@@ -66,7 +66,27 @@ type SSEEvent =
   | { type: 'indexing_done'; project: string }
   | { type: 'client_connect'; clientId: string; transport: string; project?: string; name?: string }
   | { type: 'client_update'; clientId: string; project?: string; name?: string }
-  | { type: 'client_disconnect'; clientId: string; project?: string };
+  | { type: 'client_disconnect'; clientId: string; project?: string }
+  // R09 v2 — pipeline-lifecycle events. Source of truth: DaemonEvent
+  // union in src/cli.ts. Keep these shapes in sync.
+  | { type: 'reindex_started'; project: string; pipeline: string; total_files?: number }
+  | {
+      type: 'reindex_completed';
+      project: string;
+      pipeline: string;
+      duration_ms: number;
+      summary?: Record<string, unknown>;
+    }
+  | { type: 'reindex_errored'; project: string; pipeline: string; message: string }
+  | { type: 'embed_started'; project: string; total?: number }
+  | { type: 'embed_progress'; project: string; processed: number; total: number }
+  | { type: 'embed_completed'; project: string; duration_ms: number; embedded: number }
+  | {
+      type: 'snapshot_created';
+      project: string;
+      name: string;
+      summary?: Record<string, unknown>;
+    };
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -207,7 +227,76 @@ export function useDaemon() {
         );
       } else if (event.type === 'client_disconnect') {
         setClients((prev) => prev.filter((c) => c.id !== event.clientId));
+      } else if (event.type === 'reindex_started') {
+        // R09 v2: flip project to "indexing" so the UI shows a live
+        // pipeline. Subsequent indexing_progress events fill in the
+        // progress bar; reindex_completed/errored finalizes.
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.root === event.project ? { ...p, status: 'indexing', progress: undefined } : p,
+          ),
+        );
+      } else if (event.type === 'reindex_completed') {
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.root === event.project ? { ...p, status: 'ready', progress: undefined } : p,
+          ),
+        );
+      } else if (event.type === 'reindex_errored') {
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.root === event.project
+              ? { ...p, status: 'error', error: event.message, progress: undefined }
+              : p,
+          ),
+        );
+      } else if (event.type === 'embed_progress') {
+        // Surface embed progress as a virtual pipeline so the project
+        // list shows live "embedding N / M" instead of a static state.
+        const total = event.total || 1;
+        const current = event.processed;
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.root === event.project
+              ? {
+                  ...p,
+                  status: 'embedding',
+                  progress: {
+                    phase: 'embedding',
+                    current,
+                    total,
+                    percent: Math.round((current / total) * 100),
+                  },
+                }
+              : p,
+          ),
+        );
+      } else if (event.type === 'embed_started') {
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.root === event.project
+              ? {
+                  ...p,
+                  status: 'embedding',
+                  progress: {
+                    phase: 'embedding',
+                    current: 0,
+                    total: event.total ?? 0,
+                    percent: 0,
+                  },
+                }
+              : p,
+          ),
+        );
+      } else if (event.type === 'embed_completed') {
+        setProjects((prev) =>
+          prev.map((p) =>
+            p.root === event.project ? { ...p, status: 'ready', progress: undefined } : p,
+          ),
+        );
       }
+      // snapshot_created is a one-shot informational event; Activity tab
+      // renders it. No project-state mutation here.
     };
 
     return () => {

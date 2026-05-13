@@ -31,6 +31,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
     vectorStore,
     embeddingService,
     progress,
+    onPipelineEvent,
   } = ctx;
 
   // --- Core Tools (always registered) ---
@@ -145,12 +146,43 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
       );
       try {
         const startedAt = Date.now();
-        const indexed = await withLock(
-          { lockDir: LOCKS_DIR, name: `${projectHash(projectRoot)}-embed`, op: 'embed_repo' },
-          async () => (force ? pipeline.reindexAll() : pipeline.indexUnembedded(batch_size ?? 50)),
-        );
+        // R09 v2: emit embed_started before the work begins. The total is
+        // approximated from current symbol count when force=true (full
+        // reindex) or unknown for incremental runs.
+        const totalSymbolsForStart = store.getStats().totalSymbols;
+        onPipelineEvent({
+          type: 'embed_started',
+          total: force ? totalSymbolsForStart : undefined,
+        });
+        // R09 v2: bridge the pipeline's existing ProgressState onto the
+        // SSE bus as embed_progress events. The daemon throttles these
+        // to ~5/s per project; terminal events are never throttled.
+        const progressUnsub = progress?.onUpdate((pipelineName, snapshot) => {
+          if (pipelineName !== 'embedding') return;
+          onPipelineEvent({
+            type: 'embed_progress',
+            processed: snapshot.processed,
+            total: snapshot.total,
+          });
+        });
+        let indexed: number;
+        try {
+          indexed = await withLock(
+            { lockDir: LOCKS_DIR, name: `${projectHash(projectRoot)}-embed`, op: 'embed_repo' },
+            async () =>
+              force ? pipeline.reindexAll() : pipeline.indexUnembedded(batch_size ?? 50),
+          );
+        } finally {
+          progressUnsub?.();
+        }
         const totalEmbedded = vectorStore.count();
         const totalSymbols = store.getStats().totalSymbols;
+        // R09 v2: terminal event — never throttled by the daemon.
+        onPipelineEvent({
+          type: 'embed_completed',
+          duration_ms: Date.now() - startedAt,
+          embedded: totalEmbedded,
+        });
         return {
           content: [
             {

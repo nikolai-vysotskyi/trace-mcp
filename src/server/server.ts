@@ -191,6 +191,22 @@ function extractCompactResult(
  * When provided, createServer() will use them instead of creating its own.
  * The caller is responsible for their lifecycle (they won't be closed on dispose).
  */
+/**
+ * R09 v2 — pipeline-lifecycle event shapes emitted by MCP tools
+ * (embed_repo, snapshot_graph) and relayed by the daemon to the
+ * existing /api/events SSE bus. The `project` field is stamped in by
+ * cli.ts before broadcasting; tools omit it. The `type` strings are a
+ * subset of the daemon-side `DaemonEvent` union (see src/cli.ts).
+ *
+ * No new event-bus abstraction — these flow through the existing
+ * broadcastEvent() function in cli.ts via the onPipelineEvent dep.
+ */
+export type PipelineLifecycleEvent =
+  | { type: 'embed_started'; total?: number }
+  | { type: 'embed_progress'; processed: number; total: number }
+  | { type: 'embed_completed'; duration_ms: number; embedded: number }
+  | { type: 'snapshot_created'; name: string; summary?: Record<string, unknown> };
+
 export interface ServerDeps {
   topoStore?: TopologyStore | null;
   decisionStore?: DecisionStore | null;
@@ -202,6 +218,12 @@ export interface ServerDeps {
   onJournalEntry?: (data: import('./journal-broadcast.js').JournalEntryCallbackData) => void;
   /** Session ID associated with `onJournalEntry`. Required when the callback is set. */
   sessionId?: string;
+  /**
+   * R09 v2 — optional callback for pipeline-lifecycle events emitted by
+   * MCP tools (embed_repo, snapshot_graph). cli.ts wires it to
+   * broadcastEvent, stamping the project root onto each event.
+   */
+  onPipelineEvent?: (event: PipelineLifecycleEvent) => void;
 }
 
 /**
@@ -561,6 +583,10 @@ export function createServer(
     decisionStore,
     telemetrySink,
     rankingLedger,
+    // R09 v2: default to a no-op so non-daemon contexts (CLI fallback,
+    // unit tests) can register tools without crashing. cli.ts overrides
+    // this with the broadcastEvent-bound callback.
+    onPipelineEvent: deps?.onPipelineEvent ?? (() => {}),
   };
 
   const metaCtx: MetaContext = {

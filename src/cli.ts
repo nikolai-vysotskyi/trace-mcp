@@ -37,6 +37,7 @@ import { daemonCommand } from './cli/daemon.js';
 import { consentCommand } from './cli/consent.js';
 import { detectLlmCommand } from './cli/detect-llm.js';
 import { doctorCommand } from './cli/doctor.js';
+import { evalCommand } from './cli/eval.js';
 import { exportSecurityContextCommand } from './cli/export-security-context.js';
 import { initCommand } from './cli/init.js';
 import { installAppCommand } from './cli/install-app.js';
@@ -391,6 +392,10 @@ program
     const clients = new Map<string, TrackedClient>();
 
     // ── SSE event bus ───────────────────────────────────────────
+    // R09 v2 extends this union with pipeline-lifecycle variants
+    // (reindex_*, embed_*, snapshot_created). No new event bus is
+    // introduced — all variants flow through the existing
+    // broadcastEvent() function below. Single source of truth.
     type DaemonEvent =
       | {
           type: 'indexing_progress';
@@ -421,11 +426,67 @@ program
           latency_ms?: number;
           is_error: boolean;
           session_id: string;
+        }
+      // ── R09 v2: pipeline-lifecycle variants ──────────────────
+      | {
+          type: 'reindex_started';
+          project: string;
+          pipeline: string;
+          total_files?: number;
+        }
+      | {
+          type: 'reindex_completed';
+          project: string;
+          pipeline: string;
+          duration_ms: number;
+          summary?: Record<string, unknown>;
+        }
+      | {
+          type: 'reindex_errored';
+          project: string;
+          pipeline: string;
+          message: string;
+        }
+      | { type: 'embed_started'; project: string; total?: number }
+      | { type: 'embed_progress'; project: string; processed: number; total: number }
+      | {
+          type: 'embed_completed';
+          project: string;
+          duration_ms: number;
+          embedded: number;
+        }
+      | {
+          type: 'snapshot_created';
+          project: string;
+          name: string;
+          summary?: Record<string, unknown>;
         };
 
     const sseConnections = new Set<http.ServerResponse>();
 
+    // Per-(project, pipeline) timestamps for the 200 ms progress throttle.
+    // Terminal events (reindex_completed, reindex_errored, embed_completed,
+    // snapshot_created) are never throttled.
+    const PROGRESS_THROTTLE_MS = 200;
+    const lastProgressEmittedAt = new Map<string, number>();
+
     function broadcastEvent(event: DaemonEvent): void {
+      // Throttle floor for high-frequency progress variants. Keyed by
+      // (project, pipeline) for indexing_progress and (project, 'embed')
+      // for embed_progress. Other variants bypass the floor.
+      if (event.type === 'indexing_progress') {
+        const key = `${event.project}::${event.pipeline}`;
+        const now = Date.now();
+        const last = lastProgressEmittedAt.get(key) ?? 0;
+        if (now - last < PROGRESS_THROTTLE_MS) return;
+        lastProgressEmittedAt.set(key, now);
+      } else if (event.type === 'embed_progress') {
+        const key = `${event.project}::embed`;
+        const now = Date.now();
+        const last = lastProgressEmittedAt.get(key) ?? 0;
+        if (now - last < PROGRESS_THROTTLE_MS) return;
+        lastProgressEmittedAt.set(key, now);
+      }
       const data = `data: ${JSON.stringify(event)}\n\n`;
       for (const res of sseConnections) {
         try {
@@ -500,6 +561,12 @@ program
           broadcastEvent(
             buildJournalEvent({ ...data, project: projectRoot, session_id: sessionId }),
           );
+        },
+        // R09 v2: lets MCP tools (embed_repo, snapshot_graph) emit
+        // pipeline-lifecycle events through the existing SSE bus.
+        // Tagged with the project root so the renderer can filter.
+        onPipelineEvent: (event: import('./server/server.js').PipelineLifecycleEvent) => {
+          broadcastEvent({ ...event, project: projectRoot } as DaemonEvent);
         },
       };
       const handle = createServer(
@@ -1699,9 +1766,35 @@ program
           res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
           return;
         }
-        managed.pipeline.indexAll(true).catch((err) => {
-          logger.error({ error: err, projectRoot }, 'Reindex failed');
+        // R09 v2: lifecycle events around the reindex call.
+        // started is fire-and-forget; completed/errored fire on the
+        // async settlement of the pipeline promise.
+        const reindexStartedAt = Date.now();
+        broadcastEvent({
+          type: 'reindex_started',
+          project: projectRoot,
+          pipeline: 'index',
         });
+        managed.pipeline
+          .indexAll(true)
+          .then((result) => {
+            broadcastEvent({
+              type: 'reindex_completed',
+              project: projectRoot,
+              pipeline: 'index',
+              duration_ms: Date.now() - reindexStartedAt,
+              summary: result as unknown as Record<string, unknown>,
+            });
+          })
+          .catch((err) => {
+            logger.error({ error: err, projectRoot }, 'Reindex failed');
+            broadcastEvent({
+              type: 'reindex_errored',
+              project: projectRoot,
+              pipeline: 'index',
+              message: err instanceof Error ? err.message : String(err),
+            });
+          });
         res.writeHead(202, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'reindex_started', project: projectRoot }));
         return;
@@ -2607,6 +2700,7 @@ program.addCommand(subprojectCommand);
 program.addCommand(memoryCommand);
 program.addCommand(analyticsCommand);
 program.addCommand(benchmarkCommand);
+program.addCommand(evalCommand);
 program.addCommand(statusCommand);
 program.addCommand(visualizeCommand);
 program.addCommand(daemonCommand);

@@ -54,7 +54,7 @@ import {
 import { buildNegativeEvidence } from '../shared/evidence.js';
 
 export function registerAdvancedTools(server: McpServer, ctx: ServerContext): void {
-  const { store, config, projectRoot, guardPath, j, jh } = ctx;
+  const { store, config, projectRoot, guardPath, j, jh, onPipelineEvent } = ctx;
 
   // --- Multi-Repo Topology Tools (optional) ---
   if (config.topology?.enabled && ctx.topoStore) {
@@ -910,6 +910,12 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
     async ({ name }) => {
       const { captureSnapshot } = await import('../analysis/graph-snapshot.js');
       const result = captureSnapshot(store, name);
+      // R09 v2: terminal lifecycle event — never throttled by the daemon.
+      onPipelineEvent({
+        type: 'snapshot_created',
+        name: result.name,
+        summary: result.summary as unknown as Record<string, unknown>,
+      });
       return { content: [{ type: 'text', text: j(result) }] };
     },
   );

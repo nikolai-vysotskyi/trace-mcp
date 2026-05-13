@@ -49,6 +49,12 @@ export interface ServerContext {
   telemetrySink: TelemetrySink | null;
   /** Optional persistent ranking ledger for self-tuning (null when disabled) */
   rankingLedger: RankingLedger | null;
+  /**
+   * R09 v2 — emit a pipeline-lifecycle event onto the daemon's SSE bus.
+   * No-op when running outside the daemon (CLI fallback, unit tests).
+   * Wired by createServer() from ServerDeps.onPipelineEvent.
+   */
+  onPipelineEvent: (event: import('./server.js').PipelineLifecycleEvent) => void;
 }
 
 /** Extended context for meta tools that bypass preset gate */
