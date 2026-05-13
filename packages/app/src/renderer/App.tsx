@@ -12,6 +12,7 @@ import {
   type GraphGPUSettings,
 } from './tabs/GraphExplorerGPU';
 import { Indexes } from './tabs/Indexes';
+import { Insights } from './tabs/Insights';
 import { MemoryExplorer } from './tabs/MemoryExplorer';
 import { Notebook } from './tabs/Notebook';
 import { ProjectOverview } from './tabs/ProjectOverview';
@@ -30,7 +31,7 @@ const GLOBAL_TABS: { id: GlobalTab; label: string }[] = [
   { id: 'clients', label: 'MCP Clients' },
 ];
 
-type ProjectTab = 'overview' | 'ask' | 'graph' | 'activity' | 'memory' | 'notebook';
+type ProjectTab = 'overview' | 'ask' | 'graph' | 'activity' | 'memory' | 'notebook' | 'insights';
 const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'ask', label: 'Ask' },
@@ -38,6 +39,7 @@ const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
   { id: 'activity', label: 'Activity' },
   { id: 'memory', label: 'Memory' },
   { id: 'notebook', label: 'Notebook' },
+  { id: 'insights', label: 'Insights' },
 ];
 
 function getUrlParams() {
@@ -680,6 +682,8 @@ function ProjectContent({
       {tab === 'memory' && <MemoryExplorer root={root} />}
       {/* Notebook — ad-hoc trace-mcp tool runner (read-only) */}
       {tab === 'notebook' && <Notebook root={root} />}
+      {/* Insights — high-signal project reports (drift, pagerank, hotspots) */}
+      {tab === 'insights' && <Insights root={root} />}
       {/* Graph — GPU-accelerated (cosmos.gl), edge-to-edge */}
       {tab === 'graph' && (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
