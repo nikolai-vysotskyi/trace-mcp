@@ -36,6 +36,9 @@
  *   - getCompletion→ run the chosen delegate's full pipeline
  *   - getAnswer    → identity (delegate already trimmed)
  */
+import { logger } from '../../logger.js';
+import { getGlobalTelemetrySink } from '../../telemetry/index.js';
+import type { TelemetrySink } from '../../telemetry/index.js';
 import type { BaseRetriever, RetrievedItem, RetrieverContext } from '../types.js';
 import { runRetriever } from '../types.js';
 import type { HybridQuery, HybridResult } from './hybrid-retriever.js';
@@ -65,28 +68,59 @@ interface FeelingLuckyCtx {
 
 const DEFAULT_LIMIT = 20;
 
-const SYMBOL_PATTERNS = [
-  /^[a-z][a-zA-Z0-9]*$/, // camelCase
-  /^[A-Z][a-zA-Z0-9]*$/, // PascalCase
-  /^[a-z][a-z0-9_]*$/, // snake_case
-  /^[A-Z][A-Z0-9_]*$/, // SCREAMING_SNAKE
-  /^[a-zA-Z_$][\w$]*(\.[a-zA-Z_$][\w$]*)+$/, // dotted FQN
+/**
+ * Match reasons emitted to telemetry. Pins down which regex picked the
+ * route so we can tune the rules from real-world distributions.
+ *
+ *   - camelcase / pascalcase / snake_case / screaming / dotted_fqn:
+ *     symbol-shape patterns → lexical
+ *   - phrase_fallback: query contained whitespace → hybrid
+ *   - unmatched_token: single token that matched no symbol pattern → hybrid
+ *   - empty: blank query (no route taken)
+ */
+export type RouteMatchReason =
+  | 'camelcase'
+  | 'pascalcase'
+  | 'snake_case'
+  | 'screaming'
+  | 'dotted_fqn'
+  | 'phrase_fallback'
+  | 'unmatched_token'
+  | 'empty';
+
+const SYMBOL_PATTERNS: Array<{ reason: RouteMatchReason; re: RegExp }> = [
+  { reason: 'camelcase', re: /^[a-z][a-zA-Z0-9]*$/ },
+  { reason: 'pascalcase', re: /^[A-Z][a-zA-Z0-9]*$/ },
+  { reason: 'snake_case', re: /^[a-z][a-z0-9_]*$/ },
+  { reason: 'screaming', re: /^[A-Z][A-Z0-9_]*$/ },
+  { reason: 'dotted_fqn', re: /^[a-zA-Z_$][\w$]*(\.[a-zA-Z_$][\w$]*)+$/ },
 ];
+
+/**
+ * Detailed classifier — returns the route plus the rule that fired. Used
+ * internally to feed the telemetry event without re-running the regex
+ * chain. Exported for testing.
+ */
+export function classifyQueryDetailed(
+  text: string,
+): { route: 'lexical' | 'hybrid'; reason: RouteMatchReason } | { route: 'empty'; reason: 'empty' } {
+  const trimmed = text.trim();
+  if (!trimmed) return { route: 'empty', reason: 'empty' };
+  // Anything with whitespace is a phrase / question → hybrid.
+  if (/\s/.test(trimmed)) return { route: 'hybrid', reason: 'phrase_fallback' };
+  // Match against the symbol-shape allow-list.
+  for (const { reason, re } of SYMBOL_PATTERNS) {
+    if (re.test(trimmed)) return { route: 'lexical', reason };
+  }
+  return { route: 'hybrid', reason: 'unmatched_token' };
+}
 
 /**
  * Pure-function classifier. Exported so the unit test can pin the
  * routing rules without standing up a retriever pair.
  */
 export function classifyQuery(text: string): 'lexical' | 'hybrid' | 'empty' {
-  const trimmed = text.trim();
-  if (!trimmed) return 'empty';
-  // Anything with whitespace is a phrase / question → hybrid.
-  if (/\s/.test(trimmed)) return 'hybrid';
-  // Match against the symbol-shape allow-list.
-  for (const re of SYMBOL_PATTERNS) {
-    if (re.test(trimmed)) return 'lexical';
-  }
-  return 'hybrid';
+  return classifyQueryDetailed(text).route;
 }
 
 export class FeelingLuckyRetriever implements BaseRetriever<FeelingLuckyQuery, FeelingLuckyResult> {
@@ -95,12 +129,39 @@ export class FeelingLuckyRetriever implements BaseRetriever<FeelingLuckyQuery, F
   constructor(
     private readonly lexical: BaseRetriever<LexicalQuery, LexicalResult>,
     private readonly hybrid: BaseRetriever<HybridQuery, HybridResult>,
+    /**
+     * Optional sink override — primarily for tests. Production defers to
+     * the process-wide singleton (`getGlobalTelemetrySink()`).
+     */
+    private readonly sink?: TelemetrySink,
   ) {}
 
   async getContext(query: FeelingLuckyQuery): Promise<RetrieverContext<FeelingLuckyCtx>> {
     const text = (query.text ?? '').trim();
-    const classification = classifyQuery(text);
-    const route = classification === 'lexical' ? 'lexical' : 'hybrid';
+    const detail = classifyQueryDetailed(text);
+    const route = detail.route === 'lexical' ? 'lexical' : 'hybrid';
+
+    // Emit a one-shot routing event so production traffic feeds back
+    // which heuristic branch fires for each shape. We intentionally
+    // skip the empty-query case — there is no route and no work.
+    // Privacy: never emit the literal query text. Length + token count
+    // are sufficient for distribution analysis.
+    if (detail.route !== 'empty' && text.length > 0) {
+      const tokenCount = text.split(/\s+/).filter(Boolean).length;
+      try {
+        const sink = this.sink ?? getGlobalTelemetrySink();
+        sink.emit('retrieval.feeling_lucky.routed', {
+          route,
+          match_reason: detail.reason,
+          query_length: text.length,
+          query_token_count: tokenCount,
+        });
+      } catch (err) {
+        // Telemetry must NEVER break retrieval. Log at debug and swallow.
+        logger.debug({ err }, 'retrieval.feeling_lucky.telemetry_emit_failed');
+      }
+    }
+
     return {
       query,
       data: {
@@ -144,6 +205,7 @@ export class FeelingLuckyRetriever implements BaseRetriever<FeelingLuckyQuery, F
 export function createFeelingLuckyRetriever(
   lexical: BaseRetriever<LexicalQuery, LexicalResult>,
   hybrid: BaseRetriever<HybridQuery, HybridResult>,
+  sink?: TelemetrySink,
 ): FeelingLuckyRetriever {
-  return new FeelingLuckyRetriever(lexical, hybrid);
+  return new FeelingLuckyRetriever(lexical, hybrid, sink);
 }
