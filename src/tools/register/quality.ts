@@ -8,7 +8,7 @@ import { getControlFlow } from '../analysis/control-flow.js';
 import { getSurprises } from '../analysis/surprises.js';
 import { generateDocs } from '../project/generate-docs.js';
 import { getPackageDeps } from '../project/package-deps.js';
-import { auditConfig } from '../quality/audit-config.js';
+import { auditConfig, scanInstalledSkills, scanPnpmScripts } from '../quality/audit-config.js';
 import { compareBranches, getChangedSymbols } from '../quality/changed-symbols.js';
 import { collectCoChanges, getCoChanges, persistCoChanges } from '../quality/co-changes.js';
 import {
@@ -18,6 +18,27 @@ import {
 } from '../quality/quality-gates.js';
 import { exportSecurityContext } from '../quality/security-context-export.js';
 import { packContext } from '../refactoring/pack-context.js';
+
+// E14 — Introspect the MCP server's registered tools so audit_config can
+// emit dead_tool_ref findings against the live tool surface. We reach into
+// the SDK's private field; the runtime shape is { [name]: { enabled, ... } }
+// per @modelcontextprotocol/sdk/dist/esm/server/mcp.js. Returns an empty set
+// if the SDK ever changes shape, so the audit silently degrades instead of
+// throwing.
+function collectRegisteredToolNames(server: McpServer): Set<string> {
+  try {
+    const reg = (server as unknown as { _registeredTools?: Record<string, { enabled?: boolean }> })
+      ._registeredTools;
+    if (!reg || typeof reg !== 'object') return new Set();
+    const names = new Set<string>();
+    for (const [name, tool] of Object.entries(reg)) {
+      if (tool && tool.enabled !== false) names.add(name);
+    }
+    return names;
+  } catch {
+    return new Set();
+  }
+}
 
 export function registerQualityTools(server: McpServer, ctx: ServerContext): void {
   const { store, registry, config, projectRoot, j } = ctx;
@@ -258,18 +279,62 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Audit Config ---
   server.tool(
     'audit_config',
-    'Scan AI agent config files for stale references, dead paths, and token bloat. Read-only. Use periodically to clean up CLAUDE.md and settings. Returns JSON: { issues: [{ file, type, message, suggestion }], total }.',
+    'Scan AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules, etc.) for stale references, dead paths, token bloat, and (when include_drift is set) drift between agent rules and the live MCP tool / skill / command surface. Read-only. Returns JSON: { issues: [{ file, line, category, issue, severity, fix? }], total }.',
     {
       config_files: z
         .array(z.string().max(512))
         .optional()
         .describe('Specific config files to audit (default: auto-detect)'),
       fix_suggestions: z.boolean().optional().describe('Include fix suggestions (default true)'),
+      include_drift: z
+        .boolean()
+        .optional()
+        .describe(
+          'E14 — add CLAUDE.md drift detection (dead_tool_ref, dead_skill_ref, dead_command_ref, oversized_section). Default false for back-compat.',
+        ),
+      drift_only: z
+        .boolean()
+        .optional()
+        .describe(
+          'E14 — restrict output to drift-class categories only (dead_path + dead_*_ref + oversized_section). Implies include_drift. Use when you only care about agent-config drift.',
+        ),
     },
-    async ({ config_files, fix_suggestions }) => {
+    async ({ config_files, fix_suggestions, include_drift, drift_only }) => {
+      const registeredTools = collectRegisteredToolNames(server);
       const result = auditConfig(store, projectRoot, {
         configFiles: config_files,
         fixSuggestions: fix_suggestions ?? true,
+        includeDrift: include_drift,
+        driftOnly: drift_only,
+        registeredTools,
+      });
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // --- CLAUDE.md drift detector alias ---
+  // Thin wrapper that calls auditConfig with driftOnly=true so users can
+  // surface "what is broken in my agent-config" without sifting through
+  // bloat/redundancy noise.
+  server.tool(
+    'check_claudemd_drift',
+    'Detect drift between AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules) and the live tool/skill/command surface: dead path references, references to non-existent MCP tools, references to missing skills/commands, oversized sections. Convenience alias for `audit_config { drift_only: true }`. Read-only. Returns JSON: { issues: [{ file, line, category, issue, severity, fix? }], total }.',
+    {
+      config_files: z
+        .array(z.string().max(512))
+        .optional()
+        .describe(
+          'Specific config files to scan (default: auto-detect CLAUDE.md / AGENTS.md / .cursorrules / .windsurfrules etc.)',
+        ),
+      fix_suggestions: z.boolean().optional().describe('Include fix suggestions (default true)'),
+    },
+    async ({ config_files, fix_suggestions }) => {
+      const registeredTools = collectRegisteredToolNames(server);
+      const result = auditConfig(store, projectRoot, {
+        configFiles: config_files,
+        fixSuggestions: fix_suggestions ?? true,
+        driftOnly: true,
+        registeredTools,
       });
       return { content: [{ type: 'text', text: j(result) }] };
     },
