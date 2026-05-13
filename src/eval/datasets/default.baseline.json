@@ -1,0 +1,15 @@
+{
+  "dataset": "default",
+  "captured_at": "2026-05-13T14:42:06.163Z",
+  "commit": "f384672c6f21632cc2a61605deda0c5c315eb64d",
+  "metrics": {
+    "precision_at_5_mean": 0.18333333333333332,
+    "mrr": 0.9166666666666666,
+    "first_hit_rank_mean": 1
+  },
+  "tolerance": {
+    "precision_at_5_mean": 0.02,
+    "mrr": 0.05,
+    "first_hit_rank_mean": 0.2
+  }
+}
