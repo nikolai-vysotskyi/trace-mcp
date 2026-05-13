@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.36.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.35.1...v1.36.0) (2026-05-13)
+
+
+### Features
+
+* **app:** insights tab surfacing drift, pagerank, and risk hotspots ([b080e2d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b080e2ddc0851ba1db3a6f0e388e99ae61a4a543))
+* **app:** notebook scratchpad tab for ad-hoc tool queries ([7eedb15](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7eedb157ced0538b2f7c80dad03501128e62a6ad))
+* **daemon:** pipeline-lifecycle SSE events + Electron consumer ([dcff9f3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dcff9f398929ab41250092736f22d09593805903))
+* **eval:** code-intelligence benchmark harness with CLI subcommand ([64bca2a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/64bca2af80a14b7f21000a32bf862813eaf08408))
+* **memory:** remember_decision MCP tool for live agent writes ([11fd07c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/11fd07cd07de353e14349dcad6a5795dad5c7fff))
+* **pipeline:** composable Task DAG with idempotency keys ([c33a4ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c33a4ba4ebe71c6afe1b5e51a3a4d7ff79e0a4c0))
+* **pipeline:** persisted task-cache via SQLite pass_cache table ([266bbfd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/266bbfdd4aaeb0f04023f592f704ae1ff87a1ec3))
+* **presets:** decision-memory quartet on minimal + standard ([f384672](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f384672c6f21632cc2a61605deda0c5c315eb64d))
+* **quality:** CLAUDE.md drift detection + check_claudemd_drift tool ([faf5d07](https://github.com/nikolai-vysotskyi/trace-mcp/commit/faf5d07b782c09bb8a2ec59b16103fd69fa62de1))
+* **retrieval:** BaseRetriever protocol foundation with 2 adapters ([d0d9f0c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d0d9f0cef22f157555ed4c72f0a7eb8665a89999))
+* **retrieval:** emit routing telemetry from feeling_lucky retriever ([e79b5bf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e79b5bfb189c82f5f80b0b03b448e711ec077f23))
+* **retrieval:** graph_completion retriever — vector hit + 1-hop expansion ([3fcaab1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3fcaab11ac252bf43ea50e8485851d9993e467fe))
+* **retrieval:** named search-mode taxonomy + search_with_mode MCP tool ([a8250e1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a8250e11722ba7d51f7abea8ae03d0e57bb4160f))
+* **scoring:** ranking pins — user-supplied importance weights for PageRank ([704d66c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/704d66cd4fc615f14e13684a23bf352a01fee1d3))
+* **telemetry:** observability bridge with OTLP and Langfuse sinks ([bae0fb2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bae0fb2bd5c504c12c71f0d6bc63f4449d34e6e7))
+
+
+### Bug Fixes
+
+* **ci:** normalize CRLF in DaemonEvent union guardrail for Windows runners ([71815ce](https://github.com/nikolai-vysotskyi/trace-mcp/commit/71815ce49f06044431836cf671dd3de66ee1138e))
+* **ci:** unbreak notebook test under frozen-lockfile + register project before eval indexing ([7522bc8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7522bc8682cd3a2b8371c2bf8be3bd82dc6cb270))
+* **telemetry:** wire observability bridge into server bootstrap + ship local OTLP recipe ([e03d75b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e03d75b34c46d8ee109145e530660824e9e3ac0f))
+
+
+### Performance
+
+* **indexer:** Phase 4+5+7 — incremental edges, cold-start, telemetry ([8a1ed45](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8a1ed45179c3968fb9e41d74be341911989fb4bf))
+
+
+### Refactoring
+
+* **indexer:** migrate 3 pipeline passes onto Task DAG ([c4a6afb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c4a6afbf606ba0ab6a3c71329a4cd44746a18ca7))
+* **retrieval:** migrate search MCP tool onto BaseRetriever ([61b9663](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61b9663013a5dff30f91f88e131c944058b01c2e))
+* **retrieval:** migrate search_text, search_bundles, search_sessions onto BaseRetriever ([8da5ab9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8da5ab9c5805374daeb89952c18005582f5160f5))
+
+
+### Tests
+
+* **daemon:** pipeline-lifecycle SSE integration test + drift firewall ([0976c38](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0976c3823d517a1487bd9fcee4496ec608512456))
+* **quality:** cover dead_skill_ref and dead_command_ref drift categories ([e46d0a8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e46d0a8c7d66c82db75e75039a13ee26e29e689b))
+
+
+### CI/CD
+
+* **eval:** baseline-regression check + GitHub workflow ([d902af6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d902af6f0e4cd658ce601d745a257234c16fea74))
+
 ## [1.35.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.35.0...v1.35.1) (2026-05-11)
 
 
