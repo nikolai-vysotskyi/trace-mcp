@@ -105,6 +105,62 @@ describe('Audit Config — E14 drift detection', () => {
     expect(oversized[0].file).toBe(configPath);
   });
 
+  it('detects dead_skill_ref when includeDrift + installedSkills provided', () => {
+    const configPath = path.join(tmpDir, 'CLAUDE-skills.md');
+    fs.writeFileSync(
+      configPath,
+      [
+        '# Skills',
+        'Use the `skills/nonexistent-skill` skill for cleanup.',
+        'Also rely on `skills/real-skill` for the heavy lifting.',
+      ].join('\n'),
+    );
+
+    const result = auditConfig(store, tmpDir, {
+      configFiles: [configPath],
+      includeDrift: true,
+      installedSkills: new Set(['real-skill']),
+      fixSuggestions: false,
+    });
+
+    const dead = result.issues.filter((i) => i.category === 'dead_skill_ref');
+    expect(dead.length).toBeGreaterThan(0);
+    expect(dead.some((i) => i.issue.includes('nonexistent-skill'))).toBe(true);
+    // `real-skill` is in installedSkills — must NOT be flagged.
+    expect(dead.every((i) => !i.issue.includes('`real-skill`'))).toBe(true);
+  });
+
+  it('detects dead_command_ref when includeDrift + command sets provided', () => {
+    const configPath = path.join(tmpDir, 'CLAUDE-commands.md');
+    fs.writeFileSync(
+      configPath,
+      [
+        '# Commands',
+        'Run `pnpm run nonexistent-script` to bootstrap.',
+        'Then run `pnpm run build` to compile.',
+        'Use `trace-mcp imaginary-cmd` for cleanup.',
+        'Use `trace-mcp serve` to start the server.',
+      ].join('\n'),
+    );
+
+    const result = auditConfig(store, tmpDir, {
+      configFiles: [configPath],
+      includeDrift: true,
+      registeredCliCommands: new Set(['serve', 'index']),
+      pnpmScripts: new Set(['build', 'test']),
+      fixSuggestions: false,
+    });
+
+    const dead = result.issues.filter((i) => i.category === 'dead_command_ref');
+    expect(dead.length).toBeGreaterThan(0);
+    expect(dead.some((i) => i.issue.includes('nonexistent-script'))).toBe(true);
+    expect(dead.some((i) => i.issue.includes('imaginary-cmd'))).toBe(true);
+    // `build` is a known script — must NOT be flagged.
+    expect(dead.every((i) => !i.issue.includes('pnpm build`'))).toBe(true);
+    // `serve` is a known CLI command — must NOT be flagged.
+    expect(dead.every((i) => !i.issue.includes('trace-mcp serve`'))).toBe(true);
+  });
+
   it('driftOnly restricts output to drift categories only', () => {
     // A fixture that would normally also trigger dead_path (non-drift) plus
     // dead_tool_ref (drift). With driftOnly:true the non-drift category
