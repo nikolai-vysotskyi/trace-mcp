@@ -5,6 +5,7 @@ dist/
 *.db-shm
 .claude/
 .trace-mcp/
+.trace-mcp.json
 .env
 .env.local
 coverage/

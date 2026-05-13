@@ -28,6 +28,11 @@ import type { ProgressState } from '../progress.js';
 import { computePageRank } from '../scoring/pagerank.js';
 import { RankingLedger } from '../runtime/ranking-ledger.js';
 import { TelemetrySink } from '../runtime/telemetry-sink.js';
+import {
+  createTelemetrySink,
+  getGlobalTelemetrySink,
+  setGlobalTelemetrySink,
+} from '../telemetry/index.js';
 import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
 import { CodexSessionProvider } from '../session/providers/codex.js';
 import { HermesSessionProvider } from '../session/providers/hermes.js';
@@ -279,6 +284,25 @@ export function createServer(
   const snapshotPath = getSnapshotPath(projectRoot);
   journal.enablePeriodicSnapshot(snapshotPath);
 
+  // Observability bridge (P13): replace the process-wide noop sink with one
+  // configured from `telemetry.observability`. Lazy/async — spans buffer in
+  // the noop sink until the real sink resolves (typically <50ms after start).
+  // Disabled by default; opt in via `.trace-mcp.json` or global config.
+  const observabilityCfg = config.telemetry?.observability;
+  if (observabilityCfg?.enabled) {
+    void createTelemetrySink(observabilityCfg)
+      .then((sink) => {
+        setGlobalTelemetrySink(sink);
+        logger.info(
+          { sink: sink.name, sampleRate: observabilityCfg.sampleRate },
+          'telemetry.observability_bridge_active',
+        );
+      })
+      .catch((err) => {
+        logger.warn({ err }, 'telemetry.observability_bridge_init_failed');
+      });
+  }
+
   // Structural landmarks provider: PageRank top-20 symbols + recently edited symbols
   journal.setLandmarkProvider(() => {
     const landmarks: StructuralLandmark[] = [];
@@ -361,6 +385,18 @@ export function createServer(
       } catch {
         /* best-effort */
       }
+    }
+    // Observability bridge: flush + shutdown any non-noop sink so buffered
+    // OTLP/Langfuse spans actually hit the network before we exit.
+    try {
+      const observabilitySink = getGlobalTelemetrySink();
+      if (observabilitySink.name !== 'noop') {
+        void observabilitySink
+          .shutdown()
+          .catch((err) => logger.warn({ err }, 'telemetry.observability_bridge_shutdown_failed'));
+      }
+    } catch {
+      /* best-effort */
     }
     if (rankingLedger) {
       try {

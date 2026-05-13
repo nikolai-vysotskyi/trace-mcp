@@ -1,0 +1,37 @@
+# Local OTLP collector for trace-mcp observability bridge (P13).
+#
+# Jaeger all-in-one ships OTLP HTTP + gRPC receivers plus a UI in a single
+# container — fastest path from "docker compose up" to "spans in a browser".
+#
+# Usage:
+#   docker compose up -d
+#   open http://localhost:16686
+#   # ...run trace-mcp with telemetry.observability.enabled=true, sink=otlp,
+#   #    otlp.endpoint=http://localhost:4318/v1/traces (the default)
+#   docker compose down -v       # clean up containers + volumes
+#
+# Ports:
+#   16686  Jaeger UI
+#   4318   OTLP HTTP receiver (POST /v1/traces) — this is what trace-mcp targets
+#   4317   OTLP gRPC receiver (unused by trace-mcp today; exposed for tooling)
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    container_name: trace-mcp-jaeger
+    restart: unless-stopped
+    environment:
+      # Enable OTLP receivers (off by default in older Jaeger releases).
+      COLLECTOR_OTLP_ENABLED: "true"
+      # Keep traces in memory only — no persistent volume needed for a dev
+      # validator. Set SPAN_STORAGE_TYPE=badger + volume below for retention.
+      SPAN_STORAGE_TYPE: memory
+    ports:
+      - "16686:16686"   # UI
+      - "4318:4318"     # OTLP HTTP
+      - "4317:4317"     # OTLP gRPC
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
