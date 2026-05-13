@@ -1,0 +1,4 @@
+# Container/volume scratch — never commit local state from this folder.
+volumes/
+data/
+*.log
