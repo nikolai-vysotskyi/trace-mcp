@@ -224,6 +224,33 @@ const ToolsConfigSchema = z
   })
   .optional();
 
+const TelemetryObservabilitySchema = z
+  .object({
+    /** Master switch for the observability bridge. Off by default. */
+    enabled: z.boolean().default(false),
+    /** Which sink to export spans/events to. `noop` is a safe default. */
+    sink: z.enum(['noop', 'otlp', 'langfuse', 'multi']).default('noop'),
+    /** Probabilistic sampling rate in [0,1]. 1 keeps everything (default). */
+    sampleRate: z.number().min(0).max(1).default(1),
+    /** OTLP/HTTP exporter settings — used when `sink` is `otlp` or `multi`. */
+    otlp: z
+      .object({
+        endpoint: z.string().default('http://localhost:4318/v1/traces'),
+        headers: z.record(z.string(), z.string()).default({}),
+        serviceName: z.string().default('trace-mcp'),
+      })
+      .prefault({}),
+    /** Langfuse public ingestion settings — used when `sink` is `langfuse` or `multi`. */
+    langfuse: z
+      .object({
+        endpoint: z.string().default('https://cloud.langfuse.com'),
+        publicKey: z.string().optional(),
+        secretKey: z.string().optional(),
+      })
+      .prefault({}),
+  })
+  .prefault({});
+
 const TelemetryConfigSchema = z
   .object({
     /** When true, persist tool-call latency to ~/.trace-mcp/telemetry.db. Off by default to avoid
@@ -231,6 +258,10 @@ const TelemetryConfigSchema = z
     enabled: z.boolean().default(false),
     /** Maximum rows to retain. Older rows are pruned when exceeded. 0 disables pruning. */
     max_rows: z.number().int().min(0).max(10_000_000).default(500_000),
+    /** Observability bridge: emits OpenTelemetry/Langfuse spans for AI calls + tool execution.
+     *  Independent from the local `enabled` switch above — only fires when `observability.enabled`
+     *  is explicitly true. Default sink is `noop` (zero overhead). */
+    observability: TelemetryObservabilitySchema,
   })
   .optional();
 
