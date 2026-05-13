@@ -8,6 +8,7 @@
  */
 
 import type { Store } from '../../db/store.js';
+import { getFilePinWeightExplicit, getSymbolPinWeightsByFile } from '../../scoring/pins.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -318,14 +319,29 @@ export function getPageRank(
     if (diff < tolerance) break;
   }
 
-  // Build results
-  const results: PageRankResult[] = nodes.map((fileId, i) => ({
-    file: graph.pathMap.get(fileId) ?? `[file:${fileId}]`,
-    file_id: fileId,
-    score: Math.round(scores[i] * 1e6) / 1e6,
-    in_degree: graph.reverse.get(fileId)?.size ?? 0,
-    out_degree: graph.forward.get(fileId)?.size ?? 0,
-  }));
+  // Build results. E10 — apply user-supplied pin weights as a final
+  // multiplicative pass. Precedence rules:
+  //   1. Explicit file pin always wins. A user pinning a file at 0.5 to
+  //      demote it must not be silently boosted by a symbol pin that
+  //      happens to live in the same file.
+  //   2. If no file pin, fall back to the symbol-pin propagation: take
+  //      the max symbol pin weight across symbols in the file (computed
+  //      in pins.ts).
+  //   3. Otherwise no boost (weight = 1.0).
+  const symbolPinsByFile = getSymbolPinWeightsByFile(store.db);
+  const results: PageRankResult[] = nodes.map((fileId, i) => {
+    const filePath = graph.pathMap.get(fileId) ?? `[file:${fileId}]`;
+    const explicitFile = getFilePinWeightExplicit(store.db, filePath);
+    const pinWeight = explicitFile ?? symbolPinsByFile.get(filePath) ?? 1.0;
+    const adjusted = scores[i] * pinWeight;
+    return {
+      file: filePath,
+      file_id: fileId,
+      score: Math.round(adjusted * 1e6) / 1e6,
+      in_degree: graph.reverse.get(fileId)?.size ?? 0,
+      out_degree: graph.forward.get(fileId)?.size ?? 0,
+    };
+  });
 
   results.sort((a, b) => b.score - a.score);
   return results;

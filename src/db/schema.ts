@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 26;
+const SCHEMA_VERSION = 27;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -411,6 +411,21 @@ CREATE TABLE IF NOT EXISTS repo_metadata (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- E10 — user-supplied importance weights ("pins") that multiply a symbol's
+-- or file's PageRank prior. Bounded to weight ∈ [0.1, 3.0]; values < 1 demote.
+-- TTL via expires_at (unix ms); null means never. Capped at 50 active rows
+-- per project at the tool-layer.
+CREATE TABLE IF NOT EXISTS ranking_pins (
+    scope       TEXT NOT NULL CHECK (scope IN ('symbol', 'file')),
+    target_id   TEXT NOT NULL,
+    weight      REAL NOT NULL DEFAULT 2.0,
+    expires_at  INTEGER,
+    created_by  TEXT NOT NULL DEFAULT 'user',
+    created_at  INTEGER NOT NULL,
+    PRIMARY KEY (scope, target_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ranking_pins_expires ON ranking_pins(expires_at);
 `;
 
 const SEED_NODE_TYPES = [
@@ -1436,6 +1451,22 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     // in file-extractor would force a full reparse on first run. Wipe stale
     // values once so the next index repopulates them with the new algo.
     db.exec(`UPDATE files SET content_hash = NULL`);
+  },
+  27: (db) => {
+    // E10 — ranking pins. Multiplicative importance weights applied on top
+    // of PageRank so users can boost specific symbols / files.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS ranking_pins (
+          scope       TEXT NOT NULL CHECK (scope IN ('symbol', 'file')),
+          target_id   TEXT NOT NULL,
+          weight      REAL NOT NULL DEFAULT 2.0,
+          expires_at  INTEGER,
+          created_by  TEXT NOT NULL DEFAULT 'user',
+          created_at  INTEGER NOT NULL,
+          PRIMARY KEY (scope, target_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_ranking_pins_expires ON ranking_pins(expires_at);
+    `);
   },
 };
 
