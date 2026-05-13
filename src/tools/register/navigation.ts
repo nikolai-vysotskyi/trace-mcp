@@ -45,192 +45,13 @@ import {
   isMinimal,
   type SearchItemFull,
 } from '../_common/detail-level.js';
-import { searchFts as ftsSearch } from '../../db/fts.js';
-import type { FileRow, Store, SymbolRow } from '../../db/store.js';
+import { createSearchToolRetriever } from '../../retrieval/retrievers/search-tool-retriever.js';
+import { runRetriever } from '../../retrieval/types.js';
 
 // ─── Retrieval-mode helpers ──────────────────────────────────────────
-// Lightweight building blocks for the memoir-style retrieval modes
-// wired into the `search` tool below. Kept at module scope so the test
-// suite can exercise them in isolation if needed in the future.
-
-interface FlatSearchFilters {
-  kind?: string;
-  language?: string;
-  filePattern?: string;
-  implements?: string;
-  extends?: string;
-  decorator?: string;
-}
-
-interface FlatSearchResult {
-  items: { symbol: SymbolRow; file: FileRow; score: number }[];
-  total: number;
-  search_mode: 'flat';
-  /** Always undefined for flat mode — present only so the union type stays
-   *  assignment-compatible with `SearchResult.fusion_debug`. */
-  fusion_debug?: undefined;
-}
-
-/**
- * `flat` mode entry point: BM25 hits, no PageRank / hybrid / fusion enrichment.
- * Returns a result object shaped like {@link search}'s output so the rest of
- * the tool pipeline (projection, freshness, _meta) can treat it uniformly.
- */
-async function runFlatSearch(
-  store: Store,
-  query: string,
-  filters: FlatSearchFilters,
-  limit: number,
-  offset: number,
-): Promise<FlatSearchResult> {
-  const ftsResults = ftsSearch(
-    store.db,
-    query,
-    limit + offset + 20,
-    0,
-    filters.kind || filters.language || filters.filePattern
-      ? { kind: filters.kind, language: filters.language, filePattern: filters.filePattern }
-      : undefined,
-  );
-  if (ftsResults.length === 0) {
-    return { items: [], total: 0, search_mode: 'flat' };
-  }
-
-  const symbolNumIds = ftsResults.map((r) => r.symbolId);
-  const symMap = store.getSymbolsByIds(symbolNumIds);
-  const fileIds = [...new Set(ftsResults.map((r) => r.fileId))];
-  const fileMap = store.getFilesByIds(fileIds);
-
-  const minRank = Math.min(...ftsResults.map((r) => r.rank));
-  const maxRank = Math.max(...ftsResults.map((r) => r.rank));
-  const rankSpread = maxRank - minRank || 1;
-
-  const heritage = filters.implements || filters.extends;
-  const decorator = filters.decorator;
-
-  const items: { symbol: SymbolRow; file: FileRow; score: number }[] = [];
-  for (const r of ftsResults) {
-    const symbol = symMap.get(r.symbolId);
-    if (!symbol) continue;
-    const file = fileMap.get(symbol.file_id);
-    if (!file) continue;
-
-    if ((heritage || decorator) && symbol.metadata) {
-      try {
-        const meta = (
-          typeof symbol.metadata === 'string' ? JSON.parse(symbol.metadata) : symbol.metadata
-        ) as Record<string, unknown>;
-        if (filters.implements) {
-          const impl = meta.implements;
-          if (!Array.isArray(impl) || !(impl as string[]).includes(filters.implements)) continue;
-        }
-        if (filters.extends) {
-          const ext = meta.extends;
-          const arr = Array.isArray(ext) ? (ext as string[]) : typeof ext === 'string' ? [ext] : [];
-          if (!arr.includes(filters.extends)) continue;
-        }
-        if (decorator) {
-          const decs =
-            (meta.decorators as string[] | undefined) ??
-            (meta.annotations as string[] | undefined) ??
-            (meta.attributes as string[] | undefined);
-          if (
-            !Array.isArray(decs) ||
-            !decs.some(
-              (d) =>
-                d === decorator || d.endsWith(`.${decorator}`) || d.startsWith(`${decorator}(`),
-            )
-          )
-            continue;
-        }
-      } catch {
-        /* malformed metadata → skip */
-        continue;
-      }
-    } else if (heritage || decorator) {
-      continue;
-    }
-
-    // Normalize BM25 (negative, lower=better) to a 0..1 score.
-    const score = 1 - (r.rank - minRank) / rankSpread;
-    items.push({ symbol, file, score });
-  }
-
-  const total = items.length;
-  const sliced = items.slice(offset, offset + limit);
-  return { items: sliced, total, search_mode: 'flat' };
-}
-
-/**
- * `get` mode entry point: exact symbol_id or file path lookup. No search.
- *
- * - If the query parses as a symbol_id (contains `:` and matches the lang:path:line:col:name shape),
- *   we look it up by symbol_id first, then by FQN.
- * - If the query looks like a file path, we return the first symbol of that file as a representative.
- * - Otherwise (the heuristic flagged it as path-shaped but nothing matched), returns null.
- */
-function resolveExactLookup(
-  store: Store,
-  query: string,
-): {
-  symbol_id: string;
-  name: string;
-  kind: string;
-  fqn: string | null;
-  file: string;
-  line: number | null;
-} | null {
-  // Symbol-id shape first.
-  const bySymbolId = store.getSymbolBySymbolId(query);
-  if (bySymbolId) {
-    const file = store.getFileById(bySymbolId.file_id);
-    if (file) {
-      return {
-        symbol_id: bySymbolId.symbol_id,
-        name: bySymbolId.name,
-        kind: bySymbolId.kind,
-        fqn: bySymbolId.fqn,
-        file: file.path,
-        line: bySymbolId.line_start,
-      };
-    }
-  }
-
-  // FQN fallback (lets `get` resolve dotted names).
-  const byFqn = store.getSymbolByFqn(query);
-  if (byFqn) {
-    const file = store.getFileById(byFqn.file_id);
-    if (file) {
-      return {
-        symbol_id: byFqn.symbol_id,
-        name: byFqn.name,
-        kind: byFqn.kind,
-        fqn: byFqn.fqn,
-        file: file.path,
-        line: byFqn.line_start,
-      };
-    }
-  }
-
-  // File-path shape: return the file's first ranked symbol as a representative.
-  const file = store.getFile(query);
-  if (file) {
-    const syms = store.getSymbolsByFile(file.id);
-    const first = syms[0];
-    if (first) {
-      return {
-        symbol_id: first.symbol_id,
-        name: first.name,
-        kind: first.kind,
-        fqn: first.fqn,
-        file: file.path,
-        line: first.line_start,
-      };
-    }
-  }
-
-  return null;
-}
+// The dispatch helpers (`runFlatSearch`, `resolveExactLookup`) moved to
+// `src/tools/navigation/search-dispatcher.ts` so the new `SearchToolRetriever`
+// adapter can share them. See plan-cognee-search-migration-IMPL.md.
 
 export function registerNavigationTools(server: McpServer, ctx: ServerContext): void {
   const {
@@ -444,30 +265,13 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       detail_level,
     }) => {
       // Resolve effective mode. Explicit `mode` wins; otherwise heuristic.
+      // (Kept here so the zero-index / tiered branches below can branch on it
+      // before the retriever runs. The retriever recomputes the same value
+      // from the same inputs — verified by the equivalence test suite.)
       const effectiveMode = mode ?? selectRetrievalMode(query, { drillFrom: drill_from });
 
-      // ─── get mode: exact lookup, no search ─────────────────────
-      if (effectiveMode === 'get') {
-        const lookup = resolveExactLookup(store, query);
-        const payload = {
-          mode: 'get' as const,
-          item: lookup,
-        };
-        return { content: [{ type: 'text', text: jh('search', payload) }] };
-      }
-
-      // For tiered mode, ensure we ask the underlying ranker for at least
-      // enough results to fill all buckets; honor caller-specified `limit`
-      // only when it is larger than the tiered total.
-      const effectiveLimit =
-        effectiveMode === 'tiered'
-          ? Math.max(limit ?? TIERED_TOTAL_LIMIT, TIERED_TOTAL_LIMIT)
-          : limit;
-
-      // For drill mode, scope by file_pattern / parent prefix. We still run a
-      // normal search but apply a drill filter on the way out.
-      const drillScope = effectiveMode === 'drill' ? (drill_from ?? '') : '';
-      // Zero-index fallback: if index is empty, use ripgrep
+      // Zero-index fallback: if index is empty, use ripgrep. Must run BEFORE
+      // the retriever — the retriever assumes an indexed store.
       const stats = store.getStats();
       if (stats.totalFiles === 0) {
         const fbResult = fallbackSearch(projectRoot, query, {
@@ -488,6 +292,18 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         };
       }
 
+      // For tiered mode, ensure we ask the underlying ranker for at least
+      // enough results to fill all buckets; honor caller-specified `limit`
+      // only when it is larger than the tiered total.
+      const effectiveLimit =
+        effectiveMode === 'tiered'
+          ? Math.max(limit ?? TIERED_TOTAL_LIMIT, TIERED_TOTAL_LIMIT)
+          : limit;
+
+      // For drill mode, scope by file_pattern / parent prefix. We still run a
+      // normal search but apply a drill filter on the way out.
+      const drillScope = effectiveMode === 'drill' ? (drill_from ?? '') : '';
+
       // When fusion is requested without explicit weights, fall back to per-repo
       // tuned weights from ~/.trace-mcp/tuning.jsonc (Phase 4b). Explicit
       // `fusion_weights` from the call always wins.
@@ -496,46 +312,54 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         const tuned = loadTunedWeights(projectRoot);
         if (tuned) effectiveFusionWeights = tuned;
       }
-      // ─── flat mode: raw FTS hits, skip PageRank/hybrid/fusion ──
-      // We still construct a `result` shaped like the regular search output
-      // so the downstream projection / freshness / subproject layers work
-      // uniformly. The key difference: scores reflect BM25 only.
-      const result =
-        effectiveMode === 'flat'
-          ? await runFlatSearch(
-              store,
-              query,
-              {
-                kind,
-                language,
-                filePattern: file_pattern,
-                implements: impl,
-                extends: ext,
-                decorator,
-              },
-              effectiveLimit ?? 20,
-              offset ?? 0,
-            )
-          : await search(
-              store,
-              query,
-              {
-                kind,
-                language,
-                filePattern: file_pattern,
-                implements: impl,
-                extends: ext,
-                decorator,
-              },
-              effectiveLimit ?? 20,
-              offset ?? 0,
-              { vectorStore, embeddingService, reranker },
-              { fuzzy, fuzzyThreshold: fuzzy_threshold, maxEditDistance: max_edit_distance },
-              { semantic, semanticWeight: semantic_weight },
-              fusion
-                ? { fusion: true, weights: effectiveFusionWeights, debug: fusion_debug }
-                : undefined,
-            );
+
+      // ─── Dispatch via SearchToolRetriever (plans P01 + P03) ────────
+      // Every mode (get / flat / single / tiered / drill) now flows through
+      // the BaseRetriever protocol. The retriever DELEGATES to the same
+      // helpers used previously — no behavioural change. See
+      // src/retrieval/retrievers/search-tool-retriever.ts and the equivalence
+      // tests in src/retrieval/__tests__/search-tool-equivalence.test.ts.
+      const retriever = createSearchToolRetriever({
+        store,
+        vectorStore: vectorStore ?? null,
+        embeddingService: embeddingService ?? null,
+        reranker: reranker ?? null,
+      });
+      const retrieverResults = await runRetriever(retriever, {
+        query,
+        filters: {
+          kind,
+          language,
+          filePattern: file_pattern,
+          implements: impl,
+          extends: ext,
+          decorator,
+        },
+        limit: effectiveLimit ?? 20,
+        offset: offset ?? 0,
+        fuzzy,
+        fuzzyThreshold: fuzzy_threshold,
+        maxEditDistance: max_edit_distance,
+        semantic,
+        semanticWeight: semantic_weight,
+        fusion,
+        fusionWeights: effectiveFusionWeights,
+        fusionDebug: fusion_debug,
+        mode: effectiveMode,
+        drillFrom: drill_from,
+      });
+      const retrieverResult = retrieverResults[0];
+
+      // ─── get mode: exact lookup, no search ─────────────────────
+      if (retrieverResult.kind === 'get') {
+        const payload = {
+          mode: 'get' as const,
+          item: retrieverResult.payload.item,
+        };
+        return { content: [{ type: 'text', text: jh('search', payload) }] };
+      }
+
+      const result = retrieverResult.payload;
       // Project to AI-useful fields only — strips DB internals (id, file_id, byte offsets, etc.)
       const items: SearchResultItemProjected[] = result.items.map(({ symbol, file, score }) => {
         const item: SearchResultItemProjected = {
