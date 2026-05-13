@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 27;
+const SCHEMA_VERSION = 28;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -426,6 +426,19 @@ CREATE TABLE IF NOT EXISTS ranking_pins (
     PRIMARY KEY (scope, target_id)
 );
 CREATE INDEX IF NOT EXISTS idx_ranking_pins_expires ON ranking_pins(expires_at);
+
+-- Persisted idempotency cache for the TaskDag (src/pipeline/task.ts).
+-- Each row stores one pass output keyed by (task_name, cache_key). Values are
+-- JSON-serialised so the cache survives daemon restarts. See
+-- src/pipeline/cache.ts (SqliteTaskCache) for the writer.
+CREATE TABLE IF NOT EXISTS pass_cache (
+    task_name   TEXT NOT NULL,
+    cache_key   TEXT NOT NULL,
+    value_json  TEXT NOT NULL,
+    created_at  INTEGER NOT NULL,
+    PRIMARY KEY (task_name, cache_key)
+);
+CREATE INDEX IF NOT EXISTS idx_pass_cache_created ON pass_cache(created_at);
 `;
 
 const SEED_NODE_TYPES = [
@@ -1466,6 +1479,21 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
           PRIMARY KEY (scope, target_id)
       );
       CREATE INDEX IF NOT EXISTS idx_ranking_pins_expires ON ranking_pins(expires_at);
+    `);
+  },
+  28: (db) => {
+    // Persisted idempotency cache for the TaskDag (src/pipeline/task.ts).
+    // Replaces the previous in-memory-only Map so cached pass outputs survive
+    // daemon restarts. Values are JSON-serialised; see SqliteTaskCache.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS pass_cache (
+          task_name   TEXT NOT NULL,
+          cache_key   TEXT NOT NULL,
+          value_json  TEXT NOT NULL,
+          created_at  INTEGER NOT NULL,
+          PRIMARY KEY (task_name, cache_key)
+      );
+      CREATE INDEX IF NOT EXISTS idx_pass_cache_created ON pass_cache(created_at);
     `);
   },
 };
