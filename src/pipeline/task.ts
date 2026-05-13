@@ -17,10 +17,11 @@
  *    time, behind an adapter that delegates to the existing function, keeps
  *    behaviour stable while we grow the abstraction.
  *
- * The cache is an in-memory `Map` in this slice. A persisted variant (likely a
- * `pass_cache` SQLite table keyed by `(pass_name, key, plugin_version)`) is a
- * follow-up — see plan §"Per-pass cache".
+ * The cache is pluggable: `TaskDag` defaults to an `InMemoryTaskCache` (the
+ * historical behaviour) but accepts a `SqliteTaskCache` so cached pass
+ * outputs survive daemon restarts. See `src/pipeline/cache.ts`.
  */
+import { InMemoryTaskCache, type TaskCache } from './cache.js';
 
 /** A Task is a named, optionally idempotent step that transforms `I` into `O`. */
 export interface Task<I, O> {
@@ -64,13 +65,17 @@ export interface TaskComposeSummary<O> {
  *   task's output as the next task's input. Aborts the chain on the first
  *   error or when the signal fires.
  *
- * The cache is intentionally `Map<string, unknown>` rather than a typed,
- * per-task cache: we lose a little type safety in exchange for a single,
- * inspectable structure that's easy to clear in tests.
+ * The cache is held behind the `TaskCache` interface: in tests and the
+ * default constructor it is an in-memory `Map`; in the daemon callers pass
+ * `new SqliteTaskCache(db)` so cached pass outputs survive restarts.
  */
 export class TaskDag {
   private readonly tasks = new Map<string, Task<unknown, unknown>>();
-  private readonly cache = new Map<string, unknown>();
+  private readonly cache: TaskCache;
+
+  constructor(opts?: { cache?: TaskCache }) {
+    this.cache = opts?.cache ?? new InMemoryTaskCache();
+  }
 
   /** Register a task. Throws on duplicate names — silently shadowing is worse. */
   register<I, O>(task: Task<I, O>): void {
@@ -106,12 +111,12 @@ export class TaskDag {
     this.throwIfAborted(signal);
 
     const cacheKey = this.computeCacheKey(task, input);
-    if (cacheKey !== undefined && this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey) as O;
+    if (cacheKey !== undefined && this.cache.has(task.name, cacheKey)) {
+      return this.cache.get(task.name, cacheKey) as O;
     }
 
     const output = await task.run(input, signal);
-    if (cacheKey !== undefined) this.cache.set(cacheKey, output);
+    if (cacheKey !== undefined) this.cache.set(task.name, cacheKey, output);
     return output;
   }
 
@@ -136,14 +141,14 @@ export class TaskDag {
       this.throwIfAborted(signal);
       const task = this.get<unknown, unknown>(name);
       const cacheKey = this.computeCacheKey(task, current);
-      const cacheHit = cacheKey !== undefined && this.cache.has(cacheKey);
+      const cacheHit = cacheKey !== undefined && this.cache.has(task.name, cacheKey);
       const start = Date.now();
 
       if (cacheHit) {
-        current = this.cache.get(cacheKey!);
+        current = this.cache.get(task.name, cacheKey!);
       } else {
         current = await task.run(current, signal);
-        if (cacheKey !== undefined) this.cache.set(cacheKey, current);
+        if (cacheKey !== undefined) this.cache.set(task.name, cacheKey, current);
       }
 
       steps.push({ name, duration_ms: Date.now() - start, cache_hit: cacheHit });
@@ -152,9 +157,13 @@ export class TaskDag {
     return { output: current as O, steps };
   }
 
-  /** Clear the idempotency cache. Useful in tests and after schema bumps. */
-  clearCache(): void {
-    this.cache.clear();
+  /**
+   * Clear the idempotency cache. With no argument empties the whole cache;
+   * pass a task name to forget only entries for that task. Useful in tests
+   * and after schema bumps.
+   */
+  clearCache(taskName?: string): void {
+    this.cache.clear(taskName);
   }
 
   /** Forget a single cache entry. */
@@ -162,12 +171,13 @@ export class TaskDag {
     const task = this.tasks.get(name);
     if (!task) return;
     const cacheKey = this.computeCacheKey(task, input);
-    if (cacheKey !== undefined) this.cache.delete(cacheKey);
+    if (cacheKey === undefined) return;
+    this.cache.delete(task.name, cacheKey);
   }
 
   /** Number of cache entries — handy for test assertions. */
   get cacheSize(): number {
-    return this.cache.size;
+    return this.cache.size();
   }
 
   /** Names of registered tasks in registration order. */
@@ -177,7 +187,7 @@ export class TaskDag {
 
   private computeCacheKey(task: Task<unknown, unknown>, input: unknown): string | undefined {
     if (!task.key) return undefined;
-    return `${task.name}::${task.key(input)}`;
+    return task.key(input);
   }
 
   private throwIfAborted(signal?: AbortSignal): void {
