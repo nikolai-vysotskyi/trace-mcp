@@ -470,7 +470,9 @@ describe('R09 v2 — pipeline-lifecycle SSE events', () => {
  */
 describe('R09 v2 — DaemonEvent union guardrail (parsed from src/cli.ts)', () => {
   const CLI_SRC = path.resolve(__dirname, '..', '..', 'src', 'cli.ts');
-  const source = fs.readFileSync(CLI_SRC, 'utf-8');
+  // Normalize CRLF → LF so the terminator heuristic below works regardless
+  // of how Git checked out the file (Windows runners default to autocrlf).
+  const source = fs.readFileSync(CLI_SRC, 'utf-8').replace(/\r\n/g, '\n');
 
   /**
    * Extract every `type: '<literal>'` discriminator inside the DaemonEvent
