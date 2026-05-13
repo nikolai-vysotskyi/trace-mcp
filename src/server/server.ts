@@ -44,6 +44,7 @@ import { registerKnowledgeTools } from '../tools/register/knowledge.js';
 import { registerMemoryTools } from '../tools/register/memory.js';
 import { registerNavigationTools } from '../tools/register/navigation.js';
 import { registerQualityTools } from '../tools/register/quality.js';
+import { registerRetrievalTools } from '../tools/register/retrieval.js';
 import { registerRefactoringTools } from '../tools/register/refactoring.js';
 import { registerSessionTools } from '../tools/register/session.js';
 import { withHints } from '../tools/shared/hints.js';
@@ -624,6 +625,7 @@ export function createServer(
   registerAdvancedTools(server, ctx);
   registerQualityTools(server, ctx);
   registerMemoryTools(server, ctx);
+  registerRetrievalTools(server, ctx);
   registerKnowledgeTools(server, ctx);
   registerSessionTools(server, metaCtx);
 
