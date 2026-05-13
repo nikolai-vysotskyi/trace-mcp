@@ -7,6 +7,7 @@ import type { TraceMcpConfig } from '../config.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
 import type { JournalEntryCallbackData } from './journal-broadcast.js';
+import { getGlobalTelemetrySink } from '../telemetry/index.js';
 import { ALWAYS_LOAD_TOOLS } from '../tools/project/presets.js';
 import { applyBudgetDefaults, computeBudgetLevel } from './budget-defaults.js';
 import { COMPACT_CORE_PARAMS } from './compact-params.js';
@@ -265,12 +266,29 @@ export function installToolGate(
 
         // Normal path
         const normalStart = Date.now();
-        const result = await originalCb(...cbArgs);
+        const telemetrySpan = getGlobalTelemetrySink().startSpan(`tool.${name}`, {
+          'tool.name': name,
+        });
+        let result: unknown;
+        try {
+          result = await originalCb(...cbArgs);
+        } catch (err) {
+          telemetrySpan.setAttribute('duration_ms', Date.now() - normalStart);
+          telemetrySpan.recordError(err);
+          telemetrySpan.end();
+          throw err;
+        }
         const resultObj = result as {
           content: Array<{ type: string; text: string }>;
           isError?: boolean;
         };
         const normalLatency = Date.now() - normalStart;
+        telemetrySpan.setAttributes({
+          duration_ms: normalLatency,
+          'tool.is_error': !!resultObj?.isError,
+        });
+        if (resultObj?.isError) telemetrySpan.setStatus('error');
+        telemetrySpan.end();
         savings.recordLatency(name, normalLatency, !!resultObj?.isError);
         recordToolCall?.(!resultObj?.isError);
         const count = extractResultCount(resultObj);

@@ -21,6 +21,7 @@ import type {
 import { OllamaProvider } from './ollama.js';
 import { OnnxProvider } from './onnx.js';
 import { OpenAIProvider } from './openai.js';
+import { getGlobalTelemetrySink } from '../telemetry/index.js';
 import { aiTracker } from './tracker.js';
 import { VertexAIProvider } from './vertex.js';
 import { VoyageProvider } from './voyage.js';
@@ -114,26 +115,54 @@ class TrackedEmbeddingService implements EmbeddingService {
 
   async embed(text: string, task?: EmbeddingTask): Promise<number[]> {
     const entry = aiTracker.start('embed', this.provider, this.model, this.url, text.length);
+    const span = getGlobalTelemetrySink().startSpan('ai.embed', {
+      'ai.method': 'embed',
+      'ai.provider': this.provider,
+      'ai.model': this.model,
+      'ai.url': this.url,
+      'ai.input_size': text.length,
+    });
     const t0 = Date.now();
     try {
       const result = await this.inner.embed(text, task);
-      aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
+      const dur = Date.now() - t0;
+      aiTracker.finish(entry, 'ok', dur, result.length);
+      span.setAttributes({ 'ai.output_size': result.length, duration_ms: dur });
+      span.end();
       return result;
     } catch (err) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, 0, (err as Error)?.message ?? String(err));
+      const dur = Date.now() - t0;
+      aiTracker.finish(entry, 'error', dur, 0, (err as Error)?.message ?? String(err));
+      span.setAttribute('duration_ms', dur);
+      span.recordError(err);
+      span.end();
       throw err;
     }
   }
 
   async embedBatch(texts: string[], task?: EmbeddingTask): Promise<number[][]> {
     const entry = aiTracker.start('embed_batch', this.provider, this.model, this.url, texts.length);
+    const span = getGlobalTelemetrySink().startSpan('ai.embed_batch', {
+      'ai.method': 'embed_batch',
+      'ai.provider': this.provider,
+      'ai.model': this.model,
+      'ai.url': this.url,
+      'ai.input_size': texts.length,
+    });
     const t0 = Date.now();
     try {
       const result = await this.inner.embedBatch(texts, task);
-      aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
+      const dur = Date.now() - t0;
+      aiTracker.finish(entry, 'ok', dur, result.length);
+      span.setAttributes({ 'ai.output_size': result.length, duration_ms: dur });
+      span.end();
       return result;
     } catch (err) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, 0, (err as Error)?.message ?? String(err));
+      const dur = Date.now() - t0;
+      aiTracker.finish(entry, 'error', dur, 0, (err as Error)?.message ?? String(err));
+      span.setAttribute('duration_ms', dur);
+      span.recordError(err);
+      span.end();
       throw err;
     }
   }
@@ -162,13 +191,29 @@ class TrackedInferenceService implements InferenceService {
     options?: { maxTokens?: number; temperature?: number },
   ): Promise<string> {
     const entry = aiTracker.start('generate', this.provider, this.model, this.url, prompt.length);
+    const span = getGlobalTelemetrySink().startSpan('ai.generate', {
+      'ai.method': 'generate',
+      'ai.provider': this.provider,
+      'ai.model': this.model,
+      'ai.url': this.url,
+      'ai.input_size': prompt.length,
+      'ai.max_tokens': options?.maxTokens,
+      'ai.temperature': options?.temperature,
+    });
     const t0 = Date.now();
     try {
       const result = await this.inner.generate(prompt, options);
-      aiTracker.finish(entry, 'ok', Date.now() - t0, result.length);
+      const dur = Date.now() - t0;
+      aiTracker.finish(entry, 'ok', dur, result.length);
+      span.setAttributes({ 'ai.output_size': result.length, duration_ms: dur });
+      span.end();
       return result;
     } catch (err) {
-      aiTracker.finish(entry, 'error', Date.now() - t0, 0, (err as Error)?.message ?? String(err));
+      const dur = Date.now() - t0;
+      aiTracker.finish(entry, 'error', dur, 0, (err as Error)?.message ?? String(err));
+      span.setAttribute('duration_ms', dur);
+      span.recordError(err);
+      span.end();
       throw err;
     }
   }
@@ -188,6 +233,13 @@ class TrackedInferenceService implements InferenceService {
       this.url,
       totalInput,
     );
+    const span = getGlobalTelemetrySink().startSpan('ai.generate_stream', {
+      'ai.method': 'generate_stream',
+      'ai.provider': this.provider,
+      'ai.model': this.model,
+      'ai.url': this.url,
+      'ai.input_size': totalInput,
+    });
     const t0 = Date.now();
     let outputLen = 0;
     try {
@@ -195,15 +247,16 @@ class TrackedInferenceService implements InferenceService {
         outputLen += chunk.length;
         yield chunk;
       }
-      aiTracker.finish(entry, 'ok', Date.now() - t0, outputLen);
+      const dur = Date.now() - t0;
+      aiTracker.finish(entry, 'ok', dur, outputLen);
+      span.setAttributes({ 'ai.output_size': outputLen, duration_ms: dur });
+      span.end();
     } catch (err) {
-      aiTracker.finish(
-        entry,
-        'error',
-        Date.now() - t0,
-        outputLen,
-        (err as Error)?.message ?? String(err),
-      );
+      const dur = Date.now() - t0;
+      aiTracker.finish(entry, 'error', dur, outputLen, (err as Error)?.message ?? String(err));
+      span.setAttributes({ 'ai.output_size': outputLen, duration_ms: dur });
+      span.recordError(err);
+      span.end();
       throw err;
     }
   }
