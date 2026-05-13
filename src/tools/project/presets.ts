@@ -17,6 +17,19 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_feature_context',
     'suggest_queries',
     'get_index_health',
+    // Live decision-memory quartet on the minimal preset:
+    //   remember = remember_decision (live agent write into the decision graph)
+    //   recall   = query_decisions   (FTS search across captured decisions)
+    //   forget   = invalidate_decision (mark a decision no longer valid)
+    //   improve  = mine_sessions     (post-hoc extraction from session logs)
+    // Keeping the canonical trace-mcp names rather than introducing alias
+    // tools — the quartet semantics are documented via this preset only,
+    // so agents working in code-intel mode are not paying tax on four
+    // extra registrations.
+    'remember_decision',
+    'query_decisions',
+    'invalidate_decision',
+    'mine_sessions',
   ],
 
   standard: [
@@ -65,6 +78,11 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_workspace_map',
     // session
     'get_session_resume',
+    // Live decision-memory quartet (mirrors minimal preset)
+    'remember_decision',
+    'query_decisions',
+    'invalidate_decision',
+    'mine_sessions',
   ],
 
   full: 'all',
