@@ -34,7 +34,12 @@ jobs:
 
       # The eval harness queries trace-mcp's `search` against the host
       # project's index — we need an index on disk before `eval run` can
-      # do anything useful.
+      # do anything useful. `index` requires the project to be registered
+      # first; `add --no-index` registers without doing a (slower) full
+      # indexing pass, since the next step does that explicitly with --force.
+      - name: Register project
+        run: node dist/cli.js add . --no-index
+
       - name: Index project
         run: node dist/cli.js index . --force
 
