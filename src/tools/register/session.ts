@@ -7,7 +7,9 @@ import { analyzeRealSavings } from '../../analytics/real-savings.js';
 import { getOptimizationReport, getSessionAnalytics } from '../../analytics/session-analytics.js';
 import { syncAnalytics } from '../../analytics/sync.js';
 import { detectCoverage } from '../../analytics/tech-detector.js';
-import { listBundles, loadAllBundles, searchBundles } from '../../bundles.js';
+import { listBundles, loadAllBundles } from '../../bundles.js';
+import { runRetriever } from '../../retrieval/index.js';
+import { createSearchBundlesRetriever } from '../../retrieval/retrievers/search-bundles-retriever.js';
 import { buildProjectContext } from '../../indexer/project-context.js';
 import { decisionsForResume, decisionsForTask } from '../../memory/enrichment.js';
 import { registerPrompts } from '../../prompts/index.js';
@@ -243,7 +245,8 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
           ],
         };
       }
-      const results = searchBundles(bundles, query, { kind, limit });
+      const retriever = createSearchBundlesRetriever({ bundles });
+      const [results] = await runRetriever(retriever, { query, kind, limit });
       for (const b of bundles) b.db.close();
       return {
         content: [{ type: 'text', text: j({ results, bundles_searched: bundles.length }) }],
