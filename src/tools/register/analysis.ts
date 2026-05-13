@@ -2,6 +2,17 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
+import {
+  PIN_MAX_ACTIVE,
+  PIN_WEIGHT_DEFAULT,
+  PIN_WEIGHT_MAX,
+  PIN_WEIGHT_MIN,
+  deletePin,
+  invalidatePinsCache,
+  listPins,
+  upsertPin,
+} from '../../scoring/pins.js';
+import { invalidatePageRankCache } from '../../scoring/pagerank.js';
 import { getEdgeBottlenecks } from '../analysis/bottlenecks.js';
 import { getComplexityTrend } from '../analysis/complexity-trend.js';
 import { checkSymbolForDuplicates } from '../analysis/duplication.js';
@@ -629,6 +640,139 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         },
       );
       return { content: [{ type: 'text', text: jh('check_duplication', result) }] };
+    },
+  );
+
+  // ─── E10 — ranking pins ──────────────────────────────────────────────
+  //
+  // pin_symbol / pin_file boost (or demote, with weight<1) specific targets
+  // in PageRank-driven ranking. Weights are multiplicative and applied as a
+  // post-rank pass inside getPageRank. The pins table is a flat keyed store
+  // capped at PIN_MAX_ACTIVE active rows.
+
+  const pinExpirySchema = z
+    .number()
+    .int()
+    .min(1)
+    .max(365)
+    .optional()
+    .describe('Days until the pin expires (default: 7). Omit to set the default TTL.');
+
+  const pinWeightSchema = z
+    .number()
+    .min(PIN_WEIGHT_MIN)
+    .max(PIN_WEIGHT_MAX)
+    .optional()
+    .describe(
+      `Pin weight multiplier in [${PIN_WEIGHT_MIN}, ${PIN_WEIGHT_MAX}]. Default ${PIN_WEIGHT_DEFAULT}. Values < 1 demote.`,
+    );
+
+  function bustRankingCaches(): void {
+    invalidatePinsCache();
+    invalidatePageRankCache();
+  }
+
+  function defaultExpiryMs(expiresInDays?: number): number {
+    const days = expiresInDays ?? 7;
+    return days * 24 * 60 * 60 * 1000;
+  }
+
+  server.tool(
+    'pin_symbol',
+    'Boost (or demote) a specific symbol in PageRank-driven ranking by setting a multiplicative weight. Pinned symbols also boost their containing file via the same weight. Use to surface canonical examples or architectural keystones. Capped at 50 active pins per project. Returns JSON: { ok, pin? }.',
+    {
+      symbol_id: z.string().min(1).max(512).describe('Symbol FQN to pin'),
+      weight: pinWeightSchema,
+      expires_in_days: pinExpirySchema,
+    },
+    async ({ symbol_id, weight, expires_in_days }) => {
+      const result = upsertPin(store.db, {
+        scope: 'symbol',
+        target_id: symbol_id,
+        weight,
+        expires_in_ms: defaultExpiryMs(expires_in_days),
+        created_by: 'user',
+      });
+      bustRankingCaches();
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text', text: j({ ok: false, error: result.reason }) }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text', text: j({ ok: true, pin: result.row }) }] };
+    },
+  );
+
+  server.tool(
+    'pin_file',
+    'Boost (or demote) a specific file in PageRank-driven ranking by setting a multiplicative weight on its PageRank score. Use to surface canonical examples, architectural keystones, or files central to a work-in-progress feature. Capped at 50 active pins per project. Returns JSON: { ok, pin? }.',
+    {
+      file_path: z.string().min(1).max(512).describe('File path to pin (project-relative)'),
+      weight: pinWeightSchema,
+      expires_in_days: pinExpirySchema,
+    },
+    async ({ file_path, weight, expires_in_days }) => {
+      const result = upsertPin(store.db, {
+        scope: 'file',
+        target_id: file_path,
+        weight,
+        expires_in_ms: defaultExpiryMs(expires_in_days),
+        created_by: 'user',
+      });
+      bustRankingCaches();
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text', text: j({ ok: false, error: result.reason }) }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text', text: j({ ok: true, pin: result.row }) }] };
+    },
+  );
+
+  server.tool(
+    'unpin',
+    'Remove a ranking pin by target. Pass either symbol_id (for a pinned symbol) or file_path (for a pinned file). At least one is required. Returns JSON: { ok, deleted }.',
+    {
+      symbol_id: z.string().max(512).optional().describe('Symbol FQN of the pin to remove'),
+      file_path: z.string().max(512).optional().describe('File path of the pin to remove'),
+    },
+    async ({ symbol_id, file_path }) => {
+      if (!symbol_id && !file_path) {
+        return {
+          content: [
+            { type: 'text', text: j({ ok: false, error: 'symbol_id or file_path required' }) },
+          ],
+          isError: true,
+        };
+      }
+      let total = 0;
+      if (symbol_id) {
+        total += deletePin(store.db, { scope: 'symbol', target_id: symbol_id }).deleted;
+      }
+      if (file_path) {
+        total += deletePin(store.db, { scope: 'file', target_id: file_path }).deleted;
+      }
+      bustRankingCaches();
+      return { content: [{ type: 'text', text: j({ ok: true, deleted: total }) }] };
+    },
+  );
+
+  server.tool(
+    'list_pins',
+    'List all active ranking pins with weight, scope, target, expiry, and creator. Use to inspect what is currently boosted/demoted in PageRank-driven ranking. Read-only. Returns JSON: { pins: [{ scope, target_id, weight, expires_at, created_by, created_at }], total, cap }.',
+    {},
+    async () => {
+      const pins = listPins(store.db);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: j({ pins, total: pins.length, cap: PIN_MAX_ACTIVE }),
+          },
+        ],
+      };
     },
   );
 }
