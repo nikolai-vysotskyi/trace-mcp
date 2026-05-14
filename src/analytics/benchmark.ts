@@ -1,9 +1,30 @@
 /**
- * Synthetic benchmark: compare "read full file" vs trace-mcp compact responses.
- * Measures token reduction across multiple scenarios.
+ * Synthetic benchmark: estimate "read full file" cost vs trace-mcp compact-response cost
+ * across multiple scenarios.
+ *
+ * IMPORTANT — this is a SYNTHETIC ESTIMATOR, not a real measurement harness:
+ *  - The baseline side is computed from real file byte_length values stored in the
+ *    SQLite index. It is NOT a re-read from disk.
+ *  - The trace-mcp side is computed from per-scenario fixed multipliers (e.g.
+ *    `bytes * 0.08`), NOT from actual tool invocations. The reduction percentages
+ *    are therefore upper-bound estimates, not measured savings.
+ *  - Tokens are estimated from character count. With `gpt-tokenizer` installed the
+ *    estimator calibrates against a sample to give a more accurate chars-per-token
+ *    ratio; otherwise it falls back to the legacy chars/3.5 heuristic (documented
+ *    in BenchmarkResult.methodology and accuracy).
+ *  - Each scenario is sampled `samples` times with seed-shifted re-rolls so the
+ *    output includes a mean, stddev, and p95 — single-shot is no longer the only
+ *    reported figure.
  */
 
 import type { Store } from '../db/store.js';
+
+interface ScenarioStats {
+  mean: number;
+  stddev: number;
+  p95: number;
+  samples: number;
+}
 
 interface BenchmarkScenarioResult {
   name: string;
@@ -12,6 +33,8 @@ interface BenchmarkScenarioResult {
   baseline_tokens: number;
   trace_mcp_tokens: number;
   reduction_pct: number;
+  /** Multi-sample dispersion of reduction_pct across `samples` runs. */
+  reduction_stats?: ScenarioStats;
   details: {
     query: string;
     file: string;
@@ -19,6 +42,19 @@ interface BenchmarkScenarioResult {
     trace_mcp_tokens: number;
     reduction_pct: number;
   }[];
+}
+
+interface BenchmarkAccuracy {
+  /** "synthetic-estimator" — neither side is a real tool invocation. */
+  kind: 'synthetic-estimator';
+  /** Calibrated characters-per-token ratio used by estimateTokens. */
+  chars_per_token: number;
+  /** Whether a real tokenizer was used to calibrate (gpt-tokenizer cl100k_base). */
+  tokenizer_calibrated: boolean;
+  /** How many seed-shifted re-runs were averaged. */
+  samples: number;
+  /** Caveats consumers should not strip from machine-readable output. */
+  caveats: string[];
 }
 
 interface BenchmarkResult {
@@ -30,13 +66,124 @@ interface BenchmarkResult {
     baseline_tokens: number;
     trace_mcp_tokens: number;
     reduction_pct: number;
+    /** Reduction-pct dispersion across scenarios (cross-scenario, not cross-sample). */
+    reduction_stats?: ScenarioStats;
     estimated_cost_saved_per_query: Record<string, string>;
   };
   methodology: string;
+  accuracy: BenchmarkAccuracy;
+}
+
+/**
+ * Characters-per-token ratio used to convert char counts to token estimates.
+ *
+ * BEFORE: hardcoded `3.5` everywhere, which overestimates Claude/GPT tokens for
+ * source code by ~14% versus a real BPE tokenizer (cl100k_base typically yields
+ * ~3.9-4.1 chars/token for TypeScript-ish text).
+ *
+ * AFTER: defaults to 4.0 (closer to cl100k_base on code), and is replaced by a
+ * calibrated value when `gpt-tokenizer` is loaded successfully and given a sample.
+ */
+const DEFAULT_CHARS_PER_TOKEN = 4.0;
+const LEGACY_CHARS_PER_TOKEN = 3.5; // retained only for tests that assert the legacy ratio
+
+let CALIBRATED_CHARS_PER_TOKEN: number = DEFAULT_CHARS_PER_TOKEN;
+let TOKENIZER_CALIBRATED = false;
+
+function estimateTokensWith(chars: number, charsPerToken: number): number {
+  return Math.ceil(chars / charsPerToken);
 }
 
 function estimateTokens(chars: number): number {
-  return Math.ceil(chars / 3.5);
+  return estimateTokensWith(chars, CALIBRATED_CHARS_PER_TOKEN);
+}
+
+/**
+ * Calibrate CALIBRATED_CHARS_PER_TOKEN against a real BPE tokenizer when available.
+ *
+ * BEFORE: a single hardcoded constant (3.5) was used to convert chars→tokens, with
+ * no way to verify how far off it was on actual source code.
+ *
+ * AFTER: tries `gpt-tokenizer` (cl100k_base). If the import succeeds we tokenize a
+ * representative TypeScript sample and store the measured ratio; otherwise we keep
+ * the documented default and flag `tokenizer_calibrated: false` in the result.
+ *
+ * Idempotent — first successful calibration sticks for process lifetime.
+ */
+export async function calibrateTokenizer(sample?: string): Promise<void> {
+  return tryCalibrateTokenizer(sample);
+}
+
+async function tryCalibrateTokenizer(sample?: string): Promise<void> {
+  if (TOKENIZER_CALIBRATED) return;
+  const calibrationSample =
+    sample ??
+    `import { describe, it, expect } from 'vitest';\n` +
+      `export function parseInput(input: string): AST {\n` +
+      `  const tokens = tokenize(input);\n` +
+      `  return buildTree(tokens);\n` +
+      `}\n` +
+      `class Parser { constructor(private opts: ParserOptions) {} parse(src: string) { /* ... */ } }`;
+  try {
+    const mod = (await import('gpt-tokenizer')) as { encode?: (s: string) => number[] };
+    if (typeof mod.encode === 'function') {
+      const tokens = mod.encode(calibrationSample);
+      if (tokens.length > 0) {
+        const ratio = calibrationSample.length / tokens.length;
+        // Clamp to a sane band — guards against weird tokenizers / empty samples.
+        if (ratio >= 2.0 && ratio <= 6.0) {
+          CALIBRATED_CHARS_PER_TOKEN = ratio;
+          TOKENIZER_CALIBRATED = true;
+        }
+      }
+    }
+  } catch {
+    // gpt-tokenizer not installed or failed to load — keep default.
+  }
+}
+
+/**
+ * Test/internal hook: reset the calibrated ratio so unit tests can exercise both
+ * "tokenizer available" and "fallback" code paths deterministically.
+ */
+export function _resetTokenizerCalibrationForTests(
+  ratio: number = DEFAULT_CHARS_PER_TOKEN,
+  calibrated = false,
+): void {
+  CALIBRATED_CHARS_PER_TOKEN = ratio;
+  TOKENIZER_CALIBRATED = calibrated;
+}
+
+export function _getCharsPerTokenForTests(): { ratio: number; calibrated: boolean } {
+  return { ratio: CALIBRATED_CHARS_PER_TOKEN, calibrated: TOKENIZER_CALIBRATED };
+}
+
+function mean(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  return xs.reduce((s, v) => s + v, 0) / xs.length;
+}
+
+function stddev(xs: number[]): number {
+  if (xs.length < 2) return 0;
+  const m = mean(xs);
+  const variance = xs.reduce((s, v) => s + (v - m) * (v - m), 0) / (xs.length - 1);
+  return Math.sqrt(variance);
+}
+
+function percentile(xs: number[], p: number): number {
+  if (xs.length === 0) return 0;
+  const sorted = [...xs].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[idx];
+}
+
+function buildStats(values: number[]): ScenarioStats {
+  return {
+    mean: Math.round(mean(values) * 100) / 100,
+    stddev: Math.round(stddev(values) * 100) / 100,
+    p95: Math.round(percentile(values, 95) * 100) / 100,
+    samples: values.length,
+  };
 }
 
 function seededRandom(seed: number): () => number {
@@ -577,9 +724,13 @@ function benchmarkTestsFor(
     // Baseline: glob("*.test.*", "*.spec.*") + grep(symbolName) in test files + read matched test files
     // Typical: glob returns list (200 tokens) + grep matches in 2-3 test files (2400 tokens) + read 2 test files (4000 tokens)
     const globTokens = 200;
-    const grepTokens = (3 * 5 * 80) / 3.5; // 3 files × 5 matches × 80 chars
+    // BEFORE: divided chars by 3.5 directly here while everywhere else used
+    // estimateTokens() (which Math.ceil-rounds and follows the calibrated ratio).
+    // This produced inconsistent fractional tokens. AFTER: route through
+    // estimateTokens() so the tokenizer-calibration logic applies uniformly.
+    const grepTokens = estimateTokens(3 * 5 * 80); // 3 files × 5 matches × 80 chars
     const testFileReadTokens = 2 * estimateTokens(3000); // 2 test files × ~3KB avg
-    const bl = Math.round(globTokens + grepTokens + testFileReadTokens);
+    const bl = globTokens + grepTokens + testFileReadTokens;
     // trace-mcp: get_tests_for returns only relevant test blocks with assertions
     const tm = estimateTokens(400); // compact: test name + file + line + assertion summary
     return {
@@ -597,17 +748,15 @@ function benchmarkTestsFor(
   );
 }
 
-export function runBenchmark(
+/** Run all scenarios once with a given rng. Pulled out so we can multi-sample. */
+function runScenariosOnce(
   store: Store,
-  opts: { queries?: number; seed?: number; projectName?: string; frameworks?: string[] } = {},
-): BenchmarkResult {
-  const n = opts.queries ?? 10;
-  const rand = seededRandom(opts.seed ?? 42);
-
-  const symbols = loadSymbols(store);
-  const files = loadFiles(store);
-
-  const scenarios = [
+  symbols: SymbolInfo[],
+  files: FileInfo[],
+  n: number,
+  rand: () => number,
+): BenchmarkScenarioResult[] {
+  return [
     benchmarkSymbolLookup(symbols, n, rand),
     benchmarkFileExploration(files, n, rand),
     benchmarkSearch(symbols, n, rand),
@@ -620,6 +769,69 @@ export function runBenchmark(
     benchmarkTestsFor(store, symbols, n, rand),
     benchmarkTaskContext(store, symbols, files, n, rand),
   ];
+}
+
+export function runBenchmark(
+  store: Store,
+  opts: {
+    queries?: number;
+    seed?: number;
+    projectName?: string;
+    frameworks?: string[];
+    /**
+     * Number of seed-shifted re-runs to average over. Default 5.
+     *
+     * BEFORE: each scenario ran once and the single reduction_pct was reported
+     * as if it were an exact figure. AFTER: we re-roll the sampling seed
+     * `samples` times, compute reduction_pct per run, and report mean / stddev / p95
+     * in `reduction_stats`. Detail rows still come from the first run for shape
+     * compatibility.
+     */
+    samples?: number;
+    /**
+     * Calibrate the chars-per-token ratio against a real tokenizer (gpt-tokenizer,
+     * cl100k_base) before estimating. Default true. Setting false uses the
+     * documented default ratio without attempting tokenizer import.
+     */
+    calibrateTokenizer?: boolean;
+  } = {},
+): BenchmarkResult {
+  const n = opts.queries ?? 10;
+  const seed = opts.seed ?? 42;
+  const samples = Math.max(1, Math.min(opts.samples ?? 5, 20));
+
+  // Calibrate tokenizer synchronously-ish: we awaited it for tests via the
+  // dedicated test helper. For production runs we attempt calibration lazily on
+  // the first call and cache the result; subsequent runs in the same process
+  // reuse it. We deliberately use a fire-and-forget import here because this is
+  // a CLI/tool path and not blocking the event loop is more important than
+  // first-run calibration accuracy.
+  if (opts.calibrateTokenizer !== false && !TOKENIZER_CALIBRATED) {
+    // We attempt sync require via dynamic import; if it has not resolved by the
+    // time we compute tokens we fall through with the default ratio. Tests use
+    // calibrateTokenizerForTests() to guarantee state.
+    void tryCalibrateTokenizer();
+  }
+
+  const symbols = loadSymbols(store);
+  const files = loadFiles(store);
+
+  // Primary run — its detail rows are what we surface for stable output shape.
+  const primary = runScenariosOnce(store, symbols, files, n, seededRandom(seed));
+
+  // Re-roll for variance. Use seed + i so reproducible.
+  const perScenarioReductions: number[][] = primary.map((s) => [s.reduction_pct]);
+  for (let i = 1; i < samples; i++) {
+    const reroll = runScenariosOnce(store, symbols, files, n, seededRandom(seed + i * 1000003));
+    reroll.forEach((sc, idx) => {
+      perScenarioReductions[idx].push(sc.reduction_pct);
+    });
+  }
+
+  const scenarios: BenchmarkScenarioResult[] = primary.map((sc, idx) => ({
+    ...sc,
+    reduction_stats: buildStats(perScenarioReductions[idx]),
+  }));
 
   const totalQueries = scenarios.reduce((s, sc) => s + sc.queries, 0);
   const totalBaseline = scenarios.reduce((s, sc) => s + sc.baseline_tokens, 0);
@@ -630,6 +842,23 @@ export function runBenchmark(
   for (const [model, price] of Object.entries(MODEL_PRICING)) {
     costSaved[model] = `$${(savedPerQuery * price).toFixed(4)}`;
   }
+
+  // Aggregate dispersion across scenarios — gives readers a single "how noisy
+  // are these numbers?" signal alongside the totals line.
+  const allReductions = scenarios.map((s) => s.reduction_pct);
+
+  const accuracy: BenchmarkAccuracy = {
+    kind: 'synthetic-estimator',
+    chars_per_token: Math.round(CALIBRATED_CHARS_PER_TOKEN * 100) / 100,
+    tokenizer_calibrated: TOKENIZER_CALIBRATED,
+    samples,
+    caveats: [
+      'Baseline is computed from file byte_length stored in the index, not a fresh disk read.',
+      'trace-mcp side uses fixed per-scenario multipliers, not real tool invocations.',
+      'Token counts are estimates; calibrated against cl100k_base when gpt-tokenizer is available.',
+      'reduction_pct is a single-run figure; see reduction_stats for cross-sample dispersion.',
+    ],
+  };
 
   return {
     project: opts.projectName ?? 'unknown',
@@ -644,9 +873,15 @@ export function runBenchmark(
       baseline_tokens: totalBaseline,
       trace_mcp_tokens: totalCompact,
       reduction_pct: reductionPct(totalBaseline, totalCompact),
+      reduction_stats: buildStats(allReductions),
       estimated_cost_saved_per_query: costSaved,
     },
-    methodology: `Baseline = raw file content for each queried file. trace-mcp = actual compact response size from index. Token estimation: chars/3.5. Seed: ${opts.seed ?? 42}.`,
+    methodology:
+      `SYNTHETIC ESTIMATOR. Baseline = file byte_length from index. trace-mcp side = fixed ` +
+      `per-scenario multipliers (NOT real tool calls). Token estimate: chars/${accuracy.chars_per_token.toFixed(2)} ` +
+      `${TOKENIZER_CALIBRATED ? '(calibrated via gpt-tokenizer cl100k_base)' : '(default heuristic; install gpt-tokenizer for calibration)'}. ` +
+      `Samples: ${samples}. Seed: ${seed}.`,
+    accuracy,
   };
 }
 
@@ -661,20 +896,42 @@ export function formatBenchmarkMarkdown(result: BenchmarkResult): string {
     lines.push(`Frameworks: ${result.index_stats.frameworks.join(', ')}`);
   }
   lines.push('');
-  lines.push('| Scenario | Queries | Baseline tokens | trace-mcp tokens | Reduction |');
-  lines.push('|----------|---------|-----------------|------------------|-----------|');
+  // Surface the methodology kind so readers don't read this as a measured number.
+  lines.push(
+    `> Synthetic estimator. Tokens via chars/${result.accuracy.chars_per_token.toFixed(2)} ` +
+      `${result.accuracy.tokenizer_calibrated ? '(calibrated)' : '(uncalibrated heuristic)'}. ` +
+      `${result.accuracy.samples} samples per scenario.`,
+  );
+  lines.push('');
+  lines.push(
+    '| Scenario | Queries | Baseline tokens | trace-mcp tokens | Reduction | ± stddev | p95 |',
+  );
+  lines.push(
+    '|----------|---------|-----------------|------------------|-----------|----------|-----|',
+  );
   for (const s of result.scenarios) {
+    const stats = s.reduction_stats;
+    const stddevPart = stats ? `±${stats.stddev.toFixed(1)}%` : 'n/a';
+    const p95Part = stats ? `${stats.p95.toFixed(1)}%` : 'n/a';
     lines.push(
-      `| ${s.name} | ${s.queries} | ${s.baseline_tokens.toLocaleString()} | ${s.trace_mcp_tokens.toLocaleString()} | ${s.reduction_pct}% |`,
+      `| ${s.name} | ${s.queries} | ${s.baseline_tokens.toLocaleString()} | ${s.trace_mcp_tokens.toLocaleString()} | ${s.reduction_pct}% | ${stddevPart} | ${p95Part} |`,
     );
   }
+  const totStats = result.totals.reduction_stats;
+  const totStddev = totStats ? `±${totStats.stddev.toFixed(1)}%` : 'n/a';
+  const totP95 = totStats ? `${totStats.p95.toFixed(1)}%` : 'n/a';
   lines.push(
-    `| **Total** | **${result.totals.total_queries}** | **${result.totals.baseline_tokens.toLocaleString()}** | **${result.totals.trace_mcp_tokens.toLocaleString()}** | **${result.totals.reduction_pct}%** |`,
+    `| **Total** | **${result.totals.total_queries}** | **${result.totals.baseline_tokens.toLocaleString()}** | **${result.totals.trace_mcp_tokens.toLocaleString()}** | **${result.totals.reduction_pct}%** | **${totStddev}** | **${totP95}** |`,
   );
   lines.push('');
   const models = Object.entries(result.totals.estimated_cost_saved_per_query);
   if (models.length > 0) {
     lines.push(`Estimated savings per query: ${models.map(([m, v]) => `${v} (${m})`).join(', ')}`);
+  }
+  lines.push('');
+  lines.push('Caveats:');
+  for (const c of result.accuracy.caveats) {
+    lines.push(`- ${c}`);
   }
   return lines.join('\n');
 }
@@ -715,12 +972,16 @@ export function formatBenchmarkShareReport(result: BenchmarkResult): string {
   lines.push(` trace-mcp benchmark · ${projectLabel(result.project)}`);
   lines.push(bar);
   lines.push('');
-  lines.push(' Your AI agent recomputes work worth:');
+  lines.push(' Estimated token waste in this codebase:');
   lines.push(
-    `   ${formatTokens(wasted)} tokens per benchmark run · ~$${wastedDollars.toFixed(2)} (Sonnet) / ~$${wastedDollarsOpus.toFixed(2)} (Opus)`,
+    `   ~${formatTokens(wasted)} tokens per benchmark run · ~$${wastedDollars.toFixed(2)} (Sonnet) / ~$${wastedDollarsOpus.toFixed(2)} (Opus)`,
   );
+  const totStats = result.totals.reduction_stats;
+  if (totStats) {
+    lines.push(`   ± stddev ${totStats.stddev.toFixed(1)}% across ${totStats.samples} samples`);
+  }
   lines.push('');
-  lines.push(` trace-mcp cuts this by ${result.totals.reduction_pct}%:`);
+  lines.push(` trace-mcp cuts this by ~${result.totals.reduction_pct}%:`);
   lines.push(
     `   ${formatTokens(result.totals.baseline_tokens)} → ${formatTokens(result.totals.trace_mcp_tokens)} tokens`,
   );
@@ -741,6 +1002,10 @@ export function formatBenchmarkShareReport(result: BenchmarkResult): string {
   }
   lines.push(' Run on your own codebase:');
   lines.push('   npx trace-mcp benchmark .');
+  lines.push('');
+  lines.push(
+    `   (synthetic estimator · chars/${result.accuracy.chars_per_token.toFixed(2)}${result.accuracy.tokenizer_calibrated ? ' calibrated' : ''} · ${result.accuracy.samples} samples)`,
+  );
   lines.push('');
   lines.push(' trace-mcp.com · github.com/nikolai-vysotskyi/trace-mcp');
   lines.push(bar);
