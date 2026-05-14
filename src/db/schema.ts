@@ -439,6 +439,50 @@ CREATE TABLE IF NOT EXISTS pass_cache (
     PRIMARY KEY (task_name, cache_key)
 );
 CREATE INDEX IF NOT EXISTS idx_pass_cache_created ON pass_cache(created_at);
+
+-- v11: Intent Layer — business domain mapping. Mirrored from MIGRATIONS[11]
+-- so that fresh databases (which stamp SCHEMA_VERSION immediately and skip
+-- migrations) also get the domain tables. Upgraded DBs hit MIGRATIONS[11];
+-- fresh DBs hit this block. Keep the two in sync.
+CREATE TABLE IF NOT EXISTS domains (
+    id          INTEGER PRIMARY KEY,
+    name        TEXT NOT NULL,
+    parent_id   INTEGER REFERENCES domains(id) ON DELETE SET NULL,
+    description TEXT,
+    path_hints  TEXT,
+    confidence  REAL NOT NULL DEFAULT 1.0,
+    is_manual   INTEGER NOT NULL DEFAULT 0,
+    metadata    TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(name, parent_id)
+);
+CREATE INDEX IF NOT EXISTS idx_domains_parent ON domains(parent_id);
+
+CREATE TABLE IF NOT EXISTS symbol_domains (
+    id          INTEGER PRIMARY KEY,
+    symbol_id   INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+    domain_id   INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+    relevance   REAL NOT NULL DEFAULT 1.0,
+    is_manual   INTEGER NOT NULL DEFAULT 0,
+    inferred_by TEXT NOT NULL DEFAULT 'heuristic',
+    metadata    TEXT,
+    UNIQUE(symbol_id, domain_id)
+);
+CREATE INDEX IF NOT EXISTS idx_symbol_domains_symbol ON symbol_domains(symbol_id);
+CREATE INDEX IF NOT EXISTS idx_symbol_domains_domain ON symbol_domains(domain_id);
+
+CREATE TABLE IF NOT EXISTS file_domains (
+    id          INTEGER PRIMARY KEY,
+    file_id     INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    domain_id   INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+    relevance   REAL NOT NULL DEFAULT 1.0,
+    is_manual   INTEGER NOT NULL DEFAULT 0,
+    inferred_by TEXT NOT NULL DEFAULT 'heuristic',
+    UNIQUE(file_id, domain_id)
+);
+CREATE INDEX IF NOT EXISTS idx_file_domains_file ON file_domains(file_id);
+CREATE INDEX IF NOT EXISTS idx_file_domains_domain ON file_domains(domain_id);
 `;
 
 const SEED_NODE_TYPES = [
