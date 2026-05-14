@@ -92,10 +92,7 @@ describe('getSubprojectClients() — behavioural contract', () => {
     fs.rmSync(path.dirname(ctx.dbPath), { recursive: true, force: true });
   });
 
-  // TODO(bug): TopologyStore.getClientCallsByEndpoint uses `fr.name` alias but
-  // the JOIN aliases subprojects as `sp` — SqliteError: no such column: fr.name.
-  // See src/topology/topology-db.ts ~line 1008.
-  it.skip('returns clients for endpoints whose path matches the query substring', () => {
+  it('returns clients for endpoints whose path matches the query substring', () => {
     const result = getSubprojectClients(ctx.store, { endpoint: '/users' });
     expect(result.isOk()).toBe(true);
     const list = result._unsafeUnwrap();
@@ -105,8 +102,7 @@ describe('getSubprojectClients() — behavioural contract', () => {
     expect(allClients.length).toBe(2);
   });
 
-  // TODO(bug): same alias bug in TopologyStore.getClientCallsByEndpoint blocks this case.
-  it.skip('method filter narrows endpoints to that HTTP verb', () => {
+  it('method filter narrows endpoints to that HTTP verb', () => {
     const result = getSubprojectClients(ctx.store, { endpoint: '/users', method: 'POST' });
     const list = result._unsafeUnwrap();
     expect(list).toHaveLength(1);
@@ -121,8 +117,7 @@ describe('getSubprojectClients() — behavioural contract', () => {
     expect(result._unsafeUnwrap()).toEqual([]);
   });
 
-  // TODO(bug): same alias bug in TopologyStore.getClientCallsByEndpoint blocks this case.
-  it.skip('each client entry exposes repo + filePath + line + callType + confidence', () => {
+  it('each client entry exposes repo + filePath + line + callType + confidence', () => {
     const list = getSubprojectClients(ctx.store, {
       endpoint: '/users',
       method: 'GET',
@@ -137,8 +132,7 @@ describe('getSubprojectClients() — behavioural contract', () => {
     expect(client.confidence).toBeGreaterThan(0);
   });
 
-  // TODO(bug): same alias bug in TopologyStore.getClientCallsByEndpoint blocks this case.
-  it.skip('output shape: each entry has endpoint + clients[] + totalClients', () => {
+  it('output shape: each entry has endpoint + clients[] + totalClients', () => {
     const list = getSubprojectClients(ctx.store, { endpoint: '/users' })._unsafeUnwrap();
     for (const entry of list) {
       expect(entry.endpoint).toBeDefined();
