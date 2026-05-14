@@ -261,6 +261,18 @@ export class ProjectManager {
     // Start indexing in background, gated by the shared semaphore so adding
     // N projects at once doesn't fan out to N concurrent indexAll runs.
     managed.status = 'indexing';
+    // Wrap initial indexAll in an FK-auto-recovery retry. When upgrading from
+    // an older schema (e.g. v26 -> v28) the existing DB may carry stale rows
+    // that were tolerated under the previous edge-resolution algorithm but
+    // violate FK constraints under the new one. Re-running with force=true
+    // wipes the symbol/edge tables and rebuilds them in correct order from
+    // source files, which clears the orphan rows. We only retry ONCE and we
+    // only retry for FK errors — every other failure surfaces immediately so
+    // we don't mask real bugs.
+    const isForeignKeyError = (err: unknown): boolean => {
+      const msg = err instanceof Error ? err.message : String(err);
+      return /FOREIGN KEY constraint failed/i.test(msg);
+    };
     this.indexAllLimit!(() => pipeline.indexAll())
       .then(() => {
         managed.status = 'ready';
@@ -269,7 +281,30 @@ export class ProjectManager {
         runSubprojectAutoSync(projectRoot, config);
         logger.info({ projectRoot }, 'Project indexing complete');
       })
-      .catch((err) => {
+      .catch(async (err) => {
+        if (isForeignKeyError(err)) {
+          logger.warn(
+            { projectRoot, error: String(err) },
+            'Initial indexing hit FOREIGN KEY violation — likely stale data from older schema. Retrying with force=true.',
+          );
+          try {
+            await this.indexAllLimit!(() => pipeline.indexAll(true));
+            managed.status = 'ready';
+            runSummarization();
+            runEmbeddings();
+            runSubprojectAutoSync(projectRoot, config);
+            logger.info({ projectRoot }, 'Project indexing complete (force-reindex recovery)');
+            return;
+          } catch (retryErr) {
+            managed.status = 'error';
+            managed.error = `Force-reindex after FK recovery still failed: ${String(retryErr)}`;
+            logger.error(
+              { error: retryErr, projectRoot, originalError: String(err) },
+              'Force-reindex recovery also failed',
+            );
+            return;
+          }
+        }
         managed.status = 'error';
         managed.error = String(err);
         logger.error({ error: err, projectRoot }, 'Initial indexing failed');
