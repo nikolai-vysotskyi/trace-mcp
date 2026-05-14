@@ -74,6 +74,10 @@ describe('CLI smoke tests', () => {
     db.close();
   });
 
+  // Windows runners on cold SSDs can spend >10s on the initial WAL handshake
+  // plus 28 schema migrations on a brand-new file-backed DB. The test itself
+  // is synchronous and trivial — bump the timeout so the slow setup doesn't
+  // get blamed on the assertion.
   it('DB schema includes workspace and is_cross_ws columns', () => {
     const dir = makeDbDir();
     const dbPath = path.join(dir, 'index.db');
@@ -88,5 +92,5 @@ describe('CLI smoke tests', () => {
     expect(edgeColumns.map((c) => c.name)).toContain('is_cross_ws');
 
     db.close();
-  });
+  }, 30000);
 });
