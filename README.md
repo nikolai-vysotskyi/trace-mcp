@@ -485,7 +485,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 | Document | Description |
 |---|---|
 | [Supported frameworks](docs/supported-frameworks.md) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
-| [Tools reference](docs/tools-reference.md) | All 153 MCP tools with descriptions and usage examples |
+| [Tools reference](docs/tools-reference.md) | All 162 MCP tools with descriptions and usage examples |
 | [Configuration](docs/configuration.md) | Config options, AI setup, environment variables, security settings |
 | [Architecture](docs/architecture.md) | How indexing works, plugin system, project structure, tech stack |
 | [Decision memory](docs/decision-memory.md) | Decision knowledge graph, session mining, cross-session search, wake-up context |
