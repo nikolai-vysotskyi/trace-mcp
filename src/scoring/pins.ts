@@ -7,15 +7,25 @@
  * (scope=symbol). Weights ∈ [0.1, 3.0]; values < 1 demote. TTL via
  * `expires_at` (unix ms). Total active rows capped at 50.
  *
- * This module exposes a tiny CRUD surface plus an in-process cache used
- * by `getPageRank` to multiply pinned-file scores after the algorithm
- * settles. We deliberately apply pins POST-rank rather than seed them
- * into the prior because:
+ * This module exposes a tiny CRUD surface used by `getPageRank` to multiply
+ * pinned-file scores after the algorithm settles. We deliberately apply
+ * pins POST-rank rather than seed them into the prior because:
  *   1. It composes cleanly with downstream rerankers — anyone consuming
  *      pagerank output sees a stable order.
  *   2. It avoids re-converging PageRank on every pin/unpin.
  *   3. Tests can assert a deterministic boost relative to the unpinned
  *      baseline without depending on algorithm convergence.
+ *
+ * Caching note (N1): an earlier revision kept a 30s module-level cache of
+ * the pins table, invalidated only via `upsertPin` / `deletePin`. That left
+ * stale weights cached for up to 30 seconds whenever anything bypassed the
+ * helpers — direct INSERT/DELETE/UPDATE against `ranking_pins`, bulk
+ * migrations, importers, or test fixtures. The table caps at 50 rows and
+ * every read is a single indexed SELECT; caching it was a premature
+ * optimisation. The cache has been removed entirely — every lookup hits
+ * SQLite. PageRank already does O(V²) work, so a 50-row SELECT per call is
+ * statistical noise. `invalidatePinsCache` is kept as a no-op for backward
+ * compatibility with existing callers (it is referenced from tests).
  */
 
 import type Database from 'better-sqlite3';
@@ -34,55 +44,33 @@ export interface RankingPinRow {
   created_at: number;
 }
 
-interface RankingPinDb {
-  scope: 'symbol' | 'file';
-  target_id: string;
-  weight: number;
-  expires_at: number | null;
-  created_by: string;
-  created_at: number;
-}
-
-interface PinsCache {
-  files: Map<string, number>;
-  symbols: Map<string, number>;
-  loadedAt: number;
-}
-
-let _cache: PinsCache | null = null;
-const CACHE_TTL_MS = 30_000;
-
+/**
+ * No-op retained for backward compatibility. The in-process cache that this
+ * used to invalidate has been removed; every read now hits SQLite directly.
+ * Existing call sites (notably `upsertPin` / `deletePin` and tests) continue
+ * to call this safely.
+ */
 export function invalidatePinsCache(): void {
-  _cache = null;
+  /* no-op — see file header */
 }
 
 function nowMs(): number {
   return Date.now();
 }
 
-function loadCache(db: Database.Database): PinsCache {
-  if (_cache && nowMs() - _cache.loadedAt < CACHE_TTL_MS) return _cache;
-  // Prune expired rows opportunistically — cheap and avoids stale weights.
+function pruneExpired(db: Database.Database): void {
   db.prepare('DELETE FROM ranking_pins WHERE expires_at IS NOT NULL AND expires_at < ?').run(
     nowMs(),
   );
-  const rows = db.prepare('SELECT scope, target_id, weight FROM ranking_pins').all() as Array<
-    Pick<RankingPinDb, 'scope' | 'target_id' | 'weight'>
-  >;
-  const files = new Map<string, number>();
-  const symbols = new Map<string, number>();
-  for (const r of rows) {
-    if (r.scope === 'file') files.set(r.target_id, r.weight);
-    else symbols.set(r.target_id, r.weight);
-  }
-  _cache = { files, symbols, loadedAt: nowMs() };
-  return _cache;
 }
 
 /** Look up the pin weight for a file path. Returns 1.0 (no boost) if unpinned. */
 export function getFilePinWeight(db: Database.Database, filePath: string): number {
-  const cache = loadCache(db);
-  return cache.files.get(filePath) ?? 1.0;
+  pruneExpired(db);
+  const row = db
+    .prepare("SELECT weight FROM ranking_pins WHERE scope = 'file' AND target_id = ?")
+    .get(filePath) as { weight: number } | undefined;
+  return row?.weight ?? 1.0;
 }
 
 /**
@@ -96,14 +84,20 @@ export function getFilePinWeightExplicit(
   db: Database.Database,
   filePath: string,
 ): number | undefined {
-  const cache = loadCache(db);
-  return cache.files.get(filePath);
+  pruneExpired(db);
+  const row = db
+    .prepare("SELECT weight FROM ranking_pins WHERE scope = 'file' AND target_id = ?")
+    .get(filePath) as { weight: number } | undefined;
+  return row?.weight;
 }
 
 /** Look up the pin weight for a symbol_id. Returns 1.0 (no boost) if unpinned. */
 export function getSymbolPinWeight(db: Database.Database, symbolId: string): number {
-  const cache = loadCache(db);
-  return cache.symbols.get(symbolId) ?? 1.0;
+  pruneExpired(db);
+  const row = db
+    .prepare("SELECT weight FROM ranking_pins WHERE scope = 'symbol' AND target_id = ?")
+    .get(symbolId) as { weight: number } | undefined;
+  return row?.weight ?? 1.0;
 }
 
 /**
@@ -119,9 +113,7 @@ export function getSymbolPinWeight(db: Database.Database, symbolId: string): num
  */
 export function getSymbolPinWeightsByFile(db: Database.Database): Map<string, number> {
   // Prune expired pins first so the join doesn't surface stale weights.
-  db.prepare('DELETE FROM ranking_pins WHERE expires_at IS NOT NULL AND expires_at < ?').run(
-    nowMs(),
-  );
+  pruneExpired(db);
   const rows = db
     .prepare(
       `SELECT f.path AS path, MAX(p.weight) AS weight
@@ -139,9 +131,7 @@ export function getSymbolPinWeightsByFile(db: Database.Database): Map<string, nu
 
 /** Count currently active pins (post-expiry-prune). */
 export function countActivePins(db: Database.Database): number {
-  db.prepare('DELETE FROM ranking_pins WHERE expires_at IS NOT NULL AND expires_at < ?').run(
-    nowMs(),
-  );
+  pruneExpired(db);
   return (db.prepare('SELECT COUNT(*) as cnt FROM ranking_pins').get() as { cnt: number }).cnt;
 }
 
@@ -195,7 +185,6 @@ export function upsertPin(
        expires_at = excluded.expires_at,
        created_by = excluded.created_by`,
   ).run(input.scope, input.target_id, weight, expiresAt, input.created_by ?? 'user', now);
-  invalidatePinsCache();
   const row = db
     .prepare(
       'SELECT scope, target_id, weight, expires_at, created_by, created_at FROM ranking_pins WHERE scope = ? AND target_id = ?',
@@ -221,14 +210,11 @@ export function deletePin(
   } else {
     info = db.prepare('DELETE FROM ranking_pins WHERE target_id = ?').run(input.target_id);
   }
-  invalidatePinsCache();
   return { ok: info.changes > 0, deleted: info.changes };
 }
 
 export function listPins(db: Database.Database): RankingPinRow[] {
-  db.prepare('DELETE FROM ranking_pins WHERE expires_at IS NOT NULL AND expires_at < ?').run(
-    nowMs(),
-  );
+  pruneExpired(db);
   return db
     .prepare(
       'SELECT scope, target_id, weight, expires_at, created_by, created_at FROM ranking_pins ORDER BY created_at DESC',
