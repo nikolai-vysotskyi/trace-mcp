@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.36.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.36.0...v1.36.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* **daemon:** auto-recover from FK-violating stale data on initial index ([ea8b7a6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ea8b7a6b2df57ecf8884f974969710359ffdb33b))
+* **daemon:** require explicit ?project= when multiple projects registered ([58e25a2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/58e25a2241e135a255acdf1cc96fa242d27b37b2))
+* **indexer:** density-based binary detection in isBinaryBuffer ([df7b3d8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/df7b3d88d21ce5578abcca04bb3ccb2c38c33c02))
+* **retrieval:** search_with_mode passes both `text` and `query` fields ([6abaea5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6abaea5b50bd7e23315887dddf6e75397008960b))
+* **test:** bump cli-smoke DB-schema test timeout to 30s for Windows runners ([539ae09](https://github.com/nikolai-vysotskyi/trace-mcp/commit/539ae09db54d043abede98eace37f941ee10f4e5))
+* **test:** skip eval-run smoke cases when project is not indexed ([039aced](https://github.com/nikolai-vysotskyi/trace-mcp/commit/039aced08809fbb472318be37508ee46669de6f8))
+* **test:** widen XML perf guard threshold from 500ms to 1500ms ([ddb5d84](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ddb5d842a8ac104ab989376c76c6fb3dd27999ec))
+
+
+### Documentation
+
+* release 1.36.0 consistency fixes ([a604678](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a60467820b8a9b013b6b299d5d45ef5646f5b19a))
+* **tools:** align check_claudemd_drift return shape with auditConfig ([af2f7e4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/af2f7e4ed87b66541355908bb31e134eace3e32d))
+
+
+### Tests
+
+* **db:** pin ranking_pins/pass_cache in fresh-DB schema guard ([10b8e82](https://github.com/nikolai-vysotskyi/trace-mcp/commit/10b8e82a9847e1c3856921a8e10b33fca0ce2f6a))
+* **integration:** smoke-test eval CLI list/run/baseline ([ab5bebf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ab5bebf3fd648fd7faf35408676f7979998aa44b))
+* **smoke:** MCP-tools end-to-end smoke script for new session tools ([3a362d8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3a362d8727b882b3ceea4f77e329485be68c6fe3))
+
 ## [1.36.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.35.1...v1.36.0) (2026-05-13)
 
 
