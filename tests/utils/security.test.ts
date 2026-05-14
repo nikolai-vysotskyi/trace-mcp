@@ -310,8 +310,12 @@ describe('security', () => {
   });
 
   describe('binary buffer detection', () => {
-    it('detects null bytes as binary', () => {
-      const buf = Buffer.from([0x48, 0x65, 0x6c, 0x00, 0x6f]); // "Hel\0o"
+    it('detects dense null bytes as binary', () => {
+      // 8 null bytes in 16 = 50% density, well above the 0.4% floor
+      const buf = Buffer.concat([
+        Buffer.alloc(8, 0x00),
+        Buffer.from([0x48, 0x65, 0x6c, 0x6f, 0x21, 0x21, 0x21, 0x21]),
+      ]);
       expect(isBinaryBuffer(buf)).toBe(true);
     });
 
@@ -325,28 +329,59 @@ describe('security', () => {
       expect(isBinaryBuffer(buf)).toBe(false);
     });
 
-    it('detects null byte at start', () => {
-      const buf = Buffer.from([0x00, 0x48, 0x65, 0x6c, 0x6f]);
+    it('detects all-zero buffer as binary', () => {
+      const buf = Buffer.alloc(64, 0x00);
       expect(isBinaryBuffer(buf)).toBe(true);
     });
 
-    it('detects null byte at 8KB boundary', () => {
-      // Null byte right at the end of the scan window
-      const buf = Buffer.alloc(8192, 0x41); // 8KB of 'A'
-      buf[8191] = 0x00;
+    it('allows source code with a handful of intentional \\x00 literals', () => {
+      // Regression: src/tools/register/memory.ts has 4 `h.update("\x00")`
+      // separator calls. Older detector tripped on the first null byte
+      // and silently dropped the whole file from the index, so the inner
+      // server.tool() registrations were never extracted. New detector
+      // requires both an absolute floor (>=4 nulls) AND ~0.4% density
+      // before declaring binary.
+      const body = Buffer.from(
+        "function digest() {\n  h.update('\\x00');\n  h.update('\\x00');\n  h.update('\\x00');\n  h.update('\\x00');\n  return h.digest();\n}\n".repeat(
+          20,
+        ) +
+          // Pad to ~8 KB so the density check is well-exercised.
+          'x'.repeat(8000),
+        'utf-8',
+      );
+      // Inject 4 real null bytes (matching the live memory.ts shape).
+      body[100] = 0x00;
+      body[200] = 0x00;
+      body[300] = 0x00;
+      body[400] = 0x00;
+      expect(isBinaryBuffer(body)).toBe(false);
+    });
+
+    it('detects dense binary content even when only ~0.5% of bytes are null', () => {
+      // 50 nulls in 8192 bytes ≈ 0.6% — above the 0.4% threshold.
+      const buf = Buffer.alloc(8192, 0x41);
+      for (let i = 0; i < 50; i++) buf[i * 100] = 0x00;
       expect(isBinaryBuffer(buf)).toBe(true);
     });
 
     it('ignores null bytes beyond 8KB', () => {
-      // Null byte just past the scan window
+      // Null bytes just past the scan window — dense enough to trip the
+      // detector if it were sampling there, sparse enough not to in our
+      // 8 KB window.
       const buf = Buffer.alloc(9000, 0x41); // 9KB of 'A'
-      buf[8192] = 0x00;
+      for (let i = 8192; i < 9000; i++) buf[i] = 0x00;
       expect(isBinaryBuffer(buf)).toBe(false);
     });
 
     it('detects PNG header as binary', () => {
-      // PNG magic bytes
-      const buf = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+      // PNG magic bytes + IHDR chunk header — real PNGs have many null bytes
+      // in the first 100 bytes (chunk sizes, palette, etc).
+      const buf = Buffer.concat([
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), // PNG signature
+        Buffer.from([0x00, 0x00, 0x00, 0x0d]), // IHDR length
+        Buffer.from('IHDR', 'ascii'),
+        Buffer.alloc(13, 0x00), // IHDR payload — width/height/bit depth all zero in this fixture
+      ]);
       expect(isBinaryBuffer(buf)).toBe(true);
     });
 
