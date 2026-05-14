@@ -185,13 +185,31 @@ export function escapeRegExp(s: string): string {
 /**
  * Detect binary content by scanning for null bytes in the first 8 KB.
  * Returns true if the buffer likely contains binary data.
+ *
+ * Heuristic: real binaries are *dense* with null bytes (>= ~0.4% of the
+ * sampled window) while source files only ever contain rare, intentional
+ * `'\x00'` literals (e.g. hash separators, parser sentinels). A single
+ * null byte must NOT condemn an otherwise-text TypeScript/Python/Rust
+ * file to being skipped by the indexer — that produced silent dropouts
+ * where files appeared in the `files` table but their interior symbols
+ * were never extracted.
+ *
+ * Threshold: require both an absolute floor (>=4 null bytes) AND a
+ * density floor (~0.4% of the sampled window). Binaries (PNG, gzip,
+ * ELF) sit orders of magnitude above this floor; legitimate source
+ * files sit orders of magnitude below it.
  */
 export function isBinaryBuffer(buf: Buffer): boolean {
   const checkLen = Math.min(buf.length, 8192);
+  if (checkLen === 0) return false;
+  let nulls = 0;
   for (let i = 0; i < checkLen; i++) {
-    if (buf[i] === 0x00) return true;
+    if (buf[i] === 0x00) nulls++;
   }
-  return false;
+  if (nulls < 4) return false;
+  // 0.4% density floor — guards against e.g. minified bundles that
+  // happen to contain a few `\0` literal bytes.
+  return nulls * 256 >= checkLen;
 }
 
 export function validateArtisanCommand(command: string): TraceMcpResult<string> {
