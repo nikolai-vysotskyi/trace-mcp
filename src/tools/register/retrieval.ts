@@ -120,7 +120,14 @@ export function registerRetrievalTools(server: McpServer, ctx: ServerContext): v
         };
       }
 
-      const items = (await runRetriever(retriever, { text: query, limit })) as AnyResult[];
+      // The retrievers do not share a single query-input shape: most consume `text`,
+      // but the graph-completion retriever reads `query`. Pass both so any retriever
+      // gets the field it expects without the dispatcher needing per-mode branches.
+      const items = (await runRetriever(retriever, {
+        text: query,
+        query,
+        limit,
+      } as unknown as Parameters<typeof runRetriever>[1])) as AnyResult[];
       const normalized = items.map((it) => normalize(it, ctx));
 
       return {
