@@ -318,7 +318,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // bloat/redundancy noise.
   server.tool(
     'check_claudemd_drift',
-    'Detect drift between AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules) and the live tool/skill/command surface: dead path references, references to non-existent MCP tools, references to missing skills/commands, oversized sections. Convenience alias for `audit_config { drift_only: true }`. Read-only. Returns JSON: { issues: [{ file, line, category, issue, severity, fix? }], total }.',
+    'Detect drift between AI agent config files (CLAUDE.md, AGENTS.md, .cursorrules) and the live tool/skill/command surface: dead path references, references to non-existent MCP tools, references to missing skills/commands, oversized sections. Convenience alias for `audit_config { drift_only: true }`. Read-only. Returns JSON: { issues: [{ file, line, category, issue, severity, fix? }], files_scanned, total_tokens, summary }.',
     {
       config_files: z
         .array(z.string().max(512))
