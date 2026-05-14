@@ -123,19 +123,25 @@ function computeImpact(store: Store, workspace: string) {
     .getCrossWorkspaceEdges()
     .filter((e) => e.source_workspace === workspace || e.target_workspace === workspace);
 
+  // `consumed_by` = workspaces that import OUR exports (we are the target).
+  // Key by the importer (source_workspace); record which of OUR exports
+  // (target_symbol) they pulled.
   const consumers = new Map<string, Set<string>>();
-  for (const edge of crossEdges) {
-    if (edge.source_workspace === workspace && edge.target_workspace) {
-      const key = edge.target_workspace;
-      if (!consumers.has(key)) consumers.set(key, new Set());
-      if (edge.source_symbol) consumers.get(key)!.add(edge.source_symbol);
-    }
-  }
-
-  const providers = new Map<string, Set<string>>();
   for (const edge of crossEdges) {
     if (edge.target_workspace === workspace && edge.source_workspace) {
       const key = edge.source_workspace;
+      if (!consumers.has(key)) consumers.set(key, new Set());
+      if (edge.target_symbol) consumers.get(key)!.add(edge.target_symbol);
+    }
+  }
+
+  // `depends_on` = workspaces WE import from (we are the source). Key by
+  // the workspace we depend on (target_workspace); record which of their
+  // exports (target_symbol) we reference.
+  const providers = new Map<string, Set<string>>();
+  for (const edge of crossEdges) {
+    if (edge.source_workspace === workspace && edge.target_workspace) {
+      const key = edge.target_workspace;
       if (!providers.has(key)) providers.set(key, new Set());
       if (edge.target_symbol) providers.get(key)!.add(edge.target_symbol);
     }
@@ -172,7 +178,7 @@ describe('get_cross_workspace_impact — behavioural contract', () => {
     ctx = seed();
   });
 
-  it('provider workspace exposes its public_api (symbols targeted by cross-ws edges)', () => {
+  it('provider workspace exposes its public_api and lists consumers in consumed_by', () => {
     const impact = computeImpact(ctx.store, 'packages/api');
     expect(impact.workspace).toBe('packages/api');
 
@@ -181,16 +187,14 @@ describe('get_cross_workspace_impact — behavioural contract', () => {
     expect(impact.public_api[0].name).toBe('apiFn');
     expect(impact.public_api[0].file).toBe('packages/api/api.ts');
 
-    // api is purely a target (never source) → consumed_by is empty in the
-    // tool's current aggregation logic (consumers only populate when this
-    // workspace is the source side of the cross-ws edge).
-    expect(impact.consumed_by).toEqual({});
+    // api is a target of a cross-ws edge from web → web consumes api.
+    // consumed_by is keyed by the importer (packages/web) and lists the
+    // exports of THIS workspace that get pulled (apiFn).
+    expect(Object.keys(impact.consumed_by)).toEqual(['packages/web']);
+    expect(impact.consumed_by['packages/web'].symbols).toContain('apiFn');
 
-    // api is a target of 1 edge from web. The tool's aggregation populates
-    // depends_on on the target side (target_workspace === workspace) — this
-    // mirrors how the inline tool body works today.
-    expect(Object.keys(impact.depends_on)).toEqual(['packages/web']);
-    expect(impact.depends_on['packages/web'].symbols).toContain('apiFn');
+    // api never imports another workspace → depends_on is empty.
+    expect(impact.depends_on).toEqual({});
   });
 
   it('consumer workspace lists its providers in depends_on; consumed_by stays empty when it is purely a consumer', () => {
@@ -200,17 +204,17 @@ describe('get_cross_workspace_impact — behavioural contract', () => {
     // web exports nothing cross-ws (it is never a target).
     expect(impact.public_api).toEqual([]);
 
-    // web is a SOURCE in two cross-ws edges → consumed_by has the target
-    // workspaces keyed under it (per current tool aggregation, the symbol
-    // names are the source-side symbol — webFn — for both entries).
-    expect(new Set(Object.keys(impact.consumed_by))).toEqual(
+    // web is purely a consumer (never a target) → consumed_by is empty.
+    expect(impact.consumed_by).toEqual({});
+
+    // web is the SOURCE of two cross-ws edges → depends_on enumerates the
+    // providers (packages/api, packages/shared) keyed by the workspace we
+    // pull from, with the imported symbols recorded.
+    expect(new Set(Object.keys(impact.depends_on))).toEqual(
       new Set(['packages/api', 'packages/shared']),
     );
-    expect(impact.consumed_by['packages/api'].symbols).toContain('webFn');
-    expect(impact.consumed_by['packages/shared'].symbols).toContain('webFn');
-
-    // web is NEVER a target → depends_on is empty under the same logic.
-    expect(impact.depends_on).toEqual({});
+    expect(impact.depends_on['packages/api'].symbols).toContain('apiFn');
+    expect(impact.depends_on['packages/shared'].symbols).toContain('sharedFn');
   });
 
   it('cross_workspace_edges counts every edge touching the workspace', () => {
