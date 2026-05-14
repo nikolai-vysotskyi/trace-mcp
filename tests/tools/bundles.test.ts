@@ -304,6 +304,10 @@ describe('searchBundles', () => {
     for (const b of bundles) b.db.close();
   });
 
+  // Windows runners on cold SSDs can spend >10s on the bundle round-trip
+  // (export + load + search). Bump just this case so transient runner
+  // slowness doesn't get blamed on the assertion. Same pattern as the
+  // cli-smoke timeout bump earlier.
   it('respects limit', () => {
     const src = makeSourceDb(
       Array.from({ length: 10 }, (_, i) => ({ name: `func${i}`, kind: 'function' })),
@@ -315,7 +319,7 @@ describe('searchBundles', () => {
     expect(results.length).toBeLessThanOrEqual(3);
 
     for (const b of bundles) b.db.close();
-  });
+  }, 30000);
 
   it('returns empty for no match', () => {
     const src = makeSourceDb([{ name: 'foo', kind: 'function' }]);
