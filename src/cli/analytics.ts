@@ -6,6 +6,7 @@
 import { Command } from 'commander';
 import { AnalyticsStore } from '../analytics/analytics-store.js';
 import {
+  calibrateTokenizer,
   formatBenchmarkMarkdown,
   formatBenchmarkShareReport,
   runBenchmark,
@@ -214,6 +215,8 @@ export async function runBenchmarkAction(opts: {
   queries: string;
   seed: string;
   format: string;
+  samples?: string;
+  noCalibrate?: boolean;
 }): Promise<void> {
   let projectRoot: string;
   try {
@@ -226,10 +229,17 @@ export async function runBenchmarkAction(opts: {
   const db = initializeDatabase(dbPath);
   const store = new Store(db);
   try {
+    // Await calibration explicitly so the text output reflects the real ratio.
+    if (!opts.noCalibrate) {
+      await calibrateTokenizer();
+    }
+    const samples = opts.samples ? parseInt(opts.samples, 10) : undefined;
     const result = runBenchmark(store, {
       queries: parseInt(opts.queries, 10),
       seed: parseInt(opts.seed, 10),
       projectName: projectRoot,
+      samples,
+      calibrateTokenizer: !opts.noCalibrate,
     });
 
     if (opts.format === 'json') {
@@ -240,25 +250,33 @@ export async function runBenchmarkAction(opts: {
       console.log(formatBenchmarkShareReport(result));
     } else {
       const wasted = result.totals.baseline_tokens - result.totals.trace_mcp_tokens;
-      console.log(`\n⚡ Recomputation leak in this codebase\n`);
+      console.log(`\n⚡ Synthetic token-waste estimate for this codebase\n`);
+      const totStats = result.totals.reduction_stats;
+      const totStddev = totStats ? ` ± ${totStats.stddev.toFixed(1)}%` : '';
       console.log(
-        `   ${result.totals.reduction_pct}% recomputed work · ${wasted.toLocaleString()} tokens that don't need to be paid for`,
+        `   ~${result.totals.reduction_pct}%${totStddev} recomputed work · ~${wasted.toLocaleString()} tokens (estimated, not measured)`,
       );
       console.log(
-        `   ${result.index_stats.files.toLocaleString()} files / ${result.index_stats.symbols.toLocaleString()} symbols indexed\n`,
+        `   ${result.index_stats.files.toLocaleString()} files / ${result.index_stats.symbols.toLocaleString()} symbols indexed`,
+      );
+      console.log(
+        `   tokenizer: chars/${result.accuracy.chars_per_token.toFixed(2)}${result.accuracy.tokenizer_calibrated ? ' (calibrated)' : ' (heuristic)'} · ${result.accuracy.samples} samples\n`,
       );
 
       for (const s of result.scenarios) {
         const reduction = s.reduction_pct.toFixed(1);
+        const stats = s.reduction_stats;
+        const stddevTxt = stats ? ` ±${stats.stddev.toFixed(1)}%` : '';
         console.log(
-          `   ${s.name.padEnd(22)} ${s.baseline_tokens.toLocaleString().padStart(10)} → ${s.trace_mcp_tokens.toLocaleString().padStart(8)} tokens   (${reduction}% saved)`,
+          `   ${s.name.padEnd(22)} ${s.baseline_tokens.toLocaleString().padStart(10)} → ${s.trace_mcp_tokens.toLocaleString().padStart(8)} tokens   (${reduction}%${stddevTxt} saved)`,
         );
       }
 
       console.log(
-        `\n   ${'TOTAL'.padEnd(22)} ${result.totals.baseline_tokens.toLocaleString().padStart(10)} → ${result.totals.trace_mcp_tokens.toLocaleString().padStart(8)} tokens   (${result.totals.reduction_pct}% saved)`,
+        `\n   ${'TOTAL'.padEnd(22)} ${result.totals.baseline_tokens.toLocaleString().padStart(10)} → ${result.totals.trace_mcp_tokens.toLocaleString().padStart(8)} tokens   (${result.totals.reduction_pct}%${totStddev} saved)`,
       );
-      console.log(`\n👉 Share this result: trace-mcp benchmark . --format share`);
+      console.log(`\n   Synthetic estimator — see --format json for caveats.`);
+      console.log(`👉 Share this result: trace-mcp benchmark . --format share`);
       console.log(`   Wire it into your agent: npx trace-mcp init`);
     }
   } finally {
@@ -271,19 +289,32 @@ analyticsCommand
   .description('Run synthetic token efficiency benchmark')
   .option('--queries <n>', 'Queries per scenario', '10')
   .option('--seed <n>', 'Random seed', '42')
+  .option('--samples <n>', 'Seed-shifted re-runs for variance (default: 5)')
+  .option('--no-calibrate', 'Skip tokenizer calibration, use default chars/token ratio')
   .option('--format <fmt>', 'Output: text | share | markdown | json', 'text')
   .action(runBenchmarkAction);
 
 export const benchmarkCommand = new Command('benchmark')
   .description(
-    'Show where this project recomputes work — token-waste benchmark across structured tasks',
+    'Show where this project recomputes work — synthetic token-waste estimator across structured tasks',
   )
   .argument('[path]', 'Project path (defaults to current directory)')
   .option('--queries <n>', 'Queries per scenario', '10')
   .option('--seed <n>', 'Random seed', '42')
+  .option('--samples <n>', 'Seed-shifted re-runs for variance (default: 5)')
+  .option('--no-calibrate', 'Skip tokenizer calibration, use default chars/token ratio')
   .option('--format <fmt>', 'Output: text | share | markdown | json', 'text')
   .action(
-    async (path: string | undefined, opts: { queries: string; seed: string; format: string }) => {
+    async (
+      path: string | undefined,
+      opts: {
+        queries: string;
+        seed: string;
+        format: string;
+        samples?: string;
+        noCalibrate?: boolean;
+      },
+    ) => {
       if (path && path !== '.') {
         process.chdir(path);
       }
