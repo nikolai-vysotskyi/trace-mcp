@@ -1106,7 +1106,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'search_text',
-    'Full-text search across all indexed files. Supports regex, glob file patterns, language filter. Use for finding strings, comments, TODOs, config values, error messages — anything not captured as a symbol. For symbol search (functions, classes) use search instead. Read-only. Returns JSON: { matches: [{ file, line, text, context }], total_matches }.',
+    'Full-text search across all indexed files. Supports regex, glob file patterns, language filter. Use for finding strings, comments, TODOs, config values, error messages — anything not captured as a symbol. For symbol search (functions, classes) use search instead. Read-only. Returns JSON: { matches: [{ file, line, text, context }], total_matches }. Set `grouping: "by_file"` to deduplicate file paths in results with many hits.',
     {
       query: z.string().min(1).max(1000).describe('Search string or regex pattern'),
       is_regex: z.boolean().optional().describe('Treat query as regex (default false)'),
@@ -1142,6 +1142,13 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         .describe(
           'Wall-clock budget in milliseconds. Catastrophic-backtracking regex cannot pin a worker beyond this. Default 2000. Set 0 to disable.',
         ),
+      grouping: z
+        .enum(['flat', 'by_file'])
+        .optional()
+        .default('flat')
+        .describe(
+          'Payload shape. "flat" returns a single matches[] array (default). "by_file" groups hits under each file — saves tokens on long paths with many hits.',
+        ),
     },
     async ({
       query,
@@ -1152,6 +1159,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       context_lines,
       case_sensitive,
       timeout_ms,
+      grouping,
     }) => {
       const retriever = createSearchTextRetriever({ store, projectRoot });
       const [result] = await runRetriever(retriever, {
@@ -1169,20 +1177,54 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],
           isError: true,
         };
-      if (result.value.matches.length === 0) {
-        const stats = store.getStats();
-        const enriched = {
-          ...result.value,
-          evidence: buildNegativeEvidence(
-            stats.totalFiles,
-            stats.totalSymbols,
-            false,
-            'search_text',
-          ),
-        };
-        return { content: [{ type: 'text', text: jh('search_text', enriched) }] };
+
+      // Shape transform: 'by_file' groups hits under each file (saves tokens
+      // when long paths repeat across many hits). 'flat' preserves the
+      // original wire shape verbatim. Preserves first-seen file order.
+      const baseValue = result.value;
+      let payload: Record<string, unknown>;
+      if (grouping === 'by_file') {
+        const { matches, ...rest } = baseValue;
+        const fileMap = new Map<
+          string,
+          {
+            file: string;
+            language: string | null;
+            hits: Array<{ line: number; column: number; match: string; context: string[] }>;
+          }
+        >();
+        for (const m of matches) {
+          let bucket = fileMap.get(m.file);
+          if (!bucket) {
+            bucket = { file: m.file, language: m.language, hits: [] };
+            fileMap.set(m.file, bucket);
+          }
+          bucket.hits.push({
+            line: m.line,
+            column: m.column,
+            match: m.match,
+            context: m.context,
+          });
+        }
+        for (const bucket of fileMap.values()) {
+          bucket.hits.sort((a, b) => a.line - b.line || a.column - b.column);
+        }
+        payload = { files: Array.from(fileMap.values()), ...rest };
+      } else {
+        payload = { ...baseValue };
       }
-      return { content: [{ type: 'text', text: jh('search_text', result.value) }] };
+
+      if (baseValue.matches.length === 0) {
+        const stats = store.getStats();
+        payload.evidence = buildNegativeEvidence(
+          stats.totalFiles,
+          stats.totalSymbols,
+          false,
+          'search_text',
+        );
+      }
+
+      return { content: [{ type: 'text', text: jh('search_text', payload) }] };
     },
   );
 
@@ -1397,21 +1439,28 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         .getCrossWorkspaceEdges()
         .filter((e) => e.source_workspace === workspace || e.target_workspace === workspace);
 
+      // `consumed_by` = workspaces that import OUR exports. An edge is
+      // source → target where source is the importer; so other workspaces
+      // consume us when `target_workspace === workspace` (we are being
+      // imported). Key by the importer (source_workspace), record which of
+      // our exports (target_symbol) they pulled.
       const consumers = new Map<string, Set<string>>();
       for (const edge of crossEdges) {
-        if (edge.source_workspace === workspace && edge.target_workspace) {
-          // This workspace provides to target
-          const key = edge.target_workspace;
+        if (edge.target_workspace === workspace && edge.source_workspace) {
+          const key = edge.source_workspace;
           if (!consumers.has(key)) consumers.set(key, new Set());
-          if (edge.source_symbol) consumers.get(key)!.add(edge.source_symbol);
+          if (edge.target_symbol) consumers.get(key)!.add(edge.target_symbol);
         }
       }
 
+      // `depends_on` = workspaces WE import from. We are the importer when
+      // `source_workspace === workspace`; key by the workspace we depend on
+      // (target_workspace), record which of their exports (target_symbol)
+      // we reference.
       const providers = new Map<string, Set<string>>();
       for (const edge of crossEdges) {
-        if (edge.target_workspace === workspace && edge.source_workspace) {
-          // This workspace consumes from source
-          const key = edge.source_workspace;
+        if (edge.source_workspace === workspace && edge.target_workspace) {
+          const key = edge.target_workspace;
           if (!providers.has(key)) providers.set(key, new Set());
           if (edge.target_symbol) providers.get(key)!.add(edge.target_symbol);
         }
