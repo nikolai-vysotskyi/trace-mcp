@@ -18,63 +18,6 @@ import { DomainStore, type DomainTreeNode } from '../../../src/intent/domain-sto
 import { getDomainMap } from '../../../src/tools/advanced/intent.js';
 import { createTestStore } from '../../test-utils.js';
 
-/**
- * LATENT BUG WORKAROUND: src/db/schema.ts DDL omits the domains/symbol_domains
- * tables introduced in migration v11. Fresh `:memory:` DBs run DDL once and
- * mark every migration as already applied, so the domain tables never get
- * created. We re-apply the v11 SQL manually here to keep the test
- * representative of a real index. If this is fixed in DDL the workaround
- * becomes a no-op.
- */
-function ensureDomainTables(store: Store): void {
-  store.db.exec(`
-    CREATE TABLE IF NOT EXISTS domains (
-        id          INTEGER PRIMARY KEY,
-        name        TEXT NOT NULL,
-        parent_id   INTEGER REFERENCES domains(id) ON DELETE SET NULL,
-        description TEXT,
-        path_hints  TEXT,
-        confidence  REAL NOT NULL DEFAULT 1.0,
-        is_manual   INTEGER NOT NULL DEFAULT 0,
-        metadata    TEXT,
-        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-        updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
-        UNIQUE(name, parent_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_domains_parent ON domains(parent_id);
-
-    CREATE TABLE IF NOT EXISTS symbol_domains (
-        id          INTEGER PRIMARY KEY,
-        symbol_id   INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
-        domain_id   INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
-        relevance   REAL NOT NULL DEFAULT 1.0,
-        is_manual   INTEGER NOT NULL DEFAULT 0,
-        inferred_by TEXT NOT NULL DEFAULT 'heuristic',
-        metadata    TEXT,
-        UNIQUE(symbol_id, domain_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_symbol_domains_symbol ON symbol_domains(symbol_id);
-    CREATE INDEX IF NOT EXISTS idx_symbol_domains_domain ON symbol_domains(domain_id);
-
-    CREATE TABLE IF NOT EXISTS file_domains (
-        id          INTEGER PRIMARY KEY,
-        file_id     INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
-        domain_id   INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
-        relevance   REAL NOT NULL DEFAULT 1.0,
-        is_manual   INTEGER NOT NULL DEFAULT 0,
-        inferred_by TEXT NOT NULL DEFAULT 'heuristic',
-        UNIQUE(file_id, domain_id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_file_domains_file ON file_domains(file_id);
-    CREATE INDEX IF NOT EXISTS idx_file_domains_domain ON file_domains(domain_id);
-
-    CREATE TABLE IF NOT EXISTS domain_embeddings (
-        domain_id   INTEGER PRIMARY KEY REFERENCES domains(id) ON DELETE CASCADE,
-        embedding   BLOB NOT NULL
-    );
-  `);
-}
-
 interface Fixture {
   store: Store;
   domainStore: DomainStore;
@@ -93,7 +36,6 @@ interface Fixture {
  */
 function seed(): Fixture {
   const store = createTestStore();
-  ensureDomainTables(store);
   const domainStore = new DomainStore(store.db);
 
   const paymentsId = domainStore.upsertDomain({
@@ -221,7 +163,6 @@ describe('getDomainMap() — behavioural contract', () => {
 
   it('empty index with no symbols returns empty tree without throwing', async () => {
     const empty = createTestStore();
-    ensureDomainTables(empty);
     const result = await getDomainMap(empty);
     expect(result.isOk()).toBe(true);
     const payload = result._unsafeUnwrap();
