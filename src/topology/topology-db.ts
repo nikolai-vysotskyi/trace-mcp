@@ -1005,7 +1005,7 @@ export class TopologyStore {
   ): Array<ClientCallRow & { source_repo_name: string }> {
     return this.db
       .prepare(`
-      SELECT cc.*, fr.name as source_repo_name FROM client_calls cc
+      SELECT cc.*, sp.name as source_repo_name FROM client_calls cc
       JOIN subprojects sp ON cc.source_repo_id = sp.id
       WHERE cc.matched_endpoint_id = ?
       ORDER BY cc.confidence DESC

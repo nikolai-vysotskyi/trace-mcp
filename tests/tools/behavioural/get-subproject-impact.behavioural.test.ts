@@ -106,10 +106,7 @@ describe('getSubprojectImpact() — behavioural contract', () => {
     fs.rmSync(path.dirname(ctx.dbPath), { recursive: true, force: true });
   });
 
-  // TODO(bug): TopologyStore.getClientCallsByEndpoint uses `fr.name` alias but
-  // the JOIN aliases subprojects as `sp` — SqliteError: no such column: fr.name.
-  // See src/topology/topology-db.ts ~line 1008.
-  it.skip('endpoint filter returns matching results across subprojects', () => {
+  it('endpoint filter returns matching results across subprojects', () => {
     const result = getSubprojectImpact(ctx.store, { endpoint: '/users' });
     expect(result.isOk()).toBe(true);
     const impacts = result._unsafeUnwrap();
@@ -119,8 +116,7 @@ describe('getSubprojectImpact() — behavioural contract', () => {
     expect(paths.every((p) => p === '/users')).toBe(true);
   });
 
-  // TODO(bug): same alias bug in TopologyStore.getClientCallsByEndpoint blocks this case.
-  it.skip('method filter narrows results to that HTTP verb', () => {
+  it('method filter narrows results to that HTTP verb', () => {
     const result = getSubprojectImpact(ctx.store, { endpoint: '/users', method: 'GET' });
     expect(result.isOk()).toBe(true);
     const impacts = result._unsafeUnwrap();
@@ -135,8 +131,7 @@ describe('getSubprojectImpact() — behavioural contract', () => {
     expect(result._unsafeUnwrap()).toEqual([]);
   });
 
-  // TODO(bug): same alias bug in TopologyStore.getClientCallsByEndpoint blocks this case.
-  it.skip('each impact entry has expected shape (endpoint + clients + riskLevel + summary)', () => {
+  it('each impact entry has expected shape (endpoint + clients + riskLevel + summary)', () => {
     const impacts = getSubprojectImpact(ctx.store, {
       endpoint: '/users',
       method: 'GET',
