@@ -727,10 +727,39 @@ program
 
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
-      // MCP endpoint — route by session ID, create new session on initialize
+      // MCP endpoint — route by session ID, create new session on initialize.
+      //
+      // Project resolution rules (in order):
+      //   1. Explicit `?project=` query param wins.
+      //   2. No query param + exactly ONE registered project → use it.
+      //   3. No query param + multiple registered projects → 400, force the
+      //      caller to pick. Previously we fell back to listProjects()[0],
+      //      which silently bound EVERY unattributed session to whichever
+      //      project happened to be registered first — usually surprising
+      //      and the root cause of "all my sessions show <wrong-project>"
+      //      reports.
       if (url.pathname === '/mcp') {
-        const requestedRoot =
-          url.searchParams.get('project') ?? projectManager.listProjects()[0]?.root;
+        const projects = projectManager.listProjects();
+        let requestedRoot = url.searchParams.get('project') ?? undefined;
+        if (!requestedRoot) {
+          if (projects.length === 1) {
+            requestedRoot = projects[0]?.root;
+          } else if (projects.length === 0) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'No projects registered' }));
+            return;
+          } else {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                error:
+                  'Multiple projects registered — pass ?project=<absolute-path> on /mcp. ' +
+                  `Registered roots: ${projects.map((p) => p.root).join(', ')}`,
+              }),
+            );
+            return;
+          }
+        }
         if (!requestedRoot) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'No projects registered' }));
