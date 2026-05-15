@@ -252,32 +252,36 @@ export class DartLanguagePlugin implements LanguagePlugin {
   ): Promise<TraceMcpResult<FileParseResult>> {
     const parser = await getParser('dart');
     const tree = parser.parse(sourceCode);
-    const root: TSNode = tree.rootNode;
+    try {
+      const root: TSNode = tree.rootNode;
 
-    const hasError = root.hasError;
-    const symbols: RawSymbol[] = [];
-    const edges: RawEdge[] = [];
-    const warnings: string[] = [];
+      const hasError = root.hasError;
+      const symbols: RawSymbol[] = [];
+      const edges: RawEdge[] = [];
+      const warnings: string[] = [];
 
-    if (hasError) {
-      warnings.push('Source contains syntax errors; extraction may be incomplete');
+      if (hasError) {
+        warnings.push('Source contains syntax errors; extraction may be incomplete');
+      }
+
+      this.walkTopLevel(root, filePath, symbols, edges);
+
+      const nodeTypes = collectNodeTypes(root);
+      const metadata: Record<string, unknown> = {};
+      const minDartVer = detectMinDartVersion(nodeTypes);
+      if (minDartVer) metadata.minDartVersion = minDartVer;
+
+      return ok({
+        language: 'dart',
+        status: hasError ? 'partial' : 'ok',
+        symbols,
+        edges: edges.length > 0 ? edges : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      });
+    } finally {
+      tree.delete();
     }
-
-    this.walkTopLevel(root, filePath, symbols, edges);
-
-    const nodeTypes = collectNodeTypes(root);
-    const metadata: Record<string, unknown> = {};
-    const minDartVer = detectMinDartVersion(nodeTypes);
-    if (minDartVer) metadata.minDartVersion = minDartVer;
-
-    return ok({
-      language: 'dart',
-      status: hasError ? 'partial' : 'ok',
-      symbols,
-      edges: edges.length > 0 ? edges : undefined,
-      warnings: warnings.length > 0 ? warnings : undefined,
-      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-    });
   }
 
   /* ── Top-level walk ──────────────────────────────────────────────────── */

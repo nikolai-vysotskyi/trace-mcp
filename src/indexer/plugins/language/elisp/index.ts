@@ -172,27 +172,31 @@ export class ElispLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('elisp');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
-      const seen = new Set<string>();
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
+        const seen = new Set<string>();
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
+
+        this.walkNodes(root, filePath, symbols, edges, seen);
+
+        return ok({
+          language: 'elisp',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+        });
+      } finally {
+        tree.delete();
       }
-
-      this.walkNodes(root, filePath, symbols, edges, seen);
-
-      return ok({
-        language: 'elisp',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Elisp parse failed: ${msg}`));

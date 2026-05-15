@@ -44,32 +44,36 @@ export class RubyLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('ruby');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const warnings: string[] = [];
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const warnings: string[] = [];
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
+
+        this.walkNode(root, filePath, [], symbols);
+
+        const edges = extractImportEdges(root);
+
+        const minRubyVer = detectMinRubyVersionFromSource(sourceCode);
+        const metadata: Record<string, unknown> = {};
+        if (minRubyVer) metadata.minRubyVersion = minRubyVer;
+
+        return ok({
+          language: 'ruby',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        });
+      } finally {
+        tree.delete();
       }
-
-      this.walkNode(root, filePath, [], symbols);
-
-      const edges = extractImportEdges(root);
-
-      const minRubyVer = detectMinRubyVersionFromSource(sourceCode);
-      const metadata: Record<string, unknown> = {};
-      if (minRubyVer) metadata.minRubyVersion = minRubyVer;
-
-      return ok({
-        language: 'ruby',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Ruby parse failed: ${msg}`));

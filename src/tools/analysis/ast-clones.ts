@@ -270,6 +270,19 @@ export async function detectAstClones(
     }
   }
 
+  // Release WASM heap held by tree-sitter Trees cached across callables.
+  // V8 GC cannot reclaim Tree objects on its own — explicit delete() required.
+  for (const cached of parsedTreeCache.values()) {
+    if (cached) {
+      try {
+        (cached.tree as { delete?: () => void }).delete?.();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  parsedTreeCache.clear();
+
   const byHash = new Map<string, CloneCandidate[]>();
   for (const cand of candidates) {
     const arr = byHash.get(cand.hash);

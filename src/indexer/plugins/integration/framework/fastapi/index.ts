@@ -144,10 +144,14 @@ export class FastAPIPlugin implements FrameworkPlugin {
     try {
       const parser = await getParser('python');
       const tree = parser.parse(source);
-      const root = tree.rootNode;
+      try {
+        const root = tree.rootNode;
 
-      this.extractRoutes(root, source, filePath, result);
-      this.extractRouterMounts(root, source, filePath, result);
+        this.extractRoutes(root, source, filePath, result);
+        this.extractRouterMounts(root, source, filePath, result);
+      } finally {
+        tree.delete();
+      }
     } catch (e: unknown) {
       return err(
         parseError(filePath, `FastAPI parse error: ${e instanceof Error ? e.message : String(e)}`),

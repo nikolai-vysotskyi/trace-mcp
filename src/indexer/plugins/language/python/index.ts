@@ -89,119 +89,123 @@ export class PythonLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('python');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const modulePath = filePathToModule(filePath);
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
+        const hasError = root.hasError;
+        const modulePath = filePathToModule(filePath);
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
-
-      this.walkTopLevel(root, filePath, modulePath, symbols, edges);
-
-      // Disambiguate duplicate symbolIds — valid in Python (function redefinition).
-      // Append `:L<lineStart>` to every member of each collision group.
-      const idCount = new Map<string, number>();
-      for (const s of symbols) idCount.set(s.symbolId, (idCount.get(s.symbolId) ?? 0) + 1);
-      for (const s of symbols) {
-        if ((idCount.get(s.symbolId) ?? 0) > 1) {
-          s.symbolId = `${s.symbolId}:L${s.lineStart ?? 0}`;
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
         }
-      }
 
-      // Import edges
-      const importEdges = extractImportEdges(root);
-      edges.push(...importEdges);
+        this.walkTopLevel(root, filePath, modulePath, symbols, edges);
 
-      // __init__.py re-export edges
-      const reexportEdges = extractReexportEdges(root, filePath);
-      edges.push(...reexportEdges);
-
-      // TYPE_CHECKING imports
-      const tcEdges = extractTypeCheckingImports(root);
-      edges.push(...tcEdges);
-
-      // Conditional imports (try/except ImportError)
-      const condEdges = extractConditionalImports(root);
-      edges.push(...condEdges);
-
-      // __all__ export list
-      const allList = extractAllList(root);
-
-      // ── Mark exported symbols ────────────────────────────────────
-      // Python export semantics:
-      //   - If __all__ is defined → only names listed in __all__ are exported
-      //   - Otherwise → all top-level public symbols (no leading _) are exported
-      // Methods are never directly exported (they inherit from their parent class).
-      const exportedNames: Set<string> | null = allList ? new Set(allList) : null;
-
-      for (const sym of symbols) {
-        // Skip child symbols (methods, nested classes, instance attrs)
-        if (sym.parentSymbolId) continue;
-
-        const isExported = exportedNames
-          ? exportedNames.has(sym.name)
-          : detectVisibility(sym.name) === 'public';
-
-        if (isExported) {
-          sym.metadata = sym.metadata ?? {};
-          sym.metadata.exported = true;
-        }
-      }
-
-      // ── if __name__ == "__main__" entry point detection ────────
-      // Symbols called from the __name__ guard are CLI entry points;
-      // they should not be reported as dead exports.
-      const nameMainCallees = extractNameMainCallees(root);
-      if (nameMainCallees.length > 0) {
-        const calleeSet = new Set(nameMainCallees);
-        for (const sym of symbols) {
-          if (sym.parentSymbolId) continue;
-          if (calleeSet.has(sym.name)) {
-            sym.metadata = sym.metadata ?? {};
-            sym.metadata.is_entry_point = 'name_main';
+        // Disambiguate duplicate symbolIds — valid in Python (function redefinition).
+        // Append `:L<lineStart>` to every member of each collision group.
+        const idCount = new Map<string, number>();
+        for (const s of symbols) idCount.set(s.symbolId, (idCount.get(s.symbolId) ?? 0) + 1);
+        for (const s of symbols) {
+          if ((idCount.get(s.symbolId) ?? 0) > 1) {
+            s.symbolId = `${s.symbolId}:L${s.lineStart ?? 0}`;
           }
         }
-      }
 
-      // Module-level call sites — extract from top-level expressions
-      // (e.g. `app = Flask(__name__)`, `register_blueprint(bp)`, `if __name__ == "__main__": main()`)
-      const moduleLevelCalls = extractCallSites(root);
-      if (moduleLevelCalls.length > 0) {
-        const moduleSymbolId = makeSymbolId(filePath, '<module>', 'function');
-        symbols.push({
-          symbolId: moduleSymbolId,
-          name: '<module>',
-          kind: 'function',
-          fqn: makeFqn([modulePath, '<module>']),
-          signature: `module ${filePath}`,
-          byteStart: root.startIndex,
-          byteEnd: root.endIndex,
-          lineStart: 1,
-          lineEnd: root.endPosition.row + 1,
-          metadata: { synthetic: true, callSites: moduleLevelCalls },
+        // Import edges
+        const importEdges = extractImportEdges(root);
+        edges.push(...importEdges);
+
+        // __init__.py re-export edges
+        const reexportEdges = extractReexportEdges(root, filePath);
+        edges.push(...reexportEdges);
+
+        // TYPE_CHECKING imports
+        const tcEdges = extractTypeCheckingImports(root);
+        edges.push(...tcEdges);
+
+        // Conditional imports (try/except ImportError)
+        const condEdges = extractConditionalImports(root);
+        edges.push(...condEdges);
+
+        // __all__ export list
+        const allList = extractAllList(root);
+
+        // ── Mark exported symbols ────────────────────────────────────
+        // Python export semantics:
+        //   - If __all__ is defined → only names listed in __all__ are exported
+        //   - Otherwise → all top-level public symbols (no leading _) are exported
+        // Methods are never directly exported (they inherit from their parent class).
+        const exportedNames: Set<string> | null = allList ? new Set(allList) : null;
+
+        for (const sym of symbols) {
+          // Skip child symbols (methods, nested classes, instance attrs)
+          if (sym.parentSymbolId) continue;
+
+          const isExported = exportedNames
+            ? exportedNames.has(sym.name)
+            : detectVisibility(sym.name) === 'public';
+
+          if (isExported) {
+            sym.metadata = sym.metadata ?? {};
+            sym.metadata.exported = true;
+          }
+        }
+
+        // ── if __name__ == "__main__" entry point detection ────────
+        // Symbols called from the __name__ guard are CLI entry points;
+        // they should not be reported as dead exports.
+        const nameMainCallees = extractNameMainCallees(root);
+        if (nameMainCallees.length > 0) {
+          const calleeSet = new Set(nameMainCallees);
+          for (const sym of symbols) {
+            if (sym.parentSymbolId) continue;
+            if (calleeSet.has(sym.name)) {
+              sym.metadata = sym.metadata ?? {};
+              sym.metadata.is_entry_point = 'name_main';
+            }
+          }
+        }
+
+        // Module-level call sites — extract from top-level expressions
+        // (e.g. `app = Flask(__name__)`, `register_blueprint(bp)`, `if __name__ == "__main__": main()`)
+        const moduleLevelCalls = extractCallSites(root);
+        if (moduleLevelCalls.length > 0) {
+          const moduleSymbolId = makeSymbolId(filePath, '<module>', 'function');
+          symbols.push({
+            symbolId: moduleSymbolId,
+            name: '<module>',
+            kind: 'function',
+            fqn: makeFqn([modulePath, '<module>']),
+            signature: `module ${filePath}`,
+            byteStart: root.startIndex,
+            byteEnd: root.endIndex,
+            lineStart: 1,
+            lineEnd: root.endPosition.row + 1,
+            metadata: { synthetic: true, callSites: moduleLevelCalls },
+          });
+        }
+
+        // Module docstring
+        const moduleDocstring = extractDocstring(root);
+
+        return ok({
+          language: 'python',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+          metadata: {
+            ...(allList ? { __all__: allList } : {}),
+            ...(moduleDocstring ? { docstring: moduleDocstring } : {}),
+            ...(filePath.endsWith('__init__.py') ? { isPackageInit: true } : {}),
+          },
         });
+      } finally {
+        tree.delete();
       }
-
-      // Module docstring
-      const moduleDocstring = extractDocstring(root);
-
-      return ok({
-        language: 'python',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-        metadata: {
-          ...(allList ? { __all__: allList } : {}),
-          ...(moduleDocstring ? { docstring: moduleDocstring } : {}),
-          ...(filePath.endsWith('__init__.py') ? { isPackageInit: true } : {}),
-        },
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Python parse failed: ${msg}`));

@@ -139,7 +139,11 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
         try {
           const parser = await getParser('python');
           const tree = parser.parse(source);
-          this.extractAlembicMigrations(tree.rootNode, source, filePath, result);
+          try {
+            this.extractAlembicMigrations(tree.rootNode, source, filePath, result);
+          } finally {
+            tree.delete();
+          }
         } catch (e: unknown) {
           return err(
             parseError(
@@ -170,9 +174,13 @@ export class SQLAlchemyPlugin implements FrameworkPlugin {
     try {
       const parser = await getParser('python');
       const tree = parser.parse(source);
-      const root = tree.rootNode;
+      try {
+        const root = tree.rootNode;
 
-      this.extractModels(root, source, filePath, result);
+        this.extractModels(root, source, filePath, result);
+      } finally {
+        tree.delete();
+      }
     } catch (e: unknown) {
       return err(
         parseError(

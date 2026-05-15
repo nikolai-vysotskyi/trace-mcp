@@ -59,54 +59,58 @@ export class ElmLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('elm');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
-      const seenNames = new Set<string>();
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
+        const seenNames = new Set<string>();
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
-
-      // Extract module name for FQN construction
-      let moduleName: string | undefined;
-
-      for (const child of root.namedChildren) {
-        switch (child.type) {
-          case 'module_declaration':
-            moduleName = this.extractModule(child, filePath, symbols);
-            break;
-          case 'import_clause':
-            this.extractImport(child, filePath, edges);
-            break;
-          case 'type_alias_declaration':
-            this.extractTypeAlias(child, filePath, moduleName, symbols);
-            break;
-          case 'type_declaration':
-            this.extractCustomType(child, filePath, moduleName, symbols);
-            break;
-          case 'port_annotation':
-            this.extractPort(child, filePath, moduleName, symbols, seenNames);
-            break;
-          case 'type_annotation':
-            this.extractTypeAnnotation(child, filePath, moduleName, symbols, seenNames);
-            break;
-          case 'value_declaration':
-            this.extractValueDeclaration(child, filePath, moduleName, symbols, seenNames);
-            break;
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
         }
-      }
 
-      return ok({
-        language: 'elm',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
+        // Extract module name for FQN construction
+        let moduleName: string | undefined;
+
+        for (const child of root.namedChildren) {
+          switch (child.type) {
+            case 'module_declaration':
+              moduleName = this.extractModule(child, filePath, symbols);
+              break;
+            case 'import_clause':
+              this.extractImport(child, filePath, edges);
+              break;
+            case 'type_alias_declaration':
+              this.extractTypeAlias(child, filePath, moduleName, symbols);
+              break;
+            case 'type_declaration':
+              this.extractCustomType(child, filePath, moduleName, symbols);
+              break;
+            case 'port_annotation':
+              this.extractPort(child, filePath, moduleName, symbols, seenNames);
+              break;
+            case 'type_annotation':
+              this.extractTypeAnnotation(child, filePath, moduleName, symbols, seenNames);
+              break;
+            case 'value_declaration':
+              this.extractValueDeclaration(child, filePath, moduleName, symbols, seenNames);
+              break;
+          }
+        }
+
+        return ok({
+          language: 'elm',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+        });
+      } finally {
+        tree.delete();
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Elm parse failed: ${msg}`));

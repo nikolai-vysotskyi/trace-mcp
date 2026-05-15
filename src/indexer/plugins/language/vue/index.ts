@@ -172,7 +172,11 @@ export class VueLanguagePlugin implements LanguagePlugin {
     try {
       const parser = await getParser('typescript');
       const tree = parser.parse(scriptContent);
-      return extractImportEdges(tree.rootNode as TSNode);
+      try {
+        return extractImportEdges(tree.rootNode as TSNode);
+      } finally {
+        tree.delete();
+      }
     } catch {
       return [];
     }
@@ -186,24 +190,28 @@ export class VueLanguagePlugin implements LanguagePlugin {
     try {
       const parser = await getParser('typescript');
       const tree = parser.parse(scriptContent);
-      const root: TSNode = tree.rootNode;
-      const symbols: RawSymbol[] = [];
+      try {
+        const root: TSNode = tree.rootNode;
+        const symbols: RawSymbol[] = [];
 
-      for (const node of root.namedChildren) {
-        if (node.type === 'export_statement') {
-          for (const child of node.namedChildren) {
-            if (child.type === 'object' || child.type === 'call_expression') {
-              // export default { ... } — Options API component definition
-              // We don't double-extract as the SFC itself is the component
-              continue;
+        for (const node of root.namedChildren) {
+          if (node.type === 'export_statement') {
+            for (const child of node.namedChildren) {
+              if (child.type === 'object' || child.type === 'call_expression') {
+                // export default { ... } — Options API component definition
+                // We don't double-extract as the SFC itself is the component
+                continue;
+              }
+              this.extractScriptNode(child, filePath, symbols);
             }
-            this.extractScriptNode(child, filePath, symbols);
+          } else {
+            this.extractScriptNode(node, filePath, symbols);
           }
-        } else {
-          this.extractScriptNode(node, filePath, symbols);
         }
+        return symbols;
+      } finally {
+        tree.delete();
       }
-      return symbols;
     } catch {
       return [];
     }
@@ -275,35 +283,39 @@ export class VueLanguagePlugin implements LanguagePlugin {
     try {
       const parser = await getParser('typescript');
       const tree = parser.parse(scriptContent);
-      const root: TSNode = tree.rootNode;
-      // For Vue SFCs we pass skipLexicalFunctionBodies:false because local
-      // `const foo = () => {…}` declarations in <script setup> are NOT extracted
-      // as standalone symbols — their calls must be captured at module level.
-      const callSites = extractModuleCallSites(root, { skipLexicalFunctionBodies: false });
-      const typeRefs = extractTypeReferences(root);
-      if (callSites.length === 0 && typeRefs.length === 0) return null;
-      const baseName =
-        filePath
-          .split('/')
-          .pop()
-          ?.replace(/\.vue$/, '') ?? '__module__';
-      const tag = suffix ? `__module__${suffix}` : '__module__';
-      return {
-        symbolId: makeSymbolId(filePath, tag, 'namespace'),
-        name: `${tag}:${baseName}`,
-        kind: 'namespace',
-        signature: `(sfc ${suffix || 'script'} body) ${filePath}`,
-        byteStart: 0,
-        byteEnd: scriptContent.length,
-        lineStart: 1,
-        lineEnd: scriptContent.split('\n').length,
-        metadata: {
-          synthetic: true,
-          moduleBody: true,
-          ...(callSites.length > 0 ? { callSites } : {}),
-          ...(typeRefs.length > 0 ? { typeRefs } : {}),
-        },
-      };
+      try {
+        const root: TSNode = tree.rootNode;
+        // For Vue SFCs we pass skipLexicalFunctionBodies:false because local
+        // `const foo = () => {…}` declarations in <script setup> are NOT extracted
+        // as standalone symbols — their calls must be captured at module level.
+        const callSites = extractModuleCallSites(root, { skipLexicalFunctionBodies: false });
+        const typeRefs = extractTypeReferences(root);
+        if (callSites.length === 0 && typeRefs.length === 0) return null;
+        const baseName =
+          filePath
+            .split('/')
+            .pop()
+            ?.replace(/\.vue$/, '') ?? '__module__';
+        const tag = suffix ? `__module__${suffix}` : '__module__';
+        return {
+          symbolId: makeSymbolId(filePath, tag, 'namespace'),
+          name: `${tag}:${baseName}`,
+          kind: 'namespace',
+          signature: `(sfc ${suffix || 'script'} body) ${filePath}`,
+          byteStart: 0,
+          byteEnd: scriptContent.length,
+          lineStart: 1,
+          lineEnd: scriptContent.split('\n').length,
+          metadata: {
+            synthetic: true,
+            moduleBody: true,
+            ...(callSites.length > 0 ? { callSites } : {}),
+            ...(typeRefs.length > 0 ? { typeRefs } : {}),
+          },
+        };
+      } finally {
+        tree.delete();
+      }
     } catch {
       return null;
     }

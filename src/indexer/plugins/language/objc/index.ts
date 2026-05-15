@@ -106,53 +106,57 @@ export class ObjCLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('objc');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
 
-      const seen = new Set<string>();
+        const seen = new Set<string>();
 
-      const addSymbol = (
-        name: string,
-        kind: SymbolKind,
-        node: TSNode,
-        meta?: Record<string, unknown>,
-        parentName?: string,
-      ) => {
-        const sid = makeSymbolId(filePath, name, kind, parentName);
-        if (seen.has(sid)) return;
-        seen.add(sid);
-        symbols.push({
-          symbolId: sid,
-          name,
-          kind,
-          fqn: parentName ? `${parentName}::${name}` : name,
-          signature: extractSignature(node),
-          byteStart: node.startIndex,
-          byteEnd: node.endIndex,
-          lineStart: node.startPosition.row + 1,
-          lineEnd: node.endPosition.row + 1,
-          metadata: meta,
-          ...(parentName ? { parentSymbolId: makeSymbolId(filePath, parentName, 'class') } : {}),
+        const addSymbol = (
+          name: string,
+          kind: SymbolKind,
+          node: TSNode,
+          meta?: Record<string, unknown>,
+          parentName?: string,
+        ) => {
+          const sid = makeSymbolId(filePath, name, kind, parentName);
+          if (seen.has(sid)) return;
+          seen.add(sid);
+          symbols.push({
+            symbolId: sid,
+            name,
+            kind,
+            fqn: parentName ? `${parentName}::${name}` : name,
+            signature: extractSignature(node),
+            byteStart: node.startIndex,
+            byteEnd: node.endIndex,
+            lineStart: node.startPosition.row + 1,
+            lineEnd: node.endPosition.row + 1,
+            metadata: meta,
+            ...(parentName ? { parentSymbolId: makeSymbolId(filePath, parentName, 'class') } : {}),
+          });
+        };
+
+        this.walkNodes(root.namedChildren, filePath, symbols, edges, addSymbol);
+
+        return ok({
+          language: 'objc',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
         });
-      };
-
-      this.walkNodes(root.namedChildren, filePath, symbols, edges, addSymbol);
-
-      return ok({
-        language: 'objc',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
+      } finally {
+        tree.delete();
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Objective-C parse failed: ${msg}`));

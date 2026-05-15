@@ -136,12 +136,16 @@ export class FlaskPlugin implements FrameworkPlugin {
     try {
       const parser = await getParser('python');
       const tree = parser.parse(source);
-      const root = tree.rootNode;
+      try {
+        const root = tree.rootNode;
 
-      this.extractRoutes(root, source, filePath, result);
-      this.extractBlueprintMounts(root, source, filePath, result);
-      this.extractBeforeRequestHooks(root, source, filePath, result);
-      this.extractErrorHandlers(root, source, filePath, result);
+        this.extractRoutes(root, source, filePath, result);
+        this.extractBlueprintMounts(root, source, filePath, result);
+        this.extractBeforeRequestHooks(root, source, filePath, result);
+        this.extractErrorHandlers(root, source, filePath, result);
+      } finally {
+        tree.delete();
+      }
     } catch (e: unknown) {
       return err(
         parseError(filePath, `Flask parse error: ${e instanceof Error ? e.message : String(e)}`),

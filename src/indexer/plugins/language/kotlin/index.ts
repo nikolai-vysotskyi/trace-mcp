@@ -50,33 +50,37 @@ export class KotlinLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('kotlin');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const packageName = extractPackageName(root);
-      const symbols: RawSymbol[] = [];
-      const warnings: string[] = [];
+        const hasError = root.hasError;
+        const packageName = extractPackageName(root);
+        const symbols: RawSymbol[] = [];
+        const warnings: string[] = [];
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
+
+        this.walkTopLevel(root, filePath, packageName, symbols);
+
+        const edges = extractImportEdges(root);
+
+        const minKotlinVer = detectMinKotlinVersion(sourceCode);
+        const metadata: Record<string, unknown> = {};
+        if (minKotlinVer) metadata.minKotlinVersion = minKotlinVer;
+
+        return ok({
+          language: 'kotlin',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        });
+      } finally {
+        tree.delete();
       }
-
-      this.walkTopLevel(root, filePath, packageName, symbols);
-
-      const edges = extractImportEdges(root);
-
-      const minKotlinVer = detectMinKotlinVersion(sourceCode);
-      const metadata: Record<string, unknown> = {};
-      if (minKotlinVer) metadata.minKotlinVersion = minKotlinVer;
-
-      return ok({
-        language: 'kotlin',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Kotlin parse failed: ${msg}`));

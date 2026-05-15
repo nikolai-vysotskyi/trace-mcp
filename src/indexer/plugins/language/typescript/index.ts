@@ -67,68 +67,72 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
       const useTsx = TSX_EXTENSIONS.has(ext) || hasJsx;
       const parser = await getParser(useTsx ? 'tsx' : 'typescript');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const warnings: string[] = [];
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const warnings: string[] = [];
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
 
-      this.walkTopLevel(root, filePath, symbols);
+        this.walkTopLevel(root, filePath, symbols);
 
-      // Extract module-body call sites (code that runs at load time, not inside
-      // any named function/class). Emit as a `__module__` pseudo-symbol so the
-      // call graph can attribute these calls to something.
-      const moduleCallSites = extractModuleCallSites(root);
-      if (moduleCallSites.length > 0) {
-        const moduleName =
-          filePath
-            .split('/')
-            .pop()
-            ?.replace(/\.[^.]+$/, '') ?? '__module__';
-        symbols.push({
-          symbolId: makeSymbolId(filePath, '__module__', 'namespace'),
-          name: `__module__:${moduleName}`,
-          kind: 'namespace',
-          signature: `(module body) ${filePath}`,
-          byteStart: 0,
-          byteEnd: root.endIndex,
-          lineStart: 1,
-          lineEnd: root.endPosition.row + 1,
-          metadata: {
-            synthetic: true,
-            moduleBody: true,
-            callSites: moduleCallSites,
-          },
+        // Extract module-body call sites (code that runs at load time, not inside
+        // any named function/class). Emit as a `__module__` pseudo-symbol so the
+        // call graph can attribute these calls to something.
+        const moduleCallSites = extractModuleCallSites(root);
+        if (moduleCallSites.length > 0) {
+          const moduleName =
+            filePath
+              .split('/')
+              .pop()
+              ?.replace(/\.[^.]+$/, '') ?? '__module__';
+          symbols.push({
+            symbolId: makeSymbolId(filePath, '__module__', 'namespace'),
+            name: `__module__:${moduleName}`,
+            kind: 'namespace',
+            signature: `(module body) ${filePath}`,
+            byteStart: 0,
+            byteEnd: root.endIndex,
+            lineStart: 1,
+            lineEnd: root.endPosition.row + 1,
+            metadata: {
+              synthetic: true,
+              moduleBody: true,
+              callSites: moduleCallSites,
+            },
+          });
+        }
+
+        const edges = extractImportEdges(root);
+
+        // Detect minimum versions from API usage / source patterns at file level
+        const apiVersion = detectMinNodeVersionFromAPIs(sourceCode);
+        const tsSourceVersion = detectMinTsVersionFromSource(sourceCode);
+
+        // Determine language label: JS files get 'javascript', TS files get 'typescript'
+        const isJs = JS_EXTENSIONS.has(ext);
+        const language = isJs ? 'javascript' : 'typescript';
+
+        // Build file-level metadata with detected version info
+        const metadata: Record<string, unknown> = {};
+        if (apiVersion) metadata.minNodeVersion = apiVersion;
+        if (!isJs && tsSourceVersion) metadata.minTsVersion = tsSourceVersion;
+
+        return ok({
+          language,
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         });
+      } finally {
+        tree.delete();
       }
-
-      const edges = extractImportEdges(root);
-
-      // Detect minimum versions from API usage / source patterns at file level
-      const apiVersion = detectMinNodeVersionFromAPIs(sourceCode);
-      const tsSourceVersion = detectMinTsVersionFromSource(sourceCode);
-
-      // Determine language label: JS files get 'javascript', TS files get 'typescript'
-      const isJs = JS_EXTENSIONS.has(ext);
-      const language = isJs ? 'javascript' : 'typescript';
-
-      // Build file-level metadata with detected version info
-      const metadata: Record<string, unknown> = {};
-      if (apiVersion) metadata.minNodeVersion = apiVersion;
-      if (!isJs && tsSourceVersion) metadata.minTsVersion = tsSourceVersion;
-
-      return ok({
-        language,
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `TypeScript parse failed: ${msg}`));
