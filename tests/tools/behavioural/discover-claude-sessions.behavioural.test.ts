@@ -22,8 +22,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { discoverClaudeSessions } from '../../../src/tools/advanced/claude-sessions.js';
 import { createTmpDir, removeTmpDir } from '../../test-utils.js';
 
+// `decodeClaudeProjectName` walks the filesystem from POSIX root `/`, so the
+// "exists=true" fixture only makes sense on a POSIX host. The Windows runner
+// has no `/` root and tmp paths look like `C:\Users\…`, which the encoder
+// cannot represent. Skip on Windows — the impl itself is POSIX-only.
+const isWin = process.platform === 'win32';
+const describeOrSkip = isWin ? describe.skip : describe;
+
 function encodePath(p: string): string {
-  // Claude's encoding: leading "/" becomes "-", every other "/" becomes "-".
+  // Claude's encoding: every "/" becomes "-" (the leading "/" → "-" too).
   return p.replace(/\//g, '-');
 }
 
@@ -37,7 +44,7 @@ function seedProject(scanRoot: string, projectPath: string, sessionFiles = 1): s
   return dir;
 }
 
-describe('discoverClaudeSessions() — behavioural contract', () => {
+describeOrSkip('discoverClaudeSessions() — behavioural contract', () => {
   let tmpDir: string;
   let scanRoot: string;
   // Real existing path on every dev machine — used to seed an "exists=true"
