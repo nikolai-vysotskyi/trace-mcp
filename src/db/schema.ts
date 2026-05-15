@@ -483,6 +483,148 @@ CREATE TABLE IF NOT EXISTS file_domains (
 );
 CREATE INDEX IF NOT EXISTS idx_file_domains_file ON file_domains(file_id);
 CREATE INDEX IF NOT EXISTS idx_file_domains_domain ON file_domains(domain_id);
+
+-- v11 follow-up: domain_embeddings was the last v11 table; the previous DDL
+-- mirror covered domains/symbol_domains/file_domains but missed this one.
+-- Mirrored from MIGRATIONS[11].
+CREATE TABLE IF NOT EXISTS domain_embeddings (
+    domain_id   INTEGER PRIMARY KEY REFERENCES domains(id) ON DELETE CASCADE,
+    embedding   BLOB NOT NULL
+);
+
+-- v8: Predictive Intelligence — bug prediction, drift detection, tech debt.
+-- Mirrored from MIGRATIONS[8] for fresh-DB parity.
+CREATE TABLE IF NOT EXISTS pi_snapshots (
+    id              INTEGER PRIMARY KEY,
+    snapshot_type   TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    git_head        TEXT,
+    config_hash     TEXT,
+    file_count      INTEGER,
+    duration_ms     INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_pi_snapshots_type ON pi_snapshots(snapshot_type);
+
+CREATE TABLE IF NOT EXISTS pi_bug_scores (
+    id              INTEGER PRIMARY KEY,
+    snapshot_id     INTEGER NOT NULL REFERENCES pi_snapshots(id) ON DELETE CASCADE,
+    file_id         INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    score           REAL NOT NULL,
+    churn_signal    REAL,
+    fix_ratio_signal REAL,
+    complexity_signal REAL,
+    coupling_signal REAL,
+    pagerank_signal REAL,
+    author_signal   REAL,
+    factors         TEXT,
+    UNIQUE(snapshot_id, file_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pi_bug_scores_snapshot ON pi_bug_scores(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_pi_bug_scores_score ON pi_bug_scores(score DESC);
+
+CREATE TABLE IF NOT EXISTS pi_co_changes (
+    id              INTEGER PRIMARY KEY,
+    snapshot_id     INTEGER NOT NULL REFERENCES pi_snapshots(id) ON DELETE CASCADE,
+    file_a_id       INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    file_b_id       INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    co_change_count INTEGER NOT NULL,
+    total_a         INTEGER NOT NULL,
+    total_b         INTEGER NOT NULL,
+    confidence      REAL NOT NULL,
+    same_module     INTEGER NOT NULL,
+    UNIQUE(snapshot_id, file_a_id, file_b_id)
+);
+CREATE INDEX IF NOT EXISTS idx_pi_co_changes_snapshot ON pi_co_changes(snapshot_id);
+
+CREATE TABLE IF NOT EXISTS pi_tech_debt (
+    id              INTEGER PRIMARY KEY,
+    snapshot_id     INTEGER NOT NULL REFERENCES pi_snapshots(id) ON DELETE CASCADE,
+    module_path     TEXT NOT NULL,
+    score           REAL NOT NULL,
+    complexity_score REAL,
+    coupling_score  REAL,
+    test_gap_score  REAL,
+    churn_score     REAL,
+    recommendations TEXT,
+    UNIQUE(snapshot_id, module_path)
+);
+CREATE INDEX IF NOT EXISTS idx_pi_tech_debt_snapshot ON pi_tech_debt(snapshot_id);
+
+CREATE TABLE IF NOT EXISTS pi_health_history (
+    id              INTEGER PRIMARY KEY,
+    file_path       TEXT NOT NULL,
+    recorded_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    bug_score       REAL,
+    complexity_avg  REAL,
+    coupling_ce     REAL,
+    churn_per_week  REAL,
+    test_coverage   REAL
+);
+CREATE INDEX IF NOT EXISTS idx_pi_health_file ON pi_health_history(file_path);
+CREATE INDEX IF NOT EXISTS idx_pi_health_date ON pi_health_history(recorded_at);
+
+-- v12: Runtime Intelligence — OTel trace ingestion, span mapping, aggregates.
+-- Mirrored from MIGRATIONS[12] for fresh-DB parity. The 'service' node_type
+-- and runtime_* edge_types are already covered by SEED_NODE_TYPES /
+-- SEED_EDGE_TYPES (seeded on fresh DBs by seedDatabase).
+CREATE TABLE IF NOT EXISTS runtime_traces (
+    id              INTEGER PRIMARY KEY,
+    trace_id        TEXT NOT NULL UNIQUE,
+    root_service    TEXT,
+    root_operation  TEXT,
+    started_at      TEXT NOT NULL,
+    duration_us     INTEGER,
+    status          TEXT DEFAULT 'ok',
+    ingested_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_rt_traces_started ON runtime_traces(started_at);
+
+CREATE TABLE IF NOT EXISTS runtime_spans (
+    id              INTEGER PRIMARY KEY,
+    trace_id        INTEGER NOT NULL REFERENCES runtime_traces(id) ON DELETE CASCADE,
+    span_id         TEXT NOT NULL,
+    parent_span_id  TEXT,
+    service_name    TEXT NOT NULL,
+    operation       TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    started_at      TEXT NOT NULL,
+    duration_us     INTEGER NOT NULL,
+    status_code     INTEGER DEFAULT 0,
+    status_message  TEXT,
+    attributes      TEXT,
+    mapped_node_id  INTEGER REFERENCES nodes(id),
+    mapping_method  TEXT,
+    UNIQUE(trace_id, span_id)
+);
+CREATE INDEX IF NOT EXISTS idx_rs_trace ON runtime_spans(trace_id);
+CREATE INDEX IF NOT EXISTS idx_rs_mapped_node ON runtime_spans(mapped_node_id);
+CREATE INDEX IF NOT EXISTS idx_rs_service ON runtime_spans(service_name);
+CREATE INDEX IF NOT EXISTS idx_rs_started ON runtime_spans(started_at);
+CREATE INDEX IF NOT EXISTS idx_rs_trace_parent ON runtime_spans(trace_id, parent_span_id);
+
+CREATE TABLE IF NOT EXISTS runtime_services (
+    id              INTEGER PRIMARY KEY,
+    name            TEXT NOT NULL UNIQUE,
+    kind            TEXT,
+    first_seen_at   TEXT NOT NULL,
+    last_seen_at    TEXT NOT NULL,
+    metadata        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS runtime_aggregates (
+    id              INTEGER PRIMARY KEY,
+    node_id         INTEGER NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+    bucket          TEXT NOT NULL,
+    call_count      INTEGER NOT NULL DEFAULT 0,
+    error_count     INTEGER NOT NULL DEFAULT 0,
+    total_duration_us INTEGER NOT NULL DEFAULT 0,
+    min_duration_us INTEGER,
+    max_duration_us INTEGER,
+    percentiles     TEXT,
+    UNIQUE(node_id, bucket)
+);
+CREATE INDEX IF NOT EXISTS idx_ra_node ON runtime_aggregates(node_id);
+CREATE INDEX IF NOT EXISTS idx_ra_bucket ON runtime_aggregates(bucket);
 `;
 
 const SEED_NODE_TYPES = [
