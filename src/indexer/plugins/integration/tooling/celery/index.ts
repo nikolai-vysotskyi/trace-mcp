@@ -363,7 +363,7 @@ export class CeleryPlugin implements FrameworkPlugin {
       routes: [],
     };
 
-    let tree: { rootNode: TSNode };
+    let tree: { rootNode: TSNode; delete: () => void };
     try {
       const parser = await getParser('python');
       tree = parser.parse(source);
@@ -371,85 +371,89 @@ export class CeleryPlugin implements FrameworkPlugin {
       return err(parseError(filePath, `tree-sitter parse failed: ${e}`));
     }
 
-    const root = tree.rootNode;
+    try {
+      const root = tree.rootNode;
 
-    // --- Celery tasks ---
-    const tasks = extractCeleryTasks(root);
-    const knownTaskFunctions = new Set<string>();
+      // --- Celery tasks ---
+      const tasks = extractCeleryTasks(root);
+      const knownTaskFunctions = new Set<string>();
 
-    for (const task of tasks) {
-      const taskName = task.taskName ?? task.functionName;
-      knownTaskFunctions.add(task.functionName);
+      for (const task of tasks) {
+        const taskName = task.taskName ?? task.functionName;
+        knownTaskFunctions.add(task.functionName);
 
-      result.edges!.push({
-        edgeType: 'celery_task_registered',
-        sourceSymbolId: `${filePath}::${task.functionName}#function`,
-        targetSymbolId: `${filePath}::${task.functionName}#function`,
-        metadata: {
-          taskName,
-          explicitName: task.taskName ?? undefined,
+        result.edges!.push({
+          edgeType: 'celery_task_registered',
+          sourceSymbolId: `${filePath}::${task.functionName}#function`,
+          targetSymbolId: `${filePath}::${task.functionName}#function`,
+          metadata: {
+            taskName,
+            explicitName: task.taskName ?? undefined,
+            line: task.line,
+          },
+        });
+
+        // Store as route-like entity for discoverability
+        result.routes!.push({
+          method: 'TASK',
+          uri: taskName,
+          name: task.functionName,
           line: task.line,
-        },
-      });
-
-      // Store as route-like entity for discoverability
-      result.routes!.push({
-        method: 'TASK',
-        uri: taskName,
-        name: task.functionName,
-        line: task.line,
-      });
-
-      result.frameworkRole = 'celery_tasks';
-    }
-
-    // --- Beat schedule ---
-    const beatEntries = extractBeatSchedule(root);
-    for (const entry of beatEntries) {
-      result.edges!.push({
-        edgeType: 'celery_beat_schedule',
-        sourceSymbolId: `${filePath}::beat_schedule_${entry.entryName}`,
-        targetSymbolId: entry.taskName, // resolved in pass 2 by task name
-        metadata: {
-          entryName: entry.entryName,
-          taskName: entry.taskName,
-          line: entry.line,
-        },
-      });
-
-      result.frameworkRole = result.frameworkRole ?? 'celery_beat';
-    }
-
-    // --- Dispatch calls (.delay / .apply_async) ---
-    const dispatches = extractDispatchCalls(root);
-    for (const dispatch of dispatches) {
-      // Best-effort: only emit edge when the callee is a known task in the same file
-      if (knownTaskFunctions.has(dispatch.calledOn)) {
-        result.edges!.push({
-          edgeType: 'celery_dispatches',
-          sourceSymbolId: filePath, // file-level — caller context unknown without scope analysis
-          targetSymbolId: `${filePath}::${dispatch.calledOn}#function`,
-          metadata: {
-            method: dispatch.method,
-            line: dispatch.line,
-          },
         });
-      } else {
-        // Cross-file dispatch — emit with unresolved target
-        result.edges!.push({
-          edgeType: 'celery_dispatches',
-          sourceSymbolId: filePath,
-          targetSymbolId: dispatch.calledOn, // resolved in pass 2
-          metadata: {
-            method: dispatch.method,
-            line: dispatch.line,
-            crossFile: true,
-          },
-        });
+
+        result.frameworkRole = 'celery_tasks';
       }
-    }
 
-    return ok(result);
+      // --- Beat schedule ---
+      const beatEntries = extractBeatSchedule(root);
+      for (const entry of beatEntries) {
+        result.edges!.push({
+          edgeType: 'celery_beat_schedule',
+          sourceSymbolId: `${filePath}::beat_schedule_${entry.entryName}`,
+          targetSymbolId: entry.taskName, // resolved in pass 2 by task name
+          metadata: {
+            entryName: entry.entryName,
+            taskName: entry.taskName,
+            line: entry.line,
+          },
+        });
+
+        result.frameworkRole = result.frameworkRole ?? 'celery_beat';
+      }
+
+      // --- Dispatch calls (.delay / .apply_async) ---
+      const dispatches = extractDispatchCalls(root);
+      for (const dispatch of dispatches) {
+        // Best-effort: only emit edge when the callee is a known task in the same file
+        if (knownTaskFunctions.has(dispatch.calledOn)) {
+          result.edges!.push({
+            edgeType: 'celery_dispatches',
+            sourceSymbolId: filePath, // file-level — caller context unknown without scope analysis
+            targetSymbolId: `${filePath}::${dispatch.calledOn}#function`,
+            metadata: {
+              method: dispatch.method,
+              line: dispatch.line,
+            },
+          });
+        } else {
+          // Cross-file dispatch — emit with unresolved target
+          result.edges!.push({
+            edgeType: 'celery_dispatches',
+            sourceSymbolId: filePath,
+            targetSymbolId: dispatch.calledOn, // resolved in pass 2
+            metadata: {
+              method: dispatch.method,
+              line: dispatch.line,
+              crossFile: true,
+            },
+          });
+        }
+      }
+
+      return ok(result);
+    } finally {
+      tree.delete();
+    }
   }
 
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {

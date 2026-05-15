@@ -54,51 +54,55 @@ export class GoLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('go');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const packageName = extractPackageName(root) ?? '';
-      const symbols: RawSymbol[] = [];
-      const warnings: string[] = [];
+        const hasError = root.hasError;
+        const packageName = extractPackageName(root) ?? '';
+        const symbols: RawSymbol[] = [];
+        const warnings: string[] = [];
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
-
-      for (const child of root.namedChildren) {
-        switch (child.type) {
-          case 'function_declaration':
-            this.extractFunction(child, filePath, packageName, symbols);
-            break;
-          case 'method_declaration':
-            this.extractMethod(child, filePath, packageName, symbols);
-            break;
-          case 'type_declaration':
-            this.extractTypeDecl(child, filePath, packageName, symbols);
-            break;
-          case 'const_declaration':
-            this.extractConsts(child, filePath, packageName, symbols);
-            break;
-          case 'var_declaration':
-            this.extractVars(child, filePath, packageName, symbols);
-            break;
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
         }
+
+        for (const child of root.namedChildren) {
+          switch (child.type) {
+            case 'function_declaration':
+              this.extractFunction(child, filePath, packageName, symbols);
+              break;
+            case 'method_declaration':
+              this.extractMethod(child, filePath, packageName, symbols);
+              break;
+            case 'type_declaration':
+              this.extractTypeDecl(child, filePath, packageName, symbols);
+              break;
+            case 'const_declaration':
+              this.extractConsts(child, filePath, packageName, symbols);
+              break;
+            case 'var_declaration':
+              this.extractVars(child, filePath, packageName, symbols);
+              break;
+          }
+        }
+
+        const edges = extractImportEdges(root);
+
+        const minGoVer = detectMinGoVersionFromSource(sourceCode);
+        const metadata: Record<string, unknown> = {};
+        if (minGoVer) metadata.minGoVersion = minGoVer;
+
+        return ok({
+          language: 'go',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        });
+      } finally {
+        tree.delete();
       }
-
-      const edges = extractImportEdges(root);
-
-      const minGoVer = detectMinGoVersionFromSource(sourceCode);
-      const metadata: Record<string, unknown> = {};
-      if (minGoVer) metadata.minGoVersion = minGoVer;
-
-      return ok({
-        language: 'go',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Go parse failed: ${msg}`));

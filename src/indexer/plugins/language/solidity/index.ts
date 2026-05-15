@@ -59,54 +59,58 @@ export class SolidityLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('solidity');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
-      const seen = new Set<string>();
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
+        const seen = new Set<string>();
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
 
-      const addSymbol = (
-        name: string,
-        kind: SymbolKind,
-        node: TSNode,
-        parent?: string,
-        meta?: Record<string, unknown>,
-      ): void => {
-        const sid = makeSymbolId(filePath, name, kind, parent);
-        if (seen.has(sid)) return;
-        seen.add(sid);
-        symbols.push({
-          symbolId: sid,
-          name,
-          kind,
-          fqn: parent ? `${parent}.${name}` : name,
-          parentSymbolId: parent ? makeSymbolId(filePath, parent, 'class') : undefined,
-          signature: extractSignature(node),
-          byteStart: node.startIndex,
-          byteEnd: node.endIndex,
-          lineStart: node.startPosition.row + 1,
-          lineEnd: node.endPosition.row + 1,
-          metadata: meta,
+        const addSymbol = (
+          name: string,
+          kind: SymbolKind,
+          node: TSNode,
+          parent?: string,
+          meta?: Record<string, unknown>,
+        ): void => {
+          const sid = makeSymbolId(filePath, name, kind, parent);
+          if (seen.has(sid)) return;
+          seen.add(sid);
+          symbols.push({
+            symbolId: sid,
+            name,
+            kind,
+            fqn: parent ? `${parent}.${name}` : name,
+            parentSymbolId: parent ? makeSymbolId(filePath, parent, 'class') : undefined,
+            signature: extractSignature(node),
+            byteStart: node.startIndex,
+            byteEnd: node.endIndex,
+            lineStart: node.startPosition.row + 1,
+            lineEnd: node.endPosition.row + 1,
+            metadata: meta,
+          });
+        };
+
+        for (const child of root.namedChildren) {
+          this.visitTopLevel(child, addSymbol, edges);
+        }
+
+        return ok({
+          language: 'solidity',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
         });
-      };
-
-      for (const child of root.namedChildren) {
-        this.visitTopLevel(child, addSymbol, edges);
+      } finally {
+        tree.delete();
       }
-
-      return ok({
-        language: 'solidity',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Solidity parse failed: ${msg}`));

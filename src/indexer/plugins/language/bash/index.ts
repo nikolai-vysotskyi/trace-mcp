@@ -37,42 +37,46 @@ export class BashLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('bash');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
-      const seen = new Set<string>();
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
+        const seen = new Set<string>();
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
-
-      for (const child of root.namedChildren) {
-        switch (child.type) {
-          case 'function_definition':
-            this.extractFunction(child, filePath, symbols, seen);
-            break;
-          case 'declaration_command':
-            this.extractDeclaration(child, filePath, symbols, seen);
-            break;
-          case 'variable_assignment':
-            this.extractTopLevelVariable(child, filePath, symbols, seen);
-            break;
-          case 'command':
-            this.extractSourceEdge(child, filePath, edges);
-            break;
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
         }
-      }
 
-      return ok({
-        language: 'bash',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
+        for (const child of root.namedChildren) {
+          switch (child.type) {
+            case 'function_definition':
+              this.extractFunction(child, filePath, symbols, seen);
+              break;
+            case 'declaration_command':
+              this.extractDeclaration(child, filePath, symbols, seen);
+              break;
+            case 'variable_assignment':
+              this.extractTopLevelVariable(child, filePath, symbols, seen);
+              break;
+            case 'command':
+              this.extractSourceEdge(child, filePath, edges);
+              break;
+          }
+        }
+
+        return ok({
+          language: 'bash',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+        });
+      } finally {
+        tree.delete();
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Bash parse failed: ${msg}`));

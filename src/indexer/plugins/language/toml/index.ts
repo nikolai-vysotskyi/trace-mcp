@@ -91,192 +91,196 @@ export class TomlLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('toml');
       const source = content.toString('utf-8');
       const tree = parser.parse(source);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const dialect = detectDialect(filePath);
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
-      const seen = new Set<string>();
+        const hasError = root.hasError;
+        const dialect = detectDialect(filePath);
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
+        const seen = new Set<string>();
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
 
-      let currentTable = '';
-      let currentArrayTable = '';
+        let currentTable = '';
+        let currentArrayTable = '';
 
-      function addSymbol(
-        name: string,
-        kind: SymbolKind,
-        lineStart: number,
-        lineEnd: number,
-        byteStart: number,
-        byteEnd: number,
-        meta?: Record<string, unknown>,
-        parent?: string,
-      ): void {
-        const sid = makeSymbolId(filePath, name, kind, parent);
-        if (seen.has(sid)) return;
-        seen.add(sid);
-        symbols.push({
-          symbolId: sid,
-          name,
-          kind,
-          fqn: parent ? `${parent}.${name}` : name,
-          parentSymbolId: parent ? makeSymbolId(filePath, parent, 'namespace') : undefined,
-          byteStart,
-          byteEnd,
-          lineStart,
-          lineEnd,
-          metadata: meta,
-        });
-      }
+        function addSymbol(
+          name: string,
+          kind: SymbolKind,
+          lineStart: number,
+          lineEnd: number,
+          byteStart: number,
+          byteEnd: number,
+          meta?: Record<string, unknown>,
+          parent?: string,
+        ): void {
+          const sid = makeSymbolId(filePath, name, kind, parent);
+          if (seen.has(sid)) return;
+          seen.add(sid);
+          symbols.push({
+            symbolId: sid,
+            name,
+            kind,
+            fqn: parent ? `${parent}.${name}` : name,
+            parentSymbolId: parent ? makeSymbolId(filePath, parent, 'namespace') : undefined,
+            byteStart,
+            byteEnd,
+            lineStart,
+            lineEnd,
+            metadata: meta,
+          });
+        }
 
-      function addEdge(module: string): void {
-        edges.push({ edgeType: 'imports', metadata: { module } });
-      }
+        function addEdge(module: string): void {
+          edges.push({ edgeType: 'imports', metadata: { module } });
+        }
 
-      for (const child of root.namedChildren) {
-        switch (child.type) {
-          case 'table': {
-            const tableName = extractKeyName(child);
-            if (!tableName) break;
-            currentTable = tableName;
-            currentArrayTable = '';
+        for (const child of root.namedChildren) {
+          switch (child.type) {
+            case 'table': {
+              const tableName = extractKeyName(child);
+              if (!tableName) break;
+              currentTable = tableName;
+              currentArrayTable = '';
 
-            const ln = child.startPosition.row + 1;
-            const lnEnd = child.endPosition.row + 1;
-            const bs = child.startIndex;
-            const be = child.endIndex;
+              const ln = child.startPosition.row + 1;
+              const lnEnd = child.endPosition.row + 1;
+              const bs = child.startIndex;
+              const be = child.endIndex;
 
-            // Dialect-specific table handling
-            if (dialect === 'cargo') {
-              if (currentTable === 'package' || currentTable === 'features') {
-                // will extract keys inside
-              } else if (
-                currentTable === 'dependencies' ||
-                currentTable.startsWith('dependencies.') ||
-                currentTable === 'dev-dependencies' ||
-                currentTable === 'build-dependencies'
-              ) {
-                // dependencies are handled per-key below
+              // Dialect-specific table handling
+              if (dialect === 'cargo') {
+                if (currentTable === 'package' || currentTable === 'features') {
+                  // will extract keys inside
+                } else if (
+                  currentTable === 'dependencies' ||
+                  currentTable.startsWith('dependencies.') ||
+                  currentTable === 'dev-dependencies' ||
+                  currentTable === 'build-dependencies'
+                ) {
+                  // dependencies are handled per-key below
+                } else {
+                  addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
+                    tomlKind: 'table',
+                    dialect,
+                  });
+                }
+              } else if (dialect === 'pyproject') {
+                if (
+                  currentTable === 'project' ||
+                  currentTable === 'build-system' ||
+                  currentTable === 'tool.poetry.dependencies' ||
+                  currentTable.startsWith('tool.')
+                ) {
+                  // will extract keys inside
+                } else {
+                  addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
+                    tomlKind: 'table',
+                    dialect,
+                  });
+                }
+              } else if (dialect === 'hugo') {
+                if (
+                  currentTable === 'params' ||
+                  currentTable.startsWith('params.') ||
+                  currentTable === 'menu' ||
+                  currentTable.startsWith('menu.')
+                ) {
+                  addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
+                    tomlKind: 'table',
+                    dialect,
+                  });
+                } else {
+                  addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
+                    tomlKind: 'table',
+                    dialect,
+                  });
+                }
               } else {
+                // generic, rustfmt, deno, taplo
                 addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
                   tomlKind: 'table',
                   dialect,
                 });
               }
-            } else if (dialect === 'pyproject') {
-              if (
-                currentTable === 'project' ||
-                currentTable === 'build-system' ||
-                currentTable === 'tool.poetry.dependencies' ||
-                currentTable.startsWith('tool.')
-              ) {
-                // will extract keys inside
-              } else {
-                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
-                  tomlKind: 'table',
-                  dialect,
-                });
-              }
-            } else if (dialect === 'hugo') {
-              if (
-                currentTable === 'params' ||
-                currentTable.startsWith('params.') ||
-                currentTable === 'menu' ||
-                currentTable.startsWith('menu.')
-              ) {
-                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
-                  tomlKind: 'table',
-                  dialect,
-                });
-              } else {
-                addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
-                  tomlKind: 'table',
-                  dialect,
-                });
-              }
-            } else {
-              // generic, rustfmt, deno, taplo
-              addSymbol(currentTable, 'namespace', ln, lnEnd, bs, be, {
-                tomlKind: 'table',
+
+              // Process pairs inside this table
+              this.processPairs(
+                child,
+                filePath,
                 dialect,
-              });
+                currentTable,
+                currentArrayTable,
+                addSymbol,
+                addEdge,
+              );
+              break;
             }
 
-            // Process pairs inside this table
-            this.processPairs(
-              child,
-              filePath,
-              dialect,
-              currentTable,
-              currentArrayTable,
-              addSymbol,
-              addEdge,
-            );
-            break;
-          }
+            case 'table_array_element': {
+              const arrayTableName = extractKeyName(child);
+              if (!arrayTableName) break;
+              currentArrayTable = arrayTableName;
+              currentTable = arrayTableName;
 
-          case 'table_array_element': {
-            const arrayTableName = extractKeyName(child);
-            if (!arrayTableName) break;
-            currentArrayTable = arrayTableName;
-            currentTable = arrayTableName;
+              const ln = child.startPosition.row + 1;
+              const lnEnd = child.endPosition.row + 1;
+              const bs = child.startIndex;
+              const be = child.endIndex;
 
-            const ln = child.startPosition.row + 1;
-            const lnEnd = child.endPosition.row + 1;
-            const bs = child.startIndex;
-            const be = child.endIndex;
+              if (dialect === 'cargo' && currentTable === 'bin') {
+                // [[bin]] — will extract name from keys inside
+              } else if (dialect === 'generic') {
+                addSymbol(currentArrayTable, 'class', ln, lnEnd, bs, be, {
+                  tomlKind: 'array-of-tables',
+                  dialect,
+                });
+              }
 
-            if (dialect === 'cargo' && currentTable === 'bin') {
-              // [[bin]] — will extract name from keys inside
-            } else if (dialect === 'generic') {
-              addSymbol(currentArrayTable, 'class', ln, lnEnd, bs, be, {
-                tomlKind: 'array-of-tables',
+              // Process pairs inside this array-of-tables element
+              this.processPairs(
+                child,
+                filePath,
                 dialect,
-              });
+                currentTable,
+                currentArrayTable,
+                addSymbol,
+                addEdge,
+              );
+              break;
             }
 
-            // Process pairs inside this array-of-tables element
-            this.processPairs(
-              child,
-              filePath,
-              dialect,
-              currentTable,
-              currentArrayTable,
-              addSymbol,
-              addEdge,
-            );
-            break;
-          }
-
-          case 'pair': {
-            // Top-level key = value (before any table)
-            this.processSinglePair(
-              child,
-              filePath,
-              dialect,
-              currentTable,
-              currentArrayTable,
-              addSymbol,
-              addEdge,
-            );
-            break;
+            case 'pair': {
+              // Top-level key = value (before any table)
+              this.processSinglePair(
+                child,
+                filePath,
+                dialect,
+                currentTable,
+                currentArrayTable,
+                addSymbol,
+                addEdge,
+              );
+              break;
+            }
           }
         }
-      }
 
-      return ok({
-        language: 'toml',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-        metadata: { dialect },
-      });
+        return ok({
+          language: 'toml',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+          metadata: { dialect },
+        });
+      } finally {
+        tree.delete();
+      }
     } catch (e) {
       return err(parseError(filePath, e instanceof Error ? e.message : String(e)));
     }

@@ -75,34 +75,38 @@ export class LuaLanguagePlugin implements LanguagePlugin {
       const parser = await createLuaParser();
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root = tree.rootNode as TSNode;
+      try {
+        const root = tree.rootNode as TSNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
-      const seen = new Set<string>();
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
+        const seen = new Set<string>();
 
-      // Tree-sitter pass: extract well-parsed constructs
-      this.walkStatements(root, filePath, symbols, seen);
+        // Tree-sitter pass: extract well-parsed constructs
+        this.walkStatements(root, filePath, symbols, seen);
 
-      // Regex fallback: extract patterns the grammar handles poorly or misses
-      // due to tree-sitter-lua WASM Language corruption across multiple parses.
-      // The `seen` set deduplicates symbols already found by tree-sitter.
-      this.extractModuleMethods(sourceCode, filePath, symbols, seen);
-      this.extractLocalFunctions(sourceCode, filePath, symbols, seen);
-      this.extractGlobalFunctions(sourceCode, filePath, symbols, seen);
-      this.extractTableFieldAssignments(sourceCode, filePath, symbols, seen);
-      this.extractLocalVariables(sourceCode, filePath, symbols, seen);
-      this.extractRequireEdges(sourceCode, edges);
+        // Regex fallback: extract patterns the grammar handles poorly or misses
+        // due to tree-sitter-lua WASM Language corruption across multiple parses.
+        // The `seen` set deduplicates symbols already found by tree-sitter.
+        this.extractModuleMethods(sourceCode, filePath, symbols, seen);
+        this.extractLocalFunctions(sourceCode, filePath, symbols, seen);
+        this.extractGlobalFunctions(sourceCode, filePath, symbols, seen);
+        this.extractTableFieldAssignments(sourceCode, filePath, symbols, seen);
+        this.extractLocalVariables(sourceCode, filePath, symbols, seen);
+        this.extractRequireEdges(sourceCode, edges);
 
-      return ok({
-        language: 'lua',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
+        return ok({
+          language: 'lua',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+        });
+      } finally {
+        tree.delete();
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Lua parse failed: ${msg}`));

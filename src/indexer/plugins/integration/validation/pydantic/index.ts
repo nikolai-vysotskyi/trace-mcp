@@ -503,7 +503,7 @@ export class PydanticPlugin implements FrameworkPlugin {
       edges: [],
     };
 
-    let tree: { rootNode: TSNode };
+    let tree: { rootNode: TSNode; delete: () => void };
     try {
       const parser = await getParser('python');
       tree = parser.parse(source);
@@ -511,40 +511,44 @@ export class PydanticPlugin implements FrameworkPlugin {
       return err(parseError(filePath, `tree-sitter parse failed: ${e}`));
     }
 
-    const root = tree.rootNode;
-    const models = extractPydanticModels(root);
+    try {
+      const root = tree.rootNode;
+      const models = extractPydanticModels(root);
 
-    for (const model of models) {
-      // Field type references
-      for (const field of model.fields) {
-        result.edges!.push({
-          edgeType: 'pydantic_field_type',
-          sourceSymbolId: `${filePath}::${model.className}#class`,
-          targetSymbolId: field.typeName, // resolved in pass 2
-          metadata: {
-            field: field.fieldName,
-            line: field.line,
-          },
-        });
+      for (const model of models) {
+        // Field type references
+        for (const field of model.fields) {
+          result.edges!.push({
+            edgeType: 'pydantic_field_type',
+            sourceSymbolId: `${filePath}::${model.className}#class`,
+            targetSymbolId: field.typeName, // resolved in pass 2
+            metadata: {
+              field: field.fieldName,
+              line: field.line,
+            },
+          });
+        }
+
+        // ORM mode hint
+        if (model.hasFromAttributes) {
+          result.edges!.push({
+            edgeType: 'pydantic_from_orm',
+            sourceSymbolId: `${filePath}::${model.className}#class`,
+            targetSymbolId: model.className, // placeholder — actual ORM model resolution in pass 2
+            metadata: {
+              hint: 'from_attributes',
+              line: model.line,
+            },
+          });
+        }
+
+        result.frameworkRole = 'pydantic_model';
       }
 
-      // ORM mode hint
-      if (model.hasFromAttributes) {
-        result.edges!.push({
-          edgeType: 'pydantic_from_orm',
-          sourceSymbolId: `${filePath}::${model.className}#class`,
-          targetSymbolId: model.className, // placeholder — actual ORM model resolution in pass 2
-          metadata: {
-            hint: 'from_attributes',
-            line: model.line,
-          },
-        });
-      }
-
-      result.frameworkRole = 'pydantic_model';
+      return ok(result);
+    } finally {
+      tree.delete();
     }
-
-    return ok(result);
   }
 
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {

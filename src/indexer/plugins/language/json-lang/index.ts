@@ -662,108 +662,112 @@ export class JsonLanguagePlugin implements LanguagePlugin {
 
       const parser = await getParser('json');
       const tree = parser.parse(cleanSource);
-      const rootNode = tree.rootNode;
+      try {
+        const rootNode = tree.rootNode;
 
-      if (!rootNode || rootNode.namedChildCount === 0) {
-        return ok({ language: 'json', status: 'ok', symbols: [] });
-      }
-
-      const hasError = rootNode.hasError;
-
-      // Find the top-level object (document → object)
-      let rootObject: TSNode | null = null;
-      for (const child of rootNode.namedChildren) {
-        if (child.type === 'object') {
-          rootObject = child;
-          break;
+        if (!rootNode || rootNode.namedChildCount === 0) {
+          return ok({ language: 'json', status: 'ok', symbols: [] });
         }
-      }
 
-      // We only extract from top-level objects
-      if (!rootObject) {
-        return ok({ language: 'json', status: hasError ? 'partial' : 'ok', symbols: [] });
-      }
+        const hasError = rootNode.hasError;
 
-      const add: AddFn = (
-        name: string,
-        kind: SymbolKind,
-        node: TSNode,
-        meta?: Record<string, unknown>,
-      ) => {
-        if (!name) return;
-        const id = symId(filePath, name, kind);
-        if (seen.has(id)) return;
-        seen.add(id);
-        symbols.push({
-          symbolId: id,
-          name,
-          kind,
-          fqn: name,
-          byteStart: node.startIndex,
-          byteEnd: node.endIndex,
-          lineStart: node.startPosition.row + 1, // tree-sitter is 0-based
-          lineEnd: node.endPosition.row + 1,
-          metadata: meta,
+        // Find the top-level object (document → object)
+        let rootObject: TSNode | null = null;
+        for (const child of rootNode.namedChildren) {
+          if (child.type === 'object') {
+            rootObject = child;
+            break;
+          }
+        }
+
+        // We only extract from top-level objects
+        if (!rootObject) {
+          return ok({ language: 'json', status: hasError ? 'partial' : 'ok', symbols: [] });
+        }
+
+        const add: AddFn = (
+          name: string,
+          kind: SymbolKind,
+          node: TSNode,
+          meta?: Record<string, unknown>,
+        ) => {
+          if (!name) return;
+          const id = symId(filePath, name, kind);
+          if (seen.has(id)) return;
+          seen.add(id);
+          symbols.push({
+            symbolId: id,
+            name,
+            kind,
+            fqn: name,
+            byteStart: node.startIndex,
+            byteEnd: node.endIndex,
+            lineStart: node.startPosition.row + 1, // tree-sitter is 0-based
+            lineEnd: node.endPosition.row + 1,
+            metadata: meta,
+          });
+        };
+
+        const dialect = detectDialect(filePath, rootObject);
+        const warnings: string[] = [];
+
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
+
+        switch (dialect) {
+          case 'package-json':
+            extractPackageJson(rootObject, add, edges);
+            break;
+          case 'tsconfig':
+            extractTsconfig(rootObject, add, edges);
+            break;
+          case 'eslint':
+            extractEslint(rootObject, add, edges);
+            break;
+          case 'vscode-settings':
+            extractVscodeSettings(rootObject, add);
+            break;
+          case 'vscode-launch':
+            extractVscodeLaunch(rootObject, add);
+            break;
+          case 'lerna':
+            extractLerna(rootObject, add);
+            break;
+          case 'babel':
+            extractBabel(rootObject, add, edges);
+            break;
+          case 'prettier':
+            extractPrettier(rootObject, add);
+            break;
+          case 'nest-cli':
+            extractNestCli(rootObject, add);
+            break;
+          case 'angular':
+            extractAngular(rootObject, add);
+            break;
+          case 'composer':
+            extractComposer(rootObject, add, edges);
+            break;
+          case 'openapi':
+            extractOpenApiJson(rootObject, add, edges);
+            break;
+          default:
+            extractGenericJson(rootObject, add);
+            break;
+        }
+
+        return ok({
+          language: 'json',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+          metadata: dialect !== 'generic' ? { jsonDialect: dialect } : undefined,
         });
-      };
-
-      const dialect = detectDialect(filePath, rootObject);
-      const warnings: string[] = [];
-
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
+      } finally {
+        tree.delete();
       }
-
-      switch (dialect) {
-        case 'package-json':
-          extractPackageJson(rootObject, add, edges);
-          break;
-        case 'tsconfig':
-          extractTsconfig(rootObject, add, edges);
-          break;
-        case 'eslint':
-          extractEslint(rootObject, add, edges);
-          break;
-        case 'vscode-settings':
-          extractVscodeSettings(rootObject, add);
-          break;
-        case 'vscode-launch':
-          extractVscodeLaunch(rootObject, add);
-          break;
-        case 'lerna':
-          extractLerna(rootObject, add);
-          break;
-        case 'babel':
-          extractBabel(rootObject, add, edges);
-          break;
-        case 'prettier':
-          extractPrettier(rootObject, add);
-          break;
-        case 'nest-cli':
-          extractNestCli(rootObject, add);
-          break;
-        case 'angular':
-          extractAngular(rootObject, add);
-          break;
-        case 'composer':
-          extractComposer(rootObject, add, edges);
-          break;
-        case 'openapi':
-          extractOpenApiJson(rootObject, add, edges);
-          break;
-        default:
-          extractGenericJson(rootObject, add);
-          break;
-      }
-
-      return ok({
-        language: 'json',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-        metadata: dialect !== 'generic' ? { jsonDialect: dialect } : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `JSON parse failed: ${msg}`));

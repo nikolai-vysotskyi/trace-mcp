@@ -52,27 +52,31 @@ export class HtmlLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('html');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
-      const seenCustom = new Set<string>();
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
+        const seenCustom = new Set<string>();
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
+
+        this.walk(root, filePath, symbols, edges, seenCustom);
+
+        return ok({
+          language: 'html',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+        });
+      } finally {
+        tree.delete();
       }
-
-      this.walk(root, filePath, symbols, edges, seenCustom);
-
-      return ok({
-        language: 'html',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `HTML parse failed: ${msg}`));

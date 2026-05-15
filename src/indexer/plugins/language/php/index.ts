@@ -103,39 +103,43 @@ export class PhpLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('php');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const namespace = extractNamespace(root);
-      const symbols: RawSymbol[] = [];
-      const warnings: string[] = [];
+        const hasError = root.hasError;
+        const namespace = extractNamespace(root);
+        const symbols: RawSymbol[] = [];
+        const warnings: string[] = [];
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
 
-      const edges: RawEdge[] = [];
-      this.walkTopLevel(root, filePath, namespace, symbols, edges);
+        const edges: RawEdge[] = [];
+        this.walkTopLevel(root, filePath, namespace, symbols, edges);
 
-      // Extract use statements as import edges for PSR-4 resolution
-      const useStatements = extractUseStatements(root);
-      for (const u of useStatements) {
-        edges.push({
-          edgeType: 'php_imports',
-          metadata: {
-            from: u.fqn,
-            specifiers: [u.alias ?? u.fqn.split('\\').pop() ?? u.fqn],
-          },
+        // Extract use statements as import edges for PSR-4 resolution
+        const useStatements = extractUseStatements(root);
+        for (const u of useStatements) {
+          edges.push({
+            edgeType: 'php_imports',
+            metadata: {
+              from: u.fqn,
+              specifiers: [u.alias ?? u.fqn.split('\\').pop() ?? u.fqn],
+            },
+          });
+        }
+
+        return ok({
+          language: 'php',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
         });
+      } finally {
+        tree.delete();
       }
-
-      return ok({
-        language: 'php',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `PHP parse failed: ${msg}`));

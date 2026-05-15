@@ -52,52 +52,56 @@ export class ScalaLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('scala');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const warnings: string[] = [];
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const warnings: string[] = [];
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
-      }
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
 
-      // Extract package name(s) for FQN construction
-      const packageParts: string[] = [];
-      for (const child of root.namedChildren) {
-        if (child.type === 'package_clause') {
-          const pkgName = extractPackageName(child);
-          if (pkgName) {
-            packageParts.push(pkgName);
-            // Emit namespace symbol for the package
-            symbols.push({
-              symbolId: makeSymbolId(filePath, pkgName, 'namespace'),
-              name: pkgName,
-              kind: 'namespace',
-              fqn: pkgName,
-              signature: `package ${pkgName}`,
-              byteStart: child.startIndex,
-              byteEnd: child.endIndex,
-              lineStart: child.startPosition.row + 1,
-              lineEnd: child.endPosition.row + 1,
-            });
+        // Extract package name(s) for FQN construction
+        const packageParts: string[] = [];
+        for (const child of root.namedChildren) {
+          if (child.type === 'package_clause') {
+            const pkgName = extractPackageName(child);
+            if (pkgName) {
+              packageParts.push(pkgName);
+              // Emit namespace symbol for the package
+              symbols.push({
+                symbolId: makeSymbolId(filePath, pkgName, 'namespace'),
+                name: pkgName,
+                kind: 'namespace',
+                fqn: pkgName,
+                signature: `package ${pkgName}`,
+                byteStart: child.startIndex,
+                byteEnd: child.endIndex,
+                lineStart: child.startPosition.row + 1,
+                lineEnd: child.endPosition.row + 1,
+              });
+            }
           }
         }
+        const packageName = packageParts.join('.');
+
+        // Walk top-level declarations
+        this.walkTopLevel(root, filePath, packageName ? [packageName] : [], symbols);
+
+        const edges = extractImportEdges(root);
+
+        return ok({
+          language: 'scala',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+        });
+      } finally {
+        tree.delete();
       }
-      const packageName = packageParts.join('.');
-
-      // Walk top-level declarations
-      this.walkTopLevel(root, filePath, packageName ? [packageName] : [], symbols);
-
-      const edges = extractImportEdges(root);
-
-      return ok({
-        language: 'scala',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `Scala parse failed: ${msg}`));

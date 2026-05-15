@@ -53,30 +53,34 @@ export class CssLanguagePlugin implements LanguagePlugin {
       const parser = await getParser('css');
       const sourceCode = content.toString('utf-8');
       const tree = parser.parse(sourceCode);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      const hasError = root.hasError;
-      const symbols: RawSymbol[] = [];
-      const edges: RawEdge[] = [];
-      const warnings: string[] = [];
+        const hasError = root.hasError;
+        const symbols: RawSymbol[] = [];
+        const edges: RawEdge[] = [];
+        const warnings: string[] = [];
 
-      const seenVars = new Set<string>();
-      const seenClasses = new Set<string>();
-      const seenIds = new Set<string>();
+        const seenVars = new Set<string>();
+        const seenClasses = new Set<string>();
+        const seenIds = new Set<string>();
 
-      if (hasError) {
-        warnings.push('Source contains syntax errors; extraction may be incomplete');
+        if (hasError) {
+          warnings.push('Source contains syntax errors; extraction may be incomplete');
+        }
+
+        this.walkTreeSitter(root, filePath, symbols, edges, seenVars, seenClasses, seenIds);
+
+        return ok({
+          language: 'css',
+          status: hasError ? 'partial' : 'ok',
+          symbols,
+          edges: edges.length > 0 ? edges : undefined,
+          warnings: warnings.length > 0 ? warnings : undefined,
+        });
+      } finally {
+        tree.delete();
       }
-
-      this.walkTreeSitter(root, filePath, symbols, edges, seenVars, seenClasses, seenIds);
-
-      return ok({
-        language: 'css',
-        status: hasError ? 'partial' : 'ok',
-        symbols,
-        edges: edges.length > 0 ? edges : undefined,
-        warnings: warnings.length > 0 ? warnings : undefined,
-      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(parseError(filePath, `CSS tree-sitter parse failed: ${msg}`));

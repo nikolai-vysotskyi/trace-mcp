@@ -381,92 +381,96 @@ export class PytestPlugin implements FrameworkPlugin {
     const parser = await getParser('python');
     const source = content.toString('utf-8');
     const tree = parser.parse(source);
-    const root = tree.rootNode;
+    try {
+      const root = tree.rootNode;
 
-    const result: FileParseResult = {
-      status: 'ok',
-      symbols: [],
-      edges: [],
-    };
+      const result: FileParseResult = {
+        status: 'ok',
+        symbols: [],
+        edges: [],
+      };
 
-    // conftest.py: extract fixtures
-    if (isConftest) {
-      result.frameworkRole = 'conftest';
-      const fixtures = extractFixtures(root);
-      for (const fix of fixtures) {
-        result.symbols!.push({
-          symbolId: `${filePath}::${fix.name}#function`,
-          name: fix.name,
-          kind: 'function',
-          signature: `@pytest.fixture(scope="${fix.scope}")`,
-          byteStart: fix.byteStart,
-          byteEnd: fix.byteEnd,
-          lineStart: fix.lineStart,
-          lineEnd: fix.lineEnd,
-          metadata: {
-            pytest_fixture: true,
-            scope: fix.scope,
-            autouse: fix.autouse || undefined,
-          },
-        });
+      // conftest.py: extract fixtures
+      if (isConftest) {
+        result.frameworkRole = 'conftest';
+        const fixtures = extractFixtures(root);
+        for (const fix of fixtures) {
+          result.symbols!.push({
+            symbolId: `${filePath}::${fix.name}#function`,
+            name: fix.name,
+            kind: 'function',
+            signature: `@pytest.fixture(scope="${fix.scope}")`,
+            byteStart: fix.byteStart,
+            byteEnd: fix.byteEnd,
+            lineStart: fix.lineStart,
+            lineEnd: fix.lineEnd,
+            metadata: {
+              pytest_fixture: true,
+              scope: fix.scope,
+              autouse: fix.autouse || undefined,
+            },
+          });
+        }
       }
+
+      // Test files: extract tests and inline fixtures
+      if (isTestFile) {
+        result.frameworkRole = 'pytest_test';
+
+        const tests = extractTests(root);
+        const fixtures = extractFixtures(root);
+
+        for (const test of tests) {
+          const meta: Record<string, unknown> = {
+            pytest_test: true,
+          };
+          if (test.className) meta.testClass = test.className;
+          if (test.markers.length > 0) meta.markers = test.markers;
+          if (test.parametrize) meta.parametrize = test.parametrize;
+          if (test.isAsync) meta.async = true;
+          if (test.markers.includes('skip')) meta.skipped = true;
+          if (test.markers.includes('xfail')) meta.expectedFailure = true;
+
+          const symbolName = test.className ? `${test.className}.${test.name}` : test.name;
+          result.symbols!.push({
+            symbolId: `${filePath}::${symbolName}#function`,
+            name: test.name,
+            kind: 'function',
+            signature: test.className
+              ? `def ${test.className}.${test.name}(self, ...)`
+              : `def ${test.name}(...)`,
+            byteStart: test.byteStart,
+            byteEnd: test.byteEnd,
+            lineStart: test.lineStart,
+            lineEnd: test.lineEnd,
+            metadata: meta,
+          });
+        }
+
+        // Also extract inline fixtures
+        for (const fix of fixtures) {
+          result.symbols!.push({
+            symbolId: `${filePath}::${fix.name}#function`,
+            name: fix.name,
+            kind: 'function',
+            signature: `@pytest.fixture(scope="${fix.scope}")`,
+            byteStart: fix.byteStart,
+            byteEnd: fix.byteEnd,
+            lineStart: fix.lineStart,
+            lineEnd: fix.lineEnd,
+            metadata: {
+              pytest_fixture: true,
+              scope: fix.scope,
+              autouse: fix.autouse || undefined,
+            },
+          });
+        }
+      }
+
+      return ok(result);
+    } finally {
+      tree.delete();
     }
-
-    // Test files: extract tests and inline fixtures
-    if (isTestFile) {
-      result.frameworkRole = 'pytest_test';
-
-      const tests = extractTests(root);
-      const fixtures = extractFixtures(root);
-
-      for (const test of tests) {
-        const meta: Record<string, unknown> = {
-          pytest_test: true,
-        };
-        if (test.className) meta.testClass = test.className;
-        if (test.markers.length > 0) meta.markers = test.markers;
-        if (test.parametrize) meta.parametrize = test.parametrize;
-        if (test.isAsync) meta.async = true;
-        if (test.markers.includes('skip')) meta.skipped = true;
-        if (test.markers.includes('xfail')) meta.expectedFailure = true;
-
-        const symbolName = test.className ? `${test.className}.${test.name}` : test.name;
-        result.symbols!.push({
-          symbolId: `${filePath}::${symbolName}#function`,
-          name: test.name,
-          kind: 'function',
-          signature: test.className
-            ? `def ${test.className}.${test.name}(self, ...)`
-            : `def ${test.name}(...)`,
-          byteStart: test.byteStart,
-          byteEnd: test.byteEnd,
-          lineStart: test.lineStart,
-          lineEnd: test.lineEnd,
-          metadata: meta,
-        });
-      }
-
-      // Also extract inline fixtures
-      for (const fix of fixtures) {
-        result.symbols!.push({
-          symbolId: `${filePath}::${fix.name}#function`,
-          name: fix.name,
-          kind: 'function',
-          signature: `@pytest.fixture(scope="${fix.scope}")`,
-          byteStart: fix.byteStart,
-          byteEnd: fix.byteEnd,
-          lineStart: fix.lineStart,
-          lineEnd: fix.lineEnd,
-          metadata: {
-            pytest_fixture: true,
-            scope: fix.scope,
-            autouse: fix.autouse || undefined,
-          },
-        });
-      }
-    }
-
-    return ok(result);
   }
 
   resolveEdges(_ctx: ResolveContext): TraceMcpResult<RawEdge[]> {

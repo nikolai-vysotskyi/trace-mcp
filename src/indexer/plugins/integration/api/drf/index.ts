@@ -429,7 +429,7 @@ export class DRFPlugin implements FrameworkPlugin {
       routes: [],
     };
 
-    let tree: { rootNode: TSNode };
+    let tree: { rootNode: TSNode; delete?: () => void };
     try {
       const parser = await getParser('python');
       tree = parser.parse(source);
@@ -437,71 +437,75 @@ export class DRFPlugin implements FrameworkPlugin {
       return err(parseError(filePath, `tree-sitter parse failed: ${e}`));
     }
 
-    const root = tree.rootNode;
+    try {
+      const root = tree.rootNode;
 
-    // --- Serializers ---
-    const serializers = extractSerializers(root);
-    for (const ser of serializers) {
-      if (ser.modelName) {
+      // --- Serializers ---
+      const serializers = extractSerializers(root);
+      for (const ser of serializers) {
+        if (ser.modelName) {
+          result.edges!.push({
+            edgeType: 'drf_serializer_model',
+            sourceSymbolId: `${filePath}::${ser.className}#class`,
+            targetSymbolId: ser.modelName, // resolved in pass 2
+            metadata: { line: ser.line },
+          });
+        }
+        result.frameworkRole = 'drf_serializer';
+      }
+
+      // --- ViewSets ---
+      const viewsets = extractViewSets(root);
+      for (const vs of viewsets) {
+        if (vs.serializerClass) {
+          result.edges!.push({
+            edgeType: 'drf_viewset_serializer',
+            sourceSymbolId: `${filePath}::${vs.className}#class`,
+            targetSymbolId: vs.serializerClass, // resolved in pass 2
+            metadata: { line: vs.line },
+          });
+        }
+
+        for (const perm of vs.permissionClasses) {
+          result.edges!.push({
+            edgeType: 'drf_permission_guards',
+            sourceSymbolId: `${filePath}::${vs.className}#class`,
+            targetSymbolId: perm, // resolved in pass 2
+            metadata: { line: vs.line },
+          });
+        }
+
+        if (vs.serializerClass || vs.permissionClasses.length > 0) {
+          result.frameworkRole = result.frameworkRole ?? 'drf_viewset';
+        }
+      }
+
+      // --- Router registrations ---
+      const registrations = extractRouterRegistrations(root);
+      for (const reg of registrations) {
         result.edges!.push({
-          edgeType: 'drf_serializer_model',
-          sourceSymbolId: `${filePath}::${ser.className}#class`,
-          targetSymbolId: ser.modelName, // resolved in pass 2
-          metadata: { line: ser.line },
+          edgeType: 'drf_router_registers',
+          sourceSymbolId: `${filePath}::router_register_${reg.prefix}`,
+          targetSymbolId: reg.viewsetName, // resolved in pass 2
+          metadata: { prefix: reg.prefix, line: reg.line },
         });
+
+        // Generate standard REST routes
+        const routes = generateViewSetRoutes(reg.prefix);
+        for (const route of routes) {
+          result.routes!.push({
+            ...route,
+            line: reg.line,
+          });
+        }
+
+        result.frameworkRole = result.frameworkRole ?? 'drf_router';
       }
-      result.frameworkRole = 'drf_serializer';
+
+      return ok(result);
+    } finally {
+      tree.delete?.();
     }
-
-    // --- ViewSets ---
-    const viewsets = extractViewSets(root);
-    for (const vs of viewsets) {
-      if (vs.serializerClass) {
-        result.edges!.push({
-          edgeType: 'drf_viewset_serializer',
-          sourceSymbolId: `${filePath}::${vs.className}#class`,
-          targetSymbolId: vs.serializerClass, // resolved in pass 2
-          metadata: { line: vs.line },
-        });
-      }
-
-      for (const perm of vs.permissionClasses) {
-        result.edges!.push({
-          edgeType: 'drf_permission_guards',
-          sourceSymbolId: `${filePath}::${vs.className}#class`,
-          targetSymbolId: perm, // resolved in pass 2
-          metadata: { line: vs.line },
-        });
-      }
-
-      if (vs.serializerClass || vs.permissionClasses.length > 0) {
-        result.frameworkRole = result.frameworkRole ?? 'drf_viewset';
-      }
-    }
-
-    // --- Router registrations ---
-    const registrations = extractRouterRegistrations(root);
-    for (const reg of registrations) {
-      result.edges!.push({
-        edgeType: 'drf_router_registers',
-        sourceSymbolId: `${filePath}::router_register_${reg.prefix}`,
-        targetSymbolId: reg.viewsetName, // resolved in pass 2
-        metadata: { prefix: reg.prefix, line: reg.line },
-      });
-
-      // Generate standard REST routes
-      const routes = generateViewSetRoutes(reg.prefix);
-      for (const route of routes) {
-        result.routes!.push({
-          ...route,
-          line: reg.line,
-        });
-      }
-
-      result.frameworkRole = result.frameworkRole ?? 'drf_router';
-    }
-
-    return ok(result);
   }
 
   resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {

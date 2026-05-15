@@ -197,18 +197,22 @@ export class ReactPlugin implements FrameworkPlugin {
       const useTsx = /\.(tsx|jsx)$/.test(filePath);
       const parser = await getParser(useTsx ? 'tsx' : 'typescript');
       const tree = parser.parse(source);
-      const root: TSNode = tree.rootNode;
+      try {
+        const root: TSNode = tree.rootNode;
 
-      for (const node of walk(root)) {
-        switch (node.type) {
-          case 'call_expression':
-            this.visitCallExpression(node, result);
-            break;
-          case 'jsx_self_closing_element':
-          case 'jsx_element':
-            this.visitJsxElement(node, result);
-            break;
+        for (const node of walk(root)) {
+          switch (node.type) {
+            case 'call_expression':
+              this.visitCallExpression(node, result);
+              break;
+            case 'jsx_self_closing_element':
+            case 'jsx_element':
+              this.visitJsxElement(node, result);
+              break;
+          }
         }
+      } finally {
+        tree.delete();
       }
     } catch (e) {
       return err(parseError(filePath, `tree-sitter parse failed: ${e}`));
