@@ -69,11 +69,10 @@ describe('check_duplication — behavioural contract', () => {
     expect(typeof result.threshold).toBe('number');
   });
 
-  // The two assertions below would exercise `findDuplicateSymbols`, the
-  // helper that does the actual scoring. It is referenced 3x in
-  // duplication.ts but never defined anywhere — calling either path throws
-  // ReferenceError at runtime. Skipped until the helper is restored.
-  it.skip('TODO[latent-bug]: by-name lookup against the codebase returns scored matches', () => {
+  // Both assertions below exercise `findDuplicateSymbols`, the helper that
+  // does the actual scoring. It was deleted in d8a8494 as "unused" without
+  // noticing the 3 surviving call sites — restored alongside these tests.
+  it('by-name lookup against the codebase returns scored matches', () => {
     const store = createTestStore();
     const result = checkSymbolForDuplicates(
       store,
@@ -84,7 +83,7 @@ describe('check_duplication — behavioural contract', () => {
     expect(result.warnings).toBeInstanceOf(Array);
   });
 
-  it.skip('TODO[latent-bug]: by-symbol_id lookup against the codebase returns scored matches', () => {
+  it('by-symbol_id lookup against the codebase returns scored matches', () => {
     const store = createTestStore();
     const fileId = store.insertFile('src/dup.ts', 'typescript', 'h_dup', 100);
     store.insertSymbol(fileId, {

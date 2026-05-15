@@ -6,6 +6,7 @@
  */
 
 import type Database from 'better-sqlite3';
+import { fuzzySearch } from '../../db/fuzzy.js';
 import type { Store } from '../../db/store.js';
 import type { SymbolRow } from '../../db/types.js';
 
@@ -163,6 +164,147 @@ interface SymbolRowExtended extends SymbolRow {
 }
 
 // ─── Core ───────────────────────────────────────────────────
+
+/**
+ * Check a list of symbols against the rest of the codebase for potential duplicates.
+ *
+ * Bug class closed: prior to this restoration, `checkSymbolForDuplicates` and
+ * `checkFileForDuplicates` referenced this helper but it had been deleted as
+ * dead code — every real scan threw ReferenceError at runtime. The three call
+ * sites are pinned by behavioural tests so they cannot drift again.
+ */
+function findDuplicateSymbols(
+  store: Store,
+  db: Database.Database,
+  sourceSymbols: SymbolRowExtended[],
+  sourceFileId: number,
+  sourceFilePath: string,
+  options?: {
+    threshold?: number;
+    maxResults?: number;
+  },
+): DuplicationResult {
+  const threshold = options?.threshold ?? 0.7;
+  const maxResults = options?.maxResults ?? 10;
+
+  const sourceIsTest = _TEST_PATH_RE.test(sourceFilePath);
+
+  // Collect heritage names from all source symbols' parents for exclusion
+  const heritageNames = new Set<string>();
+  for (const sym of sourceSymbols) {
+    const h = _getHeritageNames(sym.metadata);
+    for (const n of h) heritageNames.add(n);
+  }
+
+  // Filter source symbols to checkable ones
+  const checkable = sourceSymbols
+    .filter(
+      (s) =>
+        _CHECKABLE_KINDS.has(s.kind) &&
+        s.name.length >= _MIN_NAME_LENGTH &&
+        !_TRIVIAL_NAMES.has(s.name),
+    )
+    .slice(0, _MAX_SYMBOLS_PER_FILE);
+
+  const allWarnings: DuplicationWarning[] = [];
+
+  // Prepare param_count lookup: raw query since SymbolRow type doesn't include it
+  const paramCountStmt = db.prepare<[number], { param_count: number | null }>(
+    'SELECT param_count FROM symbols WHERE id = ?',
+  );
+
+  for (const src of checkable) {
+    const srcParamCount = src.param_count ?? paramCountStmt.get(src.id)?.param_count ?? null;
+    const srcTokens = _tokenizeName(src.fqn ?? src.name);
+
+    // Find similar symbols via fuzzy search
+    const candidates = fuzzySearch(db, src.name, {
+      threshold: 0.25,
+      limit: 30,
+      kind: src.kind,
+    });
+
+    for (const cand of candidates) {
+      // Skip same file
+      if (cand.fileId === sourceFileId) continue;
+
+      // Skip if candidate has exact same symbol ID (shouldn't happen, but guard)
+      if (cand.symbolIdStr === src.symbol_id) continue;
+
+      // Get candidate file path for test-double filtering
+      const candFile = store.getFileById(cand.fileId);
+      if (!candFile) continue;
+      const candIsTest = _TEST_PATH_RE.test(candFile.path);
+
+      // Skip test-double pairs (test ↔ source with same name)
+      if (sourceIsTest !== candIsTest) continue;
+
+      // Skip if candidate name matches a heritage class name (legitimate override)
+      if (heritageNames.has(cand.name)) continue;
+
+      // Check if candidate is an override of a shared base class
+      const candSymbol = _getCandidateSymbol(db, cand.symbolId);
+      if (candSymbol) {
+        const candHeritage = _getHeritageNames(candSymbol.metadata);
+        // If they share any heritage (both implement/extend same thing), skip
+        for (const h of candHeritage) {
+          if (heritageNames.has(h)) continue;
+        }
+      }
+
+      // ── Scoring ──
+      const nameSim = cand.similarity;
+      const kindMatch = cand.kind === src.kind ? 1.0 : 0.0;
+
+      const candParamCount =
+        candSymbol?.param_count ?? paramCountStmt.get(cand.symbolId)?.param_count ?? null;
+      const sigSim = _signatureSimilarity(srcParamCount, candParamCount);
+
+      const candTokens = _tokenizeName(cand.fqn ?? cand.name);
+      const tokenOvl = _jaccard(srcTokens, candTokens);
+
+      const score =
+        _W_NAME * nameSim + _W_KIND * kindMatch + _W_SIGNATURE * sigSim + _W_TOKEN * tokenOvl;
+
+      if (score >= threshold) {
+        allWarnings.push({
+          source_symbol_id: src.symbol_id,
+          source_name: src.name,
+          source_file: sourceFilePath,
+          duplicate_symbol_id: cand.symbolIdStr,
+          duplicate_name: cand.name,
+          duplicate_file: candFile.path,
+          duplicate_line: candSymbol?.line_start ?? null,
+          score: Math.round(score * 1000) / 1000,
+          signals: {
+            name_similarity: Math.round(nameSim * 1000) / 1000,
+            kind_match: kindMatch,
+            signature_similarity: Math.round(sigSim * 1000) / 1000,
+            token_overlap: Math.round(tokenOvl * 1000) / 1000,
+          },
+        });
+      }
+    }
+  }
+
+  // Sort by score desc, deduplicate by (source, duplicate) pair, limit
+  allWarnings.sort((a, b) => b.score - a.score);
+  const seen = new Set<string>();
+  const deduped: DuplicationWarning[] = [];
+  for (const w of allWarnings) {
+    const key = `${w.source_symbol_id}::${w.duplicate_symbol_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(w);
+    if (deduped.length >= maxResults) break;
+  }
+
+  return {
+    warnings: deduped,
+    symbols_checked: checkable.length,
+    threshold,
+  };
+}
 
 // ─── Convenience wrappers ───────────────────────────────────
 
