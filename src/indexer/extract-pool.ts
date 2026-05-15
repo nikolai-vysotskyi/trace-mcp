@@ -40,6 +40,18 @@ export type ExtractResponse =
   | { kind: 'error' }
   | { kind: 'ok'; extraction: FileExtraction };
 
+/**
+ * Out-of-band control message from main → worker, distinct from the per-file
+ * extract request. Currently only used for project eviction so workers can
+ * drop their `FileExtractor` + `ProjectContext` caches when a project is
+ * removed from the daemon. Without this, those Maps grow monotonically across
+ * the daemon's lifetime in long-running deployments with churning projects.
+ */
+export interface DropProjectMessage {
+  kind: 'drop_project';
+  rootPath: string;
+}
+
 interface InternalRequest extends ExtractRequest {
   id: number;
 }
@@ -144,6 +156,28 @@ export class ExtractPool {
       this.pending.set(id, { resolve, reject });
       this.dispatch({ ...req, id });
     });
+  }
+
+  /**
+   * Broadcast a project-eviction notice to every live worker so they drop
+   * their per-rootPath caches (`FileExtractor`, parsed `ProjectContext`).
+   * Idempotent — workers ignore unknown rootPaths. Safe to call on a pool
+   * that never started workers (no-op). The pool itself remains usable.
+   *
+   * Fire-and-forget: workers process the message asynchronously. The next
+   * `extract()` for the same `rootPath` will lazily rebuild its cache.
+   */
+  dropProject(rootPath: string): void {
+    if (this.terminated) return;
+    const msg: DropProjectMessage = { kind: 'drop_project', rootPath };
+    for (const w of this.workers) {
+      if (!w) continue;
+      try {
+        w.postMessage(msg);
+      } catch {
+        /* worker may be mid-terminate; safe to ignore */
+      }
+    }
   }
 
   /**

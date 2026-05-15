@@ -44,6 +44,7 @@ import {
   LSP_ENRICHMENT_TASK_NAME,
   RESOLVE_EDGES_TASK_NAME,
   TaskDag,
+  type TaskCache,
 } from '../pipeline/index.js';
 
 export type { FileExtraction } from './pipeline-state.js';
@@ -136,6 +137,14 @@ export interface IndexingPipelineDeps {
   /** Inject a daemon-shared ExtractPool. When provided, the pipeline never
    *  creates its own pool and dispose() does NOT terminate the shared one. */
   extractPool?: ExtractPool | null;
+  /**
+   * Inject a custom `TaskCache` for the TaskDag. The daemon should pass
+   * `new SqliteTaskCache(db)` so cached pass outputs persist on disk instead
+   * of growing the daemon's resident set. CLI / one-shot callers should
+   * leave this undefined — the default in-memory cache is LRU-capped and
+   * cheaper for short-lived processes.
+   */
+  taskCache?: TaskCache | null;
 }
 
 export class IndexingPipeline {
@@ -155,7 +164,13 @@ export class IndexingPipeline {
     // Each Task is a thin adapter — the actual work still happens in the
     // private methods on this class (or in `captureGraphSnapshots`); the
     // Task layer only changes how those methods are scheduled.
-    this._dag = new TaskDag();
+    //
+    // When `deps.taskCache` is provided (the daemon path passes a
+    // `SqliteTaskCache(db)`), cache state lives on disk and never accumulates
+    // in the daemon's heap. Otherwise the DAG falls back to its built-in
+    // LRU-capped in-memory cache — fine for one-shot CLI runs.
+    this._taskCacheIsExternal = !!deps?.taskCache;
+    this._dag = deps?.taskCache ? new TaskDag({ cache: deps.taskCache }) : new TaskDag();
     this._dag.register(createResolveEdgesTask());
     this._dag.register(createLspEnrichmentTask());
     this._dag.register(createGraphSnapshotsTask());
@@ -184,6 +199,14 @@ export class IndexingPipeline {
    *  terminate it on dispose(). False when the pool came in via DI from the
    *  daemon — termination is the daemon's responsibility. */
   private _poolIsOwned = true;
+  /**
+   * True when the TaskDag was constructed with an injected cache (the daemon
+   * passes `SqliteTaskCache(db)`). When true, `dispose()` does NOT clear the
+   * cache — it belongs to the caller. When false (CLI / one-shot path), the
+   * in-memory cache is owned by this pipeline and cleared on dispose so the
+   * Map can be GC'd promptly.
+   */
+  private _taskCacheIsExternal = false;
   /**
    * Postprocess level for the current run, set by indexAll/indexFiles. CRG
    * v2.2.0 made this configurable so CI builds and incremental updates
@@ -870,12 +893,20 @@ export class IndexingPipeline {
   }
 
   /** Shut down the worker pool. Safe to call repeatedly. Pools that were
-   *  injected (daemon-shared) are NOT terminated here — the daemon owns them. */
+   *  injected (daemon-shared) are NOT terminated here — the daemon owns them.
+   *
+   *  Also clears the TaskDag's idempotency cache when it is owned by this
+   *  pipeline (in-memory default). Injected caches (e.g. `SqliteTaskCache`)
+   *  belong to the caller and are left untouched — closing the underlying
+   *  database is the caller's responsibility. */
   async dispose(): Promise<void> {
     if (this._extractPool && this._poolIsOwned) {
       await this._extractPool.terminate();
     }
     this._extractPool = undefined;
+    if (!this._taskCacheIsExternal) {
+      this._dag.clearCache();
+    }
   }
 
   private async collectFiles(): Promise<string[]> {

@@ -34,7 +34,7 @@ interface FakeManaged {
   store: unknown;
   registry: unknown;
   progress: unknown;
-  pipeline: unknown;
+  pipeline: { dispose: ReturnType<typeof vi.fn> };
   watcher: { stop: ReturnType<typeof vi.fn> };
   server: { close: ReturnType<typeof vi.fn> };
   serverHandle: { dispose: ReturnType<typeof vi.fn> };
@@ -49,7 +49,7 @@ function makeFakeManaged(root: string): FakeManaged {
     store: {},
     registry: {},
     progress: {},
-    pipeline: {},
+    pipeline: { dispose: vi.fn(async () => undefined) },
     watcher: { stop: vi.fn(async () => undefined) },
     server: { close: vi.fn(async () => undefined) },
     serverHandle: { dispose: vi.fn() },
@@ -136,5 +136,40 @@ describe('ProjectManager.removeProject', () => {
     expect((pm as any).projects.size).toBe(1);
     // biome-ignore lint/suspicious/noExplicitAny: test introspection
     expect((pm as any).projects.has('/tmp/proj-b')).toBe(true);
+  });
+
+  it('notifies the shared ExtractPool so workers drop per-project caches', async () => {
+    const pm = new ProjectManager();
+    injectProject(pm, '/tmp/proj-a');
+
+    // Inject a fake sharedPool capturing dropProject calls. The real pool
+    // owns warm worker threads keyed by rootPath; without this notification
+    // the workers leak FileExtractor + ProjectContext entries for every
+    // project that ever lived in the daemon.
+    const dropProject = vi.fn();
+    // biome-ignore lint/suspicious/noExplicitAny: bypassing private state for behavioural test
+    (pm as any).sharedPool = { dropProject };
+
+    await pm.removeProject('/tmp/proj-a');
+
+    expect(dropProject).toHaveBeenCalledExactlyOnceWith('/tmp/proj-a');
+  });
+
+  it('survives a sharedPool.dropProject throw without aborting removal', async () => {
+    const pm = new ProjectManager();
+    const a = injectProject(pm, '/tmp/proj-c');
+
+    const dropProject = vi.fn(() => {
+      throw new Error('pool broken');
+    });
+    // biome-ignore lint/suspicious/noExplicitAny: bypassing private state for behavioural test
+    (pm as any).sharedPool = { dropProject };
+
+    await pm.removeProject('/tmp/proj-c');
+
+    // Removal still completes — pool error is non-fatal.
+    expect(mockUnregister).toHaveBeenCalledWith('/tmp/proj-c');
+    expect(a.watcher.stop).toHaveBeenCalledOnce();
+    expect(dropProject).toHaveBeenCalledOnce();
   });
 });

@@ -40,28 +40,64 @@ export interface TaskCache {
   size(): number;
 }
 
+/** Default LRU cap for `InMemoryTaskCache` — see class docstring. */
+export const DEFAULT_IN_MEMORY_TASK_CACHE_CAPACITY = 1000;
+
 /**
  * Default in-memory implementation. Wraps a single `Map` keyed by
- * `${taskName}::${cacheKey}`. Cheap, allocation-free for the hot path, and
- * the historical behaviour of `TaskDag` before the cache was made pluggable.
+ * `${taskName}::${cacheKey}` and evicts least-recently-used entries when
+ * the entry count would exceed `capacity` (default
+ * `DEFAULT_IN_MEMORY_TASK_CACHE_CAPACITY`).
  *
- * Use this in tests and short-lived processes where persistence is not
- * desired. The daemon should construct `SqliteTaskCache` instead so that the
- * cache survives restarts.
+ * The cap exists so that a long-running daemon process that registers tasks
+ * with unbounded `key()` domains (e.g. one cache entry per indexed file)
+ * cannot grow the in-memory map indefinitely. The cap is purposely small —
+ * the daemon should construct `SqliteTaskCache` instead and rely on disk
+ * persistence for "real" cache reuse across restarts. The in-memory cache is
+ * a short-horizon idempotency buffer, not a long-term store.
+ *
+ * LRU implementation note: insertion order in `Map` is iteration order, so
+ * we rely on delete+reinsert on access (`get` / `has`) to bubble recently
+ * touched entries to the tail. Eviction pops the head (oldest) entry.
  */
 export class InMemoryTaskCache implements TaskCache {
   private readonly entries = new Map<string, unknown>();
+  private readonly capacity: number;
+
+  constructor(capacity: number = DEFAULT_IN_MEMORY_TASK_CACHE_CAPACITY) {
+    if (!Number.isFinite(capacity) || capacity < 1) {
+      throw new Error(
+        `InMemoryTaskCache: capacity must be a positive integer, received ${capacity}`,
+      );
+    }
+    this.capacity = Math.floor(capacity);
+  }
 
   has(taskName: string, key: string): boolean {
     return this.entries.has(compositeKey(taskName, key));
   }
 
   get(taskName: string, key: string): unknown | undefined {
-    return this.entries.get(compositeKey(taskName, key));
+    const k = compositeKey(taskName, key);
+    if (!this.entries.has(k)) return undefined;
+    // Bubble to tail so the entry is "recently used" for LRU bookkeeping.
+    const value = this.entries.get(k);
+    this.entries.delete(k);
+    this.entries.set(k, value);
+    return value;
   }
 
   set(taskName: string, key: string, value: unknown): void {
-    this.entries.set(compositeKey(taskName, key), value);
+    const k = compositeKey(taskName, key);
+    // Delete first so re-insert always goes to the tail (LRU bookkeeping).
+    this.entries.delete(k);
+    this.entries.set(k, value);
+    while (this.entries.size > this.capacity) {
+      // Pop the head — oldest (least-recently used) entry.
+      const oldest = this.entries.keys().next();
+      if (oldest.done) break;
+      this.entries.delete(oldest.value);
+    }
   }
 
   delete(taskName: string, key: string): void {
@@ -81,6 +117,11 @@ export class InMemoryTaskCache implements TaskCache {
 
   size(): number {
     return this.entries.size;
+  }
+
+  /** Maximum entries this cache will retain before LRU eviction kicks in. */
+  getCapacity(): number {
+    return this.capacity;
   }
 }
 
