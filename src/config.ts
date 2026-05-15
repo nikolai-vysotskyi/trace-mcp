@@ -343,6 +343,21 @@ const IndexerConfigSchema = z
   })
   .optional();
 
+/**
+ * Pipeline task-cache configuration. The SQLite-backed `pass_cache` table
+ * accumulates one row per (task, input-hash) pair, so a long-running daemon
+ * would otherwise grow it forever. `task_cache_ttl_days` bounds row age —
+ * `ProjectManager.addProject` calls `SqliteTaskCache.evictExpired()` once at
+ * startup using this TTL. Eviction is cheap (single indexed DELETE).
+ */
+const PipelineConfigSchema = z
+  .object({
+    /** Maximum age (in days) of `pass_cache` rows before they are evicted at
+     *  project start-up. Defaults to 30 days. */
+    task_cache_ttl_days: z.number().int().min(1).max(365).default(30),
+  })
+  .prefault({});
+
 const TopologyConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
@@ -455,6 +470,7 @@ export const TraceMcpConfigSchema = z.object({
   lsp: LspConfigSchema,
   topology: TopologyConfigSchema,
   indexer: IndexerConfigSchema,
+  pipeline: PipelineConfigSchema,
   vault: VaultConfigSchema,
   decisions: DecisionsConfigSchema,
   quality_gates: QualityGatesConfigSchema,
@@ -556,6 +572,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
     lsp: LspConfigSchema,
     topology: TopologyConfigSchema,
     indexer: IndexerConfigSchema,
+    pipeline: PipelineConfigSchema,
     quality_gates: QualityGatesConfigSchema,
     decisions: DecisionsConfigSchema,
     telemetry: TelemetryConfigSchema,
