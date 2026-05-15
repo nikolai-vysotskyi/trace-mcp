@@ -317,6 +317,8 @@ export class DomainStore {
       JOIN nodes n2 ON e.target_node_id = n2.id AND n2.node_type = 'symbol'
       JOIN symbol_domains sd1 ON sd1.symbol_id = n1.ref_id
       JOIN symbol_domains sd2 ON sd2.symbol_id = n2.ref_id
+      JOIN domains d1 ON d1.id = sd1.domain_id
+      JOIN domains d2 ON d2.id = sd2.domain_id
       JOIN edge_types et ON e.edge_type_id = et.id
       WHERE sd1.domain_id != sd2.domain_id
       ${focusDomainId ? 'AND (sd1.domain_id = ? OR sd2.domain_id = ?)' : ''}

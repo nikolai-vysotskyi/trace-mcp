@@ -100,7 +100,7 @@ describe('getCrossDomainDependencies() — behavioural contract', () => {
   // last would assert an empty envelope on an empty store. Both currently
   // crash before returning. Skip until the JOIN is added in
   // src/intent/domain-store.ts.
-  it.skip('returns { dependencies: [...] } with the expected envelope and shape', async () => {
+  it('returns { dependencies: [...] } with the expected envelope and shape', async () => {
     const result = await getCrossDomainDependencies(ctx.store, {});
     const payload = result._unsafeUnwrap();
     expect(Array.isArray(payload.dependencies)).toBe(true);
@@ -121,7 +121,7 @@ describe('getCrossDomainDependencies() — behavioural contract', () => {
     expect(paymentsToOrders!.edge_types).toContain('calls');
   });
 
-  it.skip('`domain` filter narrows results to dependencies involving that domain', async () => {
+  it('`domain` filter narrows results to dependencies involving that domain', async () => {
     const result = await getCrossDomainDependencies(ctx.store, { domain: 'payments' });
     const payload = result._unsafeUnwrap();
     expect(payload.dependencies.length).toBeGreaterThan(0);
@@ -135,7 +135,7 @@ describe('getCrossDomainDependencies() — behavioural contract', () => {
     expect(result.isErr()).toBe(true);
   });
 
-  it.skip('empty index returns { dependencies: [] } without crashing', async () => {
+  it('empty index returns { dependencies: [] } without crashing', async () => {
     const empty = createTestStore();
     const result = await getCrossDomainDependencies(empty, {});
     const payload = result._unsafeUnwrap();
