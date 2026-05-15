@@ -549,9 +549,20 @@ describe('R09 v2 — DaemonEvent union guardrail (parsed from src/cli.ts)', () =
   });
 
   it('confirms the 200ms throttle floor for indexing_progress and embed_progress is wired in cli.ts', () => {
+    // cli.ts owns the throttle constant and delegates the per-event decision
+    // to the shared helper in src/daemon/progress-throttle.ts.
     expect(source).toMatch(/PROGRESS_THROTTLE_MS\s*=\s*200/);
+    expect(source).toMatch(/shouldEmitProgressEvent\s*\(/);
+
+    const throttleSrc = fs.readFileSync(
+      path.resolve(__dirname, '..', '..', 'src', 'daemon', 'progress-throttle.ts'),
+      'utf-8',
+    );
     // Both progress variants must consult the throttle map; terminals must not.
-    expect(source).toMatch(/event\.type\s*===\s*'indexing_progress'/);
-    expect(source).toMatch(/event\.type\s*===\s*'embed_progress'/);
+    expect(throttleSrc).toMatch(/event\.type\s*===\s*'indexing_progress'/);
+    expect(throttleSrc).toMatch(/event\.type\s*===\s*'embed_progress'/);
+    // Terminal-event cleanup must drop the corresponding throttle key.
+    expect(throttleSrc).toMatch(/event\.type\s*===\s*'reindex_completed'/);
+    expect(throttleSrc).toMatch(/event\.type\s*===\s*'embed_completed'/);
   });
 });

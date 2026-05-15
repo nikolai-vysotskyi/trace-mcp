@@ -145,6 +145,7 @@ export class SqliteTaskCache implements TaskCache {
 
   private readonly hasStmt: Database.Statement;
   private readonly deleteStmt: Database.Statement;
+  private readonly evictExpiredStmt: Database.Statement;
 
   constructor(private readonly db: Database.Database) {
     this.getStmt = db.prepare(
@@ -160,6 +161,8 @@ export class SqliteTaskCache implements TaskCache {
     this.clearTaskStmt = db.prepare('DELETE FROM pass_cache WHERE task_name = ?');
     this.clearAllStmt = db.prepare('DELETE FROM pass_cache');
     this.countStmt = db.prepare('SELECT COUNT(*) as c FROM pass_cache');
+    // Uses idx_pass_cache_created (added by v28 migration) — single-index DELETE.
+    this.evictExpiredStmt = db.prepare('DELETE FROM pass_cache WHERE created_at < ?');
   }
 
   has(taskName: string, key: string): boolean {
@@ -211,6 +214,23 @@ export class SqliteTaskCache implements TaskCache {
   size(): number {
     const row = this.countStmt.get() as { c: number };
     return row.c;
+  }
+
+  /**
+   * Drop rows older than `ttlMs` milliseconds. Returns the number of rows
+   * removed. Used by the long-running daemon to bound the `pass_cache` table
+   * size — without this, every fresh (task, input-hash) pair adds one row
+   * forever. Cheap: single indexed DELETE backed by `idx_pass_cache_created`.
+   */
+  evictExpired(ttlMs: number): number {
+    if (!Number.isFinite(ttlMs) || ttlMs < 0) {
+      throw new Error(
+        `SqliteTaskCache.evictExpired: ttlMs must be a non-negative finite number, received ${ttlMs}`,
+      );
+    }
+    const cutoff = Date.now() - ttlMs;
+    const result = this.evictExpiredStmt.run(cutoff);
+    return Number(result.changes ?? 0);
   }
 }
 

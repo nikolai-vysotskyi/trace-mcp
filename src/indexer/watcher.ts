@@ -85,6 +85,14 @@ export class FileWatcher {
     debounceMs = DEFAULT_DEBOUNCE_MS,
     onDeletes?: (paths: string[]) => Promise<void>,
   ): Promise<void> {
+    // Re-entry guard: if start() is invoked again while a prior subscription is
+    // live, the old AsyncSubscription (native fs-event handle + the registered
+    // callback closure capturing onChanges/pipeline/traceignore) would leak.
+    // Tear it down first so the new subscription is the sole owner.
+    if (this.subscription || this.debounceTimer) {
+      await this.stop();
+    }
+
     const watcher = await loadParcelWatcher();
     const traceignore = new TraceignoreMatcher(rootPath, config.ignore ?? {});
     const ignoreDirs = [...traceignore.getSkipDirs()].map((d) => path.join(rootPath, d));
@@ -145,16 +153,29 @@ export class FileWatcher {
   }
 
   async stop(): Promise<void> {
+    // Order matters: unsubscribe FIRST so parcel stops invoking our callback,
+    // THEN drop the debounce timer. The opposite order leaves a window where
+    // an in-flight parcel callback can schedule a new timer after we cleared
+    // the old one — that timer would then fire post-stop with a captured
+    // onChanges closure and run against torn-down state (e.g. closed DB).
+    const sub = this.subscription;
+    this.subscription = null;
+    if (sub) {
+      try {
+        await sub.unsubscribe();
+      } catch (err) {
+        // Never abandon the lifecycle: even if the native handle is wedged
+        // the reference must still be dropped (set above) so callers can
+        // safely re-start. Log and move on.
+        logger.warn({ error: err }, 'parcel watcher.unsubscribe() failed during stop');
+      }
+      logger.info('File watcher stopped');
+    }
     if (this.debounceTimer) {
       this._clearTimeout(this.debounceTimer);
       this.debounceTimer = null;
-      this.pendingPaths.clear();
     }
-    if (this.subscription) {
-      await this.subscription.unsubscribe();
-      this.subscription = null;
-      logger.info('File watcher stopped');
-    }
+    this.pendingPaths.clear();
   }
 }
 

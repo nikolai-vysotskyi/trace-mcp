@@ -177,6 +177,21 @@ export class ProjectManager {
     // pipeline never owns this cache — the project's `db` does, and is
     // closed by `stopProject()`.
     const taskCache = new SqliteTaskCache(db);
+    // Bound pass_cache row age — without this, every fresh (task, input-hash)
+    // pair adds one row forever in a long-running daemon. Eviction is a
+    // single indexed DELETE backed by idx_pass_cache_created (v28 migration).
+    try {
+      const ttlDays = config.pipeline?.task_cache_ttl_days ?? 30;
+      const removed = taskCache.evictExpired(ttlDays * 86_400_000);
+      if (removed > 0) {
+        logger.info(
+          { projectRoot, removed, ttlDays },
+          'pass_cache: evicted expired rows on project start',
+        );
+      }
+    } catch (err) {
+      logger.warn({ error: err, projectRoot }, 'pass_cache: TTL eviction failed (non-fatal)');
+    }
     const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress, {
       extractPool: this.sharedPool,
       taskCache,

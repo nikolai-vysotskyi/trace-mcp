@@ -86,6 +86,11 @@ import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
 import { resolveProjectForMcpRequest } from './daemon/mcp-project-router.js';
 import { teardownProjectBookkeeping as teardownProjectBookkeepingImpl } from './daemon/project-bookkeeping.js';
+import {
+  clearKeyForTerminalEvent as clearProgressKeyForTerminalEvent,
+  maybePruneOnHighWatermark as maybePruneProgressThrottle,
+  shouldEmitThrottledEvent as shouldEmitProgressEvent,
+} from './daemon/progress-throttle.js';
 import { handleAskSessionsRequest } from './api/ask-sessions-routes.js';
 import { handleDashboardRequest } from './api/dashboard-routes.js';
 import { handleJournalStatsRequest, type JournalStatsContext } from './api/journal-stats-routes.js';
@@ -473,22 +478,19 @@ program
     const lastProgressEmittedAt = new Map<string, number>();
 
     function broadcastEvent(event: DaemonEvent): void {
+      const now = Date.now();
+      // Passive sweep: drop stale throttle keys when the map crosses the soft
+      // cap. Cheap (no timer, runs inline at most once per event).
+      maybePruneProgressThrottle(lastProgressEmittedAt, now);
       // Throttle floor for high-frequency progress variants. Keyed by
       // (project, pipeline) for indexing_progress and (project, 'embed')
       // for embed_progress. Other variants bypass the floor.
-      if (event.type === 'indexing_progress') {
-        const key = `${event.project}::${event.pipeline}`;
-        const now = Date.now();
-        const last = lastProgressEmittedAt.get(key) ?? 0;
-        if (now - last < PROGRESS_THROTTLE_MS) return;
-        lastProgressEmittedAt.set(key, now);
-      } else if (event.type === 'embed_progress') {
-        const key = `${event.project}::embed`;
-        const now = Date.now();
-        const last = lastProgressEmittedAt.get(key) ?? 0;
-        if (now - last < PROGRESS_THROTTLE_MS) return;
-        lastProgressEmittedAt.set(key, now);
+      if (!shouldEmitProgressEvent(lastProgressEmittedAt, event, now, PROGRESS_THROTTLE_MS)) {
+        return;
       }
+      // Terminal pipeline events: drop the throttle key so finished pipelines
+      // do not pin entries inside an active (non-removed) project.
+      clearProgressKeyForTerminalEvent(lastProgressEmittedAt, event);
       const data = `data: ${JSON.stringify(event)}\n\n`;
       for (const res of sseConnections) {
         try {
