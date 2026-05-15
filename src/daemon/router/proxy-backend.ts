@@ -93,7 +93,14 @@ export class ProxyBackend implements Backend {
       /* non-fatal */
     });
 
-    const transport = new StreamableHTTPClientTransport(new URL(mcpUrl));
+    // Send X-Trace-Project as belt-and-braces: if any intermediary strips
+    // the `?project=` query string, the daemon still has a hint to route
+    // this session to the correct project before the multi-project guard.
+    const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
+      requestInit: {
+        headers: { 'X-Trace-Project': projectRoot },
+      },
+    });
     transport.onmessage = (msg) => {
       this.onmessage?.(msg);
     };
