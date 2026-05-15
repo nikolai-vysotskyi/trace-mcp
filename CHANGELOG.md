@@ -6,6 +6,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.37.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.36.1...v1.37.0) (2026-05-15)
+
+
+### Features
+
+* **tools:** toon output format for tabular MCP responses (30-60% fewer tokens) ([2e359ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2e359bab2159d3d7ec7e2cfce81edd20c0f810b9))
+
+
+### Bug Fixes
+
+* **analysis:** restore findDuplicateSymbols helper that check_duplication relied on ([8d49139](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8d4913953d92d70d3d1b06e6f68dae17969f0aff))
+* **benchmark:** honest synthetic-estimator labelling + tokenizer calibration + multi-sample variance ([279f619](https://github.com/nikolai-vysotskyi/trace-mcp/commit/279f61930f9f121112fd294eb66b2fad1ec1d9e6))
+* **daemon:** cap remaining unbounded long-lived caches and stores ([f7b7044](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f7b7044ab367275f1f66a110044bb1e0a5140b27))
+* **daemon:** plug FileWatcher re-entry leak + pass_cache TTL + progress-throttle pruning ([cc4f155](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cc4f155888d23bb08b8701f50b45185dc0ae2c1c))
+* **daemon:** restore /mcp routing for stdio clients + scope teardown to removed projects ([4a708a2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4a708a2f52c8d14ffd114e0c83bc0967ad9fd998))
+* **db:** add v11 domain tables to fresh-DB DDL ([12e4e05](https://github.com/nikolai-vysotskyi/trace-mcp/commit/12e4e0588945d98ae008b9b976bd472b28259dec))
+* **db:** mirror remaining v11+ migration tables in fresh-DB DDL + parity guard ([c0c052d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c0c052d89188c8a3cedb692c90bc8e0614ceda6e))
+* **intent:** add missing domains JOINs in getCrossDomainDependencies ([b39b5b3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b39b5b3d778b899a1604bb42ac48d89275f84016))
+* **pipeline:** bound per-project resource accumulation across project lifecycle ([61fcd70](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61fcd703b3587833c1dd2fada9754ff4782b55b6))
+* **scoring:** drop stale-prone in-process cache from ranking_pins lookups ([d5de560](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d5de560ecbc25309b64dd06a43c41e087a86f6de))
+* **telemetry:** bound OTLP/Langfuse sink memory under unreachable export endpoint ([20397a4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/20397a468a009cf6d7bca58031cfca128ba35900))
+* **test:** bump bundles searchBundles limit-case timeout to 30s ([06e0df5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/06e0df5bf2041b38ad63dbe131848803425d709d))
+* **tools:** invert source/target check in get_cross_workspace_impact ([5597781](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5597781dda4938634cacc1985b32c67484b27418))
+* **topology:** apply contractType filter to endpoints in get_api_contract ([db91b91](https://github.com/nikolai-vysotskyi/trace-mcp/commit/db91b9113ed87e6239337272bc1d745d460ef47d))
+* **topology:** replace stale fr.* alias with sp.* in client-call queries ([f304139](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f304139f144ef09dfffcae3988fb809c416e6806))
+
+
+### Tests
+
+* **tools:** behavioural coverage for api-contract and service tools ([f8c8872](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f8c887298735b07799478b926e2f8a0d05e23210))
+* **tools:** behavioural coverage for compare and suggest tools ([61b07cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61b07cfff37dbfb6c39643d52d531efde4e3b051))
+* **tools:** behavioural coverage for context and complexity tools ([8334270](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8334270247278252e6bac49e405128cb932ed734))
+* **tools:** behavioural coverage for corpus and packaging tools ([c23eb2d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c23eb2db468b887c821e3600551aa469c7557db0))
+* **tools:** behavioural coverage for cross-domain and edge tools ([7557689](https://github.com/nikolai-vysotskyi/trace-mcp/commit/75576891539bbe1829e3e956aef149a71b64e1b0))
+* **tools:** behavioural coverage for decision lifecycle tools ([fd102ae](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fd102ae6e5e5db5d26eccf7bf459c52960e3a202))
+* **tools:** behavioural coverage for graph-traversal and analysis tools ([1ca1b1a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1ca1b1aac92be45ee1b0ffa4750d07e600957756))
+* **tools:** behavioural coverage for graph/relationship tools ([ac22e25](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ac22e25e901b1908b1f747476d5a55b3653a5383))
+* **tools:** behavioural coverage for health and risk tools ([acfb835](https://github.com/nikolai-vysotskyi/trace-mcp/commit/acfb835bc33c6561b8ab7ab58e2a6cc31452ccfd))
+* **tools:** behavioural coverage for history and coupling tools ([30b46fa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/30b46fa45ffdb3fe823895707e9a1a7bf1dbddb7))
+* **tools:** behavioural coverage for index, embedding, and perf tools ([330a20c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/330a20ca509eb9209e39024d5422b822fc1e0e39))
+* **tools:** behavioural coverage for ownership and tech-debt tools ([0ce20be](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0ce20bebfe9eeef6408a0c8451d18f6aa29b98d4))
+* **tools:** behavioural coverage for quality and security tools ([9987aed](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9987aeda6763d5f79ca34d26598a8d3375839439))
+* **tools:** behavioural coverage for quality/coverage tools ([d6d6d26](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d6d6d262ba350ef4e80136954286ca9a7a4ffae0))
+* **tools:** behavioural coverage for refactoring tools ([347d107](https://github.com/nikolai-vysotskyi/trace-mcp/commit/347d107d8a2a6281ea5ae28bf01ac16149d7821a))
+* **tools:** behavioural coverage for security and refactor tools ([68d6171](https://github.com/nikolai-vysotskyi/trace-mcp/commit/68d6171f2720b90dabb737408b2529a1316f386f))
+* **tools:** behavioural coverage for session and analytics tools ([fdc0288](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fdc0288cfab3f4f58081cca9d765abd98546bf7b))
+* **tools:** behavioural coverage for session and analytics tools ([a1d87ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a1d87baf7872fee4a38cd4c531f85fd2ee976401))
+* **tools:** behavioural coverage for snapshot and maintenance tools ([eb949d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eb949d7601c67505ce93dca9a19a31f872b2e1a9))
+* **tools:** behavioural coverage for subproject and api-surface tools ([83c3300](https://github.com/nikolai-vysotskyi/trace-mcp/commit/83c3300d2f3247c01680f54afcebee8d9bf31e85))
+* **tools:** behavioural coverage for trend and visualization tools ([2fcae49](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2fcae49ab675a52529ebe67b1b70581f5b2c6ee4))
+* **tools:** behavioural coverage for workspace and architecture tools ([8496a18](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8496a186c6a706fd5901e05b4a9fff058f2eda29))
+* **tools:** behavioural test coverage for search/get_outline/find_usages/get_change_impact/pin/query_decisions ([2379ed1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2379ed1f21292ea9ea3e4c536400d0d2b216666c))
+* **tools:** skip discover_claude_sessions fixture on Windows ([6ea757e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6ea757e3f74b5d7a8519427ded12af84d2cf8891))
+
 ## [1.36.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.36.0...v1.36.1) (2026-05-14)
 
 
