@@ -71,6 +71,7 @@ export class LocalBackend implements Backend {
   private clientTransport: InMemoryTransport | null = null;
   private indexingPromise: Promise<void> | null = null;
   private started = false;
+  private starting: Promise<void> | null = null;
   private stopping = false;
   private cancelDebouncedAI: (() => void) | null = null;
 
@@ -80,7 +81,19 @@ export class LocalBackend implements Backend {
   }
 
   async start(): Promise<void> {
+    // Re-entry guard:
+    //   - already finished starting → no-op (idempotent).
+    //   - currently starting → return the in-flight promise so a second
+    //     concurrent caller doesn't run init() twice and clobber fields.
     if (this.started) return;
+    if (this.starting) return this.starting;
+    this.starting = this.doStart().finally(() => {
+      this.starting = null;
+    });
+    return this.starting;
+  }
+
+  private async doStart(): Promise<void> {
     const { projectRoot, config } = this.opts;
     ensureGlobalDirs();
 

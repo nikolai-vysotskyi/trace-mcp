@@ -13,6 +13,7 @@
 
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import { combineAbortSignals } from './abort.js';
 import type {
   AIProvider,
   ChatMessage,
@@ -46,12 +47,16 @@ function modelUrl(
 class VertexAIEmbeddingService implements EmbeddingService {
   constructor(private cfg: VertexAIConfig) {}
 
-  async embed(text: string, task?: EmbeddingTask): Promise<number[]> {
-    const results = await this.embedBatch([text], task);
+  async embed(text: string, task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]> {
+    const results = await this.embedBatch([text], task, signal);
     return results[0] ?? [];
   }
 
-  async embedBatch(texts: string[], task: EmbeddingTask = 'document'): Promise<number[][]> {
+  async embedBatch(
+    texts: string[],
+    task: EmbeddingTask = 'document',
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
     const taskType = task === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT';
     return withRetry(
       async () => {
@@ -68,7 +73,7 @@ class VertexAIEmbeddingService implements EmbeddingService {
                 ? { outputDimensionality: this.cfg.embeddingDimensions }
                 : {},
           }),
-          signal: AbortSignal.timeout(30_000),
+          signal: combineAbortSignals(signal, AbortSignal.timeout(30_000)),
         });
 
         if (!resp.ok) {
@@ -109,7 +114,7 @@ class VertexAIInferenceService implements InferenceService {
 
   async generate(
     prompt: string,
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): Promise<string> {
     return withRetry(
       async () => {
@@ -126,7 +131,7 @@ class VertexAIInferenceService implements InferenceService {
               ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
             },
           }),
-          signal: AbortSignal.timeout(60_000),
+          signal: combineAbortSignals(options?.signal, AbortSignal.timeout(60_000)),
         });
 
         if (!resp.ok) {
@@ -148,7 +153,7 @@ class VertexAIInferenceService implements InferenceService {
 
   async *generateStream(
     messages: ChatMessage[],
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): AsyncIterable<string> {
     const contents = messages.map((m) => ({
       role: m.role === 'assistant' ? 'model' : 'user',
@@ -168,7 +173,7 @@ class VertexAIInferenceService implements InferenceService {
           ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
         },
       }),
-      signal: AbortSignal.timeout(120_000),
+      signal: combineAbortSignals(options?.signal, AbortSignal.timeout(120_000)),
     });
 
     if (!resp.ok) {

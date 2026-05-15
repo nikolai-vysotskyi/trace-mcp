@@ -6,6 +6,7 @@
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
 import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
+import { combineAbortSignals } from './abort.js';
 import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
 import { parseOpenAIStream } from './sse.js';
 
@@ -26,12 +27,20 @@ class OpenAIEmbeddingService implements EmbeddingService {
     private dims: number,
   ) {}
 
-  async embed(text: string): Promise<number[]> {
-    const results = await this.embedBatch([text]);
+  async embed(
+    text: string,
+    _task?: import('./interfaces.js').EmbeddingTask,
+    signal?: AbortSignal,
+  ): Promise<number[]> {
+    const results = await this.embedBatch([text], undefined, signal);
     return results[0] ?? [];
   }
 
-  async embedBatch(texts: string[]): Promise<number[][]> {
+  async embedBatch(
+    texts: string[],
+    _task?: import('./interfaces.js').EmbeddingTask,
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
     const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
@@ -44,7 +53,7 @@ class OpenAIEmbeddingService implements EmbeddingService {
               Authorization: `Bearer ${this.apiKey}`,
             },
             body: JSON.stringify({ model: this.model, input: texts }),
-            signal: AbortSignal.timeout(30_000),
+            signal: combineAbortSignals(signal, AbortSignal.timeout(30_000)),
           },
           { allowPrivateNetworks },
         );
@@ -90,7 +99,7 @@ class OpenAIInferenceService implements InferenceService {
 
   async generate(
     prompt: string,
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): Promise<string> {
     const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
@@ -109,7 +118,7 @@ class OpenAIInferenceService implements InferenceService {
               ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
               ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
             }),
-            signal: AbortSignal.timeout(60_000),
+            signal: combineAbortSignals(options?.signal, AbortSignal.timeout(60_000)),
           },
           { allowPrivateNetworks },
         );
@@ -129,7 +138,7 @@ class OpenAIInferenceService implements InferenceService {
 
   async *generateStream(
     messages: ChatMessage[],
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): AsyncIterable<string> {
     const resp = await safeFetch(
       `${this.baseUrl}/chat/completions`,
@@ -146,7 +155,7 @@ class OpenAIInferenceService implements InferenceService {
           ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
           ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: combineAbortSignals(options?.signal, AbortSignal.timeout(120_000)),
       },
       { allowPrivateNetworks: isExplicitlyLocalUrl(this.baseUrl) },
     );

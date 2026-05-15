@@ -2,14 +2,23 @@
  * No-op AI provider for when AI is disabled or unavailable.
  * All methods either return safe defaults or throw clear errors.
  */
-import type { AIProvider, EmbeddingService, InferenceService } from './interfaces.js';
+import type {
+  AIProvider,
+  EmbeddingService,
+  EmbeddingTask,
+  InferenceService,
+} from './interfaces.js';
 
 class FallbackEmbeddingService implements EmbeddingService {
-  async embed(_text: string): Promise<number[]> {
+  async embed(_text: string, _task?: EmbeddingTask, _signal?: AbortSignal): Promise<number[]> {
     return [];
   }
 
-  async embedBatch(_texts: string[]): Promise<number[][]> {
+  async embedBatch(
+    _texts: string[],
+    _task?: EmbeddingTask,
+    _signal?: AbortSignal,
+  ): Promise<number[][]> {
     return [];
   }
 
@@ -27,7 +36,10 @@ class FallbackEmbeddingService implements EmbeddingService {
 }
 
 export class FallbackInferenceService implements InferenceService {
-  async generate(_prompt: string): Promise<string> {
+  async generate(
+    _prompt: string,
+    _options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
+  ): Promise<string> {
     return '';
   }
 }

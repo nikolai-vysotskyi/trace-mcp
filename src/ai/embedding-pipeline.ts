@@ -95,9 +95,10 @@ export class EmbeddingPipeline {
    * file-watcher re-triggers) or when the circuit breaker is open (embedding
    * service has been failing for several consecutive batches).
    */
-  async indexUnembedded(batchSize = DEFAULT_BATCH_SIZE): Promise<number> {
+  async indexUnembedded(batchSize = DEFAULT_BATCH_SIZE, signal?: AbortSignal): Promise<number> {
     if (this.inFlight) return 0;
     if (this.disabledUntilMs > Date.now()) return 0;
+    if (signal?.aborted) return 0;
 
     this.inFlight = true;
     try {
@@ -118,7 +119,9 @@ export class EmbeddingPipeline {
       try {
         let batch: number;
         do {
-          batch = await this.embedBatch(batchSize);
+          // Cooperative cancellation between batches — owner disposed.
+          if (signal?.aborted) break;
+          batch = await this.embedBatch(batchSize, signal);
           totalIndexed += batch;
           if (batch > 0) {
             this.progress?.update('embedding', { processed: totalIndexed });
@@ -150,7 +153,7 @@ export class EmbeddingPipeline {
    * Embed a single batch of unembedded symbols.
    * Returns the number of symbols embedded in this batch.
    */
-  private async embedBatch(batchSize: number): Promise<number> {
+  private async embedBatch(batchSize: number, signal?: AbortSignal): Promise<number> {
     const unembedded = this.store.db
       .prepare(`
       SELECT s.id, s.name, s.fqn, s.kind, s.signature, s.summary
@@ -169,12 +172,13 @@ export class EmbeddingPipeline {
     }[];
 
     if (unembedded.length === 0) return 0;
+    if (signal?.aborted) return 0;
 
     const texts = unembedded.map((s) => buildEmbeddingText(s));
     let indexed = 0;
 
     try {
-      const embeddings = await this.embeddingService.embedBatch(texts);
+      const embeddings = await this.embeddingService.embedBatch(texts, undefined, signal);
       for (let i = 0; i < embeddings.length; i++) {
         if (embeddings[i].length > 0) {
           this.vectorStore.insert(unembedded[i].id, embeddings[i]);

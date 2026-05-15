@@ -9,6 +9,7 @@
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
 import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
+import { combineAbortSignals } from './abort.js';
 import { FallbackInferenceService } from './fallback.js';
 import type {
   AIProvider,
@@ -34,12 +35,16 @@ class VoyageEmbeddingService implements EmbeddingService {
     private dims: number,
   ) {}
 
-  async embed(text: string, task?: EmbeddingTask): Promise<number[]> {
-    const results = await this.embedBatch([text], task);
+  async embed(text: string, task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]> {
+    const results = await this.embedBatch([text], task, signal);
     return results[0] ?? [];
   }
 
-  async embedBatch(texts: string[], task: EmbeddingTask = 'document'): Promise<number[][]> {
+  async embedBatch(
+    texts: string[],
+    task: EmbeddingTask = 'document',
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
     const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
@@ -63,7 +68,7 @@ class VoyageEmbeddingService implements EmbeddingService {
               Authorization: `Bearer ${this.apiKey}`,
             },
             body: JSON.stringify(body),
-            signal: AbortSignal.timeout(30_000),
+            signal: combineAbortSignals(signal, AbortSignal.timeout(30_000)),
           },
           { allowPrivateNetworks },
         );

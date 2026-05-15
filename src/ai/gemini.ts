@@ -6,6 +6,7 @@
 
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
+import { combineAbortSignals } from './abort.js';
 import type {
   AIProvider,
   ChatMessage,
@@ -31,12 +32,16 @@ class GeminiEmbeddingService implements EmbeddingService {
     private dims: number,
   ) {}
 
-  async embed(text: string, task?: EmbeddingTask): Promise<number[]> {
-    const results = await this.embedBatch([text], task);
+  async embed(text: string, task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]> {
+    const results = await this.embedBatch([text], task, signal);
     return results[0] ?? [];
   }
 
-  async embedBatch(texts: string[], task: EmbeddingTask = 'document'): Promise<number[][]> {
+  async embedBatch(
+    texts: string[],
+    task: EmbeddingTask = 'document',
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
     const taskType = task === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT';
     return withRetry(
       async () => {
@@ -54,7 +59,7 @@ class GeminiEmbeddingService implements EmbeddingService {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ requests }),
-            signal: AbortSignal.timeout(30_000),
+            signal: combineAbortSignals(signal, AbortSignal.timeout(30_000)),
           },
         );
 
@@ -94,7 +99,7 @@ class GeminiInferenceService implements InferenceService {
 
   async generate(
     prompt: string,
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): Promise<string> {
     return withRetry(
       async () => {
@@ -110,7 +115,7 @@ class GeminiInferenceService implements InferenceService {
                 ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
               },
             }),
-            signal: AbortSignal.timeout(60_000),
+            signal: combineAbortSignals(options?.signal, AbortSignal.timeout(60_000)),
           },
         );
 
@@ -133,7 +138,7 @@ class GeminiInferenceService implements InferenceService {
 
   async *generateStream(
     messages: ChatMessage[],
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): AsyncIterable<string> {
     // Convert ChatMessage[] to Gemini format
     const contents = messages.map((m) => ({
@@ -153,7 +158,7 @@ class GeminiInferenceService implements InferenceService {
             ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
           },
         }),
-        signal: AbortSignal.timeout(120_000),
+        signal: combineAbortSignals(options?.signal, AbortSignal.timeout(120_000)),
       },
     );
 

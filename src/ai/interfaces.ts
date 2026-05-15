@@ -11,8 +11,8 @@
 export type EmbeddingTask = 'document' | 'query';
 
 export interface EmbeddingService {
-  embed(text: string, task?: EmbeddingTask): Promise<number[]>;
-  embedBatch(texts: string[], task?: EmbeddingTask): Promise<number[][]>;
+  embed(text: string, task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]>;
+  embedBatch(texts: string[], task?: EmbeddingTask, signal?: AbortSignal): Promise<number[][]>;
   dimensions(): number;
   /** Identifier of the embedding model in use (empty for no-op/fallback). */
   modelName(): string;
@@ -31,10 +31,13 @@ export interface ChatMessage {
 }
 
 export interface InferenceService {
-  generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<string>;
+  generate(
+    prompt: string,
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
+  ): Promise<string>;
   generateStream?(
     messages: ChatMessage[],
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): AsyncIterable<string>;
 }
 
