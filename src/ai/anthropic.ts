@@ -7,7 +7,14 @@
 
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
-import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import { combineAbortSignals } from './abort.js';
+import type {
+  AIProvider,
+  ChatMessage,
+  EmbeddingService,
+  EmbeddingTask,
+  InferenceService,
+} from './interfaces.js';
 import { parseAnthropicStream } from './sse.js';
 
 interface AnthropicConfig {
@@ -19,10 +26,14 @@ interface AnthropicConfig {
 const BASE_URL = 'https://api.anthropic.com';
 
 class NoEmbeddingService implements EmbeddingService {
-  async embed(_text: string): Promise<number[]> {
+  async embed(_text: string, _task?: EmbeddingTask, _signal?: AbortSignal): Promise<number[]> {
     return [];
   }
-  async embedBatch(_texts: string[]): Promise<number[][]> {
+  async embedBatch(
+    _texts: string[],
+    _task?: EmbeddingTask,
+    _signal?: AbortSignal,
+  ): Promise<number[][]> {
     return [];
   }
   dimensions(): number {
@@ -44,7 +55,7 @@ class AnthropicInferenceService implements InferenceService {
 
   async generate(
     prompt: string,
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): Promise<string> {
     return withRetry(
       async () => {
@@ -61,7 +72,7 @@ class AnthropicInferenceService implements InferenceService {
             messages: [{ role: 'user', content: prompt }],
             ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
           }),
-          signal: AbortSignal.timeout(60_000),
+          signal: combineAbortSignals(options?.signal, AbortSignal.timeout(60_000)),
         });
 
         if (!resp.ok) {
@@ -81,7 +92,7 @@ class AnthropicInferenceService implements InferenceService {
 
   async *generateStream(
     messages: ChatMessage[],
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): AsyncIterable<string> {
     const systemMsg = messages.find((m) => m.role === 'system');
     const nonSystemMsgs = messages.filter((m) => m.role !== 'system');
@@ -101,7 +112,7 @@ class AnthropicInferenceService implements InferenceService {
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
         messages: nonSystemMsgs.map((m) => ({ role: m.role, content: m.content })),
       }),
-      signal: AbortSignal.timeout(120_000),
+      signal: combineAbortSignals(options?.signal, AbortSignal.timeout(120_000)),
     });
 
     if (!resp.ok) {

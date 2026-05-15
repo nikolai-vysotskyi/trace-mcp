@@ -6,7 +6,12 @@
 
 import { logger } from '../logger.js';
 import { FallbackProvider } from './fallback.js';
-import type { AIProvider, EmbeddingService, InferenceService } from './interfaces.js';
+import type {
+  AIProvider,
+  EmbeddingService,
+  EmbeddingTask,
+  InferenceService,
+} from './interfaces.js';
 
 const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
 const DEFAULT_DIMENSIONS = 384;
@@ -51,16 +56,24 @@ class OnnxEmbeddingService implements EmbeddingService {
     private readonly dims: number,
   ) {}
 
-  async embed(text: string): Promise<number[]> {
-    const results = await this.embedBatch([text]);
+  async embed(text: string, _task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]> {
+    const results = await this.embedBatch([text], undefined, signal);
     return results[0] ?? [];
   }
 
-  async embedBatch(texts: string[]): Promise<number[][]> {
+  // AbortSignal not propagated into the underlying transformers.js pipeline
+  // (no public signal hook). Cooperative cancellation between texts is the
+  // best we can do for the local ONNX path.
+  async embedBatch(
+    texts: string[],
+    _task?: EmbeddingTask,
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
     const pipe = await getPipeline(this.model);
     const results: number[][] = [];
 
     for (const text of texts) {
+      if (signal?.aborted) break;
       const output = await pipe(text, { pooling: 'mean', normalize: true });
       results.push(Array.from(output.data as Float32Array).slice(0, this.dims));
     }

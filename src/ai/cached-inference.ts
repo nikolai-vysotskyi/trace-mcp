@@ -15,7 +15,7 @@ export class CachedInferenceService implements InferenceService {
 
   async generate(
     prompt: string,
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): Promise<string> {
     const cached = this.cache.get(this.model, prompt);
     if (cached !== null) return cached;

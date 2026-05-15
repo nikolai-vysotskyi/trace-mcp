@@ -82,10 +82,10 @@ export class MultiSink implements TelemetrySink {
     for (const s of this.sinks) s.emit(eventName, attributes);
   }
   async flush(): Promise<void> {
-    await Promise.all(this.sinks.map((s) => s.flush()));
+    await Promise.allSettled(this.sinks.map((s) => s.flush()));
   }
   async shutdown(): Promise<void> {
-    await Promise.all(this.sinks.map((s) => s.shutdown()));
+    await Promise.allSettled(this.sinks.map((s) => s.shutdown()));
   }
 }
 

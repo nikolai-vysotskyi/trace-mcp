@@ -5,7 +5,14 @@
 import { logger } from '../logger.js';
 import { withRetry } from '../utils/retry.js';
 import { isExplicitlyLocalUrl, safeFetch } from '../utils/ssrf-guard.js';
-import type { AIProvider, ChatMessage, EmbeddingService, InferenceService } from './interfaces.js';
+import { combineAbortSignals } from './abort.js';
+import type {
+  AIProvider,
+  ChatMessage,
+  EmbeddingService,
+  EmbeddingTask,
+  InferenceService,
+} from './interfaces.js';
 import { parseOllamaChatStream } from './sse.js';
 
 interface OllamaConfig {
@@ -23,12 +30,16 @@ class OllamaEmbeddingService implements EmbeddingService {
     private dims: number,
   ) {}
 
-  async embed(text: string): Promise<number[]> {
-    const results = await this.embedBatch([text]);
+  async embed(text: string, _task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]> {
+    const results = await this.embedBatch([text], undefined, signal);
     return results[0] ?? [];
   }
 
-  async embedBatch(texts: string[]): Promise<number[][]> {
+  async embedBatch(
+    texts: string[],
+    _task?: EmbeddingTask,
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
     const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
       async () => {
@@ -38,7 +49,7 @@ class OllamaEmbeddingService implements EmbeddingService {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: this.model, input: texts }),
-            signal: AbortSignal.timeout(30_000),
+            signal: combineAbortSignals(signal, AbortSignal.timeout(30_000)),
           },
           { allowPrivateNetworks },
         );
@@ -75,7 +86,7 @@ class OllamaInferenceService implements InferenceService {
 
   async generate(
     prompt: string,
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): Promise<string> {
     const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
     return withRetry(
@@ -99,7 +110,7 @@ class OllamaInferenceService implements InferenceService {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
-            signal: AbortSignal.timeout(60_000),
+            signal: combineAbortSignals(options?.signal, AbortSignal.timeout(60_000)),
           },
           { allowPrivateNetworks },
         );
@@ -117,7 +128,7 @@ class OllamaInferenceService implements InferenceService {
 
   async *generateStream(
     messages: ChatMessage[],
-    options?: { maxTokens?: number; temperature?: number },
+    options?: { maxTokens?: number; temperature?: number; signal?: AbortSignal },
   ): AsyncIterable<string> {
     const reqBody: Record<string, unknown> = {
       model: this.model,
@@ -138,7 +149,7 @@ class OllamaInferenceService implements InferenceService {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reqBody),
-        signal: AbortSignal.timeout(120_000),
+        signal: combineAbortSignals(options?.signal, AbortSignal.timeout(120_000)),
       },
       { allowPrivateNetworks: isExplicitlyLocalUrl(this.baseUrl) },
     );

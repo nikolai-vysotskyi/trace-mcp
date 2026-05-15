@@ -96,6 +96,7 @@ import { handleDashboardRequest } from './api/dashboard-routes.js';
 import { handleJournalStatsRequest, type JournalStatsContext } from './api/journal-stats-routes.js';
 import { handleMemoryRequest } from './api/memory-routes.js';
 import { handleProjectStatsRequest } from './api/project-stats-routes.js';
+import { buildMemoryReport } from './daemon/memory-report.js';
 import { buildJournalEvent, buildJournalSnapshot } from './server/journal-broadcast.js';
 import { createServer } from './server/server.js';
 import { SubprojectManager } from './subproject/manager.js';
@@ -2075,6 +2076,26 @@ program
       if (req.method === 'GET' && url.pathname === '/api/clients') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ clients: Array.from(clients.values()) }));
+        return;
+      }
+
+      // Diagnostics: process memory + sizes of every known in-memory cache.
+      // Symptom-driven leak debugging — keep response shape stable.
+      if (req.method === 'GET' && url.pathname === '/debug/memory') {
+        const report = buildMemoryReport({
+          clients,
+          sseConnections,
+          rateBuckets,
+          lastProgressEmittedAt,
+          progressUnsubscribers,
+          projectSessions,
+          sessionTransports,
+          sessionHandles,
+          sessionClients,
+          registeredProjects: projectManager.listProjects().length,
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(report));
         return;
       }
 

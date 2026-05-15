@@ -47,6 +47,9 @@ export interface ManagedProject {
   status: 'starting' | 'indexing' | 'ready' | 'error';
   error?: string;
   cancelDebouncedAI?: () => void;
+  /** Aborted during stopProject() so in-flight AI fetches bail instead of
+   *  running to completion against a now-disposed Store. */
+  aiAbortController?: AbortController;
 }
 
 function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
@@ -257,24 +260,45 @@ export class ProjectManager {
       return summarizationPipeline;
     };
 
-    const runEmbeddings = () => {
+    // Per-project AbortController. Aborted by stopProject() so in-flight AI
+    // fetches bail out instead of running to completion holding references
+    // into a Store/ProjectContext the daemon has already disposed.
+    const aiAbortController = new AbortController();
+
+    const runEmbeddings = (signal?: AbortSignal) => {
       const p = getEmbeddingPipeline();
       if (!p) return;
-      p.indexUnembedded().catch((err) => {
+      // The debounced wrapper passes its per-invocation signal; merge with the
+      // project-level signal so either abort short-circuits the pipeline.
+      const merged = signal ?? aiAbortController.signal;
+      p.indexUnembedded(undefined, merged).catch((err) => {
         logger.error({ error: err, projectRoot }, 'Embedding indexing failed');
       });
     };
 
-    const runSummarization = () => {
+    const runSummarization = (signal?: AbortSignal) => {
       const p = getSummarizationPipeline();
       if (!p) return;
-      p.summarizeUnsummarized().catch((err) => {
+      const merged = signal ?? aiAbortController.signal;
+      p.summarizeUnsummarized(merged).catch((err) => {
         logger.error({ error: err, projectRoot }, 'Summarization failed');
       });
     };
 
-    const debouncedSummarize = trailingDebounce(runSummarization, AI_COALESCE_WAIT_MS);
-    const debouncedEmbed = trailingDebounce(runEmbeddings, AI_COALESCE_WAIT_MS);
+    // Use closure refs so the debounced fn can read its own current .signal
+    // for the in-flight invocation (it's swapped on every fire).
+    let summarizeRef: ReturnType<typeof trailingDebounce> | null = null;
+    let embedRef: ReturnType<typeof trailingDebounce> | null = null;
+    const debouncedSummarize = trailingDebounce(
+      () => runSummarization(summarizeRef?.signal),
+      AI_COALESCE_WAIT_MS,
+    );
+    summarizeRef = debouncedSummarize;
+    const debouncedEmbed = trailingDebounce(
+      () => runEmbeddings(embedRef?.signal),
+      AI_COALESCE_WAIT_MS,
+    );
+    embedRef = debouncedEmbed;
 
     const serverHandle = createServer(store, registry, config, projectRoot, progress);
 
@@ -290,6 +314,7 @@ export class ProjectManager {
       server: serverHandle.server,
       serverHandle,
       status: 'starting',
+      aiAbortController,
       cancelDebouncedAI: () => {
         debouncedSummarize.cancel();
         debouncedEmbed.cancel();
@@ -316,8 +341,8 @@ export class ProjectManager {
     this.indexAllLimit!(() => pipeline.indexAll())
       .then(() => {
         managed.status = 'ready';
-        runSummarization();
-        runEmbeddings();
+        runSummarization(aiAbortController.signal);
+        runEmbeddings(aiAbortController.signal);
         runSubprojectAutoSync(projectRoot, config);
         logger.info({ projectRoot }, 'Project indexing complete');
       })
@@ -377,6 +402,11 @@ export class ProjectManager {
   private async stopProject(root: string): Promise<void> {
     const managed = this.projects.get(root);
     if (!managed) return;
+    // Abort in-flight AI fetches FIRST so any pending summarization /
+    // embedding fetch tears its socket down before we start disposing the
+    // store. Without this, a long-running summarize batch can return after
+    // the DB has already closed and write into stale references.
+    managed.aiAbortController?.abort();
     managed.cancelDebouncedAI?.();
     await managed.watcher.stop();
     clearServerPid(managed.db);

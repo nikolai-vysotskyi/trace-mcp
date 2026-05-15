@@ -33,7 +33,7 @@ export class SummarizationPipeline {
     private vectorStore?: VectorStore | null,
   ) {}
 
-  async summarizeUnsummarized(): Promise<number> {
+  async summarizeUnsummarized(signal?: AbortSignal): Promise<number> {
     let totalSummarized = 0;
     let batch: ReturnType<Store['getUnsummarizedSymbols']>;
 
@@ -50,10 +50,16 @@ export class SummarizationPipeline {
 
     try {
       do {
+        // Cooperative cancellation: bail out at batch boundaries instead of
+        // running to completion when the owning project was already disposed.
+        if (signal?.aborted) {
+          throw signal.reason instanceof Error ? signal.reason : new Error('Summarization aborted');
+        }
+
         batch = this.store.getUnsummarizedSymbols(this.config.kinds, this.config.batchSize);
         if (batch.length === 0) break;
 
-        const results = await this.summarizeBatch(batch);
+        const results = await this.summarizeBatch(batch, signal);
         for (const { id, summary } of results) {
           this.store.updateSymbolSummary(id, summary);
           // Summary feeds buildEmbeddingText — drop any stale vector so the
@@ -87,12 +93,16 @@ export class SummarizationPipeline {
 
   private async summarizeBatch(
     symbols: ReturnType<Store['getUnsummarizedSymbols']>,
+    signal?: AbortSignal,
   ): Promise<{ id: number; summary: string }[]> {
     const results: { id: number; summary: string }[] = [];
     const template = PROMPTS.summarize_symbol;
     const concurrency = this.config.concurrency;
 
     const summarizeOne = async (sym: (typeof symbols)[number]): Promise<void> => {
+      // Per-symbol abort check — stop scheduling fresh fetches once the owner
+      // signalled cancellation.
+      if (signal?.aborted) return;
       try {
         const source = this.readSource(sym.file_path, sym.byte_start, sym.byte_end);
         const prompt = template.build({
@@ -106,6 +116,7 @@ export class SummarizationPipeline {
         const summary = await this.inferenceService.generate(prompt, {
           maxTokens: template.maxTokens,
           temperature: template.temperature,
+          signal,
         });
 
         const cleaned = summary.trim();
@@ -119,10 +130,12 @@ export class SummarizationPipeline {
 
     if (concurrency <= 1) {
       for (const sym of symbols) {
+        if (signal?.aborted) break;
         await summarizeOne(sym);
       }
     } else {
       for (let i = 0; i < symbols.length; i += concurrency) {
+        if (signal?.aborted) break;
         const chunk = symbols.slice(i, i + concurrency);
         await Promise.all(chunk.map(summarizeOne));
       }
