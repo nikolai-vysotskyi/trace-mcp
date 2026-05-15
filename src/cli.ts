@@ -552,6 +552,10 @@ program
     // Shared project-level resources (TopologyStore, DecisionStore) — avoids per-session SQLite overhead
     const { ProjectResourcePool } = await import('./daemon/resource-pool.js');
     const resourcePool = new ProjectResourcePool();
+    // Wire the pool into ProjectManager so stopProject/removeProject force-
+    // disposes the project's pool entry (two SQLite handles otherwise leak per
+    // removed project for the daemon's lifetime).
+    projectManager.setResourcePool(resourcePool);
 
     // Per-session MCP transports: sessionId → transport
     // Multiple clients can connect to the same project simultaneously.
@@ -708,6 +712,32 @@ program
       }
     }, RATE_WINDOW_MS);
     rateBucketCleanup.unref();
+
+    // ── Stale client sweep ───────────────────────────────────────
+    // If a stdio-proxy crashes without DELETE /api/clients (kill -9, OOM)
+    // and reconnects under a new id, the original `clients` entry never gets
+    // cleaned up — onclose only fires for HTTP transports. Sweep entries with
+    // lastSeen > 1h on a 10-minute timer. HTTP sessions update lastSeen via
+    // PATCH /api/clients during MCP initialize; stdio clients update through
+    // the same path. If lastSeen hasn't moved in an hour the proxy is gone.
+    const CLIENT_STALE_MS = 60 * 60 * 1000;
+    const CLIENT_SWEEP_INTERVAL_MS = 10 * 60 * 1000;
+    const clientSweep = setInterval(() => {
+      const now = Date.now();
+      const cutoff = now - CLIENT_STALE_MS;
+      for (const [id, client] of clients) {
+        const seen = Date.parse(client.lastSeen);
+        if (Number.isFinite(seen) && seen < cutoff) {
+          clients.delete(id);
+          try {
+            broadcastEvent({ type: 'client_disconnect', clientId: id, project: client.project });
+          } catch {
+            /* best-effort */
+          }
+        }
+      }
+    }, CLIENT_SWEEP_INTERVAL_MS);
+    clientSweep.unref();
 
     const MAX_BODY_SIZE = 5 * 1024 * 1024;
 
@@ -2482,6 +2512,8 @@ program
       resourcePool.disposeAll();
       idleMonitor.stop();
       clearInterval(activityPoker);
+      clearInterval(rateBucketCleanup);
+      clearInterval(clientSweep);
       await projectManager.shutdown();
       httpServer.close(() => process.exit(0));
     };

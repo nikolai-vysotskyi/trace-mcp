@@ -173,3 +173,85 @@ describe('ProjectManager.removeProject', () => {
     expect(dropProject).toHaveBeenCalledOnce();
   });
 });
+
+describe('ProjectManager resourcePool wiring', () => {
+  beforeEach(() => {
+    mockUnregister.mockClear();
+  });
+
+  it('removeProject force-disposes the per-project resource pool entry', async () => {
+    const disposeProject = vi.fn();
+    const resourcePool = {
+      disposeProject,
+      acquire: vi.fn(),
+      release: vi.fn(),
+      disposeAll: vi.fn(),
+      getRefCount: vi.fn(() => 0),
+    };
+    // biome-ignore lint/suspicious/noExplicitAny: constructor accepts a partial test double
+    const pm = new ProjectManager({ resourcePool: resourcePool as any });
+    injectProject(pm, '/tmp/proj-pool');
+
+    await pm.removeProject('/tmp/proj-pool');
+
+    // Two SQLite handles (TopologyStore + DecisionStore) leak per removed
+    // project if disposeProject isn't called — assert the wiring fires
+    // unconditionally regardless of refCount.
+    expect(disposeProject).toHaveBeenCalledExactlyOnceWith('/tmp/proj-pool');
+  });
+
+  it('shutdown force-disposes the resource pool entry for every project', async () => {
+    const disposeProject = vi.fn();
+    const resourcePool = {
+      disposeProject,
+      acquire: vi.fn(),
+      release: vi.fn(),
+      disposeAll: vi.fn(),
+      getRefCount: vi.fn(() => 0),
+    };
+    const pm = new ProjectManager();
+    // biome-ignore lint/suspicious/noExplicitAny: late-binding via setter mirrors cli.ts ordering
+    pm.setResourcePool(resourcePool as any);
+    injectProject(pm, '/tmp/proj-a');
+    injectProject(pm, '/tmp/proj-b');
+
+    await pm.shutdown();
+
+    expect(disposeProject).toHaveBeenCalledTimes(2);
+    expect(disposeProject).toHaveBeenCalledWith('/tmp/proj-a');
+    expect(disposeProject).toHaveBeenCalledWith('/tmp/proj-b');
+  });
+
+  it('survives a resourcePool.disposeProject throw without aborting removal', async () => {
+    const disposeProject = vi.fn(() => {
+      throw new Error('store close failed');
+    });
+    const resourcePool = {
+      disposeProject,
+      acquire: vi.fn(),
+      release: vi.fn(),
+      disposeAll: vi.fn(),
+      getRefCount: vi.fn(() => 0),
+    };
+    // biome-ignore lint/suspicious/noExplicitAny: constructor accepts a partial test double
+    const pm = new ProjectManager({ resourcePool: resourcePool as any });
+    const a = injectProject(pm, '/tmp/proj-d');
+
+    await pm.removeProject('/tmp/proj-d');
+
+    expect(mockUnregister).toHaveBeenCalledWith('/tmp/proj-d');
+    expect(a.db.close).toHaveBeenCalledOnce();
+    expect(disposeProject).toHaveBeenCalledOnce();
+  });
+
+  it('is a no-op when no resource pool is wired (back-compat path)', async () => {
+    const pm = new ProjectManager();
+    const a = injectProject(pm, '/tmp/proj-e');
+
+    await pm.removeProject('/tmp/proj-e');
+
+    // No resourcePool was injected — removal still completes normally.
+    expect(a.db.close).toHaveBeenCalledOnce();
+    expect(mockUnregister).toHaveBeenCalledWith('/tmp/proj-e');
+  });
+});

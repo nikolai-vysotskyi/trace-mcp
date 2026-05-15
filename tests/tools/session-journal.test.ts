@@ -193,3 +193,57 @@ describe('SessionJournal — prefetch boosts', () => {
     expect(boosts.find((b) => b.file === 'a.ts')).toBeUndefined();
   });
 });
+
+describe('SessionJournal — entry cap (leak guard)', () => {
+  /**
+   * Bug history: in a long-running daemon session, every tool call appended
+   * to `entries` and `allHashes` without an upper bound. After ~50k calls the
+   * heap footprint of the journal alone (entries + compact_result snapshots
+   * for dedup-able tools) became the dominant retainer in process snapshots.
+   * The cap drops the oldest entries once we exceed MAX_ENTRIES so the
+   * journal stays bounded regardless of session length.
+   */
+  it('caps in-memory entries at MAX_ENTRIES', () => {
+    const j = new SessionJournal();
+    // 10_500 calls — exceeds MAX_ENTRIES (10_000) by half a batch
+    for (let i = 0; i < 10_500; i++) {
+      j.record('search', { query: `q-${i}` }, 1);
+    }
+    const entries = j.getEntries();
+    // After eviction the count must stay ≤ MAX_ENTRIES
+    expect(entries.length).toBeLessThanOrEqual(10_000);
+    // Last entry kept
+    expect(entries[entries.length - 1].params_summary).toBe('search("q-10499")');
+    // First entry is NOT q-0 — it was dropped
+    expect(entries[0].params_summary).not.toBe('search("q-0")');
+  });
+
+  it('rebuilds allHashes/zeroResultQueries from survivors after eviction', () => {
+    const j = new SessionJournal();
+    // Push a unique zero-result search at the end that must survive eviction
+    for (let i = 0; i < 10_500; i++) {
+      j.record('search', { query: `q-${i}` }, i === 10_499 ? 0 : 1);
+    }
+    const summary = j.getSummary();
+    // The survivor zero-result query must be reflected in the secondary index
+    expect(summary.searches_with_zero_results).toContain('search("q-10499")');
+    // The dropped queries must NOT show up
+    expect(summary.searches_with_zero_results).not.toContain('search("q-0")');
+  });
+
+  it('dedup cache no longer pins evicted entries', () => {
+    const j = new SessionJournal();
+    // Record one dedup-able entry, then flood with unique calls so it gets evicted
+    j.record('get_symbol', { symbol_id: 'old::Symbol#class' }, 1, {
+      compactResult: { name: 'Old' },
+      resultTokens: 500,
+    });
+    for (let i = 0; i < 10_500; i++) {
+      j.record('search', { query: `q-${i}` }, 1);
+    }
+    // The old entry was dropped → calling checkDuplicate for it must return
+    // null (no compact result available, no warning chain).
+    const dup = j.checkDuplicate('get_symbol', { symbol_id: 'old::Symbol#class' });
+    expect(dup).toBeNull();
+  });
+});

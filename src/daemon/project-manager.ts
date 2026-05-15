@@ -29,6 +29,7 @@ import { createServer } from '../server/server.js';
 import { SubprojectManager } from '../subproject/manager.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { trailingDebounce } from '../util/debounce.js';
+import type { ProjectResourcePool } from './resource-pool.js';
 
 const AI_COALESCE_WAIT_MS = 5_000;
 
@@ -106,6 +107,23 @@ export class ProjectManager {
   /** Configurable cap on concurrent initial indexAll() calls. Watcher-driven
    *  indexFiles() is NOT gated. Lazy-init alongside sharedPool. */
   private indexAllLimit: ReturnType<typeof pLimit> | null = null;
+  /** Optional shared TopologyStore/DecisionStore pool. When provided,
+   *  stopProject() force-disposes the project's pool entry so the SQLite
+   *  handles plus their in-memory state don't leak across the daemon's
+   *  lifetime. Owned by cli.ts; injected here so tests can verify the wiring
+   *  without dragging the HTTP layer in. */
+  private resourcePool: ProjectResourcePool | null = null;
+
+  constructor(opts?: { resourcePool?: ProjectResourcePool }) {
+    this.resourcePool = opts?.resourcePool ?? null;
+  }
+
+  /** Inject the shared resource pool after construction. Used by cli.ts
+   *  because the pool is created after ProjectManager (legacy ordering).
+   *  Idempotent — second call replaces the reference. */
+  setResourcePool(pool: ProjectResourcePool): void {
+    this.resourcePool = pool;
+  }
 
   private ensureShared(config: TraceMcpConfig): void {
     if (!this.sharedPool) {
@@ -373,6 +391,20 @@ export class ProjectManager {
       this.sharedPool?.dropProject(root);
     } catch (err) {
       logger.warn({ error: err, projectRoot: root }, 'sharedPool.dropProject failed (non-fatal)');
+    }
+    // Force-dispose the per-project entry in the resource pool (TopologyStore
+    // + DecisionStore SQLite handles). stopProject runs unconditionally — we
+    // don't wait for refCount to drain because by this point the project is
+    // gone from `projects` and no new sessions can be acquired for this root.
+    // Any in-flight session.onclose handler will see a stale entry but its
+    // release() call is a no-op (entry already deleted).
+    try {
+      this.resourcePool?.disposeProject(root);
+    } catch (err) {
+      logger.warn(
+        { error: err, projectRoot: root },
+        'resourcePool.disposeProject failed (non-fatal)',
+      );
     }
   }
 

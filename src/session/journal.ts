@@ -98,6 +98,14 @@ export class SessionJournal {
   private snapshotFlushInterval = 5;
   /** Optional provider for structural landmarks (PageRank + recently edited symbols) */
   private landmarkProvider: LandmarkProvider | null = null;
+  /** Hard cap on in-memory entries. A long-running daemon session can push
+   *  through tens of thousands of tool calls; without a cap the entries[]
+   *  array (plus allHashes / taskContextTimestamps) grows unbounded. When
+   *  exceeded we drop the oldest entries — periodic snapshots have already
+   *  persisted them to disk so nothing is lost for cross-session context. */
+  private static readonly MAX_ENTRIES = 10_000;
+  /** Drop the oldest 10% in one pass to amortise the splice cost. */
+  private static readonly DROP_BATCH = 1_000;
 
   /** Tools whose results are content-heavy and safe to dedup (deterministic for same params) */
   private static readonly DEDUP_TOOLS = new Set([
@@ -208,6 +216,40 @@ export class SessionJournal {
         this.flushSnapshotFile(this.snapshotPath);
       } catch {
         /* best-effort */
+      }
+    }
+
+    // Cap in-memory growth: when entries exceed MAX_ENTRIES, drop the oldest
+    // DROP_BATCH and re-derive the secondary indexes so they can't keep dead
+    // entries alive via the hash map. The snapshot file already captured them
+    // for cross-session context.
+    if (this.entries.length > SessionJournal.MAX_ENTRIES) {
+      this.evictOldest();
+    }
+  }
+
+  /**
+   * Drop the oldest DROP_BATCH entries and rebuild secondary indexes from the
+   * survivors. Cheaper than evicting one-by-one because we only walk the
+   * survivors once.
+   */
+  private evictOldest(): void {
+    this.entries.splice(0, SessionJournal.DROP_BATCH);
+    // allHashes pointed at JournalEntry instances we just dropped; rebuild
+    // from survivors so we don't pin the old objects in memory and so future
+    // duplicate-detection still works against the post-eviction window.
+    this.allHashes.clear();
+    this.zeroResultQueries.clear();
+    this.taskContextTimestamps.length = 0;
+    for (const entry of this.entries) {
+      if (!this.allHashes.has(entry.params_hash)) {
+        this.allHashes.set(entry.params_hash, entry);
+      }
+      if (entry.result_count === 0 && this.isSearchTool(entry.tool)) {
+        this.zeroResultQueries.set(entry.params_hash, entry.params_summary);
+      }
+      if (entry.tool === 'get_task_context' || entry.tool === 'get_feature_context') {
+        this.taskContextTimestamps.push(entry.timestamp);
       }
     }
   }

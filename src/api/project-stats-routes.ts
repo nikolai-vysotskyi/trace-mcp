@@ -579,6 +579,30 @@ interface CacheEntry {
 
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 30_000;
+/**
+ * Hard cap on the number of cached project payloads.
+ *
+ * Each payload is a multi-section JSON object that can hit hundreds of
+ * KB on large projects. Without a bound, a long-lived dashboard daemon
+ * accumulates one entry per project ever requested and never frees
+ * them — even though every entry past the TTL is stale. Eviction
+ * policy: drop expired entries first, then LRU when still over the
+ * cap.
+ */
+const MAX_ENTRIES = 32;
+
+function evictExpiredOrLru(now: number): void {
+  // Cheap pass: drop all expired entries first.
+  for (const [k, v] of cache) {
+    if (v.expiresAt <= now) cache.delete(k);
+  }
+  // If still over the cap (e.g. lots of hot entries), drop LRU until we're under.
+  while (cache.size >= MAX_ENTRIES) {
+    const lru = cache.keys().next().value;
+    if (lru === undefined) break;
+    cache.delete(lru);
+  }
+}
 
 export function invalidateProjectStatsCache(projectRoot?: string): void {
   if (projectRoot) {
@@ -586,6 +610,15 @@ export function invalidateProjectStatsCache(projectRoot?: string): void {
   } else {
     cache.clear();
   }
+}
+
+/** Test-only: inspect cache bookkeeping. */
+export function __projectStatsCacheStats(): {
+  size: number;
+  max: number;
+  ttlMs: number;
+} {
+  return { size: cache.size, max: MAX_ENTRIES, ttlMs: CACHE_TTL_MS };
 }
 
 // ---------------------------------------------------------------------------
@@ -609,8 +642,14 @@ export function buildProjectStats(
   projectRoot: string,
   ctx: ProjectStatsContext,
 ): ProjectStatsPayload {
+  const now = Date.now();
   const cached = cache.get(projectRoot);
-  if (cached && cached.expiresAt > Date.now()) return cached.data;
+  if (cached && cached.expiresAt > now) {
+    // LRU bump so hot projects survive eviction.
+    cache.delete(projectRoot);
+    cache.set(projectRoot, cached);
+    return cached.data;
+  }
 
   const payload: ProjectStatsPayload = {
     project: projectRoot,
@@ -692,7 +731,12 @@ export function buildProjectStats(
     }
   }
 
-  cache.set(projectRoot, { data: payload, expiresAt: Date.now() + CACHE_TTL_MS });
+  // Bound the cache before inserting. Drops expired entries first, then
+  // LRU. Keeps the working set under MAX_ENTRIES even when many projects
+  // are queried over the daemon's lifetime.
+  const insertNow = Date.now();
+  evictExpiredOrLru(insertNow);
+  cache.set(projectRoot, { data: payload, expiresAt: insertNow + CACHE_TTL_MS });
   return payload;
 }
 
