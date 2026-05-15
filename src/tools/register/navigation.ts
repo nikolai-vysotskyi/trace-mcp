@@ -45,6 +45,7 @@ import {
   isMinimal,
   type SearchItemFull,
 } from '../_common/detail-level.js';
+import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
 import { createSearchToolRetriever } from '../../retrieval/retrievers/search-tool-retriever.js';
 import { runRetriever } from '../../retrieval/types.js';
 
@@ -144,7 +145,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'search',
-    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. For raw text/string/comment search use search_text instead. For finding who references a known symbol use find_usages instead. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). For natural-language / conceptual queries set semantic="on" (requires an AI provider configured + embed_repo run once). Set fusion=true for Signal Fusion — multi-channel ranking (BM25 + PageRank + embeddings + identity match) via Weighted Reciprocal Rank fusion. Use mode to switch retrieval strategy: single (default — top-K, current behavior), tiered (high/medium/low buckets), drill (scope to a parent_path/parent_symbol_id subtree via drill_from), flat (raw FTS hits, cheapest), get (exact path/symbol_id lookup, no search). Read-only. Returns JSON: { items: [{ symbol_id, name, kind, fqn, signature, file, line, score }], total, search_mode } — mode-specific shape when mode!=single.',
+    'Search symbols by name, kind, or text. Use instead of Grep when looking for functions, classes, methods, or variables in source code. For raw text/string/comment search use search_text instead. For finding who references a known symbol use find_usages instead. Supports kind/language/file_pattern filters. Set fuzzy=true for typo-tolerant search (trigram + Levenshtein). For natural-language / conceptual queries set semantic="on" (requires an AI provider configured + embed_repo run once). Set fusion=true for Signal Fusion — multi-channel ranking (BM25 + PageRank + embeddings + identity match) via Weighted Reciprocal Rank fusion. Use mode to switch retrieval strategy: single (default — top-K, current behavior), tiered (high/medium/low buckets), drill (scope to a parent_path/parent_symbol_id subtree via drill_from), flat (raw FTS hits, cheapest), get (exact path/symbol_id lookup, no search). Read-only. Returns JSON: { items: [{ symbol_id, name, kind, fqn, signature, file, line, score }], total, search_mode } — mode-specific shape when mode!=single. Set `output_format: "toon"` for ~30-60% fewer tokens on tabular responses (lossless).',
     {
       query: z.string().min(1).max(500).describe('Search query'),
       kind: z
@@ -241,6 +242,9 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
           'Drill scope for mode="drill" — a file path or symbol_id. Results are restricted to the subtree rooted here.',
         ),
       detail_level: DetailLevelSchema,
+      output_format: OutputFormatSchema.describe(
+        'Output format. "json" (default) returns JSON; "toon" returns Token-Oriented Object Notation — 30-60% fewer tokens, lossless. "markdown" is unsupported here and behaves as json.',
+      ),
     },
     async ({
       query,
@@ -263,7 +267,10 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       mode,
       drill_from,
       detail_level,
+      output_format,
     }) => {
+      const encode = (payload: unknown): string =>
+        output_format === 'toon' ? encodeResponse(payload, 'toon') : jh('search', payload);
       // Resolve effective mode. Explicit `mode` wins; otherwise heuristic.
       // (Kept here so the zero-index / tiered branches below can branch on it
       // before the retriever runs. The retriever recomputes the same value
@@ -282,7 +289,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
           content: [
             {
               type: 'text',
-              text: jh('search', {
+              text: encode({
                 ...fbResult,
                 search_mode: 'zero_index_fallback',
                 _hint: 'Index is empty. Run reindex to enable full symbol search.',
@@ -356,7 +363,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
           mode: 'get' as const,
           item: retrieverResult.payload.item,
         };
-        return { content: [{ type: 'text', text: jh('search', payload) }] };
+        return { content: [{ type: 'text', text: encode(payload) }] };
       }
 
       const result = retrieverResult.payload;
@@ -519,18 +526,23 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
             : {}),
         };
       }
-      return { content: [{ type: 'text', text: jh('search', response) }] };
+      return { content: [{ type: 'text', text: encode(response) }] };
     },
   );
 
   server.tool(
     'get_outline',
-    "Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens. For reading one symbol's source, follow up with get_symbol. Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd }] }.",
+    'Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens. For reading one symbol\'s source, follow up with get_symbol. Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd }] }. Set `output_format: "toon"` for ~30-60% fewer tokens on tabular responses (lossless).',
     {
       path: z.string().max(512).describe('Relative file path'),
       detail_level: DetailLevelSchema,
+      output_format: OutputFormatSchema.describe(
+        'Output format. "json" (default) returns JSON; "toon" returns Token-Oriented Object Notation — 30-60% fewer tokens, lossless. "markdown" is unsupported here and behaves as json.',
+      ),
     },
-    async ({ path: filePath, detail_level }) => {
+    async ({ path: filePath, detail_level, output_format }) => {
+      const encode = (payload: unknown): string =>
+        output_format === 'toon' ? encodeResponse(payload, 'toon') : jh('get_outline', payload);
       const blocked = guardPath(filePath);
       if (blocked) return blocked;
 
@@ -543,7 +555,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
             content: [
               {
                 type: 'text',
-                text: jh('get_outline', {
+                text: encode({
                   ...fbResult,
                   _hint: 'Index is empty. Run reindex to enable full symbol extraction.',
                 }),
@@ -597,7 +609,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
               },
             }),
       };
-      return { content: [{ type: 'text', text: jh('get_outline', outlineWithFreshness) }] };
+      return { content: [{ type: 'text', text: encode(outlineWithFreshness) }] };
     },
   );
 
@@ -684,7 +696,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_feature_context',
-    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature. For structured task context with tests and entry points, use get_task_context instead. For symbol metadata without source, use search. Read-only. Returns JSON (default) or Markdown: { items: [{ symbol_id, name, file, source, score }], token_usage } | { content: "...markdown..." }.',
+    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature. For structured task context with tests and entry points, use get_task_context instead. For symbol metadata without source, use search. Read-only. Returns JSON (default) or Markdown: { items: [{ symbol_id, name, file, source, score }], token_usage } | { content: "...markdown..." }. Set `output_format: "toon"` for ~30-60% fewer tokens on tabular responses (lossless).',
     {
       description: z
         .string()
@@ -698,12 +710,9 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         .max(100000)
         .optional()
         .describe('Max tokens for assembled context (default 4000)'),
-      output_format: z
-        .enum(['json', 'markdown'])
-        .optional()
-        .describe(
-          'Output format. "json" (default) returns structured items; "markdown" returns LLM-friendly fenced code blocks (~15-20% token savings, easier for the model to read).',
-        ),
+      output_format: OutputFormatSchema.describe(
+        'Output format. "json" (default) returns structured items; "markdown" returns LLM-friendly fenced code blocks (~15-20% token savings, easier for the model to read); "toon" returns Token-Oriented Object Notation — 30-60% fewer tokens, lossless.',
+      ),
     },
     async ({ description, token_budget, output_format }) => {
       const budgetState = {
@@ -723,6 +732,9 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
             'get_feature_context',
           ),
         };
+        if (output_format === 'toon') {
+          return { content: [{ type: 'text', text: encodeResponse(enriched, 'toon') }] };
+        }
         return { content: [{ type: 'text', text: jh('get_feature_context', enriched) }] };
       }
       const freshened = enrichItemsWithFreshness(store, projectRoot, result.items);
@@ -771,6 +783,9 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
           _meta: payload._meta,
         };
         return { content: [{ type: 'text', text: jh('get_feature_context', mdPayload) }] };
+      }
+      if (output_format === 'toon') {
+        return { content: [{ type: 'text', text: encodeResponse(payload, 'toon') }] };
       }
       return { content: [{ type: 'text', text: jh('get_feature_context', payload) }] };
     },
@@ -833,7 +848,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       output_format: z
         .enum(['json', 'markdown'])
         .optional()
-        .describe('Output format (default json)'),
+        .describe('Output format (default json).'),
     },
     async ({ symbol_id, symbol_ids, fqn, include_callers, token_budget, output_format }) => {
       const ids = symbol_ids ?? (symbol_id ? [symbol_id] : []);
@@ -847,7 +862,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         fqn: fqn ?? undefined,
         includeCallers: include_callers ?? false,
         tokenBudget: adaptive.budget,
-        outputFormat: output_format ?? 'json',
+        outputFormat: output_format === 'markdown' ? 'markdown' : 'json',
       });
       if (result.isErr()) {
         return {

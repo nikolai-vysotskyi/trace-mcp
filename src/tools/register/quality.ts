@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
+import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
 import { detectCommunities, getCommunities, getCommunityDetail } from '../analysis/communities.js';
 import { getControlFlow } from '../analysis/control-flow.js';
 import { getSurprises } from '../analysis/surprises.js';
@@ -110,7 +111,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Changed Symbols ---
   server.tool(
     'get_changed_symbols',
-    'Map a git diff to affected symbols (functions, classes, methods). For PR review. If "since" is omitted, auto-detects main/master as the base. Requires git. Use for PR review to see which symbols changed. For full branch comparison with risk assessment use compare_branches instead. Read-only. Returns JSON: { changes: [{ symbol_id, name, kind, file, changeType }], total }.',
+    'Map a git diff to affected symbols (functions, classes, methods). For PR review. If "since" is omitted, auto-detects main/master as the base. Requires git. Use for PR review to see which symbols changed. For full branch comparison with risk assessment use compare_branches instead. Read-only. Returns JSON: { changes: [{ symbol_id, name, kind, file, changeType }], total }. Set `output_format: "toon"` for 30-60% fewer tokens on tabular responses (lossless).',
     {
       since: z
         .string()
@@ -132,8 +133,9 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .max(10)
         .optional()
         .describe('Max blast radius traversal depth (default 3)'),
+      output_format: OutputFormatSchema,
     },
-    async ({ since, until, include_blast_radius, max_blast_depth }) => {
+    async ({ since, until, include_blast_radius, max_blast_depth, output_format }) => {
       const result = getChangedSymbols(store, projectRoot, {
         since,
         until,
@@ -146,7 +148,9 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],
           isError: true,
         };
-      return { content: [{ type: 'text', text: j(result.value) }] };
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
+      const text = encodeResponse(result.value, fmt);
+      return { content: [{ type: 'text', text }] };
     },
   );
 

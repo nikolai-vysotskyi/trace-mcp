@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
+import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
 import {
   PIN_MAX_ACTIVE,
   PIN_WEIGHT_DEFAULT,
@@ -151,17 +152,20 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dead_exports',
-    'Find exported symbols never imported by any other file — dead code candidates. Use for quick export-level dead code scan. For deeper multi-signal dead code detection (including call graph) use get_dead_code instead. Read-only. Returns JSON: { deadExports: [{ symbol_id, name, kind, file }], total }.',
+    'Find exported symbols never imported by any other file — dead code candidates. Use for quick export-level dead code scan. For deeper multi-signal dead code detection (including call graph) use get_dead_code instead. Read-only. Returns JSON: { deadExports: [{ symbol_id, name, kind, file }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       file_pattern: z
         .string()
         .max(512)
         .optional()
         .describe('Filter files by glob pattern (e.g. "src/tools/*.ts")'),
+      output_format: OutputFormatSchema,
     },
-    async ({ file_pattern }) => {
+    async ({ file_pattern, output_format }) => {
       const result = getDeadExports(store, file_pattern);
-      return { content: [{ type: 'text', text: j(result) }] };
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
+      const text = encodeResponse(result, fmt);
+      return { content: [{ type: 'text', text }] };
     },
   );
 
@@ -184,17 +188,20 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_untested_exports',
-    'Find exported public symbols with no matching test file — test coverage gaps. For deeper analysis including non-exported symbols use get_untested_symbols instead. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file }], total }.',
+    'Find exported public symbols with no matching test file — test coverage gaps. For deeper analysis including non-exported symbols use get_untested_symbols instead. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       file_pattern: z
         .string()
         .max(512)
         .optional()
         .describe('Filter by file glob pattern (e.g. "src/tools/%")'),
+      output_format: OutputFormatSchema,
     },
-    async ({ file_pattern }) => {
+    async ({ file_pattern, output_format }) => {
       const result = getUntestedExports(store, file_pattern);
-      return { content: [{ type: 'text', text: j(result) }] };
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
+      const text = encodeResponse(result, fmt);
+      return { content: [{ type: 'text', text }] };
     },
   );
 
@@ -249,19 +256,22 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_coupling',
-    'Coupling analysis: afferent (Ca), efferent (Ce), instability index per file. Shows which modules are stable vs unstable. Use to identify fragile or overly-depended-on modules. For coupling changes over time use get_coupling_trend instead. Read-only. Returns JSON: [{ file, ca, ce, instability, assessment }].',
+    'Coupling analysis: afferent (Ca), efferent (Ce), instability index per file. Shows which modules are stable vs unstable. Use to identify fragile or overly-depended-on modules. For coupling changes over time use get_coupling_trend instead. Read-only. Returns JSON: [{ file, ca, ce, instability, assessment }]. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default: all)'),
       assessment: z
         .enum(['stable', 'neutral', 'unstable', 'isolated'])
         .optional()
         .describe('Filter by stability assessment'),
+      output_format: OutputFormatSchema,
     },
-    async ({ limit, assessment }) => {
+    async ({ limit, assessment, output_format }) => {
       let results = getCouplingMetrics(store);
       if (assessment) results = results.filter((r) => r.assessment === assessment);
       if (limit) results = results.slice(0, limit);
-      return { content: [{ type: 'text', text: jh('get_coupling_metrics', results) }] };
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
+      const text = encodeResponse(results, fmt);
+      return { content: [{ type: 'text', text }] };
     },
   );
 
@@ -298,15 +308,17 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_pagerank',
-    'File importance ranking via PageRank on the import graph. Shows most central/important files. Use to identify architecturally critical files. For combined health metrics use get_project_health instead. Read-only. Returns JSON: [{ file, score }].',
+    'File importance ranking via PageRank on the import graph. Shows most central/important files. Use to identify architecturally critical files. For combined health metrics use get_project_health instead. Read-only. Returns JSON: [{ file, score }]. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
+      output_format: OutputFormatSchema,
     },
-    async ({ limit }) => {
+    async ({ limit, output_format }) => {
       const results = getPageRank(store);
-      return {
-        content: [{ type: 'text', text: jh('get_page_rank', results.slice(0, limit ?? 50)) }],
-      };
+      const sliced = results.slice(0, limit ?? 50);
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
+      const text = encodeResponse(sliced, fmt);
+      return { content: [{ type: 'text', text }] };
     },
   );
 
@@ -348,7 +360,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_refactor_candidates',
-    'Find functions with high complexity called from many files — candidates for extraction to shared modules. Use during architecture review to identify hotspots worth refactoring. Read-only. Returns JSON: [{ symbol_id, name, file, cyclomatic, callerCount }].',
+    'Find functions with high complexity called from many files — candidates for extraction to shared modules. Use during architecture review to identify hotspots worth refactoring. Read-only. Returns JSON: [{ symbol_id, name, file, cyclomatic, callerCount }]. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       min_cyclomatic: z
         .number()
@@ -363,14 +375,17 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .optional()
         .describe('Min distinct caller files (default: 2)'),
       limit: z.number().int().min(1).max(100).optional().describe('Max results (default: 20)'),
+      output_format: OutputFormatSchema,
     },
-    async ({ min_cyclomatic, min_callers, limit }) => {
+    async ({ min_cyclomatic, min_callers, limit, output_format }) => {
       const results = getExtractionCandidates(store, {
         minCyclomatic: min_cyclomatic,
         minCallers: min_callers,
         limit,
       });
-      return { content: [{ type: 'text', text: j(results) }] };
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
+      const text = encodeResponse(results, fmt);
+      return { content: [{ type: 'text', text }] };
     },
   );
 

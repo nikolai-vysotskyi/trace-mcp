@@ -68,6 +68,7 @@
     "@clack/prompts": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@parcel/watcher": "^2.5.6",
+    "@toon-format/toon": "2.2.0",
     "@vue/compiler-sfc": "^3.5.32",
     "better-sqlite3": "^12.9.0",
     "commander": "^14.0.3",
