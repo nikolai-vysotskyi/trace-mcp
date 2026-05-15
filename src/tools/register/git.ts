@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import { formatToolError } from '../../errors.js';
 import type { ServerContext } from '../../server/types.js';
+import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
 import { detectAstClones } from '../analysis/ast-clones.js';
 import { getChurnRate, getHotspots, HOTSPOT_METHODOLOGY, isGitRepo } from '../git/git-analysis.js';
 import { type ArtifactCategory, getArtifacts } from '../project/artifacts.js';
@@ -33,7 +34,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_git_churn',
-    'Per-file git churn: commits, unique authors, frequency, volatility assessment. Requires git. Use to identify frequently-changed files. For combined churn+complexity hotspots use get_risk_hotspots instead. Read-only. Returns JSON: { results: [{ file, commits, authors, frequency, volatility }], total }.',
+    'Per-file git churn: commits, unique authors, frequency, volatility assessment. Requires git. Use to identify frequently-changed files. For combined churn+complexity hotspots use get_risk_hotspots instead. Read-only. Returns JSON: { results: [{ file, commits, authors, frequency, volatility }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       since_days: z
         .number()
@@ -47,33 +48,30 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .max(256)
         .optional()
         .describe('Filter files containing this substring'),
+      output_format: OutputFormatSchema,
     },
-    async ({ since_days, limit, file_pattern }) => {
+    async ({ since_days, limit, file_pattern, output_format }) => {
       const results = getChurnRate(projectRoot, {
         sinceDays: since_days,
         limit,
         filePattern: file_pattern,
       });
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
       if (results.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: j({
-                message: 'No git history available or no matching files',
-                _methodology: GIT_CHURN_METHODOLOGY,
-              }),
-            },
-          ],
+        const payload = {
+          message: 'No git history available or no matching files',
+          _methodology: GIT_CHURN_METHODOLOGY,
         };
+        return { content: [{ type: 'text', text: encodeResponse(payload, fmt) }] };
       }
-      return { content: [{ type: 'text', text: j({ results, total: results.length }) }] };
+      const payload = { results, total: results.length };
+      return { content: [{ type: 'text', text: encodeResponse(payload, fmt) }] };
     },
   );
 
   server.tool(
     'get_risk_hotspots',
-    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). Each entry includes a confidence_level (low/medium/multi_signal) counting how many of the two independent signals fired strongly. Result envelope includes _methodology disclosure and _warnings when git is unavailable. Requires git. Use to prioritize refactoring. For per-file bug prediction use predict_bugs instead. Read-only. Returns JSON: { hotspots: [{ file, score, complexity, commits, confidence_level }], total }.',
+    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). Each entry includes a confidence_level (low/medium/multi_signal) counting how many of the two independent signals fired strongly. Result envelope includes _methodology disclosure and _warnings when git is unavailable. Requires git. Use to prioritize refactoring. For per-file bug prediction use predict_bugs instead. Read-only. Returns JSON: { hotspots: [{ file, score, complexity, commits, confidence_level }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       since_days: z
         .number()
@@ -88,8 +86,9 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .min(1)
         .optional()
         .describe('Min cyclomatic complexity to consider (default: 3)'),
+      output_format: OutputFormatSchema,
     },
-    async ({ since_days, limit, min_cyclomatic }) => {
+    async ({ since_days, limit, min_cyclomatic, output_format }) => {
       const results = getHotspots(store, projectRoot, {
         sinceDays: since_days,
         limit,
@@ -102,26 +101,21 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
             'churn signal cannot fire, so all results are confidence_level=low.',
         );
       }
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
       if (results.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: j({
-                message: 'No hotspots found (no complex files with git churn)',
-                _methodology: HOTSPOT_METHODOLOGY,
-                ...(warnings.length > 0 ? { _warnings: warnings } : {}),
-              }),
-            },
-          ],
+        const payload = {
+          message: 'No hotspots found (no complex files with git churn)',
+          _methodology: HOTSPOT_METHODOLOGY,
+          ...(warnings.length > 0 ? { _warnings: warnings } : {}),
         };
+        return { content: [{ type: 'text', text: encodeResponse(payload, fmt) }] };
       }
       const envelope = {
         hotspots: results,
         total: results.length,
         ...(warnings.length > 0 ? { _warnings: warnings } : {}),
       };
-      return { content: [{ type: 'text', text: jh('get_hotspots', envelope) }] };
+      return { content: [{ type: 'text', text: encodeResponse(envelope, fmt) }] };
     },
   );
 
@@ -551,7 +545,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_complexity_report',
-    'Get complexity metrics (cyclomatic, max nesting, param count) for symbols in a file or across the project. Use to identify complex code before refactoring. For historical trends use get_complexity_trend instead. Read-only. Returns JSON: { symbols: [{ symbol_id, name, kind, file, line, cyclomatic, max_nesting, param_count }], total }.',
+    'Get complexity metrics (cyclomatic, max nesting, param count) for symbols in a file or across the project. Use to identify complex code before refactoring. For historical trends use get_complexity_trend instead. Read-only. Returns JSON: { symbols: [{ symbol_id, name, kind, file, line, cyclomatic, max_nesting, param_count }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       file_path: z
         .string()
@@ -569,8 +563,9 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .enum(['cyclomatic', 'nesting', 'params'])
         .optional()
         .describe('Sort by metric (default: cyclomatic)'),
+      output_format: OutputFormatSchema,
     },
-    async ({ file_path, min_cyclomatic, limit: lim, sort_by }) => {
+    async ({ file_path, min_cyclomatic, limit: lim, sort_by, output_format }) => {
       if (file_path) {
         const blocked = guardPath(file_path);
         if (blocked) return blocked;
@@ -603,7 +598,9 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
       `)
         .all(...params);
 
-      return { content: [{ type: 'text', text: j({ symbols: rows, total: rows.length }) }] };
+      const payload = { symbols: rows, total: rows.length };
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
+      return { content: [{ type: 'text', text: encodeResponse(payload, fmt) }] };
     },
   );
 

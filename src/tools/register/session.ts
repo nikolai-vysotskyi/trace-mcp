@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from './_zod-helpers.js';
+import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
 import { AnalyticsStore } from '../../analytics/analytics-store.js';
 import { formatBenchmarkMarkdown, runBenchmark } from '../../analytics/benchmark.js';
 import { analyzeRealSavings } from '../../analytics/real-savings.js';
@@ -572,7 +573,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
 
   server.tool(
     'analyze_perf',
-    'Per-tool latency telemetry: p50/p95/max, count, error_rate. Default reads the current session ring; `window=1h|24h|7d|all` reads from ~/.trace-mcp/telemetry.db (requires telemetry.enabled in config). Sorted by p95 descending so the slowest tools surface first. Read-only. Returns JSON: { tools: [{ tool, p50, p95, max, count, errors, error_rate }], total_tools, source }.',
+    'Per-tool latency telemetry: p50/p95/max, count, error_rate. Default reads the current session ring; `window=1h|24h|7d|all` reads from ~/.trace-mcp/telemetry.db (requires telemetry.enabled in config). Sorted by p95 descending so the slowest tools surface first. Read-only. Returns JSON: { tools: [{ tool, p50, p95, max, count, errors, error_rate }], total_tools, source }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       top: z
         .number()
@@ -588,43 +589,33 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         .describe(
           'Time window. "session" (default) uses the in-memory ring. "1h"/"24h"/"7d"/"all" read from the persistent telemetry DB.',
         ),
+      output_format: OutputFormatSchema,
     },
-    async ({ top, tool, window }) => {
+    async ({ top, tool, window, output_format }) => {
       const limit = top ?? 20;
       const useSink = window && window !== 'session';
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
 
       if (useSink) {
         const sink = ctx.telemetrySink;
         if (!sink) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: j({
-                  tools: [],
-                  total_tools: 0,
-                  source: 'persistent',
-                  error:
-                    'Persistent telemetry is disabled. Set telemetry.enabled = true in config.jsonc and restart the server to enable cross-session analysis.',
-                }),
-              },
-            ],
+          const payload = {
+            tools: [],
+            total_tools: 0,
+            source: 'persistent',
+            error:
+              'Persistent telemetry is disabled. Set telemetry.enabled = true in config.jsonc and restart the server to enable cross-session analysis.',
           };
+          return { content: [{ type: 'text', text: encodeResponse(payload, fmt) }] };
         }
         const stats = sink.getStats(window, tool);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: j({
-                tools: stats.slice(0, limit),
-                total_tools: stats.length,
-                source: 'persistent',
-                window,
-              }),
-            },
-          ],
+        const payload = {
+          tools: stats.slice(0, limit),
+          total_tools: stats.length,
+          source: 'persistent',
+          window,
         };
+        return { content: [{ type: 'text', text: encodeResponse(payload, fmt) }] };
       }
 
       const all = savings.getLatencyPerTool();
@@ -634,18 +625,12 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       }
       entries.sort((a, b) => b.p95 - a.p95);
       const sliced = entries.slice(0, limit);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: j({
-              tools: sliced,
-              total_tools: entries.length,
-              source: 'session_ring',
-            }),
-          },
-        ],
+      const payload = {
+        tools: sliced,
+        total_tools: entries.length,
+        source: 'session_ring',
       };
+      return { content: [{ type: 'text', text: encodeResponse(payload, fmt) }] };
     },
   );
 
