@@ -22,6 +22,17 @@ export interface OtlpSinkOptions {
   maxBatchSize?: number;
   /** Auto-flush every N ms regardless of buffer size. Default 5000. */
   flushIntervalMs?: number;
+  /**
+   * Maximum number of buffered spans before the oldest are dropped. Bounds
+   * memory growth when the export endpoint is unreachable or slow. Default 5000.
+   */
+  maxQueuedSpans?: number;
+  /**
+   * Per-request timeout in milliseconds. Wraps `fetchImpl` with an
+   * AbortController so a hung server can't pin memory forever. Default 10000.
+   * Set to 0 to disable.
+   */
+  requestTimeoutMs?: number;
   /** Override the fetch implementation (test seam). */
   fetchImpl?: typeof fetch;
   /** Surface export failures. Default: swallow silently. */
@@ -37,11 +48,29 @@ interface PendingSpan {
 }
 
 /**
+ * Error sentinel emitted when the queue cap is exceeded and oldest spans are
+ * dropped. The `dropped` flag lets `onError` consumers rate-limit warnings.
+ */
+export class OtlpQueueOverflowError extends Error {
+  readonly dropped = true;
+  constructor(
+    readonly droppedCount: number,
+    readonly queueCap: number,
+  ) {
+    super(`OTLP queue overflow: dropped ${droppedCount} oldest span(s) (cap=${queueCap})`);
+    this.name = 'OtlpQueueOverflowError';
+  }
+}
+
+/**
  * Emits spans to an OTLP/HTTP JSON endpoint (default
  * http://localhost:4318/v1/traces). Buffers in memory and flushes either
  * when `maxBatchSize` is reached, after `flushIntervalMs`, or on explicit
  * flush/shutdown.
  */
+/** Minimum gap between back-to-back queue-overflow warnings, in ms. */
+const DROP_WARN_INTERVAL_MS = 60_000;
+
 export class OtlpSink implements TelemetrySink {
   readonly name = 'otlp';
   private readonly endpoint: string;
@@ -49,12 +78,20 @@ export class OtlpSink implements TelemetrySink {
   private readonly serviceName: string;
   private readonly maxBatchSize: number;
   private readonly flushIntervalMs: number;
+  private readonly maxQueuedSpans: number;
+  private readonly requestTimeoutMs: number;
   private readonly fetchImpl: typeof fetch;
   private readonly onError: (err: unknown) => void;
   private readonly nowMs: () => number;
   private readonly buffer: PendingSpan[] = [];
   private timer: NodeJS.Timeout | undefined;
   private stopped = false;
+  private flushing = false;
+  private inflight: Promise<void> | undefined;
+  private droppedSinceLastWarn = 0;
+  // Negative-infinity sentinel: first overflow always emits a warning, then
+  // subsequent ones are coalesced within DROP_WARN_INTERVAL_MS.
+  private lastDropWarnMs = Number.NEGATIVE_INFINITY;
 
   constructor(opts: OtlpSinkOptions) {
     this.endpoint = opts.endpoint;
@@ -62,6 +99,8 @@ export class OtlpSink implements TelemetrySink {
     this.serviceName = opts.serviceName ?? 'trace-mcp';
     this.maxBatchSize = Math.max(1, opts.maxBatchSize ?? 50);
     this.flushIntervalMs = Math.max(0, opts.flushIntervalMs ?? 5000);
+    this.maxQueuedSpans = Math.max(1, opts.maxQueuedSpans ?? 5000);
+    this.requestTimeoutMs = Math.max(0, opts.requestTimeoutMs ?? 10_000);
     this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
     this.onError = opts.onError ?? (() => {});
     this.nowMs = opts.nowMs ?? Date.now;
@@ -72,6 +111,11 @@ export class OtlpSink implements TelemetrySink {
       // Don't keep the process alive just to flush an empty buffer.
       if (typeof this.timer.unref === 'function') this.timer.unref();
     }
+  }
+
+  /** Current buffered-span count. Exposed for diagnostics + tests. */
+  getBufferSize(): number {
+    return this.buffer.length;
   }
 
   startSpan(name: string, attributes?: Attributes): Span {
@@ -96,27 +140,64 @@ export class OtlpSink implements TelemetrySink {
       traceIdHex: hex(16),
       spanIdHex: hex(8),
     });
+    if (this.buffer.length > this.maxQueuedSpans) {
+      const overflow = this.buffer.length - this.maxQueuedSpans;
+      this.buffer.splice(0, overflow);
+      this.recordDrops(overflow);
+    }
     if (this.buffer.length >= this.maxBatchSize) {
       void this.flush().catch((e) => this.onError(e));
     }
   }
 
+  /** Rate-limited overflow warning. Coalesces drops within DROP_WARN_INTERVAL_MS. */
+  private recordDrops(count: number): void {
+    this.droppedSinceLastWarn += count;
+    const now = this.nowMs();
+    if (now - this.lastDropWarnMs >= DROP_WARN_INTERVAL_MS) {
+      this.lastDropWarnMs = now;
+      const total = this.droppedSinceLastWarn;
+      this.droppedSinceLastWarn = 0;
+      this.onError(new OtlpQueueOverflowError(total, this.maxQueuedSpans));
+    }
+  }
+
   async flush(): Promise<void> {
+    // In-flight guard: a single fetch is allowed at a time. Concurrent callers
+    // (timer + overflow trigger) get the already-running flush so they can
+    // still await completion without double-firing a fetch.
+    if (this.flushing && this.inflight) return this.inflight;
     if (this.buffer.length === 0) return;
+    this.flushing = true;
     const batch = this.buffer.splice(0, this.buffer.length);
     const payload = this.encode(batch);
-    try {
-      const res = await this.fetchImpl(this.endpoint, {
-        method: 'POST',
-        headers: this.headers,
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        this.onError(new Error(`OTLP export failed: HTTP ${res.status}`));
+    const controller = this.requestTimeoutMs > 0 ? new AbortController() : undefined;
+    const timer =
+      this.requestTimeoutMs > 0 && controller
+        ? setTimeout(() => controller.abort(), this.requestTimeoutMs)
+        : undefined;
+    if (timer && typeof timer.unref === 'function') timer.unref();
+    const run = (async () => {
+      try {
+        const res = await this.fetchImpl(this.endpoint, {
+          method: 'POST',
+          headers: this.headers,
+          body: JSON.stringify(payload),
+          signal: controller?.signal,
+        });
+        if (!res.ok) {
+          this.onError(new Error(`OTLP export failed: HTTP ${res.status}`));
+        }
+      } catch (err) {
+        this.onError(err);
+      } finally {
+        if (timer) clearTimeout(timer);
+        this.flushing = false;
+        this.inflight = undefined;
       }
-    } catch (err) {
-      this.onError(err);
-    }
+    })();
+    this.inflight = run;
+    return run;
   }
 
   async shutdown(): Promise<void> {
@@ -124,6 +205,11 @@ export class OtlpSink implements TelemetrySink {
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = undefined;
+    }
+    // Drain any in-flight fetch first so a follow-up flush() sees the buffer
+    // that arrived after the in-flight batch was already spliced out.
+    if (this.inflight) {
+      await this.inflight.catch(() => {});
     }
     await this.flush();
   }

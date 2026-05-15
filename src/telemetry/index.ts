@@ -25,11 +25,19 @@ export interface ObservabilityConfig {
     endpoint?: string;
     headers?: Record<string, string>;
     serviceName?: string;
+    /** Cap on buffered spans before oldest are dropped. Default 5000. */
+    maxQueuedSpans?: number;
+    /** Per-request timeout (ms). Default 10000. 0 disables. */
+    requestTimeoutMs?: number;
   };
   langfuse?: {
     endpoint?: string;
     publicKey?: string;
     secretKey?: string;
+    /** Cap on buffered ingestion events before oldest are dropped. Default 10000. */
+    maxQueuedEvents?: number;
+    /** Per-request timeout (ms). Default 10000. 0 disables. */
+    requestTimeoutMs?: number;
   };
 }
 
@@ -69,6 +77,8 @@ export async function createTelemetrySink(
           endpoint: otlpEndpoint,
           headers: cfg.otlp?.headers,
           serviceName: cfg.otlp?.serviceName ?? 'trace-mcp',
+          maxQueuedSpans: cfg.otlp?.maxQueuedSpans,
+          requestTimeoutMs: cfg.otlp?.requestTimeoutMs,
           onError: (e) => logger.warn({ err: e }, 'telemetry.otlp_export_failed'),
         }),
       );
@@ -87,6 +97,8 @@ export async function createTelemetrySink(
             endpoint: endpoint ?? 'https://cloud.langfuse.com',
             publicKey,
             secretKey,
+            maxQueuedEvents: cfg.langfuse?.maxQueuedEvents,
+            requestTimeoutMs: cfg.langfuse?.requestTimeoutMs,
             onError: (e) => logger.warn({ err: e }, 'telemetry.langfuse_export_failed'),
           }),
         );

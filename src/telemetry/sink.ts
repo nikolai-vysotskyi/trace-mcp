@@ -117,6 +117,13 @@ class MultiSpan implements Span {
 }
 
 /**
+ * Maximum events retained on a single `RecordingSpan`. Long-lived spans that
+ * accumulate errors (e.g. a streaming generate that retries) would otherwise
+ * grow without bound. Drop oldest on overflow.
+ */
+export const MAX_SPAN_EVENTS = 100;
+
+/**
  * Common in-memory span used by HTTP-based sinks. Tracks start/end time,
  * attributes, events, and status. Calls `onEnd` exactly once when the
  * span is finalised so the sink can enqueue it for export.
@@ -129,16 +136,27 @@ export class RecordingSpan implements Span {
   readonly attributes: Attributes = {};
   readonly events: Array<{ name: string; timeMs: number; attributes?: Attributes }> = [];
   status: { code: 'ok' | 'error'; message?: string } = { code: 'ok' };
+  /** Total events dropped from this span due to the per-span cap. */
+  droppedEvents = 0;
   private ended = false;
+  private dropWarned = false;
+  private readonly maxEvents: number;
+  private readonly onDrop: ((span: RecordingSpan, droppedCount: number) => void) | undefined;
 
   constructor(
     name: string,
     initialAttrs: Attributes | undefined,
     private readonly onEnd: (span: RecordingSpan) => void,
+    opts?: {
+      maxEvents?: number;
+      onDrop?: (span: RecordingSpan, droppedCount: number) => void;
+    },
   ) {
     this.id = randomUUID();
     this.name = name;
     this.startTimeMs = Date.now();
+    this.maxEvents = Math.max(1, opts?.maxEvents ?? MAX_SPAN_EVENTS);
+    this.onDrop = opts?.onDrop;
     if (initialAttrs) this.setAttributes(initialAttrs);
   }
 
@@ -150,12 +168,25 @@ export class RecordingSpan implements Span {
     if (this.ended) return;
     for (const [k, v] of Object.entries(attrs)) this.attributes[k] = v;
   }
+  /** Append an event, dropping the oldest entry once the per-span cap is hit. */
+  private pushEvent(event: { name: string; timeMs: number; attributes?: Attributes }): void {
+    this.events.push(event);
+    if (this.events.length > this.maxEvents) {
+      const overflow = this.events.length - this.maxEvents;
+      this.events.splice(0, overflow);
+      this.droppedEvents += overflow;
+      if (!this.dropWarned) {
+        this.dropWarned = true;
+        if (this.onDrop) this.onDrop(this, overflow);
+      }
+    }
+  }
   recordError(err: unknown): void {
     if (this.ended) return;
     const message = err instanceof Error ? err.message : String(err);
     const type = err instanceof Error ? err.name : 'Error';
     const stack = err instanceof Error && err.stack ? err.stack : undefined;
-    this.events.push({
+    this.pushEvent({
       name: 'exception',
       timeMs: Date.now(),
       attributes: {
