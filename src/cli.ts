@@ -84,6 +84,8 @@ import {
 } from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
+import { resolveProjectForMcpRequest } from './daemon/mcp-project-router.js';
+import { teardownProjectBookkeeping as teardownProjectBookkeepingImpl } from './daemon/project-bookkeeping.js';
 import { handleAskSessionsRequest } from './api/ask-sessions-routes.js';
 import { handleDashboardRequest } from './api/dashboard-routes.js';
 import { handleJournalStatsRequest, type JournalStatsContext } from './api/journal-stats-routes.js';
@@ -497,11 +499,17 @@ program
       }
     }
 
-    // Subscribe to progress updates from all managed projects
-    const progressUnsubscribers: (() => void)[] = [];
+    // Subscribe to progress updates from all managed projects.
+    // Keyed by project root so removeProject() can tear down the listener
+    // (it otherwise pins the project's ProgressState — and through the
+    // listener closure, broadcastEvent + project root — forever).
+    const progressUnsubscribers = new Map<string, () => void>();
     function subscribeToProjectProgress(root: string): void {
       const managed = projectManager.getProject(root);
       if (!managed) return;
+      // Defensive: drop any prior listener for this root before replacing it
+      // (re-add of the same project must not double-subscribe).
+      progressUnsubscribers.get(root)?.();
       const unsub = managed.progress.onUpdate((pipeline, progress) => {
         broadcastEvent({
           type: 'indexing_progress',
@@ -512,7 +520,28 @@ program
           total: progress.total,
         });
       });
-      progressUnsubscribers.push(unsub);
+      progressUnsubscribers.set(root, unsub);
+    }
+
+    /**
+     * Tear down all daemon-side bookkeeping for a removed project.
+     * Pairs with `subscribeToProjectProgress` / addProject paths.
+     *
+     * Thin wrapper around the unit-tested helper in
+     * `daemon/project-bookkeeping.ts` — the helper owns no globals; cli.ts
+     * passes in the local maps/sets so the same code path is exercised by
+     * both the daemon and the unit tests.
+     */
+    function teardownProjectBookkeeping(root: string): void {
+      teardownProjectBookkeepingImpl(root, {
+        progressUnsubscribers,
+        lastProgressEmittedAt,
+        projectSessions,
+        sessionTransports,
+        sessionHandles,
+        sessionClients,
+        clients,
+      });
     }
 
     // Subscribe to all currently loaded projects
@@ -729,54 +758,78 @@ program
 
       // MCP endpoint — route by session ID, create new session on initialize.
       //
-      // Project resolution rules (in order):
-      //   1. Explicit `?project=` query param wins.
-      //   2. No query param + exactly ONE registered project → use it.
-      //   3. No query param + multiple registered projects → 400, force the
-      //      caller to pick. Previously we fell back to listProjects()[0],
-      //      which silently bound EVERY unattributed session to whichever
-      //      project happened to be registered first — usually surprising
-      //      and the root cause of "all my sessions show <wrong-project>"
-      //      reports.
+      // Project resolution precedence (see daemon/mcp-project-router.ts):
+      //   1. `?project=` query param.
+      //   2. `X-Trace-Project` HTTP header (set by our stdio-proxy as
+      //      belt-and-braces against query-string-stripping intermediaries).
+      //   3. `params._meta["traceMcp/projectRoot"]` in the JSON-RPC body —
+      //      the documented hook for IDE HTTP-MCP integrations.
+      //   4. Initialize body: `clientInfo.name` matched against the
+      //      registered-client tracking table (unique-match only).
+      //   5. Exactly one registered project — use it.
+      //   6. Otherwise: 400 (multi) or 404 (none). NEVER silently fall back
+      //      to listProjects()[0] — that was the pre-58e25a2 bug.
       if (url.pathname === '/mcp') {
         const projects = projectManager.listProjects();
-        let requestedRoot = url.searchParams.get('project') ?? undefined;
-        if (!requestedRoot) {
-          if (projects.length === 1) {
-            requestedRoot = projects[0]?.root;
-          } else if (projects.length === 0) {
-            res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'No projects registered' }));
-            return;
-          } else {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(
-              JSON.stringify({
-                error:
-                  'Multiple projects registered — pass ?project=<absolute-path> on /mcp. ' +
-                  `Registered roots: ${projects.map((p) => p.root).join(', ')}`,
-              }),
-            );
-            return;
+
+        // Parse the POST body upfront — the resolver needs to peek at it
+        // before the multi-project decision.
+        let parsedBody: unknown;
+        if (req.method === 'POST') {
+          try {
+            const body = await collectBody(req);
+            if (body.length > 0) {
+              parsedBody = JSON.parse(body.toString());
+            }
+          } catch {
+            // Malformed body — let the inner transport handler surface a
+            // proper JSON-RPC parse error after project resolution.
           }
         }
-        if (!requestedRoot) {
+
+        const headerHint = req.headers['x-trace-project'];
+        const headerProject = Array.isArray(headerHint) ? headerHint[0] : headerHint;
+
+        const resolution = resolveProjectForMcpRequest({
+          queryProject: url.searchParams.get('project'),
+          headerProject,
+          body: parsedBody,
+          projects,
+          trackedClients: [...clients.values()],
+          isInitializeRequest,
+        });
+
+        if (resolution.kind === 'no-projects') {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'No projects registered' }));
           return;
         }
+        if (resolution.kind === 'ambiguous') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error:
+                'Multiple projects registered — pass ?project=<absolute-path> on /mcp, ' +
+                'set the X-Trace-Project header, or include params._meta["traceMcp/projectRoot"] in the MCP initialize body. ' +
+                `Registered roots: ${resolution.registered.join(', ')}`,
+            }),
+          );
+          return;
+        }
+        if (resolution.via === 'tracked-client') {
+          logger.info(
+            { projectRoot: resolution.projectRoot },
+            'Recovered project from tracked client clientInfo.name',
+          );
+        }
+        const requestedRoot = resolution.projectRoot;
+
         // Resolve subdirectory requests to the registered parent project so we
         // don't spin up a duplicate index per nested package.
         const ancestor = resolveRegisteredAncestor(requestedRoot);
         const projectRoot = ancestor?.root ?? requestedRoot;
 
         try {
-          let parsedBody: unknown;
-          if (req.method === 'POST') {
-            const body = await collectBody(req);
-            parsedBody = JSON.parse(body.toString());
-          }
-
           // Route by session ID for existing sessions
           const sessionId = req.headers['mcp-session-id'] as string | undefined;
           let transport: StreamableHTTPServerTransport | undefined;
@@ -1966,8 +2019,15 @@ program
           return;
         }
         await projectManager.removeProject(projectRoot);
+        // Tear down progress listener, sessions, throttle keys, etc. for
+        // this root BEFORE we emit the status event so listeners on the
+        // SSE bus see a clean state.
+        teardownProjectBookkeeping(projectRoot);
         broadcastEvent({ type: 'project_status', project: projectRoot, status: 'removed' });
-        // Clean up client entries for this project
+        // Clean up any remaining client entries for this project (transport
+        // onclose handlers typically already removed these via the teardown
+        // above; this is a belt-and-braces sweep for stdio-registered clients
+        // that aren't tied to an HTTP session).
         for (const [id, client] of clients) {
           if (client.project === projectRoot) {
             clients.delete(id);
@@ -2397,7 +2457,15 @@ program
       }
       sseConnections.clear();
       // Unsubscribe progress listeners
-      for (const unsub of progressUnsubscribers) unsub();
+      for (const unsub of progressUnsubscribers.values()) {
+        try {
+          unsub();
+        } catch {
+          /* ignore */
+        }
+      }
+      progressUnsubscribers.clear();
+      lastProgressEmittedAt.clear();
       // Dispose all session handles (flush journals, close owned resources)
       for (const h of sessionHandles.values()) {
         h.dispose();
