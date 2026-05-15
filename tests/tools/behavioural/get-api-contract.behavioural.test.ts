@@ -103,7 +103,7 @@ describe('getApiContract() — behavioural contract', () => {
     expect(paths).toEqual(['/users', '/users', 'Query.user']);
   });
 
-  it('contractType filter narrows to matching contracts', () => {
+  it('contractType filter narrows to matching contracts AND scopes endpoints', () => {
     const onlyOpenapi = getApiContract(ctx.store, '/workspace', [], {
       service: 'full-svc',
       contractType: 'openapi',
@@ -111,8 +111,11 @@ describe('getApiContract() — behavioural contract', () => {
 
     expect(onlyOpenapi.contracts).toHaveLength(1);
     expect(onlyOpenapi.contracts[0].type).toBe('openapi');
-    // Endpoint list is NOT filtered by contractType — it lists service endpoints.
-    expect(onlyOpenapi.endpoints.length).toBeGreaterThanOrEqual(2);
+    // Endpoint list must respect the contractType filter — only openapi
+    // endpoints should appear, not the graphql "Query.user" row.
+    const openapiPaths = onlyOpenapi.endpoints.map((e) => e.path).sort();
+    expect(openapiPaths).toEqual(['/users', '/users']);
+    expect(onlyOpenapi.endpoints.some((e) => e.path === 'Query.user')).toBe(false);
 
     const onlyGraphql = getApiContract(ctx.store, '/workspace', [], {
       service: 'full-svc',
@@ -121,6 +124,8 @@ describe('getApiContract() — behavioural contract', () => {
 
     expect(onlyGraphql.contracts).toHaveLength(1);
     expect(onlyGraphql.contracts[0].type).toBe('graphql');
+    // Symmetric: graphql filter must not surface openapi /users endpoints.
+    expect(onlyGraphql.endpoints.map((e) => e.path)).toEqual(['Query.user']);
   });
 
   it('unknown service returns NOT_FOUND with candidates', () => {
