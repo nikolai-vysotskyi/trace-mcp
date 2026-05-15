@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.38.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.37.0...v1.38.0) (2026-05-15)
+
+
+### Features
+
+* **daemon:** memory diagnostics endpoint + AI cancellation + multisink resilience + LocalBackend re-entry guard ([e8f4116](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e8f41167682dcefcafca70dfd5fe468dee7154ae))
+
+
+### Bug Fixes
+
+* **ai:** commit missing src/ai/abort.ts referenced by anthropic/gemini providers ([49922e4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/49922e45a95f8eed65d70ec597342f976f29624d))
+* **indexer:** release tree-sitter Tree WASM heap via tree.delete() in every parse path ([0a85793](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0a857936b6c76f1e8049192fdf78de1b20fd3cf4))
+
+
+### Tests
+
+* **tools:** behavioural coverage for dead-exports, untested-exports, and decision-graph tools ([ebb888c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ebb888cb7debb8a2de0783a0fc52762371f6579b))
+* **tools:** behavioural coverage for misc + framework-aware tools ([61e94a4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61e94a4eac2a1e3dfc01e5328a6ca3e287887502))
+* **tools:** behavioural coverage for planning, intent, and batch tools ([88682ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/88682bad48fedf5fdc10df9d8dc6011acf28f563))
+
 ## [1.37.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.36.1...v1.37.0) (2026-05-15)
 
 
