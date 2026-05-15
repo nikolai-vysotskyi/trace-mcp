@@ -295,7 +295,13 @@ export function getApiContract(
     contracts = contracts.filter((c) => c.contract_type === opts.contractType);
   }
 
-  const endpoints = topoStore.getEndpointsByService(svc.id);
+  const allEndpoints = topoStore.getEndpointsByService(svc.id);
+  // When a contractType filter is applied, endpoints must also be scoped to
+  // the filtered contracts. Otherwise contracts narrow to (e.g.) openapi but
+  // endpoints still include graphql/gRPC rows from the same service.
+  const endpoints = opts.contractType
+    ? allEndpoints.filter((e) => contracts.some((c) => c.id === e.contract_id))
+    : allEndpoints;
   const events = topoStore.getEventsByService(svc.id);
 
   return ok({
