@@ -7,25 +7,12 @@ import { createTestStore } from '../test-utils.js';
 function createTestDb(): { db: Database.Database; store: Store } {
   const store = createTestStore();
   const db = store.db;
-  // Runtime tables
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS runtime_spans (
-      id INTEGER PRIMARY KEY,
-      trace_id INTEGER NOT NULL,
-      span_id TEXT UNIQUE NOT NULL,
-      parent_span_id TEXT,
-      service_name TEXT,
-      operation TEXT,
-      kind TEXT,
-      started_at TEXT,
-      duration_us INTEGER,
-      status_code INTEGER,
-      status_message TEXT,
-      attributes TEXT,
-      mapped_node_id INTEGER,
-      mapping_method TEXT
-    );
-  `);
+  // runtime_spans + runtime_traces are now seeded by the fresh-DB DDL
+  // (see src/db/schema.ts v12 mirror). Insert a parent trace so spans
+  // inserted with trace_id=1 satisfy the FK that ships with the real schema.
+  db.prepare(
+    `INSERT INTO runtime_traces (id, trace_id, started_at) VALUES (1, 'trace-1', datetime('now'))`,
+  ).run();
   return { db, store };
 }
 
