@@ -9,7 +9,7 @@
 import { parentPort } from 'node:worker_threads';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { initContentHasher } from '../util/hash.js';
-import type { ExtractRequest, ExtractResponse } from './extract-pool.js';
+import type { DropProjectMessage, ExtractRequest, ExtractResponse } from './extract-pool.js';
 import { FileExtractor } from './file-extractor.js';
 import type { WorkspaceInfo } from './monorepo.js';
 import { buildProjectContext } from './project-context.js';
@@ -61,7 +61,20 @@ interface InternalRequest extends ExtractRequest {
   id: number;
 }
 
-parentPort.on('message', async (req: InternalRequest) => {
+type InboundMessage = InternalRequest | DropProjectMessage;
+
+parentPort.on('message', async (msg: InboundMessage) => {
+  // Out-of-band control message: drop per-project caches. Workers grow these
+  // monotonically across the daemon's lifetime otherwise; long-running
+  // deployments with project churn would slowly accumulate stale
+  // FileExtractor + ProjectContext entries in worker RSS.
+  if ('kind' in msg && msg.kind === 'drop_project') {
+    extractorByRoot.delete(msg.rootPath);
+    projectContextByRoot.delete(msg.rootPath);
+    return;
+  }
+
+  const req = msg as InternalRequest;
   let result: ExtractResponse;
   try {
     await initContentHasher();

@@ -18,6 +18,7 @@ import { IndexingPipeline } from '../indexer/pipeline.js';
 import { clearProjectReindexCache } from '../indexer/recent-reindex-cache.js';
 import { FileWatcher } from '../indexer/watcher.js';
 import { logger } from '../logger.js';
+import { SqliteTaskCache } from '../pipeline/index.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { clearServerPid, ProgressState, writeServerPid } from '../progress.js';
 import { detectGitWorktree } from '../project-root.js';
@@ -153,8 +154,14 @@ export class ProjectManager {
     this.ensureShared(config);
 
     const progress = new ProgressState(db);
+    // Daemon path: use the SQLite-backed task cache so pass outputs persist on
+    // disk and never accumulate in the long-running daemon's heap. The
+    // pipeline never owns this cache — the project's `db` does, and is
+    // closed by `stopProject()`.
+    const taskCache = new SqliteTaskCache(db);
     const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress, {
       extractPool: this.sharedPool,
+      taskCache,
     });
     const watcher = new FileWatcher();
 
@@ -342,9 +349,31 @@ export class ProjectManager {
     clearServerPid(managed.db);
     managed.serverHandle.dispose();
     await managed.server.close();
+    // Dispose the pipeline before the DB closes. With an injected SQLite task
+    // cache the dispose call is mostly a no-op (the cache belongs to `db`),
+    // but for any per-pipeline in-memory state the call drops references so
+    // the heap can shrink between project lifecycles.
+    try {
+      await managed.pipeline.dispose();
+    } catch (err) {
+      logger.warn(
+        { error: err, projectRoot: root },
+        'pipeline.dispose() failed during stopProject',
+      );
+    }
     managed.db.close();
     this.projects.delete(root);
     clearProjectReindexCache(root);
+    // Evict per-project caches living inside the shared worker pool
+    // (FileExtractor + parsed ProjectContext keyed by rootPath). The pool
+    // itself stays warm; only the now-stale per-project entries are dropped.
+    // The pipeline's rootPath matches the `root` key — workers see this
+    // exact string in `req.rootPath`.
+    try {
+      this.sharedPool?.dropProject(root);
+    } catch (err) {
+      logger.warn({ error: err, projectRoot: root }, 'sharedPool.dropProject failed (non-fatal)');
+    }
   }
 
   /** Stop a project AND drop it from the persistent registry. */

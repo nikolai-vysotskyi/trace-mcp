@@ -20,6 +20,7 @@ import { IndexingPipeline } from '../../indexer/pipeline.js';
 import { FileWatcher } from '../../indexer/watcher.js';
 import { logger } from '../../logger.js';
 import { DecisionStore } from '../../memory/decision-store.js';
+import { SqliteTaskCache } from '../../pipeline/index.js';
 import { PluginRegistry } from '../../plugin-api/registry.js';
 import { clearServerPid, ProgressState, writeServerPid } from '../../progress.js';
 import { createServer, type ServerHandle } from '../../server/server.js';
@@ -93,13 +94,15 @@ export class LocalBackend implements Backend {
       keepAlive: true,
       size: config.indexer?.workers,
     });
+    // Daemon-style long-lived process: use the SQLite-backed task cache so
+    // pass outputs persist on disk rather than accumulating in resident set.
     this.pipeline = new IndexingPipeline(
       this.store,
       this.registry,
       config,
       projectRoot,
       this.progress,
-      { extractPool: this.extractPool },
+      { extractPool: this.extractPool, taskCache: new SqliteTaskCache(this.db) },
     );
     this.watcher = new FileWatcher();
 
@@ -293,6 +296,14 @@ export class LocalBackend implements Backend {
         if (this.decisionStore) this.decisionStore.close();
       } catch {
         /* best-effort */
+      }
+      try {
+        // Dispose the pipeline before the DB closes. With an injected SQLite
+        // task cache this is mostly a no-op, but it drops any per-pipeline
+        // in-memory references so the heap can shrink between sessions.
+        if (this.pipeline) await this.pipeline.dispose();
+      } catch (err) {
+        logger.warn({ error: err }, 'pipeline.dispose() failed during LocalBackend stop');
       }
       try {
         if (this.extractPool) await this.extractPool.terminate();

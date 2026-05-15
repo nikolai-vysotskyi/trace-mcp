@@ -5,6 +5,12 @@
 export { TaskDag, defineTask } from './task.js';
 export type { Task, TaskStepSummary, TaskComposeSummary } from './task.js';
 export {
+  InMemoryTaskCache,
+  SqliteTaskCache,
+  DEFAULT_IN_MEMORY_TASK_CACHE_CAPACITY,
+} from './cache.js';
+export type { TaskCache } from './cache.js';
+export {
   createIndexEnvTask,
   INDEX_ENV_TASK_NAME,
   type IndexEnvTaskInput,
