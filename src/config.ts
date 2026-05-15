@@ -238,6 +238,12 @@ const TelemetryObservabilitySchema = z
         endpoint: z.string().default('http://localhost:4318/v1/traces'),
         headers: z.record(z.string(), z.string()).default({}),
         serviceName: z.string().default('trace-mcp'),
+        /** Cap on buffered spans before oldest are dropped. Bounds memory growth
+         *  when the export endpoint is unreachable. Default 5000. */
+        maxQueuedSpans: z.number().int().min(1).max(1_000_000).default(5_000),
+        /** Per-request timeout (ms). Wraps fetch with AbortController so a hung
+         *  endpoint can't pin memory. Default 10000. Set 0 to disable. */
+        requestTimeoutMs: z.number().int().min(0).max(600_000).default(10_000),
       })
       .prefault({}),
     /** Langfuse public ingestion settings — used when `sink` is `langfuse` or `multi`. */
@@ -246,6 +252,12 @@ const TelemetryObservabilitySchema = z
         endpoint: z.string().default('https://cloud.langfuse.com'),
         publicKey: z.string().optional(),
         secretKey: z.string().optional(),
+        /** Cap on buffered ingestion events before oldest are dropped. Each span
+         *  emits 2 events (create + update), so effective span capacity is ~half.
+         *  Default 10000. */
+        maxQueuedEvents: z.number().int().min(2).max(1_000_000).default(10_000),
+        /** Per-request timeout (ms). Default 10000. Set 0 to disable. */
+        requestTimeoutMs: z.number().int().min(0).max(600_000).default(10_000),
       })
       .prefault({}),
   })

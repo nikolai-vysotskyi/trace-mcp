@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LangfuseSink } from '../langfuse.js';
+import { LangfuseSink, LangfuseQueueOverflowError } from '../langfuse.js';
 
 function makeFetchSpy(): {
   fetchImpl: typeof fetch;
@@ -113,5 +113,167 @@ describe('LangfuseSink', () => {
     expect(ev).toBeDefined();
     expect(ev!.body.name).toBe('cache.miss');
     expect(ev!.body.metadata).toEqual({ 'cache.key': 'abc' });
+  });
+
+  it('caps buffer when endpoint never responds (hung fetch)', async () => {
+    const fetchImpl = vi.fn(
+      async (_url: unknown, init?: RequestInit): Promise<Response> =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (signal) {
+            signal.addEventListener('abort', () => reject(new Error('aborted')));
+          }
+        }),
+    ) as unknown as typeof fetch;
+
+    const errors: unknown[] = [];
+    const sink = new LangfuseSink({
+      endpoint: 'https://cloud.langfuse.com',
+      publicKey: 'pk',
+      secretKey: 'sk',
+      fetchImpl,
+      maxBatchSize: 1_000_000,
+      flushIntervalMs: 0,
+      maxQueuedEvents: 50,
+      requestTimeoutMs: 0,
+      onError: (e) => errors.push(e),
+    });
+
+    // 200 spans → 400 events, hard-capped to 50.
+    for (let i = 0; i < 200; i++) {
+      sink.startSpan(`s${i}`).end();
+    }
+    expect(sink.getBufferSize()).toBe(50);
+    expect(errors.some((e) => e instanceof LangfuseQueueOverflowError)).toBe(true);
+  });
+
+  it('caps buffer when endpoint returns 500', async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response('boom', { status: 500 }),
+    ) as unknown as typeof fetch;
+    const errors: unknown[] = [];
+    const sink = new LangfuseSink({
+      endpoint: 'https://cloud.langfuse.com',
+      publicKey: 'pk',
+      secretKey: 'sk',
+      fetchImpl,
+      maxBatchSize: 10_000, // never auto-flush
+      flushIntervalMs: 0,
+      maxQueuedEvents: 40,
+      requestTimeoutMs: 0,
+      onError: (e) => errors.push(e),
+    });
+    for (let i = 0; i < 100; i++) {
+      sink.startSpan(`x${i}`).end();
+    }
+    expect(sink.getBufferSize()).toBe(40);
+    expect(errors.some((e) => e instanceof LangfuseQueueOverflowError)).toBe(true);
+    await sink.shutdown();
+  });
+
+  it('single concurrent flush: parallel triggers share one fetch', async () => {
+    const resolvers: Array<(res: Response) => void> = [];
+    const fetchImpl = vi.fn(
+      async () =>
+        new Promise<Response>((res) => {
+          resolvers.push(res);
+        }),
+    ) as unknown as typeof fetch;
+    const mockCalls = (fetchImpl as unknown as { mock: { calls: unknown[] } }).mock.calls;
+
+    const sink = new LangfuseSink({
+      endpoint: 'https://cloud.langfuse.com',
+      publicKey: 'pk',
+      secretKey: 'sk',
+      fetchImpl,
+      maxBatchSize: 1_000,
+      flushIntervalMs: 0,
+      requestTimeoutMs: 0,
+    });
+
+    sink.startSpan('a').end();
+    const p1 = sink.flush();
+    const p2 = sink.flush();
+    sink.startSpan('b').end();
+    const p3 = sink.flush();
+
+    expect(mockCalls.length).toBe(1);
+    resolvers[0]!(new Response('{}', { status: 200 }));
+    await Promise.all([p1, p2, p3]);
+
+    // "b" span (2 events) still buffered.
+    expect(sink.getBufferSize()).toBe(2);
+    const p4 = sink.flush();
+    expect(mockCalls.length).toBe(2);
+    resolvers[1]!(new Response('{}', { status: 200 }));
+    await p4;
+    expect(sink.getBufferSize()).toBe(0);
+  });
+
+  it('requestTimeoutMs aborts a hung fetch', async () => {
+    vi.useFakeTimers();
+    try {
+      const aborts: unknown[] = [];
+      const fetchImpl = vi.fn(
+        async (_url: unknown, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            const signal = init?.signal;
+            if (signal) {
+              signal.addEventListener('abort', () => {
+                aborts.push('abort');
+                reject(new Error('aborted'));
+              });
+            }
+          }),
+      ) as unknown as typeof fetch;
+      const errors: unknown[] = [];
+      const sink = new LangfuseSink({
+        endpoint: 'https://cloud.langfuse.com',
+        publicKey: 'pk',
+        secretKey: 'sk',
+        fetchImpl,
+        maxBatchSize: 1, // triggers flush after first event
+        flushIntervalMs: 0,
+        requestTimeoutMs: 100,
+        onError: (e) => errors.push(e),
+      });
+      sink.emit('cache.miss');
+      await vi.advanceTimersByTimeAsync(150);
+      expect(aborts.length).toBe(1);
+      expect(errors.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rate-limits queue overflow warnings (one warn per 60s)', async () => {
+    let now = 0;
+    const errors: unknown[] = [];
+    const fetchImpl = vi.fn(
+      async () => new Response('{}', { status: 200 }),
+    ) as unknown as typeof fetch;
+    const sink = new LangfuseSink({
+      endpoint: 'https://cloud.langfuse.com',
+      publicKey: 'pk',
+      secretKey: 'sk',
+      fetchImpl,
+      maxBatchSize: 10_000, // never auto-flush
+      flushIntervalMs: 0,
+      maxQueuedEvents: 10,
+      requestTimeoutMs: 0,
+      nowMs: () => now,
+      onError: (e) => errors.push(e),
+    });
+
+    for (let i = 0; i < 50; i++) sink.startSpan(`a${i}`).end();
+    expect(errors.filter((e) => e instanceof LangfuseQueueOverflowError).length).toBe(1);
+
+    now = 30_000;
+    for (let i = 0; i < 50; i++) sink.startSpan(`b${i}`).end();
+    expect(errors.filter((e) => e instanceof LangfuseQueueOverflowError).length).toBe(1);
+
+    now = 70_000;
+    for (let i = 0; i < 50; i++) sink.startSpan(`c${i}`).end();
+    expect(errors.filter((e) => e instanceof LangfuseQueueOverflowError).length).toBe(2);
   });
 });

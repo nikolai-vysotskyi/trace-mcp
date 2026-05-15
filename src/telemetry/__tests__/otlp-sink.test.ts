@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { OtlpSink } from '../otlp.js';
+import { OtlpSink, OtlpQueueOverflowError } from '../otlp.js';
 
 function makeFetchSpy(): {
   fetchImpl: typeof fetch;
@@ -181,5 +181,170 @@ describe('OtlpSink', () => {
     expect(calls.length).toBe(1);
     await sink.shutdown(); // no-op second call
     expect(calls.length).toBe(1);
+  });
+
+  it('caps buffer when endpoint never responds (hung fetch)', async () => {
+    // Hung fetch: never resolves and never rejects until aborted.
+    const fetchImpl = vi.fn(
+      async (_url: unknown, init?: RequestInit): Promise<Response> =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (signal) {
+            signal.addEventListener('abort', () => reject(new Error('aborted')));
+          }
+        }),
+    ) as unknown as typeof fetch;
+
+    const errors: unknown[] = [];
+    const sink = new OtlpSink({
+      endpoint: 'http://localhost:4318/v1/traces',
+      fetchImpl,
+      maxBatchSize: 1_000_000, // never trigger overflow-flush
+      flushIntervalMs: 0,
+      maxQueuedSpans: 50,
+      requestTimeoutMs: 0, // don't auto-abort during the test
+      onError: (e) => errors.push(e),
+    });
+
+    for (let i = 0; i < 500; i++) {
+      sink.startSpan(`s${i}`).end();
+    }
+
+    expect(sink.getBufferSize()).toBe(50);
+    expect(errors.some((e) => e instanceof OtlpQueueOverflowError)).toBe(true);
+  });
+
+  it('caps buffer when endpoint returns 500', async () => {
+    // Endpoint always 500s. With maxBatchSize > maxQueuedSpans, every enqueue
+    // path is the overflow drop path.
+    const fetchImpl = vi.fn(
+      async () => new Response('boom', { status: 500 }),
+    ) as unknown as typeof fetch;
+    const errors: unknown[] = [];
+    const sink = new OtlpSink({
+      endpoint: 'http://localhost:4318/v1/traces',
+      fetchImpl,
+      maxBatchSize: 10_000, // never auto-flush
+      flushIntervalMs: 0,
+      maxQueuedSpans: 25,
+      requestTimeoutMs: 0,
+      onError: (e) => errors.push(e),
+    });
+    for (let i = 0; i < 200; i++) {
+      sink.startSpan(`x${i}`).end();
+    }
+    expect(sink.getBufferSize()).toBe(25);
+    expect(errors.some((e) => e instanceof OtlpQueueOverflowError)).toBe(true);
+    await sink.shutdown();
+  });
+
+  it('single concurrent flush: parallel triggers share one fetch', async () => {
+    const resolvers: Array<(res: Response) => void> = [];
+    const fetchImpl = vi.fn(
+      async () =>
+        new Promise<Response>((res) => {
+          resolvers.push(res);
+        }),
+    ) as unknown as typeof fetch;
+    const mockCalls = (fetchImpl as unknown as { mock: { calls: unknown[] } }).mock.calls;
+
+    const sink = new OtlpSink({
+      endpoint: 'http://localhost:4318/v1/traces',
+      fetchImpl,
+      maxBatchSize: 100,
+      flushIntervalMs: 0,
+      requestTimeoutMs: 0,
+    });
+
+    sink.startSpan('a').end();
+    const p1 = sink.flush();
+    const p2 = sink.flush(); // should not start a new fetch
+    sink.startSpan('b').end();
+    const p3 = sink.flush(); // still inside the in-flight guard
+
+    // Exactly one fetch call so far — the guard collapsed all three.
+    expect(mockCalls.length).toBe(1);
+
+    // Release the in-flight fetch and let all three flush promises settle.
+    resolvers[0]!(new Response('{}', { status: 200 }));
+    await Promise.all([p1, p2, p3]);
+
+    // "b" span is still buffered; one more flush picks it up.
+    expect(sink.getBufferSize()).toBe(1);
+    const p4 = sink.flush();
+    expect(mockCalls.length).toBe(2);
+    resolvers[1]!(new Response('{}', { status: 200 }));
+    await p4;
+    expect(sink.getBufferSize()).toBe(0);
+  });
+
+  it('requestTimeoutMs aborts a hung fetch', async () => {
+    vi.useFakeTimers();
+    try {
+      const aborts: unknown[] = [];
+      const fetchImpl = vi.fn(
+        async (_url: unknown, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            const signal = init?.signal;
+            if (signal) {
+              signal.addEventListener('abort', () => {
+                aborts.push('abort');
+                reject(new Error('aborted'));
+              });
+            }
+          }),
+      ) as unknown as typeof fetch;
+      const errors: unknown[] = [];
+      const sink = new OtlpSink({
+        endpoint: 'http://localhost:4318/v1/traces',
+        fetchImpl,
+        maxBatchSize: 1,
+        flushIntervalMs: 0,
+        requestTimeoutMs: 100,
+        onError: (e) => errors.push(e),
+      });
+      sink.startSpan('a').end();
+      // Advance fake clock past the timeout; the abort listener will reject.
+      await vi.advanceTimersByTimeAsync(150);
+      expect(aborts.length).toBe(1);
+      expect(errors.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rate-limits queue overflow warnings (one warn per 60s)', async () => {
+    let now = 0;
+    const errors: unknown[] = [];
+    const fetchImpl = vi.fn(
+      async () => new Response('{}', { status: 200 }),
+    ) as unknown as typeof fetch;
+    const sink = new OtlpSink({
+      endpoint: 'http://localhost:4318/v1/traces',
+      fetchImpl,
+      maxBatchSize: 10_000, // never auto-flush
+      flushIntervalMs: 0,
+      maxQueuedSpans: 10,
+      requestTimeoutMs: 0,
+      nowMs: () => now,
+      onError: (e) => errors.push(e),
+    });
+
+    // Burst 1 — at t=0 — produces the first overflow warning.
+    for (let i = 0; i < 50; i++) sink.startSpan(`a${i}`).end();
+    const overflows1 = errors.filter((e) => e instanceof OtlpQueueOverflowError).length;
+    expect(overflows1).toBe(1);
+
+    // Burst 2 — still within the 60s window — no extra warning.
+    now = 30_000;
+    for (let i = 0; i < 50; i++) sink.startSpan(`b${i}`).end();
+    const overflows2 = errors.filter((e) => e instanceof OtlpQueueOverflowError).length;
+    expect(overflows2).toBe(1);
+
+    // Burst 3 — past the 60s window — emits a second warning.
+    now = 70_000;
+    for (let i = 0; i < 50; i++) sink.startSpan(`c${i}`).end();
+    const overflows3 = errors.filter((e) => e instanceof OtlpQueueOverflowError).length;
+    expect(overflows3).toBe(2);
   });
 });
