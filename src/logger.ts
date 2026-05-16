@@ -13,9 +13,7 @@ export const logger = pino(
   process.stderr,
 );
 
-/**
- * Resolve ~ in paths to the user's home directory.
- */
+// Resolve ~ in paths to the user's home directory.
 function expandHome(p: string): string {
   if (p.startsWith('~/') || p === '~') {
     return path.join(os.homedir(), p.slice(1));
@@ -23,27 +21,24 @@ function expandHome(p: string): string {
   return p;
 }
 
-/**
- * Rotate the log file if it exceeds maxSizeBytes.
- * Simple strategy: truncate the file by keeping only the last ~50% of content.
- */
-function rotateIfNeeded(filePath: string, maxSizeBytes: number): void {
-  try {
-    const stat = fs.statSync(filePath);
-    if (stat.size <= maxSizeBytes) return;
+// Check rotation every Nth write. Cheap stat call; bounds size between checks.
+const WRITE_CHECK_INTERVAL = 256;
+// Backstop timer interval. Short enough that an idle-but-slowly-growing log still rotates.
+const TIMER_INTERVAL_MS = 5_000;
 
-    // Read file, keep last half (find first newline after midpoint)
-    const buf = fs.readFileSync(filePath);
-    const mid = Math.floor(buf.length / 2);
-    const newlineIdx = buf.indexOf(0x0a, mid); // '\n'
-    if (newlineIdx === -1) {
-      // No newline found — just truncate
-      fs.writeFileSync(filePath, '');
-      return;
-    }
-    fs.writeFileSync(filePath, buf.subarray(newlineIdx + 1));
-  } catch {
-    // File doesn't exist yet or can't be read — ignore
+/**
+ * Atomic-rename rotation. O(1) regardless of file size — never reads the file.
+ * Renames filePath -> filePath.1 (overwriting any prior .1), then the caller opens
+ * a fresh stream. Keeps one previous generation; older content is discarded.
+ */
+function rotateAtomic(filePath: string): void {
+  const rotated = `${filePath}.1`;
+  try {
+    fs.renameSync(filePath, rotated);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    // Original gone is fine; anything else we swallow — logger must not throw.
+    if (code !== 'ENOENT') return;
   }
 }
 
@@ -60,22 +55,52 @@ export function attachFileLogging(config: {
   if (!config.file) return;
 
   const filePath = expandHome(config.path);
-  const maxSizeBytes = config.max_size_mb * 1024 * 1024;
+  const maxSizeBytes = Math.max(1, config.max_size_mb) * 1024 * 1024;
 
-  // Ensure parent directory exists
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
 
-  // Rotate before opening
-  rotateIfNeeded(filePath, maxSizeBytes);
+  // 'error' listener prevents fd write failures (ENOENT after dir removal,
+  // EACCES, ENOSPC) from crashing the daemon — logger is best-effort.
+  const swallow = (s: fs.WriteStream): fs.WriteStream => {
+    s.on('error', () => {});
+    return s;
+  };
 
-  // Open append stream
-  const fileStream = fs.createWriteStream(filePath, { flags: 'a' });
+  // State the rotator + writes share.
+  let fileStream = swallow(fs.createWriteStream(filePath, { flags: 'a' }));
+  let fileLogger = pino({ name: 'trace-mcp', level: config.level }, fileStream);
+  let writeCounter = 0;
+  let rotating = false;
 
-  // Add a child logger destination — pipe all log events to the file
-  const fileLogger = pino({ name: 'trace-mcp', level: config.level }, fileStream);
+  const rotateIfOversize = (): void => {
+    if (rotating) return;
+    let size: number;
+    try {
+      size = fs.statSync(filePath).size;
+    } catch {
+      return; // File missing or unreadable — nothing to do.
+    }
+    if (size <= maxSizeBytes) return;
 
-  // Intercept logger methods to also write to file
+    rotating = true;
+    try {
+      // End the current stream before renaming so the fd is closed cleanly.
+      const oldStream = fileStream;
+      oldStream.end();
+
+      rotateAtomic(filePath);
+
+      // Open a fresh stream. Any writes that race in here go to it.
+      fileStream = swallow(fs.createWriteStream(filePath, { flags: 'a' }));
+      fileLogger = pino({ name: 'trace-mcp', level: config.level }, fileStream);
+    } catch {
+      // Swallow — logger must never throw at call sites.
+    } finally {
+      rotating = false;
+    }
+  };
+
   const methods = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
   for (const m of methods) {
     const original = logger[m].bind(logger);
@@ -84,12 +109,15 @@ export function attachFileLogging(config: {
       original(...args);
       // @ts-expect-error — same signature
       fileLogger[m](...args);
+      writeCounter++;
+      if (writeCounter >= WRITE_CHECK_INTERVAL) {
+        writeCounter = 0;
+        rotateIfOversize();
+      }
     };
   }
 
-  // Periodic rotation check (every 60s)
-  const timer = setInterval(() => {
-    rotateIfNeeded(filePath, maxSizeBytes);
-  }, 60_000);
+  // Backstop: a slow trickle of writes still gets rotated on time.
+  const timer = setInterval(rotateIfOversize, TIMER_INTERVAL_MS);
   timer.unref();
 }
