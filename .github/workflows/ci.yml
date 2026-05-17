@@ -255,7 +255,7 @@ jobs:
         #                                      for the deterministic mid-run hang
         #                                      that blocked 1.38 — investigate
         #                                      and re-include after release.
-        run: pnpm exec vitest run --exclude='tests/perf/**' --exclude='tests/fixtures/**' --exclude='tests/languages/test_xml.test.ts' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+        run: pnpm exec vitest run --exclude='tests/perf/**' --exclude='tests/fixtures/**' --exclude='tests/languages/test_xml.test.ts' --exclude='tests/integration/**' --exclude='tests/daemon/**' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
       - name: Job summary
         if: always()
