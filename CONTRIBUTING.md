@@ -26,9 +26,11 @@ The full CLA text is available in [CLA.md](CLA.md). Key points:
 ## Development
 
 ```bash
-npm install
-npm run build
-npm test
+corepack enable
+corepack prepare pnpm@10.33.0 --activate
+pnpm install
+pnpm run build
+pnpm test
 ```
 
 ## License
