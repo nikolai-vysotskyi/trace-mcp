@@ -214,14 +214,14 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-latest
-    # Safety net: a runaway test cannot burn more than 8 min of runner time.
-    timeout-minutes: 8
+    # NOTE: temporarily de-sharded for the 1.38.0 release. Shard 3 was hitting
+    # a deterministic hang ~55 files in (not a perf test — those are already
+    # excluded) and the symptom didn't reproduce in any other shard. Running
+    # all files in one job is slower wall-clock but reliably green. Re-add
+    # 4-way sharding once the hang is identified and fixed.
+    timeout-minutes: 12
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -243,25 +243,23 @@ jobs:
             tar -xzf build-output.tar.zst
           rm build-output.tar.zst
 
-      - name: Test (shard ${{ matrix.shard }}/4)
-        # Exclude tests/perf/** from per-commit shards. Those are throughput
-        # benchmarks (tests/perf/stress.test.ts seeds 10K files, runs FTS,
-        # graph traversals) that are inherently flaky on shared CI runners
-        # and have been observed to hang past the 8 min job cap. They run in
-        # the separate `perf` job below (master push + nightly + manual only).
+      - name: Test
+        # Excludes tests/perf/** (throughput benchmarks inherently flaky on
+        # shared runners — stress.test.ts seeds 10K files; benchmark.test.ts
+        # asserts wall-clock ratios that depend on noisy-neighbour CPU).
         # --testTimeout=30000 + --hookTimeout=15000: per-test/per-hook caps so
-        # a single hung test cannot stall the shard indefinitely.
-        run: pnpm exec vitest run --shard=${{ matrix.shard }}/4 --exclude='tests/perf/**' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+        # a single hung test cannot stall the job indefinitely.
+        run: pnpm exec vitest run --exclude='tests/perf/**' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
       - name: Job summary
         if: always()
         run: |
           {
-            echo "### Test shard ${{ matrix.shard }}/4"
+            echo "### Test (all shards, single job)"
             echo ""
             echo "- Runner: ${{ runner.os }}"
             echo "- Node: $(node --version)"
-            echo "- Duration: ${{ job.status }}"
+            echo "- Status: ${{ job.status }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ───────────────────────────────────────────────────────────────────────────
