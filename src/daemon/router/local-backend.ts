@@ -27,6 +27,7 @@ import { createServer, type ServerHandle } from '../../server/server.js';
 import { SubprojectManager } from '../../subproject/manager.js';
 import { TopologyStore } from '../../topology/topology-db.js';
 import { trailingDebounce } from '../../util/debounce.js';
+import { serializeError } from '../log-error.js';
 import type { Backend } from './types.js';
 
 const AI_COALESCE_WAIT_MS = 5_000;
@@ -160,13 +161,13 @@ export class LocalBackend implements Backend {
     const runEmbeddings = () => {
       if (!embeddingPipeline) return;
       embeddingPipeline.indexUnembedded().catch((err) => {
-        logger.error({ error: err }, 'LocalBackend: embedding indexing failed');
+        logger.error({ error: serializeError(err) }, 'LocalBackend: embedding indexing failed');
       });
     };
     const runSummarization = () => {
       if (!summarizationPipeline) return;
       summarizationPipeline.summarizeUnsummarized().catch((err) => {
-        logger.error({ error: err }, 'LocalBackend: summarization failed');
+        logger.error({ error: serializeError(err) }, 'LocalBackend: summarization failed');
       });
     };
 
@@ -188,7 +189,7 @@ export class LocalBackend implements Backend {
         runSubprojectAutoSyncSafe(projectRoot, config);
       })
       .catch((err) => {
-        logger.error({ error: err }, 'LocalBackend: initial indexing failed');
+        logger.error({ error: serializeError(err) }, 'LocalBackend: initial indexing failed');
       });
 
     // Readonly shared stores — may not exist yet.
