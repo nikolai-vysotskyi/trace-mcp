@@ -14,6 +14,29 @@ function mkTmp(prefix: string): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
 }
 
+// CI sets TRACE_MCP_NO_POSTINSTALL=1 at workflow level so npm install doesn't
+// run our control-plane script. That env var leaks into this test via
+// process.env, forcing every script invocation to short-circuit before it
+// reaches the dev-checkout / fake-pkg branches the tests want to exercise.
+// Strip the opt-out vars from the inherited env unless the caller sets them
+// explicitly, so tests get the real script behavior they assert against.
+const STRIP_INHERITED = [
+  'TRACE_MCP_NO_POSTINSTALL',
+  'TRACE_MCP_NO_AUTO_UPDATE',
+  'TRACE_MCP_NO_PREFLIGHT',
+  'TRACE_MCP_MANAGED_BY',
+] as const;
+
+function buildEnv(env: Record<string, string | undefined>): NodeJS.ProcessEnv {
+  const merged: NodeJS.ProcessEnv = { ...process.env };
+  for (const k of STRIP_INHERITED) delete merged[k];
+  for (const [k, v] of Object.entries(env)) {
+    if (v === undefined) delete merged[k];
+    else merged[k] = v;
+  }
+  return merged;
+}
+
 function runScript(env: Record<string, string | undefined>): {
   status: number | null;
   stdout: string;
@@ -21,7 +44,7 @@ function runScript(env: Record<string, string | undefined>): {
 } {
   try {
     const out = execFileSync(process.execPath, [SCRIPT_PATH], {
-      env: { ...process.env, ...env },
+      env: buildEnv(env),
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf-8',
     });
@@ -104,15 +127,12 @@ describe('postinstall-control-plane', () => {
       const env = {
         HOME: home,
         TRACE_MCP_DATA_DIR: home,
-        // Pretend we're not on macOS so we don't pollute the host's LaunchAgents.
-        // The script reads process.platform at boot, so we can't override it via env —
-        // we accept that on a mac host this test exercises the macOS branch too,
-        // but launchd ops will be skipped because TRACE_MCP_MANAGED_BY isn't set
-        // AND CI isn't set. To keep the test hermetic, force the skip via CI=true.
+        // Force-skip launchctl so the host's LaunchAgents stay untouched.
+        // (The script's CI=true short-circuit keeps us out of plist territory.)
         CI: 'true',
       };
       const result1 = execFileSync(process.execPath, [fakeScript], {
-        env: { ...process.env, ...env },
+        env: buildEnv(env),
         stdio: ['ignore', 'pipe', 'pipe'],
         encoding: 'utf-8',
       });
@@ -133,7 +153,7 @@ describe('postinstall-control-plane', () => {
       const shim1 = fs.readFileSync(shimPath);
 
       execFileSync(process.execPath, [fakeScript], {
-        env: { ...process.env, ...env },
+        env: buildEnv(env),
         stdio: ['ignore', 'pipe', 'pipe'],
         encoding: 'utf-8',
       });

@@ -244,9 +244,12 @@ jobs:
           rm build-output.tar.zst
 
       - name: Test (shard ${{ matrix.shard }}/4)
+        # --reporter=verbose: print test starts (not just completions) so a
+        # hung test is identifiable from the log (default reporter only prints
+        # after a test completes, hiding the culprit of an infinite hang).
         # --testTimeout=30000 + --hookTimeout=15000: per-test/per-hook caps so
         # a single hung test cannot stall the shard indefinitely.
-        run: pnpm exec vitest run --shard=${{ matrix.shard }}/4 --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/4 --reporter=verbose --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
       - name: Job summary
         if: always()
