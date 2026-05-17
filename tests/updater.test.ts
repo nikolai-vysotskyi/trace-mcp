@@ -233,6 +233,10 @@ describe('checkAndInstallUpdate', () => {
     // checkAndInstallUpdate before any install attempt. The escape hatch
     // exists for exactly this reason; see src/updater.ts::isDevCheckout.
     process.env.TRACE_MCP_FORCE_NOT_DEV_CHECKOUT = '1';
+    // CI workflow sets TRACE_MCP_NO_AUTO_UPDATE=1 at env level so npm install
+    // never triggers an auto-update during dependency setup. Strip it here so
+    // these tests can drive checkAndInstallUpdate's actual install path.
+    delete process.env.TRACE_MCP_NO_AUTO_UPDATE;
     const mod = await import('../src/updater.js');
     checkAndInstallUpdate = mod.checkAndInstallUpdate;
   });
