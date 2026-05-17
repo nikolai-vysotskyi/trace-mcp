@@ -153,7 +153,10 @@ jobs:
 
       - id: keys
         name: Compute cache key
-        run: echo "cache_key=node_modules-${{ runner.os }}-node22-${{ hashFiles('pnpm-lock.yaml') }}" >> "$GITHUB_OUTPUT"
+        # v2: invalidates the v1 cache that was poisoned by --ignore-scripts
+        # (better-sqlite3 native binding was missing). Bump this segment any
+        # time the install lifecycle changes in a way that affects cache bytes.
+        run: echo "cache_key=node_modules-v2-${{ runner.os }}-node22-${{ hashFiles('pnpm-lock.yaml') }}" >> "$GITHUB_OUTPUT"
 
       # Restore node_modules from previous identical lockfile run. On hit
       # this is the biggest single win (~30-60s saved).
@@ -350,7 +353,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: packages/app/node_modules
-          key: app-node_modules-${{ runner.os }}-node22-${{ hashFiles('packages/app/pnpm-lock.yaml') }}
+          key: app-node_modules-v2-${{ runner.os }}-node22-${{ hashFiles('packages/app/pnpm-lock.yaml') }}
 
       - name: Install app dependencies
         if: steps.app-nm-cache.outputs.cache-hit != 'true'
@@ -413,7 +416,7 @@ jobs:
           path: |
             node_modules
             packages/*/node_modules
-          key: node_modules-${{ runner.os }}-node22-${{ hashFiles('pnpm-lock.yaml') }}
+          key: node_modules-v2-${{ runner.os }}-node22-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install
         if: steps.nm-cache.outputs.cache-hit != 'true'
