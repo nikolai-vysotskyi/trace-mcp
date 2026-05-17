@@ -29,6 +29,7 @@ import { createServer } from '../server/server.js';
 import { SubprojectManager } from '../subproject/manager.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { trailingDebounce } from '../util/debounce.js';
+import { serializeError } from './log-error.js';
 import type { ProjectResourcePool } from './resource-pool.js';
 
 const AI_COALESCE_WAIT_MS = 5_000;
@@ -193,7 +194,10 @@ export class ProjectManager {
         );
       }
     } catch (err) {
-      logger.warn({ error: err, projectRoot }, 'pass_cache: TTL eviction failed (non-fatal)');
+      logger.warn(
+        { error: serializeError(err), projectRoot },
+        'pass_cache: TTL eviction failed (non-fatal)',
+      );
     }
     const pipeline = new IndexingPipeline(store, registry, config, projectRoot, progress, {
       extractPool: this.sharedPool,
@@ -272,7 +276,7 @@ export class ProjectManager {
       // project-level signal so either abort short-circuits the pipeline.
       const merged = signal ?? aiAbortController.signal;
       p.indexUnembedded(undefined, merged).catch((err) => {
-        logger.error({ error: err, projectRoot }, 'Embedding indexing failed');
+        logger.error({ error: serializeError(err), projectRoot }, 'Embedding indexing failed');
       });
     };
 
@@ -281,7 +285,7 @@ export class ProjectManager {
       if (!p) return;
       const merged = signal ?? aiAbortController.signal;
       p.summarizeUnsummarized(merged).catch((err) => {
-        logger.error({ error: err, projectRoot }, 'Summarization failed');
+        logger.error({ error: serializeError(err), projectRoot }, 'Summarization failed');
       });
     };
 
@@ -364,7 +368,7 @@ export class ProjectManager {
             managed.status = 'error';
             managed.error = `Force-reindex after FK recovery still failed: ${String(retryErr)}`;
             logger.error(
-              { error: retryErr, projectRoot, originalError: String(err) },
+              { error: serializeError(retryErr), projectRoot, originalError: String(err) },
               'Force-reindex recovery also failed',
             );
             return;
@@ -372,7 +376,7 @@ export class ProjectManager {
         }
         managed.status = 'error';
         managed.error = String(err);
-        logger.error({ error: err, projectRoot }, 'Initial indexing failed');
+        logger.error({ error: serializeError(err), projectRoot }, 'Initial indexing failed');
       });
 
     // Start file watcher
@@ -515,8 +519,17 @@ export class ProjectManager {
     );
     for (let i = 0; i < results.length; i++) {
       if (results[i].status === 'rejected') {
+        // serializeError extracts message/stack/code from the raw Error.
+        // Without it, an Error instance under a non-`err` key gets
+        // JSON.stringify'd, dropping the non-enumerable `.message` — and the
+        // SQLite error text we actually need for triage is lost.
+        const reason = (results[i] as PromiseRejectedResult).reason;
         logger.error(
-          { projectRoot: entries[i].root, error: (results[i] as PromiseRejectedResult).reason },
+          {
+            projectRoot: entries[i].root,
+            dbPath: getDbPath(entries[i].root),
+            error: serializeError(reason),
+          },
           'Failed to load registered project',
         );
       }
