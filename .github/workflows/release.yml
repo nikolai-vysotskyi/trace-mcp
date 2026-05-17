@@ -49,9 +49,16 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created != 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
+    env:
+      # Mirror CI workflow env so our own postinstall scripts opt out and the
+      # auto-update is disabled during the install.
+      TRACE_MCP_NO_POSTINSTALL: '1'
+      TRACE_MCP_NO_AUTO_UPDATE: '1'
+      CI: 'true'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -66,7 +73,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      - run: pnpm run test
+      # Same exclusions as .github/workflows/ci.yml :: test step. Without
+      # them the suite hangs on the Linux CI runner (root cause documented
+      # in the CI workflow — embed-repo behavioural test, toon-drift, etc).
+      - run: pnpm exec vitest run --exclude='tests/perf/**' --exclude='tests/fixtures/**' --exclude='tests/languages/test_xml.test.ts' --exclude='tests/integration/**' --exclude='tests/daemon/**' --exclude='src/telemetry/__tests__/**' --exclude='src/tools/register/__tests__/toon-drift.test.ts' --exclude='tests/util/debounce-abort.test.ts' --exclude='tests/tools/behavioural/embed-repo.behavioural.test.ts' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
       - name: Index project
         run: node dist/cli.js index . --force
