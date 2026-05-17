@@ -19,4 +19,8 @@ export default class FileStartReporter {
     const path = testModule?.moduleId ?? testModule?.filepath ?? '<unknown>';
     process.stderr.write(`[FILE START] ${path}\n`);
   }
+  onTestModuleEnd(testModule: { moduleId?: string; filepath?: string }): void {
+    const path = testModule?.moduleId ?? testModule?.filepath ?? '<unknown>';
+    process.stderr.write(`[FILE END] ${path}\n`);
+  }
 }
