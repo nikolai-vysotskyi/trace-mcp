@@ -48,6 +48,7 @@ import {
 import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
 import { createSearchToolRetriever } from '../../retrieval/retrievers/search-tool-retriever.js';
 import { runRetriever } from '../../retrieval/types.js';
+import { withRecallTimeout } from '../../utils/recall-timeout.js';
 
 // ─── Retrieval-mode helpers ──────────────────────────────────────────
 // The dispatch helpers (`runFlatSearch`, `resolveExactLookup`) moved to
@@ -67,7 +68,9 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
     reranker,
     markExplored,
     decisionStore,
+    config,
   } = ctx;
+  const recallTimeoutMs = config.memory.recall.timeoutMs;
 
   // --- Level 1 Navigation Tools ---
 
@@ -696,7 +699,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_feature_context',
-    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature. For structured task context with tests and entry points, use get_task_context instead. For symbol metadata without source, use search. Read-only. Returns JSON (default) or Markdown: { items: [{ symbol_id, name, file, source, score }], token_usage } | { content: "...markdown..." }. Set `output_format: "toon"` for ~30-60% fewer tokens on tabular responses (lossless).',
+    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature. For structured task context with tests and entry points, use get_task_context instead. For symbol metadata without source, use search. Read-only. Returns JSON (default) or Markdown: { items: [{ symbol_id, name, file, source, score }], token_usage } | { content: "...markdown..." }. Set `output_format: "toon"` for ~30-60% fewer tokens on tabular responses (lossless). Hard-capped by `memory.recall.timeoutMs` (default 5000 ms); on timeout returns `{ items: [], token_usage, degraded: true }` so the agent turn never blocks on slow IO.',
     {
       description: z
         .string()
@@ -720,7 +723,30 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         totalRawTokens: savings.getSessionStats().total_raw_tokens,
       };
       const adaptive = computeAdaptiveBudget('get_feature_context', budgetState, token_budget);
-      const result = getFeatureContext(store, projectRoot, description, adaptive.budget);
+      // Recall budget: degraded shape matches the existing empty-result branch
+      // (items: [], totalTokens: 0, truncated: false) with degraded:true so
+      // callers can detect timeout vs genuinely-empty results.
+      const degradedFallback = {
+        description,
+        items: [],
+        totalTokens: 0,
+        truncated: false,
+        degraded: true as const,
+      };
+      const result = await withRecallTimeout(
+        () => getFeatureContext(store, projectRoot, description, adaptive.budget),
+        {
+          timeoutMs: recallTimeoutMs,
+          toolName: 'get_feature_context',
+          fallback: degradedFallback,
+        },
+      );
+      if ('degraded' in result && result.degraded === true) {
+        if (output_format === 'toon') {
+          return { content: [{ type: 'text', text: encodeResponse(result, 'toon') }] };
+        }
+        return { content: [{ type: 'text', text: jh('get_feature_context', result) }] };
+      }
       if (result.items.length === 0) {
         const stats = store.getStats();
         const enriched = {
