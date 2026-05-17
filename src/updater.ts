@@ -23,6 +23,9 @@ const CURRENT_VERSION =
  *      this since npm strips the repo metadata on publish.
  */
 function isDevCheckout(): boolean {
+  // Test-only escape hatch: lets the rollback suite exercise the install path
+  // even though `.git` sits next to the source tree the tests run from.
+  if (process.env.TRACE_MCP_FORCE_NOT_DEV_CHECKOUT === '1') return false;
   try {
     // dist/cli.js or dist/index.js → the dist dir → its parent is the pkg root.
     const self = fileURLToPath(import.meta.url);
@@ -46,10 +49,22 @@ interface UpdateCache {
   lastFailedInstall?: number;
   /** Version that last failed to install — back off only for the same target. */
   lastFailedVersion?: string;
+  /** Consecutive failed installs for `lastFailedVersion` (reset on success). */
+  consecutiveFailedInstalls?: number;
 }
 
 /** Back-off window after a failed auto-update install. */
 const FAILED_INSTALL_RETRY_MS = 60 * 60 * 1000; // 1 hour
+
+/** Extended back-off after repeated failures for the same target version. */
+const FAILED_INSTALL_LONG_RETRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/** Switch to the long back-off after this many consecutive failures. */
+const FAILED_INSTALL_LONG_RETRY_THRESHOLD = 3;
+
+/** Prefix for atomic-rename backup directories. Deliberately does NOT start
+ *  with `.trace-mcp-` so cleanStaleScratchDirs doesn't wipe our own backups. */
+const BACKUP_DIR_PREFIX = 'trace-mcp.tmcp-bak-';
 
 /**
  * Resolve the global npm root (`npm root -g`). Used to locate `.trace-mcp-*`
@@ -88,6 +103,81 @@ function cleanStaleScratchDirs(npmRoot: string): void {
       }
     }
   } catch {}
+}
+
+/** Check if a PID is still alive. Signal 0 is the standard liveness probe. */
+function isPidAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // ESRCH = no such process; EPERM = process exists but we can't signal it.
+    const code = (err as NodeJS.ErrnoException).code;
+    return code === 'EPERM';
+  }
+}
+
+/** Parse PID out of `trace-mcp.tmcp-bak-<pid>`. Returns NaN for malformed names. */
+function backupPid(entry: string): number {
+  if (!entry.startsWith(BACKUP_DIR_PREFIX)) return NaN;
+  return parseInt(entry.slice(BACKUP_DIR_PREFIX.length), 10);
+}
+
+/**
+ * Reconcile any leftover `trace-mcp.tmcp-bak-*` backups from previous crashed
+ * updater runs. Two scenarios:
+ *
+ *   - Main package dir MISSING + backup from dead PID exists → restore it.
+ *     A previous run renamed-out, then died before renaming-in. We must
+ *     un-brick the install before doing anything else.
+ *   - Main package dir PRESENT + backup from dead PID exists → just delete it.
+ *     Leftover garbage from a successful retry that never got to clean up.
+ *
+ * Backups from a still-running PID are left untouched — another updater
+ * process owns them.
+ */
+function reconcileStaleBackups(npmRoot: string): void {
+  const mainDir = path.join(npmRoot, 'trace-mcp');
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(npmRoot);
+  } catch {
+    return;
+  }
+
+  const mainExists = fs.existsSync(mainDir);
+
+  for (const entry of entries) {
+    const pid = backupPid(entry);
+    if (!Number.isFinite(pid)) continue;
+    if (isPidAlive(pid)) continue; // Owned by a live updater — leave alone.
+
+    const full = path.join(npmRoot, entry);
+    if (!mainExists) {
+      // Restore the first dead-PID backup we find, then stop — there can be
+      // only one canonical main dir. Any further backups become garbage and
+      // will be wiped on the next reconcile pass.
+      try {
+        fs.renameSync(full, mainDir);
+        logger.warn(
+          { backup: full, restored: mainDir },
+          'Auto-update: restored package dir from stale backup of dead updater process',
+        );
+        return;
+      } catch (err) {
+        logger.warn(
+          { backup: full, error: err },
+          'Auto-update: failed to restore stale backup, leaving in place',
+        );
+      }
+    } else {
+      try {
+        fs.rmSync(full, { recursive: true, force: true });
+        logger.debug({ backup: full }, 'Auto-update: removed stale leftover backup');
+      } catch {}
+    }
+  }
 }
 
 function readCache(): UpdateCache | null {
@@ -213,16 +303,27 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
 
   // Back off on repeated failures for the same target version so a broken
   // install doesn't trigger a `npm install` storm on every MCP client respawn.
-  if (
-    cache?.lastFailedVersion === latestVersion &&
-    cache.lastFailedInstall &&
-    now - cache.lastFailedInstall < FAILED_INSTALL_RETRY_MS
-  ) {
-    logger.debug(
-      { version: latestVersion, failedAgo: now - cache.lastFailedInstall },
-      'Auto-update: skipping retry, previous install failed recently',
-    );
-    return false;
+  // After FAILED_INSTALL_LONG_RETRY_THRESHOLD consecutive failures for the
+  // same target, switch to a 7-day window so an offline / fundamentally broken
+  // target version doesn't keep retrying every hour.
+  if (cache?.lastFailedVersion === latestVersion && cache.lastFailedInstall) {
+    const consecutive = cache.consecutiveFailedInstalls ?? 1;
+    const window =
+      consecutive >= FAILED_INSTALL_LONG_RETRY_THRESHOLD
+        ? FAILED_INSTALL_LONG_RETRY_MS
+        : FAILED_INSTALL_RETRY_MS;
+    if (now - cache.lastFailedInstall < window) {
+      logger.debug(
+        {
+          version: latestVersion,
+          failedAgo: now - cache.lastFailedInstall,
+          consecutiveFailedInstalls: consecutive,
+          windowMs: window,
+        },
+        'Auto-update: skipping retry, previous install failed recently',
+      );
+      return false;
+    }
   }
 
   logger.info(
@@ -234,7 +335,10 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
   // installs. `--force` swaps the package dir wholesale instead of relying on
   // npm's rename dance, which is the fragile step that fails with ENOTEMPTY.
   const npmRoot = resolveNpmRoot();
-  if (npmRoot) cleanStaleScratchDirs(npmRoot);
+  if (npmRoot) {
+    cleanStaleScratchDirs(npmRoot);
+    reconcileStaleBackups(npmRoot);
+  }
 
   const runInstall = () =>
     spawnSync('npm', ['install', '-g', `trace-mcp@${latestVersion}`, '--force'], {
@@ -246,14 +350,79 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
   let result = runInstall();
 
   // ENOTEMPTY even after --force means the main `trace-mcp` dir itself is in a
-  // corrupt half-extracted state. Nuke it along with any scratches and retry once.
+  // corrupt half-extracted state. Atomic-rename it aside, retry once, and
+  // rollback the rename if the retry also fails. NEVER destroy the package dir
+  // outright — a second install failure (network blip, ENOSPC, registry hiccup)
+  // would leave the user with no trace-mcp at all.
   if (result.status !== 0 && /ENOTEMPTY/.test(result.stderr ?? '') && npmRoot) {
-    logger.warn('Auto-update: ENOTEMPTY detected, nuking corrupt install dir and retrying');
+    logger.warn('Auto-update: ENOTEMPTY detected, backing up corrupt install dir and retrying');
     cleanStaleScratchDirs(npmRoot);
+
+    const mainDir = path.join(npmRoot, 'trace-mcp');
+    const backupDir = path.join(npmRoot, `${BACKUP_DIR_PREFIX}${process.pid}`);
+
+    // Atomic rename within the same filesystem — see rename(2). If mainDir
+    // doesn't exist (already wiped by a previous failed run) we just proceed
+    // to install fresh; there's nothing to back up or restore.
+    let backedUp = false;
     try {
-      fs.rmSync(path.join(npmRoot, 'trace-mcp'), { recursive: true, force: true });
-    } catch {}
+      fs.renameSync(mainDir, backupDir);
+      backedUp = true;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') {
+        logger.warn(
+          { error: err, mainDir },
+          'Auto-update: failed to back up corrupt install dir before retry',
+        );
+      }
+    }
+
     result = runInstall();
+
+    if (result.status === 0) {
+      // Install succeeded — drop the backup.
+      if (backedUp) {
+        try {
+          fs.rmSync(backupDir, { recursive: true, force: true });
+          logger.debug({ backupDir }, 'Auto-update: removed backup after successful retry');
+        } catch (err) {
+          logger.debug({ error: err, backupDir }, 'Auto-update: backup cleanup failed (non-fatal)');
+        }
+      }
+    } else if (backedUp) {
+      // Install failed — rollback. If npm partially extracted a new mainDir,
+      // wipe it before renaming the backup back into place.
+      if (fs.existsSync(mainDir)) {
+        try {
+          fs.rmSync(mainDir, { recursive: true, force: true });
+        } catch (err) {
+          logger.warn(
+            { error: err, mainDir },
+            'Auto-update: failed to remove partial install before rollback',
+          );
+        }
+      }
+      try {
+        fs.renameSync(backupDir, mainDir);
+        logger.warn(
+          { version: latestVersion },
+          'Auto-update: install retry failed, previous install restored from backup',
+        );
+      } catch (restoreErr) {
+        // CATASTROPHIC: rollback itself failed. The user must know the package
+        // is in a broken state and where their backup lives.
+        logger.error(
+          {
+            error: restoreErr,
+            backupDir,
+            mainDir,
+            recovery: `mv ${backupDir} ${mainDir}`,
+          },
+          'Auto-update: FATAL — backup restore failed, manual recovery required',
+        );
+      }
+    }
   }
 
   if (result.status !== 0) {
@@ -261,19 +430,33 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
       { stderr: (result.stderr ?? '').slice(-500), status: result.status },
       'Auto-update: npm install failed',
     );
-    // Stamp the failure so future spawns skip retry for FAILED_INSTALL_RETRY_MS.
+    // Increment the consecutive-failure counter for this exact target.
+    const sameTarget = cache?.lastFailedVersion === latestVersion;
+    const consecutive = sameTarget ? (cache?.consecutiveFailedInstalls ?? 0) + 1 : 1;
+    if (consecutive >= FAILED_INSTALL_LONG_RETRY_THRESHOLD) {
+      logger.warn(
+        {
+          version: latestVersion,
+          consecutiveFailedInstalls: consecutive,
+          retryAfterDays: FAILED_INSTALL_LONG_RETRY_MS / (24 * 60 * 60 * 1000),
+        },
+        `Auto-update: disabled for v${latestVersion} until manual intervention (too many failures)`,
+      );
+    }
     writeCache({
       lastChecked: now,
       latestVersion,
       installedVersion: cache?.installedVersion,
       lastFailedInstall: now,
       lastFailedVersion: latestVersion,
+      consecutiveFailedInstalls: consecutive,
     });
     return false;
   }
 
   // Record the version we just installed so the restarted process can detect
-  // the upgrade and run post-update migrations. Clear any prior failure stamp.
+  // the upgrade and run post-update migrations. Clear any prior failure stamp
+  // (including the consecutive-failure counter — success resets the streak).
   writeCache({ lastChecked: now, latestVersion, installedVersion: latestVersion });
 
   logger.info({ version: latestVersion }, 'Auto-update: installed successfully, restarting...');
