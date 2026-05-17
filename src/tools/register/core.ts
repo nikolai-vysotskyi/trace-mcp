@@ -138,11 +138,63 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         };
       }
       logger.info({ force, batch_size }, 'embed_repo requested');
+
+      // P0.1 — provider/model drift detection. When the active provider or
+      // model differs from the one stamped on the index, we either:
+      //   - auto-promote to force=true (default; ai.autoRebuildOnProviderMismatch=true)
+      //   - or refuse and surface ProviderMismatchError to the caller
+      // Skipped entirely when the user already asked for force=true (they
+      // intend to rewrite the index regardless of what's stored).
+      const autoRebuild = ctx.config.ai?.autoRebuildOnProviderMismatch ?? true;
+      let effectiveForce = !!force;
+      if (!effectiveForce) {
+        try {
+          const active = {
+            provider: embeddingService.providerName?.() ?? 'unknown',
+            model: embeddingService.modelName(),
+          };
+          const check = vectorStore.checkProviderMatch(active);
+          if (check.kind === 'mismatch') {
+            if (autoRebuild) {
+              logger.warn(
+                { stored: check.stored, active: check.active },
+                'embed_repo: embedding provider/model mismatch detected — auto-rebuilding index (force=true)',
+              );
+              effectiveForce = true;
+            } else {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: j({
+                      status: 'error',
+                      error: 'provider_mismatch',
+                      stored: check.stored,
+                      active: check.active,
+                      message:
+                        `Embedding provider mismatch: index built with ${check.stored.provider}/${check.stored.model}, ` +
+                        `active config uses ${check.active.provider}/${check.active.model}. ` +
+                        `Re-run with force=true to rebuild, or set ai.autoRebuildOnProviderMismatch=true to auto-rebuild on the next call.`,
+                    }),
+                  },
+                ],
+                isError: true,
+              };
+            }
+          }
+        } catch (e) {
+          // Mismatch detection must never break embed_repo. Fall through
+          // and let the pipeline handle whatever it finds.
+          logger.warn({ error: e }, 'embed_repo: provider-match probe failed; continuing');
+        }
+      }
+
       const pipeline = new EmbeddingPipeline(
         store,
         embeddingService,
         vectorStore,
         progress ?? undefined,
+        { autoRebuildOnProviderMismatch: autoRebuild },
       );
       try {
         const startedAt = Date.now();
@@ -152,7 +204,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         const totalSymbolsForStart = store.getStats().totalSymbols;
         onPipelineEvent({
           type: 'embed_started',
-          total: force ? totalSymbolsForStart : undefined,
+          total: effectiveForce ? totalSymbolsForStart : undefined,
         });
         // R09 v2: bridge the pipeline's existing ProgressState onto the
         // SSE bus as embed_progress events. The daemon throttles these
@@ -170,7 +222,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
           indexed = await withLock(
             { lockDir: LOCKS_DIR, name: `${projectHash(projectRoot)}-embed`, op: 'embed_repo' },
             async () =>
-              force ? pipeline.reindexAll() : pipeline.indexUnembedded(batch_size ?? 50),
+              effectiveForce ? pipeline.reindexAll() : pipeline.indexUnembedded(batch_size ?? 50),
           );
         } finally {
           progressUnsub?.();
@@ -195,7 +247,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
                 coverage_pct:
                   totalSymbols > 0 ? Math.round((totalEmbedded / totalSymbols) * 100) : 0,
                 duration_ms: Date.now() - startedAt,
-                force: !!force,
+                force: effectiveForce,
               }),
             },
           ],
@@ -238,7 +290,17 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
     'Read-only structural check of the local SQLite index: SQLite integrity_check, foreign-key violations, required-table presence, FTS5 integrity-check, embedding dimension consistency, and orphan embedding detection. Returns a check-by-check report with status (ok/warn/error) and a suggested repair mode for any non-ok finding. Never writes. Use as a preflight before reindex/embed_repo or when search is misbehaving. Returns JSON: { ok, status, checks: [{ name, status, detail, count?, suggested_repair? }] }.',
     {},
     async () => {
-      const report = verifyIndex(store.db);
+      // P0.1 — pass the active embedding (when configured) so verify_index
+      // can surface provider/model drift between the on-disk index and the
+      // active config. Falls back to the original single-arg behaviour when
+      // semantic search is disabled.
+      const activeEmbedding = embeddingService
+        ? {
+            provider: embeddingService.providerName?.() ?? 'unknown',
+            model: embeddingService.modelName(),
+          }
+        : undefined;
+      const report = verifyIndex(store.db, activeEmbedding ? { activeEmbedding } : undefined);
       return {
         content: [{ type: 'text', text: j(report) }],
         isError: report.status === 'error',
