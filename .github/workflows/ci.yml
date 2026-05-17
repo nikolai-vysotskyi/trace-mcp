@@ -48,8 +48,17 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 env:
-  # Skip control-plane postinstall (writes to ~/.trace-mcp/, useless on CI).
+  # Skip OUR three postinstall scripts. We do NOT use --ignore-scripts on the
+  # build install because that would also block pnpm from compiling native
+  # bindings (better-sqlite3, @parcel/watcher) — listed in the package.json
+  # `pnpm.onlyBuiltDependencies`. Without the .node binary, 67 tests that hit
+  # SQLite fail with "Could not locate the bindings file". These env vars let
+  # our own scripts opt out cleanly while pnpm's native compile still runs.
   TRACE_MCP_NO_POSTINSTALL: '1'
+  TRACE_MCP_NO_AUTO_UPDATE: '1'
+  # Preflight (codesign warm-up) intentionally left enabled — it's a no-op on
+  # Linux/Windows and ~1s on macOS, but skipping it on mac would defeat its
+  # purpose (priming amfid for first dlopen of native .node bindings).
   # Quieter pnpm; faster on cache-only resolution.
   CI: 'true'
 
@@ -161,11 +170,14 @@ jobs:
 
       - name: Install
         if: steps.nm-cache.outputs.cache-hit != 'true'
-        run: pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
+        # NO --ignore-scripts here: pnpm must compile better-sqlite3 +
+        # @parcel/watcher native bindings. Our own postinstall trio is gated
+        # off via workflow-level env vars (TRACE_MCP_NO_POSTINSTALL etc.).
+        run: pnpm install --frozen-lockfile --prefer-offline
 
-      # Run preflight-native explicitly when we ignored postinstall scripts.
-      # The other two postinstall scripts (postinstall-app, postinstall-control-plane)
-      # are intentionally skipped on CI.
+      # Preflight is normally part of postinstall. We disabled it via env so
+      # the install was fast, but native modules still need codesign priming
+      # on macOS. On Linux this is a no-op (script exits early).
       - name: Preflight native modules
         if: steps.nm-cache.outputs.cache-hit != 'true'
         run: node scripts/preflight-native.mjs
