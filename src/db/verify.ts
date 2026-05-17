@@ -93,7 +93,18 @@ function tableRowCount(db: Database.Database, name: string): number {
  * `embedding_meta` — when set, every row in `symbol_embeddings` is probed
  * for a matching length.
  */
-export function verifyIndex(db: Database.Database): VerifyReport {
+export interface VerifyOptions {
+  /**
+   * P0.1 — when supplied, compare the active embedding provider/model against
+   * the (provider, model) stamped on the on-disk index and surface a warn
+   * check on drift. Omit to skip the probe (preserves the original
+   * single-argument signature for callers that don't have an active service
+   * available, e.g. CLI subcommands run outside the AI subsystem).
+   */
+  activeEmbedding?: { provider: string; model: string };
+}
+
+export function verifyIndex(db: Database.Database, options?: VerifyOptions): VerifyReport {
   const checks: VerifyCheck[] = [];
 
   // ── 1. SQLite integrity_check ─────────────────────────────────────────
@@ -262,6 +273,67 @@ export function verifyIndex(db: Database.Database): VerifyReport {
         name: 'orphan_embeddings',
         status: 'warn',
         detail: `Orphan probe failed: ${e instanceof Error ? e.message : String(e)}`,
+      });
+    }
+  }
+
+  // ── 7. Embedding provider match (P0.1) ────────────────────────────────
+  // Only runs when the caller threads through the active provider+model.
+  // Reads embedding_meta directly to keep verify.ts free of BlobVectorStore
+  // import cycles. Legacy indexes without a provider stamp are silently OK
+  // (they will be backfilled on the next embed_repo run).
+  if (
+    options?.activeEmbedding &&
+    tableExists(db, 'embedding_meta') &&
+    tableExists(db, 'symbol_embeddings')
+  ) {
+    try {
+      const rows = db
+        .prepare("SELECT key, value FROM embedding_meta WHERE key IN ('provider', 'model')")
+        .all() as { key: string; value: string }[];
+      const map = new Map(rows.map((r) => [r.key, r.value]));
+      const storedProvider = map.get('provider');
+      const storedModel = map.get('model');
+      const totalEmbeddings = tableRowCount(db, 'symbol_embeddings');
+      if (totalEmbeddings === 0 || storedModel === undefined) {
+        // Nothing to compare against — embed_repo will stamp on first run.
+        checks.push({
+          name: 'embedding_provider_match',
+          status: 'ok',
+          detail: 'No stamped provider/model to compare against',
+        });
+      } else if (storedProvider === undefined) {
+        checks.push({
+          name: 'embedding_provider_match',
+          status: 'ok',
+          detail: `Legacy index (no provider stamp) — will be backfilled on next embed_repo run`,
+        });
+      } else if (
+        storedProvider === options.activeEmbedding.provider &&
+        storedModel === options.activeEmbedding.model
+      ) {
+        checks.push({
+          name: 'embedding_provider_match',
+          status: 'ok',
+          detail: `Index stamped with active provider (${storedProvider}/${storedModel})`,
+        });
+      } else {
+        checks.push({
+          name: 'embedding_provider_match',
+          status: 'warn',
+          detail:
+            `Embedding provider drift: index built with ${storedProvider}/${storedModel}, ` +
+            `active config uses ${options.activeEmbedding.provider}/${options.activeEmbedding.model}. ` +
+            `Run embed_repo (force=true) to rebuild, or set ai.autoRebuildOnProviderMismatch=true ` +
+            `so the next embed_repo call rebuilds automatically.`,
+          suggested_repair: 'drop-vec',
+        });
+      }
+    } catch (e) {
+      checks.push({
+        name: 'embedding_provider_match',
+        status: 'warn',
+        detail: `Provider-match probe failed: ${e instanceof Error ? e.message : String(e)}`,
       });
     }
   }

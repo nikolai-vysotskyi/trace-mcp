@@ -81,6 +81,15 @@ const AiConfigSchema = z
     vertex_project: z.string().optional(),
     /** Vertex AI: GCP region routing requests (e.g. us-central1, europe-west4). */
     vertex_location: z.string().optional(),
+    /**
+     * When the active embedding provider/model differs from the one that
+     * built the index, auto-rebuild on the next embed_repo call (instead of
+     * throwing ProviderMismatchError). Always logs a warning so the swap is
+     * not invisible. Default: true. Set to false to enforce strict matching
+     * and surface ProviderMismatchError at embed_repo and semantic-query
+     * time — useful when you want a hard gate against silent model swaps.
+     */
+    autoRebuildOnProviderMismatch: z.boolean().default(true),
   })
   .optional();
 
@@ -389,6 +398,32 @@ const DecisionsConfigSchema = z
   })
   .prefault({});
 
+/**
+ * Memory recall configuration.
+ *
+ * `recall.timeoutMs` is the hard wall-clock budget for memory-recall tools
+ * (`get_wake_up`, `query_decisions`, `get_feature_context`). On timeout the
+ * tool returns a degraded empty result with `degraded: true` instead of
+ * blocking the agent turn. Defaults to 5000 ms.
+ */
+const MemoryConfigSchema = z
+  .object({
+    recall: z
+      .object({
+        timeoutMs: z
+          .number()
+          .int()
+          .min(100)
+          .max(60000)
+          .default(5000)
+          .describe(
+            'Hard timeout for memory recall tools (get_wake_up, query_decisions, get_feature_context). On timeout, the tool returns a degraded empty result instead of blocking the agent turn.',
+          ),
+      })
+      .prefault({}),
+  })
+  .prefault({});
+
 const VaultConfigSchema = z
   .object({
     /**
@@ -473,6 +508,7 @@ export const TraceMcpConfigSchema = z.object({
   pipeline: PipelineConfigSchema,
   vault: VaultConfigSchema,
   decisions: DecisionsConfigSchema,
+  memory: MemoryConfigSchema,
   quality_gates: QualityGatesConfigSchema,
   telemetry: TelemetryConfigSchema,
   tools: ToolsConfigSchema,
@@ -575,6 +611,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
     pipeline: PipelineConfigSchema,
     quality_gates: QualityGatesConfigSchema,
     decisions: DecisionsConfigSchema,
+    memory: MemoryConfigSchema,
     telemetry: TelemetryConfigSchema,
     tools: ToolsConfigSchema,
     ignore: IgnoreConfigSchema,

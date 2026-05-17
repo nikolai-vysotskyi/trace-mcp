@@ -7,12 +7,25 @@ import { logger } from '../logger.js';
 import type { ProgressState } from '../progress.js';
 import { warnIfCloudEmbeddingProvider } from './cloud-warning.js';
 import type { EmbeddingService, VectorStore } from './interfaces.js';
+import { ProviderMismatchError } from './vector-store.js';
 
 const DEFAULT_BATCH_SIZE = 50;
 /** Trip the circuit breaker after this many consecutive batch failures. */
 const FAILURE_THRESHOLD = 2;
 /** How long to skip embedding work after the breaker trips. */
 const COOLDOWN_MS = 10 * 60 * 1000;
+
+/** Construction-time knobs for {@link EmbeddingPipeline}. */
+export interface EmbeddingPipelineOptions {
+  /**
+   * When true (default), provider/model/dim drift between the on-disk index
+   * and the active embedding service causes ensureConsistent() to drop the
+   * vector store and re-embed under the new config (with a loud warn log).
+   * When false, the same drift throws {@link ProviderMismatchError} — useful
+   * when the operator wants a hard gate against silent model swaps.
+   */
+  autoRebuildOnProviderMismatch?: boolean;
+}
 
 export class EmbeddingPipeline {
   private consistent = false;
@@ -24,13 +37,18 @@ export class EmbeddingPipeline {
   private disabledUntilMs = 0;
   /** Whether we've already logged the breaker trip (to avoid log spam). */
   private breakerNotified = false;
+  /** Resolved auto-rebuild flag — defaults to true for back-compat. */
+  private readonly autoRebuild: boolean;
 
   constructor(
     private store: Store,
     private embeddingService: EmbeddingService,
     private vectorStore: VectorStore,
     private progress?: ProgressState,
-  ) {}
+    options?: EmbeddingPipelineOptions,
+  ) {
+    this.autoRebuild = options?.autoRebuildOnProviderMismatch ?? true;
+  }
 
   /**
    * Verify the stored vectors match the current embedding model + dimensionality.
@@ -66,6 +84,18 @@ export class EmbeddingPipeline {
       // indexes without the column are accepted and will be backfilled below.
       (meta.provider !== undefined && meta.provider !== provider)
     ) {
+      // P0.1: auto-rebuild is opt-out via ai.autoRebuildOnProviderMismatch.
+      // When disabled, raise ProviderMismatchError so the operator notices
+      // before the index gets silently rewritten.
+      if (!this.autoRebuild) {
+        throw new ProviderMismatchError(
+          {
+            provider: meta.provider ?? 'unknown',
+            model: meta.model,
+          },
+          { provider, model },
+        );
+      }
       logger.warn(
         { old: meta, new: { model, dim, provider } },
         'Embedding provider/model/dim changed — dropping vector index for reindex',
