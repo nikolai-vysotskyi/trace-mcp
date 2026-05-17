@@ -228,12 +228,18 @@ describe('checkAndInstallUpdate', () => {
     mockFs.writeFileSync.mockImplementation(() => {});
 
     (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = '1.0.0';
+    // Bypass isDevCheckout() — these tests run from a checkout that has
+    // `.git` next to package.json, which would otherwise short-circuit
+    // checkAndInstallUpdate before any install attempt. The escape hatch
+    // exists for exactly this reason; see src/updater.ts::isDevCheckout.
+    process.env.TRACE_MCP_FORCE_NOT_DEV_CHECKOUT = '1';
     const mod = await import('../src/updater.js');
     checkAndInstallUpdate = mod.checkAndInstallUpdate;
   });
 
   afterEach(() => {
     (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = undefined;
+    delete process.env.TRACE_MCP_FORCE_NOT_DEV_CHECKOUT;
     vi.restoreAllMocks();
   });
 
