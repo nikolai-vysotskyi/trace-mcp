@@ -6,6 +6,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.38.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.37.0...v1.38.0) (2026-05-17)
+
+
+### Features
+
+* **daemon:** memory diagnostics endpoint + AI cancellation + multisink resilience + LocalBackend re-entry guard ([e8f4116](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e8f41167682dcefcafca70dfd5fe468dee7154ae))
+
+
+### Bug Fixes
+
+* **ai:** commit missing src/ai/abort.ts referenced by anthropic/gemini providers ([49922e4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/49922e45a95f8eed65d70ec597342f976f29624d))
+* **app:** launcher-shim binary resolution instead of PATH-only `which` ([db52e74](https://github.com/nikolai-vysotskyi/trace-mcp/commit/db52e74a98f33126970ded737e1830b04b3d7432))
+* **ci:** postinstall test inherits workflow opt-out env + verbose reporter ([dc42b46](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dc42b46c583004313ad83a8d6192ea147d4377d7))
+* **daemon:** preserve error.message + .codeName when logging failures ([edaa124](https://github.com/nikolai-vysotskyi/trace-mcp/commit/edaa124f8c04f58148d217f3b9603facc10d16e0))
+* **indexer:** cap extract-worker crash loop with backoff + dedup ([fad5bf2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fad5bf27d0d0edd56c61713e4e179bdb07f6343f))
+* **indexer:** release tree-sitter Tree WASM heap via tree.delete() in every parse path ([0a85793](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0a857936b6c76f1e8049192fdf78de1b20fd3cf4))
+* **install:** self-healing postinstall writes launcher.env + plist ([3761619](https://github.com/nikolai-vysotskyi/trace-mcp/commit/376161920a9f4df505da57430b6ff257e27cedc7))
+* **logger:** atomic-rename rotation that survives multi-GB log files ([b4d1499](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b4d1499350f2e02e262d81bee3812a9a1fe04acf))
+* **test:** updater.test.ts must also clear TRACE_MCP_NO_AUTO_UPDATE in CI ([20c5683](https://github.com/nikolai-vysotskyi/trace-mcp/commit/20c56835af8cb1949ab7517cecb1f2c8057e1753))
+* **test:** updater.test.ts must bypass isDevCheckout like rollback suite ([d4cc672](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d4cc67215fe99f914f7e32e0f08be8a1ccf819de))
+* **updater:** atomic backup + rollback for ENOTEMPTY retry path ([38115e7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/38115e7a8aea0090af04aa041eb48465de298cb6))
+
+
+### Documentation
+
+* **decision-memory:** document live-capture, review queue, and privacy filter ([aa02099](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aa020991cf7fc4c23d2d549a71f0cc74ee311007))
+
+
+### Tests
+
+* **tools:** behavioural coverage for dead-exports, untested-exports, and decision-graph tools ([ebb888c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ebb888cb7debb8a2de0783a0fc52762371f6579b))
+* **tools:** behavioural coverage for misc + framework-aware tools ([61e94a4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61e94a4eac2a1e3dfc01e5328a6ca3e287887502))
+* **tools:** behavioural coverage for planning, intent, and batch tools ([88682ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/88682bad48fedf5fdc10df9d8dc6011acf28f563))
+
+
+### CI/CD
+
+* **bisect:** also exclude src/telemetry/__tests__/** — suspect OtlpSink ([5823b76](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5823b762156c73976deb55c6969506e9f5037bb0))
+* bump cache key to v2 to invalidate poisoned node_modules ([4b6be53](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4b6be533856469c56d0d89baaeca6b37e05e3940))
+* **diag:** add [FILE END] marker to surface the actually-hung file ([39bf4e7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/39bf4e7cd38861bcf5640ce710f0f1d67b5bc0b2))
+* **diag:** file-start reporter to identify CI hang culprit ([c6c0c3a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c6c0c3a1b75b0f107328e7638988beb31f1d2c1f))
+* drop --ignore-scripts from build install so native bindings compile ([28e4a76](https://github.com/nikolai-vysotskyi/trace-mcp/commit/28e4a761573ea9fbb2c5c2601b6fb295cba85784))
+* drop sharding for 1.38.0 release — reliable single-job test run ([6366c58](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6366c585ac9f72ea2f9b081939e06e78d9f4a37a))
+* exclude embed-repo behavioural test (pinpointed hang via FILE END diag) ([1c4ac23](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1c4ac232a3628b90ea64370b733ead1511a0c039))
+* exclude fixture + xml-plugin test files (1.38 release unblocker) ([7d00584](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7d00584d930e28ac82da48be7a811190e1742a95))
+* exclude integration + daemon test dirs (bisect for CI hang) ([d9b529b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d9b529bca1adbcfb387222875be050f72450319e))
+* exclude tests/perf/** from per-commit shards ([bbc45e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bbc45e00d1b83664fc61f8068a64148be0ba500e))
+* exclude toon-drift + debounce-abort tests — bisection landed ([50cc141](https://github.com/nikolai-vysotskyi/trace-mcp/commit/50cc141ae025a969b4f7fcdf77a127f2238e9f2f))
+* shard tests + share build artifact + safety-net timeouts (&lt;3 min target) ([92fdd11](https://github.com/nikolai-vysotskyi/trace-mcp/commit/92fdd11a5318ffd1536fe9f4d54f059deb3f9b32))
+
 ## [1.37.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.36.1...v1.37.0) (2026-05-15)
 
 
