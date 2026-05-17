@@ -1,18 +1,99 @@
 name: CI
 
+# Performance target: <3 min on a typical PR / master push (cold cache),
+# ~1-2 min on warm cache. Hot paths:
+#
+#   biome (parallel)       ~20-30s
+#   build  (parallel)      ~60-90s  → uploads dist artifact
+#     ├── test-shard 1/4   ~30-60s  (downloads dist; vitest --shard=1/4)
+#     ├── test-shard 2/4   ~30-60s
+#     ├── test-shard 3/4   ~30-60s
+#     ├── test-shard 4/4   ~30-60s
+#     └── impact-report    ~30s     (PR only; reuses dist)
+#   app-typecheck (parallel, path-filtered) ~30-60s when triggered, skipped otherwise
+#   cross-platform-test (matrix mac+windows) — only on release-please PR, nightly,
+#                                              workflow_dispatch, or "cross-platform" label
+#
+# Strategy:
+#   1. ONE install + ONE build on ubuntu, fan-out the dist/ via artifact.
+#   2. Test runs sharded across 4 ubuntu runners in parallel.
+#   3. macOS/Windows test runs only when they matter (release PR, nightly,
+#      explicit opt-in) — not on every commit. Saves ~6-8 min per PR sync.
+#   4. impact-report only runs on PRs (it has nothing to comment on otherwise)
+#      and uploads a sanitized artifact consumed by pr-comment.yml.
+#   5. Cancel in-progress runs on the same ref (except master).
+
 on:
   push:
     branches: [master]
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
+  schedule:
+    # Nightly cross-platform validation at 04:00 UTC. Catches OS regressions
+    # without blocking every commit.
+    - cron: '0 4 * * *'
   workflow_dispatch:
+    inputs:
+      run_cross_platform:
+        description: 'Run macOS + Windows tests'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Always finish master pushes; cancel superseded PR runs to save minutes.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+env:
+  # Skip control-plane postinstall (writes to ~/.trace-mcp/, useless on CI).
+  TRACE_MCP_NO_POSTINSTALL: '1'
+  # Quieter pnpm; faster on cache-only resolution.
+  CI: 'true'
+
 jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Detect which parts of the tree changed. Drives path-filtered jobs without
+  # paying a full install just to discover "nothing relevant changed".
+  # ───────────────────────────────────────────────────────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      core: ${{ steps.filter.outputs.core }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: filter
+        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        with:
+          filters: |
+            app:
+              - 'packages/app/**'
+              - '.github/workflows/ci.yml'
+            core:
+              - 'src/**'
+              - 'scripts/**'
+              - 'tests/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tsconfig*.json'
+              - 'tsup.config.*'
+              - 'vitest.config.*'
+              - 'biome.json*'
+              - '.github/workflows/ci.yml'
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Biome — runs in parallel with build (it doesn't need dist/).
+  # ───────────────────────────────────────────────────────────────────────────
   biome:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     steps:
@@ -26,21 +107,33 @@ jobs:
           cache: 'pnpm'
 
       - name: Install (skip lifecycle scripts; Biome native still installs via optionalDependencies)
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts --prefer-offline
 
       - name: Biome check (formatter + linter, errors only)
         run: pnpm exec biome ci --diagnostic-level=error
 
-  impact-report:
-    needs: biome
+  # ───────────────────────────────────────────────────────────────────────────
+  # Build once on ubuntu, upload dist/ + node_modules/ as an artifact.
+  # Downstream jobs (test shards, impact-report) skip install AND build.
+  #
+  # Why upload node_modules too? Because re-running `pnpm install` even on a
+  # warm pnpm store cache still takes ~30-60s for extraction + symlinking. A
+  # tarball download of the prebuilt node_modules is faster, and native
+  # binaries (better-sqlite3, @parcel/watcher) are ABI-compatible across
+  # ubuntu runners.
+  # ───────────────────────────────────────────────────────────────────────────
+  build:
+    needs: changes
+    if: needs.changes.outputs.core == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    # Safety cap. Cold cache build is ~90s; warm ~30s. 6 min absorbs npm/registry slowdowns.
+    timeout-minutes: 6
     permissions:
       contents: read
-      pull-requests: write
+    outputs:
+      cache_key: ${{ steps.keys.outputs.cache_key }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
 
       - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
 
@@ -49,54 +142,184 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
-      - run: pnpm run test
+      - id: keys
+        name: Compute cache key
+        run: echo "cache_key=node_modules-${{ runner.os }}-node22-${{ hashFiles('pnpm-lock.yaml') }}" >> "$GITHUB_OUTPUT"
+
+      # Restore node_modules from previous identical lockfile run. On hit
+      # this is the biggest single win (~30-60s saved).
+      - name: Restore node_modules cache
+        id: nm-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: ${{ steps.keys.outputs.cache_key }}
+          # No restore-keys: partial cache of node_modules is dangerous
+          # (mismatched native bindings). Either exact-match or full install.
+
+      - name: Install
+        if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
+
+      # Run preflight-native explicitly when we ignored postinstall scripts.
+      # The other two postinstall scripts (postinstall-app, postinstall-control-plane)
+      # are intentionally skipped on CI.
+      - name: Preflight native modules
+        if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: node scripts/preflight-native.mjs
+
+      - name: Build
+        run: pnpm run build
+
+      # Tar instead of relying on actions/upload-artifact to walk node_modules
+      # (≈30k files). A single tarball uploads ~5-10× faster.
+      - name: Pack build output
+        run: |
+          tar --use-compress-program=zstd -cf build-output.tar.zst \
+            dist node_modules packages/*/node_modules 2>/dev/null || \
+            tar -czf build-output.tar.zst dist node_modules packages/*/node_modules 2>/dev/null || \
+            tar -czf build-output.tar.zst dist node_modules
+          ls -lh build-output.tar.zst
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: build-output
+          path: build-output.tar.zst
+          retention-days: 1
+          compression-level: 0 # Already compressed.
+          if-no-files-found: error
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Test — sharded 4 ways across ubuntu runners. Each shard downloads the
+  # prebuilt dist + node_modules, so install + build are free here.
+  # ───────────────────────────────────────────────────────────────────────────
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    # Safety net: a runaway test cannot burn more than 8 min of runner time.
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+          # No pnpm cache here — we're downloading the prebuilt node_modules.
+
+      - name: Download build artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: build-output
+
+      - name: Unpack build output
+        run: |
+          tar --use-compress-program=unzstd -xf build-output.tar.zst 2>/dev/null || \
+            tar -xzf build-output.tar.zst
+          rm build-output.tar.zst
+
+      - name: Test (shard ${{ matrix.shard }}/4)
+        # --testTimeout=30000 + --hookTimeout=15000: per-test/per-hook caps so
+        # a single hung test cannot stall the shard indefinitely.
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/4 --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "### Test shard ${{ matrix.shard }}/4"
+            echo ""
+            echo "- Runner: ${{ runner.os }}"
+            echo "- Node: $(node --version)"
+            echo "- Duration: ${{ job.status }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Impact report — PR-only. Reuses the prebuilt dist artifact.
+  #
+  # Note on auth: this runs in the PR-fork context (no pull-requests:write
+  # for fork PRs), so we don't post the comment here. We upload a sanitized
+  # artifact and let pr-comment.yml (workflow_run-triggered, runs in base-
+  # repo context) actually post the comment.
+  # ───────────────────────────────────────────────────────────────────────────
+  impact-report:
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0 # Needed for git diff base..head.
+
+      - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '22'
+
+      - name: Download build artifact
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: build-output
+
+      - name: Unpack build output
+        run: |
+          tar --use-compress-program=unzstd -xf build-output.tar.zst 2>/dev/null || \
+            tar -xzf build-output.tar.zst
+          rm build-output.tar.zst
 
       - name: Index project
         run: node dist/cli.js index . --force
 
-      - name: Resolve PR context
-        id: pr
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-            echo "base=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
-            echo "head=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
-          else
-            PR_JSON=$(gh pr list --head "${{ github.ref_name }}" --json number,baseRefName --limit 1 --jq '.[0] // empty')
-            if [ -n "$PR_JSON" ]; then
-              PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number')
-              BASE_BRANCH=$(echo "$PR_JSON" | jq -r '.baseRefName')
-              echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-              echo "base=$(git merge-base origin/$BASE_BRANCH HEAD)" >> "$GITHUB_OUTPUT"
-              echo "head=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-            else
-              echo "number=" >> "$GITHUB_OUTPUT"
-            fi
-          fi
-
       - name: Generate impact report
-        if: steps.pr.outputs.number != ''
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           node dist/cli.js ci-report \
-            --base ${{ steps.pr.outputs.base }} \
-            --head ${{ steps.pr.outputs.head }} \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
             --format markdown \
             --output report.md
 
-      - name: Post PR comment
-        if: steps.pr.outputs.number != '' && hashFiles('report.md') != ''
-        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
-        with:
-          number: ${{ steps.pr.outputs.number }}
-          path: report.md
+      - name: Write PR number for downstream comment job
+        run: echo "${{ github.event.pull_request.number }}" > pr-number.txt
 
+      # Sanitized artifact: report.md + pr-number.txt only. Consumed by
+      # pr-comment.yml (workflow_run trigger, base-repo context).
+      - name: Upload impact-report artifact
+        if: hashFiles('report.md') != ''
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: impact-report
+          path: |
+            report.md
+            pr-number.txt
+          retention-days: 7
+          if-no-files-found: warn
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # App typecheck/build — runs only when packages/app/** changed (or on push
+  # to master / dispatch / schedule). Different lockfile, so own install.
+  # ───────────────────────────────────────────────────────────────────────────
   app-typecheck:
-    needs: biome
+    needs: changes
+    if: needs.changes.outputs.app == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
     steps:
@@ -110,9 +333,17 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: packages/app/pnpm-lock.yaml
 
+      - name: Restore app node_modules cache
+        id: app-nm-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: packages/app/node_modules
+          key: app-node_modules-${{ runner.os }}-node22-${{ hashFiles('packages/app/pnpm-lock.yaml') }}
+
       - name: Install app dependencies
+        if: steps.app-nm-cache.outputs.cache-hit != 'true'
         working-directory: packages/app
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Typecheck
         working-directory: packages/app
@@ -122,13 +353,35 @@ jobs:
         working-directory: packages/app
         run: pnpm run build
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # Cross-platform test — macOS + Windows.
+  #
+  # Trigger logic (any one fires it):
+  #   1. release-please PR branch     — full validation before publishing.
+  #   2. nightly schedule (04:00 UTC) — catch OS regressions overnight.
+  #   3. workflow_dispatch            — manual ad-hoc verification.
+  #   4. PR labeled "cross-platform"  — opt-in per PR when needed.
+  #
+  # Ubuntu coverage already happens in the `test` job above; this matrix is
+  # mac+windows only. Each runner does its own install+build+test (the
+  # ubuntu build artifact has native bindings that won't load on mac/win).
+  # ───────────────────────────────────────────────────────────────────────────
   cross-platform-test:
     needs: biome
+    if: >-
+      startsWith(github.head_ref, 'release-please--') ||
+      startsWith(github.ref, 'refs/heads/release-please--') ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'cross-platform'))
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # Safety net per OS. macOS/Windows runners are slower than ubuntu, so the
+    # cap is higher than the ubuntu shard cap.
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:
@@ -141,14 +394,25 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
+      - name: Restore node_modules cache
+        id: nm-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            node_modules
+            packages/*/node_modules
+          key: node_modules-${{ runner.os }}-node22-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install
-        run: pnpm install --frozen-lockfile
+        if: steps.nm-cache.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build
         run: pnpm run build
 
       - name: Test
-        run: pnpm run test
+        # Per-test timeout so a single hung test cannot stall the whole job.
+        run: pnpm exec vitest run --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
       - name: Smoke-test CLI
         run: node dist/cli.js --version
