@@ -12,7 +12,7 @@
  */
 
 import * as path from 'node:path';
-import type { DecisionRow, DecisionStore } from './decision-store.js';
+import type { DecisionRow, DecisionStore, DecisionType } from './decision-store.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -111,6 +111,217 @@ export function assembleWakeUp(
   };
 
   // Rough token estimation (1 token ≈ 4 chars of JSON)
+  const jsonSize = JSON.stringify(result).length;
+  result.estimated_tokens = Math.ceil(jsonSize / 4);
+
+  return result;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// SPLIT SHAPE (P1.4 — prompt-cache friendliness)
+// ════════════════════════════════════════════════════════════════════════
+//
+// Clients that inject wake-up output into the system_prompt break their
+// provider prompt cache on every turn, because `decisions.recent` rotates
+// turn-to-turn. To fix that, expose the same data in two clearly-labelled
+// regions:
+//
+//   stable  — project identity, conventions, architecture decisions, stats
+//             (changes rarely; safe to put into the cacheable system slot)
+//   dynamic — recent activity and work-in-progress signals
+//             (changes per-turn; route into the user message instead)
+//
+// The legacy flat `WakeUpContext` is still produced by `assembleWakeUp`
+// for back-compat. `assembleWakeUpSplit` is additive.
+
+/** Compact decision entry shared by stable + dynamic regions. */
+export interface WakeUpDecisionEntry {
+  id: number;
+  title: string;
+  type: string;
+  /** Linked symbol (if any) */
+  symbol?: string;
+  /** Linked file (if any) */
+  file?: string;
+  /** ISO timestamp when this decision became valid */
+  when: string;
+}
+
+export interface WakeUpSplit {
+  /**
+   * Stable region — provider-cacheable. Inject into the system prompt slot.
+   * Contents change rarely across turns within a session.
+   */
+  stable: {
+    project: {
+      name: string;
+      root: string;
+    };
+    /** Top conventions (type='convention'). Long-lived guidance. */
+    conventions: WakeUpDecisionEntry[];
+    /** Top architecture decisions (type='architecture_decision'). Semi-stable. */
+    architecture: WakeUpDecisionEntry[];
+    /** Aggregate counts; do not vary per-turn. */
+    stats: {
+      total_active: number;
+      total_decisions: number;
+      sessions_mined: number;
+      sessions_indexed: number;
+      by_type: Record<string, number>;
+    };
+  };
+  /**
+   * Dynamic region — changes per-turn. Route into the user message slot so
+   * it never busts the cached system prompt.
+   */
+  dynamic: {
+    /**
+     * Most-recent active decisions MINUS anything already surfaced in
+     * `stable.conventions` or `stable.architecture` (no duplicates).
+     */
+    recent_decisions: WakeUpDecisionEntry[];
+    /**
+     * Active discoveries / tradeoffs / bug root causes from the last week —
+     * the "work in flight" signal.
+     */
+    in_progress: WakeUpDecisionEntry[];
+  };
+  /** Approximate total token count across both regions. */
+  estimated_tokens: number;
+  /** Hint for downstream prompt assemblers. */
+  _cache_hint: {
+    inject_stable_into: 'system_prompt';
+    inject_dynamic_into: 'user_message';
+    rationale: string;
+  };
+}
+
+/** Internal: per-section item caps for the split shape. */
+const SPLIT_LIMITS = {
+  conventions: 5,
+  architecture: 5,
+  recent: 5,
+  in_progress: 5,
+} as const;
+
+/** Internal: window for the in_progress dynamic region. */
+const IN_PROGRESS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+const IN_PROGRESS_TYPES: readonly DecisionType[] = ['discovery', 'tradeoff', 'bug_root_cause'];
+
+/**
+ * Assemble wake-up context split into stable + dynamic regions for
+ * prompt-cache friendliness. See `WakeUpSplit` for the contract.
+ *
+ * No new database tables; this regroups what `assembleWakeUp` already
+ * computes, just sliced into cache-friendly regions and de-duplicated
+ * across sections.
+ */
+export function assembleWakeUpSplit(
+  decisionStore: DecisionStore,
+  projectRoot: string,
+  opts: {
+    maxRecent?: number;
+  } = {},
+): WakeUpSplit {
+  const recentLimit = Math.min(opts.maxRecent ?? SPLIT_LIMITS.recent, 30);
+
+  // Stable: conventions + architecture (high-signal, slow-moving).
+  const conventionRows = decisionStore.queryDecisions({
+    project_root: projectRoot,
+    type: 'convention',
+    limit: SPLIT_LIMITS.conventions,
+  });
+  const architectureRows = decisionStore.queryDecisions({
+    project_root: projectRoot,
+    type: 'architecture_decision',
+    limit: SPLIT_LIMITS.architecture,
+  });
+
+  const conventions = conventionRows.map(compactDecision);
+  const architecture = architectureRows.map(compactDecision);
+
+  // Track IDs already surfaced in stable to avoid duplication in dynamic.
+  const stableIds = new Set<number>();
+  for (const d of conventionRows) stableIds.add(d.id);
+  for (const d of architectureRows) stableIds.add(d.id);
+
+  // Dynamic: in-progress — discovery/tradeoff/bug_root_cause from last 7d.
+  // The store filters `as_of` to active rows; we additionally clamp by
+  // valid_from on the client side because there is no created-since filter.
+  // Compute in_progress first so we can also exclude its IDs from recent.
+  const sinceIso = new Date(Date.now() - IN_PROGRESS_WINDOW_MS).toISOString();
+  const inProgressRows: DecisionRow[] = [];
+  for (const t of IN_PROGRESS_TYPES) {
+    const rows = decisionStore.queryDecisions({
+      project_root: projectRoot,
+      type: t,
+      limit: SPLIT_LIMITS.in_progress * 2,
+    });
+    for (const r of rows) {
+      if (r.valid_from < sinceIso) continue;
+      if (stableIds.has(r.id)) continue;
+      inProgressRows.push(r);
+    }
+  }
+  // Stable sort by valid_from descending, then cap.
+  inProgressRows.sort((a, b) =>
+    a.valid_from < b.valid_from ? 1 : a.valid_from > b.valid_from ? -1 : 0,
+  );
+  const inProgressCapped = inProgressRows.slice(0, SPLIT_LIMITS.in_progress);
+  const in_progress = inProgressCapped.map(compactDecision);
+
+  // Recent now excludes both stable and in_progress IDs so each decision
+  // surfaces in exactly one place.
+  const dynamicSeen = new Set<number>(stableIds);
+  for (const r of inProgressCapped) dynamicSeen.add(r.id);
+
+  const recentPool = decisionStore.queryDecisions({
+    project_root: projectRoot,
+    limit: recentLimit + dynamicSeen.size,
+  });
+  const recent_decisions: WakeUpDecisionEntry[] = [];
+  for (const d of recentPool) {
+    if (dynamicSeen.has(d.id)) continue;
+    recent_decisions.push(compactDecision(d));
+    if (recent_decisions.length >= recentLimit) break;
+  }
+
+  // Stable: stats (aggregate counters, do not move per-turn).
+  const stats = decisionStore.getStats(projectRoot);
+  const minedCount = decisionStore.getMinedSessionCount();
+  const indexedSessions = decisionStore.getIndexedSessionIds(projectRoot);
+
+  const result: WakeUpSplit = {
+    stable: {
+      project: {
+        name: path.basename(projectRoot),
+        root: projectRoot,
+      },
+      conventions,
+      architecture,
+      stats: {
+        total_active: stats.active,
+        total_decisions: stats.total,
+        sessions_mined: minedCount,
+        sessions_indexed: indexedSessions.length,
+        by_type: stats.by_type,
+      },
+    },
+    dynamic: {
+      recent_decisions,
+      in_progress,
+    },
+    estimated_tokens: 0,
+    _cache_hint: {
+      inject_stable_into: 'system_prompt',
+      inject_dynamic_into: 'user_message',
+      rationale:
+        'Stable content is provider-cacheable; dynamic content changes per-turn and must not bust the system-prompt cache.',
+    },
+  };
+
+  // Rough token estimation (1 token ≈ 4 chars of JSON).
   const jsonSize = JSON.stringify(result).length;
   result.estimated_tokens = Math.ceil(jsonSize / 4);
 
