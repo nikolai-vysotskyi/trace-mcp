@@ -244,12 +244,14 @@ jobs:
           rm build-output.tar.zst
 
       - name: Test (shard ${{ matrix.shard }}/4)
-        # --reporter=verbose: print test starts (not just completions) so a
-        # hung test is identifiable from the log (default reporter only prints
-        # after a test completes, hiding the culprit of an infinite hang).
+        # Exclude tests/perf/** from per-commit shards. Those are throughput
+        # benchmarks (tests/perf/stress.test.ts seeds 10K files, runs FTS,
+        # graph traversals) that are inherently flaky on shared CI runners
+        # and have been observed to hang past the 8 min job cap. They run in
+        # the separate `perf` job below (master push + nightly + manual only).
         # --testTimeout=30000 + --hookTimeout=15000: per-test/per-hook caps so
         # a single hung test cannot stall the shard indefinitely.
-        run: pnpm exec vitest run --shard=${{ matrix.shard }}/4 --reporter=verbose --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+        run: pnpm exec vitest run --shard=${{ matrix.shard }}/4 --exclude='tests/perf/**' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
       - name: Job summary
         if: always()
@@ -430,7 +432,8 @@ jobs:
 
       - name: Test
         # Per-test timeout so a single hung test cannot stall the whole job.
-        run: pnpm exec vitest run --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+        # Excludes tests/perf/** for the same reasons as the ubuntu shards.
+        run: pnpm exec vitest run --exclude='tests/perf/**' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
       - name: Smoke-test CLI
         run: node dist/cli.js --version
