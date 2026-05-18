@@ -50,6 +50,19 @@ let _lastRestartAttempt = 0;
  */
 let lastVersionMismatchRestart = 0;
 const VERSION_MISMATCH_RESTART_COOLDOWN_MS = 60_000;
+/**
+ * Timestamp of the last time we asked launchd / lifecycle.ts to ensure or
+ * restart the daemon. Used to grant a freshly-spawned daemon a grace window
+ * during which a missed /health poll does NOT count as a failure. Without
+ * this, a slow startup (post-update migrations, FK recovery, cold reindex
+ * of many registered projects) can block the daemon's event loop past the
+ * 5s health timeout for a few polls — three misses trigger `daemon restart`,
+ * which kills the in-progress startup, and the next daemon repeats the
+ * same slow startup → infinite restart loop. 60s covers typical cold-start
+ * cost on a developer machine with O(30) registered projects.
+ */
+let lastDaemonStartAttempt = 0;
+const DAEMON_STARTUP_GRACE_MS = 60_000;
 
 const daemon = new DaemonClient();
 
@@ -473,6 +486,7 @@ async function checkHealth(): Promise<void> {
         `[trace-mcp] version mismatch — daemon=${daemonVersion} app=${appVersion}, restarting daemon`,
       );
       try {
+        lastDaemonStartAttempt = Date.now();
         const result = restartDaemon();
         if (!result.ok) {
           console.warn(`[trace-mcp] version-mismatch restart failed: ${result.error ?? 'unknown'}`);
@@ -501,8 +515,21 @@ async function checkHealth(): Promise<void> {
     }
 
     daemonReachable = false;
-    consecutiveFailures++;
     setTrayIcon(false);
+
+    // Grace period after a recent ensure/restart: a freshly spawned daemon
+    // may be busy with post-update migrations, FK recovery, or a cold reindex
+    // of many registered projects. Counting these misses as failures and
+    // shooting it with `daemon restart` restarts the same slow startup from
+    // zero — an infinite loop. Hold the counter steady until the grace
+    // window elapses; once expired, normal failure accounting resumes.
+    const sinceLastStart = Date.now() - lastDaemonStartAttempt;
+    if (lastDaemonStartAttempt > 0 && sinceLastStart < DAEMON_STARTUP_GRACE_MS) {
+      tray.setContextMenu(buildContextMenu());
+      return;
+    }
+
+    consecutiveFailures++;
 
     if (shouldAttemptRestart(consecutiveFailures)) {
       // First failure → try a soft start (noop if already running, stale PID, etc.).
@@ -514,6 +541,7 @@ async function checkHealth(): Promise<void> {
         `[trace-mcp] daemon unreachable (fail #${consecutiveFailures}), attempting ${action}`,
       );
       try {
+        lastDaemonStartAttempt = Date.now();
         const result = useRestart ? restartDaemon() : ensureDaemon();
         if (!result.ok) {
           console.warn(`[trace-mcp] daemon ${action} failed: ${result.error ?? 'unknown'}`);

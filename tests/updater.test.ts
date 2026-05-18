@@ -51,6 +51,9 @@ vi.mock('../src/init/claude-md.js', () => ({
 vi.mock('../src/registry.js', () => ({
   listProjects: vi.fn(() => []),
   updateLastIndexed: vi.fn(),
+  markAllProjectsPendingReindex: vi.fn(() => 0),
+  clearPendingReindex: vi.fn(),
+  getProject: vi.fn(() => null),
 }));
 vi.mock('../src/global.js', () => ({
   TRACE_MCP_HOME: '/tmp/test-trace-mcp',
