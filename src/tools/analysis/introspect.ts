@@ -359,6 +359,8 @@ interface GetDeadExportsResult {
   dead_exports: DeadExportItem[];
   total_exports: number;
   total_dead: number;
+  /** True when `dead_exports` was truncated by the `limit` parameter — `total_dead` exceeds the returned slice. */
+  truncated?: boolean;
   unsupported_languages?: string[];
 }
 
@@ -449,7 +451,11 @@ function collectPyprojectEntryPoints(store: Store): Set<string> {
  * Cross-references exported symbols with import edge metadata (specifiers).
  * An export is "dead" if its name never appears as a specifier in any import edge.
  */
-export function getDeadExports(store: Store, filePattern?: string): GetDeadExportsResult {
+export function getDeadExports(
+  store: Store,
+  filePattern?: string,
+  limit?: number,
+): GetDeadExportsResult {
   const exported = store
     .getExportedSymbols(filePattern)
     .filter((s) => !TEST_FIXTURE_RE.test(s.file_path))
@@ -536,11 +542,17 @@ export function getDeadExports(store: Store, filePattern?: string): GetDeadExpor
   const projectLanguages = new Set(allFiles.map((f) => f.language).filter(Boolean));
   const unsupported = [...projectLanguages].filter((l) => !LANGUAGES_WITH_EXPORT_SUPPORT.has(l));
 
+  const totalDead = dead.length;
+  const sliced =
+    typeof limit === 'number' && limit > 0 && totalDead > limit ? dead.slice(0, limit) : dead;
+  const truncated = sliced.length < totalDead;
+
   return {
     file_pattern: filePattern ?? null,
-    dead_exports: dead,
+    dead_exports: sliced,
     total_exports: exported.filter((s) => s.kind !== 'method').length,
-    total_dead: dead.length,
+    total_dead: totalDead,
+    ...(truncated ? { truncated: true } : {}),
     ...(unsupported.length > 0 ? { unsupported_languages: unsupported } : {}),
   };
 }

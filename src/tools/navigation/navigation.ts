@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { err, ok } from 'neverthrow';
 import type { EmbeddingService, RerankerService, VectorStore } from '../../ai/interfaces.js';
@@ -6,6 +7,7 @@ import { type FtsFilters, searchFts } from '../../db/fts.js';
 import { fuzzySearch } from '../../db/fuzzy.js';
 import type { FileRow, Store, SymbolRow } from '../../db/store.js';
 import { notFound, type TraceMcpResult } from '../../errors.js';
+import { getParser, type TSNode } from '../../parser/tree-sitter.js';
 import {
   computeIdentityScore,
   computeRecency,
@@ -25,7 +27,7 @@ import {
   type FusionWeights,
   signalFusion,
 } from '../../scoring/signal-fusion.js';
-import { readByteRange } from '../../utils/source-reader.js';
+import { readSymbolSource } from '../../utils/source-reader.js';
 
 // ─── get_symbol ─────────────────────────────────────────────
 
@@ -62,7 +64,7 @@ export function getSymbol(
   let source: string;
   let truncated: boolean | undefined;
   try {
-    source = readByteRange(absPath, symbol.byte_start, symbol.byte_end, !!file.gitignored);
+    source = readSymbolSource(absPath, symbol.byte_start, symbol.byte_end, !!file.gitignored);
     if (opts.maxLines != null) {
       const lines = source.split('\n');
       if (lines.length > opts.maxLines) {
@@ -150,6 +152,31 @@ export interface FusionSearchOptions {
   debug?: boolean;
 }
 
+/** Per-fusion-call honesty signal: did the semantic channel actually fire? */
+export interface FusionMeta {
+  semantic_channel: 'active' | 'skipped';
+  /** Reason when skipped (e.g. "no embeddings — run embed_repo first"). */
+  reason?: string;
+  /** Active per-channel weights after auto-normalization. */
+  weights?: Partial<FusionWeights>;
+  /** Per-channel candidate counts that fed into WRR. */
+  contributions?: {
+    lexical: number;
+    structural: number;
+    similarity: number;
+    identity: number;
+  };
+}
+
+/** Closest near-miss surfaced when fuzzy search returns zero items. */
+export interface NearMiss {
+  name: string;
+  file: string;
+  symbol_id: string;
+  distance: number;
+  similarity: number;
+}
+
 interface SearchResult {
   items: SearchResultItem[];
   total: number;
@@ -164,7 +191,33 @@ interface SearchResult {
    *  with no AI provider). Mirrors `_warning` but signals "no usable
    *  results possible" rather than "results may be lower quality". */
   _error?: { code: string; message: string; hint?: string };
+  /** Honesty signal for fusion-mode calls — was the semantic channel actually
+   *  available, and how did the other channels contribute? Only set when
+   *  fusion mode is requested. */
+  _meta?: { fusion?: FusionMeta } & Record<string, unknown>;
+  /** Closest name-similar candidates surfaced when fuzzy returns zero items.
+   *  Helps the caller recover from typos by suggesting concrete next queries. */
+  _near_misses?: NearMiss[];
 }
+
+/**
+ * Count populated embeddings without depending on the VectorStore interface
+ * (the BlobVectorStore has `count()`, others may not). We only need a
+ * "does this exist?" check, so a defensive try/catch is fine.
+ */
+function countEmbeddings(store: Store): number {
+  try {
+    const row = store.db.prepare('SELECT COUNT(*) AS cnt FROM symbol_embeddings').get() as
+      | { cnt: number }
+      | undefined;
+    return row?.cnt ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Minimum populated embeddings for the similarity channel to be considered "live". */
+const MIN_EMBEDDINGS_FOR_SEMANTIC = 10;
 
 export async function search(
   store: Store,
@@ -458,17 +511,38 @@ async function runFusionSearch(
   // ── Channel 3: Similarity (embeddings) — async if available ─
   const aiAvailable = !!(aiOptions?.vectorStore && aiOptions?.embeddingService);
   const semanticMode = semanticOptions?.semantic ?? 'auto';
-  const useAI = semanticMode !== 'off' && aiAvailable;
+  // Embeddings must actually be populated for the similarity channel to be
+  // useful. AI being "configured" is not the same as "embeddings exist" —
+  // shipping fusion when the vector store is empty is the silent no-op we
+  // are fixing here.
+  const embeddingsPopulated = countEmbeddings(store);
+  const hasEnoughEmbeddings = embeddingsPopulated >= MIN_EMBEDDINGS_FOR_SEMANTIC;
+  const useAI = semanticMode !== 'off' && aiAvailable && hasEnoughEmbeddings;
 
   let similarityResults: Array<{ id: number; score: number }> = [];
+  let semanticSkipReason: string | undefined;
+  if (semanticMode === 'off') {
+    semanticSkipReason = 'semantic="off" — caller disabled the similarity channel';
+  } else if (!aiAvailable) {
+    semanticSkipReason =
+      'no AI provider — configure ollama/openai and run `embed_repo` to enable the similarity channel';
+  } else if (!hasEnoughEmbeddings) {
+    semanticSkipReason =
+      embeddingsPopulated === 0
+        ? 'no embeddings — run `embed_repo` first to enable the similarity channel'
+        : `only ${embeddingsPopulated} symbols embedded (need >=${MIN_EMBEDDINGS_FOR_SEMANTIC}) — run \`embed_repo\` to widen coverage`;
+  }
+
   if (useAI) {
     try {
       const queryEmbedding = await aiOptions!.embeddingService!.embed(query, 'query');
       if (queryEmbedding.length > 0) {
         similarityResults = aiOptions!.vectorStore!.search(queryEmbedding, fetchLimit);
+      } else {
+        semanticSkipReason = 'embedding service returned an empty vector for this query';
       }
-    } catch {
-      /* vector search failed, continue without */
+    } catch (e) {
+      semanticSkipReason = `vector search failed: ${e instanceof Error ? e.message : 'unknown error'}`;
     }
   }
 
@@ -555,7 +629,40 @@ async function runFusionSearch(
     validCandidates.push({ id: idStr, symbol, file, nodeId: nodeMap.get(symbol.id) });
   }
 
-  if (validCandidates.length === 0) return { items: [], total: 0, search_mode: 'fusion' };
+  // Build the _meta.fusion honesty payload early so we can return it from
+  // any of the early-exit paths below.
+  const buildFusionMeta = (overrideContributions?: {
+    lexical: number;
+    structural: number;
+    similarity: number;
+    identity: number;
+  }): FusionMeta => {
+    const meta: FusionMeta = {
+      semantic_channel: similarityResults.length > 0 ? 'active' : 'skipped',
+    };
+    if (meta.semantic_channel === 'skipped' && semanticSkipReason) {
+      meta.reason = semanticSkipReason;
+    }
+    if (fusionOptions?.weights) meta.weights = { ...fusionOptions.weights };
+    if (overrideContributions) meta.contributions = overrideContributions;
+    return meta;
+  };
+
+  if (validCandidates.length === 0) {
+    return {
+      items: [],
+      total: 0,
+      search_mode: 'fusion',
+      _meta: {
+        fusion: buildFusionMeta({
+          lexical: 0,
+          structural: 0,
+          similarity: similarityResults.length,
+          identity: 0,
+        }),
+      },
+    };
+  }
 
   // ── Build channel inputs ───────────────────────────────────
 
@@ -629,6 +736,14 @@ async function runFusionSearch(
     ...(fusionOptions?.debug && debugInfos.length > 0
       ? { fusion_debug: debugInfos.slice(offset, offset + limit) }
       : {}),
+    _meta: {
+      fusion: buildFusionMeta({
+        lexical: lexicalItems.length,
+        structural: structuralItems.length,
+        similarity: similarityItems.length,
+        identity: identityChannel.items.length,
+      }),
+    },
   };
 
   return result;
@@ -655,7 +770,18 @@ function runFuzzySearch(
     filePattern: filters?.filePattern,
   });
 
-  if (matches.length === 0) return { items: [], total: 0, search_mode: 'fuzzy' };
+  if (matches.length === 0) {
+    // Wider scan: when the strict fuzzy run finds nothing, drop the threshold
+    // and the edit-distance ceiling and surface the top-5 closest names so
+    // the caller has something concrete to retry with instead of a dead end.
+    const nearMisses = findNearMisses(store, query, filters);
+    return {
+      items: [],
+      total: 0,
+      search_mode: 'fuzzy',
+      ...(nearMisses.length > 0 ? { _near_misses: nearMisses } : {}),
+    };
+  }
 
   // Batch-fetch symbols and files for all matches (avoid N+1)
   const symbolIds = matches.map((m) => m.symbolId);
@@ -682,6 +808,59 @@ function runFuzzySearch(
   return { items: sliced, total, search_mode: 'fuzzy' };
 }
 
+/**
+ * Wider trigram + Levenshtein scan used when strict fuzzy search returns 0
+ * items. Lowers the threshold (trigram similarity >= 0.25) and the
+ * edit-distance ceiling (<= 4) and surfaces the top-N closest names. The
+ * candidate pool is already capped at 200 by the underlying SQL — replaces
+ * the previous misleading "do not retry with similar terms" dead-end with
+ * something concrete to re-query against.
+ */
+function findNearMisses(
+  store: Store,
+  query: string,
+  filters: SearchFilters | undefined,
+  limit = 5,
+): NearMiss[] {
+  const wider = fuzzySearch(store.db, query, {
+    threshold: 0.25,
+    maxEditDistance: 4,
+    limit: 50,
+    kind: filters?.kind,
+    language: filters?.language,
+    filePattern: filters?.filePattern,
+  });
+
+  if (wider.length === 0) return [];
+
+  const ranked = wider
+    .map((m) => {
+      const maxName = Math.max(query.length, m.name.length);
+      const editScore = maxName > 0 ? 1 - m.editDistance / maxName : 0;
+      const combined = 0.6 * m.similarity + 0.4 * editScore;
+      return { match: m, combined };
+    })
+    .sort((a, b) => b.combined - a.combined)
+    .slice(0, limit);
+
+  const fileIds = [...new Set(ranked.map((r) => r.match.fileId))];
+  const fileMap = store.getFilesByIds(fileIds);
+
+  const out: NearMiss[] = [];
+  for (const { match } of ranked) {
+    const file = fileMap.get(match.fileId);
+    if (!file) continue;
+    out.push({
+      name: match.name,
+      file: file.path,
+      symbol_id: match.symbolIdStr,
+      distance: match.editDistance,
+      similarity: Number(match.similarity.toFixed(4)),
+    });
+  }
+  return out;
+}
+
 // ─── get_outline ───────────────────────────────────────
 
 interface FileOutlineSymbol {
@@ -693,6 +872,9 @@ interface FileOutlineSymbol {
   lineStart: number | null;
   lineEnd: number | null;
   decorators?: string[];
+  /** Synthetic-nesting fields. Only present on rows emitted by the nested-walk path. */
+  parentId?: string;
+  depth?: number;
 }
 
 interface FileOutlineResult {
@@ -701,42 +883,271 @@ interface FileOutlineResult {
   symbols: FileOutlineSymbol[];
 }
 
-export function getFileOutline(store: Store, filePath: string): TraceMcpResult<FileOutlineResult> {
+export interface GetFileOutlineOptions {
+  /** When true, walk the body of large top-level symbols and emit nested function-like declarations. */
+  nested?: boolean;
+  /** Minimum (line_end - line_start) for a parent symbol to be expanded. Default 100. */
+  minLocForNesting?: number;
+  /** Project root for filesystem reads when `nested=true`. Required for nesting. */
+  projectRoot?: string;
+}
+
+/** Hard cap on nesting depth so deeply nested callbacks don't explode the response. */
+const MAX_NESTING_DEPTH = 3;
+
+const TS_FUNCTION_NODE_TYPES = new Set([
+  'function_declaration',
+  'function',
+  'function_expression',
+  'arrow_function',
+  'method_definition',
+  'generator_function',
+  'generator_function_declaration',
+]);
+
+const PY_FUNCTION_NODE_TYPES = new Set(['function_definition', 'lambda']);
+
+const GO_FUNCTION_NODE_TYPES = new Set([
+  'function_declaration',
+  'method_declaration',
+  'func_literal',
+]);
+
+function functionNodeTypesFor(language: string | null): Set<string> | null {
+  if (!language) return null;
+  if (language === 'typescript' || language === 'javascript' || language === 'tsx') {
+    return TS_FUNCTION_NODE_TYPES;
+  }
+  if (language === 'python') return PY_FUNCTION_NODE_TYPES;
+  if (language === 'go') return GO_FUNCTION_NODE_TYPES;
+  return null;
+}
+
+function resolveGrammarForOutline(language: string, filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.tsx' || ext === '.jsx') return 'tsx';
+  return language;
+}
+
+function bestEffortName(node: TSNode): string {
+  // function_declaration / method_definition / named function expression → name child
+  const nameChild = node.childForFieldName?.('name');
+  if (nameChild) return nameChild.text;
+
+  // Arrow/function expression assigned to a binding: walk up one level.
+  const parent = node.parent;
+  if (parent) {
+    if (parent.type === 'variable_declarator' || parent.type === 'assignment_expression') {
+      const left = parent.childForFieldName?.('name') ?? parent.childForFieldName?.('left');
+      if (left) return left.text;
+    }
+    if (parent.type === 'pair' || parent.type === 'property_definition') {
+      const key = parent.childForFieldName?.('key') ?? parent.childForFieldName?.('name');
+      if (key) return key.text;
+    }
+  }
+  return '<anonymous>';
+}
+
+function kindForNode(node: TSNode): string {
+  switch (node.type) {
+    case 'method_definition':
+    case 'method_declaration':
+      return 'method';
+    case 'arrow_function':
+      return 'arrow_function';
+    case 'function_expression':
+    case 'function':
+    case 'func_literal':
+      return 'function_expression';
+    case 'function_declaration':
+    case 'function_definition':
+    case 'generator_function':
+    case 'generator_function_declaration':
+      return 'function';
+    case 'lambda':
+      return 'lambda';
+    default:
+      return 'function';
+  }
+}
+
+interface NestedCandidate {
+  name: string;
+  kind: string;
+  lineStart: number;
+  lineEnd: number;
+  depth: number;
+}
+
+/**
+ * Walk descendants of `root` and collect function-like nodes. Depth grows
+ * every time we cross into a function-like node, so a function nested inside
+ * a function inside the parent has depth = 2. The node identical to the
+ * parent symbol itself is skipped — we recurse through it without emitting.
+ */
+function collectNested(
+  root: TSNode,
+  funcTypes: Set<string>,
+  parentLineStart: number,
+  parentLineEnd: number,
+  maxDepth: number,
+): NestedCandidate[] {
+  const found: NestedCandidate[] = [];
+
+  function walk(node: TSNode, depth: number): void {
+    if (depth >= maxDepth) return;
+    for (let i = 0; i < node.childCount; i++) {
+      const child = node.child(i);
+      if (!child) continue;
+      if (funcTypes.has(child.type)) {
+        const lineStart = child.startPosition.row + 1;
+        const lineEnd = child.endPosition.row + 1;
+        // Skip the node identical to the parent symbol itself.
+        if (lineStart === parentLineStart && lineEnd === parentLineEnd) {
+          walk(child, depth);
+          continue;
+        }
+        const childDepth = depth + 1;
+        if (childDepth <= maxDepth) {
+          found.push({
+            name: bestEffortName(child),
+            kind: kindForNode(child),
+            lineStart,
+            lineEnd,
+            depth: childDepth,
+          });
+          walk(child, childDepth);
+        }
+      } else {
+        walk(child, depth);
+      }
+    }
+  }
+
+  walk(root, 0);
+  return found;
+}
+
+/**
+ * For one parent symbol, parse the file and extract nested function-like
+ * declarations within the parent's line range. Returns empty when the grammar
+ * is unsupported, the file is unreadable, or there is no nesting.
+ */
+async function extractNestedFunctions(
+  projectRoot: string,
+  filePath: string,
+  language: string,
+  parent: SymbolRow,
+  maxDepth: number,
+): Promise<NestedCandidate[]> {
+  const funcTypes = functionNodeTypesFor(language);
+  if (!funcTypes) return [];
+  if (parent.line_start == null || parent.line_end == null) return [];
+
+  let content: string;
+  try {
+    const buf = readFileSync(path.resolve(projectRoot, filePath));
+    if (buf.length > 1024 * 1024) return [];
+    content = buf.toString('utf-8');
+  } catch {
+    return [];
+  }
+
+  let tree;
+  try {
+    const grammar = resolveGrammarForOutline(language, filePath);
+    const parser = await getParser(grammar);
+    tree = parser.parse(content);
+  } catch {
+    return [];
+  }
+
+  const root = tree.rootNode;
+  // Smallest node spanning the parent's line range.
+  const parentNode = root.descendantForPosition(
+    { row: parent.line_start - 1, column: 0 },
+    { row: parent.line_end - 1, column: Number.MAX_SAFE_INTEGER },
+  );
+  if (!parentNode) return [];
+
+  return collectNested(parentNode, funcTypes, parent.line_start, parent.line_end, maxDepth);
+}
+
+export async function getFileOutline(
+  store: Store,
+  filePath: string,
+  opts: GetFileOutlineOptions = {},
+): Promise<TraceMcpResult<FileOutlineResult>> {
   const file = store.getFile(filePath);
   if (!file) {
     return err(notFound(filePath));
   }
 
   const symbols = store.getSymbolsByFile(file.id);
+  const projected: FileOutlineSymbol[] = [];
+
+  const nestingEnabled = opts.nested === true && !!opts.projectRoot && !!file.language;
+  const minLoc = opts.minLocForNesting ?? 100;
+
+  for (const s of symbols) {
+    const base: FileOutlineSymbol = {
+      symbolId: s.symbol_id,
+      name: s.name,
+      kind: s.kind,
+      fqn: s.fqn,
+      signature: s.signature,
+      lineStart: s.line_start,
+      lineEnd: s.line_end,
+    };
+    if (s.metadata) {
+      const meta =
+        typeof s.metadata === 'string'
+          ? (JSON.parse(s.metadata) as Record<string, unknown>)
+          : (s.metadata as Record<string, unknown>);
+      const decs =
+        (meta.decorators as string[] | undefined) ??
+        (meta.annotations as string[] | undefined) ??
+        (meta.attributes as string[] | undefined);
+      if (Array.isArray(decs) && decs.length > 0) {
+        base.decorators = decs;
+      }
+    }
+    projected.push(base);
+
+    if (
+      nestingEnabled &&
+      s.line_start != null &&
+      s.line_end != null &&
+      s.line_end - s.line_start >= minLoc
+    ) {
+      const lang = file.language as string;
+      const nested = await extractNestedFunctions(
+        opts.projectRoot as string,
+        file.path,
+        lang,
+        s,
+        MAX_NESTING_DEPTH,
+      );
+      for (const n of nested) {
+        projected.push({
+          symbolId: `${s.symbol_id}::nested@${n.lineStart}`,
+          name: n.name,
+          kind: n.kind,
+          fqn: null,
+          signature: null,
+          lineStart: n.lineStart,
+          lineEnd: n.lineEnd,
+          parentId: s.symbol_id,
+          depth: n.depth,
+        });
+      }
+    }
+  }
 
   return ok({
     path: file.path,
     language: file.language,
-    symbols: symbols.map((s) => {
-      const base: FileOutlineSymbol = {
-        symbolId: s.symbol_id,
-        name: s.name,
-        kind: s.kind,
-        fqn: s.fqn,
-        signature: s.signature,
-        lineStart: s.line_start,
-        lineEnd: s.line_end,
-      };
-      // Surface decorators/annotations/attributes from metadata
-      if (s.metadata) {
-        const meta =
-          typeof s.metadata === 'string'
-            ? (JSON.parse(s.metadata) as Record<string, unknown>)
-            : (s.metadata as Record<string, unknown>);
-        const decs =
-          (meta.decorators as string[] | undefined) ??
-          (meta.annotations as string[] | undefined) ??
-          (meta.attributes as string[] | undefined);
-        if (Array.isArray(decs) && decs.length > 0) {
-          base.decorators = decs;
-        }
-      }
-      return base;
-    }),
+    symbols: projected,
   });
 }

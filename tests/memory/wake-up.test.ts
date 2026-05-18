@@ -416,4 +416,62 @@ describe('assembleWakeUpSplit', () => {
     // The split-only key must not have leaked into the flat shape.
     expect((flat as unknown as Record<string, unknown>)._cache_hint).toBeUndefined();
   });
+
+  describe('heat-aware dynamic ordering', () => {
+    it('orders recent_decisions by heat when heatEnabled=true', () => {
+      const a = store.addDecision({
+        title: 'A',
+        content: 'c',
+        type: 'tech_choice',
+        project_root: projectRoot,
+        valid_from: '2026-01-01T00:00:00.000Z',
+      });
+      const b = store.addDecision({
+        title: 'B',
+        content: 'c',
+        type: 'tech_choice',
+        project_root: projectRoot,
+        valid_from: '2026-02-01T00:00:00.000Z',
+      });
+      const c = store.addDecision({
+        title: 'C',
+        content: 'c',
+        type: 'tech_choice',
+        project_root: projectRoot,
+        valid_from: '2026-03-01T00:00:00.000Z',
+      });
+      // Make B clearly hot.
+      for (let i = 0; i < 8; i++) store.recordHits([b.id]);
+
+      const heated = assembleWakeUpSplit(store, projectRoot, { heatEnabled: true });
+      expect(heated.dynamic.recent_decisions[0].id).toBe(b.id);
+
+      const plain = assembleWakeUpSplit(store, projectRoot, { heatEnabled: false });
+      // Without heat, ordering remains valid_from DESC → [C, B, A].
+      expect(plain.dynamic.recent_decisions.map((d) => d.id)).toEqual([c.id, b.id, a.id]);
+    });
+
+    it('does not reorder stable.conventions / stable.architecture by heat', () => {
+      const conv1 = store.addDecision({
+        title: 'Conv 1',
+        content: 'c',
+        type: 'convention',
+        project_root: projectRoot,
+        valid_from: '2026-01-01T00:00:00.000Z',
+      });
+      const conv2 = store.addDecision({
+        title: 'Conv 2',
+        content: 'c',
+        type: 'convention',
+        project_root: projectRoot,
+        valid_from: '2026-02-01T00:00:00.000Z',
+      });
+      // Make conv1 hotter than conv2 — stable should still surface conv2 first
+      // (newer valid_from), proving stable is NOT heat-reordered.
+      for (let i = 0; i < 10; i++) store.recordHits([conv1.id]);
+
+      const out = assembleWakeUpSplit(store, projectRoot, { heatEnabled: true });
+      expect(out.stable.conventions.map((d) => d.id)).toEqual([conv2.id, conv1.id]);
+    });
+  });
 });

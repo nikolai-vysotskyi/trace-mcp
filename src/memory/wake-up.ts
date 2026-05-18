@@ -13,6 +13,7 @@
 
 import * as path from 'node:path';
 import type { DecisionRow, DecisionStore, DecisionType } from './decision-store.js';
+import { computeHeat } from './heat.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -222,9 +223,37 @@ export function assembleWakeUpSplit(
   projectRoot: string,
   opts: {
     maxRecent?: number;
+    /**
+     * Heat-aware ordering for the dynamic regions. When enabled,
+     * `recent_decisions` and `in_progress` are sorted by computed heat (DESC)
+     * before being capped. Stable regions are NOT reordered — they remain
+     * type-grouped and recency-sorted to keep the cache stable.
+     */
+    heatEnabled?: boolean;
+    heatHalfLifeDays?: number;
+    heatFreshnessDays?: number;
   } = {},
 ): WakeUpSplit {
   const recentLimit = Math.min(opts.maxRecent ?? SPLIT_LIMITS.recent, 30);
+  const heatEnabled = opts.heatEnabled === true;
+  const heatNow = new Date();
+  const heatParams = {
+    now: heatNow,
+    halfLifeDays: opts.heatHalfLifeDays,
+    freshnessDays: opts.heatFreshnessDays,
+  };
+  const byHeatDesc = (a: DecisionRow, b: DecisionRow) => {
+    const ha = computeHeat(
+      { hit_count: a.hit_count ?? 0, last_hit_at: a.last_hit_at, created_at: a.created_at },
+      heatParams,
+    );
+    const hb = computeHeat(
+      { hit_count: b.hit_count ?? 0, last_hit_at: b.last_hit_at, created_at: b.created_at },
+      heatParams,
+    );
+    if (hb !== ha) return hb - ha;
+    return a.valid_from < b.valid_from ? 1 : a.valid_from > b.valid_from ? -1 : 0;
+  };
 
   // Stable: conventions + architecture (high-signal, slow-moving).
   const conventionRows = decisionStore.queryDecisions({
@@ -264,10 +293,16 @@ export function assembleWakeUpSplit(
       inProgressRows.push(r);
     }
   }
-  // Stable sort by valid_from descending, then cap.
-  inProgressRows.sort((a, b) =>
-    a.valid_from < b.valid_from ? 1 : a.valid_from > b.valid_from ? -1 : 0,
-  );
+  // When heat is enabled, dynamic regions surface by recall heat (DESC).
+  // Otherwise keep the existing valid_from-DESC behaviour so older clients
+  // see no change.
+  if (heatEnabled) {
+    inProgressRows.sort(byHeatDesc);
+  } else {
+    inProgressRows.sort((a, b) =>
+      a.valid_from < b.valid_from ? 1 : a.valid_from > b.valid_from ? -1 : 0,
+    );
+  }
   const inProgressCapped = inProgressRows.slice(0, SPLIT_LIMITS.in_progress);
   const in_progress = inProgressCapped.map(compactDecision);
 
@@ -276,16 +311,19 @@ export function assembleWakeUpSplit(
   const dynamicSeen = new Set<number>(stableIds);
   for (const r of inProgressCapped) dynamicSeen.add(r.id);
 
+  // Fetch a generous pool so the heat re-sort has room to reorder, then
+  // filter + cap. When heat is enabled we pull a bigger pool because the
+  // valid_from-ordered DB rows may not be the heat-ordered ones.
+  const poolMultiplier = heatEnabled ? 5 : 1;
   const recentPool = decisionStore.queryDecisions({
     project_root: projectRoot,
-    limit: recentLimit + dynamicSeen.size,
+    limit: Math.max(recentLimit + dynamicSeen.size, recentLimit * poolMultiplier),
   });
-  const recent_decisions: WakeUpDecisionEntry[] = [];
-  for (const d of recentPool) {
-    if (dynamicSeen.has(d.id)) continue;
-    recent_decisions.push(compactDecision(d));
-    if (recent_decisions.length >= recentLimit) break;
-  }
+  const recentCandidates = recentPool.filter((d) => !dynamicSeen.has(d.id));
+  if (heatEnabled) recentCandidates.sort(byHeatDesc);
+  const recent_decisions: WakeUpDecisionEntry[] = recentCandidates
+    .slice(0, recentLimit)
+    .map(compactDecision);
 
   // Stable: stats (aggregate counters, do not move per-turn).
   const stats = decisionStore.getStats(projectRoot);

@@ -13,10 +13,13 @@ import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import {
   getMinimalContext,
   inferTask,
+  resolveProjectIdentity,
   type MinimalContext,
 } from '../../src/tools/project/minimal-context.js';
+import { assembleWakeUp } from '../../src/memory/wake-up.js';
+import { DecisionStore } from '../../src/memory/decision-store.js';
 import type { TraceMcpConfig } from '../../src/config.js';
-import type { ProjectContext } from '../../src/plugin-api/types.js';
+import type { FrameworkPlugin, ProjectContext } from '../../src/plugin-api/types.js';
 
 function emptyConfig(): TraceMcpConfig {
   return {} as TraceMcpConfig;
@@ -120,6 +123,96 @@ describe('getMinimalContext — shape', () => {
     // Loose bound — the point of the tool is "much smaller than full
     // get_project_map" — but a regression that doubles the size shows up here.
     expect(json.length).toBeLessThan(3000);
+  });
+
+  it('project.name matches get_wake_up identity resolution on the same fixture', () => {
+    const { store, registry } = fixture();
+    const projectRoot = '/tmp/trace-mcp-fixture';
+    const decisionStore = new DecisionStore(':memory:');
+    const wake = assembleWakeUp(decisionStore, projectRoot);
+    const minimal = getMinimalContext(store, registry, emptyConfig(), projectRoot, {
+      rootPath: projectRoot,
+      configFiles: [],
+    } as ProjectContext);
+    expect(minimal.project.name).toBe(wake.project.name);
+    expect(minimal.project.name).toBe('trace-mcp-fixture');
+  });
+
+  it('prefers package.json name when present (consistent with wake-up convention)', () => {
+    const { store, registry } = fixture();
+    const result = getMinimalContext(store, registry, emptyConfig(), '/tmp/anything', {
+      rootPath: '/tmp/anything',
+      configFiles: [],
+      packageJson: { name: 'my-pkg' },
+    } as ProjectContext);
+    expect(result.project.name).toBe('my-pkg');
+  });
+
+  it('resolveProjectIdentity falls back to basename when package.json is absent', () => {
+    expect(resolveProjectIdentity('/Users/x/projects/cool-tool')).toBe('cool-tool');
+    expect(resolveProjectIdentity('/Users/x/projects/cool-tool', undefined)).toBe('cool-tool');
+  });
+
+  it('frameworks list returns more than 3 entries on a multi-framework fixture', () => {
+    const db = initializeDatabase(':memory:');
+    const store = new Store(db);
+    const registry = new PluginRegistry();
+    // Register 7 dummy framework plugins that all detect=true.
+    const makePlugin = (name: string, priority: number): FrameworkPlugin => ({
+      manifest: { name, version: '0.0.0', priority },
+      detect: () => true,
+      registerSchema: () => ({}),
+    });
+    for (const name of ['fw-a', 'fw-b', 'fw-c', 'fw-d', 'fw-e', 'fw-f', 'fw-g']) {
+      registry.registerFrameworkPlugin(makePlugin(name, 100));
+    }
+    const result = getMinimalContext(store, registry, emptyConfig(), '/tmp/multi', {
+      rootPath: '/tmp/multi',
+      configFiles: [],
+    } as ProjectContext);
+    expect(result.project.frameworks.length).toBeGreaterThan(3);
+    expect(result.project.frameworks.length).toBe(7);
+  });
+
+  it('frameworks list is capped (does not unboundedly grow)', () => {
+    const db = initializeDatabase(':memory:');
+    const store = new Store(db);
+    const registry = new PluginRegistry();
+    const makePlugin = (name: string): FrameworkPlugin => ({
+      manifest: { name, version: '0.0.0', priority: 100 },
+      detect: () => true,
+      registerSchema: () => ({}),
+    });
+    for (let i = 0; i < 25; i++) registry.registerFrameworkPlugin(makePlugin(`fw-${i}`));
+    const result = getMinimalContext(store, registry, emptyConfig(), '/tmp/many', {
+      rootPath: '/tmp/many',
+      configFiles: [],
+    } as ProjectContext);
+    expect(result.project.frameworks.length).toBeLessThanOrEqual(10);
+  });
+
+  it('emits a detect_communities hint when communities.total is 0', () => {
+    const { store, registry } = fixture();
+    const result = getMinimalContext(store, registry, emptyConfig(), '/tmp/empty', emptyCtx());
+    expect(result.communities.total).toBe(0);
+    expect(result.communities._hints).toBeDefined();
+    expect(result.communities._hints?.map((h) => h.tool)).toContain('detect_communities');
+  });
+
+  it('task "LSP enrichment" → next_steps includes get_task_context with that task string', () => {
+    const { store, registry } = fixture();
+    const result = getMinimalContext(store, registry, emptyConfig(), '/tmp/empty', emptyCtx(), {
+      task: 'LSP enrichment',
+    });
+    const tcCall = result.next_steps.find((s) => s.tool === 'get_task_context');
+    expect(tcCall).toBeDefined();
+    expect(tcCall?.args).toMatchObject({ task: 'LSP enrichment' });
+    // And a module hint pointing at src/lsp/.
+    const outlineCall = result.next_steps.find(
+      (s) =>
+        s.tool === 'get_outline' && (s.args as { path?: string } | undefined)?.path === 'src/lsp/',
+    );
+    expect(outlineCall).toBeDefined();
   });
 
   it('every next_step entry has tool + hint fields', () => {

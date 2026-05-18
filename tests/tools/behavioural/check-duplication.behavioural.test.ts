@@ -102,4 +102,71 @@ describe('check_duplication — behavioural contract', () => {
     });
     expect(result.symbols_checked).toBeGreaterThanOrEqual(1);
   });
+
+  it('symbol_id mode never reports the queried symbol as its own duplicate', () => {
+    const store = createTestStore();
+    // Two symbols with the same name "Logger" in different files — they would
+    // otherwise score against each other. Querying by one's symbol_id must
+    // never include itself in the warnings list.
+    const fileA = store.insertFile('src/a/logger.ts', 'typescript', 'h_a', 100);
+    const fileB = store.insertFile('src/b/logger.ts', 'typescript', 'h_b', 100);
+    store.insertSymbol(fileA, {
+      symbolId: 'src/a/logger.ts::Logger#class',
+      name: 'Logger',
+      kind: 'class',
+      fqn: 'Logger',
+      byteStart: 0,
+      byteEnd: 100,
+      lineStart: 1,
+      lineEnd: 5,
+      signature: 'class Logger',
+    });
+    store.insertSymbol(fileB, {
+      symbolId: 'src/b/logger.ts::Logger#class',
+      name: 'Logger',
+      kind: 'class',
+      fqn: 'Logger',
+      byteStart: 0,
+      byteEnd: 100,
+      lineStart: 1,
+      lineEnd: 5,
+      signature: 'class Logger',
+    });
+
+    const result = checkSymbolForDuplicates(store, store.db, {
+      symbol_id: 'src/a/logger.ts::Logger#class',
+    });
+    // No duplicate row should point back at the queried symbol_id.
+    const selfHits = result.warnings.filter(
+      (w) => w.duplicate_symbol_id === 'src/a/logger.ts::Logger#class',
+    );
+    expect(selfHits).toEqual([]);
+  });
+
+  it('honours excludeSymbolIds in name-only mode', () => {
+    const store = createTestStore();
+    const fileId = store.insertFile('src/x.ts', 'typescript', 'h_x', 100);
+    store.insertSymbol(fileId, {
+      symbolId: 'src/x.ts::CanonicalLogger#class',
+      name: 'CanonicalLogger',
+      kind: 'class',
+      fqn: 'CanonicalLogger',
+      byteStart: 0,
+      byteEnd: 100,
+      lineStart: 1,
+      lineEnd: 5,
+      signature: 'class CanonicalLogger',
+    });
+
+    const result = checkSymbolForDuplicates(
+      store,
+      store.db,
+      { name: 'CanonicalLogger', kind: 'class' },
+      { threshold: 0.3, excludeSymbolIds: ['src/x.ts::CanonicalLogger#class'] },
+    );
+    const hits = result.warnings.filter(
+      (w) => w.duplicate_symbol_id === 'src/x.ts::CanonicalLogger#class',
+    );
+    expect(hits).toEqual([]);
+  });
 });

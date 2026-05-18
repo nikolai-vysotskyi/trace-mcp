@@ -118,4 +118,36 @@ describe('getDeadExports', () => {
     expect(result.total_dead).toBe(0);
     expect(result.dead_exports).toHaveLength(0);
   });
+
+  // ── P2-2: pagination ──────────────────────────────────────────────────────
+
+  it('respects the `limit` parameter and reports truncation (P2-2)', () => {
+    for (let i = 0; i < 50; i++) {
+      addExportedSymbol(store, `src/mod${i}.ts`, `unused${i}`, 'function');
+    }
+
+    const limited = getDeadExports(store, undefined, 10);
+    expect(limited.dead_exports).toHaveLength(10);
+    expect(limited.total_dead).toBe(50);
+    expect(limited.truncated).toBe(true);
+  });
+
+  it('omits `truncated` field when limit not exceeded', () => {
+    addExportedSymbol(store, 'src/a.ts', 'unusedA', 'function');
+    addExportedSymbol(store, 'src/b.ts', 'unusedB', 'function');
+
+    const result = getDeadExports(store, undefined, 100);
+    expect(result.dead_exports).toHaveLength(2);
+    expect(result.total_dead).toBe(2);
+    expect(result.truncated).toBeUndefined();
+  });
+
+  it('returns full list when limit is undefined (back-compat)', () => {
+    for (let i = 0; i < 5; i++) {
+      addExportedSymbol(store, `src/m${i}.ts`, `unused${i}`, 'function');
+    }
+    const result = getDeadExports(store);
+    expect(result.dead_exports).toHaveLength(5);
+    expect(result.truncated).toBeUndefined();
+  });
 });

@@ -380,18 +380,30 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
 
   server.tool(
     'get_tests_for',
-    'Find test files and test functions that cover a given symbol or file. Use instead of Glob/Grep — understands test-to-source mapping, not just filename conventions. For project-wide test coverage gaps use get_untested_symbols instead. Read-only. Returns JSON: { tests: [{ file, testName, symbol_id }], total }.',
+    'Find test files and test functions that cover a given symbol or file. Use instead of Glob/Grep — understands test-to-source mapping, not just filename conventions. When symbol_id (or fqn) is provided, narrows file-level reachability to test files that actually exercise the symbol — graph-resolved calls (direct_invocation), import + textual reference (import_and_call), or bare textual mention (text_match). Default min_confidence is import_and_call. For project-wide test coverage gaps use get_untested_symbols instead. Read-only. Returns JSON: { tests: [{ test_file, symbol_id, test_name, line, edge_type, confidence }], total, symbol_filtered?, fell_back_to_file_level? }.',
     {
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to find tests for'),
       fqn: optionalNonEmptyString(512).describe('Fully qualified name to find tests for'),
       file_path: optionalNonEmptyString(512).describe('File path to find tests for'),
+      min_confidence: z
+        .enum(['text_match', 'import_and_call', 'direct_invocation'])
+        .optional()
+        .describe(
+          'Minimum confidence when narrowing by symbol_id/fqn. Default: import_and_call. Ignored in file-level mode.',
+        ),
     },
-    async ({ symbol_id, fqn, file_path }) => {
+    async ({ symbol_id, fqn, file_path, min_confidence }) => {
       if (file_path) {
         const blocked = guardPath(file_path);
         if (blocked) return blocked;
       }
-      const result = getTestsFor(store, { symbolId: symbol_id, fqn, filePath: file_path });
+      const result = getTestsFor(store, {
+        symbolId: symbol_id,
+        fqn,
+        filePath: file_path,
+        projectRoot,
+        minConfidence: min_confidence,
+      });
       if (result.isErr()) {
         return {
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],

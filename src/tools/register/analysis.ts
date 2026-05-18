@@ -152,17 +152,27 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dead_exports',
-    'Find exported symbols never imported by any other file — dead code candidates. Use for quick export-level dead code scan. For deeper multi-signal dead code detection (including call graph) use get_dead_code instead. Read-only. Returns JSON: { deadExports: [{ symbol_id, name, kind, file }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'Find exported symbols never imported by any other file — dead code candidates. Use for quick export-level dead code scan. For deeper multi-signal dead code detection (including call graph) use get_dead_code instead. Paginated: caps result list at `limit` (default 100, max 500); when more exist the response includes `truncated: true` and `total_dead` reflects the full count. Read-only. Returns JSON: { dead_exports: [{ symbol_id, name, kind, file }], total_dead, total_exports, truncated? }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
     {
       file_pattern: z
         .string()
         .max(512)
         .optional()
         .describe('Filter files by glob pattern (e.g. "src/tools/*.ts")'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .default(100)
+        .describe(
+          'Maximum number of dead exports to return (default 100, max 500). When more exist, response carries `truncated: true` and `total_dead` reflects the full count.',
+        ),
       output_format: OutputFormatSchema,
     },
-    async ({ file_pattern, output_format }) => {
-      const result = getDeadExports(store, file_pattern);
+    async ({ file_pattern, limit, output_format }) => {
+      const result = getDeadExports(store, file_pattern, limit);
       const fmt = output_format === 'markdown' ? 'json' : output_format;
       const text = encodeResponse(result, fmt);
       return { content: [{ type: 'text', text }] };
@@ -617,13 +627,15 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'check_duplication',
-    'Check if a function/class name already exists elsewhere in the codebase before creating it. Prevents duplicating existing logic. Call with just a name when planning new code, or symbol_id to check an existing symbol. Returns scored matches — score ≥0.7 means high likelihood of duplication, review the existing symbol before proceeding. Read-only. Returns JSON: { duplicates: [{ symbol_id, name, file, score }], hasDuplication }.',
+    'Check if a function/class name already exists elsewhere in the codebase before creating it. Prevents duplicating existing logic. Call with just a `name` when planning new code (an existing match means the name is taken — this is expected when used as a pre-create check), or `symbol_id` to check an existing symbol against others (the supplied symbol_id is always excluded from results — a symbol is never its own duplicate). Use `exclude_symbol_id` to suppress additional known symbols. Returns scored matches — score ≥0.7 means high likelihood of duplication, review the existing symbol before proceeding. Read-only. Returns JSON: { duplicates: [{ symbol_id, name, file, score }], hasDuplication }.',
     {
       symbol_id: z
         .string()
         .max(512)
         .optional()
-        .describe('Existing symbol ID to check for duplicates'),
+        .describe(
+          'Existing symbol ID to check for duplicates (auto-excluded from results — a symbol is never reported as a duplicate of itself)',
+        ),
       name: z
         .string()
         .max(256)
@@ -639,14 +651,25 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .max(1.0)
         .optional()
         .describe('Minimum similarity score to report (default: 0.60)'),
+      exclude_symbol_id: z
+        .union([z.string().max(512), z.array(z.string().max(512)).max(50)])
+        .optional()
+        .describe(
+          'Suppress specific symbol(s) from results. Useful in name-only mode to exclude a known canonical match (e.g. when checking before adding a sibling symbol).',
+        ),
     },
-    async ({ symbol_id, name, kind, threshold }) => {
+    async ({ symbol_id, name, kind, threshold, exclude_symbol_id }) => {
       if (!symbol_id && !name) {
         return {
           content: [{ type: 'text', text: j({ error: 'Provide symbol_id or name' }) }],
           isError: true,
         };
       }
+      const excludeSymbolIds = Array.isArray(exclude_symbol_id)
+        ? exclude_symbol_id
+        : exclude_symbol_id
+          ? [exclude_symbol_id]
+          : [];
       const result = checkSymbolForDuplicates(
         store,
         store.db,
@@ -658,6 +681,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         {
           threshold: threshold ?? 0.6,
           maxResults: 15,
+          excludeSymbolIds,
         },
       );
       return { content: [{ type: 'text', text: jh('check_duplication', result) }] };

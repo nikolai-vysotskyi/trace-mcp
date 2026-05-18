@@ -100,7 +100,7 @@ describe('MCP Protocol E2E', () => {
   });
 
   describe('get_outline', () => {
-    it('returns symbols for a known file', () => {
+    it('returns symbols for a known file', async () => {
       const fileId = store.insertFile('app/User.php', 'php', 'h1', 100);
       store.insertSymbol(fileId, {
         symbolId: 'app/User.php::User#class',
@@ -112,15 +112,15 @@ describe('MCP Protocol E2E', () => {
         lineEnd: 50,
       });
 
-      const result = getFileOutline(store, 'app/User.php');
+      const result = await getFileOutline(store, 'app/User.php');
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
         expect(result.value.symbols.length).toBeGreaterThan(0);
       }
     });
 
-    it('returns error for unknown file', () => {
-      const result = getFileOutline(store, 'nonexistent.php');
+    it('returns error for unknown file', async () => {
+      const result = await getFileOutline(store, 'nonexistent.php');
       expect(result.isErr()).toBe(true);
     });
   });

@@ -427,6 +427,26 @@ const MemoryConfigSchema = z
           ),
       })
       .prefault({}),
+    heat: z
+      .object({
+        enabled: z
+          .boolean()
+          .default(true)
+          .describe('Track and use recall-heat scoring for decisions.'),
+        halfLifeDays: z
+          .number()
+          .min(0.5)
+          .max(365)
+          .default(14)
+          .describe('How fast hit-driven heat decays. Default 14d.'),
+        freshnessDays: z
+          .number()
+          .min(0.5)
+          .max(365)
+          .default(7)
+          .describe('How long a brand-new decision stays warm without recalls. Default 7d.'),
+      })
+      .prefault({}),
     mining: z
       .object({
         strategy: z

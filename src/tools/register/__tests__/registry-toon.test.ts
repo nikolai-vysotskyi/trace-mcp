@@ -110,7 +110,14 @@ describe('query_decisions — output_format wiring', () => {
     const { server, captured } = makeCapturingServer();
     registerMemoryTools(
       server as Parameters<typeof registerMemoryTools>[0],
-      baseCtxStub({ store, decisionStore }),
+      // Disable heat scoring so back-to-back calls do not mutate hit_count
+      // between the JSON and TOON requests — the round-trip equality check
+      // depends on identical payloads.
+      baseCtxStub({
+        store,
+        decisionStore,
+        config: { memory: { heat: { enabled: false } } },
+      }),
     );
     tool = findTool(captured, 'query_decisions');
   });

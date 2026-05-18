@@ -176,8 +176,8 @@ describe('Navigation tools', () => {
   });
 
   describe('getFileOutline()', () => {
-    it('returns symbols for a known file', () => {
-      const result = getFileOutline(store, 'app/Models/User.php');
+    it('returns symbols for a known file', async () => {
+      const result = await getFileOutline(store, 'app/Models/User.php');
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
         expect(result.value.symbols.length).toBeGreaterThan(0);
@@ -185,8 +185,8 @@ describe('Navigation tools', () => {
       }
     });
 
-    it('returns signatures without source bodies', () => {
-      const result = getFileOutline(store, 'src/utils.ts');
+    it('returns signatures without source bodies', async () => {
+      const result = await getFileOutline(store, 'src/utils.ts');
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
         for (const sym of result.value.symbols) {
@@ -198,8 +198,8 @@ describe('Navigation tools', () => {
       }
     });
 
-    it('returns NOT_FOUND for unknown file', () => {
-      const result = getFileOutline(store, 'nonexistent.php');
+    it('returns NOT_FOUND for unknown file', async () => {
+      const result = await getFileOutline(store, 'nonexistent.php');
       expect(result.isErr()).toBe(true);
     });
   });

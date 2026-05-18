@@ -232,14 +232,14 @@ describe('getFileOutline()', () => {
     seedSymbol(store, f, 'logout', { kind: 'function' });
   });
 
-  it('returns correct language in outline', () => {
-    const r = getFileOutline(store, 'src/auth.py');
+  it('returns correct language in outline', async () => {
+    const r = await getFileOutline(store, 'src/auth.py');
     expect(r.isOk()).toBe(true);
     expect(r._unsafeUnwrap().language).toBe('python');
   });
 
-  it('returns all symbols with signatures, no source bodies', () => {
-    const r = getFileOutline(store, 'src/auth.py');
+  it('returns all symbols with signatures, no source bodies', async () => {
+    const r = await getFileOutline(store, 'src/auth.py');
     expect(r.isOk()).toBe(true);
     const syms = r._unsafeUnwrap().symbols;
     expect(syms.length).toBe(2);
@@ -249,8 +249,8 @@ describe('getFileOutline()', () => {
     }
   });
 
-  it('returns NOT_FOUND error for unknown file', () => {
-    const r = getFileOutline(store, 'src/missing.ts');
+  it('returns NOT_FOUND error for unknown file', async () => {
+    const r = await getFileOutline(store, 'src/missing.ts');
     expect(r.isErr()).toBe(true);
     if (r.isErr()) expect(r.error.code).toBe('NOT_FOUND');
   });
