@@ -113,6 +113,7 @@ interface DriftReport {
     total_anomalies: number;
     shotgun_hotspots: number;
   };
+  _warnings?: string[];
 }
 
 interface TechDebtModule {
@@ -573,10 +574,20 @@ export function detectDrift(
       co_change_anomalies: [],
       shotgun_surgery: [],
       summary: { total_anomalies: 0, shotgun_hotspots: 0 },
+      _warnings: ['Git history unavailable or empty — drift detection cannot run.'],
     });
   }
 
   const commitGroups = getCommitFileGroups(cwd, sinceDays);
+
+  if (commitGroups.length === 0) {
+    return ok({
+      co_change_anomalies: [],
+      shotgun_surgery: [],
+      summary: { total_anomalies: 0, shotgun_hotspots: 0 },
+      _warnings: ['Git history unavailable or empty — drift detection cannot run.'],
+    });
+  }
 
   // Build co-change matrix
   const coChangeCount = new Map<string, number>(); // "fileA|fileB" -> count

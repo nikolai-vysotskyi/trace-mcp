@@ -156,4 +156,142 @@ describe('get_untested_symbols — behavioural contract', () => {
       expect(['unreached', 'imported_not_called']).toContain(item.level);
     }
   });
+
+  // ─── P1-1: non-code language filter ──────────────────────────────────────
+  // The markdown plugin maps `## headings` to `kind: class`, so without a
+  // language-aware filter the result set is flooded with CHANGELOG entries
+  // like `[1.10.0]`. The guard below pins the new default behaviour and the
+  // include_non_code escape hatch.
+
+  it('excludes non-code (markdown/json/yaml/…) symbols by default', () => {
+    // One real TS function — should appear.
+    const tsId = store.insertFile('src/util.ts', 'typescript', 'h1', 100);
+    store.insertSymbol(tsId, {
+      symbolId: 'src/util.ts::doWork#function',
+      name: 'doWork',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+
+    // Mimic markdown plugin output: heading registered as kind=class, file
+    // language=markdown. Use a CHANGELOG-style name to exercise the actual
+    // regression we are guarding against.
+    const mdId = store.insertFile('CHANGELOG.md', 'markdown', 'h2', 100);
+    store.insertSymbol(mdId, {
+      symbolId: 'CHANGELOG.md::CHANGELOG#[1.10.0]#class',
+      name: '[1.10.0]',
+      kind: 'class',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+    // Also a YAML entry — should be filtered too.
+    const ymlId = store.insertFile('config.yaml', 'yaml', 'h3', 100);
+    store.insertSymbol(ymlId, {
+      symbolId: 'config.yaml::root#class',
+      name: 'root',
+      kind: 'class',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+    // JSON declaration symbol.
+    const jsonId = store.insertFile('package.json', 'json', 'h4', 100);
+    store.insertSymbol(jsonId, {
+      symbolId: 'package.json::pkg#class',
+      name: 'pkg',
+      kind: 'class',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+
+    const result = getUntestedSymbols(store);
+    const names = result.untested.map((u) => u.name);
+    expect(names).toContain('doWork');
+    expect(names).not.toContain('[1.10.0]');
+    expect(names).not.toContain('root');
+    expect(names).not.toContain('pkg');
+
+    // total_symbols counts the candidate universe — markdown/yaml/json
+    // entries must be excluded there too (not just from the output list).
+    expect(result.total_symbols).toBe(1);
+  });
+
+  it('include_non_code=true restores legacy behaviour (markdown headings included)', () => {
+    const tsId = store.insertFile('src/util.ts', 'typescript', 'h1', 100);
+    store.insertSymbol(tsId, {
+      symbolId: 'src/util.ts::doWork#function',
+      name: 'doWork',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+    const mdId = store.insertFile('CHANGELOG.md', 'markdown', 'h2', 100);
+    store.insertSymbol(mdId, {
+      symbolId: 'CHANGELOG.md::CHANGELOG#[1.10.0]#class',
+      name: '[1.10.0]',
+      kind: 'class',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+
+    const result = getUntestedSymbols(store, undefined, undefined, true);
+    const names = result.untested.map((u) => u.name);
+    expect(names).toContain('doWork');
+    expect(names).toContain('[1.10.0]');
+  });
+
+  it('classification (unreached vs imported_not_called) still works after filter', () => {
+    // unreached TS symbol
+    const orphanId = store.insertFile('src/orphan.ts', 'typescript', 'h1', 100);
+    store.insertSymbol(orphanId, {
+      symbolId: 'src/orphan.ts::orphanFn#function',
+      name: 'orphanFn',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+
+    // covered (imports edge present) but symbol never referenced
+    const srcFileId = store.insertFile('src/covered.ts', 'typescript', 'h2', 100);
+    const symId = store.insertSymbol(srcFileId, {
+      symbolId: 'src/covered.ts::neverCalled#function',
+      name: 'neverCalled',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+    const testFileId = store.insertFile('tests/covered.test.ts', 'typescript', 'h3', 100);
+    store.insertSymbol(testFileId, {
+      symbolId: 'tests/covered.test.ts::otherTest#function',
+      name: 'otherTest',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 30,
+    });
+    const testFileNid = store.getNodeId('file', testFileId)!;
+    const srcSymNid = store.getNodeId('symbol', symId)!;
+    const srcFileNid = store.getNodeId('file', srcFileId)!;
+    store.insertEdge(testFileNid, srcSymNid, 'test_covers', true, undefined, false, 'ast_resolved');
+    store.insertEdge(testFileNid, srcFileNid, 'imports', true, undefined, false, 'ast_resolved');
+
+    // Markdown noise that would otherwise mask the real signal.
+    const mdId = store.insertFile('CHANGELOG.md', 'markdown', 'h4', 100);
+    store.insertSymbol(mdId, {
+      symbolId: 'CHANGELOG.md::CHANGELOG#[1.10.0]#class',
+      name: '[1.10.0]',
+      kind: 'class',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+
+    const result = getUntestedSymbols(store);
+    const orphan = result.untested.find((u) => u.name === 'orphanFn');
+    const covered = result.untested.find((u) => u.name === 'neverCalled');
+    expect(orphan?.level).toBe('unreached');
+    expect(covered?.level).toBe('imported_not_called');
+    // Sanity: both classifications counted, no markdown leakage.
+    expect(result.by_level.unreached).toBeGreaterThanOrEqual(1);
+    expect(result.by_level.imported_not_called).toBeGreaterThanOrEqual(1);
+    expect(result.untested.some((u) => u.name === '[1.10.0]')).toBe(false);
+  });
 });

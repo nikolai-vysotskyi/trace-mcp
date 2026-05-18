@@ -97,6 +97,78 @@ describe('Co-Change Analysis', () => {
       });
       expect(result._unsafeUnwrap().coChanges.length).toBe(0);
     });
+
+    it('does not include the empty-index warning when populated', () => {
+      const result = getCoChanges(store, {
+        file: 'src/controllers/UserController.ts',
+        minCount: 1,
+        minConfidence: 0,
+      });
+      const data = result._unsafeUnwrap();
+      const empty = (data._warnings ?? []).find((w) => /empty/i.test(w));
+      expect(empty).toBeUndefined();
+    });
+  });
+
+  describe('empty-index handling', () => {
+    it('surfaces a warning + hint when co_changes is empty', () => {
+      const emptyDb = initializeDatabase(':memory:');
+      const emptyStore = new Store(emptyDb);
+      const result = getCoChanges(emptyStore, { file: 'anything.ts' });
+      const data = result._unsafeUnwrap();
+      expect(data.coChanges).toEqual([]);
+      expect(data._warnings).toBeDefined();
+      expect(data._warnings!.some((w) => /empty/i.test(w))).toBe(true);
+      expect(data._hints).toBeDefined();
+      expect(data._hints!.some((h) => h.tool === 'refresh_co_changes')).toBe(true);
+    });
+  });
+
+  describe('stale-index handling', () => {
+    it('warns when MAX(last_co_change) is more than 30 days old', () => {
+      const staleDb = initializeDatabase(':memory:');
+      const staleStore = new Store(staleDb);
+      staleStore.insertFile('a.ts', 'typescript', 'h1', 100);
+      staleStore.insertFile('b.ts', 'typescript', 'h2', 100);
+      const stalePairs = new Map<string, Map<string, { count: number; lastDate: string }>>();
+      const inner = new Map<string, { count: number; lastDate: string }>();
+      // 120 days ago — well past the 30-day threshold
+      const stale = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      inner.set('b.ts', { count: 10, lastDate: stale });
+      stalePairs.set('a.ts', inner);
+      persistCoChanges(staleStore, stalePairs, '/tmp/test', 180);
+
+      const result = getCoChanges(staleStore, {
+        file: 'a.ts',
+        minCount: 1,
+        minConfidence: 0,
+      });
+      const data = result._unsafeUnwrap();
+      expect(data._warnings).toBeDefined();
+      expect(data._warnings!.some((w) => /days ago/i.test(w))).toBe(true);
+    });
+
+    it('does not warn when the index is fresh (< 30 days)', () => {
+      const freshDb = initializeDatabase(':memory:');
+      const freshStore = new Store(freshDb);
+      freshStore.insertFile('a.ts', 'typescript', 'h1', 100);
+      freshStore.insertFile('b.ts', 'typescript', 'h2', 100);
+      const freshPairs = new Map<string, Map<string, { count: number; lastDate: string }>>();
+      const inner = new Map<string, { count: number; lastDate: string }>();
+      const fresh = new Date().toISOString().split('T')[0];
+      inner.set('b.ts', { count: 10, lastDate: fresh });
+      freshPairs.set('a.ts', inner);
+      persistCoChanges(freshStore, freshPairs, '/tmp/test', 180);
+
+      const result = getCoChanges(freshStore, {
+        file: 'a.ts',
+        minCount: 1,
+        minConfidence: 0,
+      });
+      const data = result._unsafeUnwrap();
+      const stale = (data._warnings ?? []).find((w) => /days ago/i.test(w));
+      expect(stale).toBeUndefined();
+    });
   });
 
   describe('persistCoChanges()', () => {

@@ -26,7 +26,7 @@ import { generateInsightsReport } from '../analysis/insights-report.js';
 import { getDeadExports, getUntestedExports } from '../analysis/introspect.js';
 import { getSurprises } from '../analysis/surprises.js';
 import { getHotspots } from '../git/git-analysis.js';
-import { planTurn } from '../navigation/plan-turn.js';
+import { filterDecisionsByTaskNouns, planTurn } from '../navigation/plan-turn.js';
 import { listPresets } from '../project/presets.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
 import { getDeadCodeV2 } from '../refactoring/dead-code.js';
@@ -158,7 +158,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       description: 'Symbols flagged dead by multi-signal detection (top 50, threshold 0.5)',
     },
     async () => {
-      const result = getDeadCodeV2(store, { threshold: 0.5, limit: 50 });
+      const result = getDeadCodeV2(store, { threshold: 0.5, limit: 50, projectRoot });
       return {
         contents: [{ uri: 'project://dead-code', mimeType: 'application/json', text: j(result) }],
       };
@@ -767,8 +767,16 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       if (ds) {
         const targetFiles = result.targets?.map((t) => t.file).filter(Boolean);
         const linked = decisionsForTask(ds, projectRoot, task, targetFiles);
-        if (linked.length > 0) {
-          payload.related_decisions = linked;
+        // Stopword-aware filter: drop decisions whose title/content shares no
+        // domain noun with the task. Stops "domain classification" decisions
+        // from being attached to a "webhook endpoint" task on FTS overlap of
+        // a single generic keyword (the verified false-positive).
+        const filtered = filterDecisionsByTaskNouns(
+          linked as unknown as Array<{ title?: string; content?: string }>,
+          task,
+        ) as typeof linked;
+        if (filtered.length > 0) {
+          payload.related_decisions = filtered;
         }
       }
       // Per-target _freshness + summary in _meta. plan_turn already exposes its own

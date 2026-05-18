@@ -271,10 +271,12 @@ const api_key = 'your-key-here-changeme-placeholder';
   // Insecure Crypto (CWE-327)
   // -------------------------------------------------------------------
 
-  test('detects MD5 usage', () => {
+  test('detects MD5 usage in security-adjacent path', () => {
+    // File path contains "password" — heuristic flags weak hashes only in
+    // security-adjacent contexts (auth/password/token/signing/etc).
     writeFile(
       store,
-      'src/hash.ts',
+      'src/auth/password-hash.ts',
       `
 import crypto from 'crypto';
 const hash = crypto.createHash('md5').update(data).digest('hex');
@@ -285,6 +287,46 @@ const hash = crypto.createHash('md5').update(data).digest('hex');
     const result = scanSecurity(store, TEST_DIR, { rules: ['insecure_crypto'] });
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().findings.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('detects SHA-1 when output flows into an equality compare', () => {
+    writeFile(
+      store,
+      'src/verify.ts',
+      `
+import crypto from 'crypto';
+function verifySignature(input: string, stored: string) {
+  const digest = crypto.createHash('sha1').update(input).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(stored));
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['insecure_crypto'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    expect(data.findings.length).toBeGreaterThanOrEqual(1);
+    expect(data.findings[0].evidence).toBeDefined();
+  });
+
+  test('does not flag SHA-1 used as a content-addressable hash', () => {
+    // Plain hash usage without a security context — content-addressable cache key.
+    writeFile(
+      store,
+      'src/cache/ast-clones.ts',
+      `
+import { createHash } from 'crypto';
+function fingerprint(content: string) {
+  return createHash('sha1').update(content).digest('hex');
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['insecure_crypto'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
   });
 
   test('does not flag MD5 for checksums', () => {
@@ -527,6 +569,103 @@ const search${i} = () => db.query(\`SELECT * FROM t WHERE id = \${id}\`);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().files_scanned).toBe(50);
     expect(result._unsafeUnwrap().findings.length).toBe(50);
+  });
+
+  // -------------------------------------------------------------------
+  // Constant-interpolation reaching-defs (FP suppression)
+  // -------------------------------------------------------------------
+
+  test('SSRF: does not flag fetch with literal const URL base', () => {
+    writeFile(
+      store,
+      'src/ai/anthropic.ts',
+      `
+const BASE_URL = 'https://api.anthropic.com';
+async function send() {
+  return fetch(\`\${BASE_URL}/v1/messages\`);
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['ssrf'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
+  });
+
+  test('SSRF: does not flag fetch against localhost', () => {
+    writeFile(
+      store,
+      'src/daemon/client.ts',
+      `
+async function ping(port: number) {
+  return fetch(\`http://127.0.0.1:\${port}/health\`);
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['ssrf'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
+  });
+
+  test('SSRF: still flags fetch with req.query.url (true positive)', () => {
+    writeFile(
+      store,
+      'src/proxy.ts',
+      `
+app.get('/proxy', async (req, res) => {
+  const data = await fetch(req.query.url);
+  res.json(await data.json());
+});
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['ssrf'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('command_injection: does not flag execSync with literal const arg', () => {
+    writeFile(
+      store,
+      'src/cli/daemon.ts',
+      `
+import { execSync } from 'node:child_process';
+const PLIST_LABEL = 'com.trace-mcp.server';
+function isPlistLoaded() {
+  const out = execSync(\`launchctl list \${PLIST_LABEL} 2>&1\`, { encoding: 'utf-8' });
+  return !out.includes('Could not find service');
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
+  });
+
+  test('command_injection: still flags exec with function-parameter arg (true positive note)', () => {
+    writeFile(
+      store,
+      'src/git.ts',
+      `
+import { execSync } from 'node:child_process';
+function getLog(author: string) {
+  return execSync(\`git log --author="\${author}"\`);
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    expect(data.findings.length).toBeGreaterThanOrEqual(1);
+    expect(data.findings[0].interpolation_source).toBe('non_constant');
   });
 
   test('language filtering works — does not apply JS rules to Python', () => {

@@ -74,11 +74,24 @@ const TODO_TAGS: TodoTag[] = [
 ];
 
 // Build a single regex that captures the tag and trailing text.
-// Matches: // TODO: ..., # FIXME ..., /* HACK: ..., -- TODO ..., etc.
+// Tightened to require:
+//   1. comment delimiter (//, #, /*, *, --, %, ;, ', REM)
+//   2. optional whitespace
+//   3. UPPERCASE tag (case-sensitive — eliminates matches on "bug", "debug",
+//      "bugs", "debugging" etc. in prose)
+//   4. `:` or `(` immediately after the tag (e.g. `// BUG:` or `// BUG(jsmith):`)
+//
+// This intentionally drops prose mentions of the tag word — only standalone
+// developer-tag conventions match.
 const TODO_TAG_NAMES = TODO_TAGS.map((t) => t.tag).join('|');
+// Match only at the START of a comment (after // / # / -- / etc. + optional
+// whitespace). The tag must be UPPERCASE — case-sensitive flag — which alone
+// eliminates "debug" / "bugs" / "debugging" prose hits. We additionally require
+// the tag to be followed by `:` or `(...)` so that BUG-in-running-prose like
+// "// detects BUG patterns in user code" does not match unless authored as a
+// developer tag (`// BUG:` or `// BUG(jsmith):`).
 const TODO_REGEX = new RegExp(
-  `(?://|#|/\\*|\\*|--|%|;|'|REM\\b)\\s*\\b(${TODO_TAG_NAMES})\\b[:\\s]?(.*)`,
-  'i',
+  `(?://|#|/\\*|\\*|--|%|;|'|REM\\b)\\s*(${TODO_TAG_NAMES})(?:\\([^)]*\\))?\\s*:\\s*(.*)`,
 );
 
 const TODO_TAG_PRIORITY = new Map<string, SmellPriority>(TODO_TAGS.map((t) => [t.tag, t.priority]));
@@ -311,11 +324,12 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
       /(?:timeout|delay|interval|duration|ttl|retry|retries|max_|min_|limit)/i,
     ],
   },
-  // Hardcoded credentials / secrets patterns (not already caught by security scanner)
+  // Hardcoded credentials / secrets patterns (not already caught by security scanner).
+  // The regex now CAPTURES the value (group 1) so we can apply contextual filters
+  // in detectHardcodedValues — see CREDENTIAL_VALUE_FILTERS.
   {
     name: 'hardcoded_credential',
-    regex:
-      /(?:password|passwd|pwd|secret|api_?key|token|auth)\s*[:=]\s*['"`](?![\s'"`)]{0,2}$)[^'"`\n]{3,}['"`]/gi,
+    regex: /(?:password|passwd|pwd|secret|api_?key|token|auth)\s*[:=]\s*['"`]([^'"`\n]{3,})['"`]/gi,
     priority: 'high',
     description: 'Hardcoded credential — use environment variable or secret manager',
     falsePositives: [
@@ -340,6 +354,115 @@ const HARDCODE_PATTERNS: HardcodePattern[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Contextual credential FP filter — applied AFTER regex match for the
+// hardcoded_credential pattern. Returns true when the captured value should
+// NOT be treated as a credential.
+//
+// Real API keys / tokens land in a narrow shape:
+//   - length 8-100,
+//   - no spaces,
+//   - high entropy / mixed character classes.
+// Common FPs we drop:
+//   - ORM column-type maps (`rememberToken: 'varchar'`),
+//   - domain/taxonomy maps (`auth: 'authentication'`),
+//   - placeholder strings for local LLMs (`apiKey: 'local-no-key'`),
+//   - kebab-case English phrases (length < 30).
+// ---------------------------------------------------------------------------
+
+const ORM_TYPE_TOKENS = new Set<string>([
+  'varchar',
+  'char',
+  'text',
+  'longtext',
+  'mediumtext',
+  'tinytext',
+  'integer',
+  'int',
+  'bigint',
+  'smallint',
+  'tinyint',
+  'mediumint',
+  'boolean',
+  'bool',
+  'json',
+  'jsonb',
+  'string',
+  'number',
+  'float',
+  'double',
+  'decimal',
+  'numeric',
+  'date',
+  'datetime',
+  'timestamp',
+  'time',
+  'uuid',
+  'binary',
+  'blob',
+  'enum',
+  'set',
+  'point',
+  'geometry',
+  'array',
+]);
+
+/** kebab-case English label, length < 30 — e.g. `local-no-key`, `no-encryption`. */
+const KEBAB_LABEL_RE = /^[a-z]+(?:-[a-z]+)+$/;
+
+/** File-path / parent-property contexts where credential-like keys are domain names, not secrets. */
+const MAPPING_CONTEXT_PATH_RE =
+  /(?:migrations?|intent|classifier|taxonomy|mapping|seed(?:er)?s?|schemas?|i18n|locale|fixtures?)/i;
+const MAPPING_PROPERTY_RE =
+  /\b(?:domains?|types?|mapping|classifier|kinds?|schemas?|labels?|aliases?|taxonomy|columns?)\b\s*[:=]/i;
+
+function isLikelyCredentialValue(
+  value: string,
+  line: string,
+  filePath: string,
+  surroundingLines: string[],
+  lineIdx: number,
+): boolean {
+  // Length band — real keys / tokens are 8-100 chars.
+  if (value.length < 8 || value.length > 100) return false;
+
+  // No spaces in real tokens.
+  if (/\s/.test(value)) return false;
+
+  // ORM column-type identifier.
+  if (ORM_TYPE_TOKENS.has(value.toLowerCase())) return false;
+
+  // Kebab-case English label (e.g. `local-no-key`, `no-encryption`, `authentication`).
+  if (KEBAB_LABEL_RE.test(value) && value.length < 30) return false;
+
+  // Single English word (e.g. `'authentication'`) — not a token.
+  if (/^[a-z]+$/.test(value) && value.length < 30) return false;
+
+  // Parent property is a known mapping context (domains / types / mapping / ...).
+  if (MAPPING_PROPERTY_RE.test(line)) return false;
+
+  // File path lives in a mapping/migrations/taxonomy directory.
+  if (MAPPING_CONTEXT_PATH_RE.test(filePath)) return false;
+
+  // Look 1-3 lines above for a parent-object key declaring a mapping context
+  // (covers multi-line object literals: `const COLUMN_TYPES = { rememberToken: 'varchar', ... }`).
+  for (let k = lineIdx - 1; k >= Math.max(0, lineIdx - 5); k--) {
+    const prev = surroundingLines[k];
+    if (!prev) continue;
+    if (MAPPING_PROPERTY_RE.test(prev)) return false;
+    if (/(?:const|let|var)\s+[A-Z][A-Z0-9_]*\s*[:=]\s*\{/.test(prev)) {
+      // Inside a SCREAMING_SNAKE map literal — likely a taxonomy/lookup table.
+      // Allow only when the value looks like a real token (mixed case + length).
+      if (!/[A-Z]/.test(value) || !/[0-9]/.test(value)) return false;
+      break;
+    }
+    // Stop scanning if we hit a non-object-literal context.
+    if (/^\s*(?:function|class|export|import)\b/.test(prev)) break;
+  }
+
+  return true;
+}
+
 function detectHardcodedValues(lines: string[], filePath: string): CodeSmellFinding[] {
   const findings: CodeSmellFinding[] = [];
 
@@ -361,6 +484,13 @@ function detectHardcodedValues(lines: string[], filePath: string): CodeSmellFind
         }
       }
       if (isFP) continue;
+
+      // Contextual credential filter — drop ORM type maps, domain taxonomies,
+      // local-LLM placeholders, etc.
+      if (pattern.name === 'hardcoded_credential') {
+        const value = m[1] ?? '';
+        if (!isLikelyCredentialValue(value, line, filePath, lines, i)) continue;
+      }
 
       findings.push({
         category: 'hardcoded_value',

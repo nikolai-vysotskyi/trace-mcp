@@ -13,6 +13,7 @@ import { auditConfig, scanInstalledSkills, scanPnpmScripts } from '../quality/au
 import { compareBranches, getChangedSymbols } from '../quality/changed-symbols.js';
 import { collectCoChanges, getCoChanges, persistCoChanges } from '../quality/co-changes.js';
 import {
+  DEFAULT_QUALITY_GATES,
   evaluateQualityGates,
   type QualityGatesConfig,
   QualityGatesConfigSchema,
@@ -536,13 +537,19 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
 
   server.tool(
     'check_quality_gates',
-    'Run configurable quality gate checks against the project. Returns pass/fail for each gate (complexity, coupling, circular imports, dead exports, tech debt, security, antipatterns, code smells). Designed for CI integration — AI can verify gates pass before committing. Use before PR/commit to ensure quality standards. Read-only. Returns JSON: { passed, gates: [{ name, status, value, threshold }], summary }.',
+    'Run configurable quality gate checks against the project. Returns pass/fail for each gate (complexity, coupling, circular imports, dead exports, tech debt, security, antipatterns, code smells). Designed for CI integration — AI can verify gates pass before committing. Use before PR/commit to ensure quality standards. Read-only. When no gates are defined (no `quality_gates` in config and no inline `config.rules`), the result is `NO_GATES_CONFIGURED` with a `_warnings` advisory — NOT a misleading `PASS`. Pass `use_default_gates: true` to opt in to a conservative built-in ruleset (max_cyclomatic=30 error, max_circular_import_chains=0 error, max_coupling_instability=0.9 warning). Returns JSON: { gates, summary: { result: "PASS"|"FAIL"|"WARNING"|"NO_GATES_CONFIGURED", ... }, _warnings?, _defaults_used? }.',
     {
       scope: z
         .enum(['project', 'changed'])
         .optional()
         .describe('Scope: "project" (all) or "changed" (git diff). Default: project'),
       since: optionalNonEmptyString(128).describe('Git ref for "changed" scope (e.g. "main")'),
+      use_default_gates: z
+        .boolean()
+        .optional()
+        .describe(
+          'Opt-in to the conservative built-in default ruleset when no `quality_gates` config and no inline `config.rules` are provided. Default false — when false and no gates configured, returns `NO_GATES_CONFIGURED`.',
+        ),
       config: z
         .object({
           fail_on: z.enum(['error', 'warning', 'none']).optional(),
@@ -559,36 +566,26 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .optional()
         .describe('Inline config overrides (merged with project config)'),
     },
-    async ({ scope: _scope, since: _since, config: inlineConfig }) => {
-      // Load quality gates config from project config
+    async ({ scope: _scope, since: _since, use_default_gates, config: inlineConfig }) => {
+      // Load quality gates config from project config — DO NOT silently inject
+      // defaults. If nothing is configured, the core evaluator returns
+      // NO_GATES_CONFIGURED so CI can surface the misconfiguration.
       let gatesConfig: QualityGatesConfig;
+      let parseFailed = false;
       const rawQG = (config as Record<string, unknown>).quality_gates;
       if (rawQG) {
         const parsed = QualityGatesConfigSchema.safeParse(rawQG);
-        gatesConfig = parsed.success
-          ? parsed.data
-          : {
-              enabled: true,
-              fail_on: 'error',
-              rules: {
-                max_cyclomatic_complexity: { threshold: 30, severity: 'warning' },
-                max_circular_import_chains: { threshold: 0, severity: 'error' },
-                max_security_critical_findings: { threshold: 0, severity: 'error' },
-              },
-            };
+        if (parsed.success) {
+          gatesConfig = parsed.data;
+        } else {
+          parseFailed = true;
+          gatesConfig = { enabled: true, fail_on: 'error', rules: {} };
+        }
       } else {
-        gatesConfig = {
-          enabled: true,
-          fail_on: 'error',
-          rules: {
-            max_cyclomatic_complexity: { threshold: 30, severity: 'warning' },
-            max_circular_import_chains: { threshold: 0, severity: 'error' },
-            max_security_critical_findings: { threshold: 0, severity: 'error' },
-          },
-        };
+        gatesConfig = { enabled: true, fail_on: 'error', rules: {} };
       }
 
-      // Apply inline overrides
+      // Apply inline overrides — these can introduce rules where none existed.
       if (inlineConfig?.fail_on) gatesConfig.fail_on = inlineConfig.fail_on;
       if (inlineConfig?.rules) {
         for (const [key, val] of Object.entries(inlineConfig.rules)) {
@@ -601,10 +598,36 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         }
       }
 
+      // Opt-in default ruleset — only inject when no explicit rules exist.
+      const hasAnyRule = Object.values(gatesConfig.rules).some((v) => v !== undefined);
+      let defaultsUsed = false;
+      if (!hasAnyRule && use_default_gates) {
+        gatesConfig = {
+          enabled: true,
+          fail_on: gatesConfig.fail_on,
+          rules: { ...DEFAULT_QUALITY_GATES },
+        };
+        defaultsUsed = true;
+      }
+
       const report = evaluateQualityGates(store, projectRoot, gatesConfig, {
         sinceDays: config.predictive?.git_since_days,
         moduleDepth: config.predictive?.module_depth,
       });
+
+      if (defaultsUsed) {
+        report._defaults_used = true;
+        report._warnings = [
+          ...(report._warnings ?? []),
+          'Used built-in default quality gates (max_cyclomatic_complexity=30, max_circular_import_chains=0, max_coupling_instability=0.9). Define `quality_gates.rules` in .trace-mcp.{json,yaml} to customize.',
+        ];
+      }
+      if (parseFailed) {
+        report._warnings = [
+          ...(report._warnings ?? []),
+          'Project `quality_gates` config failed schema validation — falling back to NO_GATES_CONFIGURED. Check your .trace-mcp.{json,yaml}.',
+        ];
+      }
 
       return { content: [{ type: 'text', text: j(report) }] };
     },

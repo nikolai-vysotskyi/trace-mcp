@@ -207,7 +207,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_untested_symbols',
-    'Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test file imports the source) or "imported_not_called" (test imports file but never references this symbol). Use for thorough coverage gap analysis. For exports-only quick scan use get_untested_exports instead. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file, classification }], total }.',
+    'Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test file imports the source) or "imported_not_called" (test imports file but never references this symbol). By default only source-code languages (TypeScript, Python, Go, Ruby, …) are considered — markdown/JSON/YAML symbols are excluded. Use include_non_code=true to restore the legacy noisy behaviour. For exports-only quick scan use get_untested_exports instead. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file, classification }], total }.',
     {
       file_pattern: z
         .string()
@@ -221,9 +221,15 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .max(500)
         .optional()
         .describe('Cap on returned items (default: all)'),
+      include_non_code: z
+        .boolean()
+        .optional()
+        .describe(
+          'When true, include symbols from non-code files (markdown, json, yaml, …). Default: false — only TypeScript, JavaScript, Python, Go, Ruby, Rust, Java, PHP, C#, Swift, Kotlin, Scala, Elixir, Dart, C, C++, Objective-C symbols are considered.',
+        ),
     },
-    async ({ file_pattern, max_results }) => {
-      const result = getUntestedSymbols(store, file_pattern, max_results);
+    async ({ file_pattern, max_results, include_non_code }) => {
+      const result = getUntestedSymbols(store, file_pattern, max_results, include_non_code);
       return { content: [{ type: 'text', text: jh('get_untested_symbols', result) }] };
     },
   );

@@ -93,6 +93,23 @@ interface CloneCandidate {
   line_end: number;
   loc: number;
   hash: string;
+  signature: string;
+}
+
+/**
+ * Resolve the actual tree-sitter grammar to use for a (language, filePath) pair.
+ *
+ * The DB stores `language` as 'typescript' / 'javascript' for both plain TS/JS
+ * and TSX/JSX files (see src/indexer/file-extractor.ts). But the TS plugin
+ * itself uses the dedicated `tsx` grammar at index time for .tsx/.jsx files,
+ * because the plain `typescript` grammar mis-parses JSX content — producing
+ * collapsed ancestor nodes and accidental hash collisions across unrelated
+ * components. Mirror that choice here so ast-clones agrees with the indexer.
+ */
+function resolveGrammar(language: string, filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.tsx' || ext === '.jsx') return 'tsx';
+  return language;
 }
 
 export interface CloneGroup {
@@ -114,6 +131,7 @@ export interface AstCloneResult {
   total_duplicated_symbols: number;
   files_scanned: number;
   symbols_scanned: number;
+  _warnings?: string[];
   _methodology: {
     algorithm: string;
     min_loc: number;
@@ -200,6 +218,7 @@ export async function detectAstClones(
   const parsedTreeCache = new Map<number, { tree: unknown; content: string } | null>();
   const candidates: CloneCandidate[] = [];
   const filesSet = new Set<number>();
+  const warnings: string[] = [];
   let symbolsScanned = 0;
 
   for (const c of callables) {
@@ -224,7 +243,8 @@ export async function detectAstClones(
         fileContentCache.set(c.file_id, content);
       }
       try {
-        const parser = await getParser(c.language);
+        const grammar = resolveGrammar(c.language, c.file_path);
+        const parser = await getParser(grammar);
         const tree = parser.parse(content);
         parsed = { tree, content };
         parsedTreeCache.set(c.file_id, parsed);
@@ -251,6 +271,45 @@ export async function detectAstClones(
         target = target.parent;
       }
 
+      // Walk DOWN through named children whenever a single child still fully
+      // covers the symbol body. This narrows past wrapper nodes like
+      // `program` or `export_statement` to the actual function/class node.
+      // Without this, a symbol sitting at file offset 0 alongside sibling
+      // code lands on `program` and gets hashed together with its siblings.
+      const bodyLength = c.byte_end - c.byte_start;
+      const tolerance = Math.max(50, Math.floor(bodyLength * 0.1));
+      let drillGuard = 0;
+      while (drillGuard++ < 64) {
+        let next: TSNode | null = null;
+        for (let i = 0; i < target.namedChildCount; i++) {
+          const child = target.namedChild(i);
+          if (!child) continue;
+          if (child.startIndex <= c.byte_start && child.endIndex >= c.byte_end - 1) {
+            next = child;
+            break;
+          }
+        }
+        // Stop drilling when no single child covers the body (we're at the
+        // narrowest enclosing node) or when the new candidate is smaller than
+        // the symbol body itself (we've gone too far — keep the parent).
+        if (!next) break;
+        const nextLen = next.endIndex - next.startIndex;
+        if (nextLen < bodyLength * 0.6) break;
+        target = next;
+      }
+
+      // Defensive backstop: after locating, if the node start is far from
+      // the symbol byte_start the re-parse disagrees with the indexer
+      // (typical cause: JSX content + wrong grammar). Skip rather than emit
+      // a phantom hash.
+      const startOffBy = Math.abs(target.startIndex - c.byte_start);
+      const targetLen = target.endIndex - target.startIndex;
+      const tooBig = targetLen > bodyLength * 2 + tolerance;
+      if (startOffBy > tolerance || tooBig) {
+        warnings.push(`could not locate AST node for ${c.symbol_id}`);
+        continue;
+      }
+
       const { signature, nodes } = normalize(target);
       if (nodes < minNodes) continue;
 
@@ -263,6 +322,7 @@ export async function detectAstClones(
         line_end: c.line_end,
         loc: c.line_end - c.line_start,
         hash,
+        signature,
       });
       symbolsScanned++;
     } catch {
@@ -296,11 +356,33 @@ export async function detectAstClones(
     // Skip groups where all members are in the same file at the same byte range (edge case)
     const uniqueLocations = new Set(members.map((m) => `${m.file}:${m.line_start}`));
     if (uniqueLocations.size < 2) continue;
+
+    // LOC sanity filter: a Type-2 clone group should have members of roughly
+    // the same size. Drop any member whose LOC differs from the smallest by
+    // more than 2x — they slipped in via a hash collision, not real cloning.
+    const minMemberLoc = Math.min(...members.map((m) => Math.max(1, m.loc)));
+    const sized = members.filter((m) => Math.max(1, m.loc) <= minMemberLoc * 2);
+    if (sized.length < 2) continue;
+
+    // Hash collision double-check: large same-file clusters are the typical
+    // shape of an indexer-vs-tool grammar mismatch. Verify the first two
+    // members really have the same normalized signature; if not, drop the
+    // group as a false collision.
+    if (sized.length >= 5) {
+      const filesInGroup = new Set(sized.map((m) => m.file));
+      if (filesInGroup.size === 1) {
+        if (sized[0].signature !== sized[1].signature) {
+          warnings.push(`dropped hash-collision group ${hash} in ${sized[0].file}`);
+          continue;
+        }
+      }
+    }
+
     groups.push({
       hash,
-      size: members.length,
-      loc: Math.max(...members.map((m) => m.loc)),
-      symbols: members.map((m) => ({
+      size: sized.length,
+      loc: Math.max(...sized.map((m) => m.loc)),
+      symbols: sized.map((m) => ({
         symbol_id: m.symbol_id,
         name: m.name,
         file: m.file,
@@ -319,6 +401,7 @@ export async function detectAstClones(
     total_duplicated_symbols: totalDups,
     files_scanned: filesSet.size,
     symbols_scanned: symbolsScanned,
+    ...(warnings.length > 0 ? { _warnings: warnings } : {}),
     _methodology: {
       algorithm: 'tree_sitter_ast_subtree_hash_type2',
       min_loc: minLoc,

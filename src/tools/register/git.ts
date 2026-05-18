@@ -162,6 +162,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
               threshold,
               limit,
               detectedFrameworks,
+              projectRoot,
             });
       if (result.dead_symbols.length === 0) {
         const stats = store.getStats();
