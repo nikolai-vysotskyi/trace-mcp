@@ -549,6 +549,20 @@ const MemoryConfigSchema = z
           ),
       })
       .optional(),
+    audit_log: z
+      .object({
+        enabled: z
+          .boolean()
+          .default(false)
+          .describe(
+            'Side-write decision mutations to a day-bucketed JSONL audit log alongside SQLite. Best-effort; never blocks the main write.',
+          ),
+        dir: z
+          .string()
+          .optional()
+          .describe('Override audit log directory. Default ~/.trace-mcp/decisions/.'),
+      })
+      .optional(),
   })
   .prefault({});
 

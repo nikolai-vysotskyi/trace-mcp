@@ -7,9 +7,16 @@
  * sessions and closes resources when no sessions remain.
  */
 
+import * as path from 'node:path';
 import type { TraceMcpConfig } from '../config.js';
-import { DECISIONS_DB_PATH, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../global.js';
+import {
+  DECISIONS_DB_PATH,
+  ensureGlobalDirs,
+  TRACE_MCP_HOME,
+  TOPOLOGY_DB_PATH,
+} from '../global.js';
 import { logger } from '../logger.js';
+import { createAuditLogger } from '../memory/decision-audit-log.js';
 import { DecisionStore } from '../memory/decision-store.js';
 import type { ServerDeps } from '../server/server.js';
 import { TopologyStore } from '../topology/topology-db.js';
@@ -32,10 +39,22 @@ export class ProjectResourcePool {
     if (!entry) {
       ensureGlobalDirs();
       const topoStore = config.topology?.enabled ? new TopologyStore(TOPOLOGY_DB_PATH) : null;
-      const decisionStore = new DecisionStore(DECISIONS_DB_PATH);
+      // Opt-in JSONL audit log alongside SQLite. Best-effort writes inside
+      // the store — a misconfigured directory must not break decision
+      // mutations. Defaults the directory to ~/.trace-mcp/decisions/.
+      const auditCfg = config.memory?.audit_log;
+      const auditLogger = auditCfg?.enabled
+        ? createAuditLogger({
+            dir: auditCfg.dir ?? path.join(TRACE_MCP_HOME, 'decisions'),
+          })
+        : null;
+      const decisionStore = new DecisionStore(DECISIONS_DB_PATH, { auditLogger });
       entry = { topoStore, decisionStore, refCount: 0 };
       this.pools.set(projectRoot, entry);
-      logger.debug({ projectRoot }, 'Resource pool: created shared resources');
+      logger.debug(
+        { projectRoot, auditLog: !!auditLogger },
+        'Resource pool: created shared resources',
+      );
     }
     entry.refCount++;
     logger.debug({ projectRoot, refCount: entry.refCount }, 'Resource pool: acquired');

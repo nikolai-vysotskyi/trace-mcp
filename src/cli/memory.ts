@@ -10,11 +10,18 @@
  *   trace-mcp memory index [--project=.] [--force]
  */
 
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Command } from 'commander';
 import { DECISIONS_DB_PATH, ensureGlobalDirs } from '../global.js';
 import { mineSessions } from '../memory/conversation-miner.js';
-import { DecisionStore } from '../memory/decision-store.js';
+import {
+  EXPORT_LIMIT_DEFAULT,
+  EXPORT_LIMIT_MAX,
+  exportDecisionsAsJsonl,
+  exportDecisionsAsMarkdown,
+} from '../memory/decision-exporter.js';
+import { DecisionStore, type DecisionType } from '../memory/decision-store.js';
 import { indexSessions } from '../memory/session-indexer.js';
 import { assembleWakeUp } from '../memory/wake-up.js';
 import { getCurrentBranch } from '../utils/git-branch.js';
@@ -344,3 +351,67 @@ memoryCommand
       store.close();
     }
   });
+
+// ── memory export ───────────────────────────────────────────────────
+//
+// Human-readable export of the decision store. Wraps the same exporter
+// module used by the export_decisions MCP tool so CLI and tool output stay
+// in lockstep. JSONL by default; pass --format=markdown for grouped, prose
+// rendering. Writes to stdout unless --output is supplied.
+
+memoryCommand
+  .command('export')
+  .description('Export decisions to JSONL or Markdown (audit / sharing)')
+  .option('--format <jsonl|markdown>', 'Output format (default: jsonl)', 'jsonl')
+  .option(
+    '--project <path>',
+    'Project root to filter by (default: current directory)',
+    process.cwd(),
+  )
+  .option('--service <name>', 'Filter by subproject name')
+  .option('--type <type>', 'Filter by decision type')
+  .option('--include-invalidated', 'Include invalidated decisions')
+  .option(
+    '--limit <n>',
+    `Max rows to export (default: ${EXPORT_LIMIT_DEFAULT}, hard max: ${EXPORT_LIMIT_MAX})`,
+    String(EXPORT_LIMIT_DEFAULT),
+  )
+  .option('--output <path>', 'Write to file (default: stdout)')
+  .action(
+    (opts: {
+      format: string;
+      project: string;
+      service?: string;
+      type?: string;
+      includeInvalidated?: boolean;
+      limit: string;
+      output?: string;
+    }) => {
+      const format = opts.format === 'markdown' ? 'markdown' : 'jsonl';
+      const projectRoot = path.resolve(opts.project);
+      const limit = Math.min(parseInt(opts.limit, 10) || EXPORT_LIMIT_DEFAULT, EXPORT_LIMIT_MAX);
+      const store = openStore();
+      try {
+        const exporter = format === 'markdown' ? exportDecisionsAsMarkdown : exportDecisionsAsJsonl;
+        const { content, count } = exporter(store, {
+          project_root: projectRoot,
+          service_name: opts.service,
+          type: opts.type as DecisionType | undefined,
+          include_invalidated: opts.includeInvalidated,
+          limit,
+        });
+        if (opts.output) {
+          const outPath = path.resolve(opts.output);
+          fs.writeFileSync(outPath, content, 'utf8');
+          // Log to stderr so stdout piping is unaffected when no --output is set.
+          console.error(`Wrote ${count} decision(s) to ${outPath}`);
+        } else {
+          // Trailing newline so terminal prompts land on a fresh line and so
+          // appending more JSONL records preserves the line-per-record shape.
+          process.stdout.write(content.length > 0 ? `${content}\n` : '');
+        }
+      } finally {
+        store.close();
+      }
+    },
+  );

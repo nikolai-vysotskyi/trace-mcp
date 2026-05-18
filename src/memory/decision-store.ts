@@ -11,6 +11,7 @@ import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { relativizeUnderRoot } from '../utils/path-relativize.js';
+import type { AuditLogger } from './decision-audit-log.js';
 import { titleSimilarity } from './decision-clusterer.js';
 import { type ConsolidationVerdict, mergeContents, mergeTags } from './decision-consolidator.js';
 import { computeHeat } from './heat.js';
@@ -515,9 +516,17 @@ CREATE INDEX IF NOT EXISTS idx_project_memos_scope
 
 export class DecisionStore {
   public readonly db: Database.Database;
+  /**
+   * Optional day-bucketed JSONL audit logger. When set, every successful
+   * add/update/invalidate is mirrored to the configured directory. Audit
+   * writes are best-effort — failures never bubble out of the mutation
+   * methods.
+   */
+  private auditLogger: AuditLogger | null;
 
-  constructor(dbPath: string, opts?: { readonly?: boolean }) {
+  constructor(dbPath: string, opts?: { readonly?: boolean; auditLogger?: AuditLogger | null }) {
     this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
+    this.auditLogger = opts?.auditLogger ?? null;
     if (opts?.readonly) {
       this.db.pragma('busy_timeout = 5000');
       logger.debug({ dbPath, readonly: true }, 'Decision store opened (readonly)');
@@ -535,6 +544,33 @@ export class DecisionStore {
       this.migrate();
       this.scheduleWalCheckpoint();
       logger.debug({ dbPath }, 'Decision store initialized');
+    }
+  }
+
+  /**
+   * Best-effort audit-log emit. Wrapped in try/catch so a failed JSONL
+   * write never affects the underlying SQLite mutation. No-op when no
+   * logger is configured.
+   */
+  private auditEmit(
+    op: 'add' | 'update' | 'invalidate',
+    decisionId: number,
+    row?: { title?: string | null; type?: string | null },
+  ): void {
+    if (!this.auditLogger) return;
+    try {
+      this.auditLogger.log({
+        op,
+        decision_id: decisionId,
+        title: row?.title ?? undefined,
+        type: row?.type ?? undefined,
+        ts: new Date().toISOString(),
+      });
+    } catch (err) {
+      logger.debug?.(
+        { err: (err as Error).message },
+        'decision audit log write failed (non-fatal)',
+      );
     }
   }
 
@@ -702,7 +738,11 @@ export class DecisionStore {
       )
       .run(...values, id);
 
-    return this.getDecision(id);
+    const updated = this.getDecision(id);
+    if (updated) {
+      this.auditEmit('update', id, { title: updated.title, type: updated.type });
+    }
+    return updated;
   }
 
   close(): void {
@@ -747,7 +787,9 @@ export class DecisionStore {
       input.review_status ?? null,
       now,
     );
-    return this.getDecision(info.lastInsertRowid as number)!;
+    const newId = info.lastInsertRowid as number;
+    this.auditEmit('add', newId, { title: input.title, type: input.type });
+    return this.getDecision(newId)!;
   }
 
   addDecisions(inputs: DecisionInput[]): number {
@@ -814,6 +856,13 @@ export class DecisionStore {
          WHERE id = ? AND valid_until IS NULL`,
       )
       .run(until, id);
+    if (info.changes > 0) {
+      const row = this.getDecision(id);
+      this.auditEmit('invalidate', id, {
+        title: row?.title,
+        type: row?.type,
+      });
+    }
     return info.changes > 0;
   }
 
