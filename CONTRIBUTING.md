@@ -19,17 +19,23 @@ The full CLA text is available in [CLA.md](CLA.md). Key points:
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-change`)
 3. Make your changes
-4. Run tests (`npm test`)
+4. Run tests (`pnpm test`)
 5. Commit and push
 6. Open a Pull Request
 
 ## Development
 
+This project uses [pnpm](https://pnpm.io/) as its package manager — the version is pinned via the `packageManager` field in `package.json`. The simplest way to match it is via [Corepack](https://nodejs.org/api/corepack.html):
+
 ```bash
-npm install
-npm run build
-npm test
+corepack enable
+corepack prepare pnpm@10.33.0 --activate
+pnpm install
+pnpm run build
+pnpm test
 ```
+
+npm/yarn are not officially supported for contributor workflows — please use pnpm to ensure the lockfile and script set stay consistent.
 
 ## License
 
