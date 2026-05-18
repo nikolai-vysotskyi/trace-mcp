@@ -170,27 +170,44 @@ export function changeSignature(
   const newParamText = newParams.map((p) => p.raw).join(', ');
   const _oldParamText = parenResult.content;
 
-  // Build the new definition region
+  // Build the new definition region (whole-region rewrite — used for disk writes)
   const newDefRegion =
     defRegion.slice(0, parenResult.openOffset + 1) +
     newParamText +
     defRegion.slice(parenResult.closeOffset);
-
-  // Record the edit for the definition
   const newDefLines = newDefRegion.split('\n');
+
+  // Compute a TIGHT signature-only range for the emitted edit:
+  // - openLineOffset/closeLineOffset are 0-based offsets within defRegion
+  //   measured in source LINES (not characters).
+  // - The emitted edit covers from the symbol's start line through the line
+  //   containing the closing paren. The function body is excluded.
+  const openLineOffset = countNewlines(defRegion, 0, parenResult.openOffset);
+  const closeLineOffset = countNewlines(defRegion, 0, parenResult.closeOffset);
+
+  // Original signature: from start line through the line containing the
+  // closing paren (inclusive). Includes any return-type annotation / opening
+  // brace on the same line as `)` — they're trivially preserved.
+  const sigStartLineIdx = defStartIdx; // 0-based
+  const sigEndLineIdx = defStartIdx + closeLineOffset; // 0-based, inclusive
+  const originalSignatureLines = lines.slice(sigStartLineIdx, sigEndLineIdx + 1);
+
+  // After rewrite, the new param list has no embedded newlines, so the
+  // line that originally held `(` now also holds `)` plus everything that
+  // followed it on the original close-paren line. The new signature
+  // therefore occupies exactly `openLineOffset + 1` lines.
+  const newSignatureLines = newDefLines.slice(0, openLineOffset + 1);
+
   result.edits.push({
     file: toPosix(symbolFile.path),
     original_line: symbol.line_start,
-    original_text: defRegion
-      .split('\n')
-      .map((l) => l.trimStart())
-      .join('\n'),
-    new_text: newDefLines.map((l) => l.trimStart()).join('\n'),
+    original_text: originalSignatureLines.join('\n'),
+    new_text: newSignatureLines.join('\n'),
   });
 
   // Apply definition change
   if (!dryRun) {
-    // Replace the definition lines
+    // Replace the definition lines (whole region, so the body is preserved verbatim)
     lines.splice(defStartIdx, symbol.line_end - defStartIdx, ...newDefLines);
     writeLines(filePath, lines);
     result.files_modified.push(toPosix(symbolFile.path));
@@ -514,9 +531,14 @@ function updateCallSites(
         lines[i] = newLine;
         fileModified = true;
       } else {
-        // Multi-line: replace from start to end
+        // Multi-line: replace from start to end.
+        // The ORIGINAL last line may carry trailing tokens after `)` — e.g.
+        // `);`, `).then(...)`, JSX `}/>`, a trailing comma in an arg list,
+        // or just a newline. Preserve them verbatim.
         const firstLine = lines[i];
-        const newFirstLine = `${firstLine.slice(0, callStartCol + 1) + newArgText})`;
+        const lastLine = lines[endLine];
+        const trailingAfterCall = lastLine.slice(endCol); // text after the matching ')'
+        const newCallLine = `${firstLine.slice(0, callStartCol + 1)}${newArgText})${trailingAfterCall}`;
         result.edits.push({
           file: toPosix(file.path),
           original_line: i + 1,
@@ -524,10 +546,10 @@ function updateCallSites(
             .slice(i, endLine + 1)
             .map((l) => l.trimStart())
             .join('\n'),
-          new_text: newFirstLine.trimStart(),
+          new_text: newCallLine.trimStart(),
         });
         // Replace multi-line with single line
-        lines.splice(i, endLine - i + 1, newFirstLine);
+        lines.splice(i, endLine - i + 1, newCallLine);
         fileModified = true;
       }
     }
@@ -690,4 +712,19 @@ function extractCallArgs(
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Count newline characters in `text` within [startOffset, endOffset).
+ * Used to convert character offsets within a multi-line region back to
+ * line offsets (0-based).
+ */
+function countNewlines(text: string, startOffset: number, endOffset: number): number {
+  let n = 0;
+  const lo = Math.max(0, startOffset);
+  const hi = Math.min(text.length, endOffset);
+  for (let i = lo; i < hi; i++) {
+    if (text.charCodeAt(i) === 10) n++; // '\n'
+  }
+  return n;
 }

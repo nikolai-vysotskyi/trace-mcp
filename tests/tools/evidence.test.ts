@@ -8,7 +8,8 @@ describe('buildNegativeEvidence', () => {
     expect(ev.scope).toBe('full_index');
     expect(ev.indexed_files).toBe(100);
     expect(ev.indexed_symbols).toBe(500);
-    expect(ev.suggestion).toContain('no incoming references');
+    expect(ev.suggestion).toContain('search_text');
+    expect(ev.suggestion).toContain('parametric');
   });
 
   it('returns tool-specific suggestion for get_tests_for', () => {
@@ -71,7 +72,8 @@ describe('buildNegativeEvidence', () => {
     });
     expect(ev.verdict).toBe('symbol_indexed_but_isolated');
     expect(ev.symbol).toBe('src/foo.ts::bar#function');
-    expect(ev.suggestion).toContain('no incoming references');
+    expect(ev.suggestion).toContain('search_text');
+    expect(ev.suggestion).toContain('parametric');
   });
 
   it('isolation verdict default suggestion for unknown tool', () => {
@@ -82,7 +84,8 @@ describe('buildNegativeEvidence', () => {
       verdict: 'symbol_indexed_but_isolated',
     });
     expect(ev.verdict).toBe('symbol_indexed_but_isolated');
-    expect(ev.suggestion).toContain('absence is authoritative');
+    expect(ev.suggestion).toContain('search_text');
+    expect(ev.suggestion).toContain('parametric');
   });
 
   it('returns suggestion for get_call_graph', () => {

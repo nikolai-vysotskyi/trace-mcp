@@ -1,32 +1,40 @@
 /**
  * Behavioural coverage for `extractFunction()` (the `extract_function` MCP tool).
- * Uses dry_run exclusively so fixture files on disk are never mutated.
  *
- *  - dry_run preview produces edits + extractedFunction text containing the
- *    declaration with the chosen name
- *  - detects free variables (defined before the range) → emitted as parameters
- *    in a warning
- *  - detects defined-then-used-after variables → emitted as return values in a
- *    warning
- *  - invalid line range (end < start, OOB) returns a clean error string and
- *    success:false with no edits
- *  - missing file returns a clean "File not found" error
+ * The tool is currently DISABLED pending an AST-aware rewrite — the previous
+ * regex-based implementation produced unparseable output on non-trivial cases
+ * (outer-scope identifiers misclassified as parameters; enclosing function
+ * headers spliced into the new helper body). These tests pin the disabled
+ * contract:
+ *
+ *  - on a valid file + line range the tool returns success:false with the
+ *    sentinel `EXTRACT_FUNCTION_DISABLED_ERROR` and no edits
+ *  - the source file is never mutated (no writes happen at all)
+ *  - invalid line range (end < start, OOB) still returns the familiar
+ *    "Invalid line range" error
+ *  - missing file still returns a clean "File not found" error
+ *
+ * When the AST-aware rewrite lands these tests must be rewritten to assert
+ * the new success contract — at that point the sentinel export goes away.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { extractFunction } from '../../../src/tools/refactoring/refactor.js';
+import {
+  EXTRACT_FUNCTION_DISABLED_ERROR,
+  extractFunction,
+} from '../../../src/tools/refactoring/refactor.js';
 import { createTestStore, createTmpFixture, removeTmpDir } from '../../test-utils.js';
 
-describe('extractFunction() — behavioural contract (dry_run path)', () => {
+describe('extractFunction() — DISABLED behavioural contract', () => {
   let tmpDir: string;
 
   afterEach(() => {
     if (tmpDir) removeTmpDir(tmpDir);
   });
 
-  it('dry_run preview returns edits with the new function declaration as new_text', () => {
+  it('on a valid file + range returns the structured disabled error with no edits', () => {
     const store = createTestStore();
     tmpDir = createTmpFixture({
       'src/a.ts': [
@@ -41,58 +49,38 @@ describe('extractFunction() — behavioural contract (dry_run path)', () => {
 
     const result = extractFunction(store, tmpDir, 'src/a.ts', 4, 4, 'computeSum', true);
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(result.tool).toBe('extract_function');
-    expect(result.edits.length).toBeGreaterThan(0);
-    expect(result.edits[0].file).toBe('src/a.ts');
-    expect(result.edits[0].new_text).toContain('function computeSum');
-    expect(result.error).toBeUndefined();
+    expect(result.edits).toEqual([]);
+    expect(result.files_modified).toEqual([]);
+    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
+    expect(result.error).toContain('extract_function-ast-rewrite');
   });
 
-  it('detects free variables in the extracted body and surfaces them as parameters', () => {
+  it('returns the disabled error even when dry_run is false (no apply path)', () => {
     const store = createTestStore();
     tmpDir = createTmpFixture({
       'src/b.ts': [
         'function caller() {',
         '  const x = 10;',
         '  const y = 20;',
-        '  const z = x + y;', // line 4 — uses x and y from outer scope
+        '  const z = x + y;',
         '  console.log(z);',
         '}',
       ].join('\n'),
     });
+    const filePath = path.join(tmpDir, 'src/b.ts');
+    const beforeContent = fs.readFileSync(filePath, 'utf-8');
 
-    const result = extractFunction(store, tmpDir, 'src/b.ts', 4, 4, 'addXY', true);
+    const result = extractFunction(store, tmpDir, 'src/b.ts', 4, 4, 'addXY', false);
 
-    expect(result.success).toBe(true);
-    // Parameters are reported via warnings text — `x` and `y` are defined
-    // before the range and read inside it.
-    const paramWarning = result.warnings.find((w) => w.includes('parameter'));
-    expect(paramWarning).toBeDefined();
-    expect(paramWarning!).toMatch(/x|y/);
+    expect(result.success).toBe(false);
+    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
+    // Hard guarantee: even the non-dry-run path must not touch the file.
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe(beforeContent);
   });
 
-  it('detects defined-then-used-after variables and surfaces them as return values', () => {
-    const store = createTestStore();
-    tmpDir = createTmpFixture({
-      'src/c.ts': [
-        'function caller() {',
-        '  const a = 1;',
-        '  const result = a * 2;', // line 3 — defines `result`
-        '  console.log(result);', // line 4 — uses `result` after the range
-        '}',
-      ].join('\n'),
-    });
-
-    const result = extractFunction(store, tmpDir, 'src/c.ts', 3, 3, 'doubleA', true);
-
-    expect(result.success).toBe(true);
-    const returnWarning = result.warnings.find((w) => w.includes('return'));
-    expect(returnWarning).toBeDefined();
-    expect(returnWarning!).toContain('result');
-  });
-
-  it('invalid line range (end < start, OOB) returns clean error and success:false', () => {
+  it('invalid line range (end < start, OOB) still returns the familiar "Invalid line range" error', () => {
     const store = createTestStore();
     tmpDir = createTmpFixture({
       'src/d.ts': 'const x = 1;\nconst y = 2;\n',
@@ -102,6 +90,7 @@ describe('extractFunction() — behavioural contract (dry_run path)', () => {
     expect(reversed.success).toBe(false);
     expect(reversed.error).toBeDefined();
     expect(reversed.error).toContain('Invalid line range');
+    expect(reversed.error).not.toContain('extract_function-ast-rewrite');
     expect(reversed.edits).toEqual([]);
 
     const oob = extractFunction(store, tmpDir, 'src/d.ts', 1, 99, 'bad', true);
@@ -117,10 +106,11 @@ describe('extractFunction() — behavioural contract (dry_run path)', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('File not found');
+    expect(result.error).not.toContain('extract_function-ast-rewrite');
     expect(result.edits).toEqual([]);
   });
 
-  it('dry_run does NOT mutate the source file on disk', async () => {
+  it('source file mtime is unchanged after a disabled-path call', async () => {
     const store = createTestStore();
     const original = [
       'function f() {',
@@ -136,7 +126,8 @@ describe('extractFunction() — behavioural contract (dry_run path)', () => {
     await new Promise((r) => setTimeout(r, 5));
 
     const result = extractFunction(store, tmpDir, 'src/e.ts', 3, 3, 'addOne', true);
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
     expect(fs.readFileSync(filePath, 'utf-8')).toBe(original);
     expect(fs.statSync(filePath).mtimeMs).toBe(beforeMtime);
   });

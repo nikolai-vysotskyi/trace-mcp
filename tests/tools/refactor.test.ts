@@ -5,6 +5,7 @@ import type { Store } from '../../src/db/store.js';
 import {
   applyCodemod,
   applyRename,
+  EXTRACT_FUNCTION_DISABLED_ERROR,
   extractFunction,
   removeDeadCode,
 } from '../../src/tools/refactoring/refactor.js';
@@ -331,7 +332,7 @@ describe('removeDeadCode', () => {
 // EXTRACT FUNCTION
 // ════════════════════════════════════════════════════════════════════════
 
-describe('extractFunction', () => {
+describe('extractFunction — DISABLED contract', () => {
   let store: Store;
   let tmpDir: string;
 
@@ -348,6 +349,8 @@ describe('extractFunction', () => {
     const result = extractFunction(store, tmpDir, 'src/nope.ts', 1, 3, 'extracted');
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
+    // File-existence error must NOT be the disabled-sentinel error.
+    expect(result.error).not.toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
   });
 
   it('returns error for invalid line range', async () => {
@@ -364,7 +367,7 @@ describe('extractFunction', () => {
     expect(result.error).toContain('Invalid line range');
   });
 
-  it('extracts simple TS function with no params/returns', async () => {
+  it('valid TS file + range returns the disabled-sentinel error, no edits, no writes', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': [
         'function main() {',
@@ -375,59 +378,19 @@ describe('extractFunction', () => {
       ].join('\n'),
     });
 
+    const before = readFile(tmpDir, 'src/a.ts');
     const result = extractFunction(store, tmpDir, 'src/a.ts', 2, 3, 'greet');
-    expect(result.success).toBe(true);
-    expect(result.files_modified).toContain('src/a.ts');
 
-    const content = readFile(tmpDir, 'src/a.ts');
-    expect(content).toContain('greet();');
-    expect(content).toContain('function greet()');
+    expect(result.success).toBe(false);
+    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
+    expect(result.error).toContain('extract_function-ast-rewrite');
+    expect(result.edits).toEqual([]);
+    expect(result.files_modified).toEqual([]);
+    // File untouched.
+    expect(readFile(tmpDir, 'src/a.ts')).toBe(before);
   });
 
-  it('detects parameters from outer scope', async () => {
-    tmpDir = createTmpFixture({
-      'src/a.ts': [
-        'const items = [1, 2, 3];',
-        'const multiplier = 2;',
-        '// start extract',
-        'const result = items.map(x => x * multiplier);',
-        '// end extract',
-        'return result;',
-      ].join('\n'),
-    });
-
-    const result = extractFunction(store, tmpDir, 'src/a.ts', 4, 4, 'transform');
-    expect(result.success).toBe(true);
-    expect(result.warnings.some((w) => w.includes('parameter'))).toBe(true);
-
-    const content = readFile(tmpDir, 'src/a.ts');
-    // The call site should pass params
-    expect(content).toContain('transform(');
-    // The function should accept params
-    expect(content).toContain('function transform(');
-  });
-
-  it('detects return values used after extraction', async () => {
-    tmpDir = createTmpFixture({
-      'src/a.ts': [
-        'const input = 10;',
-        'const doubled = input * 2;',
-        'const tripled = input * 3;',
-        'console.log(doubled + tripled);',
-      ].join('\n'),
-    });
-
-    const result = extractFunction(store, tmpDir, 'src/a.ts', 2, 3, 'compute');
-    expect(result.success).toBe(true);
-    expect(result.warnings.some((w) => w.includes('return value'))).toBe(true);
-
-    const content = readFile(tmpDir, 'src/a.ts');
-    // Should have destructured return
-    expect(content).toContain('function compute(');
-    expect(content).toMatch(/return/);
-  });
-
-  it('generates Python syntax for .py files', async () => {
+  it('valid Python file + range returns the disabled-sentinel error', async () => {
     tmpDir = createTmpFixture({
       'src/main.py': [
         'data = [1, 2, 3]',
@@ -437,15 +400,15 @@ describe('extractFunction', () => {
       ].join('\n'),
     });
 
+    const before = readFile(tmpDir, 'src/main.py');
     const result = extractFunction(store, tmpDir, 'src/main.py', 2, 3, 'compute_stats');
-    expect(result.success).toBe(true);
 
-    const content = readFile(tmpDir, 'src/main.py');
-    expect(content).toContain('def compute_stats(');
-    expect(content).not.toContain('function ');
+    expect(result.success).toBe(false);
+    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
+    expect(readFile(tmpDir, 'src/main.py')).toBe(before);
   });
 
-  it('generates Go syntax for .go files', async () => {
+  it('valid Go file + range returns the disabled-sentinel error', async () => {
     tmpDir = createTmpFixture({
       'src/main.go': [
         'package main',
@@ -458,31 +421,12 @@ describe('extractFunction', () => {
       ].join('\n'),
     });
 
+    const before = readFile(tmpDir, 'src/main.go');
     const result = extractFunction(store, tmpDir, 'src/main.go', 4, 5, 'compute');
-    expect(result.success).toBe(true);
 
-    const content = readFile(tmpDir, 'src/main.go');
-    expect(content).toContain('func compute(');
-    expect(content).not.toContain('function ');
-    expect(content).not.toContain('def ');
-  });
-
-  it('preserves lines before and after extraction', async () => {
-    tmpDir = createTmpFixture({
-      'src/a.ts': [
-        'const header = "start";',
-        'const a = 1;',
-        'const b = 2;',
-        'const footer = "end";',
-      ].join('\n'),
-    });
-
-    const result = extractFunction(store, tmpDir, 'src/a.ts', 2, 3, 'setup');
-    expect(result.success).toBe(true);
-
-    const content = readFile(tmpDir, 'src/a.ts');
-    expect(content).toContain('const header = "start";');
-    expect(content).toContain('const footer = "end";');
+    expect(result.success).toBe(false);
+    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
+    expect(readFile(tmpDir, 'src/main.go')).toBe(before);
   });
 });
 
