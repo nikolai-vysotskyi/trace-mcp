@@ -920,6 +920,8 @@ export async function mineSessions(
       minConfidence: opts.minConfidence,
       reviewThreshold,
       rejectThreshold,
+      // Single switch for both paths: callers toggle incremental on/off once.
+      incrementalCursor: opts.incrementalCursor,
     },
     _providerCounters,
   );
