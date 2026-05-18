@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     branches: [master]
+  workflow_dispatch:
+    inputs:
+      publish_tag:
+        description: 'Force-publish this existing git tag (e.g. v1.38.0) when the normal release-please flow already created the tag but the publish job failed.'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -117,7 +123,7 @@ jobs:
 
   publish:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: npm
@@ -132,7 +138,8 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          # Dispatch override > release-please's freshly cut tag.
+          ref: ${{ github.event.inputs.publish_tag != '' && github.event.inputs.publish_tag || needs.release-please.outputs.tag_name }}
 
       - uses: pnpm/action-setup@8912a9102ac27614460f54aedde9e1e7f9aec20d # v6.0.5
 
