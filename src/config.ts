@@ -531,6 +531,21 @@ const MemoryConfigSchema = z
           .describe(
             'Bounded retention for project_memos. Keep at most N rows per (project_root, service_name) scope — older rows are dropped on each saveProjectMemo() in the same transaction.',
           ),
+        autoRegenerate: z
+          .boolean()
+          .default(true)
+          .describe(
+            'When memory.memo.enabled is true, automatically regenerate the project memo after memo.regenerateEveryN qualifying writes. Fire-and-forget; never blocks the write that triggered it.',
+          ),
+        minTriggerIntervalSec: z
+          .number()
+          .int()
+          .min(60)
+          .max(86400)
+          .default(600)
+          .describe(
+            'Per-scope throttle for auto-regenerate. Prevents thundering-herd regen calls.',
+          ),
       })
       .prefault({}),
     consolidation: z
@@ -659,6 +674,22 @@ const MemoryConfigSchema = z
           .max(86400)
           .default(3600)
           .describe('After 3 consecutive failures, skip a project for this long before retrying.'),
+        tuneCooldownSec: z
+          .number()
+          .int()
+          .min(3600)
+          .max(2592000)
+          .default(86400)
+          .describe('Minimum gap between consecutive auto-tune runs per project.'),
+        tuneEveryNNewEvents: z
+          .number()
+          .int()
+          .min(5)
+          .max(1000)
+          .default(25)
+          .describe(
+            'Trigger auto-tune when this many new review events accumulate since last tune.',
+          ),
       })
       .prefault({}),
   })

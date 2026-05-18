@@ -48,9 +48,11 @@ import {
   runClusterStage,
   runMemoStage,
   runMineStage,
+  runTuneStage,
   type ClusterStageResult,
   type MemoStageResult,
   type MineStageResult,
+  type TuneStageResult,
 } from './stages.js';
 import { SerialQueue } from './serial-queue.js';
 
@@ -58,7 +60,7 @@ import { SerialQueue } from './serial-queue.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export type StageName = 'mine' | 'cluster' | 'memo';
+export type StageName = 'mine' | 'cluster' | 'memo' | 'tune';
 
 /**
  * A project's view of the scheduler's per-project state. Kept in memory
@@ -69,6 +71,7 @@ export interface SchedulerProjectState {
   lastMineAt?: number;
   lastClusterAt?: number;
   lastMemoAt?: number;
+  lastTuneAt?: number;
   lastActivityAt?: number;
   pendingStages: Set<StageName>;
   consecutiveFailures: number;
@@ -79,6 +82,11 @@ export interface SchedulerProjectState {
    * to detect "≥ clusterEveryNDecisions added" without expensive scans.
    */
   decisionsAtLastCluster?: number;
+  /**
+   * Review-event count at the last tune run. Used to detect
+   * "≥ tuneEveryNNewEvents accumulated" without expensive scans.
+   */
+  lastTuneEventCount?: number;
 }
 
 export interface MemoryBackgroundConfig {
@@ -90,6 +98,8 @@ export interface MemoryBackgroundConfig {
   mineMinIntervalSec: number;
   clusterEveryNDecisions: number;
   failureBackoffSec: number;
+  tuneCooldownSec: number;
+  tuneEveryNNewEvents: number;
 }
 
 /**
@@ -132,6 +142,7 @@ export interface SchedulerStatus {
     lastMineAt?: number;
     lastClusterAt?: number;
     lastMemoAt?: number;
+    lastTuneAt?: number;
     lastActivityAt?: number;
     backoffUntil?: number;
   }>;
@@ -262,6 +273,7 @@ export class MemoryScheduler {
       lastMineAt: st.lastMineAt,
       lastClusterAt: st.lastClusterAt,
       lastMemoAt: st.lastMemoAt,
+      lastTuneAt: st.lastTuneAt,
       lastActivityAt: st.lastActivityAt,
       backoffUntil: st.backoffUntil,
     }));
@@ -311,7 +323,40 @@ export class MemoryScheduler {
     if (!st.pendingStages.has('memo') && this.isMemoDue(project, st)) {
       due.push('memo');
     }
+    if (!st.pendingStages.has('tune') && this.isTuneDue(project, st, now)) {
+      due.push('tune');
+    }
     return due;
+  }
+
+  /**
+   * Stage D — auto-retune confidence weights. Due when:
+   *   - tuning is not explicitly disabled in config
+   *   - the cooldown since the last successful tune has elapsed
+   *   - at least `tuneEveryNNewEvents` new review events have landed
+   *     since the last tune (or there's never been a tune)
+   */
+  private isTuneDue(
+    project: SchedulerProjectListing,
+    st: SchedulerProjectState,
+    now: number,
+  ): boolean {
+    const cfg = project.config ?? this.opts.config;
+    if (cfg.memory?.weight_tuning?.enabled === false) return false;
+    if (st.lastTuneAt && now - st.lastTuneAt < this.bg.tuneCooldownSec * 1000) {
+      return false;
+    }
+    const store = this.ensureDecisionStore();
+    if (!store) return false;
+    let eventCount = 0;
+    try {
+      // listReviewEvents is project-scoped — cheap when project is empty.
+      eventCount = store.listReviewEvents({ project_root: project.root }).length;
+    } catch {
+      return false;
+    }
+    const baseline = st.lastTuneEventCount ?? 0;
+    return eventCount - baseline >= this.bg.tuneEveryNNewEvents;
   }
 
   private isMineDue(st: SchedulerProjectState, now: number): boolean {
@@ -491,6 +536,41 @@ export class MemoryScheduler {
           { projectRoot: project.root, stage, result },
           'memory-scheduler: stage done',
         );
+      } else if (stage === 'tune') {
+        let result: TuneStageResult;
+        try {
+          result = await runTuneStage({
+            store,
+            projectRoot: project.root,
+            minEvents: projectConfig.memory?.weight_tuning?.min_events,
+          });
+        } catch (e) {
+          // runTuneStage swallows its own throws, but defend against
+          // unexpected programmer-error throws so the scheduler can't die.
+          result = {
+            ok: false,
+            error: (e as Error)?.message ?? String(e),
+            durationMs: 0,
+          };
+        }
+        // Snapshot regardless of ok/skipped/applied — cooldown is the
+        // only thing keeping the scheduler from re-running this stage
+        // every tick, and we want it to stick even when the fitter
+        // refused a noisy batch.
+        st.lastTuneAt = this.now();
+        try {
+          st.lastTuneEventCount = store.listReviewEvents({
+            project_root: project.root,
+          }).length;
+        } catch {
+          /* leave stale; next tick will pick up the right baseline */
+        }
+        onSuccess(result);
+        if (!result.ok && !result.skipped) onFailure(result.error);
+        logger.debug?.(
+          { projectRoot: project.root, stage, result },
+          'memory-scheduler: stage done',
+        );
       }
     } catch (err) {
       // Defensive — stage layer is supposed to swallow throws, but a
@@ -570,6 +650,8 @@ function resolveBackgroundConfig(config: TraceMcpConfig): MemoryBackgroundConfig
     mineMinIntervalSec: raw.mineMinIntervalSec ?? 1800,
     clusterEveryNDecisions: raw.clusterEveryNDecisions ?? 25,
     failureBackoffSec: raw.failureBackoffSec ?? 3600,
+    tuneCooldownSec: raw.tuneCooldownSec ?? 86400,
+    tuneEveryNNewEvents: raw.tuneEveryNNewEvents ?? 25,
   };
 }
 
