@@ -289,6 +289,51 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
             valueNode.type === 'function_expression' ||
             valueNode.type === 'generator_function');
 
+        // Detect `const Foo = class implements Bar {}` / `const Foo = class extends Base {}`
+        // (inline class expressions). Without this branch the heritage edge is
+        // never emitted and the class is invisible to get_type_hierarchy /
+        // get_implementations / findImplementors. Index as a class symbol so it
+        // participates in the heritage graph like a named class_declaration would.
+        const isClassExpression = !!valueNode && valueNode.type === 'class';
+
+        if (isClassExpression && valueNode) {
+          // Skip non-exported inline class expressions — usually local helpers.
+          if (!exported) continue;
+
+          const decorators = extractDecorators(node);
+          const heritage = this.extractHeritage(valueNode);
+          const metadata: Record<string, unknown> = {
+            exported,
+            default: isDefaultExport(node),
+            ...(decorators.length > 0 ? { decorators } : {}),
+            ...(heritage.extends ? { extends: heritage.extends } : {}),
+            ...(heritage.implements.length > 0 ? { implements: heritage.implements } : {}),
+          };
+          this.attachVersionInfo(node, metadata);
+
+          const classTypeRefs = extractTypeReferences(valueNode);
+          if (classTypeRefs.length > 0) metadata.typeRefs = classTypeRefs;
+
+          const symbolId = makeSymbolId(filePath, name, 'class');
+          symbols.push({
+            symbolId,
+            name,
+            kind: 'class',
+            signature: getFullSignature(node),
+            byteStart: node.startIndex,
+            byteEnd: node.endIndex,
+            lineStart: node.startPosition.row + 1,
+            lineEnd: node.endPosition.row + 1,
+            metadata,
+          });
+
+          const body = valueNode.childForFieldName('body');
+          if (body) {
+            symbols.push(...extractClassMethods(body, filePath, name, symbolId));
+          }
+          continue;
+        }
+
         // Skip non-exported non-function variables — they're usually constants
         // or local state that would only bloat symbol counts.
         if (!exported && !isFunctionLike) continue;

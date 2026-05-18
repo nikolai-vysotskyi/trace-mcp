@@ -290,3 +290,46 @@ export class ApiController {
     expect(cls.metadata?.decorators).toBeUndefined();
   });
 });
+
+// ---------- inline class expression ----------
+//
+// Plugins are sometimes declared as `export const FooPlugin = class implements LanguagePlugin {...}`.
+// Before the fix, the heritage edge was never emitted because the indexer only walked
+// class_declaration nodes — class expressions assigned to a const slipped through as a
+// generic `variable` symbol with no metadata.implements / metadata.extends, making them
+// invisible to get_type_hierarchy / get_implementations / findImplementors.
+
+describe('TypeScript plugin — inline class expression (const Foo = class implements Bar {})', () => {
+  it('indexes inline class expression as a class symbol with implements heritage', async () => {
+    const code = `export const FooPlugin = class implements LanguagePlugin {
+  doStuff(): void {}
+};`;
+    const result = await parse(code);
+    const cls = findSymbol(result.symbols, 'FooPlugin', 'class');
+    expect(cls.kind).toBe('class');
+    expect(cls.metadata?.exported).toBe(true);
+    expect(cls.metadata?.implements).toEqual(['LanguagePlugin']);
+  });
+
+  it('indexes inline class expression with extends heritage', async () => {
+    const code = `export const Sub = class extends Base {};`;
+    const result = await parse(code);
+    const cls = findSymbol(result.symbols, 'Sub', 'class');
+    expect(cls.kind).toBe('class');
+    expect(cls.metadata?.extends).toBe('Base');
+  });
+
+  it('emits methods of the inline class expression', async () => {
+    const code = `export const Bar = class implements LanguagePlugin {
+  doStuff(): void {}
+  helper(): number { return 1; }
+};`;
+    const result = await parse(code);
+    const cls = findSymbol(result.symbols, 'Bar', 'class');
+    expect(cls.metadata?.implements).toEqual(['LanguagePlugin']);
+    // Methods get extracted under the class's symbol_id namespace.
+    const methodNames = result.symbols.filter((s) => s.kind === 'method').map((s) => s.name);
+    expect(methodNames).toContain('doStuff');
+    expect(methodNames).toContain('helper');
+  });
+});

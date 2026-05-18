@@ -85,10 +85,17 @@ describe('getMinimalContext() — behavioural contract', () => {
     expect(review._meta.intent_inferred).toBe(true);
     expect(debug._meta.intent_inferred).toBe(true);
 
-    // The two routes pick different first-tool suggestions.
-    expect(review.next_steps[0].tool).not.toBe(debug.next_steps[0].tool);
+    // When a free-text task is supplied, get_task_context is prepended with
+    // the verbatim task string so the agent's wording survives intent
+    // classification (see fix #4 in get_minimal_context).
+    const reviewTc = review.next_steps.find((s) => s.tool === 'get_task_context');
+    const debugTc = debug.next_steps.find((s) => s.tool === 'get_task_context');
+    expect(reviewTc?.args).toMatchObject({ task: 'Please review this PR for the auth refactor' });
+    expect(debugTc?.args).toMatchObject({
+      task: 'There is a bug in the login flow — investigate the regression',
+    });
 
-    // Review route surfaces compare_branches; debug route surfaces predict_bugs.
+    // Intent-specific tools still appear in the suggestion list.
     expect(review.next_steps.map((s) => s.tool)).toContain('compare_branches');
     expect(debug.next_steps.map((s) => s.tool)).toContain('predict_bugs');
   });

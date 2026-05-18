@@ -18,6 +18,7 @@ import { computeConfidence } from './decision-confidence.js';
 import { mineProviderSessions } from './conversation-miner-providers.js';
 import type { DecisionInput, DecisionStore, DecisionType } from './decision-store.js';
 import { type LlmExtractedDecision, extractDecisionsWithLlm } from './llm-extractor.js';
+import { isContentNonEnglish, sanitizeTitle } from './title-extractor.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -126,8 +127,12 @@ interface DecisionPattern {
   type: DecisionType;
   /** Confidence multiplier for this pattern */
   confidence: number;
-  /** Function to extract title from the match */
-  titleExtractor: (match: RegExpMatchArray, context: string) => string;
+  /**
+   * Function to extract title from the match. Returns `null` when the
+   * candidate must be rejected (non-English, unbalanced, empty) — callers
+   * skip the decision entirely rather than substitute a worse title.
+   */
+  titleExtractor: (match: RegExpMatchArray, context: string) => string | null;
 }
 
 const DECISION_PATTERNS: DecisionPattern[] = [
@@ -206,10 +211,13 @@ const CONTEXT_BOOSTERS = [
   /\bdesign decision\b/i,
 ];
 
-function truncateTitle(s: string): string {
-  const clean = s.replace(/\s+/g, ' ').trim();
-  if (clean.length <= 80) return clean;
-  return `${clean.slice(0, 77)}...`;
+/**
+ * Sentence-aware, language-filtered, bracket-balanced title sanitizer.
+ * Returns `null` to signal that the candidate must be dropped — caller
+ * skips the decision entirely rather than persist a worse title.
+ */
+function truncateTitle(s: string): string | null {
+  return sanitizeTitle(s);
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -423,6 +431,10 @@ export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[]
 
       while ((match = pattern.pattern.exec(turn.text)) !== null) {
         const title = pattern.titleExtractor(match, contextText);
+        // Title-sanitizer rejects non-English / unbalanced / empty fragments
+        // by returning null. Skip these candidates entirely — falling back
+        // to a worse title would just pollute the decision graph.
+        if (title === null) continue;
         // Deduplicate by title similarity
         const titleKey = title.toLowerCase().replace(/\s+/g, ' ').trim();
         if (seen.has(titleKey)) continue;
@@ -432,6 +444,11 @@ export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[]
         const start = Math.max(0, match.index - 200);
         const end = Math.min(turn.text.length, match.index + match[0].length + 200);
         const content = turn.text.slice(start, end).trim();
+
+        // English-only rule applies to the long content field too — drop
+        // candidates whose surrounding context is predominantly non-English
+        // even if the title slice itself happened to land in Latin chars.
+        if (isContentNonEnglish(content)) continue;
 
         const confidence = Math.min(pattern.confidence * boosterMultiplier, 0.99);
 
@@ -815,8 +832,14 @@ function adaptLlmDecisions(
 
   const out: ExtractedDecision[] = [];
   for (const d of raw) {
+    // English-only gate also applies to LLM-extracted decisions — even when
+    // a remote model returns fluent foreign-language prose, it must not
+    // land in the active knowledge graph.
+    const cleanTitle = sanitizeTitle(d.title);
+    if (cleanTitle === null) continue;
+    if (isContentNonEnglish(d.content)) continue;
     const heuristic = computeConfidence({
-      title: d.title,
+      title: cleanTitle,
       content: d.content,
       type: d.type,
       symbol_id: symbolHint,
@@ -824,7 +847,7 @@ function adaptLlmDecisions(
       tags: d.tags,
     });
     out.push({
-      title: d.title,
+      title: cleanTitle,
       content: d.content,
       type: d.type,
       // Take the higher of the LLM's self-estimate and the heuristic — LLM

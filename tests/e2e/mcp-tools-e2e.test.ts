@@ -61,8 +61,8 @@ describe('MCP Tools E2E — Laravel', () => {
     }
   });
 
-  it('get_outline: returns symbols for controller file', () => {
-    const result = getFileOutline(store, 'app/Http/Controllers/UserController.php');
+  it('get_outline: returns symbols for controller file', async () => {
+    const result = await getFileOutline(store, 'app/Http/Controllers/UserController.php');
     expect(result.isOk()).toBe(true);
     const { symbols } = result._unsafeUnwrap();
     expect(symbols.length).toBeGreaterThan(0);

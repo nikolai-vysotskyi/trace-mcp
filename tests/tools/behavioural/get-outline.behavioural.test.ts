@@ -65,8 +65,8 @@ describe('getFileOutline() — behavioural contract', () => {
     seed(store);
   });
 
-  it('returns symbols ordered by lineStart ascending', () => {
-    const result = getFileOutline(store, 'src/services/auth.ts');
+  it('returns symbols ordered by lineStart ascending', async () => {
+    const result = await getFileOutline(store, 'src/services/auth.ts');
     expect(result.isOk()).toBe(true);
     const outline = result._unsafeUnwrap();
     expect(outline.symbols.length).toBeGreaterThanOrEqual(3);
@@ -80,20 +80,20 @@ describe('getFileOutline() — behavioural contract', () => {
     }
   });
 
-  it('returns the `path` that was queried', () => {
-    const result = getFileOutline(store, 'src/services/auth.ts');
+  it('returns the `path` that was queried', async () => {
+    const result = await getFileOutline(store, 'src/services/auth.ts');
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().path).toBe('src/services/auth.ts');
   });
 
-  it('returns NOT_FOUND error for a non-existent path', () => {
-    const result = getFileOutline(store, 'src/does/not/exist.ts');
+  it('returns NOT_FOUND error for a non-existent path', async () => {
+    const result = await getFileOutline(store, 'src/does/not/exist.ts');
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('NOT_FOUND');
   });
 
-  it('only returns symbols belonging to the queried file', () => {
-    const result = getFileOutline(store, 'src/services/auth.ts');
+  it('only returns symbols belonging to the queried file', async () => {
+    const result = await getFileOutline(store, 'src/services/auth.ts');
     expect(result.isOk()).toBe(true);
     const names = result._unsafeUnwrap().symbols.map((s) => s.name);
     // formatCurrency belongs to a different file and must not leak in.
@@ -101,8 +101,8 @@ describe('getFileOutline() — behavioural contract', () => {
     expect(names).toContain('AuthService');
   });
 
-  it('each symbol carries name + kind + lineStart', () => {
-    const result = getFileOutline(store, 'src/services/auth.ts');
+  it('each symbol carries name + kind + lineStart', async () => {
+    const result = await getFileOutline(store, 'src/services/auth.ts');
     expect(result.isOk()).toBe(true);
     for (const sym of result._unsafeUnwrap().symbols) {
       expect(typeof sym.name).toBe('string');

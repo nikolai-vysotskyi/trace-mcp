@@ -142,7 +142,7 @@ export class SessionJournal {
     if (SessionJournal.DEDUP_TOOLS.has(tool) && prev.compact_result) {
       return {
         action: 'dedup',
-        message: `Deduplicated: "${summary}" was already returned this session (saved ~${prev.result_tokens ?? 0} tokens). Showing compact reference.`,
+        message: `Deduplicated: ${summary} was already returned this session (saved ~${prev.result_tokens ?? 0} tokens). Showing compact reference.`,
         compact_result: prev.compact_result,
         saved_tokens: prev.result_tokens ?? 0,
       };
@@ -152,14 +152,14 @@ export class SessionJournal {
     if (prev.result_count === 0) {
       return {
         action: 'warn',
-        message: `Duplicate query: "${summary}" was already executed with 0 results. This pattern does not exist in the codebase.`,
+        message: `Duplicate query: ${summary} was already executed with 0 results. This pattern does not exist in the codebase.`,
         compact_result: null,
         saved_tokens: 0,
       };
     }
     return {
       action: 'warn',
-      message: `Duplicate query: "${summary}" was already executed (returned ${prev.result_count} results).`,
+      message: `Duplicate query: ${summary} was already executed (returned ${prev.result_count} results).`,
       compact_result: null,
       saved_tokens: 0,
     };
@@ -320,10 +320,12 @@ export class SessionJournal {
   }
 
   private extractFileFromEntry(entry: JournalEntry): string | null {
-    // Extract file from params_summary (e.g., get_symbol("src/server.ts::foo#function"))
-    const match = entry.params_summary.match(/\("([^"]+)/);
-    if (!match) return null;
-    const val = match[1];
+    // params_summary shape is `<tool> <key>` (or just `<tool>` when no key).
+    // Extract the key portion — everything after the first space.
+    const sp = entry.params_summary.indexOf(' ');
+    if (sp < 0) return null;
+    const val = entry.params_summary.slice(sp + 1).trim();
+    if (!val) return null;
 
     // symbol_id format: "file.ts::symbol#kind"
     const symMatch = val.match(/^([^:]+)::/);
@@ -622,7 +624,11 @@ export class SessionJournal {
       params.file_path ??
       params.path ??
       '';
-    return `${tool}("${String(key).slice(0, 80)}")`;
+    const keyStr = String(key).slice(0, 80);
+    // Tool name alone when no meaningful key — avoids producing tool("")
+    // which then gets wrapped by the caller into the noisy 'tool("")' shape.
+    if (keyStr.length === 0) return tool;
+    return `${tool} ${keyStr}`;
   }
 
   private hash(tool: string, params: Record<string, unknown>): string {

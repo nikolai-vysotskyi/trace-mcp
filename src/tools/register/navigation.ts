@@ -437,6 +437,21 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
       }
       if (isMinimal(detail_level)) response.detail_level = 'minimal';
       if (result.fusion_debug) response.fusion_debug = result.fusion_debug;
+      // Propagate fusion honesty signal so callers can tell whether the
+      // semantic channel actually fired (or was silently skipped because
+      // embeddings are not populated). See `_meta.fusion` in
+      // `src/tools/navigation/navigation.ts`.
+      if (result._meta?.fusion) {
+        response._meta = {
+          ...((response._meta as Record<string, unknown> | undefined) ?? {}),
+          fusion: result._meta.fusion,
+        };
+      }
+      // Propagate near-miss suggestions from fuzzy search so the caller has
+      // concrete candidates to retry with on a zero-hit response.
+      if (result._near_misses && result._near_misses.length > 0) {
+        response._near_misses = result._near_misses;
+      }
       if (items.length === 0) {
         // Auto-fallback: try text search when symbol search finds nothing
         const textResult = searchText(store, projectRoot, {
@@ -535,15 +550,30 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
 
   server.tool(
     'get_outline',
-    'Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens. For reading one symbol\'s source, follow up with get_symbol. Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd }] }. Set `output_format: "toon"` for ~30-60% fewer tokens on tabular responses (lossless).',
+    'Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens. For reading one symbol\'s source, follow up with get_symbol. Pass `nested: true` to expand large top-level symbols (default ≥100 LOC) into their inner function-like declarations — each child carries `parentId` + `depth` (max depth 3). Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd, parentId?, depth? }] }. Set `output_format: "toon"` for ~30-60% fewer tokens on tabular responses (lossless).',
     {
       path: z.string().max(512).describe('Relative file path'),
       detail_level: DetailLevelSchema,
+      nested: z
+        .boolean()
+        .optional()
+        .describe(
+          'When true, walks the body of each top-level symbol whose LOC exceeds min_loc_for_nesting and emits inner function-like declarations as additional rows carrying `parentId` + `depth`. Default false — fully backward compatible.',
+        ),
+      min_loc_for_nesting: z
+        .number()
+        .int()
+        .min(10)
+        .max(10000)
+        .optional()
+        .describe(
+          'Minimum (line_end - line_start) for a top-level symbol to be expanded when nested=true. Default 100.',
+        ),
       output_format: OutputFormatSchema.describe(
         'Output format. "json" (default) returns JSON; "toon" returns Token-Oriented Object Notation — 30-60% fewer tokens, lossless. "markdown" is unsupported here and behaves as json.',
       ),
     },
-    async ({ path: filePath, detail_level, output_format }) => {
+    async ({ path: filePath, detail_level, nested, min_loc_for_nesting, output_format }) => {
       const encode = (payload: unknown): string =>
         output_format === 'toon' ? encodeResponse(payload, 'toon') : jh('get_outline', payload);
       const blocked = guardPath(filePath);
@@ -578,7 +608,11 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         }
       }
 
-      const result = getFileOutline(store, filePath);
+      const result = await getFileOutline(store, filePath, {
+        nested: nested === true,
+        minLocForNesting: min_loc_for_nesting,
+        projectRoot,
+      });
       if (result.isErr()) {
         return {
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],

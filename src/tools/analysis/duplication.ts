@@ -182,10 +182,12 @@ function findDuplicateSymbols(
   options?: {
     threshold?: number;
     maxResults?: number;
+    excludeSymbolIds?: Set<string>;
   },
 ): DuplicationResult {
   const threshold = options?.threshold ?? 0.7;
   const maxResults = options?.maxResults ?? 10;
+  const excludeSymbolIds = options?.excludeSymbolIds ?? new Set<string>();
 
   const sourceIsTest = _TEST_PATH_RE.test(sourceFilePath);
 
@@ -230,6 +232,10 @@ function findDuplicateSymbols(
 
       // Skip if candidate has exact same symbol ID (shouldn't happen, but guard)
       if (cand.symbolIdStr === src.symbol_id) continue;
+
+      // Skip explicitly-excluded symbols (caller's own symbol, or sibling
+      // symbols the caller already knows about).
+      if (excludeSymbolIds.has(cand.symbolIdStr)) continue;
 
       // Get candidate file path for test-double filtering
       const candFile = store.getFileById(cand.fileId);
@@ -330,14 +336,20 @@ export function checkFileForDuplicates(
 /**
  * Check a single symbol by ID or by name+kind against the codebase.
  * Called from the check_duplication tool.
+ *
+ * When `query.symbol_id` is supplied, that symbol is *always* excluded from
+ * results — a symbol is never its own duplicate. Callers can additionally pass
+ * `options.excludeSymbolIds` to suppress sibling symbols (e.g. when checking
+ * a name they're about to give a new symbol that will replace an old one).
  */
 export function checkSymbolForDuplicates(
   store: Store,
   db: Database.Database,
   query: { symbol_id?: string; name?: string; kind?: string },
-  options?: { threshold?: number; maxResults?: number },
+  options?: { threshold?: number; maxResults?: number; excludeSymbolIds?: string[] },
 ): DuplicationResult {
   const threshold = options?.threshold ?? 0.6;
+  const excludeSet = new Set<string>(options?.excludeSymbolIds ?? []);
 
   if (query.symbol_id) {
     // Look up actual symbol
@@ -349,10 +361,14 @@ export function checkSymbolForDuplicates(
       return { warnings: [], symbols_checked: 0, threshold };
     }
 
+    // Always exclude the caller's own symbol_id from results.
+    excludeSet.add(query.symbol_id);
+
     const file = store.getFileById(row.file_id);
     return findDuplicateSymbols(store, db, [row], row.file_id, file?.path ?? '', {
       threshold,
       maxResults: options?.maxResults ?? 15,
+      excludeSymbolIds: excludeSet,
     });
   }
 
@@ -379,6 +395,7 @@ export function checkSymbolForDuplicates(
     return findDuplicateSymbols(store, db, [virtual], -1, '', {
       threshold,
       maxResults: options?.maxResults ?? 15,
+      excludeSymbolIds: excludeSet,
     });
   }
 

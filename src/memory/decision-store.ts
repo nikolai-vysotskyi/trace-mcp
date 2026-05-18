@@ -11,6 +11,7 @@ import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { relativizeUnderRoot } from '../utils/path-relativize.js';
+import { computeHeat } from './heat.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -68,6 +69,18 @@ export interface DecisionRow {
   created_at: string;
   /** Unix millisecond timestamp of the last write (insert, update, or invalidate). */
   updated_at: number | null;
+  /**
+   * Number of times this decision has been recalled by a read-side surface
+   * (query_decisions, get_wake_up, get_decision_timeline). Drives the heat
+   * term in `computeHeat`. Defaults to 0 for legacy rows.
+   */
+  hit_count: number;
+  /**
+   * ISO timestamp of the most recent recall hit, or null when the decision
+   * has never been recalled. Combined with `hit_count` to compute time-decay
+   * heat in `computeHeat`.
+   */
+  last_hit_at: string | null;
 }
 
 export interface DecisionInput {
@@ -133,6 +146,27 @@ export interface DecisionQuery {
    */
   include_pending?: boolean;
   review_status?: 'pending' | 'approved' | 'rejected';
+  /**
+   * Result ordering.
+   *   - `'recency'` (default)   — `valid_from DESC` (existing behaviour)
+   *   - `'created_at'`          — `created_at DESC`
+   *   - `'heat'`                — computed in JS via `computeHeat`; rows fetched
+   *                               with a safety cap (limit * 3, capped at 500)
+   *                               and sorted before truncation. Falls back to
+   *                               recency when the heat subsystem is disabled.
+   */
+  order_by?: 'recency' | 'heat' | 'created_at';
+  /**
+   * Heat scoring overrides for `order_by='heat'`. Optional — defaults come
+   * from `memory.heat.*` config or hard-coded defaults in `computeHeat`.
+   */
+  heat_half_life_days?: number;
+  heat_freshness_days?: number;
+  /**
+   * When `order_by='heat'` is requested but the heat subsystem is disabled
+   * (config flag), callers can pass this flag to opt-out of the graceful
+   * fallback and surface an explicit error. Reserved for future use.
+   */
   limit?: number;
   offset?: number;
 }
@@ -199,7 +233,9 @@ CREATE TABLE IF NOT EXISTS decisions (
     confidence      REAL NOT NULL DEFAULT 1.0,
     git_branch      TEXT,
     review_status   TEXT,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    hit_count       INTEGER NOT NULL DEFAULT 0,
+    last_hit_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_project ON decisions(project_root);
 CREATE INDEX IF NOT EXISTS idx_decisions_service ON decisions(service_name);
@@ -391,6 +427,18 @@ export class DecisionStore {
       if (!cols.includes('review_status')) {
         this.db.exec('ALTER TABLE decisions ADD COLUMN review_status TEXT');
         logger.info('Pre-migration: added review_status column to decisions table');
+      }
+      // Heat / time-decay scoring (P2.1): track recall frequency and recency
+      // so frequently-used decisions surface higher and stale ones fade.
+      // Idempotent: ALTER TABLE only runs when the column is missing —
+      // SQLite has no native "ADD COLUMN IF NOT EXISTS".
+      if (!cols.includes('hit_count')) {
+        this.db.exec('ALTER TABLE decisions ADD COLUMN hit_count INTEGER NOT NULL DEFAULT 0');
+        logger.info('Pre-migration: added hit_count column to decisions table');
+      }
+      if (!cols.includes('last_hit_at')) {
+        this.db.exec('ALTER TABLE decisions ADD COLUMN last_hit_at TEXT');
+        logger.info('Pre-migration: added last_hit_at column to decisions table');
       }
     }
   }
@@ -632,11 +680,157 @@ export class DecisionStore {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
+    const orderBy = query.order_by ?? 'recency';
 
-    const sql = `SELECT d.* FROM decisions d ${where} ORDER BY d.valid_from DESC LIMIT ? OFFSET ?`;
+    // Heat ordering is computed in JS because SQLite has no portable exp().
+    // Fetch up to limit*3 rows (capped at 500) under the same WHERE,
+    // compute heat per row, sort, then slice. Keeps the deterministic
+    // pre-filter cheap and avoids loading the whole table.
+    if (orderBy === 'heat') {
+      const HEAT_FETCH_CAP = 500;
+      const fetchCount = Math.min(Math.max(limit * 3, limit), HEAT_FETCH_CAP);
+      const sql = `SELECT d.* FROM decisions d ${where} ORDER BY d.valid_from DESC LIMIT ?`;
+      params.push(fetchCount);
+      const rows = this.db.prepare(sql).all(...params) as DecisionRow[];
+      const now = new Date();
+      const heatParams = {
+        now,
+        halfLifeDays: query.heat_half_life_days,
+        freshnessDays: query.heat_freshness_days,
+      };
+      // Stable sort: heat DESC, tie-break by valid_from DESC (newer first).
+      const scored = rows.map((r) => ({
+        row: r,
+        heat: computeHeat(
+          {
+            hit_count: r.hit_count ?? 0,
+            last_hit_at: r.last_hit_at,
+            created_at: r.created_at,
+          },
+          heatParams,
+        ),
+      }));
+      scored.sort((a, b) => {
+        if (b.heat !== a.heat) return b.heat - a.heat;
+        return a.row.valid_from < b.row.valid_from
+          ? 1
+          : a.row.valid_from > b.row.valid_from
+            ? -1
+            : 0;
+      });
+      return scored.slice(offset, offset + limit).map((s) => s.row);
+    }
+
+    const orderClause =
+      orderBy === 'created_at' ? 'ORDER BY d.created_at DESC' : 'ORDER BY d.valid_from DESC';
+    const sql = `SELECT d.* FROM decisions d ${where} ${orderClause} LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
     return this.db.prepare(sql).all(...params) as DecisionRow[];
+  }
+
+  // ── HEAT / TIME-DECAY ─────────────────────────────────────────────────
+  //
+  // Heat tracks how often + how recently each decision is recalled by a
+  // read-side surface (query_decisions, get_wake_up, get_decision_timeline).
+  // `recordHits` is the write path; `getHeat`/`getHottest` are the read path.
+
+  /**
+   * Record one or more recall hits. Increments `hit_count` and stamps
+   * `last_hit_at` to now() for every existing id in a single transaction.
+   * Missing ids are silently ignored — callers don't care, and the
+   * UPDATE's `WHERE id = ?` natively no-ops. Safe to call fire-and-forget.
+   */
+  recordHits(decisionIds: number[]): void {
+    if (decisionIds.length === 0) return;
+    const nowIso = new Date().toISOString();
+    const stmt = this.db.prepare(
+      `UPDATE decisions
+         SET hit_count = hit_count + 1,
+             last_hit_at = ?
+       WHERE id = ?`,
+    );
+    const tx = this.db.transaction((ids: number[]) => {
+      for (const id of ids) stmt.run(nowIso, id);
+    });
+    tx(decisionIds);
+  }
+
+  /**
+   * Compute the heat score for a single decision. Returns 0 when the
+   * decision does not exist, so callers can treat this as a safe accessor.
+   */
+  getHeat(id: number, params?: { halfLifeDays?: number; freshnessDays?: number }): number {
+    const row = this.getDecision(id);
+    if (!row) return 0;
+    return computeHeat(
+      {
+        hit_count: row.hit_count ?? 0,
+        last_hit_at: row.last_hit_at,
+        created_at: row.created_at,
+      },
+      {
+        now: new Date(),
+        halfLifeDays: params?.halfLifeDays,
+        freshnessDays: params?.freshnessDays,
+      },
+    );
+  }
+
+  /**
+   * Return the hottest N decisions (highest heat first). Filters mirror the
+   * common query knobs: project_root, service_name, git_branch. Only active
+   * (non-invalidated) and visible (NULL/approved) rows are considered.
+   */
+  getHottest(opts: {
+    project_root?: string;
+    service_name?: string;
+    git_branch?: string;
+    limit?: number;
+    halfLifeDays?: number;
+    freshnessDays?: number;
+  }): DecisionRow[] {
+    const limit = opts.limit ?? 10;
+    const conditions: string[] = ['valid_until IS NULL'];
+    const params: unknown[] = [];
+
+    if (opts.project_root) {
+      conditions.push('project_root = ?');
+      params.push(opts.project_root);
+    }
+    if (opts.service_name) {
+      conditions.push('service_name = ?');
+      params.push(opts.service_name);
+    }
+    if (opts.git_branch !== undefined) {
+      conditions.push('(git_branch = ? OR git_branch IS NULL)');
+      params.push(opts.git_branch);
+    }
+    conditions.push("(review_status IS NULL OR review_status = 'approved')");
+
+    const HEAT_FETCH_CAP = 500;
+    const fetchCount = Math.min(Math.max(limit * 3, limit), HEAT_FETCH_CAP);
+    const sql = `SELECT * FROM decisions WHERE ${conditions.join(' AND ')} ORDER BY valid_from DESC LIMIT ?`;
+    params.push(fetchCount);
+    const rows = this.db.prepare(sql).all(...params) as DecisionRow[];
+    const now = new Date();
+    const scored = rows.map((r) => ({
+      row: r,
+      heat: computeHeat(
+        {
+          hit_count: r.hit_count ?? 0,
+          last_hit_at: r.last_hit_at,
+          created_at: r.created_at,
+        },
+        {
+          now,
+          halfLifeDays: opts.halfLifeDays,
+          freshnessDays: opts.freshnessDays,
+        },
+      ),
+    }));
+    scored.sort((a, b) => b.heat - a.heat);
+    return scored.slice(0, limit).map((s) => s.row);
   }
 
   // ── TIMELINE ───────────────────────────────────────────────────────

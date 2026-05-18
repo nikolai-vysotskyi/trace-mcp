@@ -213,9 +213,9 @@ describe('SessionJournal — entry cap (leak guard)', () => {
     // After eviction the count must stay ≤ MAX_ENTRIES
     expect(entries.length).toBeLessThanOrEqual(10_000);
     // Last entry kept
-    expect(entries[entries.length - 1].params_summary).toBe('search("q-10499")');
+    expect(entries[entries.length - 1].params_summary).toBe('search q-10499');
     // First entry is NOT q-0 — it was dropped
-    expect(entries[0].params_summary).not.toBe('search("q-0")');
+    expect(entries[0].params_summary).not.toBe('search q-0');
   });
 
   it('rebuilds allHashes/zeroResultQueries from survivors after eviction', () => {
@@ -226,9 +226,9 @@ describe('SessionJournal — entry cap (leak guard)', () => {
     }
     const summary = j.getSummary();
     // The survivor zero-result query must be reflected in the secondary index
-    expect(summary.searches_with_zero_results).toContain('search("q-10499")');
+    expect(summary.searches_with_zero_results).toContain('search q-10499');
     // The dropped queries must NOT show up
-    expect(summary.searches_with_zero_results).not.toContain('search("q-0")');
+    expect(summary.searches_with_zero_results).not.toContain('search q-0');
   });
 
   it('dedup cache no longer pins evicted entries', () => {
