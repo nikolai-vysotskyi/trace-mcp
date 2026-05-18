@@ -1,4 +1,4 @@
-import { err, ok, Result } from 'neverthrow';
+import type { Result } from 'neverthrow';
 
 export type TraceMcpError =
   | { code: 'PARSE_ERROR'; file: string; partial: boolean; message: string }
@@ -55,4 +55,5 @@ export function formatToolError(error: TraceMcpError): object {
   return { error: base };
 }
 
-export { err, ok, Result };
+export { err, ok } from 'neverthrow';
+export type { Result };
