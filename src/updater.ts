@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import https from 'node:https';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureGlobalDirs, getDbPath, TRACE_MCP_HOME } from './global.js';
+import { ensureGlobalDirs, TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
 
@@ -498,13 +498,21 @@ export async function runPostUpdateMigrations(): Promise<void> {
     'Post-update: version change detected, running migrations...',
   );
 
+  // Stamp the new version FIRST, before doing any work. If the daemon is
+  // killed mid-migration (e.g. by the desktop app's /health watchdog when
+  // event loop is busy), the next startup must not re-run the migration
+  // and re-enter the loop. We accept that an aborted migration may leave
+  // hooks/CLAUDE.md/reindex partially applied — a partial migration is
+  // far better than an infinite restart loop. See tray.js shouldAttemptRestart.
+  writeCache({ ...cache, installedVersion: CURRENT_VERSION });
+
   // Dynamic imports — only needed during post-update, avoid loading at every startup
   const [
     { migrateGlobalConfig },
     { detectGuardHook },
     { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook },
     { updateClaudeMd },
-    { listProjects, updateLastIndexed },
+    { listProjects, markAllProjectsPendingReindex },
   ] = await Promise.all([
     import('./config-jsonc.js'),
     import('./init/detector.js'),
@@ -542,74 +550,22 @@ export async function runPostUpdateMigrations(): Promise<void> {
     logger.warn({ error: err }, 'Post-update: CLAUDE.md update failed (non-fatal)');
   }
 
-  // 4. Reindex all registered projects
+  // 4. Mark every project as needing a reindex at the new version. The
+  //    actual reindex is deferred until the daemon's ProjectManager.addProject()
+  //    opens each project (lazy, per-project, in the background) — see
+  //    clearPendingReindex. Doing it inline here used to take seconds against
+  //    a stuffed registry (31 projects in the wild), blocking the event loop
+  //    long enough that the desktop app's 5s /health watchdog flagged the
+  //    daemon as unreachable and shot it with `daemon restart`, restarting
+  //    the migration from scratch — an infinite loop. Deferring breaks it.
   const projects = listProjects();
   if (projects.length > 0) {
-    logger.info({ count: projects.length }, 'Post-update: reindexing registered projects...');
-
-    const [
-      { initializeDatabase },
-      { Store },
-      { PluginRegistry },
-      { IndexingPipeline },
-      { loadConfig },
-    ] = await Promise.all([
-      import('./db/schema.js'),
-      import('./db/store.js'),
-      import('./plugin-api/registry.js'),
-      import('./indexer/pipeline.js'),
-      import('./config.js'),
-    ]);
-
-    for (const proj of projects) {
-      if (!fs.existsSync(proj.root)) {
-        logger.debug(
-          { root: proj.root },
-          'Post-update: skipping stale project (directory missing)',
-        );
-        continue;
-      }
-
-      try {
-        const configResult = await loadConfig(proj.root);
-        if (configResult.isErr()) {
-          logger.warn(
-            { root: proj.root, error: configResult.error },
-            'Post-update: config load failed, skipping',
-          );
-          continue;
-        }
-
-        const dbPath = getDbPath(proj.root);
-        const db = initializeDatabase(dbPath);
-        const store = new Store(db);
-
-        const registry = PluginRegistry.createWithDefaults();
-
-        const pipeline = new IndexingPipeline(store, registry, configResult.value, proj.root);
-        const result = await pipeline.indexAll(true); // force = true
-        updateLastIndexed(proj.root);
-        db.close();
-
-        logger.info(
-          {
-            root: proj.root,
-            indexed: result.indexed,
-            skipped: result.skipped,
-            errors: result.errors,
-          },
-          'Post-update: project reindexed',
-        );
-      } catch (err) {
-        logger.warn(
-          { root: proj.root, error: err },
-          'Post-update: project reindex failed (non-fatal)',
-        );
-      }
-    }
+    const marked = markAllProjectsPendingReindex(CURRENT_VERSION);
+    logger.info(
+      { count: projects.length, marked, version: CURRENT_VERSION },
+      'Post-update: marked projects for lazy reindex (deferred to ProjectManager.addProject)',
+    );
   }
 
-  // Stamp the current version so we don't re-run on next startup
-  writeCache({ ...cache, installedVersion: CURRENT_VERSION });
   logger.info({ version: CURRENT_VERSION }, 'Post-update: migrations complete');
 }

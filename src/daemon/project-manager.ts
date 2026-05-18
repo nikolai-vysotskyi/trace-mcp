@@ -23,7 +23,7 @@ import { PluginRegistry } from '../plugin-api/registry.js';
 import { clearServerPid, ProgressState, writeServerPid } from '../progress.js';
 import { detectGitWorktree } from '../project-root.js';
 import { isDangerousProjectRoot, setupProject } from '../project-setup.js';
-import { listProjects, unregisterProject } from '../registry.js';
+import { clearPendingReindex, getProject, listProjects, unregisterProject } from '../registry.js';
 import type { ServerHandle } from '../server/server.js';
 import { createServer } from '../server/server.js';
 import { SubprojectManager } from '../subproject/manager.js';
@@ -342,9 +342,34 @@ export class ProjectManager {
       const msg = err instanceof Error ? err.message : String(err);
       return /FOREIGN KEY constraint failed/i.test(msg);
     };
-    this.indexAllLimit!(() => pipeline.indexAll())
+    // Lazy post-update reindex: if updater.ts stamped pendingReindexForVersion
+    // on this project's registry entry, run the initial indexAll with force=true
+    // (full rebuild) instead of the cheap incremental path. Clears the flag on
+    // success so subsequent restarts go through the fast path. This decouples
+    // "trace-mcp version bump" from "reindex storm in post-update migrations",
+    // which used to block the event loop long enough that the desktop app's
+    // /health watchdog shot the daemon with `daemon restart`. See updater.ts.
+    const registryEntry = getProject(projectRoot);
+    const needsForcedReindex = registryEntry?.pendingReindexForVersion !== undefined;
+    if (needsForcedReindex) {
+      logger.info(
+        { projectRoot, forVersion: registryEntry?.pendingReindexForVersion },
+        'Lazy post-update reindex: forcing full index rebuild for this project',
+      );
+    }
+    this.indexAllLimit!(() => pipeline.indexAll(needsForcedReindex))
       .then(() => {
         managed.status = 'ready';
+        if (needsForcedReindex) {
+          try {
+            clearPendingReindex(projectRoot);
+          } catch (err) {
+            logger.warn(
+              { projectRoot, err: String(err) },
+              'Lazy post-update reindex: clearing flag failed (non-fatal)',
+            );
+          }
+        }
         runSummarization(aiAbortController.signal);
         runEmbeddings(aiAbortController.signal);
         runSubprojectAutoSync(projectRoot, config);
@@ -359,6 +384,13 @@ export class ProjectManager {
           try {
             await this.indexAllLimit!(() => pipeline.indexAll(true));
             managed.status = 'ready';
+            if (needsForcedReindex) {
+              try {
+                clearPendingReindex(projectRoot);
+              } catch {
+                /* non-fatal — flag will retry next startup */
+              }
+            }
             runSummarization();
             runEmbeddings();
             runSubprojectAutoSync(projectRoot, config);

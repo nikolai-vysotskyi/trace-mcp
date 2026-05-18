@@ -16,6 +16,14 @@ export interface RegistryEntry {
   addedAt: string;
   type?: 'single' | 'multi-root';
   children?: string[];
+  /**
+   * Stamped by post-update migrations when the bundled trace-mcp version
+   * changes. The next time this project is opened by the daemon (ProjectManager.addProject)
+   * a lazy background reindex runs and the flag is cleared. Decouples
+   * "version bump" from "reindex storm" so a slow startup can't drive
+   * the desktop app's /health watchdog into a restart loop. See updater.ts.
+   */
+  pendingReindexForVersion?: string;
 }
 
 interface Registry {
@@ -153,6 +161,36 @@ export function updateLastIndexed(root: string): void {
   const reg = loadRegistry();
   if (reg.projects[absRoot]) {
     reg.projects[absRoot].lastIndexed = new Date().toISOString();
+    saveRegistry(reg);
+  }
+}
+
+/**
+ * Stamp every registered project with `pendingReindexForVersion=version`.
+ * Called by post-update migrations to defer the actual reindex to the
+ * first ProjectManager.addProject() of each project, so the daemon can
+ * become reachable instantly after a version bump.
+ */
+export function markAllProjectsPendingReindex(version: string): number {
+  const reg = loadRegistry();
+  let count = 0;
+  for (const entry of Object.values(reg.projects)) {
+    if (entry.pendingReindexForVersion !== version) {
+      entry.pendingReindexForVersion = version;
+      count++;
+    }
+  }
+  if (count > 0) saveRegistry(reg);
+  return count;
+}
+
+/** Clear the pending-reindex flag for one project after a successful reindex. */
+export function clearPendingReindex(root: string): void {
+  const absRoot = path.resolve(root);
+  const reg = loadRegistry();
+  const entry = reg.projects[absRoot];
+  if (entry && entry.pendingReindexForVersion !== undefined) {
+    delete entry.pendingReindexForVersion;
     saveRegistry(reg);
   }
 }
