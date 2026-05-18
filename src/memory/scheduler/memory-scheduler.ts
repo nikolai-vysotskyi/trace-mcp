@@ -196,6 +196,20 @@ export class MemoryScheduler {
     }
     if (this.timer) return;
     if (this.opts.startInterval === false) return;
+    // Hydrate per-project state from the durable scheduler_state table so
+    // a daemon restart does NOT re-run every stage on tick 1.
+    try {
+      for (const project of this.opts.projectManager.listProjects()) {
+        if (!this.states.has(project.root)) {
+          this.states.set(project.root, this.hydrateOrInitState(project.root));
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error)?.message ?? String(err) },
+        'memory-scheduler: hydration on start() failed — continuing with empty state',
+      );
+    }
     const intervalMs = Math.max(10, this.bg.tickIntervalSec) * 1000;
     this.timer = setInterval(() => {
       this.runTick().catch((err) => {
@@ -243,12 +257,12 @@ export class MemoryScheduler {
     if (!this.bg.enabled || this.stopped) return;
     const ts = this.now();
     if (projectRoot) {
-      const st = this.states.get(projectRoot) ?? this.initState();
+      const st = this.states.get(projectRoot) ?? this.hydrateOrInitState(projectRoot);
       st.lastActivityAt = ts;
       this.states.set(projectRoot, st);
     } else {
       for (const project of this.opts.projectManager.listProjects()) {
-        const st = this.states.get(project.root) ?? this.initState();
+        const st = this.states.get(project.root) ?? this.hydrateOrInitState(project.root);
         st.lastActivityAt = ts;
         this.states.set(project.root, st);
       }
@@ -303,7 +317,7 @@ export class MemoryScheduler {
 
   private computeDueStages(project: SchedulerProjectListing): StageName[] {
     const now = this.now();
-    const st = this.states.get(project.root) ?? this.initState();
+    const st = this.states.get(project.root) ?? this.hydrateOrInitState(project.root);
     this.states.set(project.root, st);
 
     // Honour back-off for the whole project.
@@ -489,6 +503,10 @@ export class MemoryScheduler {
         st.lastMineAt = this.now();
         onSuccess(result);
         if (!result.ok && !result.skipped) onFailure(result.error);
+        this.persistStateAsync(project.root, {
+          last_mine_at: st.lastMineAt,
+          consecutive_failures: st.consecutiveFailures,
+        });
         logger.debug?.(
           { projectRoot: project.root, stage, result },
           'memory-scheduler: stage done',
@@ -517,6 +535,10 @@ export class MemoryScheduler {
         }
         onSuccess(result);
         if (!result.ok && !result.skipped) onFailure(result.error);
+        this.persistStateAsync(project.root, {
+          last_cluster_at: st.lastClusterAt,
+          consecutive_failures: st.consecutiveFailures,
+        });
         logger.debug?.(
           { projectRoot: project.root, stage, result },
           'memory-scheduler: stage done',
@@ -532,6 +554,10 @@ export class MemoryScheduler {
         st.lastMemoAt = this.now();
         onSuccess(result);
         if (!result.ok && !result.skipped) onFailure(result.error);
+        this.persistStateAsync(project.root, {
+          last_memo_at: st.lastMemoAt,
+          consecutive_failures: st.consecutiveFailures,
+        });
         logger.debug?.(
           { projectRoot: project.root, stage, result },
           'memory-scheduler: stage done',
@@ -567,6 +593,11 @@ export class MemoryScheduler {
         }
         onSuccess(result);
         if (!result.ok && !result.skipped) onFailure(result.error);
+        this.persistStateAsync(project.root, {
+          last_tune_at: st.lastTuneAt,
+          last_tune_event_count: st.lastTuneEventCount ?? null,
+          consecutive_failures: st.consecutiveFailures,
+        });
         logger.debug?.(
           { projectRoot: project.root, stage, result },
           'memory-scheduler: stage done',
@@ -577,6 +608,9 @@ export class MemoryScheduler {
       // sudden OOM or programmer error must not kill the scheduler.
       const msg = (err as Error)?.message ?? String(err);
       onFailure(msg);
+      this.persistStateAsync(project.root, {
+        consecutive_failures: st.consecutiveFailures,
+      });
       logger.warn(
         { projectRoot: project.root, stage, err: msg },
         'memory-scheduler: stage threw unexpectedly',
@@ -593,6 +627,67 @@ export class MemoryScheduler {
       pendingStages: new Set<StageName>(),
       consecutiveFailures: 0,
     };
+  }
+
+  /**
+   * Build per-project state, hydrating timestamps from the durable
+   * `scheduler_state` table when possible. Falls back to a fresh
+   * `initState()` when no row exists OR the store can't be opened
+   * (e.g. read-only filesystem in tests).
+   *
+   * Hydration is best-effort — any failure logs and returns init state.
+   */
+  private hydrateOrInitState(projectRoot: string): SchedulerProjectState {
+    const fresh = this.initState();
+    const store = this.ensureDecisionStore();
+    if (!store) return fresh;
+    try {
+      const row = store.getSchedulerState(projectRoot);
+      if (!row) return fresh;
+      if (row.last_mine_at !== null) fresh.lastMineAt = row.last_mine_at;
+      if (row.last_cluster_at !== null) fresh.lastClusterAt = row.last_cluster_at;
+      if (row.last_memo_at !== null) fresh.lastMemoAt = row.last_memo_at;
+      if (row.last_tune_at !== null) fresh.lastTuneAt = row.last_tune_at;
+      if (row.last_tune_event_count !== null) {
+        fresh.lastTuneEventCount = row.last_tune_event_count;
+      }
+      fresh.consecutiveFailures = row.consecutive_failures;
+      return fresh;
+    } catch (err) {
+      logger.debug?.(
+        { projectRoot, err: (err as Error)?.message ?? String(err) },
+        'memory-scheduler: hydrateOrInitState fell back to init state',
+      );
+      return fresh;
+    }
+  }
+
+  /**
+   * Fire-and-forget persistence of per-project scheduler bookkeeping.
+   * MUST NEVER block or throw out of stage completion — a failed write
+   * here is a missed restart-resume, not a stage failure.
+   */
+  private persistStateAsync(
+    projectRoot: string,
+    patch: {
+      last_mine_at?: number | null;
+      last_cluster_at?: number | null;
+      last_memo_at?: number | null;
+      last_tune_at?: number | null;
+      last_tune_event_count?: number | null;
+      consecutive_failures?: number;
+    },
+  ): void {
+    const store = this.ensureDecisionStore();
+    if (!store) return;
+    try {
+      store.upsertSchedulerState({ project_root: projectRoot, ...patch });
+    } catch (err) {
+      logger.debug?.(
+        { projectRoot, err: (err as Error)?.message ?? String(err) },
+        'memory-scheduler: persistStateAsync failed — restart will not see this tick',
+      );
+    }
   }
 
   private ensureDecisionStore(): DecisionStore | null {
