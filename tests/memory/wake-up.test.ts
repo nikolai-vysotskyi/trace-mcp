@@ -634,4 +634,99 @@ describe('assembleWakeUpSplit', () => {
       expect(out.stable.memo).toBeUndefined();
     });
   });
+
+  describe('per-service scoping', () => {
+    it('scopes stable.topics to the requested service_name', () => {
+      const projectRoot = '/projects/per-service-topics';
+      // Seed decisions for service A and service B in the same project.
+      const aIds: number[] = [];
+      const bIds: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        aIds.push(
+          store.addDecision({
+            title: `A-${i}`,
+            content: 'c',
+            type: 'tech_choice',
+            project_root: projectRoot,
+            service_name: 'auth-api',
+          }).id,
+        );
+      }
+      for (let i = 0; i < 3; i++) {
+        bIds.push(
+          store.addDecision({
+            title: `B-${i}`,
+            content: 'c',
+            type: 'tech_choice',
+            project_root: projectRoot,
+            service_name: 'billing-api',
+          }).id,
+        );
+      }
+      // One cluster per service.
+      store.createCluster({
+        project_root: projectRoot,
+        service_name: 'auth-api',
+        title: 'Auth topic',
+        summary: 's',
+        decision_ids: aIds,
+      });
+      store.createCluster({
+        project_root: projectRoot,
+        service_name: 'billing-api',
+        title: 'Billing topic',
+        summary: 's',
+        decision_ids: bIds,
+      });
+
+      // Without service_name — both clusters surface.
+      const allOut = assembleWakeUpSplit(store, projectRoot);
+      const allTitles = (allOut.stable.topics ?? []).map((t) => t.title).sort();
+      expect(allTitles).toEqual(['Auth topic', 'Billing topic']);
+
+      // Scoped to auth-api — only Auth topic surfaces.
+      const aOut = assembleWakeUpSplit(store, projectRoot, { service_name: 'auth-api' });
+      const aTitles = (aOut.stable.topics ?? []).map((t) => t.title);
+      expect(aTitles).toEqual(['Auth topic']);
+
+      // Scoped to billing-api — only Billing topic surfaces.
+      const bOut = assembleWakeUpSplit(store, projectRoot, { service_name: 'billing-api' });
+      const bTitles = (bOut.stable.topics ?? []).map((t) => t.title);
+      expect(bTitles).toEqual(['Billing topic']);
+    });
+
+    it('scopes stable.memo to the requested service_name', () => {
+      const projectRoot = '/projects/per-service-memo';
+      // Add a project-wide architecture decision so a non-empty memo-absent
+      // surface still has something to anchor on.
+      store.addDecision({
+        title: 'global arch',
+        content: 'c',
+        type: 'architecture_decision',
+        project_root: projectRoot,
+      });
+      // Memo for auth-api only.
+      store.saveProjectMemo({
+        project_root: projectRoot,
+        service_name: 'auth-api',
+        memo_md: '## Auth memo\n\nJWT + refresh.',
+        decisions_at_generation: 1,
+        clusters_at_generation: 0,
+        estimated_tokens: 15,
+      });
+
+      // Scoped to auth-api — memo present.
+      const aOut = assembleWakeUpSplit(store, projectRoot, { service_name: 'auth-api' });
+      expect(aOut.stable.memo).toBeDefined();
+      expect(aOut.stable.memo!.memo_md).toContain('Auth memo');
+
+      // Scoped to billing-api — memo absent (no row in that service).
+      const bOut = assembleWakeUpSplit(store, projectRoot, { service_name: 'billing-api' });
+      expect(bOut.stable.memo).toBeUndefined();
+
+      // No service_name — project-wide row (none exists) → memo absent.
+      const noneOut = assembleWakeUpSplit(store, projectRoot);
+      expect(noneOut.stable.memo).toBeUndefined();
+    });
+  });
 });
