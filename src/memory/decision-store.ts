@@ -399,6 +399,31 @@ CREATE TABLE IF NOT EXISTS mined_sessions (
     last_modified_ms INTEGER NOT NULL DEFAULT 0
 );
 
+-- Mined provider sessions tracking (P2.3 extension to providers like Hermes/Codex).
+--
+-- Why a sibling table rather than overloading mined_sessions:
+--   - Provider sessions (Hermes) are SQLite-backed — byte offsets don't apply.
+--     We track a message-id / timestamp cursor instead.
+--   - The session "path" is a synthetic key like "hermes:<id>" or "codex:<id>",
+--     not a filesystem path, so reusing the same PRIMARY KEY namespace would
+--     conflate two semantically distinct things.
+--   - Provider rotation/truncation semantics differ: SQLite rows can be deleted
+--     in-place, not just appended like a JSONL file.
+--
+-- Cursor primitive: last_timestamp_ms (highest message timestamp consumed) +
+-- last_message_id (string, for deterministic ordering tie-breaks). On a re-pass
+-- we skip every message whose (ts, id) is ≤ the cursor. last_seen_size +
+-- last_seen_modified_ms detect SessionHandle-level rotation (DB shrank → restart).
+CREATE TABLE IF NOT EXISTS mined_provider_sessions (
+    session_key          TEXT PRIMARY KEY,        -- e.g. "hermes:<id>" or "codex:<id>"
+    mined_at             TEXT NOT NULL,
+    decisions_found      INTEGER NOT NULL DEFAULT 0,
+    last_timestamp_ms    INTEGER NOT NULL DEFAULT 0,
+    last_message_id      TEXT NOT NULL DEFAULT '',
+    last_seen_size       INTEGER NOT NULL DEFAULT 0,
+    last_seen_modified_ms INTEGER NOT NULL DEFAULT 0
+);
+
 -- ════════════════════════════════════════════════════════════════
 -- LLM EXTRACTION CACHE — avoid re-paying LLM tokens on re-mining
 -- ════════════════════════════════════════════════════════════════
@@ -1507,6 +1532,115 @@ export class DecisionStore {
            last_modified_ms = excluded.last_modified_ms`,
       )
       .run(opts.sessionPath, minedAt, opts.decisionsFound, opts.cursor, opts.size, opts.modifiedMs);
+  }
+
+  // ── MINED PROVIDER SESSIONS (Hermes / Codex incremental cursor) ───
+  //
+  // Mirrors the byte-offset cursor surface for file-based sessions, but the
+  // primitive is a (timestamp, message_id) pair because provider sessions are
+  // SQLite-backed (Hermes) or otherwise iterated record-by-record (Codex). A
+  // byte offset would be ill-defined.
+
+  /** Marker returned by {@link getProviderSessionCursor}. `null` means "no
+   *  changes since last pass — skip without iterating messages". */
+  getProviderSessionCursor(
+    sessionKey: string,
+    currentSeenSize?: number,
+    currentSeenModifiedMs?: number,
+  ): {
+    lastTimestampMs: number;
+    lastMessageId: string;
+    reason: 'unmined' | 'restart_shrunk' | 'incremental';
+  } | null {
+    const row = this.db
+      .prepare(
+        'SELECT last_timestamp_ms, last_message_id, last_seen_size, last_seen_modified_ms FROM mined_provider_sessions WHERE session_key = ?',
+      )
+      .get(sessionKey) as
+      | {
+          last_timestamp_ms: number;
+          last_message_id: string;
+          last_seen_size: number;
+          last_seen_modified_ms: number;
+        }
+      | undefined;
+
+    if (!row) {
+      return { lastTimestampMs: 0, lastMessageId: '', reason: 'unmined' };
+    }
+
+    // SessionHandle.sizeBytes / lastModifiedMs are optional on the provider
+    // contract. When BOTH are supplied we can detect rotation (SQLite DB
+    // shrank → restart) and skip unchanged sessions without iterating.
+    if (currentSeenSize !== undefined && row.last_seen_size > 0) {
+      if (currentSeenSize < row.last_seen_size) {
+        return { lastTimestampMs: 0, lastMessageId: '', reason: 'restart_shrunk' };
+      }
+      if (
+        currentSeenSize === row.last_seen_size &&
+        (currentSeenModifiedMs === undefined || currentSeenModifiedMs === row.last_seen_modified_ms)
+      ) {
+        return null;
+      }
+    } else if (
+      // No size signal — fall back to mtime-only skip when both sides supply it
+      // and the value matches. Without either signal we always iterate.
+      currentSeenModifiedMs !== undefined &&
+      row.last_seen_modified_ms > 0 &&
+      currentSeenModifiedMs === row.last_seen_modified_ms
+    ) {
+      return null;
+    }
+
+    return {
+      lastTimestampMs: row.last_timestamp_ms,
+      lastMessageId: row.last_message_id,
+      reason: 'incremental',
+    };
+  }
+
+  /** Atomically update the provider-session cursor after a successful pass.
+   *  Idempotent: identical inputs are a no-op write. */
+  updateProviderSessionCursor(opts: {
+    sessionKey: string;
+    /** Highest message timestamp consumed this pass (ms since epoch). */
+    lastTimestampMs: number;
+    /** Stable per-message id (string) — used as a tie-breaker when two
+     *  messages share a timestamp. Empty string is allowed. */
+    lastMessageId: string;
+    /** Current SessionHandle.sizeBytes seen this pass — for rotation detection.
+     *  Pass 0 when the provider does not report a size. */
+    seenSize: number;
+    /** Current SessionHandle.lastModifiedMs seen this pass. */
+    seenModifiedMs: number;
+    /** Delta of decisions extracted this pass. */
+    decisionsFound: number;
+  }): void {
+    const minedAt = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO mined_provider_sessions (
+           session_key, mined_at, decisions_found,
+           last_timestamp_ms, last_message_id,
+           last_seen_size, last_seen_modified_ms
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(session_key) DO UPDATE SET
+           mined_at = excluded.mined_at,
+           decisions_found = mined_provider_sessions.decisions_found + excluded.decisions_found,
+           last_timestamp_ms = excluded.last_timestamp_ms,
+           last_message_id = excluded.last_message_id,
+           last_seen_size = excluded.last_seen_size,
+           last_seen_modified_ms = excluded.last_seen_modified_ms`,
+      )
+      .run(
+        opts.sessionKey,
+        minedAt,
+        opts.decisionsFound,
+        opts.lastTimestampMs,
+        opts.lastMessageId,
+        opts.seenSize,
+        opts.seenModifiedMs,
+      );
   }
 
   // ── LLM EXTRACTION CACHE ──────────────────────────────────────────

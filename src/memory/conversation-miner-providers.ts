@@ -44,6 +44,14 @@ export interface ProviderMineOpts {
   reviewThreshold?: number;
   /** Memoir confidence tier: rows below this are dropped entirely. */
   rejectThreshold?: number;
+  /**
+   * Use the (timestamp, message_id) cursor for incremental provider-session
+   * mining. When false, falls back to legacy binary mined/unmined semantics
+   * (isSessionMined / markSessionMined). Defaults to `true` — the call site
+   * in `mineSessions` threads the value from `memory.mining.incrementalCursor`
+   * in config so both code paths share one switch.
+   */
+  incrementalCursor?: boolean;
 }
 
 /** Provider ids we know how to mine additively. Keep this list narrow — each
@@ -68,6 +76,7 @@ export async function mineProviderSessions(
 
   const reviewThreshold = opts.reviewThreshold ?? DEFAULT_REVIEW_THRESHOLD;
   const rejectThreshold = opts.rejectThreshold ?? opts.minConfidence ?? DEFAULT_REJECT_THRESHOLD;
+  const incrementalEnabled = opts.incrementalCursor !== false;
   // Branch-aware capture: resolve once per call. Provider mining is scoped
   // to a single projectRoot, so a single lookup is enough.
   const capturedBranch = getCurrentBranch(opts.projectRoot);
@@ -86,19 +95,93 @@ export async function mineProviderSessions(
       counters.scanned++;
       const sessionKey = `${provider.id}:${handle.sessionId}`;
 
-      if (!opts.force && decisionStore.isSessionMined(sessionKey)) {
-        counters.skipped++;
-        continue;
+      // Resolve incremental cursor BEFORE iterating messages so an unchanged
+      // session can short-circuit without opening the SQLite DB. The cursor
+      // contract mirrors the file-based one:
+      //   - row missing                 → reason: 'unmined' (read everything)
+      //   - rotation (size shrank)      → reason: 'restart_shrunk' (re-read from 0)
+      //   - unchanged size + mtime      → null (skip)
+      //   - everything else (incremental) → resume from (ts, message_id)
+      let lastTimestampMs = 0;
+      let lastMessageId = '';
+      if (!incrementalEnabled) {
+        if (!opts.force && decisionStore.isSessionMined(sessionKey)) {
+          counters.skipped++;
+          continue;
+        }
+      } else if (!opts.force) {
+        const cursor = decisionStore.getProviderSessionCursor(
+          sessionKey,
+          handle.sizeBytes,
+          handle.lastModifiedMs,
+        );
+        if (cursor === null) {
+          counters.skipped++;
+          continue;
+        }
+        if (cursor.reason === 'incremental') {
+          lastTimestampMs = cursor.lastTimestampMs;
+          lastMessageId = cursor.lastMessageId;
+        }
+        // 'restart_shrunk' / 'unmined' both leave the cursor at (0, '') so we
+        // read the full message stream.
       }
+      // force=true: lastTimestampMs/lastMessageId stay 0 → full re-read.
 
       try {
         const turns: ConversationTurn[] = [];
+        // Track the highest (ts, id) we actually saw so the cursor advances
+        // even when extractDecisions yields nothing.
+        let maxSeenTs = lastTimestampMs;
+        let maxSeenId = lastMessageId;
+        let i = 0;
         for await (const msg of provider.streamMessages(handle)) {
+          const msgTs = msg.timestampMs ?? 0;
+          // Skip messages already consumed in a previous pass. When the
+          // provider doesn't supply timestamps the cursor stays at 0 and we
+          // re-read everything — the worst case is the pre-incremental
+          // behaviour, which is acceptable until providers settle on a ts
+          // contract.
+          if (incrementalEnabled && lastTimestampMs > 0) {
+            if (msgTs < lastTimestampMs) {
+              i++;
+              continue;
+            }
+            // Same timestamp as the cursor: rely on the in-stream ordinal as
+            // a tie-breaker. We encode the ordinal in lastMessageId so that
+            // tooling-free providers (no per-message id column) still get a
+            // stable resume point.
+            if (msgTs === lastTimestampMs) {
+              const ordinalKey = String(i);
+              // If our recorded id is "i" and we're at index i, skip — we
+              // already mined this message. Greater indices keep going.
+              if (ordinalKey <= lastMessageId) {
+                i++;
+                continue;
+              }
+            }
+          }
           turns.push(rawMessageToTurn(msg));
+          if (msgTs >= maxSeenTs) {
+            maxSeenTs = msgTs;
+            maxSeenId = String(i);
+          }
+          i++;
         }
 
         if (turns.length === 0) {
-          decisionStore.markSessionMined(sessionKey, 0);
+          if (incrementalEnabled) {
+            decisionStore.updateProviderSessionCursor({
+              sessionKey,
+              lastTimestampMs: maxSeenTs,
+              lastMessageId: maxSeenId,
+              seenSize: handle.sizeBytes ?? 0,
+              seenModifiedMs: handle.lastModifiedMs ?? 0,
+              decisionsFound: 0,
+            });
+          } else {
+            decisionStore.markSessionMined(sessionKey, 0);
+          }
           counters.skipped++;
           continue;
         }
@@ -132,7 +215,18 @@ export async function mineProviderSessions(
           counters.extracted += tiered.length;
         }
 
-        decisionStore.markSessionMined(sessionKey, tiered.length);
+        if (incrementalEnabled) {
+          decisionStore.updateProviderSessionCursor({
+            sessionKey,
+            lastTimestampMs: maxSeenTs,
+            lastMessageId: maxSeenId,
+            seenSize: handle.sizeBytes ?? 0,
+            seenModifiedMs: handle.lastModifiedMs ?? 0,
+            decisionsFound: tiered.length,
+          });
+        } else {
+          decisionStore.markSessionMined(sessionKey, tiered.length);
+        }
         counters.mined++;
       } catch (e) {
         logger.warn({ err: e, session: sessionKey }, 'Failed to mine provider session');
