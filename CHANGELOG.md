@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.39.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.1...v1.39.2) (2026-05-18)
+
+
+### Features
+
+* **memory:** extend incremental cursor to provider (Hermes) mining ([7f4231a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7f4231a9296ba077f44fa25abe82f53c102e879d))
+* **memory:** per-service wake-up scoping + scheduler_state table ([4def231](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4def2310a798c0afc92b52b27f2c324a1acf2b32))
+* **memory:** persist scheduler state across daemon restarts + prune memo auto-trigger map ([fecd2d9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fecd2d9ff308caf1771371e0fea47ca41a95e397))
+
+
+### Bug Fixes
+
+* **daemon,app:** break post-update restart loop ([4583ab8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4583ab8004470a8a6f3caabda00f035a73aa2e0c))
+
+
+### Chores
+
+* release as 1.39.2 ([506bbc1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/506bbc145ae532af50be60a3252bbf5a36c7e891))
+
 ## [1.39.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.0...v1.39.1) (2026-05-18)
 
 
