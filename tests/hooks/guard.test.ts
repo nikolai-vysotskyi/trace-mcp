@@ -764,4 +764,175 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
       expect(decision.allowed, `description: "${description}"`).toBe(true);
     }
   });
+
+  // ─── v0.10: expanded verb allowlist + multi-word descriptions ──
+
+  it('v0.10: allows Agent with newly added action verbs', () => {
+    // Real session bugs from PR feedback: these were flagged in v0.9.
+    const cases = [
+      'compare two retrieval modes head-to-head',
+      'audit config drift across all repos',
+      'benchmark the new hot path',
+      'rewrite the daemon manager to use AbortController',
+      'add empty-index warning to co_changes',
+      'reduce fps in security/smell scanners',
+      'measure token savings across tools',
+      'verify the upgrade path for vitest 4',
+      'evaluate the candidate weights against the ledger',
+      'convert the JSON output to TOON',
+      'expand the test matrix to cover python',
+      'flip the default to fusion=true',
+      'validate the new pin format',
+      'inspect the live MCP channel',
+      'extract the shared helper out of the plugin',
+      'inline the trivial wrapper',
+      'flatten the nested community config',
+      'harden the bash whitelist',
+      'remove the deprecated knob',
+      'delete the dead exporter',
+      'update node minimum to 22',
+      'enable the new fallback path',
+      'disable the experimental plugin by default',
+      'wire the new metric into the daemon',
+      'port the swift plugin from tree-sitter 0.20',
+      'patch the regex to allow scoped packages',
+      'bump composer to 2.7',
+      'rename PluginRegistry to ServiceRegistry',
+      'split the god class into 3 modules',
+    ];
+    for (const description of cases) {
+      const decision = runGuard(
+        'Agent',
+        { subagent_type: 'general-purpose', description },
+        sessionId,
+        projectDir,
+      );
+      expect(decision.allowed, `description: "${description}"`).toBe(true);
+    }
+  });
+
+  it('v0.10: still denies pure-exploration Agent descriptions', () => {
+    // Safety-net: must NOT regress the core anti-exploration intent.
+    const cases = [
+      'explore the auth flow',
+      'investigate what foo does',
+      'understand how X works',
+      'list all files in tools',
+      'where is foo defined',
+      'how does the indexer pipeline work',
+      'research the latest LSP protocol',
+    ];
+    for (const description of cases) {
+      const decision = runGuard(
+        'Agent',
+        { subagent_type: 'general-purpose', description },
+        sessionId,
+        projectDir,
+      );
+      expect(decision.allowed, `description: "${description}"`).toBe(false);
+    }
+  });
+
+  // ─── v0.10: git stash workflow ─────────────────────────────────
+
+  it('v0.10: allows git stash internals (list/show/pop/push/drop)', () => {
+    const cases = [
+      'git stash list',
+      'git stash show -p stash@{0}',
+      'git stash pop',
+      'git stash push -m "wip"',
+      'git stash drop stash@{1}',
+      'git stash save "wip"',
+      'git stash apply stash@{2}',
+    ];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(true);
+    }
+  });
+
+  it('v0.10: allows `git show stash@{N}:path.ts` stash extraction', () => {
+    const cases = [
+      'git show stash@{0}:src/foo.ts',
+      'git show stash@{1}:src/server.ts > /tmp/server.ts',
+      'git show stash@{2}:packages/foo/bar.ts',
+    ];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(true);
+    }
+  });
+
+  // ─── v0.10: ls/find on non-source dirs (explicit whitelist) ────
+
+  it('v0.10: allows `ls` and `find` on /tmp, /var, ~, coverage/, .trace-mcp/', () => {
+    const cases = [
+      'ls /tmp/trace-mcp',
+      'ls /var/folders',
+      'ls /private/tmp',
+      'ls ~/.trace-mcp',
+      'ls coverage/',
+      'ls .trace-mcp/',
+      'find /tmp -name "*.json"',
+      'find coverage -type f',
+    ];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(true);
+    }
+  });
+
+  // ─── v0.10: opt-in backoff (silent demotion after N hits) ──────
+
+  it('v0.10: backoff demotes repeated same-category advice to silent', () => {
+    // Opt in via env: limit=3 → first 3 hits emit denies, 4th+ silent.
+    const decisions: HookDecision[] = [];
+    for (let i = 0; i < 5; i++) {
+      decisions.push(
+        runGuard(
+          'Agent',
+          { subagent_type: 'general-purpose', description: `understand module ${i}` },
+          sessionId,
+          projectDir,
+          { TRACE_MCP_GUARD_BACKOFF_LIMIT: '3' },
+        ),
+      );
+    }
+    expect(decisions[0].allowed).toBe(false);
+    expect(decisions[1].allowed).toBe(false);
+    expect(decisions[2].allowed).toBe(false);
+    // 4th and 5th: silent exit, allowed with no payload.
+    expect(decisions[3].allowed).toBe(true);
+    expect(decisions[3].reason).toBeUndefined();
+    expect(decisions[4].allowed).toBe(true);
+  });
+
+  it('v0.10: backoff is off by default (legacy loops keep firing)', () => {
+    // No env override → unlimited (the legacy behaviour the suite depends on).
+    const decisions: HookDecision[] = [];
+    for (let i = 0; i < 6; i++) {
+      decisions.push(
+        runGuard(
+          'Agent',
+          { subagent_type: 'general-purpose', description: `understand other ${i}` },
+          sessionId,
+          projectDir,
+        ),
+      );
+    }
+    for (const d of decisions) expect(d.allowed).toBe(false);
+  });
+
+  // ─── v0.10: misleading "30s" message removed ───────────────────
+
+  it('v0.10: escalated Read deny no longer promises "within 30s" fallback', () => {
+    const file = path.join(projectDir, 'no30s.ts');
+    fs.writeFileSync(file, 'export {};');
+    runGuard('Read', { file_path: file }, sessionId, projectDir);
+    const escalated = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(escalated.allowed).toBe(false);
+    expect(escalated.context ?? '').not.toContain('within 30s');
+    expect(escalated.context ?? '').not.toContain('switch this hook to fallback mode');
+    expect(escalated.context ?? '').toContain('fall back to native tools');
+  });
 });

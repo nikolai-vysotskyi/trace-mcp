@@ -150,3 +150,73 @@ export function applyBudgetDefaults(
 
   return applied;
 }
+
+/**
+ * Build the human-readable `_warnings` strings that the tool gate attaches to
+ * the top level of a response when:
+ *   (a) `applyBudgetDefaults` actually *clamped* a user-requested value, or
+ *   (b) the response itself signals truncation (`traverse_graph`'s
+ *       `truncated_by_depth / _nodes / _budget` flags).
+ *
+ * Kept as a pure function — easy to unit-test without spinning up an MCP
+ * server. The gate is responsible for calling this and writing the array onto
+ * the parsed response object.
+ *
+ *   - `originalParams` is the snapshot of params *before* `applyBudgetDefaults`
+ *     mutated them. Required to report the user's requested value alongside
+ *     the forced cap.
+ *   - `appliedDefaults` is the list returned by `applyBudgetDefaults`.
+ *   - `parsedResponse` is the JSON-parsed response body; we read
+ *     `truncated_by_*` flags off it for traverse_graph.
+ */
+export function buildClampWarnings(
+  toolName: string,
+  originalParams: Record<string, unknown>,
+  appliedDefaults: AppliedDefault[],
+  parsedResponse: Record<string, unknown>,
+): string[] {
+  const warnings: string[] = [];
+
+  // (a) Clamp warnings. Only emit when the user actually requested a *higher*
+  // value than the cap; if they didn't pass anything we silently default-cap
+  // them, which is not a clamp — just the documented default behavior.
+  for (const def of appliedDefaults) {
+    const requested = originalParams[def.param];
+    if (requested === undefined) continue;
+    if (typeof requested !== 'number') continue;
+    if (typeof def.forced_value !== 'number') continue;
+    if (requested <= def.forced_value) continue;
+    warnings.push(
+      `${def.param} clamped from ${requested} to ${def.forced_value} to stay within token budget. Pass token_budget: <higher> to expand.`,
+    );
+  }
+
+  // (b) traverse_graph mirrors its own truncated_by_* fields into `_warnings`
+  // so the user sees the truncation cause without digging through individual
+  // booleans.
+  if (toolName === 'traverse_graph') {
+    if (parsedResponse.truncated_by_depth === true) {
+      const requestedDepth =
+        typeof originalParams.max_depth === 'number' ? originalParams.max_depth : 3;
+      warnings.push(
+        `Traversal truncated at max_depth=${requestedDepth}. Pass max_depth: <higher> to walk further.`,
+      );
+    }
+    if (parsedResponse.truncated_by_nodes === true) {
+      const requestedNodes =
+        typeof originalParams.max_nodes === 'number' ? originalParams.max_nodes : 100;
+      warnings.push(
+        `Result truncated at ${requestedNodes} nodes (max_nodes limit). Pass max_nodes: <higher> to see more.`,
+      );
+    }
+    if (parsedResponse.truncated_by_budget === true) {
+      const requestedBudget =
+        typeof originalParams.token_budget === 'number' ? originalParams.token_budget : 4000;
+      warnings.push(
+        `Result truncated by token_budget=${requestedBudget}. Pass token_budget: <higher> to fit more nodes.`,
+      );
+    }
+  }
+
+  return warnings;
+}

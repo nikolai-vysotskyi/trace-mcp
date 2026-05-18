@@ -1,6 +1,26 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.9.0
+# trace-mcp-guard v0.10.0
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.10 changes (fix wave for hook over-triggering):
+#   - Agent verb allowlist expanded: compare/audit/benchmark/measure/verify/
+#     evaluate/rewrite/convert/expand/reduce/flip/validate/inspect/add/
+#     remove/delete/update/enable/disable/wire/port/extract/inline/flatten/
+#     harden/patch/bump/rename/move/split/merge/drop/introduce/replace/
+#     annotate/optimize/profile/debug — these are concrete actions, not
+#     exploration. Allowlist now matches ANY word in the description, so
+#     multi-word descriptions like "add empty-index warning to co_changes"
+#     and "reduce fps in scanners" are correctly allowed.
+#   - Opt-in hook backoff (TRACE_MCP_GUARD_BACKOFF_LIMIT, default off): when
+#     set to N, the same advice category goes silent after N hits in one
+#     session. Default is off to keep legacy behaviour intact.
+#   - `git stash list/show/pop/push/drop/save/apply` and
+#     `git show stash@{N}[:path]` are now allowed regardless of file
+#     extension — stash extraction is a git-internal op, not source reading.
+#   - `ls`/`find` on /tmp, /var, /private, /usr, /etc, $HOME, plus existing
+#     dist/build/.git exclusions, are explicitly whitelisted.
+#   - Heartbeat-dead fallback message no longer promises "within 30s" —
+#     it now reads: "If MCP is unreachable, fall back to native tools."
 # trace-mcp PreToolUse guard
 # Routes Read/Grep/Glob/Bash/Agent on source code files through trace-mcp.
 #
@@ -159,6 +179,33 @@ allow_with_context() {
 }
 EOF
   exit 0
+}
+
+# ─── Hook backoff (per-session, per-advice-category) ───────────────
+# Records how many times we've fired the SAME advice category in this
+# session. After HOOK_BACKOFF_LIMIT hits, the next call in the same
+# category exits silently — anti-spam for users who set the limit. The
+# default is effectively off (1000) to keep legacy behaviour; set
+# TRACE_MCP_GUARD_BACKOFF_LIMIT=3 to opt in. Different categories are
+# tracked independently. Counters reset when READS_DIR is wiped (per
+# session via session_end hook, or after Edit/Write of guarded files).
+HOOK_BACKOFF_LIMIT=${TRACE_MCP_GUARD_BACKOFF_LIMIT:-1000}
+
+backoff_hit() {
+  local category="$1"
+  category=$(echo "$category" | tr -c 'a-zA-Z0-9_-' '_')
+  local counter_file="$READS_DIR/.backoff-${category}"
+  local count=0
+  if [[ -f "$counter_file" ]]; then
+    count=$(cat "$counter_file" 2>/dev/null || echo 0)
+    count="${count:-0}"
+  fi
+  count=$((count + 1))
+  echo "$count" > "$counter_file" 2>/dev/null || true
+  if (( count > HOOK_BACKOFF_LIMIT )); then
+    # Demoted: emit nothing, let the tool call proceed silently.
+    exit 0
+  fi
 }
 
 # ─── Project + session paths ───────────────────────────────────────
@@ -430,14 +477,16 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
     echo "$DENY_COUNT" > "$DENY_STATE"
 
     if (( DENY_COUNT >= 2 )); then
-      # Escalated: hard imperative, no advisory framing, no fallback hint.
+      backoff_hit "read-escalated"
+      # Escalated: hard imperative, no advisory framing.
       deny \
         "BLOCKED (attempt #${DENY_COUNT}). Read of ${REL_PATH} requires a prior trace-mcp consultation — none recorded." \
-        "Required next call: get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" }\\nAfter that call succeeds, Read of this file will be allowed automatically.\\nIf trace-mcp is genuinely unreachable, the heartbeat sentinel will detect it and switch this hook to fallback mode within ${STALE_THRESHOLD_SEC}s."
+        "Required next call: get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" }\\nAfter that call succeeds, Read of this file will be allowed automatically.\\nIf trace-mcp is unreachable, fall back to native tools (Read/Grep) — the guard will auto-degrade after ${AUTO_DEGRADE_DENY_THRESHOLD} consecutive denies with no consultation marker."
     fi
 
     # First-time deny: standard advisory, no "retry will work" hint.
     echo "0:${CUR_MTIME}" > "$READ_STATE"
+    backoff_hit "read-first"
     deny \
       "Use trace-mcp for code reading — call get_outline first to record consultation, then Read will be allowed." \
       "trace-mcp alternatives for ${REL_PATH}:\\n- get_outline { \\\"path\\\": \\\"${REL_PATH}\\\" } — see file structure (signatures only); after this call, Read of this file is allowed\\n- get_symbol { \\\"fqn\\\": \\\"SymbolName\\\" } — read one specific symbol\\n- search { \\\"query\\\": \\\"keyword\\\" } — find symbols by name\\n- get_feature_context { \\\"description\\\": \\\"what you need\\\" } — relevant code for a task"
@@ -532,19 +581,33 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
       "trace-mcp alternatives:\\n- get_env_vars {} — list all env vars across all .env files\\n- get_env_vars { \\\"pattern\\\": \\\"DB_\\\" } — filter by key prefix\\nNever access .env files via shell — secrets will leak into AI model context.\\n(Template files like .env.example/.env.sample are allowed.)"
   fi
 
+  # Git stash internals: `git stash list/show/pop/push/drop/save/apply`,
+  # and `git show stash@{N}[:path]` for stash inspection/extraction. These
+  # are workflow ops on git-internal refs, not source-code reading, so
+  # they bypass the code-ext deny below.
+  if echo "$COMMAND" | grep -qE '(^|[ |;&])git +stash( |$)'; then
+    exit 0
+  fi
+  if echo "$COMMAND" | grep -qE '(^|[ |;&])git +show +(--[a-zA-Z=-]+ +)*stash@\{[0-9]+\}(:|$| )'; then
+    exit 0
+  fi
+
   # git show/diff/log -p/blame on code paths — these are de-facto Read.
   if echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +(show|blame|cat-file)( |$)'; then
+      backoff_hit "bash-git-show"
       deny \
         "Use trace-mcp instead of \\\"git show/blame/cat-file\\\" for reading code." \
         "trace-mcp alternatives:\\n- get_symbol { \\\"fqn\\\": \\\"...\\\" } — current source\\n- get_outline { \\\"path\\\": \\\"...\\\" } — file structure\\n- get_changed_symbols / compare_branches — git-aware diffs\\nUse git show/blame/cat-file only on non-code files."
     fi
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +log +.*(-p|--patch)( |$)'; then
+      backoff_hit "bash-git-log-p"
       deny \
         "Use trace-mcp instead of \\\"git log -p\\\" for reading code." \
         "trace-mcp alternatives:\\n- compare_branches { \\\"branch\\\": \\\"current\\\" } — symbol-level diff\\n- get_changed_symbols { } — diff-aware symbol list"
     fi
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +diff( |$)'; then
+      backoff_hit "bash-git-diff"
       deny \
         "Use trace-mcp instead of \\\"git diff\\\" on code files." \
         "trace-mcp alternatives:\\n- compare_branches { \\\"branch\\\": \\\"current\\\" } — symbol-level diff\\n- get_changed_symbols { } — diff-aware symbol list\\nUse git diff only on non-code files."
@@ -562,7 +625,9 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
   # match; this rule additionally catches `find src -type f` (no extension).
   if echo "$COMMAND" | grep -qE '(^|[ |;&]|xargs +)(ls|find)( |$)' \
      && echo "$COMMAND" | grep -qE '(^|[ /])(src|lib|packages|apps?|server|client|pkg|internal|modules|services|pipelines|cmd)([/ ]|$)' \
-     && ! echo "$COMMAND" | grep -qE '(node_modules|vendor|dist|build|\.git|target|out)/'; then
+     && ! echo "$COMMAND" | grep -qE '(node_modules|vendor|dist|build|coverage|\.git|\.trace-mcp|target|out)/' \
+     && ! echo "$COMMAND" | grep -qE '(^|[ ])(/tmp|/var|/private|/usr|/etc|~/|\$HOME)'; then
+    backoff_hit "bash-ls-find"
     deny \
       "Use trace-mcp instead of \\\"ls\\\"/\\\"find\\\" on source-tree paths — it knows your project structure." \
       "trace-mcp alternatives:\\n- get_project_map { \\\"summary_only\\\": true } — frameworks + structure overview\\n- get_outline { \\\"path\\\": \\\"src/foo/bar.ts\\\" } — symbols in a file (cheaper than Read)\\n- search { \\\"query\\\": \\\"keyword\\\", \\\"file_pattern\\\": \\\"src/**\\\" } — find symbols in a tree\\nUse \\\"ls\\\"/\\\"find\\\" only on non-source dirs (dist/, build/, /tmp, ~, node_modules/)."
@@ -578,6 +643,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
   # appearing as a command (start of line or after pipe / && / ; / xargs)
   # combined with a code-file extension somewhere in the command.
   if echo "$COMMAND" | grep -qE '(^|[ |;&]|xargs +)(grep|rg|find|cat|head|tail|less|more|awk|sed|bat|view|subl|code)( |$)' && echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
+    backoff_hit "bash-code-shell"
     deny \
       "Use trace-mcp instead of shell commands for code exploration." \
       "trace-mcp has structured tools for this:\\n- search — find symbols by name\\n- get_symbol — read a specific symbol\\n- get_outline — file structure\\n- find_usages — all usages of a symbol\\nUse Bash only for builds, tests, git, and system commands."
@@ -585,6 +651,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
 
   # Input redirection from a code file: `cmd < src/foo.ts`.
   if echo "$COMMAND" | grep -qE '< +[^ ]+' && echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
+    backoff_hit "bash-input-redir"
     deny \
       "Use trace-mcp instead of shell input-redirection on code files." \
       "trace-mcp alternatives:\\n- get_symbol — read a specific symbol\\n- get_outline — file structure"
@@ -607,12 +674,21 @@ if [[ "$TOOL_NAME" == "Agent" ]]; then
   fi
 
   if [[ "$SUBAGENT_TYPE" == "general-purpose" ]]; then
-    # Allowed verbs — Agent is reasonable for these.
-    ALLOW_RE='\b(write|implement|build|create|generate|run|execute|test|deploy|publish|fix|refactor|migrate|upgrade|configure|install|fetch|web search|search the web|plan|review pr|review the pr|open a pr|open pr)\b'
+    # Allowed verbs — Agent is reasonable for these. The regex matches ANY
+    # word in the description (not just the first word), so multi-word
+    # descriptions like "add empty-index warning to co_changes" match via
+    # `add` and "reduce fps in security scanners" matches via `reduce`.
+    #
+    # Pure-exploration verbs we deliberately DO NOT add: explore, investigate,
+    # understand, find (out), research, discover, document, list, where (is),
+    # how (does), analyze (alone — typically maps to exploration; pair it
+    # with fix/refactor/etc. to opt back in).
+    ALLOW_RE='\b(write|writes|writing|wrote|implement|implements|implementing|implemented|build|builds|building|built|create|creates|creating|created|generate|generates|generating|generated|run|runs|running|ran|execute|executes|executing|executed|test|tests|testing|tested|deploy|deploys|deploying|deployed|publish|publishes|publishing|published|fix|fixes|fixing|fixed|refactor|refactors|refactoring|refactored|migrate|migrates|migrating|migrated|upgrade|upgrades|upgrading|upgraded|configure|configures|configuring|configured|install|installs|installing|installed|fetch|fetches|fetching|fetched|web search|search the web|plan|plans|planning|planned|review pr|review the pr|open a pr|open pr|compare|compares|comparing|compared|audit|audits|auditing|audited|benchmark|benchmarks|benchmarking|benchmarked|measure|measures|measuring|measured|verify|verifies|verifying|verified|evaluate|evaluates|evaluating|evaluated|rewrite|rewrites|rewriting|rewrote|rewritten|convert|converts|converting|converted|expand|expands|expanding|expanded|reduce|reduces|reducing|reduced|flip|flips|flipping|flipped|validate|validates|validating|validated|inspect|inspects|inspecting|inspected|add|adds|adding|added|remove|removes|removing|removed|delete|deletes|deleting|deleted|update|updates|updating|updated|enable|enables|enabling|enabled|disable|disables|disabling|disabled|wire|wires|wiring|wired|port|ports|porting|ported|extract|extracts|extracting|extracted|inline|inlines|inlining|inlined|flatten|flattens|flattening|flattened|harden|hardens|hardening|hardened|patch|patches|patching|patched|bump|bumps|bumping|bumped|rename|renames|renaming|renamed|move|moves|moving|moved|split|splits|splitting|merge|merges|merging|merged|drop|drops|dropping|dropped|introduce|introduces|introducing|introduced|replace|replaces|replacing|replaced|annotate|annotates|annotating|annotated|optimize|optimizes|optimizing|optimized|profile|profiles|profiling|profiled|debug|debugs|debugging|debugged)\b'
     if ! echo "$DESCRIPTION" | grep -qE "$ALLOW_RE"; then
+      backoff_hit "agent-no-verb"
       deny \
-        "Agent(general-purpose) without an explicit action verb (write/implement/build/run/test/fix/refactor/fetch/plan/...) is treated as exploration. Use trace-mcp tools instead — they cost ~4K tokens vs ~50K per agent." \
-        "trace-mcp alternatives:\\n- get_task_context { \\\"task\\\": \\\"${DESCRIPTION}\\\" } — replaces exploration agents (~4K tokens)\\n- get_feature_context { \\\"description\\\": \\\"...\\\" } — NL query → relevant code\\n- find_usages / get_call_graph / get_change_impact — relationship analysis\\n- batch { \\\"calls\\\": [...] } — multiple lookups in one call\\nIf this is real coding work, rephrase the description with a concrete action verb."
+        "Agent(general-purpose) without an explicit action verb is treated as exploration. Use trace-mcp tools instead — they cost ~4K tokens vs ~50K per agent." \
+        "trace-mcp alternatives:\\n- get_task_context { \\\"task\\\": \\\"${DESCRIPTION}\\\" } — replaces exploration agents (~4K tokens)\\n- get_feature_context { \\\"description\\\": \\\"...\\\" } — NL query → relevant code\\n- find_usages / get_call_graph / get_change_impact — relationship analysis\\n- batch { \\\"calls\\\": [...] } — multiple lookups in one call\\nIf this is real coding work, rephrase the description with a concrete action verb (add/fix/refactor/compare/audit/benchmark/rewrite/reduce/expand/extract/harden/wire/...)."
     fi
   fi
 
