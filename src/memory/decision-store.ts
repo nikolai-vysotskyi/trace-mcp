@@ -247,6 +247,23 @@ CREATE TABLE IF NOT EXISTS mined_sessions (
 );
 
 -- ════════════════════════════════════════════════════════════════
+-- LLM EXTRACTION CACHE — avoid re-paying LLM tokens on re-mining
+-- ════════════════════════════════════════════════════════════════
+-- Caches raw extracted JSON for a (session_id, content_sha, model) triple.
+-- The content_sha keys the cache on the privacy-stripped transcript so a
+-- session that hasn't changed (and a model that hasn't swapped) returns the
+-- cached extraction. Different models against the same content live as
+-- separate rows so a model upgrade transparently re-extracts.
+CREATE TABLE IF NOT EXISTS llm_extraction_cache (
+    session_id      TEXT NOT NULL,
+    content_sha     TEXT NOT NULL,
+    extracted_json  TEXT NOT NULL,
+    model           TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    PRIMARY KEY (session_id, content_sha, model)
+);
+
+-- ════════════════════════════════════════════════════════════════
 -- SESSION CONTENT CHUNKS — cross-session semantic search
 -- ════════════════════════════════════════════════════════════════
 
@@ -720,6 +737,35 @@ export class DecisionStore {
 
   getMinedSessionCount(): number {
     return (this.db.prepare('SELECT COUNT(*) as c FROM mined_sessions').get() as { c: number }).c;
+  }
+
+  // ── LLM EXTRACTION CACHE ──────────────────────────────────────────
+  //
+  // Cache the raw JSON the LLM produced for a (session_id, content_sha,
+  // model) triple. Re-mining the same session under the same model returns
+  // the cached extraction instead of re-paying tokens. Schema swap on the
+  // mining strategy or a model rename naturally produces cache misses.
+
+  getCachedLlmExtraction(sessionId: string, contentSha: string, model: string): string | null {
+    const row = this.db
+      .prepare(
+        'SELECT extracted_json FROM llm_extraction_cache WHERE session_id = ? AND content_sha = ? AND model = ?',
+      )
+      .get(sessionId, contentSha, model) as { extracted_json: string } | undefined;
+    return row?.extracted_json ?? null;
+  }
+
+  putCachedLlmExtraction(
+    sessionId: string,
+    contentSha: string,
+    model: string,
+    extractedJson: string,
+  ): void {
+    this.db
+      .prepare(
+        'INSERT OR REPLACE INTO llm_extraction_cache (session_id, content_sha, model, extracted_json, created_at) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(sessionId, contentSha, model, extractedJson, new Date().toISOString());
   }
 
   // ── CODE-AWARE QUERIES ────────────────────────────────────────────

@@ -405,6 +405,12 @@ const DecisionsConfigSchema = z
  * (`get_wake_up`, `query_decisions`, `get_feature_context`). On timeout the
  * tool returns a degraded empty result with `degraded: true` instead of
  * blocking the agent turn. Defaults to 5000 ms.
+ *
+ * `mining.*` controls how `mine_sessions` extracts decisions from session logs.
+ * The regex strategy is free and fast but has low recall (~20-40% of real
+ * decisions). The llm strategy uses the configured AI provider for higher
+ * recall at the cost of tokens. The hybrid strategy runs regex first and
+ * augments with LLM extraction when an AI provider is available.
  */
 const MemoryConfigSchema = z
   .object({
@@ -419,6 +425,43 @@ const MemoryConfigSchema = z
           .describe(
             'Hard timeout for memory recall tools (get_wake_up, query_decisions, get_feature_context). On timeout, the tool returns a degraded empty result instead of blocking the agent turn.',
           ),
+      })
+      .prefault({}),
+    mining: z
+      .object({
+        strategy: z
+          .enum(['regex', 'llm', 'hybrid'])
+          .default('regex')
+          .describe(
+            'Default extraction strategy when mine_sessions is called without a strategy parameter.',
+          ),
+        llm: z
+          .object({
+            maxTokensPerSession: z
+              .number()
+              .int()
+              .min(500)
+              .max(50000)
+              .default(8000)
+              .describe(
+                'Token budget for a single LLM extraction call. Sessions exceeding this are chunked along turn boundaries.',
+              ),
+            minSessionLength: z
+              .number()
+              .int()
+              .min(0)
+              .default(500)
+              .describe(
+                'Skip LLM pass for sessions with fewer characters than this — too short to contain real decisions.',
+              ),
+            maxSessions: z
+              .number()
+              .int()
+              .min(1)
+              .default(50)
+              .describe('Max sessions to LLM-process per mine_sessions invocation (cost guard).'),
+          })
+          .prefault({}),
       })
       .prefault({}),
   })
