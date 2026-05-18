@@ -182,19 +182,18 @@ function refreshCliPackage(version) {
     return;
   }
   log(`refreshCliPackage: installing trace-mcp@${version} (was ${installed || 'unknown'})`);
+  // Build child env: strip inherited TRACE_MCP_NO_POSTINSTALL so our
+  // postinstall-control-plane.mjs can actually run (it refreshes launcher.env,
+  // shim, plist). The parent's value (often '1' on CI) must not leak through.
+  const npmEnv = { ...process.env };
+  delete npmEnv.TRACE_MCP_NO_POSTINSTALL;
+  npmEnv.TRACE_MCP_NO_AUTO_UPDATE = '1';
   try {
     const result = spawnSync(npmBin, ['install', '-g', `trace-mcp@${version}`], {
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf-8',
       timeout: 120_000,
-      env: {
-        ...process.env,
-        // Prevent the new postinstall's auto-update logic from triggering
-        // another download/swap cycle on top of the one we just applied.
-        // We deliberately leave TRACE_MCP_NO_POSTINSTALL unset — the
-        // postinstall still needs to refresh launcher.env, shim, etc.
-        TRACE_MCP_NO_AUTO_UPDATE: '1',
-      },
+      env: npmEnv,
     });
     if (result.error) {
       log(`refreshCliPackage: spawn error: ${result.error?.message ?? result.error}`);
