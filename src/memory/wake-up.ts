@@ -170,6 +170,14 @@ export interface WakeUpSplit {
       sessions_indexed: number;
       by_type: Record<string, number>;
     };
+    /**
+     * Top decision clusters (P1.1) — thematic L2 overlay over the decision
+     * store. Surfaced in the stable region because cluster titles are
+     * slow-moving topical labels that change only when the user re-runs
+     * `build_decision_clusters`. Key is omitted entirely when no clusters
+     * exist so the wake-up payload stays minimal for fresh projects.
+     */
+    topics?: Array<{ id: number; title: string; decision_count: number }>;
   };
   /**
    * Dynamic region — changes per-turn. Route into the user message slot so
@@ -330,22 +338,56 @@ export function assembleWakeUpSplit(
   const minedCount = decisionStore.getMinedSessionCount();
   const indexedSessions = decisionStore.getIndexedSessionIds(projectRoot);
 
-  const result: WakeUpSplit = {
-    stable: {
-      project: {
-        name: path.basename(projectRoot),
-        root: projectRoot,
-      },
-      conventions,
-      architecture,
-      stats: {
-        total_active: stats.active,
-        total_decisions: stats.total,
-        sessions_mined: minedCount,
-        sessions_indexed: indexedSessions.length,
-        by_type: stats.by_type,
-      },
+  // Stable: top topics (P1.1 cluster overlay). Slow-moving topical labels —
+  // safe for the cacheable region. Best-effort: if the cluster store is
+  // unavailable (older databases on disk), silently skip.
+  let topics: Array<{ id: number; title: string; decision_count: number }> | undefined;
+  try {
+    const clusters = decisionStore.listClusters({
+      project_root: projectRoot,
+      order_by: 'decision_count',
+      limit: 5,
+    });
+    if (clusters.length > 0) {
+      topics = clusters.map((c) => ({
+        id: c.id,
+        title: c.title,
+        decision_count: c.decision_count,
+      }));
+    }
+  } catch {
+    /* cluster tables missing on legacy DB — silently skip */
+  }
+
+  // Token budget for the stable region: ~350 tokens is the soft ceiling.
+  // When topics push us over, drop lowest-priority conventions one at a
+  // time. We never drop architecture/stats/project — those are the always-
+  // cacheable identity bits.
+  const STABLE_TOKEN_CEILING = 350;
+  const stableConventions = [...conventions];
+  const buildStable = () => ({
+    project: {
+      name: path.basename(projectRoot),
+      root: projectRoot,
     },
+    conventions: stableConventions,
+    architecture,
+    stats: {
+      total_active: stats.active,
+      total_decisions: stats.total,
+      sessions_mined: minedCount,
+      sessions_indexed: indexedSessions.length,
+      by_type: stats.by_type,
+    },
+    ...(topics ? { topics } : {}),
+  });
+  const stableTokens = () => Math.ceil(JSON.stringify(buildStable()).length / 4);
+  while (stableTokens() > STABLE_TOKEN_CEILING && stableConventions.length > 0) {
+    stableConventions.pop();
+  }
+
+  const result: WakeUpSplit = {
+    stable: buildStable(),
     dynamic: {
       recent_decisions,
       in_progress,

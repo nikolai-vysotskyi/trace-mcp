@@ -474,4 +474,52 @@ describe('assembleWakeUpSplit', () => {
       expect(out.stable.conventions.map((d) => d.id)).toEqual([conv2.id, conv1.id]);
     });
   });
+
+  describe('stable.topics (P1.1 cluster overlay)', () => {
+    it('omits the topics key entirely when no clusters exist', () => {
+      const projectRoot = '/projects/topics-empty';
+      store.addDecision({
+        title: 'd',
+        content: 'c',
+        type: 'tech_choice',
+        project_root: projectRoot,
+      });
+      const out = assembleWakeUpSplit(store, projectRoot);
+      expect(out.stable.topics).toBeUndefined();
+    });
+
+    it('exposes top clusters by decision_count when clusters exist', () => {
+      const projectRoot = '/projects/topics-present';
+      const ids: number[] = [];
+      for (let i = 0; i < 4; i++) {
+        ids.push(
+          store.addDecision({
+            title: `d${i}`,
+            content: 'c',
+            type: 'tech_choice',
+            project_root: projectRoot,
+          }).id,
+        );
+      }
+      store.createCluster({
+        project_root: projectRoot,
+        title: 'Small topic',
+        summary: 's',
+        decision_ids: [ids[0], ids[1]],
+      });
+      store.createCluster({
+        project_root: projectRoot,
+        title: 'Big topic',
+        summary: 's',
+        decision_ids: ids,
+      });
+      const out = assembleWakeUpSplit(store, projectRoot);
+      expect(out.stable.topics).toBeDefined();
+      expect(out.stable.topics!.length).toBe(2);
+      // Sorted by decision_count DESC — Big topic first.
+      expect(out.stable.topics![0].title).toBe('Big topic');
+      expect(out.stable.topics![0].decision_count).toBe(4);
+      expect(out.stable.topics![1].title).toBe('Small topic');
+    });
+  });
 });
