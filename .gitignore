@@ -13,6 +13,11 @@ coverage/
 plans/
 issues/
 .obsidian/
+.claw/
+
+# Developer-local debris
+daemon*.log
+run-benchmark.ts
 
 # OS
 .DS_Store
