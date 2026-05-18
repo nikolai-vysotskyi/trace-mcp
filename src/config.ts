@@ -563,6 +563,25 @@ const MemoryConfigSchema = z
           .describe('Override audit log directory. Default ~/.trace-mcp/decisions/.'),
       })
       .optional(),
+    weight_tuning: z
+      .object({
+        enabled: z
+          .boolean()
+          .default(true)
+          .describe(
+            'Use learned confidence weights when available. When false, ignore tuned weights and use fixed defaults.',
+          ),
+        min_events: z
+          .number()
+          .int()
+          .min(10)
+          .max(10000)
+          .default(25)
+          .describe(
+            'Minimum review events before tuning can fit. Below this, fixed defaults are kept.',
+          ),
+      })
+      .optional(),
   })
   .prefault({});
 
