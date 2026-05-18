@@ -9,12 +9,15 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { InferenceService } from '../ai/interfaces.js';
 import { listAllSessions } from '../analytics/log-parser.js';
 import { logger } from '../logger.js';
 import { detectGitWorktree } from '../project-root.js';
 import { getCurrentBranch } from '../utils/git-branch.js';
+import { computeConfidence } from './decision-confidence.js';
 import { mineProviderSessions } from './conversation-miner-providers.js';
 import type { DecisionInput, DecisionStore, DecisionType } from './decision-store.js';
+import { type LlmExtractedDecision, extractDecisionsWithLlm } from './llm-extractor.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -27,6 +30,33 @@ export interface MineResult {
   decisions_extracted: number;
   errors: number;
   duration_ms: number;
+  /** Extraction strategy actually used (may differ from requested when AI
+   *  provider is unavailable and we fell back to regex). Omitted on the
+   *  default regex path so existing callers / snapshots stay byte-identical. */
+  strategy?: MineStrategy;
+  /** Number of sessions that went through the LLM pass (post cost guard). */
+  llm_sessions?: number;
+  /** Number of decisions contributed by the LLM pass. */
+  llm_decisions_extracted?: number;
+}
+
+/** Decision-extraction strategy used by `mineSessions`. See the strategy
+ *  parameter docs on `mineSessions` for the per-mode semantics. */
+export type MineStrategy = 'regex' | 'llm' | 'hybrid';
+
+/** Subset of `LlmConfig` we forward into the extractor. Keeps the public
+ *  surface narrow and lets callers override knobs without re-reading config. */
+export interface LlmMiningKnobs {
+  maxTokensPerSession: number;
+  minSessionLength: number;
+  maxSessions: number;
+}
+
+/** What `mineSessions` needs from an AI layer to enable LLM extraction.
+ *  Kept narrow so tests can pass a fake without standing up a full AIProvider. */
+export interface LlmMiningContext {
+  inference: InferenceService;
+  model: string;
 }
 
 interface ExtractedDecision {
@@ -516,6 +546,19 @@ export function adoptWorktreeRoot(rawProjectPath: string, cache: Map<string, str
 /**
  * Mine all Claude Code / Claw Code sessions for decisions.
  * Skips already-mined sessions. Stores results in the decision store.
+ *
+ * Extraction strategy
+ * ───────────────────
+ *   - `'regex'`   (default) — pattern-based, free, fast, ~20-40% recall.
+ *   - `'llm'`     — LLM-only. Requires an AI provider; costs tokens; higher recall.
+ *                   When no provider is available, falls back to regex with a warning.
+ *   - `'hybrid'`  — runs regex first; when an AI provider is available, also runs
+ *                   the LLM pass and merges results (dedup by normalized title;
+ *                   keep the higher-confidence row).
+ *
+ * The LLM pass is bounded by `llm.maxSessions` (cost guard). LLM-extracted
+ * decisions are scored by `computeConfidence` and the LLM's own confidence;
+ * the routing through the auto/pending/drop tier uses the higher of the two.
  */
 export async function mineSessions(
   decisionStore: DecisionStore,
@@ -533,6 +576,14 @@ export async function mineSessions(
     reviewThreshold?: number;
     /** Memoir confidence tier: rows below this are dropped entirely. */
     rejectThreshold?: number;
+    /** Decision extraction strategy. Defaults to `'regex'` for back-compat. */
+    strategy?: MineStrategy;
+    /** AI context required for `'llm'` / `'hybrid'` strategies. */
+    llmContext?: LlmMiningContext;
+    /** Tunables for the LLM pass (token budget, min length, cost cap). */
+    llmKnobs?: Partial<LlmMiningKnobs>;
+    /** Inherits the recall timeout so LLM calls never pin the agent turn. */
+    signal?: AbortSignal;
   } = {},
 ): Promise<MineResult> {
   const start = Date.now();
@@ -541,6 +592,29 @@ export async function mineSessions(
   // is unchanged for callers that don't opt into the tiered review queue.
   const reviewThreshold = opts.reviewThreshold ?? DEFAULT_REVIEW_THRESHOLD;
   const rejectThreshold = opts.rejectThreshold ?? opts.minConfidence ?? DEFAULT_REJECT_THRESHOLD;
+
+  // ── Strategy resolution ─────────────────────────────────────────────
+  // `'regex'` is the default for back-compat. `'llm'` / `'hybrid'` require
+  // an AI provider — when one isn't configured we emit a warning and fall
+  // back to regex so the call still does something useful.
+  const requestedStrategy: MineStrategy = opts.strategy ?? 'regex';
+  let effectiveStrategy: MineStrategy = requestedStrategy;
+  const llmAvailable = !!opts.llmContext;
+  if ((requestedStrategy === 'llm' || requestedStrategy === 'hybrid') && !llmAvailable) {
+    logger.warn(
+      { requestedStrategy, fallback: 'regex' },
+      'mineSessions: LLM strategy requested but no AI inference context provided — falling back to regex',
+    );
+    effectiveStrategy = 'regex';
+  }
+  const knobs: LlmMiningKnobs = {
+    maxTokensPerSession: opts.llmKnobs?.maxTokensPerSession ?? 8000,
+    minSessionLength: opts.llmKnobs?.minSessionLength ?? 500,
+    maxSessions: opts.llmKnobs?.maxSessions ?? 50,
+  };
+  let llmSessionsRemaining = effectiveStrategy === 'regex' ? 0 : knobs.maxSessions;
+  let llmSessionsUsed = 0;
+  let llmDecisionsExtracted = 0;
   const worktreeCache = new Map<string, string>();
   // Branch-aware capture: resolve current branch per canonical project root, once.
   // Mining can span thousands of sessions across many projects; the cache keeps
@@ -592,10 +666,46 @@ export async function mineSessions(
         continue;
       }
 
+      // Strategy-driven extraction:
+      //  - regex: legacy pattern-based; current behaviour.
+      //  - llm:   skip regex entirely, use LLM only.
+      //  - hybrid: run both; merge by normalized-title dedup keeping the
+      //           higher-confidence row.
+      const sessionId = path.basename(session.filePath, '.jsonl');
+      let regexDecisions: ExtractedDecision[] =
+        effectiveStrategy === 'llm' ? [] : extractDecisions(turns);
+
+      let llmDecisions: ExtractedDecision[] = [];
+      if (
+        (effectiveStrategy === 'llm' || effectiveStrategy === 'hybrid') &&
+        opts.llmContext &&
+        llmSessionsRemaining > 0
+      ) {
+        llmSessionsRemaining--;
+        llmSessionsUsed++;
+        const llmRaw = await extractDecisionsWithLlm(turns, {
+          provider: opts.llmContext.inference,
+          model: opts.llmContext.model,
+          maxTokens: knobs.maxTokensPerSession,
+          minSessionLength: knobs.minSessionLength,
+          sessionId,
+          signal: opts.signal,
+          cache: {
+            get: (sid, sha, model) => decisionStore.getCachedLlmExtraction(sid, sha, model),
+            put: (sid, sha, model, json) =>
+              decisionStore.putCachedLlmExtraction(sid, sha, model, json),
+          },
+        });
+        llmDecisions = adaptLlmDecisions(llmRaw, turns);
+        llmDecisionsExtracted += llmDecisions.length;
+      }
+
+      const combined = mergeRegexAndLlm(regexDecisions, llmDecisions);
+
       // Memoir tiering: drop rows below the reject floor; everything else
       // becomes either auto-approved (review_status = NULL) or queued for
       // human review (review_status = 'pending').
-      const tiered = extractDecisions(turns)
+      const tiered = combined
         .map((d) => ({
           d,
           tier: classifyConfidence(d.confidence, reviewThreshold, rejectThreshold),
@@ -615,7 +725,7 @@ export async function mineSessions(
           file_path: d.file_path,
           tags: d.tags,
           valid_from: d.timestamp,
-          session_id: path.basename(session.filePath, '.jsonl'),
+          session_id: sessionId,
           source: 'mined' as const,
           confidence: d.confidence,
           git_branch: capturedBranch,
@@ -654,7 +764,7 @@ export async function mineSessions(
   extracted = _providerCounters.extracted;
   errors = _providerCounters.errors;
 
-  return {
+  const result: MineResult = {
     sessions_scanned: scanned,
     sessions_skipped: skipped,
     sessions_mined: mined,
@@ -662,4 +772,91 @@ export async function mineSessions(
     errors,
     duration_ms: Date.now() - start,
   };
+  // Annotate the new fields only when the caller opted into a non-default
+  // strategy. Keeps the byte-for-byte JSON unchanged for legacy regex callers
+  // and snapshot tests under `tests/analytics`.
+  if (requestedStrategy !== 'regex') {
+    result.strategy = effectiveStrategy;
+    result.llm_sessions = llmSessionsUsed;
+    result.llm_decisions_extracted = llmDecisionsExtracted;
+  }
+  return result;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// LLM ↔ REGEX MERGE HELPERS
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Adapt the raw `LlmExtractedDecision[]` (no provenance, no nearby-file
+ * context) into the `ExtractedDecision` shape used by the rest of the
+ * pipeline. Files/symbols referenced anywhere in the session become weak
+ * provenance hints — first-match wins, same as the regex path.
+ *
+ * Confidence is `max(computeConfidence, llm.confidence)`. The LLM's own
+ * confidence is informative but not authoritative; the heuristic floor
+ * (code_ref present, content length, type signal, tags) keeps the routing
+ * symmetric with `remember_decision`.
+ */
+function adaptLlmDecisions(
+  raw: LlmExtractedDecision[],
+  turns: ConversationTurn[],
+): ExtractedDecision[] {
+  if (raw.length === 0) return [];
+  const allFiles = new Set<string>();
+  const allSymbols = new Set<string>();
+  for (const t of turns) {
+    for (const f of t.referenced_files) allFiles.add(f);
+    for (const s of t.referenced_symbols) allSymbols.add(s);
+  }
+  const fileHint = allFiles.size > 0 ? [...allFiles][0] : undefined;
+  const symbolHint = allSymbols.size > 0 ? [...allSymbols][0] : undefined;
+  const timestamp = turns.length > 0 ? turns[turns.length - 1].timestamp : '';
+
+  const out: ExtractedDecision[] = [];
+  for (const d of raw) {
+    const heuristic = computeConfidence({
+      title: d.title,
+      content: d.content,
+      type: d.type,
+      symbol_id: symbolHint,
+      file_path: fileHint,
+      tags: d.tags,
+    });
+    out.push({
+      title: d.title,
+      content: d.content,
+      type: d.type,
+      // Take the higher of the LLM's self-estimate and the heuristic — LLM
+      // overconfidence is real, but so is heuristic blindness to nuance.
+      confidence: Math.max(heuristic, d.confidence),
+      file_path: fileHint,
+      symbol_id: symbolHint,
+      tags: d.tags ?? [],
+      timestamp: timestamp || new Date().toISOString(),
+    });
+  }
+  return out;
+}
+
+/**
+ * Merge regex and LLM extractions, deduplicating by normalized title
+ * (lowercase, whitespace-collapsed). On collision, keep the higher-confidence
+ * entry. Used by the hybrid strategy.
+ */
+export function mergeRegexAndLlm(
+  regex: ExtractedDecision[],
+  llm: ExtractedDecision[],
+): ExtractedDecision[] {
+  const byKey = new Map<string, ExtractedDecision>();
+  const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  for (const d of regex) byKey.set(normalize(d.title), d);
+  for (const d of llm) {
+    const k = normalize(d.title);
+    const existing = byKey.get(k);
+    if (!existing || d.confidence > existing.confidence) {
+      byKey.set(k, d);
+    }
+  }
+  return [...byKey.values()];
 }
