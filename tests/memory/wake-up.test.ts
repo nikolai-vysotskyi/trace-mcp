@@ -522,4 +522,116 @@ describe('assembleWakeUpSplit', () => {
       expect(out.stable.topics![1].title).toBe('Small topic');
     });
   });
+
+  describe('stable.memo (L3 orientation digest)', () => {
+    it('omits memo when no row exists, keeps architecture + conventions intact', () => {
+      const projectRoot = '/projects/memo-absent';
+      store.addDecision({
+        title: 'Arch decision',
+        content: 'c',
+        type: 'architecture_decision',
+        project_root: projectRoot,
+      });
+      store.addDecision({
+        title: 'A convention',
+        content: 'c',
+        type: 'convention',
+        project_root: projectRoot,
+      });
+      const out = assembleWakeUpSplit(store, projectRoot);
+      expect(out.stable.memo).toBeUndefined();
+      expect(out.stable.architecture.length).toBe(1);
+      expect(out.stable.conventions.length).toBe(1);
+    });
+
+    it('memo present + under budget REPLACES architecture and conventions', () => {
+      const projectRoot = '/projects/memo-present';
+      store.addDecision({
+        title: 'Arch decision',
+        content: 'c',
+        type: 'architecture_decision',
+        project_root: projectRoot,
+      });
+      store.addDecision({
+        title: 'A convention',
+        content: 'c',
+        type: 'convention',
+        project_root: projectRoot,
+      });
+      store.saveProjectMemo({
+        project_root: projectRoot,
+        memo_md: '## Architecture\n\nLayered.',
+        decisions_at_generation: 2,
+        clusters_at_generation: 0,
+        estimated_tokens: 20,
+      });
+      const out = assembleWakeUpSplit(store, projectRoot);
+      expect(out.stable.memo).toBeDefined();
+      expect(out.stable.memo!.memo_md).toContain('Architecture');
+      // Architecture + conventions are EMPTIED when memo is present.
+      expect(out.stable.architecture).toEqual([]);
+      expect(out.stable.conventions).toEqual([]);
+    });
+
+    it('drops the memo when estimated_tokens exceeds the budget cap', () => {
+      const projectRoot = '/projects/memo-toobig';
+      store.addDecision({
+        title: 'Arch decision',
+        content: 'c',
+        type: 'architecture_decision',
+        project_root: projectRoot,
+      });
+      store.saveProjectMemo({
+        project_root: projectRoot,
+        memo_md: '## Architecture\n\n' + 'x '.repeat(500),
+        decisions_at_generation: 1,
+        clusters_at_generation: 0,
+        estimated_tokens: 1500, // way over default 400 cap
+      });
+      const out = assembleWakeUpSplit(store, projectRoot);
+      expect(out.stable.memo).toBeUndefined();
+      // Architecture/conventions are kept when memo is dropped.
+      expect(out.stable.architecture.length).toBe(1);
+    });
+
+    it('honors memoEnabled=false even when memo exists', () => {
+      const projectRoot = '/projects/memo-disabled';
+      store.addDecision({
+        title: 'Arch decision',
+        content: 'c',
+        type: 'architecture_decision',
+        project_root: projectRoot,
+      });
+      store.saveProjectMemo({
+        project_root: projectRoot,
+        memo_md: '## Architecture\n\nshort.',
+        decisions_at_generation: 1,
+        clusters_at_generation: 0,
+        estimated_tokens: 5,
+      });
+      const out = assembleWakeUpSplit(store, projectRoot, { memoEnabled: false });
+      expect(out.stable.memo).toBeUndefined();
+      expect(out.stable.architecture.length).toBe(1);
+    });
+
+    it('honors a custom memoMaxBudgetTokens override', () => {
+      const projectRoot = '/projects/memo-budget-override';
+      store.addDecision({
+        title: 'Arch decision',
+        content: 'c',
+        type: 'architecture_decision',
+        project_root: projectRoot,
+      });
+      store.saveProjectMemo({
+        project_root: projectRoot,
+        memo_md: '## Architecture\n\nshort.',
+        decisions_at_generation: 1,
+        clusters_at_generation: 0,
+        estimated_tokens: 30,
+      });
+      // Cap at 10 tokens — memo is too big at 30.
+      const out = assembleWakeUpSplit(store, projectRoot, { memoMaxBudgetTokens: 10 });
+      expect(out.stable.memo).toBeUndefined();
+    });
+  });
 });

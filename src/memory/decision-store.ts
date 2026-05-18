@@ -254,6 +254,39 @@ export interface ClusterQuery {
   offset?: number;
 }
 
+// ── PROJECT MEMOS (L3 orientation digest) ─────────────────────────────
+//
+// A project memo is a 250-400 word LLM-synthesised Markdown document that
+// captures the project's architectural personality: dominant tech choices,
+// conventions, in-flight work, named subsystems. It's the L3 narrative
+// overlay over L1 (raw decisions) and L2 (clusters) — what a senior
+// engineer would say in a 30-second "what is this project about" pitch.
+//
+// Only the LATEST row per (project_root, service_name) is read by surfaces.
+// Old rows are retained for history (regenerate inserts a new row with
+// version+1 rather than overwriting).
+
+export interface ProjectMemoRow {
+  id: number;
+  project_root: string;
+  /** Null for project-wide memos; subproject name for per-service memos. */
+  service_name: string | null;
+  memo_md: string;
+  version: number;
+  /** Identifier of the LLM that produced this memo (provider + model hint). */
+  model: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Highest decision.id at the time of generation — used to compute drift. */
+  last_decision_id: number | null;
+  /** Decision count in scope when this memo was generated. */
+  decisions_at_generation: number;
+  /** Cluster count in scope when this memo was generated. */
+  clusters_at_generation: number;
+  /** Rough chars/4 token estimate of memo_md at write time. */
+  estimated_tokens: number;
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // SCHEMA
 // ════════════════════════════════════════════════════════════════════════
@@ -441,6 +474,30 @@ CREATE TRIGGER IF NOT EXISTS decision_clusters_au AFTER UPDATE ON decision_clust
     INSERT INTO decision_clusters_fts(rowid, title, summary, tags)
     VALUES (new.id, new.title, new.summary, new.tags);
 END;
+
+-- ════════════════════════════════════════════════════════════════
+-- PROJECT MEMOS (L3 orientation digest)
+-- ════════════════════════════════════════════════════════════════
+-- LLM-synthesised Markdown orientation digest for a project (or per
+-- service). Only the LATEST row per (project_root, service_name) is
+-- read by surfaces — old rows are retained for history (regenerate
+-- inserts a new row with version+1).
+CREATE TABLE IF NOT EXISTS project_memos (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_root            TEXT NOT NULL,
+    service_name            TEXT,
+    memo_md                 TEXT NOT NULL,
+    version                 INTEGER NOT NULL DEFAULT 1,
+    model                   TEXT,
+    created_at              TEXT NOT NULL,
+    updated_at              TEXT NOT NULL,
+    last_decision_id        INTEGER,
+    decisions_at_generation INTEGER NOT NULL DEFAULT 0,
+    clusters_at_generation  INTEGER NOT NULL DEFAULT 0,
+    estimated_tokens        INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_project_memos_scope
+    ON project_memos(project_root, service_name);
 `;
 
 // ════════════════════════════════════════════════════════════════════════
@@ -1449,6 +1506,148 @@ export class DecisionStore {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const row = this.db
       .prepare(`SELECT COUNT(*) as c FROM decision_clusters ${where}`)
+      .get(...params) as { c: number };
+    return row.c;
+  }
+
+  // ── PROJECT MEMOS (L3 orientation digest) ───────────────────────────
+  //
+  // Project memos are LLM-synthesised Markdown orientation digests over the
+  // decision store. Each regeneration inserts a NEW row (version+1) rather
+  // than overwriting — old memos are retained for history. Read paths only
+  // ever surface the LATEST row per (project_root, service_name).
+
+  /**
+   * Insert a new project memo row. Computes `version` as `prev.version + 1`
+   * when an earlier memo exists for the same (project_root, service_name)
+   * scope, otherwise 1. Returns the new {id, version}.
+   */
+  saveProjectMemo(input: {
+    project_root: string;
+    service_name?: string;
+    memo_md: string;
+    model?: string;
+    last_decision_id?: number;
+    decisions_at_generation: number;
+    clusters_at_generation: number;
+    estimated_tokens: number;
+  }): { id: number; version: number } {
+    const nowIso = new Date().toISOString();
+    const service = input.service_name ?? null;
+    const prev = this.getLatestProjectMemo({
+      project_root: input.project_root,
+      service_name: input.service_name,
+    });
+    const version = prev ? prev.version + 1 : 1;
+    const info = this.db
+      .prepare(
+        `INSERT INTO project_memos
+           (project_root, service_name, memo_md, version, model,
+            created_at, updated_at, last_decision_id,
+            decisions_at_generation, clusters_at_generation, estimated_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        input.project_root,
+        service,
+        input.memo_md,
+        version,
+        input.model ?? null,
+        nowIso,
+        nowIso,
+        input.last_decision_id ?? null,
+        input.decisions_at_generation,
+        input.clusters_at_generation,
+        input.estimated_tokens,
+      );
+    return { id: info.lastInsertRowid as number, version };
+  }
+
+  /**
+   * Return the most-recent memo for a (project_root, service_name) scope, or
+   * undefined when no memo has been generated. `service_name` semantics
+   * mirror the decisions/clusters surfaces — omit for the project-wide memo,
+   * supply a name for the per-service one.
+   */
+  getLatestProjectMemo(opts: {
+    project_root: string;
+    service_name?: string;
+  }): ProjectMemoRow | undefined {
+    const service = opts.service_name ?? null;
+    const sql =
+      service === null
+        ? `SELECT * FROM project_memos
+             WHERE project_root = ? AND service_name IS NULL
+             ORDER BY version DESC, id DESC LIMIT 1`
+        : `SELECT * FROM project_memos
+             WHERE project_root = ? AND service_name = ?
+             ORDER BY version DESC, id DESC LIMIT 1`;
+    const stmt = this.db.prepare(sql);
+    const row =
+      service === null ? stmt.get(opts.project_root) : stmt.get(opts.project_root, service);
+    return (row as ProjectMemoRow | undefined) ?? undefined;
+  }
+
+  /**
+   * List historical memos in a scope (most-recent first). Default limit 10.
+   * Used by `get_project_memo` when `include_history=true`.
+   */
+  listProjectMemos(opts: {
+    project_root: string;
+    service_name?: string;
+    limit?: number;
+  }): ProjectMemoRow[] {
+    const service = opts.service_name ?? null;
+    const limit = Math.max(1, Math.min(opts.limit ?? 10, 100));
+    const sql =
+      service === null
+        ? `SELECT * FROM project_memos
+             WHERE project_root = ? AND service_name IS NULL
+             ORDER BY version DESC, id DESC LIMIT ?`
+        : `SELECT * FROM project_memos
+             WHERE project_root = ? AND service_name = ?
+             ORDER BY version DESC, id DESC LIMIT ?`;
+    const stmt = this.db.prepare(sql);
+    const rows =
+      service === null
+        ? stmt.all(opts.project_root, limit)
+        : stmt.all(opts.project_root, service, limit);
+    return rows as ProjectMemoRow[];
+  }
+
+  /**
+   * Count of decisions whose id > the latest memo's `last_decision_id`,
+   * scoped to the same project (+ optional service). Drives the auto-
+   * regen threshold in `regenerate_project_memo`. When no prior memo
+   * exists, returns the total active decision count in scope.
+   */
+  countDecisionsSinceLastMemo(opts: { project_root: string; service_name?: string }): number {
+    const prev = this.getLatestProjectMemo({
+      project_root: opts.project_root,
+      service_name: opts.service_name,
+    });
+    const service = opts.service_name ?? null;
+    if (!prev || prev.last_decision_id === null) {
+      // No prior memo — count of active rows in scope.
+      const conditions: string[] = ['project_root = ?', 'valid_until IS NULL'];
+      const params: unknown[] = [opts.project_root];
+      if (service !== null) {
+        conditions.push('service_name = ?');
+        params.push(service);
+      }
+      const row = this.db
+        .prepare(`SELECT COUNT(*) as c FROM decisions WHERE ${conditions.join(' AND ')}`)
+        .get(...params) as { c: number };
+      return row.c;
+    }
+    const conditions: string[] = ['project_root = ?', 'id > ?', 'valid_until IS NULL'];
+    const params: unknown[] = [opts.project_root, prev.last_decision_id];
+    if (service !== null) {
+      conditions.push('service_name = ?');
+      params.push(service);
+    }
+    const row = this.db
+      .prepare(`SELECT COUNT(*) as c FROM decisions WHERE ${conditions.join(' AND ')}`)
       .get(...params) as { c: number };
     return row.c;
   }

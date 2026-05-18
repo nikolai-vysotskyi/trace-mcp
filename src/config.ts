@@ -485,6 +485,39 @@ const MemoryConfigSchema = z
           .prefault({}),
       })
       .prefault({}),
+    memo: z
+      .object({
+        enabled: z
+          .boolean()
+          .default(true)
+          .describe(
+            'Use a synthesized project memo as the primary orientation context in get_wake_up.',
+          ),
+        regenerateEveryN: z
+          .number()
+          .int()
+          .min(5)
+          .max(500)
+          .default(50)
+          .describe('Trigger automatic memo regeneration after this many new approved decisions.'),
+        targetTokens: z
+          .number()
+          .int()
+          .min(100)
+          .max(2000)
+          .default(350)
+          .describe('Target token length for the synthesized memo. Hard cap at 2× this value.'),
+        maxBudgetTokens: z
+          .number()
+          .int()
+          .min(100)
+          .max(4000)
+          .default(400)
+          .describe(
+            'Drop the memo from get_wake_up if it exceeds this token estimate (avoids token-bombs).',
+          ),
+      })
+      .prefault({}),
   })
   .prefault({});
 

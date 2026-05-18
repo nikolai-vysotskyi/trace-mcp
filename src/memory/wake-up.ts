@@ -178,6 +178,19 @@ export interface WakeUpSplit {
      * exist so the wake-up payload stays minimal for fresh projects.
      */
     topics?: Array<{ id: number; title: string; decision_count: number }>;
+    /**
+     * L3 project memo — LLM-synthesised orientation digest (250-400 words).
+     * When present this becomes the PRIMARY orientation surface and
+     * REPLACES `architecture` + `conventions` (the memo is the synthesis
+     * of those). Key is omitted entirely when no memo exists, or when the
+     * memo's `estimated_tokens` exceeds the wake-up budget cap.
+     */
+    memo?: {
+      memo_md: string;
+      version: number;
+      updated_at: string;
+      estimated_tokens: number;
+    };
   };
   /**
    * Dynamic region — changes per-turn. Route into the user message slot so
@@ -240,6 +253,17 @@ export function assembleWakeUpSplit(
     heatEnabled?: boolean;
     heatHalfLifeDays?: number;
     heatFreshnessDays?: number;
+    /**
+     * L3 project memo integration.
+     *   - `memoEnabled` (default true) — include the latest memo when present.
+     *   - `memoMaxBudgetTokens` (default 400) — drop the memo when its
+     *     `estimated_tokens` exceeds this cap, to avoid token-bombing the
+     *     wake-up payload.
+     * When the memo IS included, `stable.architecture` and `stable.conventions`
+     * are emptied — the memo synthesises both, so keeping them is redundant.
+     */
+    memoEnabled?: boolean;
+    memoMaxBudgetTokens?: number;
   } = {},
 ): WakeUpSplit {
   const recentLimit = Math.min(opts.maxRecent ?? SPLIT_LIMITS.recent, 30);
@@ -359,19 +383,46 @@ export function assembleWakeUpSplit(
     /* cluster tables missing on legacy DB — silently skip */
   }
 
+  // L3: project memo (synthesised orientation digest). When present + within
+  // budget, REPLACES architecture/conventions in the stable region — the memo
+  // is the synthesis of those, so keeping both would be redundant.
+  const memoEnabled = opts.memoEnabled !== false;
+  const memoMaxBudgetTokens = opts.memoMaxBudgetTokens ?? 400;
+  let memo:
+    | { memo_md: string; version: number; updated_at: string; estimated_tokens: number }
+    | undefined;
+  if (memoEnabled) {
+    try {
+      const row = decisionStore.getLatestProjectMemo({ project_root: projectRoot });
+      if (row && row.memo_md && row.estimated_tokens <= memoMaxBudgetTokens) {
+        memo = {
+          memo_md: row.memo_md,
+          version: row.version,
+          updated_at: row.updated_at,
+          estimated_tokens: row.estimated_tokens,
+        };
+      }
+    } catch {
+      /* project_memos table missing on legacy DB — silently skip */
+    }
+  }
+
   // Token budget for the stable region: ~350 tokens is the soft ceiling.
   // When topics push us over, drop lowest-priority conventions one at a
   // time. We never drop architecture/stats/project — those are the always-
   // cacheable identity bits.
   const STABLE_TOKEN_CEILING = 350;
-  const stableConventions = [...conventions];
+  // When a memo is present, drop architecture + conventions from the stable
+  // region. Mirror the same arrays here so the closure below can read them.
+  const stableConventions = memo ? [] : [...conventions];
+  const stableArchitecture = memo ? [] : architecture;
   const buildStable = () => ({
     project: {
       name: path.basename(projectRoot),
       root: projectRoot,
     },
     conventions: stableConventions,
-    architecture,
+    architecture: stableArchitecture,
     stats: {
       total_active: stats.active,
       total_decisions: stats.total,
@@ -380,6 +431,7 @@ export function assembleWakeUpSplit(
       by_type: stats.by_type,
     },
     ...(topics ? { topics } : {}),
+    ...(memo ? { memo } : {}),
   });
   const stableTokens = () => Math.ceil(JSON.stringify(buildStable()).length / 4);
   while (stableTokens() > STABLE_TOKEN_CEILING && stableConventions.length > 0) {
