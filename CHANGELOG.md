@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.39.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.38.0...v1.39.0) (2026-05-18)
+
+
+### Features
+
+* **ai:** auto-rebuild embedding index on provider/model mismatch ([427ec4e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/427ec4edb03aab44f0ceb23a0b75a239f3a4fdbe))
+* **ai:** wire P0.1 auto-rebuild into embed_repo, pipeline, verify_index ([30f516b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/30f516b27cb71d877be0808dee59de02c827e47c))
+* **memory:** add LLM-driven extraction strategy to mine_sessions ([3a44a47](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3a44a4749268991b9d2b4e6568c572fe60d028a2))
+* **memory:** hard recall timeout for wake_up / query_decisions / feature_context ([d6115b8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d6115b8124f3b41e5e1f60dff1bac8d444e8c233))
+* **memory:** incremental cursor for session mining ([28c9d3c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/28c9d3cdbf8145f3e890a0270579bcffef79203a))
+* **memory:** LLM-driven semantic dedup via consolidate_decisions tool ([fd50305](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fd50305bf76a6f82a3ef5679b96d95ddcd6967e3))
+* **memory:** project memo (L3 orientation digest) — synthesis + tools + wake-up integration ([1ac7e5e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1ac7e5eca4815558b20d0110eb58b88cd4037969))
+* **memory:** wire decision clusters MCP tools + wake-up topics ([bad337b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bad337bfc9345db98aa8f53ec5a05192bf232a9e))
+* **wake_up:** split response into stable+dynamic regions for prompt-cache friendliness ([926aaa0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/926aaa078f6cfce304e5793a57a536c4a30ffb2d))
+
+
+### Bug Fixes
+
+* **app:** Electron auto-update also refreshes the npm CLI ([f73055b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f73055b5886de01ef9df5a42bf8076b38388091f))
+* **ci:** apply-pending-update strips inherited NO_POSTINSTALL + README count ([1607a03](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1607a03252506c9395c358f09a4886a4fffc5b81))
+* **config:** allow "_warnings" in tools.meta_fields enum ([b9990e4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b9990e489c6bbe74db5bc0ed5694ffd030745d26))
+* **hooks,evidence,gate:** P3 meta cleanup — coach allowlist, verdict split, visible clamps ([9ed8a2a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9ed8a2ac22bee9ddcc2c9064aac1f5a2cf59911d))
+* **install:** postinstall enables + bootstraps plist on first install ([b2b2113](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b2b21139747e0dd3eeec9c32f00a2be1dfa21d48))
+* **memory:** defensive access to memory.recall config in tool handlers ([c38b9e4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c38b9e4f1daf95947bfcc81b959c851b6dcd9c5c))
+* **navigation,memory,analysis:** P2 UX/correctness pass on intel surface ([475c285](https://github.com/nikolai-vysotskyi/trace-mcp/commit/475c285635170e07cbf3b7ddac6f591c4c633706))
+* **quality,refactoring,analysis:** P1 false-positive + silent-empty pass ([53e55b7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/53e55b791a9a43f17c9b30a795b8acd9a6932564))
+* **refactoring:** P0 safety + correctness pass on apply/plan tools ([005fd64](https://github.com/nikolai-vysotskyi/trace-mcp/commit/005fd64ee37bde97b162e5a19bf5fba57dc58b8d))
+* **test:** embed-repo fake VectorStore must mirror to symbol_embeddings + re-enable in CI ([5cb9ffb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5cb9ffbabcfabe7eda784eb86f68267e465f130c))
+
+
+### Chores
+
+* **gitignore:** ignore .claw/, daemon*.log, run-benchmark.ts (developer-local debris) ([2fc9779](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2fc9779b59b285fa36eb3a29be0f4bfd8ef45c5a))
+
 ## [1.38.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.37.0...v1.38.0) (2026-05-17)
 
 
