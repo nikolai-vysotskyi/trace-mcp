@@ -12,7 +12,14 @@
 import path from 'node:path';
 import type { AIProvider, InferenceService } from '../../ai/interfaces.js';
 import { logger } from '../../logger.js';
+import { resetCachedWeights } from '../decision-confidence.js';
 import { clusterDecisions, type ClusterCandidate } from '../decision-clusterer.js';
+import {
+  loadWeights,
+  saveWeights,
+  tuneConfidenceWeights,
+  type TuneEvent,
+} from '../confidence-tuner.js';
 import { mineSessions, type LlmMiningContext, type MineStrategy } from '../conversation-miner.js';
 import type { DecisionRow, DecisionStore } from '../decision-store.js';
 import { generateProjectMemo } from '../project-memo.js';
@@ -399,4 +406,104 @@ export async function runMemoStage(opts: MemoStageOptions): Promise<MemoStageRes
     tokens: memoResult.estimated_tokens,
     durationMs: Date.now() - start,
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// STAGE D — TUNE WEIGHTS
+// ════════════════════════════════════════════════════════════════════════
+
+export interface RunTuneStageOpts {
+  store: DecisionStore;
+  projectRoot: string;
+  /** Minimum review events before the fitter will run. Default 25. */
+  minEvents?: number;
+  /** When true (default false), compute but do not persist new weights. */
+  dryRun?: boolean;
+}
+
+export interface TuneStageResult {
+  ok: boolean;
+  skipped?: boolean;
+  reason?: 'insufficient_events' | 'tuner_refused' | 'disabled';
+  applied?: boolean;
+  events_used?: number;
+  error?: string;
+  durationMs: number;
+}
+
+/**
+ * Stage D — re-fit confidence weights from accumulated review events.
+ *
+ * Pulls every review event for the project, drops malformed rows, and
+ * runs the logistic regression fitter. On `ok && !dryRun` writes the
+ * new weights to `~/.trace-mcp/confidence_weights.json` and resets the
+ * in-memory weight cache so the next `remember_decision` call picks up
+ * the fitted weights immediately.
+ *
+ * Failures NEVER throw — they return `{ ok: false, error }` so the
+ * scheduler's serial queue stays alive.
+ */
+export async function runTuneStage(opts: RunTuneStageOpts): Promise<TuneStageResult> {
+  const start = Date.now();
+  const minEvents = opts.minEvents ?? 25;
+  const dryRun = opts.dryRun === true;
+
+  try {
+    const rawEvents = opts.store.listReviewEvents({ project_root: opts.projectRoot });
+    const events: TuneEvent[] = rawEvents
+      .filter(
+        (r) =>
+          // Drop rows whose signal payload is malformed (zeroed by
+          // listReviewEvents). Feeding them into the fitter would silently
+          // bias the perType slot.
+          typeof r.signals?.type === 'string' && r.signals.type.length > 0,
+      )
+      .map((r) => ({
+        signals: r.signals,
+        label: (r.action === 'approve' ? 1 : 0) as 0 | 1,
+        confidence_at_decision: r.confidence_at_decision,
+      }));
+
+    if (events.length < minEvents) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'insufficient_events',
+        applied: false,
+        events_used: events.length,
+        durationMs: Date.now() - start,
+      };
+    }
+
+    const current = loadWeights();
+    const result = tuneConfidenceWeights(events, current, { minEvents });
+
+    if (!result.ok || !result.weights) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: 'tuner_refused',
+        applied: false,
+        events_used: result.events_used,
+        durationMs: Date.now() - start,
+      };
+    }
+
+    let applied = false;
+    if (!dryRun) {
+      saveWeights(result.weights);
+      resetCachedWeights();
+      applied = true;
+    }
+    return {
+      ok: true,
+      applied,
+      events_used: result.events_used,
+      durationMs: Date.now() - start,
+    };
+  } catch (e) {
+    const error = (e as Error)?.message ?? String(e);
+    logger.warn({ projectRoot: opts.projectRoot, error }, 'memory-scheduler: tune stage threw');
+    return { ok: false, error, durationMs: Date.now() - start };
+  }
 }
