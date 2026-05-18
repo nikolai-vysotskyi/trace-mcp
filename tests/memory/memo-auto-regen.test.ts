@@ -21,7 +21,11 @@ import type { InferenceService } from '../../src/ai/interfaces.js';
 import { DecisionStore } from '../../src/memory/decision-store.js';
 import type { ServerContext } from '../../src/server/types.js';
 import {
+  _memoAutoTriggerStateHasForTests,
+  _memoAutoTriggerStateSizeForTests,
+  _pruneMemoAutoTriggerStateForTests,
   _resetMemoAutoTriggerStateForTests,
+  _setMemoAutoTriggerStateEntryForTests,
   registerMemoryTools,
 } from '../../src/tools/register/memory.js';
 
@@ -332,5 +336,106 @@ describe('memo auto-regen on qualifying writes', () => {
     await tools.get('approve_decision')!.handler({ id: pending.id });
     await flushImmediate();
     expect(generate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('memoAutoTriggerState — bounded eviction', () => {
+  // Vitest does not need to share state across files; this block uses real
+  // timers because we drive `Date.now()` directly via the test setters.
+  let store: DecisionStore;
+  let dbPath: string;
+  let tmpDir: string;
+  const projectRoot = '/projects/memo-prune';
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'memo-prune-'));
+    dbPath = path.join(tmpDir, 'decisions.db');
+    store = new DecisionStore(dbPath);
+    _resetMemoAutoTriggerStateForTests();
+  });
+
+  afterEach(() => {
+    store.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+    _resetMemoAutoTriggerStateForTests();
+  });
+
+  it('a qualifying write stamps an entry in the throttle map', async () => {
+    vi.useFakeTimers();
+    try {
+      const generate = vi.fn(async () => SAMPLE_MEMO);
+      const { server, tools } = buildFakeServer();
+      registerMemoryTools(
+        server as never,
+        buildCtx({ store, projectRoot, inferenceMock: generate, regenerateEveryN: 1 }),
+      );
+      expect(_memoAutoTriggerStateSizeForTests()).toBe(0);
+      await tools.get('add_decision')!.handler({
+        title: 'JWT auth',
+        content: 'JWTs with refresh.',
+        type: 'architecture_decision',
+        file_path: 'src/auth/jwt.ts',
+      });
+      // Drain the setImmediate so the regen body runs and stamps the map.
+      await vi.advanceTimersByTimeAsync(1);
+      expect(_memoAutoTriggerStateHasForTests(projectRoot)).toBe(true);
+      expect(_memoAutoTriggerStateSizeForTests()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('force-aged entry is evicted by _pruneMemoAutoTriggerStateForTests', () => {
+    // Seed a stale entry directly.
+    const stale = Date.now() - 8 * 24 * 60 * 60 * 1000; // 8 days ago
+    _setMemoAutoTriggerStateEntryForTests(projectRoot, undefined, stale);
+    expect(_memoAutoTriggerStateHasForTests(projectRoot)).toBe(true);
+    expect(_memoAutoTriggerStateSizeForTests()).toBe(1);
+    _pruneMemoAutoTriggerStateForTests(Date.now());
+    expect(_memoAutoTriggerStateHasForTests(projectRoot)).toBe(false);
+    expect(_memoAutoTriggerStateSizeForTests()).toBe(0);
+  });
+
+  it('fresh entry survives pruning', () => {
+    const fresh = Date.now() - 60_000; // 1 minute ago
+    _setMemoAutoTriggerStateEntryForTests(projectRoot, undefined, fresh);
+    _pruneMemoAutoTriggerStateForTests(Date.now());
+    expect(_memoAutoTriggerStateHasForTests(projectRoot)).toBe(true);
+  });
+
+  it('after pruning a stale entry, the next qualifying write fires regen again', async () => {
+    vi.useFakeTimers();
+    try {
+      // Pre-seed a "very old" entry so the throttle would normally suppress
+      // a fresh trigger; pruning must clear it so the next write fires.
+      const baseNow = Date.now();
+      _setMemoAutoTriggerStateEntryForTests(
+        projectRoot,
+        undefined,
+        baseNow - 30 * 24 * 60 * 60 * 1000, // 30 days ago
+      );
+      expect(_memoAutoTriggerStateHasForTests(projectRoot)).toBe(true);
+
+      const generate = vi.fn(async () => SAMPLE_MEMO);
+      const { server, tools } = buildFakeServer();
+      registerMemoryTools(
+        server as never,
+        buildCtx({ store, projectRoot, inferenceMock: generate, regenerateEveryN: 1 }),
+      );
+      // A write triggers `pruneMemoAutoTriggerState` internally, then the
+      // throttle check sees no entry → schedules a regen.
+      await tools.get('add_decision')!.handler({
+        title: 'Use Postgres JSONB',
+        content: 'Store flexible attributes in JSONB columns indexed by GIN.',
+        type: 'architecture_decision',
+        file_path: 'src/db/schema.ts',
+      });
+      await vi.advanceTimersByTimeAsync(1);
+      expect(generate).toHaveBeenCalledTimes(1);
+      // Entry has been re-stamped with a recent timestamp; map size stays 1.
+      expect(_memoAutoTriggerStateSizeForTests()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
