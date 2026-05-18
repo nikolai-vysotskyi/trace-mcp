@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.39.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.0...v1.39.1) (2026-05-18)
+
+
+### Features
+
+* **daemon:** background memory scheduler (P1.3) — auto mine + cluster + memo ([8eda0ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8eda0ba9dd4f0155ebf20ba9f70e41a8d644a73d))
+* **memory:** auto-regenerate memo on write + auto-tune weights in scheduler ([f4c471d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f4c471db7e381c28855d83264c4af6b36d2bf79b))
+* **memory:** close P1.1/P1.2/P2.3/P2.4 close-out TODOs (decoration + retention + cursor knob) ([b4b0665](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b4b0665317f61a2ca23aedc7bbf5a96c6966b8b5))
+* **memory:** confidence-weight learning from review feedback (P2.5) ([4d4b5b1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4d4b5b159395b3eec558d67bce1c9b13e4080c9a))
+* **memory:** export_decisions tool + CLI + optional audit log ([e20ae6f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e20ae6fb8a23d07bb7d92c5d50ecd484494b473f))
+
+
+### Bug Fixes
+
+* **install:** plist v3 — both generators use launcher shim + post-kickstart health probe ([f7e5073](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f7e507364855b82c6293b8cd9d325a230f9628c7))
+
+
+### Chores
+
+* **errors:** silence tsup "err/ok never used" warning via type-only import ([94242ba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/94242badb0d1acdbe58abc3ac4fa21707b41e87a))
+
 ## [1.39.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.38.0...v1.39.0) (2026-05-18)
 
 
