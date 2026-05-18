@@ -522,6 +522,15 @@ const MemoryConfigSchema = z
           .describe(
             'Drop the memo from get_wake_up if it exceeds this token estimate (avoids token-bombs).',
           ),
+        historyLimit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .default(10)
+          .describe(
+            'Bounded retention for project_memos. Keep at most N rows per (project_root, service_name) scope — older rows are dropped on each saveProjectMemo() in the same transaction.',
+          ),
       })
       .prefault({}),
     consolidation: z
@@ -561,6 +570,15 @@ const MemoryConfigSchema = z
           .string()
           .optional()
           .describe('Override audit log directory. Default ~/.trace-mcp/decisions/.'),
+        retentionDays: z
+          .number()
+          .int()
+          .min(0)
+          .max(3650)
+          .default(0)
+          .describe(
+            'Day-bucketed JSONL retention window. 0 (default) keeps audit files forever; any positive N prunes files whose YYYY-MM-DD filename is older than N days. Pruning runs at construction time and on each day rollover, best-effort.',
+          ),
       })
       .optional(),
     weight_tuning: z

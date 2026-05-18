@@ -562,10 +562,26 @@ export class DecisionStore {
    * methods.
    */
   private auditLogger: AuditLogger | null;
+  /**
+   * Bounded retention for `project_memos`: keep at most N rows per
+   * (project_root, service_name) scope. The retention prune runs in the
+   * same transaction as the INSERT inside `saveProjectMemo`, so the table
+   * can never exceed `historyLimit * scopes` at rest. Defaults to 10 — the
+   * historical UI default for `listProjectMemos`.
+   */
+  private memoHistoryLimit: number;
 
-  constructor(dbPath: string, opts?: { readonly?: boolean; auditLogger?: AuditLogger | null }) {
+  constructor(
+    dbPath: string,
+    opts?: {
+      readonly?: boolean;
+      auditLogger?: AuditLogger | null;
+      memoHistoryLimit?: number;
+    },
+  ) {
     this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
     this.auditLogger = opts?.auditLogger ?? null;
+    this.memoHistoryLimit = Math.max(1, opts?.memoHistoryLimit ?? 10);
     if (opts?.readonly) {
       this.db.pragma('busy_timeout = 5000');
       logger.debug({ dbPath, readonly: true }, 'Decision store opened (readonly)');
@@ -1900,15 +1916,31 @@ export class DecisionStore {
       service_name: input.service_name,
     });
     const version = prev ? prev.version + 1 : 1;
-    const info = this.db
-      .prepare(
-        `INSERT INTO project_memos
-           (project_root, service_name, memo_md, version, model,
-            created_at, updated_at, last_decision_id,
-            decisions_at_generation, clusters_at_generation, estimated_tokens)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+    const insertStmt = this.db.prepare(
+      `INSERT INTO project_memos
+         (project_root, service_name, memo_md, version, model,
+          created_at, updated_at, last_decision_id,
+          decisions_at_generation, clusters_at_generation, estimated_tokens)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    // Retention prune: keep at most `memoHistoryLimit` rows for this scope
+    // (project_root, COALESCE(service_name,'')). Runs inside the same
+    // transaction as the INSERT so the table never breaches the bound
+    // visibly. Per-scope only — other scopes are untouched.
+    const pruneStmt = this.db.prepare(
+      `DELETE FROM project_memos
+         WHERE id NOT IN (
+           SELECT id FROM project_memos
+            WHERE project_root = ?
+              AND COALESCE(service_name,'') = COALESCE(?,'')
+            ORDER BY version DESC, id DESC
+            LIMIT ?
+         )
+         AND project_root = ?
+         AND COALESCE(service_name,'') = COALESCE(?,'')`,
+    );
+    const tx = this.db.transaction(() => {
+      const info = insertStmt.run(
         input.project_root,
         service,
         input.memo_md,
@@ -1921,7 +1953,17 @@ export class DecisionStore {
         input.clusters_at_generation,
         input.estimated_tokens,
       );
-    return { id: info.lastInsertRowid as number, version };
+      pruneStmt.run(
+        input.project_root,
+        service,
+        this.memoHistoryLimit,
+        input.project_root,
+        service,
+      );
+      return info.lastInsertRowid as number;
+    });
+    const id = tx();
+    return { id, version };
   }
 
   /**

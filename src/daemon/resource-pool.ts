@@ -46,9 +46,13 @@ export class ProjectResourcePool {
       const auditLogger = auditCfg?.enabled
         ? createAuditLogger({
             dir: auditCfg.dir ?? path.join(TRACE_MCP_HOME, 'decisions'),
+            retentionDays: auditCfg.retentionDays,
           })
         : null;
-      const decisionStore = new DecisionStore(DECISIONS_DB_PATH, { auditLogger });
+      const decisionStore = new DecisionStore(DECISIONS_DB_PATH, {
+        auditLogger,
+        memoHistoryLimit: config.memory?.memo?.historyLimit,
+      });
       entry = { topoStore, decisionStore, refCount: 0 };
       this.pools.set(projectRoot, entry);
       logger.debug(
