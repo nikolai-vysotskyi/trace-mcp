@@ -582,6 +582,67 @@ const MemoryConfigSchema = z
           ),
       })
       .optional(),
+    background: z
+      .object({
+        enabled: z
+          .boolean()
+          .default(false)
+          .describe(
+            'When true, the daemon periodically advances each project memory pyramid (mine -> cluster -> memo) without explicit MCP calls. Off by default; opt-in via config.',
+          ),
+        tickIntervalSec: z
+          .number()
+          .int()
+          .min(10)
+          .max(3600)
+          .default(60)
+          .describe('How often the scheduler walks all projects and enqueues due stages.'),
+        activityDebounceSec: z
+          .number()
+          .int()
+          .min(0)
+          .max(3600)
+          .default(120)
+          .describe(
+            'Skip a project while it has had MCP activity within this window — avoid running heavy stages during active development.',
+          ),
+        idleWindowSec: z
+          .number()
+          .int()
+          .min(60)
+          .max(86400)
+          .default(3600)
+          .describe('Mine only projects that saw MCP activity within this trailing window.'),
+        coldThresholdSec: z
+          .number()
+          .int()
+          .min(3600)
+          .max(604800)
+          .default(86400)
+          .describe('Skip mining for projects nobody has touched in this long.'),
+        mineMinIntervalSec: z
+          .number()
+          .int()
+          .min(60)
+          .max(86400)
+          .default(1800)
+          .describe('Minimum gap between consecutive mine runs for a single project.'),
+        clusterEveryNDecisions: z
+          .number()
+          .int()
+          .min(5)
+          .max(500)
+          .default(25)
+          .describe('Trigger automatic clustering after this many new decisions land.'),
+        failureBackoffSec: z
+          .number()
+          .int()
+          .min(60)
+          .max(86400)
+          .default(3600)
+          .describe('After 3 consecutive failures, skip a project for this long before retrying.'),
+      })
+      .prefault({}),
   })
   .prefault({});
 

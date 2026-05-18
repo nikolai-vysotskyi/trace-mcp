@@ -52,6 +52,7 @@ import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
 import { isDaemonRunning } from './daemon/client.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
+import { MemoryScheduler } from './memory/scheduler/memory-scheduler.js';
 import { ProjectManager } from './daemon/project-manager.js';
 import type { ManagedProject } from './daemon/project-manager.js';
 import { handleReindexFile } from './daemon/reindex-file-handler.js';
@@ -655,7 +656,7 @@ program
 
           // Release shared resources ref
           resourcePool.release(projectRoot);
-          idleMonitor.onActivity();
+          pokeActivity(projectRoot);
         }
       };
 
@@ -948,7 +949,7 @@ program
               projectSessions.set(projectRoot, new Set());
             }
             projectSessions.get(projectRoot)!.add(sid);
-            idleMonitor.onActivity();
+            pokeActivity(projectRoot);
 
             // Move pending handle/clientId to session-keyed maps
             const pendingHandle = (
@@ -2130,7 +2131,7 @@ program
             project,
             name,
           });
-          idleMonitor.onActivity();
+          pokeActivity(project);
           res.writeHead(201, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'registered' }));
         } catch (e) {
@@ -2176,7 +2177,7 @@ program
           const existing = clients.get(clientId);
           clients.delete(clientId);
           broadcastEvent({ type: 'client_disconnect', clientId, project: existing?.project });
-          idleMonitor.onActivity();
+          pokeActivity(existing?.project);
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'removed' }));
@@ -2534,6 +2535,7 @@ program
       projectSessions.clear();
       resourcePool.disposeAll();
       idleMonitor.stop();
+      await memoryScheduler.stop();
       clearInterval(activityPoker);
       clearInterval(rateBucketCleanup);
       clearInterval(clientSweep);
@@ -2575,6 +2577,41 @@ program
     activityPoker.unref();
     // Arm once on startup — daemon starts idle until the first client connects.
     idleMonitor.onActivity();
+
+    // ── Memory background scheduler ─────────────────────────────
+    // Long-lived background loop that periodically advances each registered
+    // project's memory pyramid (mine → cluster → memo). Off by default —
+    // opt-in via `config.memory.background.enabled = true`. The scheduler
+    // self-throttles via a global serial queue (concurrency=1) so it cannot
+    // race LLM calls or SQLite writes against itself.
+    // Load a TraceMcpConfig for the scheduler. We're inside `serve-http`
+    // which has no project-rooted config — fall back to cwd; if that fails
+    // (running outside a project), use the no-arg form to get fully-defaulted
+    // settings. Per-project overrides flow through ManagedProject.config later.
+    const schedulerConfigResult = await loadConfig(process.cwd()).catch(() => null);
+    const schedulerConfigFallback =
+      schedulerConfigResult && schedulerConfigResult.isOk()
+        ? schedulerConfigResult.value
+        : (await loadConfig().catch(() => null))?.unwrapOr(undefined as never);
+    if (!schedulerConfigFallback) {
+      logger.warn('Could not load any config for memory scheduler; skipping start');
+    }
+    const memoryScheduler = new MemoryScheduler({
+      projectManager,
+      config: schedulerConfigFallback ?? ({} as never),
+    });
+    memoryScheduler.start();
+    /**
+     * Single activity hook surface. Bumps the idle monitor AND the memory
+     * scheduler. `projectRoot` is optional — when provided the scheduler
+     * updates only that project's lastActivityAt; otherwise it updates
+     * every known project (coarse, used by hooks that don't know the
+     * project, e.g. the periodic poker).
+     */
+    const pokeActivity = (projectRoot?: string): void => {
+      idleMonitor.onActivity();
+      memoryScheduler.notifyActivity(projectRoot);
+    };
 
     // ── Self-staleness detection ─────────────────────────────────
     // A long-running daemon would otherwise stay on the version it booted with
