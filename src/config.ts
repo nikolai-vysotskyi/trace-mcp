@@ -518,6 +518,31 @@ const MemoryConfigSchema = z
           ),
       })
       .prefault({}),
+    consolidation: z
+      .object({
+        defaultMinTitleSimilarity: z
+          .number()
+          .min(0)
+          .max(1)
+          .default(0.4)
+          .describe(
+            'Minimum trigram-title similarity for candidates to be considered for LLM dedup.',
+          ),
+        defaultMaxDecisions: z
+          .number()
+          .int()
+          .min(1)
+          .max(500)
+          .default(50)
+          .describe('Cost guard: max subjects processed per consolidate_decisions invocation.'),
+        defaultSameTypeOnly: z
+          .boolean()
+          .default(false)
+          .describe(
+            'When true, only compare decisions of the same DecisionType (more conservative).',
+          ),
+      })
+      .optional(),
   })
   .prefault({});
 
