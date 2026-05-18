@@ -20,7 +20,7 @@
  * 0 even on failure to avoid noise in detached spawn logs.
  */
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -33,6 +33,7 @@ const PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
 const PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
 const PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
 const VERSION_MARKER = path.join(INSTALL_DIR, '.trace-mcp-version');
+const LAUNCHER_ENV = path.join(os.homedir(), '.trace-mcp', 'launcher.env');
 const DAEMON_PLIST = path.join(
   os.homedir(),
   'Library',
@@ -106,6 +107,109 @@ function clearPending() {
     try {
       fs.unlinkSync(p);
     } catch {}
+  }
+}
+
+// Parse launcher.env (KEY="value" lines) and return TRACE_MCP_NODE if present.
+// launcher.env is written by scripts/postinstall-control-plane.mjs after every
+// `npm install -g trace-mcp` and pins the Node interpreter the daemon runs under.
+function readLauncherNode() {
+  try {
+    const raw = fs.readFileSync(LAUNCHER_ENV, 'utf-8');
+    const m = raw.match(/^TRACE_MCP_NODE="([^"]+)"/m);
+    return m?.[1] ?? '';
+  } catch {
+    return '';
+  }
+}
+
+// Read installed CLI package version by walking up from <nodeDir>/../lib/node_modules/trace-mcp.
+// We avoid spawning `npm root -g` to keep this fast and dependency-free.
+function readInstalledCliVersion(nodeBin) {
+  try {
+    const nodeDir = path.dirname(nodeBin);
+    // Standard layout: <prefix>/bin/node + <prefix>/lib/node_modules/trace-mcp/package.json
+    const candidates = [
+      path.join(nodeDir, '..', 'lib', 'node_modules', 'trace-mcp', 'package.json'),
+      // Some Windows / portable layouts put node_modules next to node.
+      path.join(nodeDir, 'node_modules', 'trace-mcp', 'package.json'),
+    ];
+    for (const pkgPath of candidates) {
+      if (fs.existsSync(pkgPath)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        if (typeof pkg?.version === 'string') return pkg.version;
+      }
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Refresh the npm-installed CLI to the matching version so the daemon's
+ * cli.js stays in sync with the freshly-swapped .app bundle. Best-effort:
+ * any failure is logged and swallowed — we never roll back the bundle swap
+ * over a CLI refresh hiccup. The user can always `npm install -g trace-mcp`
+ * manually.
+ */
+function refreshCliPackage(version) {
+  if (!version) {
+    log('refreshCliPackage: skip (no version)');
+    return;
+  }
+  const nodeBin = readLauncherNode();
+  if (!nodeBin) {
+    log('refreshCliPackage: skip (launcher.env missing or has no TRACE_MCP_NODE)');
+    return;
+  }
+  if (!fs.existsSync(nodeBin)) {
+    log(`refreshCliPackage: skip (TRACE_MCP_NODE not on disk: ${nodeBin})`);
+    return;
+  }
+  // npm sits next to node in the same prefix. Using the launcher's Node
+  // guarantees we hit the same global node_modules tree the daemon resolves
+  // cli.js from — GUI-spawned processes inherit a stripped PATH, so a bare
+  // `npm` could pick a different Node.
+  const npmBin = path.join(path.dirname(nodeBin), 'npm');
+  if (!fs.existsSync(npmBin)) {
+    log(`refreshCliPackage: skip (npm not next to node: ${npmBin})`);
+    return;
+  }
+  const installed = readInstalledCliVersion(nodeBin);
+  if (installed === version) {
+    log(`refreshCliPackage: skip (already at ${version})`);
+    return;
+  }
+  log(`refreshCliPackage: installing trace-mcp@${version} (was ${installed || 'unknown'})`);
+  try {
+    const result = spawnSync(npmBin, ['install', '-g', `trace-mcp@${version}`], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf-8',
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        // Prevent the new postinstall's auto-update logic from triggering
+        // another download/swap cycle on top of the one we just applied.
+        // We deliberately leave TRACE_MCP_NO_POSTINSTALL unset — the
+        // postinstall still needs to refresh launcher.env, shim, etc.
+        TRACE_MCP_NO_AUTO_UPDATE: '1',
+      },
+    });
+    if (result.error) {
+      log(`refreshCliPackage: spawn error: ${result.error?.message ?? result.error}`);
+      return;
+    }
+    if (result.status !== 0) {
+      const tail = (result.stderr ?? '').toString().trim().slice(-500);
+      log(
+        `refreshCliPackage: npm exited status=${result.status} signal=${result.signal} stderr=${tail}`,
+      );
+      return;
+    }
+    log(`refreshCliPackage: ok trace-mcp@${version}`);
+  } catch (err) {
+    log(`refreshCliPackage: unexpected error: ${err?.message ?? err}`);
   }
 }
 
@@ -236,9 +340,16 @@ async function main() {
     }
     clearPending();
 
+    // Refresh the npm-installed CLI to the matching version. Without this,
+    // the GUI update path leaves the daemon binary stuck at whatever was
+    // last `npm install`'d, so the .app and cli.js drift out of sync.
+    // Best-effort: failures are logged and ignored.
+    refreshCliPackage(pendingVersion);
+
     // Restart the daemon so it runs the newly-installed binary, not the
-    // old code pinned in its memory. Order: swap bundle → restart daemon →
-    // relaunch app. App's first /health poll will then see matching versions.
+    // old code pinned in its memory. Order: swap bundle → refresh CLI →
+    // restart daemon → relaunch app. App's first /health poll will then
+    // see matching versions.
     restartDaemon();
 
     // Relaunch the new bundle so the user does not have to click anything.
@@ -254,6 +365,17 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  log(`unhandled: ${err?.stack ?? err}`);
-});
+// Only run main() when invoked as a script — keeps the module importable
+// in tests that want to exercise individual helpers like refreshCliPackage
+// without triggering the full bundle-swap path.
+const invokedAsScript =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+if (invokedAsScript) {
+  main().catch((err) => {
+    log(`unhandled: ${err?.stack ?? err}`);
+  });
+}
+
+// Test-only exports. Not part of any public API; consumed by tests/scripts.
+export { refreshCliPackage, readLauncherNode, readInstalledCliVersion };
