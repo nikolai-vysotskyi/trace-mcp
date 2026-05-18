@@ -45,7 +45,7 @@ const TOOL_SUGGESTIONS: Record<string, string> = {
 
   // ─── relation tools (verdict: symbol_indexed_but_isolated) ──
   find_usages:
-    'This symbol has no incoming references in the dependency graph. It may be dead code or only used dynamically. Do not grep for it as a fallback — the absence is authoritative.',
+    'Zero references in the dependency graph. This may mean the symbol is dead, OR that callers use it through a parametric type / dynamic dispatch the resolver did not link. Confirm with `search_text { query: "<symbol_name>" }` (or Bash grep) before treating it as dead.',
   get_tests_for:
     'No tests found for this symbol/file. Consider creating tests or check if tests use a different naming convention.',
   get_call_graph:
@@ -60,7 +60,7 @@ const DEFAULT_SUGGESTION_NOT_FOUND =
   'This pattern does not exist in the indexed codebase. Do not search again with similar terms.';
 
 const DEFAULT_SUGGESTION_ISOLATED =
-  'The symbol is indexed but the requested relation is empty. The absence is authoritative — do not retry with grep.';
+  'Indexed but no edges for the requested relation. The graph may be incomplete on parametric/dynamic call sites — verify with `search_text` before concluding.';
 
 /**
  * Build a negative-evidence block for zero-result responses.

@@ -221,6 +221,282 @@ describe('applyMove — symbol mode', () => {
     expect(consumerContent).not.toContain('./utils');
   });
 
+  // ────────────────────────────────────────────────────────────────────
+  // Bug 1: preserve `export` keyword on moved declaration
+  // ────────────────────────────────────────────────────────────────────
+
+  it('preserves export keyword when moving an exported function', () => {
+    store = createTestStore();
+    tmpDir = createTmpFixture({
+      'src/a.ts': 'export function foo() {\n  return 1;\n}\n',
+    });
+    const fileA = insertFile(store, 'src/a.ts');
+    insertSymbol(store, fileA, 'foo', { lineStart: 1, lineEnd: 3, metadata: { exported: true } });
+
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
+    expect(result.success).toBe(true);
+
+    const targetContent = readFile(tmpDir, 'src/b.ts');
+    expect(targetContent).toContain('export function foo()');
+    expect(targetContent).not.toMatch(/^\s*function foo\(\)/m);
+  });
+
+  it('injects `export` when the original declaration was bare but symbol is exported', () => {
+    store = createTestStore();
+    tmpDir = createTmpFixture({
+      // `function foo()` declaration without inline export — but the symbol
+      // metadata says exported (e.g. re-exported via `export { foo }` later).
+      'src/a.ts': 'function foo() {\n  return 1;\n}\nexport { foo };\n',
+    });
+    const fileA = insertFile(store, 'src/a.ts');
+    insertSymbol(store, fileA, 'foo', { lineStart: 1, lineEnd: 3, metadata: { exported: true } });
+
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
+    expect(result.success).toBe(true);
+
+    const targetContent = readFile(tmpDir, 'src/b.ts');
+    expect(targetContent).toContain('export function foo()');
+  });
+
+  it('does not add `export` to a non-exported helper', () => {
+    store = createTestStore();
+    tmpDir = createTmpFixture({
+      'src/a.ts': 'function helper() {\n  return 1;\n}\n',
+    });
+    const fileA = insertFile(store, 'src/a.ts');
+    insertSymbol(store, fileA, 'helper', {
+      lineStart: 1,
+      lineEnd: 3,
+      metadata: { exported: false },
+    });
+
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::helper#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
+    expect(result.success).toBe(true);
+
+    const targetContent = readFile(tmpDir, 'src/b.ts');
+    expect(targetContent).toContain('function helper()');
+    expect(targetContent).not.toMatch(/export\s+function\s+helper\(/);
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Bug 2: insert import in source file when same-file callers remain
+  // ────────────────────────────────────────────────────────────────────
+
+  it('adds an import to the source file when a same-file caller remains', () => {
+    store = createTestStore();
+    tmpDir = createTmpFixture({
+      'src/a.ts':
+        'export function foo() {\n  return 1;\n}\n\nexport function bar() {\n  return foo() + 1;\n}\n',
+    });
+    const fileA = insertFile(store, 'src/a.ts');
+    insertSymbol(store, fileA, 'foo', { lineStart: 1, lineEnd: 3, metadata: { exported: true } });
+    insertSymbol(store, fileA, 'bar', { lineStart: 5, lineEnd: 7, metadata: { exported: true } });
+
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
+    expect(result.success).toBe(true);
+
+    const sourceContent = readFile(tmpDir, 'src/a.ts');
+    expect(sourceContent).toMatch(/import\s+\{\s*foo\s*\}\s+from\s+'\.\/b'/);
+  });
+
+  it('does NOT add a back-import when no same-file callers remain', () => {
+    store = createTestStore();
+    tmpDir = createTmpFixture({
+      'src/a.ts':
+        'export function foo() {\n  return 1;\n}\n\nexport function bar() {\n  return 2;\n}\n',
+    });
+    const fileA = insertFile(store, 'src/a.ts');
+    insertSymbol(store, fileA, 'foo', { lineStart: 1, lineEnd: 3, metadata: { exported: true } });
+    insertSymbol(store, fileA, 'bar', { lineStart: 5, lineEnd: 7, metadata: { exported: true } });
+
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::foo#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
+    expect(result.success).toBe(true);
+
+    const sourceContent = readFile(tmpDir, 'src/a.ts');
+    expect(sourceContent).not.toMatch(/import\s+\{\s*foo\s*\}\s+from\s+'\.\/b'/);
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Bug 3: copy referenced imports to the new file
+  // ────────────────────────────────────────────────────────────────────
+
+  it('copies referenced imports from source to new file (same directory)', () => {
+    store = createTestStore();
+    tmpDir = createTmpFixture({
+      'src/store.ts': 'export interface Store { id: number; }\n',
+      'src/types.ts': 'export interface SymbolRow { name: string; }\n',
+      'src/a.ts':
+        "import type { Store } from './store';\nimport type { SymbolRow } from './types';\nexport function resolve(store: Store, sym: SymbolRow) { return sym.name; }\n",
+    });
+    const _storeFile = insertFile(store, 'src/store.ts');
+    const _typesFile = insertFile(store, 'src/types.ts');
+    const fileA = insertFile(store, 'src/a.ts');
+    insertSymbol(store, fileA, 'resolve', {
+      lineStart: 3,
+      lineEnd: 3,
+      metadata: { exported: true },
+    });
+
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::resolve#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
+    expect(result.success).toBe(true);
+
+    const targetContent = readFile(tmpDir, 'src/b.ts');
+    expect(targetContent).toMatch(/import\s+type\s+\{\s*Store\s*\}\s+from\s+'\.\/store'/);
+    expect(targetContent).toMatch(/import\s+type\s+\{\s*SymbolRow\s*\}\s+from\s+'\.\/types'/);
+  });
+
+  it('adjusts relative paths of copied imports when moving to a different directory', () => {
+    store = createTestStore();
+    tmpDir = createTmpFixture({
+      'src/store.ts': 'export interface Store { id: number; }\n',
+      'src/foo/a.ts':
+        "import type { Store } from '../store';\nexport function resolve(s: Store) { return s.id; }\n",
+    });
+    const _storeFile = insertFile(store, 'src/store.ts');
+    const fileA = insertFile(store, 'src/foo/a.ts');
+    insertSymbol(store, fileA, 'resolve', {
+      lineStart: 2,
+      lineEnd: 2,
+      metadata: { exported: true },
+    });
+
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/foo/a.ts::resolve#function',
+      target_file: 'src/bar/b.ts',
+      dry_run: false,
+    });
+    expect(result.success).toBe(true);
+
+    const targetContent = readFile(tmpDir, 'src/bar/b.ts');
+    // From src/bar/b.ts, src/store.ts is at '../store'
+    expect(targetContent).toMatch(/import\s+type\s+\{\s*Store\s*\}\s+from\s+'\.\.\/store'/);
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Self-test scenario from P0-E task brief
+  // ────────────────────────────────────────────────────────────────────
+
+  it('self-test: move resolveSymbol replicating ai-tools.ts scenario', () => {
+    store = createTestStore();
+    tmpDir = createTmpFixture({
+      'src/db/store.ts':
+        'export interface Store {}\nexport interface SymbolRow {}\nexport interface FileRow {}\n',
+      'src/tools/shared/resolve.ts': 'export function resolveSymbolInput() { return null; }\n',
+      'src/tools/ai/ai-tools.ts':
+        "import type { FileRow, Store, SymbolRow } from '../../db/store.js';\n" +
+        "import { resolveSymbolInput } from '../shared/resolve.js';\n" +
+        '\n' +
+        'function resolveSymbol(\n' +
+        '  store: Store,\n' +
+        '  opts: { symbolId?: string; fqn?: string },\n' +
+        '): { sym: SymbolRow; file: FileRow } | null {\n' +
+        '  const resolved = resolveSymbolInput();\n' +
+        '  if (!resolved) return null;\n' +
+        '  return resolved;\n' +
+        '}\n' +
+        '\n' +
+        'export function registerAITools(): void {\n' +
+        '  resolveSymbol({} as Store, {});\n' +
+        '}\n',
+    });
+    const aiToolsFile = insertFile(store, 'src/tools/ai/ai-tools.ts');
+    insertSymbol(store, aiToolsFile, 'resolveSymbol', {
+      lineStart: 4,
+      lineEnd: 11,
+      metadata: { exported: false },
+    });
+
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/tools/ai/ai-tools.ts::resolveSymbol#function',
+      target_file: 'src/tools/ai/resolve-symbol.ts',
+      dry_run: false,
+    });
+    expect(result.success).toBe(true);
+
+    // New file: function should NOT have export (non-exported source) but
+    // SHOULD have all three import lines copied over.
+    const newFile = readFile(tmpDir, 'src/tools/ai/resolve-symbol.ts');
+    expect(newFile).toContain('function resolveSymbol');
+    expect(newFile).toMatch(/import\s+type\s+\{[^}]*Store[^}]*\}\s+from\s+'\.\.\/\.\.\/db\/store/);
+    expect(newFile).toMatch(/import\s+type\s+\{[^}]*SymbolRow[^}]*\}/);
+    expect(newFile).toMatch(/import\s+type\s+\{[^}]*FileRow[^}]*\}/);
+    expect(newFile).toMatch(
+      /import\s+\{\s*resolveSymbolInput\s*\}\s+from\s+'\.\.\/shared\/resolve/,
+    );
+
+    // Source file: should contain a back-import for resolveSymbol from the
+    // new module, since registerAITools (same file) still calls it.
+    const sourceFile = readFile(tmpDir, 'src/tools/ai/ai-tools.ts');
+    expect(sourceFile).toMatch(/import\s+\{\s*resolveSymbol\s*\}\s+from\s+'\.\/resolve-symbol'/);
+  });
+
+  it('does not duplicate imports the new file already has', () => {
+    store = createTestStore();
+    tmpDir = createTmpFixture({
+      'src/store.ts': 'export interface Store { id: number; }\n',
+      'src/a.ts':
+        "import type { Store } from './store';\nexport function resolve(s: Store) { return s.id; }\n",
+      'src/b.ts': "import type { Store } from './store';\nexport function existing() {}\n",
+    });
+    insertFile(store, 'src/store.ts');
+    const fileA = insertFile(store, 'src/a.ts');
+    const fileB = insertFile(store, 'src/b.ts');
+    insertSymbol(store, fileA, 'resolve', {
+      lineStart: 2,
+      lineEnd: 2,
+      metadata: { exported: true },
+    });
+    insertSymbol(store, fileB, 'existing', {
+      lineStart: 2,
+      lineEnd: 2,
+      metadata: { exported: true },
+    });
+
+    const result = applyMove(store, tmpDir, {
+      mode: 'symbol',
+      symbol_id: 'src/a.ts::resolve#function',
+      target_file: 'src/b.ts',
+      dry_run: false,
+    });
+    expect(result.success).toBe(true);
+
+    const targetContent = readFile(tmpDir, 'src/b.ts');
+    const matches = targetContent.match(/import\s+type\s+\{\s*Store\s*\}/g) ?? [];
+    expect(matches.length).toBe(1);
+  });
+
   it('includes JSDoc/decorators when moving symbol', () => {
     store = createTestStore();
     tmpDir = createTmpFixture({

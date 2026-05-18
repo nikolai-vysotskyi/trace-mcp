@@ -19,17 +19,23 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'apply_rename',
-    'Rename a symbol across all usages (definition + all importing files). Runs collision detection first and aborts on conflicts. Returns the list of edits applied. Modifies source files. Use check_rename first to verify safety; use plan_refactoring with type="rename" to preview edits. Returns JSON: { success, edits: [{ file, old_text, new_text }], filesModified }.',
+    'Rename a symbol across all usages (definition + all importing files). Runs collision detection first and aborts on conflicts. Dry-run by default — preview the plan, then re-call with dry_run: false to apply. Returns the list of edits applied. Modifies source files when dry_run is false. Use check_rename first to verify safety; use plan_refactoring with type="rename" to preview edits. Returns JSON: { success, edits: [{ file, old_text, new_text }], filesModified }.',
     {
       symbol_id: z.string().max(512).describe('Symbol ID to rename (from search or outline)'),
       new_name: z.string().min(1).max(256).describe('New name for the symbol'),
       dry_run: z
         .boolean()
-        .default(false)
-        .describe('Preview changes without applying (default: false)'),
+        .default(true)
+        .describe('Preview changes without applying (default: true). Set to false to apply.'),
+      confirm_large: z
+        .boolean()
+        .optional()
+        .describe('Required when >20 files would be modified. Acknowledges large-scale change.'),
     },
-    async ({ symbol_id, new_name, dry_run }) => {
-      const result = applyRename(store, projectRoot, symbol_id, new_name, dry_run);
+    async ({ symbol_id, new_name, dry_run, confirm_large }) => {
+      const result = applyRename(store, projectRoot, symbol_id, new_name, dry_run, {
+        confirmLarge: confirm_large,
+      });
       if (!result.success) {
         return { content: [{ type: 'text', text: j(result) }], isError: true };
       }
@@ -39,13 +45,13 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'remove_dead_code',
-    'Safely remove a dead symbol from its file. Verifies the symbol is actually dead (multi-signal detection or zero incoming edges) before removal. Warns about orphaned imports in other files. Destructive — deletes code from source files. Use get_dead_code first to identify candidates. Returns JSON: { success, removed: { symbol_id, file }, orphanedImports }.',
+    'Safely remove a dead symbol from its file. Verifies the symbol is actually dead (multi-signal detection or zero incoming edges) before removal. Warns about orphaned imports in other files. Dry-run by default — preview the plan, then re-call with dry_run: false to apply. Destructive when applied — deletes code from source files. Use get_dead_code first to identify candidates. Returns JSON: { success, removed: { symbol_id, file }, orphanedImports }.',
     {
       symbol_id: z.string().max(512).describe('Symbol ID to remove (from get_dead_code results)'),
       dry_run: z
         .boolean()
-        .default(false)
-        .describe('Preview changes without applying (default: false)'),
+        .default(true)
+        .describe('Preview changes without applying (default: true). Set to false to apply.'),
     },
     async ({ symbol_id, dry_run }) => {
       const result = removeDeadCode(store, projectRoot, symbol_id, dry_run);
@@ -58,7 +64,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'extract_function',
-    'Extract a range of lines into a new named function. Detects parameters (variables from outer scope) and return values (variables used after the range). Supports TypeScript/JavaScript, Python, and Go. Modifies source files. Use plan_refactoring with type="extract" to preview first. Returns JSON: { success, edits: [{ file, old_text, new_text }], extractedFunction }.',
+    'DISABLED pending AST-aware rewrite — returns a structured error explaining the limitation. The previous regex-based implementation produced unparseable code on non-trivial inputs (outer-scope identifiers misclassified as parameters; enclosing function headers spliced into the new helper body). File-existence and line-range validation still run first so obviously malformed inputs keep their familiar errors. Tracking issue: extract_function-ast-rewrite.',
     {
       file_path: z.string().max(512).describe('File path (relative to project root)'),
       start_line: z.number().int().min(1).describe('First line to extract (1-indexed, inclusive)'),
@@ -66,8 +72,8 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
       function_name: z.string().min(1).max(256).describe('Name for the extracted function'),
       dry_run: z
         .boolean()
-        .default(false)
-        .describe('Preview changes without applying (default: false)'),
+        .default(true)
+        .describe('Preview changes without applying (default: true). Set to false to apply.'),
     },
     async ({ file_path, start_line, end_line, function_name, dry_run }) => {
       const blocked = guardPath(file_path);

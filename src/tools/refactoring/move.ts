@@ -9,7 +9,14 @@ import type { Store } from '../../db/store.js';
 import type { EsModuleResolver } from '../../indexer/resolvers/es-modules.js';
 import { computeRelativeSpecifier, rewriteImportForMovedTarget } from './import-rewriter.js';
 import type { FileEdit, RefactorResult } from './shared.js';
-import { getImportingFiles, readLines, toPosix, writeLines } from './shared.js';
+import {
+  detectLanguage,
+  extractIdentifiers,
+  getImportingFiles,
+  readLines,
+  toPosix,
+  writeLines,
+} from './shared.js';
 
 export interface MoveSymbolParams {
   symbol_id: string;
@@ -124,8 +131,8 @@ function moveSymbol(
   }
 
   const extractEnd = symbol.line_end; // inclusive in DB, exclusive for slice
-  const extractedLines = sourceLines.slice(extractStart, extractEnd);
-  const extractedText = extractedLines.join('\n');
+  let extractedLines = sourceLines.slice(extractStart, extractEnd);
+  let extractedText = extractedLines.join('\n');
 
   // Check if symbol is exported
   const meta = symbol.metadata
@@ -134,6 +141,41 @@ function moveSymbol(
       : symbol.metadata
     : {};
   const isExported = !!meta?.exported;
+
+  // Detect source language — TS-only enhancements gated on this
+  const sourceExt = path.extname(sourceAbsPath).toLowerCase();
+  const sourceLang = detectLanguage(sourceExt);
+  const isTypeScript = sourceLang === 'typescript';
+
+  // ── Bug 1: preserve `export` keyword on moved declaration ──────────────
+  // When the symbol was exported in the source file but the extracted text
+  // starts with a non-`export` declaration line (because the declaration
+  // was bare and a separate `export { foo }` re-exports it), inject the
+  // `export ` keyword so the moved code still publishes the symbol.
+  if (isExported && isTypeScript) {
+    const firstDeclIdx = extractedLines.findIndex((line) => {
+      const t = line.trim();
+      if (t === '' || t.startsWith('//') || t.startsWith('/*') || t.startsWith('*')) return false;
+      if (t.startsWith('@')) return false; // decorators
+      return true;
+    });
+    if (firstDeclIdx >= 0) {
+      const declLine = extractedLines[firstDeclIdx];
+      const trimmed = declLine.trim();
+      // Already exported (named or default) — leave it alone
+      const alreadyExported =
+        trimmed.startsWith('export ') ||
+        trimmed.startsWith('export\t') ||
+        trimmed.startsWith('export\n');
+      if (!alreadyExported) {
+        // Inject `export ` at the start of the declaration, preserving indent
+        const indent = declLine.match(/^(\s*)/)?.[1] ?? '';
+        const rest = declLine.slice(indent.length);
+        extractedLines[firstDeclIdx] = `${indent}export ${rest}`;
+        extractedText = extractedLines.join('\n');
+      }
+    }
+  }
 
   // 5. Prepare target file content
   let targetLines: string[];
@@ -172,8 +214,115 @@ function moveSymbol(
     siblingImport = `import { ${referencedSiblings.join(', ')} } from '${relSpec}';`;
   }
 
+  // ── Bug 3: copy referenced imports from the source file to the new file ─
+  // Parse the source file's import statements. For each identifier referenced
+  // in the extracted body that resolves to a source-file import, build a
+  // corresponding import line for the target file (adjusting relative paths).
+  const copiedImports: string[] = [];
+  if (isTypeScript) {
+    const sourceImports = parseTsImports(sourceLines);
+    const usedIdents = isTypeScript ? new Set(extractIdentifiers(extractedText).used) : new Set();
+
+    // Group required names by source specifier so we emit one import per module
+    const byKey = new Map<
+      string,
+      {
+        rebuiltSpecifier: string;
+        kind: 'named' | 'default' | 'namespace' | 'sideEffect';
+        names: Set<string>; // for named: 'orig as alias' or 'orig'
+        defaultName?: string;
+        namespaceName?: string;
+        isTypeOnly: boolean;
+      }
+    >();
+
+    for (const imp of sourceImports) {
+      // Decide the new specifier from the target file's perspective.
+      let rebuiltSpecifier = imp.specifier;
+      if (imp.specifier.startsWith('.')) {
+        const sourceDir = path.dirname(sourceAbsPath);
+        const resolved = resolveRelativeSpecifier(sourceDir, imp.specifier);
+        if (resolved) {
+          rebuiltSpecifier = computeRelativeSpecifier(targetAbsPath, resolved);
+        }
+      }
+
+      // Named imports — keep only the ones actually referenced
+      const wantedNamed = imp.named.filter((n) => usedIdents.has(n.localName));
+      const wantsDefault =
+        imp.defaultName !== undefined && usedIdents.has(imp.defaultName) ? imp.defaultName : null;
+      const wantsNamespace =
+        imp.namespaceName !== undefined && usedIdents.has(imp.namespaceName)
+          ? imp.namespaceName
+          : null;
+
+      if (wantedNamed.length === 0 && !wantsDefault && !wantsNamespace) continue;
+
+      const key = `${imp.isTypeOnly ? 'type:' : ''}${rebuiltSpecifier}`;
+      let bucket = byKey.get(key);
+      if (!bucket) {
+        bucket = {
+          rebuiltSpecifier,
+          kind: 'named',
+          names: new Set<string>(),
+          isTypeOnly: imp.isTypeOnly,
+        };
+        byKey.set(key, bucket);
+      }
+      for (const n of wantedNamed) {
+        const spec =
+          n.alias && n.alias !== n.localName ? `${n.original} as ${n.alias}` : n.original;
+        bucket.names.add(spec);
+      }
+      if (wantsDefault) bucket.defaultName = wantsDefault;
+      if (wantsNamespace) bucket.namespaceName = wantsNamespace;
+    }
+
+    // Determine which names already exist in the target file's imports
+    const existingTargetNames = new Set<string>();
+    if (targetExists) {
+      for (const imp of parseTsImports(targetLines)) {
+        for (const n of imp.named) existingTargetNames.add(n.localName);
+        if (imp.defaultName) existingTargetNames.add(imp.defaultName);
+        if (imp.namespaceName) existingTargetNames.add(imp.namespaceName);
+      }
+    }
+
+    for (const bucket of byKey.values()) {
+      const parts: string[] = [];
+      if (bucket.defaultName && !existingTargetNames.has(bucket.defaultName)) {
+        parts.push(bucket.defaultName);
+      }
+      if (bucket.namespaceName && !existingTargetNames.has(bucket.namespaceName)) {
+        parts.push(`* as ${bucket.namespaceName}`);
+      }
+      const namedFiltered = [...bucket.names].filter((n) => {
+        // local name is after "as " if present, otherwise the bare name
+        const local = n.includes(' as ') ? n.split(/\s+as\s+/)[1].trim() : n;
+        return !existingTargetNames.has(local);
+      });
+      if (namedFiltered.length > 0) {
+        parts.push(`{ ${namedFiltered.join(', ')} }`);
+      }
+      if (parts.length === 0) continue;
+
+      const typePrefix = bucket.isTypeOnly ? 'type ' : '';
+      copiedImports.push(
+        `import ${typePrefix}${parts.join(', ')} from '${bucket.rebuiltSpecifier}';`,
+      );
+    }
+  } else {
+    // Non-TypeScript languages — not implemented yet
+    result.warnings.push(
+      `Imports for the moved symbol were not auto-copied: language "${sourceLang}" is not supported by the move planner yet. Review imports in ${params.target_file} manually.`,
+    );
+  }
+
   // 6. Build the text to insert in target
   const insertLines: string[] = [];
+  for (const line of copiedImports) {
+    insertLines.push(line);
+  }
   if (siblingImport) {
     insertLines.push(siblingImport);
   }
@@ -201,6 +350,64 @@ function moveSymbol(
       .join('\n'),
     new_text: '(removed)',
   });
+
+  // ── Bug 2: add import to source file if same-file callers remain ───────
+  // After removing the symbol, scan the rest of the source file for any
+  // remaining references to the moved name. If any exist, the source file
+  // must import the moved symbol from the target file or it will have an
+  // unresolved identifier.
+  let sourceBackImport: string | null = null;
+  if (isTypeScript) {
+    // Build the "post-removal" source text (without the moved symbol)
+    const remainingSourceLines = [...sourceLines];
+    remainingSourceLines.splice(extractStart, extractEnd - extractStart);
+    const remainingSourceText = remainingSourceLines.join('\n');
+    const nameRegex = new RegExp(`\\b${escapeRegex(symbol.name)}\\b`);
+
+    // Strip existing import lines so we don't count `import {foo}` itself
+    // as a remaining reference (and also strip the own re-export of the
+    // moved symbol if any — handled by name match below).
+    const nonImportSource = remainingSourceLines
+      .filter((line) => {
+        const t = line.trim();
+        return !(t.startsWith('import ') || t.startsWith('from '));
+      })
+      .join('\n');
+
+    if (nameRegex.test(nonImportSource)) {
+      // Compute the import specifier the source file needs to use to reach
+      // the new file.
+      const importSpec = computeRelativeSpecifier(sourceAbsPath, targetAbsPath);
+      sourceBackImport = `import { ${symbol.name} } from '${importSpec}';`;
+
+      // Find a good place to insert: after the last existing import line in
+      // the source file (post-removal), or at line 1 if there are none.
+      let backImportInsertLine = 1;
+      for (let i = remainingSourceLines.length - 1; i >= 0; i--) {
+        const t = remainingSourceLines[i].trim();
+        if (t.startsWith('import ') || t.startsWith('from ')) {
+          backImportInsertLine = i + 2; // 1-indexed, after this line
+          break;
+        }
+      }
+
+      // Avoid duplicating the import if it already exists verbatim
+      const alreadyHasImport = remainingSourceText
+        .split('\n')
+        .some((line) => line.includes(sourceBackImport!));
+
+      if (!alreadyHasImport) {
+        result.edits.push({
+          file: sourceFile.path,
+          original_line: backImportInsertLine,
+          original_text: '(insertion point)',
+          new_text: sourceBackImport,
+        });
+      } else {
+        sourceBackImport = null;
+      }
+    }
+  }
 
   // 8. Update all importing files
   if (isExported) {
@@ -253,6 +460,18 @@ function moveSymbol(
   if (!dryRun) {
     // Remove from source
     sourceLines.splice(extractStart, extractEnd - extractStart);
+    // Insert the back-import (Bug 2) if needed
+    if (sourceBackImport) {
+      let backInsertIdx = 0;
+      for (let i = sourceLines.length - 1; i >= 0; i--) {
+        const t = sourceLines[i].trim();
+        if (t.startsWith('import ') || t.startsWith('from ')) {
+          backInsertIdx = i + 1;
+          break;
+        }
+      }
+      sourceLines.splice(backInsertIdx, 0, sourceBackImport);
+    }
     // Clean up consecutive blank lines
     for (let i = sourceLines.length - 1; i > 0; i--) {
       if (sourceLines[i].trim() === '' && sourceLines[i - 1].trim() === '') {
@@ -603,4 +822,121 @@ function findReferencedNames(text: string, names: Set<string>): string[] {
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// TypeScript import parsing (lightweight, used by move planner)
+// ════════════════════════════════════════════════════════════════════════
+
+interface ParsedTsImport {
+  /** Module specifier (e.g. './foo', '@scope/pkg') */
+  specifier: string;
+  /** Named bindings, with optional rename: `import { a as b } from 'x'` */
+  named: { original: string; alias?: string; localName: string }[];
+  /** Default binding name (`import foo from 'x'`) */
+  defaultName?: string;
+  /** Namespace binding name (`import * as ns from 'x'`) */
+  namespaceName?: string;
+  /** `import type { ... } from 'x'` */
+  isTypeOnly: boolean;
+  /** Original source line (1-indexed) where this import starts */
+  line: number;
+  /** Number of source lines this import spans (multi-line imports are common) */
+  span: number;
+}
+
+/**
+ * Parse the top of a TypeScript/JavaScript file's import statements.
+ * Handles named, default, namespace, type-only, and multi-line imports.
+ * Does NOT handle CJS `require()` — those are not in scope for the move
+ * planner's "copy referenced imports" step.
+ */
+function parseTsImports(lines: string[]): ParsedTsImport[] {
+  const out: ParsedTsImport[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const startLine = lines[i];
+    const trimmed = startLine.trim();
+    if (!trimmed.startsWith('import ') && trimmed !== 'import') continue;
+
+    // Accumulate lines until we see the trailing specifier `from '...'` or `'...';`
+    let blob = startLine;
+    let span = 1;
+    while (
+      !/from\s+['"][^'"]+['"]\s*;?\s*$/.test(blob) &&
+      !/^\s*import\s+['"][^'"]+['"]\s*;?\s*$/.test(blob) &&
+      i + span < lines.length &&
+      span < 30
+    ) {
+      blob += `\n${lines[i + span]}`;
+      span++;
+    }
+
+    const specMatch =
+      blob.match(/from\s+['"]([^'"]+)['"]/) ?? blob.match(/import\s+['"]([^'"]+)['"]/);
+    if (!specMatch) continue;
+    const specifier = specMatch[1];
+
+    const isTypeOnly = /^\s*import\s+type\s+/.test(blob);
+
+    const parsed: ParsedTsImport = {
+      specifier,
+      named: [],
+      isTypeOnly,
+      line: i + 1,
+      span,
+    };
+
+    // Side-effect import: `import 'foo';`
+    if (/^\s*import\s+['"][^'"]+['"]/.test(blob)) {
+      out.push(parsed);
+      i += span - 1;
+      continue;
+    }
+
+    // Strip the leading `import` and trailing `from 'spec'`
+    const body = blob
+      .replace(/^\s*import\s+(type\s+)?/, '')
+      .replace(/\s*from\s+['"][^'"]+['"]\s*;?\s*$/, '')
+      .trim();
+
+    // Body may be a combination of: default, namespace, named braces
+    // Examples: `Foo`, `Foo, { a, b }`, `* as ns`, `{ a, b as c }`
+    const namedMatch = body.match(/\{([\s\S]*)\}/);
+    let bodyWithoutBraces = body;
+    if (namedMatch) {
+      bodyWithoutBraces = body.replace(namedMatch[0], '').trim().replace(/,\s*$/, '');
+      const inner = namedMatch[1];
+      for (const raw of inner.split(',')) {
+        const part = raw.trim();
+        if (!part) continue;
+        // Strip per-name `type` modifier: `{ type Foo }`
+        const cleaned = part.replace(/^type\s+/, '');
+        const asMatch = cleaned.match(/^([A-Za-z_$][\w$]*)\s+as\s+([A-Za-z_$][\w$]*)$/);
+        if (asMatch) {
+          parsed.named.push({ original: asMatch[1], alias: asMatch[2], localName: asMatch[2] });
+        } else if (/^[A-Za-z_$][\w$]*$/.test(cleaned)) {
+          parsed.named.push({ original: cleaned, localName: cleaned });
+        }
+      }
+    }
+
+    // Namespace: `* as ns`
+    const nsMatch = bodyWithoutBraces.match(/\*\s+as\s+([A-Za-z_$][\w$]*)/);
+    if (nsMatch) {
+      parsed.namespaceName = nsMatch[1];
+      bodyWithoutBraces = bodyWithoutBraces.replace(nsMatch[0], '').trim().replace(/,\s*$/, '');
+    }
+
+    // Default: the remaining bare identifier
+    const defaultMatch = bodyWithoutBraces.match(/^([A-Za-z_$][\w$]*)\s*,?\s*$/);
+    if (defaultMatch) {
+      parsed.defaultName = defaultMatch[1];
+    }
+
+    out.push(parsed);
+    i += span - 1;
+  }
+
+  return out;
 }

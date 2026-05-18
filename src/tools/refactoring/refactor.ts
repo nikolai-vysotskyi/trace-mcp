@@ -16,10 +16,7 @@ import { checkRenameSafe } from './rename-check.js';
 import {
   BINARY_EXTENSIONS,
   buildRenameRegex,
-  detectLanguage,
-  extractIdentifiers,
   getImportingFiles,
-  getIndent,
   type RefactorResult,
   readLines,
   SKIP_DIRS,
@@ -34,9 +31,16 @@ export type { FileEdit, RefactorResult } from './shared.js';
 // TOOL 1: APPLY RENAME
 // ════════════════════════════════════════════════════════════════════════
 
+const RENAME_LARGE_THRESHOLD = 20;
+
 /**
  * Rename a symbol across all usages — the symbol's definition file and all
  * importing files. Runs check_rename first and aborts on conflicts.
+ *
+ * Dry-run safeguard: when `dryRun=false` and the rename would touch more than
+ * 20 files, callers must pass `options.confirmLarge=true` to proceed. Without
+ * confirmation the call returns a preview (no files written) so the agent has
+ * to acknowledge the blast radius before the destructive apply.
  */
 export function applyRename(
   store: Store,
@@ -44,6 +48,7 @@ export function applyRename(
   symbolId: string,
   newName: string,
   dryRun = false,
+  options: { confirmLarge?: boolean } = {},
 ): RefactorResult {
   const result: RefactorResult = {
     success: false,
@@ -89,8 +94,11 @@ export function applyRename(
 
   const regex = buildRenameRegex(oldName);
   const modifiedFiles = new Set<string>();
+  // Buffer pending writes so the >20-file safeguard can abort BEFORE any
+  // file is mutated on disk.
+  const pendingWrites: Array<{ filePath: string; lines: string[] }> = [];
 
-  // 4. Apply edits file by file
+  // 4. Compute edits file by file
   for (const { filePath } of allFiles) {
     if (!fs.existsSync(filePath)) {
       result.warnings.push(`File not found on disk: ${filePath}`);
@@ -121,10 +129,32 @@ export function applyRename(
     }
 
     if (fileModified) {
-      if (!dryRun) {
-        writeLines(filePath, lines);
-      }
       modifiedFiles.add(toPosix(path.relative(projectRoot, filePath)));
+      pendingWrites.push({ filePath, lines });
+    }
+  }
+
+  // 4a. Large-change safeguard — refuse to mutate >20 files without an
+  // explicit acknowledgement from the caller. The preview (edits +
+  // files_modified) is still returned so the caller can re-issue the call
+  // with confirm_large: true.
+  if (!dryRun && modifiedFiles.size > RENAME_LARGE_THRESHOLD && !options.confirmLarge) {
+    result.success = false;
+    result.error =
+      `Rename affects ${modifiedFiles.size} files (>${RENAME_LARGE_THRESHOLD}). ` +
+      `Pass confirm_large: true to proceed.`;
+    result.files_modified = [...modifiedFiles];
+    result.warnings.push(
+      `Large rename blocked: ${modifiedFiles.size} files would be modified. ` +
+        `Re-run with confirm_large: true to apply, or narrow the rename scope.`,
+    );
+    return result;
+  }
+
+  // 4b. Flush writes (skipped on dry_run)
+  if (!dryRun) {
+    for (const { filePath, lines } of pendingWrites) {
+      writeLines(filePath, lines);
     }
   }
 
@@ -303,11 +333,30 @@ export function removeDeadCode(
 // ════════════════════════════════════════════════════════════════════════
 
 /**
+ * Stable sentinel returned by both `extractFunction()` and
+ * `planRefactoring({ type: "extract" })` while the AST-aware rewrite is
+ * pending. Exported so tests and downstream tooling can assert on an
+ * identifier instead of free-form prose.
+ */
+export const EXTRACT_FUNCTION_DISABLED_ERROR =
+  'extract_function is currently unsupported — the legacy regex-based implementation is known to produce unparseable output on non-trivial cases (outer-scope identifiers misclassified as parameters, enclosing function headers spliced into the new helper body). Use plan_refactoring(type="extract") to see the structured error, then perform the extraction manually. Tracking issue: extract_function-ast-rewrite.';
+
+/**
  * Extract a range of lines from a file into a new named function.
- * Analyzes the extracted code for:
- * - Variables read but not defined in the range → become parameters
- * - Variables defined in the range and used after → become return values
- * - Imports needed by the extracted code
+ *
+ * DISABLED pending an AST-aware rewrite. The previous implementation used
+ * regex-based line-range slicing with no scope awareness and produced
+ * unparseable output on any non-trivial case (most visibly: enclosing
+ * function parameters bled into the extracted helper's parameter list, and
+ * extracting across a function header silently spliced the header into the
+ * body). Rather than ship a half-working extractor we short-circuit with a
+ * structured error and point at the tracking issue
+ * `extract_function-ast-rewrite`. File-existence and line-range validation
+ * still run first so obviously malformed inputs keep their familiar errors.
+ *
+ * The unused `store`, `functionName` and `dryRun` parameters are kept on the
+ * public signature so callers don't need to change when the AST rewrite
+ * lands.
  */
 export function extractFunction(
   store: Store,
@@ -318,6 +367,12 @@ export function extractFunction(
   functionName: string,
   dryRun = false,
 ): RefactorResult {
+  // Reference unused params to satisfy noUnusedParameters without shifting the
+  // signature — the AST rewrite will use them.
+  void store;
+  void functionName;
+  void dryRun;
+
   const result: RefactorResult = {
     success: false,
     tool: 'extract_function',
@@ -338,131 +393,7 @@ export function extractFunction(
     return result;
   }
 
-  // Detect language from file extension
-  const ext = path.extname(filePath).toLowerCase();
-  const lang = detectLanguage(ext);
-
-  // Extract the target lines (0-indexed)
-  const extractedLines = lines.slice(startLine - 1, endLine);
-  const extractedText = extractedLines.join('\n');
-
-  // Determine indentation of the extraction site
-  const siteIndent = getIndent(lines[startLine - 1]);
-  const baseIndent = siteIndent;
-
-  // Analyze variables: identify free variables (params) and defined-then-used-later (returns)
-  const identifiers = extractIdentifiers(extractedText);
-  const beforeText = lines.slice(0, startLine - 1).join('\n');
-  const afterText = lines.slice(endLine).join('\n');
-
-  // Free variables: referenced in extracted code but defined before it
-  const definedBefore = extractIdentifiers(beforeText);
-  const usedAfter = extractIdentifiers(afterText);
-
-  // Variables that the extracted code reads from the surrounding scope
-  const params = identifiers.used.filter(
-    (v) => definedBefore.defined.has(v) && !identifiers.defined.has(v),
-  );
-
-  // Variables that the extracted code defines and the remaining code uses
-  const usedAfterSet = new Set(usedAfter.used);
-  const returns = [...identifiers.defined].filter((v) => usedAfterSet.has(v));
-
-  // Build the extracted function
-  const bodyLines = extractedLines.map((l) => {
-    // Re-indent: remove site indent, add one level
-    const stripped = l.startsWith(siteIndent) ? l.slice(siteIndent.length) : l.trimStart();
-    return `  ${stripped}`;
-  });
-
-  let functionDef: string;
-  let callSite: string;
-
-  if (lang === 'python') {
-    // Python: def name(params): ... return
-    const paramStr = params.join(', ');
-    functionDef = `def ${functionName}(${paramStr}):\n${bodyLines.join('\n')}`;
-    if (returns.length > 0) {
-      const returnStr = returns.length === 1 ? returns[0] : `${returns.join(', ')}`;
-      functionDef += `\n  return ${returnStr}`;
-      const destructure = returns.length === 1 ? returns[0] : returns.join(', ');
-      callSite = `${baseIndent}${destructure} = ${functionName}(${paramStr})`;
-    } else {
-      callSite = `${baseIndent}${functionName}(${paramStr})`;
-    }
-  } else if (lang === 'go') {
-    // Go: func name(params) (returns) { ... }
-    const paramStr = params.map((p) => `${p} interface{}`).join(', ');
-    const returnTypes =
-      returns.length > 0 ? ` (${returns.map(() => 'interface{}').join(', ')})` : '';
-    functionDef = `func ${functionName}(${paramStr})${returnTypes} {\n${bodyLines.join('\n')}`;
-    if (returns.length > 0) {
-      functionDef += `\n  return ${returns.join(', ')}`;
-    }
-    functionDef += '\n}';
-    if (returns.length > 0) {
-      callSite = `${baseIndent}${returns.join(', ')} := ${functionName}(${params.join(', ')})`;
-    } else {
-      callSite = `${baseIndent}${functionName}(${params.join(', ')})`;
-    }
-  } else {
-    // TypeScript / JavaScript default
-    const paramStr = params.join(', ');
-    functionDef = `function ${functionName}(${paramStr}) {\n${bodyLines.join('\n')}`;
-    if (returns.length > 0) {
-      if (returns.length === 1) {
-        functionDef += `\n  return ${returns[0]};`;
-      } else {
-        functionDef += `\n  return { ${returns.join(', ')} };`;
-      }
-    }
-    functionDef += '\n}';
-
-    if (returns.length === 0) {
-      callSite = `${baseIndent}${functionName}(${paramStr});`;
-    } else if (returns.length === 1) {
-      callSite = `${baseIndent}const ${returns[0]} = ${functionName}(${paramStr});`;
-    } else {
-      callSite = `${baseIndent}const { ${returns.join(', ')} } = ${functionName}(${paramStr});`;
-    }
-  }
-
-  // Record edits
-  result.edits.push({
-    file: filePath,
-    original_line: startLine,
-    original_text: extractedLines.map((l) => l.trimStart()).join('\n'),
-    new_text: `${callSite.trimStart()}\n\n// Extracted function:\n${functionDef}`,
-  });
-
-  if (!dryRun) {
-    // Apply: replace extracted lines with call site, append function at end of file
-    const newLines = [
-      ...lines.slice(0, startLine - 1),
-      callSite,
-      ...lines.slice(endLine),
-      '',
-      functionDef,
-      '',
-    ];
-
-    writeLines(absPath, newLines);
-  }
-
-  result.success = true;
-  result.files_modified = [filePath];
-
-  if (params.length > 0) {
-    result.warnings.push(
-      `Detected ${params.length} parameter(s): ${params.join(', ')} — verify types`,
-    );
-  }
-  if (returns.length > 0) {
-    result.warnings.push(
-      `Detected ${returns.length} return value(s): ${returns.join(', ')} — verify correctness`,
-    );
-  }
-
+  result.error = EXTRACT_FUNCTION_DISABLED_ERROR;
   return result;
 }
 
