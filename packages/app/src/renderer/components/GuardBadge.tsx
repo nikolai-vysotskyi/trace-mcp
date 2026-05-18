@@ -103,7 +103,11 @@ export function GuardBadge({ root, onModeChange }: GuardBadgeProps) {
   const label = modeLabel(snapshot.mode);
 
   return (
-    <div className="relative inline-flex items-center" ref={popoverRef}>
+    <div
+      className="relative inline-flex items-center"
+      ref={popoverRef}
+      style={{ zIndex: open ? 50 : undefined }}
+    >
       <button
         type="button"
         onClick={(e) => {
@@ -136,7 +140,7 @@ export function GuardBadge({ root, onModeChange }: GuardBadgeProps) {
 
       {open && (
         <div
-          className="absolute z-10 right-0 top-full mt-1 p-1.5 rounded-md shadow-lg"
+          className="absolute z-50 right-0 top-full mt-1 p-1.5 rounded-md shadow-lg"
           style={{
             background: 'var(--bg-secondary)',
             border: '1px solid var(--border)',
