@@ -22,6 +22,7 @@ import { getScreenContext } from '../framework/screen-context.js';
 import { getTestsFor } from '../framework/tests.js';
 import { CALL_GRAPH_METHODOLOGY } from '../shared/confidence.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
+import { probeSymbolName } from '../shared/evidence-text-probe.js';
 import {
   compactUsageRefs,
   DetailLevelSchema,
@@ -295,14 +296,23 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       }
       if (result.value.total === 0) {
         const stats = store.getStats();
+        // findReferences returns NOT_FOUND for missing symbols/files — reaching
+        // this branch means the symbol IS indexed with 0 incoming edges. Probe
+        // text occurrences to distinguish indexed_no_edges from
+        // resolver_gap_suspected (parametric / dynamic call sites).
+        const anchor = symbol_id ?? fqn ?? file_path;
+        const sym = symbol_id ? store.getSymbolBySymbolId(symbol_id) : undefined;
+        const probe = probeSymbolName(store, projectRoot, anchor);
         const enriched = {
           ...result.value,
           evidence: buildNegativeEvidence({
             indexedFiles: stats.totalFiles,
             indexedSymbols: stats.totalSymbols,
             toolName: 'find_usages',
-            verdict: 'symbol_indexed_but_isolated',
-            symbol: symbol_id ?? fqn ?? file_path,
+            verdict: 'indexed_no_edges',
+            symbol: anchor,
+            symbolKind: sym?.kind,
+            textOccurrences: probe.occurrences,
           }),
         };
         return { content: [{ type: 'text', text: jh('find_usages', enriched) }] };
@@ -361,6 +371,8 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       const isolated = (root.calls?.length ?? 0) === 0 && (root.called_by?.length ?? 0) === 0;
       if (isolated) {
         const stats = store.getStats();
+        const sym = store.getSymbolBySymbolId(root.symbol_id);
+        const probe = probeSymbolName(store, projectRoot, root.symbol_id);
         const enriched = {
           ...result.value,
           _methodology: CALL_GRAPH_METHODOLOGY,
@@ -368,8 +380,10 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
             indexedFiles: stats.totalFiles,
             indexedSymbols: stats.totalSymbols,
             toolName: 'get_call_graph',
-            verdict: 'symbol_indexed_but_isolated',
+            verdict: 'indexed_no_edges',
             symbol: root.symbol_id,
+            symbolKind: sym?.kind,
+            textOccurrences: probe.occurrences,
           }),
         };
         return { content: [{ type: 'text', text: jh('get_call_graph', enriched) }] };
@@ -412,14 +426,19 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
       }
       if (result.value.total === 0) {
         const stats = store.getStats();
+        const anchor = symbol_id ?? fqn ?? file_path;
+        const sym = symbol_id ? store.getSymbolBySymbolId(symbol_id) : undefined;
+        const probe = probeSymbolName(store, projectRoot, anchor);
         const enriched = {
           ...result.value,
           evidence: buildNegativeEvidence({
             indexedFiles: stats.totalFiles,
             indexedSymbols: stats.totalSymbols,
             toolName: 'get_tests_for',
-            verdict: 'symbol_indexed_but_isolated',
-            symbol: symbol_id ?? fqn ?? file_path,
+            verdict: 'indexed_no_edges',
+            symbol: anchor,
+            symbolKind: sym?.kind,
+            textOccurrences: probe.occurrences,
           }),
         };
         return { content: [{ type: 'text', text: jh('get_tests_for', enriched) }] };

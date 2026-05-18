@@ -9,7 +9,7 @@ import type { SessionTracker } from '../session/tracker.js';
 import type { JournalEntryCallbackData } from './journal-broadcast.js';
 import { getGlobalTelemetrySink } from '../telemetry/index.js';
 import { ALWAYS_LOAD_TOOLS } from '../tools/project/presets.js';
-import { applyBudgetDefaults, computeBudgetLevel } from './budget-defaults.js';
+import { applyBudgetDefaults, buildClampWarnings, computeBudgetLevel } from './budget-defaults.js';
 import { COMPACT_CORE_PARAMS } from './compact-params.js';
 import { markToolConsultation } from './consultation-markers.js';
 import { getToolAnnotations } from './tool-annotations.js';
@@ -200,6 +200,12 @@ export function installToolGate(
         // tool runs. The applied list is attached to the response below.
         const stats = savings.getSessionStats();
         const budgetLevel = computeBudgetLevel(stats.total_calls, stats.total_raw_tokens);
+        // Capture the *original* user-requested values for params that might be
+        // clamped, so we can emit a visible `_warnings` string showing the
+        // before/after values. `applyBudgetDefaults` mutates `params` in place,
+        // so we have to snapshot first.
+        const originalParamSnapshot: Record<string, unknown> = {};
+        for (const key of Object.keys(params)) originalParamSnapshot[key] = params[key];
         const appliedDefaults = applyBudgetDefaults(name, params, budgetLevel);
 
         // Mark files as consulted via trace-mcp (read by guard hook)
@@ -313,17 +319,23 @@ export function installToolGate(
 
         // Optimization hint + budget auto-defaults metadata
         const optHint = journal.getOptimizationHint(name, params);
-        if (
-          (optHint || appliedDefaults.length > 0) &&
-          resultObj?.content?.[0]?.text &&
-          !resultObj.isError
-        ) {
+        // We also synthesize a top-level `_warnings` array whenever:
+        //   (a) budget defaults clamped a requested depth/breadth parameter, or
+        //   (b) the tool itself flagged truncation in its response shape
+        //       (currently `traverse_graph`'s truncated_by_* booleans).
+        // The point: `_meta.budget_defaults` was easy to miss. `_warnings` is a
+        // first-class, top-level field that callers can't overlook.
+        const needsResponseRewrite =
+          optHint || appliedDefaults.length > 0 || resultObj?.content?.[0]?.text;
+        if (needsResponseRewrite && resultObj?.content?.[0]?.text && !resultObj.isError) {
           try {
             const parsed = JSON.parse(resultObj.content[0].text);
             const obj =
               parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
                 ? parsed
                 : { data: parsed };
+
+            // Existing optimization-hint + _meta budget_defaults plumbing.
             if (optHint) obj._optimization_hint = optHint;
             if (appliedDefaults.length > 0) {
               obj._meta = {
@@ -333,6 +345,21 @@ export function installToolGate(
                 budget_defaults: appliedDefaults,
               };
             }
+
+            // Build top-level `_warnings` by combining any pre-existing array
+            // on the response with synthesized clamp + truncation warnings.
+            const existing: string[] = Array.isArray(obj._warnings)
+              ? obj._warnings.filter((w: unknown): w is string => typeof w === 'string')
+              : [];
+            const synthesized = buildClampWarnings(
+              name,
+              originalParamSnapshot,
+              appliedDefaults,
+              obj,
+            );
+            const warnings = [...existing, ...synthesized];
+            if (warnings.length > 0) obj._warnings = warnings;
+
             stripMetaFields(obj);
             resultObj.content[0].text = JSON.stringify(obj);
           } catch {

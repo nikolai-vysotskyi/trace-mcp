@@ -473,6 +473,10 @@ export function createServer(
     '_meta',
     '_duplication_warnings',
     '_methodology',
+    // `_warnings` surfaces clamped depths, node-cap truncation, and
+    // traverse_graph's truncated_by_* flags as a top-level array. Listed here
+    // so users who explicitly opt out of meta fields can still strip it.
+    '_warnings',
   ] as const;
 
   function stripMetaFields(obj: Record<string, unknown>): void {

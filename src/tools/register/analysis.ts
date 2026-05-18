@@ -45,6 +45,7 @@ import {
 import { getHotspots } from '../git/git-analysis.js';
 import { getFileOwnership, getSymbolOwnership } from '../git/git-ownership.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
+import { probeSymbolName } from '../shared/evidence-text-probe.js';
 
 export function registerAnalysisTools(server: McpServer, ctx: ServerContext): void {
   const { store, registry, projectRoot, guardPath, j, jh } = ctx;
@@ -70,14 +71,23 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         // Determine verdict: does the named class/interface exist at all?
         const target =
           store.getSymbolByName(name, 'class') ?? store.getSymbolByName(name, 'interface');
+        // Only probe text occurrences for classes — interfaces/types
+        // legitimately have no runtime edges and classifyResolverGap refuses
+        // to upgrade them anyway, so skip the search call.
+        const probe =
+          target && target.kind === 'class'
+            ? probeSymbolName(store, projectRoot, name)
+            : { occurrences: 0 };
         const enriched = {
           ...result,
           evidence: buildNegativeEvidence({
             indexedFiles: stats.totalFiles,
             indexedSymbols: stats.totalSymbols,
             toolName: 'get_implementations',
-            verdict: target ? 'symbol_indexed_but_isolated' : 'not_found_in_project',
+            verdict: target ? 'indexed_no_edges' : 'not_found',
             symbol: name,
+            symbolKind: target?.kind,
+            textOccurrences: probe.occurrences,
           }),
         };
         return { content: [{ type: 'text', text: j(enriched) }] };
@@ -134,14 +144,22 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         const stats = store.getStats();
         const target =
           store.getSymbolByName(name, 'class') ?? store.getSymbolByName(name, 'interface');
+        // For type-hierarchy: probe text occurrences only for classes —
+        // classifyResolverGap excludes interfaces/types from upgrade.
+        const probe =
+          target && target.kind === 'class'
+            ? probeSymbolName(store, projectRoot, name)
+            : { occurrences: 0 };
         const enriched = {
           ...result,
           evidence: buildNegativeEvidence({
             indexedFiles: stats.totalFiles,
             indexedSymbols: stats.totalSymbols,
             toolName: 'get_type_hierarchy',
-            verdict: target ? 'symbol_indexed_but_isolated' : 'not_found_in_project',
+            verdict: target ? 'indexed_no_edges' : 'not_found',
             symbol: name,
+            symbolKind: target?.kind,
+            textOccurrences: probe.occurrences,
           }),
         };
         return { content: [{ type: 'text', text: j(enriched) }] };
