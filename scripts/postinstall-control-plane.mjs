@@ -25,7 +25,7 @@
  * chain defined in package.json. Always exits 0.
  */
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -33,7 +33,10 @@ import { fileURLToPath } from 'node:url';
 
 // MUST match src/daemon/lifecycle.ts::PLIST_VERSION — keep in sync.
 // Bump there → also bump here. Tested by tests/scripts/postinstall-plist-version.test.ts.
-const PLIST_VERSION = 2;
+// v3: forces regeneration of v2 plists that embedded a concrete cli.js path
+// (drift between src/daemon/lifecycle.ts and this script). v3 uses the launcher
+// shim everywhere so node-version swaps don't pin the daemon to a stale binary.
+const PLIST_VERSION = 3;
 const PLIST_LABEL = 'com.trace-mcp.server';
 const PLIST_MARKER = `trace-mcp plist v${PLIST_VERSION}`;
 const DEFAULT_DAEMON_PORT = 3741;
@@ -296,6 +299,32 @@ function kickstartPlist(domain) {
   return runQuiet('/bin/launchctl', ['kickstart', '-k', `${domain}/${PLIST_LABEL}`]);
 }
 
+/**
+ * `launchctl kickstart` returns ok the moment launchd accepts the request — it
+ * doesn't wait for the daemon to actually start serving. A daemon that crashes
+ * on every boot (stale cli.js path, missing native binding) will still report
+ * `kickstart: ok` here even as launchd burns through KeepAlive respawns. Poll
+ * /health for a few seconds; if it never answers, log a clear warning so the
+ * user has a breadcrumb instead of a silently-broken install.
+ */
+function healthCheckAfterKickstart(port) {
+  const url = `http://127.0.0.1:${port}/health`;
+  const deadline = Date.now() + 6000;
+  while (Date.now() < deadline) {
+    const result = spawnSync(
+      '/usr/bin/curl',
+      ['-s', '-o', '/dev/null', '-w', '%{http_code}', '--max-time', '2', url],
+      { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf-8', timeout: 3000 },
+    );
+    if (result.status === 0 && result.stdout && result.stdout.trim() === '200') {
+      return { ok: true };
+    }
+    // Brief pause between probes — small loop, blocking is fine.
+    spawnSync('/bin/sleep', ['0.5'], { stdio: 'ignore' });
+  }
+  return { ok: false };
+}
+
 function refreshLaunchAgent(launcherShimPath) {
   if (!IS_MAC) return;
   if (process.env.TRACE_MCP_MANAGED_BY === 'launchd') {
@@ -321,6 +350,15 @@ function refreshLaunchAgent(launcherShimPath) {
     // Even if current, kickstart so the freshly-installed binary swaps in.
     const kick = kickstartPlist(domain);
     log('launchd', `kickstart: ${kick.ok ? 'ok' : `failed (${kick.stderr.trim()})`}`);
+    if (kick.ok) {
+      const health = healthCheckAfterKickstart(DEFAULT_DAEMON_PORT);
+      log(
+        'launchd',
+        health.ok
+          ? '/health: responding'
+          : `/health: unreachable after 6s — daemon may be crash-looping (check ${path.join(TRACE_MCP_HOME, 'daemon.log')})`,
+      );
+    }
     return;
   }
 
@@ -351,6 +389,19 @@ function refreshLaunchAgent(launcherShimPath) {
   if (boot.ok && wasLoaded) {
     const kick = kickstartPlist(domain);
     log('launchd', `kickstart: ${kick.ok ? 'ok' : `failed (${kick.stderr.trim()})`}`);
+  }
+  // Verify daemon actually came up (either via bootstrap's RunAtLoad or via
+  // kickstart). `bootstrap ok` / `kickstart ok` only mean launchd accepted
+  // the command; the daemon itself may crash-loop. /health probe surfaces
+  // that to the install log.
+  if (boot.ok) {
+    const health = healthCheckAfterKickstart(DEFAULT_DAEMON_PORT);
+    log(
+      'launchd',
+      health.ok
+        ? '/health: responding'
+        : `/health: unreachable after 6s — daemon may be crash-looping (check ${path.join(TRACE_MCP_HOME, 'daemon.log')})`,
+    );
   }
 }
 
