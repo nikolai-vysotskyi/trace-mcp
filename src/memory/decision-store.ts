@@ -355,9 +355,16 @@ END;
 
 -- Mined sessions tracking (prevent re-mining)
 CREATE TABLE IF NOT EXISTS mined_sessions (
-    session_path    TEXT PRIMARY KEY,
-    mined_at        TEXT NOT NULL,
-    decisions_found INTEGER NOT NULL DEFAULT 0
+    session_path     TEXT PRIMARY KEY,
+    mined_at         TEXT NOT NULL,
+    decisions_found  INTEGER NOT NULL DEFAULT 0,
+    -- Incremental cursor (P2.3): re-mining a previously-mined file resumes
+    -- from cursor_offset instead of re-parsing the whole file. last_size +
+    -- last_modified_ms detect rotation/truncation and let unchanged files
+    -- skip parsing entirely. preMigrate ALTERs upgrade legacy DBs.
+    cursor_offset    INTEGER NOT NULL DEFAULT 0,
+    last_size        INTEGER NOT NULL DEFAULT 0,
+    last_modified_ms INTEGER NOT NULL DEFAULT 0
 );
 
 -- ════════════════════════════════════════════════════════════════
@@ -604,6 +611,37 @@ export class DecisionStore {
       if (!cols.includes('last_hit_at')) {
         this.db.exec('ALTER TABLE decisions ADD COLUMN last_hit_at TEXT');
         logger.info('Pre-migration: added last_hit_at column to decisions table');
+      }
+    }
+
+    // Incremental session-mining cursor (P2.3): augment the binary
+    // mined/unmined `mined_sessions` row with a byte-offset cursor so a
+    // long-running session file (Claude Code appends continuously) can be
+    // re-mined for only the appended portion. Mirrors the existing
+    // PRAGMA-table_info probe pattern: ALTER TABLE only runs when the
+    // column is missing — SQLite has no native ADD COLUMN IF NOT EXISTS.
+    const hasMinedSessions = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='mined_sessions'")
+      .get();
+    if (hasMinedSessions) {
+      const minedCols = (
+        this.db.pragma('table_info(mined_sessions)') as Array<{ name: string }>
+      ).map((c) => c.name);
+      if (!minedCols.includes('cursor_offset')) {
+        this.db.exec(
+          'ALTER TABLE mined_sessions ADD COLUMN cursor_offset INTEGER NOT NULL DEFAULT 0',
+        );
+        logger.info('Pre-migration: added cursor_offset column to mined_sessions table');
+      }
+      if (!minedCols.includes('last_size')) {
+        this.db.exec('ALTER TABLE mined_sessions ADD COLUMN last_size INTEGER NOT NULL DEFAULT 0');
+        logger.info('Pre-migration: added last_size column to mined_sessions table');
+      }
+      if (!minedCols.includes('last_modified_ms')) {
+        this.db.exec(
+          'ALTER TABLE mined_sessions ADD COLUMN last_modified_ms INTEGER NOT NULL DEFAULT 0',
+        );
+        logger.info('Pre-migration: added last_modified_ms column to mined_sessions table');
       }
     }
   }
@@ -1099,16 +1137,110 @@ export class DecisionStore {
     return !!row;
   }
 
+  /**
+   * @deprecated Use {@link updateSessionCursor} for incremental cursor-aware
+   * mining. Retained for back-compat with callers that haven't migrated.
+   * Internally writes cursor_offset=0, last_size=0, last_modified_ms=now —
+   * which means the next {@link getSessionCursor} call will treat the file
+   * as "grown" and re-read it in full. That's intentional fallback behaviour.
+   */
   markSessionMined(sessionPath: string, decisionsFound: number): void {
+    const now = new Date().toISOString();
     this.db
       .prepare(
-        'INSERT OR REPLACE INTO mined_sessions (session_path, mined_at, decisions_found) VALUES (?, ?, ?)',
+        `INSERT INTO mined_sessions (
+           session_path, mined_at, decisions_found,
+           cursor_offset, last_size, last_modified_ms
+         ) VALUES (?, ?, ?, 0, 0, ?)
+         ON CONFLICT(session_path) DO UPDATE SET
+           mined_at = excluded.mined_at,
+           decisions_found = mined_sessions.decisions_found + excluded.decisions_found`,
       )
-      .run(sessionPath, new Date().toISOString(), decisionsFound);
+      .run(sessionPath, now, decisionsFound, Date.now());
   }
 
   getMinedSessionCount(): number {
     return (this.db.prepare('SELECT COUNT(*) as c FROM mined_sessions').get() as { c: number }).c;
+  }
+
+  /**
+   * Get the next-read cursor for a previously-mined session.
+   *
+   * Semantics:
+   *  - Row missing → `{ cursor: 0, reason: 'unmined' }`
+   *  - File shrank (current size < recorded last_size) → `{ cursor: 0, reason: 'restart_shrunk' }`
+   *    Indicates rotation/truncation; caller should restart from offset 0.
+   *  - File unchanged (same size + same mtime) → `null` (caller should skip)
+   *  - File grew → `{ cursor: cursor_offset, reason: 'incremental' }`
+   *
+   * `currentModifiedMs` is optional. When supplied, an unchanged-size +
+   * unchanged-mtime pair returns `null`; when omitted, the unchanged-size
+   * branch still skips. Pass it whenever you have it (you already `statSync`).
+   */
+  getSessionCursor(
+    sessionPath: string,
+    currentSize: number,
+    currentModifiedMs?: number,
+  ): { cursor: number; reason: 'unmined' | 'restart_shrunk' | 'incremental' } | null {
+    const row = this.db
+      .prepare(
+        'SELECT cursor_offset, last_size, last_modified_ms FROM mined_sessions WHERE session_path = ?',
+      )
+      .get(sessionPath) as
+      | { cursor_offset: number; last_size: number; last_modified_ms: number }
+      | undefined;
+
+    if (!row) return { cursor: 0, reason: 'unmined' };
+
+    // File shrank → almost certainly rotated or truncated. Start over.
+    if (currentSize < row.last_size) {
+      return { cursor: 0, reason: 'restart_shrunk' };
+    }
+
+    // Unchanged: size identical AND (no mtime supplied OR mtime matches).
+    // Without mtime we still skip on size match — appended-then-truncated-
+    // -then-rewritten-to-same-size is vanishingly rare in append-only logs.
+    if (currentSize === row.last_size) {
+      if (currentModifiedMs == null || currentModifiedMs === row.last_modified_ms) {
+        return null;
+      }
+    }
+
+    // File grew (or shrunk-then-regrew to <= last_size which the above
+    // branches handled). Resume from the recorded byte offset.
+    return { cursor: row.cursor_offset, reason: 'incremental' };
+  }
+
+  /**
+   * Atomically update the cursor after a successful mining pass.
+   * Idempotent: re-running with identical inputs is a no-op write.
+   */
+  updateSessionCursor(opts: {
+    sessionPath: string;
+    /** New byte offset (= total bytes consumed). */
+    cursor: number;
+    /** Current file size on disk after the read. */
+    size: number;
+    /** Current file mtime in ms after the read. */
+    modifiedMs: number;
+    /** Delta of decisions extracted this pass. */
+    decisionsFound: number;
+  }): void {
+    const minedAt = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO mined_sessions (
+           session_path, mined_at, decisions_found,
+           cursor_offset, last_size, last_modified_ms
+         ) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(session_path) DO UPDATE SET
+           mined_at = excluded.mined_at,
+           decisions_found = mined_sessions.decisions_found + excluded.decisions_found,
+           cursor_offset = excluded.cursor_offset,
+           last_size = excluded.last_size,
+           last_modified_ms = excluded.last_modified_ms`,
+      )
+      .run(opts.sessionPath, minedAt, opts.decisionsFound, opts.cursor, opts.size, opts.modifiedMs);
   }
 
   // ── LLM EXTRACTION CACHE ──────────────────────────────────────────
