@@ -1,12 +1,22 @@
 /**
  * Multi-signal dead code detection (v2).
  *
- * Three independent evidence signals:
+ * Four independent evidence signals:
  * 1. Import graph — symbol name not found in any import specifier
- * 2. Call graph — symbol name not mentioned in bodies of other files
+ * 2. Call graph — symbol name not mentioned in calls/references edges
  * 3. Barrel exports — symbol not re-exported from any barrel file (index.ts, __init__.py, mod.rs)
+ * 4. Intra-file usage — symbol name not referenced elsewhere in its own file
+ *    (catches default-arg/closure/file-local use that doesn't emit an edge,
+ *    e.g. `export const X = ...; function f(p = X) { ... }`).
  *
- * Confidence = signals_fired / 3.  Default threshold 0.5 (at least 2 of 3 must fire).
+ * Confidence = signals_fired / 4.  Default threshold 0.5 (at least 2 of 4 must fire).
+ *
+ * Framework-entry-point heuristic: after the raw signal score is computed,
+ * symbols whose name/file shape matches a known framework entry-point pattern
+ * (VSCode activate/deactivate, React App, Next.js route exports, electron
+ * main, package.json bin/main targets, etc.) have their confidence multiplied
+ * by a value in [0.3, 1.0] so they don't surface at confidence 1.0 even when
+ * the import-graph signal is blind to their convention-based discovery.
  */
 
 import fs from 'node:fs';
@@ -35,6 +45,18 @@ interface DeadCodeItem {
     import_graph: boolean;
     call_graph: boolean;
     barrel_exports: boolean;
+    /** True when no other line of the symbol's own file mentions its name (word-boundary match). */
+    intra_file_usage: boolean;
+    /**
+     * Multiplier in [0.3, 1.0] applied to the raw signal score because the
+     * symbol looks like a framework-discovered entry point (VSCode activate,
+     * React App, Next.js route loader, package.json bin/main target, ...).
+     * 1.0 means no downgrade. Lower values mean the framework runtime, not
+     * handwritten code, likely invokes this symbol.
+     */
+    entry_point_multiplier: number;
+    /** Why the entry-point multiplier fired (file pattern, symbol name, package.json target, ...). null when no match. */
+    entry_point_reason: string | null;
   };
 }
 
@@ -185,6 +207,301 @@ function isFrameworkEntryPoint(metadata: unknown): boolean {
       const bare = item.replace(/^@/, '').replace(/\(.*$/, '').trim().toLowerCase();
       if (FRAMEWORK_ENTRY_POINT_DECORATORS.has(bare)) return true;
     }
+  }
+  return false;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// FRAMEWORK ENTRY-POINT CONFIDENCE DOWNGRADE
+// ════════════════════════════════════════════════════════════════════════
+//
+// Symbols whose discovery is convention-driven (VSCode activate/deactivate,
+// React App.tsx default export, Next.js route loader/action, Electron main
+// entry, package.json bin/main targets, …) are not visible to the import
+// graph signal. Without a downgrade they surface at confidence 1.0 and pollute
+// the dead-code result. This heuristic returns a multiplier in [0.3, 1.0] that
+// is applied to the raw signal-count score AFTER the per-signal booleans are
+// recorded, so users still see why the score was attenuated.
+
+/** Exact symbol names that frameworks invoke by convention. */
+const ENTRY_POINT_NAMES_EXACT = new Set([
+  // VSCode extension lifecycle
+  'activate',
+  'deactivate',
+  // Electron / Node binary entry
+  'main',
+  'init',
+  'bootstrap',
+  // Serverless / FaaS
+  'handler',
+  // Remix / React Router loaders
+  'loader',
+  'action',
+  'meta',
+  'links',
+  'headers',
+  'shouldRevalidate',
+  'ErrorBoundary',
+  'HydrateFallback',
+  // Next.js page data hooks
+  'getServerSideProps',
+  'getStaticProps',
+  'getStaticPaths',
+  'getInitialProps',
+  'generateMetadata',
+  'generateStaticParams',
+  'revalidate',
+  'dynamic',
+  // Next.js App router conventions
+  'Page',
+  'Layout',
+  'Loading',
+  'Error',
+  'NotFound',
+  'Template',
+  'Default',
+  // Vue SFC composition
+  'setup',
+  'onload',
+  // tRPC entry
+  'appRouter',
+  // SvelteKit
+  'load',
+  'prerender',
+  'ssr',
+  'csr',
+  // Astro
+  'getStaticPaths',
+]);
+
+/** Default-export names that almost always indicate a framework root. */
+const ENTRY_POINT_DEFAULT_EXPORT_NAMES = new Set([
+  'App',
+  'Root',
+  'Application',
+  'default',
+  'middleware',
+  'config',
+]);
+
+/**
+ * File-path regexes that imply the file lives in a framework-managed slot.
+ * Order matters: the first match wins for `entry_point_reason`.
+ */
+const ENTRY_POINT_FILE_PATTERNS: Array<{ re: RegExp; reason: string; multiplier: number }> = [
+  {
+    re: /(?:^|\/)packages\/[^/]*vscode[^/]*\/src\/extension\.[jt]sx?$/i,
+    reason: 'vscode_extension_entry',
+    multiplier: 0.3,
+  },
+  {
+    re: /(?:^|\/)src\/extension\.[jt]sx?$/i,
+    reason: 'vscode_extension_entry',
+    multiplier: 0.3,
+  },
+  {
+    re: /(?:^|\/)(?:electron|main)\/(?:main|index)\.[jt]sx?$/i,
+    reason: 'electron_main',
+    multiplier: 0.35,
+  },
+  {
+    re: /(?:^|\/)(?:renderer|app)\/(?:App|Root|main|index)\.[jt]sx?$/i,
+    reason: 'app_root',
+    multiplier: 0.35,
+  },
+  {
+    re: /(?:^|\/)(?:lambdas?|functions|handlers)\/[^/]+\.[jt]sx?$/i,
+    reason: 'serverless_handler',
+    multiplier: 0.35,
+  },
+  {
+    re: /(?:^|\/)(?:app|src)\/api\/.+\.[jt]sx?$/i,
+    reason: 'nextjs_api_route',
+    multiplier: 0.35,
+  },
+  {
+    re: /(?:^|\/)pages\/.+\.[jt]sx?$/i,
+    reason: 'nextjs_pages_route',
+    multiplier: 0.4,
+  },
+  {
+    re: /(?:^|\/)app\/(?:[^/]+\/)*(?:page|layout|loading|error|not-found|template|default|route|head|middleware)\.[jt]sx?$/i,
+    reason: 'nextjs_app_router',
+    multiplier: 0.35,
+  },
+  {
+    re: /(?:^|\/)routes\/.+\.[jt]sx?$/i,
+    reason: 'routes_directory',
+    multiplier: 0.4,
+  },
+  {
+    re: /(?:^|\/)(?:main|bootstrap)\.[jt]sx?$/i,
+    reason: 'main_file',
+    multiplier: 0.4,
+  },
+  {
+    re: /(?:^|\/)App\.[jt]sx?$/,
+    reason: 'react_app_root',
+    multiplier: 0.4,
+  },
+  {
+    re: /\.figma\.[jt]sx?$/i,
+    reason: 'figma_code_connect',
+    multiplier: 0.4,
+  },
+  {
+    re: /(?:^|\/)bin\/[^/]+\.[jt]sx?$/i,
+    reason: 'bin_script',
+    multiplier: 0.4,
+  },
+];
+
+/**
+ * Files registered as entry points by the project's package.json (main, bin,
+ * module, exports). Computed once per `getDeadCodeV2` call.
+ */
+function readPackageEntryFiles(projectRoot: string | undefined): Set<string> {
+  if (!projectRoot) return new Set<string>();
+  const pkgPath = path.join(projectRoot, 'package.json');
+  if (!fs.existsSync(pkgPath)) return new Set<string>();
+  const out = new Set<string>();
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    const add = (rel: unknown) => {
+      if (typeof rel !== 'string') return;
+      if (rel.includes('*')) return;
+      out.add(path.normalize(rel).replace(/\\/g, '/'));
+    };
+    add(pkg.main);
+    add(pkg.module);
+    if (typeof pkg.bin === 'string') add(pkg.bin);
+    if (pkg.bin && typeof pkg.bin === 'object') {
+      for (const v of Object.values(pkg.bin)) add(v);
+    }
+    if (pkg.exports !== undefined) {
+      for (const target of collectExportsTargets(pkg.exports)) add(target);
+    }
+  } catch {
+    /* unreadable package.json — caller already logs from reachability path */
+  }
+  return out;
+}
+
+/**
+ * Returns a confidence multiplier in [0.3, 1.0] for a candidate dead symbol.
+ * 1.0 = no downgrade. Lower = looks like a framework entry point. Also
+ * returns a human-readable reason string so the result surfaces WHY the
+ * downgrade fired.
+ */
+function getEntryPointDowngrade(
+  symbolName: string,
+  filePath: string,
+  packageEntryFiles: Set<string>,
+  symbolMetadata: unknown,
+): { multiplier: number; reason: string | null } {
+  const normFile = filePath.replace(/\\/g, '/');
+
+  // package.json main/bin/module/exports — symbols exported from these files
+  // are the package's public surface; downgrade aggressively.
+  for (const pkgFile of packageEntryFiles) {
+    if (normFile === pkgFile || normFile.endsWith('/' + pkgFile)) {
+      return { multiplier: 0.3, reason: 'package_json_entry' };
+    }
+  }
+
+  // File-path patterns
+  for (const { re, reason, multiplier } of ENTRY_POINT_FILE_PATTERNS) {
+    if (re.test(normFile)) {
+      return { multiplier, reason };
+    }
+  }
+
+  // Exact name match (activate, deactivate, handler, loader, ...)
+  if (ENTRY_POINT_NAMES_EXACT.has(symbolName)) {
+    return { multiplier: 0.4, reason: `entry_point_name:${symbolName}` };
+  }
+
+  // Default-export-style root names (App, Root, default) when metadata flags it as a default export
+  if (ENTRY_POINT_DEFAULT_EXPORT_NAMES.has(symbolName)) {
+    let isDefaultExport = false;
+    try {
+      const meta =
+        typeof symbolMetadata === 'string'
+          ? (JSON.parse(symbolMetadata) as Record<string, unknown>)
+          : (symbolMetadata as Record<string, unknown> | null | undefined);
+      if (meta && (meta.default === true || meta.isDefaultExport === true)) {
+        isDefaultExport = true;
+      }
+    } catch {
+      /* ignore */
+    }
+    return {
+      multiplier: isDefaultExport ? 0.35 : 0.5,
+      reason: `entry_point_name:${symbolName}`,
+    };
+  }
+
+  return { multiplier: 1.0, reason: null };
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// SIGNAL 4: INTRA-FILE USAGE
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Returns true when `name` appears as a word-boundary token anywhere in
+ * `fileContent` OUTSIDE the byte range owned by the symbol's declaration.
+ *
+ * Catches the default-arg / closure-capture / file-local-helper case where
+ * the indexer doesn't emit a `calls`/`references` edge but the symbol is
+ * clearly used. Example:
+ *
+ *     export const CANARY_PATH = path.join(...);
+ *     export async function checkEmbeddingDrift(opts = {}) {
+ *       const file = opts.filePath ?? CANARY_PATH;  // <-- intra-file use
+ *     }
+ */
+function isUsedIntraFile(
+  fileContent: string,
+  name: string,
+  lineStart: number | null,
+  lineEnd: number | null,
+): boolean {
+  if (!name) return false;
+  // Word-boundary match. Escape regex metachars in `name` defensively.
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`\\b${escaped}\\b`, 'g');
+  const lines = fileContent.split('\n');
+  let match: RegExpExecArray | null;
+  // Build a cumulative line-start offsets table only if we need it.
+  const startLine = lineStart ?? -1;
+  const endLine = lineEnd ?? -1;
+  // Track the line each match falls on by walking the file once.
+  let lineNo = 1;
+  let offset = 0;
+  // Walk through lines and check each for matches outside [startLine, endLine].
+  for (const line of lines) {
+    if (startLine === -1 || lineNo < startLine || lineNo > endLine) {
+      re.lastIndex = 0;
+      while ((match = re.exec(line)) !== null) {
+        // Skip matches inside a comment that's the very first non-whitespace
+        // of the line — common in JSDoc / inline comments mentioning the
+        // symbol by name. Cheap heuristic, avoids the "the docblock counts
+        // as a use" false-negative-on-deletion.
+        const trimmed = line.slice(0, match.index).trimStart();
+        if (
+          trimmed.startsWith('//') ||
+          trimmed.startsWith('*') ||
+          trimmed.startsWith('/*') ||
+          trimmed.startsWith('#')
+        ) {
+          continue;
+        }
+        return true;
+      }
+    }
+    offset += line.length + 1;
+    lineNo++;
   }
   return false;
 }
@@ -347,9 +664,16 @@ export function getDeadCodeV2(
     threshold?: number;
     limit?: number;
     detectedFrameworks?: string[];
+    projectRoot?: string;
   } = {},
 ): DeadCodeResult {
-  const { filePattern, threshold = 0.5, limit = 50, detectedFrameworks = [] } = options;
+  const {
+    filePattern,
+    threshold = 0.5,
+    limit = 50,
+    detectedFrameworks = [],
+    projectRoot,
+  } = options;
 
   // Exclude test fixtures (sample projects — always false positives) and test
   // files (entry points run by test runners, never imported by production code).
@@ -384,7 +708,37 @@ export function getDeadCodeV2(
   const exportedSymIds = exported.map((s) => s.id);
   const symNodeIdMap = store.getNodeIdsBatch('symbol', exportedSymIds);
 
+  // Entry-point package.json data (read once per call).
+  const packageEntryFiles = readPackageEntryFiles(projectRoot);
+
+  // Per-file content cache for the intra-file signal. We only read when a
+  // candidate would otherwise be flagged dead, so the cache stays small.
+  const fileContentCache = new Map<string, string | null>();
+  const readFileCached = (filePath: string): string | null => {
+    if (fileContentCache.has(filePath)) return fileContentCache.get(filePath) ?? null;
+    let content: string | null = null;
+    if (projectRoot) {
+      const abs = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+      try {
+        if (fs.existsSync(abs)) {
+          const stat = fs.statSync(abs);
+          // 2 MB cap — anything larger is almost certainly generated; skipping
+          // the intra-file check is the safer side of a false positive.
+          if (stat.size <= 2 * 1024 * 1024) {
+            content = fs.readFileSync(abs, 'utf-8');
+          }
+        }
+      } catch {
+        /* unreadable file — fall back to "no intra-file evidence" */
+      }
+    }
+    fileContentCache.set(filePath, content);
+    return content;
+  };
+
   const dead: DeadCodeItem[] = [];
+  let entryPointDowngraded = 0;
+  let intraFileRescued = 0;
 
   for (const sym of exported) {
     // Signal 1: not in any import specifier
@@ -409,8 +763,49 @@ export function getDeadCodeV2(
     // Signal 3: not re-exported from any barrel file
     const notInBarrel = !barrelExportedNames.has(sym.name);
 
-    const signalCount = (notImported ? 1 : 0) + (notReferenced ? 1 : 0) + (notInBarrel ? 1 : 0);
-    const confidence = Math.round((signalCount / 3) * 100) / 100;
+    // Signal 4: not referenced anywhere in the symbol's own file outside
+    // its own declaration range. Catches the default-arg / closure /
+    // file-local-helper case the edge graph misses
+    // (e.g. `const X = ...; function f(p = X) { ... }`).
+    //
+    // The signal is only EVALUATED when we have a project root and can
+    // actually read the file. Otherwise we keep the historic 3-signal
+    // denominator so tests and embedded callers (no projectRoot) see the
+    // same confidence numbers as before this fix.
+    let notIntraFileUsed = true;
+    let intraFileSignalEvaluated = false;
+    const content = readFileCached(sym.file_path);
+    if (content) {
+      intraFileSignalEvaluated = true;
+      if (isUsedIntraFile(content, sym.name, sym.line_start, sym.line_end)) {
+        notIntraFileUsed = false;
+        intraFileRescued++;
+        // Hard skip: a symbol used in its own file is not dead, regardless
+        // of how many surface signals fire. Mirrors the call-graph hard
+        // skip above.
+        continue;
+      }
+    }
+
+    const totalSignals = intraFileSignalEvaluated ? 4 : 3;
+    const signalCount =
+      (notImported ? 1 : 0) +
+      (notReferenced ? 1 : 0) +
+      (notInBarrel ? 1 : 0) +
+      (intraFileSignalEvaluated && notIntraFileUsed ? 1 : 0);
+    const rawConfidence = signalCount / totalSignals;
+
+    // Framework-entry-point downgrade. Applied AFTER raw scoring so signals
+    // remain truthful; we just don't trust the verdict for symbols that
+    // frameworks discover by convention.
+    const { multiplier, reason } = getEntryPointDowngrade(
+      sym.name,
+      sym.file_path,
+      packageEntryFiles,
+      sym.metadata,
+    );
+    if (multiplier < 1.0) entryPointDowngraded++;
+    const confidence = Math.round(rawConfidence * multiplier * 100) / 100;
 
     if (confidence >= threshold) {
       dead.push({
@@ -420,11 +815,14 @@ export function getDeadCodeV2(
         file: sym.file_path,
         line: sym.line_start,
         confidence,
-        confidence_level: classifyConfidence(signalCount, 3),
+        confidence_level: classifyConfidence(signalCount, totalSignals),
         signals: {
           import_graph: notImported,
           call_graph: notReferenced,
           barrel_exports: notInBarrel,
+          intra_file_usage: notIntraFileUsed,
+          entry_point_multiplier: multiplier,
+          entry_point_reason: reason,
         },
       });
     }
@@ -500,6 +898,21 @@ export function getDeadCodeV2(
         `point is being missed.`,
     );
   }
+  if (entryPointDowngraded > 0) {
+    warnings.push(
+      `Framework entry points (vscode activate, React App, Next.js route loaders, electron main, ` +
+        `package.json bin/main targets, ...) had their confidence downgraded on ${entryPointDowngraded} ` +
+        `symbol(s) so they no longer surface at confidence 1.0. The dead-code detector cannot see ` +
+        `convention-based discovery, so prefer the entries above 0.7 first; see signals.entry_point_reason ` +
+        `on each row for the trigger.`,
+    );
+  }
+  if (intraFileRescued > 0) {
+    warnings.push(
+      `Intra-file usage signal rescued ${intraFileRescued} symbol(s) that the edge graph missed ` +
+        `(default args, closure captures, file-local helpers without a calls/references edge).`,
+    );
+  }
 
   const methodology: Methodology = {
     algorithm: 'multi_signal_export_analysis',
@@ -507,16 +920,20 @@ export function getDeadCodeV2(
       'import_graph: symbol name absent from all import specifiers across the project',
       'call_graph: symbol node has no incoming calls/references edges',
       'barrel_exports: symbol name not re-exported from any barrel file (index.ts, __init__.py, mod.rs)',
+      'intra_file_usage: symbol name not referenced elsewhere in its own file (word-boundary match outside the declaration range)',
+      'entry_point_multiplier: post-hoc downgrade in [0.3, 1.0] for symbols matching a known framework entry-point file pattern or name (vscode activate, React App, Next.js route loader, package.json bin/main targets, ...)',
     ],
-    confidence_formula: 'signals_fired / 3 (1=low, 2=medium, 3=multi_signal)',
+    confidence_formula:
+      '(signals_fired / signals_evaluated) * entry_point_multiplier — signals_evaluated = 4 when the symbol file is readable for intra_file_usage, else 3 (1=low, 2=medium, 3+=multi_signal)',
     limitations: [
       'dynamic dispatch and reflection are not tracked',
       'framework-aware filter drops symbols carrying stereotype decorators (@Controller, @Service, @Injectable, etc.) — see _warnings for the count and FRAMEWORK_ENTRY_POINT_DECORATORS for the full list',
-      'file-system routing (Next.js pages, Nuxt) is not traced',
+      'file-system routing (Next.js pages, Nuxt) is not traced, but matching files get a confidence multiplier <1.0 instead of being hard-skipped',
       'string-based references (e.g. dynamic imports with computed paths) are missed',
       'methods are excluded — only top-level exports are evaluated',
       'import_graph signal is blind for Go, Ruby, PHP, Rust, C, C++ and other languages ' +
         'that emit import edges without named specifiers — see _warnings for affected languages',
+      'intra_file_usage signal only runs when projectRoot is provided and the file is under 2 MB; otherwise the symbol falls through to edge-only evidence',
     ],
   };
 

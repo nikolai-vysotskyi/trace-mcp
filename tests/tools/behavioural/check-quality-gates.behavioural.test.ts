@@ -2,8 +2,8 @@
  * Behavioural coverage for the `check_quality_gates` MCP tool.
  *
  * Asserts:
- *  - Default (no rules) returns the documented `{ gates, summary }` shape
- *    with `summary.result === 'PASS'`.
+ *  - Empty rules returns `NO_GATES_CONFIGURED` (not a misleading PASS) with
+ *    an actionable `_warnings` entry.
  *  - A satisfied rule yields a `pass` gate carrying name/status/value/
  *    threshold.
  *  - A violated rule with severity=error yields an `error` gate and flips
@@ -14,6 +14,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_QUALITY_GATES,
   evaluateQualityGates,
   type QualityGatesConfig,
 } from '../../../src/tools/quality/quality-gates.js';
@@ -29,14 +30,17 @@ function configWith(
 }
 
 describe('check_quality_gates — behavioural contract', () => {
-  it('default config (no rules) returns documented shape and result=PASS', () => {
+  it('empty rules returns NO_GATES_CONFIGURED with actionable warning (not a misleading PASS)', () => {
     const store = createTestStore();
     const report = evaluateQualityGates(store, projectRoot, configWith({}));
     expect(Array.isArray(report.gates)).toBe(true);
     expect(report.gates.length).toBe(0);
     expect(report.summary).toBeDefined();
     expect(report.summary.total).toBe(0);
-    expect(report.summary.result).toBe('PASS');
+    expect(report.summary.result).toBe('NO_GATES_CONFIGURED');
+    expect(report._warnings).toBeDefined();
+    expect(report._warnings?.length).toBeGreaterThan(0);
+    expect(report._warnings?.[0]).toMatch(/quality_gates|configured/i);
   });
 
   it('a satisfied complexity rule yields a pass gate with name/status/value/threshold', () => {
@@ -138,5 +142,39 @@ describe('check_quality_gates — behavioural contract', () => {
       expect(['number', 'string']).toContain(typeof gate.actual);
       expect(['number', 'string']).toContain(typeof gate.threshold);
     }
+  });
+
+  it('NO_GATES_CONFIGURED short-circuits before any gate evaluation', () => {
+    const store = createTestStore();
+    const report = evaluateQualityGates(store, projectRoot, configWith({}));
+    expect(report.summary.result).toBe('NO_GATES_CONFIGURED');
+    // No passed/warning/error counts when nothing ran.
+    expect(report.summary.passed).toBe(0);
+    expect(report.summary.warnings).toBe(0);
+    expect(report.summary.errors).toBe(0);
+  });
+
+  it('DEFAULT_QUALITY_GATES, when supplied as rules, evaluates ≥2 gates (opt-in default set)', () => {
+    const store = createTestStore();
+    const report = evaluateQualityGates(store, projectRoot, configWith(DEFAULT_QUALITY_GATES));
+    // The default ruleset must produce at least 2 evaluated gates so callers
+    // who opt in actually get a meaningful check, not a single-rule fig-leaf.
+    expect(report.gates.length).toBeGreaterThanOrEqual(2);
+    expect(report.summary.total).toBe(report.gates.length);
+    expect(['PASS', 'FAIL', 'WARNING']).toContain(report.summary.result);
+  });
+
+  it('inline-style rules object with explicit gates preserves original PASS/FAIL behavior', () => {
+    const store = createTestStore();
+    // No symbols => max cyclomatic is 0; threshold 50 => pass; verdict = PASS
+    const okReport = evaluateQualityGates(
+      store,
+      projectRoot,
+      configWith({
+        max_cyclomatic_complexity: { threshold: 50, severity: 'error' },
+      }),
+    );
+    expect(okReport.summary.result).toBe('PASS');
+    expect(okReport._warnings).toBeUndefined();
   });
 });

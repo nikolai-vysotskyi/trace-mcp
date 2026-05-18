@@ -109,13 +109,16 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       }
 
       // 3. Dead code check
-      const deadCode = safe(() => getDeadCodeV2(store, { threshold: 0.5, limit: 10 }), {
-        dead_symbols: [],
-        file_pattern: null,
-        total_exports: 0,
-        total_dead: 0,
-        threshold: 0.5,
-      });
+      const deadCode = safe(
+        () => getDeadCodeV2(store, { threshold: 0.5, limit: 10, projectRoot }),
+        {
+          dead_symbols: [],
+          file_pattern: null,
+          total_exports: 0,
+          total_dead: 0,
+          threshold: 0.5,
+        },
+      );
       if (deadCode.dead_symbols && deadCode.dead_symbols.length > 0) {
         sections.push(`## Dead Code Candidates (${deadCode.dead_symbols.length})\n`);
         for (const d of deadCode.dead_symbols.slice(0, 5)) {
@@ -395,7 +398,7 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
       }
 
       // Dead code
-      const dead = safe(() => getDeadCodeV2(store, { threshold: 0.6, limit: 10 }), {
+      const dead = safe(() => getDeadCodeV2(store, { threshold: 0.6, limit: 10, projectRoot }), {
         dead_symbols: [],
         file_pattern: null,
         total_exports: 0,

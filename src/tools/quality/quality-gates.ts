@@ -71,6 +71,8 @@ interface GateCheckResult {
   details?: string;
 }
 
+export type QualityGateResult = 'PASS' | 'FAIL' | 'WARNING' | 'NO_GATES_CONFIGURED';
+
 interface QualityGateReport {
   gates: GateCheckResult[];
   summary: {
@@ -78,9 +80,29 @@ interface QualityGateReport {
     passed: number;
     warnings: number;
     errors: number;
-    result: 'PASS' | 'FAIL';
+    result: QualityGateResult;
   };
+  /** Non-fatal advisory messages — surfaced when the config is missing or defaults were used. */
+  _warnings?: string[];
+  /** True when the conservative default ruleset was injected (use_default_gates). */
+  _defaults_used?: boolean;
 }
+
+/**
+ * Conservative default gate set used when the caller explicitly opts in via
+ * `use_default_gates: true`. Kept intentionally minimal so it never produces
+ * surprising FAILs on first contact. Only includes rules whose evaluators
+ * work against the core `symbols`/`edges` schema (so opt-in defaults stay
+ * usable on freshly-indexed projects and on the minimal test store).
+ */
+export const DEFAULT_QUALITY_GATES: NonNullable<QualityGatesConfig['rules']> = {
+  max_cyclomatic_complexity: { threshold: 30, severity: 'error' },
+  max_circular_import_chains: { threshold: 0, severity: 'error' },
+  max_coupling_instability: { threshold: 0.9, severity: 'warning' },
+};
+
+const NO_GATES_WARNING =
+  'No quality gates configured. Add `quality_gates.rules` to .trace-mcp.{json,yaml} or pass inline `config.rules` to define gates. See docs/quality-gates.md.';
 
 // ---------------------------------------------------------------------------
 // Grade comparison
@@ -107,6 +129,24 @@ export function evaluateQualityGates(
 ): QualityGateReport {
   const { rules, fail_on } = gatesConfig;
   const gates: GateCheckResult[] = [];
+
+  // Empty ruleset → return NO_GATES_CONFIGURED instead of silently lying
+  // with "PASS". Callers in CI can branch on this value to surface a
+  // configuration problem rather than treating it as a successful run.
+  const hasAnyRule = Object.values(rules).some((v) => v !== undefined);
+  if (!hasAnyRule) {
+    return {
+      gates: [],
+      summary: {
+        total: 0,
+        passed: 0,
+        warnings: 0,
+        errors: 0,
+        result: 'NO_GATES_CONFIGURED',
+      },
+      _warnings: [NO_GATES_WARNING],
+    };
+  }
 
   // 1. Max cyclomatic complexity
   if (rules.max_cyclomatic_complexity) {
@@ -175,7 +215,7 @@ export function evaluateQualityGates(
   if (rules.max_dead_exports_percent) {
     const rule = rules.max_dead_exports_percent;
     const threshold = Number(rule.threshold);
-    const deadResult = getDeadCodeV2(store, { threshold: 0.5 });
+    const deadResult = getDeadCodeV2(store, { threshold: 0.5, projectRoot });
     const totalExported = store.db
       .prepare(`
       SELECT COUNT(*) as cnt FROM symbols WHERE is_exported = 1 AND kind != 'method'
@@ -293,7 +333,7 @@ export function evaluateQualityGates(
   const warnings = gates.filter((g) => g.status === 'warning').length;
   const passed = gates.filter((g) => g.status === 'pass').length;
 
-  let result: 'PASS' | 'FAIL' = 'PASS';
+  let result: QualityGateResult = 'PASS';
   if (fail_on === 'error' && errors > 0) result = 'FAIL';
   if (fail_on === 'warning' && (errors > 0 || warnings > 0)) result = 'FAIL';
 
@@ -319,6 +359,15 @@ export function formatGateReport(report: QualityGateReport): string {
   lines.push('  trace-mcp quality gate check');
   lines.push('');
 
+  if (report.summary.result === 'NO_GATES_CONFIGURED') {
+    lines.push('  ⚠ NO_GATES_CONFIGURED — no rules evaluated.');
+    for (const w of report._warnings ?? []) {
+      lines.push(`    ${w}`);
+    }
+    lines.push('');
+    return lines.join('\n');
+  }
+
   for (const gate of report.gates) {
     const icon = gate.status === 'pass' ? '✓' : gate.status === 'warning' ? '⚠' : '✗';
     const label = gate.rule.replace(/_/g, ' ');
@@ -333,6 +382,9 @@ export function formatGateReport(report: QualityGateReport): string {
   lines.push('');
   const { passed, warnings, errors, result } = report.summary;
   lines.push(`  Result: ${result} (${passed} passed, ${errors} error(s), ${warnings} warning(s))`);
+  if (report._defaults_used) {
+    lines.push('  (Used built-in default ruleset — set quality_gates in config to customize.)');
+  }
   lines.push('');
 
   return lines.join('\n');

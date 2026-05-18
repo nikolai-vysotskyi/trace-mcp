@@ -743,6 +743,31 @@ interface GetUntestedSymbolsResult {
 const TESTABLE_KINDS = new Set(['function', 'class', 'interface', 'type', 'enum', 'method']);
 
 /**
+ * Source code languages whose symbols are eligible for "untested" reporting.
+ * Markdown/JSON/YAML/etc. symbols (e.g. CHANGELOG headings indexed as `kind: class`
+ * by the markdown plugin) are NOT testable and must be excluded.
+ */
+const CODE_LANGUAGES = new Set([
+  'typescript',
+  'javascript',
+  'python',
+  'go',
+  'ruby',
+  'rust',
+  'java',
+  'php',
+  'csharp',
+  'swift',
+  'kotlin',
+  'scala',
+  'elixir',
+  'dart',
+  'c',
+  'cpp',
+  'objc',
+]);
+
+/**
  * Find ALL symbols (not just exports) that lack test coverage.
  * Two-level classification:
  *   - "unreached"          — no test file imports or references the source file at all
@@ -750,25 +775,40 @@ const TESTABLE_KINDS = new Set(['function', 'class', 'interface', 'type', 'enum'
  *                             this specific symbol (by name)
  *
  * Uses import-graph test_covers edges + test file name matching + symbol name matching.
+ *
+ * @param includeNonCode  When true, restores legacy behaviour and includes symbols
+ *                        from non-code files (markdown, json, yaml, …). Default false.
  */
 export function getUntestedSymbols(
   store: Store,
   filePattern?: string,
   maxResults?: number,
+  includeNonCode = false,
 ): GetUntestedSymbolsResult {
   // ── 1. Query all symbols with file paths ──────────────────────────────────
   const likeClause = filePattern
     ? `AND f.path LIKE '${filePattern.replace(/\*/g, '%').replace(/\?/g, '_')}'`
     : '';
 
+  // Filter at the SQL layer so counts AND top-N are both clean. We use a
+  // parameterised IN-list bound to CODE_LANGUAGES (no string interpolation of
+  // language names — keeps the query injection-safe even if the set grows).
+  let languageClause = '';
+  const params: string[] = [];
+  if (!includeNonCode) {
+    const placeholders = Array.from(CODE_LANGUAGES, () => '?').join(',');
+    languageClause = `AND f.language IN (${placeholders})`;
+    params.push(...CODE_LANGUAGES);
+  }
+
   const allSymbols = store.db
     .prepare(`
     SELECT s.*, f.path as file_path
     FROM symbols s
     JOIN files f ON s.file_id = f.id
-    WHERE 1=1 ${likeClause}
+    WHERE 1=1 ${likeClause} ${languageClause}
   `)
-    .all() as SymbolWithFilePath[];
+    .all(...params) as SymbolWithFilePath[];
 
   // ── 2. Filter to testable symbols ─────────────────────────────────────────
   const candidates = allSymbols

@@ -26,6 +26,7 @@ import { assessChangeRisk } from '../analysis/predictive-intelligence.js';
 import { tokenizeDescription } from './context.js';
 import { type InsertionPoint, suggestInsertionPoints } from './insertion-points.js';
 import { search } from './navigation.js';
+import { searchText } from './search-text.js';
 import { classifyIntent } from './task-context.js';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -53,6 +54,10 @@ export interface PlanTurnTarget {
   score: number;
   /** Provenance: which signals contributed to this ranking */
   why: string[];
+  /** Source of this target — 'symbol' (default) or 'text_fallback' when surfaced via raw text search */
+  source?: 'symbol' | 'text_fallback';
+  /** Code snippet for text_fallback targets (matched line text) */
+  snippet?: string;
   risk?: { level: 'low' | 'medium' | 'high' | 'critical'; score: number; mitigations: string[] };
 }
 
@@ -240,6 +245,7 @@ export async function planTurn(
       line: item.symbol.line_start ?? 0,
       score: round(score),
       why,
+      source: 'symbol',
     };
     // Only assess risk for the top target — risk computation is expensive
     if (wantRisk && i === 0) {
@@ -253,6 +259,41 @@ export async function planTurn(
       }
     }
     targets.push(target);
+  }
+
+  // 6b. Text-fallback rescue — if symbol search produced no targets but a raw
+  // text scan finds hits (TODO comments, doc strings, example strings, etc.),
+  // demote 'missing' to 'partial' and surface the file/line/snippet evidence.
+  // This breaks the false-negative loop where plan_turn tells the agent to
+  // stop looking when relevant code actually exists.
+  if (verdict === 'missing' && targets.length === 0) {
+    const textRescue = rescueViaTextFallback(ctx, task, maxTargets);
+    if (textRescue.length > 0) {
+      for (const t of textRescue) targets.push(t);
+      verdict = 'partial';
+      confidence = Math.min(confidence, 0.5);
+      reasoning = `Symbol search found no matches, but raw text scan found ${textRescue.length} reference(s). Relevant code may exist — inspect the listed file/line targets before scaffolding new code.`;
+      // Compute risk for the top text-fallback target too — refactor/bugfix
+      // intents benefit from a risk signal even when the target came from FTS
+      // rather than the symbol graph.
+      if (wantRisk && targets[0] && !targets[0].risk) {
+        const risk = assessChangeRisk(ctx.store, ctx.projectRoot, {
+          filePath: targets[0].file,
+        });
+        if (risk.isOk()) {
+          targets[0].risk = {
+            level: risk.value.risk_level,
+            score: risk.value.risk_score,
+            mitigations: risk.value.mitigations,
+          };
+        }
+      }
+    }
+  }
+  // Safety net: never report 'missing' while holding targets — that contradicts
+  // the verdict and is the exact failure plan_turn is supposed to prevent.
+  if (verdict === 'missing' && targets.length > 0) {
+    verdict = 'partial';
   }
 
   // 7. Insertion points for missing/partial — framework-aware scaffolds
@@ -287,6 +328,117 @@ export async function planTurn(
 
 function round(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Stopword list used by extractKeyNouns. These are imperative-task verbs and
+ * generic glue words that should never drive related-decision matching: a
+ * decision about "domain classification" should NOT match the task "add a
+ * webhook endpoint" just because both share the word "add" or "endpoint".
+ */
+const PLAN_TURN_STOPWORDS = new Set<string>([
+  'a',
+  'an',
+  'the',
+  'to',
+  'for',
+  'with',
+  'and',
+  'or',
+  'of',
+  'in',
+  'on',
+  'add',
+  'remove',
+  'fix',
+  'create',
+  'build',
+  'make',
+  'endpoint',
+  'function',
+  'method',
+  'class',
+  'file',
+  'code',
+  'new',
+]);
+
+/**
+ * Lowercase the input, split on non-word chars, drop stopwords and very short
+ * tokens. Returns the remaining "key nouns" — the domain words that should
+ * gate related-decision matching.
+ */
+export function extractKeyNouns(s: string): string[] {
+  if (!s) return [];
+  return s
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((w) => w.length >= 4 && !PLAN_TURN_STOPWORDS.has(w));
+}
+
+/**
+ * Filter a list of decision rows so only ones whose title+content overlaps
+ * with the task's key nouns survive. Empty noun list = no filter (preserves
+ * legacy behavior when the task is all stopwords).
+ */
+export function filterDecisionsByTaskNouns<T extends { title?: string; content?: string }>(
+  decisions: T[],
+  task: string,
+): T[] {
+  const taskNouns = extractKeyNouns(task);
+  if (taskNouns.length === 0) return decisions;
+  return decisions.filter((d) => {
+    const haystack = `${d.title ?? ''} ${d.content ?? ''}`.toLowerCase();
+    return taskNouns.some((n) => haystack.includes(n));
+  });
+}
+
+/**
+ * When symbol-based search returns 0 items, run a bounded raw text scan over
+ * the indexed files and project the top matches into PlanTurnTarget shape.
+ * Tracks the originating file/line/snippet so the agent can drill in.
+ */
+function rescueViaTextFallback(
+  ctx: PlanTurnContext,
+  task: string,
+  maxTargets: number,
+): PlanTurnTarget[] {
+  // Use the most-specific key noun (longest) as the text-scan query. Stripping
+  // stopwords avoids matching every TODO / comment that contains "add" or "fix".
+  const nouns = extractKeyNouns(task);
+  if (nouns.length === 0) return [];
+  const query = nouns.sort((a, b) => b.length - a.length)[0];
+
+  const res = searchText(ctx.store, ctx.projectRoot, {
+    query,
+    maxResults: Math.max(maxTargets, 10),
+    contextLines: 1,
+    caseSensitive: false,
+  });
+  if (res.isErr()) return [];
+  const matches = res.value.matches;
+  if (matches.length === 0) return [];
+
+  const out: PlanTurnTarget[] = [];
+  const seen = new Set<string>();
+  for (const m of matches) {
+    const dedupKey = `${m.file}:${m.line}`;
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+    out.push({
+      symbol_id: `${m.file}:${m.line}`,
+      name: m.match || query,
+      kind: 'text_match',
+      file: m.file,
+      line: m.line,
+      score: 0.2,
+      why: ['text_fallback'],
+      source: 'text_fallback',
+      snippet: m.match || m.context?.[Math.floor(m.context.length / 2)] || '',
+    });
+    if (out.length >= maxTargets) break;
+  }
+  return out;
 }
 
 function countTied(ranked: Array<{ score: number }>): number {

@@ -241,4 +241,154 @@ function doWork(x) {
     expect(data.groups).toHaveLength(0);
     expect(data.symbols_scanned).toBe(0);
   });
+
+  test('.tsx file with 5 unrelated components produces no clone groups', async () => {
+    // Regression: previously ast-clones re-parsed .tsx files with the plain
+    // `typescript` grammar, which mis-parses JSX and collapses unrelated
+    // components into the same ancestor node → bogus hash collisions.
+    const content = `
+import { useState } from 'react';
+
+export function UserCard({ user }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="card">
+      <h2>{user.name}</h2>
+      <button onClick={() => setOpen(!open)}>Toggle</button>
+      {open && <p>{user.bio}</p>}
+    </div>
+  );
+}
+
+export function ProductList({ products }) {
+  const [filter, setFilter] = useState('');
+  return (
+    <ul>
+      <input value={filter} onChange={(e) => setFilter(e.target.value)} />
+      {products.filter((p) => p.name.includes(filter)).map((p) => (
+        <li key={p.id}>{p.name}</li>
+      ))}
+    </ul>
+  );
+}
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    <section>
+      <span>Count: {count}</span>
+      <button onClick={() => setCount(count + 1)}>++</button>
+      <button onClick={() => setCount(count - 1)}>--</button>
+    </section>
+  );
+}
+
+export function LoginForm({ onSubmit }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); onSubmit({ email, password }); }}>
+      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <button type="submit">Sign in</button>
+    </form>
+  );
+}
+
+export function Notification({ message, kind }) {
+  const [visible, setVisible] = useState(true);
+  if (!visible) return null;
+  return (
+    <aside data-kind={kind}>
+      <p>{message}</p>
+      <button onClick={() => setVisible(false)}>Dismiss</button>
+    </aside>
+  );
+}
+`.trimStart();
+
+    const lines = content.split('\n');
+    function findRange(name: string): { start: number; end: number } {
+      const startIdx = lines.findIndex((l) => l.includes(`function ${name}`));
+      let depth = 0;
+      let started = false;
+      for (let i = startIdx; i < lines.length; i++) {
+        for (const ch of lines[i]) {
+          if (ch === '{') {
+            depth++;
+            started = true;
+          } else if (ch === '}') {
+            depth--;
+            if (started && depth === 0) {
+              return { start: startIdx + 1, end: i + 1 };
+            }
+          }
+        }
+      }
+      return { start: startIdx + 1, end: lines.length };
+    }
+
+    const names = ['UserCard', 'ProductList', 'Counter', 'LoginForm', 'Notification'];
+    writeAndIndex(
+      store,
+      'src/Widgets.tsx',
+      content,
+      'typescript',
+      names.map((n) => {
+        const r = findRange(n);
+        return { name: n, kind: 'function', lineStart: r.start, lineEnd: r.end };
+      }),
+    );
+
+    const result = await detectAstClones(store, TEST_DIR, { min_loc: 3, min_nodes: 10 });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    expect(data.groups).toHaveLength(0);
+  });
+
+  test('.tsx file with 2 structural twins produces 1 group of 2', async () => {
+    // Both components share identical structure (function -> return JSX with
+    // ul > items.map -> li > span + strong). With the correct tsx grammar
+    // they hash the same; with the buggy plain-typescript grammar the JSX
+    // either fails to parse or collapses, so the regression test is also a
+    // positive check that the tsx grammar is now wired up.
+    const block = (compName: string, label: string) => [
+      `export function ${compName}({ items }) {`,
+      `  return (`,
+      `    <ul className="${label}">`,
+      `      {items.map((it) => (`,
+      `        <li key={it.id}>`,
+      `          <span>{it.title}</span>`,
+      `          <strong>{it.value}</strong>`,
+      `        </li>`,
+      `      ))}`,
+      `    </ul>`,
+      `  );`,
+      `}`,
+    ];
+
+    const alpha = block('AlphaList', 'alpha');
+    const beta = block('BetaList', 'beta');
+    const blank = [''];
+    const lines = [...alpha, ...blank, ...beta];
+    const content = lines.join('\n') + '\n';
+
+    const alphaStart = 1;
+    const alphaEnd = alpha.length;
+    const betaStart = alpha.length + blank.length + 1;
+    const betaEnd = alpha.length + blank.length + beta.length;
+
+    writeAndIndex(store, 'src/Twins.tsx', content, 'typescript', [
+      { name: 'AlphaList', kind: 'function', lineStart: alphaStart, lineEnd: alphaEnd },
+      { name: 'BetaList', kind: 'function', lineStart: betaStart, lineEnd: betaEnd },
+    ]);
+
+    const result = await detectAstClones(store, TEST_DIR, { min_loc: 3, min_nodes: 10 });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    expect(data.groups).toHaveLength(1);
+    expect(data.groups[0].size).toBe(2);
+    const names = data.groups[0].symbols.map((s) => s.name).sort();
+    expect(names).toEqual(['AlphaList', 'BetaList']);
+  });
 });

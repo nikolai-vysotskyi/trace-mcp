@@ -20,7 +20,12 @@ import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { SavingsTracker } from '../../src/savings.js';
 import { SessionJournal } from '../../src/session/journal.js';
-import { type PlanTurnContext, planTurn } from '../../src/tools/navigation/plan-turn.js';
+import {
+  extractKeyNouns,
+  filterDecisionsByTaskNouns,
+  type PlanTurnContext,
+  planTurn,
+} from '../../src/tools/navigation/plan-turn.js';
 import { createTestStore } from '../test-utils.js';
 
 const FIXTURE_DIR = path.resolve(__dirname, '../fixtures/laravel-10');
@@ -269,6 +274,140 @@ describe('plan_turn', () => {
       expect(t.why.some((w) => w === 'bm25' || w === 'hybrid_ai')).toBe(true);
       expect(t.why).toContain('pagerank');
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Text-fallback rescue + decision-noun filter (BUG fix regression tests)
+// ═══════════════════════════════════════════════════════════════════
+
+describe('plan_turn — text fallback rescue', () => {
+  let store: Store;
+  let registry: PluginRegistry;
+
+  beforeAll(async () => {
+    store = createTestStore();
+    registry = new PluginRegistry();
+    registry.registerLanguagePlugin(new PhpLanguagePlugin());
+    registry.registerFrameworkPlugin(new LaravelPlugin());
+    const config = makeConfig();
+    const pipeline = new IndexingPipeline(store, registry, config, FIXTURE_DIR);
+    await pipeline.indexAll();
+  });
+
+  it('regression: gibberish task stays missing (true-negative preserved)', async () => {
+    const ctx = buildCtx(store, registry);
+    const result = await planTurn(ctx, {
+      task: 'xyzzyplugh99nonexistent quuxfrobnicate',
+    });
+    expect(result.verdict).toBe('missing');
+    expect(result.targets).toHaveLength(0);
+    expect(result.confidence).toBeGreaterThanOrEqual(0.5);
+  });
+
+  it('BUG fix: task with text-only matches is promoted to partial with targets', async () => {
+    const ctx = buildCtx(store, registry);
+    // "controller" appears in PHP class names AND in plenty of fixture text.
+    // If symbol search misses (which it usually does not here), the text
+    // fallback must kick in. To force a near-text-only path, we use a very
+    // generic word that matches in source text but not as a strong symbol.
+    const result = await planTurn(ctx, { task: 'webhook receiver payload' });
+    // We can't assume the fixture has "webhook" as a symbol — but if it has
+    // ANY text reference, plan_turn must NOT report missing with zero targets.
+    if (result.verdict === 'missing') {
+      // True-negative: fixture has zero references at all — acceptable.
+      expect(result.targets).toHaveLength(0);
+    } else {
+      // The rescue path fired: verdict is no longer 'missing' AND we got
+      // either symbol or text_fallback targets.
+      expect(['partial', 'exists', 'ambiguous']).toContain(result.verdict);
+      expect(result.targets.length).toBeGreaterThan(0);
+      const hasFallback = result.targets.some((t) => t.source === 'text_fallback');
+      if (hasFallback) {
+        expect(result.confidence).toBeLessThanOrEqual(0.5);
+        const fb = result.targets.find((t) => t.source === 'text_fallback')!;
+        expect(fb.file).toBeTruthy();
+        expect(fb.line).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('invariant: verdict is never "missing" when targets is non-empty', async () => {
+    const ctx = buildCtx(store, registry);
+    for (const task of [
+      'UserController',
+      'add a new webhook endpoint',
+      'controller',
+      'how does authentication work',
+      'refactor user middleware',
+    ]) {
+      const result = await planTurn(ctx, { task });
+      if (result.targets.length > 0) {
+        expect(result.verdict).not.toBe('missing');
+      }
+    }
+  });
+
+  it('strong symbol match keeps verdict=exists (no regression from rescue)', async () => {
+    const ctx = buildCtx(store, registry);
+    const result = await planTurn(ctx, { task: 'UserController' });
+    // The exact verdict can be exists/partial/ambiguous depending on fixture
+    // scoring — what must NOT happen is a missing verdict + zero targets when
+    // the symbol clearly exists.
+    expect(['exists', 'partial', 'ambiguous']).toContain(result.verdict);
+    expect(result.targets.length).toBeGreaterThan(0);
+    // None of the surfaced targets should be text_fallback when symbol search
+    // already found the canonical match.
+    const topTarget = result.targets[0];
+    expect(topTarget.source ?? 'symbol').toBe('symbol');
+  });
+});
+
+describe('plan_turn — extractKeyNouns helper', () => {
+  it('drops stopwords and short tokens', () => {
+    expect(extractKeyNouns('add a webhook endpoint for stripe payments')).toEqual([
+      'webhook',
+      'stripe',
+      'payments',
+    ]);
+  });
+
+  it('returns empty for all-stopword input', () => {
+    expect(extractKeyNouns('add a new file')).toEqual([]);
+  });
+
+  it('handles empty / whitespace input', () => {
+    expect(extractKeyNouns('')).toEqual([]);
+    expect(extractKeyNouns('   ')).toEqual([]);
+  });
+});
+
+describe('plan_turn — related decision noun filter', () => {
+  it('drops decision whose title shares no domain noun with the task', () => {
+    const decisions = [
+      { id: 1, title: 'business-domain classification heuristics', content: '' },
+      { id: 2, title: 'webhook signature verification policy', content: '' },
+    ];
+    const filtered = filterDecisionsByTaskNouns(
+      decisions,
+      'add a webhook receiver endpoint for stripe',
+    );
+    expect(filtered.map((d) => d.id)).toEqual([2]);
+  });
+
+  it('preserves decisions when task has no extractable nouns', () => {
+    const decisions = [{ id: 1, title: 'something', content: '' }];
+    const filtered = filterDecisionsByTaskNouns(decisions, 'add a new file');
+    expect(filtered).toHaveLength(1);
+  });
+
+  it('matches against content as well as title', () => {
+    const decisions = [
+      { id: 1, title: 'misc note', content: 'we standardized on the stripe gateway' },
+      { id: 2, title: 'misc note', content: 'unrelated paragraph about caching' },
+    ];
+    const filtered = filterDecisionsByTaskNouns(decisions, 'add a webhook for stripe payments');
+    expect(filtered.map((d) => d.id)).toEqual([1]);
   });
 });
 

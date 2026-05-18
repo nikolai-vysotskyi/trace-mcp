@@ -36,6 +36,10 @@ interface SecurityFinding {
   column: number;
   snippet: string;
   fix: string;
+  /** Optional diagnostic — populated when a finding survives interpolation analysis. */
+  interpolation_source?: 'non_constant';
+  /** Optional evidence string (e.g. "auth context: file path") for reviewers. */
+  evidence?: string;
 }
 
 export interface SecurityScanResult {
@@ -366,6 +370,173 @@ const RULES: SecurityRule[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Light reaching-defs: resolve template-literal interpolations to constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract identifier names referenced inside ${...} expressions of a template literal
+ * (or a leading-backtick fragment) on `line`. Returns null if no interpolations found.
+ * Only captures the head identifier — `${foo}` and `${foo.bar}` both yield "foo".
+ */
+function extractInterpolatedIdents(line: string): string[] | null {
+  const idents: string[] = [];
+  const re = /\$\{\s*([A-Za-z_$][\w$]*)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(line)) !== null) {
+    idents.push(m[1]);
+  }
+  return idents.length ? idents : null;
+}
+
+/**
+ * Resolve an identifier in a file to a literal string by scanning upward
+ * for a top-level `const X = '...'` / `let X = "..."` / `var X = \`...\``
+ * binding. Only matches single-string RHS (no interpolation, no concat).
+ *
+ * Returns the literal string value (without quotes) or null when:
+ * - identifier is reassigned or shadowed,
+ * - RHS contains interpolation `${...}`, concatenation `+`, or a call,
+ * - identifier is a function parameter (we cannot prove constness),
+ * - binding is not found in the file.
+ */
+function resolveStringBindingInFile(
+  lines: string[],
+  ident: string,
+  fromLine: number,
+): string | null {
+  // Walk backward from fromLine to line 0 looking for a const/let/var binding.
+  const constRe = new RegExp(
+    `^\\s*(?:export\\s+)?(?:const|let|var)\\s+${ident}\\s*(?::[^=]+)?=\\s*(['"\`])([^'"\`\\n]*?)\\1\\s*;?\\s*$`,
+  );
+  const interpolatedRhsRe = new RegExp(
+    `^\\s*(?:export\\s+)?(?:const|let|var)\\s+${ident}\\s*[:=].*[\\$\\{\\+]`,
+  );
+  // Search the entire file (not just upward) — bindings can appear below in TS due to hoisting at module scope.
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const m = constRe.exec(line);
+    if (m) return m[2];
+    if (i !== fromLine && interpolatedRhsRe.test(line)) {
+      // Identifier is bound to a non-literal expression — cannot prove constness.
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Hostnames considered safe SSRF targets — internal services or well-known SDK bases.
+ */
+const SSRF_HOST_SAFELIST = new Set<string>([
+  'localhost',
+  '127.0.0.1',
+  '0.0.0.0',
+  '::1',
+  'api.anthropic.com',
+  'api.openai.com',
+  'api.cohere.ai',
+  'api.voyageai.com',
+  'api.mistral.ai',
+  'api.groq.com',
+  'generativelanguage.googleapis.com',
+]);
+
+function extractHostFromUrl(url: string): string | null {
+  // Strip protocol; tolerate template literals where the host portion is literal.
+  const stripped = url.replace(/^https?:\/\//i, '');
+  const slashIdx = stripped.indexOf('/');
+  const portIdx = stripped.indexOf(':');
+  const end = [slashIdx, portIdx].filter((x) => x >= 0).sort((a, b) => a - b)[0];
+  const host = (end != null ? stripped.slice(0, end) : stripped).trim().toLowerCase();
+  if (!host || host.includes('${') || host.includes('$_')) return null;
+  return host;
+}
+
+/**
+ * Build a "candidate URL string" by substituting resolved interpolations into a
+ * template-literal-shaped fragment of `line`. Returns null when any unresolved
+ * `${...}` remains, otherwise returns the concatenated literal.
+ */
+function buildResolvedUrl(line: string, lines: string[], fromLine: number): string | null {
+  // Pull the first backtick string from the line.
+  const tickMatch = /`([^`]*)`/.exec(line);
+  if (!tickMatch) return null;
+  const tick = tickMatch[1];
+  let out = '';
+  let i = 0;
+  while (i < tick.length) {
+    if (tick[i] === '$' && tick[i + 1] === '{') {
+      const end = tick.indexOf('}', i + 2);
+      if (end === -1) return null;
+      const expr = tick.slice(i + 2, end).trim();
+      // Only accept bare identifiers.
+      const idMatch = /^([A-Za-z_$][\w$]*)$/.exec(expr);
+      if (!idMatch) return null;
+      const resolved = resolveStringBindingInFile(lines, idMatch[1], fromLine);
+      if (resolved == null) return null;
+      out += resolved;
+      i = end + 1;
+    } else {
+      out += tick[i];
+      i++;
+    }
+  }
+  return out;
+}
+
+/**
+ * Decide whether a template-literal interpolation should be treated as a
+ * compile-time constant for `command_injection`. Returns:
+ *  - "constant" when every `${...}` resolves to a literal string,
+ *  - "non_constant" otherwise.
+ */
+function classifyInterpolation(
+  line: string,
+  lines: string[],
+  fromLine: number,
+): 'constant' | 'non_constant' {
+  const idents = extractInterpolatedIdents(line);
+  if (!idents) return 'non_constant';
+  for (const id of idents) {
+    if (resolveStringBindingInFile(lines, id, fromLine) == null) return 'non_constant';
+  }
+  return 'constant';
+}
+
+/**
+ * Decide whether an `insecure_crypto` SHA-1/MD5 finding is in a security-adjacent
+ * context. Returns true when it should be reported.
+ *
+ * Heuristic — flag when:
+ * - the file path contains a credential-related keyword
+ *   (auth/password/token/signing/signature/hmac/secret/login/credential), OR
+ * - the surrounding context calls a comparison/equality helper
+ *   (compare/equals/timingSafeEqual/verify/validate) on the hash.
+ *
+ * Otherwise the hash is treated as content-addressable / cache-key and DROPPED.
+ */
+const SECURITY_PATH_KEYWORDS =
+  /(?:auth|password|token|signing|signature|hmac|secret|login|credential|jwt|session|cookie|cipher|encrypt|decrypt)/i;
+const SECURITY_USAGE_KEYWORDS =
+  /(?:compare|equals|timingSafeEqual|verify|validate|authenticate)\s*\(/i;
+
+function isWeakHashSecurityContext(
+  filePath: string,
+  contextWindow: string,
+): {
+  ok: boolean;
+  evidence: string;
+} {
+  if (SECURITY_PATH_KEYWORDS.test(filePath)) {
+    return { ok: true, evidence: `file path matches security keyword` };
+  }
+  if (SECURITY_USAGE_KEYWORDS.test(contextWindow)) {
+    return { ok: true, evidence: `hash output used in equality/verify call` };
+  }
+  return { ok: false, evidence: '' };
+}
+
+// ---------------------------------------------------------------------------
 // Pre-compute a lookup map for O(1) rule selection
 // ---------------------------------------------------------------------------
 
@@ -493,7 +664,57 @@ export function scanSecurity(
             }
             if (isFalsePositive) continue;
 
-            findings.push({
+            // Light reaching-defs: for rules driven by `${var}` interpolation
+            // (command_injection, ssrf, and SQL via template literals), DROP
+            // the finding when every interpolation resolves to a literal const
+            // binding in the same file.
+            let interpolationSource: 'non_constant' | undefined;
+            const usesTemplate = /\$\{/.test(line);
+
+            if (
+              usesTemplate &&
+              (rule.key === 'command_injection' ||
+                rule.key === 'sql_injection' ||
+                rule.key === 'ssrf')
+            ) {
+              const cls = classifyInterpolation(line, lines, lineIdx);
+              if (cls === 'constant') continue;
+              interpolationSource = 'non_constant';
+            }
+
+            // SSRF: drop findings whose resolved URL host is on the safelist
+            // (localhost, well-known SDK bases like api.anthropic.com).
+            if (rule.key === 'ssrf' && usesTemplate) {
+              const resolved = buildResolvedUrl(line, lines, lineIdx);
+              if (resolved) {
+                const host = extractHostFromUrl(resolved);
+                if (host && SSRF_HOST_SAFELIST.has(host)) continue;
+                // If we partially resolved a host literal directly in the template
+                // (e.g. `http://127.0.0.1:${port}/...`), also drop on host hit.
+              }
+              // Fallback: look for a literal host substring directly in the line.
+              const hostMatch = /https?:\/\/([A-Za-z0-9_.-]+)/i.exec(line);
+              if (hostMatch) {
+                const host = hostMatch[1].toLowerCase();
+                if (SSRF_HOST_SAFELIST.has(host)) continue;
+              }
+            }
+
+            // command_injection: if the command name is a literal (no $ on the
+            // shell-command position) and only safe constants are interpolated,
+            // already dropped above. Additionally drop when the only `${...}`
+            // pieces are bound to a hardcoded allowlist array literal nearby —
+            // we approximate by requiring constant resolution which is handled.
+
+            // insecure_crypto (SHA-1/MD5): require a security-adjacent context.
+            let evidence: string | undefined;
+            if (rule.key === 'insecure_crypto' && /sha1?|md5/i.test(line)) {
+              const ctx = isWeakHashSecurityContext(file.path, contextWindow);
+              if (!ctx.ok) continue;
+              evidence = ctx.evidence;
+            }
+
+            const finding: SecurityFinding = {
               rule_id: rule.id,
               rule_name: rule.name,
               severity: rule.severity,
@@ -502,7 +723,10 @@ export function scanSecurity(
               column: match.index + 1,
               snippet: snippet.length > 200 ? `${snippet.slice(0, 200)}...` : snippet,
               fix: rule.fix,
-            });
+            };
+            if (interpolationSource) finding.interpolation_source = interpolationSource;
+            if (evidence) finding.evidence = evidence;
+            findings.push(finding);
           }
         }
       }

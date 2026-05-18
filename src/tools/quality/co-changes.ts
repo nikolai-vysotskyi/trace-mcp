@@ -18,10 +18,17 @@ interface CoChangeEntry {
   lastCoChange: string | null;
 }
 
+interface CoChangeHint {
+  tool: string;
+  why: string;
+}
+
 interface CoChangeResult {
   file: string;
   coChanges: CoChangeEntry[];
   windowDays: number;
+  _warnings?: string[];
+  _hints?: CoChangeHint[];
 }
 
 interface CoChangeOptions {
@@ -168,6 +175,20 @@ export function persistCoChanges(
 export function getCoChanges(store: Store, opts: CoChangeOptions): TraceMcpResult<CoChangeResult> {
   const { file, minConfidence = 0.3, minCount = 3, windowDays = 180, limit = 20 } = opts;
 
+  // Empty-index guard — caller gets a hint instead of a silent empty array.
+  const total = store.db.prepare('SELECT COUNT(*) AS n FROM co_changes').get() as { n: number };
+  if (total.n === 0) {
+    return ok({
+      file,
+      coChanges: [],
+      windowDays,
+      _warnings: [
+        'Co-change index is empty. Run `refresh_co_changes` first to populate from git history.',
+      ],
+      _hints: [{ tool: 'refresh_co_changes', why: 'Build the co-change index from git log' }],
+    });
+  }
+
   const rows = store.db
     .prepare(`
     SELECT
@@ -192,7 +213,25 @@ export function getCoChanges(store: Store, opts: CoChangeOptions): TraceMcpResul
     last_co_change: string | null;
   }>;
 
-  return ok({
+  // Stale-index warning — surfaced regardless of whether this file has co-changes,
+  // so callers learn the underlying data is dated.
+  const freshness = store.db
+    .prepare('SELECT MAX(last_co_change) AS latest FROM co_changes')
+    .get() as { latest: string | null };
+  const warnings: string[] = [];
+  if (freshness.latest) {
+    const latestMs = Date.parse(freshness.latest);
+    if (Number.isFinite(latestMs)) {
+      const daysOld = Math.floor((Date.now() - latestMs) / (1000 * 60 * 60 * 24));
+      if (daysOld > 30) {
+        warnings.push(
+          `Co-change index last updated ${daysOld} days ago. Re-run refresh_co_changes for current data.`,
+        );
+      }
+    }
+  }
+
+  const result: CoChangeResult = {
     file,
     coChanges: rows.map((r) => ({
       file: r.co_file,
@@ -201,5 +240,7 @@ export function getCoChanges(store: Store, opts: CoChangeOptions): TraceMcpResul
       lastCoChange: r.last_co_change,
     })),
     windowDays,
-  });
+  };
+  if (warnings.length > 0) result._warnings = warnings;
+  return ok(result);
 }

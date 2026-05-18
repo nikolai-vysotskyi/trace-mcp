@@ -59,6 +59,12 @@ describe('getDeadCodeV2', () => {
       import_graph: true,
       call_graph: true,
       barrel_exports: true,
+      // intra_file_usage signal only evaluates when projectRoot is provided
+      // and the file exists on disk; in the synthetic test store it stays
+      // at its harmless default `true` ("no evidence of intra-file use").
+      intra_file_usage: true,
+      entry_point_multiplier: 1,
+      entry_point_reason: null,
     });
   });
 
@@ -271,7 +277,8 @@ describe('getDeadCodeV2', () => {
     const result = getDeadCodeV2(store);
     expect(result._methodology).toBeDefined();
     expect(result._methodology.algorithm).toBe('multi_signal_export_analysis');
-    expect(result._methodology.signals).toHaveLength(3);
+    // Five entries: import_graph, call_graph, barrel_exports, intra_file_usage, entry_point_multiplier
+    expect(result._methodology.signals).toHaveLength(5);
     expect(result._methodology.confidence_formula).toMatch(/signals_fired/);
   });
 

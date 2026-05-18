@@ -158,6 +158,57 @@ test('basic', () => {});
       expect(result._unsafeUnwrap().findings).toHaveLength(1);
     });
 
+    test('does not flag the word "bug" in running prose', () => {
+      writeFile(
+        store,
+        'src/quality/code-smells.ts',
+        `
+// This module detects bug patterns and debug artifacts in user code.
+// It also handles debugging hooks — not actual BUG-tagged TODOs.
+function scan() { return 1; }
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings).toHaveLength(0);
+    });
+
+    test('still flags BUG: as a standalone developer tag', () => {
+      writeFile(
+        store,
+        'src/buggy.ts',
+        `
+// BUG: counter resets on retry — see issue #123
+function counter() { return 0; }
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      expect(data.findings).toHaveLength(1);
+      expect(data.findings[0].tag).toBe('BUG');
+    });
+
+    test('still flags BUG(author): style tag', () => {
+      writeFile(
+        store,
+        'src/buggy2.ts',
+        `
+// BUG(jsmith): off-by-one when input is empty
+function foo() { return 1; }
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['todo_comment'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings).toHaveLength(1);
+    });
+
     test('skips markdown files (CHANGELOG headings must not match BUG tag)', () => {
       writeFile(
         store,
@@ -336,6 +387,87 @@ const password = 'test_password';
       const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
       expect(result.isOk()).toBe(true);
       expect(result._unsafeUnwrap().findings).toHaveLength(0);
+    });
+
+    test('does not flag ORM column-type values as credentials', () => {
+      writeFile(
+        store,
+        'src/migrations/users.ts',
+        `
+const COLUMNS = {
+  rememberToken: 'varchar',
+  password: 'varchar',
+  apiKey: 'text',
+};
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(0);
+    });
+
+    test('does not flag local-LLM placeholder API key', () => {
+      writeFile(
+        store,
+        'src/ai/detect-local.ts',
+        `
+function localConfig() {
+  return { apiKey: 'local-no-key', baseUrl: 'http://localhost:11434' };
+}
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(0);
+    });
+
+    test('does not flag domain-name taxonomy values', () => {
+      writeFile(
+        store,
+        'src/intent/classifier.ts',
+        `
+const DOMAINS = {
+  auth: 'authentication',
+  payments: 'billing',
+};
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings).toHaveLength(0);
+    });
+
+    test('still flags a real-looking API key (true positive)', () => {
+      writeFile(
+        store,
+        'src/api.ts',
+        `
+const apiKey = 'sk-abcdef0123456789ABCDEF0123456789abcdef01';
+`,
+        'typescript',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const credFindings = result
+        ._unsafeUnwrap()
+        .findings.filter((f) => f.tag === 'hardcoded_credential');
+      expect(credFindings.length).toBeGreaterThanOrEqual(1);
     });
 
     test('detects hardcoded URL', () => {
