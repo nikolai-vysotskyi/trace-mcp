@@ -70,7 +70,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
     decisionStore,
     config,
   } = ctx;
-  const recallTimeoutMs = config.memory.recall.timeoutMs;
+  const recallTimeoutMs = config?.memory?.recall?.timeoutMs ?? 5000;
 
   // --- Level 1 Navigation Tools ---
 
