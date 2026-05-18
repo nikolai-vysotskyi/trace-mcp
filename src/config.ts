@@ -217,6 +217,7 @@ const ToolsConfigSchema = z
             '_meta',
             '_duplication_warnings',
             '_methodology',
+            '_warnings',
           ]),
         ),
       ])
