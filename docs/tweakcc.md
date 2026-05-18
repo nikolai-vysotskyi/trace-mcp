@@ -99,7 +99,7 @@ find or ls via Bash for file discovery.
 
 ```
 Reserve Bash exclusively for system commands and terminal operations: builds
-(npm run build), tests (npm test, vitest, pytest), git commands, package managers,
+(pnpm run build), tests (pnpm test, vitest, pytest), git commands, package managers,
 docker, kubectl, and similar. Never use Bash for code exploration — do not run
 grep, rg, find, cat, head, or tail on source code files through it. Use trace-mcp
 MCP tools for all code reading and searching. If unsure whether a dedicated tool
