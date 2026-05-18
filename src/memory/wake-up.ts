@@ -264,6 +264,13 @@ export function assembleWakeUpSplit(
      */
     memoEnabled?: boolean;
     memoMaxBudgetTokens?: number;
+    /**
+     * Subproject scope. When set, `stable.topics` and `stable.memo` lookups
+     * are scoped to this service (multi-service projects only see their
+     * service's topics). Decision queries already accept project-wide
+     * results — topics + memo are the per-service overlays.
+     */
+    service_name?: string;
   } = {},
 ): WakeUpSplit {
   const recentLimit = Math.min(opts.maxRecent ?? SPLIT_LIMITS.recent, 30);
@@ -369,6 +376,7 @@ export function assembleWakeUpSplit(
   try {
     const clusters = decisionStore.listClusters({
       project_root: projectRoot,
+      ...(opts.service_name ? { service_name: opts.service_name } : {}),
       order_by: 'decision_count',
       limit: 5,
     });
@@ -393,7 +401,10 @@ export function assembleWakeUpSplit(
     | undefined;
   if (memoEnabled) {
     try {
-      const row = decisionStore.getLatestProjectMemo({ project_root: projectRoot });
+      const row = decisionStore.getLatestProjectMemo({
+        project_root: projectRoot,
+        ...(opts.service_name ? { service_name: opts.service_name } : {}),
+      });
       if (row && row.memo_md && row.estimated_tokens <= memoMaxBudgetTokens) {
         memo = {
           memo_md: row.memo_md,

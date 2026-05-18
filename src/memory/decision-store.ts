@@ -547,6 +547,27 @@ CREATE TABLE IF NOT EXISTS decision_reviews (
 );
 CREATE INDEX IF NOT EXISTS idx_decision_reviews_action ON decision_reviews(action);
 CREATE INDEX IF NOT EXISTS idx_decision_reviews_decision ON decision_reviews(decision_id);
+
+-- ════════════════════════════════════════════════════════════════
+-- SCHEDULER STATE — durable per-project cooldown bookkeeping
+-- ════════════════════════════════════════════════════════════════
+-- The background MemoryScheduler keeps per-project cooldown timestamps
+-- (lastMineAt/lastClusterAt/lastMemoAt/lastTuneAt) plus the
+-- consecutiveFailures back-off counter and a lastTuneEventCount baseline
+-- in memory. Persisting them here lets a daemon restart skip stages that
+-- were already run on the previous boot — avoiding a thundering herd of
+-- expensive LLM-backed mine/cluster/memo/tune calls on the first tick.
+CREATE TABLE IF NOT EXISTS scheduler_state (
+    project_root            TEXT NOT NULL,
+    last_mine_at            INTEGER,
+    last_cluster_at         INTEGER,
+    last_memo_at            INTEGER,
+    last_tune_at            INTEGER,
+    last_tune_event_count   INTEGER,
+    consecutive_failures    INTEGER NOT NULL DEFAULT 0,
+    updated_at              TEXT NOT NULL,
+    PRIMARY KEY (project_root)
+);
 `;
 
 // ════════════════════════════════════════════════════════════════════════
