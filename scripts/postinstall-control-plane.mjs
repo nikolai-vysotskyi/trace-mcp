@@ -262,7 +262,17 @@ function bootoutPlist(domain) {
   runQuiet('/bin/launchctl', ['unload', LAUNCHD_PLIST_PATH]);
 }
 
+function enablePlist(domain) {
+  // Clear any persistent disabled state from a prior `launchctl unload -w` or
+  // `launchctl disable`. Without this, bootstrap fails with "I/O error: 5".
+  // Idempotent — succeeds even if the service was already enabled.
+  runQuiet('/bin/launchctl', ['enable', `${domain}/${PLIST_LABEL}`]);
+}
+
 function bootstrapPlist(domain) {
+  // Always enable first — a stale `disabled` entry from a prior unload -w is
+  // the most common reason bootstrap fails on a clean-looking system.
+  enablePlist(domain);
   const result = runQuiet('/bin/launchctl', ['bootstrap', domain, LAUNCHD_PLIST_PATH]);
   if (result.ok) return { ok: true };
   // bootstrap fails if the service is already loaded (exit 37 / "Service
@@ -327,22 +337,20 @@ function refreshLaunchAgent(launcherShimPath) {
     return;
   }
 
-  // Only bootstrap if the daemon was already loaded (refresh path) — first-time
-  // installs don't auto-start the daemon. Per task spec point 8: do NOT auto-
-  // start if not running; DO restart it if it WAS running so new binary picks up.
-  if (wasLoaded) {
-    const boot = bootstrapPlist(domain);
-    log('launchd', `bootstrap: ${boot.ok ? 'ok' : `failed (${(boot.error || '').trim()})`}`);
-    if (boot.ok) {
-      const kick = kickstartPlist(domain);
-      log('launchd', `kickstart: ${kick.ok ? 'ok' : `failed (${kick.stderr.trim()})`}`);
-    }
-  } else {
-    // First-time install: bootstrap once so the menu bar app's restart button
-    // works, but launchd will respect RunAtLoad=true and start the daemon now.
-    // To avoid auto-starting we do NOT bootstrap on first install — the daemon
-    // can be started by the Electron app or by `trace-mcp ensure-daemon`.
-    log('launchd', 'plist installed but not bootstrapped (daemon was not running)');
+  // Always bootstrap. First-install case: the daemon starts immediately via
+  // RunAtLoad=true (idle-monitor will self-exit in 15 min if unused). Earlier
+  // we deliberately skipped bootstrap on first install, but that created an
+  // UX dead end — the Electron app's restart button relies on launchd already
+  // knowing the service, and users without the GUI app couldn't start the
+  // daemon at all without manual `launchctl bootstrap`. See 1.38 incident.
+  const boot = bootstrapPlist(domain);
+  log('launchd', `bootstrap: ${boot.ok ? 'ok' : `failed (${(boot.error || '').trim()})`}`);
+  // Kickstart only if the daemon was already loaded — picks up the new
+  // binary. On first install bootstrap itself starts the daemon, so a
+  // kickstart would be a redundant restart.
+  if (boot.ok && wasLoaded) {
+    const kick = kickstartPlist(domain);
+    log('launchd', `kickstart: ${kick.ok ? 'ok' : `failed (${kick.stderr.trim()})`}`);
   }
 }
 
