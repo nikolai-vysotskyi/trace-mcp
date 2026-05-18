@@ -224,8 +224,82 @@ function truncateTitle(s: string): string | null {
 // CONVERSATION PARSING
 // ════════════════════════════════════════════════════════════════════════
 
-function parseConversationTurns(filePath: string): ConversationTurn[] {
-  const content = fs.readFileSync(filePath, 'utf-8');
+/**
+ * Options for incremental session-file reads. When omitted, behaves like a
+ * full read from byte 0 — preserving the legacy single-pass contract.
+ */
+export interface ParseConversationOpts {
+  /** Byte offset to start reading from (default 0). */
+  startOffset?: number;
+}
+
+export interface ParseConversationResult {
+  turns: ConversationTurn[];
+  /** File size at read time (= next-pass startOffset). */
+  endOffset: number;
+  /** File mtime in ms at read time. */
+  modifiedMs: number;
+  /**
+   * True when `startOffset` landed mid-line and the partial first line was
+   * dropped. Cursor accounting still uses the full file size; callers only
+   * lose the partial bytes between the cursor and the first newline.
+   */
+  warningTruncated?: boolean;
+}
+
+export function parseConversationTurns(
+  filePath: string,
+  opts: ParseConversationOpts = {},
+): ParseConversationResult {
+  const startOffset = Math.max(0, opts.startOffset ?? 0);
+  const stat = fs.statSync(filePath);
+  const size = stat.size;
+  const modifiedMs = stat.mtimeMs;
+
+  if (startOffset >= size) {
+    return { turns: [], endOffset: size, modifiedMs };
+  }
+
+  // Read only the appended portion. For session files (usually <50MB) we
+  // accept reading the whole tail in one shot — sessions are JSONL, so a
+  // streaming reader buys little over the simpler slice.
+  //
+  // When startOffset > 0 we also peek the single byte immediately before
+  // startOffset. If it is a newline the chunk starts cleanly at a record
+  // boundary and we keep it verbatim; otherwise the cursor landed inside
+  // a record and we drop everything up to (and including) the first
+  // newline in the chunk.
+  const peekPrevByte = startOffset > 0;
+  const fd = fs.openSync(filePath, 'r');
+  let chunk: Buffer;
+  let prevByteIsNewline = false;
+  try {
+    if (peekPrevByte) {
+      const peek = Buffer.alloc(1);
+      fs.readSync(fd, peek, 0, 1, startOffset - 1);
+      prevByteIsNewline = peek[0] === 0x0a; // '\n'
+    }
+    const length = size - startOffset;
+    chunk = Buffer.alloc(length);
+    fs.readSync(fd, chunk, 0, length, startOffset);
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  let content = chunk.toString('utf-8');
+  let warningTruncated = false;
+  if (startOffset > 0 && !prevByteIsNewline) {
+    const nl = content.indexOf('\n');
+    if (nl === -1) {
+      // No newline in the tail at all — nothing to parse but the cursor still
+      // advances so we don't re-read the same bytes next time.
+      return { turns: [], endOffset: size, modifiedMs, warningTruncated: true };
+    }
+    // Drop the partial first line and flag the truncation.
+    content = content.slice(nl + 1);
+    warningTruncated = true;
+  }
+
   const lines = content.split('\n').filter((l) => l.trim());
   const turns: ConversationTurn[] = [];
 
@@ -262,7 +336,7 @@ function parseConversationTurns(filePath: string): ConversationTurn[] {
     }
   }
 
-  return turns;
+  return { turns, endOffset: size, modifiedMs, ...(warningTruncated ? { warningTruncated } : {}) };
 }
 
 interface ConversationContentItem {
@@ -601,6 +675,13 @@ export async function mineSessions(
     llmKnobs?: Partial<LlmMiningKnobs>;
     /** Inherits the recall timeout so LLM calls never pin the agent turn. */
     signal?: AbortSignal;
+    /**
+     * Use byte-offset cursor for incremental session mining. When false,
+     * falls back to legacy binary (mined/unmined) semantics. Defaults to
+     * `true` — caller (MCP tool) typically threads the value from
+     * `memory.mining.incrementalCursor` in config.
+     */
+    incrementalCursor?: boolean;
   } = {},
 ): Promise<MineResult> {
   const start = Date.now();
@@ -669,19 +750,76 @@ export async function mineSessions(
       continue;
     }
 
-    // Skip already mined (unless force)
-    if (!opts.force && decisionStore.isSessionMined(session.filePath)) {
-      skipped++;
-      continue;
-    }
-
-    try {
-      const turns = parseConversationTurns(session.filePath);
-      if (turns.length === 0) {
-        decisionStore.markSessionMined(session.filePath, 0);
+    // Resolve the next-read cursor for this session.
+    //  - `incrementalCursor: false` falls back to legacy binary semantics —
+    //    once mined, never re-mined unless `force=true`.
+    //  - `incrementalCursor: true` (default): consult the byte-offset cursor.
+    //    Unchanged files are skipped without parsing; grown files resume from
+    //    the recorded offset; shrunk files restart from 0.
+    //  - `force=true` always reads from 0 but still UPDATES the cursor row
+    //    afterwards.
+    const incrementalEnabled = opts.incrementalCursor !== false;
+    let readStartOffset = 0;
+    let cursorReason: 'unmined' | 'restart_shrunk' | 'incremental' | 'forced' = 'unmined';
+    if (!incrementalEnabled) {
+      if (!opts.force && decisionStore.isSessionMined(session.filePath)) {
         skipped++;
         continue;
       }
+    } else {
+      let stat: fs.Stats;
+      try {
+        stat = fs.statSync(session.filePath);
+      } catch {
+        // File disappeared between listing and stat — treat as skip.
+        skipped++;
+        continue;
+      }
+      if (opts.force) {
+        cursorReason = 'forced';
+        readStartOffset = 0;
+      } else {
+        const cursor = decisionStore.getSessionCursor(session.filePath, stat.size, stat.mtimeMs);
+        if (cursor === null) {
+          // File unchanged since last pass — skip without parsing.
+          skipped++;
+          continue;
+        }
+        cursorReason = cursor.reason;
+        readStartOffset = cursor.cursor;
+        if (cursor.reason === 'incremental' && cursor.cursor > 0) {
+          logger.debug(
+            { file: session.filePath, cursor: cursor.cursor, size: stat.size },
+            'mineSessions: incremental mining resuming from cursor',
+          );
+        }
+      }
+    }
+
+    try {
+      const parseResult = incrementalEnabled
+        ? parseConversationTurns(session.filePath, { startOffset: readStartOffset })
+        : parseConversationTurns(session.filePath);
+      const turns = parseResult.turns;
+      if (turns.length === 0) {
+        if (incrementalEnabled) {
+          decisionStore.updateSessionCursor({
+            sessionPath: session.filePath,
+            cursor: parseResult.endOffset,
+            size: parseResult.endOffset,
+            modifiedMs: parseResult.modifiedMs,
+            decisionsFound: 0,
+          });
+        } else {
+          decisionStore.markSessionMined(session.filePath, 0);
+        }
+        skipped++;
+        continue;
+      }
+      // Suppress unused-variable lint in legacy path: cursorReason is
+      // primarily for debug logging, but referenced here so the symbol
+      // doesn't trip noUnusedLocals when incrementalEnabled is false.
+      void cursorReason;
 
       // Strategy-driven extraction:
       //  - regex: legacy pattern-based; current behaviour.
@@ -753,7 +891,17 @@ export async function mineSessions(
         extracted += tiered.length;
       }
 
-      decisionStore.markSessionMined(session.filePath, tiered.length);
+      if (incrementalEnabled) {
+        decisionStore.updateSessionCursor({
+          sessionPath: session.filePath,
+          cursor: parseResult.endOffset,
+          size: parseResult.endOffset,
+          modifiedMs: parseResult.modifiedMs,
+          decisionsFound: tiered.length,
+        });
+      } else {
+        decisionStore.markSessionMined(session.filePath, tiered.length);
+      }
       mined++;
     } catch (e) {
       logger.warn({ error: e, file: session.filePath }, 'Failed to mine session for decisions');

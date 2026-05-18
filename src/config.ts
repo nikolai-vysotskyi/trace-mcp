@@ -483,6 +483,12 @@ const MemoryConfigSchema = z
               .describe('Max sessions to LLM-process per mine_sessions invocation (cost guard).'),
           })
           .prefault({}),
+        incrementalCursor: z
+          .boolean()
+          .default(true)
+          .describe(
+            'Use byte-offset cursor for incremental session mining. When false, fall back to legacy binary (mined/unmined) semantics — once a session file is marked mined, it is never re-processed even if appended.',
+          ),
       })
       .prefault({}),
     memo: z
