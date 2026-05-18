@@ -11,6 +11,7 @@ import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { relativizeUnderRoot } from '../utils/path-relativize.js';
+import { computeConfidence } from './decision-confidence.js';
 import type { AuditLogger } from './decision-audit-log.js';
 import { titleSimilarity } from './decision-clusterer.js';
 import { type ConsolidationVerdict, mergeContents, mergeTags } from './decision-consolidator.js';
@@ -269,6 +270,21 @@ export interface ClusterQuery {
 // Old rows are retained for history (regenerate inserts a new row with
 // version+1 rather than overwriting).
 
+/**
+ * P2.5 — confidence-weight learning corpus. One row per approve/reject
+ * toggle, joined with the parent decision via decision_id.
+ */
+export interface ReviewEventRow {
+  id: number;
+  decision_id: number;
+  action: 'approve' | 'reject';
+  /** JSON-encoded ConfidenceSignals payload. */
+  signals_at_decision: string;
+  confidence_at_decision: number;
+  reviewed_at: string;
+  reviewer: string | null;
+}
+
 export interface ProjectMemoRow {
   id: number;
   project_root: string;
@@ -508,6 +524,29 @@ CREATE TABLE IF NOT EXISTS project_memos (
 );
 CREATE INDEX IF NOT EXISTS idx_project_memos_scope
     ON project_memos(project_root, service_name);
+
+-- ════════════════════════════════════════════════════════════════
+-- DECISION REVIEWS (P2.5) — confidence-weight learning corpus
+-- ════════════════════════════════════════════════════════════════
+-- Every approve/reject toggle on a decision drops one row here so the
+-- weight tuner can re-fit the confidence scorer over actual reviewer
+-- feedback. signals_at_decision is a JSON blob of the features the
+-- scorer used at capture time (has_code_ref, content_length, tag_count,
+-- type, has_service) — recorded at review time, not capture time, so the
+-- review row keeps a self-contained training example even if the
+-- decision body gets edited later. FK cascade keeps the table clean
+-- when a decision is hard-deleted.
+CREATE TABLE IF NOT EXISTS decision_reviews (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    decision_id              INTEGER NOT NULL REFERENCES decisions(id) ON DELETE CASCADE,
+    action                   TEXT NOT NULL CHECK(action IN ('approve','reject')),
+    signals_at_decision      TEXT NOT NULL,
+    confidence_at_decision   REAL NOT NULL,
+    reviewed_at              TEXT NOT NULL,
+    reviewer                 TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_decision_reviews_action ON decision_reviews(action);
+CREATE INDEX IF NOT EXISTS idx_decision_reviews_decision ON decision_reviews(decision_id);
 `;
 
 // ════════════════════════════════════════════════════════════════════════
@@ -816,13 +855,139 @@ export class DecisionStore {
    * updated. Backing for the `approve_decision` / `reject_decision` MCP
    * tools and the `/api/projects/decisions/:id/review` HTTP endpoint.
    */
-  setReviewStatus(id: number, status: 'pending' | 'approved' | 'rejected'): boolean {
+  setReviewStatus(
+    id: number,
+    status: 'pending' | 'approved' | 'rejected',
+    opts: { reviewer?: string | null } = {},
+  ): boolean {
     const info = this.db
       .prepare(
         `UPDATE decisions SET review_status = ?, updated_at = strftime('%s','now')*1000 WHERE id = ?`,
       )
       .run(status, id);
+    if (info.changes > 0 && (status === 'approved' || status === 'rejected')) {
+      // P2.5 — best-effort review-event log for confidence-weight tuning.
+      // Wrapped in try/catch: a failed insert must NEVER fail the status
+      // update itself.
+      try {
+        const decision = this.getDecision(id);
+        if (decision) this.insertReviewEvent(decision, status, opts.reviewer ?? null);
+      } catch (err) {
+        logger.debug?.(
+          { err: (err as Error).message, decisionId: id },
+          'decision review-log write failed (non-fatal)',
+        );
+      }
+    }
     return info.changes > 0;
+  }
+
+  /**
+   * Insert one row into decision_reviews for the given decision. Recomputes
+   * confidence on the fly so the review log always carries the score the
+   * scorer would assign right now — which is what the tuner needs to compare
+   * against the human label.
+   */
+  private insertReviewEvent(
+    decision: DecisionRow,
+    status: 'approved' | 'rejected',
+    reviewer: string | null,
+  ): void {
+    const action = status === 'approved' ? 'approve' : 'reject';
+    const signals = extractSignalsForReview(decision);
+    const confidence = computeConfidence({
+      title: decision.title,
+      content: decision.content,
+      type: decision.type,
+      symbol_id: decision.symbol_id ?? undefined,
+      file_path: decision.file_path ?? undefined,
+      tags: parseTagsJson(decision.tags),
+      service_name: decision.service_name ?? undefined,
+    });
+    const reviewedAt = new Date().toISOString();
+    this.db
+      .prepare(
+        `INSERT INTO decision_reviews
+           (decision_id, action, signals_at_decision, confidence_at_decision, reviewed_at, reviewer)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(decision.id, action, JSON.stringify(signals), confidence, reviewedAt, reviewer);
+  }
+
+  /**
+   * Stream review events (approve/reject toggles) for the weight-tuner. When
+   * `projectRoot` is set, results are filtered to reviews whose underlying
+   * decision belongs to that project. Returns rows with signals already
+   * parsed back into a structured object.
+   */
+  listReviewEvents(opts: { project_root?: string; limit?: number } = {}): Array<{
+    id: number;
+    decision_id: number;
+    action: 'approve' | 'reject';
+    signals: {
+      has_code_ref: boolean;
+      content_length: number;
+      tag_count: number;
+      type: string;
+      has_service: boolean;
+    };
+    confidence_at_decision: number;
+    reviewed_at: string;
+    reviewer: string | null;
+  }> {
+    const limit = opts.limit ?? 10000;
+    const where = opts.project_root ? 'WHERE d.project_root = ?' : '';
+    const params: unknown[] = opts.project_root ? [opts.project_root] : [];
+    const sql = `
+      SELECT r.id, r.decision_id, r.action, r.signals_at_decision,
+             r.confidence_at_decision, r.reviewed_at, r.reviewer
+      FROM decision_reviews r
+      JOIN decisions d ON d.id = r.decision_id
+      ${where}
+      ORDER BY r.id ASC
+      LIMIT ?
+    `;
+    params.push(limit);
+    const rows = this.db.prepare(sql).all(...params) as Array<{
+      id: number;
+      decision_id: number;
+      action: 'approve' | 'reject';
+      signals_at_decision: string;
+      confidence_at_decision: number;
+      reviewed_at: string;
+      reviewer: string | null;
+    }>;
+    return rows.map((r) => {
+      let signals: {
+        has_code_ref: boolean;
+        content_length: number;
+        tag_count: number;
+        type: string;
+        has_service: boolean;
+      };
+      try {
+        signals = JSON.parse(r.signals_at_decision);
+      } catch {
+        // Corrupt row — skip safely by zeroing signals. The tuner ignores
+        // events whose signals don't deserialize cleanly via its own checks.
+        signals = {
+          has_code_ref: false,
+          content_length: 0,
+          tag_count: 0,
+          type: '',
+          has_service: false,
+        };
+      }
+      return {
+        id: r.id,
+        decision_id: r.decision_id,
+        action: r.action,
+        signals,
+        confidence_at_decision: r.confidence_at_decision,
+        reviewed_at: r.reviewed_at,
+        reviewer: r.reviewer,
+      };
+    });
   }
 
   /**
@@ -2043,4 +2208,26 @@ function parseTagsJson(raw: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * P2.5 — Pure helper that projects a DecisionRow to the signal payload
+ * stored in decision_reviews.signals_at_decision. Exported so the tuner
+ * and tests can mirror the projection without importing the store class.
+ */
+export function extractSignalsForReview(d: DecisionRow): {
+  has_code_ref: boolean;
+  content_length: number;
+  tag_count: number;
+  type: string;
+  has_service: boolean;
+} {
+  const tags = parseTagsJson(d.tags);
+  return {
+    has_code_ref: !!(d.symbol_id || d.file_path),
+    content_length: (d.content ?? '').length,
+    tag_count: tags.length,
+    type: d.type,
+    has_service: !!d.service_name,
+  };
 }
