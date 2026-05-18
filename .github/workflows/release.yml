@@ -81,8 +81,8 @@ jobs:
       - run: pnpm run build
       # Same exclusions as .github/workflows/ci.yml :: test step. Without
       # them the suite hangs on the Linux CI runner (root cause documented
-      # in the CI workflow — embed-repo behavioural test, toon-drift, etc).
-      - run: pnpm exec vitest run --exclude='tests/perf/**' --exclude='tests/fixtures/**' --exclude='tests/languages/test_xml.test.ts' --exclude='tests/integration/**' --exclude='tests/daemon/**' --exclude='src/telemetry/__tests__/**' --exclude='src/tools/register/__tests__/toon-drift.test.ts' --exclude='tests/util/debounce-abort.test.ts' --exclude='tests/tools/behavioural/embed-repo.behavioural.test.ts' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+      # in the CI workflow — toon-drift, debounce-abort).
+      - run: pnpm exec vitest run --exclude='tests/perf/**' --exclude='tests/fixtures/**' --exclude='tests/languages/test_xml.test.ts' --exclude='tests/integration/**' --exclude='tests/daemon/**' --exclude='src/telemetry/__tests__/**' --exclude='src/tools/register/__tests__/toon-drift.test.ts' --exclude='tests/util/debounce-abort.test.ts' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
 
       - name: Index project
         run: node dist/cli.js index . --force
@@ -151,8 +151,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
-      # Same exclusions as ci.yml :: test step (hang in embed-repo etc).
-      - run: pnpm exec vitest run --exclude='tests/perf/**' --exclude='tests/fixtures/**' --exclude='tests/languages/test_xml.test.ts' --exclude='tests/integration/**' --exclude='tests/daemon/**' --exclude='src/telemetry/__tests__/**' --exclude='src/tools/register/__tests__/toon-drift.test.ts' --exclude='tests/util/debounce-abort.test.ts' --exclude='tests/tools/behavioural/embed-repo.behavioural.test.ts' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
+      # Same exclusions as ci.yml :: test step (hang in toon-drift etc).
+      - run: pnpm exec vitest run --exclude='tests/perf/**' --exclude='tests/fixtures/**' --exclude='tests/languages/test_xml.test.ts' --exclude='tests/integration/**' --exclude='tests/daemon/**' --exclude='src/telemetry/__tests__/**' --exclude='src/tools/register/__tests__/toon-drift.test.ts' --exclude='tests/util/debounce-abort.test.ts' --testTimeout=30000 --hookTimeout=15000 --teardownTimeout=15000
       # pnpm 10's `--provenance` flow signs the sigstore attestation
       # successfully but the subsequent `PUT /trace-mcp` to the npm
       # registry returns 404 — the OIDC-token-to-npm-scoped-token swap

@@ -60,12 +60,27 @@ class FakeEmbeddingService implements EmbeddingService {
   }
 }
 
+/**
+ * FakeVectorStore mirrors writes into the real `symbol_embeddings` SQL table
+ * (with a placeholder BLOB) so the EmbeddingPipeline's LEFT JOIN-based
+ * `embedBatch` query observes them as "embedded" and the indexing loop
+ * terminates. Without this mirror, `embedBatch`'s SQL would keep returning
+ * the same unembedded rows on every iteration and the loop would never end —
+ * the symptom reported on CI as a multi-hour hang with corrupt accumulated
+ * counts.
+ */
 class FakeVectorStore implements VectorStore {
   private vecs = new Map<number, number[]>();
   private meta: { model: string; dim: number; provider?: string } | null = null;
+  private readonly placeholder = Buffer.alloc(0);
+
+  constructor(private store: Store) {}
 
   insert(id: number, vector: number[]): void {
     this.vecs.set(id, vector);
+    this.store.db
+      .prepare('INSERT OR REPLACE INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)')
+      .run(id, this.placeholder);
   }
 
   search(_query: number[], limit: number): { id: number; score: number }[] {
@@ -74,10 +89,12 @@ class FakeVectorStore implements VectorStore {
 
   delete(id: number): void {
     this.vecs.delete(id);
+    this.store.db.prepare('DELETE FROM symbol_embeddings WHERE symbol_id = ?').run(id);
   }
 
   clear(): void {
     this.vecs.clear();
+    this.store.db.prepare('DELETE FROM symbol_embeddings').run();
   }
 
   setMeta(model: string, dim: number, provider?: string): void {
@@ -126,7 +143,7 @@ describe('embed_repo — EmbeddingPipeline behavioural contract', () => {
 
   beforeEach(() => {
     store = createTestStore();
-    vec = new FakeVectorStore();
+    vec = new FakeVectorStore(store);
     svc = new FakeEmbeddingService(4);
   });
 
