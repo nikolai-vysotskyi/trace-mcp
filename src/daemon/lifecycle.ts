@@ -28,7 +28,10 @@ import { getDaemonHealth, isDaemonRunning } from './client.js';
 const PLIST_LABEL = 'com.trace-mcp.server';
 // Bump when the plist contents (env vars, args, KeepAlive policy, throttle) change.
 // ensureDaemonMac regenerates the plist when the marker below is absent.
-const PLIST_VERSION = 2;
+// MUST match scripts/postinstall-control-plane.mjs::PLIST_VERSION — keep in sync.
+// v3: prefer the launcher shim as ProgramArguments so Node-version drift can't
+// pin the daemon to a stale dist/cli.js.
+const PLIST_VERSION = 3;
 const PLIST_MARKER = `trace-mcp plist v${PLIST_VERSION}`;
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
@@ -59,7 +62,18 @@ export interface EnsureResult {
 // ── Platform: macOS (launchd) ───────────────────────────────────────
 
 function resolveTraceMcpBinary(): string {
-  // Prefer the currently-running binary if it's the CLI.
+  // Prefer the launcher shim at ~/.trace-mcp/bin/trace-mcp. The shim resolves
+  // Node + dist/cli.js at runtime from launcher.env, so the plist survives
+  // node-version swaps (nvm/Herd/volta). Without this, the plist embeds a
+  // concrete cli.js path; if the user later switches Node, the daemon respawns
+  // forever pointed at a stale binary that may not exist or may be from an
+  // older trace-mcp install.
+  const shimName = isWin ? 'trace-mcp.cmd' : 'trace-mcp';
+  const shimPath = path.join(TRACE_MCP_HOME, 'bin', shimName);
+  if (fs.existsSync(shimPath)) {
+    return shimPath;
+  }
+  // Fallback: currently-running binary if it's the CLI.
   const argv1 = process.argv[1];
   if (argv1 && fs.existsSync(argv1) && /trace-mcp/.test(argv1)) {
     return path.resolve(argv1);
