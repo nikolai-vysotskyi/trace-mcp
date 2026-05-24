@@ -616,25 +616,24 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
             ],
           };
         }
-        // Defence against path-injection through user-controlled `file`:
+        // Defence against path-injection through user-controlled `file`.
+        // Two independent gates:
         //
-        //   1. Resolve under projectRoot and verify the result stays
-        //      inside it (path.relative + startsWith('..') check). This
-        //      is the canonical sanitiser pattern recognised by CodeQL's
-        //      `js/path-injection` rule and blocks `/etc/passwd`,
-        //      `../../foo`, and other escape attempts before any fs
-        //      call. Out-of-tree env files (e.g. ~/.trace-mcp/launcher.env)
-        //      are intentionally not reachable via redacted-mode reads;
-        //      use the default get_env_vars view for those — it reads
-        //      from the indexed DB, not the filesystem.
+        //   1. Containment: the resolved absolute path must be inside
+        //      projectRoot. We use the prefix-startsWith pattern that
+        //      CodeQL's `js/path-injection` rule recognises as a
+        //      sanitiser (path.resolve + startsWith(base + sep) check).
+        //      Out-of-tree env files (e.g. ~/.trace-mcp/launcher.env)
+        //      are intentionally unreachable via redacted-mode reads;
+        //      the default get_env_vars view still works for them since
+        //      it reads from the indexed DB, not the filesystem.
         //
-        //   2. Additionally require the resolved path to be one the
-        //      indexer already classified as a .env file. Two
-        //      independent gates is cheap and prevents redacted-mode
+        //   2. Allowlist: the resolved path must be one the indexer
+        //      already classified as a .env file. Prevents redacted-mode
         //      from doubling as a generic in-tree file reader.
-        const resolved = path.resolve(projectRoot, file);
-        const rel = path.relative(projectRoot, resolved);
-        if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+        const safePath = path.resolve(projectRoot, file);
+        const baseWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+        if (safePath !== projectRoot && !safePath.startsWith(baseWithSep)) {
           return {
             content: [
               {
@@ -644,15 +643,16 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
             ],
           };
         }
-        const indexedRelPaths = new Set(
-          store.getAllEnvVars().map((row) => {
-            const abs = path.isAbsolute(row.file_path)
-              ? row.file_path
-              : path.resolve(projectRoot, row.file_path);
-            return path.relative(projectRoot, abs);
-          }),
+        const indexedAbsPaths = new Set(
+          store
+            .getAllEnvVars()
+            .map((row) =>
+              path.isAbsolute(row.file_path)
+                ? row.file_path
+                : path.resolve(projectRoot, row.file_path),
+            ),
         );
-        if (!indexedRelPaths.has(rel)) {
+        if (!indexedAbsPaths.has(safePath)) {
           return {
             content: [
               {
@@ -662,11 +662,6 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
             ],
           };
         }
-        // `rel` is now proven to be (a) inside projectRoot and (b) in
-        // the trusted indexed set. Build the final path from projectRoot
-        // + rel so CodeQL sees the sanitiser between user input and the
-        // fs call.
-        const safePath = path.join(projectRoot, rel);
         let content: string;
         try {
           content = fs.readFileSync(safePath, 'utf8');
