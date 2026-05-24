@@ -620,29 +620,23 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         // `file` is user-controlled and must never flow into fs.readFileSync
         // directly — otherwise an attacker could pass `/etc/passwd` or
         // `../../foo` and exfiltrate arbitrary readable files through
-        // `redactEnvFile`'s passthrough output. The indexed allowlist
-        // anchors every read to a known, project-scoped path.
-        const requested = path.isAbsolute(file) ? file : path.resolve(projectRoot, file);
-        const indexedAbsPaths = new Set(
-          store.getAllEnvVars().map((v) => {
-            return path.isAbsolute(v.file_path)
-              ? v.file_path
-              : path.resolve(projectRoot, v.file_path);
-          }),
-        );
-        let matchedAbsPath = indexedAbsPaths.has(requested) ? requested : undefined;
-        if (!matchedAbsPath) {
-          // Allow suffix match against an indexed path (mirrors the
-          // existing non-redacted branch which accepts `.env` to match
-          // `apps/web/.env`). Suffix-only candidates are still picked
-          // from the trusted set, never from user input.
-          for (const abs of indexedAbsPaths) {
-            if (abs.endsWith(file)) {
-              matchedAbsPath = abs;
-              break;
-            }
-          }
+        // `redactEnvFile`'s passthrough output. Build a lookup table whose
+        // VALUES are absolute paths drawn entirely from the indexed set,
+        // and let user input pick only a KEY. The path written to
+        // fs.readFileSync therefore originates from the trusted indexer.
+        const allowedPaths = new Map<string, string>();
+        for (const row of store.getAllEnvVars()) {
+          const abs = path.isAbsolute(row.file_path)
+            ? row.file_path
+            : path.resolve(projectRoot, row.file_path);
+          // Multiple keys for the same trusted value: caller may pass
+          // the absolute path, the stored relative path, or just the
+          // basename (e.g. `.env`).
+          allowedPaths.set(abs, abs);
+          allowedPaths.set(row.file_path, abs);
+          allowedPaths.set(path.basename(abs), abs);
         }
+        const matchedAbsPath = allowedPaths.get(file);
         if (!matchedAbsPath) {
           return {
             content: [
