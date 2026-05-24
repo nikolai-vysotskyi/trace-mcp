@@ -88,7 +88,8 @@ export function classifyEnvFile(absPath: string, headBytes?: string): EnvClassif
  * a malicious file cannot smuggle a marker by burying it lower.
  */
 export function detectManagedEmitter(headBytes: string): string | undefined {
-  const sample = headBytes.length > HEAD_SCAN_BYTES ? headBytes.slice(0, HEAD_SCAN_BYTES) : headBytes;
+  const sample =
+    headBytes.length > HEAD_SCAN_BYTES ? headBytes.slice(0, HEAD_SCAN_BYTES) : headBytes;
   for (const rawLine of sample.split('\n')) {
     const line = rawLine.trim();
     if (line === '') continue;

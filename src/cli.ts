@@ -2926,7 +2926,9 @@ program.addCommand(exportSecurityContextCommand);
 // daemon, or any network I/O.
 program
   .command('classify-env')
-  .description('Classify a .env-shaped file (template / managed / user-secret). Used by the PreToolUse guard.')
+  .description(
+    'Classify a .env-shaped file (template / managed / user-secret). Used by the PreToolUse guard.',
+  )
   .argument('<file>', 'Absolute or relative path to the file to classify')
   .action(async (file: string) => {
     const { classifyEnvFile } = await import('./utils/env-classifier.js');
