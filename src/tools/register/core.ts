@@ -616,10 +616,46 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
             ],
           };
         }
-        const absPath = path.isAbsolute(file) ? file : path.resolve(projectRoot, file);
+        // Constrain reads to files the indexer already classified as .env.
+        // `file` is user-controlled and must never flow into fs.readFileSync
+        // directly — otherwise an attacker could pass `/etc/passwd` or
+        // `../../foo` and exfiltrate arbitrary readable files through
+        // `redactEnvFile`'s passthrough output. The indexed allowlist
+        // anchors every read to a known, project-scoped path.
+        const requested = path.isAbsolute(file) ? file : path.resolve(projectRoot, file);
+        const indexedAbsPaths = new Set(
+          store.getAllEnvVars().map((v) => {
+            return path.isAbsolute(v.file_path)
+              ? v.file_path
+              : path.resolve(projectRoot, v.file_path);
+          }),
+        );
+        let matchedAbsPath = indexedAbsPaths.has(requested) ? requested : undefined;
+        if (!matchedAbsPath) {
+          // Allow suffix match against an indexed path (mirrors the
+          // existing non-redacted branch which accepts `.env` to match
+          // `apps/web/.env`). Suffix-only candidates are still picked
+          // from the trusted set, never from user input.
+          for (const abs of indexedAbsPaths) {
+            if (abs.endsWith(file)) {
+              matchedAbsPath = abs;
+              break;
+            }
+          }
+        }
+        if (!matchedAbsPath) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `No indexed .env file matches "${file}". Use get_env_vars without \`redacted\` to list known files, or run indexing.`,
+              },
+            ],
+          };
+        }
         let content: string;
         try {
-          content = fs.readFileSync(absPath, 'utf8');
+          content = fs.readFileSync(matchedAbsPath, 'utf8');
         } catch (err) {
           const reason = err instanceof Error ? err.message : String(err);
           return {
