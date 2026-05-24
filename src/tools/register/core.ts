@@ -616,28 +616,43 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
             ],
           };
         }
-        // Constrain reads to files the indexer already classified as .env.
-        // `file` is user-controlled and must never flow into fs.readFileSync
-        // directly — otherwise an attacker could pass `/etc/passwd` or
-        // `../../foo` and exfiltrate arbitrary readable files through
-        // `redactEnvFile`'s passthrough output. Build a lookup table whose
-        // VALUES are absolute paths drawn entirely from the indexed set,
-        // and let user input pick only a KEY. The path written to
-        // fs.readFileSync therefore originates from the trusted indexer.
-        const allowedPaths = new Map<string, string>();
-        for (const row of store.getAllEnvVars()) {
-          const abs = path.isAbsolute(row.file_path)
-            ? row.file_path
-            : path.resolve(projectRoot, row.file_path);
-          // Multiple keys for the same trusted value: caller may pass
-          // the absolute path, the stored relative path, or just the
-          // basename (e.g. `.env`).
-          allowedPaths.set(abs, abs);
-          allowedPaths.set(row.file_path, abs);
-          allowedPaths.set(path.basename(abs), abs);
+        // Defence against path-injection through user-controlled `file`:
+        //
+        //   1. Resolve under projectRoot and verify the result stays
+        //      inside it (path.relative + startsWith('..') check). This
+        //      is the canonical sanitiser pattern recognised by CodeQL's
+        //      `js/path-injection` rule and blocks `/etc/passwd`,
+        //      `../../foo`, and other escape attempts before any fs
+        //      call. Out-of-tree env files (e.g. ~/.trace-mcp/launcher.env)
+        //      are intentionally not reachable via redacted-mode reads;
+        //      use the default get_env_vars view for those — it reads
+        //      from the indexed DB, not the filesystem.
+        //
+        //   2. Additionally require the resolved path to be one the
+        //      indexer already classified as a .env file. Two
+        //      independent gates is cheap and prevents redacted-mode
+        //      from doubling as a generic in-tree file reader.
+        const resolved = path.resolve(projectRoot, file);
+        const rel = path.relative(projectRoot, resolved);
+        if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Refusing to read "${file}": path escapes the project root.`,
+              },
+            ],
+          };
         }
-        const matchedAbsPath = allowedPaths.get(file);
-        if (!matchedAbsPath) {
+        const indexedRelPaths = new Set(
+          store.getAllEnvVars().map((row) => {
+            const abs = path.isAbsolute(row.file_path)
+              ? row.file_path
+              : path.resolve(projectRoot, row.file_path);
+            return path.relative(projectRoot, abs);
+          }),
+        );
+        if (!indexedRelPaths.has(rel)) {
           return {
             content: [
               {
@@ -647,9 +662,14 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
             ],
           };
         }
+        // `rel` is now proven to be (a) inside projectRoot and (b) in
+        // the trusted indexed set. Build the final path from projectRoot
+        // + rel so CodeQL sees the sanitiser between user input and the
+        // fs call.
+        const safePath = path.join(projectRoot, rel);
         let content: string;
         try {
-          content = fs.readFileSync(matchedAbsPath, 'utf8');
+          content = fs.readFileSync(safePath, 'utf8');
         } catch (err) {
           const reason = err instanceof Error ? err.message : String(err);
           return {
