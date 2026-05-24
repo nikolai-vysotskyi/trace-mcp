@@ -162,7 +162,7 @@ jobs:
       # this is the biggest single win (~30-60s saved).
       - name: Restore node_modules cache
         id: nm-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             node_modules
@@ -369,7 +369,7 @@ jobs:
 
       - name: Restore app node_modules cache
         id: app-nm-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: packages/app/node_modules
           key: app-node_modules-v2-${{ runner.os }}-node22-${{ hashFiles('packages/app/pnpm-lock.yaml') }}
@@ -430,7 +430,7 @@ jobs:
 
       - name: Restore node_modules cache
         id: nm-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             node_modules
