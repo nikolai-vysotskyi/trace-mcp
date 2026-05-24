@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.39.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.2...v1.39.3) (2026-05-24)
+
+
+### Bug Fixes
+
+* **app:** keep guard mode popover above sibling project rows ([f537eef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f537eef55ca12b9781adb01fd0d5b95a6014936b))
+* **daemon:** self-heal stale registry + actionable MCP errors ([#168](https://github.com/nikolai-vysotskyi/trace-mcp/issues/168)) ([8094400](https://github.com/nikolai-vysotskyi/trace-mcp/commit/809440093892c607011b2604437bb854eb120591))
+
+
+### Documentation
+
+* align contributor setup with pnpm packageManager ([#156](https://github.com/nikolai-vysotskyi/trace-mcp/issues/156)) ([d8afe9b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d8afe9bae82b4faa535819f9991b7e707bd09049))
+
 ## [1.39.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.1...v1.39.2) (2026-05-18)
 
 
