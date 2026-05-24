@@ -1,7 +1,9 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { redactEnvFile } from '../../utils/env-parser.js';
 import { optionalNonEmptyString } from './_zod-helpers.js';
 import { EmbeddingPipeline } from '../../ai/embedding-pipeline.js';
 import { getReindexStats } from '../../daemon/reindex-stats.js';
@@ -587,7 +589,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_env_vars',
-    'List environment variable keys from .env files with inferred value types/formats. Never exposes actual values — only keys, types (string/number/boolean/empty), and formats (url/email/ip/path/uuid/json/base64/csv/dsn/etc). Read-only, no side effects, safe for secrets. Use to understand project configuration without accessing actual values. Returns JSON grouped by file: { [file]: [{ key, type, format, comment }] }.',
+    'List environment variable keys from .env files with inferred value types/formats. Never exposes actual values — only keys, types (string/number/boolean/empty), and formats (url/email/ip/path/uuid/json/base64/csv/dsn/etc). Read-only, no side effects, safe for secrets. Use to understand project configuration without accessing actual values. Pass `redacted: true` together with `file` to receive a line-by-line redacted view of that one file (keys + type hints, no values) — useful when ordering and comments matter, e.g. when reviewing a config layout. Returns JSON grouped by file by default: { [file]: [{ key, type, format, comment }] }.',
     {
       pattern: z
         .string()
@@ -595,8 +597,83 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         .optional()
         .describe('Filter keys by pattern (e.g. "DB_" or "REDIS")'),
       file: optionalNonEmptyString(512).describe('Filter by specific .env file path'),
+      redacted: z
+        .boolean()
+        .optional()
+        .describe(
+          'Return a line-by-line redacted text view of the file (keys + type hints, no values). Requires `file`.',
+        ),
     },
-    async ({ pattern, file }) => {
+    async ({ pattern, file, redacted }) => {
+      if (redacted) {
+        if (!file) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: '`redacted: true` requires `file`. Pass the .env path to redact, e.g. { file: ".env", redacted: true }.',
+              },
+            ],
+          };
+        }
+        // Defence against path-injection through user-controlled `file`.
+        // Two independent gates:
+        //
+        //   1. Containment: the resolved absolute path must be inside
+        //      projectRoot. We use the prefix-startsWith pattern that
+        //      CodeQL's `js/path-injection` rule recognises as a
+        //      sanitiser (path.resolve + startsWith(base + sep) check).
+        //      Out-of-tree env files (e.g. ~/.trace-mcp/launcher.env)
+        //      are intentionally unreachable via redacted-mode reads;
+        //      the default get_env_vars view still works for them since
+        //      it reads from the indexed DB, not the filesystem.
+        //
+        //   2. Allowlist: the resolved path must be one the indexer
+        //      already classified as a .env file. Prevents redacted-mode
+        //      from doubling as a generic in-tree file reader.
+        const safePath = path.resolve(projectRoot, file);
+        const baseWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+        if (safePath !== projectRoot && !safePath.startsWith(baseWithSep)) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Refusing to read "${file}": path escapes the project root.`,
+              },
+            ],
+          };
+        }
+        const indexedAbsPaths = new Set(
+          store
+            .getAllEnvVars()
+            .map((row) =>
+              path.isAbsolute(row.file_path)
+                ? row.file_path
+                : path.resolve(projectRoot, row.file_path),
+            ),
+        );
+        if (!indexedAbsPaths.has(safePath)) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `No indexed .env file matches "${file}". Use get_env_vars without \`redacted\` to list known files, or run indexing.`,
+              },
+            ],
+          };
+        }
+        let content: string;
+        try {
+          content = fs.readFileSync(safePath, 'utf8');
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          return {
+            content: [{ type: 'text', text: `Cannot read ${file}: ${reason}` }],
+          };
+        }
+        return { content: [{ type: 'text', text: redactEnvFile(content) }] };
+      }
+
       let vars = pattern ? store.searchEnvVars(pattern) : store.getAllEnvVars();
 
       if (file) {

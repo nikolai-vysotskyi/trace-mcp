@@ -119,10 +119,38 @@ ENV_FILE_RE='\.env(\.[a-zA-Z0-9._-]+)?$'
 # Example/template env files — committed to git, contain placeholders.
 ENV_EXAMPLE_RE='\.env\.(example|examples|sample|samples|template|templates|dist|defaults?|docs?)$'
 
+# Ask the TS classifier whether the path is a sensitive .env file. The
+# classifier is the single source of truth for the secrecy model (see
+# src/utils/env-classifier.ts) and recognises trust signals the shell
+# cannot see — notably the "# Managed by <trusted-tool>" provenance
+# header on tool-emitted files such as ~/.trace-mcp/launcher.env.
+#
+# Falls back to the filename-only regex when the CLI is missing,
+# returns a non-JSON answer, or the path is a pattern rather than a
+# real file (grep/glob arguments). The fallback preserves the legacy
+# behaviour, so the hook never gets *less* strict on classifier failure.
+classify_env_tier() {
+  local p="$1"
+  local out tier
+  # Only worth spawning trace-mcp when the path actually exists — the
+  # provenance check needs to read the file head. Otherwise filename
+  # alone is the most we can decide.
+  [[ -f "$p" ]] || { echo ""; return; }
+  command -v trace-mcp >/dev/null 2>&1 || { echo ""; return; }
+  out=$(trace-mcp classify-env "$p" 2>/dev/null) || { echo ""; return; }
+  # Extract the `tier` field without a JSON dependency. The CLI emits a
+  # single line of compact JSON like {"tier":"managed","reasons":[...]}.
+  tier=$(echo "$out" | sed -n 's/.*"tier"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  echo "$tier"
+}
+
 is_sensitive_env_file() {
   local p="$1"
   echo "$p" | grep -qiE "$ENV_FILE_RE" || return 1
   echo "$p" | grep -qiE "$ENV_EXAMPLE_RE" && return 1
+  case "$(classify_env_tier "$p")" in
+    managed|template|not-env) return 1 ;;
+  esac
   return 0
 }
 

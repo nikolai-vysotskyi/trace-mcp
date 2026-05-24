@@ -2919,4 +2919,37 @@ program.addCommand(askCommand);
 program.addCommand(searchCommand);
 program.addCommand(exportSecurityContextCommand);
 
+// Tiny synchronous subcommand consumed by the shell PreToolUse guard
+// (hooks/trace-mcp-guard.sh). Keeps the guard's secrecy model in lockstep
+// with the TypeScript side without making the shell parse TS. Prints a
+// single line of JSON to stdout and exits — never spawns the indexer,
+// daemon, or any network I/O.
+program
+  .command('classify-env')
+  .description(
+    'Classify a .env-shaped file (template / managed / user-secret). Used by the PreToolUse guard.',
+  )
+  .argument('<file>', 'Absolute or relative path to the file to classify')
+  .action(async (file: string) => {
+    const { classifyEnvFile } = await import('./utils/env-classifier.js');
+    const abs = path.resolve(file);
+    let head: string | undefined;
+    try {
+      const fd = fs.openSync(abs, 'r');
+      try {
+        const buf = Buffer.alloc(512);
+        const bytesRead = fs.readSync(fd, buf, 0, 512, 0);
+        head = buf.subarray(0, bytesRead).toString('utf8');
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      // File missing or unreadable — classify by name only. The guard
+      // still gets a useful answer (template vs user-secret) so it can
+      // decide whether to block or allow.
+    }
+    const result = classifyEnvFile(abs, head);
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+  });
+
 program.parse();
