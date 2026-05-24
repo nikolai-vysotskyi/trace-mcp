@@ -15,9 +15,33 @@ export class SymbolRepository {
 
   constructor(private readonly db: Database.Database) {
     this._stmts = {
+      // Atomic upsert that preserves the row id on symbol_id conflict.
+      // The previous `INSERT OR REPLACE` was DELETE+INSERT under the hood,
+      // which tripped `FOREIGN KEY constraint failed` whenever the replaced
+      // symbol had children pointing at it via `parent_id` (NO ACTION
+      // default refuses to orphan them on DELETE). See issue: hermes-agent
+      // "Force-reindex after FK recovery still failed". `ON CONFLICT DO
+      // UPDATE` keeps the id stable so every child FK + every node/edge
+      // pointing at this symbol stays valid across reindex runs.
       insertSymbol: db.prepare(
-        `INSERT OR REPLACE INTO symbols (file_id, symbol_id, name, kind, fqn, parent_id, signature, byte_start, byte_end, line_start, line_end, metadata, cyclomatic, max_nesting, param_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO symbols (file_id, symbol_id, name, kind, fqn, parent_id, signature, byte_start, byte_end, line_start, line_end, metadata, cyclomatic, max_nesting, param_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(symbol_id) DO UPDATE SET
+           file_id     = excluded.file_id,
+           name        = excluded.name,
+           kind        = excluded.kind,
+           fqn         = excluded.fqn,
+           parent_id   = excluded.parent_id,
+           signature   = excluded.signature,
+           byte_start  = excluded.byte_start,
+           byte_end    = excluded.byte_end,
+           line_start  = excluded.line_start,
+           line_end    = excluded.line_end,
+           metadata    = excluded.metadata,
+           cyclomatic  = excluded.cyclomatic,
+           max_nesting = excluded.max_nesting,
+           param_count = excluded.param_count
+         RETURNING id`,
       ),
       deleteSymbolsByFileId: db.prepare('DELETE FROM symbols WHERE file_id = ?'),
       deleteSymbolNodesByFileId: db.prepare(
@@ -61,7 +85,9 @@ export class SymbolRepository {
     // Guard: auto-generate symbolId if missing (framework plugins may omit it)
     const symbolIdStr = sym.symbolId || `file:${fileId}::${sym.name}#${sym.kind}`;
 
-    const result = this._stmts.insertSymbol.run(
+    // `.get()` + RETURNING — UPDATE branches of ON CONFLICT do not populate
+    // lastInsertRowid, so we ask SQLite for the resulting row id explicitly.
+    const row = this._stmts.insertSymbol.get(
       fileId,
       symbolIdStr,
       sym.name,
@@ -77,9 +103,16 @@ export class SymbolRepository {
       cyclomatic,
       maxNesting,
       paramCount,
-    );
+    ) as { id: number } | undefined;
 
-    const symbolId = Number(result.lastInsertRowid);
+    if (!row) {
+      // Should never happen — RETURNING id always emits a row on both the
+      // INSERT and ON CONFLICT DO UPDATE branches. If it does (e.g. a future
+      // schema migration adds a constraint that's silently no-op'd), fail
+      // loudly rather than return NaN and propagate corruption downstream.
+      throw new Error(`insertSymbol: RETURNING produced no row for symbol_id=${symbolIdStr}`);
+    }
+    const symbolId = row.id;
     createNode('symbol', symbolId);
     return symbolId;
   }
