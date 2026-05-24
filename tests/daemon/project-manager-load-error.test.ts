@@ -3,8 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Mock registry BEFORE importing the SUT — listProjects() drives the
 // loadAllRegistered() loop. We deliberately return ONE good-looking entry so
 // the loop reaches the addProject() call and we can force a rejection.
+//
+// The root uses a nonexistent parent dir so the issue-#168 stale-folder
+// eviction does NOT prune it before addProject runs — that eviction only
+// fires when the parent dir still exists (real deletion vs. unmounted volume).
 vi.mock('../../src/registry.js', () => ({
-  listProjects: vi.fn(() => [{ root: '/tmp/proj-corrupt' }]),
+  listProjects: vi.fn(() => [{ root: '/__trace_mcp_nonexistent_parent__/proj-corrupt' }]),
   unregisterProject: vi.fn(),
 }));
 
@@ -15,7 +19,7 @@ vi.mock('../../src/progress.js', () => ({
 }));
 
 vi.mock('../../src/project-setup.js', () => ({
-  // listProjects returns /tmp/proj-corrupt which is NOT a dangerous root.
+  // listProjects returns /__trace_mcp_nonexistent_parent__/proj-corrupt which is NOT a dangerous root.
   isDangerousProjectRoot: vi.fn(() => null),
   setupProject: vi.fn(),
 }));
@@ -65,7 +69,7 @@ describe('ProjectManager.loadAllRegistered — error logging', () => {
     expect(failureCall, 'Failed to load registered project log call').toBeDefined();
 
     const payload = failureCall![0] as Record<string, unknown>;
-    expect(payload.projectRoot).toBe('/tmp/proj-corrupt');
+    expect(payload.projectRoot).toBe('/__trace_mcp_nonexistent_parent__/proj-corrupt');
     // dbPath is included so the operator can run `sqlite3 <path>` for triage.
     expect(typeof payload.dbPath).toBe('string');
     expect((payload.dbPath as string).length).toBeGreaterThan(0);

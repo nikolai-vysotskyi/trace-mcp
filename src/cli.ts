@@ -85,6 +85,12 @@ import {
 } from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
+import {
+  buildAmbiguousProjectError,
+  buildNoProjectsError,
+  buildProjectNotFoundError,
+  extractRpcId,
+} from './daemon/mcp-error-response.js';
 import { resolveProjectForMcpRequest } from './daemon/mcp-project-router.js';
 import { teardownProjectBookkeeping as teardownProjectBookkeepingImpl } from './daemon/project-bookkeeping.js';
 import {
@@ -833,21 +839,19 @@ program
           isInitializeRequest,
         });
 
+        // JSON-RPC id from the body, if any — MCP clients otherwise wrap our
+        // 404/400 as "-32603 Backend send failed: <raw text>" because a bare
+        // {error: '...'} body isn't a valid JSON-RPC response. (issue #168)
+        const rpcId = extractRpcId(parsedBody);
+
         if (resolution.kind === 'no-projects') {
           res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'No projects registered' }));
+          res.end(JSON.stringify(buildNoProjectsError(rpcId)));
           return;
         }
         if (resolution.kind === 'ambiguous') {
           res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(
-            JSON.stringify({
-              error:
-                'Multiple projects registered — pass ?project=<absolute-path> on /mcp, ' +
-                'set the X-Trace-Project header, or include params._meta["traceMcp/projectRoot"] in the MCP initialize body. ' +
-                `Registered roots: ${resolution.registered.join(', ')}`,
-            }),
-          );
+          res.end(JSON.stringify(buildAmbiguousProjectError(resolution.registered, rpcId)));
           return;
         }
         if (resolution.via === 'tracked-client') {
@@ -891,11 +895,18 @@ program
               // lost its in-memory project list while a stdio session is
               // asking for a perfectly valid project root (or umbrella
               // workspace containing nested projects).
-              const canAutoAdd =
-                fs.existsSync(projectRoot) &&
-                !isDangerousProjectRoot(projectRoot) &&
-                (hasRootMarkers(projectRoot) ||
-                  discoverChildProjectsRecursive(projectRoot, 3).length > 0);
+              //
+              // Track the rejection reason so the 404 explains why — issue #168:
+              // bare "Project not found" left users guessing whether their
+              // MCP client was misconfigured (HOME/system root) or whether the
+              // folder had been deleted.
+              const folderMissing = !fs.existsSync(projectRoot);
+              const dangerReason = folderMissing ? null : isDangerousProjectRoot(projectRoot);
+              const hasMarkers = folderMissing
+                ? false
+                : hasRootMarkers(projectRoot) ||
+                  discoverChildProjectsRecursive(projectRoot, 3).length > 0;
+              const canAutoAdd = !folderMissing && !dangerReason && hasMarkers;
               if (canAutoAdd && !projectManager.getProject(projectRoot)) {
                 try {
                   await projectManager.addProject(projectRoot);
@@ -916,7 +927,17 @@ program
               }
               if (!transport) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ error: `Project not found: ${projectRoot}` }));
+                res.end(
+                  JSON.stringify(
+                    buildProjectNotFoundError({
+                      projectRoot,
+                      folderMissing,
+                      dangerReason,
+                      hasMarkers,
+                      rpcId: extractRpcId(parsedBody),
+                    }),
+                  ),
+                );
                 return;
               }
             }
