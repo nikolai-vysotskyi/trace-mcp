@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import {
@@ -525,9 +527,15 @@ export class ProjectManager {
   /** Load all registered projects and start them. */
   async loadAllRegistered(): Promise<void> {
     const allEntries = listProjects();
-    // Self-heal: evict any registry rows that point at dangerous roots (/, $HOME,
-    // system dirs). These usually come from an MCP client that spawned trace-mcp
-    // with cwd=/ — indexing them would walk the entire filesystem.
+    // Self-heal: evict registry rows that would block startup or cause
+    // "Project not found" 404s at runtime:
+    //  - dangerous roots (/, $HOME, system dirs) — typically from an MCP client
+    //    that spawned trace-mcp with cwd=/, which would walk the entire FS.
+    //  - missing folders whose parent still exists — the project was deleted.
+    //    The parent-exists check spares projects on unmounted volumes (e.g.
+    //    /Volumes/USB/foo when /Volumes/USB itself is also gone): we only
+    //    prune when the immediate parent directory is still there, which is
+    //    the signature of a user deletion vs. a transient mount.
     const entries = [];
     for (const entry of allEntries) {
       const dangerReason = isDangerousProjectRoot(entry.root);
@@ -535,6 +543,14 @@ export class ProjectManager {
         logger.warn(
           { root: entry.root, reason: dangerReason },
           'Removing dangerous project from registry',
+        );
+        unregisterProject(entry.root);
+        continue;
+      }
+      if (!fs.existsSync(entry.root) && fs.existsSync(path.dirname(entry.root))) {
+        logger.warn(
+          { root: entry.root },
+          'Removing project with missing folder from registry (parent dir exists — looks like deletion, not unmount)',
         );
         unregisterProject(entry.root);
         continue;
