@@ -112,7 +112,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Changed Symbols ---
   server.tool(
     'get_changed_symbols',
-    'Map a git diff to affected symbols (functions, classes, methods). For PR review. If "since" is omitted, auto-detects main/master as the base. Requires git. Use for PR review to see which symbols changed. For full branch comparison with risk assessment use compare_branches instead. Read-only. Returns JSON: { changes: [{ symbol_id, name, kind, file, changeType }], total }. Set `output_format: "toon"` for 30-60% fewer tokens on tabular responses (lossless).',
+    'Map a git diff to affected symbols (functions, classes, methods). For PR review. If "since" is omitted, auto-detects main/master as the base. Requires git. Use for PR review to see which symbols changed. For full branch comparison with risk assessment use compare_branches instead. Read-only. Returns JSON: { changes: [{ symbol_id, name, kind, file, changeType }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       since: z
         .string()

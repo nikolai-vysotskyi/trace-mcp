@@ -34,7 +34,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_git_churn',
-    'Per-file git churn: commits, unique authors, frequency, volatility assessment. Requires git. Use to identify frequently-changed files. For combined churn+complexity hotspots use get_risk_hotspots instead. Read-only. Returns JSON: { results: [{ file, commits, authors, frequency, volatility }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'Per-file git churn: commits, unique authors, frequency, volatility assessment. Requires git. Use to identify frequently-changed files. For combined churn+complexity hotspots use get_risk_hotspots instead. Read-only. Returns JSON: { results: [{ file, commits, authors, frequency, volatility }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       since_days: z
         .number()
@@ -71,7 +71,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_risk_hotspots',
-    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). Each entry includes a confidence_level (low/medium/multi_signal) counting how many of the two independent signals fired strongly. Result envelope includes _methodology disclosure and _warnings when git is unavailable. Requires git. Use to prioritize refactoring. For per-file bug prediction use predict_bugs instead. Read-only. Returns JSON: { hotspots: [{ file, score, complexity, commits, confidence_level }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). Each entry includes a confidence_level (low/medium/multi_signal) counting how many of the two independent signals fired strongly. Result envelope includes _methodology disclosure and _warnings when git is unavailable. Requires git. Use to prioritize refactoring. For per-file bug prediction use predict_bugs instead. Read-only. Returns JSON: { hotspots: [{ file, score, complexity, commits, confidence_level }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       since_days: z
         .number()
@@ -546,7 +546,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_complexity_report',
-    'Get complexity metrics (cyclomatic, max nesting, param count) for symbols in a file or across the project. Use to identify complex code before refactoring. For historical trends use get_complexity_trend instead. Read-only. Returns JSON: { symbols: [{ symbol_id, name, kind, file, line, cyclomatic, max_nesting, param_count }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'Get complexity metrics (cyclomatic, max nesting, param count) for symbols in a file or across the project. Use to identify complex code before refactoring. For historical trends use get_complexity_trend instead. Read-only. Returns JSON: { symbols: [{ symbol_id, name, kind, file, line, cyclomatic, max_nesting, param_count }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       file_path: z
         .string()

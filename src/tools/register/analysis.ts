@@ -170,7 +170,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dead_exports',
-    'Find exported symbols never imported by any other file — dead code candidates. Use for quick export-level dead code scan. For deeper multi-signal dead code detection (including call graph) use get_dead_code instead. Paginated: caps result list at `limit` (default 100, max 500); when more exist the response includes `truncated: true` and `total_dead` reflects the full count. Read-only. Returns JSON: { dead_exports: [{ symbol_id, name, kind, file }], total_dead, total_exports, truncated? }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'Find exported symbols never imported by any other file — dead code candidates. Use for quick export-level dead code scan. For deeper multi-signal dead code detection (including call graph) use get_dead_code instead. Paginated: caps result list at `limit` (default 100, max 500); when more exist the response includes `truncated: true` and `total_dead` reflects the full count. Read-only. Returns JSON: { dead_exports: [{ symbol_id, name, kind, file }], total_dead, total_exports, truncated? }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       file_pattern: z
         .string()
@@ -216,7 +216,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_untested_exports',
-    'Find exported public symbols with no matching test file — test coverage gaps. For deeper analysis including non-exported symbols use get_untested_symbols instead. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file }], total }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'Find exported public symbols with no matching test file — test coverage gaps. For deeper analysis including non-exported symbols use get_untested_symbols instead. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       file_pattern: z
         .string()
@@ -290,7 +290,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_coupling',
-    'Coupling analysis: afferent (Ca), efferent (Ce), instability index per file. Shows which modules are stable vs unstable. Use to identify fragile or overly-depended-on modules. For coupling changes over time use get_coupling_trend instead. Read-only. Returns JSON: [{ file, ca, ce, instability, assessment }]. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'Coupling analysis: afferent (Ca), efferent (Ce), instability index per file. Shows which modules are stable vs unstable. Use to identify fragile or overly-depended-on modules. For coupling changes over time use get_coupling_trend instead. Read-only. Returns JSON: [{ file, ca, ce, instability, assessment }]. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default: all)'),
       assessment: z
@@ -342,7 +342,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_pagerank',
-    'File importance ranking via PageRank on the import graph. Shows most central/important files. Use to identify architecturally critical files. For combined health metrics use get_project_health instead. Read-only. Returns JSON: [{ file, score }]. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'File importance ranking via PageRank on the import graph. Shows most central/important files. Use to identify architecturally critical files. For combined health metrics use get_project_health instead. Read-only. Returns JSON: [{ file, score }]. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
       output_format: OutputFormatSchema,
@@ -394,7 +394,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_refactor_candidates',
-    'Find functions with high complexity called from many files — candidates for extraction to shared modules. Use during architecture review to identify hotspots worth refactoring. Read-only. Returns JSON: [{ symbol_id, name, file, cyclomatic, callerCount }]. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'Find functions with high complexity called from many files — candidates for extraction to shared modules. Use during architecture review to identify hotspots worth refactoring. Read-only. Returns JSON: [{ symbol_id, name, file, cyclomatic, callerCount }]. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       min_cyclomatic: z
         .number()

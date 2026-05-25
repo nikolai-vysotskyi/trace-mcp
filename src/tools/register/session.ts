@@ -573,7 +573,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
 
   server.tool(
     'analyze_perf',
-    'Per-tool latency telemetry: p50/p95/max, count, error_rate. Default reads the current session ring; `window=1h|24h|7d|all` reads from ~/.trace-mcp/telemetry.db (requires telemetry.enabled in config). Sorted by p95 descending so the slowest tools surface first. Read-only. Returns JSON: { tools: [{ tool, p50, p95, max, count, errors, error_rate }], total_tools, source }. Set output_format: "toon" for ~20-43% fewer tokens (lossless, table-mode payloads).',
+    'Per-tool latency telemetry: p50/p95/max, count, error_rate. Default reads the current session ring; `window=1h|24h|7d|all` reads from ~/.trace-mcp/telemetry.db (requires telemetry.enabled in config). Sorted by p95 descending so the slowest tools surface first. Read-only. Returns JSON: { tools: [{ tool, p50, p95, max, count, errors, error_rate }], total_tools, source }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       top: z
         .number()
