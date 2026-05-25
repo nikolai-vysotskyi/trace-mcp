@@ -63,11 +63,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     latest?: string;
     lastChecked?: number;
     error?: string;
+    /** True when the user already attempted this transition via npm-only and nothing on disk has moved since. */
+    stuck?: boolean;
   }> => ipcRenderer.invoke('check-for-update'),
   checkPendingUpdate: (): Promise<{ pending: boolean; version?: string }> =>
     ipcRenderer.invoke('check-pending-update'),
-  applyUpdate: (): Promise<{ ok: boolean; pending?: boolean; error?: string }> =>
-    ipcRenderer.invoke('apply-update'),
+  applyUpdate: (): Promise<{
+    ok: boolean;
+    pending?: boolean;
+    error?: string;
+    /** "bundle-pending" — restart will swap the .app; "npm-only" — CLI moved but bundle is stuck; "already-current" — nothing to do. */
+    outcome?: 'bundle-pending' | 'npm-only' | 'already-current';
+    version?: string;
+  }> => ipcRenderer.invoke('apply-update'),
   restartApp: (): Promise<void> => ipcRenderer.invoke('restart-app'),
   openSettings: (section?: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('open-settings', section),

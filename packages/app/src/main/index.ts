@@ -152,6 +152,13 @@ import {
   stopDaemon as ollamaStop,
   unloadModel as ollamaUnload,
 } from './ollama-control';
+import {
+  computeUpdateOutcome,
+  isStuckOnVersion,
+  readAppUpdateState,
+  type UpdateOutcome,
+  writeAppUpdateState,
+} from './update-state';
 
 // IPC: restart daemon (kill old, create plist if needed, start new via launchd)
 ipcMain.handle('restart-daemon', async () => {
@@ -576,6 +583,16 @@ function fetchLatestRelease(): Promise<{
 ipcMain.handle('check-for-update', async () => {
   const now = Date.now();
   const current = app.getVersion().replace(/^v/, '');
+  // Read the persisted "I tried npm-only" marker once. If the user already
+  // clicked Update for exactly this (bundle, latest) pair and nothing on
+  // disk has moved, we suppress the banner — clicking Update again will
+  // produce the same npm-only outcome. The marker self-clears when the
+  // registry advances or the bundle is manually reinstalled.
+  const appUpdateState = readAppUpdateState();
+  const suppressIfStuck = (latest: string | undefined) => {
+    if (!latest) return false;
+    return isStuckOnVersion(current, latest, appUpdateState, cmpSemver);
+  };
 
   // Try npm registry first — unauthenticated, no practical rate limit.
   try {
@@ -583,6 +600,9 @@ ipcMain.handle('check-for-update', async () => {
     if (npm.status === 200 && npm.version) {
       updateCache.lastChecked = now;
       const available = cmpSemver(npm.version, current) > 0;
+      if (available && suppressIfStuck(npm.version)) {
+        return { available: false, current, latest: npm.version, lastChecked: now, stuck: true };
+      }
       return { available, current, latest: npm.version, lastChecked: now };
     }
   } catch {
@@ -607,7 +627,10 @@ ipcMain.handle('check-for-update', async () => {
       updateCache.lastChecked = now;
       const release = JSON.parse(updateCache.lastBody);
       const latest = String(release.tag_name || '').replace(/^v/, '');
-      const available = latest && cmpSemver(latest, current) > 0;
+      const available = Boolean(latest) && cmpSemver(latest, current) > 0;
+      if (available && suppressIfStuck(latest)) {
+        return { available: false, current, latest, lastChecked: now, stuck: true };
+      }
       return { available, current, latest, lastChecked: now };
     }
 
@@ -640,6 +663,9 @@ ipcMain.handle('check-for-update', async () => {
 
     const latest = String(release.tag_name).replace(/^v/, '');
     const available = cmpSemver(latest, current) > 0;
+    if (available && suppressIfStuck(latest)) {
+      return { available: false, current, latest, lastChecked: now, stuck: true };
+    }
     return { available, current, latest, lastChecked: now };
   } catch (err) {
     return {
@@ -827,11 +853,6 @@ function readInstalledVersion(npmRoot: string | null): string | undefined {
   }
 }
 
-// Set when `apply-update` finishes and the on-disk package is ahead of the
-// running process. Drives the "Restart to install" banner for the npm-install
-// path (the legacy zip-staged path uses hasPendingUpdate() instead).
-let pendingRestartVersion: string | undefined;
-
 ipcMain.handle('apply-update', async () => {
   // `install --force` is the robust swap: it replaces the package directory
   // wholesale rather than relying on `update`'s rename dance, which breaks when
@@ -935,17 +956,36 @@ ipcMain.handle('apply-update', async () => {
   }
   const installedVersion = readInstalledVersion(npmRoot);
   const running = app.getVersion().replace(/^v/, '');
-  if (installedVersion && cmpSemver(installedVersion, running) > 0) {
-    pendingRestartVersion = installedVersion;
+  const outcome: UpdateOutcome = computeUpdateOutcome(
+    installedVersion,
+    running,
+    hasPendingUpdate(),
+    cmpSemver,
+  );
+  const pending = outcome === 'bundle-pending';
+
+  if (outcome === 'npm-only' && installedVersion) {
+    // The CLI moved but the Electron bundle did not — npm install can't
+    // swap /Applications/trace-mcp.app. Record the attempt so
+    // check-for-update stops re-asking until the registry advances past
+    // this target or the user manually reinstalls the .app.
+    const state = readAppUpdateState();
+    state.lastNpmOnlyAttempt = {
+      bundle: running,
+      target: installedVersion,
+      at: Date.now(),
+    };
+    writeAppUpdateState(state);
   }
-  const pending = hasPendingUpdate() || pendingRestartVersion !== undefined;
+
   appendUpdateLog({
     event: 'apply-update:ok',
+    outcome,
     pending,
     installedVersion: installedVersion ?? null,
     runningVersion: running,
   });
-  return { ok: true, pending, version: pendingRestartVersion };
+  return { ok: true, pending, outcome, version: pending ? installedVersion : undefined };
 });
 
 // Pending update plumbing — postinstall stages a verified zip into ~/Applications/
@@ -978,8 +1018,11 @@ function clearPendingFiles(): void {
 }
 
 ipcMain.handle('check-pending-update', () => {
-  // Path 1: legacy zip-staged pending swap (postinstall produced
-  // ~/Applications/.trace-mcp-pending.{zip,version}).
+  // Only the zip-staged path can actually swap the Electron bundle on
+  // restart. The previous "npm-install path" branch claimed pending=true
+  // whenever the on-disk package was ahead of the running process, but
+  // relaunch cannot move the .app, so it produced an "Update to restart"
+  // banner that did nothing and re-armed the update cycle on next start.
   if (hasPendingUpdate()) {
     let version: string | undefined;
     try {
@@ -994,16 +1037,6 @@ ipcMain.handle('check-pending-update', () => {
       return { pending: true, version };
     }
     clearPendingFiles();
-  }
-  // Path 2: npm-install path — `apply-update` updated the on-disk package but
-  // this Electron process is still on the previous version. Relaunch picks it
-  // up.
-  if (pendingRestartVersion) {
-    const current = app.getVersion().replace(/^v/, '');
-    if (cmpSemver(pendingRestartVersion, current) > 0) {
-      return { pending: true, version: pendingRestartVersion };
-    }
-    pendingRestartVersion = undefined;
   }
   return { pending: false };
 });
