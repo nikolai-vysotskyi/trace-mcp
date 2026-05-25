@@ -64,6 +64,7 @@ export const initCommand = new Command('init')
   .option('--skip-hooks', 'Do not install guard hooks')
   .option('--skip-mcp-client', 'Do not configure MCP client')
   .option('--skip-claude-md', 'Do not add CLAUDE.md block')
+  .option('--skip-app', 'Do not install or update the menu bar app')
   .option(
     '--mcp-client <name>',
     'Force MCP client: claude-code | claw-code | claude-desktop | cursor | windsurf | continue | junie | codex | hermes | amp | warp | factory-droid',
@@ -78,6 +79,7 @@ export const initCommand = new Command('init')
       skipHooks?: boolean;
       skipMcpClient?: boolean;
       skipClaudeMd?: boolean;
+      skipApp?: boolean;
       mcpClient?: string;
       force?: boolean;
       dryRun?: boolean;
@@ -256,7 +258,7 @@ export const initCommand = new Command('init')
         }
 
         // Q6: Install or update menu bar app (macOS / Windows)
-        if (process.platform === 'darwin' || process.platform === 'win32') {
+        if (!opts.skipApp && (process.platform === 'darwin' || process.platform === 'win32')) {
           const appExists = isAppInstalled();
           const appOutdated = appExists && isAppOutdated();
 
@@ -292,6 +294,15 @@ export const initCommand = new Command('init')
         agentBehavior = installTweakcc ? 'strict' : 'off';
         // Auto-fix conflicts in non-interactive mode
         fixConflicts = true;
+        // Install or update menu bar app on supported platforms —
+        // mirrors the interactive Q6 default (initialValue: true).
+        if (!opts.skipApp && (process.platform === 'darwin' || process.platform === 'win32')) {
+          const appExists = isAppInstalled();
+          const appOutdated = appExists && isAppOutdated();
+          if (!appExists || appOutdated) {
+            installApp = true;
+          }
+        }
       }
 
       // --- Execute ---
@@ -468,25 +479,27 @@ export const initCommand = new Command('init')
 
       // --- Install menu bar app ---
       if (installApp && !opts.dryRun) {
-        const spin = p.spinner();
-        spin.start('Downloading trace-mcp menu bar app…');
+        const spin = !nonInteractive ? p.spinner() : null;
+        spin?.start('Downloading trace-mcp menu bar app…');
         const appResult = await installGuiApp({
           retries: 3,
           retryDelayMs: 15_000,
           onRetry: (attempt, total) => {
-            spin.message(`App asset not uploaded yet, retrying (${attempt}/${total})…`);
+            spin?.message(`App asset not uploaded yet, retrying (${attempt}/${total})…`);
           },
         });
         if (appResult.installed) {
-          spin.stop(`Installed → ${appResult.path}`);
+          spin?.stop(`Installed → ${appResult.path}`);
           steps.push({
             target: appResult.path!,
             action: 'created',
             detail: 'Menu bar app installed',
           });
         } else {
-          spin.stop('App installation failed');
-          p.log.warn(`Could not install app: ${appResult.error}`);
+          spin?.stop('App installation failed');
+          if (!nonInteractive) {
+            p.log.warn(`Could not install app: ${appResult.error}`);
+          }
           const fallbackPath =
             process.platform === 'darwin' ? '~/Applications/trace-mcp.app' : 'trace-mcp';
           steps.push({
