@@ -898,81 +898,6 @@
       .pipe-step { padding: 24px 0; border-top: 1px solid var(--border); }
     }
 
-    /* ── Benchmark instrument table ── */
-    .benchmark-rows {
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
-    }
-    .benchmark-row {
-      display: grid;
-      grid-template-columns: 200px 1fr 100px;
-      gap: 32px;
-      align-items: center;
-    }
-    .br-label {
-      font-family: var(--font-body);
-      font-size: 14px;
-      color: var(--text-primary);
-      font-weight: 500;
-    }
-    .br-bar { display: flex; flex-direction: column; gap: 6px; }
-    .br-segments { display: flex; gap: 2px; height: 12px; }
-    .br-segment { flex: 1; background: var(--border); transition: background 600ms ease-out; }
-    .br-segment.filled { background: var(--text-display); }
-    .br-segment.peak { background: var(--accent); }
-    .br-meta {
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 8px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--text-disabled);
-      letter-spacing: 0.04em;
-      min-width: 0;
-    }
-    .br-meta .from { text-decoration: line-through; }
-    .br-meta .to { color: var(--text-display); text-decoration: none; }
-    .br-pct {
-      font-family: var(--font-mono);
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--text-display);
-      text-align: right;
-      line-height: 1;
-    }
-    .br-pct .small { font-size: 0.5em; color: var(--text-secondary); }
-    @media (max-width: 700px) {
-      .benchmark-row { grid-template-columns: 1fr; gap: 12px; }
-      .br-pct { text-align: left; }
-    }
-
-    .benchmark-summary {
-      margin-top: 64px;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 32px;
-      align-items: end;
-      padding-top: 32px;
-      border-top: 1px solid var(--border-visible);
-    }
-    .bs-text {
-      max-width: 520px;
-      color: var(--text-primary);
-      font-size: 15px;
-      line-height: 1.6;
-    }
-    .bs-num {
-      font-family: var(--font-mono);
-      font-size: clamp(48px, 7vw, 88px);
-      font-weight: 700;
-      color: var(--text-display);
-      line-height: 0.9;
-      letter-spacing: -0.03em;
-    }
-    .bs-num .pct { font-size: 0.5em; color: var(--text-secondary); margin-left: 4px; }
-
     /* ── Use cases (when to use) ── */
     .usecase-grid {
       display: grid;
@@ -1866,7 +1791,6 @@
       <a href="#problem">Problem</a>
       <a href="#product">Product</a>
       <a href="#capabilities">Capabilities</a>
-      <a href="#benchmark">Benchmark</a>
       <a href="#install" class="primary">Install</a>
       <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" class="primary">Github</a>
       <button type="button" class="theme-toggle" role="switch" aria-label="Toggle color theme" data-theme-toggle>
@@ -1915,7 +1839,7 @@
           View on GitHub
         </a>
         <span class="hero-install" onclick="copyInstall(this)">
-          <code>npx trace-mcp benchmark .</code>
+          <code>npm install -g trace-mcp</code>
           <span class="copy">copy</span>
         </span>
       </div>
@@ -1950,7 +1874,7 @@
           <span class="metrics-strip-label">Effective context capacity per session</span>
         </div>
       </div>
-      <p class="metrics-strip-foot">Measured against baseline agent runs that re-read files and re-traverse dependencies on every turn. Run <code>npx trace-mcp benchmark .</code> to reproduce on your own repo.</p>
+      <p class="metrics-strip-foot">Measured against baseline agent runs that re-read files and re-traverse dependencies on every turn.</p>
     </div>
   </section>
 
@@ -2361,100 +2285,11 @@
     </div>
   </section>
 
-  <!-- ── BENCHMARK ── -->
-  <section id="benchmark">
-    <div class="container">
-      <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">009 / Benchmark</span></div>
-        <div>
-          <h2 class="section-title">Token cost, <span class="em">measured &mdash; not marketed.</span></h2>
-          <p class="section-lede">Structured benchmarks on a real codebase (856 files, 4,774 symbols), native Read/Grep/Glob vs trace-mcp tools, via <code>benchmark_project</code>. These are <strong>peak structured-task numbers</strong>, not average production. On mixed real-world workloads expect <strong>~40&ndash;50%</strong>; on non-code tasks, 0%. The peaks are where the math gets dramatic.</p>
-        </div>
-      </div>
-
-      <div class="benchmark-rows">
-        <div class="benchmark-row reveal" data-fill="20">
-          <div class="br-label">Type hierarchy</div>
-          <div class="br-bar">
-            <div class="br-segments" data-segments="20"></div>
-            <div class="br-meta">
-              <span><span class="from">195,717</span> &rarr; <span class="to">1,030</span> tokens</span>
-              <span>tree-walk vs read-all</span>
-            </div>
-          </div>
-          <div class="br-pct">99.5<span class="small">%</span></div>
-        </div>
-        <div class="benchmark-row reveal" data-fill="20">
-          <div class="br-label">Symbol lookup</div>
-          <div class="br-bar">
-            <div class="br-segments" data-segments="20"></div>
-            <div class="br-meta">
-              <span><span class="from">44,265</span> &rarr; <span class="to">1,023</span> tokens</span>
-              <span>indexed search vs grep</span>
-            </div>
-          </div>
-          <div class="br-pct">97.7<span class="small">%</span></div>
-        </div>
-        <div class="benchmark-row reveal" data-fill="20">
-          <div class="br-label">Composite task</div>
-          <div class="br-bar">
-            <div class="br-segments" data-segments="20"></div>
-            <div class="br-meta">
-              <span><span class="from">82,291</span> &rarr; <span class="to">2,929</span> tokens</span>
-              <span>1 call vs ~10 sequential</span>
-            </div>
-          </div>
-          <div class="br-pct">96.4<span class="small">%</span></div>
-        </div>
-        <div class="benchmark-row reveal" data-fill="20">
-          <div class="br-label">Impact analysis</div>
-          <div class="br-bar">
-            <div class="br-segments" data-segments="20"></div>
-            <div class="br-meta">
-              <span><span class="from">119,441</span> &rarr; <span class="to">5,976</span> tokens</span>
-              <span>graph traversal vs guess</span>
-            </div>
-          </div>
-          <div class="br-pct">95.0<span class="small">%</span></div>
-        </div>
-        <div class="benchmark-row reveal" data-fill="19">
-          <div class="br-label">Call graph</div>
-          <div class="br-bar">
-            <div class="br-segments" data-segments="20"></div>
-            <div class="br-meta">
-              <span><span class="from">115,570</span> &rarr; <span class="to">6,937</span> tokens</span>
-              <span>bidirectional</span>
-            </div>
-          </div>
-          <div class="br-pct">94.0<span class="small">%</span></div>
-        </div>
-        <div class="benchmark-row reveal" data-fill="17">
-          <div class="br-label">Find usages</div>
-          <div class="br-bar">
-            <div class="br-segments" data-segments="20"></div>
-            <div class="br-meta">
-              <span><span class="from">11,430</span> &rarr; <span class="to">1,720</span> tokens</span>
-              <span>edge index vs grep</span>
-            </div>
-          </div>
-          <div class="br-pct">85.0<span class="small">%</span></div>
-        </div>
-      </div>
-
-      <div class="benchmark-summary">
-        <div class="bs-text">
-          Peak structured-task reduction across 11 categories on the trace-mcp TS/Vue codebase &mdash; the recomputation that gets eliminated when the agent reuses a precomputed graph instead of re-reading files. Real production sessions mix structured calls with reads and edits, so net reduction lands at <strong>~40&ndash;50%</strong> on mixed workloads. Less noise also means fewer hallucinations and stronger first-response accuracy.
-        </div>
-        <div class="bs-num">up to 97<span class="pct">%</span></div>
-      </div>
-    </div>
-  </section>
-
   <!-- ── USE CASES ── -->
   <section id="usecases">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">010 / Use Cases</span></div>
+        <div class="section-meta-tag"><span class="label">009 / Use Cases</span></div>
         <div>
           <h2 class="section-title">Where trace-mcp <span class="em">belongs in your stack.</span></h2>
         </div>
@@ -2487,7 +2322,7 @@
   <section id="security">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">011 / Security</span></div>
+        <div class="section-meta-tag"><span class="label">010 / Security</span></div>
         <div>
           <h2 class="section-title">Built for <span class="em">real-world environments.</span></h2>
           <p class="section-lede">Runs fully local. No code leaves your machine. Refactors are reversible. Destructive operations require explicit confirmation.</p>
@@ -2518,7 +2353,7 @@
   <section id="integrations">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">012 / Ecosystem</span></div>
+        <div class="section-meta-tag"><span class="label">011 / Ecosystem</span></div>
         <div>
           <h2 class="section-title">58 integrations. <span class="em">81 languages.</span></h2>
           <p class="section-lede">Each integration adds framework-specific edges &mdash; routes, components, migrations, queries &mdash; not just syntax parsing. Plugin API is open: write your own for a niche framework in under a day.</p>
@@ -2584,10 +2419,10 @@
   <section id="install">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">013 / Install</span></div>
+        <div class="section-meta-tag"><span class="label">012 / Install</span></div>
         <div>
-          <h2 class="section-title">See your waste first. <span class="em">Then wire it in.</span></h2>
-          <p class="section-lede">Run one command and watch the recomputation surface. No config, no API keys, no signup &mdash; embeddings ship with the binary, everything stays local.</p>
+          <h2 class="section-title">Three commands. <span class="em">No config, no signup.</span></h2>
+          <p class="section-lede">Install globally, wire trace-mcp into your AI agent, then register each project. Requires Node.js 20+. No API keys &mdash; embeddings ship with the binary and everything stays local.</p>
         </div>
       </div>
 
@@ -2596,25 +2431,25 @@
           <div class="qs-step reveal">
             <div class="qs-step-num">01</div>
             <div class="qs-step-body">
-              <h4>/ See Your Waste</h4>
-              <div class="qs-cmd">npx trace-mcp benchmark .</div>
-              <p>Indexes the project, runs 11 structured task benchmarks, prints per-task token cost &mdash; without trace-mcp vs. with. Time-to-value: ~5 minutes on a real repo.</p>
+              <h4>/ Install Globally</h4>
+              <div class="qs-cmd">npm install -g trace-mcp</div>
+              <p>Installs the <code>trace-mcp</code> CLI from npm. ~30 seconds. Requires Node.js 20 or newer. Prefer pnpm or yarn? <code>pnpm add -g trace-mcp</code> / <code>yarn global add trace-mcp</code> work too.</p>
             </div>
           </div>
           <div class="qs-step reveal">
             <div class="qs-step-num">02</div>
             <div class="qs-step-body">
-              <h4>/ Wire In Your Agent</h4>
-              <div class="qs-cmd">npx trace-mcp init</div>
-              <p>Configures your MCP client (Claude Code, Cursor, Windsurf), installs the guard hook, updates CLAUDE.md. One command per machine.</p>
+              <h4>/ Wire Into Your Agent</h4>
+              <div class="qs-cmd">trace-mcp init</div>
+              <p>One-time global setup. Auto-detects installed MCP clients (Claude Code, Cursor, Windsurf, Claude Desktop, Codex, JetBrains AI, &hellip;), wires trace-mcp into each, installs the guard hook, and adds routing rules to <code>~/.claude/CLAUDE.md</code>. Run once per machine.</p>
             </div>
           </div>
           <div class="qs-step reveal">
             <div class="qs-step-num">03</div>
             <div class="qs-step-body">
-              <h4>/ Index The Project</h4>
-              <div class="qs-cmd">trace-mcp add</div>
-              <p>Detects frameworks, indexes the codebase, registers the project. The graph stays incrementally fresh from here on.</p>
+              <h4>/ Register Each Project</h4>
+              <div class="qs-cmd">cd ~/projects/my-app &amp;&amp; trace-mcp add</div>
+              <p>Detects frameworks, builds the per-project index, registers the project. The file watcher keeps the graph incrementally fresh from here on. Re-run in every repo you want trace-mcp to understand.</p>
             </div>
           </div>
         </div>
@@ -2624,23 +2459,25 @@
             <span>~/projects/my-app</span>
             <span class="right"><span class="status-dot" style="background: var(--success); box-shadow: none;"></span> ready</span>
           </div>
-          <div class="terminal-body"><span class="cmt"># 1. see your waste &mdash; ~5 minutes, no setup</span>
-<span class="pmt">$</span> npx trace-mcp benchmark .
-<span class="ok">[OK]</span> indexed 1,247 files / 8,392 symbols
-<span class="ok">[BENCH]</span> impact analysis    49,141 &rarr;  1,856 tokens (96.2% less)
-<span class="ok">[BENCH]</span> call graph        178,345 &rarr;  9,285 tokens (94.8% less)
-<span class="ok">[BENCH]</span> type hierarchy     94,762 &rarr;    855 tokens (99.1% less)
-<span class="ok">[OK]</span> total recomputation: <span class="kw">up to ~99% per call</span>
+          <div class="terminal-body"><span class="cmt"># 1. install the CLI globally (~30 seconds)</span>
+<span class="pmt">$</span> npm install -g trace-mcp
+<span class="ok">[OK]</span> trace-mcp@latest installed
 
-<span class="cmt"># 2. wire trace-mcp into your agent</span>
-<span class="pmt">$</span> npx trace-mcp init
+<span class="cmt"># 2. one-time setup &mdash; wire trace-mcp into your AI agent</span>
+<span class="pmt">$</span> trace-mcp init
 <span class="ok">[OK]</span> claude code / cursor / windsurf configured
 <span class="ok">[OK]</span> guard hook installed
 <span class="ok">[OK]</span> claude.md updated
 
-<span class="cmt"># 3. agent now reuses the graph instead of re-reading</span>
-<span class="pmt">&gt;</span> <span class="kw">get_change_impact</span>(<span class="str">"app/Models/User.php"</span>)
-<span class="ok">[READY]</span> 1 call &rarr; 23 affected symbols, 4 tests, 1 decision</div>
+<span class="cmt"># 3. register the current project for indexing</span>
+<span class="pmt">$</span> trace-mcp add
+<span class="ok">[OK]</span> detected frameworks: typescript, vue, vitest
+<span class="ok">[OK]</span> indexed 1,247 files / 8,392 symbols
+<span class="ok">[READY]</span> file watcher armed &mdash; graph stays fresh
+
+<span class="cmt"># done &mdash; your agent now reuses the graph instead of re-reading</span>
+<span class="pmt">&gt;</span> <span class="kw">get_change_impact</span>(<span class="str">"src/models/User.ts"</span>)
+<span class="ok">[OK]</span> 1 call &rarr; 23 affected symbols, 4 tests, 1 decision</div>
         </div>
       </div>
     </div>
@@ -2650,7 +2487,7 @@
   <section id="faq">
     <div class="container">
       <div class="section-meta">
-        <div class="section-meta-tag"><span class="label">014 / Faq</span></div>
+        <div class="section-meta-tag"><span class="label">013 / Faq</span></div>
         <div>
           <h2 class="section-title">Common questions.</h2>
         </div>
@@ -2750,7 +2587,6 @@
         <a href="#problem">Problem</a>
         <a href="#product">Product view</a>
         <a href="#capabilities">Capabilities</a>
-        <a href="#benchmark">Benchmark</a>
         <a href="#install">Install</a>
       </div>
       <div class="footer-col">
@@ -2881,7 +2717,7 @@
   })();
 
   // Copy install
-  function _copyInstall(el) {
+  function copyInstall(el) {
     navigator.clipboard.writeText('npm install -g trace-mcp');
     const c = el.querySelector('.copy');
     const original = c.textContent;
