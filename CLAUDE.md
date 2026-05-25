@@ -125,6 +125,31 @@ When you need to Edit a file, minimize what you Read:
 4. **For files >200 lines**: ALWAYS use offset/limit. Reading a 500-line file to edit 5 lines wastes ~400 lines of tokens
 5. **After Edit**: call `register_edit` to reindex — do NOT re-read the file to verify (Edit tool confirms success)
 
+### TOON output format — when to use
+
+14 tools support `output_format: "toon"` for lossless Token-Oriented Object Notation. Pass it whenever the response will be consumed by an LLM. Lossless is a mathematical property of the encoding; the structural win on tabular payloads is a property of the format spec. Actual token savings depend on the consumer's tokenizer and payload shape — see [docs/toon-savings.md](docs/toon-savings.md) for measurements on this repo's self-index. Default remains JSON; TOON is strictly opt-in.
+
+Allowlist:
+
+- `analyze_perf`
+- `get_changed_symbols`
+- `get_complexity_report`
+- `get_coupling`
+- `get_dead_exports`
+- `get_feature_context`
+- `get_git_churn`
+- `get_outline`
+- `get_pagerank`
+- `get_refactor_candidates`
+- `get_risk_hotspots`
+- `get_untested_exports`
+- `query_decisions`
+- `search`
+
+For `search_text`, prefer `grouping: "by_file"` (lossless path-dedup in JSON) over TOON — the two don't stack and grouping is the cheaper win.
+
+Other tools are NOT TOON-enabled — they regressed in measurements (heterogeneous payloads with nested objects or arrays land in TOON's list mode, which costs more tokens than JSON). Don't pass `output_format: "toon"` to a tool not on this list; it will be rejected by schema validation. Drift guardrail: `src/tools/register/__tests__/toon-drift.test.ts` keeps the schema, description, and allowlist in sync.
+
 ### Plugin architecture
 
 - Language plugins: `src/indexer/plugins/lang/` — one per language (ts, python, go, etc.)
