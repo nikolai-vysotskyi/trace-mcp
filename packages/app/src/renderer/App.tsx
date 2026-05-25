@@ -459,6 +459,7 @@ type UpdateState = {
   latest?: string;
   lastChecked?: number;
   error?: string;
+  stuck?: boolean;
 };
 
 function formatAgo(ts?: number, now: number = Date.now()): string {
@@ -524,7 +525,16 @@ function UpdateBanner() {
         const pend = await api.checkPendingUpdate();
         if (pend?.pending) setPendingVersion(pend.version || state.latest || null);
       }
-      if (!result?.ok) setState((s) => ({ ...s, error: result?.error || 'update failed' }));
+      if (!result?.ok) {
+        setState((s) => ({ ...s, error: result?.error || 'update failed' }));
+      } else if (result.outcome === 'npm-only') {
+        // The npm package moved but the .app bundle stayed put. Re-run the
+        // availability check now — the main process just wrote the sticky
+        // marker, so this call will return { available: false, stuck: true }
+        // and the "Update available" card collapses to "Up to date" instead
+        // of looping the user through the same prompt on the next poll.
+        runCheck();
+      }
     } finally {
       setUpdating(false);
     }

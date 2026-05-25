@@ -38,9 +38,16 @@ declare global {
         latest?: string;
         lastChecked?: number;
         error?: string;
+        stuck?: boolean;
       }>;
       checkPendingUpdate: () => Promise<{ pending: boolean; version?: string }>;
-      applyUpdate: () => Promise<{ ok: boolean; pending?: boolean; error?: string }>;
+      applyUpdate: () => Promise<{
+        ok: boolean;
+        pending?: boolean;
+        error?: string;
+        outcome?: 'bundle-pending' | 'npm-only' | 'already-current';
+        version?: string;
+      }>;
       restartApp: () => Promise<void>;
       openSettings: (section?: string) => Promise<{ ok: boolean }>;
       // Tab management (Windows custom tab bar)
