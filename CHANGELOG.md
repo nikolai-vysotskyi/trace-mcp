@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.39.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.3...v1.39.4) (2026-05-25)
+
+
+### Bug Fixes
+
+* **app:** stop in-app updater from looping on npm-only outcomes ([#173](https://github.com/nikolai-vysotskyi/trace-mcp/issues/173)) ([ae0b9ef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ae0b9ef004d67772950c0fa2c476665956dddc4a))
+* **db:** use ON CONFLICT DO UPDATE in insertSymbol to keep parent_id FKs valid ([fd63f52](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fd63f52c33e9719b75776e7499e2a39660752a44))
+* **env:** unify .env secrecy model + provenance gate for tool-managed files ([#172](https://github.com/nikolai-vysotskyi/trace-mcp/issues/172)) ([8572741](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8572741764d353b93a8f9732b6377535ccdfd2cc))
+
+
+### Documentation
+
+* **toon:** standardize TOON description wording and document allowlist ([4a3a46f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4a3a46f6c6e1007cbf4c8e665b5efc86db757548))
+
+
+### CI/CD
+
+* add pr-comment workflow that posts impact-report from CI artifact ([bdc24b9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bdc24b9dbf1e54693459f3363e3b8ee65e4e37be))
+
 ## [1.39.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.2...v1.39.3) (2026-05-24)
 
 
