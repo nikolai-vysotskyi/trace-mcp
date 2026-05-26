@@ -63,17 +63,39 @@ interface FileGraph {
   allFileIds: Set<number>;
 }
 
+export interface BuildFileGraphOptions {
+  /**
+   * When true (default), the graph includes "projected" file→file edges
+   * synthesized by the file-projection resolver from cross-file symbol→symbol
+   * edges (renders_component, dispatches, listens_to, etc.). Coupling and
+   * PageRank want these — they're real cross-file relationships.
+   *
+   * When false, the graph contains ONLY direct import statements. Cycle
+   * detection wants this: a Vue component being rendered by another file is
+   * not an import cycle even if both files reference each other indirectly
+   * through framework metadata.
+   */
+  includeProjected?: boolean;
+}
+
 /**
  * Build file-level import graph from all import-category edges.
  * Uses a single JOIN query instead of per-edge lookups (N+1 → 1).
  */
-export function buildFileGraph(store: Store): FileGraph {
+export function buildFileGraph(store: Store, options: BuildFileGraphOptions = {}): FileGraph {
+  const { includeProjected = true } = options;
   const forward = new Map<number, Set<number>>();
   const reverse = new Map<number, Set<number>>();
   const allFileIds = new Set<number>();
   const pathMap = new Map<number, string>();
 
-  // Single query: resolve all import edges to file-level in one pass
+  // Single query: resolve all import edges to file-level in one pass.
+  // `projected:true` rows come from the file-projection pass (file-projection.ts);
+  // they're synthesized from symbol-level edges of any kind and do NOT
+  // represent a real `import` statement. Cycle detection toggles them off.
+  const projectionFilter = includeProjected
+    ? ''
+    : `AND (e.metadata IS NULL OR json_extract(e.metadata, '$.projected') IS NOT 1)`;
   const rows = store.db
     .prepare(`
     SELECT
@@ -86,6 +108,7 @@ export function buildFileGraph(store: Store): FileGraph {
     LEFT JOIN symbols s1 ON n1.node_type = 'symbol' AND n1.ref_id = s1.id
     LEFT JOIN symbols s2 ON n2.node_type = 'symbol' AND n2.ref_id = s2.id
     WHERE et.name IN ('esm_imports', 'imports', 'py_imports', 'py_reexports')
+      ${projectionFilter}
   `)
     .all() as Array<{ src_file_id: number | null; tgt_file_id: number | null }>;
 
@@ -238,7 +261,15 @@ export function getDependencyCycles(
   options: GetDependencyCyclesOptions = {},
 ): DependencyCycle[] {
   const { includeTests = false } = options;
-  const graph = buildFileGraph(store);
+  // Use the import-only view of the graph. `projected:true` edges are
+  // synthesized from cross-file symbol relationships (renders_component,
+  // dispatches, listens_to, Laravel ORM relations) and re-bucketed as
+  // `imports` for downstream convenience — but a Vue component being
+  // rendered by another file is NOT an import cycle. Excluding projected
+  // edges here strips the last source of phantom SCCs that survived the
+  // test-path filter (e.g. project-context.ts ↔ tests/.../fixture.test.ts
+  // closed via a projected calls/references edge).
+  const graph = buildFileGraph(store, { includeProjected: false });
 
   // Build the working graph. When excluding tests, we filter file ids
   // whose path matches a test pattern. Removing a node also requires
