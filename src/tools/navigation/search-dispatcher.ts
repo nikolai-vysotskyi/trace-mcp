@@ -50,15 +50,16 @@ export async function runFlatSearch(
   limit: number,
   offset: number,
 ): Promise<FlatSearchResult> {
-  const ftsResults = ftsSearch(
-    store.db,
-    query,
-    limit + offset + 20,
-    0,
-    filters.kind || filters.language || filters.filePattern
-      ? { kind: filters.kind, language: filters.language, filePattern: filters.filePattern }
-      : undefined,
-  );
+  const ftsResults = ftsSearch(store.db, query, limit + offset + 20, 0, {
+    kind: filters.kind,
+    language: filters.language,
+    filePattern: filters.filePattern,
+    // Default-exclude markdown headings/tags from flat mode too — same
+    // contract as `search()` / `runFusionSearch`. Bypassed inside searchFts
+    // when the caller explicitly asks for markdown via kind / language /
+    // file_pattern.
+    excludeMarkdown: true,
+  });
   if (ftsResults.length === 0) {
     return { items: [], total: 0, search_mode: 'flat' };
   }

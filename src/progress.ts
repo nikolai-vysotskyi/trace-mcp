@@ -6,7 +6,7 @@
 import type Database from 'better-sqlite3';
 import { logger } from './logger.js';
 
-export type PipelinePhase = 'idle' | 'running' | 'completed' | 'error';
+export type PipelinePhase = 'idle' | 'running' | 'completed' | 'skipped' | 'error';
 export type PipelineName = 'indexing' | 'summarization' | 'embedding';
 
 export interface PipelineProgress {
@@ -36,8 +36,15 @@ function idleProgress(): PipelineProgress {
 function snapOne(p: PipelineProgress): PipelineProgressSnapshot {
   const now = Date.now();
   const endTime = p.completedAt > 0 ? p.completedAt : now;
+  // Normalize legacy "completed with 0 of N" rows that older producers wrote
+  // when the embedding/summarization pipeline was disabled mid-flight (e.g.
+  // provider removed). Mathematically a 0% completion isn't a completion —
+  // surface it as "skipped" so consumers don't show a misleading green tick.
+  const effectivePhase: PipelinePhase =
+    p.phase === 'completed' && p.total > 0 && p.processed === 0 ? 'skipped' : p.phase;
   return {
     ...p,
+    phase: effectivePhase,
     percentage: p.total > 0 ? Math.round((p.processed / p.total) * 100) : null,
     elapsedMs: p.startedAt > 0 ? endTime - p.startedAt : 0,
   };

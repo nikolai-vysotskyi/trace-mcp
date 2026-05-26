@@ -687,4 +687,336 @@ element.innerHTML = "hello"
       .findings.filter((f) => f.rule_id === 'CWE-79' && f.file.endsWith('.py'));
     expect(jsFindings).toHaveLength(0);
   });
+
+  // -------------------------------------------------------------------
+  // Comment stripping — patterns inside /* */ or // must not match
+  // -------------------------------------------------------------------
+
+  test('does not flag patterns inside a /* JSDoc */ block comment', () => {
+    writeFile(
+      store,
+      'src/example.ts',
+      `
+/**
+ * Example shape:
+ * fetch(\`/api/users/\${id}\`) → '/api/users/:param'
+ */
+export const noop = () => {};
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['ssrf'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
+  });
+
+  test('does not flag patterns inside a // line comment', () => {
+    writeFile(
+      store,
+      'src/example2.ts',
+      `
+// db.query(\`SELECT * FROM x WHERE id = \${id}\`); — example only
+export const noop = () => {};
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['sql_injection'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
+  });
+
+  // -------------------------------------------------------------------
+  // XSS — innerHTML safe shapes
+  // -------------------------------------------------------------------
+
+  test('XSS: innerHTML = empty string is not flagged', () => {
+    writeFile(
+      store,
+      'src/clear.ts',
+      `
+function reset(container: HTMLElement) {
+  container.innerHTML = '';
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['xss'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
+  });
+
+  test('XSS: innerHTML = static string literal is not flagged', () => {
+    writeFile(
+      store,
+      'src/static.ts',
+      `
+function reset(container: HTMLElement) {
+  container.innerHTML = "<div>static literal</div>";
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['xss'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
+  });
+
+  test('XSS: innerHTML = sanitizer(x) on RHS is not flagged', () => {
+    writeFile(
+      store,
+      'src/safe-html.ts',
+      `
+function setLabel(el: HTMLElement, n: { label: string }) {
+  el.innerHTML = esc(n.label);
+}
+function set2(el: HTMLElement, s: string) {
+  el.innerHTML = DOMPurify.sanitize(s);
+}
+function set3(el: HTMLElement, s: string) {
+  el.innerHTML = encodeURIComponent(s);
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['xss'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
+  });
+
+  test('XSS: innerHTML = raw concat is still flagged', () => {
+    writeFile(
+      store,
+      'src/bad-html.ts',
+      `
+function setLabel(el: HTMLElement, name: string) {
+  el.innerHTML = '<strong>' + name + '</strong>';
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['xss'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // -------------------------------------------------------------------
+  // Path Traversal — known root anchors downgraded
+  // -------------------------------------------------------------------
+
+  test('Path traversal: path.resolve(projectRoot, x) is downgraded to low', () => {
+    writeFile(
+      store,
+      'src/move.ts',
+      `
+import path from 'node:path';
+function moveSymbol(projectRoot: string, params: { target_file: string }) {
+  const targetAbsPath = path.resolve(projectRoot, params.target_file);
+  return targetAbsPath;
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['path_traversal'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    const highOrAbove = data.findings.filter(
+      (f) => f.severity === 'critical' || f.severity === 'high',
+    );
+    expect(highOrAbove).toHaveLength(0);
+  });
+
+  // -------------------------------------------------------------------
+  // SSRF — BASE/url localhost constant downgraded or dropped
+  // -------------------------------------------------------------------
+
+  test('SSRF: fetch with BASE bound to localhost is dropped', () => {
+    writeFile(
+      store,
+      'src/electron/api.ts',
+      `
+const BASE = 'http://localhost:3001';
+async function load() {
+  return fetch(\`\${BASE}/api/things\`);
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['ssrf'] });
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().findings).toHaveLength(0);
+  });
+
+  test('SSRF: fetch with daemonUrl base ident (unresolved) is downgraded, not high', () => {
+    writeFile(
+      store,
+      'src/electron/api2.ts',
+      `
+async function load(daemonUrl: string) {
+  return fetch(\`\${daemonUrl}/api/things\`);
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['ssrf'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    for (const f of data.findings) {
+      expect(['low', 'medium']).toContain(f.severity);
+    }
+  });
+
+  // -------------------------------------------------------------------
+  // Command injection — open / which / taskkill safe shapes
+  // -------------------------------------------------------------------
+
+  test('command_injection: execSync(`open "${filePath}"`) is downgraded to medium', () => {
+    writeFile(
+      store,
+      'src/cli/open.ts',
+      `
+import { execSync } from 'node:child_process';
+function openInBrowser(filePath: string) {
+  execSync(\`open "\${filePath}"\`);
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    const critical = data.findings.filter((f) => f.severity === 'critical');
+    expect(critical).toHaveLength(0);
+    expect(data.findings.length).toBeGreaterThanOrEqual(1);
+    expect(data.findings[0].severity).toBe('medium');
+  });
+
+  test('command_injection: execSync(`which ${cmd}`) is downgraded to low', () => {
+    writeFile(
+      store,
+      'src/lsp/which.ts',
+      `
+import { execSync } from 'node:child_process';
+function isAvailable(command: string) {
+  execSync(\`which \${command}\`);
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    const critical = data.findings.filter((f) => f.severity === 'critical');
+    expect(critical).toHaveLength(0);
+    // Severity threshold for low: 'low'. By default scanner returns ALL findings
+    // including 'low', so we just check no critical.
+  });
+
+  test('command_injection: execSync(`taskkill /PID ${pid}`) with numeric pid is downgraded', () => {
+    writeFile(
+      store,
+      'src/daemon/kill.ts',
+      `
+import { execSync } from 'node:child_process';
+function readDaemonPid(): number { return 1234; }
+function stop() {
+  const pid = readDaemonPid();
+  execSync(\`taskkill /PID \${pid} /T /F\`);
+}
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    const critical = data.findings.filter((f) => f.severity === 'critical');
+    expect(critical).toHaveLength(0);
+  });
+
+  // -------------------------------------------------------------------
+  // Confidence field
+  // -------------------------------------------------------------------
+
+  test('every finding has a confidence field', () => {
+    writeFile(
+      store,
+      'src/vuln-conf.ts',
+      `
+db.query(\`SELECT * FROM x WHERE id = \${id}\`);
+`,
+      'typescript',
+    );
+    const result = scanSecurity(store, TEST_DIR, { rules: ['all'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    for (const f of data.findings) {
+      expect(['low', 'medium', 'high']).toContain(f.confidence);
+    }
+  });
+
+  // -------------------------------------------------------------------
+  // Smoke test on real repo files — must produce 0 critical findings
+  // for the audited-safe call sites in visualize.ts, lifecycle.ts, config.ts.
+  // -------------------------------------------------------------------
+
+  test('smoke: real repo files known-safe call sites produce no critical findings', () => {
+    // Re-create the exact shapes from src/cli/visualize.ts,
+    // src/daemon/lifecycle.ts and src/lsp/config.ts. We use synthetic
+    // file paths to avoid depending on the actual indexed repo.
+    writeFile(
+      store,
+      'src/cli/visualize.ts',
+      `
+import { execSync } from 'node:child_process';
+function openInBrowser(filePath: string): void {
+  const platform = process.platform;
+  try {
+    if (platform === 'darwin') execSync(\`open "\${filePath}"\`);
+    else if (platform === 'win32') execSync(\`start "" "\${filePath}"\`);
+    else execSync(\`xdg-open "\${filePath}"\`);
+  } catch {}
+}
+`,
+      'typescript',
+    );
+    writeFile(
+      store,
+      'src/daemon/lifecycle.ts',
+      `
+import { execSync } from 'node:child_process';
+function readDaemonPid(): number | null { return null; }
+function stopDaemonByPid(): void {
+  const pid = readDaemonPid();
+  if (pid === null) return;
+  try {
+    execSync(\`taskkill /PID \${pid} /T /F\`, { stdio: 'pipe' });
+  } catch {}
+}
+`,
+      'typescript',
+    );
+    writeFile(
+      store,
+      'src/lsp/config.ts',
+      `
+import { execSync } from 'node:child_process';
+function isCommandAvailable(command: string): boolean {
+  try {
+    execSync(\`which \${command}\`, { stdio: 'pipe', timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['all'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    const critical = data.findings.filter((f) => f.severity === 'critical');
+    expect(critical).toHaveLength(0);
+  });
 });

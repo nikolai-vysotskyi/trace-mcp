@@ -105,6 +105,65 @@ function isDistinctiveComponentName(name: string): boolean {
   return /[a-z][A-Z]/.test(name) || name.length >= 8;
 }
 
+/**
+ * Walk the project root looking for a single `.vue` source file outside
+ * directories that don't count as project source (node_modules, vendor,
+ * tests, build outputs). Returns on the first hit — this is a cheap
+ * existence check, not a full scan. Bounded by depth + entry caps so
+ * pathological monorepos can't make detection slow.
+ */
+const VUE_EVIDENCE_IGNORED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  'out',
+  '.next',
+  '.nuxt',
+  '.output',
+  'coverage',
+  '.cache',
+  'vendor',
+  'tests',
+  '__tests__',
+  'test',
+  '__fixtures__',
+  'fixtures',
+]);
+const VUE_EVIDENCE_MAX_DEPTH = 6;
+const VUE_EVIDENCE_MAX_ENTRIES = 5000;
+
+function hasVueSourceFile(rootPath: string): boolean {
+  let visited = 0;
+  const walk = (dir: string, depth: number): boolean => {
+    if (depth > VUE_EVIDENCE_MAX_DEPTH || visited >= VUE_EVIDENCE_MAX_ENTRIES) return false;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+    for (const entry of entries) {
+      if (visited >= VUE_EVIDENCE_MAX_ENTRIES) return false;
+      visited++;
+      const name = entry.name;
+      if (entry.isDirectory()) {
+        if (name.startsWith('.') && name !== '.') continue;
+        if (VUE_EVIDENCE_IGNORED_DIRS.has(name)) continue;
+        if (walk(path.join(dir, name), depth + 1)) return true;
+      } else if (entry.isFile() && name.endsWith('.vue')) {
+        return true;
+      }
+    }
+    return false;
+  };
+  try {
+    return walk(rootPath, 0);
+  } catch {
+    return false;
+  }
+}
+
 /** Detect @vue/server-renderer usage (SSR entry points). */
 const VUE_SSR_IMPORT_RE = /(?:from|require\()\s*['"]@vue\/server-renderer['"]/;
 const VUE_SSR_CALL_RE =
@@ -144,51 +203,70 @@ export class VueFrameworkPlugin implements FrameworkPlugin {
   }
 
   detect(ctx: ProjectContext): boolean {
-    const hasVueFramework = (deps: Record<string, string> | undefined): boolean => {
-      if (!deps) return false;
-      return (
-        'vue' in deps ||
-        'nuxt' in deps ||
-        'nuxt3' in deps ||
-        '@nuxt/core' in deps ||
-        '@vue/compiler-sfc' in deps ||
-        '@vue/server-renderer' in deps ||
-        'vite-plugin-vue' in deps ||
-        'quasar' in deps ||
-        '@quasar/app' in deps ||
-        'vitepress' in deps ||
-        'vuepress' in deps ||
-        '@vuepress/core' in deps ||
-        'laravel-nova' in deps ||
-        'laravel-mix' in deps
-      );
+    // Vue-adjacent package names. We split them into two classes:
+    //   - "runtime"  — direct app/framework signals. If any is in
+    //                  `dependencies` (not devDeps), accept immediately.
+    //   - "tooling"  — parsers and SSR helpers (e.g. @vue/compiler-sfc)
+    //                  that frequently appear in projects that merely
+    //                  *consume* Vue source as input (linters, code-intel,
+    //                  IDE plugins). Never accept on a tooling signal
+    //                  alone — require corroborating evidence.
+    // Either class promotes the project if accompanied by at least one
+    // `.vue` source file outside tests/node_modules. This implements
+    // the rule: UI plugin needs dependency (not devDep), OR a source
+    // file matching the framework's extension pattern.
+    const RUNTIME_PKGS = [
+      'vue',
+      'nuxt',
+      'nuxt3',
+      '@nuxt/core',
+      'vite-plugin-vue',
+      'quasar',
+      '@quasar/app',
+      'vitepress',
+      'vuepress',
+      '@vuepress/core',
+      'laravel-nova',
+      'laravel-mix',
+    ] as const;
+    const TOOLING_PKGS = ['@vue/compiler-sfc', '@vue/server-renderer'] as const;
+
+    const hasAny = (deps: Record<string, string> | undefined, names: readonly string[]): boolean =>
+      !!deps && names.some((n) => n in deps);
+
+    const loadPkg = (): Record<string, unknown> | undefined => {
+      if (ctx.packageJson) return ctx.packageJson;
+      try {
+        const pkgPath = path.join(ctx.rootPath, 'package.json');
+        const content = fs.readFileSync(pkgPath, 'utf-8');
+        return JSON.parse(content) as Record<string, unknown>;
+      } catch {
+        return undefined;
+      }
     };
 
-    if (ctx.packageJson) {
-      const deps = {
-        ...(ctx.packageJson.dependencies as Record<string, string> | undefined),
-        ...(ctx.packageJson.devDependencies as Record<string, string> | undefined),
-      };
-      if (hasVueFramework(deps)) return true;
-    }
+    const pkg = loadPkg();
+    const runtimeDeps = pkg?.dependencies as Record<string, string> | undefined;
+    const allDeps = pkg
+      ? {
+          ...(pkg.dependencies as Record<string, string> | undefined),
+          ...(pkg.devDependencies as Record<string, string> | undefined),
+        }
+      : undefined;
 
-    // Fallback 1: read package.json directly from rootPath
-    try {
-      const pkgPath = path.join(ctx.rootPath, 'package.json');
-      const content = fs.readFileSync(pkgPath, 'utf-8');
-      const pkg = JSON.parse(content) as Record<string, unknown>;
-      const deps = {
-        ...(pkg.dependencies as Record<string, string> | undefined),
-        ...(pkg.devDependencies as Record<string, string> | undefined),
-      };
-      if (hasVueFramework(deps)) return true;
-    } catch {
-      /* ignore */
-    }
+    // Direct runtime dependency — strongest signal, accept on its own.
+    if (hasAny(runtimeDeps, RUNTIME_PKGS)) return true;
 
-    // Fallback 2: presence of nova-components/ dir (Laravel Nova package)
-    // or any .vue files in the project — common for Laravel+Nova projects
-    // whose root package.json omits vue but they ship Vue bundles.
+    // Runtime-class package present (possibly only in devDeps) AND .vue
+    // sources exist in non-test code — that's a real Vue project.
+    if (hasAny(allDeps, RUNTIME_PKGS) && hasVueSourceFile(ctx.rootPath)) return true;
+
+    // Tooling-only signal (e.g. @vue/compiler-sfc as a devDep) NEVER
+    // promotes on its own. Only counts when paired with .vue sources.
+    if (hasAny(allDeps, TOOLING_PKGS) && hasVueSourceFile(ctx.rootPath)) return true;
+
+    // Fallback: presence of nova-components/ dir (Laravel Nova package)
+    // is a direct project-use signal even without a manifest entry.
     try {
       const novaDir = path.join(ctx.rootPath, 'nova-components');
       if (fs.existsSync(novaDir) && fs.statSync(novaDir).isDirectory()) return true;

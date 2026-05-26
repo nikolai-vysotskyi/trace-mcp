@@ -20,6 +20,8 @@ function createMockStore(): Store {
       totalEdges: 0,
       totalNodes: 0,
       totalRoutes: 0,
+      totalResourceRoutes: 0,
+      totalTestFixtureRoutes: 0,
       totalComponents: 0,
       totalMigrations: 0,
       partialFiles: 0,

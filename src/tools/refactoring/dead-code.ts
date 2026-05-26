@@ -28,6 +28,7 @@ import {
   classifyConfidence,
   type Methodology,
 } from '../shared/confidence.js';
+import { isUsedIntraFile, makeIntraFileReader } from '../shared/intra-file-usage.js';
 
 // ════════════════════════════════��═══════════════════════════════════════
 // TYPES
@@ -447,64 +448,9 @@ function getEntryPointDowngrade(
 // ════════════════════════════════════════════════════════════════════════
 // SIGNAL 4: INTRA-FILE USAGE
 // ════════════════════════════════════════════════════════════════════════
-
-/**
- * Returns true when `name` appears as a word-boundary token anywhere in
- * `fileContent` OUTSIDE the byte range owned by the symbol's declaration.
- *
- * Catches the default-arg / closure-capture / file-local-helper case where
- * the indexer doesn't emit a `calls`/`references` edge but the symbol is
- * clearly used. Example:
- *
- *     export const CANARY_PATH = path.join(...);
- *     export async function checkEmbeddingDrift(opts = {}) {
- *       const file = opts.filePath ?? CANARY_PATH;  // <-- intra-file use
- *     }
- */
-function isUsedIntraFile(
-  fileContent: string,
-  name: string,
-  lineStart: number | null,
-  lineEnd: number | null,
-): boolean {
-  if (!name) return false;
-  // Word-boundary match. Escape regex metachars in `name` defensively.
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const re = new RegExp(`\\b${escaped}\\b`, 'g');
-  const lines = fileContent.split('\n');
-  let match: RegExpExecArray | null;
-  // Build a cumulative line-start offsets table only if we need it.
-  const startLine = lineStart ?? -1;
-  const endLine = lineEnd ?? -1;
-  // Track the line each match falls on by walking the file once.
-  let lineNo = 1;
-  let offset = 0;
-  // Walk through lines and check each for matches outside [startLine, endLine].
-  for (const line of lines) {
-    if (startLine === -1 || lineNo < startLine || lineNo > endLine) {
-      re.lastIndex = 0;
-      while ((match = re.exec(line)) !== null) {
-        // Skip matches inside a comment that's the very first non-whitespace
-        // of the line — common in JSDoc / inline comments mentioning the
-        // symbol by name. Cheap heuristic, avoids the "the docblock counts
-        // as a use" false-negative-on-deletion.
-        const trimmed = line.slice(0, match.index).trimStart();
-        if (
-          trimmed.startsWith('//') ||
-          trimmed.startsWith('*') ||
-          trimmed.startsWith('/*') ||
-          trimmed.startsWith('#')
-        ) {
-          continue;
-        }
-        return true;
-      }
-    }
-    offset += line.length + 1;
-    lineNo++;
-  }
-  return false;
-}
+// The implementation lives in `../shared/intra-file-usage.ts` so both this
+// multi-signal detector and `getDeadExports` share one canonical word-boundary
+// check.
 
 /**
  * Languages whose import edges carry `specifiers` metadata — the only kind
@@ -713,28 +659,7 @@ export function getDeadCodeV2(
 
   // Per-file content cache for the intra-file signal. We only read when a
   // candidate would otherwise be flagged dead, so the cache stays small.
-  const fileContentCache = new Map<string, string | null>();
-  const readFileCached = (filePath: string): string | null => {
-    if (fileContentCache.has(filePath)) return fileContentCache.get(filePath) ?? null;
-    let content: string | null = null;
-    if (projectRoot) {
-      const abs = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
-      try {
-        if (fs.existsSync(abs)) {
-          const stat = fs.statSync(abs);
-          // 2 MB cap — anything larger is almost certainly generated; skipping
-          // the intra-file check is the safer side of a false positive.
-          if (stat.size <= 2 * 1024 * 1024) {
-            content = fs.readFileSync(abs, 'utf-8');
-          }
-        }
-      } catch {
-        /* unreadable file — fall back to "no intra-file evidence" */
-      }
-    }
-    fileContentCache.set(filePath, content);
-    return content;
-  };
+  const readFileCached = makeIntraFileReader(projectRoot);
 
   const dead: DeadCodeItem[] = [];
   let entryPointDowngraded = 0;

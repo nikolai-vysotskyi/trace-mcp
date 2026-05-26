@@ -42,7 +42,11 @@ export type SymbolKind =
   | 'variable'
   | 'enum_case'
   | 'namespace'
-  | 'decorator';
+  | 'decorator'
+  // Markdown-specific kinds — kept distinct so headings/tags do not pollute
+  // code-symbol searches, PageRank rankings, or interface implementor counts.
+  | 'heading'
+  | 'tag';
 
 // --- Raw edges from FrameworkPlugin ---
 

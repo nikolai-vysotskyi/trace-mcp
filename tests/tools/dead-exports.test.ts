@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Store } from '../../src/db/store.js';
 import { getDeadExports } from '../../src/tools/analysis/introspect.js';
 import { createTestStore } from '../test-utils.js';
@@ -149,5 +152,135 @@ describe('getDeadExports', () => {
     const result = getDeadExports(store);
     expect(result.dead_exports).toHaveLength(5);
     expect(result.truncated).toBeUndefined();
+  });
+
+  // ── signals + recommendation (dead-export vs dead-symbol) ────────────────
+
+  it('defaults recommendation to "delete_symbol" when projectRoot is absent', () => {
+    addExportedSymbol(store, 'src/utils.ts', 'orphan', 'function');
+    const result = getDeadExports(store);
+    expect(result.dead_exports).toHaveLength(1);
+    const [item] = result.dead_exports;
+    expect(item.recommendation).toBe('delete_symbol');
+    expect(item.signals).toEqual(['not_imported']);
+  });
+});
+
+describe('getDeadExports — intra-file signal', () => {
+  const TEST_DIR = path.join(tmpdir(), `trace-mcp-dead-exports-intra-${process.pid}`);
+  let store: Store;
+
+  function writeFixture(relPath: string, content: string): string {
+    const abs = path.join(TEST_DIR, relPath);
+    mkdirSync(path.dirname(abs), { recursive: true });
+    writeFileSync(abs, content, 'utf-8');
+    return relPath;
+  }
+
+  function addExportedSymbolWithRange(
+    storeArg: Store,
+    filePath: string,
+    name: string,
+    kind: string,
+    lineStart: number,
+    lineEnd: number,
+  ): number {
+    const file = storeArg.getFile(filePath);
+    const fileId = file ? file.id : storeArg.insertFile(filePath, 'typescript', null, null);
+    return storeArg.insertSymbol(fileId, {
+      symbolId: `${filePath}::${name}#${kind}`,
+      name,
+      kind: kind as any,
+      byteStart: 0,
+      byteEnd: 100,
+      lineStart,
+      lineEnd,
+      metadata: { exported: 1 },
+    });
+  }
+
+  beforeEach(() => {
+    rmSync(TEST_DIR, { recursive: true, force: true });
+    mkdirSync(TEST_DIR, { recursive: true });
+    store = createTestStore();
+    store.ensureEdgeType('imports', 'code', 'Import statements');
+  });
+
+  afterEach(() => {
+    rmSync(TEST_DIR, { recursive: true, force: true });
+  });
+
+  it('recommends "remove_export_keyword" when the symbol is used only in its own file', () => {
+    // export const CANARY = 'x';
+    // export function go(arg = CANARY) {  // <-- intra-file use of CANARY
+    //   return arg;
+    // }
+    const rel = writeFixture(
+      'src/canary.ts',
+      [
+        "export const CANARY = 'x';",
+        '',
+        'export function go(arg = CANARY) {',
+        '  return arg;',
+        '}',
+        '',
+      ].join('\n'),
+    );
+
+    addExportedSymbolWithRange(store, rel, 'CANARY', 'variable', 1, 1);
+    addExportedSymbolWithRange(store, rel, 'go', 'function', 3, 5);
+
+    const result = getDeadExports(store, undefined, undefined, TEST_DIR);
+
+    // Both exports are uncited from outside the file, so both show up.
+    expect(result.dead_exports).toHaveLength(2);
+
+    const canary = result.dead_exports.find((d) => d.name === 'CANARY');
+    expect(canary).toBeDefined();
+    expect(canary?.recommendation).toBe('remove_export_keyword');
+    expect(canary?.signals).toEqual(expect.arrayContaining(['not_imported', 'intra_file_usage']));
+
+    const go = result.dead_exports.find((d) => d.name === 'go');
+    expect(go).toBeDefined();
+    // `go` only appears in its own declaration range — no intra-file usage.
+    expect(go?.recommendation).toBe('delete_symbol');
+    expect(go?.signals).toEqual(['not_imported']);
+  });
+
+  it('recommends "delete_symbol" when the symbol is not referenced anywhere', () => {
+    const rel = writeFixture(
+      'src/orphan.ts',
+      ['export function orphan() {', '  return 42;', '}', ''].join('\n'),
+    );
+
+    addExportedSymbolWithRange(store, rel, 'orphan', 'function', 1, 3);
+
+    const result = getDeadExports(store, undefined, undefined, TEST_DIR);
+    expect(result.dead_exports).toHaveLength(1);
+    expect(result.dead_exports[0].recommendation).toBe('delete_symbol');
+    expect(result.dead_exports[0].signals).toEqual(['not_imported']);
+  });
+
+  it('ignores docblock mentions when deciding intra-file usage', () => {
+    // The docblock mentions `Helper` by name, but the only use is in the
+    // declaration itself — should still be flagged for deletion.
+    const rel = writeFixture(
+      'src/docblock.ts',
+      [
+        '/**',
+        ' * Helper does nothing.',
+        ' */',
+        'export function Helper() {',
+        '  return 1;',
+        '}',
+        '',
+      ].join('\n'),
+    );
+
+    addExportedSymbolWithRange(store, rel, 'Helper', 'function', 4, 6);
+
+    const result = getDeadExports(store, undefined, undefined, TEST_DIR);
+    expect(result.dead_exports).toHaveLength(1);
+    expect(result.dead_exports[0].recommendation).toBe('delete_symbol');
   });
 });

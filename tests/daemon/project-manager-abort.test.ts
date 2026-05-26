@@ -160,7 +160,11 @@ describe('ProjectManager.stopProject — AbortSignal teardown', () => {
     (fake as any).aiAbortController = undefined;
     injectProject(pm, fake);
 
-    await expect(pm.removeProject('/tmp/proj-no-ctrl')).resolves.toBeUndefined();
+    // removeProject now returns artifact cleanup metadata (see project-artifacts.ts).
+    // Back-compat contract here is "resolves cleanly without throwing"; we only
+    // assert the shape, not specific counts (no on-disk DB exists for /tmp/proj-no-ctrl).
+    const result = await pm.removeProject('/tmp/proj-no-ctrl');
+    expect(result).toMatchObject({ deleted: expect.any(Array), freedBytes: expect.any(Number) });
     expect(fake.pipeline.dispose).toHaveBeenCalledTimes(1);
   });
 

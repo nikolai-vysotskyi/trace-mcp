@@ -216,13 +216,44 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
     if (total === 0) {
       checks.push({ name: 'embedding_dim', status: 'ok', detail: 'No embeddings yet' });
     } else if (expectedDim === null) {
-      checks.push({
-        name: 'embedding_dim',
-        status: 'warn',
-        detail: `${total} embeddings but no embedding_meta.dim — dimension cannot be verified`,
-        count: total,
-        suggested_repair: 'drop-vec',
-      });
+      // Self-heal: if every existing row shares a uniform Float32 byte length,
+      // back-fill embedding_meta.dim from the data itself. This used to be a
+      // dead-end "drop-vec" suggestion — but the embeddings are still valid
+      // when their byte lengths are consistent; we just lost the side-channel
+      // metadata (e.g. provider migration). Inferring keeps them usable.
+      const lengths = db
+        .prepare('SELECT DISTINCT LENGTH(embedding) AS len FROM symbol_embeddings LIMIT 2')
+        .all() as Array<{ len: number }>;
+      if (lengths.length === 1 && lengths[0].len > 0 && lengths[0].len % 4 === 0) {
+        const inferredDim = lengths[0].len / 4;
+        try {
+          db.prepare('INSERT OR REPLACE INTO embedding_meta (id, dim) VALUES (1, ?)').run(
+            inferredDim,
+          );
+          checks.push({
+            name: 'embedding_dim',
+            status: 'ok',
+            detail: `Inferred dim=${inferredDim} from ${total} uniform-length rows; embedding_meta backfilled`,
+            count: total,
+          });
+        } catch (err) {
+          checks.push({
+            name: 'embedding_dim',
+            status: 'warn',
+            detail: `${total} embeddings, dim=${inferredDim} could be inferred but embedding_meta write failed: ${err instanceof Error ? err.message : String(err)}`,
+            count: total,
+            suggested_repair: 'drop-vec',
+          });
+        }
+      } else {
+        checks.push({
+          name: 'embedding_dim',
+          status: 'warn',
+          detail: `${total} embeddings have ${lengths.length} distinct byte lengths and no embedding_meta.dim — cannot infer dimension safely`,
+          count: total,
+          suggested_repair: 'drop-vec',
+        });
+      }
     } else {
       const expectedBytes = expectedDim * 4; // Float32
       const stmt = db.prepare(

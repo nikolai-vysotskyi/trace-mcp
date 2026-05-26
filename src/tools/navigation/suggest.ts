@@ -179,6 +179,8 @@ export function suggestQueries(store: Store): SuggestQueriesResult {
       symbols: stats.totalSymbols,
       edges: stats.totalEdges,
       routes: stats.totalRoutes,
+      resource_routes: stats.totalResourceRoutes,
+      test_fixture_routes: stats.totalTestFixtureRoutes,
       components: stats.totalComponents,
     },
     languages,

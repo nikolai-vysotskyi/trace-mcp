@@ -14,7 +14,19 @@ export interface FtsFilters {
   kind?: string;
   language?: string;
   filePattern?: string;
+  /**
+   * If true (and `kind` is not one of the markdown-specific kinds, and
+   * `language !== 'markdown'`), exclude markdown headings/tags from the FTS
+   * result. Markdown sections otherwise dominate generic queries like
+   * "configuration" / "search" because heading names overlap with TS class
+   * names. Default: false (no exclusion) — callers opt in explicitly.
+   */
+  excludeMarkdown?: boolean;
 }
+
+/** Kinds emitted by the markdown plugin. Kept in one place so the FTS-level
+ *  default-exclusion guard stays in sync with the plugin. */
+export const MARKDOWN_SYMBOL_KINDS: ReadonlySet<string> = new Set(['heading', 'tag']);
 
 export function searchFts(
   db: Database.Database,
@@ -42,6 +54,23 @@ export function searchFts(
   if (filters?.filePattern) {
     conditions.push('f.path LIKE ?');
     params.push(`%${filters.filePattern}%`);
+  }
+
+  // Default-exclusion guard: drop markdown headings/tags from generic
+  // code-symbol searches. Bypass when the caller explicitly asked for a
+  // markdown kind, language='markdown', or a markdown-restricted file_pattern.
+  const askingForMarkdownKind = filters?.kind && MARKDOWN_SYMBOL_KINDS.has(filters.kind);
+  const askingForMarkdownLanguage = filters?.language === 'markdown';
+  const askingForMarkdownFiles =
+    filters?.filePattern != null && /\.(md|mdx|markdown|qmd)\b/i.test(filters.filePattern);
+  if (
+    filters?.excludeMarkdown &&
+    !askingForMarkdownKind &&
+    !askingForMarkdownLanguage &&
+    !askingForMarkdownFiles
+  ) {
+    conditions.push(`s.kind NOT IN (${[...MARKDOWN_SYMBOL_KINDS].map(() => '?').join(',')})`);
+    for (const k of MARKDOWN_SYMBOL_KINDS) params.push(k);
   }
 
   const needsFileJoin = filters?.language || filters?.filePattern;

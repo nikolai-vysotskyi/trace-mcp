@@ -146,7 +146,23 @@ export interface IndexStats {
   totalSymbols: number;
   totalEdges: number;
   totalNodes: number;
+  /**
+   * HTTP method routes only (GET/POST/PUT/DELETE/PATCH/OPTIONS/HEAD). Excludes
+   * synthetic resource routes (MCP TOOL/RESOURCE/PROMPT/JOB/SCHEMA/CLI) and
+   * test-fixture routes (TEST/TEST_ROUTE/TEST_COMPONENT) — those used to inflate
+   * this counter to meaningless levels for non-HTTP projects.
+   */
   totalRoutes: number;
+  /**
+   * Non-HTTP synthetic routes — MCP TOOL/RESOURCE/PROMPT/JOB, JSON SCHEMA, CLI
+   * commands. Counted separately so `totalRoutes` stays a clean HTTP signal.
+   */
+  totalResourceRoutes: number;
+  /**
+   * Routes registered by tests (method LIKE 'TEST%'). Excluded from `totalRoutes`
+   * to prevent fixture bloat from drowning the real HTTP route count.
+   */
+  totalTestFixtureRoutes: number;
   totalComponents: number;
   totalMigrations: number;
   partialFiles: number;

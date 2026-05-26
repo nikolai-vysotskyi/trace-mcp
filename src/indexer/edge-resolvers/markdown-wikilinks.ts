@@ -95,7 +95,7 @@ export function resolveMarkdownWikilinkEdges(
     .prepare(
       `SELECT symbol_id, fqn
        FROM symbols
-       WHERE kind = 'class' AND fqn LIKE 'note:%#%'`,
+       WHERE kind = 'heading' AND fqn LIKE 'note:%#%'`,
     )
     .all() as SectionRow[];
   const sectionByKey = new Map<string, string>();

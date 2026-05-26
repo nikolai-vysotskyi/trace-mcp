@@ -42,6 +42,7 @@ import { exportSecurityContextCommand } from './cli/export-security-context.js';
 import { initCommand } from './cli/init.js';
 import { installAppCommand } from './cli/install-app.js';
 import { memoryCommand } from './cli/memory.js';
+import { pruneCommand, pruneIndexDir } from './cli/prune.js';
 import { removeCommand } from './cli/remove.js';
 import { searchCommand } from './cli/search.js';
 import { statusCommand } from './cli/status.js';
@@ -2073,7 +2074,9 @@ program
           res.end(JSON.stringify({ error: 'Missing ?project= query param' }));
           return;
         }
-        await projectManager.removeProject(projectRoot);
+        const artifacts = await projectManager.removeProject(projectRoot, {
+          keepDbFiles: false,
+        });
         // Tear down progress listener, sessions, throttle keys, etc. for
         // this root BEFORE we emit the status event so listeners on the
         // SSE bus see a clean state.
@@ -2090,7 +2093,16 @@ program
           }
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'removed', project: projectRoot }));
+        res.end(
+          JSON.stringify({
+            status: 'removed',
+            project: projectRoot,
+            deletedFiles: artifacts.deleted.length,
+            freedBytes: artifacts.freedBytes,
+            topology: artifacts.topology,
+            decisions: artifacts.decisions,
+          }),
+        );
         return;
       }
 
@@ -2699,6 +2711,27 @@ program
           logger.error({ err }, 'loadAllRegistered failed during cold-start');
         }
 
+        // Soft GC: prune expired session DBs (>7 days) from ~/.trace-mcp/index/.
+        // Conservative — never touches live or orphan_* categories. The
+        // explicit `trace-mcp prune` CLI handles those after user review.
+        try {
+          const summary = pruneIndexDir({
+            apply: true,
+            sessionTtlDays: 7,
+            onlyCategories: ['session_expired'],
+          });
+          const deletedCount = summary.deleted.length;
+          if (deletedCount > 0) {
+            const freedMb = Math.round(summary.freedBytes / 1_048_576);
+            logger.info(
+              { deletedFiles: deletedCount, freedMb },
+              `Pruned ${deletedCount} expired session DBs (${freedMb} MB freed)`,
+            );
+          }
+        } catch (err) {
+          logger.warn({ err }, 'pruneIndexDir soft-prune failed (non-fatal)');
+        }
+
         // If cwd is a project not yet registered, add it too.
         const cwd = process.cwd();
         if (!projectManager.getProject(cwd)) {
@@ -2899,6 +2932,7 @@ program.addCommand(initCommand);
 program.addCommand(upgradeCommand);
 program.addCommand(addCommand);
 program.addCommand(removeCommand);
+program.addCommand(pruneCommand);
 program.addCommand(doctorCommand);
 program.addCommand(detectLlmCommand);
 program.addCommand(consentCommand);

@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   MarkdownLanguagePlugin,
@@ -77,7 +79,7 @@ describe('MarkdownLanguagePlugin', () => {
       const meta = noteOf(r.symbols).metadata as NoteMetadata;
       expect(meta.tags?.sort()).toEqual(['bar', 'baz', 'foo']);
 
-      const tagSymbols = r.symbols.filter((s) => s.kind === 'constant');
+      const tagSymbols = r.symbols.filter((s) => s.kind === 'tag');
       expect(tagSymbols.map((s) => s.fqn).sort()).toEqual([
         `${TAG_FQN_PREFIX}bar`,
         `${TAG_FQN_PREFIX}baz`,
@@ -99,7 +101,7 @@ describe('MarkdownLanguagePlugin', () => {
   describe('sections (headings)', () => {
     it('emits one section per heading parented to the note', async () => {
       const r = await parse('# H1\ntext\n## H2\ntext\n### H3', 'vault/x.md');
-      const sections = r.symbols.filter((s) => s.kind === 'class');
+      const sections = r.symbols.filter((s) => s.kind === 'heading');
       expect(sections.map((s) => s.name)).toEqual(['H1', 'H2', 'H3']);
       const note = noteOf(r.symbols);
       for (const s of sections) expect(s.parentSymbolId).toBe(note.symbolId);
@@ -110,8 +112,23 @@ describe('MarkdownLanguagePlugin', () => {
 
     it('deduplicates same-named headings (case-insensitive)', async () => {
       const r = await parse('# Same\nbody\n## Same\n');
-      const sections = r.symbols.filter((s) => s.kind === 'class');
+      const sections = r.symbols.filter((s) => s.kind === 'heading');
       expect(sections).toHaveLength(1);
+    });
+
+    it('never emits markdown sections under code-symbol kinds', async () => {
+      // Regression guard: earlier versions emitted headings as `class` and
+      // tags as `constant`, which polluted code-symbol searches and PageRank.
+      const r = await parse(
+        '---\ntags: [alpha]\n---\n# H1\ntext\n## H2\n#beta tag.',
+        'vault/regression.md',
+      );
+      const kinds = new Set(r.symbols.map((s) => s.kind));
+      expect(kinds.has('class')).toBe(false);
+      expect(kinds.has('constant')).toBe(false);
+      expect(kinds.has('heading')).toBe(true);
+      expect(kinds.has('tag')).toBe(true);
+      expect(kinds.has('namespace')).toBe(true);
     });
   });
 
@@ -219,6 +236,34 @@ describe('MarkdownLanguagePlugin', () => {
 
     it('handles Cyrillic without losing characters', () => {
       expect(normalizeKey('Пример')).toBe('пример');
+    });
+  });
+
+  describe('real-repo docs', () => {
+    it('emits headings/tags (not class/constant) for docs/configuration.md', async () => {
+      // Repo lives 2 levels up from tests/languages/. Skip silently if the
+      // file is missing — keeps the test resilient to repo restructure.
+      const target = path.resolve(process.cwd(), 'docs/configuration.md');
+      if (!fs.existsSync(target)) {
+        // eslint-disable-next-line no-console
+        console.warn(`[markdown.test] skipped: ${target} not found`);
+        return;
+      }
+      const source = fs.readFileSync(target, 'utf-8');
+      const r = await parse(source, 'docs/configuration.md');
+
+      const kindCounts = new Map<string, number>();
+      for (const s of r.symbols) {
+        kindCounts.set(s.kind, (kindCounts.get(s.kind) ?? 0) + 1);
+      }
+
+      // Exactly one namespace per file.
+      expect(kindCounts.get('namespace')).toBe(1);
+      // Sections must be emitted as `heading`, never `class`.
+      expect(kindCounts.get('heading') ?? 0).toBeGreaterThan(0);
+      expect(kindCounts.get('class') ?? 0).toBe(0);
+      // Tags must be emitted as `tag`, never `constant`.
+      expect(kindCounts.get('constant') ?? 0).toBe(0);
     });
   });
 

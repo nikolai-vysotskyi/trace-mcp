@@ -74,6 +74,41 @@ describe('getCouplingMetrics', () => {
     expect(b.instability).toBe(0);
     expect(b.assessment).toBe('stable');
   });
+
+  it('excludes test files by default — their Ca=0/Ce>0 floods unstable_modules', () => {
+    // Source A is imported by B and by a test file. Without filtering, the
+    // test file becomes "unstable" by definition (Ce=1/Ca=0/I=1).
+    const fA = insertFile(store, 'src/a.ts');
+    const fB = insertFile(store, 'src/b.ts');
+    const fT = insertFile(store, 'tests/a.test.ts');
+
+    const nodeA = store.getNodeId('file', fA)!;
+    const nodeB = store.getNodeId('file', fB)!;
+    const nodeT = store.getNodeId('file', fT)!;
+
+    insertEdge(store, nodeB, nodeA, 'esm_imports');
+    insertEdge(store, nodeT, nodeA, 'esm_imports');
+
+    const filtered = getCouplingMetrics(store);
+    expect(filtered.map((r) => r.file).sort()).toEqual(['src/a.ts', 'src/b.ts']);
+
+    const withTests = getCouplingMetrics(store, undefined, { includeTests: true });
+    expect(withTests.find((r) => r.file === 'tests/a.test.ts')).toBeDefined();
+  });
+
+  it('excludes __external__ synthetic stubs by default', () => {
+    const fA = insertFile(store, 'src/a.ts');
+    const fExt = insertFile(store, '__external__/_root/pkg/lodash.synthetic');
+    const nodeA = store.getNodeId('file', fA)!;
+    const nodeExt = store.getNodeId('file', fExt)!;
+    insertEdge(store, nodeA, nodeExt, 'esm_imports');
+
+    const filtered = getCouplingMetrics(store);
+    expect(filtered.map((r) => r.file)).toEqual(['src/a.ts']);
+
+    const withExternals = getCouplingMetrics(store, undefined, { includeExternals: true });
+    expect(withExternals.find((r) => r.file.startsWith('__external__/'))).toBeDefined();
+  });
 });
 
 describe('getDependencyCycles', () => {
@@ -174,6 +209,22 @@ describe('getPageRank', () => {
     const results = getPageRank(store);
     const totalScore = results.reduce((sum, r) => sum + r.score, 0);
     expect(totalScore).toBeCloseTo(1, 2);
+  });
+
+  it('excludes __external__ synthetic stubs by default — they dominate the top otherwise', () => {
+    // A imports vitest.synthetic (an external stub) → without filtering,
+    // the synthetic file gets all the PageRank flow (huge in-degree).
+    const fA = insertFile(store, 'src/a.ts');
+    const fExt = insertFile(store, '__external__/_root/pkg/vitest.synthetic');
+    const nodeA = store.getNodeId('file', fA)!;
+    const nodeExt = store.getNodeId('file', fExt)!;
+    insertEdge(store, nodeA, nodeExt, 'esm_imports');
+
+    const filtered = getPageRank(store);
+    expect(filtered.map((r) => r.file)).toEqual(['src/a.ts']);
+
+    const withExternals = getPageRank(store, { includeExternals: true });
+    expect(withExternals.find((r) => r.file.startsWith('__external__/'))).toBeDefined();
   });
 });
 

@@ -3,16 +3,20 @@
  *
  * Models a markdown vault (Obsidian, Logseq, plain MD) as a graph:
  *   - one `note` symbol per file (kind: namespace, fqn: `note:<basename>`)
- *   - heading sections nested inside the note (kind: class)
- *   - tags as constants (kind: constant, fqn: `tag:<name>`) parented to their note
+ *   - heading sections nested inside the note (kind: heading)
+ *   - tags (kind: tag, fqn: `tag:<name>`) parented to their note
  *   - frontmatter parsed from YAML and stored on note metadata
  *   - wikilinks (`[[X]]`, `[[X#H]]`, `[[X|alias]]`, `![[X]]`) and markdown
  *     links to `.md` files captured on note metadata for Pass 2 resolution
  *
- * SymbolKind reuse rationale (v1): we map note→namespace, section→class,
- * tag→constant rather than introduce new kinds. New kinds ripple through DB
- * schema, search, scoring, and the desktop graph view; reuse keeps blast
- * radius minimal while preserving semantic richness via metadata flags.
+ * SymbolKind rationale (v2): note→namespace, section→heading, tag→tag.
+ * Earlier versions reused `class` for sections and `constant` for tags. That
+ * polluted code-symbol searches (e.g. `search { kind: "class" }` returned
+ * markdown headings ahead of real TS classes) and inflated PageRank top-N
+ * with markdown files. Dedicated kinds keep the markdown graph rich while
+ * letting the search / pagerank surfaces exclude it by default. The symbol-id
+ * suffix (`#class` / `#constant`) is kept for back-compat with existing
+ * indexes; only the emitted `kind` field changed.
  */
 
 import path from 'node:path';
@@ -304,9 +308,12 @@ export const MarkdownLanguagePlugin = class implements LanguagePlugin {
       if (seenSection.has(dedupeKey)) continue;
       seenSection.add(dedupeKey);
       symbols.push({
+        // Symbol-id suffix kept as `#class` (legacy) so the DB row identity is
+        // stable across this rename; only the emitted `kind` field flips to
+        // the dedicated 'heading' kind. See docstring at the top of this file.
         symbolId: `${filePath}::${basename}#${h.name}#class`,
         name: h.name,
-        kind: 'class',
+        kind: 'heading',
         fqn: `${noteFqn}#${h.name}`,
         parentSymbolId: noteSymbolId,
         signature: `${'#'.repeat(h.level)} ${h.name}`,
@@ -320,9 +327,12 @@ export const MarkdownLanguagePlugin = class implements LanguagePlugin {
 
     for (const tag of allTags) {
       symbols.push({
+        // Symbol-id suffix kept as `#constant` (legacy) so the DB row identity
+        // is stable across this rename; only the emitted `kind` field flips to
+        // the dedicated 'tag' kind. See docstring at the top of this file.
         symbolId: `${filePath}::${basename}::tag::${tag}#constant`,
         name: tag,
-        kind: 'constant',
+        kind: 'tag',
         fqn: `${TAG_FQN_PREFIX}${tag}`,
         parentSymbolId: noteSymbolId,
         signature: `#${tag}`,

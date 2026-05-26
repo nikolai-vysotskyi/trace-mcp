@@ -2,6 +2,50 @@ import { searchFts } from '../../db/fts.js';
 import type { FileRow, Store, SymbolRow } from '../../db/store.js';
 import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 
+// ── SQL Detection ────────────────────────────────────────────────────────────
+// graph_query is a natural-language graph traversal tool, not a SQL endpoint.
+// If a user pastes a SQL statement, the FTS fallback tends to match arbitrary
+// keywords ("query", "limit", "from") and produce a misleading subgraph. We
+// detect SQL-shaped input up front and refuse it with a clear validation error.
+
+// Tokens that almost never appear outside SQL. Matching ANY of these strongly
+// suggests SQL — but bare FROM/WHERE/JOIN appear in English too (e.g. "from A
+// to B"), so we require *two or more* distinct tokens before rejecting.
+const SQL_TOKENS_RE = /\b(SELECT|FROM|WHERE|GROUP\s+BY|ORDER\s+BY|JOIN|INSERT|UPDATE|DELETE)\b/gi;
+
+// Strong SQL signals — these don't appear in plain English questions about
+// code. Any single occurrence is enough to flag the query as SQL.
+const STRONG_SQL_RE =
+  /\b(SELECT\s+(?:\*|DISTINCT|COUNT|SUM|AVG|MIN|MAX|TOP))\b|\bINSERT\s+INTO\b|\bUPDATE\s+\w+\s+SET\b|\bDELETE\s+FROM\b|\bCOUNT\s*\(\s*\*\s*\)/i;
+
+// Graph phrases that suggest the query is NL and should be allowed even when
+// it contains a bare SQL token like "from".
+const GRAPH_PHRASE_RE = /\b(flow|depends?|breaks?|calls?|imports?|references?|how|path|trace)\b|→/i;
+
+const SQL_REJECTION_EXAMPLES = [
+  'how does AuthService flow to Database',
+  'what depends on UserModel',
+  'trace the flow of LoginHandler',
+];
+
+function looksLikeSql(query: string): boolean {
+  // Strong signals: any single high-confidence SQL idiom rejects immediately.
+  if (STRONG_SQL_RE.test(query)) return true;
+
+  // Otherwise require at least two distinct SQL tokens. "from A to B" has one
+  // (FROM), "SELECT … FROM" has two — and that's typically real SQL.
+  const matches = query.match(SQL_TOKENS_RE);
+  if (!matches) return false;
+  const distinct = new Set(matches.map((m) => m.toUpperCase().replace(/\s+/g, ' ')));
+  if (distinct.size < 2) return false;
+
+  // Even with 2+ tokens, give NL frames the benefit of the doubt when an
+  // explicit graph verb is present (e.g. "trace path from A to B where it
+  // calls Database" — contrived, but should not be rejected).
+  if (GRAPH_PHRASE_RE.test(query)) return false;
+  return true;
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type GraphQueryIntent =
@@ -43,6 +87,9 @@ interface GraphQueryResult {
   edges: GraphEdge[];
   paths?: PathStep[][];
   mermaid: string;
+  /** Set when the serialized payload would have exceeded MAX_PAYLOAD_BYTES
+   *  and we dropped nodes/edges (and regenerated Mermaid) to fit. */
+  truncated?: boolean;
   _meta?: { warnings: string[] };
 }
 
@@ -120,26 +167,134 @@ function classifyQuery(query: string): ClassifiedQuery {
 
 // ── Symbol Resolution ────────────────────────────────────────────────────────
 
-function resolveAnchor(store: Store, anchor: string): SymbolRow | undefined {
+/**
+ * If the simple name of the matched symbol collides with this many other
+ * symbols (case-sensitive exact), and the match came from FTS rather than an
+ * exact symbol_id/FQN/name lookup, we consider the anchor weak ("god-name
+ * filter"). Mirrors the phantom-god-node filter used in findReferences.
+ */
+const AMBIGUOUS_NAME_THRESHOLD = 10;
+
+type AnchorMatchKind = 'symbol_id' | 'fqn' | 'name' | 'fts';
+
+interface AnchorResolution {
+  /** The candidate symbol. Undefined when nothing matched at all. */
+  symbol: SymbolRow | undefined;
+  /** How the match was made — informs confidence. */
+  matchKind: AnchorMatchKind | 'none';
+  /** Heuristic score in [0, 1]. Higher = more confident this is the user's intent. */
+  score: number;
+  /** How many other symbols share the matched symbol's simple name. */
+  nameCollisions: number;
+  /** True when the only evidence is a fuzzy text match into a high-collision name. */
+  isWeak: boolean;
+  /** The original anchor string the user supplied. */
+  anchor: string;
+}
+
+function scoreFromMatchKind(kind: AnchorMatchKind): number {
+  switch (kind) {
+    case 'symbol_id':
+      return 1.0;
+    case 'fqn':
+      return 0.9;
+    case 'name':
+      return 0.7;
+    case 'fts':
+      return 0.4;
+  }
+}
+
+function resolveAnchor(store: Store, anchor: string): AnchorResolution {
   // Try exact match by symbol_id
   const bySid = store.getSymbolBySymbolId(anchor);
-  if (bySid) return bySid;
+  if (bySid) {
+    return {
+      symbol: bySid,
+      matchKind: 'symbol_id',
+      score: scoreFromMatchKind('symbol_id'),
+      nameCollisions: store.countSymbolsByName(bySid.name),
+      isWeak: false,
+      anchor,
+    };
+  }
 
   // Try FQN
   const byFqn = store.getSymbolByFqn(anchor);
-  if (byFqn) return byFqn;
+  if (byFqn) {
+    return {
+      symbol: byFqn,
+      matchKind: 'fqn',
+      score: scoreFromMatchKind('fqn'),
+      nameCollisions: store.countSymbolsByName(byFqn.name),
+      isWeak: false,
+      anchor,
+    };
+  }
 
   // Try name match
   const byName = store.getSymbolByName(anchor);
-  if (byName) return byName;
+  if (byName) {
+    const nameCollisions = store.countSymbolsByName(byName.name);
+    // A direct name lookup is normally strong — the user typed the name
+    // verbatim — but when the same name is shared by many symbols we still
+    // can't tell which one was meant. Flag as weak so the caller knows the
+    // disambiguation failed.
+    const isWeak = nameCollisions >= AMBIGUOUS_NAME_THRESHOLD;
+    return {
+      symbol: byName,
+      matchKind: 'name',
+      score: isWeak ? 0.3 : scoreFromMatchKind('name'),
+      nameCollisions,
+      isWeak,
+      anchor,
+    };
+  }
 
   // FTS fallback — pick the best hit
   const ftsResults = searchFts(store.db, anchor, 5);
   if (ftsResults.length > 0) {
-    return store.getSymbolById(ftsResults[0].symbolId as unknown as number);
+    const sym = store.getSymbolById(ftsResults[0].symbolId as unknown as number);
+    if (!sym) {
+      return {
+        symbol: undefined,
+        matchKind: 'none',
+        score: 0,
+        nameCollisions: 0,
+        isWeak: true,
+        anchor,
+      };
+    }
+    const nameCollisions = store.countSymbolsByName(sym.name);
+    // The FTS hit is weakly grounded when the chosen symbol's name is a
+    // common token shared by many other symbols — that's the "god-name"
+    // signature. A SQL keyword like "query" or "limit" matching a popular
+    // identifier is exactly this scenario.
+    const anchorLower = anchor.toLowerCase();
+    const symNameLower = sym.name.toLowerCase();
+    const exactish =
+      anchorLower === symNameLower ||
+      (sym.fqn != null && sym.fqn.toLowerCase() === anchorLower) ||
+      sym.symbol_id.toLowerCase() === anchorLower;
+    const isWeak = !exactish && nameCollisions >= AMBIGUOUS_NAME_THRESHOLD;
+    return {
+      symbol: sym,
+      matchKind: 'fts',
+      score: isWeak ? 0.1 : scoreFromMatchKind('fts'),
+      nameCollisions,
+      isWeak,
+      anchor,
+    };
   }
 
-  return undefined;
+  return {
+    symbol: undefined,
+    matchKind: 'none',
+    score: 0,
+    nameCollisions: 0,
+    isWeak: true,
+    anchor,
+  };
 }
 
 // ── Graph Building Helpers ───────────────────────────────────────────────────
@@ -356,6 +511,14 @@ function generateMermaid(nodes: GraphNode[], edges: GraphEdge[], paths?: PathSte
 
 const MAX_DEPTH = 6;
 const MAX_NODES = 100;
+/**
+ * Hard ceiling on serialized JSON payload size returned to the caller. If the
+ * assembled subgraph exceeds this, we drop nodes (and any edges that referenced
+ * them) until it fits, then surface a truncation warning. 100 KB is a balance
+ * between giving the LLM useful structure and not blowing context budgets on
+ * runaway traversals.
+ */
+const MAX_PAYLOAD_BYTES = 100 * 1024;
 
 export function graphQuery(
   store: Store,
@@ -365,6 +528,18 @@ export function graphQuery(
   const depth = Math.min(options.depth ?? 3, MAX_DEPTH);
   const maxNodes = Math.min(options.max_nodes ?? MAX_NODES, 200);
   const warnings: string[] = [];
+
+  // 0. Reject SQL-shaped input before we let FTS run wild on it. Without this
+  //    guard, a stray "SELECT … FROM routes" produces a 60+ KB blob of unrelated
+  //    nodes because every SQL keyword fuzzy-matches against a popular symbol.
+  if (looksLikeSql(query)) {
+    return err({
+      code: 'VALIDATION_ERROR',
+      message:
+        'This query looks like SQL. graph_query is a natural-language graph traversal — see examples. For raw SQL over the index, this is not the right tool.',
+      details: { examples: SQL_REJECTION_EXAMPLES },
+    });
+  }
 
   // 1. Classify intent
   const classified = classifyQuery(query);
@@ -376,19 +551,36 @@ export function graphQuery(
     });
   }
 
-  // 2. Resolve anchor symbols
-  const anchorSymbols: SymbolRow[] = [];
-  const unresolvedAnchors: string[] = [];
-  for (const anchor of classified.anchors) {
-    const sym = resolveAnchor(store, anchor);
-    if (sym) {
-      anchorSymbols.push(sym);
-    } else {
-      unresolvedAnchors.push(anchor);
-    }
-  }
+  // 2. Resolve anchor symbols (with confidence scoring + god-name filter).
+  //    Each anchor gets a score and an `isWeak` flag — a weak anchor means the
+  //    only evidence is a fuzzy FTS match into a name shared by many symbols
+  //    (e.g. "query" → some QueryOp type from a plugin we don't care about).
+  const resolutions: AnchorResolution[] = classified.anchors.map((a) => resolveAnchor(store, a));
+  const strongResolutions = resolutions.filter((r) => r.symbol && !r.isWeak);
+  const weakResolutions = resolutions.filter((r) => r.symbol && r.isWeak);
+  const unresolvedAnchors = resolutions.filter((r) => !r.symbol).map((r) => r.anchor);
 
-  if (anchorSymbols.length === 0) {
+  if (strongResolutions.length === 0) {
+    // No anchor passed the god-name filter. Surface what we tried so the
+    // caller sees why we refused to run the traversal.
+    const weakAnchorCandidates = weakResolutions.map((r) => ({
+      anchor: r.anchor,
+      matched_name: r.symbol?.name ?? null,
+      matched_symbol_id: r.symbol?.symbol_id ?? null,
+      match_kind: r.matchKind,
+      score: Number(r.score.toFixed(2)),
+      name_collisions: r.nameCollisions,
+    }));
+
+    if (weakResolutions.length > 0) {
+      return err({
+        code: 'VALIDATION_ERROR',
+        message:
+          'Could not extract any symbol references from query. All candidate anchors matched too many unrelated symbols (god-name collisions). Try a more specific name, FQN, or symbol_id.',
+        details: { weak_anchor_candidates: weakAnchorCandidates },
+      });
+    }
+
     const candidates = classified.anchors.flatMap((a) => {
       const fts = searchFts(store.db, a, 3);
       return fts.map((f) => f.name);
@@ -398,9 +590,21 @@ export function graphQuery(
     );
   }
 
+  const anchorSymbols: SymbolRow[] = strongResolutions
+    .map((r) => r.symbol)
+    .filter((s): s is SymbolRow => s !== undefined);
+
   if (unresolvedAnchors.length > 0) {
     warnings.push(
       `Could not resolve: ${unresolvedAnchors.join(', ')}. Proceeding with resolved symbols only.`,
+    );
+  }
+
+  if (weakResolutions.length > 0) {
+    warnings.push(
+      `Dropped ${weakResolutions.length} weakly-grounded anchor(s) (god-name collision): ${weakResolutions
+        .map((r) => `"${r.anchor}"`)
+        .join(', ')}. Proceeding with stronger anchors only.`,
     );
   }
 
@@ -539,22 +743,83 @@ export function graphQuery(
   }
 
   // 8. Generate Mermaid diagram
-  const mermaid = generateMermaid(outputNodes, outputEdges, outputPaths);
+  let mermaid = generateMermaid(outputNodes, outputEdges, outputPaths);
 
   if (outputNodes.length >= maxNodes) {
     warnings.push(`Result capped at ${maxNodes} nodes. Use depth or max_nodes to adjust.`);
+  }
+
+  // 9. Apply payload-size cap. Some pathological queries assemble a small node
+  //    count but each node carries a long file path / fqn, blowing past sane
+  //    serialization budgets. Truncate by repeatedly halving the node list
+  //    until the JSON fits, then drop any edges referencing dropped nodes.
+  let truncated = false;
+  const initialSize = Buffer.byteLength(
+    JSON.stringify({ nodes: outputNodes, edges: outputEdges, paths: outputPaths }),
+    'utf8',
+  );
+  let finalNodes = outputNodes;
+  let finalEdges = outputEdges;
+  let finalPaths = outputPaths;
+  if (initialSize > MAX_PAYLOAD_BYTES) {
+    truncated = true;
+    // Preserve anchor nodes — they're the whole point of the query.
+    const anchorSidSet = new Set(anchorSymbols.map((s) => s.symbol_id));
+    const sorted = [...outputNodes].sort((a, b) => {
+      const aAnchor = anchorSidSet.has(a.symbol_id) ? 1 : 0;
+      const bAnchor = anchorSidSet.has(b.symbol_id) ? 1 : 0;
+      return bAnchor - aAnchor;
+    });
+
+    let lo = 0;
+    let hi = sorted.length;
+    // Binary search for the largest prefix that fits.
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      const candidateNodes = sorted.slice(0, mid);
+      const keepSids = new Set(candidateNodes.map((n) => n.symbol_id));
+      const candidateEdges = outputEdges.filter(
+        (e) => keepSids.has(e.source) && keepSids.has(e.target),
+      );
+      const candidatePaths = outputPaths?.filter((p) =>
+        p.every((step) => keepSids.has(step.symbol_id)),
+      );
+      const size = Buffer.byteLength(
+        JSON.stringify({
+          nodes: candidateNodes,
+          edges: candidateEdges,
+          paths: candidatePaths,
+        }),
+        'utf8',
+      );
+      if (size <= MAX_PAYLOAD_BYTES) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+
+    finalNodes = sorted.slice(0, lo);
+    const keepSids = new Set(finalNodes.map((n) => n.symbol_id));
+    finalEdges = outputEdges.filter((e) => keepSids.has(e.source) && keepSids.has(e.target));
+    finalPaths = outputPaths?.filter((p) => p.every((step) => keepSids.has(step.symbol_id)));
+    mermaid = generateMermaid(finalNodes, finalEdges, finalPaths);
+    warnings.push(
+      `Result payload exceeded ${MAX_PAYLOAD_BYTES} bytes — truncated from ${outputNodes.length} to ${finalNodes.length} nodes.`,
+    );
   }
 
   const result: GraphQueryResult = {
     query,
     intent: classified.intent,
     anchors: anchorSymbols.map((s) => s.symbol_id),
-    nodes: outputNodes,
-    edges: outputEdges,
+    nodes: finalNodes,
+    edges: finalEdges,
     mermaid,
   };
 
-  if (outputPaths) result.paths = outputPaths;
+  if (finalPaths) result.paths = finalPaths;
+  if (truncated) result.truncated = true;
   if (warnings.length > 0) result._meta = { warnings };
 
   return ok(result);
