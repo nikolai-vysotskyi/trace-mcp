@@ -102,7 +102,7 @@ batch({ calls: [
 
 Agent is ONLY acceptable for: writing code in parallel (background workers), running tests, web research, or Plan mode.
 
-**Monitor waste:** Run `get_optimization_report` to detect repeated reads, Bash grep usage, and missed trace-mcp opportunities.
+**Monitor waste:** the trace-mcp guard hook (PreToolUse) tracks repeated reads, Bash grep on source paths, and missed trace-mcp opportunities, and replies inline with corrective hints. Honour those hints.
 
 **After editing a file:** Call `register_edit` { file_path: "path/to/file" } to reindex that single file and invalidate caches. Much lighter than full `reindex`. Do this after every Edit/Write to keep the index fresh. If `_duplication_warnings` appears in the response, review the referenced symbols — you may be duplicating existing logic.
 

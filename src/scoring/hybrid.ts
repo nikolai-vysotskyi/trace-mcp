@@ -50,6 +50,10 @@ const KIND_BONUS: Record<string, number> = {
   variable: 0.2,
   enum_case: 0.3,
   namespace: 0.1,
+  // Markdown kinds — kept at the floor so a heading/tag never out-scores
+  // a real code symbol on the typeBonus channel.
+  heading: 0.05,
+  tag: 0.05,
 };
 
 /** Get type bonus for a symbol kind. */

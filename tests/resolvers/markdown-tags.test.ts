@@ -45,9 +45,11 @@ function note(basename: string, tags: string[]): Row {
 
 function tag(noteBasename: string, name: string): Row {
   return {
+    // symbol_id keeps the legacy `#constant` suffix — the indexer hasn't
+    // migrated existing rows, only the emitted `kind` field changed.
     symbol_id: `vault/${noteBasename}.md::${noteBasename}::tag::${name}#constant`,
     fqn: `tag:${name}`,
-    kind: 'constant',
+    kind: 'tag',
   };
 }
 

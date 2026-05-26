@@ -349,6 +349,10 @@ export async function search(
       kind: filters?.kind,
       language: filters?.language,
       filePattern: filters?.filePattern,
+      // Exclude markdown headings/tags from default code-symbol searches.
+      // Bypassed inside searchFts when the caller explicitly asked for a
+      // markdown kind / language / file_pattern.
+      excludeMarkdown: true,
     };
     const ftsResults = searchFts(store.db, query, fetchLimit, 0, ftsFilters);
     if (ftsResults.length === 0) return { items: [], total: 0, search_mode: 'fts' };
@@ -500,6 +504,9 @@ async function runFusionSearch(
     kind: filters?.kind,
     language: filters?.language,
     filePattern: filters?.filePattern,
+    // Same default-exclusion as the single-channel `search()` path — keeps
+    // markdown headings/tags from polluting the lexical channel of fusion.
+    excludeMarkdown: true,
   };
 
   // ── Channel 1: Lexical (BM25) ──────────────────────────────

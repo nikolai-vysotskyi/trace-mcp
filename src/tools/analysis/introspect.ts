@@ -10,6 +10,7 @@
  */
 import type { Store, SymbolWithFilePath } from '../../db/store.js';
 import type { PluginRegistry } from '../../plugin-api/registry.js';
+import { isUsedIntraFile, makeIntraFileReader } from '../shared/intra-file-usage.js';
 import { getCouplingMetrics, getDependencyCycles } from './graph-analysis.js';
 
 /** Matches paths inside test fixture directories (sample projects, not real code). */
@@ -346,12 +347,37 @@ function walkDescendants(
 // get_dead_exports
 // ---------------------------------------------------------------------------
 
+/**
+ * Recommendation for a symbol whose `export` keyword has no external consumer:
+ *
+ * - `remove_export_keyword` — the symbol is still referenced inside its own
+ *   file (default-arg, closure capture, file-local helper). The EXPORT is
+ *   dead, the SYMBOL is alive. Strip the `export` keyword, keep the symbol.
+ * - `delete_symbol` — no in-file usage detected either. Symbol is a candidate
+ *   for full deletion. Confirm with `get_dead_code` (strict, multi-signal)
+ *   before removing.
+ */
+export type DeadExportRecommendation = 'remove_export_keyword' | 'delete_symbol';
+
 interface DeadExportItem {
   symbol_id: string;
   name: string;
   kind: string;
   file: string;
   line: number | null;
+  /**
+   * Which detectors fired for this item. Always contains `not_imported`.
+   * May additionally contain `intra_file_usage` when the symbol is used
+   * inside its own file (in which case `recommendation` is
+   * `remove_export_keyword`).
+   */
+  signals: string[];
+  /**
+   * Action the caller should take. See `DeadExportRecommendation` for the
+   * semantics. Defaults to `delete_symbol` when the intra-file signal cannot
+   * be evaluated (no `projectRoot` provided to `getDeadExports`).
+   */
+  recommendation: DeadExportRecommendation;
 }
 
 interface GetDeadExportsResult {
@@ -447,14 +473,28 @@ function collectPyprojectEntryPoints(store: Store): Set<string> {
 }
 
 /**
- * Find exported symbols that are never imported by any other file.
- * Cross-references exported symbols with import edge metadata (specifiers).
- * An export is "dead" if its name never appears as a specifier in any import edge.
+ * Find exported symbols whose `export` keyword is dead — no other file imports
+ * the name. Two signals drive the result, surfaced per-item as `signals`:
+ *
+ *   - `not_imported` — always present when an item is returned. The symbol
+ *     name does not appear in any import-edge specifier list.
+ *   - `intra_file_usage` — additionally present when the symbol is still
+ *     referenced inside its own file outside its own declaration range.
+ *     When this fires, `recommendation` is `remove_export_keyword`: the
+ *     export is dead but the symbol is alive (strip `export`, keep the
+ *     declaration). Otherwise `recommendation` is `delete_symbol` and the
+ *     caller should confirm with `get_dead_code` before removing.
+ *
+ * The intra-file signal requires `projectRoot` to read the file content.
+ * Callers that don't pass one (legacy embedders, the `selfAudit` summary,
+ * CI report generator) get every item flagged `delete_symbol` — matching
+ * the pre-refactor strictness.
  */
 export function getDeadExports(
   store: Store,
   filePattern?: string,
   limit?: number,
+  projectRoot?: string,
 ): GetDeadExportsResult {
   const exported = store
     .getExportedSymbols(filePattern)
@@ -490,6 +530,11 @@ export function getDeadExports(
   // [project.gui-scripts] / setuptools console_scripts / gui_scripts.
   const pyprojectEntryNames = collectPyprojectEntryPoints(store);
 
+  // Lazy file reader for the intra-file signal. Returns null for every file
+  // when `projectRoot` is undefined — that keeps recommendation strict
+  // (`delete_symbol`) for legacy callers without a working directory.
+  const readFileCached = makeIntraFileReader(projectRoot);
+
   const dead: DeadExportItem[] = [];
   for (const sym of exported) {
     // Skip methods (their export is inherited from the class)
@@ -512,12 +557,26 @@ export function getDeadExports(
     if (pyprojectEntryNames.has(sym.name)) continue;
 
     if (!importedNames.has(sym.name)) {
+      const signals: string[] = ['not_imported'];
+      let recommendation: DeadExportRecommendation = 'delete_symbol';
+
+      // Intra-file signal: does the symbol's own file mention it outside
+      // its declaration range? Only evaluated when we can actually read
+      // the file (projectRoot supplied and file accessible).
+      const content = readFileCached(sym.file_path);
+      if (content && isUsedIntraFile(content, sym.name, sym.line_start, sym.line_end)) {
+        signals.push('intra_file_usage');
+        recommendation = 'remove_export_keyword';
+      }
+
       dead.push({
         symbol_id: sym.symbol_id,
         name: sym.name,
         kind: sym.kind,
         file: sym.file_path,
         line: sym.line_start,
+        signals,
+        recommendation,
       });
     }
   }

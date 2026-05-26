@@ -124,13 +124,29 @@ export function setupProject(
   ensureGlobalDirs();
   const dbPath = getDbPath(absRoot);
 
-  // 4. Migrate old local DB if requested
+  // 4. Migrate old local DB if requested. We treat an EMPTY (0-byte) local
+  // .trace-mcp/index.db as cruft from a previous run, not as a real migration
+  // candidate — older versions created the empty file on init even when the
+  // daemon was the real index home. Such 0-byte files persist forever and
+  // confuse users into thinking the local index is broken. Drop them.
   let migrated = false;
-  if (opts?.migrateOldDb) {
-    const oldDbPath = path.join(absRoot, '.trace-mcp', 'index.db');
-    if (fs.existsSync(oldDbPath) && !fs.existsSync(dbPath)) {
-      fs.copyFileSync(oldDbPath, dbPath);
-      migrated = true;
+  const oldDbPath = path.join(absRoot, '.trace-mcp', 'index.db');
+  if (fs.existsSync(oldDbPath)) {
+    try {
+      const size = fs.statSync(oldDbPath).size;
+      if (size === 0) {
+        // Best-effort cleanup; ignore failures (read-only FS, permissions, etc.)
+        try {
+          fs.unlinkSync(oldDbPath);
+        } catch {
+          /* leave the stray file rather than crashing setup */
+        }
+      } else if (opts?.migrateOldDb && !fs.existsSync(dbPath)) {
+        fs.copyFileSync(oldDbPath, dbPath);
+        migrated = true;
+      }
+    } catch {
+      /* unreadable — don't block setup */
     }
   }
 

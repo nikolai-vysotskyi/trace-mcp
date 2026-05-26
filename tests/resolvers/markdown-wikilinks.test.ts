@@ -7,7 +7,7 @@ import type { RawEdge } from '../../src/plugin-api/types.js';
 interface SymbolRow {
   symbol_id: string;
   fqn: string;
-  kind: 'namespace' | 'class' | 'constant';
+  kind: 'namespace' | 'heading' | 'tag';
   metadata?: Record<string, unknown>;
 }
 
@@ -45,9 +45,11 @@ function note(basename: string, meta: Record<string, unknown> = {}): SymbolRow {
 
 function section(noteBasename: string, heading: string): SymbolRow {
   return {
+    // symbol_id keeps the legacy `#class` suffix — the indexer hasn't
+    // migrated existing rows, only the emitted `kind` field changed.
     symbol_id: `vault/${noteBasename}.md::${noteBasename}#${heading}#class`,
     fqn: `note:${noteBasename}#${heading}`,
-    kind: 'class',
+    kind: 'heading',
   };
 }
 

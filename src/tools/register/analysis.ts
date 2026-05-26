@@ -170,7 +170,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dead_exports',
-    'Find exported symbols never imported by any other file — dead code candidates. Use for quick export-level dead code scan. For deeper multi-signal dead code detection (including call graph) use get_dead_code instead. Paginated: caps result list at `limit` (default 100, max 500); when more exist the response includes `truncated: true` and `total_dead` reflects the full count. Read-only. Returns JSON: { dead_exports: [{ symbol_id, name, kind, file }], total_dead, total_exports, truncated? }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Find exported symbols whose `export` keyword has no external consumer. Each item carries `signals` (which detectors fired) and `recommendation`: `"remove_export_keyword"` when the symbol is still used inside its own file (just un-export it, keep the declaration), `"delete_symbol"` when no in-file usage was detected. NOTE: this tool flags dead EXPORT KEYWORDS, not necessarily dead SYMBOLS. For strict dead-symbol detection (multi-signal: import graph + call graph + barrel re-exports + intra-file usage, only flags symbols with NO incoming references anywhere) use `get_dead_code` instead — it will reject anything `get_dead_exports` tags `remove_export_keyword`. Paginated: caps result list at `limit` (default 100, max 500); when more exist the response includes `truncated: true` and `total_dead` reflects the full count. Read-only. Returns JSON: { dead_exports: [{ symbol_id, name, kind, file, line, signals, recommendation }], total_dead, total_exports, truncated? }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       file_pattern: z
         .string()
@@ -190,7 +190,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
       output_format: OutputFormatSchema,
     },
     async ({ file_pattern, limit, output_format }) => {
-      const result = getDeadExports(store, file_pattern, limit);
+      const result = getDeadExports(store, file_pattern, limit, projectRoot);
       const fmt = output_format === 'markdown' ? 'json' : output_format;
       const text = encodeResponse(result, fmt);
       return { content: [{ type: 'text', text }] };
@@ -311,10 +311,17 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_circular_imports',
-    'Find circular dependency chains in the import graph (Kosaraju SCC algorithm). Use to detect and break dependency cycles. Read-only. Returns JSON: { total_cycles, cycles: [[file1, file2, ...]] }.',
-    {},
-    async () => {
-      const cycles = getDependencyCycles(store);
+    'Find circular dependency chains in the import graph (Kosaraju SCC algorithm). Considers only import-typed edges (esm_imports / imports / py_imports / py_reexports); call, reference, member_of, and test_covers edges are NOT walked. Test files (paths matching tests/**, **/*.test.*, **/*.spec.*, **/__tests__/**) are excluded by default to suppress spurious test↔source cycles — pass include_tests: true to opt in. Use to detect and break dependency cycles. Read-only. Returns JSON: { total_cycles, cycles: [{ files, length }] }.',
+    {
+      include_tests: z
+        .boolean()
+        .optional()
+        .describe(
+          'Include test files in cycle detection. Default false — paths matching tests/**, **/*.test.*, **/*.spec.*, **/__tests__/** are excluded because they routinely produce spurious cycles (test imports source, while an indexer scan adds a reverse imports edge into the fixture).',
+        ),
+    },
+    async ({ include_tests }) => {
+      const cycles = getDependencyCycles(store, { includeTests: include_tests === true });
       const stats = store.getStats();
       return {
         content: [
@@ -342,13 +349,19 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_pagerank',
-    'File importance ranking via PageRank on the import graph. Shows most central/important files. Use to identify architecturally critical files. For combined health metrics use get_project_health instead. Read-only. Returns JSON: [{ file, score }]. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'File importance ranking via PageRank on the import graph. Shows most central/important files. Use to identify architecturally critical files. For combined health metrics use get_project_health instead. By default markdown files (.md/.mdx/.markdown/.qmd) are excluded — their cross-link patterns dominate the graph and bury real code. Pass `include_markdown: true` to keep them. Read-only. Returns JSON: [{ file, score }]. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
+      include_markdown: z
+        .boolean()
+        .optional()
+        .describe(
+          'When true, include markdown notes (.md/.mdx/.markdown/.qmd) in the ranking. Default: false — they crowd out real code in top-N otherwise.',
+        ),
       output_format: OutputFormatSchema,
     },
-    async ({ limit, output_format }) => {
-      const results = getPageRank(store);
+    async ({ limit, include_markdown, output_format }) => {
+      const results = getPageRank(store, { includeMarkdown: include_markdown });
       const sliced = results.slice(0, limit ?? 50);
       const fmt = output_format === 'markdown' ? 'json' : output_format;
       const text = encodeResponse(sliced, fmt);

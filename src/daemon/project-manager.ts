@@ -32,6 +32,11 @@ import { SubprojectManager } from '../subproject/manager.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { trailingDebounce } from '../util/debounce.js';
 import { serializeError } from './log-error.js';
+import {
+  removeProjectArtifacts,
+  type RemoveArtifactsOptions,
+  type RemoveArtifactsResult,
+} from './project-artifacts.js';
 import type { ProjectResourcePool } from './resource-pool.js';
 
 const AI_COALESCE_WAIT_MS = 5_000;
@@ -491,11 +496,47 @@ export class ProjectManager {
     }
   }
 
-  /** Stop a project AND drop it from the persistent registry. */
-  async removeProject(root: string): Promise<void> {
+  /**
+   * Stop a project, delete its on-disk artifacts, and drop it from the
+   * persistent registry.
+   *
+   * `keepDbFiles: true` skips the index/session/task-cache DB unlinks but
+   * still drops topology + decision rows + registry entry. Default is
+   * `false` — desktop "delete project" should reclaim disk.
+   *
+   * Artifact cleanup is best-effort and idempotent: a partial failure on one
+   * tier (e.g. topology DB locked by another process) does not block the
+   * registry unregister, so the UI never lies about removal.
+   */
+  async removeProject(
+    root: string,
+    options?: RemoveArtifactsOptions,
+  ): Promise<RemoveArtifactsResult> {
     await this.stopProject(root);
+    let artifacts: RemoveArtifactsResult;
+    try {
+      artifacts = removeProjectArtifacts(root, options);
+    } catch (err) {
+      // Cleanup is best-effort — never block unregister on a stray fs error.
+      logger.warn({ err, projectRoot: root }, 'removeProjectArtifacts threw (non-fatal)');
+      artifacts = {
+        deleted: [],
+        kept: [],
+        freedBytes: 0,
+        topology: { subprojects: 0, services: 0 },
+        decisions: { decisions: 0, chunks: 0, clusters: 0, memos: 0 },
+      };
+    }
     unregisterProject(root);
-    logger.info({ projectRoot: root }, 'Project removed from daemon');
+    logger.info(
+      {
+        projectRoot: root,
+        deletedFiles: artifacts.deleted.length,
+        freedBytes: artifacts.freedBytes,
+      },
+      'Project removed from daemon',
+    );
+    return artifacts;
   }
 
   /** Get a managed project by root path. */

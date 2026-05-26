@@ -211,8 +211,27 @@ export class AnalyticsRepository {
     ).c;
     const edgeCount = (this.db.prepare('SELECT COUNT(*) as c FROM edges').get() as { c: number }).c;
     const nodeCount = (this.db.prepare('SELECT COUNT(*) as c FROM nodes').get() as { c: number }).c;
-    const routeCount = (this.db.prepare('SELECT COUNT(*) as c FROM routes').get() as { c: number })
-      .c;
+    // Split route counts so the headline `totalRoutes` reflects only real HTTP
+    // routes. Synthetic resource routes (MCP TOOL/RESOURCE/PROMPT/JOB, SCHEMA,
+    // CLI) and test-fixture routes (TEST*) are counted separately — they used
+    // to inflate `totalRoutes` to thousands on non-HTTP projects.
+    const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'];
+    const httpRouteCount = (
+      this.db
+        .prepare(
+          `SELECT COUNT(*) as c FROM routes WHERE method IN (${HTTP_METHODS.map(() => '?').join(',')})`,
+        )
+        .get(...HTTP_METHODS) as { c: number }
+    ).c;
+    const testFixtureRouteCount = (
+      this.db.prepare("SELECT COUNT(*) as c FROM routes WHERE method LIKE 'TEST%'").get() as {
+        c: number;
+      }
+    ).c;
+    const totalRouteCount = (
+      this.db.prepare('SELECT COUNT(*) as c FROM routes').get() as { c: number }
+    ).c;
+    const resourceRouteCount = totalRouteCount - httpRouteCount - testFixtureRouteCount;
     const componentCount = (
       this.db.prepare('SELECT COUNT(*) as c FROM components').get() as { c: number }
     ).c;
@@ -236,7 +255,9 @@ export class AnalyticsRepository {
       totalSymbols: symbolCount,
       totalEdges: edgeCount,
       totalNodes: nodeCount,
-      totalRoutes: routeCount,
+      totalRoutes: httpRouteCount,
+      totalResourceRoutes: Math.max(0, resourceRouteCount),
+      totalTestFixtureRoutes: testFixtureRouteCount,
       totalComponents: componentCount,
       totalMigrations: migrationCount,
       partialFiles,

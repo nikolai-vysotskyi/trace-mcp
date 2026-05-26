@@ -132,11 +132,46 @@ function _getFileIdForSymbol(store: Store, symbolRefId: number): number | undefi
 // 1. COUPLING METRICS
 // ════════════════════════════════════════════════════════════════════════
 
-export function getCouplingMetrics(store: Store, prebuiltGraph?: FileGraph): CouplingResult[] {
+/**
+ * Synthetic external-package stub files emitted by the indexer. They live
+ * under `__external__/_root/pkg/*.synthetic` and exist purely to give edge
+ * resolution something to attach to when resolving imports of npm/pip
+ * packages. They are NOT user code, so they pollute any "most important
+ * file" / "most unstable file" list. Filtered out of public outputs by
+ * default.
+ */
+export function isExternalSyntheticPath(filePath: string): boolean {
+  return filePath.startsWith('__external__/') || filePath.includes('/__external__/');
+}
+
+export interface CouplingMetricsOptions {
+  /**
+   * When true, test files participate in the coupling/instability metric.
+   * Default false — tests have Ca=0/Ce>0 by definition, which floods the
+   * `unstable_modules` count and the most-unstable top-N with results that
+   * are not architectural smells but a property of test-file structure.
+   */
+  includeTests?: boolean;
+  /**
+   * When true, `__external__/*.synthetic` files participate in the metric.
+   * Default false — externals are stubs, not code the user can act on.
+   */
+  includeExternals?: boolean;
+}
+
+export function getCouplingMetrics(
+  store: Store,
+  prebuiltGraph?: FileGraph,
+  options: CouplingMetricsOptions = {},
+): CouplingResult[] {
+  const { includeTests = false, includeExternals = false } = options;
   const graph = prebuiltGraph ?? buildFileGraph(store);
   const results: CouplingResult[] = [];
 
   for (const fileId of graph.allFileIds) {
+    const filePath = graph.pathMap.get(fileId) ?? `[file:${fileId}]`;
+    if (!includeTests && isTestPath(filePath)) continue;
+    if (!includeExternals && isExternalSyntheticPath(filePath)) continue;
     const ca = graph.reverse.get(fileId)?.size ?? 0;
     const ce = graph.forward.get(fileId)?.size ?? 0;
     const total = ca + ce;
@@ -149,7 +184,7 @@ export function getCouplingMetrics(store: Store, prebuiltGraph?: FileGraph): Cou
     else assessment = 'unstable';
 
     results.push({
-      file: graph.pathMap.get(fileId) ?? `[file:${fileId}]`,
+      file: filePath,
       file_id: fileId,
       ca,
       ce,
@@ -167,9 +202,81 @@ export function getCouplingMetrics(store: Store, prebuiltGraph?: FileGraph): Cou
 // 2. DEPENDENCY CYCLE DETECTION (Kosaraju's SCC)
 // ════════════════════════════════════════════════════════════════════════
 
-export function getDependencyCycles(store: Store): DependencyCycle[] {
+/**
+ * Path patterns that identify test files. Test files routinely produce
+ * spurious cycles in the import graph because:
+ *   - Test files import the source under test (legitimate).
+ *   - Cross-cutting indexers/registries occasionally end up with parsed
+ *     `imports` edges pointing AT a test fixture (e.g. when a `.test.ts`
+ *     file is itself parsed as a plugin or fixture file gets enumerated by
+ *     a project-context scan). That second edge closes a bogus 2-node
+ *     "cycle" (test ↔ source) that nobody cares about.
+ *   - When many such test fixtures share a transitively imported source
+ *     graph, Kosaraju's SCC collapses them into one massive (false) cycle.
+ *
+ * We strip test files from the cycle graph by default. Pass
+ * `includeTests: true` to opt back in.
+ */
+export const TEST_PATH_PATTERN: RegExp =
+  /(?:^|\/)tests?\/|(?:^|\/)__tests__\/|\.(test|spec)\.[cm]?[jt]sx?$/i;
+
+export function isTestPath(filePath: string): boolean {
+  return TEST_PATH_PATTERN.test(filePath);
+}
+
+export interface GetDependencyCyclesOptions {
+  /**
+   * When true, test files participate in cycle detection. Default false —
+   * paths matching `tests/**`, `**\/*.test.{ts,tsx,js,jsx,mjs,cjs}`,
+   * `**\/*.spec.*`, `**\/__tests__/**` are excluded.
+   */
+  includeTests?: boolean;
+}
+
+export function getDependencyCycles(
+  store: Store,
+  options: GetDependencyCyclesOptions = {},
+): DependencyCycle[] {
+  const { includeTests = false } = options;
   const graph = buildFileGraph(store);
-  const nodes = [...graph.allFileIds];
+
+  // Build the working graph. When excluding tests, we filter file ids
+  // whose path matches a test pattern. Removing a node also requires
+  // pruning its incoming/outgoing edges so the SCC walk doesn't traverse
+  // through ghosts.
+  const excluded = new Set<number>();
+  if (!includeTests) {
+    for (const fileId of graph.allFileIds) {
+      const path = graph.pathMap.get(fileId);
+      if (path && isTestPath(path)) excluded.add(fileId);
+    }
+  }
+
+  const allowed = (id: number): boolean => !excluded.has(id);
+  const filterNeighbors = (set: Set<number> | undefined): Set<number> | undefined => {
+    if (!set || excluded.size === 0) return set;
+    const out = new Set<number>();
+    for (const n of set) if (!excluded.has(n)) out.add(n);
+    return out;
+  };
+
+  // Build filtered adjacency maps once so the two DFS passes stay cheap.
+  const forward: Map<number, Set<number>> = excluded.size === 0
+    ? graph.forward
+    : new Map(
+        [...graph.forward.entries()]
+          .filter(([k]) => allowed(k))
+          .map(([k, v]) => [k, filterNeighbors(v)!]),
+      );
+  const reverse: Map<number, Set<number>> = excluded.size === 0
+    ? graph.reverse
+    : new Map(
+        [...graph.reverse.entries()]
+          .filter(([k]) => allowed(k))
+          .map(([k, v]) => [k, filterNeighbors(v)!]),
+      );
+
+  const nodes = [...graph.allFileIds].filter(allowed);
 
   // Pass 1: DFS on original graph, record finish order
   const visited = new Set<number>();
@@ -177,7 +284,7 @@ export function getDependencyCycles(store: Store): DependencyCycle[] {
 
   for (const node of nodes) {
     if (!visited.has(node)) {
-      dfsForward(node, graph.forward, visited, finishOrder);
+      dfsForward(node, forward, visited, finishOrder);
     }
   }
 
@@ -189,7 +296,7 @@ export function getDependencyCycles(store: Store): DependencyCycle[] {
     const node = finishOrder[i];
     if (!visited2.has(node)) {
       const component: number[] = [];
-      dfsReverse(node, graph.reverse, visited2, component);
+      dfsReverse(node, reverse, visited2, component);
       if (component.length > 1) {
         sccs.push(component);
       }
@@ -259,6 +366,18 @@ function dfsReverse(
 // 3. PAGERANK
 // ════════════════════════════════════════════════════════════════════════
 
+/**
+ * File extensions emitted by the markdown language plugin. Used by
+ * `getPageRank` to suppress markdown files from the default ranking — they
+ * otherwise crowd out real code under generic queries.
+ */
+const MARKDOWN_EXTENSIONS: readonly string[] = ['.md', '.mdx', '.markdown', '.qmd'];
+
+function isMarkdownPath(p: string): boolean {
+  const lower = p.toLowerCase();
+  return MARKDOWN_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
 export function getPageRank(
   store: Store,
   options: {
@@ -266,9 +385,28 @@ export function getPageRank(
     maxIterations?: number;
     tolerance?: number;
     prebuiltGraph?: FileGraph;
+    /**
+     * When true, keep markdown files in the result. Default false — markdown
+     * notes dominate the import graph by structural accident (many notes
+     * cross-link via wikilinks) and bury real code files in the top-N.
+     */
+    includeMarkdown?: boolean;
+    /**
+     * When true, keep `__external__/*.synthetic` stubs in the result. Default
+     * false — synthetic externals like `vitest.synthetic`/`node:path.synthetic`
+     * have huge in-degree by definition (everyone imports them) and crowd out
+     * real user code in the top-N otherwise.
+     */
+    includeExternals?: boolean;
   } = {},
 ): PageRankResult[] {
-  const { damping = 0.85, maxIterations = 100, tolerance = 1e-6 } = options;
+  const {
+    damping = 0.85,
+    maxIterations = 100,
+    tolerance = 1e-6,
+    includeMarkdown = false,
+    includeExternals = false,
+  } = options;
   const graph = options.prebuiltGraph ?? buildFileGraph(store);
   const nodes = [...graph.allFileIds];
   const N = nodes.length;
@@ -329,19 +467,23 @@ export function getPageRank(
   //      in pins.ts).
   //   3. Otherwise no boost (weight = 1.0).
   const symbolPinsByFile = getSymbolPinWeightsByFile(store.db);
-  const results: PageRankResult[] = nodes.map((fileId, i) => {
+  const results: PageRankResult[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    const fileId = nodes[i];
     const filePath = graph.pathMap.get(fileId) ?? `[file:${fileId}]`;
+    if (!includeMarkdown && isMarkdownPath(filePath)) continue;
+    if (!includeExternals && isExternalSyntheticPath(filePath)) continue;
     const explicitFile = getFilePinWeightExplicit(store.db, filePath);
     const pinWeight = explicitFile ?? symbolPinsByFile.get(filePath) ?? 1.0;
     const adjusted = scores[i] * pinWeight;
-    return {
+    results.push({
       file: filePath,
       file_id: fileId,
       score: Math.round(adjusted * 1e6) / 1e6,
       in_degree: graph.reverse.get(fileId)?.size ?? 0,
       out_degree: graph.forward.get(fileId)?.size ?? 0,
-    };
-  });
+    });
+  }
 
   results.sort((a, b) => b.score - a.score);
   return results;

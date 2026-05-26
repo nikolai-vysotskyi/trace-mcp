@@ -40,7 +40,7 @@ export function resolveMarkdownTagEdges(
     .prepare(
       `SELECT id, symbol_id, fqn
        FROM symbols
-       WHERE kind = 'constant' AND fqn LIKE 'tag:%'
+       WHERE kind = 'tag' AND fqn LIKE 'tag:%'
        ORDER BY id ASC`,
     )
     .all() as TagSymbolRow[];

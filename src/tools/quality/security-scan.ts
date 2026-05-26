@@ -40,6 +40,13 @@ interface SecurityFinding {
   interpolation_source?: 'non_constant';
   /** Optional evidence string (e.g. "auth context: file path") for reviewers. */
   evidence?: string;
+  /**
+   * Confidence in the finding:
+   *   - "high"   — pattern matched and no known safe shape detected,
+   *   - "medium" — pattern matched but heuristics suggest a safer shape (downgraded),
+   *   - "low"    — weakly grounded, likely false positive but kept for review.
+   */
+  confidence: 'low' | 'medium' | 'high';
 }
 
 export interface SecurityScanResult {
@@ -537,6 +544,243 @@ function isWeakHashSecurityContext(
 }
 
 // ---------------------------------------------------------------------------
+// Comment stripper (lossy on comments, preserves strings + line count)
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace comment contents with spaces while preserving string literals and
+ * line numbering. Returns an array parallel to the original lines.
+ *
+ * Handles:
+ *  - C-style `// line comments` to end-of-line.
+ *  - C-style `/* block comments *\/` across multiple lines.
+ *  - Single, double, and backtick strings (with backslash escapes).
+ *
+ * Backticks: nested `${...}` may itself contain backticks; we do not recurse,
+ * but we treat the outer backtick as a normal string scope, which is enough for
+ * comment skipping. String contents are preserved verbatim so regex detectors
+ * that target string literals (SQL, exec, fetch URLs) keep working.
+ */
+function stripCommentsKeepStrings(source: string): string {
+  const len = source.length;
+  const out: string[] = new Array(len);
+  let i = 0;
+  let inLine = false;
+  let inBlock = false;
+  let stringDelim: string | null = null;
+  while (i < len) {
+    const ch = source[i];
+    const next = source[i + 1];
+
+    if (inLine) {
+      // Drop comment chars but keep newline.
+      out[i] = ch === '\n' ? '\n' : ' ';
+      if (ch === '\n') inLine = false;
+      i++;
+      continue;
+    }
+
+    if (inBlock) {
+      if (ch === '*' && next === '/') {
+        out[i] = ' ';
+        out[i + 1] = ' ';
+        i += 2;
+        inBlock = false;
+        continue;
+      }
+      out[i] = ch === '\n' ? '\n' : ' ';
+      i++;
+      continue;
+    }
+
+    if (stringDelim !== null) {
+      out[i] = ch;
+      if (ch === '\\' && i + 1 < len) {
+        out[i + 1] = source[i + 1];
+        i += 2;
+        continue;
+      }
+      if (ch === stringDelim) {
+        stringDelim = null;
+      }
+      i++;
+      continue;
+    }
+
+    // Not inside a comment or string.
+    if (ch === '/' && next === '/') {
+      out[i] = ' ';
+      out[i + 1] = ' ';
+      i += 2;
+      inLine = true;
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      out[i] = ' ';
+      out[i + 1] = ' ';
+      i += 2;
+      inBlock = true;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      stringDelim = ch;
+      out[i] = ch;
+      i++;
+      continue;
+    }
+    out[i] = ch;
+    i++;
+  }
+  return out.join('');
+}
+
+// ---------------------------------------------------------------------------
+// Safe-shape detectors (used to drop/downgrade common FP shapes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Local-path roots commonly used to anchor `path.resolve(root, x)` against a
+ * known directory. Path Traversal findings whose first argument is one of these
+ * identifiers are downgraded — the resolved path is still bound to `root`'s
+ * tree (the caller is expected to validate that staying-within-root via
+ * realpath/normalize, but this is the SAFE pattern, not the dangerous one).
+ */
+const PATH_ROOT_ANCHORS = new Set<string>([
+  'projectRoot',
+  'projectDir',
+  'absRoot',
+  'workspaceRoot',
+  'cwd',
+  '__dirname',
+  'baseDir',
+  'rootDir',
+]);
+
+/**
+ * Identifier names commonly used to hold a hardcoded `http://localhost:N` /
+ * `http://127.0.0.1:N` URL base. SSRF findings whose interpolated base resolves
+ * to such a literal are downgraded.
+ */
+const SSRF_BASE_IDENT_RE = /^(?:BASE|API|URL|BASE_URL|API_BASE|baseUrl|daemonUrl|url|base|api)$/i;
+
+const LOCAL_URL_LITERAL_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?/i;
+
+/** Identify XSS `innerHTML = ...` shapes that are safe by construction. */
+function classifyInnerHtmlAssignment(
+  line: string,
+): { safe: true } | { safe: false; confidence: 'high' | 'medium' } {
+  // Extract the RHS after `innerHTML =`.
+  const m = /\.innerHTML\s*=\s*(.+?);?\s*$/.exec(line);
+  if (!m) return { safe: false, confidence: 'high' };
+  const rhs = m[1].trim();
+
+  // Literal-only string (no interpolation, no concat).
+  // Examples: innerHTML = '', innerHTML = "<div></div>", innerHTML = `static`.
+  const literalOnly = /^(['"])([^'"\\]|\\.)*\1$/.exec(rhs) || /^`([^`$\\]|\\.)*`$/.exec(rhs);
+  if (literalOnly) return { safe: true };
+
+  // Sanitizer call on the immediate RHS (covers `esc(x)`, `DOMPurify.sanitize(x)`,
+  // `encodeURI(x)`, `encodeURIComponent(x)`).
+  if (
+    /^(?:[A-Za-z_$][\w$]*\.)*(?:esc|sanitize|DOMPurify|escapeHtml|encodeURI|encodeURIComponent)\s*\(/.test(
+      rhs,
+    )
+  ) {
+    return { safe: true };
+  }
+
+  return { safe: false, confidence: 'high' };
+}
+
+/**
+ * Classify a Path Traversal finding. Returns:
+ *  - { drop: true } when the call is clearly a safe path-join against a known root
+ *  - { drop: false, downgrade: true } when the first argument is a known root
+ *    anchor (still flagged but at lower severity for review),
+ *  - { drop: false, downgrade: false } otherwise.
+ */
+function classifyPathResolve(line: string): { drop: true } | { drop: false; downgrade: boolean } {
+  // Capture the first argument identifier of path.join/path.resolve.
+  const m = /path\.(?:join|resolve)\s*\(\s*([A-Za-z_$][\w$]*)\s*,/.exec(line);
+  if (!m) return { drop: false, downgrade: false };
+  if (PATH_ROOT_ANCHORS.has(m[1])) return { drop: false, downgrade: true };
+  return { drop: false, downgrade: false };
+}
+
+/**
+ * Classify an SSRF `fetch(\`${X}/...\`)` shape. Returns "local" when the
+ * interpolated base ident is bound to a localhost URL literal, "downgrade"
+ * when the base ident matches the SSRF_BASE_IDENT pattern but cannot be
+ * resolved, otherwise null (no special treatment).
+ */
+function classifySsrfTemplate(
+  line: string,
+  lines: string[],
+  fromLine: number,
+): 'local' | 'downgrade' | null {
+  // Pull the first ${IDENT} in the line.
+  const m = /\$\{\s*([A-Za-z_$][\w$]*)\s*\}/.exec(line);
+  if (!m) return null;
+  const ident = m[1];
+  const resolved = resolveStringBindingInFile(lines, ident, fromLine);
+  if (resolved && LOCAL_URL_LITERAL_RE.test(resolved)) return 'local';
+  if (SSRF_BASE_IDENT_RE.test(ident)) return 'downgrade';
+  return null;
+}
+
+/**
+ * Identify low-risk command_injection shapes. Returns one of:
+ *  - "open"     — GUI file-open commands (open/xdg-open/start) with a path arg,
+ *  - "which"    — `which X` lookup (read-only PATH probe),
+ *  - "taskkill" — Windows `taskkill /PID X` with a numeric/pid-bound arg,
+ *  - null       — no known safe shape.
+ */
+function classifyCommandInjection(
+  line: string,
+  lines: string[],
+  fromLine: number,
+): 'open' | 'which' | 'taskkill' | null {
+  // Match fixed-verb GUI openers.
+  if (/(?:exec|execSync|spawnSync)\s*\(\s*`(?:open|xdg-open|start "")\s+/.test(line)) {
+    return 'open';
+  }
+  // `which X` — argument controls only which binary is looked up.
+  if (/(?:exec|execSync|spawnSync)\s*\(\s*`which\s+\$\{/.test(line)) return 'which';
+  // `taskkill /PID X` — check whether the interpolated value is a numeric literal,
+  // or bound to one of `pid` / `process.pid` / `child.pid` in the same function.
+  const tk =
+    /(?:exec|execSync|spawnSync)\s*\(\s*`taskkill\s+\/PID\s+\$\{\s*([A-Za-z_$][\w$.]*)\s*\}/.exec(
+      line,
+    );
+  if (tk) {
+    const ident = tk[1];
+    if (/^(?:process\.pid|child\.pid)$/.test(ident)) return 'taskkill';
+    if (/^-?\d+$/.test(ident)) return 'taskkill';
+    // Look upward in the same file for `const ident = readDaemonPid()` or
+    // a numeric assignment — pragmatic heuristic.
+    const headIdent = ident.split('.')[0];
+    const pidAssignRe = new RegExp(
+      `(?:const|let|var)\\s+${headIdent}\\b[^=]*=\\s*(?:readDaemonPid|process\\.pid|child\\.pid|\\d+|.+\\.pid\\b)`,
+    );
+    for (let i = 0; i < lines.length; i++) {
+      if (i === fromLine) continue;
+      if (pidAssignRe.test(lines[i])) return 'taskkill';
+    }
+  }
+  return null;
+}
+
+/**
+ * Lower severity by one step.
+ */
+function downgradeSeverity(s: Severity): Severity {
+  if (s === 'critical') return 'high';
+  if (s === 'high') return 'medium';
+  if (s === 'medium') return 'low';
+  return 'low';
+}
+
+// ---------------------------------------------------------------------------
 // Pre-compute a lookup map for O(1) rule selection
 // ---------------------------------------------------------------------------
 
@@ -631,7 +875,25 @@ export function scanSecurity(
       }
 
       scanned++;
-      const lines = content.split('\n');
+      const rawLines = content.split('\n');
+      // Strip comments for languages where stripping is safe (C-style: //, /* */).
+      // We keep the original raw lines for snippet display, but run pattern
+      // matching against the stripped variant so JSDoc examples and `//` notes
+      // never trigger a finding.
+      const stripped =
+        file.language === 'typescript' ||
+        file.language === 'javascript' ||
+        file.language === 'java' ||
+        file.language === 'kotlin' ||
+        file.language === 'scala' ||
+        file.language === 'csharp' ||
+        file.language === 'go' ||
+        file.language === 'rust' ||
+        file.language === 'swift' ||
+        file.language === 'php'
+          ? stripCommentsKeepStrings(content)
+          : content;
+      const lines = stripped.split('\n');
 
       for (const rule of activeRules) {
         if (severityRank(rule.severity) < thresholdRank) continue;
@@ -644,11 +906,13 @@ export function scanSecurity(
 
           for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
             const line = lines[lineIdx];
+            // Skip lines blanked by comment stripping (all-whitespace).
+            if (line.trim() === '') continue;
             re.lastIndex = 0;
             const match = re.exec(line);
             if (!match) continue;
 
-            const snippet = line.trim();
+            const snippet = (rawLines[lineIdx] ?? line).trim();
 
             // Check false positive filters on the line + surrounding context
             const contextWindow = lines
@@ -714,15 +978,79 @@ export function scanSecurity(
               evidence = ctx.evidence;
             }
 
+            // ---- Per-rule safe-shape classification ----
+            // Default confidence; we may downgrade severity and/or confidence
+            // when a known-safe shape is recognized.
+            let severity: Severity = rule.severity;
+            let confidence: 'low' | 'medium' | 'high' = 'high';
+            let fixOverride: string | null = null;
+
+            if (rule.key === 'xss' && /\.innerHTML\s*=/.test(line)) {
+              const cls = classifyInnerHtmlAssignment(line);
+              if (cls.safe) continue;
+            }
+
+            if (rule.key === 'path_traversal' && /path\.(?:join|resolve)/.test(line)) {
+              const cls = classifyPathResolve(line);
+              if (cls.drop) continue;
+              if (cls.downgrade) {
+                severity = 'low';
+                confidence = 'low';
+                evidence = evidence ?? 'path.resolve anchored to known root directory';
+              }
+            }
+
+            if (rule.key === 'ssrf' && usesTemplate) {
+              const cls = classifySsrfTemplate(line, lines, lineIdx);
+              if (cls === 'local') continue;
+              if (cls === 'downgrade') {
+                severity = downgradeSeverity(severity); // high -> medium
+                confidence = 'low';
+                evidence = evidence ?? 'fetch base bound to a localhost-shaped identifier';
+              }
+            }
+
+            if (rule.key === 'command_injection' && usesTemplate) {
+              const cmdShape = classifyCommandInjection(line, lines, lineIdx);
+              if (cmdShape === 'open') {
+                // GUI file-open verb with a path our process produced.
+                severity = 'medium';
+                confidence = 'medium';
+                fixOverride =
+                  'GUI file-open with a path our process produced; ensure the path is not attacker-controlled.';
+              } else if (cmdShape === 'which') {
+                severity = 'low';
+                confidence = 'low';
+                fixOverride =
+                  '`which X` only looks up a binary by name and does not execute it; prefer a hardcoded allowlist of valid command names.';
+              } else if (cmdShape === 'taskkill') {
+                severity = 'low';
+                confidence = 'low';
+                fixOverride =
+                  '`taskkill /PID X` argument bound to a known numeric PID; verify the source of the PID.';
+              }
+            }
+
+            // Apply confidence policy: critical/high require medium+ confidence.
+            // Otherwise drop one severity step and tag evidence as "weak".
+            if ((severity === 'critical' || severity === 'high') && confidence === 'low') {
+              severity = downgradeSeverity(severity);
+              evidence = evidence ?? 'weak';
+            }
+
+            // Honor the per-call severity threshold AFTER downgrades.
+            if (severityRank(severity) < thresholdRank) continue;
+
             const finding: SecurityFinding = {
               rule_id: rule.id,
               rule_name: rule.name,
-              severity: rule.severity,
+              severity,
               file: file.path,
               line: lineIdx + 1,
               column: match.index + 1,
               snippet: snippet.length > 200 ? `${snippet.slice(0, 200)}...` : snippet,
-              fix: rule.fix,
+              fix: fixOverride ?? rule.fix,
+              confidence,
             };
             if (interpolationSource) finding.interpolation_source = interpolationSource;
             if (evidence) finding.evidence = evidence;

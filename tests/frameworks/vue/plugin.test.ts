@@ -22,10 +22,43 @@ describe('VueFrameworkPlugin', () => {
       expect(plugin.detect(ctx)).toBe(true);
     });
 
-    it('returns true when packageJson has vue in devDependencies', () => {
+    it('returns true when packageJson has vue in devDependencies AND .vue files exist', () => {
+      // VUE3_FIXTURE has .vue source files, so vue-in-devDeps still counts.
+      const ctx: ProjectContext = {
+        rootPath: VUE3_FIXTURE,
+        packageJson: { devDependencies: { vue: '^3.0.0' } },
+        configFiles: [],
+      };
+      expect(plugin.detect(ctx)).toBe(true);
+    });
+
+    it('returns false when vue is ONLY in devDependencies and no .vue files exist', () => {
+      // Tooling/library projects that depend on Vue packages as parsers
+      // (not as runtime) must not be tagged as Vue projects.
       const ctx: ProjectContext = {
         rootPath: '/tmp/test',
         packageJson: { devDependencies: { vue: '^3.0.0' } },
+        configFiles: [],
+      };
+      expect(plugin.detect(ctx)).toBe(false);
+    });
+
+    it('returns false when only @vue/compiler-sfc is present (parser-only signal)', () => {
+      // @vue/compiler-sfc is commonly used as a Vue file parser by code-intel
+      // tools that themselves are not Vue apps. Without a .vue source file,
+      // this must not be tagged as a Vue project.
+      const ctx: ProjectContext = {
+        rootPath: '/tmp/test',
+        packageJson: { devDependencies: { '@vue/compiler-sfc': '^3.5.0' } },
+        configFiles: [],
+      };
+      expect(plugin.detect(ctx)).toBe(false);
+    });
+
+    it('returns true when @vue/compiler-sfc is paired with .vue source files', () => {
+      const ctx: ProjectContext = {
+        rootPath: VUE3_FIXTURE,
+        packageJson: { devDependencies: { '@vue/compiler-sfc': '^3.5.0' } },
         configFiles: [],
       };
       expect(plugin.detect(ctx)).toBe(true);

@@ -535,6 +535,192 @@ describe('graphQuery: symbol resolution', () => {
   });
 });
 
+// ── SQL Rejection ────────────────────────────────────────────────────────────
+
+describe('graphQuery: SQL-shaped input rejection', () => {
+  let store: Store;
+
+  beforeEach(() => {
+    store = createTestStore();
+    seedEdgeTypes(store);
+    // Seed enough collision so an FTS fallback on "query" would *want* to fire.
+    for (let i = 0; i < 12; i++) {
+      addSymbol(store, {
+        filePath: `src/q${i}.ts`,
+        name: 'QueryOp',
+        kind: 'class',
+      });
+    }
+  });
+
+  it('rejects a SELECT statement with VALIDATION_ERROR', () => {
+    const result = graphQuery(
+      store,
+      'SELECT kind, COUNT(*) FROM routes GROUP BY kind ORDER BY cnt DESC LIMIT 20',
+    );
+    expect(result.isErr()).toBe(true);
+    const e = result._unsafeUnwrapErr();
+    expect(e.code).toBe('VALIDATION_ERROR');
+    if (e.code === 'VALIDATION_ERROR') {
+      expect(e.message).toContain('looks like SQL');
+      expect(e.message).toContain('natural-language graph traversal');
+      // Examples surfaced for the caller
+      expect((e.details as { examples: string[] }).examples.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('rejects UPDATE/DELETE/INSERT/JOIN as SQL', () => {
+    for (const q of [
+      'UPDATE symbols SET name = "x"',
+      'DELETE FROM nodes WHERE id = 1',
+      'INSERT INTO edges VALUES (1, 2)',
+      'SELECT * FROM s JOIN f ON s.file_id = f.id',
+    ]) {
+      const result = graphQuery(store, q);
+      expect(result.isErr(), `query=${q}`).toBe(true);
+      expect(result._unsafeUnwrapErr().code, `query=${q}`).toBe('VALIDATION_ERROR');
+    }
+  });
+
+  it('does NOT reject NL queries that happen to contain "to" or "what"', () => {
+    addSymbol(store, { filePath: 'src/a.ts', name: 'Alpha', kind: 'class' });
+    addSymbol(store, { filePath: 'src/b.ts', name: 'Beta', kind: 'class' });
+    const result = graphQuery(store, 'how does Alpha flow to Beta');
+    expect(result.isOk()).toBe(true);
+  });
+
+  it('does NOT reject NL queries that contain SQL keywords inside an NL frame', () => {
+    // "trace the flow from A to B" includes "FROM ... to" but is clearly NL.
+    addSymbol(store, { filePath: 'src/a.ts', name: 'Alpha', kind: 'class' });
+    addSymbol(store, { filePath: 'src/b.ts', name: 'Beta', kind: 'class' });
+    const result = graphQuery(store, 'trace the flow from Alpha to Beta');
+    expect(result.isOk()).toBe(true);
+  });
+});
+
+// ── God-Name Filter ──────────────────────────────────────────────────────────
+
+describe('graphQuery: god-name anchor filter', () => {
+  let store: Store;
+
+  beforeEach(() => {
+    store = createTestStore();
+    seedEdgeTypes(store);
+  });
+
+  it('rejects anchors whose only match is FTS into a heavily-collided name', () => {
+    // Seed many symbols literally named "query" — this is the phantom-god-node
+    // scenario from the user's reproducer: a single short word collides with
+    // dozens of unrelated symbols and any one of them would be a misleading
+    // anchor.
+    for (let i = 0; i < 12; i++) {
+      addSymbol(store, {
+        filePath: `src/q${i}.ts`,
+        name: 'query',
+        kind: 'variable',
+      });
+    }
+
+    const result = graphQuery(store, 'trace the flow of query');
+    expect(result.isErr()).toBe(true);
+    const e = result._unsafeUnwrapErr();
+    expect(e.code).toBe('VALIDATION_ERROR');
+    if (e.code === 'VALIDATION_ERROR') {
+      expect(e.message).toContain('Could not extract any symbol references');
+      const details = e.details as { weak_anchor_candidates?: Array<Record<string, unknown>> };
+      expect(details.weak_anchor_candidates).toBeDefined();
+      expect(details.weak_anchor_candidates!.length).toBeGreaterThan(0);
+      const first = details.weak_anchor_candidates![0];
+      expect(first.match_kind).toMatch(/name|fts/);
+      expect(first.name_collisions).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it('keeps strong direct-name anchors even when FTS would have been weak', () => {
+    // A direct, unique name lookup is strong — the user typed the literal name.
+    addSymbol(store, { filePath: 'src/unique.ts', name: 'TotallyUnique', kind: 'class' });
+    const result = graphQuery(store, 'what depends on TotallyUnique');
+    expect(result.isOk()).toBe(true);
+  });
+
+  it('proceeds with strong anchors when one is weak (warns about dropped weak anchor)', () => {
+    addSymbol(store, { filePath: 'src/auth.ts', name: 'AuthService', kind: 'class' });
+    for (let i = 0; i < 12; i++) {
+      addSymbol(store, {
+        filePath: `src/q${i}.ts`,
+        name: 'frob',
+        kind: 'variable',
+      });
+    }
+
+    // Anchor 1 = AuthService (strong name match). Anchor 2 = "MysteryXYZ" which
+    // FTS will fuzzy-match into a `frob` row (12 collisions → weak).
+    const result = graphQuery(store, 'how does AuthService flow to MysteryXYZ');
+    // It either returns ok with a warning OR notFound — both are acceptable
+    // because we may have zero anchors after filtering depending on FTS hit.
+    // The key invariant: we never return the polluted full subgraph.
+    if (result.isOk()) {
+      const warnings = result._unsafeUnwrap()._meta?.warnings ?? [];
+      const dropped = warnings.some((w) => w.includes('weakly-grounded'));
+      const unresolved = warnings.some((w) => w.includes('Could not resolve'));
+      expect(dropped || unresolved).toBe(true);
+    } else {
+      expect(result._unsafeUnwrapErr().code).toMatch(/VALIDATION_ERROR|NOT_FOUND/);
+    }
+  });
+});
+
+// ── Payload Size Cap ─────────────────────────────────────────────────────────
+
+describe('graphQuery: payload size cap', () => {
+  let store: Store;
+
+  beforeEach(() => {
+    store = createTestStore();
+    seedEdgeTypes(store);
+  });
+
+  it('truncates with truncated: true when payload exceeds 100 KB', () => {
+    // Create a star graph wide enough that even with long file paths and
+    // names, we likely blow the 100 KB ceiling at maxNodes=200.
+    const padding = 'x'.repeat(1200); // long filename → fat per-node payload
+    const hub = addSymbol(store, { filePath: 'src/hub.ts', name: 'PayloadHub', kind: 'class' });
+    for (let i = 0; i < 200; i++) {
+      const spoke = addSymbol(store, {
+        filePath: `src/very/deep/nested/path/spoke_${padding}_${i}.ts`,
+        name: `Spoke_${padding}_${i}`,
+        kind: 'class',
+        fqn: `App\\VeryLong\\Namespace\\Spoke_${padding}_${i}`,
+      });
+      // Hub depends on the spoke (outgoing edges from hub)
+      store.insertEdge(hub.nodeId, spoke.nodeId, 'calls');
+    }
+
+    const result = graphQuery(store, 'what does PayloadHub depend on', {
+      depth: 1,
+      max_nodes: 200,
+    });
+    expect(result.isOk()).toBe(true);
+    const val = result._unsafeUnwrap();
+    expect(val.truncated).toBe(true);
+    expect(val._meta?.warnings?.some((w) => w.includes('truncated'))).toBe(true);
+    const payloadSize = Buffer.byteLength(
+      JSON.stringify({ nodes: val.nodes, edges: val.edges, paths: val.paths }),
+      'utf8',
+    );
+    expect(payloadSize).toBeLessThanOrEqual(100 * 1024);
+  });
+
+  it('does NOT mark truncated when payload is small', () => {
+    const a = addSymbol(store, { filePath: 'src/a.ts', name: 'A', kind: 'class' });
+    const b = addSymbol(store, { filePath: 'src/b.ts', name: 'B', kind: 'class' });
+    store.insertEdge(a.nodeId, b.nodeId, 'calls');
+    const result = graphQuery(store, 'what does A depend on');
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().truncated).toBeUndefined();
+  });
+});
+
 // ── Multiple Edge Types ──────────────────────────────────────────────────────
 
 describe('graphQuery: edge type variety', () => {

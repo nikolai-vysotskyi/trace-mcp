@@ -738,13 +738,15 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'graph_query',
-    'Trace how named symbols relate in the dependency graph → returns subgraph + Mermaid diagram. Input must contain symbol/class names (e.g. "How does AuthService reach Database?", "What depends on UserModel?"). Use for ad-hoc graph exploration. For structured call graph use get_call_graph instead. Read-only. Returns JSON: { nodes, edges, mermaid }.',
+    'Trace how named symbols relate in the dependency graph → returns subgraph + Mermaid diagram. Input is NATURAL LANGUAGE only — NOT SQL. Must contain symbol/class names (e.g. "How does AuthService reach Database?", "What depends on UserModel?", "trace the flow of LoginHandler"). SQL-shaped input (SELECT/FROM/WHERE/JOIN…) is rejected with VALIDATION_ERROR — there is no SQL endpoint for the index. Weakly-grounded anchors (single-word collisions with many symbols) are dropped via god-name filter. Use for ad-hoc graph exploration. For structured call graph use get_call_graph instead. Read-only. Returns JSON: { nodes, edges, mermaid, truncated? }.',
     {
       query: z
         .string()
         .min(1)
         .max(500)
-        .describe('Natural language question about code relationships'),
+        .describe(
+          'Natural-language question about code relationships. SQL is not accepted — use symbol names, e.g. "what depends on UserModel".',
+        ),
       depth: z.number().int().min(1).max(6).optional().describe('Max traversal depth (default 3)'),
       max_nodes: z
         .number()
