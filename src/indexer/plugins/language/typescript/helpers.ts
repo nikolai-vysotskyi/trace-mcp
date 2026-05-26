@@ -6,6 +6,65 @@ import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/type
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
+/**
+ * tree-sitter-typescript node types that signal a type-context ancestor.
+ * If any ancestor of a `call_expression` matches one of these (or has the
+ * generic `_type` / `type_` shape), we treat the call as type-erased — so
+ * `import('./x').T` used as a return type / property type / type alias
+ * doesn't get logged as a runtime import edge.
+ */
+const TS_TYPE_POSITION_NODES = new Set<string>([
+  'type_annotation',
+  'opting_type_annotation',
+  'asserts_annotation',
+  'type_alias_declaration',
+  'type_parameter',
+  'type_parameters',
+  'type_arguments',
+  'type_query',
+  'predefined_type',
+  'generic_type',
+  'function_type',
+  'constructor_type',
+  'tuple_type',
+  'array_type',
+  'object_type',
+  'union_type',
+  'intersection_type',
+  'parenthesized_type',
+  'conditional_type',
+  'infer_type',
+  'index_type_query',
+  'lookup_type',
+  'mapped_type_clause',
+  'template_literal_type',
+  'template_type',
+  'literal_type',
+  'existential_type',
+  'import_type',
+  'readonly_type',
+  'nested_type_identifier',
+]);
+
+/**
+ * Walk up to 12 ancestors of `node`. Return true if any of them is a
+ * known TypeScript type-position node (see TS_TYPE_POSITION_NODES) — i.e. the
+ * node lives inside a type annotation, type alias, type argument list, etc.
+ *
+ * 12 levels is enough to escape deeply nested generic-of-generic positions
+ * like `Map<string, Promise<import('./x').T>>` without unbounded walks.
+ */
+export function isInTypePosition(node: TSNode): boolean {
+  let cur: TSNode | null = node.parent;
+  for (let depth = 0; depth < 12 && cur; depth++) {
+    if (TS_TYPE_POSITION_NODES.has(cur.type)) return true;
+    // Heuristic fallback for grammar variants — anything obviously type-shaped.
+    if (cur.type.endsWith('_type') || cur.type.startsWith('type_')) return true;
+    cur = cur.parent;
+  }
+  return false;
+}
+
 /** Build a symbol ID: `path::Name#kind` */
 export function makeSymbolId(
   relativePath: string,
@@ -151,6 +210,13 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
   //   require('./foo').default         — CommonJS with .default
   //   import('./foo')                  — dynamic import
   //   import('./foo').then(...)        — dynamic import chain
+  //
+  // Explicitly NOT captured:
+  //   field: import('./foo').T         — TS-only import-type, erased at runtime
+  //   (): import('./foo').T            — same, return-type position
+  // These look like call_expressions to tree-sitter but live entirely inside
+  // type annotations. Counting them as runtime imports inflates the cycle
+  // graph with ~200-node SCCs of pure type cross-references.
   const seen = new Set<string>();
   const visit = (n: TSNode): void => {
     if (n.type === 'call_expression') {
@@ -160,7 +226,7 @@ export function extractImportEdges(root: TSNode): RawEdge[] {
         // Detect CommonJS require or dynamic import()
         const isRequire = fn.type === 'identifier' && fn.text === 'require';
         const isDynamicImport = fn.type === 'import';
-        if (isRequire || isDynamicImport) {
+        if ((isRequire || isDynamicImport) && !isInTypePosition(n)) {
           const firstArg = argsNode.namedChildren[0];
           if (firstArg && (firstArg.type === 'string' || firstArg.type === 'template_string')) {
             const raw = firstArg.text.replace(/^['"`]|['"`]$/g, '');

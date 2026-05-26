@@ -129,6 +129,23 @@ describe('getDependencyCycles', () => {
     expect(cycles).toEqual([]);
   });
 
+  it("ignores 'projected:true' file-projection edges — they are not real imports", () => {
+    const fA = insertFile(store, 'src/a.ts');
+    const fB = insertFile(store, 'src/b.ts');
+    const nodeA = store.getNodeId('file', fA)!;
+    const nodeB = store.getNodeId('file', fB)!;
+    // Real import A → B
+    insertEdge(store, nodeA, nodeB, 'esm_imports');
+    // Projected B → A (e.g. a renders_component / dispatches / typecheck symbol
+    // edge that the file-projection pass flattened into the `imports` bucket
+    // with metadata.projected=true). This is NOT a real import — including it
+    // would close a phantom 2-cycle.
+    store.insertEdge(nodeB, nodeA, 'imports', true, { projected: true }, false, 'ast_inferred');
+
+    const cycles = getDependencyCycles(store);
+    expect(cycles).toEqual([]);
+  });
+
   it('detects a simple cycle A→B→A', () => {
     const fA = insertFile(store, 'src/a.ts');
     const fB = insertFile(store, 'src/b.ts');
