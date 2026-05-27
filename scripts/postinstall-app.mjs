@@ -29,12 +29,19 @@ import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 
-const APP_NAME = 'trace-mcp.app';
-const INSTALL_DIR = path.join(os.homedir(), 'Applications');
-const APP_PATH = path.join(INSTALL_DIR, APP_NAME);
-const PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
-const PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
-const PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
+import { APP_NAME, locateInstalledApp } from './locate-app.mjs';
+
+// Resolved at top-level after the platform/no-update gates run. `null` means
+// no install was found — the script then exits 0 like the old hardcoded
+// `!fs.existsSync(APP_PATH)` short-circuit. All path constants below are
+// derived from the resolved bundle so pending-zip files are written next to
+// the actual `.app` (same filesystem → atomic rename works).
+let APP_PATH = '';
+let INSTALL_DIR = '';
+let PENDING_ZIP = '';
+let PENDING_VERSION = '';
+let PENDING_CHECKSUM = '';
+
 const GITHUB_REPO = 'nikolai-vysotskyi/trace-mcp';
 
 if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
@@ -77,7 +84,16 @@ function stopRunningDaemon() {
 
 stopRunningDaemon();
 
-if (process.platform !== 'darwin' || !fs.existsSync(APP_PATH)) process.exit(0);
+if (process.platform !== 'darwin') process.exit(0);
+
+const located = locateInstalledApp();
+if (!located) process.exit(0);
+
+APP_PATH = located.appPath;
+INSTALL_DIR = path.dirname(APP_PATH);
+PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
+PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
+PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
 
 /** Returns true if the installed trace-mcp.app is currently running. */
 function appIsRunning() {
