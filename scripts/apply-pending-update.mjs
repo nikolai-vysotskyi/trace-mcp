@@ -26,13 +26,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const APP_NAME = 'trace-mcp.app';
-const INSTALL_DIR = path.join(os.homedir(), 'Applications');
-const APP_PATH = path.join(INSTALL_DIR, APP_NAME);
-const PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
-const PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
-const PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
-const VERSION_MARKER = path.join(INSTALL_DIR, '.trace-mcp-version');
+import { APP_NAME, locateInstalledApp } from './locate-app.mjs';
+
+// Resolved by main() via locateInstalledApp(). Pending-zip and version markers
+// must live next to the actual `.app` (atomic `fs.renameSync` requires the
+// same filesystem), so all paths are derived from APP_PATH rather than a
+// hard-coded `~/Applications` install root.
+let APP_PATH = '';
+let INSTALL_DIR = '';
+let PENDING_ZIP = '';
+let PENDING_VERSION = '';
+let PENDING_CHECKSUM = '';
+let VERSION_MARKER = '';
 const LAUNCHER_ENV = path.join(os.homedir(), '.trace-mcp', 'launcher.env');
 const DAEMON_PLIST = path.join(
   os.homedir(),
@@ -236,6 +241,19 @@ async function main() {
     log('abort: not darwin');
     return;
   }
+  const located = locateInstalledApp();
+  if (!located) {
+    log('abort: locateInstalledApp returned null (no bundle resolved)');
+    return;
+  }
+  APP_PATH = located.appPath;
+  INSTALL_DIR = path.dirname(APP_PATH);
+  PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
+  PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
+  PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
+  VERSION_MARKER = path.join(INSTALL_DIR, '.trace-mcp-version');
+  log(`locate: source=${located.source} appPath=${APP_PATH}`);
+
   if (!fs.existsSync(PENDING_ZIP) || !fs.existsSync(PENDING_VERSION)) {
     log('abort: no pending zip/version');
     return;

@@ -840,6 +840,69 @@ function appendUpdateLog(entry: Record<string, unknown>): void {
   }
 }
 
+// --- Bundle self-location ---------------------------------------------------
+//
+// The updater scripts (postinstall-app.mjs, apply-pending-update.mjs) used to
+// hard-code `~/Applications` and silently no-op for users whose .app lived in
+// `/Applications` — the more common drag-install target. We now have a shared
+// `scripts/locate-app.mjs` helper with a marker-file → mdfind → known-dirs
+// chain, but it cannot be imported here directly (this file is compiled by
+// tsc with `rootDir: src/main`, and scripts/ lives outside that root). So we
+// reimplement the writer inline. Constants below intentionally mirror the
+// helper's so a single grep across the repo finds all producers + consumers.
+
+const APP_BUNDLE_ID = 'com.trace-mcp.app';
+const APP_LOCATION_MARKER = path.join(
+  os.homedir(),
+  '.trace-mcp',
+  'app-location.json',
+);
+
+/**
+ * Walk up from `process.execPath` to the enclosing `.app` directory. Returns
+ * null in development (electron's own Electron.app is not our bundle) and on
+ * non-darwin. Caller is expected to fall back to the legacy `~/Applications`
+ * convention only when this returns null AND we're forced into the packaged
+ * code path — otherwise the legacy guess is the bug we're fixing.
+ */
+function deriveBundlePath(): string | null {
+  if (process.platform !== 'darwin') return null;
+  if (!app.isPackaged) return null;
+  let dir = path.dirname(process.execPath);
+  for (let i = 0; i < 10 && dir && dir !== '/'; i++) {
+    if (dir.endsWith('.app')) return dir;
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+
+/**
+ * Persist the running bundle's path so the next npm-side postinstall picks
+ * the right `INSTALL_DIR`. Written every startup (cheap, ~150 bytes) so a
+ * user who moves the .app between launches self-heals on first run. Atomic
+ * via rename — concurrent readers never see a half-written file.
+ */
+function writeAppLocationMarker(bundlePath: string): void {
+  try {
+    fs.mkdirSync(path.dirname(APP_LOCATION_MARKER), { recursive: true });
+    const payload = {
+      appPath: bundlePath,
+      bundleId: APP_BUNDLE_ID,
+      version: app.getVersion().replace(/^v/, ''),
+      writtenAt: Date.now(),
+    };
+    const tmp = `${APP_LOCATION_MARKER}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2));
+    fs.renameSync(tmp, APP_LOCATION_MARKER);
+    appendUpdateLog({ event: 'app-location:written', appPath: bundlePath });
+  } catch (err) {
+    appendUpdateLog({
+      event: 'app-location:write-failed',
+      error: (err as Error)?.message ?? String(err),
+    });
+  }
+}
+
 function readInstalledVersion(npmRoot: string | null): string | undefined {
   if (!npmRoot) return undefined;
   try {
@@ -988,9 +1051,17 @@ ipcMain.handle('apply-update', async () => {
   return { ok: true, pending, outcome, version: pending ? installedVersion : undefined };
 });
 
-// Pending update plumbing — postinstall stages a verified zip into ~/Applications/
-// when it detects this app is running, so the swap can be deferred until exit.
-const INSTALL_DIR = path.join(os.homedir(), 'Applications');
+// Pending update plumbing — postinstall stages a verified zip next to the
+// installed .app so the swap can be deferred until exit. The install dir is
+// derived from the running bundle (`process.execPath`-walked-to-.app) instead
+// of the previously-hardcoded `~/Applications`, which silently missed users
+// with the .app dragged into `/Applications`. Dev-mode falls back to
+// `~/Applications` — the pending flow is unreachable there anyway because
+// extraResources are only present in packaged builds.
+const BUNDLE_PATH = deriveBundlePath();
+const INSTALL_DIR = BUNDLE_PATH
+  ? path.dirname(BUNDLE_PATH)
+  : path.join(os.homedir(), 'Applications');
 const PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
 const PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
 // Bundled via electron-builder `extraResources` in production; falls back to the
@@ -1067,6 +1138,11 @@ ipcMain.handle('restart-app', () => {
 });
 
 app.whenReady().then(() => {
+  // Refresh the bundle-location marker so the npm-side postinstall + the
+  // detached apply-pending-update helper read the actual install location
+  // instead of guessing `~/Applications`. Cheap (~150 byte JSON write) and
+  // best-effort — failures are logged to update.log but never surface.
+  if (BUNDLE_PATH) writeAppLocationMarker(BUNDLE_PATH);
   // macOS: set custom dock icon so it's ready when the window shows.
   if (process.platform === 'darwin' && fs.existsSync(dockIconPath)) {
     app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));

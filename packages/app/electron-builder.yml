@@ -11,6 +11,10 @@ files:
 extraResources:
   - from: ../../scripts/apply-pending-update.mjs
     to: scripts/apply-pending-update.mjs
+  # locate-app.mjs is imported by apply-pending-update.mjs at runtime, so it
+  # must ship alongside it inside the bundle's Resources/scripts/.
+  - from: ../../scripts/locate-app.mjs
+    to: scripts/locate-app.mjs
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.png
