@@ -11,6 +11,7 @@
  *   BulkActionsBar (floating, only when selection > 0)
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { addRecentProject, removeRecentProject } from '../recent-projects';
 import { AddProjectControl } from './AddProjectControl';
 import { BulkActionsBar } from './BulkActionsBar';
 import { WorkspaceCompactView } from './WorkspaceCompactView';
@@ -59,6 +60,7 @@ function loadFilter(): WorkspaceFilter {
 // ── Open handler (cross-window IPC) ───────────────────────────────────────
 
 function openProjectWindow(root: string): void {
+  addRecentProject(root);
   window.electronAPI?.openProjectTab(root).catch(() => {
     /* ignore — Menu window will still navigate via internal state if any */
   });
@@ -216,7 +218,10 @@ export function Workspace() {
           onSelectChange={selection.set}
           onOpen={openProjectWindow}
           onReindex={(r) => void data.reindexProject(r)}
-          onRemove={(r) => void data.removeProject(r)}
+          onRemove={(r) => {
+            removeRecentProject(r);
+            void data.removeProject(r);
+          }}
         />
       ) : (
         <WorkspaceTableView
@@ -233,7 +238,10 @@ export function Workspace() {
           }}
           onOpen={openProjectWindow}
           onReindex={(r) => void data.reindexProject(r)}
-          onRemove={(r) => void data.removeProject(r)}
+          onRemove={(r) => {
+            removeRecentProject(r);
+            void data.removeProject(r);
+          }}
         />
       )}
 
@@ -241,6 +249,7 @@ export function Workspace() {
         projects={selectedProjects}
         onReindex={(roots) => data.reindexMany(roots)}
         onRemove={async (roots) => {
+          for (const r of roots) removeRecentProject(r);
           await data.removeMany(roots);
           selection.clear();
         }}
