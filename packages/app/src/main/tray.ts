@@ -427,7 +427,7 @@ function buildContextMenu(): Menu {
   return Menu.buildFromTemplate([
     { label: statusLabel, enabled: false, icon: dotIcon },
     { type: 'separator' },
-    { label: 'Projects', click: () => showWindow('projects') },
+    { label: 'Workspace', click: () => showWindow('workspace') },
     { label: 'MCP Clients', click: () => showWindow('clients') },
     { label: 'Settings', click: () => showWindow('settings') },
     { type: 'separator' },

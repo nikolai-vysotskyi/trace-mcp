@@ -175,7 +175,7 @@ function ViewToggle({ view, onViewChange }: ViewToggleProps) {
   );
 }
 
-// ── Spinner (local; the dashboard inlines the same pattern) ──────────────
+// ── Spinner (local — inline CSS @keyframes is the renderer's spinner idiom) ──
 
 function Spinner() {
   return (
