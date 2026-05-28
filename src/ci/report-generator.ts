@@ -26,6 +26,7 @@ import {
 import { getChurnRate } from '../tools/git/git-analysis.js';
 import { getFileOwnership } from '../tools/git/git-ownership.js';
 import { TopologyStore } from '../topology/topology-db.js';
+import type { BaselineComparison } from './types.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -120,7 +121,7 @@ export interface CIReport {
   ownershipAnalysis?: OwnershipAnalysis;
   deploymentImpact?: DeploymentImpact;
   // Baseline comparison (present when historical data exists)
-  baseline?: import('./baseline.js').BaselineComparison | null;
+  baseline?: BaselineComparison | null;
   summary: {
     changedFileCount: number;
     affectedFileCount: number;

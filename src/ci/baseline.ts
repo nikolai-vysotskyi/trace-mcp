@@ -6,16 +6,9 @@
  */
 import type { Store } from '../db/store.js';
 import type { CIReport } from './report-generator.js';
+import type { BaselineComparison } from './types.js';
 
-export interface BaselineComparison {
-  riskDelta: number;
-  untestedDelta: number;
-  violationsDelta: number;
-  deadExportsDelta: number;
-  regressionDetected: boolean;
-  baselineCommit: string | null;
-  baselineDate: string;
-}
+export type { BaselineComparison };
 
 const SNAPSHOT_TYPE = 'ci_quality_baseline';
 const REGRESSION_THRESHOLD = 0.15; // 15% risk score increase = regression
