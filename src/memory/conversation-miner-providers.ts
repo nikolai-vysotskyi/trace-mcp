@@ -23,7 +23,7 @@ import {
   DEFAULT_REVIEW_THRESHOLD,
   classifyConfidence,
   extractDecisions,
-} from './conversation-miner.js';
+} from './conversation-miner-types.js';
 import type { DecisionInput, DecisionStore } from './decision-store.js';
 
 export interface ProviderMineCounters {

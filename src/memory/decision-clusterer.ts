@@ -28,7 +28,7 @@
 
 import { logger } from '../logger.js';
 import type { InferenceService } from '../ai/interfaces.js';
-import type { DecisionRow, DecisionType } from './decision-store.js';
+import type { DecisionRow, DecisionType } from './decision-types.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

@@ -26,7 +26,7 @@ import {
   scoreWithWeights,
   WEIGHTS_PATH,
 } from './confidence-tuner.js';
-import type { DecisionInput } from './decision-store.js';
+import type { DecisionInput } from './decision-types.js';
 
 const BASE = 0.4;
 const W_CODE_REF = 0.2; // symbol_id or file_path present

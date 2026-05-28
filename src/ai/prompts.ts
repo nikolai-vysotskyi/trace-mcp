@@ -3,7 +3,7 @@
  * When a template changes, the prompt text changes → cache key changes → fresh generation.
  */
 
-interface PromptTemplate {
+export interface PromptTemplate {
   version: number;
   build: (vars: Record<string, string>) => string;
   maxTokens: number;

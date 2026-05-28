@@ -41,8 +41,8 @@ import {
   type ConversationTurn,
   isInternalProtocolPayload,
   stripPrivacyTags,
-} from './conversation-miner.js';
-import type { DecisionType } from './decision-store.js';
+} from './conversation-miner-types.js';
+import type { DecisionType } from './decision-types.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES

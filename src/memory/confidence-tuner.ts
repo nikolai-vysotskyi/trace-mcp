@@ -24,7 +24,7 @@ import path from 'node:path';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
 import { logger } from '../logger.js';
 import { atomicWriteString } from '../utils/atomic-write.js';
-import type { DecisionType } from './decision-store.js';
+import type { DecisionType } from './decision-types.js';
 
 export const WEIGHTS_PATH = path.join(TRACE_MCP_HOME, 'confidence_weights.json');
 
