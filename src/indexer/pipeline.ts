@@ -274,6 +274,15 @@ export class IndexingPipeline {
       const filePaths = await this.collectFiles();
       const r = await this.runPipeline(filePaths, force ?? false, start);
       if (before) this.checkShrink(before, r);
+      // Refresh planner statistics so subsequent queries pick indices using
+      // real cardinality rather than fallback heuristics. ANALYZE is sub-second
+      // on graphs in our typical size range and runs at most once per full
+      // reindex, so the amortized cost is negligible.
+      try {
+        this.store.db.exec('ANALYZE');
+      } catch (err) {
+        logger.debug({ err }, 'ANALYZE failed after indexAll (non-fatal)');
+      }
       return r;
     });
     this._lock = result.catch(() => {});
