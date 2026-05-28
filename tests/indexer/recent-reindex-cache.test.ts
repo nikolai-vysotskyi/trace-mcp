@@ -3,6 +3,7 @@ import {
   __resetRecentReindexCache,
   clearProjectReindexCache,
   shouldSkipRecentReindex,
+  TTL_MS,
 } from '../../src/indexer/recent-reindex-cache.js';
 
 describe('recent-reindex-cache', () => {
@@ -41,18 +42,22 @@ describe('recent-reindex-cache', () => {
   });
 
   it('after TTL expires the call is no longer deduped', () => {
+    // TTL was widened from 500ms to 2000ms to cover the latency skew
+    // between parcel-watcher, the PostToolUse HTTP hook, and the
+    // register_edit MCP tool — a single Edit can fire all three within
+    // ~1-1.5s, so 500ms missed the duplicates.
     const project = '/tmp/proj-a';
     const file = 'src/foo.ts';
     expect(shouldSkipRecentReindex(project, file, 0)).toBe(false);
-    // boundary: exactly 500 ms later should NOT be skipped
-    expect(shouldSkipRecentReindex(project, file, 500)).toBe(false);
+    // boundary: exactly TTL_MS later should NOT be skipped
+    expect(shouldSkipRecentReindex(project, file, TTL_MS)).toBe(false);
   });
 
   it('within TTL boundary stays deduped', () => {
     const project = '/tmp/proj-a';
     const file = 'src/foo.ts';
     expect(shouldSkipRecentReindex(project, file, 0)).toBe(false);
-    expect(shouldSkipRecentReindex(project, file, 499)).toBe(true);
+    expect(shouldSkipRecentReindex(project, file, TTL_MS - 1)).toBe(true);
   });
 
   it('clearProjectReindexCache drops the bucket so next call returns false', () => {
@@ -77,7 +82,8 @@ describe('recent-reindex-cache', () => {
     expect(shouldSkipRecentReindex('/tmp/proj-a', 'src/foo.ts')).toBe(false);
     vi.setSystemTime(1_100);
     expect(shouldSkipRecentReindex('/tmp/proj-a', 'src/foo.ts')).toBe(true);
-    vi.setSystemTime(1_600);
+    // Advance past TTL_MS from the first call (t=1_000 + TTL_MS).
+    vi.setSystemTime(1_000 + TTL_MS + 100);
     expect(shouldSkipRecentReindex('/tmp/proj-a', 'src/foo.ts')).toBe(false);
   });
 

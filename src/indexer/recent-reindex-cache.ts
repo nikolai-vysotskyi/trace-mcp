@@ -1,11 +1,15 @@
 /**
  * Per-project, per-file recent-reindex tracker. Used to dedup the
- * concurrent (PostToolUse hook + register_edit MCP tool) reindex of
- * the same file caused by a single Edit/Write.
+ * concurrent (parcel-watcher + PostToolUse hook + register_edit MCP
+ * tool) reindex of the same file caused by a single Edit/Write.
  *
- * TTL is intentionally tight (~500 ms): long enough to absorb the
- * round-trip skew between the two paths, short enough that real
- * subsequent edits are never silently dropped.
+ * TTL widened from the original 500 ms to 2000 ms: a single Edit can
+ * trigger up to three pipelines (parcel-watcher fires inside the
+ * daemon, the PostToolUse hook fires over HTTP, and Claude's
+ * `register_edit` MCP tool fires over the MCP transport). Latency
+ * skew between the three paths regularly exceeds 500 ms in practice
+ * — daemon.log shows duplicate runs ~1-1.5s apart. Two seconds is
+ * still well below typical human follow-up edit cadence.
  *
  * Bounded on both axes:
  *   - inner bucket: ≤ 256 file entries, GC'd opportunistically on insert
@@ -20,7 +24,7 @@
  * paths. With the bounds the memory ceiling is O(64 × 256) entries,
  * roughly 16k tiny rows.
  */
-const TTL_MS = 500;
+export const TTL_MS = 2000;
 const MAX_PROJECTS = 64;
 const MAX_BUCKET_SIZE = 256;
 

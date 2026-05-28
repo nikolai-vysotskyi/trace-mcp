@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import path from 'node:path';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type Database from 'better-sqlite3';
@@ -17,6 +18,7 @@ import { Store } from '../../db/store.js';
 import { DECISIONS_DB_PATH, ensureGlobalDirs, TOPOLOGY_DB_PATH } from '../../global.js';
 import { ExtractPool } from '../../indexer/extract-pool.js';
 import { IndexingPipeline } from '../../indexer/pipeline.js';
+import { shouldSkipRecentReindex } from '../../indexer/recent-reindex-cache.js';
 import { FileWatcher } from '../../indexer/watcher.js';
 import { logger } from '../../logger.js';
 import { DecisionStore } from '../../memory/decision-store.js';
@@ -28,6 +30,7 @@ import { SubprojectManager } from '../../subproject/manager.js';
 import { TopologyStore } from '../../topology/topology-db.js';
 import { trailingDebounce } from '../../util/debounce.js';
 import { serializeError } from '../log-error.js';
+import { getReindexStats } from '../reindex-stats.js';
 import type { Backend } from './types.js';
 
 const AI_COALESCE_WAIT_MS = 5_000;
@@ -214,7 +217,113 @@ export class LocalBackend implements Backend {
       config,
       async (paths) => {
         if (this.stopping) return;
-        await this.pipeline!.indexFiles(paths);
+        const watchStart = performance.now();
+        const stats = getReindexStats();
+        // Dedup against the recent-reindex cache: if the same Edit fired
+        // both parcel-watcher and the PostToolUse hook (or register_edit),
+        // the second arrival is a no-op. Compute a POSIX-relative key
+        // matching the form used by reindex-file-handler.ts.
+        const toRel = (p: string): string => {
+          const rel = path.isAbsolute(p) ? path.relative(projectRoot, p) : p;
+          return path.sep === '\\' ? rel.split('\\').join('/') : rel;
+        };
+        const skipped: string[] = [];
+        const toIndex: string[] = [];
+        for (const p of paths) {
+          const rel = toRel(p);
+          if (shouldSkipRecentReindex(projectRoot, rel)) {
+            skipped.push(rel);
+          } else {
+            toIndex.push(p);
+          }
+        }
+        for (const rel of skipped) {
+          const elapsedMs = Math.round(performance.now() - watchStart);
+          logger.info(
+            {
+              event: 'reindex-file',
+              project: projectRoot,
+              path: rel,
+              pathSource: 'watcher',
+              skippedRecent: true,
+              skippedHash: false,
+              indexed: 0,
+              elapsedMs,
+            },
+            'reindex-file telemetry',
+          );
+          stats.record({
+            pathSource: 'watcher',
+            skippedRecent: true,
+            skippedHash: false,
+            indexed: 0,
+            elapsedMs,
+          });
+        }
+        if (toIndex.length === 0) return;
+
+        let result: { indexed?: number; skipped?: number } | undefined;
+        let watchErr: unknown;
+        try {
+          result = await this.pipeline!.indexFiles(toIndex);
+        } catch (err) {
+          watchErr = err;
+          throw err;
+        } finally {
+          const elapsedMs = Math.round(performance.now() - watchStart);
+          const indexed = result?.indexed ?? 0;
+          const skippedRows = result?.skipped ?? 0;
+          const skippedHash = indexed === 0 && skippedRows > 0;
+          for (const p of toIndex) {
+            const relPosix = toRel(p);
+            if (watchErr) {
+              logger.error(
+                {
+                  event: 'reindex-file',
+                  project: projectRoot,
+                  path: relPosix,
+                  pathSource: 'watcher',
+                  skippedRecent: false,
+                  skippedHash: false,
+                  indexed: 0,
+                  elapsedMs,
+                  err: watchErr,
+                  error: String(watchErr),
+                },
+                'reindex-file telemetry (error)',
+              );
+              stats.record({
+                pathSource: 'watcher',
+                skippedRecent: false,
+                skippedHash: false,
+                indexed: 0,
+                elapsedMs,
+                error: true,
+              });
+            } else {
+              logger.info(
+                {
+                  event: 'reindex-file',
+                  project: projectRoot,
+                  path: relPosix,
+                  pathSource: 'watcher',
+                  skippedRecent: false,
+                  skippedHash,
+                  indexed,
+                  elapsedMs,
+                },
+                'reindex-file telemetry',
+              );
+              stats.record({
+                pathSource: 'watcher',
+                skippedRecent: false,
+                skippedHash,
+                indexed,
+                elapsedMs,
+              });
+            }
+          }
+        }
         debouncedSummarize();
         debouncedEmbed();
       },
