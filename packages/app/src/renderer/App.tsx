@@ -58,27 +58,15 @@ const SIDEBAR_DEFAULT = 180;
 const BASE = 'http://127.0.0.1:3741';
 
 // ── Recent projects (localStorage) ──────────────────────────
-const RECENT_KEY = 'trace-mcp:recent-projects';
-const MAX_RECENT = 8;
+// Helpers live in ./recent-projects.ts so the Indexes tab can import
+// `removeRecentProject` without pulling in App.tsx (import cycle).
+import {
+  addRecentProject,
+  getRecentProjects,
+  removeRecentProject,
+} from './recent-projects.js';
 
-function getRecentProjects(): string[] {
-  try {
-    return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
-  } catch {
-    return [];
-  }
-}
-
-function addRecentProject(root: string): void {
-  const recent = getRecentProjects().filter((r) => r !== root);
-  recent.unshift(root);
-  localStorage.setItem(RECENT_KEY, JSON.stringify(recent.slice(0, MAX_RECENT)));
-}
-
-export function removeRecentProject(root: string): void {
-  const recent = getRecentProjects().filter((r) => r !== root);
-  localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
-}
+export { removeRecentProject };
 
 function RecentProjects() {
   const [recent, setRecent] = useState<string[]>(getRecentProjects);

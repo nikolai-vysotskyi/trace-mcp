@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { removeRecentProject } from '../App';
+import { removeRecentProject } from '../recent-projects';
 import { ProjectRow } from '../components/ProjectRow';
 import { useDaemon } from '../hooks/useDaemon';
 
