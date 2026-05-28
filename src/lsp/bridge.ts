@@ -10,6 +10,19 @@ import { fileLanguageToLspLanguage, resolveServers } from './config.js';
 import { type EnrichmentResult, LspEnrichmentPass } from './enrichment.js';
 import { LspServerManager } from './lifecycle.js';
 
+export interface LspEnrichOptions {
+  /**
+   * Restrict enrichment to symbols belonging to these file IDs. Background
+   * enricher uses this to scope a run to a watcher burst. Undefined =
+   * enrich every callable symbol (original full-pass behavior).
+   */
+  fileIdFilter?: ReadonlySet<number>;
+  /**
+   * Cooperative cancellation propagated into the enrichment pass.
+   */
+  signal?: AbortSignal;
+}
+
 export class LspBridge {
   private serverManager: LspServerManager | null = null;
 
@@ -22,7 +35,7 @@ export class LspBridge {
   /**
    * Run the LSP enrichment pass: detect servers, start them, enrich edges.
    */
-  async enrich(): Promise<EnrichmentResult> {
+  async enrich(options: LspEnrichOptions = {}): Promise<EnrichmentResult> {
     // Determine which languages are in the index
     const indexedLanguages = this.detectIndexedLanguages();
     if (indexedLanguages.size === 0) {
@@ -56,6 +69,7 @@ export class LspBridge {
       this.rootPath,
       this.config.lsp?.batch_size ?? 100,
       this.config.lsp?.enrichment_timeout_ms ?? 120_000,
+      { fileIdFilter: options.fileIdFilter, signal: options.signal },
     );
 
     const result = await enrichment.enrichEdges();

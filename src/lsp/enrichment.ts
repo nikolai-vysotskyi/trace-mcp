@@ -47,6 +47,21 @@ interface SymbolWithFile {
   language: string;
 }
 
+export interface LspEnrichmentPassOptions {
+  /**
+   * Optional set of file IDs to restrict enrichment to. When provided,
+   * `collectCallableSymbols()` only emits symbols belonging to these files —
+   * the BackgroundLspEnricher uses this to scope work to a watcher burst.
+   * Undefined means "enrich everything" (the original full-pass behavior).
+   */
+  fileIdFilter?: ReadonlySet<number>;
+  /**
+   * Cooperative cancellation — checked between language passes. The
+   * background enricher aborts in-flight runs on shutdown via this.
+   */
+  signal?: AbortSignal;
+}
+
 export class LspEnrichmentPass {
   constructor(
     private readonly store: Store,
@@ -54,6 +69,7 @@ export class LspEnrichmentPass {
     private readonly rootPath: string,
     private readonly batchSize: number,
     private readonly enrichmentTimeoutMs: number,
+    private readonly options: LspEnrichmentPassOptions = {},
   ) {}
 
   async enrichEdges(): Promise<EnrichmentResult> {
@@ -76,6 +92,10 @@ export class LspEnrichmentPass {
 
     // 2. Process each language
     for (const [language, symbols] of symbolsByLanguage) {
+      if (this.options.signal?.aborted) {
+        logger.debug('LSP enrichment aborted via signal');
+        break;
+      }
       const client = await this.serverManager.getClient(language);
       if (!client) {
         result.serverStatuses[language] = 'unavailable';
@@ -118,8 +138,10 @@ export class LspEnrichmentPass {
 
     const byLanguage = new Map<string, SymbolWithFile[]>();
     const files = this.store.getAllFiles();
+    const filter = this.options.fileIdFilter;
 
     for (const file of files) {
+      if (filter && !filter.has(file.id)) continue;
       const lspLang = fileLanguageToLspLanguage(file.language);
       if (!lspLang) continue;
 

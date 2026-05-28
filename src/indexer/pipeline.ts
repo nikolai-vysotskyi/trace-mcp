@@ -91,6 +91,16 @@ export interface IndexingResult {
     afterEdges: number;
     reason: string;
   };
+  /**
+   * File IDs that were touched in this run (extracted, re-extracted, or had
+   * their resolution scope expanded by rename/edge bind churn). Surfaced so
+   * callers — primarily the background LSP enricher — can scope follow-up
+   * work to exactly the files whose symbols may have new outgoing edges.
+   *
+   * Empty / undefined for full reindexes (the enricher is meant to handle
+   * incremental drift, not the synchronous initial pass).
+   */
+  changedFileIds?: number[];
 }
 
 /** A full rebuild that drops more than this fraction of symbols or edges
@@ -469,6 +479,14 @@ export class IndexingPipeline {
         await this.indexEnvFiles(force);
       }
     } finally {
+      // Snapshot the changed-file set BEFORE clearing so callers (background
+      // LSP enricher) can scope follow-up work to exactly these files. The
+      // set is otherwise wiped here for the next run. Empty array for full
+      // reindexes — extractAndPersist only populates _changedFileIds for the
+      // incremental path.
+      if (this._changedFileIds.size > 0) {
+        result.changedFileIds = Array.from(this._changedFileIds);
+      }
       this._fileContentCache.clear();
       this._pendingImports.clear();
       this._changedFileIds.clear();
@@ -805,6 +823,13 @@ export class IndexingPipeline {
   /** Pass 3: LSP enrichment — upgrade call graph edges with compiler-grade resolution. */
   private async runLspEnrichment(): Promise<void> {
     if (!this.config.lsp?.enabled) return;
+    // Defense in depth: incremental indexFiles() runs default to
+    // postprocess='minimal' which already skips this method, but if a future
+    // caller bumps an incremental run to 'full' it must still bail here.
+    // The BackgroundLspEnricher (src/lsp/background-enricher.ts) handles
+    // incremental enrichment out-of-band — running it inline on the watcher
+    // hot path was the source of 3-11s outliers Phase 1 fixed.
+    if (this._isIncremental) return;
 
     try {
       const { LspBridge } = await import('../lsp/bridge.js');
