@@ -10,7 +10,7 @@
  * renders its rows in the detail panel on the right. Per-report refresh
  * + inline loading + error state. Read-only — no destructive tools.
  *
- * Visual style mirrors AskTab.tsx / Dashboard.tsx — same theme tokens,
+ * Visual style mirrors AskTab.tsx / WorkspaceTableView.tsx — same theme tokens,
  * spacing, and accent button. The renderer/runtime split (this file
  * vs insights-runtime.ts) follows the pattern established by R08
  * (Notebook) so the project-root vitest config can test pure logic

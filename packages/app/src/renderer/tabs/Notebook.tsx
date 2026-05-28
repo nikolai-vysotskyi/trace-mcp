@@ -94,7 +94,8 @@ export function Notebook({
       className="flex flex-col h-full"
       style={{ WebkitAppRegion: 'no-drag', overflow: 'hidden' } as React.CSSProperties}
     >
-      {/* Local keyframe — matches the Dashboard tab's inline style approach. */}
+      {/* Local keyframe — inline `@keyframes` is the renderer's standard
+          pattern for one-off spinner animations (see WorkspaceHeader). */}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       {/* Header */}
       <div

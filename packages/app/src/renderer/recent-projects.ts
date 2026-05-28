@@ -1,7 +1,7 @@
 /**
  * Recent projects — localStorage-backed list of the project roots the
  * user has opened. Lives in its own module so consumers (App.tsx and
- * the Indexes tab) can share it without forming an import cycle.
+ * the Workspace tab) can share it without forming an import cycle.
  */
 
 const RECENT_KEY = 'trace-mcp:recent-projects';

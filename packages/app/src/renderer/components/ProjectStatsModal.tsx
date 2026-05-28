@@ -3,7 +3,7 @@
  * stats payload returned by GET /api/projects/full-stats?project=<root>.
  *
  * Modeled on memoir's `/stats` (7 tabs). Anatomy mirrors the existing
- * Activity/Dashboard tabs:
+ * Activity tab:
  *   - Top tab bar with the 7 sections
  *   - Each tab renders the corresponding JSON section as a panel
  *   - Refresh + Export JSON in the header

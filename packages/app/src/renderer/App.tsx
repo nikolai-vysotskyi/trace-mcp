@@ -4,32 +4,40 @@ import { WindowTabBar } from './components/WindowTabBar';
 import { Activity } from './tabs/Activity';
 import { AskTab } from './tabs/AskTab';
 import { Clients } from './tabs/Clients';
-import { Dashboard } from './tabs/Dashboard';
 import {
   DEFAULT_GRAPH_GPU_SETTINGS,
   GraphExplorerGPU,
   type GraphExplorerGPUHandle,
   type GraphGPUSettings,
 } from './tabs/GraphExplorerGPU';
-import { Indexes } from './tabs/Indexes';
 import { Insights } from './tabs/Insights';
 import { MemoryExplorer } from './tabs/MemoryExplorer';
 import { Notebook } from './tabs/Notebook';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
+import { Workspace } from './workspace/Workspace';
 
 // ── URL params determine window type ──────────────────────────
-// ?view=menu&tab=projects  → Menu window (sidebar + Projects/Clients/Settings)
+// ?view=menu&tab=workspace → Menu window (sidebar + Workspace/Clients/Settings)
 // ?view=project&root=/path → Project window (sidebar + Overview/Graph)
 
-type GlobalTab = 'projects' | 'dashboard' | 'clients' | 'settings';
+type GlobalTab = 'workspace' | 'clients' | 'settings';
 // Settings lives in the sidebar footer (always-visible bottom row), not the top
 // nav. Keep it in the type union so existing routing/state code keeps working.
 const GLOBAL_TABS: { id: GlobalTab; label: string }[] = [
-  { id: 'projects', label: 'Projects' },
-  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'workspace', label: 'Workspace' },
   { id: 'clients', label: 'MCP Clients' },
 ];
+
+/**
+ * Migrate legacy `?tab=projects` / `?tab=dashboard` query values + any value
+ * persisted by older builds. Both pre-merge tabs collapse to `workspace`.
+ */
+function normalizeGlobalTab(value: string | null | undefined): GlobalTab {
+  if (value === 'clients' || value === 'settings' || value === 'workspace') return value;
+  // 'projects' / 'dashboard' / anything else → workspace (the new home).
+  return 'workspace';
+}
 
 type ProjectTab = 'overview' | 'ask' | 'graph' | 'activity' | 'memory' | 'notebook' | 'insights';
 const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
@@ -58,7 +66,7 @@ const SIDEBAR_DEFAULT = 180;
 const BASE = 'http://127.0.0.1:3741';
 
 // ── Recent projects (localStorage) ──────────────────────────
-// Helpers live in ./recent-projects.ts so the Indexes tab can import
+// Helpers live in ./recent-projects.ts so the Workspace tab can import
 // `removeRecentProject` without pulling in App.tsx (import cycle).
 import {
   addRecentProject,
@@ -634,16 +642,9 @@ function UpdateBanner() {
 
 // ── Menu content ──────────────────────────────────────────────
 function MenuContent({ tab }: { tab: GlobalTab }) {
-  const openProject = (root: string) => {
-    addRecentProject(root);
-    const api = window.electronAPI;
-    api?.openProjectTab(root);
-  };
-
   return (
     <>
-      {tab === 'projects' && <Indexes onOpenProject={openProject} />}
-      {tab === 'dashboard' && <Dashboard />}
+      {tab === 'workspace' && <Workspace />}
       {tab === 'clients' && <Clients />}
       {tab === 'settings' && <Settings />}
     </>
@@ -702,9 +703,7 @@ export function App() {
   const { view, tab, root } = getUrlParams();
   const isProject = view === 'project' && root !== null;
 
-  const [globalTab, setGlobalTab] = useState<GlobalTab>(
-    tab === 'projects' || tab === 'clients' || tab === 'settings' ? tab : 'projects',
-  );
+  const [globalTab, setGlobalTab] = useState<GlobalTab>(normalizeGlobalTab(tab));
   const [projectTab, setProjectTab] = useState<ProjectTab>('overview');
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const [_isFullscreen, setIsFullscreen] = useState(false);
