@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { WindowTabBar } from './components/WindowTabBar';
 import { Activity } from './tabs/Activity';
@@ -927,17 +928,21 @@ export function App() {
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
             {isProject ? (
-              <ProjectContent
-                root={root!}
-                tab={projectTab}
-                graphRef={graphRef}
-                graphGpuSettings={graphGpuSettings}
-                onGraphGpuSettingsChange={onGraphGpuSettingsChange}
-                onNavigateToService={navigateToService}
-                onOpenFileInGraph={openFileInGraph}
-              />
+              <ErrorBoundary key={`project:${projectTab}`} label={`${projectTab} tab`}>
+                <ProjectContent
+                  root={root!}
+                  tab={projectTab}
+                  graphRef={graphRef}
+                  graphGpuSettings={graphGpuSettings}
+                  onGraphGpuSettingsChange={onGraphGpuSettingsChange}
+                  onNavigateToService={navigateToService}
+                  onOpenFileInGraph={openFileInGraph}
+                />
+              </ErrorBoundary>
             ) : (
-              <MenuContent tab={globalTab} />
+              <ErrorBoundary key={`menu:${globalTab}`} label={`${globalTab} tab`}>
+                <MenuContent tab={globalTab} />
+              </ErrorBoundary>
             )}
           </div>
         </main>
