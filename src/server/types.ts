@@ -17,6 +17,25 @@ import type { SessionTracker } from '../session/tracker.js';
 import type { TopologyStore } from '../topology/topology-db.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
+
+/**
+ * R09 v2 — pipeline-lifecycle event shapes emitted by MCP tools
+ * (embed_repo, snapshot_graph) and relayed by the daemon to the
+ * existing /api/events SSE bus. The `project` field is stamped in by
+ * cli.ts before broadcasting; tools omit it. The `type` strings are a
+ * subset of the daemon-side `DaemonEvent` union (see src/cli.ts).
+ *
+ * Lives here (rather than in `./server.ts`) so `ServerContext` below can
+ * reference it without forcing `tool-gate.ts` → `types.ts` → `server.ts`
+ * → `tool-gate.ts` to close into an import cycle. `server.ts` re-exports
+ * the name to preserve the public API.
+ */
+export type PipelineLifecycleEvent =
+  | { type: 'embed_started'; total?: number }
+  | { type: 'embed_progress'; processed: number; total: number }
+  | { type: 'embed_completed'; duration_ms: number; embedded: number }
+  | { type: 'snapshot_created'; name: string; summary?: Record<string, unknown> };
+
 export interface ServerContext {
   store: Store;
   registry: PluginRegistry;
@@ -32,7 +51,7 @@ export interface ServerContext {
   /** Check if any of the named frameworks are detected */
   has: (...names: string[]) => boolean;
   /** Validate path stays within project root; returns error response on failure */
-  guardPath: (filePath: string) => ErrorResponse | null;
+  guardPath: (filePath: string) => ToolResponse | null;
   /** Compact JSON serializer (strips nulls) */
   j: (value: unknown) => string;
   /** JSON serializer with contextual hints + budget warnings */
@@ -54,7 +73,7 @@ export interface ServerContext {
    * No-op when running outside the daemon (CLI fallback, unit tests).
    * Wired by createServer() from ServerDeps.onPipelineEvent.
    */
-  onPipelineEvent: (event: import('./server.js').PipelineLifecycleEvent) => void;
+  onPipelineEvent: (event: PipelineLifecycleEvent) => void;
 }
 
 /** Extended context for meta tools that bypass preset gate */

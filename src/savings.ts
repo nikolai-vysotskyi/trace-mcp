@@ -54,7 +54,7 @@ const DEFAULT_RAW_COST = 500;
 /** Estimated compression ratio (trace-mcp response tokens / raw tokens) */
 const COMPRESSION_RATIO = 0.15;
 
-interface ToolCallRecord {
+export interface ToolCallRecord {
   calls: number;
   tokens_saved: number;
   raw_tokens: number;
@@ -78,7 +78,7 @@ export interface ToolLatencyStats {
 /** Max retained durations per tool. p95 stays meaningful at this size. */
 const LATENCY_WINDOW = 200;
 
-interface ToolLatencyState {
+export interface ToolLatencyState {
   /** Bounded ring of recent durations in ms. */
   durations: number[];
   /** Total calls (incl. those rolled out of the ring). */
@@ -87,7 +87,7 @@ interface ToolLatencyState {
   totalErrors: number;
 }
 
-interface SessionStats {
+export interface SessionStats {
   started_at: string;
   total_calls: number;
   total_tokens_saved: number;
@@ -96,7 +96,7 @@ interface SessionStats {
   per_tool: Record<string, ToolCallRecord>;
 }
 
-interface PersistentSavings {
+export interface PersistentSavings {
   version: 1;
   total_tokens_saved: number;
   total_raw_tokens: number;

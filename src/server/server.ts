@@ -197,21 +197,12 @@ function extractCompactResult(
  * When provided, createServer() will use them instead of creating its own.
  * The caller is responsible for their lifecycle (they won't be closed on dispose).
  */
-/**
- * R09 v2 — pipeline-lifecycle event shapes emitted by MCP tools
- * (embed_repo, snapshot_graph) and relayed by the daemon to the
- * existing /api/events SSE bus. The `project` field is stamped in by
- * cli.ts before broadcasting; tools omit it. The `type` strings are a
- * subset of the daemon-side `DaemonEvent` union (see src/cli.ts).
- *
- * No new event-bus abstraction — these flow through the existing
- * broadcastEvent() function in cli.ts via the onPipelineEvent dep.
- */
-export type PipelineLifecycleEvent =
-  | { type: 'embed_started'; total?: number }
-  | { type: 'embed_progress'; processed: number; total: number }
-  | { type: 'embed_completed'; duration_ms: number; embedded: number }
-  | { type: 'snapshot_created'; name: string; summary?: Record<string, unknown> };
+// `PipelineLifecycleEvent` now lives in `./types.ts` so `ServerContext`
+// there can reference it without inducing a server.ts ↔ types.ts ↔
+// tool-gate.ts import cycle. Re-export here to preserve the public API —
+// external callers (cli.ts, daemon code) keep importing from `./server.js`.
+export type { PipelineLifecycleEvent } from './types.js';
+import type { PipelineLifecycleEvent } from './types.js';
 
 export interface ServerDeps {
   topoStore?: TopologyStore | null;
