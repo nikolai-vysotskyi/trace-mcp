@@ -2,7 +2,9 @@
  * Tests for the postprocess level knob on the indexing pipeline.
  *
  * The contract:
- *   - default postprocess level is 'full'
+ *   - indexAll() default postprocess level is 'full'
+ *   - indexFiles() default postprocess level is 'minimal' (watcher/hook
+ *     /register_edit hot path — full was the source of 3-11s outliers)
  *   - 'minimal' skips LSP enrichment + env-var scan + git history snapshots
  *   - 'none' also skips edge resolution (raw symbol pass only)
  *   - the level is surfaced on IndexingResult so callers know what ran
@@ -46,11 +48,27 @@ function cleanup(root: string) {
 }
 
 describe('IndexingPipeline postprocess level', () => {
-  it('reports postprocess="full" by default', async () => {
+  it('indexAll() reports postprocess="full" by default', async () => {
     const { root, pipeline } = fixture();
     try {
       const r = await pipeline.indexAll(true);
       expect(r.postprocess).toBe('full');
+    } finally {
+      cleanup(root);
+    }
+  });
+
+  it('indexFiles() reports postprocess="minimal" by default (hot-path optimization)', async () => {
+    // Watcher/hook/register_edit callers don't override the postprocess level;
+    // running LSP + env scan + snapshots inline on single-file edits was the
+    // source of 3-11s outliers in daemon.log. The default is now 'minimal' so
+    // edge resolution still happens but the heavy passes are skipped.
+    const { root, pipeline } = fixture();
+    try {
+      // Need an initial full index so indexFiles() has something to update.
+      await pipeline.indexAll(true);
+      const r = await pipeline.indexFiles(['src.ts']);
+      expect(r.postprocess).toBe('minimal');
     } finally {
       cleanup(root);
     }
