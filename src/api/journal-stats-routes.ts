@@ -91,6 +91,8 @@ export interface ByMinute {
 
 export interface JournalStatsResponse {
   window_ms: number;
+  /** Window end timestamp (Unix ms) — echoes the `before` query param (or now). */
+  window_end?: number;
   total_calls: number;
   error_rate: number;
   hot_tools: HotTool[];
@@ -153,9 +155,14 @@ function extractFilesFromSummary(summary: string): string[] {
 // Core aggregation
 // ---------------------------------------------------------------------------
 
-function aggregate(entries: JournalEntryForStats[], windowMs: number): JournalStatsResponse {
-  const cutoff = Date.now() - windowMs;
-  const windowed = entries.filter((e) => e.ts >= cutoff);
+export function aggregate(
+  entries: JournalEntryForStats[],
+  windowMs: number,
+  before: number = Date.now(),
+): JournalStatsResponse {
+  const end = before;
+  const start = before - windowMs;
+  const windowed = entries.filter((e) => e.ts >= start && e.ts <= end);
 
   const totalCalls = windowed.length;
   const errorCount = windowed.filter((e) => e.is_error).length;
@@ -240,13 +247,14 @@ function aggregate(entries: JournalEntryForStats[], windowMs: number): JournalSt
       count: g.count,
     }));
 
-  // ── By-minute sparkline (last 60 minutes) ─────────────────────────────
+  // ── By-minute sparkline (minute buckets across [start, end]) ───────────
   const MINUTE_MS = 60_000;
-  const nowFloor = Math.floor(Date.now() / MINUTE_MS) * MINUTE_MS;
+  const endFloor = Math.floor(end / MINUTE_MS) * MINUTE_MS;
+  const startFloor = Math.floor(start / MINUTE_MS) * MINUTE_MS;
   const minuteMap = new Map<number, { count: number; error_count: number }>();
-  // Pre-fill last 60 minutes
-  for (let i = 59; i >= 0; i--) {
-    minuteMap.set(nowFloor - i * MINUTE_MS, { count: 0, error_count: 0 });
+  // Pre-fill every minute-floored bucket covering the window [start, end].
+  for (let t = startFloor; t <= endFloor; t += MINUTE_MS) {
+    minuteMap.set(t, { count: 0, error_count: 0 });
   }
   for (const e of windowed) {
     const minuteTs = Math.floor(e.ts / MINUTE_MS) * MINUTE_MS;
@@ -262,6 +270,7 @@ function aggregate(entries: JournalEntryForStats[], windowMs: number): JournalSt
 
   return {
     window_ms: windowMs,
+    window_end: end,
     total_calls: totalCalls,
     error_rate: errorRate,
     hot_tools: hotTools,
@@ -301,8 +310,14 @@ export function handleJournalStatsRequest(
     ? Math.min(MAX_WINDOW_MS, Math.max(1, parseInt(rawWindow, 10) || DEFAULT_WINDOW_MS))
     : DEFAULT_WINDOW_MS;
 
+  // Optional window-end timestamp (Unix ms). Falls back to now when absent or
+  // invalid, preserving the legacy "window ending at now" behaviour.
+  const beforeRaw = url.searchParams.get('before');
+  const beforeParsed = beforeRaw ? Number(beforeRaw) : Date.now();
+  const before = Number.isFinite(beforeParsed) && beforeParsed > 0 ? beforeParsed : Date.now();
+
   const entries = ctx.listEntriesForProject(projectRoot);
-  const stats = aggregate(entries, windowMs);
+  const stats = aggregate(entries, windowMs, before);
 
   res.writeHead(200, {
     'Content-Type': 'application/json',

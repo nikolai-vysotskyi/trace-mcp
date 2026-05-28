@@ -21,6 +21,7 @@
 import {
   type CSSProperties,
   type MouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -114,6 +115,10 @@ interface JournalStats {
   latency_buckets: LatencyBucket[];
   error_groups: ErrorGroup[];
   by_minute: ByMinute[];
+  // Present when the stats endpoint was queried with a `before` param so the
+  // caller can confirm which window the response covers. Optional — the
+  // "window ends at now" path omits it.
+  window_end?: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -128,6 +133,15 @@ function relativeTime(ts: number): string {
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max)}…`;
+}
+
+/**
+ * Stable React/selection key for a journal entry. Mirrors the inline key used
+ * in both render paths so the lifted `expandedKeys` set lines up with the keys
+ * passed to <EntryRow>.
+ */
+function entryKey(e: JournalEntry): string {
+  return `${e.ts}:${e.tool}:${e.session_id}:${e.params_summary.slice(0, 32)}`;
 }
 
 /**
@@ -186,7 +200,8 @@ const FILE_PATH_RE =
 function tokenizeParams(
   text: string,
   q: string,
-  onFileClick: (file: string) => void,
+  onFileClick: (file: string, e: MouseEvent) => void,
+  navigates: boolean,
 ): ReactNode {
   // 1. Collect all file-path spans (non-overlapping by regex semantics).
   const fileSpans: { start: number; end: number; file: string }[] = [];
@@ -226,10 +241,14 @@ function tokenizeParams(
       <button
         key={key++}
         type="button"
-        // TODO: wire to Graph/Overview tab navigation once cross-tab IPC exists
+        // Primary action: open the file's node in the Graph tab (when a
+        // navigation handler is wired). ⌥/⌘-click copies the path instead.
+        // Without a handler this falls back to copy-only (see EntryRow).
         onClick={(e) => {
           e.stopPropagation();
-          onFileClick(span.file);
+          // Pass the FULL matched path token (span.file), not the truncated
+          // display text, so navigation/copy operate on the real path.
+          onFileClick(span.file, e);
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.textDecoration = 'underline';
@@ -237,7 +256,11 @@ function tokenizeParams(
         onMouseLeave={(e) => {
           e.currentTarget.style.textDecoration = 'none';
         }}
-        title={span.file}
+        title={
+          navigates
+            ? 'Click to open in Graph · ⌥-click to copy path'
+            : 'Click to copy path'
+        }
         style={btnStyle}
       >
         {span.file}
@@ -283,6 +306,108 @@ function computeP95(buckets: LatencyBucket[]): string {
     }
   }
   return formatLatencyBucket(buckets[buckets.length - 1]?.bucket_ms ?? -1);
+}
+
+// Numeric p95 (bucket left-edge, in ms) for delta arithmetic. Mirrors the
+// bucket-selection logic of computeP95 but returns the raw left-edge value
+// instead of a formatted string. The open-ended ">=5000ms" bucket (-1) is
+// treated as 5000ms so deltas stay finite. Returns 0 when there is no data.
+function p95Ms(buckets: LatencyBucket[]): number {
+  const total = buckets.reduce((s, b) => s + b.count, 0);
+  if (total === 0) return 0;
+  const threshold = total * 0.95;
+  let cumulative = 0;
+  for (const b of buckets) {
+    cumulative += b.count;
+    if (cumulative >= threshold) {
+      return b.bucket_ms === -1 ? 5000 : b.bucket_ms;
+    }
+  }
+  const last = buckets[buckets.length - 1]?.bucket_ms ?? -1;
+  return last === -1 ? 5000 : last;
+}
+
+// ── Baseline (vs-previous-window) delta rendering ──────────────────────────
+
+interface DeltaInfo {
+  // Display string for the badge: e.g. "+42%", "−18%", "↑2.4×", "new", "—".
+  text: string;
+  // 'up' / 'down' / 'flat' describes the raw numeric direction (cur vs prev),
+  // independent of whether that direction is good or bad.
+  direction: 'up' | 'down' | 'flat';
+  // Whether prev was 0 and cur > 0 (the "new" case — no ratio computable).
+  isNew: boolean;
+}
+
+/**
+ * Computes a compact delta descriptor comparing `cur` to `prev`.
+ *  - prev === 0 && cur > 0  → "new"
+ *  - prev === 0 && cur === 0 → "—"
+ *  - |ratio| >= 2×          → multiplier form "↑2.4×" / "↓3×"
+ *  - otherwise              → percentage form "+42%" / "−18%"
+ * The minus sign uses U+2212 (−) to match the spec's display.
+ */
+function computeDelta(cur: number, prev: number): DeltaInfo {
+  if (prev === 0) {
+    if (cur > 0) return { text: 'new', direction: 'up', isNew: true };
+    return { text: '—', direction: 'flat', isNew: false };
+  }
+  if (cur === prev) return { text: '0%', direction: 'flat', isNew: false };
+  const direction: 'up' | 'down' = cur > prev ? 'up' : 'down';
+  const ratio = cur / prev;
+  // Multiplier form for large swings (>=2x in either direction).
+  if (ratio >= 2 || ratio <= 0.5) {
+    const mult = direction === 'up' ? ratio : prev / cur;
+    const rounded = mult >= 10 ? Math.round(mult) : Math.round(mult * 10) / 10;
+    const arrow = direction === 'up' ? '↑' : '↓';
+    return { text: `${arrow}${rounded}×`, direction, isNew: false };
+  }
+  const pct = ((cur - prev) / prev) * 100;
+  const rounded = Math.round(pct);
+  const sign = rounded > 0 ? '+' : '−';
+  return { text: `${sign}${Math.abs(rounded)}%`, direction, isNew: false };
+}
+
+/**
+ * Renders the compact "vs previous window" badge for one metric.
+ *  - `higherIsBad`: when true, an upward direction is red and downward green
+ *    (error rate, latency). When false, the change is neutral (calls volume).
+ * Renders nothing meaningful when prev is unavailable — callers should guard.
+ */
+function DeltaBadge({
+  cur,
+  prev,
+  higherIsBad,
+  windowMs,
+  curLabel,
+  prevLabel,
+  unit,
+}: {
+  cur: number;
+  prev: number;
+  higherIsBad: boolean;
+  windowMs: number;
+  curLabel: string;
+  prevLabel: string;
+  unit: string;
+}) {
+  const delta = computeDelta(cur, prev);
+  let color = 'var(--text-tertiary)';
+  if (higherIsBad && delta.direction !== 'flat') {
+    color = delta.direction === 'up' ? 'var(--red, #ef4444)' : 'var(--success, #22c55e)';
+  }
+  const glyph = delta.direction === 'up' ? '▲' : delta.direction === 'down' ? '▼' : '';
+  const title = `vs previous ${windowLabel(windowMs)}: ${prevLabel} → ${curLabel}${unit ? ` ${unit}` : ''}`;
+  return (
+    <span
+      className="tabular-nums"
+      style={{ fontSize: 9, color, marginLeft: 3, whiteSpace: 'nowrap' }}
+      title={title}
+    >
+      {glyph}
+      {delta.text}
+    </span>
+  );
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────
@@ -331,13 +456,22 @@ function EntryRow({
   entry,
   query = '',
   indent = 0,
+  isSelected = false,
+  expanded = false,
+  onToggleExpand,
+  entryIdx,
+  onOpenFileInGraph,
 }: {
   entry: JournalEntry;
   query?: string;
   indent?: number;
+  isSelected?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  entryIdx?: number;
+  onOpenFileInGraph?: (filePath: string) => void;
 }) {
   const [, setTick] = useState(0);
-  const [expanded, setExpanded] = useState(false);
   // Set when the user clicks a file-path in params_summary; cleared after 1.5s.
   // Lives per-row so multiple rows can show "Copied" independently.
   const [recentlyCopied, setRecentlyCopied] = useState<string | null>(null);
@@ -368,10 +502,12 @@ function EntryRow({
     void navigator.clipboard.writeText(entry.params_summary);
   };
 
-  // TODO: wire to Graph/Overview tab navigation once cross-tab IPC exists.
-  // For now, clicking a file-path in params_summary copies the path and
-  // shows a transient "Copied" note next to the row.
-  const handleFilePathClick = useCallback((file: string) => {
+  // Clicking a file-path token in params_summary navigates the project window
+  // to the Graph tab and focuses that file's node (primary action). A modifier
+  // click (⌥ or ⌘) copies the path to the clipboard and shows a transient
+  // "Copied" note instead. When no navigation handler is wired (defensive
+  // fallback), every click copies the path.
+  const copyFilePath = useCallback((file: string) => {
     void navigator.clipboard.writeText(file);
     setRecentlyCopied(file);
     if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current);
@@ -380,19 +516,32 @@ function EntryRow({
       copiedTimerRef.current = null;
     }, 1500);
   }, []);
+  const handleFilePathClick = useCallback(
+    (file: string, e: MouseEvent) => {
+      const wantsCopy = e.altKey || e.metaKey;
+      if (onOpenFileInGraph && !wantsCopy) {
+        onOpenFileInGraph(file);
+        return;
+      }
+      copyFilePath(file);
+    },
+    [onOpenFileInGraph, copyFilePath],
+  );
 
   return (
     <div
+      data-entry-idx={entryIdx}
       style={{
         borderBottom: '0.5px solid var(--border-row)',
-        background: rowBg,
+        background: isSelected ? 'var(--bg-active)' : rowBg,
         paddingLeft: indent,
+        borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
       }}
     >
       {/* Collapsed row — clickable */}
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => onToggleExpand?.()}
         className="flex items-start gap-2.5 px-3 py-2 w-full text-left"
         style={{
           background: 'none',
@@ -428,7 +577,12 @@ function EntryRow({
               fontFamily: 'SF Mono, Menlo, monospace',
             }}
           >
-            {tokenizeParams(truncate(entry.params_summary, 120), query, handleFilePathClick)}
+            {tokenizeParams(
+              truncate(entry.params_summary, 120),
+              query,
+              handleFilePathClick,
+              onOpenFileInGraph !== undefined,
+            )}
             {recentlyCopied !== null && (
               <span
                 className="ml-2 text-[10px]"
@@ -546,12 +700,14 @@ function EntryRow({
  */
 function StatsSummaryBar({
   stats,
+  prevStats,
   expanded,
   onToggle,
   windowMs,
   onWindowChange,
 }: {
   stats: JournalStats;
+  prevStats: JournalStats | null;
   expanded: boolean;
   onToggle: () => void;
   windowMs: number;
@@ -559,6 +715,7 @@ function StatsSummaryBar({
 }) {
   const errorPct = (stats.error_rate * 100).toFixed(1);
   const p95 = computeP95(stats.latency_buckets);
+  const curP95Ms = p95Ms(stats.latency_buckets);
   const errorColor =
     stats.error_rate > 0.1
       ? 'var(--red, #ef4444)'
@@ -631,14 +788,47 @@ function StatsSummaryBar({
       <span className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-primary)' }}>
         <span className="font-semibold tabular-nums">{stats.total_calls.toLocaleString()}</span>
         <span style={{ color: 'var(--text-tertiary)' }}>calls</span>
+        {prevStats !== null && (
+          <DeltaBadge
+            cur={stats.total_calls}
+            prev={prevStats.total_calls}
+            higherIsBad={false}
+            windowMs={windowMs}
+            curLabel={stats.total_calls.toLocaleString()}
+            prevLabel={prevStats.total_calls.toLocaleString()}
+            unit="calls"
+          />
+        )}
       </span>
       <span className="flex items-center gap-1 text-[11px]" style={{ color: errorColor }}>
         <span className="font-semibold tabular-nums">{errorPct}%</span>
         <span style={{ color: 'var(--text-tertiary)' }}>err</span>
+        {prevStats !== null && (
+          <DeltaBadge
+            cur={stats.error_rate}
+            prev={prevStats.error_rate}
+            higherIsBad
+            windowMs={windowMs}
+            curLabel={`${(stats.error_rate * 100).toFixed(1)}%`}
+            prevLabel={`${(prevStats.error_rate * 100).toFixed(1)}%`}
+            unit=""
+          />
+        )}
       </span>
       <span className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-primary)' }}>
         <span className="font-semibold tabular-nums">{p95}</span>
         <span style={{ color: 'var(--text-tertiary)' }}>p95</span>
+        {prevStats !== null && (
+          <DeltaBadge
+            cur={curP95Ms}
+            prev={p95Ms(prevStats.latency_buckets)}
+            higherIsBad
+            windowMs={windowMs}
+            curLabel={p95}
+            prevLabel={computeP95(prevStats.latency_buckets)}
+            unit=""
+          />
+        )}
       </span>
       <span className="ml-auto text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
         {expanded ? '▲' : '▼'}
@@ -910,18 +1100,142 @@ function ErrorGroupsList({
 /**
  * Sparkline: vertical bars for by_minute data covering the active window.
  * NOTE: for ≥6h windows, by_minute could be down-sampled server-side later.
+ *
+ * Interactive: dragging horizontally across the bars selects a time interval
+ * which the parent uses to filter the FEED (client-side only — does NOT touch
+ * the server stats window). Pointer events are tracked on the bar container:
+ *  - pointerdown records the bar index under the cursor (drag anchor)
+ *  - pointermove updates the hovered bar index while a drag is in progress
+ *  - pointerup commits [start, end] from the min/max ts of covered bars
+ *  - a click (anchor === release on the same bar) selects that single minute
+ *  - double-click clears the selection
+ * While dragging, a translucent accent overlay rectangle spans the covered bars.
  */
-function Sparkline({ byMinute, windowMs }: { byMinute: ByMinute[]; windowMs: number }) {
+function Sparkline({
+  byMinute,
+  windowMs,
+  onSelectRange,
+  activeRange,
+}: {
+  byMinute: ByMinute[];
+  windowMs: number;
+  onSelectRange: (range: { start: number; end: number } | null) => void;
+  activeRange: { start: number; end: number } | null;
+}) {
   const maxCount = Math.max(...byMinute.map((m) => m.count), 1);
+  const barsRef = useRef<HTMLDivElement>(null);
+  // Drag anchor bar index (set on pointerdown) and the current hovered bar
+  // index (updated on pointermove). null when no drag is in progress.
+  const dragAnchorRef = useRef<number | null>(null);
+  const [dragRange, setDragRange] = useState<{ lo: number; hi: number } | null>(null);
+
+  // Map a clientX onto a bar index within the container. Returns null when the
+  // container has no width or no bars yet.
+  const barIndexAtX = useCallback(
+    (clientX: number): number | null => {
+      const el = barsRef.current;
+      if (!el || byMinute.length === 0) return null;
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0) return null;
+      const ratio = (clientX - rect.left) / rect.width;
+      const idx = Math.floor(ratio * byMinute.length);
+      return Math.max(0, Math.min(byMinute.length - 1, idx));
+    },
+    [byMinute.length],
+  );
+
+  const handlePointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      const idx = barIndexAtX(e.clientX);
+      if (idx === null) return;
+      dragAnchorRef.current = idx;
+      setDragRange({ lo: idx, hi: idx });
+      // Capture so we keep getting move/up even if the pointer leaves the box.
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    },
+    [barIndexAtX],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      const anchor = dragAnchorRef.current;
+      if (anchor === null) return;
+      const idx = barIndexAtX(e.clientX);
+      if (idx === null) return;
+      setDragRange({ lo: Math.min(anchor, idx), hi: Math.max(anchor, idx) });
+    },
+    [barIndexAtX],
+  );
+
+  const commitSelection = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      const anchor = dragAnchorRef.current;
+      dragAnchorRef.current = null;
+      e.currentTarget.releasePointerCapture?.(e.pointerId);
+      if (anchor === null) {
+        setDragRange(null);
+        return;
+      }
+      const release = barIndexAtX(e.clientX) ?? anchor;
+      const lo = Math.min(anchor, release);
+      const hi = Math.max(anchor, release);
+      setDragRange(null);
+      const first = byMinute[lo];
+      const last = byMinute[hi];
+      if (!first || !last) return;
+      // Start at the first covered minute's ts; end at last covered minute + 60s
+      // so the interval is inclusive of the whole last bucket.
+      onSelectRange({ start: first.ts, end: last.ts + 60_000 });
+    },
+    [barIndexAtX, byMinute, onSelectRange],
+  );
+
+  // Determine which bars fall inside the committed activeRange so they render
+  // highlighted even when no drag is in progress.
+  const isActive = useCallback(
+    (ts: number) =>
+      activeRange !== null && ts >= activeRange.start && ts < activeRange.end,
+    [activeRange],
+  );
+
   return (
     <div>
-      <div className="text-[10px] font-semibold mb-1.5" style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Last {windowLabel(windowMs)}
+      <div className="text-[10px] font-semibold mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <span>Last {windowLabel(windowMs)}</span>
+        {activeRange !== null && (
+          <button
+            type="button"
+            onClick={() => onSelectRange(null)}
+            title="Clear time-range filter"
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              color: 'var(--accent, #007aff)',
+              fontSize: 9,
+              lineHeight: 1,
+              textTransform: 'none',
+            }}
+          >
+            clear ✕
+          </button>
+        )}
       </div>
-      <div className="flex items-end gap-px" style={{ height: 28 }}>
+      <div
+        ref={barsRef}
+        className="flex items-end gap-px relative"
+        style={{ height: 28, cursor: 'crosshair', touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={commitSelection}
+        onPointerCancel={commitSelection}
+        onDoubleClick={() => onSelectRange(null)}
+      >
         {byMinute.map((m) => {
           const heightPct = (m.count / maxCount) * 100;
           const hasErrors = m.error_count > 0;
+          const inRange = isActive(m.ts);
           const minuteLabel = new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
           return (
             <div
@@ -934,12 +1248,28 @@ function Sparkline({ byMinute, windowMs }: { byMinute: ByMinute[]; windowMs: num
                 background: hasErrors
                   ? 'var(--red, #ef4444)'
                   : 'var(--accent, #007aff)',
-                opacity: 0.65,
-                transition: 'height 0.3s ease',
+                opacity: activeRange !== null ? (inRange ? 0.9 : 0.3) : 0.65,
+                transition: 'height 0.3s ease, opacity 0.15s ease',
               }}
             />
           );
         })}
+        {/* Live drag overlay — spans the covered bars at ~0.15 alpha. */}
+        {dragRange !== null && byMinute.length > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: `${(dragRange.lo / byMinute.length) * 100}%`,
+              width: `${((dragRange.hi - dragRange.lo + 1) / byMinute.length) * 100}%`,
+              background: 'var(--accent, #007aff)',
+              opacity: 0.15,
+              borderRadius: 2,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -955,6 +1285,8 @@ function StatsPanel({
   toolFilter,
   errorsOnly,
   windowMs,
+  onSelectRange,
+  timeRange,
 }: {
   stats: JournalStats;
   onToolClick: (tool: string) => void;
@@ -962,6 +1294,8 @@ function StatsPanel({
   toolFilter: Set<string>;
   errorsOnly: boolean;
   windowMs: number;
+  onSelectRange: (range: { start: number; end: number } | null) => void;
+  timeRange: { start: number; end: number } | null;
 }) {
   return (
     <div
@@ -1010,7 +1344,12 @@ function StatsPanel({
           )}
         </div>
         <div style={{ width: 140, flexShrink: 0 }}>
-          <Sparkline byMinute={stats.by_minute} windowMs={windowMs} />
+          <Sparkline
+            byMinute={stats.by_minute}
+            windowMs={windowMs}
+            onSelectRange={onSelectRange}
+            activeRange={timeRange}
+          />
         </div>
       </div>
     </div>
@@ -1159,7 +1498,96 @@ function SessionGroupHeader({
   );
 }
 
-export function ToolActivity({ root }: { root: string }) {
+// ── Keyboard help overlay ─────────────────────────────────────────────────
+
+const SHORTCUTS: { keys: string; desc: string }[] = [
+  { keys: '/', desc: 'Focus search' },
+  { keys: 'j', desc: 'Next entry' },
+  { keys: 'k', desc: 'Previous entry' },
+  { keys: 'Enter', desc: 'Expand / collapse selected' },
+  { keys: 'Esc', desc: 'Blur search · clear search · clear filters · deselect' },
+  { keys: '?', desc: 'Toggle this help' },
+];
+
+function ShortcutsHelp({ onClose }: { onClose: () => void }) {
+  const chipStyle: CSSProperties = {
+    display: 'inline-block',
+    minWidth: 18,
+    textAlign: 'center',
+    padding: '1px 6px',
+    borderRadius: 5,
+    background: 'var(--bg-inset)',
+    border: '0.5px solid var(--border-row)',
+    fontFamily: 'SF Mono, Menlo, monospace',
+    fontSize: 11,
+    color: 'var(--text-primary)',
+  };
+  return (
+    <div
+      onClick={onClose}
+      role="presentation"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        background: 'rgba(0,0,0,0.35)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 50,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="Keyboard shortcuts"
+        style={{
+          background: 'var(--bg-grouped)',
+          border: '0.5px solid var(--border-row)',
+          borderRadius: 12,
+          padding: '14px 18px',
+          minWidth: 320,
+          maxWidth: 420,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+        }}
+      >
+        <div
+          className="text-[11px] font-semibold mb-2.5"
+          style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+        >
+          Keyboard Shortcuts
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr',
+            gap: '6px 12px',
+            alignItems: 'center',
+            fontSize: 12,
+            color: 'var(--text-secondary)',
+          }}
+        >
+          {SHORTCUTS.map((s) => (
+            <div key={s.keys} style={{ display: 'contents' }}>
+              <span style={chipStyle}>{s.keys}</span>
+              <span>{s.desc}</span>
+            </div>
+          ))}
+        </div>
+        <div className="text-[10px] mt-3" style={{ color: 'var(--text-tertiary)' }}>
+          Press Esc or ? to close.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ToolActivity({
+  root,
+  onOpenFileInGraph,
+}: {
+  root: string;
+  onOpenFileInGraph?: (filePath: string) => void;
+}) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   // Multi-select tool filter — empty set means "no tool restriction".
   const [toolFilter, setToolFilter] = useState<Set<string>>(() => loadToolFilter());
@@ -1175,6 +1603,18 @@ export function ToolActivity({ root }: { root: string }) {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ── Keyboard navigation state ────────────────────────────────────────
+  // Index into the currently-visible `filtered` list (flat order, regardless
+  // of group-by-session). -1 means no selection.
+  const [selectedIdx, setSelectedIdx] = useState<number>(-1);
+  // Expand state lifted out of EntryRow so Enter can toggle the selected row.
+  // Keyed by entryKey(entry) so it survives re-renders and list churn.
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  // Keyboard-shortcuts help overlay.
+  const [showHelp, setShowHelp] = useState(false);
+  // Ref to the search input so "/" can focus it and Escape can blur it.
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   // ── Pause / clear / export local controls ────────────────────────────
   const [paused, setPaused] = useState(false);
   // Mirror of `paused` for the long-lived SSE onmessage closure to avoid
@@ -1187,9 +1627,15 @@ export function ToolActivity({ root }: { root: string }) {
 
   // ── Stats state ──────────────────────────────────────────────────────
   const [stats, setStats] = useState<JournalStats | null>(null);
+  // Immediately-preceding window of the same size, for the "vs previous" deltas.
+  // Best-effort: a failed prev fetch leaves this as-is rather than blanking it.
+  const [prevStats, setPrevStats] = useState<JournalStats | null>(null);
   const [statsExpanded, setStatsExpanded] = useState(true);
   // Active stats window, persisted in localStorage.
   const [windowMs, setWindowMs] = useState<number>(() => loadWindowMs());
+  // Client-side feed time-range filter, driven by dragging across the
+  // sparkline. Null = no range filter. Does NOT affect the server stats window.
+  const [timeRange, setTimeRange] = useState<{ start: number; end: number } | null>(null);
   // Live incremental counters between server reconciliations
   const liveCountsRef = useRef({ calls: 0, errors: 0 });
 
@@ -1200,21 +1646,48 @@ export function ToolActivity({ root }: { root: string }) {
   // ── Fetch aggregated stats ────────────────────────────────────────────
 
   const fetchStats = useCallback(async () => {
-    try {
-      const params = new URLSearchParams({
-        project: root,
-        window: String(windowMs),
-      });
-      const res = await fetch(`${BASE}/api/projects/journal/stats?${params}`);
-      if (res.ok) {
-        const data = (await res.json()) as JournalStats;
-        setStats(data);
-        // Reset live increment counters after a server reconciliation
-        liveCountsRef.current = { calls: 0, errors: 0 };
+    // Current window — ends at "now" (no `before` param).
+    const curParams = new URLSearchParams({
+      project: root,
+      window: String(windowMs),
+    });
+    // Previous window of the same size — ends where the current window starts.
+    const prevParams = new URLSearchParams({
+      project: root,
+      window: String(windowMs),
+      before: String(Date.now() - windowMs),
+    });
+
+    const curFetch = (async () => {
+      try {
+        const res = await fetch(`${BASE}/api/projects/journal/stats?${curParams}`);
+        if (res.ok) {
+          const data = (await res.json()) as JournalStats;
+          setStats(data);
+          // Reset live increment counters after a server reconciliation
+          liveCountsRef.current = { calls: 0, errors: 0 };
+        }
+      } catch {
+        /* stats are best-effort — silently skip on network error */
       }
-    } catch {
-      /* stats are best-effort — silently skip on network error */
-    }
+    })();
+
+    // Previous-window fetch is independent: a failure must NOT blank the
+    // current stats, so it has its own try/catch and leaves prevStats as-is.
+    const prevFetch = (async () => {
+      try {
+        const res = await fetch(`${BASE}/api/projects/journal/stats?${prevParams}`);
+        if (res.ok) {
+          const data = (await res.json()) as JournalStats;
+          setPrevStats(data);
+        }
+      } catch {
+        /* baseline is best-effort — keep the last good prevStats on error */
+      }
+    })();
+
+    // Run both in parallel; each settles independently.
+    await Promise.all([curFetch, prevFetch]);
   }, [root, windowMs]);
 
   useEffect(() => {
@@ -1268,6 +1741,17 @@ export function ToolActivity({ root }: { root: string }) {
       const next = new Set(prev);
       if (next.has(sessionId)) next.delete(sessionId);
       else next.add(sessionId);
+      return next;
+    });
+  }, []);
+
+  // Toggle expand for a single entry (by its stable key). Used by both the
+  // row's own click and the keyboard Enter shortcut.
+  const toggleExpandKey = useCallback((key: string) => {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
@@ -1510,11 +1994,19 @@ export function ToolActivity({ root }: { root: string }) {
 
   const top5 = topTools(entries, 5);
 
-  // Errors-only and the multi-select tool filter combine multiplicatively,
-  // then the free-text query narrows on top.
+  // Errors-only, the multi-select tool filter, and the sparkline time-range
+  // combine multiplicatively, then the free-text query narrows on top. The
+  // time-range filter is client-side only (it does not change the server stats
+  // window) and is folded in here so keyboard selection and session grouping
+  // all operate on the same visible list.
   let chipFiltered = entries;
   if (errorsOnly) chipFiltered = chipFiltered.filter((e) => e.is_error);
   if (toolFilter.size > 0) chipFiltered = chipFiltered.filter((e) => toolFilter.has(e.tool));
+  if (timeRange !== null) {
+    chipFiltered = chipFiltered.filter(
+      (e) => e.ts >= timeRange.start && e.ts <= timeRange.end,
+    );
+  }
 
   const queryLower = query.trim().toLowerCase();
   const filtered =
@@ -1526,12 +2018,112 @@ export function ToolActivity({ root }: { root: string }) {
             e.tool.toLowerCase().includes(queryLower),
         );
 
+  // Keep the selected index within bounds as the visible list shrinks/grows.
+  // (e.g. a new filter trims the list below the previously-selected index.)
+  useEffect(() => {
+    if (selectedIdx >= filtered.length) {
+      setSelectedIdx(filtered.length > 0 ? filtered.length - 1 : -1);
+    }
+  }, [filtered.length, selectedIdx]);
+
+  // Scroll the selected row into view whenever the selection moves.
+  useEffect(() => {
+    if (selectedIdx < 0) return;
+    const el = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-entry-idx="${selectedIdx}"]`,
+    );
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIdx]);
+
+  // ── Keyboard navigation ───────────────────────────────────────────────
+  // Single window-level keydown listener. Guarded so typing in the search
+  // input doesn't trigger shortcuts — except Escape, which still blurs/clears.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const inInput = document.activeElement?.tagName === 'INPUT';
+
+      // Escape works everywhere, including while typing in the search box.
+      if (e.key === 'Escape') {
+        if (showHelp) {
+          setShowHelp(false);
+          return;
+        }
+        // (a) search focused → blur it
+        if (inInput && document.activeElement === searchInputRef.current) {
+          searchInputRef.current?.blur();
+          return;
+        }
+        // (b) query non-empty → clear query
+        if (query !== '') {
+          setQuery('');
+          return;
+        }
+        // (c) any filter active → clear filters (tool/errors chips AND the
+        //     sparkline time-range, which is treated as a special filter)
+        if (toolFilter.size > 0 || errorsOnly || timeRange !== null) {
+          setToolFilter(new Set());
+          setErrorsOnly(false);
+          setTimeRange(null);
+          return;
+        }
+        // (d) an entry is selected → deselect
+        if (selectedIdx >= 0) {
+          setSelectedIdx(-1);
+        }
+        return;
+      }
+
+      // All other shortcuts are suppressed while typing in an input.
+      if (inInput) return;
+
+      switch (e.key) {
+        case '/':
+          e.preventDefault();
+          searchInputRef.current?.focus();
+          break;
+        case 'j':
+          e.preventDefault();
+          setSelectedIdx((i) =>
+            filtered.length === 0 ? -1 : Math.min(i + 1, filtered.length - 1),
+          );
+          break;
+        case 'k':
+          e.preventDefault();
+          setSelectedIdx((i) => (filtered.length === 0 ? -1 : Math.max(i - 1, 0)));
+          break;
+        case 'Enter':
+          if (selectedIdx >= 0 && selectedIdx < filtered.length) {
+            e.preventDefault();
+            toggleExpandKey(entryKey(filtered[selectedIdx]));
+          }
+          break;
+        case '?':
+          // Shift+/ produces "?"; toggle the help overlay.
+          e.preventDefault();
+          setShowHelp((v) => !v);
+          break;
+        default:
+          break;
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [filtered, selectedIdx, query, toolFilter, errorsOnly, timeRange, showHelp, toggleExpandKey]);
+
+  // Map entryKey → flat index in `filtered`, so the grouped render path (which
+  // maps over per-session buckets) can resolve each row's selection index.
+  const flatIdxByKey = new Map<string, number>();
+  filtered.forEach((e, i) => {
+    flatIdxByKey.set(entryKey(e), i);
+  });
+
   // ── Render ───────────────────────────────────────────────────────────
 
   return (
     <div
       className="flex flex-col h-full"
-      style={{ color: 'var(--text-primary)' }}
+      style={{ color: 'var(--text-primary)', position: 'relative' }}
     >
       {/* ── Header ── */}
       <div
@@ -1692,6 +2284,7 @@ export function ToolActivity({ root }: { root: string }) {
           </button>
           <div style={{ position: 'relative', width: 180 }}>
             <input
+              ref={searchInputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -1766,6 +2359,30 @@ export function ToolActivity({ root }: { root: string }) {
               }}
             />
           ))}
+          {/* Time-range filter chip — present only while a sparkline range is
+              active. Styled like a filter chip but with an accent border to
+              mark it as a special (client-side) filter. ✕ clears the range. */}
+          {timeRange !== null && (
+            <button
+              type="button"
+              onClick={() => setTimeRange(null)}
+              title="Clear time range filter"
+              className="text-[11px] px-2.5 py-1 rounded-full transition-all shrink-0 flex items-center gap-1 tabular-nums"
+              style={{
+                background: 'var(--accent-soft, rgba(0,122,255,0.12))',
+                color: 'var(--accent, #007aff)',
+                border: '0.5px solid var(--accent, #007aff)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🕒 {new Date(timeRange.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              –
+              {new Date(timeRange.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <span style={{ marginLeft: 2 }}>✕</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1774,6 +2391,7 @@ export function ToolActivity({ root }: { root: string }) {
       {stats !== null && (
         <StatsSummaryBar
           stats={stats}
+          prevStats={prevStats}
           expanded={statsExpanded}
           onToggle={() => setStatsExpanded((v) => !v)}
           windowMs={windowMs}
@@ -1789,6 +2407,8 @@ export function ToolActivity({ root }: { root: string }) {
           toolFilter={toolFilter}
           errorsOnly={errorsOnly}
           windowMs={windowMs}
+          onSelectRange={setTimeRange}
+          timeRange={timeRange}
         />
       )}
 
@@ -1819,12 +2439,12 @@ export function ToolActivity({ root }: { root: string }) {
             style={{ color: 'var(--text-tertiary)' }}
           >
             <div className="text-[13px] mb-1">
-              {toolFilter.size === 0 && !errorsOnly && query === ''
+              {toolFilter.size === 0 && !errorsOnly && query === '' && timeRange === null
                 ? 'No tool calls yet'
                 : 'No matching entries'}
             </div>
             <div className="text-[11px]">
-              {toolFilter.size === 0 && !errorsOnly && query === ''
+              {toolFilter.size === 0 && !errorsOnly && query === '' && timeRange === null
                 ? 'Run a tool from Claude Code to see activity here.'
                 : 'Try a different filter or clear the search.'}
             </div>
@@ -1840,27 +2460,51 @@ export function ToolActivity({ root }: { root: string }) {
                   onToggle={() => handleToggleSessionCollapsed(group.session_id)}
                 />
                 {!collapsed &&
-                  group.entries.map((entry) => (
-                    <EntryRow
-                      key={`${entry.ts}:${entry.tool}:${entry.session_id}:${entry.params_summary.slice(0, 32)}`}
-                      entry={entry}
-                      query={query}
-                      indent={12}
-                    />
-                  ))}
+                  group.entries.map((entry) => {
+                    const key = entryKey(entry);
+                    const idx = flatIdxByKey.get(key) ?? -1;
+                    return (
+                      <EntryRow
+                        key={key}
+                        entry={entry}
+                        query={query}
+                        indent={12}
+                        entryIdx={idx}
+                        isSelected={idx === selectedIdx}
+                        expanded={expandedKeys.has(key)}
+                        onToggleExpand={() => {
+                          setSelectedIdx(idx);
+                          toggleExpandKey(key);
+                        }}
+                        onOpenFileInGraph={onOpenFileInGraph}
+                      />
+                    );
+                  })}
               </div>
             );
           })
         ) : (
-          filtered.map((entry) => (
-            <EntryRow
-              key={`${entry.ts}:${entry.tool}:${entry.session_id}:${entry.params_summary.slice(0, 32)}`}
-              entry={entry}
-              query={query}
-            />
-          ))
+          filtered.map((entry, idx) => {
+            const key = entryKey(entry);
+            return (
+              <EntryRow
+                key={key}
+                entry={entry}
+                query={query}
+                entryIdx={idx}
+                isSelected={idx === selectedIdx}
+                expanded={expandedKeys.has(key)}
+                onToggleExpand={() => {
+                  setSelectedIdx(idx);
+                  toggleExpandKey(key);
+                }}
+                onOpenFileInGraph={onOpenFileInGraph}
+              />
+            );
+          })
         )}
       </div>
+      {showHelp && <ShortcutsHelp onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

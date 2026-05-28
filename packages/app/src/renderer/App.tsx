@@ -659,6 +659,7 @@ function ProjectContent({
   graphGpuSettings,
   onGraphGpuSettingsChange,
   onNavigateToService,
+  onOpenFileInGraph,
 }: {
   root: string;
   tab: ProjectTab;
@@ -666,6 +667,7 @@ function ProjectContent({
   graphGpuSettings: GraphGPUSettings;
   onGraphGpuSettingsChange: (patch: Partial<GraphGPUSettings>) => void;
   onNavigateToService: (serviceName: string) => void;
+  onOpenFileInGraph: (filePath: string) => void;
 }) {
   return (
     <>
@@ -676,7 +678,7 @@ function ProjectContent({
       {/* Ask — chat interface, needs flex layout */}
       {tab === 'ask' && <AskTab root={root} />}
       {/* Activity — live MCP tool-call feed for this project */}
-      {tab === 'activity' && <Activity root={root} />}
+      {tab === 'activity' && <Activity root={root} onOpenFileInGraph={onOpenFileInGraph} />}
       {/* Memory — decisions / corpora / sessions explorer */}
       {tab === 'memory' && <MemoryExplorer root={root} />}
       {/* Notebook — ad-hoc trace-mcp tool runner (read-only) */}
@@ -932,6 +934,7 @@ export function App() {
                 graphGpuSettings={graphGpuSettings}
                 onGraphGpuSettingsChange={onGraphGpuSettingsChange}
                 onNavigateToService={navigateToService}
+                onOpenFileInGraph={openFileInGraph}
               />
             ) : (
               <MenuContent tab={globalTab} />
