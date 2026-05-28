@@ -21,7 +21,13 @@ function readStored(): SubTab {
   }
 }
 
-export function Activity({ root }: { root: string }) {
+export function Activity({
+  root,
+  onOpenFileInGraph,
+}: {
+  root: string;
+  onOpenFileInGraph?: (filePath: string) => void;
+}) {
   const [sub, setSub] = useState<SubTab>(readStored);
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, sub); } catch { /* ignore quota */ }
@@ -39,7 +45,11 @@ export function Activity({ root }: { root: string }) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        {sub === 'tool' ? <ToolActivity root={root} /> : <AIActivity />}
+        {sub === 'tool' ? (
+          <ToolActivity root={root} onOpenFileInGraph={onOpenFileInGraph} />
+        ) : (
+          <AIActivity />
+        )}
       </div>
     </div>
   );
