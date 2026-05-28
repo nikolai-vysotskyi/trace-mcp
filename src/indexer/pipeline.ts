@@ -394,7 +394,12 @@ export class IndexingPipeline {
   ): Promise<IndexingResult> {
     const result = this._lock.then(async () => {
       this._isIncremental = true;
-      this._postprocessLevel = opts.postprocess ?? 'full';
+      // Default to 'minimal' for incremental runs. Watcher/hook/register_edit
+      // callers don't override; full postprocess (LSP + env + snapshots) was
+      // the source of 3-11s outliers visible in daemon.log on single-file
+      // edits. Explicit callers (the `reindex` MCP tool for indexPath param)
+      // still pass 'full' explicitly when needed.
+      this._postprocessLevel = opts.postprocess ?? 'minimal';
       const start = Date.now();
       const relPaths: string[] = [];
       for (const fp of filePaths) {
