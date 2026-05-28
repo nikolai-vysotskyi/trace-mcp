@@ -3,7 +3,7 @@
 
 export interface ReindexEvent {
   ts: number;
-  pathSource: 'http' | 'mcp';
+  pathSource: 'http' | 'mcp' | 'watcher';
   skippedRecent: boolean;
   skippedHash: boolean;
   indexed: number;
