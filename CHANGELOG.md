@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.40.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.4...v1.40.0) (2026-05-28)
+
+
+### Features
+
+* **app:** advanced Activity tab — Tool/AI sub-tabs, search, filters, sessions ([17f4d11](https://github.com/nikolai-vysotskyi/trace-mcp/commit/17f4d117d2dc46cf82681080cb93f0a9ade17d65))
+* **lsp:** background enricher for incremental LSP edge upgrades ([a74b6c1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a74b6c1984c1ce930906cf9bc56d69309f868996))
+
+
+### Bug Fixes
+
+* **app:** exclude test files from renderer typecheck ([77e38d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/77e38d7e96ff942b57965ed4f09667c10b8b90e5))
+* **cli:** install menu bar app under --yes / --json / --dry-run ([6384b7c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6384b7c4e6ec65bca7aea3004c357aadd04a50b9))
+* **indexer,analysis:** suppress phantom SCCs from type-only imports & projected edges ([62e88d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/62e88d73549599bfaa09734d060d6845c6edde4f))
+* **intelligence:** 14 correctness/UX/storage fixes across the trace-mcp surface ([79963a1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/79963a1f0e4f58308ca18ea08c4ac2c24828734a))
+* **updater:** locate installed .app by bundle id instead of guessing ~/Applications ([#179](https://github.com/nikolai-vysotskyi/trace-mcp/issues/179)) ([06b8e04](https://github.com/nikolai-vysotskyi/trace-mcp/commit/06b8e047f91e0ea920638f923c6cfe6682d3ecd6))
+
+
+### Performance
+
+* **indexer:** default incremental indexFiles to postprocess=minimal ([0576a0a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0576a0a8f99fc95d2693bb685c817cb38c0c4c0d))
+* **indexer:** gate watcher reindexes through dedup + emit watcher telemetry ([b3e1352](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b3e1352b6bdbafcb1b0c06f678d069630ac562ea))
+
+
+### Refactoring
+
+* break 2 small import cycles via shared-module extraction ([7bb8d00](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7bb8d00b7c0a0d2b4a791fec7c5b0708af2eae34))
+* break 7 small import cycles + fix latent DTS issues exposed ([86d26ca](https://github.com/nikolai-vysotskyi/trace-mcp/commit/86d26caec7627afe3ea65d7968214d8e04852da5))
+
+
+### Documentation
+
+* **landing:** drop Benchmark section, fix install steps, fix copy button ([a72cf27](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a72cf27d907a31a1f113fc27ad56b4b5e4d92844))
+
+
+### Chores
+
+* **deps:** bump qs and protobufjs to patched versions ([270f73d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/270f73dcb7a3e7add57df3947be455c647465c75))
+
+
+### Build
+
+* ESM + DTS both clean ([86d26ca](https://github.com/nikolai-vysotskyi/trace-mcp/commit/86d26caec7627afe3ea65d7968214d8e04852da5))
+
 ## [1.39.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.3...v1.39.4) (2026-05-25)
 
 
