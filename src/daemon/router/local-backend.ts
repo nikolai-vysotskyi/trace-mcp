@@ -29,6 +29,7 @@ import { createServer, type ServerHandle } from '../../server/server.js';
 import { SubprojectManager } from '../../subproject/manager.js';
 import { TopologyStore } from '../../topology/topology-db.js';
 import { trailingDebounce } from '../../util/debounce.js';
+import { BackgroundLspEnricher } from '../../lsp/background-enricher.js';
 import { serializeError } from '../log-error.js';
 import { getReindexStats } from '../reindex-stats.js';
 import type { Backend } from './types.js';
@@ -78,6 +79,12 @@ export class LocalBackend implements Backend {
   private starting: Promise<void> | null = null;
   private stopping = false;
   private cancelDebouncedAI: (() => void) | null = null;
+  /**
+   * Phase 3 background LSP enricher. Constructed only when LSP is enabled
+   * in config. Cancelled in stop() so any in-flight enrichment aborts
+   * before the DB closes.
+   */
+  private lspEnricher: BackgroundLspEnricher | null = null;
 
   constructor(opts: LocalBackendOptions) {
     this.opts = opts;
@@ -181,6 +188,17 @@ export class LocalBackend implements Backend {
       debouncedEmbed.cancel();
     };
 
+    // Phase 3 background LSP enricher — only constructed when LSP is enabled
+    // in config (opt-in by design). Watcher onChanges schedules scoped
+    // enrichment off the hot path; stop() cancels any in-flight run.
+    if (config.lsp?.enabled) {
+      this.lspEnricher = new BackgroundLspEnricher({
+        store: this.store,
+        config,
+        rootPath: projectRoot,
+      });
+    }
+
     // Kick off initial indexing in the background — do not block start.
     // This promise is tracked so stop() can let it drain before closing the DB.
     this.indexingPromise = this.pipeline
@@ -262,7 +280,7 @@ export class LocalBackend implements Backend {
         }
         if (toIndex.length === 0) return;
 
-        let result: { indexed?: number; skipped?: number } | undefined;
+        let result: { indexed?: number; skipped?: number; changedFileIds?: number[] } | undefined;
         let watchErr: unknown;
         try {
           result = await this.pipeline!.indexFiles(toIndex);
@@ -326,6 +344,12 @@ export class LocalBackend implements Backend {
         }
         debouncedSummarize();
         debouncedEmbed();
+        // Phase 3: schedule scoped LSP enrichment off the hot path. Only
+        // fires when LSP is enabled in config (this.lspEnricher is null
+        // otherwise) and only for IDs the pipeline actually touched.
+        if (this.lspEnricher && result?.changedFileIds && result.changedFileIds.length > 0) {
+          this.lspEnricher.scheduleEnrichment(result.changedFileIds);
+        }
       },
       undefined,
       async (deleted) => {
@@ -372,6 +396,16 @@ export class LocalBackend implements Backend {
       /* best-effort */
     }
     this.cancelDebouncedAI = null;
+
+    // Cancel background LSP enricher BEFORE closing the in-flight indexing /
+    // DB so any in-flight enrichment aborts via its AbortSignal and won't
+    // try to write into a disposed Store.
+    try {
+      this.lspEnricher?.cancel();
+    } catch {
+      /* best-effort */
+    }
+    this.lspEnricher = null;
 
     // Stop accepting new MCP messages immediately.
     // Detach our onmessage so router never receives stale output.

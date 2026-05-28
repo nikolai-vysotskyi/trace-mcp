@@ -23,6 +23,7 @@ import {
 } from '../indexer/recent-reindex-cache.js';
 import { FileWatcher } from '../indexer/watcher.js';
 import { logger } from '../logger.js';
+import { BackgroundLspEnricher } from '../lsp/background-enricher.js';
 import { getReindexStats } from './reindex-stats.js';
 import { SqliteTaskCache } from '../pipeline/index.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
@@ -62,6 +63,13 @@ export interface ManagedProject {
   /** Aborted during stopProject() so in-flight AI fetches bail instead of
    *  running to completion against a now-disposed Store. */
   aiAbortController?: AbortController;
+  /**
+   * Phase 3 background LSP enricher — runs LSP enrichment scoped to a
+   * watcher burst's changed files N seconds after the burst ends. Null
+   * when LSP is disabled in config (the construction is gated on
+   * `config.lsp?.enabled`).
+   */
+  lspEnricher?: BackgroundLspEnricher | null;
 }
 
 function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
@@ -315,6 +323,15 @@ export class ProjectManager {
     );
     embedRef = debouncedEmbed;
 
+    // Phase 3 background LSP enricher — only constructed when LSP is enabled
+    // in config (opt-in by design). Watcher onChanges feeds it the changed
+    // file IDs from each indexFiles() result; the enricher debounces the
+    // burst and runs a scoped LSP enrichment off the hot path. See
+    // src/lsp/background-enricher.ts.
+    const lspEnricher: BackgroundLspEnricher | null = config.lsp?.enabled
+      ? new BackgroundLspEnricher({ store, config, rootPath: projectRoot })
+      : null;
+
     const serverHandle = createServer(store, registry, config, projectRoot, progress);
 
     const managed: ManagedProject = {
@@ -330,6 +347,7 @@ export class ProjectManager {
       serverHandle,
       status: 'starting',
       aiAbortController,
+      lspEnricher,
       cancelDebouncedAI: () => {
         debouncedSummarize.cancel();
         debouncedEmbed.cancel();
@@ -472,7 +490,7 @@ export class ProjectManager {
         }
         if (toIndex.length === 0) return;
 
-        let result: { indexed?: number; skipped?: number } | undefined;
+        let result: { indexed?: number; skipped?: number; changedFileIds?: number[] } | undefined;
         let watchErr: unknown;
         try {
           result = await pipeline.indexFiles(toIndex);
@@ -536,6 +554,12 @@ export class ProjectManager {
         }
         debouncedSummarize();
         debouncedEmbed();
+        // Phase 3: schedule scoped LSP enrichment off the hot path. Only
+        // fires when LSP is enabled in config (lspEnricher is null
+        // otherwise) and only for IDs the pipeline actually touched.
+        if (lspEnricher && result?.changedFileIds && result.changedFileIds.length > 0) {
+          lspEnricher.scheduleEnrichment(result.changedFileIds);
+        }
       },
       undefined,
       async (deleted) => {
@@ -561,6 +585,17 @@ export class ProjectManager {
     // the DB has already closed and write into stale references.
     managed.aiAbortController?.abort();
     managed.cancelDebouncedAI?.();
+    // Cancel background LSP enricher BEFORE closing the store so any
+    // in-flight enrichment run aborts via its AbortSignal and won't try to
+    // write into a disposed Store.
+    try {
+      managed.lspEnricher?.cancel();
+    } catch (err) {
+      logger.warn(
+        { error: err, projectRoot: root },
+        'lspEnricher.cancel() failed during stopProject (non-fatal)',
+      );
+    }
     await managed.watcher.stop();
     clearServerPid(managed.db);
     managed.serverHandle.dispose();
