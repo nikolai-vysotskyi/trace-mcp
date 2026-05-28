@@ -38,12 +38,12 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     db = initializeDatabase(':memory:');
   });
 
-  it('SCHEMA_VERSION row is 28 in schema_meta', () => {
+  it('SCHEMA_VERSION row is 29 in schema_meta', () => {
     const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as
       | { value: string }
       | undefined;
     expect(row).toBeDefined();
-    expect(Number(row!.value)).toBe(28);
+    expect(Number(row!.value)).toBe(29);
   });
 
   it('ranking_pins table exists with the expected columns and PK', () => {
