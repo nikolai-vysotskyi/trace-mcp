@@ -4,7 +4,12 @@ import { cpus } from 'node:os';
 import path from 'node:path';
 import fg from 'fast-glob';
 import type { TraceMcpConfig } from '../config.js';
-import { disableFts5Triggers, enableFts5Triggers } from '../db/schema.js';
+import {
+  disableBulkMode,
+  disableFts5Triggers,
+  enableBulkMode,
+  enableFts5Triggers,
+} from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
@@ -272,16 +277,52 @@ export class IndexingPipeline {
         }
       }
       const filePaths = await this.collectFiles();
-      const r = await this.runPipeline(filePaths, force ?? false, start);
-      if (before) this.checkShrink(before, r);
-      // Refresh planner statistics so subsequent queries pick indices using
-      // real cardinality rather than fallback heuristics. ANALYZE is sub-second
-      // on graphs in our typical size range and runs at most once per full
-      // reindex, so the amortized cost is negligible.
+      // Engage bulk-load mode (synchronous=OFF, foreign_keys=OFF) only for
+      // genuine from-scratch indexes. We never enter bulk mode on a live
+      // daemon with an existing graph because other connections may still
+      // read the DB and a crash with synchronous=OFF would corrupt the file.
+      // The "from-scratch" signal is `totalSymbols === 0` — this works even
+      // when `force=true` is passed (which would otherwise skip the shrink
+      // check signal).
+      const isFromScratch = (() => {
+        try {
+          return this.store.getStats().totalSymbols === 0;
+        } catch {
+          return false;
+        }
+      })();
+      if (isFromScratch) {
+        logger.info('Engaging bulk-load mode for from-scratch index');
+        enableBulkMode(this.store.db);
+      }
+      let r: IndexingResult;
       try {
-        this.store.db.exec('ANALYZE');
-      } catch (err) {
-        logger.debug({ err }, 'ANALYZE failed after indexAll (non-fatal)');
+        r = await this.runPipeline(filePaths, force ?? false, start);
+      } finally {
+        // Always restore production-safe pragmas — a crash with
+        // synchronous=OFF on disk would leave the daemon unsafe. disableBulkMode
+        // also runs ANALYZE + WAL checkpoint, so we don't need a separate
+        // ANALYZE on this path.
+        if (isFromScratch) {
+          try {
+            disableBulkMode(this.store.db);
+          } catch (err) {
+            logger.warn({ err }, 'Failed to restore pragmas after bulk index (non-fatal)');
+          }
+        }
+      }
+      if (before) this.checkShrink(before, r);
+      // Non-bulk path: refresh planner statistics so subsequent queries pick
+      // indices using real cardinality rather than fallback heuristics.
+      // ANALYZE is sub-second on graphs in our typical size range and runs at
+      // most once per full reindex. Skipped on the bulk path because
+      // disableBulkMode already ran ANALYZE.
+      if (!isFromScratch) {
+        try {
+          this.store.db.exec('ANALYZE');
+        } catch (err) {
+          logger.debug({ err }, 'ANALYZE failed after indexAll (non-fatal)');
+        }
       }
       return r;
     });
