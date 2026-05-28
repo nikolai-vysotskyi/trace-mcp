@@ -1727,6 +1727,13 @@ export function initializeDatabase(dbPath: string): Database.Database {
   db.pragma('cache_size = -65536');
   // 256 MB mmap — lets SQLite access pages via mmap instead of read() syscalls
   db.pragma('mmap_size = 268435456');
+  // Keep temp tables / temp indices (ORDER BY, GROUP BY, DISTINCT) in RAM
+  // instead of spilling to disk. Cheap win for read-heavy aggregations.
+  db.pragma('temp_store = MEMORY');
+  // Default WAL autocheckpoint is 1000 pages (~4 MB). For our long-running
+  // daemon the WAL can grow during write bursts; 10000 pages (~40 MB) means
+  // fewer checkpoint interruptions without uncapping WAL growth.
+  db.pragma('wal_autocheckpoint = 10000');
 
   db.exec(DDL);
 
@@ -1759,6 +1766,57 @@ export function initializeDatabase(dbPath: string): Database.Database {
 
   logger.debug({ dbPath, schemaVersion: SCHEMA_VERSION }, 'Database initialized');
   return db;
+}
+
+/**
+ * Close the database after running `PRAGMA optimize` so SQLite can refresh
+ * planner statistics for any tables whose distribution drifted during this
+ * session. Recommended by sqlite.org for long-running connections.
+ *
+ * Safe to call on any connection — `optimize` is a no-op when there is
+ * nothing to refresh, and is wrapped in try/finally so a planner failure
+ * never prevents the close.
+ */
+export function closeDatabase(db: Database.Database): void {
+  try {
+    db.pragma('optimize');
+  } catch (err) {
+    logger.warn({ err }, 'PRAGMA optimize failed during close (non-fatal)');
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Switch the database into bulk-load mode for first-time indexing.
+ *
+ * Trades durability for throughput: fsync is disabled and foreign-key checks
+ * are suspended. Must be paired with {@link disableBulkMode} which restores
+ * the production-safe settings, runs ANALYZE, and truncates the WAL.
+ *
+ * Only call this inside the initial bulk-index phase, never on a live DB
+ * that may be queried by other connections.
+ */
+export function enableBulkMode(db: Database.Database): void {
+  db.pragma('synchronous = OFF');
+  db.pragma('foreign_keys = OFF');
+}
+
+/**
+ * Exit bulk-load mode after first-time indexing finishes. Restores fsync +
+ * foreign keys, populates `sqlite_stat1` via ANALYZE so the planner has real
+ * cardinality data for our queries, then truncates the WAL.
+ */
+export function disableBulkMode(db: Database.Database): void {
+  db.pragma('synchronous = NORMAL');
+  db.pragma('foreign_keys = ON');
+  // Populate sqlite_stat1 so the query planner picks indices using real
+  // cardinality rather than fallback heuristics. One-shot cost; pays off
+  // on every subsequent JOIN-heavy query.
+  db.exec('ANALYZE');
+  // Flush WAL back into the main DB file so the next process opens with a
+  // clean, small WAL instead of inheriting whatever the bulk phase wrote.
+  db.pragma('wal_checkpoint(TRUNCATE)');
 }
 
 function seedDatabase(db: Database.Database): void {
