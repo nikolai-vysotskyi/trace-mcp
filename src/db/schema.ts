@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 28;
+const SCHEMA_VERSION = 29;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -231,6 +231,13 @@ CREATE INDEX IF NOT EXISTS idx_edges_type   ON edges(edge_type_id);
 CREATE INDEX IF NOT EXISTS idx_edges_src_tgt_type ON edges(source_node_id, target_node_id, edge_type_id);
 CREATE INDEX IF NOT EXISTS idx_edges_resolution_tier ON edges(resolution_tier);
 CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
+-- v29: compound covering index for the file-outline hot path:
+--   SELECT id, name, kind, line_start, line_end FROM symbols
+--   WHERE file_id = ? ORDER BY line_start
+-- The single-column idx_symbols_file forces SQLite into USE TEMP B-TREE FOR ORDER BY;
+-- this compound index lets the planner stream rows in line_start order directly.
+-- Mirrored in MIGRATIONS[29] for upgraded DBs.
+CREATE INDEX IF NOT EXISTS idx_symbols_file_line ON symbols(file_id, line_start);
 CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
 CREATE INDEX IF NOT EXISTS idx_symbols_fqn  ON symbols(fqn);
 CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
@@ -1680,6 +1687,17 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
           PRIMARY KEY (task_name, cache_key)
       );
       CREATE INDEX IF NOT EXISTS idx_pass_cache_created ON pass_cache(created_at);
+    `);
+  },
+  29: (db) => {
+    // Compound covering index for the file-outline hot path
+    // (`SELECT id, name, kind, line_start, line_end FROM symbols WHERE file_id = ? ORDER BY line_start`).
+    // Without (file_id, line_start) the planner uses idx_symbols_file for the
+    // predicate and then USE TEMP B-TREE FOR ORDER BY to sort — measurable
+    // overhead on large files. The compound index removes the temp btree.
+    // Mirrored in the top-of-file DDL block for fresh-DB parity.
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_symbols_file_line ON symbols(file_id, line_start);
     `);
   },
 };
