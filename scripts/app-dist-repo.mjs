@@ -19,16 +19,12 @@
 /**
  * Default public distribution repo (owner/name form).
  *
- * PHASE A (current): still points at the core repo, which is where the app
- * binaries live today — this keeps behaviour identical while the env override
- * mechanism is introduced, so it is safe to ship in any release.
- *
- * PHASE C (cutover): flip this to the dedicated public dist repo
- * (`nikolai-vysotskyi/trace-mcp-app-dist`) ONLY after that repo exists and has
- * a populated `releases/latest`. Until then, the env override can be used to
- * test against the dist repo without changing the shipped default.
+ * The app source moved to a separate private repo; its CI publishes the
+ * compiled binaries to this dedicated PUBLIC dist repo, which the core fetches
+ * anonymously. Cutover done once `releases/latest` was populated (v1.41.0).
+ * Override via TRACE_MCP_APP_DIST_REPO for forks/staging/testing.
  */
-export const DEFAULT_APP_DIST_REPO = 'nikolai-vysotskyi/trace-mcp';
+export const DEFAULT_APP_DIST_REPO = 'nikolai-vysotskyi/trace-mcp-app-dist';
 
 const REPO_SLUG_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 
