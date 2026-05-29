@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.41.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.41.0...v1.41.1) (2026-05-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* **app:** remove desktop app from core repo (phase E)
+
+### Tests
+
+* remove orphaned app tests from core (source moved to app repo) ([b910850](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b910850f54e5978927b07df9caaec60588915229))
+
+
+### Chores
+
+* **app:** remove desktop app from core repo (phase E) ([f3b4b0e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f3b4b0ead9c20795ad61c9e65863edb73c48f766))
+* release as 1.41.1 ([462369e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/462369e5d2102e0114ca2e2b9eefc89118d24221))
+
 ## [1.41.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.40.0...v1.41.0) (2026-05-29)
 
 
