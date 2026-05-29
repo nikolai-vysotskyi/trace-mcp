@@ -538,10 +538,21 @@ function EntryRow({
         borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
       }}
     >
-      {/* Collapsed row — clickable */}
-      <button
-        type="button"
+      {/* Collapsed row — clickable. Must NOT be a <button>: the params summary
+          renders clickable file-path <button>s, and a <button> nested inside a
+          <button> is invalid HTML. Chromium reparents the inner button out of
+          the row, desyncing React's DOM refs and crashing react-dom on the next
+          re-render. Use a div with role="button" so the inner buttons are valid. */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => onToggleExpand?.()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleExpand?.();
+          }
+        }}
         className="flex items-start gap-2.5 px-3 py-2 w-full text-left"
         style={{
           background: 'none',
@@ -615,7 +626,7 @@ function EntryRow({
             )}
           </div>
         </div>
-      </button>
+      </div>
 
       {/* Expanded detail */}
       {expanded && (
