@@ -29,6 +29,7 @@ import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
 
+import { getAppDistRepo } from './app-dist-repo.mjs';
 import { APP_NAME, locateInstalledApp } from './locate-app.mjs';
 
 // Resolved at top-level after the platform/no-update gates run. `null` means
@@ -42,7 +43,9 @@ let PENDING_ZIP = '';
 let PENDING_VERSION = '';
 let PENDING_CHECKSUM = '';
 
-const GITHUB_REPO = 'nikolai-vysotskyi/trace-mcp';
+// The compiled app lives in a separate PUBLIC distribution repo (the source
+// is private). See scripts/app-dist-repo.mjs. Overridable via env.
+const GITHUB_REPO = getAppDistRepo();
 
 if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
 
