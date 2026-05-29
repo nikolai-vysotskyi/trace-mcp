@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.41.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.40.0...v1.41.0) (2026-05-29)
+
+
+### Features
+
+* **app:** Activity P2 — keyboard nav, baseline deltas, sparkline zoom, file deep-links ([a0de7b7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a0de7b773ef872406c816af3acc1da4cdbad9470))
+* **install:** fetch desktop app from dedicated public dist repo (phase C) ([c1bbf4d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c1bbf4d7b092d13b72ac89f00f716798589b5c15))
+
+
+### Bug Fixes
+
+* **app:** add ErrorBoundary so one tab crash no longer blanks the whole window ([90961d8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/90961d82e8b1edc3a62dd2a3c7cfdf7670f78b42))
+* **app:** stop Activity feed crashing react-dom via nested &lt;button&gt; ([38d893f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/38d893fc5d51a76590a52fd0f5f3d6c7acb316b8))
+
+
+### Refactoring
+
+* **install:** make app distribution repo configurable (split prep, phase A) ([6bee11b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6bee11b0fcea9eed372990943c2e2f46c1f22462))
+
+
+### Tests
+
+* exclude packages/app from core test runner (app moved to own repo) ([da28bdc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/da28bdc3aebeb169563accd4ead18b23c4f72fe0))
+
 ## [1.40.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.39.4...v1.40.0) (2026-05-28)
 
 
