@@ -364,35 +364,50 @@ function findSpecFiles(
 // HTTP methods that represent real API endpoints (vs CLI, JOB, TOOL, TEST, etc.)
 const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'ANY']);
 
+/**
+ * Compute the path a route is actually *served* at, given the declared URI and
+ * its source file. Laravel registers `routes/api.php` under the `api` prefix
+ * (the framework default), so a `Route::get('/user', ...)` there answers at
+ * `/api/user`. The route extractor stores the raw declared URI (`/user`), so we
+ * apply the `/api` prefix here — this is what a frontend's `$api('/api/user')`
+ * call must match against. Non-api route files (web.php, etc.) are unchanged.
+ */
+function composeServedPath(uri: string, filePath: string): string {
+  const normalized = uri.startsWith('/') ? uri : `/${uri}`;
+  const p = filePath.replace(/\\/g, '/');
+  const isApiRoutes = /\/routes\/api\.php$/.test(p) || /\/routes\/api\//.test(p);
+  if (isApiRoutes && !normalized.startsWith('/api/') && normalized !== '/api') {
+    return `/api${normalized}`;
+  }
+  return normalized;
+}
+
 export function extractRoutesFromDb(dbPath: string, pathPrefix?: string): ParsedContract | null {
   if (!fs.existsSync(dbPath)) return null;
   try {
     const db = new Database(dbPath, { readonly: true });
     try {
-      let rows: Array<{ method: string; uri: string; name: string | null }>;
+      type RouteRow = { method: string; uri: string; name: string | null; path: string };
+      let rows: RouteRow[];
 
       if (pathPrefix) {
         // Normalise: ensure trailing slash so "fair-laravel" doesn't match "fair-laravel-admin"
         const prefix = pathPrefix.endsWith('/') ? pathPrefix : `${pathPrefix}/`;
         rows = db
           .prepare(`
-          SELECT r.method, r.uri, r.name
+          SELECT r.method, r.uri, r.name, f.path AS path
           FROM routes r
           JOIN files f ON r.file_id = f.id
           WHERE f.path LIKE ? OR f.path LIKE ?
           ORDER BY r.uri
         `)
-          .all(`${prefix}%`, `${pathPrefix}`) as Array<{
-          method: string;
-          uri: string;
-          name: string | null;
-        }>;
+          .all(`${prefix}%`, `${pathPrefix}`) as RouteRow[];
       } else {
-        rows = db.prepare('SELECT method, uri, name FROM routes ORDER BY uri').all() as Array<{
-          method: string;
-          uri: string;
-          name: string | null;
-        }>;
+        rows = db
+          .prepare(
+            'SELECT r.method, r.uri, r.name, f.path AS path FROM routes r JOIN files f ON r.file_id = f.id ORDER BY r.uri',
+          )
+          .all() as RouteRow[];
       }
 
       // Filter to HTTP routes only — exclude CLI commands, CI jobs, MCP tools, test routes, etc.
@@ -402,7 +417,7 @@ export function extractRoutesFromDb(dbPath: string, pathPrefix?: string): Parsed
 
       const endpoints: ParsedEndpoint[] = rows.map((r) => ({
         method: r.method === 'ANY' ? null : r.method,
-        path: r.uri.startsWith('/') ? r.uri : `/${r.uri}`,
+        path: composeServedPath(r.uri, r.path),
         operationId: r.name ?? undefined,
       }));
 
