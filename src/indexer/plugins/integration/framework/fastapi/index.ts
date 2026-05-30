@@ -147,7 +147,8 @@ export class FastAPIPlugin implements FrameworkPlugin {
       try {
         const root = tree.rootNode;
 
-        this.extractRoutes(root, source, filePath, result);
+        const routerPrefixes = this.buildRouterPrefixMap(root);
+        this.extractRoutes(root, source, filePath, result, routerPrefixes);
         this.extractRouterMounts(root, source, filePath, result);
       } finally {
         tree.delete();
@@ -178,6 +179,7 @@ export class FastAPIPlugin implements FrameworkPlugin {
     source: string,
     filePath: string,
     result: FileParseResult,
+    routerPrefixes: Map<string, string> = new Map(),
   ): void {
     const decoratedDefs = this.findAllByType(root, 'decorated_definition');
 
@@ -215,8 +217,16 @@ export class FastAPIPlugin implements FrameworkPlugin {
         const args = callNode.childForFieldName('arguments');
         if (!args) continue;
 
-        const uri = this.extractFirstStringArg(args);
-        if (!uri) continue;
+        const rawUri = this.extractFirstStringArg(args);
+        if (!rawUri) continue;
+
+        // Compose the APIRouter(prefix=...) of the decorator object. For
+        // `router = APIRouter(prefix="/users")` + `@router.post("/")`, FastAPI
+        // serves `/users`; without this the route was stored as bare `/` and
+        // get_request_flow("/users") missed it entirely.
+        const objectName = funcRef.childForFieldName('object')?.text;
+        const prefix = objectName ? routerPrefixes.get(objectName) : undefined;
+        const uri = prefix ? this.joinRoutePath(prefix, rawUri) : rawUri;
 
         // Extract response_model keyword argument
         const responseModel = this.extractKeywordArg(args, 'response_model');
@@ -406,6 +416,41 @@ export class FastAPIPlugin implements FrameworkPlugin {
         });
       }
     }
+  }
+
+  /**
+   * Map router variable name → its APIRouter(prefix="...") so route decorators
+   * on that variable can be resolved to their full served path. Scans
+   * `name = APIRouter(prefix="/x")` assignments in the file.
+   */
+  private buildRouterPrefixMap(root: TSNode): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const assign of this.findAllByType(root, 'assignment')) {
+      const left = assign.childForFieldName('left');
+      const right = assign.childForFieldName('right');
+      if (!left || left.type !== 'identifier' || !right || right.type !== 'call') continue;
+
+      const fn = right.childForFieldName('function');
+      const fnText = fn?.text ?? '';
+      // Match `APIRouter(...)` or `fastapi.APIRouter(...)`.
+      if (fnText !== 'APIRouter' && !fnText.endsWith('.APIRouter')) continue;
+
+      const args = right.childForFieldName('arguments');
+      const prefix = args ? this.extractKeywordArg(args, 'prefix') : null;
+      if (prefix) map.set(left.text, prefix);
+    }
+    return map;
+  }
+
+  /**
+   * Join a router prefix and a route path the way FastAPI does, then normalize:
+   * collapse duplicate slashes and drop a lone trailing slash so `/users` and
+   * `/users/{id}` are produced (not `/users/` or `/users//{id}`).
+   */
+  private joinRoutePath(prefix: string, path: string): string {
+    let joined = `${prefix}${path}`.replace(/\/{2,}/g, '/');
+    if (joined.length > 1 && joined.endsWith('/')) joined = joined.slice(0, -1);
+    return joined || '/';
   }
 
   // ─── Tree-sitter helpers ───────────────────────────────────────────
