@@ -21,9 +21,19 @@ import type {
   FrameworkPlugin,
   PluginManifest,
   ProjectContext,
+  RawEdge,
   RawRoute,
+  ResolveContext,
 } from '../../../../../plugin-api/types.js';
 import { escapeRegExp } from '../../../../../utils/security.js';
+import { findEnclosingSymbol, lineOfIndex } from '../../_shared/regex-edges.js';
+
+/**
+ * Matches a FastAPI dependency: `Depends(get_session)` / `Depends(get_db)`,
+ * including the `Annotated[T, Depends(dep)]` form. Captures the dependency
+ * callable's identifier. Calls like `Depends(factory())` or lambdas are skipped.
+ */
+const DEPENDS_RE = /\bDepends\(\s*([A-Za-z_]\w*)\s*\)/g;
 
 /** HTTP methods recognized on FastAPI route decorators. */
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch', 'options', 'head']);
@@ -164,6 +174,82 @@ export class FastAPIPlugin implements FrameworkPlugin {
     }
 
     return ok(result);
+  }
+
+  /**
+   * Pass 2: resolve `Depends(dep)` dependency injection to symbol-level edges.
+   *
+   * The pass-1 `fastapi_depends` edge is metadata-only (no resolvable target),
+   * so a dependency function like `get_session` had zero graph dependents. Here
+   * we have cross-file symbol access: for every `Depends(dep)` site we attach a
+   * `fastapi_depends` edge from the enclosing handler to the resolved dependency
+   * function/class, so it surfaces in get_change_impact, find_usages, and the
+   * call graph. Regex-based (sync) — also catches the `Annotated[..., Depends]`
+   * form the AST pass-1 extractor misses.
+   */
+  resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+    const edges: RawEdge[] = [];
+
+    const pyFiles = ctx.getAllFiles().filter((f) => f.language === 'python');
+    if (pyFiles.length === 0) return ok(edges);
+
+    // Index top-level functions/classes by name for dependency resolution.
+    type Sym = { id: number; symbolId: string; name: string; kind: string };
+    const byName = new Map<string, Sym[]>();
+    const symsByFile = new Map<number, ReturnType<ResolveContext['getSymbolsByFile']>>();
+    for (const f of pyFiles) {
+      const syms = ctx.getSymbolsByFile(f.id);
+      symsByFile.set(f.id, syms);
+      for (const s of syms) {
+        // Top-level only: `file::name#kind` has exactly one `::` separator.
+        if (s.kind !== 'function' && s.kind !== 'class') continue;
+        if (s.symbolId.split('::').length !== 2) continue;
+        const list = byName.get(s.name) ?? [];
+        list.push({ id: s.id, symbolId: s.symbolId, name: s.name, kind: s.kind });
+        byName.set(s.name, list);
+      }
+    }
+
+    for (const f of pyFiles) {
+      const source = ctx.readFile(f.path);
+      if (!source || (!source.includes('Depends') && !source.includes('depends'))) continue;
+      const fileSyms = symsByFile.get(f.id) ?? [];
+
+      DEPENDS_RE.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      // biome-ignore lint/suspicious/noAssignInExpressions: standard regex exec loop
+      while ((m = DEPENDS_RE.exec(source)) !== null) {
+        const depName = m[1];
+        const line = lineOfIndex(source, m.index);
+        const handler = findEnclosingSymbol(fileSyms, line);
+        if (!handler) continue;
+
+        // Resolve the dependency: same-file top-level symbol wins, else an
+        // unambiguous single match across the project (mirrors python-types).
+        const candidates = byName.get(depName);
+        if (!candidates || candidates.length === 0) continue;
+        const sameFile = candidates.find((c) =>
+          fileSyms.some((s) => s.id === c.id && s.symbolId === c.symbolId),
+        );
+        let target: Sym | undefined = sameFile;
+        if (!target) {
+          if (candidates.length === 1) target = candidates[0];
+          else continue; // ambiguous — do not guess
+        }
+        if (target.id === handler.id) continue;
+
+        edges.push({
+          edgeType: 'fastapi_depends',
+          sourceNodeType: 'symbol',
+          sourceRefId: handler.id,
+          targetSymbolId: target.symbolId,
+          metadata: { dependency: depName, handler: handler.name, file: f.path, line },
+          resolution: 'ast_resolved',
+        });
+      }
+    }
+
+    return ok(edges);
   }
 
   /**
