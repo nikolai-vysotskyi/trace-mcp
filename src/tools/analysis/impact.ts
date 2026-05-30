@@ -120,7 +120,7 @@ export interface ChangeImpactResult {
   target: { path: string; symbolId?: string; symbolName?: string; kind?: string };
   summary: ImpactSummary;
   risk: RiskSignals;
-  affectedTests: { total: number; files: string[] };
+  affectedTests: { total: number; files: string[]; truncated?: boolean };
   breakingChanges?: BreakingChange[];
   byModule?: ModuleImpact[];
   byEdgeType?: Record<string, number>;
@@ -137,6 +137,60 @@ export interface ChangeImpactResult {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+// ─── Output-size budget ──────────────────────────────────────────────────────
+// get_change_impact response is consumed by an LLM agent. List-valued fields
+// (affected tests, files per module) are bounded so a large blast radius does
+// not flood the agent context with hundreds of paths — counts stay exact, only
+// the enumerated samples are capped. The earlier uncapped `affectedTests.files`
+// alone could emit ~300 paths (thousands of tokens) on a central symbol.
+const MAX_AFFECTED_TEST_FILES = 25;
+const MAX_MODULE_FILES = 15;
+// Cap on the enumerated `dependents` array. Summary stats (totalAffected,
+// byModule counts, untested ratio, risk) are still computed over the FULL set;
+// only the listed dependents are bounded, ranked by impact, so a central symbol
+// (hundreds of dependents) yields a focused response instead of tens of KB.
+const MAX_EMITTED_DEPENDENTS = 25;
+// Cap on the per-dependent symbol detail list (a file can reference a target
+// from many symbols; the first few, ranked by impact, are enough to act on).
+const MAX_SYMBOLS_PER_DEPENDENT = 4;
+
+/** Impact weight for ranking which dependents to emit when over budget. */
+function dependentWeight(d: EnrichedDependent): number {
+  let w = 0;
+  for (const s of d.symbols ?? []) {
+    if (s.isExported) w += 2;
+    w += Math.min(s.complexity ?? 0, 30) / 10;
+  }
+  if (d.hasTests === false) w += 0.5;
+  return w;
+}
+
+/**
+ * Rank dependents by proximity (shallower depth = more directly impacted) then
+ * by impact weight, cap the list, and trim each dependent's symbol detail.
+ * Returns whether anything was dropped so the caller can flag truncation.
+ */
+function capEmittedDependents(deps: EnrichedDependent[]): {
+  emitted: EnrichedDependent[];
+  truncated: boolean;
+} {
+  let truncated = false;
+  let ranked = deps;
+  if (deps.length > MAX_EMITTED_DEPENDENTS) {
+    truncated = true;
+    ranked = [...deps].sort((a, b) => {
+      if (a.depth !== b.depth) return a.depth - b.depth;
+      return dependentWeight(b) - dependentWeight(a);
+    });
+  }
+  const emitted = ranked.slice(0, MAX_EMITTED_DEPENDENTS).map((d) => {
+    if (!d.symbols || d.symbols.length <= MAX_SYMBOLS_PER_DEPENDENT) return d;
+    truncated = true;
+    return { ...d, symbols: d.symbols.slice(0, MAX_SYMBOLS_PER_DEPENDENT) };
+  });
+  return { emitted, truncated };
+}
 
 function getModule(filePath: string, depth = 2): string {
   const parts = filePath.split('/');
@@ -293,8 +347,15 @@ function findAffectedTests(
     }
   }
 
-  const files = [...seen].sort();
-  return { total: files.length, files };
+  const all = [...seen].sort();
+  // Cap the enumerated list — `total` carries the true count; an agent that
+  // needs the full set can call get_tests_for. Prevents a central symbol's
+  // hundreds of covering tests from dominating the response.
+  return {
+    total: all.length,
+    files: all.slice(0, MAX_AFFECTED_TEST_FILES),
+    truncated: all.length > MAX_AFFECTED_TEST_FILES,
+  };
 }
 
 function collectTestFiles(store: Store, nodeId: number, seen: Set<string>): void {
@@ -558,7 +619,8 @@ export function getChangeImpact(
     .map(([mod, data]) => ({
       module: mod,
       count: data.files.size,
-      files: [...data.files],
+      // `count` is exact; cap the enumerated file list for large modules.
+      files: [...data.files].slice(0, MAX_MODULE_FILES),
       maxDepth: data.maxDepth,
       hasUntested: data.hasUntested,
     }))
@@ -678,6 +740,11 @@ export function getChangeImpact(
   for (const raw of rawDeps) resolutionTiers[raw.resolutionTier]++;
 
   // ── Build result, omitting empty optional sections ──
+  // Enumerate only a bounded, impact-ranked slice of dependents; totalAffected
+  // and all summary stats above remain computed over the full set.
+  const { emitted: emittedDependents, truncated: dependentsTruncated } =
+    capEmittedDependents(dependents);
+
   const result: ChangeImpactResult = {
     target: {
       path: targetPath,
@@ -688,7 +755,7 @@ export function getChangeImpact(
     summary,
     risk,
     affectedTests,
-    dependents,
+    dependents: emittedDependents,
     totalAffected: dependents.length,
     resolution_tiers: resolutionTiers,
   };
@@ -698,7 +765,7 @@ export function getChangeImpact(
   if (Object.keys(byEdgeType).length > 0) result.byEdgeType = byEdgeType;
   if (Object.keys(byDepth).length > 0) result.byDepth = byDepth;
   if (coChangeHidden.length > 0) result.coChangeHidden = coChangeHidden;
-  if (truncated) result.truncated = true;
+  if (truncated || dependentsTruncated) result.truncated = true;
   if (pennant) result.pennant = pennant;
   if (scopedToSymbols) result.scopedToSymbols = scopedToSymbols;
 
