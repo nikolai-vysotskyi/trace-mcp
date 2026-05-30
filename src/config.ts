@@ -717,6 +717,15 @@ const VaultConfigSchema = z
   })
   .prefault({});
 
+/**
+ * Source-file extensions for the directory-rooted default include globs
+ * (`src/`, `lib/`, `app/`, `test/`, `tests/`, `routes/`). Kept language-complete
+ * across the mainstream set trace-mcp has first-class plugins for, so coverage
+ * does not silently depend on which directory a language's code lives in.
+ */
+const SOURCE_EXTS =
+  'ts,tsx,mts,cts,js,jsx,mjs,cjs,py,pyi,go,rs,java,kt,kts,rb,php,vue,svelte,scala,cs,swift,dart,ex,exs,c,h,cc,cpp,hpp,cxx,m,mm';
+
 export const TraceMcpConfigSchema = z.object({
   root: z.string().default('.'),
   db: z
@@ -725,12 +734,22 @@ export const TraceMcpConfigSchema = z.object({
     })
     .prefault({}),
   include: z.array(z.string()).default([
-    'src/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php,vue,svelte}',
-    'lib/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php}',
-    'app/**/*.{ts,tsx,js,jsx,php,rb,vue,svelte}',
-    'test/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php}',
-    'tests/**/*.{ts,tsx,js,jsx,py,go,rs,java,kt,rb,php}',
-    'routes/**/*.{ts,js,php}',
+    // Common source roots — language-complete so a FastAPI/Flask/Django app
+    // under `app/` (or a Go/Rust/Java service) is indexed the same as `src/`.
+    // Previously `app/**` omitted `py` (and go/rs/java/kt), so Python projects
+    // that keep all code under `app/` (the FastAPI convention) indexed nothing.
+    `src/**/*.{${SOURCE_EXTS}}`,
+    `lib/**/*.{${SOURCE_EXTS}}`,
+    `app/**/*.{${SOURCE_EXTS}}`,
+    `test/**/*.{${SOURCE_EXTS}}`,
+    `tests/**/*.{${SOURCE_EXTS}}`,
+    `routes/**/*.{${SOURCE_EXTS}}`,
+    // Python projects frequently place packages at arbitrary roots (a flat
+    // `main.py` + `routers/` + `models/`, or a top-level `<pkg>/` directory)
+    // rather than under src/app/lib. Index every `.py`/`.pyi` outside the
+    // excluded virtualenv/cache dirs so Python coverage does not depend on a
+    // particular layout. Mirrors the existing global markdown glob below.
+    '**/*.{py,pyi}',
     'database/migrations/**/*.php',
     'resources/js/**/*.{vue,ts,tsx,js,jsx}',
     'resources/assets/**/*.{vue,ts,tsx,js,jsx}',
@@ -749,22 +768,35 @@ export const TraceMcpConfigSchema = z.object({
     // Markdown knowledge graph — Obsidian/Logseq/plain MD vaults
     '**/*.{md,mdx,markdown}',
   ]),
-  exclude: z
-    .array(z.string())
-    .default([
-      '**/vendor/**',
-      '**/node_modules/**',
-      '**/.git/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/out/**',
-      '**/storage/**',
-      '**/bootstrap/cache/**',
-      '**/.nuxt/**',
-      '**/.next/**',
-      '**/.env',
-      '**/.env.*',
-    ]),
+  exclude: z.array(z.string()).default([
+    '**/vendor/**',
+    '**/node_modules/**',
+    '**/.git/**',
+    '**/dist/**',
+    '**/build/**',
+    '**/out/**',
+    '**/storage/**',
+    '**/bootstrap/cache/**',
+    '**/.nuxt/**',
+    '**/.next/**',
+    '**/.env',
+    '**/.env.*',
+    // Python virtualenvs, build artifacts, and tool caches. Required so the
+    // global `**/*.{py,pyi}` include does not pull in the entire dependency
+    // tree of a venv (which would dwarf the project's own code).
+    '**/.venv/**',
+    '**/venv/**',
+    '**/.virtualenv/**',
+    '**/site-packages/**',
+    '**/__pycache__/**',
+    '**/.tox/**',
+    '**/.nox/**',
+    '**/.mypy_cache/**',
+    '**/.pytest_cache/**',
+    '**/.ruff_cache/**',
+    '**/.eggs/**',
+    '**/*.egg-info/**',
+  ]),
   ignore: IgnoreConfigSchema,
   frameworks: FrameworkConfigSchema,
   ai: AiConfigSchema,
