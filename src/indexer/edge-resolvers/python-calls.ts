@@ -307,6 +307,17 @@ function resolveCallSite(
     return null;
   }
 
+  // ── 1b. Celery task dispatch: `task.delay(...)` / `task.apply_async(...)` ──
+  // The meaningful call target is the task FUNCTION (the receiver), not the
+  // `delay`/`apply_async` shim method. Only fire when the receiver resolves to a
+  // top-level function, so `some_queue.delay()` on an unrelated object stays
+  // inert. This is what makes a Celery task show up in its dispatchers' call
+  // graph and in get_change_impact for the task.
+  if (receiver && !isSelfCall && CELERY_DISPATCH_METHODS.has(calleeName)) {
+    const taskTarget = resolveTopLevelFunction(receiver, fileSymbols, fileImports, symbolsByFile);
+    if (taskTarget) return taskTarget;
+  }
+
   // ── 2. Bare name call: foo() ──
   if (!receiver) {
     // 2a. Same-file function/class definition
@@ -457,6 +468,36 @@ type SymbolEntry = {
   file_id: number;
   parent_symbol_id: string | null;
 };
+
+/**
+ * Celery dispatch shim methods: `task.delay(...)` and `task.apply_async(...)`.
+ * A call to one of these on a task function is, for graph purposes, a call to
+ * the task itself.
+ */
+const CELERY_DISPATCH_METHODS = new Set(['delay', 'apply_async']);
+
+/** Resolve a bare name to a top-level function — same file first, then imports. */
+function resolveTopLevelFunction(
+  name: string,
+  fileSymbols: SymbolEntry[],
+  fileImports: Map<string, number[]> | undefined,
+  symbolsByFile: Map<number, SymbolEntry[]>,
+): SymbolEntry | null {
+  const sameFile = fileSymbols.find(
+    (s) => s.name === name && s.kind === 'function' && s.parent_symbol_id == null,
+  );
+  if (sameFile) return sameFile;
+  const importedFrom = fileImports?.get(name);
+  if (importedFrom) {
+    for (const tfid of importedFrom) {
+      const match = (symbolsByFile.get(tfid) ?? []).find(
+        (s) => s.name === name && s.kind === 'function' && s.parent_symbol_id == null,
+      );
+      if (match) return match;
+    }
+  }
+  return null;
+}
 
 /**
  * Resolve f-string pattern: getattr(self, f"handle_{x}") → all methods starting with "handle_"
