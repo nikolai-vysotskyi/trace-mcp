@@ -105,3 +105,53 @@ app.include_router(router, prefix='/api/v1')
     expect(mountEdge).toBeDefined();
   });
 });
+
+describe('FastAPIPlugin — APIRouter(prefix=...) composition', () => {
+  // Regression: a router declared with a prefix must compose that prefix into
+  // its routes. Previously @router.post("/") was stored as bare "/", so
+  // get_request_flow("/users") could never find it.
+  const code = `
+from fastapi import APIRouter
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+
+@router.post("/")
+def create_user():
+    pass
+
+
+@router.get("/{user_id}")
+def get_user(user_id: int):
+    pass
+`;
+
+  it('prepends the router prefix to route URIs', async () => {
+    const plugin = new FastAPIPlugin();
+    const result = await plugin.extractNodes!('users.py', Buffer.from(code), 'python');
+    expect(result.isOk()).toBe(true);
+    const routes = result._unsafeUnwrap().routes ?? [];
+    const uris = routes.map((r) => `${r.method} ${r.uri}`);
+
+    expect(uris).toContain('POST /users');
+    expect(uris).toContain('GET /users/{user_id}');
+    // The bare, un-prefixed paths must NOT be present.
+    expect(uris).not.toContain('POST /');
+    expect(uris).not.toContain('GET /{user_id}');
+  });
+
+  it('leaves routes on a prefix-less app/router unchanged', async () => {
+    const plain = `
+from fastapi import FastAPI
+app = FastAPI()
+
+@app.get("/health")
+def health():
+    pass
+`;
+    const plugin = new FastAPIPlugin();
+    const result = await plugin.extractNodes!('main.py', Buffer.from(plain), 'python');
+    const routes = result._unsafeUnwrap().routes ?? [];
+    expect(routes.map((r) => r.uri)).toContain('/health');
+  });
+});
