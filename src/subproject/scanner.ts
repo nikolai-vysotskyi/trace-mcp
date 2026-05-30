@@ -44,13 +44,28 @@ const CALL_PATTERNS: CallPattern[] = [
   },
   // Nuxt composables: useFetch / useLazyFetch / useAsyncData / useLazyAsyncData / useApiFetch(Mounted)
   // Also catches project-specific wrappers that match `use*Fetch*` / `use*Api*`.
+  // URL char class allows `${...}` so template-literal paths
+  // (`useApiFetch(`/api/items/${id}`)`) are captured, then normalized downstream.
   {
     name: 'nuxt-composable',
     regex:
-      /\buse(?:Lazy)?(?:Async)?(?:[A-Z]\w*)?(?:Fetch|Api)(?:Mounted)?\s*(?:<[^>]*>)?\s*\(\s*['"`]([^'"`\s${}]+)['"`]/g,
+      /\buse(?:Lazy)?(?:Async)?(?:[A-Z]\w*)?(?:Fetch|Api)(?:Mounted)?\s*(?:<[^>]*>)?\s*\(\s*['"`]([^'"`\s]+)['"`]/g,
     extractMethod: () => null,
     extractUrl: (m) => m[1],
     confidence: 0.7,
+  },
+  // Nuxt $fetch.create plugin clients and other injected HTTP helpers:
+  //   $api('/login'), $api.get('/users'), $apiFetch('/x'), $http.post('/y'), $axios.get('/z')
+  // The leading `$` + an api/http/axios/client-flavoured name disambiguates from
+  // i18n/event helpers ($t, $emit). `$fetch` is already covered by the fetch
+  // pattern above. Optional `.method` is captured for precision.
+  {
+    name: 'nuxt-plugin-client',
+    regex:
+      /\$(?:api|http|axios|client|backend|apiFetch|httpClient)\w*\s*(?:\.\s*(get|post|put|patch|delete|head|options))?\s*\(\s*['"`]([^'"`\s]+)['"`]/gi,
+    extractMethod: (m) => (m[1] ? m[1].toUpperCase() : null),
+    extractUrl: (m) => m[2],
+    confidence: 0.75,
   },
   // Next.js Route Handlers / server actions — fetch is covered above. Also `NextResponse.rewrite('/url')`.
   {
@@ -328,16 +343,41 @@ function walkAndInvoke(
   }
 }
 
-function scanFileContent(filePath: string, content: string, results: ScannedClientCall[]): void {
-  const _lines = content.split('\n');
+/**
+ * Normalize a captured client URL into a route-matchable pattern.
+ * - Template interpolation `${expr}` → `{*}` (`/api/items/${id}` → `/api/items/{*}`).
+ * - String concatenation (`'/api/items/' + id`) → the literal ends at the quote and
+ *   the next non-space source char is `+`; the dynamic tail is represented as `{*}`.
+ * This lets dynamic frontend calls match parameterized backend routes
+ * (`/api/items/{id}`) instead of being dropped or mismatched.
+ */
+function normalizeClientUrl(url: string, concatenated: boolean): string {
+  let s = url.replace(/\$\{[^}]*\}/g, '{*}');
+  if (concatenated) {
+    s = s.endsWith('/') ? `${s}{*}` : `${s}/{*}`;
+  }
+  return s;
+}
 
+function scanFileContent(filePath: string, content: string, results: ScannedClientCall[]): void {
   for (const pattern of CALL_PATTERNS) {
     // Reset regex state
     pattern.regex.lastIndex = 0;
     let match: RegExpExecArray | null;
 
     while ((match = pattern.regex.exec(content)) !== null) {
-      const url = pattern.extractUrl(match);
+      const rawUrl = pattern.extractUrl(match);
+      if (!rawUrl) continue;
+
+      // Detect `'/literal/' + expr` concatenation: peek at the source right after
+      // the matched literal for a `+` operator.
+      const tail = content.slice(match.index + match[0].length, match.index + match[0].length + 4);
+      const concatenated =
+        /^\s*\+/.test(tail) && pattern.name !== 'grpc-call' && pattern.name !== 'graphql-operation';
+      const url =
+        pattern.name === 'grpc-call' || pattern.name === 'graphql-operation'
+          ? rawUrl
+          : normalizeClientUrl(rawUrl, concatenated);
       if (!url) continue;
 
       // Skip obviously internal paths and relative imports
