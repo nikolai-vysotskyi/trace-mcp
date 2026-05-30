@@ -93,6 +93,13 @@ export function getModelContext(
     return err(notFound(`file for model:${modelName}`));
   }
 
+  // Python models (SQLModel / Pydantic / SQLAlchemy) are symbol-based but use a
+  // completely different shape than Eloquent — fields are typed class attributes
+  // and relationships are type references, not migration tables / has_many edges.
+  if (file.language === 'python') {
+    return buildPythonModelContext(store, modelSymbol, file);
+  }
+
   const relationships = getRelationships(store, modelSymbol);
   const schema = getModelSchema(store, modelName);
   const relatedControllers = getRelatedByRole(store, modelSymbol, 'controller');
@@ -160,6 +167,111 @@ function buildOrmModelContext(
     relatedRequests: [],
     ormMetadata: metadata,
   });
+}
+
+/**
+ * Build model context for a Python model class (SQLModel / Pydantic /
+ * SQLAlchemy). Fields come from the class's typed attribute symbols; related
+ * models come from the symbol-level type-reference / inheritance edges. Without
+ * this, get_model_context fell through to the Eloquent path and returned empty
+ * schema + relationships for every Python model.
+ */
+function buildPythonModelContext(
+  store: Store,
+  modelSymbol: SymbolRow,
+  file: { path: string },
+): TraceMcpResult<ModelContextResult> {
+  // Fields: typed attributes are extracted as property/constant child symbols.
+  const children = store.db
+    .prepare(`SELECT name, kind, signature FROM symbols WHERE parent_id = ? ORDER BY line_start`)
+    .all(modelSymbol.id) as Array<{ name: string; kind: string; signature: string | null }>;
+  const columns = children
+    .filter((c) => c.kind === 'property' || c.kind === 'constant')
+    .map((c) => ({
+      name: c.name,
+      kind: c.kind,
+      ...(c.signature ? { signature: c.signature } : {}),
+    }));
+  const schema: ModelSchema[] =
+    columns.length > 0
+      ? [{ tableName: modelNameToTable(modelSymbol.name), columns, operation: 'model' }]
+      : [];
+
+  // ORM hint from class bases / pydantic metadata.
+  let orm: string | undefined;
+  try {
+    const meta = modelSymbol.metadata
+      ? (JSON.parse(modelSymbol.metadata) as Record<string, unknown>)
+      : {};
+    const bases = Array.isArray(meta.bases) ? (meta.bases as string[]) : [];
+    if (bases.some((b) => b === 'SQLModel' || b.endsWith('.SQLModel'))) orm = 'sqlmodel';
+    else if (meta.pydantic || bases.some((b) => b === 'BaseModel' || b.endsWith('.BaseModel')))
+      orm = 'pydantic';
+    else if (bases.some((b) => b === 'Base' || b.endsWith('.Base') || b.includes('declarative')))
+      orm = 'sqlalchemy';
+  } catch {
+    /* ignore */
+  }
+
+  return ok({
+    model: {
+      name: modelSymbol.name,
+      fqn: modelSymbol.fqn ?? modelSymbol.name,
+      symbolId: modelSymbol.symbol_id,
+      filePath: file.path,
+      orm,
+    },
+    relationships: getPythonModelRelationships(store, modelSymbol),
+    schema,
+    relatedControllers: [],
+    relatedRequests: [],
+  });
+}
+
+/**
+ * Related models for a Python model: other indexed classes reachable via
+ * type-reference / inheritance edges (in both directions). External bases like
+ * SQLModel/BaseModel are not indexed, so they naturally drop out.
+ */
+function getPythonModelRelationships(store: Store, modelSymbol: SymbolRow): ModelRelationship[] {
+  const rels: ModelRelationship[] = [];
+  const nodeId = store.getNodeId('symbol', modelSymbol.id);
+  if (!nodeId) return rels;
+
+  const REL_EDGES = new Set(['references', 'py_inherits', 'extends']);
+  const out = store.getOutgoingEdges(nodeId).filter((e) => REL_EDGES.has(e.edge_type_name));
+  const inc = store.getIncomingEdges(nodeId).filter((e) => REL_EDGES.has(e.edge_type_name));
+
+  const nodeRefs = store.getNodeRefsBatch([
+    ...out.map((e) => e.target_node_id),
+    ...inc.map((e) => e.source_node_id),
+  ]);
+  const symRefIds = [...nodeRefs.values()]
+    .filter((r) => r.nodeType === 'symbol')
+    .map((r) => r.refId);
+  const symMap = symRefIds.length > 0 ? store.getSymbolsByIds(symRefIds) : new Map();
+
+  const seen = new Set<string>();
+  const add = (edgeType: string, otherNodeId: number, inverse: boolean) => {
+    const ref = nodeRefs.get(otherNodeId);
+    if (!ref || ref.nodeType !== 'symbol') return;
+    const sym = symMap.get(ref.refId);
+    if (!sym || sym.kind !== 'class' || sym.id === modelSymbol.id) return;
+    const relType =
+      edgeType === 'references' ? (inverse ? 'referenced_by' : 'references') : edgeType;
+    const key = `${relType}:${sym.symbol_id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    rels.push({
+      type: relType,
+      relatedModel: sym.fqn ?? sym.name,
+      relatedSymbolId: sym.symbol_id,
+    });
+  };
+
+  for (const e of out) add(e.edge_type_name, e.target_node_id, false);
+  for (const e of inc) add(e.edge_type_name, e.source_node_id, true);
+  return rels;
 }
 
 function getRelationships(store: Store, modelSymbol: SymbolRow): ModelRelationship[] {
