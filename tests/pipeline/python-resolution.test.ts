@@ -453,4 +453,73 @@ describe('Python resolution pipeline', () => {
     const callees = callEdges.map((e) => e.callee);
     expect(callees).toContain('validate');
   });
+
+  // ─── Type-reference edges (blast-radius coverage) ───────────
+  //
+  // Regression for the "Python blast radius < 30%" report: a function that
+  // takes or returns a class must produce a symbol-level `references` edge to
+  // that class, so changing the class surfaces the function in get_change_impact.
+  // These were previously emitted as unresolved `py_param_type`/`py_return_type`
+  // self-loops that contributed nothing to impact analysis.
+
+  function typeReferenceEdges(): { source: string; target: string }[] {
+    return db
+      .prepare(`
+      SELECT s1.name AS source, s2.name AS target
+      FROM edges e
+      JOIN nodes n1 ON e.source_node_id = n1.id
+      JOIN nodes n2 ON e.target_node_id = n2.id
+      JOIN symbols s1 ON n1.node_type = 'symbol' AND n1.ref_id = s1.id
+      JOIN symbols s2 ON n2.node_type = 'symbol' AND n2.ref_id = s2.id
+      JOIN edge_types et ON e.edge_type_id = et.id
+      WHERE et.name = 'references'
+    `)
+      .all() as { source: string; target: string }[];
+  }
+
+  it('creates references edge from a function return type to the class', () => {
+    // user_views.get_user(user_id: int) -> User  (User imported via re-export)
+    const pairs = typeReferenceEdges().map((e) => `${e.source} → ${e.target}`);
+    expect(pairs).toContain('get_user → User');
+  });
+
+  it('creates references edge from a function parameter type to the class', () => {
+    // helpers.verify_and_save(user: User, ...) — param annotation
+    const pairs = typeReferenceEdges().map((e) => `${e.source} → ${e.target}`);
+    expect(pairs).toContain('verify_and_save → User');
+  });
+
+  it('resolves type references across re-export boundaries to the real class', () => {
+    // `from ..models import User` resolves to models/__init__.py, but the edge
+    // must land on the actual User class in models/user.py, not the package.
+    const target = db
+      .prepare(`
+      SELECT s2.fqn AS fqn
+      FROM edges e
+      JOIN nodes n1 ON e.source_node_id = n1.id
+      JOIN nodes n2 ON e.target_node_id = n2.id
+      JOIN symbols s1 ON n1.node_type = 'symbol' AND n1.ref_id = s1.id
+      JOIN symbols s2 ON n2.node_type = 'symbol' AND n2.ref_id = s2.id
+      JOIN edge_types et ON e.edge_type_id = et.id
+      WHERE et.name = 'references' AND s1.name = 'get_user' AND s2.name = 'User'
+    `)
+      .get() as { fqn: string } | undefined;
+    expect(target).toBeDefined();
+    expect(target!.fqn).toContain('user');
+  });
+
+  it('does not persist unresolved type-annotation edges as self-loops', () => {
+    const selfLoops = (
+      db
+        .prepare(`
+      SELECT COUNT(*) AS cnt
+      FROM edges e
+      JOIN edge_types et ON e.edge_type_id = et.id
+      WHERE et.name IN ('py_param_type', 'py_return_type')
+        AND e.source_node_id = e.target_node_id
+    `)
+        .get() as { cnt: number }
+    ).cnt;
+    expect(selfLoops).toBe(0);
+  });
 });
