@@ -161,6 +161,142 @@ export function extractTypeAnnotationEdges(funcNode: TSNode, symbolId: string): 
   return edges;
 }
 
+// ─── Type reference name extraction (for symbol-level `references` edges) ─────
+
+/**
+ * Typing/builtin identifiers that are not user-defined types and should never
+ * become `references` edges. Keeping this list tight means an unknown name is
+ * treated as a candidate reference and simply dropped later if it resolves to
+ * no symbol — that is cheaper than missing a real type.
+ */
+const TYPE_NAME_NOISE = new Set<string>([
+  // typing constructs
+  'Optional',
+  'Union',
+  'List',
+  'Dict',
+  'Tuple',
+  'Set',
+  'FrozenSet',
+  'Sequence',
+  'MutableSequence',
+  'Mapping',
+  'MutableMapping',
+  'Iterable',
+  'Iterator',
+  'Generator',
+  'AsyncIterator',
+  'AsyncGenerator',
+  'AsyncIterable',
+  'Awaitable',
+  'Coroutine',
+  'Callable',
+  'Type',
+  'ClassVar',
+  'Final',
+  'Annotated',
+  'Literal',
+  'TypeVar',
+  'Any',
+  'NoReturn',
+  'Never',
+  'Self',
+  'TypedDict',
+  'Protocol',
+  'Generic',
+  'Concatenate',
+  'ParamSpec',
+  'Required',
+  'NotRequired',
+  'Unpack',
+  // builtins / primitives that are never user types worth an edge
+  'None',
+  'True',
+  'False',
+  'str',
+  'int',
+  'float',
+  'bool',
+  'bytes',
+  'bytearray',
+  'complex',
+  'object',
+  'dict',
+  'list',
+  'tuple',
+  'set',
+  'frozenset',
+  'type',
+  'bytes',
+  'memoryview',
+  'range',
+]);
+
+/**
+ * Extract candidate user-defined type names from a Python type-annotation
+ * string. Handles unions (`User | None`), subscripts (`Optional[User]`,
+ * `list[User]`, `Dict[str, User]`), forward references (`"Order"`), and dotted
+ * names (`models.User` → `User`). Typing constructs and primitives are filtered
+ * out; whatever remains is a candidate reference that the resolver will match
+ * against indexed class symbols (and silently drop if there is no match).
+ */
+export function extractPythonTypeNames(annotation: string): string[] {
+  if (!annotation) return [];
+  // Strip string-quote characters used by forward references.
+  const cleaned = annotation.replace(/['"]/g, '');
+  const out: string[] = [];
+  const idRe = /[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*/g;
+  let m: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: standard regex exec loop
+  while ((m = idRe.exec(cleaned)) !== null) {
+    let id = m[0];
+    if (id.includes('.')) id = id.split('.').pop() as string;
+    if (!id || TYPE_NAME_NOISE.has(id)) continue;
+    out.push(id);
+  }
+  return [...new Set(out)];
+}
+
+/** Collect type-reference names from a function/method's parameter + return annotations. */
+export function collectFunctionTypeRefs(funcNode: TSNode): string[] {
+  const refs = new Set<string>();
+  const params = funcNode.childForFieldName('parameters');
+  if (params) {
+    for (const param of params.namedChildren) {
+      const typeNode = param.childForFieldName('type');
+      if (typeNode) for (const n of extractPythonTypeNames(typeNode.text)) refs.add(n);
+    }
+  }
+  const returnType = funcNode.childForFieldName('return_type');
+  if (returnType) for (const n of extractPythonTypeNames(returnType.text)) refs.add(n);
+  return [...refs];
+}
+
+/**
+ * Collect type-reference names from a class body's annotated attributes
+ * (`field: SomeType`, `field: Optional[Other] = ...`). This is what lets a
+ * change to `User` surface an `Order` model that declares `user: Optional[User]`.
+ */
+export function collectClassTypeRefs(classNode: TSNode): string[] {
+  const refs = new Set<string>();
+  const body = classNode.childForFieldName('body');
+  if (!body) return [];
+  for (const child of body.namedChildren) {
+    if (child.type !== 'expression_statement') continue;
+    const expr = child.namedChildren[0];
+    if (!expr) continue;
+    // Annotated attribute `field: SomeType [= value]`. tree-sitter-python
+    // exposes the annotation via the `type` field on the assignment node;
+    // some grammar versions wrap it in a `type` node instead, so handle both.
+    const annotationNode =
+      expr.childForFieldName('type') ?? (expr.type === 'type' ? expr.namedChildren[1] : undefined);
+    if (annotationNode) {
+      for (const n of extractPythonTypeNames(annotationNode.text)) refs.add(n);
+    }
+  }
+  return [...refs];
+}
+
 // ─── Decorator edges ─────────────────────────────────────────
 
 /** Emit py_uses_decorator edges for a symbol with decorators. */

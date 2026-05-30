@@ -23,11 +23,21 @@ import { resolvePhpImportEdges as _resolvePhpImports } from './edge-resolvers/ph
 import { resolvePythonCallEdges as _resolvePyCalls } from './edge-resolvers/python-calls.js';
 import { resolvePythonHeritageEdges as _resolvePyHeritage } from './edge-resolvers/python-heritage.js';
 import { resolvePythonImportEdges as _resolvePyImports } from './edge-resolvers/python-imports.js';
+import { resolvePythonTypeEdges as _resolvePyTypes } from './edge-resolvers/python-types.js';
 import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
 import { resolveTypeScriptCallEdges as _resolveTsCalls } from './edge-resolvers/typescript-calls.js';
 import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/typescript-types.js';
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
+
+/**
+ * Edge types whose targets live in metadata and are resolved later by a
+ * dedicated resolver. When `storeRawEdges` cannot resolve a graph target for
+ * one of these, it must drop the edge rather than fall back to a source→source
+ * self-loop. Currently the Python type-annotation carriers, which are turned
+ * into proper `references` edges by `resolvePythonTypeEdges`.
+ */
+const SELF_LOOP_SUPPRESSED_EDGE_TYPES = new Set<string>(['py_param_type', 'py_return_type']);
 
 /**
  * Wrap a resolver call with debug-level timing. Off at info log level;
@@ -137,6 +147,11 @@ export class EdgeResolver {
   /** Pass 2g: Python call edges (function/method calls → definitions). */
   resolvePythonCallEdges(scope?: ChangeScope): void {
     timed('py-calls', () => _resolvePyCalls(this.state, scope));
+  }
+
+  /** Pass 2g1b: Python type-reference edges (param/return/attribute annotations → class symbols). */
+  resolvePythonTypeEdges(scope?: ChangeScope): void {
+    timed('py-types', () => _resolvePyTypes(this.state, scope));
   }
 
   /** Pass 2g2: PHP call/heritage edges (method calls, extends, implements, uses_trait). */
@@ -271,7 +286,14 @@ export class EdgeResolver {
     for (const edge of edges) {
       const src = this.resolveNodeId(edge, symbolNodeCache, typeRefCache);
       if (src == null) continue;
-      const tgt = this.resolveTargetNodeId(edge, symbolNodeCache, typeRefCache) ?? src;
+      const resolvedTgt = this.resolveTargetNodeId(edge, symbolNodeCache, typeRefCache);
+      // Annotation-only edge types (Python type annotations) carry their target
+      // in metadata, to be resolved later into `references` edges by a dedicated
+      // resolver. They never have a graph target here — persisting them as
+      // source→source self-loops just pollutes the graph (inflating byEdgeType,
+      // PageRank, and impact counts) with edges no consumer reads. Skip them.
+      if (resolvedTgt == null && SELF_LOOP_SUPPRESSED_EDGE_TYPES.has(edge.edgeType)) continue;
+      const tgt = resolvedTgt ?? src;
       resolved.push({ src, tgt, edge });
       if (allNodeIds) {
         allNodeIds.add(src);

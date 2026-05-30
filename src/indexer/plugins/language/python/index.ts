@@ -27,6 +27,8 @@ import {
   extractCallSites,
   extractClassBases,
   extractClassMethods,
+  collectClassTypeRefs,
+  collectFunctionTypeRefs,
   extractConditionalImports,
   extractDecoratorEdges,
   extractDecorators,
@@ -308,6 +310,12 @@ export class PythonLanguagePlugin implements LanguagePlugin {
       if (callSites.length > 0) meta.callSites = callSites;
     }
 
+    // Type-reference names (param + return annotations) — consumed by the
+    // Python type-edge resolver to build symbol-level `references` edges so a
+    // change to `User` surfaces every function that takes/returns a `User`.
+    const typeRefs = collectFunctionTypeRefs(node);
+    if (typeRefs.length > 0) meta.typeRefs = typeRefs;
+
     symbols.push({
       symbolId,
       name,
@@ -397,6 +405,12 @@ export class PythonLanguagePlugin implements LanguagePlugin {
 
     // Typing patterns
     detectTypingPatterns(bases, meta);
+
+    // Type-reference names from annotated class attributes (`user: Optional[User]`)
+    // — feeds the Python type-edge resolver so relationships between models
+    // (e.g. Order → User) appear in the dependency graph and blast radius.
+    const classTypeRefs = collectClassTypeRefs(node);
+    if (classTypeRefs.length > 0) meta.typeRefs = classTypeRefs;
 
     symbols.push({
       symbolId,

@@ -786,6 +786,9 @@ export class IndexingPipeline {
     edgeResolver.resolveMemberOfEdges(scope);
     edgeResolver.resolvePythonHeritageEdges(scope);
     edgeResolver.resolvePythonCallEdges(scope);
+    // After Python imports + calls: turn type annotations into `references`
+    // edges. Runs before file projection so they reach the file-level graph too.
+    edgeResolver.resolvePythonTypeEdges(scope);
     edgeResolver.resolveTestCoversEdges(scope);
     edgeResolver.resolveMarkdownWikilinkEdges(scope);
     edgeResolver.resolveMarkdownTagEdges(scope);
