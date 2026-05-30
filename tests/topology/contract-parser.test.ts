@@ -250,6 +250,29 @@ describe('extractRoutesFromDb', () => {
     expect(methods).not.toContain('TEST');
   });
 
+  it('prefixes routes/api.php routes with /api (Laravel served path), leaves web.php as-is', () => {
+    const db = new Database(dbPath);
+    db.exec(`
+      INSERT INTO files (id, path) VALUES (3, 'app/routes/api.php');
+      INSERT INTO routes (file_id, method, uri, name) VALUES (3, 'GET', '/home', 'home');
+      INSERT INTO routes (file_id, method, uri, name) VALUES (3, 'POST', 'video', NULL);
+      INSERT INTO routes (file_id, method, uri, name) VALUES (3, 'GET', '/api/already', NULL);
+    `);
+    db.close();
+
+    const contract = extractRoutesFromDb(dbPath);
+    const paths = contract!.endpoints.map((e) => e.path);
+    // api.php routes are served under /api
+    expect(paths).toContain('/api/home');
+    expect(paths).toContain('/api/video'); // leading slash normalized + prefixed
+    // already-prefixed paths are not double-prefixed
+    expect(paths).toContain('/api/already');
+    expect(paths).not.toContain('/api/api/already');
+    // web.php routes are unchanged
+    expect(paths).toContain('/users');
+    expect(paths).not.toContain('/api/users');
+  });
+
   it('returns null when only non-HTTP routes exist', () => {
     // Remove HTTP routes
     const db = new Database(dbPath);
