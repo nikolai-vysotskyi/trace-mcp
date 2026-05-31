@@ -1004,6 +1004,33 @@ export class IndexingPipeline {
       onlyFiles: true,
     });
 
+    // Monorepo / folder-of-projects: the directory-rooted include globs
+    // (src/**, app/**, routes/**, ...) only match at the container root, so
+    // nested subprojects are missed (e.g. `the/15carats/15carats-laravel/routes`).
+    // When workspaces are detected, also discover files with those patterns
+    // anchored to each workspace. Global `**/...` patterns already span the whole
+    // tree, so only re-anchor the directory-rooted ones. This is deterministic
+    // and complete — unlike the entries===0 deep-glob fallback below, which never
+    // fires when a root-level file (a stray README, a `**/*.md`) matched first.
+    if (this.workspaces.length > 0) {
+      const rooted = this.config.include.filter((p) => !p.startsWith('**/'));
+      if (rooted.length > 0) {
+        const wsPatterns = this.workspaces.flatMap((ws) => rooted.map((p) => `${ws.path}/${p}`));
+        const wsEntries = await fg(wsPatterns, {
+          cwd: this.rootPath,
+          ignore,
+          dot: false,
+          absolute: false,
+          onlyFiles: true,
+        });
+        if (wsEntries.length > 0) {
+          const merged = new Set(entries);
+          for (const e of wsEntries) merged.add(e);
+          entries = [...merged];
+        }
+      }
+    }
+
     // Workspace/monorepo fallback: if nothing matched, all code is nested deeper
     // (e.g. root/project/service/src/**). Re-try with **/<pattern> prefixed globs.
     if (entries.length === 0) {
