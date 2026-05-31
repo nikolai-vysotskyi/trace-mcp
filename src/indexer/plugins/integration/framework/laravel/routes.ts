@@ -68,10 +68,124 @@ export function extractRoutes(source: string, filePath: string): RouteExtraction
   // Extract top-level resource routes
   extractResourceRoutes(source, useMap, routes, {});
 
+  // Inline-chained + closure routes: `Route::middleware([...])->post('/x', fn)`,
+  // `Route::get('/y', fn)`, `Route::prefix('p')->get('/z', [C::class,'m'])`. The
+  // controller-centric extractors above miss closure handlers and any route
+  // where the HTTP method isn't directly after `Route::` — extremely common in
+  // real Laravel API files. Registering them is what lets a frontend call match.
+  extractInlineRoutes(source, useMap, routes, {});
+
   // Apply middleware from Route::middleware(...)->group(...) blocks
   applyMiddlewareGroups(source, routes);
 
-  return { routes, warnings };
+  // Dedupe by (method, uri): the extractors above intentionally overlap; merge
+  // duplicates, preferring a resolved controller and unioning middleware.
+  return { routes: dedupeRoutes(routes), warnings };
+}
+
+/**
+ * Extract routes where the HTTP method is reached through a chain
+ * (`Route::middleware([...])->prefix('x')->get('/uri', target)`) or where the
+ * handler is a closure (`Route::get('/uri', function () { ... })`). Additive and
+ * deduped against the controller-centric extractors.
+ */
+function extractInlineRoutes(
+  source: string,
+  useMap: Map<string, string>,
+  routes: RawRoute[],
+  ctx: GroupContext,
+): void {
+  const methodPattern = HTTP_METHODS.join('|');
+  // Optional leading chain of middleware/prefix/name/domain/etc., then a method.
+  const regex = new RegExp(
+    `Route::((?:(?:middleware|prefix|name|domain|scopeBindings|withoutMiddleware|as|where|whereNumber|whereUuid)\\s*\\([^)]*\\)\\s*->\\s*)*)(${methodPattern})\\s*\\(\\s*['"]([^'"]+)['"]([^;]*);`,
+    'g',
+  );
+
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(source)) !== null) {
+    const lead = match[1] ?? '';
+    const method = match[2].toUpperCase();
+    let uri = match[3];
+    const rest = match[4] ?? '';
+
+    // Inline prefix in the leading chain (rare but valid), composed onto ctx.
+    const inlinePrefix = lead.match(/prefix\s*\(\s*['"]([^'"]+)['"]/)?.[1];
+    let prefix = ctx.prefix;
+    if (inlinePrefix) prefix = prefix ? `${prefix}/${inlinePrefix}` : inlinePrefix;
+    uri = applyPrefix(uri, prefix);
+
+    const controllerSymbolId = resolveTargetController(rest, useMap, ctx);
+
+    const chainMiddleware = [...parseLeadMiddleware(lead), ...extractChainedMiddleware(rest)];
+    const middleware = mergeMiddleware(ctx.middleware, chainMiddleware);
+    const name = parseLeadName(lead) ?? extractChainedName(rest) ?? undefined;
+
+    routes.push({
+      method,
+      uri,
+      name,
+      controllerSymbolId,
+      middleware: middleware.length > 0 ? middleware : undefined,
+    });
+  }
+}
+
+/** Resolve the controller target of a route's second argument (the text after the URI). */
+function resolveTargetController(
+  rest: string,
+  useMap: Map<string, string>,
+  ctx: GroupContext,
+): string | undefined {
+  // [Controller::class, 'method']
+  let m = rest.match(/^\s*,\s*\[\s*([\w\\]+::class)\s*,\s*['"]([^'"]+)['"]\s*\]/);
+  if (m) return `${resolveClass(m[1], useMap, ctx.namespace)}::${m[2]}`;
+  // 'Controller@method'
+  m = rest.match(/^\s*,\s*['"]([^'"]+@[^'"]+)['"]/);
+  if (m) {
+    const [c, a] = m[1].split('@');
+    return `${resolveClass(c, useMap, ctx.namespace)}::${a}`;
+  }
+  // Invokable: Controller::class
+  m = rest.match(/^\s*,\s*([\w\\]+::class)\s*\)/);
+  if (m) return `${resolveClass(m[1], useMap, ctx.namespace)}::__invoke`;
+  // Short action string inside a Route::controller() group
+  m = rest.match(/^\s*,\s*['"]([^'"@/]+)['"]/);
+  if (m && ctx.controller) return `${ctx.controller}::${m[1]}`;
+  // Closure or unresolved — endpoint still registered, no controller symbol.
+  return undefined;
+}
+
+/** Extract the first middleware(...) call from a leading chain string. */
+function parseLeadMiddleware(lead: string): string[] {
+  const m = lead.match(/middleware\s*\(\s*(['"[][^)]*)\)/);
+  return m ? parseMiddlewareArg(m[1]) : [];
+}
+
+/** Extract a name(...) / as(...) call from a leading chain string. */
+function parseLeadName(lead: string): string | null {
+  const m = lead.match(/(?:name|as)\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+  return m ? m[1] : null;
+}
+
+/** Dedupe routes by (method, uri), merging controller + middleware + name. */
+function dedupeRoutes(routes: RawRoute[]): RawRoute[] {
+  const byKey = new Map<string, RawRoute>();
+  for (const r of routes) {
+    const key = `${r.method} ${r.uri}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...r });
+      continue;
+    }
+    if (!existing.controllerSymbolId && r.controllerSymbolId) {
+      existing.controllerSymbolId = r.controllerSymbolId;
+    }
+    if (!existing.name && r.name) existing.name = r.name;
+    const merged = mergeMiddleware(existing.middleware, r.middleware);
+    existing.middleware = merged.length > 0 ? merged : undefined;
+  }
+  return [...byKey.values()];
 }
 
 /** Build a map of short class name -> FQN from `use` statements. */
