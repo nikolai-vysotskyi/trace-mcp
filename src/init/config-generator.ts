@@ -31,11 +31,15 @@ export function generateConfig(detection: DetectionResult): TraceMcpConfig {
     }
   }
 
-  // Ultimate fallback: broad patterns
+  // Ultimate fallback: no framework/language preset matched (e.g. a monorepo
+  // CONTAINER whose root is not itself a framework, or an unrecognized stack).
+  // Omit include/exclude entirely so the comprehensive schema defaults apply
+  // (src/lib/app/test/tests/routes/** language-complete + pages/server/components
+  // for nested frontends + proper junk excludes). The old minimal
+  // [src,lib,app]/**/* fallback lacked routes/pages/server, which silently broke
+  // route extraction for nested subprojects of a container.
   if (include.size === 0) {
-    include.add('src/**/*');
-    include.add('lib/**/*');
-    include.add('app/**/*');
+    return TraceMcpConfigSchema.parse({ root: '.' });
   }
 
   const raw = {
