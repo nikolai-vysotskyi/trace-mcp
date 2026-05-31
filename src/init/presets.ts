@@ -9,7 +9,27 @@ interface IncludePreset {
 }
 
 /** Base excludes applied to all projects. */
-export const BASE_EXCLUDE = ['node_modules/**', '.git/**', '**/.env', '**/.env.*'];
+export const BASE_EXCLUDE = [
+  'node_modules/**',
+  '.git/**',
+  '**/.env',
+  '**/.env.*',
+  // Universal build / dependency / cache junk — excluded for EVERY generated
+  // config, not only recognized frameworks. Without these a non-framework or
+  // monorepo-container root indexes vendor/ (Laravel), .nuxt/, dist/, venvs, etc.
+  '**/vendor/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/out/**',
+  '**/storage/**',
+  '**/bootstrap/cache/**',
+  '**/.nuxt/**',
+  '**/.next/**',
+  '**/.venv/**',
+  '**/venv/**',
+  '**/site-packages/**',
+  '**/__pycache__/**',
+];
 
 /** Framework-specific presets. Keys match plugin manifest names. */
 export const FRAMEWORK_PRESETS: Record<string, IncludePreset> = {
