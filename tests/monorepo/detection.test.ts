@@ -116,4 +116,37 @@ describe('detectWorkspaces', () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.name).toBe('@pnpm/web');
   });
+
+  it('detects implicit workspaces under a vestigial root manifest (folder of projects)', () => {
+    // Regression: a container like `the/` has a stray root package.json (a lone
+    // build-tool dependency) that declares no workspaces. The nested front+back
+    // projects must still be detected so per-workspace framework detection fires.
+    writeJson(path.join(tmpDir, 'package.json'), { dependencies: { tinymce: '^6.0.0' } });
+    writeJson(path.join(tmpDir, '15carats/15carats-front/package.json'), { name: 'front' });
+    writeJson(path.join(tmpDir, '15carats/15carats-laravel/composer.json'), { name: 'a/b' });
+    writeJson(path.join(tmpDir, 'fair/fair-front/package.json'), { name: 'front' });
+    writeJson(path.join(tmpDir, 'fair/fair-laravel/composer.json'), { name: 'c/d' });
+
+    const paths = detectWorkspaces(tmpDir)
+      .map((w) => w.path)
+      .sort();
+    expect(paths).toEqual([
+      '15carats/15carats-front',
+      '15carats/15carats-laravel',
+      'fair/fair-front',
+      'fair/fair-laravel',
+    ]);
+  });
+
+  it('does NOT split a self-contained app that has a single nested package', () => {
+    // A real app with a root manifest and one stray nested manifest must stay a
+    // single project (not be treated as a folder-of-projects).
+    writeJson(path.join(tmpDir, 'package.json'), {
+      name: 'my-app',
+      dependencies: { nuxt: '^3' },
+    });
+    writeJson(path.join(tmpDir, 'tooling/scripts/package.json'), { name: 'scripts' });
+
+    expect(detectWorkspaces(tmpDir)).toEqual([]);
+  });
 });
