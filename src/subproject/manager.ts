@@ -369,6 +369,10 @@ export class SubprojectManager {
       const calls = this.topoStore.getClientCallsByRepo(repo.id);
       for (const call of calls) {
         if (!call.target_repo_id) continue;
+        // The subproject graph is about CROSS-repo edges. A call that resolves to
+        // an endpoint in its own repo (e.g. a Nuxt page hitting its own server/api
+        // route) is intra-app, not a cross-project dependency — skip it.
+        if (call.target_repo_id === repo.id) continue;
         const targetRepo = repos.find((r) => r.id === call.target_repo_id);
         if (!targetRepo) continue;
 
