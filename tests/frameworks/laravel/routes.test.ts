@@ -76,4 +76,51 @@ describe('Laravel route extraction', () => {
       expect(grouped.length).toBeGreaterThan(0);
     });
   });
+
+  describe('inline-chained and closure routes', () => {
+    const source = `<?php
+use App\\Http\\Controllers\\DashController;
+
+Route::get('/closure', function () { return response()->json([]); });
+
+Route::middleware(['auth:sanctum'])->post('/toggle-lenta', function (Request $request) {
+    return $request->user();
+});
+
+Route::middleware('auth')->prefix('admin')->get('/dashboard', [DashController::class, 'index']);
+
+Route::middleware(['auth:sanctum', 'verified'])->post('/favorited/media/{media}', function (Request $request, Media $media) {
+    return $media;
+})->name('media.fav');
+`;
+    const { routes } = extractRoutes(source, 'routes/api.php');
+
+    it('extracts closure routes (no controller, endpoint still registered)', () => {
+      const closure = routes.find((r) => r.uri === '/closure' && r.method === 'GET');
+      expect(closure).toBeDefined();
+      expect(closure!.controllerSymbolId).toBeUndefined();
+    });
+
+    it('extracts inline-chained closure routes with middleware', () => {
+      const toggle = routes.find((r) => r.uri === '/toggle-lenta' && r.method === 'POST');
+      expect(toggle).toBeDefined();
+      expect(toggle!.middleware).toContain('auth:sanctum');
+    });
+
+    it('composes an inline prefix(...) into the URI and resolves the controller', () => {
+      const dash = routes.find((r) => r.uri === '/admin/dashboard' && r.method === 'GET');
+      expect(dash).toBeDefined();
+      expect(dash!.controllerSymbolId).toContain('DashController');
+      expect(dash!.controllerSymbolId).toContain('index');
+      expect(dash!.middleware).toContain('auth');
+    });
+
+    it('registers a parameterized closure endpoint (method + uri) for matching', () => {
+      // The endpoint itself must be registered so a frontend call can match it;
+      // a trailing ->name() after a multi-line closure body is best-effort.
+      const fav = routes.find((r) => r.uri === '/favorited/media/{media}' && r.method === 'POST');
+      expect(fav).toBeDefined();
+      expect(fav!.middleware).toContain('auth:sanctum');
+    });
+  });
 });
