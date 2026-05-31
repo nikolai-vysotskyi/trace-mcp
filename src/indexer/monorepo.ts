@@ -26,23 +26,38 @@ export function detectWorkspaces(rootPath: string): WorkspaceInfo[] {
   const composerResult = detectComposerWorkspaces(rootPath);
   if (composerResult.length > 0) return composerResult;
 
-  // 4. Implicit workspace detection: if root has no manifest files, scan 1-2
-  //    levels deep for directories with package.json or composer.json.
-  //    Covers the common "folder of projects" layout (e.g. ~/projects/the/).
+  // 4. Implicit workspace detection: scan 1-2 levels deep for directories with
+  //    package.json or composer.json. Covers the "folder of projects" layout
+  //    (e.g. ~/projects/the/ holding 15carats/{front,laravel}, fair/{...}, ...).
+  const implicitResult = detectImplicitWorkspaces(rootPath);
+  if (implicitResult.length === 0) return [];
+
   const hasRootManifest =
     fs.existsSync(path.join(rootPath, 'package.json')) ||
     fs.existsSync(path.join(rootPath, 'composer.json')) ||
     fs.existsSync(path.join(rootPath, 'pnpm-workspace.yaml'));
 
+  // No root manifest → unambiguously a folder of projects.
   if (!hasRootManifest) {
-    const implicitResult = detectImplicitWorkspaces(rootPath);
-    if (implicitResult.length > 0) {
-      logger.info(
-        { count: implicitResult.length },
-        'Detected implicit workspaces from nested manifest files',
-      );
-      return implicitResult;
-    }
+    logger.info(
+      { count: implicitResult.length },
+      'Detected implicit workspaces from nested manifest files',
+    );
+    return implicitResult;
+  }
+
+  // Root HAS a manifest but declared no workspaces (we got here past the
+  // pnpm/npm/composer detectors). That is either a self-contained app with a
+  // stray nested package, or a container whose root manifest is vestigial
+  // (e.g. a lone `dependencies` for a build tool). Only treat it as a
+  // folder-of-projects when there are MULTIPLE independent nested projects —
+  // a single nested manifest is far more likely to be a sub-package of the app.
+  if (implicitResult.length >= 2) {
+    logger.info(
+      { count: implicitResult.length },
+      'Detected implicit workspaces under a root manifest that declares none',
+    );
+    return implicitResult;
   }
 
   return [];
@@ -152,6 +167,10 @@ const SKIP_DIRS = new Set([
   '__pycache__',
   '.next',
   '.nuxt',
+  // Laravel Nova local components carry their own composer.json but are part of
+  // the host app, never a separate workspace. (Real apps register them as
+  // composer path repositories, which the explicit detector handles first.)
+  'nova-components',
 ]);
 
 /**
