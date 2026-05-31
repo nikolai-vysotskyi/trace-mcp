@@ -372,6 +372,24 @@ const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', '
  * apply the `/api` prefix here — this is what a frontend's `$api('/api/user')`
  * call must match against. Non-api route files (web.php, etc.) are unchanged.
  */
+/**
+ * True when a route originates from a Vue Router page declaration — a Nuxt/Vue
+ * file-based `pages/*.vue`, a `.vue` component route, or `router.options.*`.
+ * These are browser PAGES, never cross-service API endpoints, so they must not
+ * pollute the topology endpoint set (otherwise a backend that merely builds a
+ * frontend page URL — an email link, a payment redirect, a sitemap entry —
+ * looks like it "calls" the frontend, producing backwards edges).
+ * Nuxt `server/api/**` and `server/routes/**` are real API endpoints and kept.
+ */
+function isFrontendPageRoute(filePath: string): boolean {
+  const p = filePath.replace(/\\/g, '/');
+  if (/(^|\/)server\//.test(p)) return false; // Nuxt BFF API — keep
+  if (/\.vue$/.test(p)) return true;
+  if (/(^|\/)router\.options\.[cm]?[jt]s$/.test(p)) return true;
+  if (/(^|\/)pages\//.test(p)) return true;
+  return false;
+}
+
 function composeServedPath(uri: string, filePath: string): string {
   const normalized = uri.startsWith('/') ? uri : `/${uri}`;
   const p = filePath.replace(/\\/g, '/');
@@ -410,8 +428,10 @@ export function extractRoutesFromDb(dbPath: string, pathPrefix?: string): Parsed
           .all() as RouteRow[];
       }
 
-      // Filter to HTTP routes only — exclude CLI commands, CI jobs, MCP tools, test routes, etc.
-      rows = rows.filter((r) => HTTP_METHODS.has(r.method));
+      // Filter to HTTP routes only — exclude CLI commands, CI jobs, MCP tools,
+      // test routes, etc. Also drop Vue Router page routes: they are browser
+      // pages, not cross-service API endpoints.
+      rows = rows.filter((r) => HTTP_METHODS.has(r.method) && !isFrontendPageRoute(r.path));
 
       if (rows.length === 0) return null;
 

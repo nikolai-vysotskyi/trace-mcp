@@ -273,6 +273,27 @@ describe('extractRoutesFromDb', () => {
     expect(paths).not.toContain('/api/users');
   });
 
+  it('excludes Vue Router page routes but keeps Nuxt server/api endpoints', () => {
+    const db = new Database(dbPath);
+    db.exec(`
+      INSERT INTO files (id, path) VALUES (4, 'app/pages/about.vue');
+      INSERT INTO files (id, path) VALUES (5, 'app/router.options.ts');
+      INSERT INTO files (id, path) VALUES (6, 'server/api/catalog.get.ts');
+      INSERT INTO routes (file_id, method, uri, name) VALUES (4, 'GET', '/about', NULL);
+      INSERT INTO routes (file_id, method, uri, name) VALUES (5, 'GET', '/category/:slug', NULL);
+      INSERT INTO routes (file_id, method, uri, name) VALUES (6, 'GET', '/api/catalog', NULL);
+    `);
+    db.close();
+
+    const contract = extractRoutesFromDb(dbPath);
+    const paths = contract!.endpoints.map((e) => e.path);
+    // Browser page routes are not cross-service API endpoints.
+    expect(paths).not.toContain('/about');
+    expect(paths).not.toContain('/category/:slug');
+    // Nuxt server/api routes ARE real API endpoints.
+    expect(paths).toContain('/api/catalog');
+  });
+
   it('returns null when only non-HTTP routes exist', () => {
     // Remove HTTP routes
     const db = new Database(dbPath);
