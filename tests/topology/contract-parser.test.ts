@@ -273,6 +273,18 @@ describe('extractRoutesFromDb', () => {
     expect(paths).not.toContain('/api/users');
   });
 
+  it('prefixes a repo-relative routes/api.php (standalone-indexed service)', () => {
+    const db = new Database(dbPath);
+    db.exec(`
+      INSERT INTO files (id, path) VALUES (7, 'routes/api.php');
+      INSERT INTO routes (file_id, method, uri, name) VALUES (7, 'GET', '/widgets', NULL);
+    `);
+    db.close();
+    const paths = extractRoutesFromDb(dbPath)!.endpoints.map((e) => e.path);
+    // The (^|/) anchor must fire even with no leading directory in the path.
+    expect(paths).toContain('/api/widgets');
+  });
+
   it('excludes Vue Router page routes but keeps Nuxt server/api endpoints', () => {
     const db = new Database(dbPath);
     db.exec(`
