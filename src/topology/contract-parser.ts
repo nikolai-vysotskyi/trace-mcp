@@ -393,7 +393,13 @@ function isFrontendPageRoute(filePath: string): boolean {
 function composeServedPath(uri: string, filePath: string): string {
   const normalized = uri.startsWith('/') ? uri : `/${uri}`;
   const p = filePath.replace(/\\/g, '/');
-  const isApiRoutes = /\/routes\/api\.php$/.test(p) || /\/routes\/api\//.test(p);
+  // Match `routes/api.php` (or `routes/api/*`) whether the path is repo-relative
+  // (`routes/api.php`, from a standalone service index) or nested
+  // (`fair/fair-laravel/routes/api.php`, from a container index). The leading
+  // `(^|\/)` is essential — without it standalone-indexed services (the
+  // recommended per-subproject flow) never got the `/api` prefix and only
+  // matched frontend calls via the lossy endsWith fallback.
+  const isApiRoutes = /(^|\/)routes\/api\.php$/.test(p) || /(^|\/)routes\/api\//.test(p);
   if (isApiRoutes && !normalized.startsWith('/api/') && normalized !== '/api') {
     return `/api${normalized}`;
   }
