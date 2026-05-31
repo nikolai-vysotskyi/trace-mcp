@@ -302,6 +302,21 @@ export function scanEndpointLiterals(
   return results;
 }
 
+/**
+ * Server-side declaration/view/admin files whose path-literals are route
+ * DEFINITIONS (or rendered views / admin-panel internals), never cross-service
+ * API client calls. Excluded so a backend's own `routes/api.php`, Blade views,
+ * or Nova components don't masquerade as clients of another service.
+ */
+function isCrossServiceNoiseFile(relPath: string): boolean {
+  const p = relPath.replace(/\\/g, '/');
+  if (/\.blade\.php$/.test(p)) return true;
+  if (/(^|\/)routes\/[^/]+\.php$/.test(p)) return true;
+  if (/(^|\/)nova-components\//.test(p)) return true;
+  if (/(^|\/)database\/(migrations|seeders|factories)\//.test(p)) return true;
+  return false;
+}
+
 function walkRepo(repoRoot: string, onFile: (relPath: string, content: string) => void): void {
   walkAndInvoke(repoRoot, repoRoot, onFile, 0);
 }
@@ -333,8 +348,13 @@ function walkAndInvoke(
       !EXCLUDE_FILES.has(entry.name)
     ) {
       try {
-        const content = fs.readFileSync(fullPath, 'utf-8');
         const relPath = path.relative(repoRoot, fullPath);
+        // Skip server-side declaration/view/admin files: their path literals are
+        // route DEFINITIONS (or Blade views / Nova admin), not cross-service API
+        // CALLS. Scanning them produced spurious backwards edges (a Laravel
+        // backend "calling" a frontend's page routes).
+        if (isCrossServiceNoiseFile(relPath)) continue;
+        const content = fs.readFileSync(fullPath, 'utf-8');
         onFile(relPath, content);
       } catch {
         // skip unreadable files
