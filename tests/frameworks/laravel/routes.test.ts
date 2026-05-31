@@ -123,4 +123,48 @@ Route::middleware(['auth:sanctum', 'verified'])->post('/favorited/media/{media}'
       expect(fav!.middleware).toContain('auth:sanctum');
     });
   });
+
+  describe('group prefix composition', () => {
+    it('composes a chained ->prefix()->group() onto inner routes (incl. closures)', () => {
+      const source = `<?php
+Route::middleware(['auth:sanctum', 'verified'])->prefix('account/bride')->group(function () {
+    Route::get('/favorite/articles', function () { return []; });
+    Route::post('/update', [App\\Http\\Controllers\\BrideController::class, 'update']);
+});`;
+      const { routes } = extractRoutes(source, 'routes/api.php');
+      const fav = routes.find((r) => r.uri === '/account/bride/favorite/articles');
+      expect(fav).toBeDefined();
+      expect(fav!.method).toBe('GET');
+      expect(fav!.middleware).toEqual(expect.arrayContaining(['auth:sanctum', 'verified']));
+      const upd = routes.find((r) => r.uri === '/account/bride/update' && r.method === 'POST');
+      expect(upd).toBeDefined();
+      expect(upd!.controllerSymbolId).toContain('update');
+      // The bare, un-prefixed paths must NOT exist.
+      expect(routes.some((r) => r.uri === '/favorite/articles')).toBe(false);
+    });
+
+    it('composes an array-syntax Route::group([prefix,middleware], fn)', () => {
+      const source = `<?php
+Route::group(['prefix' => 'admin', 'middleware' => ['auth', 'can:admin']], function () {
+    Route::get('/stats', [App\\Http\\Controllers\\AdminController::class, 'stats']);
+});`;
+      const { routes } = extractRoutes(source, 'routes/web.php');
+      const stats = routes.find((r) => r.uri === '/admin/stats');
+      expect(stats).toBeDefined();
+      expect(stats!.middleware).toEqual(expect.arrayContaining(['auth', 'can:admin']));
+    });
+
+    it('accumulates nested group prefixes', () => {
+      const source = `<?php
+Route::prefix('api/v1')->group(function () {
+    Route::prefix('users')->group(function () {
+        Route::get('/{id}/posts', [App\\Http\\Controllers\\PostController::class, 'index']);
+    });
+});`;
+      const { routes } = extractRoutes(source, 'routes/web.php');
+      expect(routes.some((r) => r.uri === '/api/v1/users/{id}/posts' && r.method === 'GET')).toBe(
+        true,
+      );
+    });
+  });
 });
