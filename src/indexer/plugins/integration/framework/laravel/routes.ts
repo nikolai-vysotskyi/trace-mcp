@@ -53,34 +53,36 @@ interface GroupContext {
  * Handles all Laravel route definition patterns from L6 to L13.
  */
 export function extractRoutes(source: string, filePath: string): RouteExtractionResult {
+  void filePath; // served-path `/api` prefixing for api.php is applied in the topology layer
   const routes: RawRoute[] = [];
-  const warnings: string[] = [];
-
-  // Extract use statements for class resolution
   const useMap = buildUseMap(source);
+  // Single recursive, group-aware pass. Route groups — chained
+  // (`Route::prefix('p')->middleware([...])->group(fn)`) or array
+  // (`Route::group(['prefix'=>'p',...], fn)`) — carry prefix / middleware /
+  // namespace / controller context down to the routes they wrap, with arbitrary
+  // nesting. Group bodies are masked out of each scope so a route is processed
+  // exactly once with the correct accumulated prefix; dedupeRoutes then merges
+  // the intentional overlap between the leaf extractors.
+  walkScope(source, useMap, routes, {});
+  return { routes: dedupeRoutes(routes), warnings: [] };
+}
 
-  // Process groups recursively, then top-level routes
-  processRouteGroups(source, useMap, routes, {});
-
-  // Extract top-level simple routes (not inside any group we've already processed)
-  extractSimpleRoutes(source, useMap, routes, {});
-
-  // Extract top-level resource routes
-  extractResourceRoutes(source, useMap, routes, {});
-
-  // Inline-chained + closure routes: `Route::middleware([...])->post('/x', fn)`,
-  // `Route::get('/y', fn)`, `Route::prefix('p')->get('/z', [C::class,'m'])`. The
-  // controller-centric extractors above miss closure handlers and any route
-  // where the HTTP method isn't directly after `Route::` — extremely common in
-  // real Laravel API files. Registering them is what lets a frontend call match.
-  extractInlineRoutes(source, useMap, routes, {});
-
-  // Apply middleware from Route::middleware(...)->group(...) blocks
-  applyMiddlewareGroups(source, routes);
-
-  // Dedupe by (method, uri): the extractors above intentionally overlap; merge
-  // duplicates, preferring a resolved controller and unioning middleware.
-  return { routes: dedupeRoutes(routes), warnings };
+/**
+ * Extract every route inside a source scope under an accumulated group context,
+ * after recursing into (and masking out) any nested `->group()` blocks.
+ */
+function walkScope(
+  scope: string,
+  useMap: Map<string, string>,
+  routes: RawRoute[],
+  ctx: GroupContext,
+): void {
+  const masked = maskAndRecurseGroups(scope, useMap, routes, ctx);
+  // Controller groups: inner routes use the short `Route::get('/x', 'action')` form.
+  if (ctx.controller) extractControllerGroupRoutes(masked, ctx.controller, ctx, routes);
+  extractSimpleRoutes(masked, useMap, routes, ctx);
+  extractResourceRoutes(masked, useMap, routes, ctx);
+  extractInlineRoutes(masked, useMap, routes, ctx);
 }
 
 /**
@@ -236,116 +238,111 @@ function resolveClass(ref: string, useMap: Map<string, string>, namespace?: stri
   return ref;
 }
 
-/**
- * Process Route::group() wrappers that carry context (namespace, prefix, middleware, controller).
- *
- * Matches patterns like:
- * - Route::namespace('Admin')->prefix('admin')->group(function () { ... })
- * - Route::controller(UserController::class)->group(function () { ... })
- * - Route::middleware(['auth'])->prefix('api')->group(function () { ... })
- */
-function processRouteGroups(
-  source: string,
-  useMap: Map<string, string>,
-  routes: RawRoute[],
-  parentCtx: GroupContext,
-): void {
-  // Match Route:: chains ending with ->group(function ... { ... })
-  // We use a regex that captures the chain before group() and then find the matching body
-  const _groupStartRegex =
-    /Route::((?:namespace|controller|prefix|middleware|name)\s*\([^)]*\)\s*->\s*)*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
+// Chained group header: `Route::prefix('p')->middleware([...])->...->group(fn|arrow {`.
+// Each chain call's args use `[^)]*`, which tolerates a middleware ARRAY literal
+// (`middleware(['a','b'])`) since arrays contain no `)`.
+const GROUP_CHAIN_RE =
+  /Route::((?:(?:namespace|prefix|middleware|controller|name|domain|scopeBindings|withoutMiddleware|as|where|whereNumber|whereUuid)\s*\([^)]*\)\s*->\s*)+)group\s*\(\s*(?:function\s*\([^)]*\)\s*(?:use\s*\([^)]*\)\s*)?|\([^)]*\)\s*=>\s*)\{/g;
 
-  // Simpler approach: find specific group patterns
-  // 1. Route::namespace('X')->...->group(function () { ... })
-  extractNamespaceGroups(source, useMap, routes, parentCtx);
+// Array-syntax group: `Route::group(['prefix'=>'p','middleware'=>['a','b']], fn {`.
+// The array capture allows one level of nested `[...]` (the middleware array).
+const GROUP_ARRAY_RE =
+  /Route::group\s*\(\s*(\[(?:[^[\]]|\[[^\]]*\])*\])\s*,\s*(?:function\s*\([^)]*\)\s*(?:use\s*\([^)]*\)\s*)?|\([^)]*\)\s*=>\s*)\{/g;
 
-  // 2. Route::controller(X::class)->group(function () { ... })
-  extractControllerGroups(source, useMap, routes, parentCtx);
+interface GroupHeader {
+  start: number;
+  bodyStart: number; // index just after the opening `{`
+  kind: 'chain' | 'array';
+  spec: string; // chain string (chain) or the `[...]` array-args literal (array)
+}
+
+/** Find the earliest `->group(... {` header (chain or array) in `scope`, or null. */
+function findNextGroupHeader(scope: string): GroupHeader | null {
+  let best: GroupHeader | null = null;
+  for (const [re, kind] of [
+    [GROUP_CHAIN_RE, 'chain'],
+    [GROUP_ARRAY_RE, 'array'],
+  ] as const) {
+    re.lastIndex = 0;
+    const m = re.exec(scope);
+    if (m && (best === null || m.index < best.start)) {
+      best = { start: m.index, bodyStart: m.index + m[0].length, kind, spec: m[1] ?? '' };
+    }
+  }
+  return best;
+}
+
+/** Replace [start,end) with spaces, preserving length/offsets. */
+function blankSpan(s: string, start: number, end: number): string {
+  return s.slice(0, start) + ' '.repeat(end - start) + s.slice(end);
 }
 
 /**
- * Extract Route::namespace('Admin')->...->group(function () { ... })
+ * Process every `->group()` block in `scope`: recurse into its body with the
+ * merged context, then blank the whole group statement out so the leaf
+ * extractors don't re-process those routes (which would lose the group prefix).
+ * Returns the masked scope.
  */
-function extractNamespaceGroups(
-  source: string,
+function maskAndRecurseGroups(
+  scope: string,
   useMap: Map<string, string>,
   routes: RawRoute[],
-  parentCtx: GroupContext,
-): void {
-  const regex =
-    /Route::namespace\s*\(\s*['"]([^'"]+)['"]\s*\)((?:\s*->\s*(?:prefix|middleware|name)\s*\([^)]*\))*)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
+  ctx: GroupContext,
+): string {
+  let working = scope;
+  for (let guard = 0; guard < 10_000; guard++) {
+    const header = findNextGroupHeader(working);
+    if (!header) break;
 
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(source)) !== null) {
-    const ns = match[1];
-    const chainStr = match[2] || '';
-    const bodyStart = match.index + match[0].length;
-    const body = extractGroupBody(source, bodyStart);
-    if (!body) continue;
-
-    const ctx: GroupContext = {
-      ...parentCtx,
-      namespace: parentCtx.namespace ? `${parentCtx.namespace}\\${ns}` : ns,
-    };
-
-    // Extract prefix from chain
-    const prefixMatch = chainStr.match(/prefix\s*\(\s*['"]([^'"]+)['"]\s*\)/);
-    if (prefixMatch) {
-      ctx.prefix = parentCtx.prefix ? `${parentCtx.prefix}/${prefixMatch[1]}` : prefixMatch[1];
+    const body = extractGroupBody(working, header.bodyStart);
+    if (body === null) {
+      // Unbalanced braces — blank just the header so we still make progress.
+      working = blankSpan(working, header.start, header.bodyStart);
+      continue;
     }
-
-    // Extract middleware from chain
-    const mwMatch = chainStr.match(/middleware\s*\(\s*['"]([^'"]+)['"]\s*\)/);
-    if (mwMatch) {
-      ctx.middleware = [...(parentCtx.middleware ?? []), mwMatch[1]];
-    }
-
-    // Parse routes inside the group body
-    extractSimpleRoutes(body, useMap, routes, ctx);
-    extractResourceRoutes(body, useMap, routes, ctx);
+    const spanEnd = header.bodyStart + body.length + 1; // past the matching `}`
+    walkScope(body, useMap, routes, mergeGroupContext(ctx, header, useMap));
+    working = blankSpan(working, header.start, spanEnd);
   }
+  return working;
 }
 
-/**
- * Extract Route::controller(X::class)->group(function () { ... })
- * Laravel 9+ pattern where method routes only need the action name.
- */
-function extractControllerGroups(
-  source: string,
+/** Merge a group header's prefix/middleware/namespace/controller onto the parent context. */
+function mergeGroupContext(
+  parent: GroupContext,
+  header: GroupHeader,
   useMap: Map<string, string>,
-  routes: RawRoute[],
-  parentCtx: GroupContext,
-): void {
-  const regex =
-    /Route::controller\s*\(\s*([\w\\]+::class)\s*\)((?:\s*->\s*(?:prefix|middleware|name)\s*\([^)]*\))*)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
+): GroupContext {
+  const ctx: GroupContext = { ...parent };
+  let prefix: string | undefined;
+  let namespace: string | undefined;
+  let controller: string | undefined;
+  let middleware: string[] = [];
 
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(source)) !== null) {
-    const controllerFqn = resolveClass(match[1], useMap, parentCtx.namespace);
-    const chainStr = match[2] || '';
-    const bodyStart = match.index + match[0].length;
-    const body = extractGroupBody(source, bodyStart);
-    if (!body) continue;
-
-    const ctx: GroupContext = {
-      ...parentCtx,
-      controller: controllerFqn,
-    };
-
-    // Extract prefix/middleware from chain
-    const prefixMatch = chainStr.match(/prefix\s*\(\s*['"]([^'"]+)['"]\s*\)/);
-    if (prefixMatch) {
-      ctx.prefix = parentCtx.prefix ? `${parentCtx.prefix}/${prefixMatch[1]}` : prefixMatch[1];
-    }
-    const mwMatch = chainStr.match(/middleware\s*\(\s*['"]([^'"]+)['"]\s*\)/);
-    if (mwMatch) {
-      ctx.middleware = [...(parentCtx.middleware ?? []), mwMatch[1]];
-    }
-
-    // Inside controller groups, routes use short syntax:
-    // Route::get('/users', 'index')
-    extractControllerGroupRoutes(body, controllerFqn, ctx, routes);
+  if (header.kind === 'array') {
+    const a = header.spec;
+    prefix = a.match(/['"]prefix['"]\s*=>\s*['"]([^'"]+)['"]/)?.[1];
+    namespace = a.match(/['"]namespace['"]\s*=>\s*['"]([^'"]+)['"]/)?.[1];
+    controller = a.match(/['"]controller['"]\s*=>\s*([\w\\]+::class)/)?.[1];
+    const mw = a.match(/['"]middleware['"]\s*=>\s*(\[[^\]]*\]|['"][^'"]+['"])/);
+    if (mw) middleware = parseMiddlewareArg(mw[1]);
+  } else {
+    const chain = header.spec;
+    prefix = chain.match(/prefix\s*\(\s*['"]([^'"]+)['"]\s*\)/)?.[1];
+    namespace = chain.match(/namespace\s*\(\s*['"]([^'"]+)['"]\s*\)/)?.[1];
+    controller = chain.match(/controller\s*\(\s*([\w\\]+::class)\s*\)/)?.[1];
+    middleware = parseLeadMiddleware(chain);
   }
+
+  if (prefix) {
+    const p = prefix.replace(/^\/+|\/+$/g, '');
+    if (p) ctx.prefix = parent.prefix ? `${parent.prefix}/${p}` : p;
+  }
+  if (namespace) ctx.namespace = parent.namespace ? `${parent.namespace}\\${namespace}` : namespace;
+  if (middleware.length > 0) ctx.middleware = mergeMiddleware(parent.middleware, middleware);
+  if (controller) ctx.controller = resolveClass(controller, useMap, ctx.namespace);
+
+  return ctx;
 }
 
 /**
@@ -600,35 +597,6 @@ function extractChainedMiddleware(chain: string): string[] {
   // Single string: 'auth'
   const single = arg.match(/['"]([^'"]+)['"]/);
   return single ? [single[1]] : [];
-}
-
-/** Apply middleware from Route::middleware(...)->group(...) wrappers to already-extracted routes. */
-function applyMiddlewareGroups(source: string, routes: RawRoute[]): void {
-  // Match: Route::middleware('auth:sanctum')->group(function () { ... });
-  // Also: Route::middleware(['auth', 'verified'])->group(function () { ... });
-  const groupRegex =
-    /Route::middleware\s*\(\s*([['""][^)]*?)\s*\)\s*->\s*group\s*\(\s*function\s*\([^)]*\)\s*\{/g;
-
-  let match: RegExpExecArray | null;
-  while ((match = groupRegex.exec(source)) !== null) {
-    const mwArg = match[1];
-    const groupMiddleware = parseMiddlewareArg(mwArg);
-    const bodyStart = match.index + match[0].length;
-    const body = extractGroupBody(source, bodyStart);
-    if (!body) continue;
-
-    // Find routes defined inside this group by matching their URIs in the body
-    for (const route of routes) {
-      if (body.includes(route.uri)) {
-        // Add group middleware, avoiding duplicates
-        const existing = route.middleware ?? [];
-        const toAdd = groupMiddleware.filter((m) => !existing.includes(m));
-        if (toAdd.length > 0) {
-          route.middleware = [...toAdd, ...existing];
-        }
-      }
-    }
-  }
 }
 
 /** Parse a middleware argument which can be 'name', "name", or ['a', 'b']. */

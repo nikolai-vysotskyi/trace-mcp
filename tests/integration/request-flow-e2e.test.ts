@@ -68,10 +68,12 @@ describe('get_request_flow end-to-end (laravel-10)', () => {
     // Route step
     expect(stepTypes).toContain('route');
 
-    // Should have middleware 'auth'
+    // Should have an auth-family middleware. The laravel-10 fixture defines
+    // POST /users in BOTH web.php (`auth`) and api.php apiResource
+    // (`auth:sanctum`) — same method+uri, so get_request_flow may surface either.
     const mwStep = flow.steps.find((s) => s.type === 'middleware');
     if (mwStep) {
-      expect(mwStep.name).toBe('auth');
+      expect(mwStep.name.startsWith('auth')).toBe(true);
     }
 
     // Controller step
