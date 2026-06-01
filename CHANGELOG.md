@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.41.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.41.1...v1.41.2) (2026-06-01)
+
+
+### Bug Fixes
+
+* **config:** index Python source under app/ and flat layouts by default ([08cd008](https://github.com/nikolai-vysotskyi/trace-mcp/commit/08cd008ae414726f5fd9ae96cc38a6639a82979f))
+* **fastapi:** compose APIRouter(prefix=...) into route URIs ([7c5ab83](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7c5ab833cadd755a5e64c04dde221f0047cffa14))
+* **fastapi:** resolve Depends(dep) to a symbol-level edge in pass 2 ([aa471b2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aa471b22494833b77110c095b815f5497cd6dbd1))
+* **impact:** bound get_change_impact output for high-fan-in symbols ([e49a743](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e49a743fd72328d09ecd48c92b24cd1cec50b344))
+* **indexer:** discover nested subproject files per detected workspace ([b9e4731](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b9e4731ecdb3ddaff5ded9cf5b50ca01c765224d))
+* **init:** comprehensive default config for non-framework / container roots ([7e40276](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7e40276ad1e564a857f8b942b8332413ac7aad55))
+* **laravel:** compose group prefixes via a recursive route walk ([c97f7c4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c97f7c45f8d10fa9c08146aab66d98361cbdde50))
+* **laravel:** extract closure and inline-chained routes ([dd3c5dd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dd3c5dd7dd947ce181f848736d65a6626f83322e))
+* **model:** populate get_model_context for Python SQLModel/Pydantic models ([ecc17fb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ecc17fbe7839620e06727004e9f96422c32db097))
+* **monorepo:** detect implicit workspaces under a non-workspace root manifest ([8bd3339](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8bd3339cec36ec738be4e96530396b4d61c6d092))
+* **python:** resolve Celery task.delay()/.apply_async() to the task function ([81fbcbc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/81fbcbc79a7933f4e4cba79f2f85b665de4ea375))
+* **python:** resolve type annotations to symbol-level references edges ([04ff4a6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/04ff4a623e3fdd20ca78fdba9c8713b512129480))
+* **topology:** apply Laravel /api prefix for standalone-indexed services too ([fbd9f39](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fbd9f39fe21e56c44a0eb21896f5671255182c30))
+* **topology:** don't register Laravel nova-components as separate services ([e305715](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e305715c15fcf26a5a70dc032db83223c73b7eba))
+* **topology:** exclude intra-repo calls from the cross-project graph ([60b1d8a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/60b1d8a9fd0be32b787598220604da28b2afa8f8))
+* **topology:** exclude Vue Router page routes from cross-service endpoints ([ddb9736](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ddb97368f83d122684685799dee27028f0b94c04))
+* **topology:** scan Nuxt $api plugin clients and dynamic API paths ([2810515](https://github.com/nikolai-vysotskyi/trace-mcp/commit/281051580cd03c088f32e0262983a1a078c0351d))
+* **topology:** serve Laravel routes/api.php endpoints under /api ([38eae10](https://github.com/nikolai-vysotskyi/trace-mcp/commit/38eae10e154e01f746e9f0dcd4c0977286c47d3f))
+* **topology:** skip backend declaration/view/admin files in client scan ([92193a9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/92193a95b07c36cea2e73ad5af901d28171ef060))
+
+
+### Tests
+
+* **eval:** skip eval-cli smoke runs when the global index is transiently unavailable ([38fb1d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/38fb1d744ef15ffe0aad95396c152fc3f25b56ec))
+* **isolation:** redirect global home to a temp dir so tests can't pollute ~/.trace-mcp ([9809296](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9809296430260a5fcab806b929d29fd66e12e489))
+* **topology:** cover /api prefix for repo-relative routes/api.php ([06a40b0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/06a40b0b6dc782690a5a885eccb6d0c727fd0607))
+
 ## [1.41.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.41.0...v1.41.1) (2026-05-29)
 
 
