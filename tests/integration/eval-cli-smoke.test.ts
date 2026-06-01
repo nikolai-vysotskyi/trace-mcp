@@ -28,6 +28,19 @@ import { describe, expect, it } from 'vitest';
 const REPO_ROOT = join(import.meta.dirname, '..', '..');
 const CLI = join(REPO_ROOT, 'dist', 'cli.js');
 
+/**
+ * The suite-wide setupFile (tests/setup/isolate-home.ts) redirects
+ * TRACE_MCP_DATA_DIR to an empty temp home so tests can't pollute the real
+ * ~/.trace-mcp. This smoke test is the exception: it must validate the built
+ * CLI against the *actual* self-index, which lives in the developer's real
+ * home. Point the spawned subprocess back at it (the setup stashed the original
+ * in TRACE_MCP_REAL_DATA_DIR). In CI the repo is unindexed → the run-flavoured
+ * tests skip, exactly as before.
+ */
+const SUBPROCESS_ENV: Record<string, string> = process.env.TRACE_MCP_REAL_DATA_DIR
+  ? { TRACE_MCP_DATA_DIR: process.env.TRACE_MCP_REAL_DATA_DIR }
+  : {};
+
 const haveBuiltCli = existsSync(CLI);
 const describeIfBuilt = haveBuiltCli ? describe : describe.skip;
 
@@ -43,7 +56,7 @@ function isProjectIndexed(): boolean {
   const probe = spawnSync('node', [CLI, 'eval', 'run', '--dataset', 'default', '--output', 'md'], {
     cwd: REPO_ROOT,
     encoding: 'utf-8',
-    env: process.env,
+    env: { ...process.env, ...SUBPROCESS_ENV },
     timeout: 60_000,
   });
   const combined = (probe.stderr ?? '') + (probe.stdout ?? '');
@@ -62,7 +75,7 @@ function runCli(args: string[], extraEnv: Record<string, string> = {}) {
   return spawnSync('node', [CLI, ...args], {
     cwd: REPO_ROOT,
     encoding: 'utf-8',
-    env: { ...process.env, ...extraEnv },
+    env: { ...process.env, ...SUBPROCESS_ENV, ...extraEnv },
     timeout: 60_000,
   });
 }
