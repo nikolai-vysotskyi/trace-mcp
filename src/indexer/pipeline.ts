@@ -789,6 +789,8 @@ export class IndexingPipeline {
     // After Python imports + calls: turn type annotations into `references`
     // edges. Runs before file projection so they reach the file-level graph too.
     edgeResolver.resolvePythonTypeEdges(scope);
+    // Cross-file FastAPI mount prefixes — needs resolved Python imports above.
+    edgeResolver.resolveFastapiRouterMounts(scope);
     edgeResolver.resolveTestCoversEdges(scope);
     edgeResolver.resolveMarkdownWikilinkEdges(scope);
     edgeResolver.resolveMarkdownTagEdges(scope);

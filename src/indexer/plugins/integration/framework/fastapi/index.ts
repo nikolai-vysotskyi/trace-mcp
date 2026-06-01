@@ -322,6 +322,12 @@ export class FastAPIPlugin implements FrameworkPlugin {
           uri,
           controllerSymbolId: funcName,
           line: funcDef.startPosition.row + 1,
+          // `router` is the decorator object var (`@router.get` → "router",
+          // `@app.get` → "app"); `baseUri` is the within-file-composed path.
+          // Pass 2 (resolveFastapiRouterMounts) reads these to prepend a
+          // cross-file `app.include_router(router, prefix=...)` mount prefix,
+          // always recomputing from baseUri so re-indexing is idempotent.
+          metadata: { router: objectName ?? '', baseUri: uri },
         };
         result.routes!.push(route);
 

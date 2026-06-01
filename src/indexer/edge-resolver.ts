@@ -23,6 +23,7 @@ import { resolvePhpImportEdges as _resolvePhpImports } from './edge-resolvers/ph
 import { resolvePythonCallEdges as _resolvePyCalls } from './edge-resolvers/python-calls.js';
 import { resolvePythonHeritageEdges as _resolvePyHeritage } from './edge-resolvers/python-heritage.js';
 import { resolvePythonImportEdges as _resolvePyImports } from './edge-resolvers/python-imports.js';
+import { resolveFastapiRouterMounts as _resolveFastapiMounts } from './edge-resolvers/fastapi-mounts.js';
 import { resolvePythonTypeEdges as _resolvePyTypes } from './edge-resolvers/python-types.js';
 import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
 import { resolveTypeScriptCallEdges as _resolveTsCalls } from './edge-resolvers/typescript-calls.js';
@@ -152,6 +153,13 @@ export class EdgeResolver {
   /** Pass 2g1b: Python type-reference edges (param/return/attribute annotations → class symbols). */
   resolvePythonTypeEdges(scope?: ChangeScope): void {
     timed('py-types', () => _resolvePyTypes(this.state, scope));
+  }
+
+  /** Pass 2g1c: compose cross-file FastAPI `include_router(prefix=...)` mount
+   * prefixes onto the mounted routers' route URIs. Depends on Python import
+   * edges (run resolvePythonImportEdges first). */
+  resolveFastapiRouterMounts(scope?: ChangeScope): void {
+    timed('fastapi-mounts', () => _resolveFastapiMounts(this.state, scope));
   }
 
   /** Pass 2g2: PHP call/heritage edges (method calls, extends, implements, uses_trait). */

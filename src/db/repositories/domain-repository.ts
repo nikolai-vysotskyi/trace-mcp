@@ -48,8 +48,8 @@ export class DomainRepository {
 
     const result = this.db
       .prepare(
-        `INSERT INTO routes (method, uri, name, controller_symbol_id, middleware, file_id, line)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO routes (method, uri, name, controller_symbol_id, middleware, metadata, file_id, line)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         route.method,
@@ -57,6 +57,7 @@ export class DomainRepository {
         route.name ?? null,
         resolvedControllerSymId,
         middlewareJson,
+        route.metadata ? JSON.stringify(route.metadata) : null,
         fileId,
         route.line ?? null,
       );
@@ -73,6 +74,12 @@ export class DomainRepository {
 
   getAllRoutes(): RouteRow[] {
     return this.db.prepare('SELECT * FROM routes').all() as RouteRow[];
+  }
+
+  /** Rewrite a route's served URI in place (e.g. after composing a cross-file
+   * FastAPI include_router mount prefix). */
+  updateRouteUri(id: number, uri: string): void {
+    this.db.prepare('UPDATE routes SET uri = ? WHERE id = ?').run(uri, id);
   }
 
   findRouteByPattern(uri: string, method: string): RouteRow | undefined {
