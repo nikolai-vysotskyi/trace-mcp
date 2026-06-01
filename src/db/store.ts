@@ -337,6 +337,10 @@ export class Store {
     return this.domain.getAllRoutes();
   }
 
+  updateRouteUri(id: number, uri: string): void {
+    this.domain.updateRouteUri(id, uri);
+  }
+
   findRouteByPattern(uri: string, method: string): RouteRow | undefined {
     return this.domain.findRouteByPattern(uri, method);
   }
