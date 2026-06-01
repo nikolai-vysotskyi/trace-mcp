@@ -7,7 +7,20 @@ import path from 'node:path';
 import { logger } from '../logger.js';
 import { ROOT_MARKERS } from '../project-root.js';
 
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'vendor', '.svn', '__pycache__', '.tox']);
+const SKIP_DIRS = new Set([
+  '.git',
+  'node_modules',
+  'vendor',
+  '.svn',
+  '__pycache__',
+  '.tox',
+  // Laravel Nova local components: each ships its own composer.json, so the
+  // grouped-workspace scan below would otherwise register every one as a
+  // separate "service" (observed: 90 phantom nova-components/* subprojects for
+  // a single Laravel app). They are internal packages of the host app, never
+  // deployable services.
+  'nova-components',
+]);
 
 interface DetectedService {
   name: string;
