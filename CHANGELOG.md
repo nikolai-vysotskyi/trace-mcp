@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.41.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.41.2...v1.41.3) (2026-06-01)
+
+
+### Bug Fixes
+
+* **fastapi:** compose cross-file include_router(prefix=...) mount prefixes ([1287418](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1287418c750fff20e01d1d2263f875deaf1749bb))
+
 ## [1.41.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.41.1...v1.41.2) (2026-06-01)
 
 
