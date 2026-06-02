@@ -91,7 +91,7 @@ export async function subprojectAddRepo(
 
   try {
     const manager = new SubprojectManager(topoStore);
-    const result = manager.add(repoPath, opts.projectRoot, {
+    const result = await manager.add(repoPath, opts.projectRoot, {
       name: opts.name,
       contractPaths: opts.contractPaths,
     });
@@ -105,16 +105,18 @@ export async function subprojectAddRepo(
 // 4. SUBPROJECT SYNC — re-scan all subprojects
 // ════════════════════════════════════════════════════════════════════════
 
-export function subprojectSync(topoStore: TopologyStore): TraceMcpResult<{
-  repos: number;
-  servicesUpdated: number;
-  endpointsUpdated: number;
-  clientCallsScanned: number;
-  newlyLinked: number;
-  crossRepoEdges: number;
-}> {
+export async function subprojectSync(topoStore: TopologyStore): Promise<
+  TraceMcpResult<{
+    repos: number;
+    servicesUpdated: number;
+    endpointsUpdated: number;
+    clientCallsScanned: number;
+    newlyLinked: number;
+    crossRepoEdges: number;
+  }>
+> {
   const manager = new SubprojectManager(topoStore);
-  const result = manager.sync();
+  const result = await manager.sync();
   return ok(result);
 }
 

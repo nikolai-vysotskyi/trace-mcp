@@ -186,7 +186,7 @@ function collectKnownLanguages(projects: ManagedProject[]): string[] {
   return [...langs];
 }
 
-function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
+async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): Promise<void> {
   if (config.topology?.enabled === false) return;
   if (config.topology?.auto_discover === false) return;
 
@@ -195,7 +195,7 @@ function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): voi
     const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
     const manager = new SubprojectManager(topoStore);
 
-    const { services } = manager.autoDiscoverSubprojects(projectRoot, {
+    const { services } = await manager.autoDiscoverSubprojects(projectRoot, {
       contractPaths: config.topology?.contract_globs,
     });
 
@@ -1785,7 +1785,7 @@ program
         req.on('data', (chunk: Buffer) => {
           body += chunk.toString();
         });
-        req.on('end', () => {
+        req.on('end', async () => {
           try {
             const { repoPath, project } = JSON.parse(body) as { repoPath: string; project: string };
             if (!repoPath || !project) {
@@ -1810,7 +1810,7 @@ program
 
             try {
               const manager = new SubprojectManager(topoStore);
-              const result = manager.add(repoPath, project);
+              const result = await manager.add(repoPath, project);
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify(result));
             } catch (e) {
@@ -2794,7 +2794,7 @@ program
     logger.info(result, 'Indexing completed');
 
     // Auto-discover subprojects: register this project, scan contracts & client calls
-    runSubprojectAutoSync(resolvedDir, config);
+    await runSubprojectAutoSync(resolvedDir, config);
 
     await pipeline.dispose();
     db.close();

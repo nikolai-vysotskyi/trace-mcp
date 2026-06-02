@@ -40,11 +40,11 @@ subprojectCommand
   .requiredOption('--project <path>', 'Project root this subproject belongs to')
   .option('--contract <paths...>', 'Explicit contract file paths (relative to repo root)')
   .option('--name <name>', 'Name for this repo (default: directory basename)')
-  .action((opts: { repo: string; project: string; contract?: string[]; name?: string }) => {
+  .action(async (opts: { repo: string; project: string; contract?: string[]; name?: string }) => {
     const { manager, topoStore } = createManager();
     try {
       console.log(`Adding subproject: ${opts.repo} (project: ${opts.project})`);
-      const result = manager.add(opts.repo, opts.project, {
+      const result = await manager.add(opts.repo, opts.project, {
         name: opts.name,
         contractPaths: opts.contract,
       });
@@ -144,11 +144,11 @@ subprojectCommand
 subprojectCommand
   .command('sync')
   .description('Re-scan all subprojects: contracts, client calls, and re-link')
-  .action(() => {
+  .action(async () => {
     const { manager, topoStore } = createManager();
     try {
       console.log('Syncing all subprojects...');
-      const result = manager.sync();
+      const result = await manager.sync();
 
       console.log(`\n  Repos synced: ${result.repos}`);
       console.log(`  Services: ${result.servicesUpdated}`);
