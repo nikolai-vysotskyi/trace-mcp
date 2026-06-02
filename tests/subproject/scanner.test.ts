@@ -36,30 +36,30 @@ describe('scanClientCalls — Nuxt client patterns', () => {
 
   afterAll(() => removeTmpDir(dir));
 
-  function urls(): string[] {
-    return [...new Set(scanClientCalls(dir).map((c) => c.urlPattern))];
+  async function urls(): Promise<string[]> {
+    return [...new Set((await scanClientCalls(dir)).map((c) => c.urlPattern))];
   }
 
-  it('captures $api(...) plugin-client calls (literal path)', () => {
-    expect(urls()).toContain('/login');
+  it('captures $api(...) plugin-client calls (literal path)', async () => {
+    expect(await urls()).toContain('/login');
   });
 
-  it('captures useApiFetch(...) composable calls', () => {
-    expect(urls()).toContain('/api/user');
+  it('captures useApiFetch(...) composable calls', async () => {
+    expect(await urls()).toContain('/api/user');
   });
 
-  it('normalizes template-literal interpolation to a {*} param', () => {
-    const u = urls();
+  it('normalizes template-literal interpolation to a {*} param', async () => {
+    const u = await urls();
     expect(u).toContain('/api/favorited/participant/{*}');
     expect(u).toContain('/api/video/{*}');
   });
 
-  it('normalizes string concatenation to a {*} param', () => {
-    expect(urls()).toContain('/api/favorited/media/{*}');
+  it('normalizes string concatenation to a {*} param', async () => {
+    expect(await urls()).toContain('/api/favorited/media/{*}');
   });
 
-  it('extracts the HTTP method from $api.get(...)', () => {
-    const getCall = scanClientCalls(dir).find((c) => c.urlPattern === '/api/video/{*}');
+  it('extracts the HTTP method from $api.get(...)', async () => {
+    const getCall = (await scanClientCalls(dir)).find((c) => c.urlPattern === '/api/video/{*}');
     expect(getCall?.method).toBe('GET');
   });
 });

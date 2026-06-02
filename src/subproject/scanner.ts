@@ -230,9 +230,9 @@ const CODE_EXTENSIONS = new Set([
 /**
  * Scan a repository for HTTP/gRPC/GraphQL client calls.
  */
-export function scanClientCalls(repoRoot: string): ScannedClientCall[] {
+export async function scanClientCalls(repoRoot: string): Promise<ScannedClientCall[]> {
   const results: ScannedClientCall[] = [];
-  walkRepo(repoRoot, (relPath, content) => scanFileContent(relPath, content, results));
+  await walkRepo(repoRoot, (relPath, content) => scanFileContent(relPath, content, results));
   logger.debug({ repoRoot, calls: results.length }, 'Client call scan completed');
   return results;
 }
@@ -246,10 +246,10 @@ export function scanClientCalls(repoRoot: string): ScannedClientCall[] {
  * @param knownEndpoints   Endpoints to match against (pre-filter to cross-service
  *                         endpoints in the same project_group for best results).
  */
-export function scanEndpointLiterals(
+export async function scanEndpointLiterals(
   repoRoot: string,
   knownEndpoints: Array<{ method: string | null; path: string }>,
-): ScannedClientCall[] {
+): Promise<ScannedClientCall[]> {
   if (knownEndpoints.length === 0) return [];
 
   // Normalize endpoint path: strip params, collapse trailing slashes. Matches the
@@ -273,7 +273,7 @@ export function scanEndpointLiterals(
   const urlLiteralRegex = /['"`](\/[a-zA-Z0-9_\-./{}:$[\]]+)['"`]/g;
 
   const results: ScannedClientCall[] = [];
-  walkRepo(repoRoot, (relPath, content) => {
+  await walkRepo(repoRoot, (relPath, content) => {
     urlLiteralRegex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = urlLiteralRegex.exec(content)) !== null) {
@@ -317,21 +317,33 @@ function isCrossServiceNoiseFile(relPath: string): boolean {
   return false;
 }
 
-function walkRepo(repoRoot: string, onFile: (relPath: string, content: string) => void): void {
-  walkAndInvoke(repoRoot, repoRoot, onFile, 0);
+/**
+ * Yield control back to the event loop after this many files. Keeps the daemon's
+ * main thread responsive while scanning a large repo: synchronous fs + regex over
+ * the whole tree used to block every concurrent MCP request until the scan
+ * finished. See issue #198.
+ */
+const YIELD_EVERY_N_FILES = 200;
+
+async function walkRepo(
+  repoRoot: string,
+  onFile: (relPath: string, content: string) => void,
+): Promise<void> {
+  await walkAndInvoke(repoRoot, repoRoot, onFile, 0, { filesProcessed: 0 });
 }
 
-function walkAndInvoke(
+async function walkAndInvoke(
   dir: string,
   repoRoot: string,
   onFile: (relPath: string, content: string) => void,
   depth: number,
-): void {
+  state: { filesProcessed: number },
+): Promise<void> {
   if (depth > 10) return;
 
   let entries: fs.Dirent[];
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
+    entries = await fs.promises.readdir(dir, { withFileTypes: true });
   } catch {
     return;
   }
@@ -341,23 +353,27 @@ function walkAndInvoke(
 
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      walkAndInvoke(fullPath, repoRoot, onFile, depth + 1);
+      await walkAndInvoke(fullPath, repoRoot, onFile, depth + 1, state);
     } else if (
       entry.isFile() &&
       CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) &&
       !EXCLUDE_FILES.has(entry.name)
     ) {
+      const relPath = path.relative(repoRoot, fullPath);
+      // Skip server-side declaration/view/admin files: their path literals are
+      // route DEFINITIONS (or Blade views / Nova admin), not cross-service API
+      // CALLS. Scanning them produced spurious backwards edges (a Laravel
+      // backend "calling" a frontend's page routes).
+      if (isCrossServiceNoiseFile(relPath)) continue;
       try {
-        const relPath = path.relative(repoRoot, fullPath);
-        // Skip server-side declaration/view/admin files: their path literals are
-        // route DEFINITIONS (or Blade views / Nova admin), not cross-service API
-        // CALLS. Scanning them produced spurious backwards edges (a Laravel
-        // backend "calling" a frontend's page routes).
-        if (isCrossServiceNoiseFile(relPath)) continue;
-        const content = fs.readFileSync(fullPath, 'utf-8');
+        const content = await fs.promises.readFile(fullPath, 'utf-8');
         onFile(relPath, content);
       } catch {
         // skip unreadable files
+      }
+      // Cooperative yield so a large tree never blocks the event loop (#198).
+      if (++state.filesProcessed % YIELD_EVERY_N_FILES === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
       }
     }
   }

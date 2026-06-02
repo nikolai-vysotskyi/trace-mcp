@@ -278,7 +278,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       'Re-scan all subprojects: re-discover services, re-parse contracts, re-scan client calls, and re-link everything. Mutates the topology store; idempotent. Use after code changes in subproject repos. Returns JSON: { synced, services, contracts, clientCalls }.',
       {},
       async () => {
-        const result = subprojectSync(topoStore);
+        const result = await subprojectSync(topoStore);
         if (result.isErr())
           return {
             content: [{ type: 'text', text: j(formatToolError(result.error)) }],
@@ -422,7 +422,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           limit: limit ?? 50,
         };
         const result = add_as_subprojects
-          ? discoverAndRegisterSubprojects(topoStore, opts)
+          ? await discoverAndRegisterSubprojects(topoStore, opts)
           : discoverClaudeSessions(opts);
         if (result.isErr())
           return {

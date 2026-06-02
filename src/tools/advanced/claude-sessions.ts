@@ -192,14 +192,14 @@ export function discoverClaudeSessions(
 /**
  * Discover sessions and register each existing one as a subproject in one call.
  */
-export function discoverAndRegisterSubprojects(
+export async function discoverAndRegisterSubprojects(
   topoStore: TopologyStore,
   opts: {
     scanRoot?: string;
     excludePrefix?: string;
     limit?: number;
   } = {},
-): TraceMcpResult<DiscoverClaudeSessionsResult> {
+): Promise<TraceMcpResult<DiscoverClaudeSessionsResult>> {
   const discovered = discoverClaudeSessions({ ...opts, onlyExisting: true });
   if (discovered.isErr()) return discovered;
 
@@ -210,7 +210,7 @@ export function discoverAndRegisterSubprojects(
   const manager = new SubprojectManager(topoStore);
   for (const session of result.sessions) {
     try {
-      const { services } = manager.autoDiscoverSubprojects(session.projectPath);
+      const { services } = await manager.autoDiscoverSubprojects(session.projectPath);
       const totalEndpoints = services.reduce((sum, s) => sum + s.endpoints, 0);
       added.push({
         repo: session.projectPath,

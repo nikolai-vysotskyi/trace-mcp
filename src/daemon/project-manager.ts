@@ -72,14 +72,14 @@ export interface ManagedProject {
   lspEnricher?: BackgroundLspEnricher | null;
 }
 
-function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): void {
+async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): Promise<void> {
   if (config.topology?.enabled === false) return;
   if (config.topology?.auto_discover === false) return;
   try {
     ensureGlobalDirs();
     const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
     const manager = new SubprojectManager(topoStore);
-    manager.autoDiscoverSubprojects(projectRoot, {
+    await manager.autoDiscoverSubprojects(projectRoot, {
       contractPaths: config.topology?.contract_globs,
     });
   } catch (err) {
@@ -387,7 +387,7 @@ export class ProjectManager {
       );
     }
     this.indexAllLimit!(() => pipeline.indexAll(needsForcedReindex))
-      .then(() => {
+      .then(async () => {
         managed.status = 'ready';
         if (needsForcedReindex) {
           try {
@@ -401,7 +401,7 @@ export class ProjectManager {
         }
         runSummarization(aiAbortController.signal);
         runEmbeddings(aiAbortController.signal);
-        runSubprojectAutoSync(projectRoot, config);
+        await runSubprojectAutoSync(projectRoot, config);
         logger.info({ projectRoot }, 'Project indexing complete');
       })
       .catch(async (err) => {
@@ -422,7 +422,7 @@ export class ProjectManager {
             }
             runSummarization();
             runEmbeddings();
-            runSubprojectAutoSync(projectRoot, config);
+            await runSubprojectAutoSync(projectRoot, config);
             logger.info({ projectRoot }, 'Project indexing complete (force-reindex recovery)');
             return;
           } catch (retryErr) {

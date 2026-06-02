@@ -203,11 +203,11 @@ export class LocalBackend implements Backend {
     // This promise is tracked so stop() can let it drain before closing the DB.
     this.indexingPromise = this.pipeline
       .indexAll()
-      .then(() => {
+      .then(async () => {
         if (this.stopping) return;
         runSummarization();
         runEmbeddings();
-        runSubprojectAutoSyncSafe(projectRoot, config);
+        await runSubprojectAutoSyncSafe(projectRoot, config);
       })
       .catch((err) => {
         logger.error({ error: serializeError(err) }, 'LocalBackend: initial indexing failed');
@@ -511,14 +511,17 @@ export class LocalBackend implements Backend {
  * Subproject auto-sync. Safe to call on a worker thread of LocalBackend's
  * indexing pipeline — matches cli.ts's behavior (logs service counts).
  */
-function runSubprojectAutoSyncSafe(projectRoot: string, config: TraceMcpConfig): void {
+async function runSubprojectAutoSyncSafe(
+  projectRoot: string,
+  config: TraceMcpConfig,
+): Promise<void> {
   if (config.topology?.enabled === false) return;
   if (config.topology?.auto_discover === false) return;
   try {
     ensureGlobalDirs();
     const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
     const manager = new SubprojectManager(topoStore);
-    const { services } = manager.autoDiscoverSubprojects(projectRoot, {
+    const { services } = await manager.autoDiscoverSubprojects(projectRoot, {
       contractPaths: config.topology?.contract_globs,
     });
     const subprojects = topoStore.getAllSubprojects();

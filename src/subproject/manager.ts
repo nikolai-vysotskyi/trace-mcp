@@ -117,14 +117,14 @@ export class SubprojectManager {
    * @param projectRoot - the project this subproject belongs to
    * @param opts - optional name, contract paths
    */
-  add(
+  async add(
     repoRoot: string,
     projectRoot: string,
     opts?: {
       name?: string;
       contractPaths?: string[];
     },
-  ): SubprojectAddResult {
+  ): Promise<SubprojectAddResult> {
     const absRoot = path.resolve(repoRoot);
     const absProjectRoot = path.resolve(projectRoot);
     if (!fs.existsSync(absRoot)) {
@@ -157,7 +157,7 @@ export class SubprojectManager {
       this.registerContracts(serviceId, svc.repoRoot, absRoot, opts?.contractPaths);
     }
 
-    const clientCalls = this.scanAndLinkClientCalls(repoId, absRoot);
+    const clientCalls = await this.scanAndLinkClientCalls(repoId, absRoot);
 
     this.topoStore.updateSubprojectSyncTime(repoId);
 
@@ -179,12 +179,12 @@ export class SubprojectManager {
    * Unlike add(), this doesn't add the project itself — it discovers
    * sub-services (from docker-compose, workspace structure, or root markers).
    */
-  autoDiscoverSubprojects(
+  async autoDiscoverSubprojects(
     projectRoot: string,
     opts?: {
       contractPaths?: string[];
     },
-  ): { services: SubprojectAddResult[] } {
+  ): Promise<{ services: SubprojectAddResult[] }> {
     const absProjectRoot = path.resolve(projectRoot);
     if (!fs.existsSync(absProjectRoot)) {
       throw new Error(`Project path does not exist: ${absProjectRoot}`);
@@ -225,7 +225,7 @@ export class SubprojectManager {
       this.topoStore.deleteContractsByService(serviceId);
       this.registerContracts(serviceId, svc.repoRoot, absProjectRoot, opts?.contractPaths);
 
-      const clientCalls = this.scanAndLinkClientCalls(repoId, svc.repoRoot);
+      const clientCalls = await this.scanAndLinkClientCalls(repoId, svc.repoRoot);
       this.topoStore.updateSubprojectSyncTime(repoId);
       registered.push({
         repoId,
@@ -246,7 +246,7 @@ export class SubprojectManager {
       });
     }
 
-    this.scanCrossServiceEndpointLiterals(registered);
+    await this.scanCrossServiceEndpointLiterals(registered);
 
     return { services: results };
   }
@@ -257,14 +257,14 @@ export class SubprojectManager {
    * helpers / composables where the inline fetcher syntax would miss the URL
    * (e.g. Nuxt `useApiFetch(API.home())` with the path table in `useAppRoutes.ts`).
    */
-  private scanCrossServiceEndpointLiterals(
+  private async scanCrossServiceEndpointLiterals(
     registered: Array<{
       repoId: number;
       serviceId: number;
       repoRoot: string;
       projectGroup: string | null;
     }>,
-  ): void {
+  ): Promise<void> {
     if (registered.length < 2) return;
 
     const allEndpoints = this.topoStore.getAllEndpoints();
@@ -279,7 +279,7 @@ export class SubprojectManager {
       });
       if (crossServiceEndpoints.length === 0) continue;
 
-      const literalCalls = scanEndpointLiterals(repo.repoRoot, crossServiceEndpoints);
+      const literalCalls = await scanEndpointLiterals(repo.repoRoot, crossServiceEndpoints);
       if (literalCalls.length === 0) continue;
 
       this.topoStore.insertClientCalls(
@@ -415,7 +415,7 @@ export class SubprojectManager {
    * Re-sync all subprojects: re-scan contracts and client calls,
    * re-link everything.
    */
-  sync(): SubprojectSyncResult {
+  async sync(): Promise<SubprojectSyncResult> {
     const repos = this.topoStore.getAllSubprojects();
     let servicesUpdated = 0;
     let contractsUpdated = 0;
@@ -455,7 +455,7 @@ export class SubprojectManager {
         this.registerContracts(serviceId, svc.repoRoot, repo.project_root);
       }
 
-      const calls = this.scanAndLinkClientCalls(repo.id, repo.repo_root);
+      const calls = await this.scanAndLinkClientCalls(repo.id, repo.repo_root);
       clientCallsScanned += calls.scanned;
 
       this.topoStore.updateSubprojectSyncTime(repo.id);
@@ -605,12 +605,12 @@ export class SubprojectManager {
   }
 
   /** Scan repo for client calls, insert them, link to endpoints, and build edges. */
-  private scanAndLinkClientCalls(
+  private async scanAndLinkClientCalls(
     repoId: number,
     repoRoot: string,
-  ): { scanned: number; linked: number } {
+  ): Promise<{ scanned: number; linked: number }> {
     this.topoStore.deleteClientCallsByRepo(repoId);
-    const clientCalls = scanClientCalls(repoRoot);
+    const clientCalls = await scanClientCalls(repoRoot);
     if (clientCalls.length > 0) {
       this.topoStore.insertClientCalls(
         clientCalls.map((c) => ({
