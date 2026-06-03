@@ -504,6 +504,40 @@ const pkg = 'https://npmjs.org/package/foo';
       const urlFindings = data.findings.filter((f) => f.tag === 'hardcoded_url');
       expect(urlFindings).toHaveLength(0);
     });
+
+    test('does not flag credentials inside a .env file', () => {
+      // .env is the externalized-config mechanism — `KEY=value` here IS the
+      // recommended fix for the hardcoded-credential smell, not an instance of
+      // it. Regression for the "Hardcoded" panel flagging DB passwords in .env.
+      // language is 'dotenv' (NOT in NON_CODE_LANGUAGES) so this proves the
+      // basename-based skip, not a language-based one.
+      writeFile(
+        store,
+        'thewed/thewed-laravel/.env',
+        `
+APP_ENV=production
+TOP_15_SHOP_DB_PASSWORD='s2^secretValue123'
+MAIL_SECRET="abcDEF0123456789xyz"
+`,
+        'dotenv',
+      );
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      expect(data.findings).toHaveLength(0);
+      expect(data.files_scanned).toBe(0);
+    });
+
+    test('does not flag credentials in .env.* variants (.local, .backup, ...)', () => {
+      writeFile(store, '.env.backup', `DB_PASSWORD='s2^secretValue123'\n`, 'dotenv');
+      writeFile(store, '.env.local', `API_KEY='sk-abcdef0123456789ABCDEF'\n`, 'dotenv');
+      writeFile(store, '.env.production', `APP_SECRET='superSecretToken9876'\n`, 'dotenv');
+
+      const result = scanCodeSmells(store, TEST_DIR, { category: ['hardcoded_value'] });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().findings).toHaveLength(0);
+    });
   });
 
   // -------------------------------------------------------------------

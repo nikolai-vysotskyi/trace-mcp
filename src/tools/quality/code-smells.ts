@@ -852,6 +852,17 @@ export function scanCodeSmells(
       if (NON_CODE_EXTENSIONS.has(ext)) continue;
       if (file.language && NON_CODE_LANGUAGES.has(file.language.toLowerCase())) continue;
 
+      // Skip dotenv-family config files (.env, .env.local, .env.backup, ...).
+      // In a .env file, `KEY=value` IS the externalized config — that is the
+      // recommended fix for the hardcoded-credential smell, not an instance of
+      // it. Flagging `DB_PASSWORD='...'` in .env as a "hardcoded value" is
+      // self-contradictory. (Whether a real secret should be committed to VCS
+      // is a separate concern handled by the security scanner / secret scan.)
+      // path.extname('.env') === '' and '.env.backup' → '.backup', so the
+      // NON_CODE_EXTENSIONS check above never catches these — match by basename.
+      const base = path.basename(file.path);
+      if (base === '.env' || base.startsWith('.env.')) continue;
+
       const absPath = path.resolve(projectRoot, file.path);
       let content: string;
       try {
