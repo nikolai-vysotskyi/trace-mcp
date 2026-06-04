@@ -298,7 +298,7 @@ Then in your MCP client:
 
 > Prefer a GUI? The [desktop app](#desktop-app) handles install, indexing, MCP-client wiring, and re-indexing without touching a terminal.
 
-**Going further:** [adding more projects / upgrading / manual setup](docs/configuration.md#cli) · [semantic search (local ONNX)](docs/configuration.md#ai-configuration) · [indexing & file watcher](docs/configuration.md#how-config-works) · [`.traceignore`](docs/configuration.md#traceignore).
+**Going further:** [adding more projects / upgrading / manual setup](docs/configuration.md#cli) · [stdio vs HTTP setup (per-repo or team)](docs/configuration.md#stdio-vs-http--choosing-your-setup) · [semantic search (local ONNX)](docs/configuration.md#ai-configuration) · [indexing & file watcher](docs/configuration.md#how-config-works) · [`.traceignore`](docs/configuration.md#traceignore).
 
 ---
 

@@ -546,6 +546,56 @@ For all other clients only the Base tier applies — there is no equivalent of C
 
 ---
 
+## stdio vs HTTP — choosing your setup
+
+trace-mcp speaks MCP over two transports. Which one to pick depends on whether you want a process per repo or one long-lived daemon serving many projects.
+
+### stdio — recommended for per-repo agent sessions
+
+`trace-mcp serve` runs the server over stdio. Your MCP client launches one process per session with the working directory set to the repo you opened, so the project is auto-detected from there — no URL, no `?project=`, and each session is isolated to its own repo. No daemon is required: it runs in-process, and if a daemon happens to be running it transparently reuses the warm index.
+
+Wire it up without touching a committed file:
+
+```bash
+# Across all your projects (stored in ~/.claude.json, not committed):
+claude mcp add --scope user trace-mcp -- npx -y trace-mcp@latest serve
+
+# Just one project, not committed (local scope):
+claude mcp add --scope local trace-mcp -- npx -y trace-mcp@latest serve
+```
+
+To share one config with the whole team, commit a portable stdio entry to `.mcp.json` — it carries no machine-specific URL or path:
+
+```json
+{
+  "mcpServers": {
+    "trace-mcp": { "command": "npx", "args": ["-y", "trace-mcp@latest", "serve"] }
+  }
+}
+```
+
+Each developer's session spawns its own per-repo process; nothing is shared or hardcoded. Avoid committing an absolute HTTP URL such as `http://127.0.0.1:3741/mcp?project=/Users/you/...` — that path only exists on your machine and would break for everyone else.
+
+### HTTP daemon — one warm index shared across many projects
+
+`trace-mcp serve-http` runs a long-lived daemon (default `127.0.0.1:3741`) that holds warm indexes for several registered projects and backs the desktop app. MCP clients connect with the target project in the URL:
+
+```
+http://127.0.0.1:3741/mcp?project=/absolute/path/to/repo
+```
+
+The daemon multiplexes projects — one process serves all of them — but each MCP registration is bound to a single project via `?project=` (or, for clients that cannot append a query string, the `X-Trace-Project` header or `params._meta["traceMcp/projectRoot"]`). Pick this when you want one warm index reused across sessions and tools and you're comfortable managing the per-registration URL. For one-session-per-repo workflows, stdio is simpler.
+
+| | stdio | HTTP daemon |
+|---|---|---|
+| Process model | one per session | one shared daemon |
+| Project scope | auto-detected from cwd | `?project=` per registration |
+| Config | command, no URL | URL with absolute path |
+| Warm-index reuse | per session (shared if a daemon is running) | always shared |
+| Best for | per-repo agent sessions, committed team config | desktop app, many projects, one shared index |
+
+---
+
 ## Hermes Agent sessions
 
 Hermes Agent (NousResearch) stores conversations in a SQLite database at `$HERMES_HOME/state.db` (default `~/.hermes/state.db`) plus one DB per profile under `<home>/profiles/<name>/state.db`. trace-mcp reads these read-only and exposes them through:
