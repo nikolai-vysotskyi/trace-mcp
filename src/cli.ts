@@ -2703,6 +2703,16 @@ program
         },
         'trace-mcp daemon started',
       );
+      // Project model (#199): one daemon serves ALL registered projects. Each
+      // MCP session/registration selects its project per connection — via
+      // ?project=<abs-path> on /mcp, the X-Trace-Project header, or
+      // params._meta["traceMcp/projectRoot"] in initialize. With one registered
+      // project that selection is implicit. Cross-repo queries in a SINGLE
+      // session are not yet supported (tracked in #199).
+      logger.info(
+        'Project model: per-session project selection (?project= / X-Trace-Project / _meta). ' +
+          'One project per session; not cross-repo within a session.',
+      );
 
       // Phase 5.2: warm tree-sitter init eagerly so the first parse doesn't
       // pay the WASM cold-start tax. Best-effort, fire-and-forget.
