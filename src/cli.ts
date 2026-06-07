@@ -317,6 +317,16 @@ program
     const autoSpawnDaemon =
       process.env.TRACE_MCP_NO_DAEMON === '1' ? false : (config.auto_spawn_daemon ?? true);
     const autoSpawnTimeoutMs = (config.daemon_spawn_timeout_seconds ?? 5) * 1_000;
+    // Discoverability (#202): make the daemon opt-out knobs visible. Logged to
+    // stderr/file (never stdout — that carries the JSON-RPC stream).
+    if (autoSpawnDaemon) {
+      logger.info(
+        'Daemon auto-spawn is enabled. To run pure stdio: `trace-mcp daemon stop`, ' +
+          'or set TRACE_MCP_NO_DAEMON=1 / auto_spawn_daemon=false in ~/.trace-mcp/.config.json.',
+      );
+    } else {
+      logger.info('Daemon auto-spawn is disabled — running local-only (stdio).');
+    }
 
     const session = new StdioSession({
       projectRoot,

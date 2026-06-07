@@ -62,6 +62,8 @@ const LOG_PATH = path.join(TRACE_MCP_HOME, 'postinstall.log');
 const LAUNCHER_DIR = path.join(TRACE_MCP_HOME, 'bin');
 const LAUNCHER_ENV_PATH = path.join(TRACE_MCP_HOME, 'launcher.env');
 const DAEMON_LOG_PATH = path.join(TRACE_MCP_HOME, 'daemon.log');
+// Opt-out sentinel (#202) — keep in sync with src/global.ts::DAEMON_DISABLED_PATH.
+const DAEMON_DISABLED_PATH = path.join(TRACE_MCP_HOME, 'daemon.disabled');
 const LAUNCHD_PLIST_PATH = path.join(
   os.homedir(),
   'Library',
@@ -446,10 +448,19 @@ function main() {
   }
 
   if (IS_MAC && shimPath) {
-    try {
-      refreshLaunchAgent(shimPath);
-    } catch (err) {
-      log('launchd', `failed: ${err.message || err}`);
+    // Respect an explicit daemon opt-out (#202). A user who removed the daemon
+    // via `trace-mcp daemon stop` should not have it silently reinstalled on the
+    // next `npm install -g` / upgrade. The launcher.env + shim above are still
+    // refreshed (harmless, needed if they later re-enable), only the launchd
+    // bootstrap is skipped.
+    if (fs.existsSync(DAEMON_DISABLED_PATH)) {
+      log('launchd', `skip (daemon opt-out present at ${DAEMON_DISABLED_PATH})`);
+    } else {
+      try {
+        refreshLaunchAgent(shimPath);
+      } catch (err) {
+        log('launchd', `failed: ${err.message || err}`);
+      }
     }
   }
 

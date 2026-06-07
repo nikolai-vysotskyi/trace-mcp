@@ -16,6 +16,7 @@ import { execSync, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  DAEMON_DISABLED_PATH,
   DAEMON_LOG_PATH,
   DEFAULT_DAEMON_PORT,
   LAUNCHD_PLIST_PATH,
@@ -57,6 +58,43 @@ export interface EnsureResult {
   error?: string;
   /** Informational: which strategy was used to start (if started). */
   strategy?: 'launchd' | 'detached' | 'already-running' | 'none';
+}
+
+// ── Opt-out sentinel (#202) ─────────────────────────────────────────
+// A user who prefers pure stdio can remove the daemon and expect it to stay
+// gone. `trace-mcp daemon stop` records an explicit opt-out; auto-spawn then
+// becomes a logged no-op instead of silently reinstalling the launchd plist on
+// the next session. `daemon start`/`restart` clear the opt-out.
+
+/** True if the user has explicitly opted out of the background daemon. */
+export function isDaemonDisabled(): boolean {
+  try {
+    return fs.existsSync(DAEMON_DISABLED_PATH);
+  } catch {
+    return false;
+  }
+}
+
+/** Persist an explicit daemon opt-out. Best-effort; never throws. */
+export function disableDaemon(reason: string): void {
+  try {
+    if (!fs.existsSync(TRACE_MCP_HOME)) fs.mkdirSync(TRACE_MCP_HOME, { recursive: true });
+    atomicWriteString(
+      DAEMON_DISABLED_PATH,
+      `${JSON.stringify({ reason, disabledAt: new Date().toISOString() }, null, 2)}\n`,
+    );
+  } catch (err) {
+    logger.warn({ err: String(err) }, 'Failed to persist daemon opt-out');
+  }
+}
+
+/** Clear an explicit daemon opt-out (idempotent). Best-effort; never throws. */
+export function enableDaemon(): void {
+  try {
+    if (fs.existsSync(DAEMON_DISABLED_PATH)) fs.unlinkSync(DAEMON_DISABLED_PATH);
+  } catch (err) {
+    logger.warn({ err: String(err) }, 'Failed to clear daemon opt-out');
+  }
 }
 
 // ── Platform: macOS (launchd) ───────────────────────────────────────
@@ -214,6 +252,14 @@ function ensurePlistInstalled(port: number): { ok: boolean; error?: string; rege
 function ensureDaemonMac(port: number): EnsureResult {
   const install = ensurePlistInstalled(port);
   if (!install.ok) return { ok: false, error: install.error };
+  // Idempotent: when the plist was already current AND launchd already has it
+  // loaded, skip the redundant `launchctl bootstrap` subprocess (it would just
+  // report "already loaded"). A loaded-but-unhealthy service is handled by the
+  // caller's kickstart/restart retry path, not by re-bootstrapping here.
+  if (!install.regenerated && _isPlistLoaded()) {
+    logger.debug('ensureDaemonMac: plist already current and loaded, skipping bootstrap');
+    return { ok: true, strategy: 'launchd' };
+  }
   const boot = bootstrapPlist();
   if (!boot.ok) return { ok: false, error: boot.error };
   return { ok: true, strategy: 'launchd' };
@@ -468,9 +514,20 @@ function restartDaemonGeneric(port: number): EnsureResult {
 export async function ensureDaemon(opts?: { port?: number }): Promise<EnsureResult> {
   const port = opts?.port ?? DEFAULT_DAEMON_PORT;
 
-  // Fast path: already responding.
+  // Fast path: already responding. (We never tear down a live daemon, even if
+  // an opt-out file is present — only the *start* of a new one is suppressed.)
   const health = await getDaemonHealth(port);
   if (health) return { ok: true, alreadyRunning: true, strategy: 'already-running' };
+
+  // Respect an explicit opt-out (#202): do not (re)install/spawn. Cleared by
+  // `trace-mcp daemon start`/`restart`, which call enableDaemon() first.
+  if (isDaemonDisabled()) {
+    logger.info(
+      { sentinel: DAEMON_DISABLED_PATH },
+      'Daemon start suppressed by opt-out; run `trace-mcp daemon start` to re-enable',
+    );
+    return { ok: false, strategy: 'none', error: 'daemon disabled by opt-out' };
+  }
 
   return isMac ? ensureDaemonMac(port) : ensureDaemonGeneric(port);
 }
@@ -479,6 +536,9 @@ export async function ensureDaemon(opts?: { port?: number }): Promise<EnsureResu
  * Stop the daemon (best-effort).
  */
 export function stopDaemon(): void {
+  // Record an explicit opt-out so the next stdio session doesn't silently
+  // reinstall the daemon the user just removed (#202).
+  disableDaemon('trace-mcp daemon stop');
   if (isMac) stopDaemonMac();
   else stopDaemonByPid();
 }
@@ -488,6 +548,8 @@ export function stopDaemon(): void {
  */
 export function restartDaemon(opts?: { port?: number }): EnsureResult {
   const port = opts?.port ?? DEFAULT_DAEMON_PORT;
+  // An explicit restart is a clear intent to run the daemon — clear any opt-out.
+  enableDaemon();
   return isMac ? restartDaemonMac(port) : restartDaemonGeneric(port);
 }
 
@@ -619,6 +681,17 @@ export async function tryAutoSpawnDaemon(
   // Fast path — already running.
   if (await isDaemonRunning(port).catch(() => false)) {
     return { ok: true, alreadyRunning: true };
+  }
+
+  // Respect an explicit opt-out (#202) before touching the spawn lock or
+  // installing anything. This is the fix for "I removed the daemon and it kept
+  // coming back": once opted out, stdio sessions run local-only with no reinstall.
+  if (isDaemonDisabled()) {
+    logger.info(
+      { sentinel: DAEMON_DISABLED_PATH },
+      'Daemon auto-spawn suppressed by opt-out; running local-only. Re-enable with `trace-mcp daemon start`',
+    );
+    return { ok: false, error: 'daemon disabled by opt-out' };
   }
 
   const deadline = Date.now() + timeoutMs;
