@@ -7,7 +7,9 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import * as p from '@clack/prompts';
+import Database from 'better-sqlite3';
 import { Command } from 'commander';
+import { REGISTRY_PATH } from '../global.js';
 import { type ConflictSeverity, detectConflicts } from '../init/conflict-detector.js';
 import { type FixResult, fixAllConflicts, fixConflict } from '../init/conflict-resolver.js';
 import {
@@ -19,6 +21,7 @@ import {
 } from '../init/launcher.js';
 import { LAUNCHER_VERSION } from '../init/types.js';
 import { findProjectRoot } from '../project-root.js';
+import { inspectRegistry } from '../registry.js';
 
 const _SEVERITY_ICON: Record<ConflictSeverity, string> = {
   critical: 'X',
@@ -33,7 +36,7 @@ const SEVERITY_LABEL: Record<ConflictSeverity, string> = {
 };
 
 export const doctorCommand = new Command('doctor')
-  .description('Check for competing tools that may conflict with trace-mcp')
+  .description('Check trace-mcp health: registry/DB integrity and competing tools')
   .option('--fix', 'Automatically fix all fixable conflicts')
   .option('--fix-interactive', 'Fix conflicts interactively (ask for each)')
   .option('--dry-run', 'Show what --fix would do without making changes')
@@ -51,6 +54,12 @@ export const doctorCommand = new Command('doctor')
         const code = diagnoseLauncher({ json: opts.json });
         process.exit(code);
       }
+
+      // Registry/DB integrity (#168) — independent of project conflicts. Surfaces
+      // stale registrations (deleted folders, missing/corrupt DBs) that would
+      // otherwise only manifest as runtime "Project not found" errors.
+      const registry = diagnoseRegistry();
+
       // Detect project root (optional — doctor works without it)
       let projectRoot: string | undefined;
       try {
@@ -66,12 +75,14 @@ export const doctorCommand = new Command('doctor')
       if (opts.json) {
         if (opts.fix || opts.dryRun) {
           const results = fixAllConflicts(conflicts, { dryRun: opts.dryRun });
-          console.log(JSON.stringify({ conflicts, fixes: results }, null, 2));
+          console.log(JSON.stringify({ registry, conflicts, fixes: results }, null, 2));
         } else {
-          console.log(JSON.stringify(report, null, 2));
+          console.log(JSON.stringify({ registry, ...report }, null, 2));
         }
         return;
       }
+
+      printRegistryReport(registry);
 
       // --- No conflicts ---
       if (conflicts.length === 0) {
@@ -197,6 +208,101 @@ export const doctorCommand = new Command('doctor')
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Registry / DB integrity (#168)
+// ---------------------------------------------------------------------------
+
+type RegistryEntryStatus = 'ok' | 'missing_root' | 'db_missing' | 'db_unreadable';
+
+interface RegistryEntryHealth {
+  root: string;
+  name: string;
+  dbPath: string;
+  status: RegistryEntryStatus;
+}
+
+interface RegistryHealthReport {
+  registryPath: string;
+  registryExists: boolean;
+  registryCorrupt: boolean;
+  entries: RegistryEntryHealth[];
+  staleCount: number;
+}
+
+/** Open a project DB read-only and run a trivial query to confirm it's intact. */
+function checkDbReadable(dbPath: string): boolean {
+  try {
+    const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    try {
+      db.prepare('SELECT count(*) FROM sqlite_master').get();
+      return true;
+    } finally {
+      db.close();
+    }
+  } catch {
+    return false;
+  }
+}
+
+function diagnoseRegistry(): RegistryHealthReport {
+  const inspection = inspectRegistry();
+  const entries: RegistryEntryHealth[] = inspection.entries.map((e) => {
+    let status: RegistryEntryStatus;
+    if (!fs.existsSync(e.root)) {
+      status = 'missing_root';
+    } else if (!fs.existsSync(e.dbPath)) {
+      status = 'db_missing';
+    } else {
+      status = checkDbReadable(e.dbPath) ? 'ok' : 'db_unreadable';
+    }
+    return { root: e.root, name: e.name, dbPath: e.dbPath, status };
+  });
+  return {
+    registryPath: REGISTRY_PATH,
+    registryExists: inspection.exists,
+    registryCorrupt: inspection.corrupt,
+    entries,
+    staleCount: entries.filter((e) => e.status !== 'ok').length,
+  };
+}
+
+const REGISTRY_STATUS_LABEL: Record<RegistryEntryStatus, string> = {
+  ok: 'OK',
+  missing_root: 'WARNING (folder deleted)',
+  db_missing: 'WARNING (index DB missing)',
+  db_unreadable: 'WARNING (index DB unreadable/corrupt)',
+};
+
+function printRegistryReport(r: RegistryHealthReport): void {
+  if (r.registryCorrupt) {
+    console.log(
+      `[CRITICAL] Project registry is corrupt: ${shortPath(r.registryPath)}\n` +
+        '  trace-mcp is treating it as empty, so no projects are visible. Re-register ' +
+        'with `trace-mcp add <path>` (existing per-project indexes are reused).',
+    );
+    return;
+  }
+  if (!r.registryExists || r.entries.length === 0) {
+    console.log(
+      'Registry: no projects registered yet. Run `trace-mcp add <project-path>` to register one.',
+    );
+    return;
+  }
+  console.log(
+    `Registry: ${r.entries.length} project${r.entries.length > 1 ? 's' : ''}` +
+      (r.staleCount > 0 ? `, ${r.staleCount} need attention` : ' — all healthy') +
+      ` (${shortPath(r.registryPath)})`,
+  );
+  for (const e of r.entries) {
+    if (e.status === 'ok') continue;
+    console.log(`  [${REGISTRY_STATUS_LABEL[e.status]}] ${e.name}  ${shortPath(e.root)}`);
+  }
+  if (r.staleCount > 0) {
+    console.log('  Clean up stale registrations with `trace-mcp prune --apply`.');
+  }
+  console.log('');
+}
 
 function printFixResults(results: FixResult[], dryRun?: boolean) {
   const prefix = dryRun ? '(dry run) ' : '';
