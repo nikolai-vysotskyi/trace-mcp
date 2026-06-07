@@ -57,6 +57,7 @@ import {
 } from '../registry.js';
 import { ensureDaemonRunning } from './daemon.js';
 import { installGuiApp, isAppInstalled, isAppOutdated } from './install-app.js';
+import { runPreflight } from './preflight.js';
 
 export const initCommand = new Command('init')
   .description('One-time global setup: configure MCP clients, install hooks, set up CLAUDE.md')
@@ -105,6 +106,32 @@ export const initCommand = new Command('init')
       // Detect existing MCP clients and hook state
       const mcpClients = detectMcpClients();
       const { hasGuardHook, guardHookVersion } = detectGuardHook();
+
+      // Preflight (#124): fail fast on a broken environment with an actionable
+      // message instead of a mid-run stack trace.
+      const preflight = runPreflight({ mcpClientCount: mcpClients.length });
+      if (!preflight.ok) {
+        const errors = preflight.checks.filter((c) => c.severity !== 'ok');
+        if (opts.json) {
+          console.log(JSON.stringify({ preflight: preflight.checks, ok: false }, null, 2));
+        } else {
+          console.error('trace-mcp init — preflight failed:\n');
+          for (const c of errors) {
+            console.error(`  [${c.severity.toUpperCase()}] ${c.message}`);
+            if (c.hint) console.error(`         ${c.hint}`);
+          }
+          console.error('\nFix the above and re-run `trace-mcp init`. See `trace-mcp doctor`.');
+        }
+        process.exit(1);
+      }
+      // Surface non-fatal preflight warnings (e.g. no MCP client detected).
+      if (!nonInteractive) {
+        for (const c of preflight.checks) {
+          if (c.severity === 'warn') {
+            p.log.warn(`${c.message}${c.hint ? ` — ${c.hint}` : ''}`);
+          }
+        }
+      }
 
       // --- Interactive questions ---
       let selectedClients: DetectedMcpClient['name'][] = [];
@@ -547,7 +574,9 @@ export const initCommand = new Command('init')
         }
         if (!opts.dryRun) {
           console.log(
-            '\n  Next: run `trace-mcp add` in a project directory to register it for indexing.\n',
+            '\n  Next: run `trace-mcp add` in a project directory to register it for indexing,\n' +
+              '  then ask your agent to call `get_project_map` to confirm it works.\n' +
+              '  If anything looks off, run `trace-mcp doctor`.\n',
           );
         }
       } else {
@@ -572,8 +601,8 @@ export const initCommand = new Command('init')
 
         p.outro(
           indexProject
-            ? 'Ready! Project registered and indexed.'
-            : 'Ready! Run `trace-mcp add` in a project directory to register it for indexing.',
+            ? 'Ready! Project registered and indexed — ask your agent to call `get_project_map` to confirm. Trouble? `trace-mcp doctor`.'
+            : 'Ready! Run `trace-mcp add` in a project directory, then call `get_project_map` to confirm. Trouble? `trace-mcp doctor`.',
         );
       }
     },
