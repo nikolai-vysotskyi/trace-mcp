@@ -23,7 +23,7 @@ import Database from 'better-sqlite3';
 import { Command } from 'commander';
 import { ensureGlobalDirs, projectHash, projectName } from '../global.js';
 import { logger } from '../logger.js';
-import { listProjects } from '../registry.js';
+import { listProjects, pruneStaleProjects } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
 
 /** Categories assigned to each DB candidate. */
@@ -413,14 +413,39 @@ export const pruneCommand = new Command('prune')
 
       const summary = pruneIndexDir({ apply, aggressive, sessionTtlDays });
 
+      // Stale registry rows (folder deleted) cause "Project not found" at runtime
+      // (#168). The DB-file sweep above doesn't touch registry.json, so prune
+      // them here too: report on dry-run, remove on --apply.
+      const staleRegistryRoots = listProjects()
+        .filter((e) => !fs.existsSync(e.root))
+        .map((e) => e.root);
+      const removedRegistryRoots = apply ? pruneStaleProjects() : [];
+
       if (opts.json) {
         console.log(
-          JSON.stringify(toJson(summary, { apply, aggressive, sessionTtlDays }), null, 2),
+          JSON.stringify(
+            {
+              ...(toJson(summary, { apply, aggressive, sessionTtlDays }) as object),
+              staleRegistryRoots,
+              removedRegistryRoots,
+            },
+            null,
+            2,
+          ),
         );
         return;
       }
 
       printSummary(summary, { apply, aggressive, sessionTtlDays });
+      if (staleRegistryRoots.length > 0) {
+        const heading = apply
+          ? `Removed ${removedRegistryRoots.length} stale registry entr${removedRegistryRoots.length === 1 ? 'y' : 'ies'}:`
+          : `${staleRegistryRoots.length} stale registry entr${staleRegistryRoots.length === 1 ? 'y' : 'ies'} (folder deleted) — would remove:`;
+        p.note(
+          [heading, ...staleRegistryRoots.map((r) => `  ${shortPath(r)}`)].join('\n'),
+          'Registry',
+        );
+      }
       if (!apply) {
         p.outro('Dry-run only — re-run with --apply to delete.');
       } else {

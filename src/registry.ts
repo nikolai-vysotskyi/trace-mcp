@@ -141,7 +141,7 @@ export function listProjects(): RegistryEntry[] {
 }
 
 /** Remove entries whose root directory no longer exists. Returns removed paths. */
-function _pruneStaleProjects(): string[] {
+export function pruneStaleProjects(): string[] {
   const reg = loadRegistry();
   const removed: string[] = [];
 
@@ -154,6 +154,43 @@ function _pruneStaleProjects(): string[] {
 
   if (removed.length > 0) saveRegistry(reg);
   return removed;
+}
+
+export interface RegistryFileInspection {
+  /** registry.json is present on disk. */
+  exists: boolean;
+  /** File exists but is unparseable or has the wrong shape. `loadRegistry`
+   *  silently treats this as empty; `doctor` surfaces it so the user knows
+   *  their project list was lost rather than never created (#168). */
+  corrupt: boolean;
+  /** Parsed entries (empty when missing or corrupt). */
+  entries: RegistryEntry[];
+}
+
+/**
+ * Inspect registry.json without the silent corrupt→empty coercion that
+ * `loadRegistry` applies. Distinguishes "missing" from "corrupt" so the doctor
+ * report can tell the user which one they're looking at.
+ */
+export function inspectRegistry(): RegistryFileInspection {
+  if (!fs.existsSync(REGISTRY_PATH)) {
+    return { exists: false, corrupt: false, entries: [] };
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
+  } catch {
+    return { exists: true, corrupt: true, entries: [] };
+  }
+  const reg = raw as Partial<Registry> | null;
+  if (!reg || typeof reg !== 'object' || reg.version !== 1 || typeof reg.projects !== 'object') {
+    return { exists: true, corrupt: true, entries: [] };
+  }
+  return {
+    exists: true,
+    corrupt: false,
+    entries: Object.values(reg.projects as Record<string, RegistryEntry>),
+  };
 }
 
 export function updateLastIndexed(root: string): void {
