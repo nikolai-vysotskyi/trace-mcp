@@ -56,6 +56,15 @@ export const DEFAULT_DAEMON_PORT = 3741;
 /** Daemon log file path. */
 export const DAEMON_LOG_PATH = path.join(TRACE_MCP_HOME, 'daemon.log');
 
+/**
+ * Opt-out sentinel for the background daemon (#202). When this file exists,
+ * `ensureDaemon`/`tryAutoSpawnDaemon` treat the daemon as explicitly disabled:
+ * they do NOT (re)install the launchd plist or spawn a detached process. Written
+ * by `trace-mcp daemon stop`, cleared by `trace-mcp daemon start`/`restart`.
+ * Lets a user who prefers pure stdio remove the daemon and have it stay gone.
+ */
+export const DAEMON_DISABLED_PATH = path.join(TRACE_MCP_HOME, 'daemon.disabled');
+
 /** launchd plist path for auto-start on macOS. */
 export const LAUNCHD_PLIST_PATH = path.join(
   os.homedir(),

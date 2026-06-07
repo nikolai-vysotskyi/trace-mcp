@@ -3,6 +3,10 @@ import { DEFAULT_DAEMON_PORT } from '../global.js';
 export interface DaemonHealthResponse {
   status: 'ok';
   transport: 'http';
+  /** Daemon version (PKG_VERSION of the running serve-http process). */
+  version?: string;
+  /** OS process id of the running daemon. */
+  pid?: number;
   uptime?: number;
   projects?: { root: string; status: string }[];
 }

@@ -2,8 +2,20 @@ import { execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { Command } from 'commander';
 import { getDaemonHealth } from '../daemon/client.js';
-import { ensureDaemon, restartDaemon, stopDaemon, waitForDaemonUp } from '../daemon/lifecycle.js';
-import { DAEMON_LOG_PATH, DEFAULT_DAEMON_PORT, LAUNCHD_PLIST_PATH } from '../global.js';
+import {
+  enableDaemon,
+  ensureDaemon,
+  isDaemonDisabled,
+  restartDaemon,
+  stopDaemon,
+  waitForDaemonUp,
+} from '../daemon/lifecycle.js';
+import {
+  DAEMON_DISABLED_PATH,
+  DAEMON_LOG_PATH,
+  DEFAULT_DAEMON_PORT,
+  LAUNCHD_PLIST_PATH,
+} from '../global.js';
 import {
   aggregateHookStats,
   fetchDaemonStats,
@@ -51,6 +63,13 @@ daemonCommand
       return;
     }
 
+    // Explicit start clears any prior opt-out (e.g. from `daemon stop`) so the
+    // daemon can be brought back after a user removed it (#202).
+    if (isDaemonDisabled()) {
+      console.log('Clearing daemon opt-out (set by a previous `daemon stop`).');
+      enableDaemon();
+    }
+
     const result = await ensureDaemon({ port });
     if (!result.ok) {
       console.error(`Failed to start daemon: ${result.error ?? 'unknown'}`);
@@ -75,6 +94,10 @@ daemonCommand
   .action(async () => {
     stopDaemon();
     console.log('Daemon stopped.');
+    console.log(
+      'Auto-spawn is now disabled — stdio sessions will run local-only and will not ' +
+        'reinstall the daemon. Re-enable with `trace-mcp daemon start`.',
+    );
   });
 
 daemonCommand
@@ -110,6 +133,8 @@ daemonCommand
     const port = parseInt(opts.port, 10);
     const health = await getDaemonHealth(port);
 
+    const disabled = isDaemonDisabled();
+
     if (!health) {
       console.log(`Daemon is not reachable on port ${port}.`);
       if (process.platform === 'darwin') {
@@ -117,14 +142,32 @@ daemonCommand
         console.log(`  launchd plist: ${loaded ? 'loaded' : 'not loaded'}`);
         console.log(`  Plist path: ${LAUNCHD_PLIST_PATH}`);
       }
+      if (disabled) {
+        console.log(`  Auto-spawn: disabled (opt-out file: ${DAEMON_DISABLED_PATH})`);
+        console.log('  Re-enable with `trace-mcp daemon start`.');
+      } else {
+        console.log('  Auto-spawn: enabled (a stdio session will start it on demand).');
+        console.log(
+          '  Disable with `trace-mcp daemon stop`, or set TRACE_MCP_NO_DAEMON=1 / ' +
+            'auto_spawn_daemon=false in ~/.trace-mcp/.config.json for a single session.',
+        );
+      }
       process.exit(1);
     }
 
     console.log(`Daemon is running on port ${port}.`);
+    if (health.version) console.log(`  Version: ${health.version}`);
+    if (health.pid != null) console.log(`  PID: ${health.pid}`);
     if (health.uptime != null) {
       const h = Math.floor(health.uptime / 3600);
       const m = Math.floor((health.uptime % 3600) / 60);
       console.log(`  Uptime: ${h}h ${m}m`);
+    }
+    if (disabled) {
+      console.log(
+        `  Note: opt-out file present (${DAEMON_DISABLED_PATH}) but a daemon is still running; ` +
+          'it will not be auto-respawned after it exits.',
+      );
     }
     if (health.projects) {
       console.log(`  Projects: ${health.projects.length}`);
