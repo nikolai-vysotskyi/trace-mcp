@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.42.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.41.3...v1.42.0) (2026-06-08)
+
+
+### Features
+
+* **init:** preflight checks + verify/doctor hints for first-run ([#124](https://github.com/nikolai-vysotskyi/trace-mcp/issues/124)) ([7502b73](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7502b73ced181b8cdc89b1ef313df1ef808c7682))
+
+
+### Bug Fixes
+
+* **daemon:** respect explicit opt-out so removed daemon stays gone ([#202](https://github.com/nikolai-vysotskyi/trace-mcp/issues/202)) ([1aca174](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1aca1745529fb223f20ef127d97f5ef4cea5869d))
+* **quality:** exclude .env* files from code-smell scanning ([3be2c25](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3be2c25d87d4b35c685408bec369642994319737))
+* **registry:** doctor reports registry/DB integrity, prune removes stale rows ([#168](https://github.com/nikolai-vysotskyi/trace-mcp/issues/168)) ([b6550ce](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b6550ce16d07317f87a71e17e2d6ee77fa42a615))
+* **topology:** make subproject client-call scan async to unblock the event loop ([e9316ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e9316abdbf811c1d5eb0c757bf86d6981e2f1fc0)), closes [#198](https://github.com/nikolai-vysotskyi/trace-mcp/issues/198)
+
+
+### Documentation
+
+* **config:** add stdio vs HTTP setup guide for per-repo and team use ([ba80138](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ba8013806f7201f87c6d3c25f838ef4918705e0a))
+* **project-model:** document one-project-per-session model + serve-http log ([#199](https://github.com/nikolai-vysotskyi/trace-mcp/issues/199)) ([14bb2ca](https://github.com/nikolai-vysotskyi/trace-mcp/commit/14bb2cac3dcc5a9ea4c479fa4a3ec483afd0a782))
+
 ## [1.41.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.41.2...v1.41.3) (2026-06-01)
 
 
