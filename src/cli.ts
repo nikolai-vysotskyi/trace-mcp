@@ -6,6 +6,7 @@
 // session. We force UTF-8 and route stdout writes to stderr until the MCP
 // server is wired (see src/server/transport-hardening.ts).
 import { hardenStdio } from './server/transport-hardening.js';
+import { installProcessSafetyNet } from './server/process-safety-net.js';
 
 if (process.argv.includes('serve') || process.argv.length === 2) {
   hardenStdio();
@@ -238,6 +239,10 @@ program
   .command('serve', { isDefault: true })
   .description('Start MCP server (stdio transport)')
   .action(async () => {
+    // Keep a stray unhandled rejection / uncaught exception from tearing down
+    // the whole MCP session — log it and stay alive instead (see #202-adjacent
+    // "disconnects/crashes" reports).
+    installProcessSafetyNet('serve');
     const projectRoot = process.cwd();
 
     // Auto-update: check if a newer trace-mcp version is available and install it.
@@ -386,6 +391,9 @@ program
   .option('-p, --port <port>', 'Port to listen on', '3741')
   .option('--host <host>', 'Host to bind to', '127.0.0.1')
   .action(async (opts: { port: string; host: string }) => {
+    // A single unhandled rejection must not take down the daemon serving every
+    // registered project — log and stay alive.
+    installProcessSafetyNet('serve-http');
     // Auto-update (same logic as serve)
     const globalRaw = loadGlobalConfigRaw();
     if (globalRaw.auto_update !== false) {
