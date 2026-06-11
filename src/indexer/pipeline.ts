@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { cpus } from 'node:os';
 import path from 'node:path';
 import fg from 'fast-glob';
+import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import {
   disableBulkMode,
@@ -411,6 +412,11 @@ export class IndexingPipeline {
       // still pass 'full' explicitly when needed.
       this._postprocessLevel = opts.postprocess ?? 'minimal';
       const start = Date.now();
+      // Same exclude gate collectFiles() applies via fast-glob. Without it,
+      // event-driven entry points (watcher, hooks, register_edit, HTTP) index
+      // runtime churn the full pipeline would never touch — e.g. Laravel
+      // storage/framework/sessions blobs arriving on every web request.
+      const isExcluded = this.getExcludeMatcher();
       const relPaths: string[] = [];
       for (const fp of filePaths) {
         const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
@@ -419,12 +425,26 @@ export class IndexingPipeline {
           logger.warn({ file: fp }, 'Path traversal blocked in indexFiles');
           continue;
         }
+        if (isExcluded(rel.split(path.sep).join('/'))) {
+          logger.debug({ file: rel }, 'Excluded path skipped in indexFiles');
+          continue;
+        }
         relPaths.push(rel);
       }
       return this.runPipeline(relPaths, false, start);
     });
     this._lock = result.catch(() => {});
     return result as Promise<IndexingResult>;
+  }
+
+  private _excludeMatcher?: (p: string) => boolean;
+
+  /** Lazily-built picomatch matcher over config.exclude (POSIX rel paths). */
+  private getExcludeMatcher(): (p: string) => boolean {
+    if (!this._excludeMatcher) {
+      this._excludeMatcher = picomatch(this.config.exclude ?? [], { dot: true });
+    }
+    return this._excludeMatcher;
   }
 
   private async runPipeline(
@@ -998,12 +1018,18 @@ export class IndexingPipeline {
     const traceignoreIgnore = this._traceignore?.toFastGlobIgnore() ?? [];
     const ignore = [...this.config.exclude, ...traceignoreIgnore];
 
+    // suppressErrors: a path component that matches a directory-shaped glob
+    // but is actually a file (e.g. a stray `<ws>/test` FILE meeting the
+    // `test/**` include) made fast-glob throw ENOTDIR and abort the whole
+    // initial index, bricking the project in 'error' state. Traversal errors
+    // (ENOTDIR/EACCES/ELOOP) must skip the entry, not kill indexing.
     let entries = await fg(this.config.include, {
       cwd: this.rootPath,
       ignore,
       dot: false,
       absolute: false,
       onlyFiles: true,
+      suppressErrors: true,
     });
 
     // Monorepo / folder-of-projects: the directory-rooted include globs
@@ -1024,6 +1050,7 @@ export class IndexingPipeline {
           dot: false,
           absolute: false,
           onlyFiles: true,
+          suppressErrors: true,
         });
         if (wsEntries.length > 0) {
           const merged = new Set(entries);
@@ -1047,6 +1074,7 @@ export class IndexingPipeline {
           dot: false,
           absolute: false,
           onlyFiles: true,
+          suppressErrors: true,
         });
         if (entries.length > 0) {
           logger.info(

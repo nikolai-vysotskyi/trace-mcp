@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import type * as parcelWatcher from '@parcel/watcher';
+import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
@@ -96,6 +97,11 @@ export class FileWatcher {
     const watcher = await loadParcelWatcher();
     const traceignore = new TraceignoreMatcher(rootPath, config.ignore ?? {});
     const ignoreDirs = [...traceignore.getSkipDirs()].map((d) => path.join(rootPath, d));
+    // config.exclude globs (e.g. **/storage/**, **/node_modules/**) gate
+    // collectFiles() but historically NOT watcher events — so runtime churn
+    // dirs excluded from full indexing (Laravel storage/framework/sessions,
+    // caches) still triggered per-event reindexes. Apply the same globs here.
+    const isExcluded = picomatch(config.exclude ?? [], { dot: true });
 
     this.subscription = await watcher.subscribe(
       rootPath,
@@ -108,6 +114,7 @@ export class FileWatcher {
         const notIgnored = (p: string) => {
           if (ignoreDirs.some((d) => p.startsWith(d))) return false;
           const rel = path.relative(rootPath, p);
+          if (isExcluded(rel.split(path.sep).join('/'))) return false;
           return !traceignore.isIgnored(rel);
         };
 
@@ -145,7 +152,17 @@ export class FileWatcher {
         }, debounceMs);
       },
       {
-        ignore: ignoreDirs,
+        // Native-level ignore: absolute top-level dirs PLUS nested globs.
+        // `path.join(root, 'node_modules')` alone misses `<root>/sub/node_modules`
+        // in monorepos/container roots — every nested dep change still woke the
+        // process. Parcel matches globs relative to the watched root, so
+        // `**/node_modules/**` and the config.exclude globs (storage/, caches)
+        // drop those events before they ever cross the native→JS boundary.
+        ignore: [
+          ...ignoreDirs,
+          ...[...traceignore.getSkipDirs()].map((d) => `**/${d}/**`),
+          ...(config.exclude ?? []),
+        ],
       },
     );
 

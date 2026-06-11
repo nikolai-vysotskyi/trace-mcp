@@ -87,6 +87,38 @@ describe('FileWatcher', () => {
     );
   });
 
+  it('drops events matching config.exclude globs (runtime churn dirs)', async () => {
+    const onChanges = vi.fn().mockResolvedValue(undefined);
+    const config: TraceMcpConfig = {
+      ...mockConfig,
+      exclude: ['**/storage/**', '**/bootstrap/cache/**'],
+    };
+    await watcher.start('/project', config, onChanges);
+
+    await capturedCallback(null, [
+      { type: 'create', path: '/project/storage/framework/sessions/ePOAB7aEuvxc' },
+      { type: 'update', path: '/project/bootstrap/cache/services.php' },
+      { type: 'update', path: '/project/src/app.ts' },
+    ]);
+    await timer.flush();
+
+    expect(onChanges).toHaveBeenCalledTimes(1);
+    expect(onChanges).toHaveBeenCalledWith(['/project/src/app.ts']);
+  });
+
+  it('passes nested skip-dir globs and exclude globs to the native ignore list', async () => {
+    const config: TraceMcpConfig = { ...mockConfig, exclude: ['**/storage/**'] };
+    await watcher.start('/project', config, vi.fn());
+
+    expect(parcelWatcher.subscribe).toHaveBeenCalledWith(
+      '/project',
+      expect.any(Function),
+      expect.objectContaining({
+        ignore: expect.arrayContaining(['**/node_modules/**', '**/storage/**']),
+      }),
+    );
+  });
+
   it('calls onChanges after debounce for create and update events', async () => {
     const onChanges = vi.fn().mockResolvedValue(undefined);
     await watcher.start('/project', mockConfig, onChanges);
