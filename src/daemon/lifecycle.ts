@@ -249,7 +249,29 @@ function ensurePlistInstalled(port: number): { ok: boolean; error?: string; rege
   return { ok: true, regenerated: true };
 }
 
+/** Rotate daemon.log once it exceeds this size (bytes). */
+const DAEMON_LOG_MAX_BYTES = 20 * 1024 * 1024;
+
+/**
+ * Size-capped rotation: daemon.log → daemon.log.1 (previous .1 dropped).
+ * daemon.log grew unbounded (149 MB observed in the field) because launchd
+ * and the detached-spawn path both append forever. Called only at points
+ * where the daemon is about to (re)start — rotating under a live daemon
+ * would leave its fd writing to the renamed file.
+ */
+export function rotateDaemonLogIfLarge(maxBytes: number = DAEMON_LOG_MAX_BYTES): void {
+  try {
+    const st = fs.statSync(DAEMON_LOG_PATH);
+    if (st.size <= maxBytes) return;
+    fs.rmSync(`${DAEMON_LOG_PATH}.1`, { force: true });
+    fs.renameSync(DAEMON_LOG_PATH, `${DAEMON_LOG_PATH}.1`);
+  } catch {
+    /* missing file or permission issue — rotation is best-effort */
+  }
+}
+
 function ensureDaemonMac(port: number): EnsureResult {
+  rotateDaemonLogIfLarge();
   const install = ensurePlistInstalled(port);
   if (!install.ok) return { ok: false, error: install.error };
   // Idempotent: when the plist was already current AND launchd already has it
@@ -271,6 +293,7 @@ function stopDaemonMac(): void {
 }
 
 function restartDaemonMac(port: number): EnsureResult {
+  rotateDaemonLogIfLarge();
   // Regenerate stale plist first, then ensure it's loaded, then force kickstart.
   const install = ensurePlistInstalled(port);
   if (!install.ok) return { ok: false, error: install.error };
@@ -463,6 +486,7 @@ function ensureDaemonGeneric(port: number): EnsureResult {
 
   let logFd: number;
   try {
+    rotateDaemonLogIfLarge();
     logFd = fs.openSync(DAEMON_LOG_PATH, 'a');
   } catch (err) {
     return { ok: false, error: `Cannot open log: ${(err as Error).message}` };
