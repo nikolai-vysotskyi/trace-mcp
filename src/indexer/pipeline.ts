@@ -776,6 +776,12 @@ export class IndexingPipeline {
 
       const processed = result.indexed + result.skipped + result.errors;
       this.progress?.update('indexing', { processed });
+      // persistBatch is one synchronous SQLite transaction over up to 500
+      // files — stacked back-to-back across batches it starves the event
+      // loop, /health stops answering, and the desktop app's watchdog kills
+      // the daemon mid-warm-up. One macrotask turn per batch keeps the
+      // process responsive at negligible cost.
+      await new Promise<void>((r) => setImmediate(r));
     }
 
     if (useFtsRebuild) enableFts5Triggers(this.store.db);
@@ -817,37 +823,55 @@ export class IndexingPipeline {
     }
   }
 
-  /** Run every edge resolver against `scope` (undefined = full pass). */
+  /**
+   * Run every edge resolver against `scope` (undefined = full pass).
+   *
+   * Each resolver stage is fully synchronous (better-sqlite3 + in-memory
+   * indexes); on large repos a full pass holds the event loop for seconds.
+   * That made the daemon's /health endpoint unresponsive during warm-up, and
+   * the desktop app's 5s watchdog answered by shooting the daemon with
+   * `daemon restart` — an infinite restart loop in the field. The
+   * setImmediate yield between stages gives pending I/O (health checks, MCP
+   * requests) a turn while preserving stage ORDER (fastapi-mounts needs
+   * python imports; file-projection must run last).
+   */
   private async runEdgeResolvers(scope: ChangeScope | undefined): Promise<void> {
     if (scope === undefined) this._lastFullResolveMs = Date.now();
+    const yieldLoop = () => new Promise<void>((r) => setImmediate(r));
     const edgeResolver = new EdgeResolver(this.getPipelineState());
     await edgeResolver.resolveEdges(
       this.buildProjectContext(),
       this.buildResolveContext(scope),
       scope,
     );
-    edgeResolver.resolveOrmAssociationEdges(scope);
-    edgeResolver.resolveTypeScriptHeritageEdges(scope);
-    edgeResolver.resolveEsmImportEdges(scope);
-    edgeResolver.resolvePythonImportEdges(scope);
-    edgeResolver.resolvePhpImportEdges(scope);
-    edgeResolver.resolvePhpCallEdges(scope);
-    edgeResolver.resolveTypeScriptCallEdges(scope);
-    edgeResolver.resolveTypeScriptTypeEdges(scope);
-    edgeResolver.resolveMemberOfEdges(scope);
-    edgeResolver.resolvePythonHeritageEdges(scope);
-    edgeResolver.resolvePythonCallEdges(scope);
-    // After Python imports + calls: turn type annotations into `references`
-    // edges. Runs before file projection so they reach the file-level graph too.
-    edgeResolver.resolvePythonTypeEdges(scope);
-    // Cross-file FastAPI mount prefixes — needs resolved Python imports above.
-    edgeResolver.resolveFastapiRouterMounts(scope);
-    edgeResolver.resolveTestCoversEdges(scope);
-    edgeResolver.resolveMarkdownWikilinkEdges(scope);
-    edgeResolver.resolveMarkdownTagEdges(scope);
-    // Must run last — projects cross-file symbol edges to file-level `imports`
-    // edges so the file dependency graph is as rich as the symbol graph.
-    edgeResolver.resolveFileProjectionEdges(scope);
+    const stages: Array<() => void> = [
+      () => edgeResolver.resolveOrmAssociationEdges(scope),
+      () => edgeResolver.resolveTypeScriptHeritageEdges(scope),
+      () => edgeResolver.resolveEsmImportEdges(scope),
+      () => edgeResolver.resolvePythonImportEdges(scope),
+      () => edgeResolver.resolvePhpImportEdges(scope),
+      () => edgeResolver.resolvePhpCallEdges(scope),
+      () => edgeResolver.resolveTypeScriptCallEdges(scope),
+      () => edgeResolver.resolveTypeScriptTypeEdges(scope),
+      () => edgeResolver.resolveMemberOfEdges(scope),
+      () => edgeResolver.resolvePythonHeritageEdges(scope),
+      () => edgeResolver.resolvePythonCallEdges(scope),
+      // After Python imports + calls: turn type annotations into `references`
+      // edges. Runs before file projection so they reach the file-level graph too.
+      () => edgeResolver.resolvePythonTypeEdges(scope),
+      // Cross-file FastAPI mount prefixes — needs resolved Python imports above.
+      () => edgeResolver.resolveFastapiRouterMounts(scope),
+      () => edgeResolver.resolveTestCoversEdges(scope),
+      () => edgeResolver.resolveMarkdownWikilinkEdges(scope),
+      () => edgeResolver.resolveMarkdownTagEdges(scope),
+      // Must run last — projects cross-file symbol edges to file-level `imports`
+      // edges so the file dependency graph is as rich as the symbol graph.
+      () => edgeResolver.resolveFileProjectionEdges(scope),
+    ];
+    for (const stage of stages) {
+      await yieldLoop();
+      stage();
+    }
   }
 
   /**

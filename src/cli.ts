@@ -2551,7 +2551,16 @@ program
       res.end();
     });
 
-    const shutdown = async () => {
+    const shutdown = async (reason?: string) => {
+      // Field debugging of the 60s restart loop (desktop-app /health watchdog
+      // firing `daemon restart` against a warming daemon) was blind because
+      // shutdowns left no trace of WHO asked. Always say why we're going down.
+      // `process.on('SIGTERM', shutdown)` passes the signal name as arg 1;
+      // programmatic callers pass their own reason string.
+      logger.info(
+        { reason: reason ?? 'unknown', uptimeSec: Math.floor((Date.now() - startedAt) / 1000) },
+        'Daemon shutting down',
+      );
       // Close SSE connections
       for (const res of sseConnections) {
         try {
@@ -2618,7 +2627,7 @@ program
       idleTimeoutMs: configuredIdleMinutes * 60_000,
       isBusy: () => clients.size > 0 || sessionTransports.size > 0 || sseConnections.size > 0,
       onIdle: async () => {
-        await shutdown();
+        await shutdown('idle-exit');
       },
     });
     // Track activity: wrap the client/session/SSE mutation points in-place via
@@ -2688,7 +2697,7 @@ program
                 { running: PKG_VERSION, installed: pkg.version },
                 'Installed version changed — shutting down so supervisor respawns with fresh binary',
               );
-              void shutdown();
+              void shutdown('version-staleness');
             }
           } catch {
             /* transient read error — try again next tick */
