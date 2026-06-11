@@ -90,7 +90,12 @@ export interface OutlineSymbolMinimal {
   line: number | null | undefined;
 }
 
-export function compactOutlineSymbols(symbols: OutlineSymbolFull[]): OutlineSymbolMinimal[] {
+// Accept any row carrying the fields we actually read, so both OutlineSymbolFull
+// (index-signature shape) and FileOutlineSymbol (the get_outline result row) pass
+// without an unsafe cast.
+export function compactOutlineSymbols(
+  symbols: ReadonlyArray<{ name: string; kind: string; lineStart?: number | null }>,
+): OutlineSymbolMinimal[] {
   return symbols.map((s) => ({
     name: s.name,
     kind: s.kind,
