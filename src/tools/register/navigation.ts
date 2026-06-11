@@ -797,7 +797,14 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         }
         return { content: [{ type: 'text', text: jh('get_feature_context', enriched) }] };
       }
-      const freshened = enrichItemsWithFreshness(store, projectRoot, result.items);
+      // FeatureContextItem carries the path as `filePath`; enrichItemsWithFreshness
+      // keys off `file`. Provide it so per-item freshness actually resolves instead
+      // of silently defaulting to 'fresh'.
+      const freshened = enrichItemsWithFreshness(
+        store,
+        projectRoot,
+        result.items.map((it) => ({ ...it, file: it.filePath })),
+      );
       const top = freshened.items[0];
       const confidence = computeRetrievalConfidence({
         scores: freshened.items.map((i) => Number((i as { score?: number }).score ?? 0)),
@@ -940,7 +947,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         name?: string;
         fqn?: string | null;
       }>;
-      let payload: Record<string, unknown> = { ...(result.value as Record<string, unknown>) };
+      let payload: Record<string, unknown> = { ...result.value };
       if (primaryItems.length > 0) {
         const freshened = enrichItemsWithFreshness(store, projectRoot, primaryItems);
         payload.primary = freshened.items;
