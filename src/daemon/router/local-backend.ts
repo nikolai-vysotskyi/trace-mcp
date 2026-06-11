@@ -32,6 +32,7 @@ import { trailingDebounce } from '../../util/debounce.js';
 import { BackgroundLspEnricher } from '../../lsp/background-enricher.js';
 import { serializeError } from '../log-error.js';
 import { getReindexStats } from '../reindex-stats.js';
+import { seedSessionDbFromShared, sweepOrphanedSessionDbs } from './session-db.js';
 import type { Backend } from './types.js';
 
 const AI_COALESCE_WAIT_MS = 5_000;
@@ -107,6 +108,27 @@ export class LocalBackend implements Backend {
   private async doStart(): Promise<void> {
     const { projectRoot, config } = this.opts;
     ensureGlobalDirs();
+
+    // Reclaim session DBs leaked by SIGKILLed siblings (graceful dispose
+    // unlinks them; killed processes don't). PID-liveness guarded — live
+    // sessions are never touched. Best-effort and cheap (~ms per file).
+    try {
+      sweepOrphanedSessionDbs(path.dirname(this.dbPath));
+    } catch {
+      /* never block startup on janitorial work */
+    }
+
+    // Seed this session's DB from the canonical project DB (when one
+    // exists) so the initial indexAll() below is a hash-gated validation
+    // pass instead of a full from-scratch index. N stdio sessions during a
+    // daemon outage used to mean N complete re-indexes of the same repo.
+    const seeded = await seedSessionDbFromShared(this.opts.sharedDbPath, this.dbPath);
+    if (seeded) {
+      logger.info(
+        { sharedDbPath: this.opts.sharedDbPath, sessionDbPath: this.dbPath },
+        'Session DB seeded from shared project DB',
+      );
+    }
 
     // Build all full-mode resources up-front — cheap (~500ms) compared to indexing.
     this.db = initializeDatabase(this.dbPath);

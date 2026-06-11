@@ -36,7 +36,7 @@ export const TRACE_MCP_HOME = (() => {
 export const GLOBAL_CONFIG_PATH = path.join(TRACE_MCP_HOME, '.config.json');
 
 /** Directory for per-project SQLite databases. */
-const INDEX_DIR = path.join(TRACE_MCP_HOME, 'index');
+export const INDEX_DIR = path.join(TRACE_MCP_HOME, 'index');
 
 /** Global project registry. */
 export const REGISTRY_PATH = path.join(TRACE_MCP_HOME, 'registry.json');

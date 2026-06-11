@@ -902,6 +902,8 @@ export class IndexingPipeline {
   private static readonly EDGE_RECONCILE_DEBOUNCE_MS = 10_000;
   private _reconcileDebounceMs: number = IndexingPipeline.EDGE_RECONCILE_DEBOUNCE_MS;
   private _reconcileTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Date.now() at the most recent scheduleEdgeReconcile() call. */
+  private _reconcileScheduledAt = 0;
   /** Timestamp of the most recent full (scope=undefined) resolver pass. */
   private _lastFullResolveMs = 0;
 
@@ -916,26 +918,43 @@ export class IndexingPipeline {
    */
   private scheduleEdgeReconcile(): void {
     if (this._reconcileTimer) clearTimeout(this._reconcileTimer);
-    const scheduledAt = Date.now();
-    this._reconcileTimer = setTimeout(() => {
-      this._reconcileTimer = null;
-      const run = this._lock.then(async () => {
-        if (this._disposed) return;
-        // A full pass already ran after this was scheduled (forced reindex,
-        // large-batch fallback) — the graph is already reconciled.
-        if (this._lastFullResolveMs >= scheduledAt) return;
-        const start = Date.now();
-        await this.runEdgeResolvers(undefined);
-        invalidatePageRankCache();
-        invalidateSearchCache();
-        logger.info({ durationMs: Date.now() - start }, 'Deferred edge reconcile completed');
-      });
-      this._lock = run.catch((e) => {
-        logger.warn({ error: e }, 'Deferred edge reconcile failed');
-      });
-    }, this._reconcileDebounceMs);
+    this._reconcileScheduledAt = Date.now();
+    this._reconcileTimer = setTimeout(() => this.fireEdgeReconcile(), this._reconcileDebounceMs);
     // Never keep the process alive just for a pending reconcile.
     this._reconcileTimer.unref?.();
+  }
+
+  /** Timer body for the deferred reconcile — chains the full pass onto the pipeline lock. */
+  private fireEdgeReconcile(): void {
+    this._reconcileTimer = null;
+    const scheduledAt = this._reconcileScheduledAt;
+    const run = this._lock.then(async () => {
+      if (this._disposed) return;
+      // A full pass already ran after this was scheduled (forced reindex,
+      // large-batch fallback) — the graph is already reconciled.
+      if (this._lastFullResolveMs >= scheduledAt) return;
+      const start = Date.now();
+      await this.runEdgeResolvers(undefined);
+      invalidatePageRankCache();
+      invalidateSearchCache();
+      logger.info({ durationMs: Date.now() - start }, 'Deferred edge reconcile completed');
+    });
+    this._lock = run.catch((e) => {
+      logger.warn({ error: e }, 'Deferred edge reconcile failed');
+    });
+  }
+
+  /**
+   * Test hook: fire a pending deferred reconcile immediately and await it.
+   * Lets tests assert coalescing behaviour deterministically (large injected
+   * debounce + explicit flush) instead of racing wall-clock timers. No-op
+   * when nothing is scheduled.
+   */
+  async __flushEdgeReconcileForTests(): Promise<void> {
+    if (!this._reconcileTimer) return;
+    clearTimeout(this._reconcileTimer);
+    this.fireEdgeReconcile();
+    await this._lock;
   }
 
   /** Pass 3: LSP enrichment — upgrade call graph edges with compiler-grade resolution. */

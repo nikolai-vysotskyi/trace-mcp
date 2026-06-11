@@ -67,8 +67,10 @@ import {
   ensureGlobalDirs,
   GLOBAL_CONFIG_PATH,
   getDbPath,
+  INDEX_DIR,
   TOPOLOGY_DB_PATH,
 } from './global.js';
+import { sweepOrphanedSessionDbs } from './daemon/router/session-db.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import {
   installGuardHook,
@@ -2735,6 +2737,18 @@ program
       // pay the WASM cold-start tax. Best-effort, fire-and-forget.
       void ensureInitialized().catch(() => {
         /* warm-up failure is non-fatal; lazy path still works */
+      });
+
+      // Janitor: reclaim session DBs leaked by SIGKILLed stdio sessions
+      // (graceful dispose unlinks them; killed processes don't — observed
+      // 60 orphans / 1.9 GB in the field). PID-liveness guarded, never
+      // touches a live session. Deferred so it can't delay first requests.
+      setImmediate(() => {
+        try {
+          sweepOrphanedSessionDbs(INDEX_DIR);
+        } catch {
+          /* janitorial only — never affects daemon startup */
+        }
       });
 
       // Phase 5.1: kick off registered-project loading in the background.

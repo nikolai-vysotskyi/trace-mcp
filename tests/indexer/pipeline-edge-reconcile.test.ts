@@ -8,8 +8,10 @@
  * pass instead, so an edit storm of N files costs N scoped passes + 1 full
  * pass.
  *
- * Real timers + an injected tiny debounce (the FileWatcher pattern): fake
- * timers stall the indexing pipeline itself.
+ * Determinism: the debounce is injected ABSURDLY large so it never fires on
+ * its own; tests trigger it explicitly via __flushEdgeReconcileForTests().
+ * Wall-clock debounce windows flake under full-suite load (an indexFiles
+ * call can take longer than the window), so no test here sleeps.
  */
 
 import fs from 'node:fs';
@@ -23,9 +25,8 @@ import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typ
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { createTestStore } from '../test-utils.js';
 
-const DEBOUNCE_MS = 40;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Never fires by itself — tests flush explicitly. */
+const DEBOUNCE_MS = 10 * 60_000;
 
 function makeSetup(rootDir: string) {
   const store = createTestStore();
@@ -82,8 +83,9 @@ describe('deferred edge reconcile', () => {
     expect(scopes()[0]).toBeDefined();
 
     // Debounce elapses → exactly one full reconcile pass (scope undefined).
-    await vi.waitFor(() => expect(fullPasses()).toBe(1), { timeout: 2_000 });
+    await pipeline.__flushEdgeReconcileForTests();
     expect(scopes()).toHaveLength(2);
+    expect(scopes()[1]).toBeUndefined();
   });
 
   it('coalesces an edit storm into a single reconcile pass', async () => {
@@ -98,12 +100,15 @@ describe('deferred edge reconcile', () => {
       await pipeline.indexFiles([`src/${name}.ts`]);
     }
 
-    // 3 scoped passes so far, zero full passes (storm ran inside the window).
+    // 3 scoped passes so far, zero full passes (debounce still pending).
     expect(scopes()).toHaveLength(3);
     expect(fullPasses()).toBe(0);
 
-    await vi.waitFor(() => expect(fullPasses()).toBe(1), { timeout: 2_000 });
-    await sleep(DEBOUNCE_MS * 3); // no second pass shows up later
+    await pipeline.__flushEdgeReconcileForTests();
+    expect(fullPasses()).toBe(1);
+
+    // Nothing left pending — a second flush is a no-op.
+    await pipeline.__flushEdgeReconcileForTests();
     expect(fullPasses()).toBe(1);
   });
 
@@ -116,7 +121,7 @@ describe('deferred edge reconcile', () => {
     await pipeline.indexAll(true); // forced full pass — covers the reconcile
 
     expect(fullPasses()).toBe(1);
-    await sleep(DEBOUNCE_MS * 3);
+    await pipeline.__flushEdgeReconcileForTests();
     expect(fullPasses()).toBe(1); // timer fired but reconcile no-oped
   });
 
@@ -128,7 +133,7 @@ describe('deferred edge reconcile', () => {
     await pipeline.indexFiles(['src/g.ts']); // schedules reconcile
 
     await pipeline.dispose();
-    await sleep(DEBOUNCE_MS * 3);
+    await pipeline.__flushEdgeReconcileForTests(); // timer cleared — no-op
 
     // Only the inline scoped pass — nothing fired after dispose.
     expect(scopes()).toHaveLength(1);
@@ -143,7 +148,7 @@ describe('deferred edge reconcile', () => {
     fs.writeFileSync(path.join(rootDir, 'src', 'a.ts'), 'export function alpha() { return 42; }\n');
     await pipeline.indexFiles(['src/a.ts']);
 
-    await sleep(DEBOUNCE_MS * 3);
+    await pipeline.__flushEdgeReconcileForTests(); // nothing pending — no-op
     expect(fullPasses()).toBe(0);
   });
 });
