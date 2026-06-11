@@ -19,6 +19,7 @@ const { unregisterMock, listProjectsMock } = vi.hoisted(() => ({
 vi.mock('../../src/registry.js', () => ({
   listProjects: listProjectsMock,
   unregisterProject: unregisterMock,
+  findOverlappingProjects: vi.fn(() => []),
 }));
 
 vi.mock('../../src/progress.js', () => ({

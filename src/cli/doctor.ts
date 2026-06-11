@@ -21,7 +21,7 @@ import {
 } from '../init/launcher.js';
 import { LAUNCHER_VERSION } from '../init/types.js';
 import { findProjectRoot } from '../project-root.js';
-import { inspectRegistry } from '../registry.js';
+import { findOverlappingProjects, inspectRegistry } from '../registry.js';
 
 const _SEVERITY_ICON: Record<ConflictSeverity, string> = {
   critical: 'X',
@@ -222,12 +222,21 @@ interface RegistryEntryHealth {
   status: RegistryEntryStatus;
 }
 
+interface RegistryOverlapReport {
+  ancestorName: string;
+  ancestorRoot: string;
+  descendantName: string;
+  descendantRoot: string;
+}
+
 interface RegistryHealthReport {
   registryPath: string;
   registryExists: boolean;
   registryCorrupt: boolean;
   entries: RegistryEntryHealth[];
   staleCount: number;
+  /** Project pairs where one registered root contains another — double indexing/watching. */
+  overlaps: RegistryOverlapReport[];
 }
 
 /** Open a project DB read-only and run a trivial query to confirm it's intact. */
@@ -264,6 +273,12 @@ function diagnoseRegistry(): RegistryHealthReport {
     registryCorrupt: inspection.corrupt,
     entries,
     staleCount: entries.filter((e) => e.status !== 'ok').length,
+    overlaps: findOverlappingProjects().map((o) => ({
+      ancestorName: o.ancestor.name,
+      ancestorRoot: o.ancestor.root,
+      descendantName: o.descendant.name,
+      descendantRoot: o.descendant.root,
+    })),
   };
 }
 
@@ -300,6 +315,19 @@ function printRegistryReport(r: RegistryHealthReport): void {
   }
   if (r.staleCount > 0) {
     console.log('  Clean up stale registrations with `trace-mcp prune --apply`.');
+  }
+  for (const o of r.overlaps) {
+    console.log(
+      `  [WARNING (overlapping roots)] "${o.ancestorName}" (${shortPath(o.ancestorRoot)}) ` +
+        `contains "${o.descendantName}" (${shortPath(o.descendantRoot)})`,
+    );
+  }
+  if (r.overlaps.length > 0) {
+    console.log(
+      '  Overlapping roots index and watch the same files twice — every change costs ' +
+        'double CPU. Keep the per-project registrations and remove the container: ' +
+        '`trace-mcp remove <container-path>`.',
+    );
   }
   console.log('');
 }

@@ -135,6 +135,34 @@ export function getProject(root: string): RegistryEntry | null {
   return reg.projects[absRoot] ?? null;
 }
 
+export interface RegistryOverlap {
+  ancestor: RegistryEntry;
+  descendant: RegistryEntry;
+}
+
+/**
+ * Find registered project pairs where one root is an ancestor directory of
+ * another (e.g. a container folder like `~/Projects` registered alongside
+ * `~/Projects/my-app`). Each such pair means the same files are indexed into
+ * two separate DBs and watched by two watchers — every change costs double
+ * CPU, and watcher-driven reindexes multiply across daemon + stdio sessions.
+ * Declared `multi-root` children are intentional and NOT reported.
+ */
+export function findOverlappingProjects(): RegistryOverlap[] {
+  const entries = listProjects();
+  const overlaps: RegistryOverlap[] = [];
+  for (const ancestor of entries) {
+    for (const descendant of entries) {
+      if (ancestor.root === descendant.root) continue;
+      const rel = path.relative(ancestor.root, descendant.root);
+      if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) continue;
+      if (ancestor.type === 'multi-root' && ancestor.children?.includes(descendant.root)) continue;
+      overlaps.push({ ancestor, descendant });
+    }
+  }
+  return overlaps;
+}
+
 export function listProjects(): RegistryEntry[] {
   const reg = loadRegistry();
   return Object.values(reg.projects);

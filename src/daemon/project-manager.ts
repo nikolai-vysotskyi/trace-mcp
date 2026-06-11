@@ -30,7 +30,13 @@ import { PluginRegistry } from '../plugin-api/registry.js';
 import { clearServerPid, ProgressState, writeServerPid } from '../progress.js';
 import { detectGitWorktree } from '../project-root.js';
 import { isDangerousProjectRoot, setupProject } from '../project-setup.js';
-import { clearPendingReindex, getProject, listProjects, unregisterProject } from '../registry.js';
+import {
+  clearPendingReindex,
+  findOverlappingProjects,
+  getProject,
+  listProjects,
+  unregisterProject,
+} from '../registry.js';
 import type { ServerHandle } from '../server/server.js';
 import { createServer } from '../server/server.js';
 import { SubprojectManager } from '../subproject/manager.js';
@@ -742,6 +748,18 @@ export class ProjectManager {
         continue;
       }
       entries.push(entry);
+    }
+    // Overlapping roots (a container folder registered alongside projects
+    // inside it) double-index and double-watch the same files — observed in
+    // the field as a 2-3× multiplier on every watcher-driven reindex. The
+    // daemon still loads them (user's choice), but says so loudly; doctor
+    // reports the same pairs with a fix hint.
+    for (const o of findOverlappingProjects()) {
+      logger.warn(
+        { ancestor: o.ancestor.root, descendant: o.descendant.root },
+        'Registered project roots overlap — same files are indexed and watched twice. ' +
+          'Keep the per-project registrations and `trace-mcp remove` the container root.',
+      );
     }
     // Phase 5+7 audit fix: addProject() runs synchronous setup (DB open, plugin
     // registry, watcher start, ~250-500ms each) BEFORE reaching the

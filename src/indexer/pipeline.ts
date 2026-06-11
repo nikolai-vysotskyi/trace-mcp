@@ -161,6 +161,13 @@ export interface IndexingPipelineDeps {
    * cheaper for short-lived processes.
    */
   taskCache?: TaskCache | null;
+  /**
+   * Debounce window (ms) before the deferred full edge-resolution reconcile
+   * pass fires after symbol-name churn. Production callers leave this
+   * undefined (10s default); tests inject a small value so they can await
+   * the pass with real timers.
+   */
+  reconcileDebounceMs?: number;
 }
 
 export class IndexingPipeline {
@@ -175,6 +182,9 @@ export class IndexingPipeline {
     if (deps?.extractPool) {
       this._extractPool = deps.extractPool;
       this._poolIsOwned = false;
+    }
+    if (deps?.reconcileDebounceMs !== undefined) {
+      this._reconcileDebounceMs = deps.reconcileDebounceMs;
     }
     // P02 Task DAG: register the migrated passes once per pipeline instance.
     // Each Task is a thin adapter — the actual work still happens in the
@@ -210,6 +220,8 @@ export class IndexingPipeline {
   private _lastNewSymbolNames: Map<string, Set<number>> = new Map();
   private _lastDeletedSymbolNames: Map<string, Set<number>> = new Map();
   private _isIncremental = false;
+  /** Set by dispose(); pending deferred work must bail instead of touching a closed DB. */
+  private _disposed = false;
   private _extractPool: ExtractPool | undefined;
   /** True when this pipeline owns its pool (lazy, per-instance) and must
    *  terminate it on dispose(). False when the pool came in via DI from the
@@ -789,6 +801,25 @@ export class IndexingPipeline {
       return;
     }
 
+    await this.runEdgeResolvers(scope);
+
+    // Symbol-name churn (add / delete / rename) means references in UNTOUCHED
+    // files may need rebinding — a brand-new symbol can satisfy a previously
+    // unresolved call, and a deleted one may have shadowed a same-name
+    // alternative. That used to force an inline full-pass on every such edit
+    // (1-9s of synchronous CPU per watcher event on large repos — the
+    // dominant indexing cost observed in the field, and every new file
+    // counts all its symbols as new). The scoped pass above keeps the
+    // changed files correct immediately; one debounced full reconcile pass
+    // restores global correctness after the edit storm quiets down.
+    if (scope && (scope.newSymbolNames.size > 0 || scope.deletedSymbolNames.size > 0)) {
+      this.scheduleEdgeReconcile();
+    }
+  }
+
+  /** Run every edge resolver against `scope` (undefined = full pass). */
+  private async runEdgeResolvers(scope: ChangeScope | undefined): Promise<void> {
+    if (scope === undefined) this._lastFullResolveMs = Date.now();
     const edgeResolver = new EdgeResolver(this.getPipelineState());
     await edgeResolver.resolveEdges(
       this.buildProjectContext(),
@@ -825,24 +856,62 @@ export class IndexingPipeline {
    * back to full-pass behaviour. Returns a populated scope for incremental
    * runs, OR `undefined` when the watcher batch is so large (>200 files) that
    * the incremental advantage is gone — full-pass is cheaper at that point.
+   *
+   * Symbol-name churn (rename / add / delete) no longer downgrades the run
+   * to a full pass: edges pointing at deleted symbols are already removed by
+   * the node-delete FK cascade in deleteSymbolsByFile(), and cross-file
+   * rebinding to new names is handled by the debounced reconcile pass
+   * scheduled in resolveAllEdges(). The previous inline full-pass cost 1-9s
+   * of synchronous CPU per edit that introduced or removed any symbol.
    */
   private buildChangeScope(): ChangeScope | undefined {
     if (!this._isIncremental) return undefined;
     if (this._changedFileIds.size > IndexingPipeline.MAX_INCREMENTAL_FILES) return undefined;
-    // Phase 4 conservative correctness: when symbol names actually churn
-    // (rename / add / delete), fall back to full-pass resolve so unresolved
-    // edges in UNTOUCHED files can rebind to the new symbol, and edges
-    // pointing at deleted symbols get cleaned up. Pure-content cases
-    // (formatter-on-save, single-line tweak) leave both maps empty and
-    // keep the scoped fast path.
-    if (this._lastNewSymbolNames.size > 0 || this._lastDeletedSymbolNames.size > 0) {
-      return undefined;
-    }
     return {
       changedFileIds: this._changedFileIds,
       newSymbolNames: this._lastNewSymbolNames,
       deletedSymbolNames: this._lastDeletedSymbolNames,
     };
+  }
+
+  /** Debounce window before the deferred full edge-resolution reconcile. */
+  private static readonly EDGE_RECONCILE_DEBOUNCE_MS = 10_000;
+  private _reconcileDebounceMs: number = IndexingPipeline.EDGE_RECONCILE_DEBOUNCE_MS;
+  private _reconcileTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Timestamp of the most recent full (scope=undefined) resolver pass. */
+  private _lastFullResolveMs = 0;
+
+  /**
+   * Schedule a coalesced full edge-resolution pass. Incremental runs whose
+   * symbol names churned resolve only their own files inline; references in
+   * untouched files that should (re)bind to the new/deleted names are
+   * reconciled here, once, after EDGE_RECONCILE_DEBOUNCE_MS of quiet. An
+   * edit storm of N files costs N scoped passes + 1 full pass instead of N
+   * full passes. The pass chains onto `_lock`, so it serializes with any
+   * concurrently queued pipeline run and never overlaps a live transaction.
+   */
+  private scheduleEdgeReconcile(): void {
+    if (this._reconcileTimer) clearTimeout(this._reconcileTimer);
+    const scheduledAt = Date.now();
+    this._reconcileTimer = setTimeout(() => {
+      this._reconcileTimer = null;
+      const run = this._lock.then(async () => {
+        if (this._disposed) return;
+        // A full pass already ran after this was scheduled (forced reindex,
+        // large-batch fallback) — the graph is already reconciled.
+        if (this._lastFullResolveMs >= scheduledAt) return;
+        const start = Date.now();
+        await this.runEdgeResolvers(undefined);
+        invalidatePageRankCache();
+        invalidateSearchCache();
+        logger.info({ durationMs: Date.now() - start }, 'Deferred edge reconcile completed');
+      });
+      this._lock = run.catch((e) => {
+        logger.warn({ error: e }, 'Deferred edge reconcile failed');
+      });
+    }, this._reconcileDebounceMs);
+    // Never keep the process alive just for a pending reconcile.
+    this._reconcileTimer.unref?.();
   }
 
   /** Pass 3: LSP enrichment — upgrade call graph edges with compiler-grade resolution. */
@@ -1005,6 +1074,13 @@ export class IndexingPipeline {
    *  belong to the caller and are left untouched — closing the underlying
    *  database is the caller's responsibility. */
   async dispose(): Promise<void> {
+    this._disposed = true;
+    // Drop any pending deferred reconcile — it must never fire against a
+    // torn-down store (daemon stopProject closes the DB right after this).
+    if (this._reconcileTimer) {
+      clearTimeout(this._reconcileTimer);
+      this._reconcileTimer = null;
+    }
     if (this._extractPool && this._poolIsOwned) {
       await this._extractPool.terminate();
     }

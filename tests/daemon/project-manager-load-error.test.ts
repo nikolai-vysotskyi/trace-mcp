@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/registry.js', () => ({
   listProjects: vi.fn(() => [{ root: '/__trace_mcp_nonexistent_parent__/proj-corrupt' }]),
   unregisterProject: vi.fn(),
+  findOverlappingProjects: vi.fn(() => []),
 }));
 
 vi.mock('../../src/progress.js', () => ({
