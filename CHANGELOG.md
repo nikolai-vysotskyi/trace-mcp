@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.42.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.42.0...v1.42.1) (2026-06-12)
+
+
+### Bug Fixes
+
+* **daemon:** keep /health responsive during warm-up; log shutdown reason ([4da4beb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4da4bebdb98b9f730738cdc34bdc4a905446de66))
+* **server:** process-wide safety net so one stray error doesn't drop the session ([bdc6b33](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bdc6b33441a4aefa615e1a747ee9ab99d4e21ee2))
+* **types:** resolve 3 navigation type errors incl. a latent freshness bug ([29b7bb6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/29b7bb63c4f66b97ca1dfcb385964f5d48871186))
+* **watcher:** stop indexing runtime churn; harden initial indexing; rotate daemon.log ([a603bde](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a603bde366a1cf2e679dc4bcf5f3b8929fe17075))
+
+
+### Performance
+
+* **indexer:** defer full edge resolution to a coalesced reconcile; flag overlapping roots ([76f2f1c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/76f2f1c84fb0d9ed595dac005c431c23f6ec931a))
+* **local-backend:** seed session DBs from the shared index; sweep SIGKILL orphans ([fb033ec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fb033ec1b8cc55a6be4dc04fca081b0b36e9f432))
+
 ## [1.42.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.41.3...v1.42.0) (2026-06-08)
 
 
