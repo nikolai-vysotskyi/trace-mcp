@@ -102,7 +102,11 @@ writeAppLocationMarker(${JSON.stringify(appPath)}, { homeDir: ${JSON.stringify(h
   execFileSync(process.execPath, [harnessPath], { stdio: 'ignore', timeout: 10_000 });
 }
 
-describe('locateInstalledApp', () => {
+// Locates the installed macOS .app bundle by shelling out to mdfind / mdls /
+// PlistBuddy. Even with platform injected as 'darwin', a Windows host can't
+// resolve those tools or .app/Info.plist semantics, so the suite only runs on
+// macOS/Linux hosts. CLI/server Windows support is unaffected.
+describe.skipIf(process.platform === 'win32')('locateInstalledApp', () => {
   let home: string;
 
   beforeEach(() => {

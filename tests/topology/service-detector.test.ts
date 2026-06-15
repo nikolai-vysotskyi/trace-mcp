@@ -59,7 +59,10 @@ describe('detectServices', () => {
     });
 
     const services = detectServices([container]);
-    const roots = services.map((s) => path.relative(container, s.repoRoot)).sort();
+    // Normalize to forward slashes — path.relative yields '\' on Windows.
+    const roots = services
+      .map((s) => path.relative(container, s.repoRoot).replaceAll(path.sep, '/'))
+      .sort();
     expect(roots).toContain('15carats/15carats-front');
     expect(roots).toContain('15carats/15carats-laravel');
     expect(roots).toContain('fair/fair-front');
