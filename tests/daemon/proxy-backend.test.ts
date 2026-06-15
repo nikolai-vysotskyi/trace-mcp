@@ -14,6 +14,9 @@ class FakeTransport implements ProxyTransport {
   started = false;
   closed = false;
   failSessionLost = false;
+  // Body the daemon returns for a dead session. Defaults to the 404 restart
+  // case; overridable to the "Session expired, reinitialize required" variant.
+  sessionLostMessage = 'Session not found';
 
   async start(): Promise<void> {
     this.started = true;
@@ -25,7 +28,7 @@ class FakeTransport implements ProxyTransport {
     if (this.failSessionLost) {
       throw new Error(
         'Streamable HTTP error: Error POSTing to endpoint: ' +
-          '{"jsonrpc":"2.0","error":{"code":-32000,"message":"Session not found"},"id":null}',
+          `{"jsonrpc":"2.0","error":{"code":-32000,"message":"${this.sessionLostMessage}"},"id":null}`,
       );
     }
     this.sent.push(msg);
@@ -57,6 +60,9 @@ function methodOf(msg: JSONRPCMessage): unknown {
 describe('ProxyBackend daemon-restart recovery', () => {
   let transports: FakeTransport[];
   let clientInbox: JSONRPCMessage[];
+  // When true, every transport opened from now on (including recovery ones)
+  // reports a lost session — simulates a daemon stuck in a restart loop.
+  let failNewTransports: boolean;
 
   function makeBackend(): ProxyBackend {
     const backend = new ProxyBackend({
@@ -65,6 +71,7 @@ describe('ProxyBackend daemon-restart recovery', () => {
       clientId: 'test-client',
       transportFactory: () => {
         const t = new FakeTransport();
+        t.failSessionLost = failNewTransports;
         transports.push(t);
         return t;
       },
@@ -76,6 +83,7 @@ describe('ProxyBackend daemon-restart recovery', () => {
   beforeEach(() => {
     transports = [];
     clientInbox = [];
+    failNewTransports = false;
     // Project/client registration is best-effort fetch — stub it out.
     vi.stubGlobal(
       'fetch',
@@ -116,6 +124,48 @@ describe('ProxyBackend daemon-restart recovery', () => {
     // handshake) — the replayed initialize echo must be swallowed.
     const initResponses = clientInbox.filter((m) => (m as { id?: number }).id === 1);
     expect(initResponses).toHaveLength(1);
+  });
+
+  it('recovers from the daemon\'s "Session expired, reinitialize required" (-32000)', async () => {
+    const backend = makeBackend();
+    await backend.start();
+    await backend.send(initFrame(1));
+    await backend.send(toolCall(2));
+
+    // The daemon kept the session id but lost its in-memory state → it answers
+    // 404 -32000 "Session expired, reinitialize required" (cli.ts /mcp handler),
+    // a different string from the "Session not found" restart case.
+    const first = transports[0]!;
+    first.failSessionLost = true;
+    first.sessionLostMessage = 'Session expired, reinitialize required';
+
+    await backend.send(toolCall(3));
+
+    expect(transports).toHaveLength(2);
+    const second = transports[1]!;
+    expect(second.sent.map(methodOf)).toEqual([
+      'initialize',
+      'notifications/initialized',
+      'tools/call',
+    ]);
+    expect((second.sent[2] as { id: number }).id).toBe(3);
+  });
+
+  it('retries reinit a bounded number of times, then gives up so the watcher can fall back', async () => {
+    const backend = makeBackend();
+    await backend.start();
+    await backend.send(initFrame(1));
+    await backend.send(toolCall(2));
+
+    // Daemon is stuck restarting: the held session AND every freshly-opened one
+    // report a lost session.
+    transports[0]!.failSessionLost = true;
+    failNewTransports = true;
+
+    await expect(backend.send(toolCall(3))).rejects.toThrow(/session/i);
+
+    // Original transport + exactly one fresh transport per bounded attempt (2).
+    expect(transports).toHaveLength(3);
   });
 
   it('does not attempt recovery when no initialize was ever cached', async () => {
