@@ -1,5 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { safeGitEnv } from '../../utils/git-env.js';
 import { err, ok } from 'neverthrow';
 import type { EmbeddingService, RerankerService, VectorStore } from '../../ai/interfaces.js';
 import { hybridSearch as aiHybridSearch } from '../../ai/search.js';
@@ -36,12 +38,46 @@ interface GetSymbolResult {
   file: FileRow;
   source: string;
   truncated?: boolean;
+  /** Present only when verify_against_git=true and the indexed source differs from HEAD. */
+  git_mismatch?: boolean;
+}
+
+/**
+ * Read the byte range [byteStart, byteEnd) from HEAD:<relPath> via `git show`.
+ * Returns null when git is unavailable, the file is not tracked, or any other
+ * error occurs — callers should treat null as "check skipped".
+ *
+ * ponytail: uses execFileSync (synchronous) to keep getSymbol() synchronous.
+ * For the occasional integrity check this is acceptable; the caller opts in
+ * explicitly with verify_against_git=true.
+ */
+function readGitHeadSlice(
+  rootPath: string,
+  relPath: string,
+  byteStart: number,
+  byteEnd: number,
+): string | null {
+  try {
+    const raw = execFileSync('git', ['show', `HEAD:${relPath}`], {
+      cwd: rootPath,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 3000,
+      env: safeGitEnv(),
+      // Return a Buffer so we can safely slice bytes before decoding.
+      encoding: 'buffer',
+    });
+    const slice = raw.slice(byteStart, byteEnd);
+    return slice.toString('utf8');
+  } catch {
+    // git not available, file not tracked, detached HEAD with no commits, etc.
+    return null;
+  }
 }
 
 export function getSymbol(
   store: Store,
   rootPath: string,
-  opts: { symbolId?: string; fqn?: string; maxLines?: number },
+  opts: { symbolId?: string; fqn?: string; maxLines?: number; verifyAgainstGit?: boolean },
 ): TraceMcpResult<GetSymbolResult> {
   let symbol: SymbolRow | undefined;
 
@@ -76,7 +112,29 @@ export function getSymbol(
     source = symbol.signature ?? '// source unavailable';
   }
 
-  return ok({ symbol, file, source, ...(truncated ? { truncated: true } : {}) });
+  let git_mismatch: boolean | undefined;
+  if (opts.verifyAgainstGit) {
+    const headSlice = readGitHeadSlice(rootPath, file.path, symbol.byte_start, symbol.byte_end);
+    if (headSlice !== null) {
+      // Normalise to the same slice the index stored so truncation doesn't
+      // produce a false positive when max_lines was also supplied.
+      const indexedRaw = source.endsWith('\n// ... truncated')
+        ? source.slice(0, source.length - '\n// ... truncated'.length)
+        : source;
+      if (headSlice !== indexedRaw) {
+        git_mismatch = true;
+      }
+    }
+    // If headSlice is null the check was skipped — omit the field entirely.
+  }
+
+  return ok({
+    symbol,
+    file,
+    source,
+    ...(truncated ? { truncated: true } : {}),
+    ...(git_mismatch ? { git_mismatch: true } : {}),
+  });
 }
 
 // ─── search ─────────────────────────────────────────────────

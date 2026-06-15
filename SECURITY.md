@@ -182,6 +182,50 @@ Release workflow must publish the checksum asset (e.g., `shasum -a 256 trace-mcp
 
 ---
 
+## npm Package Provenance
+
+Every release published from the `master` branch is signed with an npm provenance attestation via GitHub OIDC. The attestation links the published package to the exact source commit and the GitHub Actions workflow run that built it, making the entire build-to-publish pipeline auditable.
+
+### Verifying provenance (consumers)
+
+**Option 1 — npm CLI (npm ≥ 9.5 / Node 20+)**
+
+```bash
+npm audit signatures
+```
+
+This command verifies the registry signatures and provenance attestations for every package in your `node_modules`. A successful run prints `audited N packages` with no integrity errors.
+
+**Option 2 — inspect on the npm registry**
+
+Open `https://www.npmjs.com/package/trace-mcp` and click the **Provenance** badge on any version. The panel shows the source repository, the git tag, and a link to the Actions workflow run that produced the package.
+
+**Option 3 — query the registry API**
+
+```bash
+npm view trace-mcp dist.attestations --json
+```
+
+The `attestations` field lists each sigstore bundle URL. Download and verify with the [sigstore CLI](https://github.com/sigstore/sigstore):
+
+```bash
+cosign verify-blob --bundle <bundle-url> <tarball>
+```
+
+### What the attestation covers
+
+| Field | Value |
+| --- | --- |
+| Builder | `https://github.com/actions/runner` |
+| Source repository | `https://github.com/nikolai-vysotskyi/trace-mcp` |
+| Trigger | Push to `master` (release tag) or `workflow_dispatch` |
+| Workflow | `.github/workflows/release.yml` |
+| Build environment | `ubuntu-latest`, Node 22 |
+
+A missing or invalid attestation means the package was **not** built by the official GitHub Actions pipeline and should be treated as suspect.
+
+---
+
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability, please report it responsibly:
@@ -214,3 +258,4 @@ If you discover a security vulnerability, please report it responsibly:
 | Auto-update SHA-256 verification | Required, no checksum = no update | No |
 | Auto-update Gatekeeper check | `spctl -a -t exec` on staged bundle | No |
 | Auto-update opt-out | Disabled when set | Yes (`TRACE_MCP_NO_AUTO_UPDATE=1`) |
+| npm provenance attestation | Sigstore/OIDC on every release | No |

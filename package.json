@@ -64,6 +64,10 @@
     "LICENSE",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
