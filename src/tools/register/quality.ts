@@ -11,6 +11,7 @@ import { generateDocs } from '../project/generate-docs.js';
 import { getPackageDeps } from '../project/package-deps.js';
 import { auditConfig, scanInstalledSkills, scanPnpmScripts } from '../quality/audit-config.js';
 import { compareBranches, getChangedSymbols } from '../quality/changed-symbols.js';
+import { checkEditSafe } from '../quality/check-edit-safe.js';
 import { collectCoChanges, getCoChanges, persistCoChanges } from '../quality/co-changes.js';
 import {
   DEFAULT_QUALITY_GATES,
@@ -659,6 +660,33 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
           isError: true,
         };
       }
+      return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  // --- Edit-Safety Preflight ---
+  server.tool(
+    'check_edit_safe',
+    'Edit-safety preflight: before you MODIFY a symbol or file, get ONE verdict for "is this safe to edit and what must I preserve". Fuses signature impact (cross-file importers depending on the current contract), cyclomatic complexity (regression-prone bodies), and test-coverage presence into a single verdict tier (safe_to_edit / untested / complexity_risk / signature_impact) with ranked blockers, a one-line recommended action, and a confidence score. Complements assess_change_risk (continuous risk score) — this names the dominant blocker and what to preserve. Read-only. Returns JSON: { verdict, recommended_action, blockers: [{ signal, severity, detail }], confidence, signals }.',
+    {
+      file_path: optionalNonEmptyString(512).describe('File path to check before editing'),
+      symbol_id: optionalNonEmptyString(512).describe('Symbol ID to check before editing'),
+    },
+    async ({ file_path, symbol_id }) => {
+      if (file_path) {
+        const blocked = ctx.guardPath(file_path);
+        if (blocked) return blocked;
+      }
+      const result = checkEditSafe(
+        store,
+        { filePath: file_path, symbolId: symbol_id },
+        projectRoot,
+      );
+      if (result.isErr())
+        return {
+          content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+          isError: true,
+        };
       return { content: [{ type: 'text', text: j(result.value) }] };
     },
   );
