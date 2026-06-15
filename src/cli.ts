@@ -7,6 +7,7 @@
 // server is wired (see src/server/transport-hardening.ts).
 import { hardenStdio } from './server/transport-hardening.js';
 import { installProcessSafetyNet } from './server/process-safety-net.js';
+import { startDaemonLogRotation } from './daemon/lifecycle.js';
 
 if (process.argv.includes('serve') || process.argv.length === 2) {
   hardenStdio();
@@ -392,6 +393,9 @@ program
     // A single unhandled rejection must not take down the daemon serving every
     // registered project — log and stay alive.
     installProcessSafetyNet('serve-http');
+    // Rotate daemon.log from within the long-lived daemon — the spawn-point
+    // rotation only fires at restart, so a long-running daemon never rotated it.
+    startDaemonLogRotation();
     // Auto-update (same logic as serve)
     const globalRaw = loadGlobalConfigRaw();
     if (globalRaw.auto_update !== false) {

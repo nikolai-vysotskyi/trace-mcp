@@ -270,6 +270,49 @@ export function rotateDaemonLogIfLarge(maxBytes: number = DAEMON_LOG_MAX_BYTES):
   }
 }
 
+/** How often the running daemon checks its own log size. */
+const DAEMON_LOG_ROTATE_INTERVAL_MS = 60_000;
+
+/**
+ * Rotate daemon.log from *inside* the running daemon. Its stdout/stderr is an
+ * inherited O_APPEND fd on this inode (detached spawn), or launchd's
+ * StandardOutPath fd — so a rename would leave the daemon writing to the
+ * renamed inode and never recreate daemon.log (which is exactly why the
+ * spawn-point `rotateDaemonLogIfLarge` can only run when the daemon is down).
+ * Instead copy the contents to daemon.log.1 and truncate the live file to zero:
+ * the append fd survives and subsequent writes resume from offset 0
+ * (logrotate's `copytruncate`). Best-effort; a write lost across the
+ * copy→truncate gap is acceptable for a debug log.
+ */
+export function rotateDaemonLogInPlace(
+  maxBytes: number = DAEMON_LOG_MAX_BYTES,
+  logPath: string = DAEMON_LOG_PATH,
+): void {
+  try {
+    const st = fs.statSync(logPath);
+    if (st.size <= maxBytes) return;
+    fs.copyFileSync(logPath, `${logPath}.1`);
+    fs.truncateSync(logPath, 0);
+  } catch {
+    /* missing file or permission issue — rotation is best-effort */
+  }
+}
+
+/**
+ * Start the periodic in-daemon log-size check and return a stop handle. The
+ * spawn-point rotation only fires at (re)start, so a long-lived daemon never
+ * rotated and daemon.log grew unbounded (154 MB observed). Unref'd so it never
+ * keeps the event loop alive.
+ */
+export function startDaemonLogRotation(
+  intervalMs: number = DAEMON_LOG_ROTATE_INTERVAL_MS,
+): () => void {
+  rotateDaemonLogInPlace(); // immediate check on boot
+  const timer = setInterval(() => rotateDaemonLogInPlace(), intervalMs);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}
+
 function ensureDaemonMac(port: number): EnsureResult {
   rotateDaemonLogIfLarge();
   const install = ensurePlistInstalled(port);
