@@ -2,6 +2,7 @@ import type { LanguagePlugin } from '../../../plugin-api/types.js';
 import { GraphQLLanguagePlugin } from '../integration/api/graphql/index.js';
 import { PrismaLanguagePlugin } from '../integration/orm/prisma/index.js';
 import { AdaLanguagePlugin } from './ada/index.js';
+import { AstroLanguagePlugin } from './astro/index.js';
 import { AlLanguagePlugin } from './al/index.js';
 import { ApexLanguagePlugin } from './apex/index.js';
 import { AssemblyLanguagePlugin } from './assembly/index.js';
@@ -84,6 +85,7 @@ export function createAllLanguagePlugins(): LanguagePlugin[] {
     new PhpLanguagePlugin(),
     new TypeScriptLanguagePlugin(),
     new VueLanguagePlugin(),
+    new AstroLanguagePlugin(),
     new PythonLanguagePlugin(),
     new JavaLanguagePlugin(),
     new KotlinLanguagePlugin(),
