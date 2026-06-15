@@ -1,4 +1,4 @@
-# trace-mcp-guard-read.ps1 v0.6.0
+# trace-mcp-guard-read.ps1 v0.11.0
 # Windows helper for trace-mcp-guard.cmd — implements the Read-handler repeat-read
 # dedup logic (per-session allowed read counter with mtime reset).
 #
@@ -15,6 +15,8 @@
 #   TMG_FILE       - absolute file path being read
 #   TMG_SESSION    - session id
 #   TMG_ROOT       - project root (pwd of the Claude Code session)
+#   TMG_OFFSET     - Read offset parameter (if set, targeted pre-Edit read → ALLOW)
+#   TMG_LIMIT      - Read limit parameter  (if set, targeted pre-Edit read → ALLOW)
 #
 # This script is side-effecting: it writes state files under
 #   $env:TEMP\trace-mcp-reads-<session>\<file-hash>        ("count:mtime")
@@ -26,10 +28,23 @@ $ErrorActionPreference = 'SilentlyContinue'
 $filePath  = $env:TMG_FILE
 $sessionId = $env:TMG_SESSION
 $projectRoot = $env:TMG_ROOT
+$tmgOffset = $env:TMG_OFFSET
+$tmgLimit  = $env:TMG_LIMIT
 $tmp = $env:TEMP
 if (-not $tmp) { $tmp = [System.IO.Path]::GetTempPath().TrimEnd('\','/') }
 
 if (-not $filePath -or -not $sessionId) {
+    Write-Output 'ALLOW'
+    exit 0
+}
+
+# Targeted pre-Edit reads (offset or limit present) — always allow.
+# Read-before-Edit must keep working even under strict enforcement.
+if ($tmgOffset -and $tmgOffset -ne '') {
+    Write-Output 'ALLOW'
+    exit 0
+}
+if ($tmgLimit -and $tmgLimit -ne '') {
     Write-Output 'ALLOW'
     exit 0
 }

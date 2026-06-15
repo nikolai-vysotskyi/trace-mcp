@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.10.0
+# trace-mcp-guard v0.11.0
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.11 changes (enforcement tier — TRACE_MCP_ENFORCE):
+#   - New env var TRACE_MCP_ENFORCE with three values:
+#       advisory (DEFAULT): warn on stderr, allow the tool call (exit 0).
+#       strict:             hard-deny via permissionDecision:deny JSON.
+#                           The denial message names the trace-mcp route to use.
+#       off:                fully silent, always allow (exit 0).
+#     Unknown/typo value falls back to advisory (never hard-blocks on bad input).
+#   - Exemptions that always pass even under strict:
+#       * Read with offset/limit present (targeted pre-Edit reads).
+#       * Non-code files (.md/.json/.yaml/.env/config).
+#       * Paths outside the project root (not in an indexed repo).
+#       * Anything the heartbeat/bypass logic would already allow (MCP down).
+#   - scripts/trace-mcp-enable-guard.sh gains a --strict flag that writes
+#     TRACE_MCP_ENFORCE=strict into the hook's env block in settings.json.
+#     Running without --strict (re)sets TRACE_MCP_ENFORCE=advisory.
 #
 # v0.10 changes (fix wave for hook over-triggering):
 #   - Agent verb allowlist expanded: compare/audit/benchmark/measure/verify/
@@ -103,6 +119,26 @@ if [[ "$GUARD_MODE" == "off" ]]; then
   exit 0
 fi
 
+# ─── Enforcement tier (TRACE_MCP_ENFORCE) ─────────────────────────
+# Independent of GUARD_MODE. Controls what happens when the guard wants
+# to deny a native tool call that trace-mcp can serve.
+#
+#   advisory — always allow + hint (overrides GUARD_MODE=strict).
+#   strict   — always hard-deny (overrides GUARD_MODE=coach).
+#   off      — silent, always allow (exit 0).
+#   unset    — fall back to GUARD_MODE (back-compat; NEVER hard-block on typo/bad value).
+#
+# Resolution: TRACE_MCP_ENFORCE env var (set by scripts/trace-mcp-enable-guard.sh --strict).
+# When unset, ENFORCE_TIER is empty — GUARD_MODE governs behaviour (back-compat).
+ENFORCE_TIER="${TRACE_MCP_ENFORCE:-}"
+case "$ENFORCE_TIER" in
+  advisory|strict|off) ;;
+  *) ENFORCE_TIER="" ;;   # unknown value → treat as unset; never hard-block on typo
+esac
+if [[ "$ENFORCE_TIER" == "off" ]]; then
+  exit 0
+fi
+
 INPUT=$(cat)
 TOOL_NAME="${CLAUDE_TOOL_NAME:-$(echo "$INPUT" | jq -r '.tool_name // empty')}"
 
@@ -170,19 +206,36 @@ file_mtime() {
 deny() {
   local reason="$1"
   local context="$2"
-  if [[ "$GUARD_MODE" == "coach" ]]; then
-    # Coach mode: never block. Inject the trace-mcp hint as additionalContext
-    # so the agent sees the suggestion without losing the round-trip.
+  # Enforcement decision matrix:
+  #
+  # ENFORCE_TIER=advisory → always allow + hint (overrides GUARD_MODE=strict).
+  # ENFORCE_TIER=strict   → always hard-deny (overrides GUARD_MODE=coach).
+  # ENFORCE_TIER="" (unset/invalid) → fall back to GUARD_MODE: coach=soft, strict=hard.
+  # ENFORCE_TIER=off      → early exit 0 before reaching here; unreachable.
+  local should_block=1
+  if [[ "$ENFORCE_TIER" == "advisory" ]]; then
+    should_block=0
+  elif [[ "$ENFORCE_TIER" == "strict" ]]; then
+    should_block=1
+  elif [[ "$GUARD_MODE" == "coach" ]]; then
+    # No ENFORCE_TIER override; coach mode never blocks.
+    should_block=0
+  fi
+
+  if (( should_block == 0 )); then
+    # Allow but surface the recommendation via additionalContext.
     cat <<EOF
 {
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
-    "additionalContext": "[trace-mcp coach] $reason\\n$context"
+    "additionalContext": "[trace-mcp guard] $reason\\n$context"
   }
 }
 EOF
     exit 0
   fi
+
+  # Hard block.
   cat <<EOF
 {
   "hookSpecificOutput": {
@@ -395,6 +448,17 @@ fi
 if [[ "$TOOL_NAME" == "Read" ]]; then
   FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
+  # Targeted pre-Edit reads (offset/limit present) — always allow regardless
+  # of ENFORCE_TIER. Read-before-Edit is a mandatory workflow step; blocking it
+  # would prevent the agent from safely modifying code files. This exemption
+  # applies even under strict enforcement because the agent is reading a narrow
+  # slice (not doing wholesale exploration).
+  READ_OFFSET=$(echo "$INPUT" | jq -r '.tool_input.offset // empty')
+  READ_LIMIT=$(echo "$INPUT" | jq -r '.tool_input.limit // empty')
+  if [[ -n "$READ_OFFSET" ]] || [[ -n "$READ_LIMIT" ]]; then
+    exit 0
+  fi
+
   # .env files — always block, even when heartbeat is dead.
   # Secret leakage risk is independent of trace-mcp availability.
   if is_sensitive_env_file "$FILE_PATH"; then
@@ -442,6 +506,14 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
   # Code files: route through consultation marker / heartbeat.
   if echo "$FILE_PATH" | grep -qiE "$CODE_EXT_RE"; then
     REL_PATH=$(echo "$FILE_PATH" | sed "s|^${PROJECT_ROOT}/||")
+
+    # Out-of-repo paths — trace-mcp cannot index them, so strict must not block.
+    # A path is out-of-repo when it is absolute and does not start with PROJECT_ROOT,
+    # or when REL_PATH still starts with / (absolute path outside cwd).
+    if [[ "$FILE_PATH" == /* ]] && [[ "$REL_PATH" == /* ]]; then
+      # Absolute path that doesn't live under PROJECT_ROOT — not indexed.
+      exit 0
+    fi
 
     # Heartbeat fallback — server is unavailable, allow Read with warning.
     # This is the legitimate fallback path; agents do not control it.

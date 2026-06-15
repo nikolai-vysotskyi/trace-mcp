@@ -1,8 +1,14 @@
 @echo off
-REM trace-mcp-guard v0.9.0
+REM trace-mcp-guard v0.11.0
 REM trace-mcp PreToolUse guard (Windows)
 REM Blocks Read/Grep/Glob/Bash on source code files + Agent(Explore) subagents - redirects to trace-mcp tools.
 REM Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
+REM
+REM Enforcement tier (TRACE_MCP_ENFORCE):
+REM   advisory (default): warn but allow native tool calls.
+REM   strict:             hard-deny calls that trace-mcp can already serve.
+REM   off:                silent, always allow.
+REM   unknown/typo:       falls back to advisory.
 REM
 REM Consultation markers: trace-mcp server writes markers when tools access files.
 REM If a marker exists, Read is allowed immediately.
@@ -15,6 +21,16 @@ REM Install: add to ~\.claude\settings.json or .claude\settings.local.json
 REM See README.md for setup instructions.
 
 setlocal enabledelayedexpansion
+
+REM ─── Enforcement tier ───────────────────────────────────────────────
+REM Read TRACE_MCP_ENFORCE; default advisory; unknown value → advisory.
+set "ENFORCE_TIER=advisory"
+if defined TRACE_MCP_ENFORCE (
+    if /i "%TRACE_MCP_ENFORCE%"=="strict"   set "ENFORCE_TIER=strict"
+    if /i "%TRACE_MCP_ENFORCE%"=="advisory" set "ENFORCE_TIER=advisory"
+    if /i "%TRACE_MCP_ENFORCE%"=="off"      set "ENFORCE_TIER=off"
+)
+if /i "%ENFORCE_TIER%"=="off" goto :allow
 
 REM Read JSON from stdin into a temp file
 set "TMPINPUT=%TEMP%\trace-mcp-guard-input-%RANDOM%.json"
@@ -37,6 +53,15 @@ REM --- Read ---
 if /i not "%TOOL_NAME%"=="Read" goto :check_grep
 
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.file_path"`) do set "FILE_PATH=%%i"
+
+REM Targeted pre-Edit reads (offset or limit present) — always allow even under strict.
+REM Read-before-Edit is a mandatory workflow step; blocking it breaks safe code edits.
+set "READ_OFFSET="
+set "READ_LIMIT="
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $v=(Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.offset; if ($null -ne $v) { $v } else { '' } } catch { '' }"`) do set "READ_OFFSET=%%i"
+for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "try { $v=(Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.limit; if ($null -ne $v) { $v } else { '' } } catch { '' }"`) do set "READ_LIMIT=%%i"
+if defined READ_OFFSET goto :allow
+if defined READ_LIMIT  goto :allow
 
 REM Block .env files (example/template variants are exempt - placeholders only)
 call :is_env_example "%FILE_PATH%"
@@ -84,6 +109,8 @@ if not exist "%TMG_SCRIPT%" goto :legacy_read_path
 set "TMG_FILE=%FILE_PATH%"
 set "TMG_SESSION=%SESSION_ID%"
 set "TMG_ROOT=%CD%"
+set "TMG_OFFSET=%READ_OFFSET%"
+set "TMG_LIMIT=%READ_LIMIT%"
 
 set "DECISION="
 for /f "usebackq delims=" %%d in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%TMG_SCRIPT%"`) do set "DECISION=%%d"
@@ -295,6 +322,17 @@ goto :eof
 :deny
 set "REASON=%~1"
 set "CONTEXT=%~2"
+REM advisory tier: allow but surface the hint via additionalContext.
+REM strict tier: hard-deny via permissionDecision:deny.
+if /i "%ENFORCE_TIER%"=="advisory" (
+    echo {
+    echo   "hookSpecificOutput": {
+    echo     "hookEventName": "PreToolUse",
+    echo     "additionalContext": "[trace-mcp guard] %REASON% %CONTEXT%"
+    echo   }
+    echo }
+    goto :eof
+)
 echo {
 echo   "hookSpecificOutput": {
 echo     "hookEventName": "PreToolUse",

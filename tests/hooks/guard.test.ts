@@ -345,7 +345,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
       TRACE_MCP_GUARD_MODE: 'coach',
     });
     expect(decision.allowed).toBe(true);
-    expect(decision.context ?? '').toContain('[trace-mcp coach]');
+    expect(decision.context ?? '').toContain('[trace-mcp guard]');
     expect(decision.context ?? '').toContain('get_outline');
   });
 
@@ -366,7 +366,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
       TRACE_MCP_GUARD_MODE: 'coach',
     });
     expect(decision.allowed).toBe(true);
-    expect(decision.context ?? '').toContain('[trace-mcp coach]');
+    expect(decision.context ?? '').toContain('[trace-mcp guard]');
   });
 
   // ─── Stall detection via status JSON ────────────────────────────
@@ -934,5 +934,183 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     expect(escalated.context ?? '').not.toContain('within 30s');
     expect(escalated.context ?? '').not.toContain('switch this hook to fallback mode');
     expect(escalated.context ?? '').toContain('fall back to native tools');
+  });
+
+  // ─── v0.11: TRACE_MCP_ENFORCE enforcement tier ─────────────────
+
+  it('advisory: overrides strict GUARD_MODE — Read is allowed with hint context', () => {
+    // TRACE_MCP_ENFORCE=advisory on top of GUARD_MODE=strict → allow + hint (no hard deny).
+    const file = path.join(projectDir, 'enforce-advisory.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'strict',
+      TRACE_MCP_ENFORCE: 'advisory',
+    });
+    expect(decision.allowed).toBe(true);
+    // Advisory still surfaces the route recommendation.
+    expect(decision.context ?? '').toContain('trace-mcp guard');
+    expect(decision.context ?? '').toContain('get_outline');
+  });
+
+  it('TRACE_MCP_ENFORCE unset: existing GUARD_MODE=strict behavior unchanged (hard deny)', () => {
+    // When TRACE_MCP_ENFORCE is not set, GUARD_MODE=strict continues to hard-deny.
+    // This verifies no regression in the default code path.
+    const file = path.join(projectDir, 'enforce-default.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'strict',
+    });
+    // Strict GUARD_MODE with no ENFORCE_TIER override → hard deny.
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason ?? '').toContain('get_outline');
+  });
+
+  it('strict: overrides coach GUARD_MODE — Read on indexed-source code file is hard-denied', () => {
+    // TRACE_MCP_ENFORCE=strict on top of GUARD_MODE=coach → hard deny (overrides coach's allow).
+    const file = path.join(projectDir, 'enforce-strict.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'coach',
+      TRACE_MCP_ENFORCE: 'strict',
+    });
+    expect(decision.allowed).toBe(false);
+    // Denial message must name a trace-mcp route to use instead.
+    const msg = (decision.reason ?? '') + (decision.context ?? '');
+    expect(msg).toMatch(/get_outline|get_symbol|search|find_usages|search_text/);
+  });
+
+  it('strict: Grep on code paths is hard-denied (even when coach mode would allow)', () => {
+    const decision = runGuard(
+      'Grep',
+      { pattern: 'myFunc', path: path.join(projectDir, 'src') },
+      sessionId,
+      projectDir,
+      { TRACE_MCP_GUARD_MODE: 'coach', TRACE_MCP_ENFORCE: 'strict' },
+    );
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason ?? '').toMatch(/trace-mcp|search/i);
+  });
+
+  it('strict: allows Read with offset (targeted pre-Edit read — always exempt)', () => {
+    // Read with offset/limit is a read-before-Edit and must never be blocked,
+    // even when strict overrides coach.
+    const file = path.join(projectDir, 'pre-edit.ts');
+    fs.writeFileSync(file, 'export const x = 1;\nexport const y = 2;\n');
+    const decision = runGuard(
+      'Read',
+      { file_path: file, offset: 1, limit: 10 },
+      sessionId,
+      projectDir,
+      { TRACE_MCP_GUARD_MODE: 'coach', TRACE_MCP_ENFORCE: 'strict' },
+    );
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('strict: allows Read with limit only (no offset)', () => {
+    const file = path.join(projectDir, 'pre-edit-limit.ts');
+    fs.writeFileSync(file, 'export const z = 3;\n');
+    const decision = runGuard('Read', { file_path: file, limit: 5 }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'coach',
+      TRACE_MCP_ENFORCE: 'strict',
+    });
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('strict: allows Read on non-code files (always exempt)', () => {
+    const file = path.join(projectDir, 'config.json');
+    fs.writeFileSync(file, '{}');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'coach',
+      TRACE_MCP_ENFORCE: 'strict',
+    });
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('strict: allows Read on .md files (always exempt)', () => {
+    const file = path.join(projectDir, 'README.md');
+    fs.writeFileSync(file, '# readme');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'coach',
+      TRACE_MCP_ENFORCE: 'strict',
+    });
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('strict: allows Read on paths outside project root (not indexed)', () => {
+    // A code file that lives in /tmp (outside the indexed repo) must not be blocked.
+    const outsideFile = path.join(TMP_BASE, `outside-${Date.now()}.ts`);
+    fs.writeFileSync(outsideFile, 'export {};');
+    try {
+      const decision = runGuard('Read', { file_path: outsideFile }, sessionId, projectDir, {
+        TRACE_MCP_GUARD_MODE: 'coach',
+        TRACE_MCP_ENFORCE: 'strict',
+      });
+      expect(decision.allowed).toBe(true);
+    } finally {
+      fs.rmSync(outsideFile, { force: true });
+    }
+  });
+
+  it('strict: still allows Read when heartbeat is dead (MCP unavailable)', () => {
+    // When trace-mcp is not running, the heartbeat-dead fallback applies first —
+    // strict enforcement cannot block when the MCP server is unreachable.
+    fs.rmSync(heartbeatFile, { force: true });
+    const file = path.join(projectDir, 'strict-fallback.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'strict',
+      TRACE_MCP_ENFORCE: 'strict',
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain('not running');
+  });
+
+  it('off: completely silent — no JSON output, always allows', () => {
+    const file = path.join(projectDir, 'enforce-off.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_ENFORCE: 'off',
+    });
+    expect(decision.allowed).toBe(true);
+    // off must produce no additionalContext, no reason.
+    expect(decision.context).toBeUndefined();
+    expect(decision.reason).toBeUndefined();
+  });
+
+  it('off: Grep is silently allowed', () => {
+    const decision = runGuard('Grep', { pattern: 'foo' }, sessionId, projectDir, {
+      TRACE_MCP_ENFORCE: 'off',
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.context).toBeUndefined();
+  });
+
+  it('unknown TRACE_MCP_ENFORCE value does not escalate coach to strict (never hard-blocks on typo)', () => {
+    // A typo like "XSTRICT" must not silently upgrade a coach-mode session to
+    // hard-deny. Unknown values collapse to empty string → GUARD_MODE governs.
+    const file = path.join(projectDir, 'enforce-typo.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir, {
+      TRACE_MCP_GUARD_MODE: 'coach',
+      TRACE_MCP_ENFORCE: 'XSTRICT', // typo — must not upgrade to strict
+    });
+    // coach + unknown ENFORCE → still soft (allow + hint), not hard-deny.
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('strict: Bash ls on source-tree path is denied', () => {
+    const decision = runGuard('Bash', { command: 'ls src/tools/' }, sessionId, projectDir, {
+      TRACE_MCP_ENFORCE: 'strict',
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason ?? '').toMatch(/trace-mcp|get_project_map/i);
+  });
+
+  it('advisory: Bash ls on source-tree path is allowed (with hint)', () => {
+    const decision = runGuard('Bash', { command: 'ls src/tools/' }, sessionId, projectDir, {
+      TRACE_MCP_ENFORCE: 'advisory',
+    });
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain('trace-mcp guard');
   });
 });

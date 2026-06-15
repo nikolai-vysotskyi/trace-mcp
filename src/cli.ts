@@ -73,6 +73,7 @@ import {
 import { sweepOrphanedSessionDbs } from './daemon/router/session-db.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import {
+  type GuardEnforceTier,
   installGuardHook,
   installLifecycleHooks,
   uninstallGuardHook,
@@ -2930,29 +2931,61 @@ program
     '--lifecycle',
     'Operate on the lifecycle hooks (SessionStart / UserPromptSubmit / Stop / SessionEnd) instead of the guard hook',
   )
-  .action((opts: { global?: boolean; uninstall?: boolean; lifecycle?: boolean }) => {
-    if (opts.lifecycle) {
-      if (opts.uninstall) {
-        const removed = uninstallLifecycleHooks({ global: opts.global });
-        console.log(`Removed ${removed.length} lifecycle hook entries.`);
+  .option(
+    '--strict',
+    'Set enforcement tier to strict: hard-deny native Read/Grep/ls/find calls that trace-mcp can serve (default: advisory — warn but allow)',
+  )
+  .option(
+    '--enforce <tier>',
+    'Set enforcement tier explicitly: advisory (default), strict, or off',
+    'advisory',
+  )
+  .action(
+    (opts: {
+      global?: boolean;
+      uninstall?: boolean;
+      lifecycle?: boolean;
+      strict?: boolean;
+      enforce?: string;
+    }) => {
+      if (opts.lifecycle) {
+        if (opts.uninstall) {
+          const removed = uninstallLifecycleHooks({ global: opts.global });
+          console.log(`Removed ${removed.length} lifecycle hook entries.`);
+          return;
+        }
+        const installed = installLifecycleHooks({ global: opts.global });
+        for (const r of installed) {
+          console.log(`Hook ${r.action}: ${r.target}`);
+          if (r.detail) console.log(`  ${r.detail}`);
+        }
         return;
       }
-      const installed = installLifecycleHooks({ global: opts.global });
-      for (const r of installed) {
-        console.log(`Hook ${r.action}: ${r.target}`);
-        if (r.detail) console.log(`  ${r.detail}`);
+      if (opts.uninstall) {
+        uninstallGuardHook({ global: opts.global });
+        console.log('trace-mcp hook removed.');
+        return;
       }
-      return;
-    }
-    if (opts.uninstall) {
-      uninstallGuardHook({ global: opts.global });
-      console.log('trace-mcp hook removed.');
-      return;
-    }
-    const result = installGuardHook({ global: opts.global });
-    console.log(`Hook ${result.action}: ${result.target}`);
-    if (result.detail) console.log(`  ${result.detail}`);
-  });
+      // --strict shorthand wins over --enforce if both supplied.
+      let tier: GuardEnforceTier = 'advisory';
+      if (opts.strict) {
+        tier = 'strict';
+      } else if (opts.enforce) {
+        const raw = opts.enforce.toLowerCase();
+        if (raw === 'strict' || raw === 'off' || raw === 'advisory') {
+          tier = raw as GuardEnforceTier;
+        } else {
+          console.warn(`Unknown --enforce value "${opts.enforce}" — falling back to advisory.`);
+        }
+      }
+      const result = installGuardHook({ global: opts.global, enforce: tier });
+      console.log(`Hook ${result.action}: ${result.target}`);
+      if (result.detail) console.log(`  ${result.detail}`);
+      if (tier !== 'advisory') {
+        console.log(`  Enforcement tier: ${tier} (TRACE_MCP_ENFORCE=${tier})`);
+      }
+    },
+  );
 
 program
   .command('list')
