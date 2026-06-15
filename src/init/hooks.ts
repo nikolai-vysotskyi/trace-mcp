@@ -255,31 +255,44 @@ function writeSettings(filePath: string, settings: Record<string, unknown>): voi
   atomicWriteJson(filePath, settings);
 }
 
-function addHookEntry(settings: Record<string, unknown>, desc: HookDescriptor, dest: string): void {
+function addHookEntry(
+  settings: Record<string, unknown>,
+  desc: HookDescriptor,
+  dest: string,
+  hookEnv?: Record<string, string>,
+): void {
   const hooks = (settings.hooks as Record<string, unknown[]> | undefined) ?? {};
   settings.hooks = hooks;
   if (!hooks[desc.settingsKey]) hooks[desc.settingsKey] = [];
   const entries = hooks[desc.settingsKey] as {
     matcher?: string;
-    hooks?: { type?: string; command?: string }[];
+    hooks?: { type?: string; command?: string; env?: Record<string, string> }[];
   }[];
 
   const expectedCmd = desc.plainCommand ? plainHookCommand(dest) : hookCommand(dest);
+
+  // Build inner hook object — include env block only when non-empty.
+  const innerHook: { type: string; command: string; env?: Record<string, string> } = {
+    type: 'command',
+    command: expectedCmd,
+  };
+  if (hookEnv && Object.keys(hookEnv).length > 0) {
+    innerHook.env = { ...hookEnv };
+  }
 
   const existing = entries.find((h) =>
     h.hooks?.some((hh) => hh.command?.includes(desc.scriptName)),
   );
   if (existing) {
-    // Refresh command (e.g. after removing the obsolete {{tool_name}} template)
-    // and matcher in case the schema changed between versions.
-    existing.hooks = [{ type: 'command', command: expectedCmd }];
+    // Refresh command, env, and matcher in case the schema changed between versions.
+    existing.hooks = [innerHook];
     if (desc.matcher) existing.matcher = desc.matcher;
     else existing.matcher = undefined;
     return;
   }
 
   const entry: Record<string, unknown> = {
-    hooks: [{ type: 'command' as const, command: expectedCmd }],
+    hooks: [innerHook],
   };
   if (desc.matcher) entry.matcher = desc.matcher;
   entries.push(entry as unknown as { hooks?: { command?: string }[] });
@@ -303,7 +316,7 @@ function removeHookEntry(settings: Record<string, unknown>, desc: HookDescriptor
 
 function installHook(
   desc: HookDescriptor,
-  opts: { global?: boolean; dryRun?: boolean },
+  opts: { global?: boolean; dryRun?: boolean; hookEnv?: Record<string, string> },
 ): InitStepResult {
   const primaryDest = hookDest(CLIENTS[0], desc);
 
@@ -337,7 +350,7 @@ function installHook(
 
     const sPath = settingsPath(client, !!opts.global);
     const settings = readSettings(sPath);
-    addHookEntry(settings, desc, dest);
+    addHookEntry(settings, desc, dest, opts.hookEnv);
     writeSettings(sPath, settings);
   }
 
@@ -374,8 +387,30 @@ function uninstallHook(desc: HookDescriptor, opts: { global?: boolean }): InitSt
 
 // --- Public API ---
 
-export function installGuardHook(opts: { global?: boolean; dryRun?: boolean }): InitStepResult {
-  return installHook(GUARD_HOOK, opts);
+/**
+ * Enforcement tier for the guard hook (TRACE_MCP_ENFORCE env var).
+ *
+ *   advisory (default) — warn on each violation, allow the tool call.
+ *   strict             — hard-deny tool calls trace-mcp can already serve.
+ *   off                — silent, always allow (useful for CI).
+ *
+ * Unknown/typo values fall back to advisory inside the hook script itself,
+ * so the API only accepts valid values.
+ */
+export type GuardEnforceTier = 'advisory' | 'strict' | 'off';
+
+export function installGuardHook(opts: {
+  global?: boolean;
+  dryRun?: boolean;
+  /** Enforcement tier written into the hook's env block. Default: 'advisory'. */
+  enforce?: GuardEnforceTier;
+}): InitStepResult {
+  const tier = opts.enforce ?? 'advisory';
+  const hookEnv: Record<string, string> =
+    tier === 'advisory'
+      ? {} // advisory is the default — no env needed (omitting keeps settings.json clean)
+      : { TRACE_MCP_ENFORCE: tier };
+  return installHook(GUARD_HOOK, { ...opts, hookEnv });
 }
 
 export function uninstallGuardHook(opts: { global?: boolean }): InitStepResult {
