@@ -6,6 +6,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.43.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.42.0...v1.43.0) (2026-06-15)
+
+
+### Features
+
+* **ai:** harden summarizer against prompt injection + configurable request body ([3f1f1dc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3f1f1dc111615e45a0e09dabb62b46b2178748db))
+* **hooks:** opt-in strict enforcement tier for the navigation guard ([0c1ceec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0c1ceeccf2dc65ff939531e265e0d5014f605aa0))
+* **indexer:** first-class Astro (.astro) language support ([25716b0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/25716b00ae984d623dae230dc6cb8350c9bd849a))
+* **indexer:** refine sensitive-file detection (basename + secret-store dirs) ([8cc831d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8cc831d721e6ce8b003118cb5abe4c90b2dd1ed0))
+* **lsp:** wire C# into LSP enrichment (csharp-ls auto-detect) ([2c80906](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2c80906101651efb893922094e85e4328186ffdb))
+* **release:** publish provenance + get_symbol git-HEAD verification ([9a01450](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9a01450b79edb36829f30856d376b2eec9c0be61))
+* **tools:** add check_edit_safe edit-safety preflight ([3539b0b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3539b0bb2ee2ff63968a97e9e8a279b9566bdc0c))
+
+
+### Bug Fixes
+
+* **daemon:** bounded reinit-retry covers 'Session expired' session loss ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([3c23576](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3c235766468ab2c4de783d430e80ee424ec39007))
+* **daemon:** don't auto-register a bare parent dir that only contains projects ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([f7e228f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f7e228fa36e49483d7cdded41a0e66453c48ee06))
+* **daemon:** keep /health responsive during warm-up; log shutdown reason ([4da4beb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4da4bebdb98b9f730738cdc34bdc4a905446de66))
+* **daemon:** proxy transparently re-initializes after daemon restart ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([1d8d791](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1d8d7919135c76a7935f1304264f82ac80f7cd01))
+* **daemon:** rotate daemon.log from inside the running daemon ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([fa4f93a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fa4f93ac32119c23f46244a2f56591922d4603c9))
+* **deps:** regenerate pnpm-lock.yaml after dependabot group merges ([3ab0ece](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ab0ece64f55f78e2ad8fe5bd0af1e4675e8005a))
+* **server:** process-wide safety net so one stray error doesn't drop the session ([bdc6b33](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bdc6b33441a4aefa615e1a747ee9ab99d4e21ee2))
+* **types:** resolve 3 navigation type errors incl. a latent freshness bug ([29b7bb6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/29b7bb63c4f66b97ca1dfcb385964f5d48871186))
+* **watcher:** stop indexing runtime churn; harden initial indexing; rotate daemon.log ([a603bde](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a603bde366a1cf2e679dc4bcf5f3b8929fe17075))
+* **windows:** green the nightly cross-platform job ([f441b1d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f441b1d7729a2801a5d56d9cd3ac40abea75929b))
+
+
+### Performance
+
+* **indexer:** defer full edge resolution to a coalesced reconcile; flag overlapping roots ([76f2f1c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/76f2f1c84fb0d9ed595dac005c431c23f6ec931a))
+* **local-backend:** seed session DBs from the shared index; sweep SIGKILL orphans ([fb033ec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fb033ec1b8cc55a6be4dc04fca081b0b36e9f432))
+
 ## [1.42.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.41.3...v1.42.0) (2026-06-08)
 
 
