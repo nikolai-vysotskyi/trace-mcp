@@ -17,6 +17,48 @@ interface OpenAIConfig {
   embeddingDimensions: number;
   inferenceModel: string;
   fastModel: string;
+  /**
+   * Extra fields merged into every /chat/completions and /responses request
+   * body. Sourced from `ai.openaiExtraBody` (config) merged over
+   * TRACE_MCP_OPENAI_EXTRA_BODY (env). Core fields always win over this.
+   */
+  extraBody?: Record<string, unknown>;
+}
+
+/**
+ * Parse TRACE_MCP_OPENAI_EXTRA_BODY (a JSON object string) defensively. Bad
+ * JSON or a non-object value is warned about and ignored — never thrown — so a
+ * typo in the env can't take down the indexer.
+ */
+export function parseOpenAIExtraBodyEnv(
+  raw: string | undefined = process.env.TRACE_MCP_OPENAI_EXTRA_BODY,
+): Record<string, unknown> {
+  if (!raw || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      logger.warn('TRACE_MCP_OPENAI_EXTRA_BODY is not a JSON object — ignoring');
+      return {};
+    }
+    return parsed as Record<string, unknown>;
+  } catch (e) {
+    logger.warn(
+      { error: e instanceof Error ? e.message : String(e) },
+      'TRACE_MCP_OPENAI_EXTRA_BODY is not valid JSON — ignoring',
+    );
+    return {};
+  }
+}
+
+/**
+ * Resolve the effective extra body: env first, then config layered on top so
+ * config wins on per-key conflicts. Either side may be omitted.
+ */
+export function resolveOpenAIExtraBody(
+  configExtra?: Record<string, unknown>,
+  envExtra: Record<string, unknown> = parseOpenAIExtraBodyEnv(),
+): Record<string, unknown> {
+  return { ...envExtra, ...(configExtra ?? {}) };
 }
 
 class OpenAIEmbeddingService implements EmbeddingService {
@@ -95,6 +137,8 @@ class OpenAIInferenceService implements InferenceService {
     private baseUrl: string,
     private apiKey: string,
     private model: string,
+    /** Merged config+env extra body fields; core request fields win over these. */
+    private extraBody: Record<string, unknown> = {},
   ) {}
 
   async generate(
@@ -112,7 +156,9 @@ class OpenAIInferenceService implements InferenceService {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${this.apiKey}`,
             },
+            // Spread extraBody FIRST so the core fields below always win on conflict.
             body: JSON.stringify({
+              ...this.extraBody,
               model: this.model,
               messages: [{ role: 'user', content: prompt }],
               ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
@@ -148,7 +194,9 @@ class OpenAIInferenceService implements InferenceService {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.apiKey}`,
         },
+        // Spread extraBody FIRST so the core fields below always win on conflict.
         body: JSON.stringify({
+          ...this.extraBody,
           model: this.model,
           messages,
           stream: true,
@@ -208,6 +256,7 @@ export class OpenAIProvider implements AIProvider {
       this.config.baseUrl,
       this.config.apiKey,
       this.config.inferenceModel,
+      this.config.extraBody,
     );
   }
 
@@ -216,6 +265,7 @@ export class OpenAIProvider implements AIProvider {
       this.config.baseUrl,
       this.config.apiKey,
       this.config.fastModel,
+      this.config.extraBody,
     );
   }
 }

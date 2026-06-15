@@ -282,6 +282,7 @@ export class ProjectManager {
             'type',
           ],
           concurrency: config.ai!.concurrency ?? 1,
+          summarizeFromDocstrings: config.ai!.summarizeFromDocstrings,
         },
         progress,
         getVectorStore(),

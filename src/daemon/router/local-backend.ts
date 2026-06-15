@@ -184,6 +184,7 @@ export class LocalBackend implements Backend {
                 'type',
               ],
               concurrency: config.ai.concurrency ?? 1,
+              summarizeFromDocstrings: config.ai.summarizeFromDocstrings,
             },
             this.progress,
             vectorStore,
