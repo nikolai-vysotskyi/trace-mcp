@@ -12,9 +12,24 @@ const DEFAULT_SECRET_PATTERNS = [
 ];
 
 // ─── Sensitive file detection ─────────────────────────────────────────
-// Filename/extension patterns that indicate credential or key files.
+// Two-rule model (both checked against the relative path):
+//
+// Rule 1 — BASENAME patterns: match specific credential/key basenames against
+//   the file's basename only. A directory name containing "secret" does NOT
+//   by itself exclude files beneath it. Source-code extensions (.ts, .js,
+//   .py, .go, …) are never credential data — *secret* is intentionally absent
+//   from this list; source files whose basename contains "secret" are indexed.
+//   ponytail: pattern list is intentionally minimal — add only well-known
+//   credential filename conventions, not broad substrings.
+//
+// Rule 2 — SECRET-STORE DIRECTORY: a file is sensitive when it lives inside a
+//   directory whose name is exactly "secret" or "secrets" (whole path segment,
+//   not a substring like "secrets-manager") AND the file carries a
+//   data/credential extension (.yaml, .json, .env, .pem, .key, …).
+//   Source files (e.g. router.go, index.ts) under such directories are indexed.
 
-const SENSITIVE_FILE_PATTERNS = [
+// ponytail: keep this list to well-known credential filename patterns only.
+const SENSITIVE_BASENAME_PATTERNS = [
   // Env files (handled specially by env-parser, but still blocked from raw indexing)
   '.env',
   '.env.*',
@@ -47,44 +62,80 @@ const SENSITIVE_FILE_PATTERNS = [
   '.netrc',
   '.npmrc',
   '.pypirc',
-  // Broad wildcard (with doc exemption below)
-  '*secret*',
 ];
 
-// Documentation extensions where the broad *secret* glob produces false positives
-// (e.g. docs/secrets-handling.md is documentation, not a credential file).
-const DOC_SAFE_EXTENSIONS = new Set([
-  '.md',
-  '.markdown',
-  '.mdx',
-  '.rst',
-  '.txt',
-  '.adoc',
-  '.asciidoc',
-  '.asc',
-  '.html',
-  '.htm',
-  '.ipynb',
+// Extensions that represent data/credential files rather than source code.
+// Used by the secret-store directory rule (Rule 2).
+// ponytail: keep to data serialisation and credential formats only.
+const SECRET_STORE_DATA_EXTENSIONS = new Set([
+  '.yaml',
+  '.yml',
+  '.json',
+  '.toml',
+  '.env',
+  '.pem',
+  '.key',
+  '.crt',
+  '.cer',
+  '.p12',
+  '.pfx',
+  '.jks',
+  '.keystore',
+  '.credentials',
+  '.token',
+  '.secrets',
+  '.tfvars',
+  '.tfstate',
+  '.ini',
+  '.conf',
+  '.config',
+  '.properties',
 ]);
 
-// Patterns exempt from doc-extension files
-const DOC_EXEMPT_PATTERNS = new Set(['*secret*']);
+// Exact directory segment names that designate a secret store.
+// Must be a WHOLE segment ("secrets" matches, "secrets-manager" does not).
+const SECRET_STORE_DIR_SEGMENTS = new Set(['secret', 'secrets']);
+
+/**
+ * Return true when `segments` contains a whole-segment secret-store dir name.
+ * Checks every directory component; the filename itself is excluded.
+ */
+function hasSecretStoreSegment(segments: string[]): boolean {
+  // segments is path.dirname split; last element is the immediate parent dir
+  return segments.some((seg) => SECRET_STORE_DIR_SEGMENTS.has(seg.toLowerCase()));
+}
 
 /**
  * Check if a file path matches known sensitive/credential file patterns.
- * Uses filename/extension matching, not content inspection.
+ * Uses filename/extension matching and secret-store directory detection.
+ * Does NOT inspect file content.
+ *
+ * Rule 1 — basename patterns applied to the file's basename only.
+ * Rule 2 — secret-store dir: whole-segment "secret"/"secrets" parent dir
+ *           AND a data/credential extension (not a source-code extension).
  */
 export function isSensitiveFile(filePath: string): boolean {
-  const name = path.basename(filePath).toLowerCase();
-  const ext = path.extname(name);
+  const basename = path.basename(filePath).toLowerCase();
+  const ext = path.extname(basename);
 
-  for (const pattern of SENSITIVE_FILE_PATTERNS) {
-    // Skip broad patterns for documentation files
-    if (DOC_EXEMPT_PATTERNS.has(pattern) && DOC_SAFE_EXTENSIONS.has(ext)) {
-      continue;
-    }
-    if (matchGlob(name, pattern)) return true;
+  // Rule 1: basename patterns
+  for (const pattern of SENSITIVE_BASENAME_PATTERNS) {
+    if (matchGlob(basename, pattern)) return true;
   }
+
+  // Rule 1b: a file literally named like a secret (basename contains a
+  // "secret" token) AND carrying a data/credential extension — e.g.
+  // app-secret.yml, secrets.yaml. Source extensions (.ts/.go/…) and doc
+  // extensions (.md/.rst/.txt/.html) are excluded by the data-extension
+  // gate, so secret-utils.ts and secrets-handling.md stay indexed.
+  if (basename.includes('secret') && SECRET_STORE_DATA_EXTENSIONS.has(ext)) return true;
+
+  // Rule 2: secret-store directory + data/credential extension
+  if (SECRET_STORE_DATA_EXTENSIONS.has(ext)) {
+    const dirParts = path.dirname(filePath).split(/[\\/]/).filter(Boolean);
+    if (hasSecretStoreSegment(dirParts)) return true;
+  }
+
   return false;
 }
 
