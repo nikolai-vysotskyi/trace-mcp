@@ -140,11 +140,15 @@ function readPackageVersion() {
 }
 
 function writeLauncherEnv(nodePath, cliPath, version) {
+  // Forward slashes in launcher.env: node accepts them everywhere, and it keeps
+  // the file portable instead of baking in Windows backslashes the shim then
+  // has to re-escape. cliPath is passed to node as a script arg, so '/' is safe.
+  const cliPathPortable = cliPath.replaceAll('\\', '/');
   const lines = [
     '# Managed by trace-mcp postinstall — do not edit by hand.',
     '# Regenerated each time npm install -g trace-mcp runs.',
     `TRACE_MCP_NODE=${quoteEnvValue(nodePath)}`,
-    `TRACE_MCP_CLI=${quoteEnvValue(cliPath)}`,
+    `TRACE_MCP_CLI=${quoteEnvValue(cliPathPortable)}`,
     `TRACE_MCP_VERSION=${quoteEnvValue(version)}`,
     '',
   ];

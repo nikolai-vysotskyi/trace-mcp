@@ -27,6 +27,19 @@ import { logger } from '../logger.js';
 import type { WorkspaceInfo } from './monorepo.js';
 import type { FileExtraction } from './pipeline-state.js';
 
+/**
+ * fileURLToPath that never throws. Used only for log lines: a malformed worker
+ * entry URL (e.g. a Windows file URL with no drive letter) must not crash the
+ * crash-handler that's trying to report it. Falls back to the raw href.
+ */
+function fileURLToPathSafe(url: URL): string {
+  try {
+    return fileURLToPath(url);
+  } catch {
+    return url.href;
+  }
+}
+
 export interface ExtractRequest {
   relPath: string;
   rootPath: string;
@@ -355,7 +368,7 @@ export class ExtractPool {
           workerIdx,
           totalFailures: total,
           lastError: err.message,
-          workerEntry: this.workerEntry ? fileURLToPath(this.workerEntry) : null,
+          workerEntry: this.workerEntry ? fileURLToPathSafe(this.workerEntry) : null,
         },
         `Extract worker ${workerIdx} permanently disabled after ${total} consecutive failures — worker entry could not load; falling back to in-process extraction`,
       );
