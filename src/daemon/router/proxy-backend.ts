@@ -32,6 +32,15 @@ export interface ProxyBackendOptions {
 /** Max wall-clock to wait for the daemon's initialize reply during recovery. */
 const REINIT_TIMEOUT_MS = 10_000;
 
+/**
+ * How many reinitialize+retry attempts to make on a lost session before giving
+ * up and letting the error propagate (so the watcher can fall back to local
+ * mode). Greater than 1 because the daemon can restart *again* in the narrow
+ * reinit→retry window — a single attempt would surface that second loss to the
+ * client as the very "session expired" disconnect this recovery exists to hide.
+ */
+const MAX_REINIT_ATTEMPTS = 2;
+
 /** The daemon's /mcp session router rejects stale/missing sessions with these. */
 function isSessionLostError(err: unknown): boolean {
   const msg = String((err as { message?: unknown })?.message ?? err).toLowerCase();
@@ -140,6 +149,7 @@ export class ProxyBackend implements Backend {
     if (isInitializeRequest(msg)) this.initializeFrame = msg;
     try {
       await this.httpTransport.send(msg);
+      return;
     } catch (err) {
       // Only recover from a lost daemon session, and never for the initialize
       // frame itself (a failing initialize is a real connection problem the
@@ -147,12 +157,26 @@ export class ProxyBackend implements Backend {
       if (!isSessionLostError(err) || !this.initializeFrame || isInitializeRequest(msg)) {
         throw err;
       }
-      logger.warn(
-        { err: String(err) },
-        'ProxyBackend: daemon session lost — reinitializing and retrying',
-      );
-      await this.reestablishSession();
-      await this.httpTransport!.send(msg);
+      // Reinitialize and retry, bounded. If recovery itself fails with a
+      // non-session error (the daemon is genuinely down) we propagate at once
+      // so the watcher can fall back to local mode; only a *repeated* session
+      // loss (the daemon restarted again mid-recovery) is worth another pass.
+      let lastErr: unknown = err;
+      for (let attempt = 1; attempt <= MAX_REINIT_ATTEMPTS; attempt++) {
+        logger.warn(
+          { err: String(lastErr), attempt },
+          'ProxyBackend: daemon session lost — reinitializing and retrying',
+        );
+        try {
+          await this.reestablishSession();
+          await this.httpTransport!.send(msg);
+          return;
+        } catch (retryErr) {
+          lastErr = retryErr;
+          if (!isSessionLostError(retryErr)) throw retryErr;
+        }
+      }
+      throw lastErr;
     }
   }
 
