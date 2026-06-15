@@ -87,12 +87,19 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
         .max(10000)
         .optional()
         .describe('Truncate source to this many lines (omit for full source)'),
+      verify_against_git: z
+        .boolean()
+        .optional()
+        .describe(
+          'When true, compare the indexed source against the current git HEAD slice for that file and line range. If they differ, the response includes `git_mismatch: true` indicating the index may be stale. Read-only — never writes. Silently skipped when git is unavailable or the file is not tracked.',
+        ),
     },
-    async ({ symbol_id, fqn, max_lines }) => {
+    async ({ symbol_id, fqn, max_lines, verify_against_git }) => {
       const result = getSymbol(store, projectRoot, {
         symbolId: symbol_id,
         fqn,
         maxLines: max_lines,
+        verifyAgainstGit: verify_against_git,
       });
       if (result.isErr()) {
         return {
@@ -100,7 +107,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
           isError: true,
         };
       }
-      const { symbol, file, source, truncated } = result.value;
+      const { symbol, file, source, truncated, git_mismatch } = result.value;
       markExplored(file.path);
       // Phase 4a: attribute this read to a recent ranked retrieval event when possible.
       ctx.rankingLedger?.recordAcceptance(projectRoot, symbol.symbol_id);
@@ -129,6 +136,7 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
               line_end: symbol.line_end,
               source,
               ...(truncated ? { truncated: true } : {}),
+              ...(git_mismatch ? { git_mismatch: true } : {}),
               _freshness: freshness,
               _meta: {
                 freshness: summary,
