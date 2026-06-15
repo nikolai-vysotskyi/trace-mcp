@@ -56,6 +56,14 @@ const KNOWN_SERVERS: KnownServer[] = [
     args: [],
     detect: (root) => existsSync(join(root, 'Cargo.toml')),
   },
+  {
+    language: 'csharp',
+    command: 'csharp-ls', // Roslyn-backed, stdio; `dotnet tool install -g csharp-ls`
+    args: [],
+    // ponytail: real gate is indexedLanguages.has('csharp') in resolveServers;
+    // loose-.cs / no-project repos are caught by the supportsCallHierarchy skip in lifecycle.
+    detect: () => true,
+  },
 ];
 
 /** Language extensions mapped to LSP language IDs */
@@ -72,6 +80,8 @@ export const EXTENSION_TO_LANGUAGE: Record<string, string> = {
   '.pyi': 'python',
   '.go': 'go',
   '.rs': 'rust',
+  '.cs': 'csharp',
+  '.csx': 'csharp',
 };
 
 /** Map trace-mcp file language string to LSP language ID */
@@ -83,6 +93,7 @@ export function fileLanguageToLspLanguage(fileLanguage: string | null): string |
     python: 'python',
     go: 'go',
     rust: 'rust',
+    csharp: 'csharp',
   };
   return map[fileLanguage] ?? null;
 }
