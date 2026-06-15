@@ -81,12 +81,7 @@ import {
 import { attachFileLogging, logger } from './logger.js';
 import { ensureInitialized, warmUpGrammars } from './parser/tree-sitter.js';
 import { PluginRegistry } from './plugin-api/registry.js';
-import {
-  detectGitWorktree,
-  discoverChildProjectsRecursive,
-  findProjectRoot,
-  hasRootMarkers,
-} from './project-root.js';
+import { detectGitWorktree, findProjectRoot, hasRootMarkers } from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
 import {
@@ -923,10 +918,14 @@ program
               // folder had been deleted.
               const folderMissing = !fs.existsSync(projectRoot);
               const dangerReason = folderMissing ? null : isDangerousProjectRoot(projectRoot);
-              const hasMarkers = folderMissing
-                ? false
-                : hasRootMarkers(projectRoot) ||
-                  discoverChildProjectsRecursive(projectRoot, 3).length > 0;
+              // Only auto-register a directory that is ITSELF a project (has its
+              // own root markers). A bare parent that merely *contains* projects
+              // (e.g. ~/PhpstormProjects, ~/dev) must NOT be auto-registered:
+              // doing so indexes every nested repo as one giant blob and pins the
+              // daemon in permanent re-index churn (issue #209). Real monorepo
+              // roots carry their own package.json/go.mod/etc and still qualify;
+              // bare container folders fall through to a clean 404 instead.
+              const hasMarkers = !folderMissing && hasRootMarkers(projectRoot);
               const canAutoAdd = !folderMissing && !dangerReason && hasMarkers;
               if (canAutoAdd && !projectManager.getProject(projectRoot)) {
                 try {
