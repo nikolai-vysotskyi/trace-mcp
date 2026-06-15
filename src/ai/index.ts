@@ -20,7 +20,7 @@ import type {
 } from './interfaces.js';
 import { OllamaProvider } from './ollama.js';
 import { OnnxProvider } from './onnx.js';
-import { OpenAIProvider } from './openai.js';
+import { OpenAIProvider, resolveOpenAIExtraBody } from './openai.js';
 import { getGlobalTelemetrySink } from '../telemetry/index.js';
 import { aiTracker } from './tracker.js';
 import { VertexAIProvider } from './vertex.js';
@@ -484,6 +484,8 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
       return new FallbackProvider();
     }
     const url = pick(config.ai.base_url, defaults.baseUrl);
+    // Config value wins over the TRACE_MCP_OPENAI_EXTRA_BODY env var on conflict.
+    const extraBody = resolveOpenAIExtraBody(config.ai.openaiExtraBody);
     return new GatedAIProvider(
       wrapWithTracking(
         new OpenAIProvider({
@@ -493,6 +495,7 @@ export function createAIProvider(config: TraceMcpConfig): AIProvider {
           embeddingDimensions: config.ai.embedding_dimensions ?? defaults.embeddingDimensions,
           inferenceModel: pick(config.ai.inference_model, defaults.inferenceModel),
           fastModel: pick(config.ai.fast_model, defaults.fastModel),
+          extraBody,
         }),
         provider,
         url,
@@ -527,9 +530,14 @@ export type {
 } from './interfaces.js';
 export { OllamaProvider } from './ollama.js';
 export { isOnnxAvailable, OnnxProvider } from './onnx.js';
-export { OpenAIProvider } from './openai.js';
+export { OpenAIProvider, parseOpenAIExtraBodyEnv, resolveOpenAIExtraBody } from './openai.js';
 export type { PromptTemplate } from './prompts.js';
-export { PROMPTS } from './prompts.js';
+export {
+  PROMPTS,
+  sanitizeGeneratedSummary,
+  stripLeadingDocstrings,
+  UNTRUSTED_CODE_DELIMITER,
+} from './prompts.js';
 export { LLMReranker } from './reranker.js';
 export { hybridSearch } from './search.js';
 export { parseAnthropicStream, parseOllamaChatStream, parseOpenAIStream } from './sse.js';

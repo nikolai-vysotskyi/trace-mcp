@@ -71,6 +71,28 @@ const AiConfigSchema = z
     summarize_kinds: z
       .array(z.string())
       .default(['class', 'function', 'method', 'interface', 'trait', 'enum', 'type']),
+    /**
+     * Whether to include docstrings / leading comment blocks in the source sent
+     * to the summarizer. Default true (preserves existing behavior). Set false
+     * to harden against indirect prompt injection: docstrings are free-form,
+     * fully author-controlled prose and the highest-risk IPI surface, so when
+     * disabled they are stripped and only the signature + structural body is
+     * summarized.
+     */
+    summarizeFromDocstrings: z.boolean().default(true),
+    /**
+     * Extra JSON merged into every OpenAI-compatible /chat/completions (and
+     * /responses) request body. Use to pass provider-specific knobs the schema
+     * doesn't model — e.g. disabling a thinking model's reasoning so it spends
+     * the budget on output: { "reasoning_effort": "none" } or
+     * { "chat_template_kwargs": { "enable_thinking": false } }.
+     *
+     * Merge precedence: this config value wins over the
+     * TRACE_MCP_OPENAI_EXTRA_BODY env var on per-key conflicts. Core request
+     * fields (model, messages, stream, max_tokens, temperature) always win over
+     * both. Default {}.
+     */
+    openaiExtraBody: z.record(z.string(), z.unknown()).default({}),
     /** Max parallel requests to the AI provider (embedding + inference).
      *  Ollama-side: set OLLAMA_NUM_PARALLEL env var to match this value.
      *  On macOS desktop app: `launchctl setenv OLLAMA_NUM_PARALLEL <N>` + restart app.
