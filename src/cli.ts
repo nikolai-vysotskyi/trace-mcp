@@ -320,7 +320,7 @@ program
     const drainTimeoutMs = config.backend_swap_drain_ms ?? 5_000;
     const autoSpawnDaemon =
       process.env.TRACE_MCP_NO_DAEMON === '1' ? false : (config.auto_spawn_daemon ?? true);
-    const autoSpawnTimeoutMs = (config.daemon_spawn_timeout_seconds ?? 5) * 1_000;
+    const autoSpawnTimeoutMs = (config.daemon_spawn_timeout_seconds ?? 20) * 1_000;
     // Discoverability (#202): make the daemon opt-out knobs visible. Logged to
     // stderr/file (never stdout — that carries the JSON-RPC stream).
     if (autoSpawnDaemon) {
