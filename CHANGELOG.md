@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.43.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.43.0...v1.43.1) (2026-06-16)
+
+
+### Bug Fixes
+
+* **daemon:** raise auto-spawn timeout 5s-&gt;20s to stop premature local fallback ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([6b3a43e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6b3a43edc8e64e36bcd822de24650ba4bba1a586))
+* **indexer:** skip postprocess on unchanged full reindex ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([e108d4b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e108d4b4677171681808869116e58bf1016b78b4))
+
 ## [1.43.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.42.0...v1.43.0) (2026-06-15)
 
 
