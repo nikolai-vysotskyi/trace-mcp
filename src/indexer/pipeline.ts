@@ -149,6 +149,46 @@ function readGitHeadSha(rootPath: string): string | null {
   }
 }
 
+/**
+ * Decide whether a full (non-incremental) `indexAll` can skip the postprocess
+ * phase (edge resolution + LSP enrichment + env scan).
+ *
+ * The daemon re-runs `indexAll` for every registered project on every start.
+ * Without this gate it re-resolves the entire edge graph even when extraction
+ * hash-skipped 100% of files (`indexed: 0`) — tens of seconds of CPU plus a
+ * full-graph memory spike per project on every restart. On a multi-project
+ * daemon that spike is what drives the OOM-kill -> launchd respawn -> full
+ * reindex -> OOM loop that surfaces to MCP clients as "Session expired".
+ *
+ * Skip only with positive proof the persisted graph is already current:
+ *   - not a forced rebuild — post-update and FK-recovery passes set force=true
+ *     and MUST rebuild so schema / plugin-version changes land;
+ *   - extraction touched nothing (indexed === 0 && errors === 0);
+ *   - the graph already has edges (not a first/empty index);
+ *   - git HEAD matches the SHA stamped at the last successful index.
+ *
+ * ponytail: git-only freshness proof. Non-git projects (no HEAD) never skip —
+ * they keep the prior full-resolution behavior rather than risk a stale graph.
+ * Same blind spot as the incremental short-circuit in resolveAllEdges(): an
+ * uncommitted file *deletion* at an unchanged HEAD won't re-prune edges until
+ * the next real change; the watcher + debounced reconcile cover that live.
+ */
+export function canSkipFullPostprocess(args: {
+  force: boolean;
+  indexed: number;
+  errors: number;
+  totalEdges: number;
+  currentHead: string | null;
+  storedHead: string | null;
+}): boolean {
+  const { force, indexed, errors, totalEdges, currentHead, storedHead } = args;
+  if (force) return false;
+  if (indexed !== 0 || errors !== 0) return false;
+  if (totalEdges <= 0) return false;
+  if (!currentHead || !storedHead) return false;
+  return currentHead === storedHead;
+}
+
 export interface IndexingPipelineDeps {
   /** Inject a daemon-shared ExtractPool. When provided, the pipeline never
    *  creates its own pool and dispose() does NOT terminate the shared one. */
@@ -499,16 +539,39 @@ export class IndexingPipeline {
       // this._dag. The Task wrappers are pure adapters — they call back
       // into the private methods below. Telemetry / progress callbacks are
       // unchanged because the underlying methods own them.
-      if (this._postprocessLevel !== 'none') {
-        await this._dag.run(RESOLVE_EDGES_TASK_NAME, {
-          runResolveAllEdges: () => this.resolveAllEdges(),
+      //
+      // Restart short-circuit: when extraction proves nothing changed since
+      // the last successful index (HEAD + content match) the persisted edge
+      // graph is already correct. Skip the whole postprocess so a daemon
+      // restart doesn't re-resolve every project's full graph from scratch —
+      // see canSkipFullPostprocess() for why this breaks the OOM-restart loop.
+      const skipPostprocess =
+        this._postprocessLevel !== 'none' &&
+        canSkipFullPostprocess({
+          force,
+          indexed: result.indexed,
+          errors: result.errors,
+          totalEdges: this.store.getStats().totalEdges,
+          currentHead: readGitHeadSha(this.rootPath),
+          storedHead: this.store.getRepoMetadata('index_head_sha'),
         });
-      }
-      if (this._postprocessLevel === 'full') {
-        await this._dag.run(LSP_ENRICHMENT_TASK_NAME, {
-          runLspEnrichment: () => this.runLspEnrichment(),
-        });
-        await this.indexEnvFiles(force);
+      if (skipPostprocess) {
+        logger.info(
+          { root: this.rootPath, postprocess: this._postprocessLevel },
+          'Index unchanged since last run (HEAD + content match) — skipping edge resolution + postprocess',
+        );
+      } else {
+        if (this._postprocessLevel !== 'none') {
+          await this._dag.run(RESOLVE_EDGES_TASK_NAME, {
+            runResolveAllEdges: () => this.resolveAllEdges(),
+          });
+        }
+        if (this._postprocessLevel === 'full') {
+          await this._dag.run(LSP_ENRICHMENT_TASK_NAME, {
+            runLspEnrichment: () => this.runLspEnrichment(),
+          });
+          await this.indexEnvFiles(force);
+        }
       }
     } finally {
       // Snapshot the changed-file set BEFORE clearing so callers (background
