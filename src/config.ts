@@ -886,10 +886,18 @@ export const TraceMcpConfigSchema = z.object({
    */
   auto_spawn_daemon: z.boolean().default(true),
   /**
-   * Seconds to wait for an auto-spawned daemon's /health to respond. If the
-   * daemon isn't up in time, the stdio session falls back to local mode.
+   * Seconds to wait for an auto-spawned daemon's /health to respond before the
+   * stdio session gives up and falls back to local mode. Stays comfortably
+   * under MCP clients' ~30s connection timeout (bootstrap blocks on this).
+   *
+   * Default 20 (not 5): a daemon doing a first index or a forced post-update
+   * reindex can have its /health blocked by synchronous edge-resolution warm-up
+   * for well over 5s, especially under memory pressure. A premature fallback
+   * spins up a full in-process index per client; N clients then pile up
+   * multi-GB local indexers that starve the daemon and feed a restart loop
+   * (#209). Waiting longer for the shared daemon is far cheaper.
    */
-  daemon_spawn_timeout_seconds: z.number().min(1).max(60).default(5),
+  daemon_spawn_timeout_seconds: z.number().min(1).max(60).default(20),
   /**
    * Minutes the HTTP daemon (`serve-http`) stays alive with zero connected
    * clients before self-exiting. 0 disables (launchd-managed daemons get 0
