@@ -27,6 +27,15 @@ jobs:
           persist-credentials: false
 
       - name: Run analysis
+        # ponytail: tolerate transient publish flakes, don't mask real failures.
+        # publish_results uploads the public OpenSSF score to
+        # api.securityscorecards.dev, which intermittently times out
+        # ("context deadline exceeded") and fails this whole required check
+        # (e.g. run 27633150872). The SARIF is written before that upload, so
+        # code-scanning + the README badge still work; continue-on-error swallows
+        # only the flaky publish — a genuine analysis failure produces no SARIF
+        # and still reddens the upload-sarif step below.
+        continue-on-error: true
         uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
         with:
           results_file: results.sarif
