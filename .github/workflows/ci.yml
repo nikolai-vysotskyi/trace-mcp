@@ -381,17 +381,18 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
-      - name: Restore node_modules cache
-        id: nm-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: |
-            node_modules
-            packages/*/node_modules
-          key: node_modules-v2-${{ runner.os }}-node22-${{ hashFiles('pnpm-lock.yaml') }}
-
+      # No node_modules cache here — install fresh every run. actions/cache
+      # tars+restores pnpm's symlinked .pnpm junctions; when the windows-latest
+      # image rotates (it did between image 20260608 and 20260614), Node's
+      # realpathSync chokes on junctions created under the OLD image with
+      # "EPERM: operation not permitted, stat …/bundle-require…/load-tsconfig"
+      # during tsup's config load, failing the build deterministically on every
+      # run that restores the poisoned cache. A fresh install creates junctions
+      # that match the running image. The pnpm STORE is still cached via
+      # setup-node (cache: 'pnpm'), so install stays fast.
+      # ponytail: do NOT re-add node_modules caching here — it reintroduces the
+      # cross-image junction EPERM on the next windows-latest rotation.
       - name: Install
-        if: steps.nm-cache.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build
