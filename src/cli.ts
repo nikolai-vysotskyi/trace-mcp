@@ -2074,31 +2074,6 @@ program
             return;
           }
 
-          // Bare-container guard — mirrors the /mcp auto-register path (cli.ts
-          // ~933). Only register a directory that is ITSELF a project (has its
-          // own root markers: package.json / go.mod / .git / etc.). A bare
-          // parent that merely *contains* repos (e.g. ~/PhpstormProjects) must
-          // NOT be registered: indexing it pulls every nested repo into one
-          // giant blob that pins the daemon in permanent re-index churn and
-          // starves the HTTP server (#209). The proxy POSTs this endpoint on
-          // every connect, so without the guard a session opened with
-          // cwd=<folder-of-repos> silently re-registers the umbrella — which is
-          // exactly how it kept coming back after manual removal. Subdirectories
-          // of a real registered project are already routed to their parent above.
-          if (!hasRootMarkers(absRoot)) {
-            logger.warn(
-              { root: absRoot, ua: req.headers['user-agent'] },
-              'Rejected bare-container project root (no root markers) — likely an MCP client spawned with cwd=<folder-of-repos>',
-            );
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(
-              JSON.stringify({
-                error: `Refusing to register "${absRoot}" as a project: no root markers (package.json, go.mod, .git, pyproject.toml, etc.) found, so it looks like a container of repositories rather than a single project. Point the MCP server "cwd" at a specific repository, or register nested repos individually.`,
-              }),
-            );
-            return;
-          }
-
           await projectManager.addProject(absRoot);
           subscribeToProjectProgress(absRoot);
           broadcastEvent({ type: 'project_status', project: absRoot, status: 'indexing' });
