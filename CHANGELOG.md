@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.43.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.43.1...v1.43.2) (2026-06-25)
+
+
+### Bug Fixes
+
+* **daemon:** guard POST /api/projects against bare-container roots ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([1e2b8e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1e2b8e0b1550fc5421d25dfd619c9db3b92a0586))
+* **daemon:** read-only local fallback — stop per-session full re-index ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([8c28b65](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8c28b658de6db5ca2719fc13717232a67427525b))
+
+
+### CI/CD
+
+* **scorecard:** tolerate transient publish-results timeout ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([d2f2a81](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d2f2a8104e23114b782662a306d4efaf5ef1ea9c))
+* **windows:** drop node_modules cache on cross-platform job to fix realpath EPERM ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([3f9a5ad](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3f9a5adb4b68d50b5d055878eac7d632f9803f32))
+
 ## [1.43.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.43.0...v1.43.1) (2026-06-16)
 
 
