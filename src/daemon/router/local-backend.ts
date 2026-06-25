@@ -76,6 +76,18 @@ export class LocalBackend implements Backend {
   private decisionStore: DecisionStore | null = null;
   private clientTransport: InMemoryTransport | null = null;
   private indexingPromise: Promise<void> | null = null;
+  /**
+   * Read-only fallback: when the daemon already indexed this project and seeded
+   * our session DB, we serve that snapshot directly and never run the indexing
+   * stack (ExtractPool workers, indexAll, FileWatcher, AI passes). That stack is
+   * what made each local-mode session cost ~0.4-1.3 GB; with N stdio sessions
+   * during a daemon hiccup it piled up into multi-GB pressure that starved the
+   * daemon further (#209). The daemon owns indexing; a fallback client only
+   * needs to answer reads from the last index, and freshness returns when the
+   * DaemonWatcher swaps it back to proxy. Full local indexing still runs in the
+   * genuine daemonless case (no shared DB to seed from).
+   */
+  private readOnly = false;
   private started = false;
   private starting: Promise<void> | null = null;
   private stopping = false;
@@ -222,19 +234,33 @@ export class LocalBackend implements Backend {
       });
     }
 
+    // Read-only fallback (the common case during a daemon hiccup): the seeded
+    // DB already holds the daemon's index, so skip the entire indexing stack —
+    // no indexAll (which spawns the ExtractPool worker threads), no AI passes.
+    // Full indexing only runs in the genuine daemonless case (nothing seeded).
+    const readOnly = seeded;
+    this.readOnly = readOnly;
+
     // Kick off initial indexing in the background — do not block start.
     // This promise is tracked so stop() can let it drain before closing the DB.
-    this.indexingPromise = this.pipeline
-      .indexAll()
-      .then(async () => {
-        if (this.stopping) return;
-        runSummarization();
-        runEmbeddings();
-        await runSubprojectAutoSyncSafe(projectRoot, config);
-      })
-      .catch((err) => {
-        logger.error({ error: serializeError(err) }, 'LocalBackend: initial indexing failed');
-      });
+    if (!readOnly) {
+      this.indexingPromise = this.pipeline
+        .indexAll()
+        .then(async () => {
+          if (this.stopping) return;
+          runSummarization();
+          runEmbeddings();
+          await runSubprojectAutoSyncSafe(projectRoot, config);
+        })
+        .catch((err) => {
+          logger.error({ error: serializeError(err) }, 'LocalBackend: initial indexing failed');
+        });
+    } else {
+      logger.info(
+        { dbPath: this.dbPath, projectRoot },
+        'LocalBackend: read-only fallback — serving daemon-indexed snapshot, indexing stack idle',
+      );
+    }
 
     // Readonly shared stores — may not exist yet.
     try {
@@ -252,134 +278,138 @@ export class LocalBackend implements Backend {
       /* noop */
     }
 
-    // Start file watcher.
-    await this.watcher.start(
-      projectRoot,
-      config,
-      async (paths) => {
-        if (this.stopping) return;
-        const watchStart = performance.now();
-        const stats = getReindexStats();
-        // Dedup against the recent-reindex cache: if the same Edit fired
-        // both parcel-watcher and the PostToolUse hook (or register_edit),
-        // the second arrival is a no-op. Compute a POSIX-relative key
-        // matching the form used by reindex-file-handler.ts.
-        const toRel = (p: string): string => {
-          const rel = path.isAbsolute(p) ? path.relative(projectRoot, p) : p;
-          return path.sep === '\\' ? rel.split('\\').join('/') : rel;
-        };
-        const skipped: string[] = [];
-        const toIndex: string[] = [];
-        for (const p of paths) {
-          const rel = toRel(p);
-          if (shouldSkipRecentReindex(projectRoot, rel)) {
-            skipped.push(rel);
-          } else {
-            toIndex.push(p);
+    // Start file watcher — skipped in read-only fallback. The daemon owns
+    // indexing; a fallback client serving the seeded snapshot must not spin up
+    // @parcel/watcher + per-change reindexing (the `if` guards the whole
+    // single `await this.watcher.start(...)` statement below).
+    if (!readOnly)
+      await this.watcher.start(
+        projectRoot,
+        config,
+        async (paths) => {
+          if (this.stopping) return;
+          const watchStart = performance.now();
+          const stats = getReindexStats();
+          // Dedup against the recent-reindex cache: if the same Edit fired
+          // both parcel-watcher and the PostToolUse hook (or register_edit),
+          // the second arrival is a no-op. Compute a POSIX-relative key
+          // matching the form used by reindex-file-handler.ts.
+          const toRel = (p: string): string => {
+            const rel = path.isAbsolute(p) ? path.relative(projectRoot, p) : p;
+            return path.sep === '\\' ? rel.split('\\').join('/') : rel;
+          };
+          const skipped: string[] = [];
+          const toIndex: string[] = [];
+          for (const p of paths) {
+            const rel = toRel(p);
+            if (shouldSkipRecentReindex(projectRoot, rel)) {
+              skipped.push(rel);
+            } else {
+              toIndex.push(p);
+            }
           }
-        }
-        for (const rel of skipped) {
-          const elapsedMs = Math.round(performance.now() - watchStart);
-          logger.info(
-            {
-              event: 'reindex-file',
-              project: projectRoot,
-              path: rel,
+          for (const rel of skipped) {
+            const elapsedMs = Math.round(performance.now() - watchStart);
+            logger.info(
+              {
+                event: 'reindex-file',
+                project: projectRoot,
+                path: rel,
+                pathSource: 'watcher',
+                skippedRecent: true,
+                skippedHash: false,
+                indexed: 0,
+                elapsedMs,
+              },
+              'reindex-file telemetry',
+            );
+            stats.record({
               pathSource: 'watcher',
               skippedRecent: true,
               skippedHash: false,
               indexed: 0,
               elapsedMs,
-            },
-            'reindex-file telemetry',
-          );
-          stats.record({
-            pathSource: 'watcher',
-            skippedRecent: true,
-            skippedHash: false,
-            indexed: 0,
-            elapsedMs,
-          });
-        }
-        if (toIndex.length === 0) return;
+            });
+          }
+          if (toIndex.length === 0) return;
 
-        let result: { indexed?: number; skipped?: number; changedFileIds?: number[] } | undefined;
-        let watchErr: unknown;
-        try {
-          result = await this.pipeline!.indexFiles(toIndex);
-        } catch (err) {
-          watchErr = err;
-          throw err;
-        } finally {
-          const elapsedMs = Math.round(performance.now() - watchStart);
-          const indexed = result?.indexed ?? 0;
-          const skippedRows = result?.skipped ?? 0;
-          const skippedHash = indexed === 0 && skippedRows > 0;
-          for (const p of toIndex) {
-            const relPosix = toRel(p);
-            if (watchErr) {
-              logger.error(
-                {
-                  event: 'reindex-file',
-                  project: projectRoot,
-                  path: relPosix,
+          let result: { indexed?: number; skipped?: number; changedFileIds?: number[] } | undefined;
+          let watchErr: unknown;
+          try {
+            result = await this.pipeline!.indexFiles(toIndex);
+          } catch (err) {
+            watchErr = err;
+            throw err;
+          } finally {
+            const elapsedMs = Math.round(performance.now() - watchStart);
+            const indexed = result?.indexed ?? 0;
+            const skippedRows = result?.skipped ?? 0;
+            const skippedHash = indexed === 0 && skippedRows > 0;
+            for (const p of toIndex) {
+              const relPosix = toRel(p);
+              if (watchErr) {
+                logger.error(
+                  {
+                    event: 'reindex-file',
+                    project: projectRoot,
+                    path: relPosix,
+                    pathSource: 'watcher',
+                    skippedRecent: false,
+                    skippedHash: false,
+                    indexed: 0,
+                    elapsedMs,
+                    err: watchErr,
+                    error: String(watchErr),
+                  },
+                  'reindex-file telemetry (error)',
+                );
+                stats.record({
                   pathSource: 'watcher',
                   skippedRecent: false,
                   skippedHash: false,
                   indexed: 0,
                   elapsedMs,
-                  err: watchErr,
-                  error: String(watchErr),
-                },
-                'reindex-file telemetry (error)',
-              );
-              stats.record({
-                pathSource: 'watcher',
-                skippedRecent: false,
-                skippedHash: false,
-                indexed: 0,
-                elapsedMs,
-                error: true,
-              });
-            } else {
-              logger.info(
-                {
-                  event: 'reindex-file',
-                  project: projectRoot,
-                  path: relPosix,
+                  error: true,
+                });
+              } else {
+                logger.info(
+                  {
+                    event: 'reindex-file',
+                    project: projectRoot,
+                    path: relPosix,
+                    pathSource: 'watcher',
+                    skippedRecent: false,
+                    skippedHash,
+                    indexed,
+                    elapsedMs,
+                  },
+                  'reindex-file telemetry',
+                );
+                stats.record({
                   pathSource: 'watcher',
                   skippedRecent: false,
                   skippedHash,
                   indexed,
                   elapsedMs,
-                },
-                'reindex-file telemetry',
-              );
-              stats.record({
-                pathSource: 'watcher',
-                skippedRecent: false,
-                skippedHash,
-                indexed,
-                elapsedMs,
-              });
+                });
+              }
             }
           }
-        }
-        debouncedSummarize();
-        debouncedEmbed();
-        // Phase 3: schedule scoped LSP enrichment off the hot path. Only
-        // fires when LSP is enabled in config (this.lspEnricher is null
-        // otherwise) and only for IDs the pipeline actually touched.
-        if (this.lspEnricher && result?.changedFileIds && result.changedFileIds.length > 0) {
-          this.lspEnricher.scheduleEnrichment(result.changedFileIds);
-        }
-      },
-      undefined,
-      async (deleted) => {
-        if (this.stopping) return;
-        this.pipeline!.deleteFiles(deleted);
-      },
-    );
+          debouncedSummarize();
+          debouncedEmbed();
+          // Phase 3: schedule scoped LSP enrichment off the hot path. Only
+          // fires when LSP is enabled in config (this.lspEnricher is null
+          // otherwise) and only for IDs the pipeline actually touched.
+          if (this.lspEnricher && result?.changedFileIds && result.changedFileIds.length > 0) {
+            this.lspEnricher.scheduleEnrichment(result.changedFileIds);
+          }
+        },
+        undefined,
+        async (deleted) => {
+          if (this.stopping) return;
+          this.pipeline!.deleteFiles(deleted);
+        },
+      );
 
     // Create McpServer and wire it to our in-memory pair.
     this.handle = createServer(this.store, this.registry, config, projectRoot, this.progress, {
