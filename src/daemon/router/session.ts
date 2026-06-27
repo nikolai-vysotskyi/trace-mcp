@@ -21,6 +21,11 @@ declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 
+function isInitializeRequest(msg: JSONRPCMessage): boolean {
+  const m = msg as Record<string, unknown>;
+  return m.method === 'initialize' && m.id !== undefined && m.id !== null;
+}
+
 export interface StdioSessionOptions {
   projectRoot: string;
   indexRoot: string;
@@ -70,6 +75,13 @@ export class StdioSession {
   private desiredMode: 'proxy' | 'local' | 'dormant' = 'dormant';
   /** Guards against concurrent wakeUp() calls when multiple stdin messages arrive in the dormant window. */
   private wakePromise: Promise<void> | null = null;
+  /**
+   * The client's `initialize` frame, cached the moment it arrives. A swapped-in
+   * ProxyBackend (local→proxy after daemon recovery) never sees `initialize`
+   * again, so we seed it from here — otherwise its first request POSTs
+   * session-less and surfaces "Session expired, reinitialize required" (#209).
+   */
+  private cachedInitialize: JSONRPCMessage | null = null;
 
   constructor(opts: StdioSessionOptions) {
     this.opts = opts;
@@ -96,6 +108,9 @@ export class StdioSession {
     this.stdio.onmessage = (msg) => {
       this.handshake?.observe();
       this.resetIdleTimer();
+      // Cache the handshake so a later swapped-in proxy backend can re-establish
+      // the daemon session (the client only sends `initialize` once).
+      if (isInitializeRequest(msg as JSONRPCMessage)) this.cachedInitialize = msg as JSONRPCMessage;
       void this.router.ingestFromClient(msg as JSONRPCMessage);
     };
     this.stdio.onerror = (err) => {
@@ -322,6 +337,11 @@ export class StdioSession {
       projectRoot: this.opts.projectRoot,
       clientId: this.clientId,
       clientTransportKind: 'stdio-proxy',
+      // Seed the cached handshake so a swap-in backend (the client already
+      // initialized through a previous backend) can re-establish a daemon
+      // session on its first request instead of surfacing "Session expired".
+      // Null at bootstrap — the initial backend captures it via send() instead.
+      initializeFrame: this.cachedInitialize ?? undefined,
     });
   }
 
