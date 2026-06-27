@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 29;
+const SCHEMA_VERSION = 30;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -230,6 +230,9 @@ CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_node_id);
 CREATE INDEX IF NOT EXISTS idx_edges_type   ON edges(edge_type_id);
 CREATE INDEX IF NOT EXISTS idx_edges_src_tgt_type ON edges(source_node_id, target_node_id, edge_type_id);
 CREATE INDEX IF NOT EXISTS idx_edges_resolution_tier ON edges(resolution_tier);
+-- v30: partial index for the resolved-edge hot paths (PageRank cold pull +
+-- the COUNT(*) WHERE resolved = 1 guard). Mirrored in MIGRATIONS[30].
+CREATE INDEX IF NOT EXISTS idx_edges_resolved ON edges(resolved) WHERE resolved = 1;
 CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_id);
 -- v29: compound covering index for the file-outline hot path:
 --   SELECT id, name, kind, line_start, line_end FROM symbols
@@ -247,6 +250,14 @@ CREATE INDEX IF NOT EXISTS idx_symbols_has_heritage ON symbols(file_id)
   WHERE metadata IS NOT NULL
     AND (json_extract(metadata, '$.extends') IS NOT NULL
       OR json_extract(metadata, '$.implements') IS NOT NULL);
+-- v30: index parent_id so getSymbolChildren (WHERE parent_id = ?) stops doing a
+-- full table scan. Mirrored in MIGRATIONS[30].
+CREATE INDEX IF NOT EXISTS idx_symbols_parent ON symbols(parent_id);
+-- v30: partial expression index for getExportedSymbols / self_audit, which
+-- otherwise scan + json_extract every row. Mirrored in MIGRATIONS[30].
+CREATE INDEX IF NOT EXISTS idx_symbols_exported
+  ON symbols(json_extract(metadata, '$.exported'))
+  WHERE json_extract(metadata, '$.exported') IS NOT NULL;
 -- idx_files_workspace and idx_edges_cross_ws created in migration v9
 
 -- ============================================================
@@ -1698,6 +1709,22 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     // Mirrored in the top-of-file DDL block for fresh-DB parity.
     db.exec(`
       CREATE INDEX IF NOT EXISTS idx_symbols_file_line ON symbols(file_id, line_start);
+    `);
+  },
+  30: (db) => {
+    // Three missing indexes for known hot paths. All mirrored in the
+    // top-of-file DDL block for fresh-DB parity (byte-identical definitions).
+    db.exec(`
+      -- idx_symbols_parent: getSymbolChildren was a full table scan
+      -- (symbol-repository.ts WHERE parent_id = ?).
+      CREATE INDEX IF NOT EXISTS idx_symbols_parent ON symbols(parent_id);
+      -- idx_symbols_exported: getExportedSymbols / self_audit scanned +
+      -- json_extract'd every row.
+      CREATE INDEX IF NOT EXISTS idx_symbols_exported
+        ON symbols(json_extract(metadata, '$.exported'))
+        WHERE json_extract(metadata, '$.exported') IS NOT NULL;
+      -- idx_edges_resolved: PageRank cold pull + the COUNT(*) WHERE resolved = 1 guard.
+      CREATE INDEX IF NOT EXISTS idx_edges_resolved ON edges(resolved) WHERE resolved = 1;
     `);
   },
 };
