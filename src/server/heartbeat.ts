@@ -21,7 +21,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { projectHash } from '../global.js';
 
-const FLUSH_INTERVAL_MS = 5_000;
+/** Flush cadence while at least one MCP session is active. */
+const FLUSH_INTERVAL_ACTIVE_MS = 5_000;
+/** Slower flush cadence while no sessions are active (back-off). */
+const FLUSH_INTERVAL_IDLE_MS = 30_000;
 const STATUS_SCHEMA_VERSION = 1;
 
 interface StatusState {
@@ -104,9 +107,28 @@ export function startHeartbeat(projectRoot: string): HeartbeatHandle {
     }
   };
 
+  const cadenceFor = (sessionsActive: number): number =>
+    sessionsActive > 0 ? FLUSH_INTERVAL_ACTIVE_MS : FLUSH_INTERVAL_IDLE_MS;
+
   flush();
-  const timer = setInterval(flush, FLUSH_INTERVAL_MS);
+  let currentIntervalMs = cadenceFor(state.mcp_sessions_active);
+  let timer = setInterval(flush, currentIntervalMs);
   if (typeof timer.unref === 'function') timer.unref();
+
+  /**
+   * Re-aim the flush interval at the cadence implied by the current session
+   * count. No-op when the cadence is unchanged, so it is cheap to call on every
+   * session-count change. Reassigns `timer` in this closure so the existing
+   * stop()/clearInterval continues to target the live timer.
+   */
+  const retarget = () => {
+    const next = cadenceFor(state.mcp_sessions_active);
+    if (next === currentIntervalMs) return;
+    currentIntervalMs = next;
+    clearInterval(timer);
+    timer = setInterval(flush, currentIntervalMs);
+    if (typeof timer.unref === 'function') timer.unref();
+  };
 
   return {
     path: file,
@@ -123,6 +145,8 @@ export function startHeartbeat(projectRoot: string): HeartbeatHandle {
     },
     setSessionsActive(count: number) {
       state.mcp_sessions_active = count;
+      // Adjust flush cadence to match active/idle state (no-op if unchanged).
+      retarget();
     },
     flush,
     getState() {
