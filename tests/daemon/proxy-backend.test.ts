@@ -177,6 +177,44 @@ describe('ProxyBackend daemon-restart recovery', () => {
     expect(transports).toHaveLength(1); // no fresh transport opened
   });
 
+  it('seeded initialize frame (swap-in) recovers without a prior send() handshake', async () => {
+    // Simulates a local→proxy swap-back: the client already completed its
+    // handshake through a previous backend, so this fresh backend never sees
+    // `initialize` via send(). Seeded with the frame, its first real request
+    // must still re-establish the session instead of surfacing "Session
+    // expired" — the bug exposed once read-only local made swap-back fire (#209).
+    const backend = new ProxyBackend({
+      daemonUrl: 'http://127.0.0.1:65535',
+      projectRoot: '/tmp/does-not-resolve-to-any-registered-project',
+      clientId: 'test-client',
+      initializeFrame: initFrame(1),
+      transportFactory: () => {
+        const t = new FakeTransport();
+        t.failSessionLost = failNewTransports;
+        transports.push(t);
+        return t;
+      },
+    });
+    backend.onmessage = (m) => clientInbox.push(m);
+    await backend.start();
+
+    // The daemon has no session for us — we never initialized through send().
+    transports[0]!.failSessionLost = true;
+    transports[0]!.sessionLostMessage = 'Session expired, reinitialize required';
+
+    await backend.send(toolCall(5));
+
+    // Recovery fired off the seeded frame: fresh transport, handshake replayed,
+    // original request retried.
+    expect(transports).toHaveLength(2);
+    expect(transports[1]!.sent.map(methodOf)).toEqual([
+      'initialize',
+      'notifications/initialized',
+      'tools/call',
+    ]);
+    expect((transports[1]!.sent[2] as { id: number }).id).toBe(5);
+  });
+
   it('propagates non-session errors without re-initializing', async () => {
     const backend = makeBackend();
     await backend.start();

@@ -23,6 +23,17 @@ export interface ProxyBackendOptions {
   clientId: string; // stable uuid for this stdio session (for /api/clients)
   clientTransportKind?: string; // "stdio-proxy" by default
   /**
+   * The client's `initialize` frame, when this backend is created by a *swap*
+   * (e.g. local→proxy after the daemon recovers) rather than at bootstrap.
+   * On a swap the client already completed its handshake through a previous
+   * backend and will NOT re-send `initialize` through us — so without this seed
+   * `initializeFrame` stays null, the first real request POSTs session-less, the
+   * daemon answers "Session expired, reinitialize required", and send()'s
+   * recovery is skipped (it bails on a null frame). Seeding it lets that
+   * recovery replay the handshake and mint a session on the first request (#209).
+   */
+  initializeFrame?: JSONRPCMessage;
+  /**
    * Test seam: build a transport for the resolved /mcp URL + project root.
    * Defaults to a real StreamableHTTPClientTransport.
    */
@@ -113,6 +124,11 @@ export class ProxyBackend implements Backend {
 
   constructor(opts: ProxyBackendOptions) {
     this.opts = opts;
+    // Swap-in seed: adopt the client's initialize frame so send()'s recovery
+    // can establish a daemon session on the first request (see options doc).
+    if (opts.initializeFrame && isInitializeRequest(opts.initializeFrame)) {
+      this.initializeFrame = opts.initializeFrame;
+    }
   }
 
   async start(): Promise<void> {
