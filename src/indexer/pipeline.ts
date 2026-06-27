@@ -837,6 +837,19 @@ export class IndexingPipeline {
         result.indexed += extractions.length;
       }
 
+      // Bound in-process content residency to one batch: Pass 2
+      // (buildResolveContext.readFile) re-reads from disk on a cache miss, and
+      // the OS page cache keeps these warm, so it is safe to release the
+      // batch's source here instead of pinning the whole repo's file content
+      // in RAM until run end. The end-of-run clear() (in run()'s finally
+      // block) remains as the final safety net. relPath is the exact key the
+      // in-process extractor populated the cache with (file-extractor.ts sets
+      // fileContentCache.set(relPath, ...)); for the worker path these keys
+      // are not present, so the delete is a harmless no-op.
+      for (const ext of extractions) {
+        this._fileContentCache.delete(ext.relPath);
+      }
+
       const processed = result.indexed + result.skipped + result.errors;
       this.progress?.update('indexing', { processed });
       // persistBatch is one synchronous SQLite transaction over up to 500
