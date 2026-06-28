@@ -159,6 +159,10 @@ export class SubprojectManager {
 
     const clientCalls = await this.scanAndLinkClientCalls(repoId, absRoot);
 
+    // Build cross-service edges once at the end of the discovery run (was previously
+    // rebuilt per-service inside scanAndLinkClientCalls).
+    this.buildCrossServiceEdges();
+
     this.topoStore.updateSubprojectSyncTime(repoId);
 
     const stats = this.topoStore.getTopologyStats();
@@ -248,6 +252,11 @@ export class SubprojectManager {
 
     await this.scanCrossServiceEndpointLiterals(registered);
 
+    // Build cross-service edges once for the whole discovery run. The per-service rebuild
+    // was removed from scanAndLinkClientCalls, and the post-pass above only rebuilds when
+    // it actually inserts new literal calls, so we always rebuild here to cover every path.
+    this.buildCrossServiceEdges();
+
     return { services: results };
   }
 
@@ -298,9 +307,9 @@ export class SubprojectManager {
 
     if (totalInserted === 0) return;
 
-    // Re-link with the expanded client-call set and rebuild cross-service edges.
+    // Re-link with the expanded client-call set. The cross-service edge rebuild is done
+    // once by the autoDiscoverSubprojects() caller after this post-pass returns.
     this.topoStore.linkClientCallsToEndpoints();
-    this.buildCrossServiceEdges();
 
     logger.info({ inserted: totalInserted }, 'Cross-service endpoint-literal scan completed');
   }
@@ -312,17 +321,12 @@ export class SubprojectManager {
     const repo = this.topoStore.getSubproject(nameOrRoot);
     if (!repo) return false;
 
-    // Remove client calls
-    this.topoStore.deleteClientCallsByRepo(repo.id);
-
-    // Remove associated services
-    const services = this.topoStore.getAllServices().filter((s) => s.repo_root === repo.repo_root);
-    for (const svc of services) {
-      this.topoStore.deleteService(svc.id);
-    }
-
-    // Remove repo
-    this.topoStore.deleteSubproject(repo.id);
+    // Delegate to the transactional cascade-safe removal. Doing the deletes here
+    // by hand previously failed with "FOREIGN KEY constraint failed": a service's
+    // api_endpoints can be referenced by OTHER repos' client_calls
+    // (matched_endpoint_id, no ON DELETE), so the service-delete cascade was
+    // blocked. removeByRepoRoot() detaches those references first, in one tx.
+    this.topoStore.removeByRepoRoot(repo.repo_root);
     return true;
   }
 
@@ -461,13 +465,18 @@ export class SubprojectManager {
       this.topoStore.updateSubprojectSyncTime(repo.id);
     }
 
+    // Final relink across the full client-call set, then build cross-service edges once
+    // for the whole run (was previously rebuilt per-repo inside scanAndLinkClientCalls).
+    const newlyLinked = this.topoStore.linkClientCallsToEndpoints();
+    this.buildCrossServiceEdges();
+
     return {
       repos: repos.length,
       servicesUpdated,
       contractsUpdated,
       endpointsUpdated,
       clientCallsScanned,
-      newlyLinked: this.topoStore.linkClientCallsToEndpoints(),
+      newlyLinked,
       crossRepoEdges: this.topoStore.getTopologyStats().crossEdges,
     };
   }
@@ -625,7 +634,10 @@ export class SubprojectManager {
       );
     }
     const linked = this.topoStore.linkClientCallsToEndpoints();
-    this.buildCrossServiceEdges();
+    // Cross-service edges are global + INSERT OR IGNORE idempotent, so they are built
+    // exactly once per discovery run (by the add()/sync()/autoDiscover() callers) rather
+    // than once per service here — the per-service rebuild was an O(N) repeat of the same
+    // global pass.
     return { scanned: clientCalls.length, linked };
   }
 
@@ -701,29 +713,41 @@ export class SubprojectManager {
     const repos = this.topoStore.getAllSubprojects();
     const services = this.topoStore.getAllServices();
 
+    // Hoist the endpoint fetch out of the per-call loop: index endpoints by id ONCE
+    // so the matched_endpoint_id lookup is a Map.get instead of a full JOIN + linear find.
+    const endpointById = new Map<
+      number,
+      ReturnType<typeof this.topoStore.getAllEndpoints>[number]
+    >();
+    for (const ep of this.topoStore.getAllEndpoints()) {
+      endpointById.set(ep.id, ep);
+    }
+
+    // Sort services longest-repo_root-first ONCE. The per-call source selection then uses
+    // .find over this pre-sorted array, so the first matching candidate is the most specific
+    // (longest repo_root), preserving the prior "sort by repo_root.length desc, pick [0]"
+    // semantics. The exact-repo_root short-circuit is kept inside the predicate below.
+    const sortedServices = [...services].sort((a, b) => b.repo_root.length - a.repo_root.length);
+
     for (const repo of repos) {
       const calls = this.topoStore.getClientCallsByRepo(repo.id);
       const linkedCalls = calls.filter((c) => c.matched_endpoint_id != null);
 
       for (const call of linkedCalls) {
         // Find target service from the matched endpoint
-        const targetEndpoint = this.topoStore
-          .getAllEndpoints()
-          .find((e) => e.id === call.matched_endpoint_id);
+        const targetEndpoint = endpointById.get(call.matched_endpoint_id as number);
         if (!targetEndpoint) continue;
 
         // Find source service: exact match first, then longest prefix match (handles
         // the case where a parent folder is registered as a repo but services live
         // in subdirectories, e.g. repo_root="the/" but service.repo_root="the/fair-front/").
-        const _repoRoot = repo.repo_root.endsWith('/') ? repo.repo_root : `${repo.repo_root}/`;
         const callPath = call.file_path.startsWith('/') ? call.file_path : `/${call.file_path}`;
-        const candidates = services.filter((s) => {
+        // sortedServices is longest-repo_root-first, so the first hit is the most specific.
+        const sourceService = sortedServices.find((s) => {
           if (s.repo_root === repo.repo_root) return true;
           const svcRoot = s.repo_root.endsWith('/') ? s.repo_root : `${s.repo_root}/`;
           return callPath.startsWith(svcRoot) || call.file_path.startsWith(svcRoot);
         });
-        // Pick most specific (longest repo_root wins)
-        const sourceService = candidates.sort((a, b) => b.repo_root.length - a.repo_root.length)[0];
         if (!sourceService || sourceService.id === targetEndpoint.service_id) continue;
 
         this.topoStore.insertCrossServiceEdge({

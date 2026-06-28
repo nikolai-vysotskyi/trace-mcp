@@ -929,25 +929,50 @@ export class TopologyStore {
   removeByRepoRoot(repoRoot: string): { subprojects: number; services: number } {
     const result = { subprojects: 0, services: 0 };
 
-    // Delete subproject entry (cascades to client_calls)
-    const sub = this.getSubproject(repoRoot);
-    if (sub) {
-      this.deleteSubproject(sub.id);
-      result.subprojects = 1;
-    }
-
-    // Delete all services rooted in this path (cascades to contracts, endpoints, events, edges, snapshots)
     const services = this.db
       .prepare('SELECT id FROM services WHERE repo_root = ?')
       .all(repoRoot) as Array<{ id: number }>;
-    if (services.length > 0) {
-      this.db.transaction(() => {
+
+    // Whole removal runs in ONE transaction so a mid-way FK failure can't leave
+    // a half-deleted repo behind.
+    this.db.transaction(() => {
+      if (services.length > 0) {
+        // client_calls.matched_endpoint_id REFERENCES api_endpoints(id) with NO
+        // `ON DELETE` action — so deleting a service (which cascade-deletes its
+        // api_endpoints) throws "FOREIGN KEY constraint failed" whenever ANOTHER
+        // repo's client call matched one of those endpoints. Detach those
+        // references first (the column is nullable), then the cascade is safe.
+        const placeholders = services.map(() => '?').join(',');
+        const ids = services.map((s) => s.id);
+        this.db
+          .prepare(
+            `UPDATE client_calls SET matched_endpoint_id = NULL
+             WHERE matched_endpoint_id IN (
+               SELECT id FROM api_endpoints WHERE service_id IN (${placeholders})
+             )`,
+          )
+          .run(...ids);
+
+        // Delete all services rooted in this path (cascades to contracts,
+        // endpoints, events, edges, snapshots).
         for (const svc of services) {
           this.deleteService(svc.id);
         }
-      })();
-      result.services = services.length;
-    }
+        result.services = services.length;
+      }
+
+      // Delete subproject entry last. source_repo_id cascades, but
+      // client_calls.target_repo_id REFERENCES subprojects(id) has NO `ON DELETE`
+      // — other repos pointing AT this one would block the delete. Detach first.
+      const sub = this.getSubproject(repoRoot);
+      if (sub) {
+        this.db
+          .prepare('UPDATE client_calls SET target_repo_id = NULL WHERE target_repo_id = ?')
+          .run(sub.id);
+        this.deleteSubproject(sub.id);
+        result.subprojects = 1;
+      }
+    })();
 
     return result;
   }
@@ -1042,18 +1067,32 @@ export class TopologyStore {
 
     const endpoints = this.getAllEndpoints();
     const services = this.getAllServices();
+    const allRepos = this.getAllSubprojects();
 
     // Build service_id → project_group lookup
     const serviceGroup = new Map<number, string | null>();
+    // Build service_id → repo_root lookup (replaces a per-matched-call
+    // `SELECT repo_root FROM services WHERE id = ?`).
+    const serviceRepoRoot = new Map<number, string>();
+    // Build repo_root → service lookup (replaces the per-repo `services.find(...)` below).
+    const serviceByRepoRoot = new Map<string, (typeof services)[number]>();
     for (const svc of services) {
       serviceGroup.set(svc.id, svc.project_group ?? null);
+      serviceRepoRoot.set(svc.id, svc.repo_root);
+      if (!serviceByRepoRoot.has(svc.repo_root)) serviceByRepoRoot.set(svc.repo_root, svc);
+    }
+
+    // Build repo_root → subproject_id lookup (replaces a per-matched-call
+    // `SELECT id FROM subprojects WHERE repo_root = ?`).
+    const repoIdByRoot = new Map<string, number>();
+    for (const repo of allRepos) {
+      if (!repoIdByRoot.has(repo.repo_root)) repoIdByRoot.set(repo.repo_root, repo.id);
     }
 
     // Build source_repo_id → { projectGroup, serviceId } lookup
     const repoInfo = new Map<number, { group: string | null; serviceId: number | null }>();
-    const allRepos = this.getAllSubprojects();
     for (const repo of allRepos) {
-      const svc = services.find((s) => s.repo_root === repo.repo_root);
+      const svc = serviceByRepoRoot.get(repo.repo_root);
       repoInfo.set(repo.id, { group: svc?.project_group ?? null, serviceId: svc?.id ?? null });
     }
 
@@ -1096,17 +1135,12 @@ export class TopologyStore {
           );
         }
         if (match) {
-          // Find the repo for this service
-          const svc = this.db
-            .prepare('SELECT repo_root FROM services WHERE id = ?')
-            .get(match.service_id) as { repo_root: string } | undefined;
-          const targetRepo = svc
-            ? (this.db
-                .prepare('SELECT id FROM subprojects WHERE repo_root = ?')
-                .get(svc.repo_root) as { id: number } | undefined)
-            : undefined;
+          // Find the repo for this service via pre-built maps (was two per-call SELECTs).
+          const matchRepoRoot = serviceRepoRoot.get(match.service_id);
+          const targetRepoId =
+            matchRepoRoot != null ? (repoIdByRoot.get(matchRepoRoot) ?? null) : null;
 
-          updateStmt.run(match.id, targetRepo?.id ?? null, match.confidence, call.id);
+          updateStmt.run(match.id, targetRepoId ?? null, match.confidence, call.id);
           linked++;
         }
       }
