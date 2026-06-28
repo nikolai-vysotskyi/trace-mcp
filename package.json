@@ -108,7 +108,8 @@
     "vitest": "^4.1.4"
   },
   "optionalDependencies": {
-    "@huggingface/transformers": "^4.0.1"
+    "@huggingface/transformers": "^4.0.1",
+    "sqlite-vec": "^0.1.9"
   },
   "overrides": {
     "protobufjs": ">=7.5.5",

@@ -5,6 +5,7 @@
  */
 import type Database from 'better-sqlite3';
 import type { VectorStore } from './interfaces.js';
+import { Vec0Index } from './vec-extension.js';
 
 const CREATE_TABLE = `
 CREATE TABLE IF NOT EXISTS symbol_embeddings (
@@ -63,15 +64,48 @@ export type ProviderCheckResult =
 export class BlobVectorStore implements VectorStore {
   /** Cached expected dim — null until first getMeta() or setMeta(). */
   private cachedDim: number | null = null;
+  /** Optional sqlite-vec ANN accelerator over the BLOB table; null when absent. */
+  private vec: Vec0Index | null = null;
 
   constructor(private db: Database.Database) {
     this.ensureTable();
     const meta = this.getMeta();
     if (meta) this.cachedDim = meta.dim;
+    this.vec = Vec0Index.tryCreate(db);
+    this.syncVecIndex();
   }
 
   private ensureTable(): void {
     this.db.exec(CREATE_TABLE);
+  }
+
+  /** Backfill the ANN accelerator from the canonical BLOB table if it is behind. */
+  private syncVecIndex(): void {
+    if (!this.vec) return;
+    const dim = this.cachedDim ?? this.peekDim();
+    if (dim == null) return; // no vectors yet — vec0 is created lazily on first insert
+    if (this.vec.count() >= this.count()) return; // already in sync
+
+    // Read in chunks via all() (not iterate): better-sqlite3 forbids writing while a
+    // read iterator is open on the same connection, and chunking bounds peak memory
+    // for a large one-time backfill.
+    const CHUNK = 1000;
+    const read = this.db.prepare(
+      'SELECT symbol_id, embedding FROM symbol_embeddings ORDER BY symbol_id LIMIT ? OFFSET ?',
+    );
+    for (let offset = 0; ; offset += CHUNK) {
+      const rows = read.all(CHUNK, offset) as { symbol_id: number; embedding: Buffer }[];
+      if (rows.length === 0) break;
+      this.vec.backfill(rows, dim);
+    }
+  }
+
+  /** Infer vector dimensionality from a stored BLOB (bytes / 4 = float32 count). */
+  private peekDim(): number | null {
+    const row = this.db.prepare('SELECT embedding FROM symbol_embeddings LIMIT 1').get() as
+      | { embedding: Buffer }
+      | undefined;
+    return row ? row.embedding.byteLength / 4 : null;
   }
 
   insert(id: number, vector: number[]): void {
@@ -82,6 +116,7 @@ export class BlobVectorStore implements VectorStore {
     this.db
       .prepare('INSERT OR REPLACE INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)')
       .run(id, buf);
+    this.vec?.insert(id, buf, vector.length);
   }
 
   search(query: number[], limit: number): { id: number; score: number }[] {
@@ -90,6 +125,13 @@ export class BlobVectorStore implements VectorStore {
     const queryArr = new Float32Array(query);
     const queryNorm = vecNorm(queryArr);
     if (queryNorm === 0) return [];
+
+    // Fast path: sub-linear ANN via sqlite-vec when the extension is loaded.
+    // Returns null on any vec0 error → fall through to the brute-force scan.
+    if (this.vec) {
+      const ann = this.vec.search(Buffer.from(queryArr.buffer), limit, query.length);
+      if (ann) return ann;
+    }
 
     // Use iterate() instead of all() to avoid loading every embedding into memory at once.
     // Maintain a min-heap of top-K results so we only keep `limit` items in memory.
@@ -124,6 +166,7 @@ export class BlobVectorStore implements VectorStore {
 
   delete(id: number): void {
     this.db.prepare('DELETE FROM symbol_embeddings WHERE symbol_id = ?').run(id);
+    this.vec?.delete(id);
   }
 
   count(): number {
@@ -135,6 +178,7 @@ export class BlobVectorStore implements VectorStore {
 
   clear(): void {
     this.db.exec('DELETE FROM symbol_embeddings');
+    this.vec?.clear();
   }
 
   setMeta(model: string, dim: number, provider?: string): void {
