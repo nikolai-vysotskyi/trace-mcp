@@ -25,6 +25,7 @@ import { invalidateSearchCache } from '../scoring/search-cache.js';
 import { captureGraphSnapshots } from '../tools/analysis/history.js';
 import { safeGitEnv } from '../utils/git-env.js';
 import { initContentHasher } from '../util/hash.js';
+import { descendantExcludeGlobs } from '../registry.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { hashContent } from '../utils/hasher.js';
 import { validatePath } from '../utils/security.js';
@@ -469,6 +470,13 @@ export class IndexingPipeline {
       // runtime churn the full pipeline would never touch — e.g. Laravel
       // storage/framework/sessions blobs arriving on every web request.
       const isExcluded = this.getExcludeMatcher();
+      // A registered descendant owns its own subtree — drop its files so an
+      // umbrella root's watcher-driven reindex is a no-op instead of a second,
+      // umbrella-wide edge reconcile (the daemon-starvation cause behind #209).
+      const descendantGlobs = descendantExcludeGlobs(this.rootPath);
+      const ownedByDescendant = descendantGlobs.length
+        ? picomatch(descendantGlobs, { dot: true })
+        : undefined;
       const relPaths: string[] = [];
       for (const fp of filePaths) {
         const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
@@ -477,8 +485,13 @@ export class IndexingPipeline {
           logger.warn({ file: fp }, 'Path traversal blocked in indexFiles');
           continue;
         }
-        if (isExcluded(rel.split(path.sep).join('/'))) {
+        const relPosix = rel.split(path.sep).join('/');
+        if (isExcluded(relPosix)) {
           logger.debug({ file: rel }, 'Excluded path skipped in indexFiles');
+          continue;
+        }
+        if (ownedByDescendant?.(relPosix)) {
+          logger.debug({ file: rel }, 'Skipped: owned by a more-specific registered project');
           continue;
         }
         relPaths.push(rel);
@@ -1211,7 +1224,14 @@ export class IndexingPipeline {
 
   private async collectFiles(): Promise<string[]> {
     const traceignoreIgnore = this._traceignore?.toFastGlobIgnore() ?? [];
-    const ignore = [...this.config.exclude, ...traceignoreIgnore];
+    // Most-specific registered project owns a path: skip files that live under a
+    // registered descendant so an umbrella root doesn't index its child repos
+    // into a second DB (the double-index churn behind #209).
+    const ignore = [
+      ...this.config.exclude,
+      ...traceignoreIgnore,
+      ...descendantExcludeGlobs(this.rootPath),
+    ];
 
     // suppressErrors: a path component that matches a directory-shaped glob
     // but is actually a file (e.g. a stray `<ws>/test` FILE meeting the

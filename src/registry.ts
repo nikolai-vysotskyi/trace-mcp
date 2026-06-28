@@ -168,6 +168,46 @@ export function listProjects(): RegistryEntry[] {
   return Object.values(reg.projects);
 }
 
+/**
+ * Registered project roots that live strictly inside `root` — accidental
+ * "container overlap" projects (a parent folder registered alongside child
+ * repos). Declared `multi-root` children of `root` are intentional and excluded,
+ * mirroring findOverlappingProjects().
+ *
+ * Indexing and file-watching use this so the *most-specific* registered project
+ * owns a path: an ancestor project skips files that live under a registered
+ * descendant instead of indexing them into a second DB and watching them with a
+ * second watcher. That double-indexing is the churn + daemon-starvation cause
+ * behind #209, and it mirrors resolveRegisteredAncestor(), which already routes
+ * subdirectory *requests* to the most-specific project.
+ */
+export function registeredDescendantRoots(root: string): string[] {
+  const absRoot = path.resolve(root);
+  const reg = loadRegistry();
+  const self = reg.projects[absRoot];
+  const declaredChildren = new Set(self?.type === 'multi-root' ? (self.children ?? []) : []);
+  return Object.values(reg.projects)
+    .map((e) => e.root)
+    .filter((r) => {
+      if (r === absRoot || declaredChildren.has(r)) return false;
+      const rel = path.relative(absRoot, r);
+      return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+    });
+}
+
+/**
+ * fast-glob / parcel-watcher ignore globs (POSIX, relative to `root`) for every
+ * registered descendant of `root`. Feed into collectFiles()'s ignore list and
+ * the incremental indexFiles() gate so an ancestor never indexes a
+ * descendant-owned file. Empty when `root` has no registered descendants.
+ */
+export function descendantExcludeGlobs(root: string): string[] {
+  const absRoot = path.resolve(root);
+  return registeredDescendantRoots(absRoot).map(
+    (r) => `${path.relative(absRoot, r).split(path.sep).join('/')}/**`,
+  );
+}
+
 /** Remove entries whose root directory no longer exists. Returns removed paths. */
 export function pruneStaleProjects(): string[] {
   const reg = loadRegistry();
