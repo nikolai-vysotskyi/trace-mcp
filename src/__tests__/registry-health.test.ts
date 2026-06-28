@@ -98,4 +98,53 @@ describe('registry health (#168)', () => {
       expect(registry.listProjects()).toHaveLength(1);
     });
   });
+
+  // #209: an umbrella root registered alongside its child repos double-indexed
+  // every child file (parent DB + child DB), pinning the daemon in reindex churn
+  // that starved idle MCP sessions into "Session expired". The most-specific
+  // registered project must own a path; the ancestor skips a descendant's files.
+  describe('registeredDescendantRoots / descendantExcludeGlobs', () => {
+    it('returns registered roots strictly inside the umbrella, not siblings or self', () => {
+      const umbrella = makeProjectDir('ws');
+      const child = makeProjectDir('ws/the');
+      const grandchild = makeProjectDir('ws/the/front');
+      const sibling = makeProjectDir('other');
+      for (const p of [umbrella, child, grandchild, sibling]) registry.registerProject(p);
+
+      const descendants = registry.registeredDescendantRoots(umbrella).sort();
+      expect(descendants).toEqual([child, grandchild].sort());
+      expect(descendants).not.toContain(umbrella);
+      expect(descendants).not.toContain(sibling);
+    });
+
+    it('emits POSIX child-relative ignore globs', () => {
+      const umbrella = makeProjectDir('ws');
+      const child = makeProjectDir('ws/the');
+      registry.registerProject(umbrella);
+      registry.registerProject(child);
+
+      expect(registry.descendantExcludeGlobs(umbrella)).toEqual(['the/**']);
+      // A leaf project with no registered descendants excludes nothing.
+      expect(registry.descendantExcludeGlobs(child)).toEqual([]);
+    });
+
+    it('is most-specific: a child excludes its own registered descendants only', () => {
+      const umbrella = makeProjectDir('ws');
+      const child = makeProjectDir('ws/cryptochase');
+      const grandchild = makeProjectDir('ws/cryptochase/laravel');
+      for (const p of [umbrella, child, grandchild]) registry.registerProject(p);
+
+      expect(registry.descendantExcludeGlobs(child)).toEqual(['laravel/**']);
+    });
+
+    it('does not exclude a declared multi-root child (intentional overlap)', () => {
+      const umbrella = makeProjectDir('mono');
+      const pkg = makeProjectDir('mono/packages/app');
+      registry.registerProject(umbrella, { type: 'multi-root', children: [pkg] });
+      registry.registerProject(pkg);
+
+      expect(registry.registeredDescendantRoots(umbrella)).toEqual([]);
+      expect(registry.descendantExcludeGlobs(umbrella)).toEqual([]);
+    });
+  });
 });
