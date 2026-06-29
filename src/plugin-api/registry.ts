@@ -87,8 +87,19 @@ export class PluginRegistry {
   }
 
   getLanguagePluginForFile(filePath: string): LanguagePlugin | undefined {
-    const ext = filePath.slice(filePath.lastIndexOf('.'));
-    return this.getExtensionMap().get(ext);
+    const map = this.getExtensionMap();
+    const dotIdx = filePath.lastIndexOf('.');
+    if (dotIdx >= 0) {
+      const ext = filePath.slice(dotIdx);
+      const byExt = map.get(ext);
+      if (byExt) return byExt;
+    }
+    // Fall back to whole-basename match for extensionless files registered by
+    // name (e.g. `Dockerfile`, `Makefile`). Without this, `lastIndexOf('.')`
+    // returns -1 and the slice silently matches the wrong key.
+    const slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+    const baseName = slash >= 0 ? filePath.slice(slash + 1) : filePath;
+    return map.get(baseName);
   }
 
   /**
