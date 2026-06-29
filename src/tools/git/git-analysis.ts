@@ -61,6 +61,7 @@ export const HOTSPOT_METHODOLOGY: Methodology = {
   confidence_formula:
     'score = max_cyclomatic × log(1 + commits). assessment buckets the score (≤3=low, ≤10=medium, >10=high). confidence_level counts signals that fired strongly (complexity > 10, commits > 5): 0=low, 1=medium, 2=multi_signal.',
   limitations: [
+    'heuristic triage ranking, not a validated risk metric — calibration (scripts/calibrate-health-metrics.mjs) shows churn correlates only moderately (Spearman ~0.3) with where bugs are later fixed',
     'requires git history; falls back to complexity-only ranking when git is unavailable',
     'max-per-file complexity is dominated by the single hottest function',
     'analysis window is fixed by sinceDays — files outside the window are ignored',
