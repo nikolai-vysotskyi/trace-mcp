@@ -26,6 +26,7 @@ import {
   isScalar,
   isSeq,
   type Pair,
+  parseAllDocuments,
   parseDocument,
   type YAMLMap,
   type YAMLSeq,
@@ -159,6 +160,7 @@ type YamlDialect =
   | 'github-actions'
   | 'gitlab-ci'
   | 'kubernetes'
+  | 'kustomize'
   | 'ansible-playbook'
   | 'openapi'
   | 'circleci'
@@ -187,6 +189,7 @@ function detectDialect(filePath: string, doc: Document): YamlDialect {
   if (fn.includes('.circleci/') && (baseName === 'config.yml' || baseName === 'config.yaml'))
     return 'circleci';
   if (baseName === 'chart.yaml' || baseName === 'chart.yml') return 'helm-chart';
+  if (baseName === 'kustomization.yaml' || baseName === 'kustomization.yml') return 'kustomize';
 
   const contents = doc.contents;
 
@@ -209,6 +212,9 @@ function detectDialect(filePath: string, doc: Document): YamlDialect {
   if (topKeyNames.has('services') && !topKeyNames.has('apiversion')) return 'docker-compose';
   if (topKeyNames.has('on') && topKeyNames.has('jobs')) return 'github-actions';
   if (topKeyNames.has('stages')) return 'gitlab-ci';
+  // Kustomize before Kubernetes — a kustomization carries `kind: Kustomization`
+  // (with or without an apiVersion) and lists resources/bases/components.
+  if (getMapScalar(contents, 'kind') === 'Kustomization') return 'kustomize';
   if (topKeyNames.has('apiversion') && topKeyNames.has('kind')) return 'kubernetes';
   if (topKeyNames.has('openapi') || topKeyNames.has('swagger')) return 'openapi';
 
@@ -257,6 +263,48 @@ function extractDockerCompose(
             yamlKind: 'image',
             value: imageVal,
           });
+      }
+
+      // build: — cross-link the service to the Dockerfile / build context it
+      // is built from, so impact analysis reaches the Dockerfile.
+      const buildPair = getMapPair(svcMap, 'build');
+      if (buildPair) {
+        let buildRef: string | undefined;
+        let context: string | undefined;
+        if (isScalar(buildPair.value)) {
+          // Short form: build: ./path
+          buildRef = pairVal(buildPair);
+          context = buildRef;
+        } else if (isMap(buildPair.value)) {
+          // Long form: build: { context: ./path, dockerfile: Dockerfile.prod }
+          const buildMap = buildPair.value as YAMLMap;
+          context = getMapScalar(buildMap, 'context');
+          const dockerfile = getMapScalar(buildMap, 'dockerfile');
+          if (context && dockerfile) {
+            // Join context + dockerfile so the edge points at the actual file.
+            buildRef = `${context.replace(/\/$/, '')}/${dockerfile}`;
+          } else {
+            buildRef = dockerfile ?? context;
+          }
+        }
+        if (buildRef) {
+          add(`${svcName}:build`, 'constant', pairStart(buildPair), pairEnd(buildPair), {
+            yamlKind: 'build',
+            value: buildRef,
+            context,
+            service: svcName,
+          });
+          edges.push({
+            sourceSymbolId: symId(filePath, svcName, 'class'),
+            edgeType: 'imports',
+            metadata: {
+              dialect: 'docker-compose',
+              buildLink: true,
+              module: buildRef,
+              context,
+            },
+          });
+        }
       }
 
       // ports:
@@ -513,8 +561,9 @@ function extractKubernetes(filePath: string, rootMap: YAMLMap, edges: RawEdge[],
     if (kind) add(kind, 'type', pairStart(kindPair), pairEnd(kindPair), { yamlKind: 'k8sKind' });
   }
 
-  // metadata.name
+  // metadata.name + namespace
   let metadataName = '';
+  let namespace = '';
   const metaMap = getMapMap(rootMap, 'metadata');
   if (metaMap) {
     const namePair = getMapPair(metaMap, 'name');
@@ -526,10 +575,27 @@ function extractKubernetes(filePath: string, rootMap: YAMLMap, edges: RawEdge[],
           kind,
         });
     }
+    namespace = getMapScalar(metaMap, 'namespace') ?? '';
+  }
+
+  // First-class Resource node — one cohesive graph entity per K8s object,
+  // capturing kind + name + namespace. This is the node find_usages /
+  // get_change_impact traverse, and the source of dependency edges below.
+  let resourceSymbolId: string | undefined;
+  if (metadataName) {
+    resourceSymbolId = symId(filePath, metadataName, 'class');
+    const namePair = metaMap ? getMapPair(metaMap, 'name') : undefined;
+    const resStart = namePair ? pairStart(namePair) : kindPair ? pairStart(kindPair) : 0;
+    const resEnd = namePair ? pairEnd(namePair) : kindPair ? pairEnd(kindPair) : 0;
+    add(metadataName, 'class', resStart, resEnd, {
+      yamlKind: 'k8sResource',
+      k8sKind: kind,
+      namespace: namespace || undefined,
+    });
   }
 
   // Walk the entire tree for containers, volume mounts, configMapRef, secretRef, selectors
-  walkK8sNode(filePath, rootMap, kind, metadataName, edges, add);
+  walkK8sNode(filePath, rootMap, kind, metadataName, resourceSymbolId, edges, add);
 }
 
 /** Recursively walk Kubernetes AST nodes for nested structures */
@@ -538,6 +604,7 @@ function walkK8sNode(
   node: YNode,
   kind: string,
   metadataName: string,
+  resourceSymbolId: string | undefined,
   edges: RawEdge[],
   add: AddFn,
 ): void {
@@ -597,7 +664,7 @@ function walkK8sNode(
             resource: metadataName,
           });
           edges.push({
-            sourceSymbolId: symId(filePath, metadataName || kind, 'constant'),
+            sourceSymbolId: resourceSymbolId ?? symId(filePath, metadataName || kind, 'constant'),
             targetSymbolId: symId(filePath, `configMap:${ref}`, 'constant'),
             edgeType: 'depends_on',
             metadata: { dialect: 'kubernetes', refKind: 'configMap' },
@@ -618,7 +685,7 @@ function walkK8sNode(
             resource: metadataName,
           });
           edges.push({
-            sourceSymbolId: symId(filePath, metadataName || kind, 'constant'),
+            sourceSymbolId: resourceSymbolId ?? symId(filePath, metadataName || kind, 'constant'),
             targetSymbolId: symId(filePath, `secret:${ref}`, 'constant'),
             edgeType: 'depends_on',
             metadata: { dialect: 'kubernetes', refKind: 'secret' },
@@ -648,12 +715,85 @@ function walkK8sNode(
     // Recurse into all map values
     for (const pair of map.items) {
       if (isPair(pair)) {
-        walkK8sNode(filePath, pair.value as YNode, kind, metadataName, edges, add);
+        walkK8sNode(
+          filePath,
+          pair.value as YNode,
+          kind,
+          metadataName,
+          resourceSymbolId,
+          edges,
+          add,
+        );
       }
     }
   } else if (isSeq(node)) {
     for (const item of (node as YAMLSeq).items) {
-      walkK8sNode(filePath, item as YNode, kind, metadataName, edges, add);
+      walkK8sNode(filePath, item as YNode, kind, metadataName, resourceSymbolId, edges, add);
+    }
+  }
+}
+
+/**
+ * Kustomize (kustomization.yaml) — a Module node plus IMPORTS edges to every
+ * referenced resource / base / overlay / component / patch so the dependency
+ * graph traverses from an overlay down into the manifests it composes.
+ */
+function extractKustomize(filePath: string, rootMap: YAMLMap, edges: RawEdge[], add: AddFn): void {
+  // Module node — the kustomization itself. Name it after its directory so
+  // overlays/prod/kustomization.yaml becomes a distinguishable graph node.
+  const normalized = filePath.replace(/\\/g, '/');
+  const segments = normalized.split('/');
+  const dirName = segments.length >= 2 ? segments[segments.length - 2] : 'kustomization';
+  const moduleName = `kustomization:${dirName}`;
+
+  const kindPair = getMapPair(rootMap, 'kind');
+  const moduleStart = kindPair ? pairStart(kindPair) : 0;
+  const moduleEnd = kindPair ? pairEnd(kindPair) : 0;
+  const moduleId = symId(filePath, moduleName, 'namespace');
+  add(moduleName, 'namespace', moduleStart, moduleEnd, {
+    yamlKind: 'kustomization',
+    dir: dirName,
+  });
+
+  // Keys whose sequence entries are path references to other manifests/modules.
+  const refKeys = ['resources', 'bases', 'components', 'patchesStrategicMerge', 'crds'];
+  for (const refKey of refKeys) {
+    const seq = getMapSeq(rootMap, refKey);
+    if (!seq) continue;
+    for (const item of seq.items) {
+      const ref = scalarVal(item as YNode);
+      if (!ref) continue;
+      add(`ref:${ref}`, 'constant', nodeStart(item as YNode), nodeEnd(item as YNode), {
+        yamlKind: 'kustomizeRef',
+        refKind: refKey,
+        value: ref,
+      });
+      edges.push({
+        sourceSymbolId: moduleId,
+        edgeType: 'imports',
+        metadata: { dialect: 'kustomize', module: ref, refKind: refKey },
+      });
+    }
+  }
+
+  // patches: can be a sequence of objects with a `path` key.
+  const patchesSeq = getMapSeq(rootMap, 'patches');
+  if (patchesSeq) {
+    for (const item of patchesSeq.items) {
+      if (!isMap(item)) continue;
+      const p = getMapScalar(item as YAMLMap, 'path');
+      if (!p) continue;
+      const pathPair = getMapPair(item as YAMLMap, 'path')!;
+      add(`ref:${p}`, 'constant', pairStart(pathPair), pairEnd(pathPair), {
+        yamlKind: 'kustomizeRef',
+        refKind: 'patches',
+        value: p,
+      });
+      edges.push({
+        sourceSymbolId: moduleId,
+        edgeType: 'imports',
+        metadata: { dialect: 'kustomize', module: p, refKind: 'patches' },
+      });
     }
   }
 }
@@ -994,40 +1134,59 @@ export class YamlLanguagePlugin implements LanguagePlugin {
         });
       };
 
+      // Dialect is detected from the first document, then each document in a
+      // multi-document file (`---` separated) is dispatched. This matters for
+      // Kubernetes manifests, which routinely pack several objects per file.
       const dialect = detectDialect(filePath, doc);
-      const contents = doc.contents;
 
-      switch (dialect) {
-        case 'docker-compose':
-          if (isMap(contents)) extractDockerCompose(filePath, contents, edges, add);
-          break;
-        case 'github-actions':
-          if (isMap(contents)) extractGitHubActions(filePath, contents, edges, add);
-          break;
-        case 'gitlab-ci':
-          if (isMap(contents)) extractGitLabCI(filePath, contents, edges, add);
-          break;
-        case 'kubernetes':
-          if (isMap(contents)) extractKubernetes(filePath, contents, edges, add);
-          break;
-        case 'ansible-playbook':
-          extractAnsible(filePath, doc, edges, add);
-          break;
-        case 'openapi':
-          if (isMap(contents)) extractOpenAPI(filePath, contents, edges, add);
-          break;
-        case 'circleci':
-          if (isMap(contents)) extractCircleCI(filePath, contents, edges, add);
-          break;
-        case 'helm-chart':
-          if (isMap(contents)) extractHelmChart(filePath, contents, edges, add);
-          break;
-        case 'cloudformation':
-          if (isMap(contents)) extractCloudFormation(filePath, contents, edges, add);
-          break;
-        default:
-          if (isMap(contents)) extractGenericYaml(filePath, contents, add);
-          break;
+      const dispatchDoc = (d: Document): void => {
+        const contents = d.contents;
+        switch (dialect) {
+          case 'docker-compose':
+            if (isMap(contents)) extractDockerCompose(filePath, contents, edges, add);
+            break;
+          case 'github-actions':
+            if (isMap(contents)) extractGitHubActions(filePath, contents, edges, add);
+            break;
+          case 'gitlab-ci':
+            if (isMap(contents)) extractGitLabCI(filePath, contents, edges, add);
+            break;
+          case 'kubernetes':
+            if (isMap(contents)) extractKubernetes(filePath, contents, edges, add);
+            break;
+          case 'kustomize':
+            if (isMap(contents)) extractKustomize(filePath, contents, edges, add);
+            break;
+          case 'ansible-playbook':
+            extractAnsible(filePath, d, edges, add);
+            break;
+          case 'openapi':
+            if (isMap(contents)) extractOpenAPI(filePath, contents, edges, add);
+            break;
+          case 'circleci':
+            if (isMap(contents)) extractCircleCI(filePath, contents, edges, add);
+            break;
+          case 'helm-chart':
+            if (isMap(contents)) extractHelmChart(filePath, contents, edges, add);
+            break;
+          case 'cloudformation':
+            if (isMap(contents)) extractCloudFormation(filePath, contents, edges, add);
+            break;
+          default:
+            if (isMap(contents)) extractGenericYaml(filePath, contents, add);
+            break;
+        }
+      };
+
+      // Kubernetes is the only dialect where multi-document is idiomatic; for
+      // the rest we keep the single-document parse to avoid behaviour changes.
+      if (dialect === 'kubernetes') {
+        const allDocs = parseAllDocuments(source, { keepSourceTokens: true });
+        for (const d of allDocs) {
+          if (d.contents) dispatchDoc(d);
+        }
+      } else {
+        dispatchDoc(doc);
       }
 
       return ok({
