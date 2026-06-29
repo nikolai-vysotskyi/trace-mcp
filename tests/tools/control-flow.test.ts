@@ -207,4 +207,96 @@ if (a) {
       expect(cfg.edges.length).toBeLessThan(4000);
     });
   });
+
+  describe('loop back-edges and merge nodes', () => {
+    it('emits a back-edge from the while loop body to the loop header', () => {
+      const source = `
+while (queue.length > 0) {
+  const item = queue.pop();
+  process(item);
+}
+done();`;
+      const cfg = extractCFG(source);
+      const whileNode = cfg.nodes.find((n) => n.kind === 'while')!;
+      expect(whileNode).toBeDefined();
+
+      // A real CFG models the loop as a cycle: the last body node loops back to
+      // the header. Assert a 'back'-labeled edge points to the while node.
+      const backEdge = cfg.edges.find((e) => e.to === whileNode.id && e.label === 'back');
+      expect(backEdge).toBeDefined();
+      expect(backEdge?.from).not.toBe(whileNode.id);
+    });
+
+    it('emits a loop-exit (false) edge from the for header to the continuation', () => {
+      const source = `
+for (let i = 0; i < n; i++) {
+  acc += i;
+}
+return acc;`;
+      const cfg = extractCFG(source);
+      const forNode = cfg.nodes.find((n) => n.kind === 'for')!;
+      expect(forNode).toBeDefined();
+
+      // The loop header must have an exit edge (condition false) leaving the loop.
+      const exitEdge = cfg.edges.find((e) => e.from === forNode.id && e.label === 'false');
+      expect(exitEdge).toBeDefined();
+
+      // And a back-edge into the header (the cycle).
+      const backEdge = cfg.edges.find((e) => e.to === forNode.id && e.label === 'back');
+      expect(backEdge).toBeDefined();
+    });
+
+    it('renders the back-edge in mermaid output', () => {
+      const source = `
+while (running) {
+  tick();
+}`;
+      const cfg = extractCFG(source);
+      const mermaid = cfgToMermaid(cfg);
+      // The back-edge should appear as a labeled edge in the mermaid graph.
+      expect(mermaid).toMatch(/back/);
+    });
+
+    it('back-edge increases cyclomatic complexity for a loop', () => {
+      // A single while loop is one decision point; with the back-edge the
+      // E - N + 2 formula yields complexity >= 2.
+      const source = `
+while (x) {
+  y();
+}`;
+      const cfg = extractCFG(source);
+      expect(cfg.cyclomatic_complexity).toBeGreaterThanOrEqual(2);
+    });
+
+    it('do_while emits a back-edge', () => {
+      const source = `
+do {
+  step();
+} while (more());`;
+      const cfg = extractCFG(source);
+      const loopNode = cfg.nodes.find((n) => n.kind === 'do_while')!;
+      expect(loopNode).toBeDefined();
+      const backEdge = cfg.edges.find((e) => e.to === loopNode.id && e.label === 'back');
+      expect(backEdge).toBeDefined();
+    });
+
+    it('try/catch/finally route to a single merge node', () => {
+      const source = `
+try {
+  risky();
+} catch (e) {
+  handle(e);
+} finally {
+  cleanup();
+}
+after();`;
+      const cfg = extractCFG(source);
+      // There should be a dedicated merge node where try/catch/finally rejoin.
+      const mergeNode = cfg.nodes.find((n) => n.kind === 'merge');
+      expect(mergeNode).toBeDefined();
+      // Both the finally (or catch when no finally) and the normal path reach merge.
+      const incoming = cfg.edges.filter((e) => e.to === mergeNode!.id);
+      expect(incoming.length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });
