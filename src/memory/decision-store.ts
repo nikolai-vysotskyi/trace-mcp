@@ -15,7 +15,7 @@ import { computeConfidence } from './decision-confidence.js';
 import type { AuditLogger } from './decision-audit-log.js';
 import { titleSimilarity } from './decision-clusterer.js';
 import { type ConsolidationVerdict, mergeContents, mergeTags } from './decision-consolidator.js';
-import { computeHeat } from './heat.js';
+import { computeHeat, heatDecayMultiplier } from './heat.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -787,7 +787,26 @@ export class DecisionStore {
 
   // ── CRUD ───────────────────────────────────────────────────────────
 
-  addDecision(input: DecisionInput): DecisionRow {
+  /**
+   * Insert a decision.
+   *
+   * When `opts.supersede` is true, any active decision sharing the SAME
+   * state key (project_root + type + code anchor) is auto-invalidated with
+   * `valid_until = now` before the new row lands — "state-key supersession"
+   * (Task 11). The conflict heuristic is deliberately conservative:
+   *   - same `project_root`
+   *   - same `type`
+   *   - same code anchor: `symbol_id` when the new row has one (file-only rows
+   *     never collide with symbol-anchored rows), else `file_path`.
+   * Rows with no anchor at all never supersede anything (no state key).
+   *
+   * For the caller-facing variant that also returns the superseded ids, use
+   * `addDecisionWithSupersession`.
+   */
+  addDecision(input: DecisionInput, opts?: { supersede?: boolean }): DecisionRow {
+    if (opts?.supersede) {
+      this.supersedeConflicting(input);
+    }
     const now = new Date().toISOString();
     // Canonicalise file_path to repo-relative when it sits inside project_root.
     // Stops absolute /Users/<dev>/<host-only>/... paths leaking into the
@@ -831,6 +850,70 @@ export class DecisionStore {
       return count;
     });
     return insertMany(inputs);
+  }
+
+  /**
+   * Insert a decision with auto-supersession, returning both the new row and
+   * the ids of any active decisions that were invalidated as a result. Thin
+   * wrapper over `addDecision(input, { supersede: true })` that captures the
+   * superseded ids for the caller's response. See `addDecision` for the
+   * conflict heuristic.
+   */
+  addDecisionWithSupersession(input: DecisionInput): {
+    decision: DecisionRow;
+    superseded: number[];
+  } {
+    const superseded = this.findSupersedable(input);
+    for (const id of superseded) {
+      this.invalidateDecision(id);
+    }
+    // Already invalidated above — don't re-run the scan inside addDecision.
+    const decision = this.addDecision(input);
+    return { decision, superseded };
+  }
+
+  /**
+   * Find active decisions that the given input would supersede (same
+   * state key). Returns their ids. Pure read — does NOT invalidate. The
+   * canonicalised `file_path` mirrors `addDecision` so absolute-vs-relative
+   * inputs collide on the same stored rows.
+   */
+  private findSupersedable(input: DecisionInput): number[] {
+    if (!input.project_root) return [];
+    const symbolId = input.symbol_id ?? null;
+    const canonFilePath = input.project_root
+      ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
+      : (input.file_path ?? null);
+    // No anchor → no state key → never supersedes.
+    if (!symbolId && !canonFilePath) return [];
+
+    const conditions: string[] = ['project_root = ?', 'type = ?', 'valid_until IS NULL'];
+    const params: unknown[] = [input.project_root, input.type];
+    if (symbolId) {
+      // Symbol-anchored state key: match the exact symbol. File-only rows
+      // (symbol_id IS NULL) must NOT collide with a symbol-anchored insert.
+      conditions.push('symbol_id = ?');
+      params.push(symbolId);
+    } else {
+      // File-anchored state key: only rows that are ALSO file-only (no
+      // symbol) on the same file. Keeps the heuristic conservative.
+      conditions.push('symbol_id IS NULL');
+      conditions.push('file_path = ?');
+      params.push(canonFilePath);
+    }
+    const rows = this.db
+      .prepare(`SELECT id FROM decisions WHERE ${conditions.join(' AND ')}`)
+      .all(...params) as Array<{ id: number }>;
+    return rows.map((r) => r.id);
+  }
+
+  /** Invalidate every active decision sharing the input's state key. */
+  private supersedeConflicting(input: DecisionInput): number[] {
+    const ids = this.findSupersedable(input);
+    for (const id of ids) {
+      this.invalidateDecision(id);
+    }
+    return ids;
   }
 
   getDecision(id: number): DecisionRow | undefined {
@@ -1119,16 +1202,21 @@ export class DecisionStore {
         freshnessDays: query.heat_freshness_days,
       };
       // Stable sort: heat DESC, tie-break by valid_from DESC (newer first).
+      // Search-time temporal decay (Task 11) multiplies the base heat by a
+      // recency boost / staleness dampening factor — reranking only, never
+      // mutating stored state. Neutral (1.0×) for mid-age rows.
       const scored = rows.map((r) => ({
         row: r,
-        heat: computeHeat(
-          {
-            hit_count: r.hit_count ?? 0,
-            last_hit_at: r.last_hit_at,
-            created_at: r.created_at,
-          },
-          heatParams,
-        ),
+        heat:
+          computeHeat(
+            {
+              hit_count: r.hit_count ?? 0,
+              last_hit_at: r.last_hit_at,
+              created_at: r.created_at,
+            },
+            heatParams,
+          ) *
+          heatDecayMultiplier({ created_at: r.created_at, last_hit_at: r.last_hit_at }, { now }),
       }));
       scored.sort((a, b) => {
         if (b.heat !== a.heat) return b.heat - a.heat;

@@ -50,6 +50,54 @@ function parseIsoMs(iso: string | null | undefined): number | null {
  * `last_hit_at` (no hit term), future `created_at` from clock skew (floor
  * clamped at 1), and zero/negative hit_count (term collapses to 0).
  */
+/** Search-time decay multiplier knobs (Task 11). */
+export interface HeatDecayParams {
+  now: Date;
+  /** Created/recalled within this many days → recency boost. Default 7. */
+  recencyDays?: number;
+  /** Created/recalled longer ago than this many days → dampening. Default 90. */
+  staleDays?: number;
+  /** Boost factor for recent decisions. Default 1.5. */
+  boost?: number;
+  /** Dampening factor for stale decisions. Default 0.3. */
+  dampen?: number;
+}
+
+/**
+ * Search-time temporal decay multiplier (Task 11). This is a RERANKING knob
+ * layered on top of `computeHeat` — it never deletes or re-embeds anything.
+ *
+ *   - Decision created OR recalled within `recencyDays` → `boost` (default 1.5×).
+ *   - Decision whose most-recent activity is older than `staleDays` → `dampen`
+ *     (default 0.3×).
+ *   - Everything in between, or with unparseable timestamps → 1.0× (neutral).
+ *
+ * "Activity" is the more recent of `created_at` and `last_hit_at`, so a freshly
+ * recalled old decision still earns the boost.
+ */
+export function heatDecayMultiplier(
+  d: { created_at: string; last_hit_at?: string | null },
+  params: HeatDecayParams,
+): number {
+  const recencyDays = Math.max(params.recencyDays ?? 7, 1e-6);
+  const staleDays = Math.max(params.staleDays ?? 90, recencyDays);
+  const boost = params.boost ?? 1.5;
+  const dampen = params.dampen ?? 0.3;
+  const nowMs = params.now.getTime();
+
+  const createdMs = parseIsoMs(d.created_at);
+  const hitMs = parseIsoMs(d.last_hit_at);
+  // Most-recent activity timestamp; null when neither parses.
+  const activityMs =
+    createdMs !== null && hitMs !== null ? Math.max(createdMs, hitMs) : (createdMs ?? hitMs);
+  if (activityMs === null) return 1;
+
+  const ageDays = (nowMs - activityMs) / DAY_MS;
+  if (ageDays <= recencyDays) return boost;
+  if (ageDays > staleDays) return dampen;
+  return 1;
+}
+
 export function computeHeat(d: HeatInput, params: HeatParams): number {
   const halfLifeDays = Math.max(params.halfLifeDays ?? 14, 1e-6);
   const freshnessDays = Math.max(params.freshnessDays ?? 7, 1e-6);
