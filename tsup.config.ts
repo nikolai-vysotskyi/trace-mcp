@@ -22,6 +22,9 @@ const NATIVE_EXTERNALS = [
   'web-tree-sitter',
   '@huggingface/transformers',
   'tree-sitter-wasms',
+  // NAPI binding with platform-specific .node binaries — not bundle-able.
+  // Used by the AST codemod engine (src/tools/refactoring/codemod-ast.ts).
+  '@ast-grep/napi',
   // Pure JS, but pulls dynamic requires on dozens of optional template
   // engines (marko, twig, coffee-script, etc.) via `consolidate` — not
   // bundle-able. Keep external, load via createRequire.

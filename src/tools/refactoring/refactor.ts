@@ -11,6 +11,12 @@ import path from 'node:path';
 import fg from 'fast-glob';
 import type { Store } from '../../db/store.js';
 import { maybeYield } from '../../utils/event-loop.js';
+import {
+  type AstCodemodFileResult,
+  astLangForFile,
+  looksLikeAstPattern,
+  runAstCodemodOnSource,
+} from './codemod-ast.js';
 import { scanNonCodeFiles } from './non-code-scanner.js';
 import { checkRenameSafe } from './rename-check.js';
 import {
@@ -414,6 +420,8 @@ interface CodemodResult {
   success: boolean;
   tool: 'apply_codemod';
   dry_run: boolean;
+  /** Which engine ran: 'ast' (ast-grep, syntax-aware) or 'regex' (text). */
+  engine_used: 'ast' | 'regex';
   matches: CodemodMatch[];
   files_modified: string[];
   total_replacements: number;
@@ -421,6 +429,16 @@ interface CodemodResult {
   warnings: string[];
   error?: string;
 }
+
+/**
+ * Codemod engine selection.
+ *  - 'auto'  (default): AST for supported code files when `pattern` looks like a
+ *    valid ast-grep pattern (contains metavariables, no regex metacharacters);
+ *    otherwise the regex engine. Per-file: a non-AST file always uses regex.
+ *  - 'ast'   : force the ast-grep engine (errors if no supported files match).
+ *  - 'regex' : force the legacy text-regex engine.
+ */
+export type CodemodEngine = 'auto' | 'ast' | 'regex';
 
 const CODEMOD_MAX_PREVIEW = 20;
 const CODEMOD_LARGE_THRESHOLD = 20;
@@ -436,12 +454,18 @@ export async function applyCodemod(
     confirmLarge?: boolean;
     filterContent?: string;
     multiline?: boolean;
+    engine?: CodemodEngine;
   },
 ): Promise<CodemodResult> {
+  const requestedEngine: CodemodEngine = options.engine ?? 'auto';
   const result: CodemodResult = {
     success: false,
     tool: 'apply_codemod',
     dry_run: options.dryRun,
+    // Provisional — refined once we know which engine actually ran on the
+    // matched files. For 'regex'/'ast' it's fixed; for 'auto' we report the
+    // engine that produced the matches (AST when any AST pattern fired).
+    engine_used: requestedEngine === 'ast' ? 'ast' : 'regex',
     matches: [],
     files_modified: [],
     total_replacements: 0,
@@ -449,15 +473,23 @@ export async function applyCodemod(
     warnings: [],
   };
 
-  // 1. Compile regex
-  let regex: RegExp;
-  try {
-    const flags = options.multiline ? 'gms' : 'gm';
-    regex = new RegExp(pattern, flags);
-  } catch (e) {
-    result.error = `Invalid regex pattern: ${(e as Error).message}`;
-    return result;
+  // 1. Pre-compile regex when the regex engine may be used. In 'ast' mode we
+  // never touch regex, so an invalid regex there is irrelevant.
+  let regex: RegExp | null = null;
+  if (requestedEngine !== 'ast') {
+    try {
+      const flags = options.multiline ? 'gms' : 'gm';
+      regex = new RegExp(pattern, flags);
+    } catch (e) {
+      result.error = `Invalid regex pattern: ${(e as Error).message}`;
+      return result;
+    }
   }
+
+  // Decide, for 'auto', whether the pattern is AST-shaped at all. When it is
+  // not, no file should use the AST engine even if it is a supported language.
+  const patternIsAstShaped =
+    requestedEngine === 'ast' || (requestedEngine === 'auto' && looksLikeAstPattern(pattern));
 
   // 2. Glob files
   let files: string[];
@@ -481,9 +513,15 @@ export async function applyCodemod(
     return result;
   }
 
-  // 3. Scan files for matches
+  // 3. Scan files for matches. Each file is routed to the AST engine (when its
+  //    language is supported AND the pattern is AST-shaped) or the regex engine.
   const allMatches: CodemodMatch[] = [];
   const filesWithMatches = new Set<string>();
+  // Remember which engine handled each matched file so apply mode re-runs the
+  // same transform (AST commitEdits vs regex replace).
+  const fileEngine = new Map<string, 'ast' | 'regex'>();
+  let anyAstUsed = false;
+  let anyRegexUsed = false;
 
   let scanned = 0;
   for (const relPath of files) {
@@ -506,80 +544,91 @@ export async function applyCodemod(
       continue;
     }
 
-    const lines = content.split('\n');
+    const lang = patternIsAstShaped ? astLangForFile(relPath) : null;
+    const useAst = lang !== null && requestedEngine !== 'regex';
 
-    // Find all matches line-by-line (non-multiline) or in full content (multiline)
-    if (options.multiline) {
-      // Multiline: work on full content
-      regex.lastIndex = 0;
-      if (!regex.test(content)) continue;
+    if (useAst && lang !== null) {
+      // ── AST engine ──────────────────────────────────────────────────────
+      let astRes: AstCodemodFileResult;
+      try {
+        astRes = runAstCodemodOnSource(lang, content, pattern, replacement);
+      } catch (e) {
+        // Pattern not parseable as ast-grep on this file.
+        if (requestedEngine === 'ast') {
+          result.warnings.push(`AST parse failed for ${relPath}: ${(e as Error).message}`);
+          continue;
+        }
+        // 'auto' with an AST-shaped pattern that nonetheless failed to parse:
+        // fall back to regex for this file if we have one.
+        if (regex) {
+          scanFileWithRegex(
+            relPath,
+            content,
+            regex,
+            replacement,
+            options.multiline ?? false,
+            allMatches,
+            filesWithMatches,
+            fileEngine,
+            result,
+          );
+          if (filesWithMatches.has(relPath)) anyRegexUsed = true;
+        }
+        continue;
+      }
+
+      if (astRes.matchCount === 0) continue;
 
       filesWithMatches.add(relPath);
+      fileEngine.set(relPath, 'ast');
+      anyAstUsed = true;
+      result.total_replacements += astRes.matchCount;
 
-      // Count matches
-      regex.lastIndex = 0;
-      let matchCount = 0;
-      const matchPositions: { index: number; match: string }[] = [];
-      let m: RegExpExecArray | null;
-      while ((m = regex.exec(content)) !== null) {
-        matchPositions.push({ index: m.index, match: m[0] });
-        matchCount++;
-        if (m[0].length === 0) {
-          regex.lastIndex++;
-        }
-      }
-
-      // For preview, find line numbers of first few matches
-      for (const pos of matchPositions.slice(0, CODEMOD_MAX_PREVIEW - allMatches.length)) {
-        const lineNum = content.slice(0, pos.index).split('\n').length;
-        const original = pos.match;
-        regex.lastIndex = 0;
-        const replaced = original.replace(regex, replacement);
+      const lines = content.split('\n');
+      for (const m of astRes.matches) {
+        if (allMatches.length >= CODEMOD_MAX_PREVIEW) break;
         allMatches.push({
           file: relPath,
-          line: lineNum,
-          original: original.length > 200 ? `${original.slice(0, 200)}…` : original,
-          replaced: replaced.length > 200 ? `${replaced.slice(0, 200)}…` : replaced,
-          context_before: lines.slice(
-            Math.max(0, lineNum - 1 - CODEMOD_CONTEXT_LINES),
-            lineNum - 1,
-          ),
-          context_after: lines.slice(lineNum, lineNum + CODEMOD_CONTEXT_LINES),
+          line: m.line,
+          original: m.original.length > 200 ? `${m.original.slice(0, 200)}…` : m.original,
+          replaced: m.replaced.length > 200 ? `${m.replaced.slice(0, 200)}…` : m.replaced,
+          context_before: lines.slice(Math.max(0, m.line - 1 - CODEMOD_CONTEXT_LINES), m.line - 1),
+          context_after: lines.slice(m.line, m.line + CODEMOD_CONTEXT_LINES),
         });
       }
-
-      result.total_replacements += matchCount;
-    } else {
-      // Line-by-line matching
-      let fileMatchCount = 0;
-      for (let i = 0; i < lines.length; i++) {
-        regex.lastIndex = 0;
-        if (!regex.test(lines[i])) continue;
-
-        filesWithMatches.add(relPath);
-        fileMatchCount++;
-
-        regex.lastIndex = 0;
-        const newLine = lines[i].replace(regex, replacement);
-
-        if (allMatches.length < CODEMOD_MAX_PREVIEW) {
-          allMatches.push({
-            file: relPath,
-            line: i + 1,
-            original: lines[i],
-            replaced: newLine,
-            context_before: lines.slice(Math.max(0, i - CODEMOD_CONTEXT_LINES), i),
-            context_after: lines.slice(i + 1, i + 1 + CODEMOD_CONTEXT_LINES),
-          });
-        }
+    } else if (regex) {
+      // ── Regex engine ────────────────────────────────────────────────────
+      scanFileWithRegex(
+        relPath,
+        content,
+        regex,
+        replacement,
+        options.multiline ?? false,
+        allMatches,
+        filesWithMatches,
+        fileEngine,
+        result,
+      );
+      if (filesWithMatches.has(relPath) && fileEngine.get(relPath) === 'regex') {
+        anyRegexUsed = true;
       }
-      result.total_replacements += fileMatchCount;
     }
   }
 
   result.total_files = filesWithMatches.size;
 
-  if (allMatches.length === 0) {
+  // Report the engine that actually produced matches. AST wins when any AST
+  // file matched; otherwise regex. (In 'ast'/'regex' modes this is fixed.)
+  if (requestedEngine === 'ast') {
+    result.engine_used = 'ast';
+  } else if (requestedEngine === 'regex') {
+    result.engine_used = 'regex';
+  } else {
+    result.engine_used = anyAstUsed ? 'ast' : 'regex';
+    void anyRegexUsed;
+  }
+
+  if (allMatches.length === 0 && filesWithMatches.size === 0) {
     result.error = `No matches found for pattern in ${files.length} files`;
     return result;
   }
@@ -604,14 +653,23 @@ export async function applyCodemod(
     return result;
   }
 
-  // 6. Apply changes
+  // 6. Apply changes — re-run the same engine that matched each file.
   for (const relPath of filesWithMatches) {
     const absPath = path.resolve(projectRoot, relPath);
     try {
       const content = fs.readFileSync(absPath, 'utf-8');
-      const flags = options.multiline ? 'gms' : 'gm';
-      const freshRegex = new RegExp(pattern, flags);
-      const newContent = content.replace(freshRegex, replacement);
+      let newContent = content;
+
+      if (fileEngine.get(relPath) === 'ast') {
+        const lang = astLangForFile(relPath);
+        if (lang !== null) {
+          newContent = runAstCodemodOnSource(lang, content, pattern, replacement).newSource;
+        }
+      } else {
+        const flags = options.multiline ? 'gms' : 'gm';
+        const freshRegex = new RegExp(pattern, flags);
+        newContent = content.replace(freshRegex, replacement);
+      }
 
       if (newContent !== content) {
         fs.writeFileSync(absPath, newContent, 'utf-8');
@@ -625,4 +683,82 @@ export async function applyCodemod(
   result.matches = allMatches;
   result.success = true;
   return result;
+}
+
+/**
+ * Regex-engine scan of a single file. Mirrors the original line-by-line /
+ * multiline behaviour. Mutates `allMatches`, `filesWithMatches`, `fileEngine`,
+ * and `result.total_replacements` in place to keep the caller flat.
+ */
+function scanFileWithRegex(
+  relPath: string,
+  content: string,
+  regex: RegExp,
+  replacement: string,
+  multiline: boolean,
+  allMatches: CodemodMatch[],
+  filesWithMatches: Set<string>,
+  fileEngine: Map<string, 'ast' | 'regex'>,
+  result: CodemodResult,
+): void {
+  const lines = content.split('\n');
+
+  if (multiline) {
+    regex.lastIndex = 0;
+    if (!regex.test(content)) return;
+
+    filesWithMatches.add(relPath);
+    fileEngine.set(relPath, 'regex');
+
+    regex.lastIndex = 0;
+    let matchCount = 0;
+    const matchPositions: { index: number; match: string }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(content)) !== null) {
+      matchPositions.push({ index: m.index, match: m[0] });
+      matchCount++;
+      if (m[0].length === 0) regex.lastIndex++;
+    }
+
+    for (const pos of matchPositions.slice(0, CODEMOD_MAX_PREVIEW - allMatches.length)) {
+      const lineNum = content.slice(0, pos.index).split('\n').length;
+      const original = pos.match;
+      regex.lastIndex = 0;
+      const replaced = original.replace(regex, replacement);
+      allMatches.push({
+        file: relPath,
+        line: lineNum,
+        original: original.length > 200 ? `${original.slice(0, 200)}…` : original,
+        replaced: replaced.length > 200 ? `${replaced.slice(0, 200)}…` : replaced,
+        context_before: lines.slice(Math.max(0, lineNum - 1 - CODEMOD_CONTEXT_LINES), lineNum - 1),
+        context_after: lines.slice(lineNum, lineNum + CODEMOD_CONTEXT_LINES),
+      });
+    }
+    result.total_replacements += matchCount;
+  } else {
+    let fileMatchCount = 0;
+    for (let i = 0; i < lines.length; i++) {
+      regex.lastIndex = 0;
+      if (!regex.test(lines[i])) continue;
+
+      filesWithMatches.add(relPath);
+      fileEngine.set(relPath, 'regex');
+      fileMatchCount++;
+
+      regex.lastIndex = 0;
+      const newLine = lines[i].replace(regex, replacement);
+
+      if (allMatches.length < CODEMOD_MAX_PREVIEW) {
+        allMatches.push({
+          file: relPath,
+          line: i + 1,
+          original: lines[i],
+          replaced: newLine,
+          context_before: lines.slice(Math.max(0, i - CODEMOD_CONTEXT_LINES), i),
+          context_after: lines.slice(i + 1, i + 1 + CODEMOD_CONTEXT_LINES),
+        });
+      }
+    }
+    result.total_replacements += fileMatchCount;
+  }
 }
