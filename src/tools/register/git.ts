@@ -411,7 +411,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'taint_analysis',
-    'Track flow of untrusted data from sources (HTTP params, env vars, file reads) to dangerous sinks (SQL queries, exec, innerHTML, redirects). Framework-aware: knows Express req.params, Laravel $request->input, Django request.GET, FastAPI Query(), etc. Reports unsanitized flows with CWE IDs and fix suggestions. More accurate than pattern-based scanning — traces actual data flow paths. Use for data-flow security analysis. For pattern-based OWASP scanning use scan_security instead. Read-only. Returns JSON: { flows: [{ source, sink, path, sanitized, cwe, suggestion }], total }.',
+    'Track flow of untrusted data from sources (HTTP params, env vars, file reads) to dangerous sinks (SQL queries, exec, innerHTML, redirects). Framework-aware: knows Express req.params, Laravel $request->input, Django request.GET, FastAPI Query(), etc. Reports unsanitized flows with CWE IDs and fix suggestions. Type-aware: flows that terminate at a provably non-string value (numeric/boolean coercion such as Math.floor(), (int) casts, comparison results) are pruned, since a string-injection sink cannot be exploited by a number/boolean. Heuristic, regex-based intra/inter-procedural analysis — not a sound dataflow engine; treat results as triage. Use for data-flow security analysis. For pattern-based OWASP scanning use scan_security instead. Read-only. Returns JSON: { flows: [{ source, sink, path, sanitized, cwe, suggestion }], total }.',
     {
       scope: optionalNonEmptyString(512).describe('Directory to scan (default: whole project)'),
       sources: z
