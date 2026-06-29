@@ -85,7 +85,6 @@
     "oxc-resolver": "^11.19.1",
     "picomatch": "^4.0.4",
     "pino": "^10.3.1",
-    "scip": "^0.0.1",
     "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "^0.24.7",
     "xxhash-wasm": "^1.1.0",

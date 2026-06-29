@@ -33,6 +33,10 @@
 import type { EdgeResolution } from '../plugin-api/types.js';
 
 export const CONFIDENCE_BY_TIER: Record<EdgeResolution, number> = {
+  // SCIP is offline compiler-grade resolution and ranks above LSP. Both sit at
+  // the 1.0 ceiling for the numeric score; the categorical tier order
+  // (scip_resolved > lsp_resolved) is what breaks ties when comparing tiers.
+  scip_resolved: 1.0,
   lsp_resolved: 1.0,
   ast_resolved: 0.95,
   ast_inferred: 0.7,

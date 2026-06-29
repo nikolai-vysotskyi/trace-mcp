@@ -1,6 +1,12 @@
-export type EdgeResolution = 'lsp_resolved' | 'ast_resolved' | 'ast_inferred' | 'text_matched';
+export type EdgeResolution =
+  | 'scip_resolved'
+  | 'lsp_resolved'
+  | 'ast_resolved'
+  | 'ast_inferred'
+  | 'text_matched';
 
 export interface ResolutionTiers {
+  scip_resolved: number;
   lsp_resolved: number;
   ast_resolved: number;
   ast_inferred: number;
@@ -8,7 +14,7 @@ export interface ResolutionTiers {
 }
 
 export function emptyResolutionTiers(): ResolutionTiers {
-  return { lsp_resolved: 0, ast_resolved: 0, ast_inferred: 0, text_matched: 0 };
+  return { scip_resolved: 0, lsp_resolved: 0, ast_resolved: 0, ast_inferred: 0, text_matched: 0 };
 }
 
 /**
@@ -23,6 +29,7 @@ export function inferResolution(edge: {
 }): EdgeResolution {
   const tier = edge.resolution_tier;
   if (
+    tier === 'scip_resolved' ||
     tier === 'lsp_resolved' ||
     tier === 'ast_resolved' ||
     tier === 'ast_inferred' ||

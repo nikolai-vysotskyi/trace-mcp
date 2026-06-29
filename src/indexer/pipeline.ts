@@ -583,6 +583,10 @@ export class IndexingPipeline {
           await this._dag.run(LSP_ENRICHMENT_TASK_NAME, {
             runLspEnrichment: () => this.runLspEnrichment(),
           });
+          // SCIP ingestion runs AFTER LSP so its higher-precision tier
+          // (scip_resolved > lsp_resolved) wins last and is not downgraded by
+          // the LSP edge-upgrade UPDATE. Opt-in, no-op when scip.enabled=false.
+          await this.runScipIngestion();
           await this.indexEnvFiles(force);
         }
       }
@@ -1067,6 +1071,25 @@ export class IndexingPipeline {
       }
     } catch (e) {
       logger.warn({ error: e }, 'LSP enrichment failed — continuing without LSP edges');
+    }
+  }
+
+  /**
+   * Pass 3b: SCIP ingestion — upgrade edges to the compiler-grade
+   * `scip_resolved` tier (ranked above lsp_resolved) by running an offline SCIP
+   * indexer (or ingesting a pre-built index_path). Opt-in via `scip.enabled`.
+   * Skips the watcher hot path like LSP enrichment does.
+   */
+  private async runScipIngestion(): Promise<void> {
+    if (!this.config.scip?.enabled) return;
+    if (this._isIncremental) return;
+
+    try {
+      const { ScipBridge } = await import('../scip/bridge.js');
+      const bridge = new ScipBridge(this.store, this.config, this.rootPath);
+      await bridge.ingest();
+    } catch (e) {
+      logger.warn({ error: e }, 'SCIP ingestion failed — continuing without SCIP edges');
     }
   }
 

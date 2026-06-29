@@ -25,6 +25,7 @@ export interface InsightsReport {
     edges: number;
   };
   resolution_tiers: {
+    scip_resolved: number;
     lsp_resolved: number;
     ast_resolved: number;
     ast_inferred: number;
@@ -67,7 +68,13 @@ function countResolutionTiers(store: Store): InsightsReport['resolution_tiers'] 
     )
     .all() as Array<{ resolution_tier: string; cnt: number }>;
 
-  const tiers = { lsp_resolved: 0, ast_resolved: 0, ast_inferred: 0, text_matched: 0 };
+  const tiers = {
+    scip_resolved: 0,
+    lsp_resolved: 0,
+    ast_resolved: 0,
+    ast_inferred: 0,
+    text_matched: 0,
+  };
   let total = 0;
   for (const row of rows) {
     if (row.resolution_tier in tiers) {
@@ -91,7 +98,7 @@ function renderMarkdown(report: Omit<InsightsReport, 'markdown'>): string {
   lines.push('## Edge resolution');
   const t = report.resolution_tiers;
   lines.push(
-    `- lsp_resolved: ${t.lsp_resolved} · ast_resolved: ${t.ast_resolved} · ast_inferred: ${t.ast_inferred} · text_matched: ${t.text_matched}`,
+    `- scip_resolved: ${t.scip_resolved} · lsp_resolved: ${t.lsp_resolved} · ast_resolved: ${t.ast_resolved} · ast_inferred: ${t.ast_inferred} · text_matched: ${t.text_matched}`,
   );
   if (t.text_matched_pct >= 5) {
     lines.push(

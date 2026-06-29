@@ -363,6 +363,41 @@ const LspConfigSchema = z
   })
   .optional();
 
+/** Explicit indexer override for a SCIP language (mirrors LspServerConfigSchema). */
+const ScipIndexerConfigSchema = z.object({
+  /** Command to run the SCIP indexer (e.g. "scip-typescript"). */
+  command: z.string(),
+  /** Args passed to the indexer (e.g. ["index"]). */
+  args: z.array(z.string()).default([]),
+  /** Timeout for one indexer invocation. */
+  timeout_ms: z.number().int().min(1000).max(600000).default(120000),
+});
+
+/**
+ * SCIP ingestion config. Mirrors the LSP config shape. Disabled by default —
+ * zero overhead when off. When enabled, trace-mcp runs an available SCIP
+ * indexer offline (or ingests a pre-existing index_path) and upgrades edge
+ * precision to the `scip_resolved` tier (ranked above lsp_resolved).
+ */
+const ScipConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Auto-detect installed SCIP indexers (scip-typescript, scip-python, ...). */
+    auto_detect: z.boolean().default(true),
+    /**
+     * Path to a pre-built `.scip` index file (relative to project root or
+     * absolute). When set, trace-mcp ingests it directly and does NOT run any
+     * indexer command — useful in CI where the index is produced by a prior
+     * build step.
+     */
+    index_path: z.string().optional(),
+    /** Per-language explicit indexer overrides keyed by language id. */
+    indexers: z.record(z.string(), ScipIndexerConfigSchema).prefault({}),
+    /** Overall budget for running indexers + ingestion. */
+    ingestion_timeout_ms: z.number().int().min(5000).max(600000).default(120000),
+  })
+  .optional();
+
 const IndexerConfigSchema = z
   .object({
     /** Daemon-shared ExtractPool size. Defaults to half cores capped at 4 in
@@ -828,6 +863,7 @@ export const TraceMcpConfigSchema = z.object({
   intent: IntentConfigSchema,
   runtime: RuntimeConfigSchema,
   lsp: LspConfigSchema,
+  scip: ScipConfigSchema,
   topology: TopologyConfigSchema,
   indexer: IndexerConfigSchema,
   pipeline: PipelineConfigSchema,
@@ -939,6 +975,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
     intent: IntentConfigSchema,
     runtime: RuntimeConfigSchema,
     lsp: LspConfigSchema,
+    scip: ScipConfigSchema,
     topology: TopologyConfigSchema,
     indexer: IndexerConfigSchema,
     pipeline: PipelineConfigSchema,

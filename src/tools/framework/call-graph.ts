@@ -26,6 +26,7 @@ interface CallGraphNode {
 
 /** Summary of resolution tier distribution */
 interface ResolutionTiers {
+  scip_resolved: number;
   lsp_resolved: number;
   ast_resolved: number;
   ast_inferred: number;
@@ -49,6 +50,7 @@ function inferResolution(edge: {
 }): EdgeResolution {
   const tier = edge.resolution_tier;
   if (
+    tier === 'scip_resolved' ||
     tier === 'lsp_resolved' ||
     tier === 'ast_resolved' ||
     tier === 'ast_inferred' ||
@@ -103,7 +105,13 @@ export function getCallGraph(
       root: makeNode(symbol, file?.path ?? '', null, [], []),
       edge_types_used: [],
       max_depth: depth,
-      resolution_tiers: { lsp_resolved: 0, ast_resolved: 0, ast_inferred: 0, text_matched: 0 },
+      resolution_tiers: {
+        scip_resolved: 0,
+        lsp_resolved: 0,
+        ast_resolved: 0,
+        ast_inferred: 0,
+        text_matched: 0,
+      },
     });
   }
 
@@ -158,6 +166,7 @@ function buildCallNode(
     incoming: Array<EdgeRef & { nodeId: number }>;
   }
   const tiers: ResolutionTiers = {
+    scip_resolved: 0,
     lsp_resolved: 0,
     ast_resolved: 0,
     ast_inferred: 0,
