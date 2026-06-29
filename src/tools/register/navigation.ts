@@ -730,6 +730,9 @@ export function registerNavigationTools(server: McpServer, ctx: ServerContext): 
           projectRoot,
           { symbolId: symbol_id ?? fqn, filePath: file_path },
           result.value.dependents?.map((d) => d.path),
+          undefined,
+          undefined,
+          store,
         );
         if (linkedDecisions.length > 0) {
           payload.linked_decisions = linkedDecisions;

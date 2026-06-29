@@ -16,6 +16,8 @@ import { shouldSkipRecentReindex } from '../../indexer/recent-reindex-cache.js';
 import { logger } from '../../logger.js';
 import type { ServerContext } from '../../server/types.js';
 import { LockError, withLock } from '../../utils/pid-lock.js';
+import { verifyDecision } from '../../memory/decision-verification.js';
+import { relativizeUnderRoot } from '../../utils/path-relativize.js';
 import { checkFileForDuplicates } from '../analysis/duplication.js';
 import { getMinimalContext } from '../project/minimal-context.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
@@ -527,6 +529,33 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         /* non-fatal */
       }
 
+      // Task 3 — opportunistic decision staleness re-check. After the edited
+      // file is reindexed, re-verify any decisions linked to it so the agent
+      // learns immediately when a decision's anchored symbol was renamed/
+      // deleted or its source changed since capture. Best-effort: never fails
+      // register_edit, and only runs when a decision store is wired.
+      const staleDecisions: Array<{
+        id: number;
+        title: string;
+        verification: string;
+      }> = [];
+      try {
+        const ds = ctx.decisionStore;
+        if (ds) {
+          const relPath = relativizeUnderRoot(filePath, projectRoot) ?? dedupKey;
+          const linked = ds.getDecisionsForFile(relPath);
+          for (const d of linked) {
+            if (!d.symbol_id) continue;
+            const v = verifyDecision(d, store, projectRoot);
+            if (v.stale) {
+              staleDecisions.push({ id: d.id, title: d.title, verification: v.verification });
+            }
+          }
+        }
+      } catch {
+        /* non-fatal — verification is advisory only */
+      }
+
       return {
         content: [
           {
@@ -536,6 +565,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
               file: filePath,
               ...result,
               ...(dupWarnings.length > 0 ? { _duplication_warnings: dupWarnings } : {}),
+              ...(staleDecisions.length > 0 ? { _stale_decisions: staleDecisions } : {}),
             }),
           },
         ],

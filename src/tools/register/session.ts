@@ -766,7 +766,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       const ds = ctx.decisionStore;
       if (ds) {
         const targetFiles = result.targets?.map((t) => t.file).filter(Boolean);
-        const linked = decisionsForTask(ds, projectRoot, task, targetFiles);
+        const linked = decisionsForTask(ds, projectRoot, task, targetFiles, undefined, ctx.store);
         // Stopword-aware filter: drop decisions whose title/content shares no
         // domain noun with the task. Stops "domain classification" decisions
         // from being attached to a "webhook endpoint" task on FTS overlap of

@@ -8,7 +8,9 @@
  * plan_turn, get_session_resume, etc.
  */
 
+import type { Store } from '../db/store.js';
 import type { DecisionRow, DecisionStore } from './decision-store.js';
+import { type VerificationStatus, verifyDecision } from './decision-verification.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -21,16 +23,32 @@ export interface CompactDecision {
   when: string;
   symbol?: string;
   file?: string;
+  /** Task 3 — staleness verdict, present only when the decision is stale. */
+  verification?: VerificationStatus;
+  /** True when the linked code was deleted/renamed or changed since capture. */
+  stale?: boolean;
 }
 
 // ════════════════════════════════════════════════════════════════════════
 // COMPACT
 // ════════════════════════════════════════════════════════════════════════
 
-function compact(d: DecisionRow): CompactDecision {
+function compact(
+  d: DecisionRow,
+  verifyCtx?: { store: Store | null; projectRoot: string },
+): CompactDecision {
   const entry: CompactDecision = { id: d.id, title: d.title, type: d.type, when: d.valid_from };
   if (d.symbol_id) entry.symbol = d.symbol_id;
   if (d.file_path) entry.file = d.file_path;
+  // Task 3 — flag stale rows (deleted/renamed symbol, or source changed since
+  // created_at) so impact/task surfaces show WHY a decision may no longer hold.
+  if (verifyCtx?.store && d.symbol_id) {
+    const v = verifyDecision(d, verifyCtx.store, verifyCtx.projectRoot);
+    if (v.stale) {
+      entry.verification = v.verification;
+      entry.stale = true;
+    }
+  }
   return entry;
 }
 
@@ -70,9 +88,11 @@ export function decisionsForImpact(
   affectedFiles?: string[],
   limit = 10,
   gitBranch?: BranchFilter,
+  store?: Store | null,
 ): CompactDecision[] {
   const seen = new Set<number>();
   const results: CompactDecision[] = [];
+  const verifyCtx = store ? { store, projectRoot } : undefined;
 
   // 1. Decisions linked to the target symbol
   if (target.symbolId) {
@@ -80,7 +100,7 @@ export function decisionsForImpact(
       if (!matchesBranch(d, gitBranch)) continue;
       if (!seen.has(d.id)) {
         seen.add(d.id);
-        results.push(compact(d));
+        results.push(compact(d, verifyCtx));
       }
     }
   }
@@ -91,7 +111,7 @@ export function decisionsForImpact(
       if (!matchesBranch(d, gitBranch)) continue;
       if (!seen.has(d.id)) {
         seen.add(d.id);
-        results.push(compact(d));
+        results.push(compact(d, verifyCtx));
       }
     }
   }
@@ -103,7 +123,7 @@ export function decisionsForImpact(
         if (!matchesBranch(d, gitBranch)) continue;
         if (!seen.has(d.id)) {
           seen.add(d.id);
-          results.push(compact(d));
+          results.push(compact(d, verifyCtx));
         }
         if (results.length >= limit) break;
       }
@@ -124,9 +144,11 @@ export function decisionsForTask(
   taskDescription: string,
   targetFiles?: string[],
   limit = 5,
+  store?: Store | null,
 ): CompactDecision[] {
   const seen = new Set<number>();
   const results: CompactDecision[] = [];
+  const verifyCtx = store ? { store, projectRoot } : undefined;
 
   // 1. FTS search on task description (top keywords)
   const keywords = extractKeywords(taskDescription);
@@ -140,7 +162,7 @@ export function decisionsForTask(
       for (const d of ftsResults) {
         if (!seen.has(d.id)) {
           seen.add(d.id);
-          results.push(compact(d));
+          results.push(compact(d, verifyCtx));
         }
       }
     } catch {
@@ -154,7 +176,7 @@ export function decisionsForTask(
       for (const d of decisionStore.getDecisionsForFile(file)) {
         if (!seen.has(d.id)) {
           seen.add(d.id);
-          results.push(compact(d));
+          results.push(compact(d, verifyCtx));
         }
         if (results.length >= limit) break;
       }
@@ -177,7 +199,7 @@ export function decisionsForResume(
     project_root: projectRoot,
     limit,
   });
-  return decisions.map(compact);
+  return decisions.map((d) => compact(d));
 }
 
 /**
