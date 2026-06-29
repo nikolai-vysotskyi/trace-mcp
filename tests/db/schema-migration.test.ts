@@ -38,12 +38,12 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     db = initializeDatabase(':memory:');
   });
 
-  it('SCHEMA_VERSION row is 30 in schema_meta', () => {
+  it('SCHEMA_VERSION row is 31 in schema_meta', () => {
     const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as
       | { value: string }
       | undefined;
     expect(row).toBeDefined();
-    expect(Number(row!.value)).toBe(30);
+    expect(Number(row!.value)).toBe(31);
   });
 
   it('ranking_pins table exists with the expected columns and PK', () => {
@@ -110,5 +110,50 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     ]) {
       expect(tables, `Missing table on fresh DB: ${required}`).toContain(required);
     }
+  });
+});
+
+describe('edges_confidence_from_tier trigger — scip_resolved arm', () => {
+  it('seeds confidence 1.0 for a scip_resolved edge on insert', async () => {
+    const { Store } = await import('../../src/db/store.js');
+    const db = initializeDatabase(':memory:');
+    const store = new Store(db);
+
+    const fileId = store.insertFile('src/t.ts', 'typescript', 'h', 10);
+    const aId = store.insertSymbol(fileId, {
+      symbolId: 'src/t.ts::a#function',
+      name: 'a',
+      kind: 'function',
+      fqn: 'a',
+      byteStart: 0,
+      byteEnd: 1,
+    });
+    const bId = store.insertSymbol(fileId, {
+      symbolId: 'src/t.ts::b#function',
+      name: 'b',
+      kind: 'function',
+      fqn: 'b',
+      byteStart: 2,
+      byteEnd: 3,
+    });
+    const aNode = store.getNodeId('symbol', aId)!;
+    const bNode = store.getNodeId('symbol', bId)!;
+
+    const inserted = store.insertEdge(
+      aNode,
+      bNode,
+      'references',
+      true,
+      undefined,
+      false,
+      'scip_resolved',
+    );
+    expect(inserted.isOk()).toBe(true);
+
+    const edge = db
+      .prepare('SELECT resolution_tier, confidence FROM edges WHERE source_node_id = ?')
+      .get(aNode) as { resolution_tier: string; confidence: number };
+    expect(edge.resolution_tier).toBe('scip_resolved');
+    expect(edge.confidence).toBe(1.0);
   });
 });

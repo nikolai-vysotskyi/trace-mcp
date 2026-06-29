@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 30;
+const SCHEMA_VERSION = 31;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -217,6 +217,7 @@ AFTER INSERT ON edges
 WHEN NEW.confidence = 0.95 AND NEW.resolution_tier != 'ast_resolved'
 BEGIN
   UPDATE edges SET confidence = CASE NEW.resolution_tier
+    WHEN 'scip_resolved' THEN 1.0
     WHEN 'lsp_resolved' THEN 1.0
     WHEN 'ast_inferred' THEN 0.7
     WHEN 'text_matched' THEN 0.4
@@ -685,6 +686,12 @@ const SEED_EDGE_TYPES = [
   { name: 'unresolved', category: 'core', description: 'Phantom edge for unresolved targets' },
   { name: 'test_covers', category: 'core', description: 'Test file covers a symbol or file' },
   { name: 'esm_imports', category: 'core', description: 'ESM import (file→file)' },
+  // Infrastructure-as-code edges (Kubernetes / Kustomize / docker-compose)
+  {
+    name: 'depends_on',
+    category: 'infra',
+    description: 'Infra resource depends on another (K8s configMap/secret ref, compose service)',
+  },
   {
     name: 'graphql_resolves',
     category: 'graphql',
@@ -1726,6 +1733,32 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
       -- idx_edges_resolved: PageRank cold pull + the COUNT(*) WHERE resolved = 1 guard.
       CREATE INDEX IF NOT EXISTS idx_edges_resolved ON edges(resolved) WHERE resolved = 1;
     `);
+  },
+  31: (db) => {
+    // SCIP ingestion adds a `scip_resolved` tier ranked above `lsp_resolved`
+    // (offline compiler-grade cross-file resolution). The confidence-from-tier
+    // trigger created in migration 25 used CREATE TRIGGER IF NOT EXISTS, so an
+    // upgraded DB still carries the old CASE without a scip arm. Drop and
+    // recreate it so future scip_resolved inserts seed confidence = 1.0.
+    db.exec(`DROP TRIGGER IF EXISTS edges_confidence_from_tier`);
+    db.exec(`
+      CREATE TRIGGER edges_confidence_from_tier
+      AFTER INSERT ON edges
+      WHEN NEW.confidence = 0.95 AND NEW.resolution_tier != 'ast_resolved'
+      BEGIN
+        UPDATE edges SET confidence = CASE NEW.resolution_tier
+          WHEN 'scip_resolved' THEN 1.0
+          WHEN 'lsp_resolved' THEN 1.0
+          WHEN 'ast_inferred' THEN 0.7
+          WHEN 'text_matched' THEN 0.4
+          ELSE 0.95
+        END
+        WHERE id = NEW.id;
+      END;
+    `);
+    // Backfill is a no-op on existing DBs (no scip_resolved rows exist yet),
+    // but kept for symmetry with the per-tier backfill in migration 25.
+    db.exec(`UPDATE edges SET confidence = 1.00 WHERE resolution_tier = 'scip_resolved'`);
   },
 };
 

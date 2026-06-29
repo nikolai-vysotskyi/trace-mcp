@@ -43,6 +43,8 @@ export type SymbolKind =
   | 'enum_case'
   | 'namespace'
   | 'decorator'
+  // Infrastructure / build kinds — Dockerfile FROM stages, IaC modules.
+  | 'module'
   // Markdown-specific kinds — kept distinct so headings/tags do not pollute
   // code-symbol searches, PageRank rankings, or interface implementor counts.
   | 'heading'
@@ -50,8 +52,17 @@ export type SymbolKind =
 
 // --- Raw edges from FrameworkPlugin ---
 
-/** How an edge was resolved during indexing — tiers from highest to lowest confidence */
-export type EdgeResolution = 'lsp_resolved' | 'ast_resolved' | 'ast_inferred' | 'text_matched';
+/**
+ * How an edge was resolved during indexing — tiers from highest to lowest
+ * confidence. `scip_resolved` (offline SCIP index ingestion, compiler-grade
+ * cross-file precision) ranks above `lsp_resolved`.
+ */
+export type EdgeResolution =
+  | 'scip_resolved'
+  | 'lsp_resolved'
+  | 'ast_resolved'
+  | 'ast_inferred'
+  | 'text_matched';
 
 export interface RawEdge {
   sourceSymbolId?: string;
