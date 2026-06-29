@@ -32,6 +32,21 @@ export interface RefactorResult {
   warnings: string[];
   error?: string;
   non_code_suggestions?: NonCodeMention[];
+  /**
+   * extract_function: free variables of the extracted slice that became
+   * parameters of the new helper (declared outside the slice, read inside it).
+   */
+  extracted_params?: string[];
+  /**
+   * extract_function: the variable returned by the helper — a binding declared
+   * inside the slice and used after it. Undefined when the slice returns nothing.
+   */
+  return_value?: string;
+  /**
+   * Confidence in an AST-derived result. 'high' when full binding info was
+   * available; 'low' when the analysis fell back to a coarser scope heuristic.
+   */
+  confidence?: 'high' | 'low';
 }
 
 // ════════════════════════════════════════════════════════════════════════

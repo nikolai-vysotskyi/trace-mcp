@@ -64,7 +64,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'extract_function',
-    'DISABLED pending AST-aware rewrite — returns a structured error explaining the limitation. The previous regex-based implementation produced unparseable code on non-trivial inputs (outer-scope identifiers misclassified as parameters; enclosing function headers spliced into the new helper body). File-existence and line-range validation still run first so obviously malformed inputs keep their familiar errors. Tracking issue: extract_function-ast-rewrite.',
+    'Extract a line range out of an enclosing function into a new named helper (AST-aware, TypeScript/JavaScript). Computes the parameter list via free-variable analysis (identifiers read in the slice but declared outside it, including closure captures) and a return value (a binding declared in the slice and used after it). The helper is inserted after the enclosing function and the slice is replaced by a call. Dry-run by default — preview the edits + extracted_params + return_value, then re-call with dry_run=false to apply. Returns JSON: { success, edits, extracted_params, return_value, confidence, files_modified }.',
     {
       file_path: z.string().max(512).describe('File path (relative to project root)'),
       start_line: z.number().int().min(1).describe('First line to extract (1-indexed, inclusive)'),

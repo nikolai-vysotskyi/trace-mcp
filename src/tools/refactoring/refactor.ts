@@ -17,6 +17,7 @@ import {
   looksLikeAstPattern,
   runAstCodemodOnSource,
 } from './codemod-ast.js';
+import { isExtractError, planExtractFunction } from './extract-function-ast.js';
 import { scanNonCodeFiles } from './non-code-scanner.js';
 import { checkRenameSafe } from './rename-check.js';
 import {
@@ -339,30 +340,25 @@ export function removeDeadCode(
 // ════════════════════════════════════════════════════════════════════════
 
 /**
- * Stable sentinel returned by both `extractFunction()` and
- * `planRefactoring({ type: "extract" })` while the AST-aware rewrite is
- * pending. Exported so tests and downstream tooling can assert on an
- * identifier instead of free-form prose.
+ * @deprecated The AST-aware rewrite has landed — `extractFunction` now performs
+ * real extraction. This sentinel is retained only so older downstream code that
+ * imported it does not break at the type level. New code should not reference it.
  */
 export const EXTRACT_FUNCTION_DISABLED_ERROR =
-  'extract_function is currently unsupported — the legacy regex-based implementation is known to produce unparseable output on non-trivial cases (outer-scope identifiers misclassified as parameters, enclosing function headers spliced into the new helper body). Use plan_refactoring(type="extract") to see the structured error, then perform the extraction manually. Tracking issue: extract_function-ast-rewrite.';
+  'extract_function-ast-rewrite: this sentinel is obsolete; extract_function is enabled.';
 
 /**
- * Extract a range of lines from a file into a new named function.
+ * Extract a range of lines [startLine, endLine] (1-based, inclusive) from a file
+ * into a new named function, computing the parameter list and return value via
+ * AST free-variable analysis (see extract-function-ast.ts).
  *
- * DISABLED pending an AST-aware rewrite. The previous implementation used
- * regex-based line-range slicing with no scope awareness and produced
- * unparseable output on any non-trivial case (most visibly: enclosing
- * function parameters bled into the extracted helper's parameter list, and
- * extracting across a function header silently spliced the header into the
- * body). Rather than ship a half-working extractor we short-circuit with a
- * structured error and point at the tracking issue
- * `extract_function-ast-rewrite`. File-existence and line-range validation
- * still run first so obviously malformed inputs keep their familiar errors.
+ *  - parameters  = identifiers read in the slice but declared outside it
+ *                  (including closure captures of outer variables)
+ *  - return value = a binding declared in the slice and used after it
  *
- * The unused `store`, `functionName` and `dryRun` parameters are kept on the
- * public signature so callers don't need to change when the AST rewrite
- * lands.
+ * The new helper is inserted immediately after the enclosing function, and the
+ * slice is replaced by a call (binding the return value when present). dry_run
+ * returns the edit preview without writing.
  */
 export function extractFunction(
   store: Store,
@@ -373,11 +369,10 @@ export function extractFunction(
   functionName: string,
   dryRun = false,
 ): RefactorResult {
-  // Reference unused params to satisfy noUnusedParameters without shifting the
-  // signature — the AST rewrite will use them.
+  // `store` is unused for now — extraction is purely AST-driven. Kept on the
+  // signature for parity with the other refactor tools and future binding
+  // resolution (SCIP/LSP) to raise confidence.
   void store;
-  void functionName;
-  void dryRun;
 
   const result: RefactorResult = {
     success: false,
@@ -399,7 +394,76 @@ export function extractFunction(
     return result;
   }
 
-  result.error = EXTRACT_FUNCTION_DISABLED_ERROR;
+  const source = fs.readFileSync(absPath, 'utf-8');
+  const plan = planExtractFunction(filePath, source, startLine, endLine, functionName);
+  if (isExtractError(plan)) {
+    result.error = plan.error;
+    return result;
+  }
+
+  // Build the new file content: replace the slice with the call site and insert
+  // the helper after the enclosing function.
+  const srcLines = source.split('\n');
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+
+  // 1. Replace the slice (startLine..endLine, 1-based) with the call site.
+  const before = srcLines.slice(0, startLine - 1);
+  const after = srcLines.slice(endLine);
+  const callSiteLines = plan.callSite.split('\n');
+
+  // 2. Insert the helper after the enclosing function's end line. Because we
+  //    removed (endLine - startLine + 1) lines and added callSite lines, the
+  //    enclosing end line shifts. Compute the new index in the rebuilt array.
+  const removedCount = endLine - startLine + 1;
+  const addedCount = callSiteLines.length;
+  const shift = addedCount - removedCount;
+  // enclosingEndLine is 0-based; convert to 1-based array index after the slice
+  // replacement.
+  const enclosingEnd1 = plan.enclosingEndLine + 1 + shift;
+
+  const rebuilt = [...before, ...callSiteLines, ...after];
+
+  // Insert a blank line + helper after the enclosing function.
+  const helperBlock = ['', ...plan.helperSource.split('\n')];
+  const insertAt = Math.min(enclosingEnd1, rebuilt.length);
+  const finalLines = [...rebuilt.slice(0, insertAt), ...helperBlock, ...rebuilt.slice(insertAt)];
+
+  const newContent = finalLines.join(eol);
+
+  // Record the structured edits for preview.
+  result.edits.push({
+    file: toPosix(path.relative(projectRoot, absPath)),
+    original_line: startLine,
+    original_text: lines.slice(startLine - 1, endLine).join('\n'),
+    new_text: plan.callSite.trimStart(),
+  });
+  result.edits.push({
+    file: toPosix(path.relative(projectRoot, absPath)),
+    original_line: enclosingEnd1,
+    original_text: '',
+    new_text: plan.helperSource,
+  });
+
+  result.extracted_params = plan.params;
+  result.return_value = plan.returnValue;
+  result.confidence = plan.confidence;
+  if (plan.confidence === 'low') {
+    result.warnings.push(
+      'Low confidence: scope analysis could not fully resolve bindings — review the parameter list.',
+    );
+  }
+
+  if (!dryRun) {
+    try {
+      fs.writeFileSync(absPath, newContent, 'utf-8');
+      result.files_modified.push(toPosix(path.relative(projectRoot, absPath)));
+    } catch (e) {
+      result.error = `Failed to write ${filePath}: ${(e as Error).message}`;
+      return result;
+    }
+  }
+
+  result.success = true;
   return result;
 }
 
