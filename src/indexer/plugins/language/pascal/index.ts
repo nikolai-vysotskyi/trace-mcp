@@ -37,6 +37,7 @@ const _plugin = createMultiPassPlugin({
     // unit/program/library/package declaration (module-level scope)
     {
       kind: 'module',
+      memberPatterns: [],
       pattern: /^\s*(?:unit|program|library|package)\s+(\w[\w.]*)\s*;/gim,
     },
     // class type: TMyClass = class[(TParent)]

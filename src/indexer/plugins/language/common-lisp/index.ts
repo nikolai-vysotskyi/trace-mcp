@@ -71,6 +71,7 @@ const _plugin = createMultiPassPlugin({
     // (defsystem "name" ...) — ASDF
     {
       kind: 'module',
+      memberPatterns: [],
       pattern: new RegExp(`\\(\\s*(?:asdf:)?defsystem\\s+[:#]?"?(${SYM_RE})"?`, 'gim'),
       meta: { asdf: true },
     },
