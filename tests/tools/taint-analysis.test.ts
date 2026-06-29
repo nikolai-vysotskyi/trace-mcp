@@ -849,4 +849,102 @@ exec(\`ping \${dbHost}\`);
       expect(data.flows[0].source.kind).toBe('env');
     });
   });
+
+  // -------------------------------------------------------------------
+  // Type-aware false-positive pruning
+  // -------------------------------------------------------------------
+
+  describe('type-aware pruning', () => {
+    test('prunes Math.floor-coerced flow (numeric value cannot carry SQL injection)', () => {
+      // The source taints `id` (string); Math.floor() narrows it to a number.
+      // Math.floor is NOT in the sanitizer list, so the flow IS propagated and
+      // reported by the base analyzer — type inference is what prunes it. A
+      // number cannot carry a string SQL injection, so this is a false positive.
+      writeFile(
+        store,
+        'src/routes/numeric.ts',
+        `
+app.get('/user/:id', (req, res) => {
+  const id = req.params.id;
+  const idNum = Math.floor(id);
+  db.query(\`SELECT * FROM users WHERE id = \${idNum}\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      // idNum is provably numeric → cannot carry a string SQL injection → no flow
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89');
+      expect(sqlFlow).toBeUndefined();
+    });
+
+    test('prunes boolean comparison result flowing into a string-injection sink', () => {
+      // `isAdmin` is the result of a comparison → boolean. A boolean cannot
+      // carry a string injection, so the SQL flow is a false positive.
+      writeFile(
+        store,
+        'src/routes/flag.ts',
+        `
+app.get('/flag', (req, res) => {
+  const role = req.query.role;
+  const isAdmin = role === 'admin';
+  db.query(\`SELECT * FROM users WHERE is_admin = \${isAdmin}\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89');
+      expect(sqlFlow).toBeUndefined();
+    });
+
+    test('still reports a real string flow (no coercion)', () => {
+      writeFile(
+        store,
+        'src/routes/string.ts',
+        `
+app.get('/search', (req, res) => {
+  const term = req.query.term;
+  db.query(\`SELECT * FROM items WHERE name = '\${term}'\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89');
+      expect(sqlFlow).toBeDefined();
+      expect(sqlFlow!.sanitized).toBe(false);
+    });
+
+    test('does not prune when only an unrelated variable is numeric', () => {
+      writeFile(
+        store,
+        'src/routes/mixed.ts',
+        `
+app.get('/mixed', (req, res) => {
+  const count = Number(req.query.count);
+  const name = req.query.name;
+  db.query(\`SELECT * FROM users WHERE name = '\${name}'\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      // name is still a string → flow must survive
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89' && f.sink.variable === 'name');
+      expect(sqlFlow).toBeDefined();
+    });
+  });
 });

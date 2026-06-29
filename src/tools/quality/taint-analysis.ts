@@ -500,6 +500,12 @@ function trackVariableFlow(lines: string[], _language: string): VarAssignment[] 
     /(\$\w+)\s*=\s*(\$\w+)(?:->|\[)/g,
     // Go: x := y.Something
     /(\w+)\s*:?=\s*(\w+)(?:\.\w+)?/g,
+    // JS/TS/Py: wrapper-call RHS — x = Wrapper(y, ...). Captures the FIRST
+    // identifier argument so taint propagates through coercions, sanitizers,
+    // and other single-arg transforms. The type-inference pass (inferVarTypes)
+    // is responsible for pruning the flow back out when the wrapper is a
+    // provably non-string coercion (Number/parseInt/...).
+    /(?:const|let|var\s+)?(\$?\w+)\s*:?=\s*\$?\w+(?:\.\w+)*\s*\(\s*(\$?\w+)/g,
   ];
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
@@ -522,6 +528,95 @@ function trackVariableFlow(lines: string[], _language: string): VarAssignment[] 
   }
 
   return assignments;
+}
+
+// ---------------------------------------------------------------------------
+// Type inference (lightweight, lexical)
+//
+// String-injection sinks (SQL, exec, eval, innerHTML, redirect, template_raw)
+// can only be exploited by a string-typed value. When the analyzer can prove a
+// variable holds a numeric or boolean — via an explicit coercion or a typed
+// literal — that variable cannot carry a string-injection payload, so any flow
+// terminating at it is a false positive and is pruned.
+//
+// This is intentionally conservative: we only record a non-string type when
+// there is POSITIVE evidence of a coercion/literal. Absence of evidence leaves
+// the variable string-typed (the safe default that keeps real flows reported).
+// ---------------------------------------------------------------------------
+
+type InferredType = 'numeric' | 'boolean';
+
+/** Sinks whose exploitation requires a string payload. */
+const STRING_INJECTION_SINKS: Set<TaintSinkKind> = new Set([
+  'sql_query',
+  'exec',
+  'eval',
+  'innerHTML',
+  'redirect',
+  'template_raw',
+  'response_body',
+]);
+
+// Numeric coercions across the supported languages. The capture group is the
+// LHS variable being assigned the numeric value.
+const NUMERIC_COERCION_PATTERNS: RegExp[] = [
+  // JS/TS: x = Number(...) / parseInt(...) / parseFloat(...) / Math.floor(...)
+  /(?:const|let|var\s+)?(\$?\w+)\s*:?=\s*(?:Number|parseInt|parseFloat|Math\.\w+|BigInt)\s*\(/g,
+  // JS/TS: x = +something (unary plus numeric coercion)
+  /(?:const|let|var\s+)?(\w+)\s*=\s*\+\s*\w/g,
+  // Numeric literal assignment: x = 42 or x = 3.14
+  /(?:const|let|var\s+)?(\$?\w+)\s*:?=\s*-?\d+(?:\.\d+)?\s*[;,)\n]?/g,
+  // PHP/C-style cast: $x = (int)$y / (float)$y
+  /(\$?\w+)\s*=\s*\(\s*(?:int|integer|float|double)\s*\)/g,
+  // PHP: $x = intval(...) / floatval(...)
+  /(\$?\w+)\s*=\s*(?:intval|floatval)\s*\(/g,
+  // Python: x = int(...) / float(...)
+  /^(\w+)\s*=\s*(?:int|float)\s*\(/gm,
+  // Go: x, _ := strconv.Atoi(...) / ParseInt / ParseFloat
+  /(\w+)\s*,?\s*\w*\s*:?=\s*strconv\.(?:Atoi|ParseInt|ParseFloat)\s*\(/g,
+];
+
+// Boolean coercions / comparison results.
+const BOOLEAN_COERCION_PATTERNS: RegExp[] = [
+  // JS/TS: x = Boolean(...) / !!something
+  /(?:const|let|var\s+)?(\w+)\s*=\s*(?:Boolean\s*\(|!!)/g,
+  // Comparison result: x = a === b / a > b / a <= b etc.
+  /(?:const|let|var\s+)?(\w+)\s*=\s*[^=!<>]+\s*(?:===|!==|==|!=|>=|<=|>|<)\s*[^=]/g,
+  // Boolean literal: x = true / false
+  /(?:const|let|var\s+)?(\$?\w+)\s*:?=\s*(?:true|false)\b/g,
+  // PHP: $x = (bool)$y / boolval(...)
+  /(\$?\w+)\s*=\s*(?:\(\s*bool(?:ean)?\s*\)|boolval\s*\()/g,
+  // Python: x = bool(...)
+  /^(\w+)\s*=\s*bool\s*\(/gm,
+];
+
+/**
+ * Scan the file and return the set of variables that hold a provably non-string
+ * (numeric or boolean) value. A variable assigned BOTH a string and later a
+ * number resolves to its last evidence — but since string-injection requires
+ * the value at the sink line, callers pair this with line ordering where it
+ * matters. For the conservative intra-procedural use here, presence of any
+ * non-string coercion of a variable is treated as "typed non-string".
+ */
+function inferVarTypes(lines: string[]): Map<string, InferredType> {
+  const types = new Map<string, InferredType>();
+  for (const line of lines) {
+    for (const re of NUMERIC_COERCION_PATTERNS) {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(line)) !== null) {
+        if (m[1]) types.set(m[1], 'numeric');
+      }
+    }
+    for (const re of BOOLEAN_COERCION_PATTERNS) {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(line)) !== null) {
+        if (m[1] && !types.has(m[1])) types.set(m[1], 'boolean');
+      }
+    }
+  }
+  return types;
 }
 
 // ---------------------------------------------------------------------------
@@ -581,6 +676,10 @@ function analyzeFile(content: string, filePath: string, language: string): Taint
   // Step 3: Track variable assignments
   const assignments = trackVariableFlow(lines, language);
 
+  // Step 3b: Infer non-string types so string-injection flows that terminate
+  // at a provably numeric/boolean variable can be pruned as false positives.
+  const varTypes = inferVarTypes(lines);
+
   // Step 4: Build taint propagation graph
   // For each source, track which variables become tainted through assignments
   for (const source of sources) {
@@ -611,6 +710,11 @@ function analyzeFile(content: string, filePath: string, language: string): Taint
     for (const sink of sinks) {
       if (sink.line <= source.line) continue; // sink must come after source
       if (!taintedVars.has(sink.variable)) continue;
+
+      // Type-aware pruning: a string-injection sink fed by a provably
+      // non-string (numeric/boolean) value cannot be exploited. Drop the flow.
+      const sinkVarType = varTypes.get(sink.variable);
+      if (sinkVarType && STRING_INJECTION_SINKS.has(sink.kind)) continue;
 
       // Step 6: Check for sanitizers between source and sink
       let sanitized = false;
