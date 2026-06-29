@@ -19,6 +19,7 @@ import {
   type QualityGatesConfig,
   QualityGatesConfigSchema,
 } from '../quality/quality-gates.js';
+import { qualityGateReportToSarif } from '../quality/sarif.js';
 import { exportSecurityContext } from '../quality/security-context-export.js';
 import { packContext } from '../refactoring/pack-context.js';
 
@@ -566,8 +567,20 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         })
         .optional()
         .describe('Inline config overrides (merged with project config)'),
+      output_format: z
+        .enum(['json', 'sarif'])
+        .optional()
+        .describe(
+          'Output format. "json" (default) returns the native gate report; "sarif" emits a SARIF 2.1.0 log (only warning/error gates become results) for code-scanning ingestion.',
+        ),
     },
-    async ({ scope: _scope, since: _since, use_default_gates, config: inlineConfig }) => {
+    async ({
+      scope: _scope,
+      since: _since,
+      use_default_gates,
+      config: inlineConfig,
+      output_format,
+    }) => {
       // Load quality gates config from project config — DO NOT silently inject
       // defaults. If nothing is configured, the core evaluator returns
       // NO_GATES_CONFIGURED so CI can surface the misconfiguration.
@@ -630,6 +643,9 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         ];
       }
 
+      if (output_format === 'sarif') {
+        return { content: [{ type: 'text', text: j(qualityGateReportToSarif(report)) }] };
+      }
       return { content: [{ type: 'text', text: j(report) }] };
     },
   );
