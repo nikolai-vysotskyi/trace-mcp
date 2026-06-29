@@ -96,14 +96,21 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'apply_codemod',
-    'Bulk regex find-and-replace across files. Dry-run by default — first call shows preview, second call with dry_run=false applies. Use for mechanical changes like adding async/await, renaming patterns, updating imports across many files. Potentially destructive — can modify or delete code. Always preview with dry_run=true first. Returns JSON: { success, matchedFiles, changes: [{ file, matches }], applied }.',
+    'Structural (AST-aware) or regex find-and-replace across files. Default engine "auto": when the pattern is an ast-grep pattern (concrete syntax with $META metavariables, e.g. "foo($$$ARGS)") supported code files (.ts/.tsx/.js/.jsx) are matched syntactically — so occurrences inside strings and comments are NOT touched. Plain regex patterns fall back to the text engine. Dry-run by default — first call shows preview (with engine_used), second call with dry_run=false applies. Potentially destructive. Always preview with dry_run=true first. Returns JSON: { success, engine_used, dry_run, matches, files_modified, total_replacements, total_files }.',
     {
       pattern: z
         .string()
         .min(1)
         .max(1000)
-        .describe('Regex pattern to match (JavaScript regex syntax)'),
-      replacement: z.string().max(1000).describe('Replacement string ($1, $2 for capture groups)'),
+        .describe(
+          'Pattern to match. ast-grep pattern (e.g. "foo($$$ARGS)", "console.log($A)") for the AST engine, or a JavaScript regex for the text engine.',
+        ),
+      replacement: z
+        .string()
+        .max(1000)
+        .describe(
+          'Replacement template. AST engine: substitute captured metavariables ($A, $$$ARGS, or positional $1/$2). Regex engine: $1, $2 capture groups.',
+        ),
       file_pattern: z
         .string()
         .min(1)
@@ -113,6 +120,12 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
         .boolean()
         .default(true)
         .describe('Preview changes without writing (default: true). Set to false to apply.'),
+      engine: z
+        .enum(['auto', 'ast', 'regex'])
+        .optional()
+        .describe(
+          'Engine: "auto" (default — AST for ast-grep patterns on supported code files, else regex), "ast" (force ast-grep), "regex" (force text regex).',
+        ),
       confirm_large: z
         .boolean()
         .optional()
@@ -125,19 +138,21 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
       multiline: z
         .boolean()
         .optional()
-        .describe('Enable multiline mode (dot matches newlines, patterns span lines)'),
+        .describe('Regex engine only: multiline mode (dot matches newlines, patterns span lines)'),
     },
     async ({
       pattern,
       replacement,
       file_pattern,
       dry_run,
+      engine,
       confirm_large,
       filter_content,
       multiline,
     }) => {
       const result = await applyCodemod(projectRoot, pattern, replacement, file_pattern, {
         dryRun: dry_run,
+        engine,
         confirmLarge: confirm_large,
         filterContent: filter_content,
         multiline: multiline,
