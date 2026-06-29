@@ -82,6 +82,8 @@ const BUG_PREDICTION_METHODOLOGY: Methodology = {
   confidence_formula:
     'score = Σ(weight × normalized_signal). confidence_level counts signals with normalized > 0.5: 1=low, 2=medium, 3=high, ≥4=multi_signal. risk is bucketed from raw score (low<0.3, medium<0.5, high<0.75, critical≥0.75).',
   limitations: [
+    'HEURISTIC TRIAGE, NOT A VALIDATED PREDICTOR — the score ranks where to look first, it does not certify a file as buggy',
+    'calibration (scripts/calibrate-health-metrics.mjs, temporal holdout) shows the git signals beat chance only moderately (churn Spearman ~0.3, ~2x precision@K lift) on this repo; expect weaker signal on repos with poor commit-message hygiene',
     'fix_ratio depends on commit message conventions ("fix:", "bug:", etc.)',
     'rank-percentile means score is relative to the rest of the project, not absolute',
     'newly added files have churn ≈ 0 and may be under-reported',

@@ -72,7 +72,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_risk_hotspots',
-    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). Each entry includes a confidence_level (low/medium/multi_signal) counting how many of the two independent signals fired strongly. Result envelope includes _methodology disclosure and _warnings when git is unavailable. Requires git. Use to prioritize refactoring. For per-file bug prediction use predict_bugs instead. Read-only. Returns JSON: { hotspots: [{ file, score, complexity, commits, confidence_level }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). This is a heuristic triage ranking, not a validated risk metric — churn alone correlates only moderately with where bugs are later fixed (Spearman ~0.3 on this repo via scripts/calibrate-health-metrics.mjs), so treat the ranking as "look here first", not a guarantee. Each entry includes a confidence_level (low/medium/multi_signal) counting how many of the two independent signals fired strongly. Result envelope includes _methodology disclosure and _warnings when git is unavailable. Requires git. Use to prioritize refactoring. For per-file bug-risk triage use predict_bugs instead. Read-only. Returns JSON: { hotspots: [{ file, score, complexity, commits, confidence_level }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
     {
       since_days: z
         .number()
