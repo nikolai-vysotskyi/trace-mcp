@@ -12,7 +12,9 @@
  */
 
 import * as path from 'node:path';
+import type { Store } from '../db/store.js';
 import type { DecisionRow, DecisionStore, DecisionType } from './decision-store.js';
+import { verifyDecisions } from './decision-verification.js';
 import { computeHeat } from './heat.js';
 
 // ════════════════════════════════════════════════════════════════════════
@@ -76,15 +78,29 @@ export function assembleWakeUp(
   projectRoot: string,
   opts: {
     maxDecisions?: number;
+    /**
+     * Optional code index. When provided, decisions whose linked symbol was
+     * deleted/renamed or whose source changed since `created_at` are WITHHELD
+     * from the orientation surface (Task 3). Omit to keep the legacy behaviour
+     * (no verification, zero git work).
+     */
+    store?: Store | null;
   } = {},
 ): WakeUpContext {
   const maxDecisions = opts.maxDecisions ?? 10;
 
-  // L1: Recent active decisions
-  const recentDecisions = decisionStore.queryDecisions({
-    project_root: projectRoot,
-    limit: maxDecisions,
-  });
+  // L1: Recent active decisions. Over-fetch a little when verifying so that
+  // withheld stale rows don't shrink the surface below maxDecisions.
+  const verifying = !!opts.store;
+  const recentDecisions = verifyDecisions(
+    decisionStore.queryDecisions({
+      project_root: projectRoot,
+      limit: verifying ? maxDecisions * 2 : maxDecisions,
+    }),
+    opts.store ?? null,
+    projectRoot,
+    { withhold: true },
+  ).slice(0, maxDecisions);
 
   const activeCount = decisionStore.getStats(projectRoot).active;
 
@@ -271,6 +287,13 @@ export function assembleWakeUpSplit(
      * results — topics + memo are the per-service overlays.
      */
     service_name?: string;
+    /**
+     * Optional code index for Task 3 staleness verification. When provided,
+     * stale decisions (deleted/renamed symbol, or source changed since
+     * created_at) are WITHHELD from the rotating `recent_decisions` region.
+     * Omit to keep the legacy behaviour.
+     */
+    store?: Store | null;
   } = {},
 ): WakeUpSplit {
   const recentLimit = Math.min(opts.maxRecent ?? SPLIT_LIMITS.recent, 30);
@@ -358,8 +381,15 @@ export function assembleWakeUpSplit(
     project_root: projectRoot,
     limit: Math.max(recentLimit + dynamicSeen.size, recentLimit * poolMultiplier),
   });
-  const recentCandidates = recentPool.filter((d) => !dynamicSeen.has(d.id));
+  let recentCandidates = recentPool.filter((d) => !dynamicSeen.has(d.id));
   if (heatEnabled) recentCandidates.sort(byHeatDesc);
+  // Task 3 — withhold stale rows from the rotating recent surface when a code
+  // index is supplied. No-op when opts.store is omitted.
+  if (opts.store) {
+    recentCandidates = verifyDecisions(recentCandidates, opts.store, projectRoot, {
+      withhold: true,
+    });
+  }
   const recent_decisions: WakeUpDecisionEntry[] = recentCandidates
     .slice(0, recentLimit)
     .map(compactDecision);
