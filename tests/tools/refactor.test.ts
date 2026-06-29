@@ -5,7 +5,6 @@ import type { Store } from '../../src/db/store.js';
 import {
   applyCodemod,
   applyRename,
-  EXTRACT_FUNCTION_DISABLED_ERROR,
   extractFunction,
   removeDeadCode,
 } from '../../src/tools/refactoring/refactor.js';
@@ -349,8 +348,6 @@ describe('extractFunction — DISABLED contract', () => {
     const result = extractFunction(store, tmpDir, 'src/nope.ts', 1, 3, 'extracted');
     expect(result.success).toBe(false);
     expect(result.error).toContain('not found');
-    // File-existence error must NOT be the disabled-sentinel error.
-    expect(result.error).not.toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
   });
 
   it('returns error for invalid line range', async () => {
@@ -367,36 +364,37 @@ describe('extractFunction — DISABLED contract', () => {
     expect(result.error).toContain('Invalid line range');
   });
 
-  it('valid TS file + range returns the disabled-sentinel error, no edits, no writes', async () => {
+  it('valid TS file + range extracts a helper and replaces the slice with a call', async () => {
     tmpDir = createTmpFixture({
       'src/a.ts': [
         'function main() {',
-        '  console.log("hello");',
-        '  console.log("world");',
-        '  return 0;',
+        '  const x = 10;',
+        '  const y = x * 2;',
+        '  console.log(y);',
+        '  return y;',
         '}',
       ].join('\n'),
     });
 
+    // Dry run: returns edits but does not write.
     const before = readFile(tmpDir, 'src/a.ts');
-    const result = extractFunction(store, tmpDir, 'src/a.ts', 2, 3, 'greet');
+    const result = extractFunction(store, tmpDir, 'src/a.ts', 2, 3, 'compute', true);
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
-    expect(result.error).toContain('extract_function-ast-rewrite');
-    expect(result.edits).toEqual([]);
-    expect(result.files_modified).toEqual([]);
-    // File untouched.
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.edits.length).toBeGreaterThan(0);
+    expect(JSON.stringify(result.edits)).toContain('compute');
+    // dry_run leaves the file untouched.
     expect(readFile(tmpDir, 'src/a.ts')).toBe(before);
   });
 
-  it('valid Python file + range returns the disabled-sentinel error', async () => {
+  it('Python file returns an unsupported-language error (not bundled in ast-grep)', async () => {
     tmpDir = createTmpFixture({
       'src/main.py': [
-        'data = [1, 2, 3]',
-        'total = sum(data)',
-        'average = total / len(data)',
-        'print(average)',
+        'def host():',
+        '    data = [1, 2, 3]',
+        '    total = sum(data)',
+        '    return total',
       ].join('\n'),
     });
 
@@ -404,11 +402,11 @@ describe('extractFunction — DISABLED contract', () => {
     const result = extractFunction(store, tmpDir, 'src/main.py', 2, 3, 'compute_stats');
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
+    expect(result.error).toContain('TypeScript/JavaScript');
     expect(readFile(tmpDir, 'src/main.py')).toBe(before);
   });
 
-  it('valid Go file + range returns the disabled-sentinel error', async () => {
+  it('Go file returns an unsupported-language error', async () => {
     tmpDir = createTmpFixture({
       'src/main.go': [
         'package main',
@@ -425,7 +423,7 @@ describe('extractFunction — DISABLED contract', () => {
     const result = extractFunction(store, tmpDir, 'src/main.go', 4, 5, 'compute');
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
+    expect(result.error).toContain('TypeScript/JavaScript');
     expect(readFile(tmpDir, 'src/main.go')).toBe(before);
   });
 });

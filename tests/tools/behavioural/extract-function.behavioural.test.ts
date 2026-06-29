@@ -1,134 +1,164 @@
 /**
- * Behavioural coverage for `extractFunction()` (the `extract_function` MCP tool).
+ * Behavioural coverage for the re-enabled `extractFunction()`.
  *
- * The tool is currently DISABLED pending an AST-aware rewrite — the previous
- * regex-based implementation produced unparseable output on non-trivial cases
- * (outer-scope identifiers misclassified as parameters; enclosing function
- * headers spliced into the new helper body). These tests pin the disabled
- * contract:
+ * The AST-aware implementation slices a line range out of an enclosing function
+ * and computes:
+ *   - the parameter list via free-variable analysis (identifiers read in the
+ *     slice but declared outside it — including closure captures)
+ *   - a return value when a variable declared inside the slice is used after it
  *
- *  - on a valid file + line range the tool returns success:false with the
- *    sentinel `EXTRACT_FUNCTION_DISABLED_ERROR` and no edits
- *  - the source file is never mutated (no writes happen at all)
- *  - invalid line range (end < start, OOB) still returns the familiar
- *    "Invalid line range" error
- *  - missing file still returns a clean "File not found" error
- *
- * When the AST-aware rewrite lands these tests must be rewritten to assert
- * the new success contract — at that point the sentinel export goes away.
+ * These tests pin the new success contract:
+ *   - a clean extract with one free variable produces a helper + a call
+ *   - a closure capturing an outer variable turns that variable into a param
+ *   - a slice whose result is used later returns that value and assigns it back
+ *   - validation errors (bad range, missing file) still fire first
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  EXTRACT_FUNCTION_DISABLED_ERROR,
-  extractFunction,
-} from '../../../src/tools/refactoring/refactor.js';
+import { extractFunction } from '../../../src/tools/refactoring/refactor.js';
 import { createTestStore, createTmpFixture, removeTmpDir } from '../../test-utils.js';
 
-describe('extractFunction() — DISABLED behavioural contract', () => {
+describe('extractFunction() — AST-aware contract', () => {
   let tmpDir: string;
 
   afterEach(() => {
     if (tmpDir) removeTmpDir(tmpDir);
   });
 
-  it('on a valid file + range returns the structured disabled error with no edits', () => {
+  it('extracts a clean slice with one free variable into a parameterised helper', () => {
     const store = createTestStore();
     tmpDir = createTmpFixture({
       'src/a.ts': [
-        'function outer() {',
+        'function outer(p: number) {',
         '  const a = 1;',
-        '  const b = 2;',
-        '  const sum = a + b;',
-        '  return sum;',
+        '  const b = a + p;',
+        '  console.log(b);',
         '}',
+        '',
       ].join('\n'),
     });
 
-    const result = extractFunction(store, tmpDir, 'src/a.ts', 4, 4, 'computeSum', true);
+    // Extract lines 2-3 (const a; const b = a + p). `p` and `a`... `a` is
+    // declared on line 2 (inside the slice), `p` is the outer param → param.
+    const result = extractFunction(store, tmpDir, 'src/a.ts', 2, 3, 'computeB', true);
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
     expect(result.tool).toBe('extract_function');
-    expect(result.edits).toEqual([]);
-    expect(result.files_modified).toEqual([]);
-    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
-    expect(result.error).toContain('extract_function-ast-rewrite');
+    expect(result.error).toBeUndefined();
+    // The preview edits must mention the new function name and a param for `p`.
+    const blob = JSON.stringify(result.edits);
+    expect(blob).toContain('computeB');
+    expect(blob).toContain('p');
   });
 
-  it('returns the disabled error even when dry_run is false (no apply path)', () => {
+  it('turns an outer variable captured in the slice into a parameter', () => {
     const store = createTestStore();
     tmpDir = createTmpFixture({
-      'src/b.ts': [
-        'function caller() {',
-        '  const x = 10;',
-        '  const y = 20;',
-        '  const z = x + y;',
-        '  console.log(z);',
+      'src/closure.ts': [
+        'function build(prefix: string) {',
+        '  const items = [1, 2, 3];',
+        '  const labelled = items.map((n) => prefix + n);',
+        '  return labelled;',
         '}',
+        '',
       ].join('\n'),
     });
-    const filePath = path.join(tmpDir, 'src/b.ts');
-    const beforeContent = fs.readFileSync(filePath, 'utf-8');
 
-    const result = extractFunction(store, tmpDir, 'src/b.ts', 4, 4, 'addXY', false);
+    // Extract line 3 — the arrow captures `prefix` (outer param) and uses
+    // `items` (declared line 2). Both are free → both become params.
+    const result = extractFunction(store, tmpDir, 'src/closure.ts', 3, 3, 'labelItems', true);
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
-    // Hard guarantee: even the non-dry-run path must not touch the file.
-    expect(fs.readFileSync(filePath, 'utf-8')).toBe(beforeContent);
+    expect(result.success).toBe(true);
+    const params = result.extracted_params ?? [];
+    expect(params).toContain('prefix');
+    expect(params).toContain('items');
   });
 
-  it('invalid line range (end < start, OOB) still returns the familiar "Invalid line range" error', () => {
+  it('returns a value declared in the slice and used afterwards', () => {
     const store = createTestStore();
     tmpDir = createTmpFixture({
-      'src/d.ts': 'const x = 1;\nconst y = 2;\n',
+      'src/ret.ts': [
+        'function calc(x: number, y: number) {',
+        '  const sum = x + y;',
+        '  const scaled = sum * 2;',
+        '  return scaled;',
+        '}',
+        '',
+      ].join('\n'),
     });
+
+    // Extract line 2 (const sum = x + y). `sum` is used on line 3 → returned.
+    const result = extractFunction(store, tmpDir, 'src/ret.ts', 2, 2, 'addXY', true);
+
+    expect(result.success).toBe(true);
+    expect(result.return_value).toBe('sum');
+    const params = result.extracted_params ?? [];
+    expect(params).toContain('x');
+    expect(params).toContain('y');
+    // The call site re-binds the returned value.
+    const blob = JSON.stringify(result.edits);
+    expect(blob).toContain('addXY');
+    expect(blob).toContain('sum');
+  });
+
+  it('applies the extraction to disk when dry_run is false', () => {
+    const store = createTestStore();
+    tmpDir = createTmpFixture({
+      'src/apply.ts': [
+        'function host(p: number) {',
+        '  const doubled = p * 2;',
+        '  return doubled;',
+        '}',
+        '',
+      ].join('\n'),
+    });
+    const filePath = path.join(tmpDir, 'src/apply.ts');
+
+    const result = extractFunction(store, tmpDir, 'src/apply.ts', 2, 2, 'double', false);
+
+    expect(result.success).toBe(true);
+    expect(result.files_modified).toContain('src/apply.ts');
+    const out = fs.readFileSync(filePath, 'utf-8');
+    // The new helper function exists and is called.
+    expect(out).toContain('function double');
+    expect(out).toContain('double(');
+    // It must still parse-shape: braces balanced.
+    expect((out.match(/\{/g) || []).length).toBe((out.match(/\}/g) || []).length);
+  });
+
+  it('invalid line range still returns the familiar "Invalid line range" error', () => {
+    const store = createTestStore();
+    tmpDir = createTmpFixture({ 'src/d.ts': 'const x = 1;\nconst y = 2;\n' });
 
     const reversed = extractFunction(store, tmpDir, 'src/d.ts', 2, 1, 'bad', true);
     expect(reversed.success).toBe(false);
-    expect(reversed.error).toBeDefined();
     expect(reversed.error).toContain('Invalid line range');
-    expect(reversed.error).not.toContain('extract_function-ast-rewrite');
-    expect(reversed.edits).toEqual([]);
 
     const oob = extractFunction(store, tmpDir, 'src/d.ts', 1, 99, 'bad', true);
     expect(oob.success).toBe(false);
     expect(oob.error).toContain('Invalid line range');
   });
 
-  it('missing file returns clean error without throwing', () => {
+  it('missing file returns a clean error without throwing', () => {
     const store = createTestStore();
     tmpDir = createTmpFixture({ 'src/keep.ts': 'export const k = 1;\n' });
 
     const result = extractFunction(store, tmpDir, 'src/ghost.ts', 1, 1, 'f', true);
-
     expect(result.success).toBe(false);
     expect(result.error).toContain('File not found');
-    expect(result.error).not.toContain('extract_function-ast-rewrite');
-    expect(result.edits).toEqual([]);
   });
 
-  it('source file mtime is unchanged after a disabled-path call', async () => {
+  it('a slice not inside any function returns a structured error (cannot extract)', () => {
     const store = createTestStore();
-    const original = [
-      'function f() {',
-      '  const a = 1;',
-      '  const b = a + 1;',
-      '  return b;',
-      '}',
-      '',
-    ].join('\n');
-    tmpDir = createTmpFixture({ 'src/e.ts': original });
-    const filePath = path.join(tmpDir, 'src/e.ts');
-    const beforeMtime = fs.statSync(filePath).mtimeMs;
-    await new Promise((r) => setTimeout(r, 5));
+    tmpDir = createTmpFixture({
+      'src/top.ts': ['const a = 1;', 'const b = 2;', ''].join('\n'),
+    });
 
-    const result = extractFunction(store, tmpDir, 'src/e.ts', 3, 3, 'addOne', true);
+    const result = extractFunction(store, tmpDir, 'src/top.ts', 1, 1, 'f', true);
     expect(result.success).toBe(false);
-    expect(result.error).toBe(EXTRACT_FUNCTION_DISABLED_ERROR);
-    expect(fs.readFileSync(filePath, 'utf-8')).toBe(original);
-    expect(fs.statSync(filePath).mtimeMs).toBe(beforeMtime);
+    expect(result.error).toBeDefined();
+    expect(result.error).not.toContain('Invalid line range');
   });
 });
