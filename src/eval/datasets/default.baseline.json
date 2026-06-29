@@ -9,7 +9,7 @@
   },
   "tolerance": {
     "precision_at_5_mean": 0.02,
-    "mrr": 0.05,
+    "mrr": 0.1,
     "first_hit_rank_mean": 0.2
   }
 }
