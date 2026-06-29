@@ -15,6 +15,7 @@ import {
   detectAntipatterns,
 } from '../quality/antipatterns.js';
 import { type SmellCategory, type SmellPriority, scanCodeSmells } from '../quality/code-smells.js';
+import { antipatternFindingsToSarif, securityFindingsToSarif } from '../quality/sarif.js';
 import { type RuleName, type Severity, scanSecurity } from '../quality/security-scan.js';
 import {
   type TaintSinkKind,
@@ -212,8 +213,14 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .enum(['critical', 'high', 'medium', 'low'])
         .optional()
         .describe('Minimum severity to report (default: low)'),
+      output_format: z
+        .enum(['json', 'sarif'])
+        .optional()
+        .describe(
+          'Output format. "json" (default) returns the native finding shape; "sarif" emits a SARIF 2.1.0 log for GitHub/GitLab/Azure code-scanning ingestion.',
+        ),
     },
-    async ({ scope, rules, severity_threshold }) => {
+    async ({ scope, rules, severity_threshold, output_format }) => {
       if (scope) {
         const blocked = guardPath(scope);
         if (blocked) return blocked;
@@ -228,6 +235,9 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],
           isError: true,
         };
+      }
+      if (output_format === 'sarif') {
+        return { content: [{ type: 'text', text: j(securityFindingsToSarif(result.value)) }] };
       }
       return { content: [{ type: 'text', text: j(result.value) }] };
     },
@@ -271,8 +281,14 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .max(500)
         .optional()
         .describe('Max findings to return (default: 100)'),
+      output_format: z
+        .enum(['json', 'sarif'])
+        .optional()
+        .describe(
+          'Output format. "json" (default) returns the native finding shape; "sarif" emits a SARIF 2.1.0 log for code-scanning ingestion.',
+        ),
     },
-    async ({ category, file_pattern, severity_threshold, limit }) => {
+    async ({ category, file_pattern, severity_threshold, limit, output_format }) => {
       const result = detectAntipatterns(store, projectRoot, {
         category: category as AntipatternCategory[] | undefined,
         file_pattern,
@@ -284,6 +300,9 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
           content: [{ type: 'text', text: j(formatToolError(result.error)) }],
           isError: true,
         };
+      }
+      if (output_format === 'sarif') {
+        return { content: [{ type: 'text', text: j(antipatternFindingsToSarif(result.value)) }] };
       }
       return { content: [{ type: 'text', text: jh('detect_antipatterns', result.value) }] };
     },
