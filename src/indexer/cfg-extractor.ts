@@ -31,6 +31,7 @@ type CFGNodeKind =
   | 'continue'
   | 'await'
   | 'yield'
+  | 'merge'
   | 'statement';
 
 interface CFGNode {
@@ -44,7 +45,7 @@ interface CFGNode {
 interface CFGEdge {
   from: number;
   to: number;
-  label?: 'true' | 'false' | 'exception' | 'default' | 'fallthrough';
+  label?: 'true' | 'false' | 'exception' | 'default' | 'fallthrough' | 'back';
 }
 
 export interface CFGResult {
@@ -153,10 +154,46 @@ export function extractCFG(source: string, startLine = 1): CFGResult {
   let currentNesting = 0;
   const nestingStack: { kind: CFGNodeKind; nodeId: number }[] = [];
 
+  // Loop kinds form cycles: their body loops back to the header, and the header
+  // has a "false" exit edge to whatever follows the loop.
+  const LOOP_KINDS = new Set<CFGNodeKind>(['for', 'while', 'do_while', 'for_of', 'for_in']);
+
+  // Loop headers whose body just closed, awaiting the continuation node so we
+  // can wire the header's loop-exit (false) edge to it.
+  const pendingLoopExits: number[] = [];
+
+  // Wire any pending loop-exit (false) edges to the next real node `targetId`,
+  // then clear the queue. Called whenever control flow rejoins the linear
+  // sequence after a loop body closes.
+  const flushPendingLoopExits = (targetId: number): void => {
+    if (pendingLoopExits.length === 0) return;
+    for (const headerId of pendingLoopExits) {
+      mkEdge(headerId, targetId, 'false');
+    }
+    pendingLoopExits.length = 0;
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const lineNum = startLine + i;
     const trimmed = line.trim();
+
+    // do-while tail: `} while (cond);` closes a do_while loop. The condition
+    // sits AT THE BOTTOM, so the back-edge goes from this tail to the do header
+    // and the exit edge leaves from here to the continuation.
+    const doWhileTail = /^\}\s*while\s*\((.+?)\)\s*;?\s*$/.exec(trimmed);
+    if (doWhileTail && nestingStack.length > 0 && nestingStack.at(-1)?.kind === 'do_while') {
+      const popped = nestingStack.pop()!;
+      currentNesting = Math.max(0, currentNesting - 1);
+      const header = nodes.find((n) => n.id === popped.nodeId);
+      if (header && !header.condition) header.condition = doWhileTail[1].trim().slice(0, 120);
+      // Back-edge from the loop tail to the header (the cycle).
+      mkEdge(prevNodeId, popped.nodeId, 'back');
+      // Exit edge leaves the loop when the condition is false.
+      pendingLoopExits.push(popped.nodeId);
+      prevNodeId = popped.nodeId;
+      continue;
+    }
 
     if (
       !trimmed ||
@@ -168,8 +205,42 @@ export function extractCFG(source: string, startLine = 1): CFGResult {
     ) {
       // Track nesting on closing braces
       if (trimmed === '}' && nestingStack.length > 0) {
-        nestingStack.pop();
+        const popped = nestingStack.pop()!;
         currentNesting = Math.max(0, currentNesting - 1);
+
+        if (LOOP_KINDS.has(popped.kind)) {
+          // Back-edge: the last node of the loop body loops back to the header.
+          // Guard against the degenerate empty-body case (prev === header).
+          if (prevNodeId !== popped.nodeId) {
+            mkEdge(prevNodeId, popped.nodeId, 'back');
+          } else {
+            // Empty body still forms a self-cycle on the header.
+            mkEdge(popped.nodeId, popped.nodeId, 'back');
+          }
+          // The header's "false" (condition-failed) edge leaves the loop; wire
+          // it to whatever node comes next. After a back-edge the linear cursor
+          // returns to the loop header so the exit edge originates correctly.
+          pendingLoopExits.push(popped.nodeId);
+          prevNodeId = popped.nodeId;
+        } else if (popped.kind === 'try') {
+          // The try/catch/finally chain just fully closed (bare `}` after the
+          // last handler). Create a single merge node where all paths through
+          // the construct rejoin, and route the current tail into it. Catch
+          // nodes belonging to this try (declared between the try header and
+          // this closing brace) are also wired into the merge so the exception
+          // path converges instead of dangling.
+          const tryHeader = nodes.find((n) => n.id === popped.nodeId);
+          const merge = mkNode('merge', lineNum, 'merge');
+          mkEdge(prevNodeId, merge.id);
+          if (tryHeader) {
+            for (const n of nodes) {
+              if (n.kind === 'catch' && n.line > tryHeader.line && n.line < lineNum) {
+                mkEdge(n.id, merge.id);
+              }
+            }
+          }
+          prevNodeId = merge.id;
+        }
       }
       continue;
     }
@@ -181,6 +252,13 @@ export function extractCFG(source: string, startLine = 1): CFGResult {
 
       const condition = pattern.condGroup ? m[pattern.condGroup] : undefined;
       const node = mkNode(pattern.kind, lineNum, trimmed, condition);
+
+      // A loop that just closed has its exit (condition-false) edge wired to
+      // this next node — unless this node continues the same chain (e.g. an
+      // else/catch/finally that conceptually belongs to the prior construct).
+      if (pattern.kind !== 'else' && pattern.kind !== 'catch' && pattern.kind !== 'finally') {
+        flushPendingLoopExits(node.id);
+      }
 
       // Branching logic
       switch (pattern.kind) {
@@ -283,6 +361,7 @@ export function extractCFG(source: string, startLine = 1): CFGResult {
           continue;
         }
         const node = mkNode('statement', lineNum, trimmed);
+        flushPendingLoopExits(node.id);
         mkEdge(prevNodeId, node.id);
         prevNodeId = node.id;
       }
@@ -291,6 +370,9 @@ export function extractCFG(source: string, startLine = 1): CFGResult {
 
   // Exit node
   const exit = mkNode('exit', startLine + lines.length - 1, 'Exit');
+  // Any loop whose exit edge never found a continuation (loop is the last
+  // construct in the function) leaves the loop straight to exit.
+  flushPendingLoopExits(exit.id);
   mkEdge(prevNodeId, exit.id);
 
   // Also link return/throw nodes to exit
