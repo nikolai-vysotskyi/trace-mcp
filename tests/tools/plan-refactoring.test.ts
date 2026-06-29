@@ -117,7 +117,7 @@ describe('planRefactoring', () => {
     expect(fs.existsSync(path.join(tmpDir, 'src/moved.ts'))).toBe(false);
   });
 
-  it('extract type is DISABLED — returns sentinel error, no edits, file unchanged', () => {
+  it('previews extract_function without applying (now enabled)', () => {
     store = createTestStore();
     tmpDir = createTmpFixture({
       'src/a.ts': 'function main() {\n  const x = 1;\n  const y = 2;\n  return x + y;\n}\n',
@@ -133,11 +133,10 @@ describe('planRefactoring', () => {
       function_name: 'initVars',
     });
 
-    expect(result.success).toBe(false);
-    expect(result.edits).toEqual([]);
-    expect(result.error).toBeDefined();
-    expect(result.error).toContain('extract_function-ast-rewrite');
-    // File never touched.
+    expect(result.success).toBe(true);
+    expect(result.edits.length).toBeGreaterThan(0);
+    expect(result.error).toBeUndefined();
+    // Preview only — file never touched.
     expect(readFile(tmpDir, 'src/a.ts')).toBe(before);
   });
 

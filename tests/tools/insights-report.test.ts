@@ -36,6 +36,7 @@ describe('generate_insights_report', () => {
 
     expect(r.totals).toEqual({ files: 0, symbols: 0, edges: 0 });
     expect(r.resolution_tiers).toEqual({
+      scip_resolved: 0,
       lsp_resolved: 0,
       ast_resolved: 0,
       ast_inferred: 0,

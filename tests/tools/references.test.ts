@@ -148,6 +148,7 @@ describe('findReferences', () => {
     expect(val.resolution_tiers.ast_inferred).toBe(0);
 
     const totalByTier =
+      val.resolution_tiers.scip_resolved +
       val.resolution_tiers.lsp_resolved +
       val.resolution_tiers.ast_resolved +
       val.resolution_tiers.ast_inferred +
@@ -162,6 +163,7 @@ describe('findReferences', () => {
     const val = result._unsafeUnwrap();
     expect(val.references).toHaveLength(0);
     expect(val.resolution_tiers).toEqual({
+      scip_resolved: 0,
       lsp_resolved: 0,
       ast_resolved: 0,
       ast_inferred: 0,
