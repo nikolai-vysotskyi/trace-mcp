@@ -185,3 +185,66 @@ export interface ProjectMemoRow {
   /** Rough chars/4 token estimate of memo_md at write time. */
   estimated_tokens: number;
 }
+
+// ── SESSION CHUNKS (cross-session conversation search) ────────────────
+
+export interface SessionChunkRow {
+  id: number;
+  session_id: string;
+  project_root: string;
+  chunk_index: number;
+  role: string;
+  content: string;
+  timestamp: string;
+  referenced_files: string | null;
+}
+
+export interface SessionChunkInput {
+  session_id: string;
+  project_root: string;
+  chunk_index: number;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  referenced_files?: string[];
+}
+
+export interface SessionSearchResult {
+  chunk_id: number;
+  session_id: string;
+  role: string;
+  content: string;
+  timestamp: string;
+  referenced_files: string | null;
+  rank: number;
+}
+
+/**
+ * P2.5 — confidence-weight learning corpus. One row per approve/reject
+ * toggle, joined with the parent decision via decision_id.
+ */
+export interface ReviewEventRow {
+  id: number;
+  decision_id: number;
+  action: 'approve' | 'reject';
+  /** JSON-encoded ConfidenceSignals payload. */
+  signals_at_decision: string;
+  confidence_at_decision: number;
+  reviewed_at: string;
+  reviewer: string | null;
+}
+
+/**
+ * Persisted per-project background-scheduler bookkeeping. Restored on
+ * daemon start so a restart does NOT re-run every stage on tick 1.
+ */
+export interface SchedulerStateRow {
+  project_root: string;
+  last_mine_at: number | null;
+  last_cluster_at: number | null;
+  last_memo_at: number | null;
+  last_tune_at: number | null;
+  last_tune_event_count: number | null;
+  consecutive_failures: number;
+  updated_at: string;
+}
