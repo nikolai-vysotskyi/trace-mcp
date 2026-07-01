@@ -29,6 +29,15 @@ export interface ToolResultEvent {
   toolId: string;
   outputSizeChars: number;
   isError: boolean;
+  /**
+   * True when the result body carries the trace-mcp `search` tool's
+   * silent-semantic-degradation marker: `semantic="on"`/`"only"` was
+   * requested but no AI provider was configured, so results fell back to
+   * lexical (FTS5) search. See SearchResult._warning in
+   * src/tools/navigation/navigation.ts (not owned here — this only reads
+   * the already-serialized warning text out of the session log).
+   */
+  semanticDegraded: boolean;
 }
 
 interface SessionSummary {
@@ -179,19 +188,30 @@ interface ToolResultContentItem {
   is_error?: boolean;
 }
 
+/**
+ * Substring of the `search` tool's silent-degradation warning
+ * (SearchResult._warning in src/tools/navigation/navigation.ts). Matching on
+ * this fixed fragment — rather than parsing full JSON — keeps detection
+ * robust to whichever fields surround `_warning` in the serialized result.
+ */
+const SEMANTIC_DEGRADED_MARKER =
+  'was requested but no AI provider is available; results came from lexical';
+
 /** Process a tool result (shared between Claude Code and Claw Code) */
 function processToolResult(
   item: ToolResultContentItem,
   toolResults: Map<string, ToolResultEvent>,
 ): void {
   const resultContent = item.content || item.output || '';
-  const outputSize =
-    typeof resultContent === 'string' ? resultContent.length : JSON.stringify(resultContent).length;
+  const isString = typeof resultContent === 'string';
+  const outputSize = isString ? resultContent.length : JSON.stringify(resultContent).length;
   const toolId = item.tool_use_id || '';
+  const haystack = isString ? resultContent : JSON.stringify(resultContent);
   toolResults.set(toolId, {
     toolId,
     outputSizeChars: outputSize,
     isError: !!item.is_error,
+    semanticDegraded: haystack.includes(SEMANTIC_DEGRADED_MARKER),
   });
 }
 

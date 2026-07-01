@@ -53,9 +53,9 @@ function makeParsedSession(overrides: Partial<ParsedSession['summary']> = {}): P
       },
     ],
     toolResults: new Map([
-      ['tc-1', { toolId: 'tc-1', outputSizeChars: 5000, isError: false }],
-      ['tc-2', { toolId: 'tc-2', outputSizeChars: 800, isError: false }],
-      ['tc-3', { toolId: 'tc-3', outputSizeChars: 2000, isError: false }],
+      ['tc-1', { toolId: 'tc-1', outputSizeChars: 5000, isError: false, semanticDegraded: false }],
+      ['tc-2', { toolId: 'tc-2', outputSizeChars: 800, isError: false, semanticDegraded: false }],
+      ['tc-3', { toolId: 'tc-3', outputSizeChars: 2000, isError: false, semanticDegraded: false }],
     ]),
   };
 }
@@ -136,5 +136,73 @@ describe('AnalyticsStore', () => {
     const stats = store.getSyncStats();
     expect(stats.sessions).toBe(1);
     expect(stats.tool_calls).toBe(3);
+  });
+
+  it('persists semantic_degraded flag from ToolResultEvent through getToolCallsForOptimization', () => {
+    const session = makeParsedSession();
+    session.toolCalls.push({
+      toolId: 'tc-4',
+      sessionId: 'sess-1',
+      timestamp: '2026-04-01T10:20:00Z',
+      model: 'claude-sonnet-4-6',
+      toolName: 'mcp__trace-mcp__search',
+      toolServer: 'trace-mcp',
+      toolShortName: 'search',
+      inputParams: { query: 'authenticate user', semantic: 'on' },
+      inputSizeChars: 40,
+    });
+    session.toolResults.set('tc-4', {
+      toolId: 'tc-4',
+      outputSizeChars: 300,
+      isError: false,
+      semanticDegraded: true,
+    });
+    store.storeSession(session);
+
+    const calls = store.getToolCallsForOptimization({ period: 'all' });
+    const searchCalls = calls.filter((c) => c.tool_name === 'mcp__trace-mcp__search');
+    expect(searchCalls).toHaveLength(2); // base fixture's tc-2 + our pushed tc-4
+    const degraded = searchCalls.find((c) => c.input_snippet?.includes('authenticate user'));
+    expect(degraded).toBeDefined();
+    expect(degraded!.semantic_degraded).toBe(1);
+
+    // The base fixture's search call (no degradation) must read back 0, not NULL/undefined.
+    const notDegraded = searchCalls.find((c) => c.input_snippet?.includes('handleSubmit'));
+    expect(notDegraded!.semantic_degraded).toBe(0);
+
+    // Non-search rows must also read back 0.
+    const readCall = calls.find((c) => c.tool_name === 'Read');
+    expect(readCall!.semantic_degraded).toBe(0);
+  });
+
+  it('captures query + semantic mode in input_snippet for search tool calls', () => {
+    const session = makeParsedSession();
+    session.toolCalls.push({
+      toolId: 'tc-5',
+      sessionId: 'sess-1',
+      timestamp: '2026-04-01T10:25:00Z',
+      model: 'claude-sonnet-4-6',
+      toolName: 'mcp__trace-mcp__search',
+      toolServer: 'trace-mcp',
+      toolShortName: 'search',
+      inputParams: { query: 'authenticate user', semantic: 'on' },
+      inputSizeChars: 40,
+    });
+    session.toolResults.set('tc-5', {
+      toolId: 'tc-5',
+      outputSizeChars: 300,
+      isError: false,
+      semanticDegraded: false,
+    });
+    store.storeSession(session);
+
+    const calls = store.getToolCallsForOptimization({ period: 'all' });
+    const searchCall = calls.find(
+      (c) =>
+        c.tool_name === 'mcp__trace-mcp__search' && c.input_snippet?.includes('authenticate user'),
+    );
+    expect(searchCall).toBeDefined();
+    expect(searchCall!.input_snippet).toContain('authenticate user');
+    expect(searchCall!.input_snippet).toContain('"semantic":"on"');
   });
 });

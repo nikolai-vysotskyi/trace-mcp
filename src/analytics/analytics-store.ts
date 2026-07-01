@@ -2,9 +2,33 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
-import type { ParsedSession } from './log-parser.js';
+import type { ParsedSession, ToolCallEvent } from './log-parser.js';
 
 const ANALYTICS_DB_PATH = path.join(TRACE_MCP_HOME, 'analytics.db');
+
+/**
+ * Build the `input_snippet` column value for a tool call, used by the
+ * optimization-rule engine (src/analytics/rules.ts) for pattern detection.
+ *  - Bash commands: first 500 chars of the shell command (pre-existing).
+ *  - `search` tool calls: bounded JSON of {query, semantic} so rules can
+ *    detect semantic-search usage and near-duplicate query phrasing
+ *    without re-parsing full session logs.
+ *  - Everything else: null (unchanged from before this was extracted).
+ */
+function buildInputSnippet(tc: ToolCallEvent): string | null {
+  if (tc.toolShortName === 'Bash' || tc.toolShortName === 'bash') {
+    return typeof tc.inputParams.command === 'string'
+      ? (tc.inputParams.command as string).slice(0, 500)
+      : null;
+  }
+  if (tc.toolShortName === 'search') {
+    const query = typeof tc.inputParams.query === 'string' ? tc.inputParams.query : null;
+    const semantic = typeof tc.inputParams.semantic === 'string' ? tc.inputParams.semantic : null;
+    if (query === null && semantic === null) return null;
+    return JSON.stringify({ query, semantic }).slice(0, 500);
+  }
+  return null;
+}
 
 export interface ToolCallRow {
   tool_name: string;
@@ -16,6 +40,13 @@ export interface ToolCallRow {
   is_error: number;
   session_id: string;
   input_snippet: string | null;
+  /**
+   * 1 when this call's result carried the `search` tool's silent semantic-
+   * degradation warning (semantic="on"/"only" requested, no AI provider
+   * configured, fell back to lexical FTS5). 0 otherwise. See
+   * ToolResultEvent.semanticDegraded in log-parser.ts.
+   */
+  semantic_degraded: number;
 }
 
 const SCHEMA_SQL = `
@@ -46,7 +77,8 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   is_error INTEGER DEFAULT 0,
   target_file TEXT,
   model TEXT,
-  input_snippet TEXT
+  input_snippet TEXT,
+  semantic_degraded INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_tc_session ON tool_calls(session_id);
@@ -74,6 +106,24 @@ export class AnalyticsStore {
     this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
     this.db.pragma('foreign_keys = OFF'); // for performance during bulk inserts
     this.db.exec(SCHEMA_SQL);
+    this.preMigrate();
+  }
+
+  /**
+   * Idempotent ALTER TABLE guards for columns added after the initial
+   * CREATE TABLE IF NOT EXISTS. SQLite has no "ADD COLUMN IF NOT EXISTS",
+   * so probe via PRAGMA table_info first — mirrors the pattern in
+   * src/memory/decision-store.ts.
+   */
+  private preMigrate(): void {
+    const cols = (this.db.pragma('table_info(tool_calls)') as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
+    if (!cols.includes('semantic_degraded')) {
+      this.db.exec(
+        'ALTER TABLE tool_calls ADD COLUMN semantic_degraded INTEGER NOT NULL DEFAULT 0',
+      );
+    }
   }
 
   /** Check if a session file needs re-parsing (by mtime) */
@@ -116,21 +166,15 @@ export class AnalyticsStore {
 
       // Insert tool calls
       const insertTC = this.db.prepare(`
-        INSERT INTO tool_calls (id, session_id, timestamp, tool_name, tool_server, tool_short_name, input_size_chars, output_size_chars, output_tokens_estimate, is_error, target_file, model, input_snippet)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tool_calls (id, session_id, timestamp, tool_name, tool_server, tool_short_name, input_size_chars, output_size_chars, output_tokens_estimate, is_error, target_file, model, input_snippet, semantic_degraded)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       for (const tc of parsed.toolCalls) {
         const result = parsed.toolResults.get(tc.toolId);
         const outputChars = result?.outputSizeChars ?? 0;
         const outputTokensEst = Math.ceil(outputChars / 3.5); // rough estimate
-        // Store first 500 chars of Bash commands for optimization rule detection
-        const snippet =
-          tc.toolShortName === 'Bash' || tc.toolShortName === 'bash'
-            ? typeof tc.inputParams.command === 'string'
-              ? (tc.inputParams.command as string).slice(0, 500)
-              : null
-            : null;
+        const snippet = buildInputSnippet(tc);
         insertTC.run(
           tc.toolId,
           tc.sessionId,
@@ -145,6 +189,7 @@ export class AnalyticsStore {
           tc.targetFile ?? null,
           tc.model,
           snippet,
+          result?.semanticDegraded ? 1 : 0,
         );
       }
     });
@@ -323,7 +368,7 @@ export class AnalyticsStore {
       .prepare(`
       SELECT tc.tool_name, tc.tool_server, tc.tool_short_name, tc.target_file,
         tc.output_size_chars, tc.output_tokens_estimate, tc.session_id, tc.is_error,
-        tc.input_snippet
+        tc.input_snippet, tc.semantic_degraded
       FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id
       WHERE 1=1 ${dateFilter} ${projectFilter}
       ORDER BY tc.timestamp
