@@ -33,7 +33,7 @@ import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 
 /** Dialects whose `imports` edges carry a path-string target in metadata.module. */
-const IAC_DIALECTS = new Set(['kustomize', 'docker-compose']);
+const IAC_DIALECTS = new Set(['kustomize', 'docker-compose', 'terraform']);
 
 interface SelfLoopImport {
   edgeId: number;
@@ -138,6 +138,13 @@ export function resolveIacImportEdges(state: PipelineState, _scope?: ChangeScope
    * a Dockerfile inside that dir). Returns the repo-relative target file path.
    */
   const resolveTargetFile = (baseDir: string, ref: string, dialect: string): string | undefined => {
+    // Terraform: only LOCAL module sources (./ or ../) point at in-repo files.
+    // Registry (`terraform-aws-modules/vpc/aws`), git (`git::`), and other
+    // remote sources cannot be resolved to a node — leave them dangling.
+    if (dialect === 'terraform' && !ref.startsWith('./') && !ref.startsWith('../')) {
+      return undefined;
+    }
+
     const joined = baseDir ? `${baseDir}/${ref}` : ref;
     let candidate = normalizeRel(joined);
     // A bare `.` (compose `build: .` at repo root) normalises to `.` — the
@@ -157,6 +164,12 @@ export function resolveIacImportEdges(state: PipelineState, _scope?: ChangeScope
           const p = candidate ? `${candidate}/${name}` : name;
           if (filePathSet.has(p)) return p;
         }
+      } else if (dialect === 'terraform') {
+        // Terraform module dir — prefer main.tf, else any .tf file in the dir.
+        const mainTf = candidate ? `${candidate}/main.tf` : 'main.tf';
+        if (filePathSet.has(mainTf)) return mainTf;
+        const anyTf = dirFiles.find((p) => p.endsWith('.tf'));
+        if (anyTf) return anyTf;
       } else {
         // docker-compose build context — the Dockerfile in that dir.
         const dockerfile = dirFiles.find((p) => {

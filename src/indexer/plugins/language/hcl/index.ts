@@ -91,8 +91,26 @@ export class HclLanguagePlugin implements LanguagePlugin {
       });
     }
 
-    function addEdge(module: string): void {
-      edges.push({ edgeType: 'imports', metadata: { module } });
+    function addEdge(moduleName: string, source: string, lineNum: number, offset: number): void {
+      // Emit a distinct per-source placeholder constant symbol and source the
+      // edge from the module symbol. Without a sourceSymbolId, storeRawEdges
+      // resolves src == null and silently drops the edge, so the module→source
+      // link never reaches the graph. Targeting a distinct placeholder (vs a
+      // bare metadata-only edge) also stops two module sources collapsing under
+      // INSERT OR IGNORE. resolveIacImportEdges rewrites this to the actual
+      // referenced module directory / file for local `./` sources.
+      const refName = `ref:${source}`;
+      addSymbol(refName, 'constant', lineNum, offset, {
+        hclKind: 'moduleSource',
+        module: moduleName,
+        value: source,
+      });
+      edges.push({
+        sourceSymbolId: makeSymbolId(filePath, moduleName, 'namespace'),
+        targetSymbolId: makeSymbolId(filePath, refName, 'constant'),
+        edgeType: 'imports',
+        metadata: { dialect: 'terraform', module: source },
+      });
     }
 
     function currentBlock(): BlockState | undefined {
@@ -319,7 +337,7 @@ export class HclLanguagePlugin implements LanguagePlugin {
         if (block.kind === 'module' && depthInsideBlock === 0) {
           const sourceMatch = trimmed.match(/^source\s*=\s*"([^"]+)"/);
           if (sourceMatch) {
-            addEdge(sourceMatch[1]);
+            addEdge(block.name, sourceMatch[1], lineNum, lineOffset);
           }
         }
 
