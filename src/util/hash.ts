@@ -34,7 +34,3 @@ export function contentHash(buf: Buffer): string {
       : new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
   return api.h64Raw(view).toString(16).padStart(16, '0');
 }
-
-export function isContentHasherReady(): boolean {
-  return api !== null;
-}

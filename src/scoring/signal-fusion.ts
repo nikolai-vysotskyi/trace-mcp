@@ -48,12 +48,6 @@ export interface FusionDebugInfo {
   contributions: FusionWeights;
 }
 
-export interface FusionCandidate {
-  id: string; // symbolIdStr
-  /** Any extra data to carry through (symbol row, file, etc.) */
-  data?: unknown;
-}
-
 export interface FusionResult {
   id: string;
   score: number;

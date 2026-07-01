@@ -9,7 +9,7 @@ import { getControlFlow } from '../analysis/control-flow.js';
 import { getSurprises } from '../analysis/surprises.js';
 import { generateDocs } from '../project/generate-docs.js';
 import { getPackageDeps } from '../project/package-deps.js';
-import { auditConfig, scanInstalledSkills, scanPnpmScripts } from '../quality/audit-config.js';
+import { auditConfig, scanInstalledSkills } from '../quality/audit-config.js';
 import { compareBranches, getChangedSymbols } from '../quality/changed-symbols.js';
 import { checkEditSafe } from '../quality/check-edit-safe.js';
 import { collectCoChanges, getCoChanges, persistCoChanges } from '../quality/co-changes.js';

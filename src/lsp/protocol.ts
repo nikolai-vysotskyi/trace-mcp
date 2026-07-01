@@ -99,8 +99,6 @@ export interface InitializeResult {
 
 // ── Call Hierarchy ────────────────────────────────────────────
 
-export interface CallHierarchyPrepareParams extends TextDocumentPositionParams {}
-
 export interface CallHierarchyItem {
   name: string;
   kind: number; // SymbolKind enum
@@ -112,17 +110,9 @@ export interface CallHierarchyItem {
   data?: unknown;
 }
 
-export interface CallHierarchyIncomingCallsParams {
-  item: CallHierarchyItem;
-}
-
 export interface CallHierarchyIncomingCall {
   from: CallHierarchyItem;
   fromRanges: Range[];
-}
-
-export interface CallHierarchyOutgoingCallsParams {
-  item: CallHierarchyItem;
 }
 
 export interface CallHierarchyOutgoingCall {

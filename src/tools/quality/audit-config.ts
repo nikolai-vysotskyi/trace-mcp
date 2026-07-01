@@ -498,22 +498,3 @@ export function scanInstalledSkills(projectRoot: string): Set<string> {
   }
   return skills;
 }
-
-/**
- * E14 — read pnpm/npm script names from a project's package.json. Returns
- * an empty set on missing file or invalid JSON.
- */
-export function scanPnpmScripts(projectRoot: string): Set<string> {
-  const scripts = new Set<string>();
-  try {
-    const pkgPath = path.join(projectRoot, 'package.json');
-    if (!fs.existsSync(pkgPath)) return scripts;
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as {
-      scripts?: Record<string, string>;
-    };
-    for (const name of Object.keys(pkg.scripts ?? {})) scripts.add(name);
-  } catch {
-    // Bad JSON / IO error — return empty set silently.
-  }
-  return scripts;
-}

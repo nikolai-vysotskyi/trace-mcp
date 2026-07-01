@@ -104,19 +104,3 @@ export class SqliteSource {
     return `sqlite://${abs}?row=${encodeURIComponent(String(rowId))}&via=${encodeURIComponent(this.opts.label)}`;
   }
 }
-
-/** Parse a `sqlite://...?row=<pk>&via=<label>` sourcePath back to its parts. */
-export function parseSqliteSourcePath(
-  sourcePath: string,
-): { dbPath: string; row: string; label?: string } | null {
-  if (!sourcePath.startsWith('sqlite://')) return null;
-  const rest = sourcePath.slice('sqlite://'.length);
-  const qIdx = rest.indexOf('?');
-  if (qIdx < 0) return null;
-  const dbPath = rest.slice(0, qIdx);
-  const params = new URLSearchParams(rest.slice(qIdx + 1));
-  const row = params.get('row');
-  if (!row) return null;
-  const label = params.get('via') ?? undefined;
-  return { dbPath, row, label };
-}
