@@ -47,7 +47,9 @@ pnpm run test --run <pattern> # Run specific test
 
 **HARD RULE: NEVER use Read, Grep, Glob, or Bash (ls, find, cat, head, tail) to explore or navigate source code (.ts, .js, .py, etc.). ALWAYS use trace-mcp tools instead. This is not a suggestion — it is a requirement. Violations waste tokens and produce worse results.**
 
-Since trace-mcp is its own MCP server, when developing it you MUST use trace-mcp tools to navigate the codebase:
+Since trace-mcp is its own MCP server, when developing it you MUST use trace-mcp tools to navigate the codebase. This guidance is split into focused subsections below: Navigation & Search, Refactoring & Codemods, Token & Output Optimization, and Plugin & LSP Architecture.
+
+## Navigation & Search
 
 ### Decision Matrix — USE THESE, NOT native tools
 
@@ -71,13 +73,15 @@ Since trace-mcp is its own MCP server, when developing it you MUST use trace-mcp
 | Change function signature | `change_signature` { symbol_id, changes } | ~~manual Edit across files~~ |
 | Preview any refactoring | `plan_refactoring` { type, ... } | ~~guessing~~ |
 
+## Token & Output Optimization
+
 ### Token optimization — MANDATORY
 
 **Use `batch` for multiple independent queries.** When you need 2+ independent tool calls, combine them into a single `batch` call. This saves round-trips and reduces context overhead.
 
 ```
 batch({ calls: [
-  { tool: "get_outline", args: { path: "src/server.ts" } },
+  { tool: "get_outline", args: { path: "src/server/server.ts" } },
   { tool: "get_outline", args: { path: "src/config.ts" } },
   { tool: "search", args: { query: "registerTool", kind: "method" } }
 ] })
@@ -107,6 +111,8 @@ Agent is ONLY acceptable for: writing code in parallel (background workers), run
 **After editing a file:** Call `register_edit` { file_path: "path/to/file" } to reindex that single file and invalidate caches. Much lighter than full `reindex`. Do this after every Edit/Write to keep the index fresh. If `_duplication_warnings` appears in the response, review the referenced symbols — you may be duplicating existing logic.
 
 **Before creating new functions/classes:** Call `check_duplication` { name: "functionName", kind: "function" } to verify no similar symbol exists. Prevents reinventing existing logic.
+
+## Refactoring & Codemods
 
 ### The ONLY cases where native tools are allowed
 
@@ -150,6 +156,8 @@ For `search_text`, prefer `grouping: "by_file"` (lossless path-dedup in JSON) ov
 
 Other tools are NOT TOON-enabled — they regressed in measurements (heterogeneous payloads with nested objects or arrays land in TOON's list mode, which costs more tokens than JSON). Don't pass `output_format: "toon"` to a tool not on this list; it will be rejected by schema validation. Drift guardrail: `src/tools/register/__tests__/toon-drift.test.ts` keeps the schema, description, and allowlist in sync.
 
+## Plugin & LSP Architecture
+
 ### Plugin architecture
 
 - Language plugins: `src/indexer/plugins/lang/` — one per language (ts, python, go, etc.)
@@ -170,7 +178,7 @@ Other tools are NOT TOON-enabled — they regressed in measurements (heterogeneo
   - `src/lsp/mappers.ts` — symbol ↔ LSP position mapping
   - `src/lsp/config.ts` — auto-detection of available servers (tsserver, pyright, gopls, rust-analyzer)
   - `src/lsp/protocol.ts` — hand-written LSP type definitions (zero external deps)
-- Edges have a `resolution_tier` column: `lsp_resolved` > `ast_resolved` > `ast_inferred` > `text_matched`
+- Edges have a `resolution_tier` column (a field value, not a tool) with possible values ranked `lsp_resolved` > `ast_resolved` > `ast_inferred` > `text_matched`
 - Config schema: `lsp` section in `TraceMcpConfigSchema` (`src/config.ts`)
 
 ## Workflow Checklists — MANDATORY
@@ -191,7 +199,7 @@ These workflows define which trace-mcp tools MUST be used at each stage. Follow 
 ### Renaming a symbol
 1. `check_rename` { symbol_id, target_name } — collision detection FIRST
 2. `apply_rename` { symbol_id, new_name } — renames across ALL files (definition + imports). Also scans non-code files (YAML/JSON/env) for mentions.
-3. Review `non_code_suggestions` in the result — apply manually if relevant
+3. Review the result's `non_code_suggestions` field (not a separate tool — a property of `apply_rename`'s response) — apply manually if relevant
 4. NEVER rename manually via Edit with replace_all — it misses import sites and cross-file references
 
 ### Moving a symbol or file
@@ -205,8 +213,8 @@ These workflows define which trace-mcp tools MUST be used at each stage. Follow 
 1. `plan_refactoring` { type: "signature", symbol_id, changes } — preview all edits FIRST
 2. Review: definition changes + all call site updates
 3. `change_signature` { symbol_id, changes, dry_run: false } — apply changes
-4. Changes: `add_param`, `remove_param`, `rename_param`, `reorder_params`
-5. Params with `default_value` don't require call site changes; params without get `undefined` placeholder
+4. The `changes` array passed to `change_signature` accepts these change-object keys (not standalone tools): `add_param`, `remove_param`, `rename_param`, `reorder_params`
+5. Params added via `add_param` with a `default_value` field set don't require call site changes; params without one get an `undefined` placeholder
 
 ### Previewing any refactoring
 - `plan_refactoring` { type: "rename"|"move"|"extract"|"signature", ... } — returns all {old_text, new_text} pairs without applying
@@ -217,7 +225,7 @@ These workflows define which trace-mcp tools MUST be used at each stage. Follow 
 2. Review the preview — check matched files, context lines, replacement correctness
 3. `apply_codemod` { pattern, replacement, file_pattern, dry_run: false } — apply changes
 4. If >20 files affected, must add `confirm_large: true`
-5. Use `filter_content` to narrow scope (e.g. only files containing "extractNodes")
+5. Use the `filter_content` parameter (on `apply_codemod`, not a separate tool) to narrow scope (e.g. only files containing "extractNodes")
 6. Use `multiline: true` for patterns spanning multiple lines
 7. NEVER use Edit for the same mechanical change 2+ times — use apply_codemod. This is a HARD RULE, not a guideline. Even "just 3 edits" is a violation.
 
