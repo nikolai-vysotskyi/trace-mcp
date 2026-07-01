@@ -11,8 +11,13 @@
  */
 
 import type Database from 'better-sqlite3';
-import type { DecisionType, DecisionRow } from './decision-types.js';
-import type { ClusterRow, ClusterInput, ClusterQuery } from './decision-store.js';
+import type {
+  DecisionType,
+  DecisionRow,
+  ClusterRow,
+  ClusterInput,
+  ClusterQuery,
+} from './decision-types.js';
 
 export class ClusterOperations {
   constructor(private readonly db: Database.Database) {}

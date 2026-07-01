@@ -11,7 +11,7 @@
  */
 
 import type Database from 'better-sqlite3';
-import type { ProjectMemoRow } from './decision-store.js';
+import type { ProjectMemoRow } from './decision-types.js';
 
 export class MemoOperations {
   constructor(
