@@ -19,25 +19,97 @@
  * edits and returns the rewritten source — we never hand-splice byte offsets.
  */
 
-import { Lang, parse } from '@ast-grep/napi';
+import type { Lang, parse as parseFn } from '@ast-grep/napi';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
-/** Extensions we route through the AST engine, mapped to an ast-grep Lang. */
-const EXT_TO_LANG: Record<string, Lang> = {
-  '.ts': Lang.TypeScript,
-  '.mts': Lang.TypeScript,
-  '.cts': Lang.TypeScript,
-  '.tsx': Lang.Tsx,
-  '.js': Lang.JavaScript,
-  '.jsx': Lang.JavaScript,
-  '.mjs': Lang.JavaScript,
-  '.cjs': Lang.JavaScript,
+// ESM has no `require`; the native `@ast-grep/napi` is a CJS/NAPI module we load
+// via createRequire so resolution matches the bundled server's native-external
+// shim (see tsup.config.ts). Anchored at this module's URL.
+const nativeRequire = createRequire(import.meta.url);
+
+/**
+ * `@ast-grep/napi` is a native (NAPI) module: its actual binding lives in a
+ * platform-specific optional dependency (`@ast-grep/napi-<platform>`). npm
+ * intermittently fails to install that optional dep (npm/cli#4828), and when
+ * it does, `require('@ast-grep/napi')` throws "Cannot find native binding".
+ *
+ * A top-level static import here would propagate that throw through the tool
+ * registry and crash the ENTIRE MCP server at startup — even though only the
+ * AST codemod path and `extract_function` need the binding (the regex codemod
+ * engine does not). So we load it lazily and memoized, catching the native
+ * failure and degrading to "AST engine unavailable" instead of crashing.
+ */
+type AstGrepModule = { Lang: typeof Lang; parse: typeof parseFn };
+
+let astGrepModule: AstGrepModule | null | undefined;
+
+/** Overridable loader — real by default; swapped in tests to simulate failure. */
+let astGrepLoader: () => AstGrepModule = () => nativeRequire('@ast-grep/napi') as AstGrepModule;
+
+/**
+ * Load `@ast-grep/napi` once, memoizing both success and failure. Returns the
+ * module on success, or `null` when the native binding is unavailable. Never
+ * throws.
+ */
+export function loadAstGrep(): AstGrepModule | null {
+  if (astGrepModule !== undefined) return astGrepModule;
+  try {
+    astGrepModule = astGrepLoader();
+  } catch {
+    // Missing/broken native binding — disable the AST engine. Callers fall
+    // back to the regex engine (apply_codemod) or return a structured error
+    // (extract_function). We deliberately swallow the specific error text;
+    // the surfaced signal is `astLangForFile() === null`.
+    astGrepModule = null;
+  }
+  return astGrepModule;
+}
+
+/** True when the native AST engine is loadable in this environment. */
+export function isAstEngineAvailable(): boolean {
+  return loadAstGrep() !== null;
+}
+
+/**
+ * Test-only seam: inject a loader to simulate a missing native binding, or pass
+ * `null` to restore the real loader. Also resets the memo so the next
+ * `loadAstGrep()` re-evaluates.
+ */
+export function __setAstGrepLoaderForTests(loader: (() => AstGrepModule) | null): void {
+  astGrepLoader = loader ?? (() => nativeRequire('@ast-grep/napi') as AstGrepModule);
+  astGrepModule = undefined;
+}
+
+/**
+ * Extensions we route through the AST engine, mapped to an ast-grep Lang *name*.
+ * Kept as string keys (not `Lang.*` values) so this map can be declared without
+ * touching the native binding — the actual `Lang` enum member is resolved
+ * lazily in `astLangForFile` only once the binding is confirmed available.
+ */
+const EXT_TO_LANG_NAME: Record<string, 'TypeScript' | 'Tsx' | 'JavaScript'> = {
+  '.ts': 'TypeScript',
+  '.mts': 'TypeScript',
+  '.cts': 'TypeScript',
+  '.tsx': 'Tsx',
+  '.js': 'JavaScript',
+  '.jsx': 'JavaScript',
+  '.mjs': 'JavaScript',
+  '.cjs': 'JavaScript',
 };
 
-/** True when a file path is eligible for the AST engine (bundled languages). */
+/**
+ * True when a file path is eligible for the AST engine (bundled languages).
+ * Returns `null` for unsupported extensions AND when the native binding is
+ * unavailable — in both cases callers route through the regex engine instead.
+ */
 export function astLangForFile(filePath: string): Lang | null {
   const ext = path.extname(filePath).toLowerCase();
-  return EXT_TO_LANG[ext] ?? null;
+  const langName = EXT_TO_LANG_NAME[ext];
+  if (langName === undefined) return null;
+  const mod = loadAstGrep();
+  if (mod === null) return null;
+  return mod.Lang[langName];
 }
 
 /** A single AST-engine match within a file (1-indexed line, like the regex engine). */
@@ -122,7 +194,7 @@ function planMetavars(pattern: string): MetavarPlan {
  */
 function buildReplacement(
   template: string,
-  match: ReturnType<ReturnType<typeof parse>['root']>,
+  match: ReturnType<ReturnType<typeof parseFn>['root']>,
   plan: MetavarPlan,
 ): string {
   const singleText = (name: string): string => match.getMatch(name)?.text() ?? '';
@@ -162,7 +234,9 @@ function buildReplacement(
  * Returns the rewritten source plus per-match preview info. Pure: does no IO.
  *
  * Throws if the pattern fails to parse — callers in `engine: 'auto'` mode treat
- * a throw as "not an AST pattern, fall back to regex".
+ * a throw as "not an AST pattern, fall back to regex". Also throws if the
+ * native binding is unavailable; callers should gate on `astLangForFile()`
+ * (which returns null when the engine is unavailable) before calling this.
  */
 export function runAstCodemodOnSource(
   lang: Lang,
@@ -170,7 +244,11 @@ export function runAstCodemodOnSource(
   pattern: string,
   replacement: string,
 ): AstCodemodFileResult {
-  const root = parse(lang, source).root();
+  const mod = loadAstGrep();
+  if (mod === null) {
+    throw new Error('AST engine unavailable: @ast-grep/napi native binding failed to load');
+  }
+  const root = mod.parse(lang, source).root();
   const nodes = root.findAll(pattern);
 
   if (nodes.length === 0) {
