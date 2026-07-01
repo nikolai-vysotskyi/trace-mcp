@@ -98,13 +98,6 @@ export interface RetrievalItem {
   score: number;
 }
 
-/** Result for `single` mode — flat top-K list (matches existing `search`). */
-export interface SingleModeResult {
-  mode: 'single';
-  items: RetrievalItem[];
-  total: number;
-}
-
 /** Buckets for `tiered` mode. The exact slicing is documented inline. */
 export interface TieredBuckets {
   /** Top 3 — strongest matches. */
@@ -113,33 +106,6 @@ export interface TieredBuckets {
   medium: RetrievalItem[];
   /** Next 15 — weak / contextual. */
   low: RetrievalItem[];
-}
-
-export interface TieredModeResult {
-  mode: 'tiered';
-  buckets: TieredBuckets;
-  total: number;
-}
-
-/** Result for `drill` mode — only items within the requested subtree. */
-export interface DrillModeResult {
-  mode: 'drill';
-  parent: string;
-  items: RetrievalItem[];
-  total: number;
-}
-
-/** Result for `flat` mode — raw FTS hits, unranked beyond BM25. */
-export interface FlatModeResult {
-  mode: 'flat';
-  items: RetrievalItem[];
-  total: number;
-}
-
-/** Result for `get` mode — exact lookup, 0 or 1 item. */
-export interface GetModeResult {
-  mode: 'get';
-  item: RetrievalItem | null;
 }
 
 /**
