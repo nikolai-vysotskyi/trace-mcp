@@ -296,6 +296,7 @@ function extractDockerCompose(
           });
           edges.push({
             sourceSymbolId: symId(filePath, svcName, 'class'),
+            targetSymbolId: symId(filePath, `${svcName}:build`, 'constant'),
             edgeType: 'imports',
             metadata: {
               dialect: 'docker-compose',
@@ -768,8 +769,13 @@ function extractKustomize(filePath: string, rootMap: YAMLMap, edges: RawEdge[], 
         refKind: refKey,
         value: ref,
       });
+      // Target the per-ref constant symbol (distinct per path) so multiple
+      // resource entries do NOT collapse into one self-loop under
+      // `INSERT OR IGNORE`. The IaC import resolver later rewrites this edge to
+      // point at the actual manifest/module node once all files are indexed.
       edges.push({
         sourceSymbolId: moduleId,
+        targetSymbolId: symId(filePath, `ref:${ref}`, 'constant'),
         edgeType: 'imports',
         metadata: { dialect: 'kustomize', module: ref, refKind: refKey },
       });
@@ -791,6 +797,7 @@ function extractKustomize(filePath: string, rootMap: YAMLMap, edges: RawEdge[], 
       });
       edges.push({
         sourceSymbolId: moduleId,
+        targetSymbolId: symId(filePath, `ref:${p}`, 'constant'),
         edgeType: 'imports',
         metadata: { dialect: 'kustomize', module: p, refKind: 'patches' },
       });

@@ -13,6 +13,7 @@ import {
   resolveFileProjectionEdges as _resolveFileProjection,
 } from './edge-resolvers/file-projection.js';
 import { resolveTypeScriptHeritageEdges as _resolveHeritage } from './edge-resolvers/heritage.js';
+import { resolveIacImportEdges as _resolveIacImports } from './edge-resolvers/iac-imports.js';
 import { resolveEsmImportEdges as _resolveImports } from './edge-resolvers/imports.js';
 import { resolveMarkdownTagEdges as _resolveMarkdownTags } from './edge-resolvers/markdown-tags.js';
 import { resolveMarkdownWikilinkEdges as _resolveMarkdownLinks } from './edge-resolvers/markdown-wikilinks.js';
@@ -190,6 +191,15 @@ export class EdgeResolver {
   /** Pass 2j: file-level projection of cross-file symbol edges. */
   resolveFileProjectionEdges(scope?: ChangeScope): void {
     timed('file-projection', () => _resolveFileProjection(this.state, scope));
+  }
+
+  /**
+   * Pass 2l: resolve IaC (Kustomize + docker-compose) path-string `imports`
+   * edges to the actual manifest / Dockerfile node. Must run after all files
+   * are indexed so the target manifests exist in the graph.
+   */
+  resolveIacImportEdges(scope?: ChangeScope): void {
+    timed('iac-imports', () => _resolveIacImports(this.state, scope));
   }
 
   /** Pass 2m: Markdown wikilink + md-link edges between notes. */
