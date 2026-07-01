@@ -163,4 +163,50 @@ describe('applyCodemod() — AST engine (ast-grep)', () => {
     expect(result.engine_used).toBe('regex');
     expect(result.total_replacements).toBe(1);
   });
+
+  it('$$$ARGS splices a real multi-arg (4-arg) call correctly', async () => {
+    // Beyond the shipped 2-arg identity-shape tests: a genuine 4-argument call
+    // renamed via the variadic splice, to prove $$$ARGS captures and re-emits
+    // an arbitrary-length argument list (not just a fixed 1-2 arg shape).
+    tmpDir = createTmpFixture({
+      'src/multi.ts': 'combine(a, b, c, d);\ncombine(onlyOne);\n',
+    });
+
+    const result = await applyCodemod(
+      tmpDir,
+      'combine($$$ARGS)',
+      'merged($$$ARGS)',
+      'src/**/*.ts',
+      {
+        dryRun: false,
+        engine: 'ast',
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.total_replacements).toBe(2);
+    const out = fs.readFileSync(path.join(tmpDir, 'src/multi.ts'), 'utf-8');
+    expect(out).toContain('merged(a, b, c, d);');
+    expect(out).toContain('merged(onlyOne);');
+  });
+
+  it('AST engine: a pattern with zero matches returns a clean empty result, not an error', async () => {
+    tmpDir = createTmpFixture({
+      'src/a.ts': 'const x = 1;\nconst y = 2;\n',
+    });
+
+    const result = await applyCodemod(
+      tmpDir,
+      'nonexistentCall($$$ARGS)',
+      'other($$$ARGS)',
+      'src/**/*.ts',
+      { dryRun: true, engine: 'ast' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.matches).toEqual([]);
+    expect(result.total_replacements).toBe(0);
+    expect(result.files_modified).toEqual([]);
+  });
 });

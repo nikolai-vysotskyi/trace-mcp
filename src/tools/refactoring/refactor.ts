@@ -693,7 +693,14 @@ export async function applyCodemod(
   }
 
   if (allMatches.length === 0 && filesWithMatches.size === 0) {
-    result.error = `No matches found for pattern in ${files.length} files`;
+    // Zero matches is a normal, non-exceptional outcome (e.g. checking whether
+    // a migration was already applied) — it must NOT be reported as a failure.
+    // Doing so previously set `success: false`, which the MCP tool handler
+    // (src/tools/register/refactoring.ts) surfaces as `isError: true`, turning
+    // "nothing to change here" into a hard tool-call error. Report success
+    // with an informational warning instead.
+    result.success = true;
+    result.warnings.push(`No matches found for pattern in ${files.length} files scanned`);
     return result;
   }
 
