@@ -126,8 +126,15 @@ export class Store {
   }
 
   insertSymbols(fileId: number, syms: RawSymbol[]): number[] {
+    // Batch path: skip the per-symbol graph.createNode (an INSERT-OR-IGNORE +
+    // SELECT per symbol whose returned node id is discarded here). Instead,
+    // SymbolRepository.insertSymbols bulk-creates all 'symbol' nodes for this
+    // file in a single statement at the end of the same transaction. The no-op
+    // createNode's return value is unused — insertSymbol returns the symbol row
+    // id, not the node id — so this is behavior-preserving. The single-symbol
+    // insertSymbol above is untouched and still creates its node per call.
     return this.symbols.insertSymbols(fileId, syms, (fId, sym, parentId) =>
-      this.insertSymbol(fId, sym, parentId),
+      this.symbols.insertSymbol(fId, sym, parentId, () => 0),
     );
   }
 

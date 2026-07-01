@@ -5,6 +5,7 @@ import type { SymbolRow, SymbolWithFilePath } from '../types.js';
 export class SymbolRepository {
   private readonly _stmts: {
     insertSymbol: Database.Statement;
+    bulkInsertSymbolNodesByFileId: Database.Statement;
     deleteSymbolsByFileId: Database.Statement;
     deleteSymbolNodesByFileId: Database.Statement;
     getSymbolsByFileId: Database.Statement;
@@ -42,6 +43,14 @@ export class SymbolRepository {
            max_nesting = excluded.max_nesting,
            param_count = excluded.param_count
          RETURNING id`,
+      ),
+      // Bulk graph-node creation for a file's symbols in a single statement.
+      // Mirrors the exact rows produced by per-symbol createNode('symbol', id):
+      // node_type='symbol', ref_id=symbols.id. INSERT OR IGNORE honors
+      // UNIQUE(node_type, ref_id) so re-indexing is idempotent.
+      bulkInsertSymbolNodesByFileId: db.prepare(
+        `INSERT OR IGNORE INTO nodes (node_type, ref_id)
+         SELECT 'symbol', id FROM symbols WHERE file_id = ?`,
       ),
       deleteSymbolsByFileId: db.prepare('DELETE FROM symbols WHERE file_id = ?'),
       deleteSymbolNodesByFileId: db.prepare(
@@ -153,8 +162,31 @@ export class SymbolRepository {
         ids.push(id);
         parentIdMap.set(sym.symbolId, id);
       }
+      // Create all graph nodes for this file's symbols in ONE statement, after
+      // every symbol row has landed (so the SELECT sees them) and still inside
+      // this transaction. `insertSymbolFn` on the batch path deliberately skips
+      // per-symbol createNode; this replaces it with a single bulk insert.
+      // insertSymbols is always called per-file (single fileId) — verified at
+      // every call site — so scoping by file_id captures exactly this batch's
+      // symbols and no others.
+      this.bulkCreateSymbolNodes(fileId);
       return ids;
     })();
+  }
+
+  /**
+   * Bulk-create graph `nodes` rows for every symbol of a file in ONE statement,
+   * instead of one INSERT-OR-IGNORE + one SELECT per symbol via createNode.
+   *
+   * Produces exactly the same rows the per-symbol `createNode('symbol', id)`
+   * did: node_type='symbol', ref_id=symbols.id. `INSERT OR IGNORE` respects the
+   * UNIQUE(node_type, ref_id) constraint, so re-indexing stays idempotent.
+   *
+   * MUST run after all symbol rows for `fileId` are inserted (so the SELECT sees
+   * them) and — on the batch path — within the same transaction as the inserts.
+   */
+  bulkCreateSymbolNodes(fileId: number): void {
+    this._stmts.bulkInsertSymbolNodesByFileId.run(fileId);
   }
 
   deleteSymbolsByFile(fileId: number): void {
