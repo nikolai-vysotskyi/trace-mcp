@@ -151,6 +151,26 @@ const SOURCE_PATTERNS: SourcePattern[] = [
     varExtractor: (m) => m[1].split(',').map((s) => s.trim().split(':')[0].trim())[0],
   },
 
+  // Array-destructured params: const [id] = req.query.ids
+  // Pulls the FIRST bound name out of the array pattern. Elided leading holes
+  // (e.g. `const [, second] = ...`) resolve to the first non-empty binding.
+  {
+    regex: /(?:const|let|var)\s+\[\s*([^\]]+)\]\s*=\s*req\.(?:params|query|body)/g,
+    kind: 'http_param',
+    languages: JS_TS,
+    varExtractor: (m) =>
+      m[1]
+        .split(',')
+        .map((s) =>
+          s
+            .trim()
+            .replace(/^\.\.\./, '')
+            .split(/[:=]/)[0]
+            .trim(),
+        )
+        .find((name) => name.length > 0) ?? '',
+  },
+
   // FastAPI
   {
     regex: /(\w+)\s*:\s*\w+\s*=\s*(?:Query|Path|Body|Header|Cookie)\s*\(/g,
