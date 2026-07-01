@@ -197,4 +197,67 @@ describe('auto-supersession (Task 11)', () => {
     expect(superseded).toEqual([old.id]);
     expect(store.getDecision(decision.id)?.valid_until).toBeNull();
   });
+
+  // ── Adversarial false-positive guards ──────────────────────────────────
+  //
+  // Wrongly invalidating a decision is a data-loss bug (the row is dropped
+  // from the active surface, and only recoverable by inspecting
+  // valid_until/history). These two scenarios are the highest-risk shape of
+  // Task 11: an `architecture_decision` must never supersede a
+  // `bug_root_cause` recorded on the SAME symbol, and near-identical title
+  // TEXT across two DIFFERENT symbols must never trigger supersession —
+  // `findSupersedable` keys purely on (project_root, type, anchor), so title
+  // similarity plays no role at all, by design.
+
+  it('does NOT let an architecture_decision supersede a bug_root_cause on the same symbol', () => {
+    const rootCause = store.addDecision({
+      title: 'Root cause: race condition in cache invalidation',
+      content: 'Two writers raced on the same key without a lock.',
+      type: 'bug_root_cause',
+      project_root: projectRoot,
+      symbol_id: 'src/cache.ts::invalidate#function',
+    });
+    store.addDecision(
+      {
+        title: 'Adopt write-through caching architecture',
+        content: 'Switched the cache layer to write-through.',
+        type: 'architecture_decision',
+        project_root: projectRoot,
+        symbol_id: 'src/cache.ts::invalidate#function',
+      },
+      { supersede: true },
+    );
+    // The bug_root_cause must survive untouched — different type, no shared
+    // state key, even though it anchors the exact same symbol.
+    expect(store.getDecision(rootCause.id)?.valid_until).toBeNull();
+    const active = store.queryDecisions({ project_root: projectRoot });
+    expect(active.map((d) => d.id)).toContain(rootCause.id);
+  });
+
+  it('does NOT supersede across different symbols that share near-identical title text', () => {
+    // Adversarial: titles are almost word-for-word identical (a naive
+    // title-similarity heuristic would flag these as "the same decision
+    // restated"), but the symbol_id differs. The state key is the anchor,
+    // never the title — so no supersession should occur.
+    const a = store.addDecision({
+      title: 'Use bcrypt for password hashing',
+      content: 'bcrypt cost 12',
+      type: 'tech_choice',
+      project_root: projectRoot,
+      symbol_id: 'src/auth.ts::hashPassword#function',
+    });
+    store.addDecision(
+      {
+        title: 'Use bcrypt for password hashing',
+        content: 'bcrypt cost 12, applied to the admin login path too',
+        type: 'tech_choice',
+        project_root: projectRoot,
+        symbol_id: 'src/admin-auth.ts::hashAdminPassword#function',
+      },
+      { supersede: true },
+    );
+    expect(store.getDecision(a.id)?.valid_until).toBeNull(); // untouched
+    const active = store.queryDecisions({ project_root: projectRoot });
+    expect(active).toHaveLength(2); // both stayed active
+  });
 });
