@@ -506,11 +506,15 @@ describe('applyCodemod', () => {
     expect(result.error).toContain('No files matched');
   });
 
-  it('returns error when no content matches pattern', async () => {
+  it('returns a clean empty success when no content matches pattern', async () => {
+    // Zero matches is a normal, non-exceptional outcome — not conflated with
+    // a real failure (invalid regex/glob). See
+    // tests/tools/behavioural/apply-codemod.behavioural.test.ts for the
+    // full behavioural contract this mirrors.
     tmpDir = createTmpFixture({ 'src/a.ts': 'hello world' });
     const result = await applyCodemod(tmpDir, 'zzzzz', 'x', 'src/**', { dryRun: true });
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('No matches found');
+    expect(result.success).toBe(true);
+    expect(result.matches ?? []).toEqual([]);
   });
 
   it('filter_content narrows scope', async () => {
