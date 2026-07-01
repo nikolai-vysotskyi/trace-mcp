@@ -9,7 +9,7 @@
  *   trace-mcp ask --model gpt-4o "explain the plugin system"
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import readline from 'node:readline';
@@ -80,7 +80,7 @@ async function resolveLocalProject(): Promise<ProjectContext> {
   return { projectRoot, config, store, pluginRegistry };
 }
 
-async function resolveRemoteRepo(repo: string): Promise<ProjectContext> {
+export async function resolveRemoteRepo(repo: string): Promise<ProjectContext> {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
     throw new Error(`Invalid repo format: "${repo}". Expected owner/name (e.g. facebook/react)`);
   }
@@ -88,9 +88,15 @@ async function resolveRemoteRepo(repo: string): Promise<ProjectContext> {
   const tmpDir = `${os.tmpdir()}/trace-mcp-ask-${repo.replace('/', '-')}-${Date.now()}`;
 
   process.stderr.write(`Cloning ${repo}...\n`);
-  execSync(`git clone --depth=1 --single-branch "https://github.com/${repo}.git" "${tmpDir}"`, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  // `repo` is validated above against a strict owner/name regex, but we still
+  // avoid the shell entirely: execFileSync passes each argv element (repo URL,
+  // tmpDir) as a literal string to git, so even a value that somehow bypassed
+  // validation could never be reinterpreted as shell syntax.
+  execFileSync(
+    'git',
+    ['clone', '--depth=1', '--single-branch', `https://github.com/${repo}.git`, tmpDir],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
 
   const { entry } = setupProject(tmpDir, { force: true });
 
