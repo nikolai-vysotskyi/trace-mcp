@@ -219,7 +219,7 @@ export function changeSignature(
   const callSiteEdits = updateCallSites(
     store,
     projectRoot,
-    symbol,
+    { id: symbol.id, name: symbol.name, file_id: symbol.file_id, line_start: symbol.line_start },
     existingParams,
     newParams,
     changes,
@@ -439,7 +439,7 @@ interface CallSiteResult {
 function updateCallSites(
   store: Store,
   projectRoot: string,
-  symbol: { id: number; name: string; file_id: number },
+  symbol: { id: number; name: string; file_id: number; line_start: number },
   oldParams: ParsedParam[],
   newParams: ParsedParam[],
   changes: SignatureChange[],
@@ -487,8 +487,7 @@ function updateCallSites(
 
     for (let i = 0; i < lines.length; i++) {
       // Skip the definition line itself
-      if (fileId === symbol.file_id && i === (symbol as { line_start: number }).line_start - 1)
-        continue;
+      if (fileId === symbol.file_id && i === symbol.line_start - 1) continue;
 
       callPattern.lastIndex = 0;
       const match = callPattern.exec(lines[i]);
