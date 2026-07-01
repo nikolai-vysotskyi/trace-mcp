@@ -93,4 +93,113 @@ describe('planExtractFunction', () => {
     if (!isExtractError(res)) return;
     expect(res.error).toContain('TypeScript/JavaScript');
   });
+
+  // ─── Adversarial cases ──────────────────────────────────────────────────────
+
+  it('SHADOWING: does not treat an inner-block-scoped name as the return value of an outer same-named usage', () => {
+    // `x` is declared twice: once at outer-function scope (line 2), once inside
+    // a nested block INSIDE the extracted slice (line 4). The `console.log(x)`
+    // AFTER the slice (line 7) is back at outer-function scope, so it refers to
+    // the OUTER `x` (still 10) — never touched by the extraction — not the
+    // slice's inner `x` (20, block-scoped, already out of scope by line 7).
+    //
+    // Silently returning `x` here would generate `return x;` inside the helper
+    // AFTER the inner block that declared it has closed — a dangling reference
+    // (ReferenceError at runtime), and even if it "worked" it would be the
+    // wrong value from the caller's perspective.
+    const src = [
+      'function outer() {', // 1
+      '  const x = 10;', //     2
+      '  {', //                 3 (slice start)
+      '    const x = 20;', //   4
+      '    console.log(x);', // 5
+      '  }', //                 6 (slice end)
+      '  console.log(x);', //   7 — refers to the OUTER x, not the slice's
+      '}', //                   8
+    ].join('\n');
+
+    const res = plan(src, 3, 6);
+    expect(isExtractError(res)).toBe(false);
+    if (isExtractError(res)) return;
+    // Must NOT claim the shadowed inner `x` as a return value.
+    expect(res.returnValue).toBeUndefined();
+    // The generated helper must not reference `x` outside the block it owns.
+    expect(res.helperSource).not.toMatch(/return x;/);
+  });
+
+  it('LOOP VARIABLE: extracting from inside a for-loop captures the loop variable as a parameter', () => {
+    const src = [
+      'function sumSquares(arr: number[]) {', //      1
+      '  let total = 0;', //                          2
+      '  for (let i = 0; i < arr.length; i++) {', //  3
+      '    const sq = arr[i] * arr[i];', //            4 (slice start)
+      '    total += sq;', //                           5 (slice end)
+      '  }', //                                        6
+      '  return total;', //                            7
+      '}', //                                          8
+    ].join('\n');
+
+    const res = plan(src, 4, 5);
+    expect(isExtractError(res)).toBe(false);
+    if (isExtractError(res)) return;
+    // `i` (the for-loop's own declaration, outside the slice) is read in the
+    // slice (`arr[i]`) and must become a captured parameter — not silently
+    // dropped, which would make the helper reference an undeclared `i`.
+    expect(res.params).toContain('i');
+    expect(res.params).toContain('arr');
+    expect(res.params).toContain('total');
+    expect(res.helperSource).toContain('function helper(arr, i, total)');
+  });
+
+  it('MULTIPLE RETURN-RELEVANT BINDINGS: rejects extraction rather than silently dropping one', () => {
+    // Both `a` and `b` are declared in the slice and used after it. The tool
+    // supports only a single return value — it must reject this extraction
+    // with a clear, actionable error, not silently return `a` while `b`
+    // becomes a dangling reference at the call site (ReferenceError).
+    const src = [
+      'function calc(n: number) {', // 1
+      '  const a = n + 1;', //         2 (slice start)
+      '  const b = n + 2;', //         3 (slice end)
+      '  console.log(a, b);', //       4 — both a and b are still needed
+      '}', //                          5
+    ].join('\n');
+
+    const res = plan(src, 2, 3);
+    expect(isExtractError(res)).toBe(true);
+    if (!isExtractError(res)) return;
+    expect(res.error).toContain('multiple values');
+    expect(res.error).toContain('a');
+    expect(res.error).toContain('b');
+  });
+
+  it('CONFIDENCE: is measurably lower for a shadowed case than a clean equivalent', () => {
+    const cleanSrc = [
+      'function f(p: number) {', //  1
+      '  const total = p + 1;', //   2 (slice)
+      '  console.log(total);', //    3
+      '}', //                        4
+    ].join('\n');
+    const cleanRes = plan(cleanSrc, 2, 2);
+    expect(isExtractError(cleanRes)).toBe(false);
+    if (isExtractError(cleanRes)) return;
+    expect(cleanRes.confidence).toBe('high');
+
+    const shadowSrc = [
+      'function outer() {', // 1
+      '  const x = 10;', //     2
+      '  {', //                 3 (slice start)
+      '    const x = 20;', //   4
+      '    console.log(x);', // 5
+      '  }', //                 6 (slice end)
+      '  console.log(x);', //   7
+      '}', //                   8
+    ].join('\n');
+    const shadowRes = plan(shadowSrc, 3, 6);
+    expect(isExtractError(shadowRes)).toBe(false);
+    if (isExtractError(shadowRes)) return;
+    expect(shadowRes.confidence).toBe('low');
+
+    // The two must actually differ — not both defaulting to the same value.
+    expect(shadowRes.confidence).not.toBe(cleanRes.confidence);
+  });
 });

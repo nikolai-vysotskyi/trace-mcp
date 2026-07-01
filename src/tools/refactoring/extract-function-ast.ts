@@ -104,6 +104,13 @@ interface IdentInfo {
   line: number; // 0-based
   isDeclaration: boolean;
   isMemberProperty: boolean;
+  /**
+   * 0-based end line of the nearest enclosing block (`statement_block` or,
+   * absent one, the enclosing function body) for THIS identifier occurrence.
+   * Used to detect shadowing: a declaration is only "still in scope" at a
+   * later line if that line falls within `[declLine, declBlockEndLine]`.
+   */
+  blockEndLine: number;
 }
 
 /**
@@ -195,15 +202,68 @@ export function planExtractFunction(
   }
 
   // 5. Return value: a binding declared in the slice used after it (in the fn).
-  let returnValue: string | undefined;
+  //
+  // Two adversarial cases this must handle correctly rather than silently:
+  //
+  //   a) SHADOWING — a name declared in the slice may be shadowed by (or itself
+  //      shadow) a same-named binding in a DIFFERENT block. Naively matching by
+  //      name alone (`declaredInSlice.has(id.name)`) picks up post-slice uses of
+  //      an OUTER same-named variable that the slice's inner declaration never
+  //      touches, generating a `return x;` that references an out-of-scope
+  //      (or wrong-value) binding. Guard: a slice-declared identifier only
+  //      "reaches" a later usage line if that line falls within the
+  //      declaration's own enclosing block (`blockEndLine`) — i.e. the
+  //      declaration's block hasn't already closed by the time of the later
+  //      reference. Usages in a block that already closed refer to some OTHER
+  //      (outer) binding, not the slice's — so they must not be treated as the
+  //      return-candidate's continued lifetime.
+  //
+  //   b) MULTIPLE RETURN-RELEVANT BINDINGS — if two or more distinct slice-local
+  //      names are genuinely used after the slice, this tool only supports a
+  //      single return value. Silently picking the first candidate (previous
+  //      behavior) drops the second one, generating code with a dangling
+  //      reference (ReferenceError at runtime). We instead collect ALL distinct
+  //      candidates and reject the extraction when there is more than one,
+  //      rather than emit code that silently loses data.
+  const sliceDeclarations = idents.filter(
+    (id) => id.isDeclaration && id.line >= sliceStart0 && id.line <= sliceEnd0,
+  );
+  const returnCandidates = new Set<string>();
+  // Names where a slice declaration exists but was excluded as a return
+  // candidate because its enclosing block already closed by the usage line —
+  // i.e. a shadowing situation was detected and conservatively suppressed.
+  // Surfaced via `confidence: 'low'` so callers can tell "resolved cleanly"
+  // apart from "resolved by suppressing an ambiguous shadow".
+  let shadowSuppressed = false;
   for (const id of idents) {
     if (id.line <= sliceEnd0 || id.line > fnRange.end.line) continue;
     if (id.isDeclaration || id.isMemberProperty) continue;
-    if (declaredInSlice.has(id.name)) {
-      returnValue = id.name;
-      break;
+    const sameNameDecls = sliceDeclarations.filter((d) => d.name === id.name);
+    if (sameNameDecls.length === 0) continue;
+    // A slice declaration of this name "reaches" this usage only if the usage
+    // line is still within that declaration's enclosing block.
+    const reachingDecl = sameNameDecls.find((d) => id.line <= d.blockEndLine);
+    if (reachingDecl) {
+      returnCandidates.add(id.name);
+    } else {
+      // Same name was declared in the slice, but every such declaration's
+      // block had already closed by this usage — the usage refers to some
+      // OTHER (outer) binding with the same name. Not a return candidate.
+      shadowSuppressed = true;
     }
   }
+
+  if (returnCandidates.size > 1) {
+    return {
+      error:
+        `Cannot extract: the selected range would need to return multiple values ` +
+        `(${[...returnCandidates].join(', ')}), but extract_function supports a single ` +
+        'return value only. Split the extraction or restructure to return one value ' +
+        '(e.g. an object literal) and apply this refactor manually.',
+    };
+  }
+  const returnValue: string | undefined =
+    returnCandidates.size === 1 ? [...returnCandidates][0] : undefined;
 
   // 6. Build helper + call site text.
   const indent = (lines[sliceStart0].match(/^\s*/)?.[0] ?? '') || '';
@@ -227,10 +287,18 @@ export function planExtractFunction(
     ? `${indent}const ${returnValue} = ${callExpr};`
     : `${indent}${callExpr};`;
 
-  // Confidence: high when the slice is fully within the function body and we
-  // resolved at least the declared-before set; low for empty-scope heuristics.
-  const confidence: 'high' | 'low' =
-    declaredBeforeSliceInFn.size > 0 || params.length === 0 ? 'high' : 'low';
+  // Confidence: 'low' when we had to conservatively suppress a shadowed
+  // return-value candidate (the analysis is scope-approximate, so a
+  // shadowing situation is a real signal the result may be incomplete —
+  // e.g. a variable the caller expected back was silently dropped rather
+  // than misattributed). Otherwise 'high' when the slice is fully within the
+  // function body and we resolved at least the declared-before set; 'low'
+  // for the empty-scope heuristic fallback.
+  const confidence: 'high' | 'low' = shadowSuppressed
+    ? 'low'
+    : declaredBeforeSliceInFn.size > 0 || params.length === 0
+      ? 'high'
+      : 'low';
 
   return {
     helperSource,
@@ -289,6 +357,27 @@ function findEnclosingFunction(
   return best;
 }
 
+/** Node kinds that introduce a new lexical block scope for our purposes. */
+const BLOCK_KINDS = new Set(['statement_block', 'program']);
+
+/**
+ * Walk up from `node` to the nearest enclosing block (`statement_block`, or
+ * `program` for module-level code) and return its 0-based end line. This is
+ * the scope-shadowing guard: a `const`/`let` declared inside a nested block is
+ * out of scope once that block's line range ends, even if the SAME NAME is
+ * declared again in an outer block. Falls back to the node's own end line if
+ * no block ancestor is found (should not happen for well-formed programs).
+ */
+function nearestBlockEndLine(node: SgNode): number {
+  let n: SgNode | null = node;
+  while (n) {
+    const kind = String(n.kind());
+    if (BLOCK_KINDS.has(kind)) return n.range().end.line;
+    n = n.parent();
+  }
+  return node.range().end.line;
+}
+
 function collectIdentifiers(root: SgNode): IdentInfo[] {
   const out: IdentInfo[] = [];
   for (const kind of ['identifier', 'shorthand_property_identifier']) {
@@ -315,7 +404,13 @@ function collectIdentifiers(root: SgNode): IdentInfo[] {
 
       const isDeclaration = DECLARATION_PARENTS.has(parentKind) && isNamePosition(parent, name);
 
-      out.push({ name, line: range.start.line, isDeclaration, isMemberProperty });
+      out.push({
+        name,
+        line: range.start.line,
+        isDeclaration,
+        isMemberProperty,
+        blockEndLine: nearestBlockEndLine(id),
+      });
     }
   }
   // Sort by source position so first-seen order is deterministic.
