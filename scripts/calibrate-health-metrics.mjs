@@ -123,26 +123,21 @@ export function precisionAtK(files, signal, label, k) {
   return hits / Math.min(k, topSig.length);
 }
 
-function main() {
-  const commits = gitLog(SINCE_DAYS);
-  if (commits.length < 10) {
-    console.log(
-      JSON.stringify(
-        { status: 'insufficient_history', commits: commits.length, note: 'Need >=10 commits.' },
-        null,
-        2,
-      ),
-    );
-    return;
-  }
+/**
+ * Split commits chronologically at the midpoint into an EARLY (signal) window
+ * and a LATE (label) window.
+ */
+export function splitCommits(commits) {
+  const sorted = [...commits].sort((a, b) => a.date - b.date);
+  const mid = Math.floor(sorted.length / 2);
+  return { early: sorted.slice(0, mid), late: sorted.slice(mid) };
+}
 
-  // Temporal split at midpoint commit (chronological).
-  commits.sort((a, b) => a.date - b.date);
-  const mid = Math.floor(commits.length / 2);
-  const early = commits.slice(0, mid);
-  const late = commits.slice(mid);
-
-  // EARLY signals: churn (commits) + recent-fix count.
+/**
+ * EARLY-window signals: per-file churn (commit count) and recent-fix count.
+ * Returns two Maps keyed by file path.
+ */
+export function buildEarlySignals(early) {
   const churn = new Map();
   const earlyFix = new Map();
   for (const c of early) {
@@ -151,14 +146,24 @@ function main() {
       if (c.isFix) earlyFix.set(f, (earlyFix.get(f) ?? 0) + 1);
     }
   }
+  return { churn, earlyFix };
+}
 
-  // LATE label: future fix-commit count per file.
+/** LATE-window label: future fix-commit count per file. */
+export function buildFutureFixLabels(late) {
   const futureFix = new Map();
   for (const c of late) {
     if (!c.isFix) continue;
     for (const f of c.files) futureFix.set(f, (futureFix.get(f) ?? 0) + 1);
   }
+  return futureFix;
+}
 
+/**
+ * Score the EARLY signals against the LATE labels (Spearman + precision@K +
+ * random baseline) and assemble the JSON report object.
+ */
+export function buildReport(commits, early, late, churn, earlyFix, futureFix) {
   // Universe: files seen in the EARLY window (so we can only "predict" files
   // that existed). This is the realistic deployment setting.
   const files = [...churn.keys()];
@@ -176,7 +181,7 @@ function main() {
   const labeled = files.filter((f) => (futureFix.get(f) ?? 0) > 0).length;
   const randomP = files.length ? labeled / files.length : 0;
 
-  const report = {
+  return {
     status: 'ok',
     window_days: SINCE_DAYS,
     commits_total: commits.length,
@@ -200,10 +205,31 @@ function main() {
       'files that actually got fixed later. These calibrate the shared git signals only; ' +
       'they are heuristic triage evidence, not a validated bug-prediction benchmark.',
   };
+}
+
+function main() {
+  const commits = gitLog(SINCE_DAYS);
+  if (commits.length < 10) {
+    console.log(
+      JSON.stringify(
+        { status: 'insufficient_history', commits: commits.length, note: 'Need >=10 commits.' },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  const { early, late } = splitCommits(commits);
+  const { churn, earlyFix } = buildEarlySignals(early);
+  const futureFix = buildFutureFixLabels(late);
+  const report = buildReport(commits, early, late, churn, earlyFix, futureFix);
 
   console.log(JSON.stringify(report, null, 2));
 
   // Human one-liner.
+  const pEarlyFix = report[`precision_at_${K}`].recent_fixes;
+  const randomP = report[`precision_at_${K}`].random_baseline;
   const lift = randomP > 0 ? (pEarlyFix / randomP).toFixed(1) : 'n/a';
   console.error(
     `\nSummary: churn ρ=${report.spearman.churn_vs_future_fixes}, ` +
