@@ -19,8 +19,8 @@
  * cleanly inside a single function.
  */
 
-import { Lang, parse } from '@ast-grep/napi';
-import { astLangForFile } from './codemod-ast.js';
+import type { Lang, parse } from '@ast-grep/napi';
+import { astLangForFile, isAstEngineAvailable, loadAstGrep } from './codemod-ast.js';
 
 /** Identifier parent kinds that introduce a binding (the name position). */
 const DECLARATION_PARENTS = new Set([
@@ -119,6 +119,16 @@ export function planExtractFunction(
 ): ExtractResult {
   const lang = astLangForFile(filePath);
   if (lang === null) {
+    // Two distinct null causes: unsupported language vs. missing native binding.
+    if (!isAstEngineAvailable()) {
+      return {
+        error:
+          'extract_function is unavailable: the @ast-grep/napi native binding failed to load ' +
+          '(commonly an npm optional-dependency install issue — npm/cli#4828). Reinstall ' +
+          'dependencies (remove node_modules + lockfile, reinstall) to restore it. Use ' +
+          'plan_refactoring to preview the extraction manually in the meantime.',
+      };
+    }
     return {
       error:
         'extract_function currently supports TypeScript/JavaScript files only ' +
@@ -130,7 +140,14 @@ export function planExtractFunction(
   const sliceStart0 = startLine - 1;
   const sliceEnd0 = endLine - 1;
 
-  const root = parse(lang, source).root();
+  // Binding is guaranteed available here (astLangForFile returned non-null).
+  const astGrep = loadAstGrep();
+  if (astGrep === null) {
+    return {
+      error: 'extract_function is unavailable: the @ast-grep/napi native binding failed to load.',
+    };
+  }
+  const root = astGrep.parse(lang, source).root();
 
   // 1. Find the innermost function whose body contains the whole slice.
   const enclosing = findEnclosingFunction(root, sliceStart0, sliceEnd0);
@@ -331,4 +348,4 @@ function stripCommonIndent(line: string, commonIndent: string): string {
   return line.replace(/^\s+/, '');
 }
 
-export { Lang as ExtractLang };
+export type { Lang as ExtractLang };
