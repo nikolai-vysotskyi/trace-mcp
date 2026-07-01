@@ -102,8 +102,5 @@ export const JUNIE_HOME = path.join(os.homedir(), '.junie');
 /** Factory.ai Droid MCP config. */
 export const FACTORY_HOME = path.join(os.homedir(), '.factory');
 
-/** Sourcegraph Amp config (XDG-style). */
-export const AMP_HOME = path.join(os.homedir(), '.config', 'amp');
-
 /** Project-local trace-mcp dir name (NOT a full path — joined with project root). */
 export const PROJECT_LOCAL_DIRNAME = '.trace-mcp';

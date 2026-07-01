@@ -81,18 +81,6 @@ export function isSafeGitRef(value: unknown): value is string {
 }
 
 /**
- * Throws if `value` is not a safe git ref. Keeps call sites short while
- * surfacing a clear error message at the boundary.
- */
-export function assertSafeGitRef(value: unknown, paramName: string): asserts value is string {
-  if (!isSafeGitRef(value)) {
-    throw new Error(
-      `Invalid git ref for "${paramName}": ${JSON.stringify(value)}. Refs must match ${REF_RE} and not start with "-".`,
-    );
-  }
-}
-
-/**
  * Validate every ref-like argument in a record; returns the first failure.
  * Useful for compare_branches / get_changed_symbols which accept several
  * refs at once.

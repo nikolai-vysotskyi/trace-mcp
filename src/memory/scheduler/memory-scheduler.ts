@@ -749,6 +749,3 @@ function resolveBackgroundConfig(config: TraceMcpConfig): MemoryBackgroundConfig
     tuneEveryNNewEvents: raw.tuneEveryNNewEvents ?? 25,
   };
 }
-
-/** Exposed for tests that want to assert the defaults applied. */
-export const _internal = { resolveBackgroundConfig };
