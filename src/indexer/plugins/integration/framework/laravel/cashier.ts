@@ -19,12 +19,6 @@ export interface BillableModelInfo {
   chargeMethods: string[];
 }
 
-export interface CashierConfigInfo {
-  model: string | null;
-  currency: string | null;
-  currencyLocale: string | null;
-}
-
 // ─── Detection ───────────────────────────────────────────────
 
 const NAMESPACE_RE = /namespace\s+([\w\\]+)\s*;/;
@@ -104,23 +98,6 @@ export function extractCashierWebhook(source: string): string | null {
   return null;
 }
 
-// ─── Config extraction ───────────────────────────────────────
-
-/**
- * Extract cashier.php configuration.
- */
-export function extractCashierConfig(source: string): CashierConfigInfo | null {
-  if (!source.includes('cashier') && !source.includes('Cashier')) return null;
-
-  const model = extractConfigString(source, 'model');
-  const currency = extractConfigString(source, 'currency');
-  const currencyLocale = extractConfigString(source, 'currency_locale');
-
-  if (!model && !currency) return null;
-
-  return { model, currency, currencyLocale };
-}
-
 // ─── Edge builders ───────────────────────────────────────────
 
 export function buildBillableModelEdges(info: BillableModelInfo): RawEdge[] {
@@ -139,11 +116,4 @@ export function buildBillableModelEdges(info: BillableModelInfo): RawEdge[] {
   }
 
   return edges;
-}
-
-// ─── Internal helpers ────────────────────────────────────────
-
-function extractConfigString(source: string, key: string): string | null {
-  const re = new RegExp(`['"]${key}['"]\\s*=>\\s*['"]([^'"]+)['"]`);
-  return source.match(re)?.[1] ?? null;
 }

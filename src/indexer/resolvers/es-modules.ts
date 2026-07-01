@@ -133,13 +133,6 @@ function buildResolver(projectRoot: string, rootPath: string): ResolverFactory {
   return new ResolverFactory(options);
 }
 
-export interface WorkspaceResolver {
-  /** The workspace root path (absolute). */
-  workspaceRoot: string;
-  /** The oxc-resolver instance. */
-  resolver: ResolverFactory;
-}
-
 export class EsModuleResolver {
   private resolvers: Map<string, ResolverFactory> = new Map();
   private rootResolver: ResolverFactory;
