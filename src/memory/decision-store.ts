@@ -13,11 +13,12 @@ import { restrictDbPerms } from '../shared/db-perms.js';
 import { relativizeUnderRoot } from '../utils/path-relativize.js';
 import { computeConfidence } from './decision-confidence.js';
 import type { AuditLogger } from './decision-audit-log.js';
-import { titleSimilarity } from './decision-clusterer.js';
-import { type ConsolidationVerdict, mergeContents, mergeTags } from './decision-consolidator.js';
 import { computeHeat, heatDecayMultiplier } from './heat.js';
 import { MemoOperations } from './decision-store-memo-ops.js';
 import { ClusterOperations } from './decision-store-cluster-ops.js';
+import { SchedulerStateOperations } from './decision-store-scheduler-ops.js';
+import { ConsolidationOperations, parseTagsJson } from './decision-store-consolidation-ops.js';
+import type { ConsolidationVerdict } from './decision-consolidator.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -35,6 +36,11 @@ export type {
   ClusterInput,
   ClusterQuery,
   ProjectMemoRow,
+  SessionChunkRow,
+  SessionChunkInput,
+  SessionSearchResult,
+  ReviewEventRow,
+  SchedulerStateRow,
 } from './decision-types.js';
 import type {
   DecisionType,
@@ -44,6 +50,11 @@ import type {
   ClusterInput,
   ClusterQuery,
   ProjectMemoRow,
+  SessionChunkRow,
+  SessionChunkInput,
+  SessionSearchResult,
+  ReviewEventRow,
+  SchedulerStateRow,
 } from './decision-types.js';
 
 export interface DecisionQuery {
@@ -115,82 +126,11 @@ export interface DecisionTimelineEntry {
   is_active: boolean;
 }
 
-export interface SessionChunkRow {
-  id: number;
-  session_id: string;
-  project_root: string;
-  chunk_index: number;
-  role: string;
-  content: string;
-  timestamp: string;
-  referenced_files: string | null;
-}
-
-export interface SessionChunkInput {
-  session_id: string;
-  project_root: string;
-  chunk_index: number;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: string;
-  referenced_files?: string[];
-}
-
-export interface SessionSearchResult {
-  chunk_id: number;
-  session_id: string;
-  role: string;
-  content: string;
-  timestamp: string;
-  referenced_files: string | null;
-  rank: number;
-}
-
-// Cluster + memo row/query shapes moved to `decision-types.ts` so the
-// extracted persistence modules can import them without closing an import
-// cycle back through this store. Re-exported here for public-API back-compat.
-
-// ── PROJECT MEMOS (L3 orientation digest) ─────────────────────────────
-//
-// A project memo is a 250-400 word LLM-synthesised Markdown document that
-// captures the project's architectural personality: dominant tech choices,
-// conventions, in-flight work, named subsystems. It's the L3 narrative
-// overlay over L1 (raw decisions) and L2 (clusters) — what a senior
-// engineer would say in a 30-second "what is this project about" pitch.
-//
-// Only the LATEST row per (project_root, service_name) is read by surfaces.
-// Old rows are retained for history (regenerate inserts a new row with
-// version+1 rather than overwriting).
-
-/**
- * P2.5 — confidence-weight learning corpus. One row per approve/reject
- * toggle, joined with the parent decision via decision_id.
- */
-export interface ReviewEventRow {
-  id: number;
-  decision_id: number;
-  action: 'approve' | 'reject';
-  /** JSON-encoded ConfidenceSignals payload. */
-  signals_at_decision: string;
-  confidence_at_decision: number;
-  reviewed_at: string;
-  reviewer: string | null;
-}
-
-/**
- * Persisted per-project background-scheduler bookkeeping. Restored on
- * daemon start so a restart does NOT re-run every stage on tick 1.
- */
-export interface SchedulerStateRow {
-  project_root: string;
-  last_mine_at: number | null;
-  last_cluster_at: number | null;
-  last_memo_at: number | null;
-  last_tune_at: number | null;
-  last_tune_event_count: number | null;
-  consecutive_failures: number;
-  updated_at: string;
-}
+// Session-chunk, review-event, scheduler-state, cluster + memo row/query
+// shapes moved to `decision-types.ts` so the extracted persistence modules
+// can import them without closing an import cycle back through this store.
+// Re-exported here (below, with the DecisionType block) for public-API
+// back-compat.
 
 // ════════════════════════════════════════════════════════════════════════
 // SCHEMA
@@ -506,6 +446,10 @@ export class DecisionStore {
   private memoOps: MemoOperations;
   /** Decision-cluster persistence, extracted from this class (god-class decomposition). */
   private clusterOps: ClusterOperations;
+  /** Scheduler-state persistence, extracted from this class (god-class decomposition). */
+  private schedulerOps: SchedulerStateOperations;
+  /** Semantic-dedup / consolidation logic, extracted from this class (god-class decomposition). */
+  private consolidationOps: ConsolidationOperations;
 
   constructor(
     dbPath: string,
@@ -520,6 +464,16 @@ export class DecisionStore {
     this.memoHistoryLimit = Math.max(1, opts?.memoHistoryLimit ?? 10);
     this.memoOps = new MemoOperations(this.db, this.memoHistoryLimit);
     this.clusterOps = new ClusterOperations(this.db);
+    this.schedulerOps = new SchedulerStateOperations(this.db);
+    this.consolidationOps = new ConsolidationOperations(this.db, {
+      getDecision: (id) => this.getDecision(id),
+      updateDecision: (id, patch) => {
+        this.updateDecision(id, patch);
+      },
+      invalidateDecision: (id) => {
+        this.invalidateDecision(id);
+      },
+    });
     if (opts?.readonly) {
       this.db.pragma('busy_timeout = 5000');
       logger.debug({ dbPath, readonly: true }, 'Decision store opened (readonly)');
@@ -1943,10 +1897,7 @@ export class DecisionStore {
 
   /** Fetch the persisted scheduler state for a project, or undefined. */
   getSchedulerState(projectRoot: string): SchedulerStateRow | undefined {
-    const row = this.db
-      .prepare('SELECT * FROM scheduler_state WHERE project_root = ?')
-      .get(projectRoot) as SchedulerStateRow | undefined;
-    return row ?? undefined;
+    return this.schedulerOps.getSchedulerState(projectRoot);
   }
 
   /**
@@ -1968,65 +1919,7 @@ export class DecisionStore {
     last_tune_event_count?: number | null;
     consecutive_failures?: number;
   }): void {
-    const nowIso = new Date().toISOString();
-    const selectStmt = this.db.prepare('SELECT * FROM scheduler_state WHERE project_root = ?');
-    const insertStmt = this.db.prepare(
-      `INSERT INTO scheduler_state
-         (project_root, last_mine_at, last_cluster_at, last_memo_at,
-          last_tune_at, last_tune_event_count, consecutive_failures, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    );
-    const updateStmt = this.db.prepare(
-      `UPDATE scheduler_state
-         SET last_mine_at = ?,
-             last_cluster_at = ?,
-             last_memo_at = ?,
-             last_tune_at = ?,
-             last_tune_event_count = ?,
-             consecutive_failures = ?,
-             updated_at = ?
-       WHERE project_root = ?`,
-    );
-    const tx = this.db.transaction(() => {
-      const existing = selectStmt.get(input.project_root) as SchedulerStateRow | undefined;
-      const pick = <T>(next: T | null | undefined, prev: T | null | undefined): T | null => {
-        if (next === undefined) return (prev ?? null) as T | null;
-        return next as T | null;
-      };
-      const lastMine = pick(input.last_mine_at, existing?.last_mine_at);
-      const lastCluster = pick(input.last_cluster_at, existing?.last_cluster_at);
-      const lastMemo = pick(input.last_memo_at, existing?.last_memo_at);
-      const lastTune = pick(input.last_tune_at, existing?.last_tune_at);
-      const lastTuneEv = pick(input.last_tune_event_count, existing?.last_tune_event_count);
-      const failures =
-        input.consecutive_failures !== undefined
-          ? input.consecutive_failures
-          : (existing?.consecutive_failures ?? 0);
-      if (existing) {
-        updateStmt.run(
-          lastMine,
-          lastCluster,
-          lastMemo,
-          lastTune,
-          lastTuneEv,
-          failures,
-          nowIso,
-          input.project_root,
-        );
-      } else {
-        insertStmt.run(
-          input.project_root,
-          lastMine,
-          lastCluster,
-          lastMemo,
-          lastTune,
-          lastTuneEv,
-          failures,
-          nowIso,
-        );
-      }
-    });
-    tx();
+    this.schedulerOps.upsertSchedulerState(input);
   }
 
   // ── SEMANTIC DEDUP / CONSOLIDATION (P2.2) ─────────────────────────
@@ -2057,55 +1950,7 @@ export class DecisionStore {
     project_root?: string;
     active_only?: boolean;
   }): DecisionRow[] {
-    const subject = this.getDecision(opts.subject_id);
-    if (!subject) return [];
-
-    const topK = Math.max(1, Math.min(opts.topK ?? 5, 50));
-    const minSim = Math.max(0, Math.min(opts.min_title_similarity ?? 0.4, 1));
-    const sameTypeOnly = opts.same_type_only ?? false;
-    const activeOnly = opts.active_only ?? true;
-    // Default project scope = the subject's own project. Pass `''` to mean
-    // "any project" (rare; mostly for cross-project audits).
-    const projectScope = opts.project_root !== undefined ? opts.project_root : subject.project_root;
-
-    // Build the candidate pool. We branch on whether we can produce a
-    // useful FTS query — short / punctuation-only titles fall through to
-    // a project-wide scan capped at 500 rows.
-    const ftsWords = extractFtsWords(subject.title);
-    const conditions: string[] = ['d.id <> ?'];
-    const params: unknown[] = [subject.id];
-
-    if (projectScope) {
-      conditions.push('d.project_root = ?');
-      params.push(projectScope);
-    }
-    if (activeOnly) {
-      conditions.push('d.valid_until IS NULL');
-    }
-    if (sameTypeOnly) {
-      conditions.push('d.type = ?');
-      params.push(subject.type);
-    }
-
-    let pool: DecisionRow[];
-    if (ftsWords.length > 0) {
-      const ftsQuery = ftsWords.map((w) => `"${w}"`).join(' OR ');
-      conditions.push('d.id IN (SELECT rowid FROM decisions_fts WHERE decisions_fts MATCH ?)');
-      params.push(ftsQuery);
-      const sql = `SELECT d.* FROM decisions d WHERE ${conditions.join(' AND ')} LIMIT 200`;
-      pool = this.db.prepare(sql).all(...params) as DecisionRow[];
-    } else {
-      const sql = `SELECT d.* FROM decisions d WHERE ${conditions.join(' AND ')} ORDER BY d.valid_from DESC LIMIT 500`;
-      pool = this.db.prepare(sql).all(...params) as DecisionRow[];
-    }
-
-    // Score by trigram similarity to the subject's title.
-    const scored = pool
-      .map((row) => ({ row, sim: titleSimilarity(subject.title, row.title) }))
-      .filter((s) => s.sim >= minSim);
-    scored.sort((a, b) => b.sim - a.sim);
-
-    return scored.slice(0, topK).map((s) => s.row);
+    return this.consolidationOps.findSimilarDecisions(opts);
   }
 
   /**
@@ -2131,98 +1976,7 @@ export class DecisionStore {
     /** Optional: caller-supplied merged content. If absent, plain concat. */
     merged_content?: string;
   }): { applied: boolean; affected_ids: number[] } {
-    if (opts.verdict.kind === 'keep_separate') {
-      return { applied: false, affected_ids: [] };
-    }
-
-    const tx = this.db.transaction(() => {
-      const subject = this.getDecision(opts.subject_id);
-      if (!subject) return { applied: false, affected_ids: [] as number[] };
-
-      const existingId =
-        opts.verdict.kind === 'merge_into_existing' ||
-        opts.verdict.kind === 'replace_existing' ||
-        opts.verdict.kind === 'invalidate_existing'
-          ? opts.verdict.existing_id
-          : null;
-
-      const existing = existingId !== null ? this.getDecision(existingId) : null;
-      if (!existing) return { applied: false, affected_ids: [] as number[] };
-
-      // Refuse to act on a row whose validity window has already closed.
-      // A prior verdict may have invalidated it earlier in this batch.
-      if (existing.valid_until !== null) {
-        return { applied: false, affected_ids: [] as number[] };
-      }
-
-      switch (opts.verdict.kind) {
-        case 'merge_into_existing': {
-          if (subject.valid_until !== null) {
-            // Subject already invalidated — nothing left to merge.
-            return { applied: false, affected_ids: [] as number[] };
-          }
-          const mergedContent =
-            opts.merged_content ?? mergeContents(existing.content, subject.content);
-          const mergedTagsArr = mergeTags(
-            parseTagsJson(existing.tags),
-            parseTagsJson(subject.tags),
-          );
-          this.updateDecision(existing.id, {
-            content: mergedContent,
-            tags: mergedTagsArr,
-          });
-          this.invalidateDecision(subject.id);
-          return { applied: true, affected_ids: [existing.id, subject.id] };
-        }
-        case 'replace_existing': {
-          this.invalidateDecision(existing.id);
-          return { applied: true, affected_ids: [existing.id] };
-        }
-        case 'invalidate_existing': {
-          this.invalidateDecision(existing.id);
-          return { applied: true, affected_ids: [existing.id] };
-        }
-        default:
-          return { applied: false, affected_ids: [] as number[] };
-      }
-    });
-
-    return tx();
-  }
-}
-
-/**
- * Extract FTS5-safe word tokens from a title. Strips punctuation, filters
- * very short / numeric-only tokens, and dedups while preserving order.
- * Returns at most 8 tokens — FTS5 OR-queries with 20+ terms get costly.
- */
-function extractFtsWords(title: string): string[] {
-  if (!title) return [];
-  const tokens = title
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length >= 3 && !/^\d+$/.test(t));
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const t of tokens) {
-    if (seen.has(t)) continue;
-    seen.add(t);
-    out.push(t);
-    if (out.length >= 8) break;
-  }
-  return out;
-}
-
-/** Local helper mirroring the consolidator's parseTags. Avoids a circular
- *  dep since the store is the lower-level module. */
-function parseTagsJson(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((t): t is string => typeof t === 'string').slice(0, 20);
-  } catch {
-    return [];
+    return this.consolidationOps.applyConsolidationVerdict(opts);
   }
 }
 
