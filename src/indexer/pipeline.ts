@@ -2,7 +2,6 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { cpus } from 'node:os';
 import path from 'node:path';
-import fg from 'fast-glob';
 import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import {
@@ -27,13 +26,14 @@ import { safeGitEnv } from '../utils/git-env.js';
 import { initContentHasher } from '../util/hash.js';
 import { descendantExcludeGlobs } from '../registry.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
-import { hashContent } from '../utils/hasher.js';
 import { validatePath } from '../utils/security.js';
 import { findPackageJsonEntries } from './package-entries.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import { EnvIndexer } from './env-indexer.js';
 import { ExtractPool, type ExtractRequest } from './extract-pool.js';
+import { collectFiles as collectFilesImpl } from './file-collector.js';
+import { detectRenames as detectRenamesImpl } from './rename-detector.js';
 import { FileExtractor } from './file-extractor.js';
 import { FilePersister } from './file-persister.js';
 import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
@@ -658,57 +658,7 @@ export class IndexingPipeline {
     relPaths: string[],
     existingFiles: Map<string, import('../db/types.js').FileRow>,
   ): number {
-    // Files in DB whose path is not in the current scan list — candidates
-    // for "old name of a renamed file".
-    const onDiskSet = new Set(relPaths);
-    const orphans = this.store.getAllFiles().filter((f) => {
-      if (!f.content_hash) return false;
-      if (onDiskSet.has(f.path)) return false;
-      // Defensive: only consider rows whose old path actually no longer exists
-      // on disk. A second snapshot could otherwise mistakenly rename a row
-      // whose original file was simply excluded from this batch.
-      const abs = path.resolve(this.rootPath, f.path);
-      return !fs.existsSync(abs);
-    });
-    if (orphans.length === 0) return 0;
-
-    // Index orphans by hash for O(1) lookup. A given hash may appear under
-    // multiple orphans (legitimate identical files that were all moved); we
-    // keep them in an array and pick the first available match per new path.
-    const orphansByHash = new Map<string, import('../db/types.js').FileRow[]>();
-    for (const o of orphans) {
-      const arr = orphansByHash.get(o.content_hash!) ?? [];
-      arr.push(o);
-      orphansByHash.set(o.content_hash!, arr);
-    }
-
-    let renamed = 0;
-    for (const relPath of relPaths) {
-      if (existingFiles.has(relPath)) continue; // already known under this path
-      const abs = path.resolve(this.rootPath, relPath);
-      let buf: Buffer;
-      try {
-        buf = fs.readFileSync(abs);
-      } catch {
-        continue; // unreadable file — leave for the normal error path
-      }
-      const hash = hashContent(buf);
-      const candidates = orphansByHash.get(hash);
-      if (!candidates || candidates.length === 0) continue;
-
-      const orphan = candidates.shift()!;
-      // Carry the existing row over to the new path. All FK references
-      // (symbols, edges, nodes) keep their connection because the row id
-      // does not change.
-      this.store.updateFilePath(orphan.id, relPath);
-      existingFiles.set(relPath, { ...orphan, path: relPath });
-      renamed++;
-      logger.debug(
-        { from: orphan.path, to: relPath, hash: hash.slice(0, 8) },
-        'Detected rename — reused existing symbols',
-      );
-    }
-    return renamed;
+    return detectRenamesImpl(this.store, this.rootPath, relPaths, existingFiles);
   }
 
   /** Pass 1: extract symbols from files and persist in batched transactions. */
@@ -1250,97 +1200,12 @@ export class IndexingPipeline {
   }
 
   private async collectFiles(): Promise<string[]> {
-    const traceignoreIgnore = this._traceignore?.toFastGlobIgnore() ?? [];
-    // Most-specific registered project owns a path: skip files that live under a
-    // registered descendant so an umbrella root doesn't index its child repos
-    // into a second DB (the double-index churn behind #209).
-    const ignore = [
-      ...this.config.exclude,
-      ...traceignoreIgnore,
-      ...descendantExcludeGlobs(this.rootPath),
-    ];
-
-    // suppressErrors: a path component that matches a directory-shaped glob
-    // but is actually a file (e.g. a stray `<ws>/test` FILE meeting the
-    // `test/**` include) made fast-glob throw ENOTDIR and abort the whole
-    // initial index, bricking the project in 'error' state. Traversal errors
-    // (ENOTDIR/EACCES/ELOOP) must skip the entry, not kill indexing.
-    let entries = await fg(this.config.include, {
-      cwd: this.rootPath,
-      ignore,
-      dot: false,
-      absolute: false,
-      onlyFiles: true,
-      suppressErrors: true,
+    return collectFilesImpl({
+      config: this.config,
+      rootPath: this.rootPath,
+      workspaces: this.workspaces,
+      traceignore: this._traceignore,
+      maxFiles: this.config.security?.max_files ?? IndexingPipeline.DEFAULT_MAX_FILES,
     });
-
-    // Monorepo / folder-of-projects: the directory-rooted include globs
-    // (src/**, app/**, routes/**, ...) only match at the container root, so
-    // nested subprojects are missed (e.g. `the/15carats/15carats-laravel/routes`).
-    // When workspaces are detected, also discover files with those patterns
-    // anchored to each workspace. Global `**/...` patterns already span the whole
-    // tree, so only re-anchor the directory-rooted ones. This is deterministic
-    // and complete — unlike the entries===0 deep-glob fallback below, which never
-    // fires when a root-level file (a stray README, a `**/*.md`) matched first.
-    if (this.workspaces.length > 0) {
-      const rooted = this.config.include.filter((p) => !p.startsWith('**/'));
-      if (rooted.length > 0) {
-        const wsPatterns = this.workspaces.flatMap((ws) => rooted.map((p) => `${ws.path}/${p}`));
-        const wsEntries = await fg(wsPatterns, {
-          cwd: this.rootPath,
-          ignore,
-          dot: false,
-          absolute: false,
-          onlyFiles: true,
-          suppressErrors: true,
-        });
-        if (wsEntries.length > 0) {
-          const merged = new Set(entries);
-          for (const e of wsEntries) merged.add(e);
-          entries = [...merged];
-        }
-      }
-    }
-
-    // Workspace/monorepo fallback: if nothing matched, all code is nested deeper
-    // (e.g. root/project/service/src/**). Re-try with **/<pattern> prefixed globs.
-    if (entries.length === 0) {
-      const deepPatterns = this.config.include
-        .filter((p) => !p.startsWith('**/'))
-        .map((p) => `**/${p}`);
-
-      if (deepPatterns.length > 0) {
-        entries = await fg(deepPatterns, {
-          cwd: this.rootPath,
-          ignore,
-          dot: false,
-          absolute: false,
-          onlyFiles: true,
-          suppressErrors: true,
-        });
-        if (entries.length > 0) {
-          logger.info(
-            { count: entries.length, root: this.rootPath },
-            'Workspace root detected — using deep glob patterns',
-          );
-        }
-      }
-    }
-
-    if (this._traceignore) {
-      const ti = this._traceignore;
-      entries = entries.filter((e) => !ti.isIgnored(e));
-    }
-
-    const maxFiles = this.config.security?.max_files ?? IndexingPipeline.DEFAULT_MAX_FILES;
-    if (entries.length > maxFiles) {
-      logger.warn(
-        { found: entries.length, limit: maxFiles },
-        'File count exceeds limit — truncating. Increase security.max_files to index more.',
-      );
-      return entries.slice(0, maxFiles);
-    }
-
-    return entries;
   }
 }
