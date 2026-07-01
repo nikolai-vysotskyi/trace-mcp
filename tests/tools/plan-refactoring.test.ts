@@ -119,8 +119,13 @@ describe('planRefactoring', () => {
 
   it('previews extract_function without applying (now enabled)', () => {
     store = createTestStore();
+    // Single-return-value slice: x and y are only used inside the slice,
+    // `sum` is the one binding used after it — not the ambiguous multi-value
+    // case (`return x + y` referencing both) that the tool now correctly
+    // rejects with a structured error.
     tmpDir = createTmpFixture({
-      'src/a.ts': 'function main() {\n  const x = 1;\n  const y = 2;\n  return x + y;\n}\n',
+      'src/a.ts':
+        'function main() {\n  const x = 1;\n  const y = 2;\n  const sum = x + y;\n  return sum;\n}\n',
     });
     const _fileId = insertFile(store, 'src/a.ts');
     const before = readFile(tmpDir, 'src/a.ts');
@@ -129,7 +134,7 @@ describe('planRefactoring', () => {
       type: 'extract',
       file_path: 'src/a.ts',
       start_line: 2,
-      end_line: 3,
+      end_line: 4,
       function_name: 'initVars',
     });
 
