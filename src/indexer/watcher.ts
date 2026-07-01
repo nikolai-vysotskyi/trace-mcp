@@ -195,8 +195,3 @@ export class FileWatcher {
     this.pendingPaths.clear();
   }
 }
-
-/** @internal — exported for tests to reset module-scoped cache between cases. */
-export function __resetWatcherCache(): void {
-  cachedWatcher = null;
-}
