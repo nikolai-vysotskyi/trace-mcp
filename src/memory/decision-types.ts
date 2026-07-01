@@ -105,6 +105,77 @@ export interface DecisionInput {
   review_status?: 'pending' | 'approved' | 'rejected' | null;
 }
 
+// ── QUERY / TIMELINE SHAPES ───────────────────────────────────────────
+
+export interface DecisionQuery {
+  project_root?: string;
+  /** Filter by subproject name within the project */
+  service_name?: string;
+  type?: DecisionType;
+  symbol_id?: string;
+  file_path?: string;
+  tag?: string;
+  /** Only return decisions active at this timestamp (default: now) */
+  as_of?: string;
+  /** Include invalidated decisions (default: false) */
+  include_invalidated?: boolean;
+  /** Full-text search query */
+  search?: string;
+  /**
+   * Git-branch filter. Three modes:
+   *   - `'all'`           — every branch (no filter)
+   *   - `string` (other)  — only that branch + branch-agnostic (NULL) rows
+   *   - `null`            — only branch-agnostic (NULL) rows
+   *   - omitted/`undefined` — no filter (back-compat: equivalent to `'all'`)
+   * Callers that want "current branch + NULL" should resolve the branch first
+   * (see `getCurrentBranch`) and pass the resolved name.
+   */
+  git_branch?: string | null | 'all';
+  /**
+   * Review-queue filter (memoir-style confidence tiers).
+   * Default behaviour returns auto-approved (`NULL`) and explicitly-approved
+   * rows so the review queue stays out of regular queries.
+   *
+   *   - omitted              — only `NULL` + `'approved'` rows
+   *   - `include_pending`    — convenience flag; when true also returns `'pending'`
+   *   - `review_status`      — restrict to that exact status (overrides default)
+   */
+  include_pending?: boolean;
+  review_status?: 'pending' | 'approved' | 'rejected';
+  /**
+   * Result ordering.
+   *   - `'recency'` (default)   — `valid_from DESC` (existing behaviour)
+   *   - `'created_at'`          — `created_at DESC`
+   *   - `'heat'`                — computed in JS via `computeHeat`; rows fetched
+   *                               with a safety cap (limit * 3, capped at 500)
+   *                               and sorted before truncation. Falls back to
+   *                               recency when the heat subsystem is disabled.
+   */
+  order_by?: 'recency' | 'heat' | 'created_at';
+  /**
+   * Heat scoring overrides for `order_by='heat'`. Optional — defaults come
+   * from `memory.heat.*` config or hard-coded defaults in `computeHeat`.
+   */
+  heat_half_life_days?: number;
+  heat_freshness_days?: number;
+  /**
+   * When `order_by='heat'` is requested but the heat subsystem is disabled
+   * (config flag), callers can pass this flag to opt-out of the graceful
+   * fallback and surface an explicit error. Reserved for future use.
+   */
+  limit?: number;
+  offset?: number;
+}
+
+export interface DecisionTimelineEntry {
+  id: number;
+  title: string;
+  type: DecisionType;
+  valid_from: string;
+  valid_until: string | null;
+  is_active: boolean;
+}
+
 // ── DECISION CLUSTERS (P1.1) ──────────────────────────────────────────
 //
 // Cluster + memo row/query shapes live here (not in `decision-store.ts`) so
