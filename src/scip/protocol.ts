@@ -111,9 +111,18 @@ class Reader {
       case 1: // I64
         this.pos += 8;
         break;
-      case 2: // LEN
-        this.pos += this.readVarint();
+      case 2: {
+        // LEN. NOTE: `this.pos += this.readVarint()` is WRONG — JS evaluates the
+        // `this.pos` on the left to its pre-call value, then readVarint() also
+        // advances this.pos past the length prefix, so the addition double-counts
+        // from the stale base and lands 1+ bytes short. Capture the length first,
+        // then advance. (This off-by-one only manifested on real .scip files that
+        // contain skipped LEN fields — e.g. Document.symbols — followed by more
+        // fields; the synthetic decoder tests never exercised that path.)
+        const len = this.readVarint();
+        this.pos += len;
         break;
+      }
       case 5: // I32
         this.pos += 4;
         break;
@@ -170,13 +179,22 @@ function decodeOccurrence(bytes: Uint8Array): ScipOccurrence {
   while (!r.eof) {
     const { fieldNumber, wireType } = readTag(r);
     if (fieldNumber === 1) {
-      // range: repeated int32. Packed (LEN) is the common case; tolerate
-      // the unpacked (one VARINT per element) form too.
+      // range: `repeated int32`. In proto3, `int32` is encoded as a PLAIN
+      // varint (two's complement) — NOT zig-zag. Only `sint32`/`sint64` use
+      // zig-zag. SCIP ranges are always 0-based and non-negative, so plain
+      // varint is both correct and never negative. (Reading them as zig-zag —
+      // the previous bug — produced garbage negative lines/chars on real .scip
+      // files, so no reference occurrence ever matched a symbol and NO
+      // scip_resolved edges were produced. The synthetic decoder tests missed
+      // this because their test writer also zig-zag-encoded the range, making
+      // the round-trip self-consistent but wrong vs. real indexers.)
+      // Packed (LEN) is the common case; tolerate the unpacked (one VARINT per
+      // element) form too.
       if (wireType === 2) {
         const sub = new Reader(r.readBytes());
-        while (!sub.eof) rangeInts.push(sub.readSignedVarint());
+        while (!sub.eof) rangeInts.push(sub.readVarint());
       } else if (wireType === 0) {
-        rangeInts.push(r.readSignedVarint());
+        rangeInts.push(r.readVarint());
       } else {
         r.skipField(wireType);
       }
