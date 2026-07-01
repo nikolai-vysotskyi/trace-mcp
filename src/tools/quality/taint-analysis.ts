@@ -525,9 +525,71 @@ function trackVariableFlow(lines: string[], _language: string): VarAssignment[] 
         }
       }
     }
+
+    // String-build pass: taint must flow through string concatenation and
+    // template literals, e.g. `s = '' + id`, `s = 'x=' + id`, `` s = `p-${id}` ``.
+    // The single-regex assignPatterns above miss these (they only capture a
+    // bare `x = y` / `x = wrapper(y)`), which silently drops a real string
+    // injection — a false negative. This RHS-aware pass keeps the payload
+    // tainted. It is deliberately literal-`=`-safe (string literals may contain
+    // `=`) and only fires when the RHS actually builds a string.
+    for (const from of stringBuildRhsIdents(line)) {
+      if (from.variable !== from.fromVariable) {
+        assignments.push({
+          variable: from.variable,
+          fromVariable: from.fromVariable,
+          line: lineIdx + 1,
+          expression: line.trim(),
+        });
+      }
+    }
   }
 
   return assignments;
+}
+
+/**
+ * Extract `{ lhs, rhsIdent }` edges from an assignment whose RHS builds a string
+ * via template literal (`\`...${x}...\``) or `+` concatenation. Returns one
+ * entry per distinct identifier referenced in the string-building RHS.
+ *
+ * Robust against `=` inside string literals (so `s = 'x=' + id` still yields
+ * `s <- id`) because it splits the LHS off the first top-level `=` and then
+ * scans the RHS for string-build identifiers only — it never re-anchors the LHS
+ * inside a literal. Assignments that do not build a string (plain literals,
+ * comparisons, sink calls) yield nothing.
+ */
+function stringBuildRhsIdents(rawLine: string): Array<{ variable: string; fromVariable: string }> {
+  const line = rawLine.trim();
+  // Assignment head: optional decl keyword, an identifier LHS, `=`, then RHS.
+  // `[^=]` on the LHS keeps us from matching `==`/`===`/`<=` comparison ops.
+  const head = /^(?:const|let|var)?\s*(\$?[A-Za-z_]\w*)\s*=\s*([^=].*)$/.exec(line);
+  if (!head) return [];
+  const lhs = head[1];
+  const rhs = head[2];
+
+  const hasTemplate = /`[^`]*\$\{/.test(rhs);
+  const hasConcat = rhs.includes('+');
+  if (!hasTemplate && !hasConcat) return [];
+
+  const idents = new Set<string>();
+  if (hasTemplate) {
+    const re = /\$\{\s*(\$?[A-Za-z_]\w*)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(rhs)) !== null) idents.add(m[1]);
+  }
+  if (hasConcat) {
+    // Identifiers adjacent to a `+` on either side (excludes `++`/`+=` noise
+    // via the surrounding \w boundaries the identifier class provides).
+    const re = /(?:\+\s*(\$?[A-Za-z_]\w*))|(?:(\$?[A-Za-z_]\w*)\s*\+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(rhs)) !== null) {
+      if (m[1]) idents.add(m[1]);
+      if (m[2]) idents.add(m[2]);
+    }
+  }
+
+  return [...idents].map((fromVariable) => ({ variable: lhs, fromVariable }));
 }
 
 // ---------------------------------------------------------------------------
