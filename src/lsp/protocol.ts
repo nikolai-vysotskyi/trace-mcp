@@ -60,11 +60,6 @@ export interface TextDocumentItem {
   text: string;
 }
 
-export interface TextDocumentPositionParams {
-  textDocument: TextDocumentIdentifier;
-  position: Position;
-}
-
 // ── Initialize ────────────────────────────────────────────────
 
 export interface ClientCapabilities {
