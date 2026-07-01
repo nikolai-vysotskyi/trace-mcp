@@ -424,14 +424,23 @@ export async function getTaskContext(
   // ─── Step 7: Test coverage discovery ───
 
   if (includeTests) {
-    // Find test_covers edges for primary + dependency symbols
-    const primaryAndDepNodeIds = entries
-      .filter((e) => e.section === 'primary' || e.section === 'dependencies')
-      .map(
-        (e) =>
-          seedNodeMap.get(e.symbol.id) ??
-          store.getNodeIdsBatch('symbol', [e.symbol.id]).get(e.symbol.id),
-      )
+    // Find test_covers edges for primary + dependency symbols.
+    // Resolve node IDs in a single batch: seeds are already in seedNodeMap;
+    // any primary/dependency symbols not covered there (e.g. graph-expanded
+    // dependencies) are collected and looked up in ONE getNodeIdsBatch call
+    // instead of a single-element batch query per entry.
+    const primaryAndDepEntries = entries.filter(
+      (e) => e.section === 'primary' || e.section === 'dependencies',
+    );
+    const unresolvedSymIds = primaryAndDepEntries
+      .filter((e) => seedNodeMap.get(e.symbol.id) == null)
+      .map((e) => e.symbol.id);
+    const extraNodeMap =
+      unresolvedSymIds.length > 0
+        ? store.getNodeIdsBatch('symbol', unresolvedSymIds)
+        : new Map<number, number>();
+    const primaryAndDepNodeIds = primaryAndDepEntries
+      .map((e) => seedNodeMap.get(e.symbol.id) ?? extraNodeMap.get(e.symbol.id))
       .filter((id): id is number => id != null);
 
     if (primaryAndDepNodeIds.length > 0) {
@@ -533,11 +542,20 @@ export async function getTaskContext(
 
   // ─── Step 10: Build result ───
 
+  // Index entries by symbol_id once so mapItems is O(1) per item instead of a
+  // linear entries.find() scan for every assembled item across all 5 sections.
+  // Entries are deduplicated by symbol id upstream (seenSymIds), so each
+  // symbol_id maps to exactly one entry — identical to what find() returned.
+  const entryBySymbolId = new Map<string, ScoredEntry>();
+  for (const e of entries) {
+    if (!entryBySymbolId.has(e.symbol.symbol_id)) entryBySymbolId.set(e.symbol.symbol_id, e);
+  }
+
   function mapItems(
     items: Array<{ id: string; score: number; detail: string; content: string; tokens: number }>,
   ): TaskContextItem[] {
     return items.map((ai) => {
-      const entry = entries.find((e) => e.symbol.symbol_id === ai.id);
+      const entry = entryBySymbolId.get(ai.id);
       return {
         symbolId: ai.id,
         name: entry?.symbol.name ?? ai.id,

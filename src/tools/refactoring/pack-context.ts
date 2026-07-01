@@ -80,6 +80,14 @@ export function packContext(
   const include =
     strategy === 'compact' ? options.include.filter((s) => s !== 'source') : options.include;
 
+  // Per-call scope context: load the full file list and the PageRank ranking at
+  // most once each, then share them across every getScopeFiles/getAllScopeFiles
+  // call in this request. Both are pure functions of the (unchanging) index for
+  // the duration of a single pack, so hoisting them is behavior-preserving —
+  // the ranking and file set are identical to recomputing them per section, but
+  // we avoid rebuilding the whole file graph + re-running PageRank 2-3× per pack.
+  const scopeCtx = createScopeContext(store);
+
   const parts: string[] = [];
   const includedSections: string[] = [];
   const sectionMeta: Record<string, SectionMeta> = {};
@@ -126,7 +134,7 @@ export function packContext(
 
   // --- File Tree ---
   if (include.includes('file_tree')) {
-    const files = getAllScopeFiles(store, scope, scopePath);
+    const files = getAllScopeFiles(scopeCtx, scope, scopePath);
     const tree = buildFileTree(files.map((f) => f.path));
     const section =
       format === 'markdown'
@@ -141,7 +149,7 @@ export function packContext(
   if (include.includes('outlines')) {
     // compact mode: pull a much wider net since we're not spending budget on source bodies
     const outlineLimit = strategy === 'compact' ? 200 : 30;
-    const files = getScopeFiles(store, scope, scopePath, query, outlineLimit, strategy);
+    const files = getScopeFiles(scopeCtx, scope, scopePath, query, outlineLimit, strategy);
     const outlineLines: string[] = [];
     let outlineFilesIncluded = 0;
     let outlineFilesDropped = 0;
@@ -179,8 +187,12 @@ export function packContext(
   }
 
   // --- Source Code (key files) ---
+  // Track the candidate source-file count so the files_included fallback below
+  // can reuse it instead of recomputing getScopeFiles (which reranks by PageRank).
+  let sourceScopeFileCount = 0;
   if (include.includes('source')) {
-    const files = getScopeFiles(store, scope, scopePath, query, 20, strategy);
+    const files = getScopeFiles(scopeCtx, scope, scopePath, query, 20, strategy);
+    sourceScopeFileCount = files.length;
     const sourceLines: string[] = [];
     const budgetForSource = Math.floor((maxTokens - tokenCount) * 0.9);
     let sourceTokens = 0;
@@ -351,9 +363,7 @@ export function packContext(
 
   const filesIncluded =
     sectionMeta.source?.items_included ??
-    (includedSections.includes('source')
-      ? getScopeFiles(store, scope, scopePath, query, 20, strategy).length
-      : 0);
+    (includedSections.includes('source') ? sourceScopeFileCount : 0);
 
   const result: PackResult = {
     format,
@@ -379,12 +389,51 @@ export function packContext(
 
 // --- Helpers ---
 
+/**
+ * Per-call scope context. Holds the full file list (loaded once) and a lazily
+ * computed PageRank rank map, so that multiple getScopeFiles/getAllScopeFiles
+ * calls within a single packContext invocation don't each re-scan `files` or
+ * rebuild the file graph + re-run PageRank. Values are pure functions of the
+ * index, which does not change during a pack — so sharing them is
+ * behavior-preserving.
+ */
+interface ScopeContext {
+  /** Underlying store — used only by the feature-scope FTS path. */
+  store: Store;
+  /** All indexed files (loaded once). */
+  allFiles: { id: number; path: string }[];
+  /** path → PageRank score, computed on first rerank and reused thereafter. */
+  getRankMap(): Map<string, number> | null;
+}
+
+function createScopeContext(store: Store): ScopeContext {
+  const allFiles = store.getAllFiles() as { id: number; path: string }[];
+  let rankMap: Map<string, number> | null | undefined; // undefined = not yet computed
+  return {
+    store,
+    allFiles,
+    getRankMap() {
+      if (rankMap === undefined) {
+        try {
+          const ranks = getPageRank(store);
+          rankMap = new Map(
+            ranks.map((r: { file: string; score?: number }) => [r.file, r.score ?? 0]),
+          );
+        } catch {
+          rankMap = null;
+        }
+      }
+      return rankMap;
+    },
+  };
+}
+
 function getAllScopeFiles(
-  store: Store,
+  ctx: ScopeContext,
   scope: string,
   scopePath?: string,
 ): { id: number; path: string }[] {
-  const all = store.getAllFiles() as { id: number; path: string }[];
+  const all = ctx.allFiles;
   if (scope === 'module' && scopePath) {
     return all.filter((f) => f.path.startsWith(scopePath));
   }
@@ -401,28 +450,23 @@ function getAllScopeFiles(
  * - compact:       same selection as most_relevant (compact only changes section composition)
  */
 function getScopeFiles(
-  store: Store,
+  ctx: ScopeContext,
   scope: string,
   scopePath: string | undefined,
   query: string | undefined,
   limit: number,
   strategy: PackStrategy = 'most_relevant',
 ): { id: number; path: string }[] {
-  const all = store.getAllFiles() as { id: number; path: string }[];
+  const all = ctx.allFiles;
 
-  // Helper: re-rank a candidate set by PageRank descending
+  // Helper: re-rank a candidate set by PageRank descending. The rank map is
+  // computed at most once per packContext call (see ScopeContext) and reused
+  // across every section — same ordering as before, without rebuilding the
+  // file graph + re-running PageRank per section.
   const rerankByPageRank = (candidates: { id: number; path: string }[]) => {
-    try {
-      const ranks = getPageRank(store);
-      const rankMap = new Map(
-        ranks.map((r: { file: string; score?: number }) => [r.file, r.score ?? 0]),
-      );
-      return [...candidates].sort(
-        (a, b) => (rankMap.get(b.path) ?? 0) - (rankMap.get(a.path) ?? 0),
-      );
-    } catch {
-      return candidates;
-    }
+    const rankMap = ctx.getRankMap();
+    if (!rankMap) return candidates;
+    return [...candidates].sort((a, b) => (rankMap.get(b.path) ?? 0) - (rankMap.get(a.path) ?? 0));
   };
 
   if (scope === 'module' && scopePath) {
@@ -433,12 +477,12 @@ function getScopeFiles(
 
   if (scope === 'feature' && query) {
     // Use FTS search to find relevant files
-    const ftsResults = searchFts(store.db, query, limit * 2, 0);
+    const ftsResults = searchFts(ctx.store.db, query, limit * 2, 0);
     const fileIds = new Set<number>();
     const files: { id: number; path: string }[] = [];
     for (const r of ftsResults) {
       if (!fileIds.has(r.fileId)) {
-        const file = store.getFileById(r.fileId);
+        const file = ctx.store.getFileById(r.fileId);
         if (file) {
           fileIds.add(r.fileId);
           files.push({ id: file.id, path: file.path });
