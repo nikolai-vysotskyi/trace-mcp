@@ -50,8 +50,6 @@ export const REMOTE_PROVIDERS = [
 /** Provider names that run fully locally (no consent required). */
 export const LOCAL_PROVIDERS = ['onnx', 'ollama', 'lmstudio', 'llama-cpp'] as const;
 
-export type RemoteProvider = (typeof REMOTE_PROVIDERS)[number];
-
 export interface ConsentRecord {
   granted_at: string;
   granted_by: 'cli' | 'env' | 'unknown';
