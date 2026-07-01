@@ -439,5 +439,53 @@ shutdown();`;
       // And no phantom loop nodes inflating it.
       expect(cfg.nodes.filter((n) => n.kind === 'do_while')).toHaveLength(0);
     });
+
+    it('a statement following a nested loop is emitted as its own node, not absorbed', () => {
+      // Regression for the statement-collapse quirk: `afterInner()` sits AFTER
+      // a nested loop body closes. The naive collapse guard looked at the LAST
+      // node created in array order (the `inner()` statement inside the loop)
+      // and absorbed `afterInner()` into it — even though control flow has
+      // rejoined at the loop header, a different program point. Every statement
+      // at a sibling nesting level must get its own CFG node.
+      const source = `
+function outer() {
+  before();
+  for (let i = 0; i < n; i++) {
+    inner();
+  }
+  afterInner();
+}`;
+      const cfg = extractCFG(source);
+
+      const forNode = cfg.nodes.find((n) => n.kind === 'for');
+      expect(forNode).toBeDefined();
+
+      // afterInner() must exist as a distinct statement node.
+      const afterInnerNode = cfg.nodes.find(
+        (n) => n.kind === 'statement' && n.code_snippet.includes('afterInner'),
+      );
+      expect(afterInnerNode).toBeDefined();
+
+      // It must not have been merged into the inner() body node.
+      const innerNode = cfg.nodes.find(
+        (n) => n.kind === 'statement' && n.code_snippet.includes('inner()'),
+      );
+      expect(innerNode).toBeDefined();
+      expect(afterInnerNode!.id).not.toBe(innerNode!.id);
+
+      // Predecessor: control reaches afterInner via the loop header's
+      // condition-false exit edge, so there is an incoming edge to it.
+      const incoming = cfg.edges.filter((e) => e.to === afterInnerNode!.id);
+      expect(incoming.length).toBeGreaterThanOrEqual(1);
+      // The loop header's "false" exit wires to the continuation node.
+      const falseExit = cfg.edges.find(
+        (e) => e.from === forNode!.id && e.to === afterInnerNode!.id && e.label === 'false',
+      );
+      expect(falseExit).toBeDefined();
+
+      // Successor: afterInner flows onward (to the exit node).
+      const outgoing = cfg.edges.filter((e) => e.from === afterInnerNode!.id);
+      expect(outgoing.length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

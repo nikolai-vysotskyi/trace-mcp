@@ -358,9 +358,18 @@ export function extractCFG(source: string, startLine = 1): CFGResult {
     if (!matched && trimmed.length > 0 && !trimmed.startsWith('//') && !trimmed.startsWith('*')) {
       // Regular statement — only create node if it looks meaningful
       if (trimmed.includes('(') || trimmed.includes('=') || trimmed.includes('.')) {
-        // Collapse sequential statements in simplify mode
+        // Collapse consecutive straight-line statements into one node — but
+        // ONLY when the last emitted statement is the current linear
+        // predecessor. Checking `nodes[nodes.length - 1]` (array order) alone
+        // is wrong: after a nested block closes, control flow rejoins at the
+        // loop header / merge node and `prevNodeId` is reset there, while the
+        // last-created node is still the buried inner-body statement. Collapsing
+        // against that absorbs the post-block statement (e.g. `afterInner()`)
+        // into a node it doesn't actually follow. Requiring
+        // `prevNode.id === prevNodeId` keeps genuine sequences collapsed while
+        // emitting a fresh node whenever control flow has rejoined.
         const prevNode = nodes[nodes.length - 1];
-        if (prevNode && prevNode.kind === 'statement') {
+        if (prevNode && prevNode.kind === 'statement' && prevNode.id === prevNodeId) {
           // Don't create a new node, just update snippet
           continue;
         }
