@@ -31,11 +31,6 @@ export function makeFqn(namespaceParts: string[], methodName?: string): string {
   return base;
 }
 
-/** Convert a file path to a Ruby module-style path (for FQN prefix). */
-export function filePathToModule(filePath: string): string {
-  return filePath.replace(/\\/g, '/').replace(/\.(rb|rake)$/, '');
-}
-
 /** Extract signature — first line of the node text. */
 export function extractSignature(node: TSNode): string {
   const firstLine = node.text.split('\n')[0].trim();
@@ -46,11 +41,6 @@ export function extractSignature(node: TSNode): string {
 export function getNodeName(node: TSNode): string | undefined {
   const nameNode = node.childForFieldName('name');
   return nameNode?.text;
-}
-
-/** Check if a name is ALL_CAPS (constant naming convention). */
-export function isAllCaps(name: string): boolean {
-  return /^[A-Z][A-Z0-9_]{2,}$/.test(name);
 }
 
 /** Extract the superclass from a class definition. */
