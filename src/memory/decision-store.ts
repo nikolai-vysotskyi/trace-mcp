@@ -27,8 +27,24 @@ import { ClusterOperations } from './decision-store-cluster-ops.js';
 // confidence scorer, consolidator, tuner) can import them without closing
 // a cycle back through this store. Re-export here to preserve the public
 // API — external callers keep importing from `./decision-store.js`.
-export type { DecisionType, DecisionRow, DecisionInput } from './decision-types.js';
-import type { DecisionType, DecisionRow, DecisionInput } from './decision-types.js';
+export type {
+  DecisionType,
+  DecisionRow,
+  DecisionInput,
+  ClusterRow,
+  ClusterInput,
+  ClusterQuery,
+  ProjectMemoRow,
+} from './decision-types.js';
+import type {
+  DecisionType,
+  DecisionRow,
+  DecisionInput,
+  ClusterRow,
+  ClusterInput,
+  ClusterQuery,
+  ProjectMemoRow,
+} from './decision-types.js';
 
 export interface DecisionQuery {
   project_root?: string;
@@ -130,48 +146,9 @@ export interface SessionSearchResult {
   rank: number;
 }
 
-// ── DECISION CLUSTERS (P1.1) ──────────────────────────────────────────
-
-export interface ClusterRow {
-  id: number;
-  project_root: string;
-  service_name: string | null;
-  title: string;
-  summary: string;
-  /** JSON array of tag strings (or null). */
-  tags: string | null;
-  primary_type: DecisionType | null;
-  decision_count: number;
-  created_at: string;
-  /** Unix millisecond timestamp of the last write. */
-  updated_at: number;
-}
-
-export interface ClusterInput {
-  project_root: string;
-  service_name?: string | null;
-  title: string;
-  summary: string;
-  tags?: string[];
-  primary_type?: DecisionType | null;
-  decision_ids: number[];
-}
-
-export interface ClusterQuery {
-  project_root?: string;
-  service_name?: string;
-  /** Full-text search across title + summary + tags (FTS5 with porter stemming). */
-  search?: string;
-  /**
-   * Sort order.
-   *   - 'decision_count' (default) — largest clusters first
-   *   - 'updated_at'              — most-recently-rebuilt first
-   *   - 'title'                   — alphabetical
-   */
-  order_by?: 'decision_count' | 'updated_at' | 'title';
-  limit?: number;
-  offset?: number;
-}
+// Cluster + memo row/query shapes moved to `decision-types.ts` so the
+// extracted persistence modules can import them without closing an import
+// cycle back through this store. Re-exported here for public-API back-compat.
 
 // ── PROJECT MEMOS (L3 orientation digest) ─────────────────────────────
 //
@@ -198,27 +175,6 @@ export interface ReviewEventRow {
   confidence_at_decision: number;
   reviewed_at: string;
   reviewer: string | null;
-}
-
-export interface ProjectMemoRow {
-  id: number;
-  project_root: string;
-  /** Null for project-wide memos; subproject name for per-service memos. */
-  service_name: string | null;
-  memo_md: string;
-  version: number;
-  /** Identifier of the LLM that produced this memo (provider + model hint). */
-  model: string | null;
-  created_at: string;
-  updated_at: string;
-  /** Highest decision.id at the time of generation — used to compute drift. */
-  last_decision_id: number | null;
-  /** Decision count in scope when this memo was generated. */
-  decisions_at_generation: number;
-  /** Cluster count in scope when this memo was generated. */
-  clusters_at_generation: number;
-  /** Rough chars/4 token estimate of memo_md at write time. */
-  estimated_tokens: number;
 }
 
 /**
