@@ -338,7 +338,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
       // semantic channel actually fired (or was silently skipped because
       // embeddings are not populated). See `_meta.fusion` in
       // `src/tools/navigation/navigation.ts`.
-      if (result._meta?.fusion) {
+      if ('_meta' in result && result._meta?.fusion) {
         response._meta = {
           ...((response._meta as Record<string, unknown> | undefined) ?? {}),
           fusion: result._meta.fusion,
@@ -346,7 +346,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
       }
       // Propagate near-miss suggestions from fuzzy search so the caller has
       // concrete candidates to retry with on a zero-hit response.
-      if (result._near_misses && result._near_misses.length > 0) {
+      if ('_near_misses' in result && result._near_misses && result._near_misses.length > 0) {
         response._near_misses = result._near_misses;
       }
       if (items.length === 0) {
