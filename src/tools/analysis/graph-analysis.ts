@@ -11,6 +11,49 @@ import type { Store } from '../../db/store.js';
 import { getFilePinWeightExplicit, getSymbolPinWeightsByFile } from '../../scoring/pins.js';
 
 // ════════════════════════════════════════════════════════════════════════
+// FILE-GRAPH CACHE
+// ════════════════════════════════════════════════════════════════════════
+//
+// buildFileGraph is a pure function of the resolved import edges + file paths
+// (plus the `includeProjected` flag). It is called repeatedly per request by
+// pack_context, coupling, bottlenecks, layer-violations, suggest, predictive
+// intelligence, and getPageRank — each rebuilding the whole graph from scratch.
+//
+// Mirror the cache in src/scoring/pagerank.ts exactly: a module-level cache
+// keyed by DB identity + resolved-edge COUNT(*), which is the natural
+// invalidation key — a reindex changes the edge count, which busts the cache
+// automatically (no explicit hook needed). We additionally key on
+// `includeProjected` because it changes the query output (cycle detection
+// requests the projected-edge-free variant).
+//
+// NOTE: we cache only the built graph, NOT the PageRank ranking. getPageRank
+// applies user pin weights (pins.ts) as a final pass, and pins can change
+// without the edge count changing — so caching the ranking here would serve
+// stale pin adjustments. The graph itself is pin-independent, so it is safe.
+// All callers treat the returned FileGraph as read-only (verified: they
+// iterate / .get() and build their own maps; none mutate forward/reverse/
+// pathMap/allFileIds), so sharing a single cached instance is safe.
+interface FileGraphCacheEntry {
+  edgeCount: number;
+  result: FileGraph;
+}
+// Keyed by the Database instance itself (WeakMap) — NOT db.name, because
+// in-memory DBs all report name ":memory:" and would collide across distinct
+// stores (e.g. every test, and multi-project daemons). Sub-keyed by
+// includeProjected. WeakMap also auto-releases entries when a project's DB is
+// GC'd and avoids cross-project cache thrash.
+let _fileGraphCache = new WeakMap<object, Map<boolean, FileGraphCacheEntry>>();
+
+/**
+ * Invalidate the file-graph cache. The COUNT-based key already busts on
+ * reindex, so this is a belt-and-suspenders hook matching pagerank.ts's
+ * `invalidatePageRankCache` convention (e.g. for forced rebuilds).
+ */
+export function invalidateFileGraphCache(): void {
+  _fileGraphCache = new WeakMap();
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
@@ -81,9 +124,36 @@ export interface BuildFileGraphOptions {
 /**
  * Build file-level import graph from all import-category edges.
  * Uses a single JOIN query instead of per-edge lookups (N+1 → 1).
+ *
+ * Cross-call memoized (see FILE-GRAPH CACHE above): keyed by DB identity +
+ * `includeProjected` + resolved-edge count, so a reindex busts it automatically
+ * and consumers stop rebuilding the whole graph on every call. The build itself
+ * is delegated unchanged to buildFileGraphUncached, so output is identical.
  */
 export function buildFileGraph(store: Store, options: BuildFileGraphOptions = {}): FileGraph {
   const { includeProjected = true } = options;
+
+  // Fast cache check: same DB instance, same variant, edge count unchanged → reuse.
+  // Keyed on the Database object (see FILE-GRAPH CACHE above), not db.name.
+  const db = store.db;
+  const countRow = db.prepare('SELECT COUNT(*) as cnt FROM edges WHERE resolved = 1').get() as {
+    cnt: number;
+  };
+  const byVariant = _fileGraphCache.get(db);
+  const cached = byVariant?.get(includeProjected);
+  if (cached && cached.edgeCount === countRow.cnt) {
+    return cached.result;
+  }
+
+  const result = buildFileGraphUncached(store, includeProjected);
+  const bucket = byVariant ?? new Map<boolean, FileGraphCacheEntry>();
+  bucket.set(includeProjected, { edgeCount: countRow.cnt, result });
+  _fileGraphCache.set(db, bucket);
+  return result;
+}
+
+/** Uncached graph build — the original buildFileGraph body. */
+function buildFileGraphUncached(store: Store, includeProjected: boolean): FileGraph {
   const forward = new Map<number, Set<number>>();
   const reverse = new Map<number, Set<number>>();
   const allFileIds = new Set<number>();
