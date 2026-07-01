@@ -52,11 +52,129 @@ type FileGraph = ReturnType<typeof buildFileGraph>;
 const SAMPLING_THRESHOLD = 500;
 const MIN_SAMPLE_SIZE = 32;
 
+/**
+ * An {@link EdgeBottleneck} carrying the UNROUNDED bottleneck score. The public
+ * API rounds `bottleneckScore` to 3 dp, but the original `minScore` filter runs
+ * against the unrounded value (`score < minScore`). To keep the cached-path
+ * filtering byte-identical to a fresh computation, the cached full list retains
+ * the raw score and it is stripped before the result leaves {@link getEdgeBottlenecks}.
+ */
+interface ScoredEdge extends EdgeBottleneck {
+  _rawScore: number;
+}
+
+/**
+ * The graph-state-dependent portion of a bottleneck computation: the fully
+ * scored (but NOT yet topN/minScore-filtered) edge list, articulation points,
+ * and the sampling stats. This is a pure function of the current graph +
+ * co-change state; per-call `topN` / `minScore` are applied downstream and are
+ * NOT part of what we cache.
+ */
+interface CachedBottlenecks {
+  edges: ScoredEdge[];
+  articulationPoints: ArticulationPoint[];
+  stats: BottlenecksResult['stats'];
+}
+
+/**
+ * Cached bottleneck computation, keyed like {@link computePageRank}: DB filename
+ * + resolved-edge count. Two extra key components are required for correctness:
+ *
+ *  - `coChangeCount`: `bottleneckScore` folds in the `co_changes` table
+ *    (`coChangeWeight`), which is mutated by `refresh_co_changes` — a path that
+ *    does NOT go through the reindex pipeline's cache invalidation. Because
+ *    `refresh_co_changes` rewrites rows (DELETE-by-window then re-INSERT), the
+ *    table's row count is a cheap monotonic change-signal that keeps the cache
+ *    self-invalidating without wiring a new external hook.
+ *  - `sampling`: `sampling='auto'` uses random source selection on large graphs
+ *    (Brandes over √V sources), so a cached `auto` result must never be served
+ *    for a `full` request and vice-versa.
+ *
+ * Only ONE entry is retained (last computation), matching pagerank.ts's
+ * single-slot cache. The list is stored unfiltered so different `topN`/`minScore`
+ * on the same graph both hit the cache.
+ */
+interface BottlenecksCacheEntry {
+  edgeCount: number;
+  coChangeCount: number;
+  sampling: 'auto' | 'full';
+  result: CachedBottlenecks;
+}
+// Keyed by the Database instance (WeakMap), NOT db.name: in-memory DBs all
+// report ":memory:" and would otherwise collide across distinct stores.
+let _cache = new WeakMap<object, BottlenecksCacheEntry>();
+
+/** Invalidate the bottleneck cache (call after bulk edge inserts, e.g. reindex). */
+export function invalidateEdgeBottlenecksCache(): void {
+  _cache = new WeakMap();
+}
+
+/** Resolved-edge count — same invalidation signal source pagerank.ts uses. */
+function resolvedEdgeCount(store: Store): number {
+  return (
+    store.db.prepare('SELECT COUNT(*) as cnt FROM edges WHERE resolved = 1').get() as {
+      cnt: number;
+    }
+  ).cnt;
+}
+
+/**
+ * Row count of the `co_changes` table (0 when the table doesn't exist yet).
+ * Cheap indexed COUNT — used as a change-signal so `refresh_co_changes` busts
+ * the bottleneck cache even though it bypasses the reindex invalidation path.
+ */
+function coChangeRowCount(store: Store): number {
+  const tableExists = store.db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='co_changes'")
+    .get();
+  if (!tableExists) return 0;
+  return (store.db.prepare('SELECT COUNT(*) as cnt FROM co_changes').get() as { cnt: number }).cnt;
+}
+
 export function getEdgeBottlenecks(
   store: Store,
   opts: GetEdgeBottlenecksOptions = {},
 ): TraceMcpResult<BottlenecksResult> {
   const { topN = 50, minScore = 0, sampling = 'auto' } = opts;
+
+  // Fast cache check: same DB + unchanged edge/co-change counts + same sampling
+  // mode → reuse the heavy graph computation. topN/minScore are applied below
+  // regardless, so they don't participate in the cache key.
+  const db = store.db;
+  const edgeCount = resolvedEdgeCount(store);
+  const coChangeCount = coChangeRowCount(store);
+  const cached = _cache.get(db);
+  let computed: CachedBottlenecks;
+  if (
+    cached &&
+    cached.edgeCount === edgeCount &&
+    cached.coChangeCount === coChangeCount &&
+    cached.sampling === sampling
+  ) {
+    computed = cached.result;
+  } else {
+    computed = computeBottlenecks(store, sampling);
+    _cache.set(db, { edgeCount, coChangeCount, sampling, result: computed });
+  }
+
+  // Apply per-call filters over the cached full edge list (cheap: filter + slice).
+  const edges = filterAndSliceEdges(computed.edges, topN, minScore);
+
+  return ok({
+    edges,
+    articulationPoints: computed.articulationPoints,
+    stats: computed.stats,
+  });
+}
+
+/**
+ * The heavy, graph-state-only portion of {@link getEdgeBottlenecks}: build the
+ * file graph, run Brandes edge-betweenness + Tarjan bridges/articulations,
+ * fetch co-change weights, and produce the FULL scored edge list (topN = 0 /
+ * minScore = 0 so nothing is filtered out). Pure function of the DB's current
+ * graph + co-change state.
+ */
+function computeBottlenecks(store: Store, sampling: 'auto' | 'full'): CachedBottlenecks {
   const graph = buildFileGraph(store);
   const N = graph.allFileIds.size;
 
@@ -64,11 +182,11 @@ export function getEdgeBottlenecks(
   for (const targets of graph.forward.values()) totalEdges += targets.size;
 
   if (N === 0 || totalEdges === 0) {
-    return ok({
+    return {
       edges: [],
       articulationPoints: [],
       stats: { nodes: N, edges: totalEdges, sampled: false, sampleSize: 0 },
-    });
+    };
   }
 
   const shouldSample = sampling === 'auto' && N > SAMPLING_THRESHOLD;
@@ -80,13 +198,16 @@ export function getEdgeBottlenecks(
 
   const coChangeWeights = fetchCoChangeWeights(store, graph);
 
-  const edges = scoreAndRankEdges(graph, betweenness, coChangeWeights, bridges, topN, minScore);
+  // Score EVERY edge (no topN/minScore filtering here) so the cached list can
+  // serve any later topN/minScore without recomputation. Filtering + capping
+  // happens per-call in filterAndSliceEdges.
+  const edges = scoreAllEdges(graph, betweenness, coChangeWeights, bridges);
 
   const articulationPoints: ArticulationPoint[] = [...articulations]
     .map((fileId) => ({ file: graph.pathMap.get(fileId) ?? `[file:${fileId}]`, fileId }))
     .sort((a, b) => a.file.localeCompare(b.file));
 
-  return ok({
+  return {
     edges,
     articulationPoints,
     stats: {
@@ -95,7 +216,37 @@ export function getEdgeBottlenecks(
       sampled: shouldSample,
       sampleSize,
     },
-  });
+  };
+}
+
+/**
+ * Apply the per-call `minScore` filter and `topN` cap over an already-scored,
+ * already-sorted edge list, then strip the internal `_rawScore`. Mirrors the
+ * old filter/cap tail exactly: the filter uses the UNROUNDED score
+ * (`score < minScore`, i.e. keep when `_rawScore >= minScore`) so the cached
+ * path is byte-identical to a fresh full computation, including at the rounding
+ * boundary.
+ */
+function filterAndSliceEdges(
+  edges: ScoredEdge[],
+  topN: number,
+  minScore: number,
+): EdgeBottleneck[] {
+  const kept: EdgeBottleneck[] = [];
+  for (const e of edges) {
+    if (e._rawScore < minScore) continue;
+    if (topN > 0 && kept.length >= topN) break;
+    // Strip the internal raw score; emit the public shape only.
+    kept.push({
+      sourceFile: e.sourceFile,
+      targetFile: e.targetFile,
+      betweenness: e.betweenness,
+      coChangeWeight: e.coChangeWeight,
+      bottleneckScore: e.bottleneckScore,
+      isBridge: e.isBridge,
+    });
+  }
+  return kept;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -330,14 +481,23 @@ interface RawEdge {
   bridge: boolean;
 }
 
-function scoreAndRankEdges(
+/**
+ * Score EVERY edge and return the full list sorted by `bottleneckScore`
+ * descending — no `topN`/`minScore` filtering (that is applied per-call in
+ * {@link filterAndSliceEdges}). Each returned edge carries the internal
+ * `_rawScore` (unrounded) so downstream `minScore` filtering can reproduce the
+ * original `score < minScore` semantics exactly.
+ *
+ * This is the same math as before; the previous `scoreAndRankEdges` merely
+ * folded the filter/cap into this pass. Splitting them lets one cached full
+ * list serve any `topN`/`minScore` without recomputing Brandes/Tarjan.
+ */
+function scoreAllEdges(
   graph: FileGraph,
   betweenness: Map<string, number>,
   coChangeWeights: Map<string, number>,
   bridges: Set<string>,
-  topN: number,
-  minScore: number,
-): EdgeBottleneck[] {
+): ScoredEdge[] {
   const rawEdges: RawEdge[] = [];
   for (const [src, targets] of graph.forward) {
     for (const dst of targets) {
@@ -360,12 +520,11 @@ function scoreAndRankEdges(
     if (e.cc > ccMax) ccMax = e.cc;
   }
 
-  const result: EdgeBottleneck[] = [];
+  const result: ScoredEdge[] = [];
   for (const e of rawEdges) {
     const bcNorm = bcMax > 0 ? e.bc / bcMax : 0;
     const ccNorm = ccMax > 0 ? e.cc / ccMax : 0;
     const score = bcNorm * (1 + ccNorm);
-    if (score < minScore) continue;
     result.push({
       sourceFile: graph.pathMap.get(e.src) ?? `[file:${e.src}]`,
       targetFile: graph.pathMap.get(e.dst) ?? `[file:${e.dst}]`,
@@ -373,11 +532,12 @@ function scoreAndRankEdges(
       coChangeWeight: round3(ccNorm),
       bottleneckScore: round3(score),
       isBridge: e.bridge,
+      _rawScore: score,
     });
   }
 
   result.sort((a, b) => b.bottleneckScore - a.bottleneckScore);
-  return topN > 0 ? result.slice(0, topN) : result;
+  return result;
 }
 
 function round3(x: number): number {
