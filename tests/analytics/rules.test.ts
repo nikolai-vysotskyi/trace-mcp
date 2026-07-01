@@ -13,8 +13,23 @@ function makeToolCall(overrides: Partial<ToolCallRow> = {}): ToolCallRow {
     is_error: 0,
     session_id: 'sess-001',
     input_snippet: null,
+    semantic_degraded: 0,
     ...overrides,
   };
+}
+
+/** Build a `search` ToolCallRow with query + semantic mode captured in input_snippet,
+ *  matching what AnalyticsStore.storeSession now writes for search calls. */
+function makeSearchCall(query: string, overrides: Partial<ToolCallRow> = {}): ToolCallRow {
+  return makeToolCall({
+    tool_name: 'mcp__trace-mcp__search',
+    tool_server: 'trace-mcp',
+    tool_short_name: 'search',
+    target_file: null,
+    input_snippet: JSON.stringify({ query, semantic: 'on' }),
+    output_tokens_estimate: 200,
+    ...overrides,
+  });
 }
 
 describe('rules / analyzeOptimizations', () => {
@@ -168,6 +183,115 @@ describe('rules / analyzeOptimizations', () => {
       if (highIdx >= 0 && mediumIdx >= 0) {
         expect(highIdx).toBeLessThan(mediumIdx);
       }
+    });
+  });
+
+  describe('semantic-degraded-no-provider rule', () => {
+    it('detects search calls whose semantic request silently fell back to lexical', () => {
+      const calls: ToolCallRow[] = [
+        makeSearchCall('authenticate user', { semantic_degraded: 1 }),
+        makeSearchCall('parse config file', { semantic_degraded: 1 }),
+        makeSearchCall('unrelated lexical search', { semantic_degraded: 0 }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'semantic-degraded-no-provider');
+      expect(hit).toBeDefined();
+      expect(hit!.occurrences).toBe(2);
+      expect(hit!.recommendation).toMatch(/embed_repo|AI provider/);
+      expect(hit!.recommendation).toContain('semantic');
+    });
+
+    it('does not trigger when no search calls were degraded', () => {
+      const calls: ToolCallRow[] = [
+        makeSearchCall('authenticate user', { semantic_degraded: 0 }),
+        makeToolCall(),
+      ];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'semantic-degraded-no-provider');
+      expect(hit).toBeUndefined();
+    });
+
+    it('does not trigger for non-search tools even if the flag were somehow set', () => {
+      const calls: ToolCallRow[] = [makeToolCall({ semantic_degraded: 1 })];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'semantic-degraded-no-provider');
+      expect(hit).toBeUndefined();
+    });
+  });
+
+  describe('possible-duplicate-semantic-search rule', () => {
+    it('flags two semantic searches sharing 2+ significant keywords within a short window', () => {
+      const calls: ToolCallRow[] = [
+        makeSearchCall('authenticate user'),
+        makeToolCall({ target_file: 'src/unrelated.ts' }),
+        makeSearchCall('user authentication logic'),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'possible-duplicate-semantic-search');
+      expect(hit).toBeDefined();
+      expect(hit!.occurrences).toBeGreaterThanOrEqual(1);
+      expect(hit!.recommendation.length).toBeGreaterThan(0);
+    });
+
+    it('does not flag semantic searches sharing fewer than 2 significant keywords', () => {
+      const calls: ToolCallRow[] = [
+        makeSearchCall('authenticate user'),
+        makeSearchCall('render dashboard widget'),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'possible-duplicate-semantic-search');
+      expect(hit).toBeUndefined();
+    });
+
+    it('does not flag near-duplicate queries that are far apart in the same session', () => {
+      // Same 2 overlapping keywords, but separated by many intervening calls —
+      // outside the "short window" — should not be flagged as a near-duplicate.
+      const filler = Array.from({ length: 20 }, (_, i) =>
+        makeToolCall({ target_file: `src/filler${i}.ts` }),
+      );
+      const calls: ToolCallRow[] = [
+        makeSearchCall('authenticate user'),
+        ...filler,
+        makeSearchCall('user authentication logic'),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'possible-duplicate-semantic-search');
+      expect(hit).toBeUndefined();
+    });
+
+    it('does not flag non-semantic (lexical-only) repeated searches', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({
+          tool_name: 'mcp__trace-mcp__search',
+          tool_server: 'trace-mcp',
+          tool_short_name: 'search',
+          input_snippet: JSON.stringify({ query: 'authenticate user', semantic: null }),
+        }),
+        makeToolCall({
+          tool_name: 'mcp__trace-mcp__search',
+          tool_server: 'trace-mcp',
+          tool_short_name: 'search',
+          input_snippet: JSON.stringify({ query: 'user authentication logic', semantic: null }),
+        }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'possible-duplicate-semantic-search');
+      expect(hit).toBeUndefined();
+    });
+
+    it('does not flag a single semantic search with no companion', () => {
+      const calls: ToolCallRow[] = [makeSearchCall('authenticate user')];
+
+      const report = analyzeOptimizations(calls, 'week');
+      const hit = report.optimizations.find((o) => o.rule === 'possible-duplicate-semantic-search');
+      expect(hit).toBeUndefined();
     });
   });
 });

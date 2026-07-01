@@ -209,6 +209,117 @@ describe('parseSessionFile', () => {
     removeTmpDir(tmpDir);
   });
 
+  it('flags semantic-degraded search results (semantic="on" but no AI provider)', () => {
+    const tmpDir = createTmpDir('log-parser-semantic-degraded-');
+    const filePath = path.join(tmpDir, 'test-session.jsonl');
+
+    const degradedWarning =
+      'semantic="on" was requested but no AI provider is available; results came from lexical (FTS5) search. Configure an AI provider + run `embed_repo` for hybrid ranking.';
+
+    const lines = [
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 10, output_tokens: 5 },
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool_sem_1',
+              name: 'mcp__trace-mcp__search',
+              input: { query: 'authenticate user', semantic: 'on' },
+            },
+          ],
+        },
+        timestamp: '2026-04-01T10:00:00Z',
+        sessionId: 'test-sem',
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool_sem_1',
+              content: JSON.stringify({
+                items: [],
+                total: 0,
+                _warning: degradedWarning,
+              }),
+              is_error: false,
+            },
+          ],
+        },
+        timestamp: '2026-04-01T10:00:01Z',
+        sessionId: 'test-sem',
+      }),
+    ];
+
+    fs.writeFileSync(filePath, lines.join('\n'));
+
+    const result = parseSessionFile(filePath, '/test/project');
+    expect(result).not.toBeNull();
+    const toolResult = result!.toolResults.get('tool_sem_1');
+    expect(toolResult).toBeDefined();
+    expect(toolResult!.semanticDegraded).toBe(true);
+
+    removeTmpDir(tmpDir);
+  });
+
+  it('does not flag semantic-degraded for normal (non-degraded) tool results', () => {
+    const tmpDir = createTmpDir('log-parser-semantic-ok-');
+    const filePath = path.join(tmpDir, 'test-session.jsonl');
+
+    const lines = [
+      JSON.stringify({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          model: 'claude-sonnet-4-6',
+          usage: { input_tokens: 10, output_tokens: 5 },
+          content: [
+            {
+              type: 'tool_use',
+              id: 'tool_ok_1',
+              name: 'mcp__trace-mcp__search',
+              input: { query: 'authenticate user', semantic: 'on' },
+            },
+          ],
+        },
+        timestamp: '2026-04-01T10:00:00Z',
+        sessionId: 'test-sem-ok',
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tool_ok_1',
+              content: JSON.stringify({ items: [{ name: 'foo' }], total: 1 }),
+              is_error: false,
+            },
+          ],
+        },
+        timestamp: '2026-04-01T10:00:01Z',
+        sessionId: 'test-sem-ok',
+      }),
+    ];
+
+    fs.writeFileSync(filePath, lines.join('\n'));
+
+    const result = parseSessionFile(filePath, '/test/project');
+    expect(result).not.toBeNull();
+    const toolResult = result!.toolResults.get('tool_ok_1');
+    expect(toolResult).toBeDefined();
+    expect(toolResult!.semanticDegraded).toBe(false);
+
+    removeTmpDir(tmpDir);
+  });
+
   it('returns null for empty session', () => {
     const tmpDir = createTmpDir('log-parser-test-');
     const filePath = path.join(tmpDir, 'empty.jsonl');
