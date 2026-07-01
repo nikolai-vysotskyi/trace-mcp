@@ -299,6 +299,3 @@ export async function handleDashboardRequest(
 
   return false;
 }
-
-// Re-export the path constant used by tests / the integrator
-export const DASHBOARD_ROUTE_PATH = '/api/dashboard/projects';

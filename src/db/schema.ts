@@ -1847,25 +1847,6 @@ export function initializeDatabase(dbPath: string): Database.Database {
 }
 
 /**
- * Close the database after running `PRAGMA optimize` so SQLite can refresh
- * planner statistics for any tables whose distribution drifted during this
- * session. Recommended by sqlite.org for long-running connections.
- *
- * Safe to call on any connection — `optimize` is a no-op when there is
- * nothing to refresh, and is wrapped in try/finally so a planner failure
- * never prevents the close.
- */
-export function closeDatabase(db: Database.Database): void {
-  try {
-    db.pragma('optimize');
-  } catch (err) {
-    logger.warn({ err }, 'PRAGMA optimize failed during close (non-fatal)');
-  } finally {
-    db.close();
-  }
-}
-
-/**
  * Switch the database into bulk-load mode for first-time indexing.
  *
  * Trades durability for throughput: fsync is disabled and foreign-key checks

@@ -104,15 +104,6 @@ export function pruneStaleEntries(map: Map<string, number>, now: number, maxAgeM
 }
 
 /**
- * Throttle-eligible event types. cli.ts uses this set to decide whether the
- * 200 ms floor applies; exported so tests don't duplicate the list.
- */
-export const THROTTLED_EVENT_TYPES: ReadonlySet<string> = new Set([
-  'indexing_progress',
-  'embed_progress',
-]);
-
-/**
  * Decide whether a throttle-eligible event should be emitted right now and
  * update bookkeeping. Encapsulates the "200 ms floor + record-last" logic
  * that previously lived inline in `broadcastEvent`.

@@ -142,14 +142,6 @@ export interface GetModeResult {
   item: RetrievalItem | null;
 }
 
-/** Discriminated union: all per-mode results. */
-export type RetrievalResult =
-  | SingleModeResult
-  | TieredModeResult
-  | DrillModeResult
-  | FlatModeResult
-  | GetModeResult;
-
 /**
  * Default bucket sizes for `tiered` mode. Exposed so callers (CLI, MCP tool
  * description) can describe the contract without hard-coding magic numbers.
