@@ -947,4 +947,134 @@ app.get('/mixed', (req, res) => {
       expect(sqlFlow).toBeDefined();
     });
   });
+
+  // -------------------------------------------------------------------
+  // Adversarial: false-NEGATIVE risk of type-aware pruning.
+  //
+  // The pruner drops flows whose sink variable is "provably" numeric/boolean.
+  // These tests guard against OVER-pruning — hiding a real vulnerability. A
+  // false negative in a security scanner is the worst failure mode, so when
+  // in doubt the analyzer must UNDER-prune (report the flow).
+  // -------------------------------------------------------------------
+
+  describe('type-aware pruning — false-negative guards', () => {
+    test('String()-cast value reaching a sink is still a string flow (must flag)', () => {
+      // String(id) is a string coercion, NOT a numeric one. The value is still
+      // fully attacker-controlled and string-typed → SQL injection is real.
+      writeFile(
+        store,
+        'src/routes/stringcast.ts',
+        `
+app.get('/user/:id', (req, res) => {
+  const id = req.params.id;
+  const s = String(id);
+  db.query(\`SELECT * FROM users WHERE id = '\${s}'\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89');
+      expect(sqlFlow).toBeDefined();
+      expect(sqlFlow!.sanitized).toBe(false);
+    });
+
+    test('string concatenation (empty-string + x) reaching a sink is still tainted', () => {
+      // `'' + id` stringifies but keeps the payload; the classic "looks like a
+      // math op, is actually a string build" case. Must NOT be pruned.
+      writeFile(
+        store,
+        'src/routes/concat.ts',
+        `
+app.get('/user/:id', (req, res) => {
+  const id = req.params.id;
+  const s = '' + id;
+  db.query(\`SELECT * FROM users WHERE id = '\${s}'\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89');
+      expect(sqlFlow).toBeDefined();
+    });
+
+    test('template-literal wrapped value reaching a sink is still tainted', () => {
+      writeFile(
+        store,
+        'src/routes/tpl.ts',
+        `
+app.get('/user/:id', (req, res) => {
+  const id = req.params.id;
+  const s = \`prefix-\${id}\`;
+  db.query(\`SELECT * FROM users WHERE id = '\${s}'\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89');
+      expect(sqlFlow).toBeDefined();
+    });
+
+    test('numeric-then-REASSIGNED-to-untrusted-string before the sink must flag', () => {
+      // `x` starts numeric (Number(...)) but is later reassigned to raw user
+      // input BEFORE the sink. A line-order-blind pruner records x as numeric
+      // and wrongly drops the very real string-injection flow. This is the
+      // canonical false negative the pruning change risks.
+      writeFile(
+        store,
+        'src/routes/reassign.ts',
+        `
+app.get('/user/:id', (req, res) => {
+  let x = Number(req.query.page);
+  const evil = req.query.evil;
+  x = evil;
+  db.query(\`SELECT * FROM users WHERE name = '\${x}'\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      // x holds attacker-controlled STRING at the sink line → must be reported.
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89' && f.sink.variable === 'x');
+      expect(sqlFlow).toBeDefined();
+    });
+
+    test('non-sanitizing wrapper (looks like a sanitizer, does nothing) still propagates taint', () => {
+      // `normalize` is NOT a known sanitizer and does not coerce type. Taint
+      // must flow through it and the sink must be reported.
+      writeFile(
+        store,
+        'src/routes/wrapper.ts',
+        `
+app.get('/search', (req, res) => {
+  const q = req.query.q;
+  const clean = normalize(q);
+  db.query(\`SELECT * FROM items WHERE name = '\${clean}'\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89');
+      expect(sqlFlow).toBeDefined();
+      expect(sqlFlow!.sanitized).toBe(false);
+    });
+  });
 });
