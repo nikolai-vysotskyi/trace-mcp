@@ -28,12 +28,40 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
+/**
+ * SQLite has no parameter-binding mechanism for identifiers (table/column
+ * names can't be bound params), so any table name interpolated into SQL
+ * text — as every method below does with `this.table` — must be validated
+ * against a strict allowlist first (CWE-89 defense-in-depth). This mirrors
+ * a standard `[a-zA-Z_][a-zA-Z0-9_]*` identifier: starts with a letter or
+ * underscore, followed by letters/digits/underscores only. No quotes,
+ * whitespace, semicolons, or SQL keywords can ever match.
+ */
+const SAFE_SQLITE_IDENTIFIER_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+export function isSafeSqliteIdentifier(name: string): boolean {
+  return typeof name === 'string' && SAFE_SQLITE_IDENTIFIER_RE.test(name);
+}
+
+function assertSafeSqliteIdentifier(name: string): void {
+  if (!isSafeSqliteIdentifier(name)) {
+    throw new Error(`Vec0Index: unsafe table identifier: ${JSON.stringify(name)}`);
+  }
+}
+
 export class Vec0Index {
   private readonly table = 'vec_symbol_embeddings';
   private dim: number | null = null;
   private ready = false;
 
-  private constructor(private readonly db: Database.Database) {}
+  private constructor(private readonly db: Database.Database) {
+    // Defense-in-depth: `table` is a hardcoded literal today and never
+    // derived from external/config input, but every method below builds SQL
+    // by interpolating it directly. Validating once at construction means
+    // any future change that makes `table` configurable fails fast here
+    // instead of silently building unsafe SQL.
+    assertSafeSqliteIdentifier(this.table);
+  }
 
   /** Load sqlite-vec into the connection. Returns null when unavailable. */
   static tryCreate(db: Database.Database): Vec0Index | null {
@@ -96,6 +124,12 @@ export class Vec0Index {
   }
 
   clear(): void {
+    // Defensive re-check immediately before the DDL statement (belt-and-
+    // suspenders on top of the constructor-time assertion), in case `table`
+    // is ever mutated post-construction. Intentionally outside the try/catch
+    // below — an unsafe identifier must fail loudly, not be swallowed by the
+    // "vec0 hiccup is non-fatal" error handling that follows.
+    assertSafeSqliteIdentifier(this.table);
     try {
       this.db.exec(`DROP TABLE IF EXISTS ${this.table}`);
     } catch {
