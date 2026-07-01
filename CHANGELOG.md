@@ -6,6 +6,144 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.44.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.43.3...v1.44.0) (2026-07-01)
+
+
+### Features
+
+* **analysis:** add get_file_health_timeline (complexity+coupling+churn merge) ([84a889d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/84a889d7cb501235fc61592bf1e468c02ca6bb1b))
+* **analysis:** add get_graph_timeline (simplified commit-sampling tier) ([ee30168](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ee301681a6bed8d55c32ee1fa75a25af6ae7f66d))
+* **analytics:** track semantic-degraded searches + near-duplicate rephrased queries ([a3becf2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a3becf221d05a1cb224409328a4b24f85267722d))
+* **cfg:** model loop back-edges, loop-exit edges, and try/catch merge nodes ([8b58c13](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b58c1350cf6b51e063f968604098d5702752e59))
+* **eval:** health-metric calibration harness + honest triage language ([caae2c9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/caae2c9416f11839639ad43ba1f6ae9f99aca970))
+* **iac:** K8s Resource nodes, multi-doc, Kustomize modules, compose build links ([391d03e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/391d03e1b0d94b261188e2faf7efe240796e6a4e))
+* **iac:** resolve Kustomize/compose path-string imports to real manifest nodes ([4da5e48](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4da5e489b322d31bab0fb65f5ac6a2918a0db867))
+* **memory:** decision staleness verification (Task 3) ([dce53ea](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dce53ea27f5830d787d32639848240d3f50c95e4))
+* **memory:** hybrid retrieval for decisions + tracked benchmark (Task 9) ([05cb7fb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/05cb7fbf212a810203e59527fb2c66c86a8e60c4))
+* **memory:** progressive disclosure of decisions (Task 12) ([1222cef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1222cefc1b6c3d9abd1e30b927002e7c098e3b01))
+* **memory:** search-time heat decay + auto-supersession (Task 11) ([6bcf60b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6bcf60b7798d64e152346c6c5ab1aa6d189c2bea))
+* **quality:** SARIF 2.1.0 output for scan_security, detect_antipatterns, check_quality_gates ([37a0047](https://github.com/nikolai-vysotskyi/trace-mcp/commit/37a0047b584c245aa8d2aec469e3e18e49c48ff7))
+* **quality:** type-aware taint pruning to cut false positives ([62a2a6a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/62a2a6a596cbdb6f133392a98ed7d816d252a632))
+* **refactor:** re-enable extract_function with AST free-variable analysis ([296a2b8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/296a2b8ec39b96a0c55fa710dbd361c9c422b3ba))
+* **refactor:** rebuild apply_codemod on ast-grep AST engine ([c3e823c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c3e823cdf1e1e9fd5aef1f9cdf0e820d234be951))
+* **scip:** SCIP ingestion with scip_resolved edge tier ([3b5a970](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3b5a9707fd69d3dd7fab7d9b8b1417e51f3f22a4))
+* **taint:** array-destructuring source + lock-in multi-hop/coercion regressions ([106eb5c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/106eb5c3d1f993c7cf9a4df6a2dca18d2aa9b344))
+* **tools:** register get_federation_impact, get_file_health_timeline, get_graph_timeline ([1ebf5bc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1ebf5bc665445589203d6b881371335292044ea4))
+
+
+### Bug Fixes
+
+* **cfg:** emit post-nested-block statement as its own node ([13ee9c1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/13ee9c1e9304e6413b650f9ad28761dd1b573746))
+* **cfg:** stop mis-classifying do-prefixed identifiers as do-while loops ([3f7a8e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3f7a8e03c24bca8010cc02f3cb9fbea1cb37d573))
+* **codemod:** a pattern with zero matches is success, not an error ([6d1bc99](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6d1bc99360cd1e1723321f37855f5ab7d2e1a5c8))
+* **codemod:** lazy-load @ast-grep/napi so a missing native binding degrades instead of crashing the server ([643e7d5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/643e7d5a16f4f975065641d0bebb2a97643c1eee))
+* **extract-function:** stop misclassifying shadowed/multi-return slices, make confidence reflect it ([4175a41](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4175a419fd552c674546a490706f2ecf876ebc91))
+* **hcl:** persist + resolve Terraform module source imports edge ([970a144](https://github.com/nikolai-vysotskyi/trace-mcp/commit/970a14450746e4697e65d49ff87aa0440e06771d))
+* **indexer:** scope indexing to most-specific registered project ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([32e2930](https://github.com/nikolai-vysotskyi/trace-mcp/commit/32e29305af171eb9e800274a572c46292ed25f9a))
+* **memory:** break decision-store circular import via shared decision-types ([5892529](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5892529470a62ab84713de57706482c8d0102087))
+* **memory:** decision retrieval bench script was broken and measuring stale data ([e6259b4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e6259b46530ba95328b73aba29ec927ad388ae7e))
+* **memory:** fail open when decision verification throws internally ([3850eb9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3850eb9f6cd2a7b49cc0c33301a1dae75f5e317d))
+* **registry:** match extensionless language files by basename ([cfa018b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cfa018b7bed075904945e5746a5204989b661a97))
+* revert 6 dead-code false positives from get_dead_code confidence-1.0 batch ([0a18f42](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0a18f42c10c56d9ee2ac7a039056873ac3701831))
+* **sarif:** emit the canonical OASIS $schema URL, not a dead 404 ([511ef78](https://github.com/nikolai-vysotskyi/trace-mcp/commit/511ef788cb6dab9734b42a92179507ea2346aecd))
+* **security:** eliminate 3x command injection in install-app.ts ([ff9eca6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ff9eca6fb732dd207378d30b6db80338665a4ed4))
+* **security:** eliminate command injection in ask --repo git clone ([b052f9a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b052f9a5155b2f270e2c1f15b5bcf006d460e4ac))
+* **security:** validate table identifier before DDL in Vec0Index (CWE-89) ([6285f0b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6285f0b66c2fc9d6b6312d06056e212e389ddf0f))
+* **session:** tighten unbatched-call hint, broaden tracked tool set ([fbccd6e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fbccd6e4ea96fa656ce1b96acc89a675e2028941))
+* **taint:** line-aware type pruning to prevent hidden string-injection ([edb6815](https://github.com/nikolai-vysotskyi/trace-mcp/commit/edb68159b833d3897c0361b4098882e459715729))
+* **taint:** propagate taint through string concat and template literals ([05194ee](https://github.com/nikolai-vysotskyi/trace-mcp/commit/05194eed5c32ccf164af484156ad7cb8fdb5be7a))
+* **types:** narrow SearchResult | FlatSearchResult before _meta/_near_misses access ([76ef9ce](https://github.com/nikolai-vysotskyi/trace-mcp/commit/76ef9ce430e4b8f6e4d83c078a596e45b3f6cc9d))
+* **types:** null-guard decisionStore inside nested closures in memory.ts ([ac98c3a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ac98c3a7dd84cee222b42ee8180a9f4d9ffa6021))
+* **types:** remove invalid type assertion in updateCallSites ([739295b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/739295babaa6d5de128fda08224b4c9c0e4e1cda))
+* **types:** replace zod v3 ZodEffects with v4 ZodPipe/ZodTransform ([22c5294](https://github.com/nikolai-vysotskyi/trace-mcp/commit/22c5294fe897eff39fa4197a95a48010945ada51))
+* **types:** widen tsconfig rootDir to repo root to fix TS6059 ([f526ba3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f526ba38fa0801a9b8d46c0fe79bc0f8569d6cf3))
+
+
+### Performance
+
+* **ai:** optional sqlite-vec ANN index for vector search ([256305f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/256305ff3bc8c936980ee1f4a776a2a22b31be2e))
+* **analysis:** batch per-period churn queries in getGraphTimeline into one git call ([a3f846b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a3f846b69c1ecad068b4a6d8d037dbb722ffe567))
+* **analysis:** cross-call cache for buildFileGraph + edge bottlenecks ([5f43b89](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5f43b890fda3fe00acc700a299c3fd1e73b8a4ab))
+* **analytics:** replace tool_calls JOIN sessions with IN-subquery filter ([f76afa6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f76afa6fd52e16b2da627f8babc7f3adfd41b92a))
+* **complexity:** strip strings/comments once per symbol, not twice ([106dc58](https://github.com/nikolai-vysotskyi/trace-mcp/commit/106dc585b72bde913ac6f11460d679b52c7d5293))
+* **context:** hoist repeated graph/file loads in context assembly ([42d5d33](https://github.com/nikolai-vysotskyi/trace-mcp/commit/42d5d33c633e25bac0c28dbe176e5cece7a6f1ca))
+* **daemon:** grace-TTL release of idle project stores + idle heartbeat backoff ([9a3a3f4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9a3a3f4edd4f5428754aab99c97a80248243e009))
+* **db:** add hot-path indexes idx_symbols_parent/exported, idx_edges_resolved (schema v30) ([cc49d47](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cc49d4788be30f48b16e7d4041c1e9ea5285cc1f))
+* **indexer:** bulk-create symbol nodes per file batch (2N-&gt;1 statements) ([dbba80b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dbba80bde8383c54c9e71681554145bc516075e6))
+* **indexer:** evict per-batch file content cache to bound in-process RSS ([405f3ae](https://github.com/nikolai-vysotskyi/trace-mcp/commit/405f3aeb12647ef49376524b8894a584a205ae03))
+* **memory:** batch decision-verification blob reads via git cat-file --batch ([a079eac](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a079eac39ea6f719a9db95dd6e198b3fce641858))
+* **memory:** dedupe getStats() on the wake-up hot path ([02972d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/02972d7eb57cf7108eb32ad6b2ec6a20bc9794fd))
+* **memory:** memoize git subprocess spawns in decision verification ([28ba56c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/28ba56c071a4d5ca97240d943fa21ee841ce78b5))
+* **scoring:** avoid expensive filtered COUNT in PageRank cache-hit check ([7d0e751](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7d0e7510613277b9a6520af0973222899693e5ca))
+* **topology:** memoize endpoint-path normalization in linkClientCallsToEndpoints ([cd3a756](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cd3a7563f8e8a20cf460438a15e2b39b084349ba))
+* **topology:** O(N^2)-&gt;O(N) cross-service edges; fix FK-safe repo removal ([c0140da](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c0140da1ea49106a2e7b84baa2ad08cfaa71d1ec))
+
+
+### Refactoring
+
+* **api:** split memory-routes dispatcher into per-route handlers ([60bafa9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/60bafa98766d093f54408022388e13ea486c4538))
+* **eval:** extract main() helpers in calibrate-health-metrics (F -&gt; D) ([fe62553](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fe62553de6dc357d84d6fab14264864187d68ae1))
+* **indexer:** extract FileCollector from IndexingPipeline.collectFiles ([9fc7bb2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9fc7bb28a1a1a4335427919aa44002d15e02cfa5))
+* **indexer:** extract RenameDetector from IndexingPipeline.detectRenames ([2c72d9a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2c72d9a85797bbc8333d2e456a8071ffe59a2a5d))
+* **memory:** extract MemoOperations from DecisionStore god-class ([1ce07d2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1ce07d224e8c96ec2503ec4c4d13c8e9f3c78015))
+* **memory:** extract MutationOperations (write-path) from DecisionStore ([5af82ad](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5af82ad43a7cc3989ede21b9316483ec74661339))
+* **memory:** extract QueryOperations (read-path) from DecisionStore ([478f91b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/478f91b40b44b5c52bfb875c8dc2d1e210ab1c7e))
+* **memory:** extract ReviewOperations from DecisionStore ([c88242f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c88242fb3cbaede41d1dc4a8f60ae8a6a59cc4d7))
+* **memory:** extract SchedulerState + Consolidation ops from DecisionStore ([b68847f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b68847f3ac61f50177a518b02f9ce1bf93a16f71))
+* **memory:** extract SessionOperations from DecisionStore ([7eca034](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7eca0341b73891691343bc107eeb0297ddee85a3))
+* **python:** decompose PythonLanguagePlugin.extractClass into helpers (class cyclomatic 153 to 66) ([3562333](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3562333aaedcfc6f984c37cc5d432d2ce6b37a42))
+* **server:** decompose installToolGate into tool-gate-helpers (cyclomatic 154 to 26) ([634078e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/634078ec85f94671cf8e6df2f8a392736c69cee1))
+* **tools:** extract get_context_bundle + get_feature_context into navigation/context-tools.ts ([b64478f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b64478fe3334fe5180ad5578ca6a51e889d47c80))
+* **tools:** extract get_task_context into navigation/task-context-tools.ts ([89a2f4f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/89a2f4f8d441d9dd360e6d09a9ca8ccce0aa8fdb))
+* **tools:** extract point-lookup tools into navigation/lookup-tools.ts ([b79a318](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b79a3183182fd40e6c09422fa7458f0f2f833bda))
+* **tools:** extract search + suggest_queries into navigation/search-tools.ts ([ddc7cf8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ddc7cf8e601f6431bc4da6ee918422f34c490368))
+* **tools:** hoist memo helpers out of registerMemoryTools closure ([b2cd23b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b2cd23b31197252e5463ca0bce40a0a6844470b9))
+* **tools:** reduce registerNavigationTools to thin orchestrator (cyclomatic 183 -&gt; 1) ([bc292c7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bc292c7fd2c51866477cdb340d8a15d82bd12758))
+
+
+### Documentation
+
+* fix CLAUDE.md/AGENTS.md drift (dead path, false-positive tool refs, oversized section) ([40a1b90](https://github.com/nikolai-vysotskyi/trace-mcp/commit/40a1b90809176627d0964ca8bf7953876d5731ee))
+* reflect shipped gap-closures + adversarial validation findings ([4ae193b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4ae193ba1dd673fb324583cd3e0658ef18698808))
+* refresh competitor comparison (June 2026) + new entrants ([cc5c332](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cc5c3327f9d5a3219de58ead6892cf015486f6f1))
+
+
+### Tests
+
+* **ai:** add AnthropicProvider unit tests ([b3152a8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b3152a8af04f5f1303b40ec448c9b8434f83c2c3))
+* **ai:** add ask-shared.ts unit tests (resolveProvider, gatherContext, factories) ([35b1838](https://github.com/nikolai-vysotskyi/trace-mcp/commit/35b18387e737e034456179455546fd2135a37969))
+* **ai:** add GeminiProvider unit tests ([4827f32](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4827f32778e7d9c5b7ef6997e35836163e2879de))
+* **ai:** add OnnxProvider unit tests ([842501d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/842501d7dd04179f46eab744605cddfe555b4edf))
+* **ai:** add OpenAIProvider unit tests ([e6fbe6a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e6fbe6a942702769431a44f0ee8829aeb98b1cd2))
+* **codemod:** add CI smoke test for @ast-grep/napi native binding resolution ([a7980ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a7980ab42db3b6996228f47febb3913cdd6cba16))
+* **eval:** widen MRR baseline tolerance to dataset granularity ([3479053](https://github.com/nikolai-vysotskyi/trace-mcp/commit/34790530256ef9eff7ddcd8fd8f0f8752cab8e41))
+* **iac:** adversarial hardening for K8s/Kustomize/compose edge cases ([a0682a6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a0682a65b68f9e2f7d8cb41d836b8aea965836bf))
+* **memory:** adversarial supersession non-triggers (Task 11) ([e3ace69](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e3ace6915736f5bc1d9ab10898ef14331b163db6))
+* **memory:** end-to-end heat-decay ranking with real timestamps (Task 11) ([cdc3e15](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cdc3e1548cb6d7d505d182b1c88d54c9c62028f3))
+* **memory:** end-to-end staleness scenarios (file deletion, in-place edit) ([6dce0c8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6dce0c838e8224ff9007819df547707afc952d5f))
+* **memory:** progressive-disclosure error handling + content-leak hardening (Task 12) ([5c8f198](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5c8f198e39c28e6de41b9a9b9d5fbc81f910ac62))
+* **memory:** query_decisions hybrid retrieval wiring at the tool-handler level (Task 9) ([54d2a8a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/54d2a8a77707500c2c28b1b60cebed81a5c35516))
+* **refactor:** fix extract_function preview fixture to a genuine single-return case ([cc799cc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cc799cc4b20162dedc94b4f4973b9ce1d30ebe75))
+* **refactor:** fix legacy zero-match assertion missed by the targeted re-run ([4268172](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4268172a25c96187166562c0e81200c43c350d68))
+
+
+### Chores
+
+* **ai:** remove 5 unused retrieval-mode result interfaces ([541b9fb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/541b9fb8d718c784314eb8eca5b9b25f623e7688))
+* **lsp:** remove TextDocumentPositionParams — orphaned by prior removal ([3472c41](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3472c416fbe5ee2f7c2684a022f4e0a4b4d8756d))
+* **plugin:** sync manifest versions to 1.43.4 ([956902b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/956902bf95f35247c8be475cc345b7e7ae9ec739))
+* **release:** 1.43.4 ([4998247](https://github.com/nikolai-vysotskyi/trace-mcp/commit/49982479d241afaf949c86ff4f321bccfb4e28ba))
+* remove 5 verified-dead leaf exports ([f8066ac](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f8066acca5347ff0d69717c7bbe6873a0368af67))
+* remove confirmed-dead exports from fresh dead-code sweep ([a862c06](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a862c06d6b13bfc7907a0c5dde50cd9324f34e39))
+* remove dead extractCashierConfig cascade + WorkspaceResolver ([b2e9375](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b2e9375a37f40801efc7fe791a29a1ef7f42528b))
+* remove verified dead code (4 symbols, confirmed via search_text) ([dbcff51](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dbcff51ab0aae2ddf397082d2603d9a8f3bdf9cc))
+* **ruby:** remove confirmed-dead filePathToModule and isAllCaps helpers ([cc9b90e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cc9b90e894640f605ef7ec976b24480960fc62e3))
+
+
+### CI/CD
+
+* add informational-only quality-gates report job ([a1b0f26](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a1b0f263c4d51fa070d1f7471e6041adc19db2aa))
+
 ## [1.43.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.43.2...v1.43.3) (2026-06-27)
 
 
