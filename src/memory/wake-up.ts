@@ -102,10 +102,12 @@ export function assembleWakeUp(
     { withhold: true },
   ).slice(0, maxDecisions);
 
-  const activeCount = decisionStore.getStats(projectRoot).active;
-
-  // L2: Memory stats
+  // L2: Memory stats. `getStats` runs four aggregate queries over the whole
+  // `decisions` table (2 COUNTs + 2 GROUP BYs); compute it ONCE and reuse
+  // `stats.active` for the active count — the previous double call doubled the
+  // aggregate work on this session-start hot path for an identical result.
   const stats = decisionStore.getStats(projectRoot);
+  const activeCount = stats.active;
   const minedCount = decisionStore.getMinedSessionCount();
   const indexedSessions = decisionStore.getIndexedSessionIds(projectRoot);
 
