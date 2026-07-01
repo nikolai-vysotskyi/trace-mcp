@@ -590,29 +590,50 @@ const BOOLEAN_COERCION_PATTERNS: RegExp[] = [
   /^(\w+)\s*=\s*bool\s*\(/gm,
 ];
 
+/** A non-string type inference plus the 1-based line the evidence came from. */
+interface TypeEvidence {
+  type: InferredType;
+  line: number;
+}
+
 /**
- * Scan the file and return the set of variables that hold a provably non-string
- * (numeric or boolean) value. A variable assigned BOTH a string and later a
- * number resolves to its last evidence — but since string-injection requires
- * the value at the sink line, callers pair this with line ordering where it
- * matters. For the conservative intra-procedural use here, presence of any
- * non-string coercion of a variable is treated as "typed non-string".
+ * Scan the file and return, per variable, the LAST-seen numeric/boolean type
+ * evidence together with the line it was observed on.
+ *
+ * Line tracking is load-bearing for correctness: a variable can be numeric at
+ * one point and later reassigned to an attacker-controlled string before the
+ * sink. Recording the evidence line lets the pruner check whether a subsequent
+ * string reassignment invalidated the numeric/boolean narrowing — without it,
+ * a real string-injection flow would be silently hidden (a false negative,
+ * the worst failure mode for a security scanner).
+ *
+ * Numeric evidence takes precedence over boolean when both appear on the same
+ * variable at the same line; the newest evidence (highest line) always wins so
+ * `let x = Number(a); ... x = something;` reflects the latest narrowing state.
  */
-function inferVarTypes(lines: string[]): Map<string, InferredType> {
-  const types = new Map<string, InferredType>();
-  for (const line of lines) {
+function inferVarTypes(lines: string[]): Map<string, TypeEvidence> {
+  const types = new Map<string, TypeEvidence>();
+  const record = (name: string, type: InferredType, line: number): void => {
+    const prev = types.get(name);
+    // Newer evidence supersedes older. On a tie (same line) numeric wins.
+    if (!prev || line > prev.line || (line === prev.line && type === 'numeric')) {
+      types.set(name, { type, line });
+    }
+  };
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx];
     for (const re of NUMERIC_COERCION_PATTERNS) {
       re.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = re.exec(line)) !== null) {
-        if (m[1]) types.set(m[1], 'numeric');
+        if (m[1]) record(m[1], 'numeric', lineIdx + 1);
       }
     }
     for (const re of BOOLEAN_COERCION_PATTERNS) {
       re.lastIndex = 0;
       let m: RegExpExecArray | null;
       while ((m = re.exec(line)) !== null) {
-        if (m[1] && !types.has(m[1])) types.set(m[1], 'boolean');
+        if (m[1]) record(m[1], 'boolean', lineIdx + 1);
       }
     }
   }
@@ -712,9 +733,27 @@ function analyzeFile(content: string, filePath: string, language: string): Taint
       if (!taintedVars.has(sink.variable)) continue;
 
       // Type-aware pruning: a string-injection sink fed by a provably
-      // non-string (numeric/boolean) value cannot be exploited. Drop the flow.
+      // non-string (numeric/boolean) value cannot be exploited. Drop the flow —
+      // BUT only when the numeric/boolean narrowing still holds at the sink.
+      //
+      // A variable can be numeric at one point and then reassigned to an
+      // attacker-controlled string before the sink (e.g.
+      //   let x = Number(a); ...; x = req.query.evil; db.query(`... ${x}`)).
+      // If a taint-carrying assignment to the same sink variable happens AFTER
+      // the type evidence and BEFORE the sink, the numeric/boolean type is
+      // stale and pruning it would hide a real vulnerability. When in doubt we
+      // under-prune (report the flow) rather than risk a false negative.
       const sinkVarType = varTypes.get(sink.variable);
-      if (sinkVarType && STRING_INJECTION_SINKS.has(sink.kind)) continue;
+      if (sinkVarType && STRING_INJECTION_SINKS.has(sink.kind)) {
+        const invalidatedByLaterAssign = assignments.some(
+          (a) =>
+            a.variable === sink.variable &&
+            a.line > sinkVarType.line &&
+            a.line < sink.line &&
+            taintedVars.has(a.fromVariable),
+        );
+        if (!invalidatedByLaterAssign) continue;
+      }
 
       // Step 6: Check for sanitizers between source and sink
       let sanitized = false;
