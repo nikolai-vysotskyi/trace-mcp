@@ -299,4 +299,145 @@ after();`;
       expect(incoming.length).toBeGreaterThanOrEqual(1);
     });
   });
+
+  // -------------------------------------------------------------------
+  // Adversarial: nested / compound control flow. These guard the loop
+  // back-edge modeling against conflation, mis-classification, and wrong
+  // cyclomatic counts.
+  // -------------------------------------------------------------------
+  describe('nested and compound control flow', () => {
+    it('does NOT classify do-prefixed identifiers as do_while loops', () => {
+      // `doOuter()`, `done()`, `download()` all START with "do" but are plain
+      // calls, NOT do-while loops. A greedy /^\s*do\s*\{?/ pattern mis-matches
+      // them, injecting phantom loop nodes + back-edges and corrupting the CFG.
+      const source = `
+function work() {
+  doOuter();
+  const x = download(url);
+  done();
+}`;
+      const cfg = extractCFG(source);
+      const bogusLoops = cfg.nodes.filter((n) => n.kind === 'do_while');
+      expect(bogusLoops).toHaveLength(0);
+      // No spurious back-edges should exist in a loop-free function.
+      const backEdges = cfg.edges.filter((e) => e.label === 'back');
+      expect(backEdges).toHaveLength(0);
+    });
+
+    it('a real do-while is still detected when written as `do {`', () => {
+      const source = `
+do {
+  step();
+} while (more());`;
+      const cfg = extractCFG(source);
+      expect(cfg.nodes.some((n) => n.kind === 'do_while')).toBe(true);
+    });
+
+    it('nested for-inside-while emits two independent back-edges to the right headers', () => {
+      const source = `
+while (outer()) {
+  prep();
+  for (let i = 0; i < n; i++) {
+    inner();
+  }
+  cleanup();
+}
+finish();`;
+      const cfg = extractCFG(source);
+      const whileNode = cfg.nodes.find((n) => n.kind === 'while');
+      const forNode = cfg.nodes.find((n) => n.kind === 'for');
+      expect(whileNode).toBeDefined();
+      expect(forNode).toBeDefined();
+      // No plain call ("prep", "cleanup", "finish", "inner") should have become
+      // a loop node.
+      expect(cfg.nodes.filter((n) => n.kind === 'do_while')).toHaveLength(0);
+      expect(cfg.nodes.filter((n) => n.kind === 'for')).toHaveLength(1);
+      expect(cfg.nodes.filter((n) => n.kind === 'while')).toHaveLength(1);
+
+      // Two distinct back-edges: one into the while header, one into the for
+      // header — not conflated onto a single node.
+      const backToWhile = cfg.edges.find((e) => e.label === 'back' && e.to === whileNode!.id);
+      const backToFor = cfg.edges.find((e) => e.label === 'back' && e.to === forNode!.id);
+      expect(backToWhile).toBeDefined();
+      expect(backToFor).toBeDefined();
+      expect(backToWhile!.to).not.toBe(backToFor!.to);
+    });
+
+    it('break does not create a back-edge to the loop header', () => {
+      const source = `
+while (true) {
+  if (found()) {
+    break;
+  }
+  step();
+}
+after();`;
+      const cfg = extractCFG(source);
+      const whileNode = cfg.nodes.find((n) => n.kind === 'while')!;
+      const breakNode = cfg.nodes.find((n) => n.kind === 'break')!;
+      expect(breakNode).toBeDefined();
+      // The break node must NOT loop back to the header (it exits the loop).
+      const breakBack = cfg.edges.find(
+        (e) => e.from === breakNode.id && e.to === whileNode.id && e.label === 'back',
+      );
+      expect(breakBack).toBeUndefined();
+    });
+
+    it('continue inside a loop is modeled as a distinct node (not a plain statement)', () => {
+      const source = `
+for (let i = 0; i < n; i++) {
+  if (skip(i)) {
+    continue;
+  }
+  process(i);
+}`;
+      const cfg = extractCFG(source);
+      const continueNode = cfg.nodes.find((n) => n.kind === 'continue');
+      expect(continueNode).toBeDefined();
+      // No phantom do_while from `process(i)` etc.
+      expect(cfg.nodes.filter((n) => n.kind === 'do_while')).toHaveLength(0);
+    });
+
+    it('switch/case fallthrough is modeled as branches, not flattened', () => {
+      const source = `
+switch (kind) {
+  case 'a':
+    handleA();
+  case 'b':
+    handleB();
+    break;
+  default:
+    handleDefault();
+}`;
+      const cfg = extractCFG(source);
+      const switchNode = cfg.nodes.find((n) => n.kind === 'switch')!;
+      expect(switchNode).toBeDefined();
+      const caseNodes = cfg.nodes.filter((n) => n.kind === 'case');
+      expect(caseNodes.length).toBe(2);
+      expect(cfg.nodes.some((n) => n.kind === 'default')).toBe(true);
+      // Each case is a branch OUT of the switch node.
+      for (const c of caseNodes) {
+        expect(cfg.edges.some((e) => e.from === switchNode.id && e.to === c.id)).toBe(true);
+      }
+    });
+
+    it('cyclomatic complexity matches the McCabe hand-count (E - N + 2)', () => {
+      // A single while loop with an if inside. We assert the reported number
+      // equals the formula computed from the emitted graph — i.e. the extractor
+      // is internally consistent and not fudging a constant.
+      const source = `
+while (running()) {
+  if (ready()) {
+    act();
+  }
+  tick();
+}
+shutdown();`;
+      const cfg = extractCFG(source);
+      const expected = Math.max(1, cfg.edges.length - cfg.nodes.length + 2);
+      expect(cfg.cyclomatic_complexity).toBe(expected);
+      // And no phantom loop nodes inflating it.
+      expect(cfg.nodes.filter((n) => n.kind === 'do_while')).toHaveLength(0);
+    });
+  });
 });
