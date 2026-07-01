@@ -68,6 +68,173 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+async function handleMultiRoot(
+  parentDir: string,
+  childRoots: string[],
+  opts: { force?: boolean; index?: boolean; json?: boolean },
+): Promise<void> {
+  const isInteractive = !opts.json;
+
+  if (isInteractive) {
+    p.intro('trace-mcp add (multi-root)');
+    p.note(
+      `No project root markers in ${parentDir}\n` +
+        `Discovered ${childRoots.length} child project(s):\n` +
+        childRoots.map((r) => `  ${path.basename(r)}`).join('\n'),
+      'Multi-root',
+    );
+  }
+
+  // Check if already registered as multi-root
+  const existing = getProject(parentDir);
+  if (existing && !opts.force) {
+    if (opts.json) {
+      console.log(JSON.stringify({ status: 'already_registered', project: existing }));
+    } else {
+      p.note(`Already registered as multi-root: ${existing.name}`, 'Existing');
+      p.outro('Use --force to re-register.');
+    }
+    return;
+  }
+
+  // Detect and merge configs from all children
+  const mergedInclude: string[] = [];
+  const mergedExclude: string[] = [];
+  const allLanguages = new Set<string>();
+  const allFrameworks = new Set<string>();
+
+  for (const childRoot of childRoots) {
+    const relPath = path.relative(parentDir, childRoot).replace(/\\/g, '/');
+    const detection = detectProject(childRoot);
+    const config = generateConfig(detection);
+
+    // Prefix patterns with child relative path
+    for (const pattern of config.include) {
+      mergedInclude.push(`${relPath}/${pattern}`);
+    }
+    for (const pattern of config.exclude) {
+      mergedExclude.push(`${relPath}/${pattern}`);
+    }
+
+    for (const lang of detection.languages) allLanguages.add(lang);
+    for (const fw of detection.frameworks) allFrameworks.add(fw.name);
+  }
+
+  if (isInteractive) {
+    const detectedLines: string[] = [];
+    if (allLanguages.size > 0) {
+      detectedLines.push(`Languages: ${[...allLanguages].join(', ')}`);
+    }
+    if (allFrameworks.size > 0) {
+      detectedLines.push(`Frameworks: ${[...allFrameworks].join(', ')}`);
+    }
+    if (detectedLines.length > 0) {
+      p.note(detectedLines.join('\n'), 'Detected (all children)');
+    }
+  }
+
+  // Cleanup: remove individually registered children
+  const allProjects = listProjects();
+  const cleaned: string[] = [];
+  for (const proj of allProjects) {
+    if (proj.root.startsWith(parentDir + path.sep) || proj.root.startsWith(`${parentDir}/`)) {
+      // Delete child's DB file
+      if (fs.existsSync(proj.dbPath)) {
+        fs.unlinkSync(proj.dbPath);
+      }
+      unregisterProject(proj.root);
+      removeProjectConfig(proj.root);
+      cleaned.push(path.basename(proj.root));
+    }
+  }
+
+  if (isInteractive && cleaned.length > 0) {
+    p.note(`Removed individual indexes: ${cleaned.join(', ')}`, 'Cleanup');
+  }
+
+  // Save unified config
+  ensureGlobalDirs();
+  const configForSave = {
+    root: '.',
+    include: mergedInclude,
+    exclude: mergedExclude,
+    children: childRoots,
+  };
+  saveProjectConfig(parentDir, configForSave);
+
+  // Create unified DB
+  const dbPath = getDbPath(parentDir);
+  const db = initializeDatabase(dbPath);
+  db.close();
+
+  // Register as multi-root
+  const entry = registerProject(parentDir, {
+    type: 'multi-root',
+    children: childRoots,
+  });
+
+  // Index immediately (unless --no-index)
+  let indexResult: Awaited<ReturnType<typeof runIndexing>> = null;
+  if (opts.index !== false) {
+    if (isInteractive) {
+      const spin = p.spinner();
+      spin.start('Indexing multi-root project...');
+      indexResult = await runIndexing(parentDir, opts);
+      if (indexResult) {
+        spin.stop(
+          `Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`,
+        );
+      } else {
+        spin.stop('Indexing skipped');
+      }
+    } else {
+      indexResult = await runIndexing(parentDir, opts);
+    }
+  }
+
+  // Report
+  if (opts.json) {
+    console.log(
+      JSON.stringify(
+        {
+          status: existing ? 're-registered' : 'registered',
+          type: 'multi-root',
+          project: entry,
+          children: childRoots.map((r) => path.basename(r)),
+          cleaned,
+          indexing: indexResult ?? undefined,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    const lines: string[] = [];
+    lines.push(`Project: ${entry.name} (multi-root)`);
+    lines.push(`Root: ${parentDir}`);
+    lines.push(`DB: ${shortPath(dbPath)}`);
+    lines.push(`Children: ${childRoots.map((r) => path.basename(r)).join(', ')}`);
+    if (indexResult) {
+      lines.push(
+        `Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`,
+      );
+      lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
+    }
+    p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
+    if (indexResult) {
+      p.outro('Multi-root project registered and indexed.');
+    } else {
+      p.outro('Multi-root project registered. Run `trace-mcp index` to index it.');
+    }
+  }
+}
+
+function shortPath(p: string): string {
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
+  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
+  return p;
+}
+
 export const addCommand = new Command('add')
   .description('Register a project for indexing: detect root, create DB, add to registry')
   .argument('[dir]', 'Project directory (default: current directory)', '.')
@@ -241,170 +408,3 @@ export const addCommand = new Command('add')
       }
     }
   });
-
-async function handleMultiRoot(
-  parentDir: string,
-  childRoots: string[],
-  opts: { force?: boolean; index?: boolean; json?: boolean },
-): Promise<void> {
-  const isInteractive = !opts.json;
-
-  if (isInteractive) {
-    p.intro('trace-mcp add (multi-root)');
-    p.note(
-      `No project root markers in ${parentDir}\n` +
-        `Discovered ${childRoots.length} child project(s):\n` +
-        childRoots.map((r) => `  ${path.basename(r)}`).join('\n'),
-      'Multi-root',
-    );
-  }
-
-  // Check if already registered as multi-root
-  const existing = getProject(parentDir);
-  if (existing && !opts.force) {
-    if (opts.json) {
-      console.log(JSON.stringify({ status: 'already_registered', project: existing }));
-    } else {
-      p.note(`Already registered as multi-root: ${existing.name}`, 'Existing');
-      p.outro('Use --force to re-register.');
-    }
-    return;
-  }
-
-  // Detect and merge configs from all children
-  const mergedInclude: string[] = [];
-  const mergedExclude: string[] = [];
-  const allLanguages = new Set<string>();
-  const allFrameworks = new Set<string>();
-
-  for (const childRoot of childRoots) {
-    const relPath = path.relative(parentDir, childRoot).replace(/\\/g, '/');
-    const detection = detectProject(childRoot);
-    const config = generateConfig(detection);
-
-    // Prefix patterns with child relative path
-    for (const pattern of config.include) {
-      mergedInclude.push(`${relPath}/${pattern}`);
-    }
-    for (const pattern of config.exclude) {
-      mergedExclude.push(`${relPath}/${pattern}`);
-    }
-
-    for (const lang of detection.languages) allLanguages.add(lang);
-    for (const fw of detection.frameworks) allFrameworks.add(fw.name);
-  }
-
-  if (isInteractive) {
-    const detectedLines: string[] = [];
-    if (allLanguages.size > 0) {
-      detectedLines.push(`Languages: ${[...allLanguages].join(', ')}`);
-    }
-    if (allFrameworks.size > 0) {
-      detectedLines.push(`Frameworks: ${[...allFrameworks].join(', ')}`);
-    }
-    if (detectedLines.length > 0) {
-      p.note(detectedLines.join('\n'), 'Detected (all children)');
-    }
-  }
-
-  // Cleanup: remove individually registered children
-  const allProjects = listProjects();
-  const cleaned: string[] = [];
-  for (const proj of allProjects) {
-    if (proj.root.startsWith(parentDir + path.sep) || proj.root.startsWith(`${parentDir}/`)) {
-      // Delete child's DB file
-      if (fs.existsSync(proj.dbPath)) {
-        fs.unlinkSync(proj.dbPath);
-      }
-      unregisterProject(proj.root);
-      removeProjectConfig(proj.root);
-      cleaned.push(path.basename(proj.root));
-    }
-  }
-
-  if (isInteractive && cleaned.length > 0) {
-    p.note(`Removed individual indexes: ${cleaned.join(', ')}`, 'Cleanup');
-  }
-
-  // Save unified config
-  ensureGlobalDirs();
-  const configForSave = {
-    root: '.',
-    include: mergedInclude,
-    exclude: mergedExclude,
-    children: childRoots,
-  };
-  saveProjectConfig(parentDir, configForSave);
-
-  // Create unified DB
-  const dbPath = getDbPath(parentDir);
-  const db = initializeDatabase(dbPath);
-  db.close();
-
-  // Register as multi-root
-  const entry = registerProject(parentDir, {
-    type: 'multi-root',
-    children: childRoots,
-  });
-
-  // Index immediately (unless --no-index)
-  let indexResult: Awaited<ReturnType<typeof runIndexing>> = null;
-  if (opts.index !== false) {
-    if (isInteractive) {
-      const spin = p.spinner();
-      spin.start('Indexing multi-root project...');
-      indexResult = await runIndexing(parentDir, opts);
-      if (indexResult) {
-        spin.stop(
-          `Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`,
-        );
-      } else {
-        spin.stop('Indexing skipped');
-      }
-    } else {
-      indexResult = await runIndexing(parentDir, opts);
-    }
-  }
-
-  // Report
-  if (opts.json) {
-    console.log(
-      JSON.stringify(
-        {
-          status: existing ? 're-registered' : 'registered',
-          type: 'multi-root',
-          project: entry,
-          children: childRoots.map((r) => path.basename(r)),
-          cleaned,
-          indexing: indexResult ?? undefined,
-        },
-        null,
-        2,
-      ),
-    );
-  } else {
-    const lines: string[] = [];
-    lines.push(`Project: ${entry.name} (multi-root)`);
-    lines.push(`Root: ${parentDir}`);
-    lines.push(`DB: ${shortPath(dbPath)}`);
-    lines.push(`Children: ${childRoots.map((r) => path.basename(r)).join(', ')}`);
-    if (indexResult) {
-      lines.push(
-        `Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`,
-      );
-      lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
-    }
-    p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
-    if (indexResult) {
-      p.outro('Multi-root project registered and indexed.');
-    } else {
-      p.outro('Multi-root project registered. Run `trace-mcp index` to index it.');
-    }
-  }
-}
-
-function shortPath(p: string): string {
-  const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
-  if (home && p.startsWith(home)) return `~${p.slice(home.length)}`;
-  return p;
-}

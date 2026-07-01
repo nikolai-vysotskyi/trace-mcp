@@ -294,34 +294,6 @@ analyticsCommand
   .option('--format <fmt>', 'Output: text | share | markdown | json', 'text')
   .action(runBenchmarkAction);
 
-export const benchmarkCommand = new Command('benchmark')
-  .description(
-    'Show where this project recomputes work — synthetic token-waste estimator across structured tasks',
-  )
-  .argument('[path]', 'Project path (defaults to current directory)')
-  .option('--queries <n>', 'Queries per scenario', '10')
-  .option('--seed <n>', 'Random seed', '42')
-  .option('--samples <n>', 'Seed-shifted re-runs for variance (default: 5)')
-  .option('--no-calibrate', 'Skip tokenizer calibration, use default chars/token ratio')
-  .option('--format <fmt>', 'Output: text | share | markdown | json', 'text')
-  .action(
-    async (
-      path: string | undefined,
-      opts: {
-        queries: string;
-        seed: string;
-        format: string;
-        samples?: string;
-        noCalibrate?: boolean;
-      },
-    ) => {
-      if (path && path !== '.') {
-        process.chdir(path);
-      }
-      await runBenchmarkAction(opts);
-    },
-  );
-
 // --- coverage ---
 analyticsCommand
   .command('coverage')
@@ -569,3 +541,31 @@ analyticsCommand
       analyticsStore.close();
     }
   });
+
+export const benchmarkCommand = new Command('benchmark')
+  .description(
+    'Show where this project recomputes work — synthetic token-waste estimator across structured tasks',
+  )
+  .argument('[path]', 'Project path (defaults to current directory)')
+  .option('--queries <n>', 'Queries per scenario', '10')
+  .option('--seed <n>', 'Random seed', '42')
+  .option('--samples <n>', 'Seed-shifted re-runs for variance (default: 5)')
+  .option('--no-calibrate', 'Skip tokenizer calibration, use default chars/token ratio')
+  .option('--format <fmt>', 'Output: text | share | markdown | json', 'text')
+  .action(
+    async (
+      path: string | undefined,
+      opts: {
+        queries: string;
+        seed: string;
+        format: string;
+        samples?: string;
+        noCalibrate?: boolean;
+      },
+    ) => {
+      if (path && path !== '.') {
+        process.chdir(path);
+      }
+      await runBenchmarkAction(opts);
+    },
+  );

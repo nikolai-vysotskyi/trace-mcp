@@ -134,6 +134,22 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
   ],
 };
 
+/** Resolve a preset by name, returning the tool set or null if unknown. */
+export function resolvePreset(name: string): Set<string> | 'all' | null {
+  const preset = TOOL_PRESETS[name];
+  if (preset === undefined) return null;
+  if (preset === 'all') return 'all';
+  return new Set(preset);
+}
+
+/** Get list of available preset names */
+export function listPresets(): { name: string; toolCount: number | 'all' }[] {
+  return Object.entries(TOOL_PRESETS).map(([name, tools]) => ({
+    name,
+    toolCount: tools === 'all' ? 'all' : tools.length,
+  }));
+}
+
 /**
  * Tools that should bypass Claude Code's ToolSearch deferral and stay
  * eagerly loaded even when the rest of trace-mcp's surface is hidden
@@ -165,19 +181,3 @@ export const ALWAYS_LOAD_TOOLS: ReadonlySet<string> = new Set([
   'register_edit',
   'batch',
 ]);
-
-/** Resolve a preset by name, returning the tool set or null if unknown. */
-export function resolvePreset(name: string): Set<string> | 'all' | null {
-  const preset = TOOL_PRESETS[name];
-  if (preset === undefined) return null;
-  if (preset === 'all') return 'all';
-  return new Set(preset);
-}
-
-/** Get list of available preset names */
-export function listPresets(): { name: string; toolCount: number | 'all' }[] {
-  return Object.entries(TOOL_PRESETS).map(([name, tools]) => ({
-    name,
-    toolCount: tools === 'all' ? 'all' : tools.length,
-  }));
-}
