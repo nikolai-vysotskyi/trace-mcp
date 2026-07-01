@@ -133,40 +133,59 @@ export function verifyDecision(
   // not flagged (too coarse, high false-positive rate).
   if (!decision.symbol_id) return FRESH;
 
-  const symbol = store.getSymbolBySymbolId(decision.symbol_id);
-  if (!symbol) {
-    // The decision points at a symbol the index no longer knows — renamed,
-    // moved, or deleted. Withhold/flag.
-    return { verification: 'symbol_missing', stale: true };
+  // Fail-open safety net (correctness-critical). Every code/git access below
+  // can throw — a locked or corrupt index DB, an internal Store invariant
+  // violation, a git subprocess blowing up in an unexpected way. The module
+  // contract is: verification NEVER hides a decision on its own failure. An
+  // uncaught throw here would propagate up through `verifyDecisions` and crash
+  // the whole recall (query_decisions / get_wake_up), turning a soft "couldn't
+  // verify" into hard data loss. So any unexpected error fails open to FRESH.
+  try {
+    const symbol = store.getSymbolBySymbolId(decision.symbol_id);
+    if (!symbol) {
+      // The decision points at a symbol the index no longer knows — renamed,
+      // moved, or deleted. Withhold/flag.
+      return { verification: 'symbol_missing', stale: true };
+    }
+
+    const file = store.getFileById(symbol.file_id);
+    if (!file) {
+      // Symbol row exists but its file is gone from the index — treat as missing.
+      return { verification: 'symbol_missing', stale: true };
+    }
+
+    // Compare the current on-disk slice against the slice at the last commit
+    // ≤ created_at. Any read failure fails-open to "ok".
+    const current = readDiskSlice(projectRoot, file.path, symbol.byte_start, symbol.byte_end);
+    if (current === null) return FRESH;
+
+    const commit = lastCommitBefore(projectRoot, file.path, decision.created_at);
+    if (!commit) return FRESH;
+
+    // The byte range is the CURRENT index range; the historical file may have
+    // had different offsets, so a byte-range slice of an old blob is only a
+    // heuristic. To keep false positives low we compare on the historical
+    // commit's own byte range when the slice lands cleanly; if the old slice
+    // read fails we fail-open. This is intentionally conservative — it flags
+    // the common case (symbol body edited in place) without crying wolf on
+    // offset drift.
+    const past = readCommitSlice(
+      projectRoot,
+      commit,
+      file.path,
+      symbol.byte_start,
+      symbol.byte_end,
+    );
+    if (past === null) return FRESH;
+
+    if (normalize(past) !== normalize(current)) {
+      return { verification: 'code_changed', stale: true };
+    }
+    return FRESH;
+  } catch {
+    // Fail-open: an internal error must never hide a decision.
+    return FRESH;
   }
-
-  const file = store.getFileById(symbol.file_id);
-  if (!file) {
-    // Symbol row exists but its file is gone from the index — treat as missing.
-    return { verification: 'symbol_missing', stale: true };
-  }
-
-  // Compare the current on-disk slice against the slice at the last commit
-  // ≤ created_at. Any read failure fails-open to "ok".
-  const current = readDiskSlice(projectRoot, file.path, symbol.byte_start, symbol.byte_end);
-  if (current === null) return FRESH;
-
-  const commit = lastCommitBefore(projectRoot, file.path, decision.created_at);
-  if (!commit) return FRESH;
-
-  // The byte range is the CURRENT index range; the historical file may have had
-  // different offsets, so a byte-range slice of an old blob is only a heuristic.
-  // To keep false positives low we compare on the historical commit's own
-  // byte range when the slice lands cleanly; if the old slice read fails we
-  // fail-open. This is intentionally conservative — it flags the common case
-  // (symbol body edited in place) without crying wolf on offset drift.
-  const past = readCommitSlice(projectRoot, commit, file.path, symbol.byte_start, symbol.byte_end);
-  if (past === null) return FRESH;
-
-  if (normalize(past) !== normalize(current)) {
-    return { verification: 'code_changed', stale: true };
-  }
-  return FRESH;
 }
 
 /** Trim trailing whitespace per line + collapse CRLF so cosmetic diffs don't flag. */
@@ -202,7 +221,16 @@ export function verifyDecisions(
       out.push(d);
       continue;
     }
-    const v = verifyDecision(d, store, projectRoot);
+    // Belt-and-suspenders: `verifyDecision` already fails open, but a per-row
+    // guard here guarantees one poisoned row can never crash the whole batch
+    // (and thus the whole recall). On any unexpected error, serve the row
+    // unflagged rather than dropping it.
+    let v: DecisionVerification = FRESH;
+    try {
+      v = verifyDecision(d, store, projectRoot);
+    } catch {
+      v = FRESH;
+    }
     if (v.stale && opts.withhold) continue;
     if (v.stale) {
       out.push({ ...d, verification: v.verification, stale: true });
