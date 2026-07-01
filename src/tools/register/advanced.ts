@@ -10,6 +10,7 @@ import {
   discoverClaudeSessions,
 } from '../advanced/claude-sessions.js';
 import { discoverHermesSessions } from '../advanced/hermes-sessions.js';
+import { getFederationImpact } from '../advanced/federation-impact.js';
 import {
   getCrossDomainDependencies,
   getDomainContext,
@@ -164,6 +165,37 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       async ({ service }) => {
         const result = getContractDrift(topoStore, store, projectRoot, additionalRepos, {
           service,
+        });
+        if (result.isErr())
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      },
+    );
+
+    server.tool(
+      'get_federation_impact',
+      'Aggregates cross-repo impact into ONE call: if you change an endpoint, service, or symbol, this combines subproject client-call impact (which repos/files call it), cross-service edge impact (dependent services via HTTP/event edges), and contract drift (spec vs implementation) into a single blast-radius report — instead of manually chaining get_subproject_impact + get_cross_service_impact + get_contract_drift. Requires at least one of endpoint or service. Read-only. Returns JSON: { target, affected_clients, affected_services, contract_drift, risk_level, summary, total_affected }.',
+      {
+        endpoint: optionalNonEmptyString(512).describe(
+          'Endpoint path or pattern (e.g. /api/users). Used to find client callers and service-level impact.',
+        ),
+        service: optionalNonEmptyString(256).describe(
+          'Service name. Used for cross-service edge impact and contract drift.',
+        ),
+        symbol_id: optionalNonEmptyString(512).describe(
+          'Symbol FQN being changed (informational — included in the target field; per-repo symbol resolution happens automatically when per-repo indexes exist).',
+        ),
+        method: optionalNonEmptyString(10).describe('HTTP method filter (e.g. GET, POST)'),
+      },
+      async ({ endpoint, service, symbol_id, method }) => {
+        const result = getFederationImpact(topoStore, store, projectRoot, additionalRepos, {
+          endpoint,
+          service,
+          symbol_id,
+          method,
         });
         if (result.isErr())
           return {

@@ -3,7 +3,7 @@
  * Supports macOS and Windows.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import https from 'node:https';
 import os from 'node:os';
@@ -146,28 +146,64 @@ function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<voi
 }
 
 /** Pin the app to the macOS Dock (persistent-apps) if not already present. */
-function pinToDock(appPath: string): void {
+export function pinToDock(appPath: string): void {
   try {
     // Check if already in Dock
-    const dockPlist = execSync('defaults read com.apple.dock persistent-apps', {
+    const dockPlist = execFileSync('defaults', ['read', 'com.apple.dock', 'persistent-apps'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     if (dockPlist.includes(appPath)) return;
 
-    // Add to Dock
+    // Add to Dock. Runs via execFileSync (argv array, no shell) so appPath —
+    // embedded in the plist XML entry below — can never break out of the
+    // command regardless of quotes/metacharacters it contains.
     const entry = `<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>${appPath}</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>`;
-    execSync(`defaults write com.apple.dock persistent-apps -array-add '${entry}'`, {
+    execFileSync('defaults', ['write', 'com.apple.dock', 'persistent-apps', '-array-add', entry], {
       stdio: 'pipe',
     });
-    execSync('killall Dock', { stdio: 'pipe' });
+    execFileSync('killall', ['Dock'], { stdio: 'pipe' });
   } catch {
     // Non-critical — don't fail the install if Dock pinning doesn't work
   }
 }
 
+/**
+ * Unzip a downloaded archive into destDir using the system `unzip` (macOS).
+ * Runs via execFileSync (argv array, no shell) so archivePath/destDir —
+ * which are ultimately derived from a GitHub Releases API asset name and
+ * therefore not fully trusted — can never break out into a second command
+ * regardless of embedded shell metacharacters.
+ */
+export function unzipMac(archivePath: string, destDir: string): void {
+  execFileSync('unzip', ['-q', '-o', archivePath, '-d', destDir], { stdio: 'pipe' });
+}
+
+/** Run a downloaded NSIS installer silently (Windows). See {@link unzipMac} for provenance notes. */
+export function runNsisInstaller(archivePath: string, destDir: string): void {
+  execFileSync(archivePath, ['/S', `/D=${destDir}`], { stdio: 'pipe', timeout: 120000 });
+}
+
+/** Extract a downloaded zip via PowerShell's Expand-Archive (Windows). See {@link unzipMac} for provenance notes. */
+export function expandArchiveWindows(archivePath: string, destDir: string): void {
+  execFileSync(
+    'powershell',
+    [
+      '-NoProfile',
+      '-Command',
+      'Expand-Archive',
+      '-Path',
+      archivePath,
+      '-DestinationPath',
+      destDir,
+      '-Force',
+    ],
+    { stdio: 'pipe', timeout: 120000 },
+  );
+}
+
 /** Create a Start Menu shortcut on Windows. */
-function createStartMenuShortcut(exePath: string): void {
+export function createStartMenuShortcut(exePath: string): void {
   try {
     const startMenuDir = path.join(
       process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'),
@@ -179,7 +215,13 @@ function createStartMenuShortcut(exePath: string): void {
     fs.mkdirSync(startMenuDir, { recursive: true });
     const shortcutPath = path.join(startMenuDir, 'trace-mcp.lnk');
 
-    // Use PowerShell to create .lnk shortcut
+    // Use PowerShell to create .lnk shortcut. Single quotes are still
+    // escaped for the PowerShell string-literal parser (`''` is PowerShell's
+    // own quote-escaping, unrelated to the outer process boundary). Running
+    // via execFileSync (argv array, no shell) means exePath/shortcutPath can
+    // no longer break out of the *shell* layer regardless of their content —
+    // only PowerShell's own parser sees the script text, and it only ever
+    // receives a single literal argv element.
     const ps = `
       $ws = New-Object -ComObject WScript.Shell;
       $sc = $ws.CreateShortcut('${shortcutPath.replace(/'/g, "''")}');
@@ -188,7 +230,7 @@ function createStartMenuShortcut(exePath: string): void {
       $sc.Description = 'trace-mcp';
       $sc.Save();
     `.replace(/\n/g, ' ');
-    execSync(`powershell -NoProfile -Command "${ps}"`, { stdio: 'pipe' });
+    execFileSync('powershell', ['-NoProfile', '-Command', ps], { stdio: 'pipe' });
   } catch {
     // Non-critical — don't fail the install if shortcut creation doesn't work
   }
@@ -285,7 +327,7 @@ export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<In
       }
 
       // 5. Unzip
-      execSync(`unzip -q -o "${archivePath}" -d "${INSTALL_DIR}"`, { stdio: 'pipe' });
+      unzipMac(archivePath, INSTALL_DIR);
 
       // 6. Write version marker
       fs.writeFileSync(path.join(INSTALL_DIR, '.trace-mcp-version'), release!.tag, 'utf-8');
@@ -304,13 +346,10 @@ export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<In
 
     if (isExeInstaller) {
       // Run NSIS installer silently
-      execSync(`"${archivePath}" /S /D=${INSTALL_DIR}`, { stdio: 'pipe', timeout: 120000 });
+      runNsisInstaller(archivePath, INSTALL_DIR);
     } else {
       // Extract zip using PowerShell (available on all modern Windows)
-      execSync(
-        `powershell -NoProfile -Command "Expand-Archive -Path '${archivePath}' -DestinationPath '${INSTALL_DIR}' -Force"`,
-        { stdio: 'pipe', timeout: 120000 },
-      );
+      expandArchiveWindows(archivePath, INSTALL_DIR);
     }
 
     // Write version marker
