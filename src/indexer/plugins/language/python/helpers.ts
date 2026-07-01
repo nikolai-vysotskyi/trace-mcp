@@ -2,7 +2,9 @@
  * Helper utilities for the Python language plugin.
  * Extracts AST-walking logic to keep the main plugin under 300 lines.
  */
+import type { TSNode } from '../../../../parser/tree-sitter.js';
 import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
+import { detectMinPythonVersion } from './version-features.js';
 
 export type { TSNode } from '../../../../parser/tree-sitter.js';
 
@@ -1760,3 +1762,358 @@ const PYTHON_BUILTINS = new Set([
   'FutureWarning',
   'UserWarning',
 ]);
+
+// ─── Class extraction ────────────────────────────────────────
+// Extracted from PythonLanguagePlugin.extractClass / extractClassAttributes /
+// extractModuleVariable to keep the plugin class small and each concern
+// independently testable. Behavior is identical to the original inline code.
+
+/**
+ * Build the metadata object for a class symbol: decorators, bases, type params,
+ * visibility, docstring, metaclass, minimum Python version, special class
+ * patterns (dataclass/pydantic/protocol/abstract/enum), typing patterns, and
+ * class-level type references.
+ */
+export function buildClassMetadata(
+  node: TSNode,
+  effectiveNode: TSNode,
+  bases: string[],
+  decorators: string[],
+  typeParams: unknown,
+  name: string,
+): Record<string, unknown> {
+  const meta: Record<string, unknown> = {};
+  if (decorators.length > 0) meta.decorators = decorators;
+  if (bases.length > 0) meta.bases = bases;
+  if (typeParams) meta.typeParams = typeParams;
+
+  // Visibility
+  const vis = detectVisibility(name);
+  if (vis !== 'public') meta.visibility = vis;
+
+  // Docstring
+  const doc = extractDocstring(node);
+  if (doc) meta.docstring = doc;
+
+  // Metaclass
+  const metaclass = extractMetaclass(node);
+  if (metaclass) meta.metaclass = metaclass;
+
+  // Detect minimum Python version from AST features
+  const nodeTypes = collectNodeTypes(effectiveNode);
+  const minVer = detectMinPythonVersion(nodeTypes);
+  if (minVer) meta.minPythonVersion = minVer;
+
+  // Detect special class patterns
+  if (decorators.includes('dataclass') || decorators.includes('dataclasses.dataclass')) {
+    meta.dataclass = true;
+  }
+  if (bases.some((b) => b === 'BaseModel' || b.endsWith('.BaseModel'))) {
+    meta.pydantic = true;
+  }
+  if (bases.some((b) => b === 'Protocol' || b.endsWith('.Protocol'))) {
+    meta.protocol = true;
+  }
+  if (bases.some((b) => b === 'ABC' || b === 'ABCMeta' || b.endsWith('.ABC'))) {
+    meta.abstract = true;
+  }
+  if (
+    bases.some((b) => b === 'Enum' || b === 'IntEnum' || b === 'StrEnum' || b.endsWith('.Enum'))
+  ) {
+    meta.enum = true;
+  }
+
+  // Typing patterns
+  detectTypingPatterns(bases, meta);
+
+  // Type-reference names from annotated class attributes (`user: Optional[User]`)
+  const classTypeRefs = collectClassTypeRefs(node);
+  if (classTypeRefs.length > 0) meta.typeRefs = classTypeRefs;
+
+  return meta;
+}
+
+/** Find the AST node for a method by name (for docstring/type extraction). */
+export function findMethodNode(body: TSNode, methodName: string): TSNode | null {
+  for (const child of body.namedChildren) {
+    if (child.type === 'function_definition' && getNodeName(child) === methodName) {
+      return child;
+    }
+    if (child.type === 'decorated_definition') {
+      const inner = child.namedChildren.find((c) => c.type === 'function_definition');
+      if (inner && getNodeName(inner) === methodName) return inner;
+    }
+  }
+  return null;
+}
+
+/** Find the `__init__` method node in a class body, if present. */
+export function findInitMethod(body: TSNode): TSNode | null {
+  for (const child of body.namedChildren) {
+    if (child.type === 'function_definition') {
+      if (getNodeName(child) === '__init__') return child;
+    }
+    if (child.type === 'decorated_definition') {
+      const inner = child.namedChildren.find((c) => c.type === 'function_definition');
+      if (inner && getNodeName(inner) === '__init__') return inner;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract methods from a class body: attach fqn, visibility, docstring, call
+ * sites, type-annotation edges, decorator edges, and property grouping, then
+ * push each into `symbols` and any resulting edges into `edges`.
+ */
+export function processClassMethods(
+  body: TSNode,
+  filePath: string,
+  modulePath: string,
+  className: string,
+  classSymbolId: string,
+  symbols: RawSymbol[],
+  edges: RawEdge[],
+): void {
+  const methods = extractClassMethods(body, filePath, className, classSymbolId);
+  for (const method of methods) {
+    method.fqn = makeFqn([modulePath, className, method.name]);
+
+    // Visibility on methods
+    const methodVis = detectVisibility(method.name);
+    if (methodVis !== 'public') {
+      method.metadata = method.metadata ?? {};
+      method.metadata.visibility = methodVis;
+    }
+
+    // Docstring and call sites on methods — need the AST node
+    const methodNode = findMethodNode(body, method.name);
+    if (methodNode) {
+      const methodDoc = extractDocstring(methodNode);
+      if (methodDoc) {
+        method.metadata = method.metadata ?? {};
+        method.metadata.docstring = methodDoc;
+      }
+
+      // Call sites for call edge resolver
+      const methodBody = methodNode.childForFieldName('body');
+      if (methodBody) {
+        const callSites = extractCallSites(methodBody);
+        if (callSites.length > 0) {
+          method.metadata = method.metadata ?? {};
+          method.metadata.callSites = callSites;
+        }
+      }
+
+      // Type annotation edges from method
+      edges.push(...extractTypeAnnotationEdges(methodNode, method.symbolId));
+    }
+
+    // Decorator edges from method
+    if (method.metadata?.decorators && Array.isArray(method.metadata.decorators)) {
+      edges.push(...extractDecoratorEdges(method.metadata.decorators as string[], method.symbolId));
+
+      // Property grouping
+      detectPropertyGrouping(method.metadata.decorators as string[], method.name, method.metadata);
+    }
+
+    symbols.push(method);
+  }
+}
+
+/**
+ * Extract instance attributes declared in a class `__init__` method and append
+ * any that aren't already present as symbols (deduped by parent + name).
+ */
+export function appendInstanceAttributes(
+  body: TSNode,
+  filePath: string,
+  modulePath: string,
+  className: string,
+  classSymbolId: string,
+  symbols: RawSymbol[],
+): void {
+  const initMethod = findInitMethod(body);
+  if (!initMethod) return;
+  const initBody = initMethod.childForFieldName('body');
+  if (!initBody) return;
+
+  const attrs = extractInstanceAttributes(initBody, filePath, className, classSymbolId);
+  for (const attr of attrs) {
+    const exists = symbols.some((s) => s.parentSymbolId === classSymbolId && s.name === attr.name);
+    if (!exists) {
+      attr.fqn = makeFqn([modulePath, className, attr.name]);
+      // Visibility on instance attributes
+      const attrVis = detectVisibility(attr.name);
+      if (attrVis !== 'public') {
+        attr.metadata = attr.metadata ?? {};
+        attr.metadata.visibility = attrVis;
+      }
+      symbols.push(attr);
+    }
+  }
+}
+
+/** Append nested classes declared inside a class body (Meta, Config, etc.). */
+export function appendNestedClasses(
+  body: TSNode,
+  filePath: string,
+  className: string,
+  classSymbolId: string,
+  modulePath: string,
+  symbols: RawSymbol[],
+): void {
+  const nestedClasses = extractNestedDefinitions(
+    body,
+    filePath,
+    className,
+    classSymbolId,
+    modulePath,
+  );
+  // Only keep nested classes; methods and standalone functions are handled elsewhere.
+  for (const nested of nestedClasses) {
+    if (nested.kind === 'class') {
+      symbols.push(nested);
+    }
+  }
+}
+
+/**
+ * Extract class-level variable assignments (class attributes) as symbols:
+ * plain assignments (`x = 1`) and typed assignments (`x: int`, `x: int = 1`).
+ */
+export function extractClassAttributeSymbols(
+  body: TSNode,
+  filePath: string,
+  modulePath: string,
+  className: string,
+  classSymbolId: string,
+  symbols: RawSymbol[],
+): void {
+  for (const child of body.namedChildren) {
+    if (child.type !== 'expression_statement') continue;
+    const expr = child.namedChildren[0];
+    if (!expr) continue;
+
+    if (expr.type === 'assignment') {
+      const left = expr.childForFieldName('left');
+      if (left && left.type === 'identifier') {
+        const name = left.text;
+        const kind: SymbolKind = isAllCaps(name) ? 'constant' : 'property';
+        const vis = detectVisibility(name);
+        const meta: Record<string, unknown> | undefined =
+          vis !== 'public' ? { visibility: vis } : undefined;
+        symbols.push({
+          symbolId: makeSymbolId(filePath, name, kind, className),
+          name,
+          kind,
+          fqn: makeFqn([modulePath, className, name]),
+          parentSymbolId: classSymbolId,
+          byteStart: child.startIndex,
+          byteEnd: child.endIndex,
+          lineStart: child.startPosition.row + 1,
+          lineEnd: child.endPosition.row + 1,
+          metadata: meta,
+        });
+      }
+    }
+    if (expr.type === 'type') continue;
+  }
+
+  // Handle typed assignments (annotation): `name: type` or `name: type = value`
+  for (const child of body.namedChildren) {
+    if (child.type !== 'expression_statement') continue;
+    const expr = child.namedChildren[0];
+    if (!expr) continue;
+
+    if (expr.type === 'type' && expr.namedChildren.length > 0) {
+      const innerAssign = expr.namedChildren[0];
+      if (innerAssign && innerAssign.type === 'identifier') {
+        const name = innerAssign.text;
+        const kind: SymbolKind = isAllCaps(name) ? 'constant' : 'property';
+        const exists = symbols.some((s) => s.parentSymbolId === classSymbolId && s.name === name);
+        if (!exists) {
+          const vis = detectVisibility(name);
+          const meta: Record<string, unknown> | undefined =
+            vis !== 'public' ? { visibility: vis } : undefined;
+          symbols.push({
+            symbolId: makeSymbolId(filePath, name, kind, className),
+            name,
+            kind,
+            fqn: makeFqn([modulePath, className, name]),
+            parentSymbolId: classSymbolId,
+            byteStart: child.startIndex,
+            byteEnd: child.endIndex,
+            lineStart: child.startPosition.row + 1,
+            lineEnd: child.endPosition.row + 1,
+            metadata: meta,
+          });
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Extract a top-level module variable / constant symbol from an
+ * expression_statement node: simple assignments and tuple unpacking.
+ */
+export function extractModuleVariableSymbols(
+  node: TSNode,
+  filePath: string,
+  modulePath: string,
+  symbols: RawSymbol[],
+): void {
+  const expr = node.namedChildren[0];
+  if (!expr) return;
+
+  if (expr.type === 'assignment') {
+    const left = expr.childForFieldName('left');
+    if (left && left.type === 'identifier') {
+      const name = left.text;
+      // Skip __all__ — it's handled separately as metadata
+      if (name === '__all__') return;
+      const kind: SymbolKind = isAllCaps(name) ? 'constant' : 'variable';
+      const sig = node.text.split('\n')[0].trim().slice(0, 80);
+      const vis = detectVisibility(name);
+      const meta: Record<string, unknown> | undefined =
+        vis !== 'public' ? { visibility: vis } : undefined;
+
+      symbols.push({
+        symbolId: makeSymbolId(filePath, name, kind),
+        name,
+        kind,
+        fqn: makeFqn([modulePath, name]),
+        signature: sig,
+        byteStart: node.startIndex,
+        byteEnd: node.endIndex,
+        lineStart: node.startPosition.row + 1,
+        lineEnd: node.endPosition.row + 1,
+        metadata: meta,
+      });
+    }
+    // Handle tuple unpacking: a, b = 1, 2
+    if (left && left.type === 'pattern_list') {
+      for (const id of left.namedChildren) {
+        if (id.type === 'identifier') {
+          const name = id.text;
+          const kind: SymbolKind = isAllCaps(name) ? 'constant' : 'variable';
+          const vis = detectVisibility(name);
+          const meta: Record<string, unknown> | undefined =
+            vis !== 'public' ? { visibility: vis } : undefined;
+          symbols.push({
+            symbolId: makeSymbolId(filePath, name, kind),
+            name,
+            kind,
+            fqn: makeFqn([modulePath, name]),
+            byteStart: node.startIndex,
+            byteEnd: node.endIndex,
+            lineStart: node.startPosition.row + 1,
+            lineEnd: node.endPosition.row + 1,
+            metadata: meta,
+          });
+        }
+      }
+    }
+  }
+}
