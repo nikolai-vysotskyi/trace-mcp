@@ -1077,4 +1077,163 @@ app.get('/search', (req, res) => {
       expect(sqlFlow!.sanitized).toBe(false);
     });
   });
+
+  // -------------------------------------------------------------------
+  // Multi-hop reassignment chains (a → b → c → sink)
+  // -------------------------------------------------------------------
+
+  describe('multi-hop reassignment chains', () => {
+    test('propagates taint through a three-hop assignment chain', () => {
+      writeFile(
+        store,
+        'src/routes/multihop.ts',
+        `
+app.get('/user/:id', (req, res) => {
+  let a = req.query.id;
+  let b = a;
+  let c = b;
+  db.query(\`SELECT * FROM users WHERE id = \${c}\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      // Taint must reach the sink via a → b → c.
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89' && f.sink.variable === 'c');
+      expect(sqlFlow).toBeDefined();
+      expect(sqlFlow!.sanitized).toBe(false);
+    });
+
+    test('does NOT flag when the chain is sanitized partway through', () => {
+      writeFile(
+        store,
+        'src/routes/multihop-sanitized.ts',
+        `
+app.get('/user/:id', (req, res) => {
+  let a = req.query.id;
+  let b = sanitize(a);
+  let c = b;
+  db.query(\`SELECT * FROM users WHERE id = \${c}\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      // A sanitizer sits between the source and the sink on the taint path, so
+      // no unsanitized flow may be reported by default.
+      const unsanitized = data.flows.filter((f) => f.sink.cwe === 'CWE-89' && !f.sanitized);
+      expect(unsanitized).toHaveLength(0);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Destructuring reassignment (object + array)
+  // -------------------------------------------------------------------
+
+  describe('destructuring reassignment', () => {
+    test('object destructuring: const { id } = req.query → sink', () => {
+      writeFile(
+        store,
+        'src/routes/destructure-obj.ts',
+        `
+app.get('/user', (req, res) => {
+  const { id } = req.query;
+  db.query(\`SELECT * FROM users WHERE id = \${id}\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89' && f.sink.variable === 'id');
+      expect(sqlFlow).toBeDefined();
+      expect(sqlFlow!.sanitized).toBe(false);
+    });
+
+    test('array destructuring: const [id] = req.query.ids → sink', () => {
+      writeFile(
+        store,
+        'src/routes/destructure-arr.ts',
+        `
+app.get('/user', (req, res) => {
+  const [id] = req.query.ids;
+  db.query(\`SELECT * FROM users WHERE id = \${id}\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89' && f.sink.variable === 'id');
+      expect(sqlFlow).toBeDefined();
+      expect(sqlFlow!.sanitized).toBe(false);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // Property taint after numeric coercion
+  // -------------------------------------------------------------------
+
+  describe('property taint after numeric coercion', () => {
+    test('object property fed only by a Number()-coerced value stays pruned', () => {
+      // n is provably numeric (Number(...)). obj.userId is exactly n, so a
+      // sink interpolating ONLY obj.userId cannot be exploited by a string
+      // injection. This should NOT flag — verifying the pruner is not too
+      // timid, and documenting current behavior.
+      writeFile(
+        store,
+        'src/routes/coerce-prop-safe.ts',
+        `
+app.get('/user', (req, res) => {
+  let n = Number(req.query.id);
+  let obj = { userId: n };
+  db.query(\`SELECT * FROM users WHERE id = \${obj.userId}\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      // obj.userId is numeric-only; no string-injection flag expected.
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89');
+      expect(sqlFlow).toBeUndefined();
+    });
+
+    test('a raw string interpolated alongside a coerced numeric still flags', () => {
+      // name is a raw attacker-controlled string interpolated in the SAME
+      // template as the numeric obj.userId. The string part is exploitable and
+      // MUST flag regardless of the numeric neighbour.
+      writeFile(
+        store,
+        'src/routes/coerce-prop-mixed.ts',
+        `
+app.get('/user', (req, res) => {
+  let n = Number(req.query.id);
+  const name = req.query.name;
+  db.query(\`SELECT * FROM users WHERE id = \${n} AND name = '\${name}'\`);
+});
+`,
+        'typescript',
+      );
+
+      const result = taintAnalysis(store, TEST_DIR, {});
+      expect(result.isOk()).toBe(true);
+      const data = result._unsafeUnwrap();
+      const sqlFlow = data.flows.find((f) => f.sink.cwe === 'CWE-89' && f.sink.variable === 'name');
+      expect(sqlFlow).toBeDefined();
+      expect(sqlFlow!.sanitized).toBe(false);
+    });
+  });
 });
