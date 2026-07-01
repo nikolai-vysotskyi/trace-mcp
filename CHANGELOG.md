@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.43.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.43.2...v1.43.3) (2026-06-27)
+
+
+### Bug Fixes
+
+* **daemon:** seed initialize frame into swapped-in proxy backends ([#209](https://github.com/nikolai-vysotskyi/trace-mcp/issues/209)) ([90eee30](https://github.com/nikolai-vysotskyi/trace-mcp/commit/90eee306c8df3e5c2a9b3be5b4c2ffbfa824679a))
+
 ## [1.43.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.43.1...v1.43.2) (2026-06-25)
 
 
