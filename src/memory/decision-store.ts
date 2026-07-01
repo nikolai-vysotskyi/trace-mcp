@@ -10,7 +10,6 @@
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
-import { relativizeUnderRoot } from '../utils/path-relativize.js';
 import type { AuditLogger } from './decision-audit-log.js';
 import { MemoOperations } from './decision-store-memo-ops.js';
 import { ClusterOperations } from './decision-store-cluster-ops.js';
@@ -19,6 +18,7 @@ import { ConsolidationOperations } from './decision-store-consolidation-ops.js';
 import { SessionOperations } from './decision-store-session-ops.js';
 import { QueryOperations } from './decision-store-query-ops.js';
 import { ReviewOperations, extractSignalsForReview } from './decision-store-review-ops.js';
+import { MutationOperations } from './decision-store-mutation-ops.js';
 import type { ConsolidationVerdict } from './decision-consolidator.js';
 
 // Re-export for back-compat: the tuner + tests import extractSignalsForReview
@@ -396,6 +396,8 @@ export class DecisionStore {
   private queryOps: QueryOperations;
   /** Memoir-style review-queue persistence, extracted from this class. */
   private reviewOps: ReviewOperations;
+  /** Decision write-path (CRUD + supersession), extracted from this class. */
+  private mutationOps: MutationOperations;
 
   constructor(
     dbPath: string,
@@ -408,6 +410,7 @@ export class DecisionStore {
     this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
     this.auditLogger = opts?.auditLogger ?? null;
     this.memoHistoryLimit = Math.max(1, opts?.memoHistoryLimit ?? 10);
+    this.mutationOps = new MutationOperations(this.db, this.auditLogger);
     this.memoOps = new MemoOperations(this.db, this.memoHistoryLimit);
     this.clusterOps = new ClusterOperations(this.db);
     this.schedulerOps = new SchedulerStateOperations(this.db);
@@ -444,33 +447,6 @@ export class DecisionStore {
       this.migrate();
       this.scheduleWalCheckpoint();
       logger.debug({ dbPath }, 'Decision store initialized');
-    }
-  }
-
-  /**
-   * Best-effort audit-log emit. Wrapped in try/catch so a failed JSONL
-   * write never affects the underlying SQLite mutation. No-op when no
-   * logger is configured.
-   */
-  private auditEmit(
-    op: 'add' | 'update' | 'invalidate',
-    decisionId: number,
-    row?: { title?: string | null; type?: string | null },
-  ): void {
-    if (!this.auditLogger) return;
-    try {
-      this.auditLogger.log({
-        op,
-        decision_id: decisionId,
-        title: row?.title ?? undefined,
-        type: row?.type ?? undefined,
-        ts: new Date().toISOString(),
-      });
-    } catch (err) {
-      logger.debug?.(
-        { err: (err as Error).message },
-        'decision audit log write failed (non-fatal)',
-      );
     }
   }
 
@@ -623,26 +599,7 @@ export class DecisionStore {
       }
     >,
   ): DecisionRow | undefined {
-    const cols = Object.keys(fields) as Array<keyof typeof fields>;
-    if (cols.length === 0) return this.getDecision(id);
-
-    const setClauses = cols.map((k) => `${k} = ?`).join(', ');
-    const values = cols.map((k) => {
-      if (k === 'tags' && Array.isArray(fields[k])) return JSON.stringify(fields[k]);
-      return fields[k] ?? null;
-    });
-
-    this.db
-      .prepare(
-        `UPDATE decisions SET ${setClauses}, updated_at = strftime('%s','now')*1000 WHERE id = ?`,
-      )
-      .run(...values, id);
-
-    const updated = this.getDecision(id);
-    if (updated) {
-      this.auditEmit('update', id, { title: updated.title, type: updated.type });
-    }
-    return updated;
+    return this.mutationOps.updateDecision(id, fields);
   }
 
   close(): void {
@@ -675,52 +632,11 @@ export class DecisionStore {
    * `addDecisionWithSupersession`.
    */
   addDecision(input: DecisionInput, opts?: { supersede?: boolean }): DecisionRow {
-    if (opts?.supersede) {
-      this.supersedeConflicting(input);
-    }
-    const now = new Date().toISOString();
-    // Canonicalise file_path to repo-relative when it sits inside project_root.
-    // Stops absolute /Users/<dev>/<host-only>/... paths leaking into the
-    // decision store and downstream MCP responses (mempalace #1325).
-    const canonFilePath = input.project_root
-      ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
-      : (input.file_path ?? null);
-    const stmt = this.db.prepare(`
-      INSERT INTO decisions (title, content, type, project_root, service_name, symbol_id, file_path, tags, valid_from, session_id, source, confidence, git_branch, review_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now')*1000)
-    `);
-    const info = stmt.run(
-      input.title,
-      input.content,
-      input.type,
-      input.project_root,
-      input.service_name ?? null,
-      input.symbol_id ?? null,
-      canonFilePath,
-      input.tags ? JSON.stringify(input.tags) : null,
-      input.valid_from ?? now,
-      input.session_id ?? null,
-      input.source ?? 'manual',
-      input.confidence ?? 1.0,
-      input.git_branch ?? null,
-      input.review_status ?? null,
-      now,
-    );
-    const newId = info.lastInsertRowid as number;
-    this.auditEmit('add', newId, { title: input.title, type: input.type });
-    return this.getDecision(newId)!;
+    return this.mutationOps.addDecision(input, opts);
   }
 
   addDecisions(inputs: DecisionInput[]): number {
-    const insertMany = this.db.transaction((items: DecisionInput[]) => {
-      let count = 0;
-      for (const input of items) {
-        this.addDecision(input);
-        count++;
-      }
-      return count;
-    });
-    return insertMany(inputs);
+    return this.mutationOps.addDecisions(inputs);
   }
 
   /**
@@ -734,63 +650,11 @@ export class DecisionStore {
     decision: DecisionRow;
     superseded: number[];
   } {
-    const superseded = this.findSupersedable(input);
-    for (const id of superseded) {
-      this.invalidateDecision(id);
-    }
-    // Already invalidated above — don't re-run the scan inside addDecision.
-    const decision = this.addDecision(input);
-    return { decision, superseded };
-  }
-
-  /**
-   * Find active decisions that the given input would supersede (same
-   * state key). Returns their ids. Pure read — does NOT invalidate. The
-   * canonicalised `file_path` mirrors `addDecision` so absolute-vs-relative
-   * inputs collide on the same stored rows.
-   */
-  private findSupersedable(input: DecisionInput): number[] {
-    if (!input.project_root) return [];
-    const symbolId = input.symbol_id ?? null;
-    const canonFilePath = input.project_root
-      ? (relativizeUnderRoot(input.file_path, input.project_root) ?? null)
-      : (input.file_path ?? null);
-    // No anchor → no state key → never supersedes.
-    if (!symbolId && !canonFilePath) return [];
-
-    const conditions: string[] = ['project_root = ?', 'type = ?', 'valid_until IS NULL'];
-    const params: unknown[] = [input.project_root, input.type];
-    if (symbolId) {
-      // Symbol-anchored state key: match the exact symbol. File-only rows
-      // (symbol_id IS NULL) must NOT collide with a symbol-anchored insert.
-      conditions.push('symbol_id = ?');
-      params.push(symbolId);
-    } else {
-      // File-anchored state key: only rows that are ALSO file-only (no
-      // symbol) on the same file. Keeps the heuristic conservative.
-      conditions.push('symbol_id IS NULL');
-      conditions.push('file_path = ?');
-      params.push(canonFilePath);
-    }
-    const rows = this.db
-      .prepare(`SELECT id FROM decisions WHERE ${conditions.join(' AND ')}`)
-      .all(...params) as Array<{ id: number }>;
-    return rows.map((r) => r.id);
-  }
-
-  /** Invalidate every active decision sharing the input's state key. */
-  private supersedeConflicting(input: DecisionInput): number[] {
-    const ids = this.findSupersedable(input);
-    for (const id of ids) {
-      this.invalidateDecision(id);
-    }
-    return ids;
+    return this.mutationOps.addDecisionWithSupersession(input);
   }
 
   getDecision(id: number): DecisionRow | undefined {
-    return this.db.prepare('SELECT * FROM decisions WHERE id = ?').get(id) as
-      | DecisionRow
-      | undefined;
+    return this.mutationOps.getDecision(id);
   }
 
   /**
@@ -840,26 +704,11 @@ export class DecisionStore {
   }
 
   invalidateDecision(id: number, validUntil?: string): boolean {
-    const until = validUntil ?? new Date().toISOString();
-    const info = this.db
-      .prepare(
-        `UPDATE decisions SET valid_until = ?, updated_at = strftime('%s','now')*1000
-         WHERE id = ? AND valid_until IS NULL`,
-      )
-      .run(until, id);
-    if (info.changes > 0) {
-      const row = this.getDecision(id);
-      this.auditEmit('invalidate', id, {
-        title: row?.title,
-        type: row?.type,
-      });
-    }
-    return info.changes > 0;
+    return this.mutationOps.invalidateDecision(id, validUntil);
   }
 
   deleteDecision(id: number): boolean {
-    const info = this.db.prepare('DELETE FROM decisions WHERE id = ?').run(id);
-    return info.changes > 0;
+    return this.mutationOps.deleteDecision(id);
   }
 
   // ── QUERY ──────────────────────────────────────────────────────────
