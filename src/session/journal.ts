@@ -107,6 +107,25 @@ export class SessionJournal {
   /** Drop the oldest 10% in one pass to amortise the splice cost. */
   private static readonly DROP_BATCH = 1_000;
 
+  /**
+   * Tools considered "independent, batchable" read-only lookups for Pattern 3
+   * (unbatched-calls coaching hint). Broadened from the original 4-tool set
+   * {get_outline, get_symbol, search, find_usages} to cover other commonly
+   * chained single-purpose lookups.
+   */
+  private static readonly BATCHABLE_TOOLS = new Set([
+    'get_outline',
+    'get_symbol',
+    'search',
+    'find_usages',
+    'get_context_bundle',
+    'get_change_impact',
+    'assess_change_risk',
+    'get_tests_for',
+  ]);
+  /** Window size for Pattern 3: fire after this many trailing independent calls. */
+  private static readonly BATCHABLE_WINDOW = 3;
+
   /** Tools whose results are content-heavy and safe to dedup (deterministic for same params) */
   private static readonly DEDUP_TOOLS = new Set([
     'get_symbol',
@@ -392,13 +411,19 @@ export class SessionJournal {
     }
 
     // Pattern 3: Multiple independent tool calls → suggest batch
-    if (this.entries.length >= 6) {
-      const lastN = this.entries.slice(-6);
+    // Tightened: fires after the 3rd unbatched call (was 6th) so the coaching
+    // hint lands before the waste has already happened, not after. Broadened
+    // beyond the original 4-tool set to cover other commonly-batchable
+    // read-only lookups. Same-tool repeats don't count as "independent" —
+    // uniqueTools >= window size means every call in the window used a
+    // different tool, which is the actual "should have been one batch{}"
+    // signature (as opposed to N reads of the same symbol/file, which
+    // Patterns 1/4 already handle).
+    if (this.entries.length >= SessionJournal.BATCHABLE_WINDOW) {
+      const lastN = this.entries.slice(-SessionJournal.BATCHABLE_WINDOW);
       const uniqueTools = new Set(lastN.map((e) => e.tool));
-      const allIndependent = lastN.every((e) =>
-        ['get_outline', 'get_symbol', 'search', 'find_usages'].includes(e.tool),
-      );
-      if (uniqueTools.size >= 3 && allIndependent) {
+      const allIndependent = lastN.every((e) => SessionJournal.BATCHABLE_TOOLS.has(e.tool));
+      if (uniqueTools.size >= SessionJournal.BATCHABLE_WINDOW && allIndependent) {
         return "You're making many small independent queries. Consider using the batch tool to combine them into a single request — reduces round-trips.";
       }
     }

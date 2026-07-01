@@ -157,6 +157,69 @@ describe('SessionJournal — optimization hints', () => {
     // Pattern 1 (same-file bulk reads) fires — recommends get_context_bundle or Read
     expect(hint).toContain('get_context_bundle');
   });
+
+  describe('Pattern 3 — unbatched independent calls (tightened: fires after 3rd, broadened tool set)', () => {
+    it('fires after 3 distinct batchable tools are called (not 6)', () => {
+      const j = new SessionJournal();
+      j.record('search', { query: 'foo' }, 5);
+      j.record('get_symbol', { symbol_id: 'a.ts::x#function' }, 1);
+      j.record('find_usages', { symbol_id: 'a.ts::x#function' }, 2);
+
+      const hint = j.getOptimizationHint('find_usages', { symbol_id: 'a.ts::x#function' });
+      expect(hint).not.toBeNull();
+      expect(hint).toContain('batch');
+    });
+
+    it('fires for the newly broadened tool set (get_change_impact, assess_change_risk, get_tests_for, get_context_bundle)', () => {
+      const j = new SessionJournal();
+      j.record('get_change_impact', { symbol_id: 'a.ts::x#function' }, 3);
+      j.record('assess_change_risk', { symbol_id: 'b.ts::y#function' }, 1);
+      j.record('get_tests_for', { symbol_id: 'c.ts::z#function' }, 2);
+
+      const hint = j.getOptimizationHint('get_tests_for', { symbol_id: 'c.ts::z#function' });
+      expect(hint).not.toBeNull();
+      expect(hint).toContain('batch');
+    });
+
+    it('does not fire for only 2 recorded calls', () => {
+      const j = new SessionJournal();
+      j.record('search', { query: 'foo' }, 5);
+      j.record('get_symbol', { symbol_id: 'a.ts::x#function' }, 1);
+
+      const hint = j.getOptimizationHint('get_symbol', { symbol_id: 'a.ts::x#function' });
+      expect(hint).toBeNull();
+    });
+
+    it('does not false-positive when the last 3 calls are the same tool (dependent bulk reads)', () => {
+      const j = new SessionJournal();
+      // 3 get_symbol calls in a row is the same-file-bulk-read pattern (Pattern 1/4
+      // territory when the count is high enough), not "3 different independent tools" —
+      // Pattern 3 requires >=3 UNIQUE tools, so same-tool repeats must not trigger it.
+      const j2 = new SessionJournal();
+      j2.record('get_symbol', { symbol_id: 'x.ts::a#function' }, 1);
+      j2.record('get_symbol', { symbol_id: 'y.ts::b#function' }, 1);
+      j2.record('get_symbol', { symbol_id: 'z.ts::c#function' }, 1);
+
+      const hint = j2.getOptimizationHint('get_symbol', { symbol_id: 'z.ts::c#function' });
+      // Only 1 unique tool among the last 3 — Pattern 3 must not fire.
+      // (Pattern 1's own bulk-read threshold is 4+, so it won't fire here either.)
+      expect(hint === null || !hint.includes('batch tool')).toBe(true);
+      void j; // (unused placeholder kept for symmetry with other describe blocks)
+    });
+
+    it('does not fire for a legitimately dependent chain outside the tracked batchable set', () => {
+      const j = new SessionJournal();
+      // Tools outside the tracked set (e.g. register_edit, get_outline mixed with
+      // non-batchable maintenance calls) — only get_outline is in-set, so unique
+      // batchable-tool count stays below 3.
+      j.record('register_edit', { file_path: 'a.ts' }, 1);
+      j.record('get_outline', { path: 'a.ts' }, 5);
+      j.record('register_edit', { file_path: 'b.ts' }, 1);
+
+      const hint = j.getOptimizationHint('register_edit', { file_path: 'b.ts' });
+      expect(hint).toBeNull();
+    });
+  });
 });
 
 describe('SessionJournal — prefetch boosts', () => {
