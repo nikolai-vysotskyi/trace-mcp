@@ -237,6 +237,26 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_service ON contract_snapshots(service_i
 // TOPOLOGY STORE
 // ════════════════════════════════════════════════════════════════════════
 
+// Cache for normalizeEndpointPattern(): endpoint/URL patterns repeat heavily across
+// linkClientCallsToEndpoints() calls (same small set of endpoint paths gets re-normalized
+// for every unlinked client call, and re-normalized again on every reindex). Pure string
+// transform, so a plain unbounded-within-process Map is safe — never goes stale, and the
+// key space is bounded by the number of distinct path patterns actually seen (small
+// relative to calls × endpoints). Cleared only implicitly on process exit.
+const normalizeCache = new Map<string, string>();
+
+/** Normalize: /api/users/{id} and /api/users/:id → /api/users/{*}. Memoized — see normalizeCache. */
+function normalizeEndpointPattern(p: string): string {
+  const cached = normalizeCache.get(p);
+  if (cached !== undefined) return cached;
+  const normalized = p
+    .replace(/\{[^}]+\}/g, '{*}')
+    .replace(/:[\w]+/g, '{*}')
+    .replace(/\/+$/, '');
+  normalizeCache.set(p, normalized);
+  return normalized;
+}
+
 /**
  * Match a client call URL pattern to the best-fitting endpoint.
  * Normalizes path params ({id}, :id) and compares.
@@ -246,14 +266,7 @@ function findBestEndpointMatch(
   method: string | null,
   endpoints: Array<EndpointRow & { service_name: string }>,
 ): (EndpointRow & { service_name: string; confidence: number }) | null {
-  // Normalize: /api/users/{id} and /api/users/:id → /api/users/{*}
-  const normalize = (p: string) =>
-    p
-      .replace(/\{[^}]+\}/g, '{*}')
-      .replace(/:[\w]+/g, '{*}')
-      .replace(/\/+$/, '');
-
-  const normalizedUrl = normalize(urlPattern);
+  const normalizedUrl = normalizeEndpointPattern(urlPattern);
   // Skip overly generic URL patterns — they match everything and produce false positives
   if (!normalizedUrl || normalizedUrl === '/' || normalizedUrl === '') return null;
 
@@ -261,7 +274,7 @@ function findBestEndpointMatch(
   let bestScore = 0;
 
   for (const ep of endpoints) {
-    const normalizedEp = normalize(ep.path);
+    const normalizedEp = normalizeEndpointPattern(ep.path);
     // Skip root endpoints — too generic to produce meaningful matches
     if (!normalizedEp || normalizedEp === '/' || normalizedEp === '') continue;
 
@@ -1096,6 +1109,34 @@ export class TopologyStore {
       repoInfo.set(repo.id, { group: svc?.project_group ?? null, serviceId: svc?.id ?? null });
     }
 
+    // Pre-group endpoints by project_group once (was previously an O(endpoints) `.filter()`
+    // re-run for EVERY unlinked call — with thousands of calls and endpoints this dominated
+    // reindex time; see plan-indexer-perf topology hotspot). Endpoints and their group
+    // membership are fixed for the duration of this method, so grouping once and caching the
+    // self/other split per (group, serviceId) pair turns an O(calls × endpoints) scan into
+    // O(endpoints) up front plus O(1) lookups per call.
+    const endpointsByGroup = new Map<
+      string | null,
+      Array<EndpointRow & { service_name: string }>
+    >();
+    for (const ep of endpoints) {
+      const epGroup = serviceGroup.get(ep.service_id) ?? null;
+      const list = endpointsByGroup.get(epGroup);
+      if (list) list.push(ep);
+      else endpointsByGroup.set(epGroup, [ep]);
+    }
+
+    // Cache of (group, serviceId) → { self, other } endpoint subsets, built lazily since the
+    // number of distinct (group, serviceId) pairs actually hit is typically far smaller than
+    // the number of unlinked calls.
+    const splitCache = new Map<
+      string,
+      {
+        self: Array<EndpointRow & { service_name: string }>;
+        other: Array<EndpointRow & { service_name: string }>;
+      }
+    >();
+
     let linked = 0;
 
     const updateStmt = this.db.prepare(
@@ -1108,31 +1149,32 @@ export class TopologyStore {
         const sourceGroup = info?.group ?? null;
         const sourceServiceId = info?.serviceId ?? null;
 
-        // Filter endpoints to same project_group (strict isolation).
-        const groupEndpoints = endpoints.filter((ep) => {
-          const epGroup = serviceGroup.get(ep.service_id) ?? null;
-          return epGroup === sourceGroup;
-        });
+        const groupEndpoints = endpointsByGroup.get(sourceGroup) ?? [];
+
+        const splitKey = `${sourceGroup ?? ''} ${sourceServiceId ?? ''}`;
+        let split = splitCache.get(splitKey);
+        if (!split) {
+          const self: Array<EndpointRow & { service_name: string }> = [];
+          const other: Array<EndpointRow & { service_name: string }> = [];
+          for (const ep of groupEndpoints) {
+            if (sourceServiceId != null && ep.service_id === sourceServiceId) self.push(ep);
+            else other.push(ep);
+          }
+          split = { self, other };
+          splitCache.set(splitKey, split);
+        }
 
         // Self-first matching: prefer endpoints from the SAME service as the client call.
         // This prevents cross-project false positives when multiple services share
         // identical route paths (e.g., copy-pasted Nova components across Laravel apps).
         let match =
           sourceServiceId != null
-            ? findBestEndpointMatch(
-                call.url_pattern,
-                call.method,
-                groupEndpoints.filter((ep) => ep.service_id === sourceServiceId),
-              )
+            ? findBestEndpointMatch(call.url_pattern, call.method, split.self)
             : null;
 
         // Fall back to other services in the same group only if no self-match found.
         if (!match) {
-          match = findBestEndpointMatch(
-            call.url_pattern,
-            call.method,
-            groupEndpoints.filter((ep) => ep.service_id !== sourceServiceId),
-          );
+          match = findBestEndpointMatch(call.url_pattern, call.method, split.other);
         }
         if (match) {
           // Find the repo for this service via pre-built maps (was two per-call SELECTs).
