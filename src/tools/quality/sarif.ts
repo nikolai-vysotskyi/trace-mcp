@@ -13,9 +13,17 @@
  * Spec: https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html
  */
 
-/** Canonical schema URL embedded in the `$schema` field of a SARIF log. */
+/**
+ * Canonical schema URL embedded in the `$schema` field of a SARIF log.
+ *
+ * This is the OASIS-published, stable location (it is the schema document's own
+ * `$id` and resolves HTTP 200). The previously-used
+ * `raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/...` path is
+ * dead (404) — the upstream repo was reorganized — so any consumer that
+ * dereferences `$schema` for validation would fail against it.
+ */
 export const SARIF_SCHEMA_URL =
-  'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json';
+  'https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json';
 
 /** Valid SARIF result levels. */
 export type SarifLevel = 'error' | 'warning' | 'note' | 'none';

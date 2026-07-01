@@ -2,15 +2,31 @@ import { describe, expect, it } from 'vitest';
 import {
   antipatternFindingsToSarif,
   qualityGateReportToSarif,
+  SARIF_SCHEMA_URL,
   securityFindingsToSarif,
   toSarifLog,
   type NormalizedFinding,
 } from '../../src/tools/quality/sarif.js';
 
+// The canonical, stable SARIF 2.1.0 schema location published by OASIS. This is
+// the schema's own `$id` and resolves (HTTP 200); the old
+// raw.githubusercontent.com/oasis-tcs/sarif-spec/master/... path is dead (404)
+// because the upstream repo was reorganized.
 const SARIF_SCHEMA =
-  'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json';
+  'https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json';
 
 describe('SARIF 2.1.0 serializer', () => {
+  it('embeds the canonical OASIS schema URL (not the dead raw.githubusercontent path)', () => {
+    expect(SARIF_SCHEMA_URL).toBe(SARIF_SCHEMA);
+    // Guard against regressing to the 404 URL.
+    expect(SARIF_SCHEMA_URL).not.toContain('raw.githubusercontent.com');
+    const log = toSarifLog(
+      [{ ruleId: 'r', ruleName: 'R', level: 'error', file: 'a.ts', line: 1, message: 'm' }],
+      { toolName: 't' },
+    );
+    expect(log.$schema).toBe(SARIF_SCHEMA);
+  });
+
   describe('toSarifLog', () => {
     it('produces a valid SARIF 2.1.0 envelope for a single finding', () => {
       const findings: NormalizedFinding[] = [
