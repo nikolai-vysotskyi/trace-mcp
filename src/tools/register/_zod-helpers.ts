@@ -16,7 +16,9 @@
  */
 import { z } from 'zod';
 
-const EMPTY_TO_UNDEF = (v: unknown) => (v === '' || v === null ? undefined : v);
+function emptyToUndef<A>(v: unknown): A | undefined {
+  return v === '' || v === null ? undefined : (v as A);
+}
 
 /**
  * Optional string filter: empty string / null are coerced to undefined,
@@ -29,8 +31,8 @@ const EMPTY_TO_UNDEF = (v: unknown) => (v === '' || v === null ? undefined : v);
  */
 export function optionalNonEmptyString(
   maxLen = 1024,
-): z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, unknown> {
-  return z.preprocess(EMPTY_TO_UNDEF, z.string().max(maxLen).optional());
+): z.ZodPipe<z.ZodTransform<string | undefined, unknown>, z.ZodOptional<z.ZodString>> {
+  return z.preprocess(emptyToUndef<string>, z.string().max(maxLen).optional());
 }
 
 /**
@@ -43,6 +45,9 @@ export function optionalNonEmptyString(
  */
 export function optionalEnum<const T extends readonly [string, ...string[]]>(
   values: T,
-): z.ZodEffects<z.ZodOptional<z.ZodEnum<T>>, T[number] | undefined, unknown> {
-  return z.preprocess(EMPTY_TO_UNDEF, z.enum(values).optional());
+): z.ZodPipe<
+  z.ZodTransform<T[number] | undefined, unknown>,
+  z.ZodOptional<z.ZodEnum<z.core.util.ToEnum<T[number]>>>
+> {
+  return z.preprocess(emptyToUndef<T[number]>, z.enum(values).optional());
 }
