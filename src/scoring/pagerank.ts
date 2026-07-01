@@ -22,9 +22,23 @@ export function computePageRank(
   iterations = 20,
   dampingFactor = 0.85,
 ): Map<number, number> {
-  // Fast cache check: if same DB and edge count hasn't changed, reuse
+  // Fast cache check: if same DB and edge count hasn't changed, reuse.
+  //
+  // Uses an UNFILTERED `COUNT(*) FROM edges` rather than `WHERE resolved = 1`.
+  // SQLite has no maintained row-count metadata for a filtered predicate —
+  // even a covering index requires scanning every matching entry to tally
+  // the count, which measured ~0.36ms on this project's own index (30k
+  // edges) vs ~0.004ms for the unfiltered form (a hot per-search-query cost,
+  // since this cache check runs on every `search()` call, fusion or not).
+  // The unfiltered count is a correctness-preserving proxy here because the
+  // only two places that mutate `resolved` state (`IndexingPipeline.runPipeline`
+  // and `fireEdgeReconcile` in src/indexer/pipeline.ts) already call
+  // `invalidatePageRankCache()` explicitly after every run — this DB-side
+  // check is a redundant defense-in-depth guard, not the source of truth for
+  // staleness. Edge insert/delete (the dominant real-world case) still
+  // changes the unfiltered total and is still caught.
   const dbName = db.name;
-  const countRow = db.prepare('SELECT COUNT(*) as cnt FROM edges WHERE resolved = 1').get() as {
+  const countRow = db.prepare('SELECT COUNT(*) as cnt FROM edges').get() as {
     cnt: number;
   };
   if (_cache && _cache.dbName === dbName && _cache.edgeCount === countRow.cnt) {
