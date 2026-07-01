@@ -986,6 +986,48 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
     },
   );
 
+  server.tool(
+    'get_graph_timeline',
+    'SIMPLIFIED first version of a continuous graph-evolution timeline: samples evenly-spaced historical commits across the requested window (via git log, same sampling strategy as get_complexity_trend) and reports file-count + commit churn (files changed/insertions/deletions) per period, with a short narrative diff marker (e.g. "+12 files, 8 commit(s), +540/-120 lines"). Symbol/edge counts are reported for the current HEAD snapshot only — NOT reconstructed per historical commit (that would require re-indexing the full tree at every sampled commit, which this tool deliberately avoids). For point-in-time named checkpoints use snapshot_graph + diff_graph_snapshots instead. Requires git. Read-only. Returns JSON: { since_days, granularity, periods: [{ period, commit, date, file_count, commits_in_period, files_changed, insertions, deletions, narrative }], current: { files, symbols, edges_by_type }, _tier, _methodology }.',
+    {
+      since_days: z
+        .number()
+        .int()
+        .min(1)
+        .max(3650)
+        .optional()
+        .describe('Git history window in days (default: 90)'),
+      granularity: z
+        .enum(['daily', 'weekly', 'monthly'])
+        .optional()
+        .describe('Bucket size for periods (default: monthly)'),
+      max_periods: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe('Cap on number of periods returned, most recent kept (default: 24)'),
+    },
+    async ({ since_days, granularity, max_periods }) => {
+      const { getGraphTimeline } = await import('../analysis/graph-timeline.js');
+      const result = getGraphTimeline(store, projectRoot, {
+        sinceDays: since_days,
+        granularity,
+        maxPeriods: max_periods,
+      });
+      if (!result) {
+        return {
+          content: [
+            { type: 'text', text: j({ error: 'Not a git repository — no timeline available.' }) },
+          ],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
   // --- Graph Export (GraphML / Cypher / Obsidian) ---
 
   server.tool(
@@ -1408,6 +1450,52 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           isError: true,
         };
       return { content: [{ type: 'text', text: j(result.value) }] };
+    },
+  );
+
+  server.tool(
+    'get_file_health_timeline',
+    'Aggregates get_complexity_trend, get_coupling_trend, and get_git_churn into ONE time-series response per file: for each historical snapshot, reports complexity (max/avg cyclomatic), coupling (ca/ce/instability), and a lightweight per-point risk_score, plus a whole-window churn summary — so "is this file getting healthier or worse over time" is answerable in one call instead of three. For cross-file bug-risk ranking use predict_bugs instead (different, more thorough scoring model). Requires git. Read-only. Returns JSON: { file, current, historical: [{ date, commit, max_cyclomatic, avg_cyclomatic, ca, ce, instability, risk_score }], churn, trend }.',
+    {
+      file_path: z.string().min(1).max(512).describe('File path to analyze'),
+      since_days: z
+        .number()
+        .int()
+        .min(1)
+        .max(3650)
+        .optional()
+        .describe('Git history window in days (default: 90)'),
+      snapshots: z
+        .number()
+        .int()
+        .min(2)
+        .max(20)
+        .optional()
+        .describe('Number of historical snapshots to sample (default: 6)'),
+    },
+    async ({ file_path, since_days, snapshots }) => {
+      const blocked = guardPath(file_path);
+      if (blocked) return blocked;
+      const { getFileHealthTimeline } = await import('../analysis/file-health-timeline.js');
+      const result = getFileHealthTimeline(store, projectRoot, file_path, {
+        sinceDays: since_days,
+        snapshots,
+      });
+      if (!result) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({
+                error:
+                  'No health timeline available — not a git repository, or file is not indexed.',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text', text: j(result) }] };
     },
   );
 
