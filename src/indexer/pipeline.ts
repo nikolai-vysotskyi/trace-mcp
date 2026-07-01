@@ -957,6 +957,10 @@ export class IndexingPipeline {
       () => edgeResolver.resolveTestCoversEdges(scope),
       () => edgeResolver.resolveMarkdownWikilinkEdges(scope),
       () => edgeResolver.resolveMarkdownTagEdges(scope),
+      // Kustomize/compose path-string imports → actual manifest / Dockerfile
+      // node. Runs before file-projection so the resolved cross-file edge also
+      // reaches the file-level dependency graph.
+      () => edgeResolver.resolveIacImportEdges(scope),
       // Must run last — projects cross-file symbol edges to file-level `imports`
       // edges so the file dependency graph is as rich as the symbol graph.
       () => edgeResolver.resolveFileProjectionEdges(scope),
