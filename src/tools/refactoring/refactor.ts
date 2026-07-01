@@ -340,14 +340,6 @@ export function removeDeadCode(
 // ════════════════════════════════════════════════════════════════════════
 
 /**
- * @deprecated The AST-aware rewrite has landed — `extractFunction` now performs
- * real extraction. This sentinel is retained only so older downstream code that
- * imported it does not break at the type level. New code should not reference it.
- */
-export const EXTRACT_FUNCTION_DISABLED_ERROR =
-  'extract_function-ast-rewrite: this sentinel is obsolete; extract_function is enabled.';
-
-/**
  * Extract a range of lines [startLine, endLine] (1-based, inclusive) from a file
  * into a new named function, computing the parameter list and return value via
  * AST free-variable analysis (see extract-function-ast.ts).

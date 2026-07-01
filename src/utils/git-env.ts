@@ -43,9 +43,6 @@ export function safeGitEnv(extra?: Record<string, string | undefined>): NodeJS.P
   return merged;
 }
 
-/** Read-only export for callers that want to inspect the override list. */
-export const SAFE_GIT_ENV_KEYS = Object.freeze(Object.keys(SAFE_GIT_ENV_OVERRIDES));
-
 // ─── Reference validation ────────────────────────────────────────────
 //
 // Tools like compare_branches and get_changed_symbols accept raw git ref

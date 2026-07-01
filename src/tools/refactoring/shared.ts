@@ -350,12 +350,6 @@ export function extractIdentifiers(text: string): IdentifierAnalysis {
   return { used: usedList, defined };
 }
 
-/** Get leading whitespace of a line. */
-export function getIndent(line: string): string {
-  const match = line.match(/^(\s*)/);
-  return match ? match[1] : '';
-}
-
 export const BINARY_EXTENSIONS = new Set([
   '.png',
   '.jpg',

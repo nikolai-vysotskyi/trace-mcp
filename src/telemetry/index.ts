@@ -167,12 +167,3 @@ export async function instrumentAiCall<T>(
     fn,
   );
 }
-
-/** Convenience for MCP tool execution. Adds standard `tool.*` attributes. */
-export async function instrumentToolCall<T>(
-  sink: TelemetrySink,
-  toolName: string,
-  fn: (span: Span) => Promise<T>,
-): Promise<T> {
-  return instrumentAsync(sink, `tool.${toolName}`, { 'tool.name': toolName }, fn);
-}
