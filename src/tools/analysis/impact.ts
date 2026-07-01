@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import type { Store, SymbolRow } from '../../db/store.js';
 import { err, notFound, ok, type TraceMcpResult } from '../../errors.js';
 import { safeGitEnv } from '../../utils/git-env.js';
@@ -383,15 +383,22 @@ function collectTestFiles(store: Store, nodeId: number, seen: Set<string>): void
 
 function getFileChurn(cwd: string, filePath: string, days: number): number {
   try {
+    // `days` is always an internal constant (never attacker-controlled), but
+    // we still validate defensively since this value is formatted into a
+    // git flag. `filePath` DOES come from an MCP tool call (get_change_impact
+    // { filePath }) — passed as a discrete execFileSync argv element (no
+    // shell), so it can never break out into a second command regardless of
+    // its contents.
+    if (!Number.isFinite(days) || days <= 0) return 0;
     const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
-    const output = execSync(`git log --since="${since}" --oneline -- "${filePath}" | wc -l`, {
+    const output = execFileSync('git', ['log', `--since=${since}`, '--oneline', '--', filePath], {
       cwd,
       encoding: 'utf8',
       timeout: 5000,
       stdio: ['pipe', 'pipe', 'pipe'],
       env: safeGitEnv(),
     });
-    return parseInt(output.trim(), 10) || 0;
+    return output.split('\n').filter((line) => line.trim().length > 0).length;
   } catch {
     return 0;
   }

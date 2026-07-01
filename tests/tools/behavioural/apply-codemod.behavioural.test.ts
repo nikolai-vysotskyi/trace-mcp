@@ -136,4 +136,32 @@ describe('applyCodemod() — behavioural contract (dry_run path)', () => {
     expect(fs.readFileSync(path.join(tmpDir, 'src/a.ts'), 'utf-8')).toContain('original');
     expect(fs.readFileSync(path.join(tmpDir, 'src/a.ts'), 'utf-8')).not.toContain('replacement');
   });
+
+  it('a pattern with zero matches returns a clean empty result, not an error (regex engine)', async () => {
+    // "Zero matches" is a normal, non-exceptional outcome (e.g. checking
+    // whether a migration was already applied) — it must not be conflated
+    // with a real failure (invalid regex, invalid glob, etc). Previously this
+    // set `success: false` + an `error` string, which the MCP tool handler
+    // (src/tools/register/refactoring.ts) surfaces as `isError: true` — a
+    // hard tool-call error for what is just "nothing to change here".
+    tmpDir = createTmpFixture({
+      'src/a.ts': 'const x = 1;\n',
+    });
+
+    const result = await applyCodemod(
+      tmpDir,
+      '\\bnonexistentToken\\b',
+      'replacement',
+      'src/**/*.ts',
+      {
+        dryRun: true,
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.matches).toEqual([]);
+    expect(result.total_replacements).toBe(0);
+    expect(result.files_modified).toEqual([]);
+  });
 });
