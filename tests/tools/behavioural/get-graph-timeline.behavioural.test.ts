@@ -35,15 +35,12 @@ function mockGitTimeline(opts: { isRepo?: boolean; commits: CommitFixture[] }): 
     }
 
     if (argList[0] === 'log' && argList.includes('--shortstat')) {
-      // Range arg is argList[1], e.g. "shaA..shaB" or just "shaB".
-      const range = argList[1] ?? '';
-      const [fromExclusive, toInclusive] = range.includes('..') ? range.split('..') : [null, range];
-      const fromIdx = fromExclusive ? opts.commits.findIndex((c) => c.sha === fromExclusive) : -1;
-      const toIdx = opts.commits.findIndex((c) => c.sha === toInclusive);
-      const slice = opts.commits.slice(fromIdx + 1, toIdx + 1);
+      // Single whole-window call: ['log', '--since=X days ago', '--no-merges',
+      // '--shortstat', '--pretty=format:__C__%H'] — one commit-tagged shortstat
+      // entry per commit in the window (see getChurnByCommit), NOT per-period.
       const lines: string[] = [];
-      for (const c of slice) {
-        lines.push('__C__');
+      for (const c of opts.commits) {
+        lines.push(`__C__${c.sha}`);
         lines.push(` 2 files changed, 10 insertions(+), 3 deletions(-)`);
       }
       return Buffer.from(lines.join('\n'));
@@ -119,6 +116,39 @@ describe('getGraphTimeline() — behavioural contract', () => {
     expect(mayPeriod.period).toBe('2026-05');
     expect(mayPeriod.file_count).toBe(4);
     expect(mayPeriod.narrative).toContain('files');
+
+    // Churn is aggregated per-period from the single batched `git log
+    // --shortstat` call — April bucket has 2 commits (sha1aaaa, sha2bbbb),
+    // May bucket has 1 (sha3cccc); each mock commit contributes 2 files
+    // changed / 10 insertions / 3 deletions.
+    expect(aprilPeriod.commits_in_period).toBe(2);
+    expect(aprilPeriod.insertions).toBe(20);
+    expect(aprilPeriod.deletions).toBe(6);
+    expect(mayPeriod.commits_in_period).toBe(1);
+    expect(mayPeriod.insertions).toBe(10);
+    expect(mayPeriod.deletions).toBe(3);
+  });
+
+  it('fetches churn in ONE `git log --shortstat` call for the whole window, not one per period', () => {
+    const store = createTestStore();
+    mockGitTimeline({
+      commits: [
+        { sha: 'sha4', iso: '2026-06-10T10:00:00Z', files: ['a.ts'] },
+        { sha: 'sha3', iso: '2026-05-10T10:00:00Z', files: ['a.ts'] },
+        { sha: 'sha2', iso: '2026-04-10T10:00:00Z', files: ['a.ts'] },
+        { sha: 'sha1', iso: '2026-03-10T10:00:00Z', files: ['a.ts'] },
+      ],
+    });
+
+    getGraphTimeline(store, '/project', { sinceDays: 180, granularity: 'monthly' });
+
+    const shortstatCalls = mockExecFileSync.mock.calls.filter(([, args]) =>
+      ((args ?? []) as string[]).includes('--shortstat'),
+    );
+    // 4 distinct monthly periods would have meant 4 separate --shortstat
+    // subprocess spawns before batching; must stay at exactly 1 regardless
+    // of period count.
+    expect(shortstatCalls.length).toBe(1);
   });
 
   it('current snapshot reports live-index totals (files/symbols/edges), not historical reconstruction', () => {
