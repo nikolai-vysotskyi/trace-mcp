@@ -246,6 +246,18 @@ export class AnalyticsStore {
 
     const projectFilter = opts.projectPath ? `AND s.project_path = '${opts.projectPath}'` : '';
     const where = `WHERE 1=1 ${dateFilter} ${projectFilter}`;
+    // Same filter, expressed as a `tool_calls.session_id IN (SELECT id FROM
+    // sessions ...)` subquery instead of `JOIN sessions`. Measured on this
+    // project's own analytics DB (955 sessions / 75505 tool_calls): the plain
+    // JOIN makes SQLite `SCAN tc` (all 75505 rows) with one indexed
+    // point-lookup into `sessions` per row (~16-18ms/call). The `IN`
+    // subquery form lets SQLite filter the small `sessions` table first and
+    // then `SEARCH tc USING INDEX idx_tc_session (session_id=?)` — only
+    // touching matching rows (~0.9-3ms/call, 5-20x faster depending on query
+    // shape). Both forms are semantically identical (inner join on an FK
+    // relationship); no `sessions` table columns are projected in these
+    // three tool_calls-scoped queries, so the rewrite is a pure perf win.
+    const sessionIdSubquery = `tc.session_id IN (SELECT s.id FROM sessions s ${where})`;
 
     // Sessions summary
     const summary = this.db
@@ -279,7 +291,7 @@ export class AnalyticsStore {
     const serverRows = this.db
       .prepare(`
       SELECT tc.tool_server, COUNT(*) as calls, COALESCE(SUM(tc.output_tokens_estimate),0) as output_tokens_est
-      FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id ${where}
+      FROM tool_calls tc WHERE ${sessionIdSubquery}
       GROUP BY tc.tool_server ORDER BY calls DESC
     `)
       .all() as { tool_server: string; calls: number; output_tokens_est: number }[];
@@ -298,7 +310,7 @@ export class AnalyticsStore {
     const topTools = this.db
       .prepare(`
       SELECT tc.tool_name as name, COUNT(*) as calls, COALESCE(SUM(tc.output_tokens_estimate),0) as output_tokens_est
-      FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id ${where}
+      FROM tool_calls tc WHERE ${sessionIdSubquery}
       GROUP BY tc.tool_name ORDER BY output_tokens_est DESC LIMIT 15
     `)
       .all() as { name: string; calls: number; output_tokens_est: number }[];
@@ -307,7 +319,7 @@ export class AnalyticsStore {
     const topFiles = this.db
       .prepare(`
       SELECT tc.target_file as path, COUNT(*) as reads, COALESCE(SUM(tc.output_tokens_estimate),0) as tokens_est
-      FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id ${where}
+      FROM tool_calls tc WHERE ${sessionIdSubquery}
       AND tc.target_file IS NOT NULL
       GROUP BY tc.target_file ORDER BY tokens_est DESC LIMIT 15
     `)
@@ -364,13 +376,16 @@ export class AnalyticsStore {
     }
     const projectFilter = opts.projectPath ? `AND s.project_path = '${opts.projectPath}'` : '';
 
+    // See the comment on `sessionIdSubquery` in getSessionAnalytics — same
+    // IN-subquery rewrite (measured ~5x faster than JOIN sessions on this
+    // project's own analytics DB: ~15.8ms/call -> ~3.1ms/call).
     return this.db
       .prepare(`
       SELECT tc.tool_name, tc.tool_server, tc.tool_short_name, tc.target_file,
         tc.output_size_chars, tc.output_tokens_estimate, tc.session_id, tc.is_error,
         tc.input_snippet, tc.semantic_degraded
-      FROM tool_calls tc JOIN sessions s ON tc.session_id = s.id
-      WHERE 1=1 ${dateFilter} ${projectFilter}
+      FROM tool_calls tc
+      WHERE tc.session_id IN (SELECT s.id FROM sessions s WHERE 1=1 ${dateFilter} ${projectFilter})
       ORDER BY tc.timestamp
     `)
       .all() as ToolCallRow[];

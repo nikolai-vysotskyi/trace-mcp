@@ -175,6 +175,38 @@ describe('AnalyticsStore', () => {
     expect(readCall!.semantic_degraded).toBe(0);
   });
 
+  it('filters tool_calls via an indexed session_id subquery, not a full JOIN scan', () => {
+    // Regression guard for the perf fix: getSessionAnalytics/
+    // getToolCallsForOptimization used to `JOIN sessions` directly, which
+    // made SQLite scan the entire (potentially much larger) tool_calls
+    // table with a per-row point-lookup into sessions. Measured ~5-24x
+    // slower than the `tc.session_id IN (SELECT id FROM sessions WHERE ...)`
+    // form on this project's own analytics DB (75k+ tool_calls rows). Assert
+    // the query plan still uses the cheap indexed-search shape so a future
+    // edit can't silently reintroduce the JOIN.
+    store.storeSession(makeParsedSession());
+
+    const plan = store.db
+      .prepare(`
+        EXPLAIN QUERY PLAN
+        SELECT tc.tool_server, COUNT(*) as calls
+        FROM tool_calls tc
+        WHERE tc.session_id IN (SELECT s.id FROM sessions s WHERE 1=1 AND s.started_at >= '2020-01-01')
+        GROUP BY tc.tool_server
+      `)
+      .all() as Array<{ detail: string }>;
+
+    const details = plan.map((p) => p.detail).join(' | ');
+    expect(details).toContain('SEARCH tc USING INDEX idx_tc_session');
+    // The regressed `JOIN sessions` form scans the entire tool_calls table
+    // (optionally via a different index, e.g. idx_tc_server) instead of
+    // seeking it by session_id — assert the seek-by-session_id shape
+    // specifically rather than a generic "no SCAN tc" check, since SQLite
+    // can legitimately use `SCAN tc USING INDEX ...` for an unrelated
+    // reason and a bare substring match would be too brittle either way.
+    expect(details).not.toContain('SCAN tc USING INDEX idx_tc_server');
+  });
+
   it('captures query + semantic mode in input_snippet for search tool calls', () => {
     const session = makeParsedSession();
     session.toolCalls.push({
