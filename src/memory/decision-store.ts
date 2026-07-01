@@ -11,15 +11,19 @@ import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { relativizeUnderRoot } from '../utils/path-relativize.js';
-import { computeConfidence } from './decision-confidence.js';
 import type { AuditLogger } from './decision-audit-log.js';
 import { MemoOperations } from './decision-store-memo-ops.js';
 import { ClusterOperations } from './decision-store-cluster-ops.js';
 import { SchedulerStateOperations } from './decision-store-scheduler-ops.js';
-import { ConsolidationOperations, parseTagsJson } from './decision-store-consolidation-ops.js';
+import { ConsolidationOperations } from './decision-store-consolidation-ops.js';
 import { SessionOperations } from './decision-store-session-ops.js';
 import { QueryOperations } from './decision-store-query-ops.js';
+import { ReviewOperations, extractSignalsForReview } from './decision-store-review-ops.js';
 import type { ConsolidationVerdict } from './decision-consolidator.js';
+
+// Re-export for back-compat: the tuner + tests import extractSignalsForReview
+// from this module. It now lives in decision-store-review-ops.ts.
+export { extractSignalsForReview };
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -390,6 +394,8 @@ export class DecisionStore {
   private sessionOps: SessionOperations;
   /** Decision read-path (query / heat / timeline / stats), extracted from this class. */
   private queryOps: QueryOperations;
+  /** Memoir-style review-queue persistence, extracted from this class. */
+  private reviewOps: ReviewOperations;
 
   constructor(
     dbPath: string,
@@ -416,6 +422,9 @@ export class DecisionStore {
     });
     this.sessionOps = new SessionOperations(this.db);
     this.queryOps = new QueryOperations(this.db, {
+      getDecision: (id) => this.getDecision(id),
+    });
+    this.reviewOps = new ReviewOperations(this.db, {
       getDecision: (id) => this.getDecision(id),
     });
     if (opts?.readonly) {
@@ -795,58 +804,7 @@ export class DecisionStore {
     status: 'pending' | 'approved' | 'rejected',
     opts: { reviewer?: string | null } = {},
   ): boolean {
-    const info = this.db
-      .prepare(
-        `UPDATE decisions SET review_status = ?, updated_at = strftime('%s','now')*1000 WHERE id = ?`,
-      )
-      .run(status, id);
-    if (info.changes > 0 && (status === 'approved' || status === 'rejected')) {
-      // P2.5 — best-effort review-event log for confidence-weight tuning.
-      // Wrapped in try/catch: a failed insert must NEVER fail the status
-      // update itself.
-      try {
-        const decision = this.getDecision(id);
-        if (decision) this.insertReviewEvent(decision, status, opts.reviewer ?? null);
-      } catch (err) {
-        logger.debug?.(
-          { err: (err as Error).message, decisionId: id },
-          'decision review-log write failed (non-fatal)',
-        );
-      }
-    }
-    return info.changes > 0;
-  }
-
-  /**
-   * Insert one row into decision_reviews for the given decision. Recomputes
-   * confidence on the fly so the review log always carries the score the
-   * scorer would assign right now — which is what the tuner needs to compare
-   * against the human label.
-   */
-  private insertReviewEvent(
-    decision: DecisionRow,
-    status: 'approved' | 'rejected',
-    reviewer: string | null,
-  ): void {
-    const action = status === 'approved' ? 'approve' : 'reject';
-    const signals = extractSignalsForReview(decision);
-    const confidence = computeConfidence({
-      title: decision.title,
-      content: decision.content,
-      type: decision.type,
-      symbol_id: decision.symbol_id ?? undefined,
-      file_path: decision.file_path ?? undefined,
-      tags: parseTagsJson(decision.tags),
-      service_name: decision.service_name ?? undefined,
-    });
-    const reviewedAt = new Date().toISOString();
-    this.db
-      .prepare(
-        `INSERT INTO decision_reviews
-           (decision_id, action, signals_at_decision, confidence_at_decision, reviewed_at, reviewer)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(decision.id, action, JSON.stringify(signals), confidence, reviewedAt, reviewer);
+    return this.reviewOps.setReviewStatus(id, status, opts);
   }
 
   /**
@@ -870,59 +828,7 @@ export class DecisionStore {
     reviewed_at: string;
     reviewer: string | null;
   }> {
-    const limit = opts.limit ?? 10000;
-    const where = opts.project_root ? 'WHERE d.project_root = ?' : '';
-    const params: unknown[] = opts.project_root ? [opts.project_root] : [];
-    const sql = `
-      SELECT r.id, r.decision_id, r.action, r.signals_at_decision,
-             r.confidence_at_decision, r.reviewed_at, r.reviewer
-      FROM decision_reviews r
-      JOIN decisions d ON d.id = r.decision_id
-      ${where}
-      ORDER BY r.id ASC
-      LIMIT ?
-    `;
-    params.push(limit);
-    const rows = this.db.prepare(sql).all(...params) as Array<{
-      id: number;
-      decision_id: number;
-      action: 'approve' | 'reject';
-      signals_at_decision: string;
-      confidence_at_decision: number;
-      reviewed_at: string;
-      reviewer: string | null;
-    }>;
-    return rows.map((r) => {
-      let signals: {
-        has_code_ref: boolean;
-        content_length: number;
-        tag_count: number;
-        type: string;
-        has_service: boolean;
-      };
-      try {
-        signals = JSON.parse(r.signals_at_decision);
-      } catch {
-        // Corrupt row — skip safely by zeroing signals. The tuner ignores
-        // events whose signals don't deserialize cleanly via its own checks.
-        signals = {
-          has_code_ref: false,
-          content_length: 0,
-          tag_count: 0,
-          type: '',
-          has_service: false,
-        };
-      }
-      return {
-        id: r.id,
-        decision_id: r.decision_id,
-        action: r.action,
-        signals,
-        confidence_at_decision: r.confidence_at_decision,
-        reviewed_at: r.reviewed_at,
-        reviewer: r.reviewer,
-      };
-    });
+    return this.reviewOps.listReviewEvents(opts);
   }
 
   /**
@@ -930,22 +836,7 @@ export class DecisionStore {
    * Used by the Memory Explorer Review tab badge and the wake-up surface.
    */
   countPendingReviews(projectRoot?: string): number {
-    if (projectRoot) {
-      return (
-        this.db
-          .prepare(
-            "SELECT COUNT(*) as c FROM decisions WHERE review_status = 'pending' AND project_root = ? AND valid_until IS NULL",
-          )
-          .get(projectRoot) as { c: number }
-      ).c;
-    }
-    return (
-      this.db
-        .prepare(
-          "SELECT COUNT(*) as c FROM decisions WHERE review_status = 'pending' AND valid_until IS NULL",
-        )
-        .get() as { c: number }
-    ).c;
+    return this.reviewOps.countPendingReviews(projectRoot);
   }
 
   invalidateDecision(id: number, validUntil?: string): boolean {
@@ -1464,26 +1355,4 @@ export class DecisionStore {
   }): { applied: boolean; affected_ids: number[] } {
     return this.consolidationOps.applyConsolidationVerdict(opts);
   }
-}
-
-/**
- * P2.5 — Pure helper that projects a DecisionRow to the signal payload
- * stored in decision_reviews.signals_at_decision. Exported so the tuner
- * and tests can mirror the projection without importing the store class.
- */
-export function extractSignalsForReview(d: DecisionRow): {
-  has_code_ref: boolean;
-  content_length: number;
-  tag_count: number;
-  type: string;
-  has_service: boolean;
-} {
-  const tags = parseTagsJson(d.tags);
-  return {
-    has_code_ref: !!(d.symbol_id || d.file_path),
-    content_length: (d.content ?? '').length,
-    tag_count: tags.length,
-    type: d.type,
-    has_service: !!d.service_name,
-  };
 }
