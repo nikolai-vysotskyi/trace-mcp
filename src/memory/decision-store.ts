@@ -17,6 +17,7 @@ import { titleSimilarity } from './decision-clusterer.js';
 import { type ConsolidationVerdict, mergeContents, mergeTags } from './decision-consolidator.js';
 import { computeHeat, heatDecayMultiplier } from './heat.js';
 import { MemoOperations } from './decision-store-memo-ops.js';
+import { ClusterOperations } from './decision-store-cluster-ops.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -547,6 +548,8 @@ export class DecisionStore {
   private memoHistoryLimit: number;
   /** Project-memo persistence, extracted from this class (god-class decomposition). */
   private memoOps: MemoOperations;
+  /** Decision-cluster persistence, extracted from this class (god-class decomposition). */
+  private clusterOps: ClusterOperations;
 
   constructor(
     dbPath: string,
@@ -560,6 +563,7 @@ export class DecisionStore {
     this.auditLogger = opts?.auditLogger ?? null;
     this.memoHistoryLimit = Math.max(1, opts?.memoHistoryLimit ?? 10);
     this.memoOps = new MemoOperations(this.db, this.memoHistoryLimit);
+    this.clusterOps = new ClusterOperations(this.db);
     if (opts?.readonly) {
       this.db.pragma('busy_timeout = 5000');
       logger.debug({ dbPath, readonly: true }, 'Decision store opened (readonly)');
@@ -1835,38 +1839,7 @@ export class DecisionStore {
    * Returns the inserted ClusterRow.
    */
   createCluster(input: ClusterInput): ClusterRow {
-    const nowIso = new Date().toISOString();
-    const nowMs = Date.now();
-    const tagsJson = input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null;
-
-    const insertCluster = this.db.prepare(
-      `INSERT INTO decision_clusters
-         (project_root, service_name, title, summary, tags, primary_type,
-          decision_count, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    );
-    const insertMember = this.db.prepare(
-      `INSERT OR IGNORE INTO decision_cluster_members (cluster_id, decision_id) VALUES (?, ?)`,
-    );
-
-    const tx = this.db.transaction(() => {
-      const info = insertCluster.run(
-        input.project_root,
-        input.service_name ?? null,
-        input.title,
-        input.summary,
-        tagsJson,
-        input.primary_type ?? null,
-        input.decision_ids.length,
-        nowIso,
-        nowMs,
-      );
-      const clusterId = info.lastInsertRowid as number;
-      for (const id of input.decision_ids) insertMember.run(clusterId, id);
-      return clusterId;
-    });
-    const id = tx();
-    return this.getCluster(id)!;
+    return this.clusterOps.createCluster(input);
   }
 
   /**
@@ -1884,49 +1857,12 @@ export class DecisionStore {
       decision_ids?: number[];
     },
   ): ClusterRow | undefined {
-    const existing = this.getCluster(id);
-    if (!existing) return undefined;
-    const nowMs = Date.now();
-    const newTitle = input.title ?? existing.title;
-    const newSummary = input.summary ?? existing.summary;
-    const tagsJson =
-      input.tags !== undefined
-        ? input.tags.length > 0
-          ? JSON.stringify(input.tags)
-          : null
-        : existing.tags;
-    const newPrimaryType =
-      input.primary_type !== undefined ? input.primary_type : existing.primary_type;
-    const newCount = input.decision_ids ? input.decision_ids.length : existing.decision_count;
-
-    const updateStmt = this.db.prepare(
-      `UPDATE decision_clusters
-         SET title = ?, summary = ?, tags = ?, primary_type = ?,
-             decision_count = ?, updated_at = ?
-       WHERE id = ?`,
-    );
-    const deleteMembers = this.db.prepare(
-      `DELETE FROM decision_cluster_members WHERE cluster_id = ?`,
-    );
-    const insertMember = this.db.prepare(
-      `INSERT OR IGNORE INTO decision_cluster_members (cluster_id, decision_id) VALUES (?, ?)`,
-    );
-
-    const tx = this.db.transaction(() => {
-      updateStmt.run(newTitle, newSummary, tagsJson, newPrimaryType, newCount, nowMs, id);
-      if (input.decision_ids) {
-        deleteMembers.run(id);
-        for (const did of input.decision_ids) insertMember.run(id, did);
-      }
-    });
-    tx();
-    return this.getCluster(id);
+    return this.clusterOps.updateCluster(id, input);
   }
 
   /** Single-cluster lookup by id. */
   getCluster(id: number): ClusterRow | undefined {
-    const row = this.db.prepare('SELECT * FROM decision_clusters WHERE id = ?').get(id);
-    return (row as ClusterRow) ?? undefined;
+    return this.clusterOps.getCluster(id);
   }
 
   /**
@@ -1935,45 +1871,7 @@ export class DecisionStore {
    * wake-up "topics" surface lands the biggest topics on top.
    */
   listClusters(query: ClusterQuery = {}): ClusterRow[] {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-
-    if (query.project_root) {
-      conditions.push('project_root = ?');
-      params.push(query.project_root);
-    }
-    if (query.service_name) {
-      conditions.push('service_name = ?');
-      params.push(query.service_name);
-    }
-    if (query.search) {
-      conditions.push(
-        'id IN (SELECT rowid FROM decision_clusters_fts WHERE decision_clusters_fts MATCH ?)',
-      );
-      params.push(query.search);
-    }
-
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const orderBy = query.order_by ?? 'decision_count';
-    let orderClause: string;
-    switch (orderBy) {
-      case 'title':
-        orderClause = 'ORDER BY title ASC';
-        break;
-      case 'updated_at':
-        orderClause = 'ORDER BY updated_at DESC';
-        break;
-      case 'decision_count':
-      default:
-        orderClause = 'ORDER BY decision_count DESC, updated_at DESC';
-    }
-
-    const limit = query.limit ?? 50;
-    const offset = query.offset ?? 0;
-    params.push(limit, offset);
-
-    const sql = `SELECT * FROM decision_clusters ${where} ${orderClause} LIMIT ? OFFSET ?`;
-    return this.db.prepare(sql).all(...params) as ClusterRow[];
+    return this.clusterOps.listClusters(query);
   }
 
   /**
@@ -1985,17 +1883,7 @@ export class DecisionStore {
     clusterId: number,
     opts: { limit?: number; include_invalidated?: boolean } = {},
   ): DecisionRow[] {
-    const limit = opts.limit ?? 100;
-    const activeOnly = !opts.include_invalidated;
-    const where = activeOnly ? 'AND d.valid_until IS NULL' : '';
-    const sql = `
-      SELECT d.* FROM decisions d
-        INNER JOIN decision_cluster_members m ON m.decision_id = d.id
-       WHERE m.cluster_id = ? ${where}
-       ORDER BY d.valid_from DESC
-       LIMIT ?
-    `;
-    return this.db.prepare(sql).all(clusterId, limit) as DecisionRow[];
+    return this.clusterOps.getClusterDecisions(clusterId, opts);
   }
 
   /**
@@ -2003,13 +1891,7 @@ export class DecisionStore {
    * to annotate a decision with its parent topic(s).
    */
   findClustersForDecision(decisionId: number): ClusterRow[] {
-    const sql = `
-      SELECT c.* FROM decision_clusters c
-        INNER JOIN decision_cluster_members m ON m.cluster_id = c.id
-       WHERE m.decision_id = ?
-       ORDER BY c.decision_count DESC
-    `;
-    return this.db.prepare(sql).all(decisionId) as ClusterRow[];
+    return this.clusterOps.findClustersForDecision(decisionId);
   }
 
   /**
@@ -2018,8 +1900,7 @@ export class DecisionStore {
    * automatically. Returns true when a row was removed.
    */
   deleteCluster(id: number): boolean {
-    const info = this.db.prepare('DELETE FROM decision_clusters WHERE id = ?').run(id);
-    return info.changes > 0;
+    return this.clusterOps.deleteCluster(id);
   }
 
   /**
@@ -2028,38 +1909,12 @@ export class DecisionStore {
    * from a clean slate. Returns the number of cluster rows removed.
    */
   deleteClustersForScope(opts: { project_root?: string; service_name?: string }): number {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    if (opts.project_root) {
-      conditions.push('project_root = ?');
-      params.push(opts.project_root);
-    }
-    if (opts.service_name) {
-      conditions.push('service_name = ?');
-      params.push(opts.service_name);
-    }
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const info = this.db.prepare(`DELETE FROM decision_clusters ${where}`).run(...params);
-    return info.changes;
+    return this.clusterOps.deleteClustersForScope(opts);
   }
 
   /** Count clusters in a scope (used by tests + stats). */
   countClusters(opts: { project_root?: string; service_name?: string } = {}): number {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
-    if (opts.project_root) {
-      conditions.push('project_root = ?');
-      params.push(opts.project_root);
-    }
-    if (opts.service_name) {
-      conditions.push('service_name = ?');
-      params.push(opts.service_name);
-    }
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const row = this.db
-      .prepare(`SELECT COUNT(*) as c FROM decision_clusters ${where}`)
-      .get(...params) as { c: number };
-    return row.c;
+    return this.clusterOps.countClusters(opts);
   }
 
   // ── PROJECT MEMOS (L3 orientation digest) ───────────────────────────
