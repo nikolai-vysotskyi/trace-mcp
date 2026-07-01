@@ -74,7 +74,11 @@ const PATTERNS: { kind: CFGNodeKind; regex: RegExp; condGroup?: number }[] = [
   },
   { kind: 'for', regex: /^\s*for\s*\((.+?)\)\s*\{?/, condGroup: 1 },
   { kind: 'while', regex: /^\s*while\s*\((.+?)\)\s*\{?/, condGroup: 1 },
-  { kind: 'do_while', regex: /^\s*do\s*\{?/ },
+  // `do` must be a standalone loop keyword — optionally followed by `{` and
+  // nothing else on the line. Anchoring the end prevents `doThing()`, `done()`,
+  // `download(x)` and other do-prefixed identifiers from being mis-classified
+  // as do-while loops (which injected phantom loop nodes + back-edges).
+  { kind: 'do_while', regex: /^\s*do\s*\{?\s*$/ },
   { kind: 'switch', regex: /^\s*switch\s*\((.+?)\)\s*\{?/, condGroup: 1 },
   { kind: 'case', regex: /^\s*case\s+(.+?)\s*:/, condGroup: 1 },
   { kind: 'default', regex: /^\s*default\s*:/ },
