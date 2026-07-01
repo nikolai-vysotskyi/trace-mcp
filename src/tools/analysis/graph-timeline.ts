@@ -145,6 +145,12 @@ interface PeriodBoundary {
   date: string;
 }
 
+interface CommitSample {
+  boundaries: PeriodBoundary[];
+  /** Every commit hash in the window, oldest-first — used to slice churn ranges without another git call. */
+  orderedHashesOldestFirst: string[];
+}
+
 /**
  * Sample one representative commit per period over the window, using
  * `git log --since`. Periods are bucketed client-side from full commit
@@ -155,7 +161,7 @@ function sampleCommitsByPeriod(
   cwd: string,
   sinceDays: number,
   granularity: Granularity,
-): PeriodBoundary[] {
+): CommitSample {
   let output: string;
   try {
     output = execFileSync(
@@ -165,7 +171,7 @@ function sampleCommitsByPeriod(
     ).toString('utf-8');
   } catch (e) {
     logger.debug({ error: e }, 'git log failed for graph timeline');
-    return [];
+    return { boundaries: [], orderedHashesOldestFirst: [] };
   }
 
   const commits = output
@@ -208,44 +214,98 @@ function sampleCommitsByPeriod(
     byPeriod.set(label, { label, hash, date: iso.split('T')[0] });
   }
 
-  return [...byPeriod.values()].sort((a, b) => (a.label < b.label ? -1 : 1));
+  return {
+    boundaries: [...byPeriod.values()].sort((a, b) => (a.label < b.label ? -1 : 1)),
+    orderedHashesOldestFirst: commits.map((c) => c.hash),
+  };
 }
 
-/** Per-period commit/insertion/deletion counts via `git log --shortstat` bounded by two commit refs. */
-function getPeriodChurn(
-  cwd: string,
-  fromExclusive: string | null,
-  toInclusive: string,
-): { commits: number; filesChanged: number; insertions: number; deletions: number } {
-  const range = fromExclusive ? `${fromExclusive}..${toInclusive}` : toInclusive;
+interface PeriodChurn {
+  commits: number;
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+}
+
+const EMPTY_CHURN: PeriodChurn = { commits: 0, filesChanged: 0, insertions: 0, deletions: 0 };
+
+/**
+ * Commit/insertion/deletion counts for EVERY commit in the window, in a
+ * single `git log --shortstat` invocation tagged with each commit's own
+ * hash (`--pretty=format:__C__%H`).
+ *
+ * Replaces what used to be one `git log --shortstat <range>` subprocess
+ * PER sampled period (up to `maxPeriods` extra spawns). Measured on this
+ * project's own history (1000+ commits in 180 days): bare git subprocess
+ * spawn overhead alone is ~9-15ms/call regardless of repo size, so batching
+ * N per-period calls into 1 whole-window call turns an O(periods) spawn
+ * cost into O(1) — the dominant cost for `daily`/`weekly` granularity
+ * where `maxPeriods` can be 24+.
+ */
+function getChurnByCommit(cwd: string, sinceDays: number): Map<string, PeriodChurn> {
+  const byCommit = new Map<string, PeriodChurn>();
+  let output: string;
   try {
-    const output = execFileSync(
+    output = execFileSync(
       'git',
-      ['log', range, '--no-merges', '--shortstat', '--pretty=format:__C__'],
+      [
+        'log',
+        `--since=${sinceDays} days ago`,
+        '--no-merges',
+        '--shortstat',
+        '--pretty=format:__C__%H',
+      ],
       { cwd, stdio: 'pipe', timeout: 20_000, maxBuffer: 20 * 1024 * 1024, env: safeGitEnv() },
     ).toString('utf-8');
-
-    let commits = 0;
-    let filesChanged = 0;
-    let insertions = 0;
-    let deletions = 0;
-    for (const line of output.split('\n')) {
-      if (line === '__C__') {
-        commits++;
-        continue;
-      }
-      const fileMatch = line.match(/(\d+) files? changed/);
-      const insMatch = line.match(/(\d+) insertions?\(\+\)/);
-      const delMatch = line.match(/(\d+) deletions?\(-\)/);
-      if (fileMatch) filesChanged += Number(fileMatch[1]);
-      if (insMatch) insertions += Number(insMatch[1]);
-      if (delMatch) deletions += Number(delMatch[1]);
-    }
-    return { commits, filesChanged, insertions, deletions };
   } catch (e) {
-    logger.debug({ range, error: e }, 'git shortstat failed for graph timeline');
-    return { commits: 0, filesChanged: 0, insertions: 0, deletions: 0 };
+    logger.debug({ error: e }, 'git shortstat failed for graph timeline');
+    return byCommit;
   }
+
+  let current: PeriodChurn | null = null;
+  for (const line of output.split('\n')) {
+    if (line.startsWith('__C__')) {
+      const hash = line.slice('__C__'.length);
+      current = { commits: 1, filesChanged: 0, insertions: 0, deletions: 0 };
+      byCommit.set(hash, current);
+      continue;
+    }
+    if (!current) continue;
+    const fileMatch = line.match(/(\d+) files? changed/);
+    const insMatch = line.match(/(\d+) insertions?\(\+\)/);
+    const delMatch = line.match(/(\d+) deletions?\(-\)/);
+    if (fileMatch) current.filesChanged += Number(fileMatch[1]);
+    if (insMatch) current.insertions += Number(insMatch[1]);
+    if (delMatch) current.deletions += Number(delMatch[1]);
+  }
+  return byCommit;
+}
+
+/**
+ * Aggregate per-commit churn (from `getChurnByCommit`) for every commit in
+ * `(fromExclusive, toInclusive]`, using the full oldest-first commit hash
+ * order already sampled by `sampleCommitsByPeriod`.
+ */
+function aggregateChurn(
+  churnByCommit: Map<string, PeriodChurn>,
+  orderedHashesOldestFirst: string[],
+  fromExclusive: string | null,
+  toInclusive: string,
+): PeriodChurn {
+  const fromIdx = fromExclusive ? orderedHashesOldestFirst.indexOf(fromExclusive) : -1;
+  const toIdx = orderedHashesOldestFirst.indexOf(toInclusive);
+  if (toIdx === -1) return { ...EMPTY_CHURN };
+
+  const agg: PeriodChurn = { commits: 0, filesChanged: 0, insertions: 0, deletions: 0 };
+  for (let i = fromIdx + 1; i <= toIdx; i++) {
+    const c = churnByCommit.get(orderedHashesOldestFirst[i]);
+    if (!c) continue;
+    agg.commits += c.commits;
+    agg.filesChanged += c.filesChanged;
+    agg.insertions += c.insertions;
+    agg.deletions += c.deletions;
+  }
+  return agg;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -261,7 +321,19 @@ export function getGraphTimeline(
 
   if (!isGitRepo(cwd)) return null;
 
-  const boundaries = sampleCommitsByPeriod(cwd, sinceDays, granularity).slice(-maxPeriods);
+  const { boundaries: allBoundaries, orderedHashesOldestFirst } = sampleCommitsByPeriod(
+    cwd,
+    sinceDays,
+    granularity,
+  );
+  const boundaries = allBoundaries.slice(-maxPeriods);
+
+  // One `git log --shortstat` call for the whole window instead of one per
+  // period (see getChurnByCommit doc comment) — the dominant fix here since
+  // `countSourceFilesAtCommit` still needs one `git ls-tree` per period (each
+  // targets a different historical tree snapshot, which isn't batchable the
+  // same way).
+  const churnByCommit = getChurnByCommit(cwd, sinceDays);
 
   const periods: GraphTimelinePeriod[] = [];
   let prevFileCount: number | null = null;
@@ -269,7 +341,7 @@ export function getGraphTimeline(
 
   for (const boundary of boundaries) {
     const fileCount = countSourceFilesAtCommit(cwd, boundary.hash);
-    const churn = getPeriodChurn(cwd, prevHash, boundary.hash);
+    const churn = aggregateChurn(churnByCommit, orderedHashesOldestFirst, prevHash, boundary.hash);
 
     const effectiveFileCount: number | null = fileCount ?? prevFileCount;
     const fileDelta =
