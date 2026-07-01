@@ -39,8 +39,12 @@ function stripStringsAndComments(source: string): string {
 
 // ── Cyclomatic complexity ───────────────────────────────────────────────
 
-export function computeCyclomatic(source: string, language?: string): number {
-  const clean = stripStringsAndComments(source);
+/**
+ * Count branch keywords in ALREADY-stripped text. Split out so `computeComplexity`
+ * can share a single strip pass across every sub-metric instead of re-stripping
+ * the same body slice once per metric.
+ */
+function countCyclomatic(clean: string, language?: string): number {
   const pattern = BRANCH_KEYWORDS_BY_LANG[language ?? ''] ?? BRANCH_KEYWORDS_DEFAULT;
   // Reset regex state (global flag)
   pattern.lastIndex = 0;
@@ -48,10 +52,14 @@ export function computeCyclomatic(source: string, language?: string): number {
   return 1 + (matches?.length ?? 0);
 }
 
+export function computeCyclomatic(source: string, language?: string): number {
+  return countCyclomatic(stripStringsAndComments(source), language);
+}
+
 // ── Max nesting depth ───────────────────────────────────────────────────
 
-export function computeMaxNesting(source: string): number {
-  const clean = stripStringsAndComments(source);
+/** Count max brace-nesting depth in ALREADY-stripped text (see countCyclomatic). */
+function countMaxNesting(clean: string): number {
   let depth = 0;
   let max = 0;
   for (const ch of clean) {
@@ -63,6 +71,10 @@ export function computeMaxNesting(source: string): number {
     }
   }
   return max;
+}
+
+export function computeMaxNesting(source: string): number {
+  return countMaxNesting(stripStringsAndComments(source));
 }
 
 // ── Parameter count ─────────────────────────────────────────────────────
@@ -126,9 +138,14 @@ export function computeComplexity(
   signature?: string | null,
   language?: string,
 ): ComplexityMetrics {
+  // Strip strings/comments ONCE and feed the cleaned text to every text-based
+  // sub-metric, instead of each sub-metric re-running the multi-pass stripper
+  // on the same source slice. Behavior-preserving: both counters receive the
+  // exact same cleaned input they would have produced individually.
+  const clean = stripStringsAndComments(source);
   return {
-    cyclomatic: computeCyclomatic(source, language),
-    max_nesting: computeMaxNesting(source),
+    cyclomatic: countCyclomatic(clean, language),
+    max_nesting: countMaxNesting(clean),
     param_count: computeParamCount(signature),
     lines: source.split('\n').length,
   };
