@@ -200,6 +200,7 @@ const RULES: SecurityRule[] = [
       /execFile|spawn\s*\(/i, // safe alternatives
       /\.test\.|\.spec\.|__tests__/,
       /shlex\.quote|escapeshellarg|shellescape/i,
+      /\bdb\s*\.\s*exec\s*\(/i, // DB-handle .exec() (better-sqlite3, etc.) is not a shell exec API
     ],
     fix: 'Use execFile() with argument arrays, or sanitize/escape shell arguments.',
   },
