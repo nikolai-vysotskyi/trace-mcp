@@ -281,15 +281,9 @@ export async function scanEndpointLiterals(
       const norm = normalize(literal);
       if (!endpointSet.has(norm)) continue;
 
-      // Line number
-      let lineNum = 1;
-      for (let i = 0; i < match.index && i < content.length; i++) {
-        if (content[i] === '\n') lineNum++;
-      }
-
       results.push({
         filePath: relPath,
-        line: lineNum,
+        line: lineNumberAt(content, match.index),
         callType: 'literal-match',
         method: null,
         urlPattern: literal,
@@ -354,11 +348,7 @@ async function walkAndInvoke(
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       await walkAndInvoke(fullPath, repoRoot, onFile, depth + 1, state);
-    } else if (
-      entry.isFile() &&
-      CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) &&
-      !EXCLUDE_FILES.has(entry.name)
-    ) {
+    } else if (isScannableCodeFile(entry)) {
       const relPath = path.relative(repoRoot, fullPath);
       // Skip server-side declaration/view/admin files: their path literals are
       // route DEFINITIONS (or Blade views / Nova admin), not cross-service API
@@ -379,6 +369,15 @@ async function walkAndInvoke(
   }
 }
 
+/** Whether a directory entry is a source file eligible for client-call scanning. */
+function isScannableCodeFile(entry: fs.Dirent): boolean {
+  return (
+    entry.isFile() &&
+    CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()) &&
+    !EXCLUDE_FILES.has(entry.name)
+  );
+}
+
 /**
  * Normalize a captured client URL into a route-matchable pattern.
  * - Template interpolation `${expr}` → `{*}` (`/api/items/${id}` → `/api/items/{*}`).
@@ -395,6 +394,47 @@ function normalizeClientUrl(url: string, concatenated: boolean): string {
   return s;
 }
 
+/**
+ * Count newlines in `content` up to `index` to turn a regex match offset into
+ * a 1-based line number. Shared by both scan passes (inline call patterns and
+ * endpoint-literal matching) — previously duplicated inline in each.
+ */
+function lineNumberAt(content: string, index: number): number {
+  let lineNum = 1;
+  for (let i = 0; i < index && i < content.length; i++) {
+    if (content[i] === '\n') lineNum++;
+  }
+  return lineNum;
+}
+
+/**
+ * Turn a pattern's raw extracted URL into the final normalized `urlPattern`,
+ * or null if the match should be discarded (relative import, non-URL-looking
+ * string, or overly generic root path). Isolated from scanFileContent's match
+ * loop because it's a pure decision given (pattern, rawUrl, tail-of-match) —
+ * the loop itself only needs to iterate matches and push results.
+ */
+function resolveMatchedUrl(pattern: CallPattern, rawUrl: string, tail: string): string | null {
+  const isStructuralCall = pattern.name === 'grpc-call' || pattern.name === 'graphql-operation';
+
+  // Detect `'/literal/' + expr` concatenation: peek at the source right after
+  // the matched literal for a `+` operator.
+  const concatenated = /^\s*\+/.test(tail) && !isStructuralCall;
+  const url = isStructuralCall ? rawUrl : normalizeClientUrl(rawUrl, concatenated);
+  if (!url) return null;
+
+  // Skip obviously internal paths and relative imports
+  if (url.startsWith('./') || url.startsWith('../') || url.startsWith('#')) return null;
+  // Must look like an API path or URL. For gRPC/GraphQL, bare method names are OK.
+  if (!url.startsWith('/') && !url.startsWith('http') && !url.includes('.') && !isStructuralCall) {
+    return null;
+  }
+  // Skip overly generic URLs — root path '/' matches every project
+  if (url === '/' || url === '') return null;
+
+  return url;
+}
+
 function scanFileContent(filePath: string, content: string, results: ScannedClientCall[]): void {
   for (const pattern of CALL_PATTERNS) {
     // Reset regex state
@@ -405,37 +445,13 @@ function scanFileContent(filePath: string, content: string, results: ScannedClie
       const rawUrl = pattern.extractUrl(match);
       if (!rawUrl) continue;
 
-      // Detect `'/literal/' + expr` concatenation: peek at the source right after
-      // the matched literal for a `+` operator.
       const tail = content.slice(match.index + match[0].length, match.index + match[0].length + 4);
-      const concatenated =
-        /^\s*\+/.test(tail) && pattern.name !== 'grpc-call' && pattern.name !== 'graphql-operation';
-      const url =
-        pattern.name === 'grpc-call' || pattern.name === 'graphql-operation'
-          ? rawUrl
-          : normalizeClientUrl(rawUrl, concatenated);
+      const url = resolveMatchedUrl(pattern, rawUrl, tail);
       if (!url) continue;
-
-      // Skip obviously internal paths and relative imports
-      if (url.startsWith('./') || url.startsWith('../') || url.startsWith('#')) continue;
-      // Must look like an API path or URL
-      if (!url.startsWith('/') && !url.startsWith('http') && !url.includes('.')) {
-        // For gRPC/GraphQL, method names are OK
-        if (pattern.name !== 'grpc-call' && pattern.name !== 'graphql-operation') continue;
-      }
-      // Skip overly generic URLs — root path '/' matches every project
-      if (url === '/' || url === '') continue;
-
-      // Find line number
-      const charIndex = match.index;
-      let lineNum = 1;
-      for (let i = 0; i < charIndex && i < content.length; i++) {
-        if (content[i] === '\n') lineNum++;
-      }
 
       results.push({
         filePath,
-        line: lineNum,
+        line: lineNumberAt(content, match.index),
         callType: pattern.name,
         method: pattern.extractMethod(match),
         urlPattern: url,
