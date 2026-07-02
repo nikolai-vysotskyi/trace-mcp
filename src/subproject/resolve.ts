@@ -46,6 +46,18 @@ export function findSubprojectRootForPath(cwd: string, dbPath = TOPOLOGY_DB_PATH
 }
 
 /**
+ * True when `root` is ITSELF a registered subproject repo_root (not merely
+ * living under one). Lets the auto-add path serve a known subproject read-mostly
+ * (indexed once, no fs watcher, no registry.json entry) instead of promoting it
+ * to a full watched project — the resource guard for umbrella repos with many
+ * subprojects (#209). `findSubprojectRootForPath` returns the deepest ancestor,
+ * which equals `root` exactly when `root` is the registered subproject.
+ */
+export function isKnownSubproject(root: string, dbPath = TOPOLOGY_DB_PATH): boolean {
+  return findSubprojectRootForPath(root, dbPath) === path.resolve(root);
+}
+
+/**
  * Resolve the most-specific KNOWN project root for a session cwd: the deeper of
  * the registered-project ancestor and the registered *subproject* repo_root.
  *

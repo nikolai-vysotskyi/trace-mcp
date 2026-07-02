@@ -86,7 +86,7 @@ import { PluginRegistry } from './plugin-api/registry.js';
 import { detectGitWorktree, findProjectRoot, hasRootMarkers } from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
-import { resolveDeepestKnownRoot } from './subproject/resolve.js';
+import { isKnownSubproject, resolveDeepestKnownRoot } from './subproject/resolve.js';
 import {
   buildAmbiguousProjectError,
   buildNoProjectsError,
@@ -935,17 +935,34 @@ program
               // roots carry their own package.json/go.mod/etc and still qualify;
               // bare container folders fall through to a clean 404 instead.
               const hasMarkers = !folderMissing && hasRootMarkers(projectRoot);
-              const canAutoAdd = !folderMissing && !dangerReason && hasMarkers;
+              // A user-registered subproject (topology.db) is trusted even when
+              // it carries no generic root markers — the user already declared
+              // it a project. It is served READ-MOSTLY: indexed once, no fs
+              // watcher, no registry.json entry, so an umbrella repo with many
+              // subprojects doesn't spawn N watchers or get restored as N full
+              // watched projects on restart (#209). A registry project always
+              // wins (full watched mode).
+              const asSubproject =
+                !folderMissing && !getProject(projectRoot) && isKnownSubproject(projectRoot);
+              const canAutoAdd = !folderMissing && !dangerReason && (hasMarkers || asSubproject);
               if (canAutoAdd && !projectManager.getProject(projectRoot)) {
                 try {
-                  await projectManager.addProject(projectRoot);
+                  await projectManager.addProject(
+                    projectRoot,
+                    asSubproject ? { watch: false, persist: false } : undefined,
+                  );
                   subscribeToProjectProgress(projectRoot);
                   broadcastEvent({
                     type: 'project_status',
                     project: projectRoot,
                     status: 'indexing',
                   });
-                  logger.info({ projectRoot }, 'Auto-registered project on first MCP connect');
+                  logger.info(
+                    { projectRoot, readMostly: asSubproject },
+                    asSubproject
+                      ? 'Auto-served registered subproject read-mostly on first MCP connect'
+                      : 'Auto-registered project on first MCP connect',
+                  );
                   transport = (await createSessionTransport(projectRoot)) ?? undefined;
                 } catch (err) {
                   logger.warn(
