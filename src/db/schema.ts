@@ -1788,7 +1788,29 @@ function runMigrations(db: Database.Database, fromVersion: number): void {
   }
 }
 
-export function initializeDatabase(dbPath: string): Database.Database {
+export interface InitializeDatabaseOptions {
+  /**
+   * Page cache size in MB (`PRAGMA cache_size`). Mirrors config key
+   * `index_cache_mb`. Defaults match that config's default (16 MB) so
+   * one-shot CLI callers that never load config get the same low-memory
+   * behavior as the daemon.
+   */
+  cacheMb?: number;
+  /**
+   * mmap window size in MB (`PRAGMA mmap_size`). Mirrors config key
+   * `index_mmap_mb`. 0 disables mmap. Defaults match that config's default
+   * (64 MB).
+   */
+  mmapMb?: number;
+}
+
+const DEFAULT_INDEX_CACHE_MB = 16;
+const DEFAULT_INDEX_MMAP_MB = 64;
+
+export function initializeDatabase(
+  dbPath: string,
+  options?: InitializeDatabaseOptions,
+): Database.Database {
   const db = new Database(dbPath);
   restrictDbPerms(dbPath);
 
@@ -1801,10 +1823,16 @@ export function initializeDatabase(dbPath: string): Database.Database {
   // NORMAL is safe in WAL mode (data survives process crash, not OS crash) and
   // avoids an fsync per transaction — major win for batched indexing.
   db.pragma('synchronous = NORMAL');
-  // 64 MB page cache (default is ~2 MB) — keeps hot pages in memory during indexing
-  db.pragma('cache_size = -65536');
-  // 256 MB mmap — lets SQLite access pages via mmap instead of read() syscalls
-  db.pragma('mmap_size = 268435456');
+  // Page cache (default is ~2 MB) — keeps hot pages in memory during indexing.
+  // Configurable because this is a PER-CONNECTION cost: a daemon with many
+  // registered projects opens one connection each, so this multiplies by
+  // project count. See config keys `index_cache_mb` / `index_mmap_mb`.
+  const cacheMb = options?.cacheMb ?? DEFAULT_INDEX_CACHE_MB;
+  db.pragma(`cache_size = ${-Math.max(1, Math.round(cacheMb * 1024))}`);
+  // mmap — lets SQLite access pages via mmap instead of read() syscalls.
+  // Same per-connection multiplication concern as cache_size above.
+  const mmapMb = options?.mmapMb ?? DEFAULT_INDEX_MMAP_MB;
+  db.pragma(`mmap_size = ${Math.max(0, Math.round(mmapMb * 1024 * 1024))}`);
   // Keep temp tables / temp indices (ORDER BY, GROUP BY, DISTINCT) in RAM
   // instead of spilling to disk. Cheap win for read-heavy aggregations.
   db.pragma('temp_store = MEMORY');

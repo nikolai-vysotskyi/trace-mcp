@@ -108,4 +108,47 @@ describe('schema', () => {
     const fk = db.pragma('foreign_keys', { simple: true }) as number;
     expect(fk).toBe(1);
   });
+
+  describe('cache_size / mmap_size configurability', () => {
+    it('applies the low-memory defaults (16 MB cache, 64 MB mmap) when no options are passed', () => {
+      const tmpDir = createTmpDir('trace-mcp-pragma-defaults-');
+      const tmpDb = initializeDatabase(path.join(tmpDir, 'test.db'));
+      try {
+        const cacheSize = tmpDb.pragma('cache_size', { simple: true }) as number;
+        const mmapSize = tmpDb.pragma('mmap_size', { simple: true }) as number;
+        // Negative cache_size is in KB: -16384 KB == 16 MB.
+        expect(cacheSize).toBe(-16384);
+        expect(mmapSize).toBe(64 * 1024 * 1024);
+      } finally {
+        tmpDb.close();
+        removeTmpDir(tmpDir);
+      }
+    });
+
+    it('honors explicit cacheMb / mmapMb overrides', () => {
+      const tmpDir = createTmpDir('trace-mcp-pragma-override-');
+      const tmpDb = initializeDatabase(path.join(tmpDir, 'test.db'), { cacheMb: 4, mmapMb: 256 });
+      try {
+        const cacheSize = tmpDb.pragma('cache_size', { simple: true }) as number;
+        const mmapSize = tmpDb.pragma('mmap_size', { simple: true }) as number;
+        expect(cacheSize).toBe(-4096);
+        expect(mmapSize).toBe(256 * 1024 * 1024);
+      } finally {
+        tmpDb.close();
+        removeTmpDir(tmpDir);
+      }
+    });
+
+    it('mmapMb: 0 disables mmap', () => {
+      const tmpDir = createTmpDir('trace-mcp-pragma-nommap-');
+      const tmpDb = initializeDatabase(path.join(tmpDir, 'test.db'), { mmapMb: 0 });
+      try {
+        const mmapSize = tmpDb.pragma('mmap_size', { simple: true }) as number;
+        expect(mmapSize).toBe(0);
+      } finally {
+        tmpDb.close();
+        removeTmpDir(tmpDir);
+      }
+    });
+  });
 });

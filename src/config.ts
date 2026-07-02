@@ -946,6 +946,33 @@ export const TraceMcpConfigSchema = z.object({
    */
   daemon_idle_exit_minutes: z.number().min(0).max(1440).default(15),
   /**
+   * Minutes a registered project can go without a request/watcher-relevant
+   * touch before the daemon's periodic sweep unloads its in-memory state
+   * (DB handle, pipeline, watcher, MCP server) while leaving it registered.
+   * The next request for that project re-adds it lazily (503 + Retry-After
+   * while it warms, same UX as a cold-start project — see cli.ts serve-http
+   * Phase 5.1). 0 disables the sweep. Never unloads a project that is still
+   * indexing or has connected clients/SSE subscribers.
+   */
+  project_idle_unload_minutes: z.number().min(0).max(1440).default(30),
+  /**
+   * Per-project-connection SQLite page cache size, in MB, applied via
+   * `PRAGMA cache_size` on every index DB connection (one per registered
+   * project in the daemon). Memory cost scales linearly with project count —
+   * lower this if the daemon holds many registered projects. See
+   * `index_mmap_mb` for the other major per-connection memory knob.
+   */
+  index_cache_mb: z.number().min(1).max(1024).default(16),
+  /**
+   * Per-project-connection SQLite mmap window size, in MB, applied via
+   * `PRAGMA mmap_size` on every index DB connection. Like `index_cache_mb`,
+   * this is resident-set cost multiplied by the number of registered
+   * projects the daemon loads — raise it back up for perf-sensitive setups
+   * with few, large projects; lower it (or rely on the default) when many
+   * projects are registered on one daemon. 0 disables mmap.
+   */
+  index_mmap_mb: z.number().min(0).max(4096).default(64),
+  /**
    * Hermes Agent (NousResearch) session provider.
    *
    * - `enabled: 'auto'` (default) registers the provider; discovery is a no-op

@@ -944,7 +944,14 @@ program
               // wins (full watched mode).
               const asSubproject =
                 !folderMissing && !getProject(projectRoot) && isKnownSubproject(projectRoot);
-              const canAutoAdd = !folderMissing && !dangerReason && (hasMarkers || asSubproject);
+              // A root present in the on-disk registry but absent from the
+              // manager was idle-unloaded by the sweep
+              // (project_idle_unload_minutes) — always eligible for lazy
+              // reload, even without generic root markers (the user already
+              // vetted it at registration time).
+              const isRegistered = !folderMissing && !!getProject(projectRoot);
+              const canAutoAdd =
+                !folderMissing && !dangerReason && (hasMarkers || asSubproject || isRegistered);
               if (canAutoAdd && !projectManager.getProject(projectRoot)) {
                 try {
                   await projectManager.addProject(
@@ -1059,10 +1066,22 @@ program
 
       // Health endpoint — includes project status
       if (req.method === 'GET' && url.pathname === '/health') {
-        const projects = projectManager.listProjects().map((p) => ({
-          root: p.root,
-          status: p.status,
-        }));
+        const loadedRoots = new Set<string>();
+        const projects: Array<{
+          root: string;
+          status: ManagedProject['status'] | 'unloaded';
+        }> = projectManager.listProjects().map((p) => {
+          loadedRoots.add(p.root);
+          return { root: p.root, status: p.status };
+        });
+        // Registered projects idle-unloaded by the sweep (project_idle_unload_minutes)
+        // are absent from listProjects() — surface them as 'unloaded' rather than
+        // silently dropping them, so /health still reflects every registered root.
+        for (const entry of listProjects()) {
+          if (!loadedRoots.has(entry.root)) {
+            projects.push({ root: entry.root, status: 'unloaded' });
+          }
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
@@ -1995,6 +2014,42 @@ program
           res.end(JSON.stringify({ error: `invalid JSON body: ${(e as Error).message}` }));
           return;
         }
+        // The project may be registered but idle-unloaded (project_idle_unload_minutes) —
+        // getProject() alone would see it as gone and handleReindexFile would
+        // 404 (non-retryable). Mirror the /mcp auto-register path: kick off a
+        // lazy reload and answer 503 + Retry-After so the hook falls back and
+        // retries transparently, same UX as a still-warming cold-start project.
+        const idleUnloadedRoot =
+          parsed?.project &&
+          !projectManager.getProject(parsed.project) &&
+          getProject(parsed.project)
+            ? parsed.project
+            : undefined;
+        if (idleUnloadedRoot) {
+          void projectManager
+            .addProject(idleUnloadedRoot)
+            .then(() => {
+              // Mirror the /mcp auto-register path: re-arm the progress
+              // listener the idle-unload sweep tore down, so the reload's
+              // indexing progress reaches SSE subscribers again.
+              subscribeToProjectProgress(idleUnloadedRoot);
+              broadcastEvent({
+                type: 'project_status',
+                project: idleUnloadedRoot,
+                status: 'indexing',
+              });
+            })
+            .catch((err) => {
+              logger.warn(
+                { err: String(err), projectRoot: idleUnloadedRoot },
+                'Lazy reload of idle-unloaded project failed',
+              );
+            });
+          res.writeHead(503, { 'Content-Type': 'application/json', 'Retry-After': '5' });
+          res.end(JSON.stringify({ error: `project not ready: reloading` }));
+          return;
+        }
+        pokeActivity(parsed.project);
         const result = await handleReindexFile(parsed, {
           getProject: (root) => projectManager.getProject(root),
         });
@@ -2657,6 +2712,31 @@ program
         await shutdown('idle-exit');
       },
     });
+
+    // ── Per-project idle-unload sweep ───────────────────────────
+    // Distinct from the whole-daemon idle-exit monitor above: this unloads
+    // individual cold projects (in-memory DB/pipeline/watcher/server) while
+    // the daemon keeps serving everything else, reclaiming per-connection
+    // SQLite cache/mmap for projects nobody has touched recently. Stays
+    // registered — reloads lazily on the next request (see the /mcp
+    // auto-register path and /api/projects/reindex-file). 0 disables.
+    const configuredIdleUnloadMinutes =
+      typeof globalRaw.project_idle_unload_minutes === 'number'
+        ? globalRaw.project_idle_unload_minutes
+        : 30;
+    projectManager.startIdleUnloadSweep(configuredIdleUnloadMinutes * 60_000, {
+      onUnloaded: (roots) => {
+        for (const root of roots) {
+          // Same cleanup as the DELETE endpoint: without it the progress
+          // listener closure pins the unloaded project's ProgressState for
+          // the daemon's lifetime. Sessions are already gone (the sweep
+          // skips refCount > 0 projects) so this is mostly the listener +
+          // throttle-key teardown.
+          teardownProjectBookkeeping(root);
+          broadcastEvent({ type: 'project_status', project: root, status: 'unloaded' });
+        }
+      },
+    });
     // Track activity: wrap the client/session/SSE mutation points in-place via
     // a ticker that re-evaluates on every /health check (cheap, idempotent).
     // Plus explicit hook below on key mutations.
@@ -2698,6 +2778,10 @@ program
     const pokeActivity = (projectRoot?: string): void => {
       idleMonitor.onActivity();
       memoryScheduler.notifyActivity(projectRoot);
+      // Resets the per-project idle-unload clock (project_idle_unload_minutes).
+      // No-op for the coarse (no-projectRoot) callers and for projects not
+      // currently loaded.
+      if (projectRoot) projectManager.touchActivity(projectRoot);
     };
 
     // ── Self-staleness detection ─────────────────────────────────

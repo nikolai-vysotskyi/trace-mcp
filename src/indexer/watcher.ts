@@ -69,10 +69,45 @@ async function loadParcelWatcher(): Promise<ParcelWatcherModule> {
   throw lastErr;
 }
 
+interface StartOpts {
+  /**
+   * POSIX globs (relative to rootPath) for every registered project root
+   * that is a strict descendant of this watcher's rootPath — see
+   * `descendantExcludeGlobs()` in registry.ts. An umbrella root's watcher
+   * must not fire (or reindex) for files a more-specific registered
+   * project already owns; without this an ancestor + descendant pair
+   * double-watches and double-indexes every file under the descendant
+   * (#209). Empty/undefined when this project has no registered
+   * descendants.
+   */
+  descendantExcludeGlobs?: string[];
+}
+
 export class FileWatcher {
   private subscription: parcelWatcher.AsyncSubscription | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingPaths: Set<string> = new Set();
+  /** Args from the most recent start() call, kept so restartWithExcludes()
+   *  can re-subscribe without the caller re-threading every closure. */
+  private lastStartArgs: {
+    rootPath: string;
+    config: TraceMcpConfig;
+    onChanges: (paths: string[]) => Promise<void>;
+    debounceMs: number;
+    onDeletes?: (paths: string[]) => Promise<void>;
+  } | null = null;
+  /**
+   * Serializes start()/stop()/restartWithExcludes() on this instance. Without
+   * this, two overlapping calls (e.g. ProjectManager.restartManagedAncestorWatchers
+   * firing for two sibling descendants registered under the same ancestor at
+   * nearly the same time) both read `this.subscription` before either has
+   * assigned its own, so the second `watcher.subscribe()` silently overwrites
+   * the first's subscription without ever unsubscribing it — a leaked live
+   * fs-event handle whose stale closure keeps double-indexing forever.
+   * Every call chains off this promise so it always observes the fully
+   * settled state left by the previous call.
+   */
+  private opQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly _setTimeout: typeof setTimeout = setTimeout,
@@ -85,13 +120,34 @@ export class FileWatcher {
     onChanges: (paths: string[]) => Promise<void>,
     debounceMs = DEFAULT_DEBOUNCE_MS,
     onDeletes?: (paths: string[]) => Promise<void>,
+    opts?: StartOpts,
   ): Promise<void> {
+    const run = this.opQueue.then(() =>
+      this.startLocked(rootPath, config, onChanges, debounceMs, onDeletes, opts),
+    );
+    // Swallow rejections in the chain itself so one failed call doesn't wedge
+    // every subsequent queued call — the actual error still propagates below.
+    this.opQueue = run.catch(() => {});
+    return run;
+  }
+
+  private async startLocked(
+    rootPath: string,
+    config: TraceMcpConfig,
+    onChanges: (paths: string[]) => Promise<void>,
+    debounceMs: number,
+    onDeletes: ((paths: string[]) => Promise<void>) | undefined,
+    opts: StartOpts | undefined,
+  ): Promise<void> {
+    this.lastStartArgs = { rootPath, config, onChanges, debounceMs, onDeletes };
     // Re-entry guard: if start() is invoked again while a prior subscription is
     // live, the old AsyncSubscription (native fs-event handle + the registered
     // callback closure capturing onChanges/pipeline/traceignore) would leak.
-    // Tear it down first so the new subscription is the sole owner.
+    // Tear it down first so the new subscription is the sole owner. Safe to
+    // call stopLocked() directly (bypassing the queue) since startLocked()
+    // itself only ever runs serialized on the queue.
     if (this.subscription || this.debounceTimer) {
-      await this.stop();
+      await this.stopLocked();
     }
 
     const watcher = await loadParcelWatcher();
@@ -102,6 +158,15 @@ export class FileWatcher {
     // dirs excluded from full indexing (Laravel storage/framework/sessions,
     // caches) still triggered per-event reindexes. Apply the same globs here.
     const isExcluded = picomatch(config.exclude ?? [], { dot: true });
+    const descendantGlobs = opts?.descendantExcludeGlobs ?? [];
+    // Cheap per-event guard mirroring the native-level ignore below: covers
+    // the race where a project is registered under this ancestor AFTER this
+    // subscription was created (or removed just before) and the native
+    // ignore list, snapshotted at subscribe-time, has gone stale until the
+    // caller restarts us. See ProjectManager.addProject/removeProject.
+    const isOwnedByDescendant = descendantGlobs.length
+      ? picomatch(descendantGlobs, { dot: true })
+      : undefined;
 
     this.subscription = await watcher.subscribe(
       rootPath,
@@ -115,6 +180,7 @@ export class FileWatcher {
           if (ignoreDirs.some((d) => p.startsWith(d))) return false;
           const rel = path.relative(rootPath, p);
           if (isExcluded(rel.split(path.sep).join('/'))) return false;
+          if (isOwnedByDescendant?.(rel.split(path.sep).join('/'))) return false;
           return !traceignore.isIgnored(rel);
         };
 
@@ -158,10 +224,14 @@ export class FileWatcher {
         // process. Parcel matches globs relative to the watched root, so
         // `**/node_modules/**` and the config.exclude globs (storage/, caches)
         // drop those events before they ever cross the native→JS boundary.
+        // descendantGlobs (e.g. `the/**`) do the same for registered
+        // descendant project roots — a change under a descendant's subtree
+        // never reaches this process's fs-event callback at all (#209).
         ignore: [
           ...ignoreDirs,
           ...[...traceignore.getSkipDirs()].map((d) => `**/${d}/**`),
           ...(config.exclude ?? []),
+          ...descendantGlobs,
         ],
       },
     );
@@ -169,7 +239,33 @@ export class FileWatcher {
     logger.info({ rootPath }, 'File watcher started');
   }
 
+  /**
+   * Re-subscribe with a fresh `descendantExcludeGlobs` list, reusing every
+   * other argument from the most recent `start()` call. Used by
+   * ProjectManager when a project is registered/removed under an already-
+   * running ancestor's watcher — the ancestor's ignore list was snapshotted
+   * at subscribe-time and is now stale (#209). No-op if `start()` was never
+   * called (e.g. a read-mostly project with `watch: false` — nothing to
+   * restart) or already stopped.
+   */
+  async restartWithExcludes(descendantExcludeGlobs: string[]): Promise<void> {
+    if (!this.lastStartArgs) {
+      logger.debug('restartWithExcludes called before start() — ignoring');
+      return;
+    }
+    const { rootPath, config, onChanges, debounceMs, onDeletes } = this.lastStartArgs;
+    await this.start(rootPath, config, onChanges, debounceMs, onDeletes, {
+      descendantExcludeGlobs,
+    });
+  }
+
   async stop(): Promise<void> {
+    const run = this.opQueue.then(() => this.stopLocked());
+    this.opQueue = run.catch(() => {});
+    return run;
+  }
+
+  private async stopLocked(): Promise<void> {
     // Order matters: unsubscribe FIRST so parcel stops invoking our callback,
     // THEN drop the debounce timer. The opposite order leaves a window where
     // an in-flight parcel callback can schedule a new timer after we cleared
