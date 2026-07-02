@@ -6,8 +6,6 @@ import type { TSNode } from '../../../../parser/tree-sitter.js';
 import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 import { detectMinPythonVersion } from './version-features.js';
 
-export type { TSNode } from '../../../../parser/tree-sitter.js';
-
 // ─── Visibility ──────────────────────────────────────────────
 
 export type PythonVisibility = 'public' | 'private' | 'mangled' | 'dunder';

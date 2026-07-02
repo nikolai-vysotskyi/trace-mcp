@@ -3,7 +3,7 @@
  */
 import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
-export type { TSNode } from '../../../../parser/tree-sitter.js';
+import type { TSNode } from '../../../../parser/tree-sitter.js';
 
 export function makeSymbolId(
   filePath: string,
