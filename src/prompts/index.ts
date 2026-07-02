@@ -117,6 +117,12 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
           total_exports: 0,
           total_dead: 0,
           threshold: 0.5,
+          _methodology: {
+            algorithm: 'unavailable',
+            signals: [],
+            confidence_formula: 'dead code analysis failed; no results',
+            limitations: ['analysis did not run'],
+          },
         },
       );
       if (deadCode.dead_symbols && deadCode.dead_symbols.length > 0) {
@@ -404,6 +410,12 @@ export function registerPrompts(server: McpServer, ctx: PromptContext): void {
         total_exports: 0,
         total_dead: 0,
         threshold: 0.6,
+        _methodology: {
+          algorithm: 'unavailable',
+          signals: [],
+          confidence_formula: 'dead code analysis failed; no results',
+          limitations: ['analysis did not run'],
+        },
       });
       if (dead.dead_symbols && dead.dead_symbols.length > 0) {
         sections.push(`## Potential Dead Code: ${dead.dead_symbols.length}\n`);

@@ -54,8 +54,11 @@ export interface ContainerPattern {
   pattern: RegExp;
   nameGroup?: number;
   meta?: Record<string, unknown>;
-  /** Patterns to extract inside this container's body. */
-  memberPatterns: MemberPattern[];
+  /**
+   * Patterns to extract inside this container's body. Optional: some containers
+   * (e.g. an Apex trigger) have no member declarations to extract.
+   */
+  memberPatterns?: MemberPattern[];
 }
 
 export interface SymbolPatternV2 {

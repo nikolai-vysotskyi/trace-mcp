@@ -14,6 +14,7 @@ import { ensureGlobalDirs, getDbPath } from '../global.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import { generateConfig } from '../init/config-generator.js';
 import { detectProject } from '../init/detector.js';
+import type { DetectedFramework, PackageManagerInfo } from '../init/types.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
 import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
 import { setupProject } from '../project-setup.js';
@@ -336,12 +337,12 @@ export const addCommand = new Command('add')
       }
       if (detection.frameworks.length > 0) {
         detectedLines.push(
-          `Frameworks: ${detection.frameworks.map((f) => (f.version ? `${f.name} ${f.version}` : f.name)).join(', ')}`,
+          `Frameworks: ${detection.frameworks.map((f: DetectedFramework) => (f.version ? `${f.name} ${f.version}` : f.name)).join(', ')}`,
         );
       }
       if (detection.packageManagers.length > 0) {
         detectedLines.push(
-          `Package managers: ${detection.packageManagers.map((pm) => pm.type).join(', ')}`,
+          `Package managers: ${detection.packageManagers.map((pm: PackageManagerInfo) => pm.type).join(', ')}`,
         );
       }
       if (detectedLines.length > 0) {
@@ -378,7 +379,7 @@ export const addCommand = new Command('add')
             migrated,
             detection: {
               languages: detection.languages,
-              frameworks: detection.frameworks.map((f) => f.name),
+              frameworks: detection.frameworks.map((f: DetectedFramework) => f.name),
             },
             indexing: indexResult ?? undefined,
           },

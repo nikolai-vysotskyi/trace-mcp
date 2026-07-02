@@ -104,10 +104,8 @@ export function attachFileLogging(config: {
   const methods = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'] as const;
   for (const m of methods) {
     const original = logger[m].bind(logger);
-    // @ts-expect-error — pino method reassignment
     logger[m] = (...args: Parameters<typeof original>) => {
       original(...args);
-      // @ts-expect-error — same signature
       fileLogger[m](...args);
       writeCounter++;
       if (writeCounter >= WRITE_CHECK_INTERVAL) {

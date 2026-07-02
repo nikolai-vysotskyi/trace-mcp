@@ -28,7 +28,7 @@ describe('installProcessSafetyNet', () => {
   afterEach(() => {
     // Remove exactly the listeners we added so we don't leak into other tests.
     for (const ev of events) {
-      for (const after of process.listeners(ev).slice(baseline[ev])) {
+      for (const after of (process as NodeJS.EventEmitter).listeners(ev).slice(baseline[ev])) {
         process.off(ev, after as (...a: unknown[]) => void);
       }
     }

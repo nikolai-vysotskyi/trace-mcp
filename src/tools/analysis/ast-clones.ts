@@ -14,9 +14,13 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import type Parser from 'web-tree-sitter';
 import type { Store } from '../../db/store.js';
 import { ok, type TraceMcpResult } from '../../errors.js';
 import { getParser, type TSNode } from '../../parser/tree-sitter.js';
+
+/** Parsed tree-sitter syntax tree — owns a WASM heap that must be `delete()`d. */
+type TSTree = Parser.Tree;
 
 // Languages we hash. A language is only useful here if its tree-sitter
 // grammar is available via getParser().
@@ -215,7 +219,7 @@ export async function detectAstClones(
   }>;
 
   const fileContentCache = new Map<number, string>();
-  const parsedTreeCache = new Map<number, { tree: unknown; content: string } | null>();
+  const parsedTreeCache = new Map<number, { tree: TSTree; content: string } | null>();
   const candidates: CloneCandidate[] = [];
   const filesSet = new Set<number>();
   const warnings: string[] = [];
@@ -335,7 +339,7 @@ export async function detectAstClones(
   for (const cached of parsedTreeCache.values()) {
     if (cached) {
       try {
-        (cached.tree as { delete?: () => void }).delete?.();
+        cached.tree.delete();
       } catch {
         /* ignore */
       }

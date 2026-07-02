@@ -77,7 +77,10 @@ export const MatlabLanguagePlugin = class implements LanguagePlugin {
   supportedExtensions = _plugin.supportedExtensions;
   supportedVersions = _plugin.supportedVersions;
 
-  extractSymbols(filePath: string, content: Buffer): TraceMcpResult<FileParseResult> {
+  extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): TraceMcpResult<FileParseResult> | Promise<TraceMcpResult<FileParseResult>> {
     // .m file disambiguation: only treat as MATLAB if path has indicators
     if (filePath.endsWith('.m') && !MATLAB_PATH_INDICATORS.test(filePath)) {
       // Let Objective-C plugin handle it

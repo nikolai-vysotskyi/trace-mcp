@@ -354,6 +354,9 @@ export class NuxtUiPlugin implements FrameworkPlugin {
     dependencies: ['nuxt'],
   };
 
+  private isV3 = false;
+  private hasPro = false;
+
   detect(ctx: ProjectContext): boolean {
     const deps = {
       ...(ctx.packageJson?.dependencies as Record<string, string> | undefined),

@@ -153,7 +153,7 @@ export function generateDocs(
     if (cycles.length > 0) {
       parts.push(`### Dependency Cycles: ${cycles.length}\n`);
       for (const c of cycles.slice(0, 5)) {
-        parts.push(`- ${c.join(' → ')}`);
+        parts.push(`- ${c.files.join(' → ')}`);
       }
       parts.push('');
     }

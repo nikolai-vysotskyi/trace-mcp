@@ -38,12 +38,12 @@ export function findChildByType(node: TSNode, ...types: string[]): TSNode | null
   return null;
 }
 
-function extractGetterName(node: TSNode): string | undefined {
+export function extractGetterName(node: TSNode): string | undefined {
   const m = node.text.match(/get\s+(\w+)/);
   return m?.[1];
 }
 
-function extractSetterName(node: TSNode): string | undefined {
+export function extractSetterName(node: TSNode): string | undefined {
   const m = node.text.match(/set\s+(\w+)/);
   return m?.[1];
 }

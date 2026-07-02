@@ -454,7 +454,7 @@ async function runFindCommand(store: Store, args: string): Promise<string> {
 function runImpactCommand(store: Store, args: string): string {
   const result = getChangeImpact(store, { symbolId: args });
   if (result.isErr()) {
-    return `<!-- slash:impact -->\n**Error:** ${result.error.message}`;
+    return `<!-- slash:impact -->\n**Error:** ${'message' in result.error ? result.error.message : result.error.code}`;
   }
   const { dependents, totalAffected, summary } = result.value;
   if (dependents.length === 0) {
@@ -481,7 +481,7 @@ function runScanCommand(store: Store, projectRoot: string): string {
     severityThreshold: 'medium',
   });
   if (result.isErr()) {
-    return `<!-- slash:scan -->\n**Error:** ${result.error.message}`;
+    return `<!-- slash:scan -->\n**Error:** ${'message' in result.error ? result.error.message : result.error.code}`;
   }
   const { findings, files_scanned } = result.value;
   const total = findings.length;

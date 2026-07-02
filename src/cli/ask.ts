@@ -109,8 +109,8 @@ export async function resolveRemoteRepo(repo: string): Promise<ProjectContext> {
   const pluginRegistry = PluginRegistry.createWithDefaults();
 
   process.stderr.write('Indexing...\n');
-  const pipeline = new IndexingPipeline(store, pluginRegistry, config);
-  const result = await pipeline.run(tmpDir);
+  const pipeline = new IndexingPipeline(store, pluginRegistry, config, tmpDir);
+  const result = await pipeline.indexAll();
   process.stderr.write(`Indexed ${result.indexed} files in ${result.durationMs}ms\n`);
 
   const cleanup = () => {

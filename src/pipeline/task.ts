@@ -185,7 +185,7 @@ export class TaskDag {
     return Array.from(this.tasks.keys());
   }
 
-  private computeCacheKey(task: Task<unknown, unknown>, input: unknown): string | undefined {
+  private computeCacheKey<I, O>(task: Task<I, O>, input: I): string | undefined {
     if (!task.key) return undefined;
     return task.key(input);
   }

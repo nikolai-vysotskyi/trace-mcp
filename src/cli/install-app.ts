@@ -260,7 +260,7 @@ export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<In
   const { retries = 3, retryDelayMs = 15_000, onRetry } = opts;
   const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
 
-  const findAsset = (assets: { name: string }[]) => {
+  const findAsset = (assets: { name: string; url: string }[]) => {
     if (isMac) {
       // electron-builder names: trace-mcp-{ver}-arm64-mac.zip / trace-mcp-{ver}-mac.zip (x64)
       const zips = assets.filter((a) => /trace-mcp.*-mac.*\.zip$/i.test(a.name));

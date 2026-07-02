@@ -258,7 +258,7 @@ export class ReactTablePlugin implements FrameworkPlugin {
       result.routes!.push({
         method: 'TABLE_INSTANCE',
         uri: `react-table:useReactTable#${i}`,
-        metadata: t,
+        metadata: { ...t },
       });
     }
 

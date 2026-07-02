@@ -13,7 +13,7 @@ import { saveProjectConfig } from './config.js';
 import { initializeDatabase } from './db/schema.js';
 import { ensureGlobalDirs, getDbPath } from './global.js';
 import { generateConfig } from './init/config-generator.js';
-import type { DetectionResult } from './init/detector.js';
+import type { DetectionResult } from './init/types.js';
 import { detectProject } from './init/detector.js';
 import type { RegistryEntry } from './registry.js';
 import { getProject, registerProject } from './registry.js';
@@ -102,7 +102,19 @@ export function setupProject(
   if (existing && !opts?.force) {
     return {
       entry: existing,
-      detection: { languages: [], frameworks: [], packageManagers: [], rootMarkers: [] },
+      detection: {
+        projectRoot: absRoot,
+        languages: [],
+        frameworks: [],
+        packageManagers: [],
+        mcpClients: [],
+        existingConfig: null,
+        existingDb: null,
+        hasClaudeMd: false,
+        claudeMdHasTraceMcpBlock: false,
+        hasGuardHook: false,
+        guardHookVersion: null,
+      },
       dbPath: existing.dbPath,
       migrated: false,
       isNew: false,

@@ -224,7 +224,7 @@ export function getMinimalContext(
 
   let topCentral: Array<{ file: string; pagerank: number }> = [];
   try {
-    const pageRankResult = getPageRank(store, 3);
+    const pageRankResult = getPageRank(store);
     const ranked = Array.isArray(pageRankResult) ? pageRankResult : [];
     topCentral = ranked.slice(0, 3).map((r: { file: string; score: number }) => ({
       file: r.file,
@@ -233,6 +233,11 @@ export function getMinimalContext(
   } catch {
     /* PageRank not yet computed */
   }
+
+  // `summaryOnly = true` above guarantees getProjectMap returns the summary
+  // shape (fileCount/symbolCount), but the union return type doesn't narrow
+  // on the boolean argument — read the counts through the summary projection.
+  const summaryCounts = summary as { fileCount?: number; symbolCount?: number };
 
   // 3. Communities — already detected; ignore if not yet run.
   let communitiesSummary: MinimalContext['communities'] = { total: 0, top: [] };
@@ -304,8 +309,8 @@ export function getMinimalContext(
   return {
     project: {
       name: resolveProjectIdentity(projectRoot, ctx),
-      fileCount: summary.fileCount ?? 0,
-      symbolCount: summary.symbolCount ?? 0,
+      fileCount: summaryCounts.fileCount ?? 0,
+      symbolCount: summaryCounts.symbolCount ?? 0,
       frameworks,
     },
     health: {

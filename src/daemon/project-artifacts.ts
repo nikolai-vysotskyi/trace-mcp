@@ -118,7 +118,7 @@ function dropDecisionRows(root: string): DecisionDeleteCounts {
     // (project_root TEXT NOT NULL on every project-scoped table).
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Database = require('better-sqlite3') as typeof import('better-sqlite3');
-    const db = new Database.default(DECISIONS_DB_PATH);
+    const db = new Database(DECISIONS_DB_PATH);
     try {
       const counts: DecisionDeleteCounts = { ...empty };
       const tables: Array<{ table: string; key: keyof DecisionDeleteCounts }> = [
