@@ -1905,12 +1905,14 @@ export function processClassMethods(
       }
 
       // Type annotation edges from method
-      edges.push(...extractTypeAnnotationEdges(methodNode, method.symbolId));
+      edges.push(...extractTypeAnnotationEdges(methodNode, method.symbolId ?? ''));
     }
 
     // Decorator edges from method
     if (method.metadata?.decorators && Array.isArray(method.metadata.decorators)) {
-      edges.push(...extractDecoratorEdges(method.metadata.decorators as string[], method.symbolId));
+      edges.push(
+        ...extractDecoratorEdges(method.metadata.decorators as string[], method.symbolId ?? ''),
+      );
 
       // Property grouping
       detectPropertyGrouping(method.metadata.decorators as string[], method.name, method.metadata);

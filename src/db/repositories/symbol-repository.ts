@@ -160,7 +160,7 @@ export class SymbolRepository {
         }
         const id = insertSymbolFn(fileId, sym, parentId);
         ids.push(id);
-        parentIdMap.set(sym.symbolId, id);
+        if (sym.symbolId) parentIdMap.set(sym.symbolId, id);
       }
       // Create all graph nodes for this file's symbols in ONE statement, after
       // every symbol row has landed (so the SELECT sees them) and still inside

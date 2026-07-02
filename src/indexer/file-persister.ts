@@ -216,15 +216,28 @@ export class FilePersister {
 
     // Auto-fill missing symbolId/byteStart/byteEnd — framework plugins often
     // produce metadata-only symbols without these required fields.
-    const validSymbols = symbols.map((s) => {
-      if (s.symbolId && s.byteStart != null) return s;
-      return {
-        ...s,
-        symbolId: s.symbolId || `${relPath}::${s.name}#${s.kind}`,
-        byteStart: s.byteStart ?? 0,
-        byteEnd: s.byteEnd ?? 0,
-      };
-    });
+    const validSymbols = symbols.map(
+      (
+        s,
+      ): FileExtraction['symbols'][number] & {
+        symbolId: string;
+        byteStart: number;
+        byteEnd: number;
+      } => {
+        if (s.symbolId && s.byteStart != null)
+          return s as FileExtraction['symbols'][number] & {
+            symbolId: string;
+            byteStart: number;
+            byteEnd: number;
+          };
+        return {
+          ...s,
+          symbolId: s.symbolId || `${relPath}::${s.name}#${s.kind}`,
+          byteStart: s.byteStart ?? 0,
+          byteEnd: s.byteEnd ?? 0,
+        };
+      },
+    );
     if (validSymbols.length > 0) {
       const insertedIds = store.insertSymbols(fileId, validSymbols);
       // Deduplicate by symbolId: INSERT OR REPLACE invalidates earlier IDs when
@@ -309,7 +322,7 @@ export class FilePersister {
 
     // Verify all new symbols match an existing symbol structurally
     for (const sym of ext.symbols) {
-      const ex = existingMap.get(sym.symbolId);
+      const ex = existingMap.get(sym.symbolId ?? '');
       if (!ex) return false;
       if (ex.name !== sym.name || ex.kind !== sym.kind) return false;
       if ((ex.fqn ?? null) !== (sym.fqn ?? null)) return false;
@@ -326,7 +339,7 @@ export class FilePersister {
     );
 
     for (const sym of ext.symbols) {
-      const ex = existingMap.get(sym.symbolId)!;
+      const ex = existingMap.get(sym.symbolId ?? '')!;
       const cyclomatic =
         ((sym.metadata as Record<string, unknown> | undefined)?.cyclomatic as number | undefined) ??
         null;
