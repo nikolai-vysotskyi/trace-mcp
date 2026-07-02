@@ -140,8 +140,6 @@ export class EsModuleResolver {
   private sortedWorkspacePaths: string[] = [];
 
   constructor(rootPath: string, workspacePaths?: string[]) {
-    this.rootPath = rootPath;
-
     // Build resolvers for each workspace
     if (workspacePaths && workspacePaths.length > 0) {
       // Sort longest-first so nested workspaces match before parents

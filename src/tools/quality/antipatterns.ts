@@ -527,8 +527,10 @@ function detectUnboundedQuery(store: Store, data: PreFetchedData): AntipatternFi
     const tableName = model.collection_or_table ?? `${model.name.toLowerCase()}s`;
 
     // Check model options for pagination/limit config
-    const opts = jsonParse(model.options);
-    const meta = jsonParse(model.metadata);
+    const opts = jsonParse<{ perPage?: unknown; defaultScope?: { limit?: unknown } }>(
+      model.options,
+    );
+    const meta = jsonParse<{ perPage?: unknown; paginate?: unknown }>(model.metadata);
 
     const hasPagination =
       opts?.perPage != null ||

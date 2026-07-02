@@ -250,7 +250,6 @@ export class TailwindPlugin implements FrameworkPlugin {
       if (fs.existsSync(p)) {
         this.configFilePath = p;
         this.detectedVersion = name === 'tailwind.js' ? 1 : 3;
-        this.findPostCssConfig(ctx.rootPath);
         return true;
       }
     }
@@ -263,17 +262,6 @@ export class TailwindPlugin implements FrameworkPlugin {
       const p = path.join(rootPath, name);
       if (fs.existsSync(p)) {
         this.configFilePath = p;
-        break;
-      }
-    }
-    this.findPostCssConfig(rootPath);
-  }
-
-  private findPostCssConfig(rootPath: string): void {
-    for (const name of POSTCSS_CONFIG_NAMES) {
-      const p = path.join(rootPath, name);
-      if (fs.existsSync(p)) {
-        this.postCssConfigPath = p;
         break;
       }
     }
@@ -676,7 +664,7 @@ export class TailwindPlugin implements FrameworkPlugin {
         name: `tailwind:utility:${uMatch[1]}`,
         kind: 'function',
         signature: `@utility ${uMatch[1]} { ... }`,
-        line,
+        lineStart: line,
         metadata: { frameworkRole: 'tailwind_v4_utility' },
       });
     }
@@ -694,7 +682,7 @@ export class TailwindPlugin implements FrameworkPlugin {
         name: `tailwind:variant:${vMatch[1]}`,
         kind: 'variable',
         signature: `@variant ${vMatch[1]}`,
-        line,
+        lineStart: line,
         metadata: { frameworkRole: 'tailwind_v4_variant' },
       });
     }
@@ -711,7 +699,7 @@ export class TailwindPlugin implements FrameworkPlugin {
         name: `tailwind:variant:${vMatch[1]}`,
         kind: 'variable',
         signature: `@custom-variant ${vMatch[1]}`,
-        line,
+        lineStart: line,
         metadata: { frameworkRole: 'tailwind_v4_variant', isCustom: true },
       });
     }
@@ -1123,7 +1111,7 @@ export class TailwindPlugin implements FrameworkPlugin {
         name: `tailwind:container:${containerName ?? 'anonymous'}`,
         kind: 'variable',
         signature: `@container${containerName ? ` ${containerName}` : ''} (${condition})`,
-        line,
+        lineStart: line,
         metadata: {
           frameworkRole: 'tailwind_container_query',
           containerName,
@@ -1162,7 +1150,7 @@ export class TailwindPlugin implements FrameworkPlugin {
         name: m[1],
         kind: 'variable',
         signature: `.${m[1]} (@layer ${layer})`,
-        line,
+        lineStart: line,
         metadata: { frameworkRole: 'tailwind_custom_class', layer },
       });
     }

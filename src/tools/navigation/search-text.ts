@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-// @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
 import type { FileRow, Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';

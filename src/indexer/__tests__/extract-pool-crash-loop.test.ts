@@ -228,8 +228,7 @@ describe('ExtractPool — crash-loop guard', () => {
     // We allow at most MAX_CONSECUTIVE_FAILURES (5) — at the 5th failure the
     // slot is marked permanently dead and no timer is scheduled. The cap
     // matters when MAX is raised; verify the helper directly.
-    type WithBackoff = ExtractPool & { backoffFor: (n: number) => number };
-    const p = pool as unknown as WithBackoff;
+    const p = pool as unknown as { backoffFor: (n: number) => number };
     expect(p.backoffFor(1)).toBe(200);
     expect(p.backoffFor(2)).toBe(400);
     expect(p.backoffFor(8)).toBe(25_600);

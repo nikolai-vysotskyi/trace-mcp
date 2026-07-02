@@ -598,7 +598,9 @@ export function getDeadExports(
     'erlang',
   ]);
   const allFiles = store.getAllFiles();
-  const projectLanguages = new Set(allFiles.map((f) => f.language).filter(Boolean));
+  const projectLanguages = new Set(
+    allFiles.map((f) => f.language).filter((l): l is string => l !== null),
+  );
   const unsupported = [...projectLanguages].filter((l) => !LANGUAGES_WITH_EXPORT_SUPPORT.has(l));
 
   const totalDead = dead.length;

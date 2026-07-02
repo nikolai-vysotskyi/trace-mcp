@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Command } from 'commander';
-import { loadConfig } from '../config.js';
+import { loadConfig, TraceMcpConfigSchema } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
 import { ensureGlobalDirs, getDbPath } from '../global.js';
@@ -52,15 +52,7 @@ export const exportSecurityContextCommand = new Command('export-security-context
         const configResult = await loadConfig(projectRoot);
         const config = configResult.isOk()
           ? configResult.value
-          : {
-              root: projectRoot,
-              include: ['**/*'],
-              exclude: ['vendor/**', 'node_modules/**', '.git/**'],
-              db: { path: '' },
-              plugins: [] as string[],
-              ignore: { directories: [] as string[], patterns: [] as string[] },
-              watch: { enabled: false, debounceMs: 2000 },
-            };
+          : TraceMcpConfigSchema.parse({ root: projectRoot });
 
         const registry = PluginRegistry.createWithDefaults();
 
@@ -87,7 +79,9 @@ export const exportSecurityContextCommand = new Command('export-security-context
       });
 
       if (result.isErr()) {
-        console.error(`Error: ${result.error.message}`);
+        console.error(
+          `Error: ${'message' in result.error ? result.error.message : result.error.code}`,
+        );
         process.exit(1);
       }
 

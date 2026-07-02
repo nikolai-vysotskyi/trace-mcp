@@ -23,7 +23,12 @@ import {
   extractPartEdge,
   extractPartOfEdge,
 } from './dart-edges.js';
-import { extractClassMembers } from './dart-members.js';
+import {
+  extractClassMembers,
+  extractGetterName,
+  extractSetterName,
+  findChildByType,
+} from './dart-members.js';
 
 /* ── Tree-sitter helpers ─────────────────────────────────────────────────── */
 
@@ -475,7 +480,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
     }
 
     // Mixins (with clause)
-    const withClause = this.findChildByType(node, 'mixins');
+    const withClause = findChildByType(node, 'mixins');
     if (withClause) {
       const withText = withClause.text.replace(/^with\s+/, '').trim();
       const mixins = withText
@@ -497,7 +502,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
       metadata: Object.keys(meta).length > 0 ? meta : undefined,
     });
 
-    const body = this.findChildByType(node, 'class_body');
+    const body = findChildByType(node, 'class_body');
     if (body) {
       extractClassMembers(body, filePath, name, symbolId, symbols);
     }
@@ -512,7 +517,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
     const symbolId = makeSymbolId(filePath, name, 'trait');
     const meta: Record<string, unknown> = { dartKind: 'mixin' };
 
-    const onClause = this.findChildByType(node, 'on_clause', 'superclass');
+    const onClause = findChildByType(node, 'on_clause', 'superclass');
     if (onClause) {
       const onText = onClause.text.replace(/^on\s+/, '').trim();
       const bases = onText
@@ -534,7 +539,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
       metadata: meta,
     });
 
-    const body = this.findChildByType(node, 'class_body', 'mixin_body');
+    const body = findChildByType(node, 'class_body', 'mixin_body');
     if (body) {
       extractClassMembers(body, filePath, name, symbolId, symbols);
     }
@@ -549,7 +554,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
     const symbolId = makeSymbolId(filePath, name, 'class');
     const meta: Record<string, unknown> = { dartKind: 'extension' };
 
-    const onType = this.findChildByType(node, 'type_identifier', 'on_type');
+    const onType = findChildByType(node, 'type_identifier', 'on_type');
     if (onType) {
       meta.on = onType.text.trim();
     }
@@ -566,7 +571,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
       metadata: meta,
     });
 
-    const body = this.findChildByType(node, 'extension_body', 'class_body');
+    const body = findChildByType(node, 'extension_body', 'class_body');
     if (body) {
       extractClassMembers(body, filePath, name, symbolId, symbols);
     }
@@ -593,7 +598,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
       metadata: meta,
     });
 
-    const body = this.findChildByType(node, 'extension_type_body', 'class_body');
+    const body = findChildByType(node, 'extension_type_body', 'class_body');
     if (body) {
       extractClassMembers(body, filePath, name, symbolId, symbols);
     }
@@ -618,7 +623,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
       lineEnd: node.endPosition.row + 1,
     });
 
-    const body = this.findChildByType(node, 'enum_body');
+    const body = findChildByType(node, 'enum_body');
     if (body) {
       for (const child of body.namedChildren) {
         if (child.type === 'enum_constant') {
@@ -685,7 +690,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
   /* ── Top-level getters / setters ─────────────────────────────────────── */
 
   private extractTopLevelGetter(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
-    const name = getNodeName(node) ?? this.extractGetterName(node);
+    const name = getNodeName(node) ?? extractGetterName(node);
     if (!name) return;
 
     symbols.push({
@@ -702,7 +707,7 @@ export class DartLanguagePlugin implements LanguagePlugin {
   }
 
   private extractTopLevelSetter(node: TSNode, filePath: string, symbols: RawSymbol[]): void {
-    const name = getNodeName(node) ?? this.extractSetterName(node);
+    const name = getNodeName(node) ?? extractSetterName(node);
     if (!name) return;
 
     symbols.push({

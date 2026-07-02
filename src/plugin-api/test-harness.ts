@@ -53,7 +53,7 @@ export function createTestHarness(plugin: LanguagePlugin | FrameworkPlugin): Plu
       if (!fwPlugin.extractNodes) return null;
 
       const ext = filePath.slice(filePath.lastIndexOf('.') + 1);
-      const result = executeFrameworkExtractNodes(fwPlugin, filePath, buf, ext);
+      const result = await executeFrameworkExtractNodes(fwPlugin, filePath, buf, ext);
       if (result.isErr() || !result.value) return null;
 
       const parsed = result.value;

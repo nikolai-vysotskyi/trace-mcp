@@ -41,6 +41,8 @@ interface SuggestQueriesResult {
     symbols: number;
     edges: number;
     routes: number;
+    resource_routes?: number;
+    test_fixture_routes?: number;
     components: number;
   };
   languages: LanguageStat[];

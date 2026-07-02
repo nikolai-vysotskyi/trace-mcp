@@ -25,7 +25,8 @@ vi.mock('node:fs', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/config.js', () => ({
+vi.mock('../../src/config.js', async (importActual) => ({
+  ...(await importActual<typeof import('../../src/config.js')>()),
   loadConfig: vi.fn(),
 }));
 

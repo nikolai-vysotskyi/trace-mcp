@@ -8,7 +8,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
-// @ts-expect-error — picomatch has no bundled types (transitive dep of fast-glob)
 import picomatch from 'picomatch';
 import { initializeDatabase } from '../../db/schema.js';
 import { type FileRow, Store } from '../../db/store.js';
@@ -243,6 +242,16 @@ function buildSubprojectGraph(
   const repos = topoStore.getSubprojectsByProject(projectRoot);
   if (repos.length === 0) return null; // no connected repos — skip subproject merge
 
+  // A registered subproject only contributes nodes if it has an indexed DB on
+  // disk. If none of the connected repos (excluding the project itself) does,
+  // there is nothing to merge — fall back to single-project mode with no repo
+  // tags. (Previously an undefined `allRepos` reference threw here and was
+  // caught upstream, masking the missing guard.)
+  const hasConnectedRepo = repos.some(
+    (r) => r.repo_root !== projectRoot && !!r.db_path && fs.existsSync(r.db_path),
+  );
+  if (!hasConnectedRepo) return null;
+
   const allNodes: VizNode[] = [];
   const allEdges: VizEdge[] = [];
 
@@ -257,7 +266,7 @@ function buildSubprojectGraph(
   );
 
   const mainPrefix =
-    allRepos.find((r) => r.repo_root === projectRoot)?.name ?? path.basename(projectRoot);
+    repos.find((r) => r.repo_root === projectRoot)?.name ?? path.basename(projectRoot);
 
   for (const n of mainResult.nodes) {
     n.repo = mainPrefix;
@@ -313,8 +322,8 @@ function buildSubprojectGraph(
   try {
     const crossEdges = topoStore.getAllCrossServiceEdges();
     for (const ce of crossEdges) {
-      const srcPrefix = allRepos.find((r) => r.name === ce.source_name)?.name ?? mainPrefix;
-      const tgtPrefix = allRepos.find((r) => r.name === ce.target_name)?.name ?? mainPrefix;
+      const srcPrefix = repos.find((r) => r.name === ce.source_name)?.name ?? mainPrefix;
+      const tgtPrefix = repos.find((r) => r.name === ce.target_name)?.name ?? mainPrefix;
       if (srcPrefix === tgtPrefix) continue;
 
       const srcNodes = allNodes.filter((n) => n.repo === srcPrefix);

@@ -75,6 +75,7 @@ export class LocalBackend implements Backend {
   private topoStore: TopologyStore | null = null;
   private decisionStore: DecisionStore | null = null;
   private clientTransport: InMemoryTransport | null = null;
+  private serverTransport: InMemoryTransport | null = null;
   private indexingPromise: Promise<void> | null = null;
   /**
    * Read-only fallback: when the daemon already indexed this project and seeded

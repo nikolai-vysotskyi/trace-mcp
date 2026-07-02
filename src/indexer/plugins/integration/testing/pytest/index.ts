@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../../errors.js';
-import { getParser } from '../../../../../parser/tree-sitter.js';
+import { getParser, type TSNode } from '../../../../../parser/tree-sitter.js';
 import type {
   EdgeTypeDeclaration,
   FileParseResult,
@@ -22,8 +22,6 @@ import type {
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
-
-type TSNode = import('tree-sitter').SyntaxNode;
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

@@ -16,7 +16,7 @@ import {
 } from '../ci/github-annotations.js';
 import { formatJson, formatMarkdown } from '../ci/markdown-formatter.js';
 import { generateReport } from '../ci/report-generator.js';
-import { loadConfig } from '../config.js';
+import { loadConfig, TraceMcpConfigSchema } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
 import { ensureGlobalDirs, getDbPath } from '../global.js';
@@ -87,15 +87,7 @@ export const ciReportCommand = new Command('ci-report')
       const configResult = await loadConfig(projectRoot);
       const config = configResult.isOk()
         ? configResult.value
-        : {
-            root: projectRoot,
-            include: ['**/*'],
-            exclude: ['vendor/**', 'node_modules/**', '.git/**'],
-            db: { path: '' },
-            plugins: [] as string[],
-            ignore: { directories: [] as string[], patterns: [] as string[] },
-            watch: { enabled: false, debounceMs: 2000 },
-          };
+        : TraceMcpConfigSchema.parse({ root: projectRoot });
 
       const dbPath = resolveDbPath(projectRoot);
       ensureGlobalDirs();

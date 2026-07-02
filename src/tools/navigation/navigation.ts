@@ -369,7 +369,10 @@ export async function search(
       // — re-stamp it so a cache hit doesn't hide the silent-degradation
       // signal from the caller. Cache stays useful (same items + total)
       // while still telling the caller they didn't get hybrid ranking.
-      if (degradedFromOn && !cached._warning) {
+      // The cache stores the lean `CachedSearchResult` shape (no `_warning`);
+      // read through a widened view so an already-stamped body is respected.
+      const cachedWarning = (cached as { _warning?: string })._warning;
+      if (degradedFromOn && !cachedWarning) {
         return {
           ...cached,
           _warning:

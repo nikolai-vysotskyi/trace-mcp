@@ -37,7 +37,7 @@ import { subprojectSearch as _subprojectSearch } from './subproject-search.js';
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-interface SubprojectAddResult {
+export interface SubprojectAddResult {
   repo: string;
   name: string;
   services: number;
@@ -47,7 +47,7 @@ interface SubprojectAddResult {
   linkedCalls: number;
 }
 
-interface SubprojectSyncResult {
+export interface SubprojectSyncResult {
   repos: number;
   servicesUpdated: number;
   contractsUpdated: number;
@@ -703,7 +703,9 @@ export class SubprojectManager {
     return endpoints;
   }
 
-  private collectEndpointClients(clientCalls: ClientCallRow[]): CrossRepoImpactResult['clients'] {
+  private collectEndpointClients(
+    clientCalls: Array<ClientCallRow & { source_repo_name: string }>,
+  ): CrossRepoImpactResult['clients'] {
     const byRepo = new Map<string, ClientCallRow[]>();
     for (const call of clientCalls) {
       const repo = call.source_repo_name;

@@ -323,7 +323,7 @@ function findAffectedTests(
   store: Store,
   targetPath: string,
   dependentPaths: string[],
-): { total: number; files: string[] } {
+): { total: number; files: string[]; truncated?: boolean } {
   const seen = new Set<string>();
   const allPaths = [targetPath, ...dependentPaths];
 
