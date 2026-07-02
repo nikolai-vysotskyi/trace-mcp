@@ -200,6 +200,109 @@ def run(cmd):
     expect(result._unsafeUnwrap().findings.length).toBeGreaterThanOrEqual(1);
   });
 
+  test('detects cp.exec with template literal (real command injection)', () => {
+    writeFile(
+      store,
+      'src/tools/runner.ts',
+      `
+import cp from 'node:child_process';
+function run(userInput: string) {
+  cp.exec(\`rm -rf \${userInput}\`);
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    expect(data.findings.length).toBeGreaterThanOrEqual(1);
+    expect(data.findings[0].rule_id).toBe('CWE-78');
+  });
+
+  test('detects child_process.execSync with template literal (real command injection)', () => {
+    writeFile(
+      store,
+      'src/tools/lister.ts',
+      `
+import child_process from 'node:child_process';
+function list(dir: string) {
+  child_process.execSync(\`ls \${dir}\`);
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    expect(data.findings.length).toBeGreaterThanOrEqual(1);
+    expect(data.findings[0].rule_id).toBe('CWE-78');
+  });
+
+  test('does not flag this.db.exec() as command injection (SQLite handle, not a shell)', () => {
+    writeFile(
+      store,
+      'src/ai/vec-extension.ts',
+      `
+class VecIndex {
+  clear(): void {
+    this.db.exec(\`DROP TABLE IF EXISTS \${this.table}\`);
+  }
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
+    expect(result.isOk()).toBe(true);
+    const findings = result._unsafeUnwrap().findings.filter((f) => f.rule_id === 'CWE-78');
+    expect(findings).toHaveLength(0);
+  });
+
+  test('does not flag db.exec() as command injection (SQLite handle, not a shell)', () => {
+    writeFile(
+      store,
+      'src/daemon/project-manager.ts',
+      `
+function wipeTables(db: Database, targets: string[]) {
+  for (const name of targets) {
+    db.exec(\`DELETE FROM "\${name}"\`);
+  }
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['command_injection'] });
+    expect(result.isOk()).toBe(true);
+    const findings = result._unsafeUnwrap().findings.filter((f) => f.rule_id === 'CWE-78');
+    expect(findings).toHaveLength(0);
+  });
+
+  test('db.exec() SQL string-build is still caught by CWE-89 SQL injection', () => {
+    writeFile(
+      store,
+      'src/daemon/project-manager.ts',
+      `
+function wipeTables(db: Database, targets: string[]) {
+  for (const name of targets) {
+    db.exec(\`DELETE FROM "\${name}"\`);
+  }
+}
+`,
+      'typescript',
+    );
+
+    const result = scanSecurity(store, TEST_DIR, { rules: ['all'] });
+    expect(result.isOk()).toBe(true);
+    const data = result._unsafeUnwrap();
+    const sqlFindings = data.findings.filter((f) => f.rule_id === 'CWE-89');
+    const cmdFindings = data.findings.filter((f) => f.rule_id === 'CWE-78');
+    expect(sqlFindings.length).toBeGreaterThanOrEqual(1);
+    expect(cmdFindings).toHaveLength(0);
+  });
+
   // -------------------------------------------------------------------
   // Hardcoded Secrets (CWE-798)
   // -------------------------------------------------------------------
