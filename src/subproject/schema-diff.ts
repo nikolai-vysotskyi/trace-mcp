@@ -73,44 +73,18 @@ export function diffSchemas(
     if (!oldKeys.has(key)) added.add(key);
   }
 
-  // Detect renames: removed field with similar name + same type in added
-  const renamedOld = new Set<string>();
-  const renamedNew = new Set<string>();
-
-  for (const oldKey of removed) {
-    const oldType = getSchemaType(oldProps[oldKey]);
-    let bestMatch: string | null = null;
-    let bestDistance = Infinity;
-
-    for (const newKey of added) {
-      if (renamedNew.has(newKey)) continue;
-      const newType = getSchemaType(newProps[newKey]);
-      if (oldType !== newType) continue;
-
-      const dist = levenshtein(oldKey, newKey);
-      const maxLen = Math.max(oldKey.length, newKey.length);
-      // Only consider as rename if edit distance < 60% of max length
-      if (dist < maxLen * 0.6 && dist < bestDistance) {
-        bestDistance = dist;
-        bestMatch = newKey;
-      }
-    }
-
-    if (bestMatch) {
-      const maxLen = Math.max(oldKey.length, bestMatch.length);
-      const confidence = 1 - bestDistance / maxLen;
-      diffs.push({
-        type: 'field_renamed',
-        path: pathPrefix ? `${pathPrefix}.${oldKey}` : oldKey,
-        oldValue: oldKey,
-        newValue: bestMatch,
-        breaking: true,
-        confidence,
-      });
-      renamedOld.add(oldKey);
-      renamedNew.add(bestMatch);
-    }
-  }
+  // Detect renames: removed field with similar name + same type in added.
+  // Extracted so diffSchemas() reads as an orchestration of four independent
+  // phases (renames, remaining-removed, remaining-added, common-field checks)
+  // rather than one function carrying all the branching itself.
+  const { renameDiffs, renamedOld, renamedNew } = detectRenames(
+    removed,
+    added,
+    oldProps,
+    newProps,
+    pathPrefix,
+  );
+  diffs.push(...renameDiffs);
 
   // Remaining removed fields (not renames)
   for (const key of removed) {
@@ -257,6 +231,63 @@ function parseSchemaField(
 function getSchemaType(prop: Record<string, unknown> | undefined): string {
   if (!prop) return 'unknown';
   return (prop.type as string) ?? 'unknown';
+}
+
+/**
+ * Match removed fields to added fields that look like renames: same JSON
+ * Schema type + edit distance under 60% of the longer name. Greedy nearest-match
+ * per removed key (first-come first-served on the added side via `renamedNew`).
+ * Extracted out of diffSchemas() — this is the densest, most self-contained
+ * chunk of that function's branching and has no dependency on the caller's
+ * other three diff phases beyond the shared `oldProps`/`newProps` lookups.
+ */
+function detectRenames(
+  removed: Set<string>,
+  added: Set<string>,
+  oldProps: Record<string, Record<string, unknown>>,
+  newProps: Record<string, Record<string, unknown>>,
+  pathPrefix: string,
+): { renameDiffs: SchemaDiff[]; renamedOld: Set<string>; renamedNew: Set<string> } {
+  const renameDiffs: SchemaDiff[] = [];
+  const renamedOld = new Set<string>();
+  const renamedNew = new Set<string>();
+
+  for (const oldKey of removed) {
+    const oldType = getSchemaType(oldProps[oldKey]);
+    let bestMatch: string | null = null;
+    let bestDistance = Infinity;
+
+    for (const newKey of added) {
+      if (renamedNew.has(newKey)) continue;
+      const newType = getSchemaType(newProps[newKey]);
+      if (oldType !== newType) continue;
+
+      const dist = levenshtein(oldKey, newKey);
+      const maxLen = Math.max(oldKey.length, newKey.length);
+      // Only consider as rename if edit distance < 60% of max length
+      if (dist < maxLen * 0.6 && dist < bestDistance) {
+        bestDistance = dist;
+        bestMatch = newKey;
+      }
+    }
+
+    if (bestMatch) {
+      const maxLen = Math.max(oldKey.length, bestMatch.length);
+      const confidence = 1 - bestDistance / maxLen;
+      renameDiffs.push({
+        type: 'field_renamed',
+        path: pathPrefix ? `${pathPrefix}.${oldKey}` : oldKey,
+        oldValue: oldKey,
+        newValue: bestMatch,
+        breaking: true,
+        confidence,
+      });
+      renamedOld.add(oldKey);
+      renamedNew.add(bestMatch);
+    }
+  }
+
+  return { renameDiffs, renamedOld, renamedNew };
 }
 
 /**
