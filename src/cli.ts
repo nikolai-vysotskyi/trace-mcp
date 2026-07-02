@@ -86,6 +86,7 @@ import { PluginRegistry } from './plugin-api/registry.js';
 import { detectGitWorktree, findProjectRoot, hasRootMarkers } from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
 import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
+import { resolveDeepestKnownRoot } from './subproject/resolve.js';
 import {
   buildAmbiguousProjectError,
   buildNoProjectsError,
@@ -883,10 +884,13 @@ program
         }
         const requestedRoot = resolution.projectRoot;
 
-        // Resolve subdirectory requests to the registered parent project so we
-        // don't spin up a duplicate index per nested package.
-        const ancestor = resolveRegisteredAncestor(requestedRoot);
-        const projectRoot = ancestor?.root ?? requestedRoot;
+        // Resolve to the deepest KNOWN root: a registered subproject
+        // (the/fair/fair-front) wins over its container ancestor (the) so the
+        // session serves the subproject's own scoped index instead of the
+        // container's mixed blob (#209). Falls back to the raw requested root
+        // when nothing covers it — the initialize path below then auto-registers
+        // it if it has root markers (reusing any existing getDbPath index).
+        const projectRoot = resolveDeepestKnownRoot(requestedRoot) ?? requestedRoot;
 
         try {
           // Route by session ID for existing sessions

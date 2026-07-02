@@ -1,8 +1,8 @@
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../../logger.js';
-import { resolveRegisteredAncestor } from '../../registry.js';
 import { resolveWorktreeAware, worktreeHint } from '../../registry-worktree.js';
+import { resolveDeepestKnownRoot } from '../../subproject/resolve.js';
 import type { Backend } from './types.js';
 
 /**
@@ -288,15 +288,19 @@ export class ProxyBackend implements Backend {
    * (nested package in a monorepo) or the canonical repo behind a git worktree.
    */
   private resolveProjectRoot(): string {
-    const ancestor = resolveRegisteredAncestor(this.opts.projectRoot);
-    if (ancestor && ancestor.root !== this.opts.projectRoot) {
+    // Prefer the deepest KNOWN root: a registered subproject (e.g.
+    // the/fair/fair-front) beats its container ancestor (the) so the session
+    // binds to the subproject's own scoped index instead of the container's
+    // mixed blob (#209 — "ругается на зонтик").
+    const known = resolveDeepestKnownRoot(this.opts.projectRoot);
+    if (known && known !== this.opts.projectRoot) {
       logger.info(
-        { requested: this.opts.projectRoot, parent: ancestor.root },
-        'ProxyBackend: routing subdirectory to registered parent project',
+        { requested: this.opts.projectRoot, resolved: known },
+        'ProxyBackend: routing to deepest known project/subproject',
       );
-      return ancestor.root;
+      return known;
     }
-    if (ancestor) return ancestor.root;
+    if (known) return known;
 
     // Worktree-aware fallback: if path-only resolution didn't land on a
     // registered project, check whether this path is a *linked* git worktree
