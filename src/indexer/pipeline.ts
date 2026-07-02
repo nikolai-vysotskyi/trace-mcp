@@ -1,16 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import { cpus } from 'node:os';
 import path from 'node:path';
 import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
-import {
-  disableBulkMode,
-  disableFts5Triggers,
-  enableBulkMode,
-  enableFts5Triggers,
-  ensureFts5Triggers,
-} from '../db/schema.js';
+import { disableBulkMode, enableBulkMode } from '../db/schema.js';
 import type { Store } from '../db/store.js';
 import { logger } from '../logger.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
@@ -28,15 +21,13 @@ import { initContentHasher } from '../util/hash.js';
 import { descendantExcludeGlobs } from '../registry.js';
 import { GitignoreMatcher } from '../utils/gitignore.js';
 import { validatePath } from '../utils/security.js';
-import { findPackageJsonEntries } from './package-entries.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 import { EdgeResolver } from './edge-resolver.js';
 import { EnvIndexer } from './env-indexer.js';
-import { ExtractPool, type ExtractRequest } from './extract-pool.js';
+import { ExtractPool } from './extract-pool.js';
 import { collectFiles as collectFilesImpl } from './file-collector.js';
+import { extractAndPersist as extractAndPersistImpl } from './extract-and-persist.js';
 import { detectRenames as detectRenamesImpl } from './rename-detector.js';
-import { FileExtractor } from './file-extractor.js';
-import { FilePersister } from './file-persister.js';
 import { buildMultiRootWorkspaces, detectWorkspaces, type WorkspaceInfo } from './monorepo.js';
 import type { PipelineState } from './pipeline-state.js';
 import { buildProjectContext } from './project-context.js';
@@ -668,196 +659,35 @@ export class IndexingPipeline {
     force: boolean,
     result: IndexingResult,
   ): Promise<void> {
-    // Preload all existing file rows in one IN-query so per-file extract()
-    // calls hit a Map instead of issuing a SELECT each.
-    let existingFiles = this.store.getFilesByPaths(relPaths);
-
-    // Detect renames before extraction. Without this pass a refactor that
-    // moves N files to new paths re-extracts every byte, even though the
-    // content is identical to known DB rows. graphify v0.7.0 fixed the same
-    // wasted work by keying its cache on content alone.
-    const renamed = this.detectRenames(relPaths, existingFiles);
-    if (renamed > 0) {
-      // Renamed paths are now keyed under their new path in the DB; refresh
-      // the lookup map so the extractor sees them as "existing".
-      existingFiles = this.store.getFilesByPaths(relPaths);
-      logger.info({ renamed }, 'Detected renames — reused existing symbols');
-    }
-
-    // Force-include set: package.json#main/module/bin/exports must always be
-    // indexed regardless of file-size cap. Without this, lodash-class
-    // monolithic libraries (single-file UMD/IIFE declared as `main`) drop
-    // out of the index and every published method looks dead.
-    const forceIncludePaths = findPackageJsonEntries(this.rootPath);
-
-    const extractor = new FileExtractor({
-      store: this.store,
-      registry: this.registry,
-      rootPath: this.rootPath,
-      workspaces: this.workspaces,
-      gitignore: this._gitignore,
-      fileContentCache: this._fileContentCache,
-      buildProjectContext: () => this.buildProjectContext(),
-      existingFiles,
-      forceIncludePaths,
-    });
-
-    // Cluster same-language files so each worker hits its parser cache instead
-    // of paying ~50-100 ms WASM Language.load on every extension switch.
-    sortByExtension(relPaths);
-
-    // FTS5 trigger disable+rebuild is only worth it on bulk indexing.
-    // For small (incremental) batches the per-row trigger fire is cheaper than
-    // rebuilding the entire FTS index from all symbols at the end.
-    const useFtsRebuild = relPaths.length > IndexingPipeline.FTS_REBUILD_THRESHOLD;
-    if (useFtsRebuild) {
-      disableFts5Triggers(this.store.db);
-    } else {
-      // Incremental path relies on the AFTER INSERT/DELETE/UPDATE triggers to
-      // keep symbols_fts in sync. If a prior bulk run crashed between
-      // disableFts5Triggers() and its rebuild, the triggers were left dropped
-      // and every incremental symbol write since has silently skipped FTS —
-      // making edited symbols unsearchable by name. Re-arm the triggers here
-      // (idempotent no-op when present; no rebuild) so the incremental writes
-      // below always propagate to FTS.
-      ensureFts5Triggers(this.store.db);
-    }
-
-    const BATCH_SIZE = Math.min(500, Math.max(100, Math.ceil(relPaths.length / 20)));
-
-    // Worker pool: only worth the spawn cost (~150-300 ms × N) for bigger
-    // batches. Below the threshold or when unavailable (env disable, dev mode,
-    // tests), we fall through to in-process extraction.
-    const pool = this.maybeGetExtractPool(relPaths.length);
-    const CONCURRENCY = pool ? pool.size : Math.min(8, cpus().length);
-
-    // Single shared persister/resolver — no need to recreate per batch.
-    const state = this.getPipelineState();
-    const persistEdgeResolver = new EdgeResolver(state);
-    const persister = new FilePersister(state, (edges) => persistEdgeResolver.storeRawEdges(edges));
-    // Phase 4 phantom-rebind: reset prior-run snapshot, then snapshot fresh
-    // maps once persistBatch has populated them across all batches.
+    // Phase 4 phantom-rebind: reset prior-run snapshot before the batch runs;
+    // extractAndPersistImpl returns the persister's fresh diff maps below.
     this._lastNewSymbolNames = new Map();
     this._lastDeletedSymbolNames = new Map();
 
-    // try/finally so a throw mid-batch (worker error, FK constraint failure in
-    // persistBatch, etc.) can never leave the FTS triggers dropped. Leaving
-    // them dropped would silently desync symbols_fts on every subsequent
-    // incremental write until a manual rebuild — the durability bug this guards
-    // against. enableFts5Triggers rebuilds from the current symbols table, so
-    // running it on the error path also re-syncs FTS to the partial state.
-    try {
-      for (let i = 0; i < relPaths.length; i += BATCH_SIZE) {
-        const batch = relPaths.slice(i, i + BATCH_SIZE);
-        const extractions: FileExtraction[] = [];
+    const outcome = await extractAndPersistImpl(
+      {
+        store: this.store,
+        registry: this.registry,
+        rootPath: this.rootPath,
+        workspaces: this.workspaces,
+        gitignore: this._gitignore,
+        fileContentCache: this._fileContentCache,
+        buildProjectContext: () => this.buildProjectContext(),
+        getPipelineState: () => this.getPipelineState(),
+        maybeGetExtractPool: (batchSize) => this.maybeGetExtractPool(batchSize),
+        ftsRebuildThreshold: IndexingPipeline.FTS_REBUILD_THRESHOLD,
+        progress: this.progress,
+        sortByExtension,
+      },
+      relPaths,
+      force,
+      result,
+    );
 
-        if (pool) {
-          // Continuous dispatch: spawn `pool.size` consumers that each pull
-          // from a shared queue. Keeps every worker fed without chunk barriers.
-          const queue = batch.slice();
-          await Promise.all(
-            Array.from({ length: pool.size }, async () => {
-              while (queue.length > 0) {
-                const relPath = queue.shift();
-                if (!relPath) return;
-                const existing = existingFiles.get(relPath) ?? null;
-                const gitignored = this._gitignore?.isIgnored(relPath) ?? false;
-                const r = await pool.extract({
-                  relPath,
-                  rootPath: this.rootPath,
-                  force,
-                  existing,
-                  gitignored,
-                  workspaces: this.workspaces,
-                } as ExtractRequest);
-                if (r.kind === 'skipped') {
-                  result.skipped++;
-                  continue;
-                }
-                if (r.kind === 'mtime_updated') {
-                  // WHY: workers have no DB handle — apply the deferred mtime
-                  // update on the main thread so the next run hits the cheap
-                  // mtime fast-path instead of re-hashing every file.
-                  this.store.updateFileMtime(r.fileId, r.newMtimeMs);
-                  result.skipped++;
-                  continue;
-                }
-                if (r.kind === 'error') {
-                  result.errors++;
-                  continue;
-                }
-                extractions.push(r.extraction);
-              }
-            }),
-          );
-        } else {
-          for (let c = 0; c < batch.length; c += CONCURRENCY) {
-            const chunk = batch.slice(c, c + CONCURRENCY);
-            const results = await Promise.all(
-              chunk.map((relPath) => extractor.extract(relPath, force)),
-            );
-            for (const ext of results) {
-              if (ext.kind === 'skipped') {
-                result.skipped++;
-                continue;
-              }
-              if (ext.kind === 'mtime_updated') {
-                // WHY: in-process path normally writes via the in-extractor
-                // store handle; this branch is defensive for callers that
-                // construct a FileExtractor without a store.
-                this.store.updateFileMtime(ext.fileId, ext.newMtimeMs);
-                result.skipped++;
-                continue;
-              }
-              if (ext.kind === 'error') {
-                result.errors++;
-                continue;
-              }
-              extractions.push(ext.extraction);
-            }
-          }
-        }
-
-        if (extractions.length > 0) {
-          persister.persistBatch(extractions);
-          result.indexed += extractions.length;
-        }
-
-        // Bound in-process content residency to one batch: Pass 2
-        // (buildResolveContext.readFile) re-reads from disk on a cache miss, and
-        // the OS page cache keeps these warm, so it is safe to release the
-        // batch's source here instead of pinning the whole repo's file content
-        // in RAM until run end. The end-of-run clear() (in run()'s finally
-        // block) remains as the final safety net. relPath is the exact key the
-        // in-process extractor populated the cache with (file-extractor.ts sets
-        // fileContentCache.set(relPath, ...)); for the worker path these keys
-        // are not present, so the delete is a harmless no-op.
-        for (const ext of extractions) {
-          this._fileContentCache.delete(ext.relPath);
-        }
-
-        const processed = result.indexed + result.skipped + result.errors;
-        this.progress?.update('indexing', { processed });
-        // persistBatch is one synchronous SQLite transaction over up to 500
-        // files — stacked back-to-back across batches it starves the event
-        // loop, /health stops answering, and the desktop app's watchdog kills
-        // the daemon mid-warm-up. One macrotask turn per batch keeps the
-        // process responsive at negligible cost.
-        await new Promise<void>((r) => setImmediate(r));
-      }
-    } finally {
-      // Always restore FTS triggers + rebuild if we dropped them for the bulk
-      // path — even if a batch threw above. Without this, a mid-run throw
-      // leaves the triggers dropped and desyncs symbols_fts on every later
-      // incremental write. No-op on the incremental path (triggers stayed live
-      // and were re-armed via ensureFts5Triggers before the loop).
-      if (useFtsRebuild) enableFts5Triggers(this.store.db);
-    }
-
-    // Phase 4 phantom-rebind: persistBatch has now populated the persister
-    // diff maps; expose them to buildChangeScope() via the pipeline fields.
-    this._lastNewSymbolNames = persister.newSymbolNames;
-    this._lastDeletedSymbolNames = persister.deletedSymbolNames;
+    // Phase 4 phantom-rebind: expose the persister's diff maps to
+    // buildChangeScope() via the pipeline fields.
+    this._lastNewSymbolNames = outcome.newSymbolNames;
+    this._lastDeletedSymbolNames = outcome.deletedSymbolNames;
   }
 
   /** Pass 2: resolve all edge types (imports, heritage, ORM, tests). */
