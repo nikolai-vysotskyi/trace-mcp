@@ -192,6 +192,44 @@ export class BackgroundLspEnricher {
     return this.inFlight;
   }
 
+  /**
+   * Log a completed enrichment result at info level. No-op for void/non-object
+   * results (the default runner returns void when LSP is disabled or no
+   * languages matched — nothing to report).
+   */
+  private logEnrichmentResult(
+    result: EnrichmentResult | void,
+    scopedFiles: number,
+    start: number,
+  ): void {
+    if (!result || typeof result !== 'object') return;
+    logger.info(
+      {
+        event: 'background-lsp-enrichment',
+        scopedFiles,
+        upgraded: result.edgesUpgraded,
+        added: result.edgesAdded,
+        failed: result.edgesFailed,
+        queried: result.symbolsQueried,
+        durationMs: Date.now() - start,
+        servers: result.serverStatuses,
+      },
+      'Background LSP enrichment completed',
+    );
+  }
+
+  /**
+   * Move any IDs that arrived in pendingDuringRun (while a flush was in
+   * flight) back into pendingFileIds and re-arm the debounce. Keeps the
+   * no-drop guarantee without recursing synchronously into flushInternal.
+   */
+  private drainPendingDuringRun(): void {
+    if (this.pendingDuringRun.size === 0 || this.disposed) return;
+    for (const id of this.pendingDuringRun) this.pendingFileIds.add(id);
+    this.pendingDuringRun.clear();
+    this.debounced();
+  }
+
   private async flushInternal(): Promise<void> {
     if (this.disposed) return;
     if (this.inFlight) return; // a flush is already running; re-entry guard
@@ -208,21 +246,7 @@ export class BackgroundLspEnricher {
 
     try {
       const result = await this.runner({ changedFileIds: ids, signal: controller.signal });
-      if (result && typeof result === 'object') {
-        logger.info(
-          {
-            event: 'background-lsp-enrichment',
-            scopedFiles: ids.size,
-            upgraded: result.edgesUpgraded,
-            added: result.edgesAdded,
-            failed: result.edgesFailed,
-            queried: result.symbolsQueried,
-            durationMs: Date.now() - start,
-            servers: result.serverStatuses,
-          },
-          'Background LSP enrichment completed',
-        );
-      }
+      this.logEnrichmentResult(result, ids.size, start);
     } catch (err) {
       // Background work must NEVER throw out — every error path logs and
       // continues so a tsserver hiccup can't take the daemon down.
@@ -233,14 +257,7 @@ export class BackgroundLspEnricher {
     } finally {
       this.inFlight = false;
       this.currentController = null;
-      // Drain anything that arrived during the run. If non-empty, re-arm a
-      // fresh debounce — keeps the no-drop guarantee without recursing
-      // synchronously.
-      if (this.pendingDuringRun.size > 0 && !this.disposed) {
-        for (const id of this.pendingDuringRun) this.pendingFileIds.add(id);
-        this.pendingDuringRun.clear();
-        this.debounced();
-      }
+      this.drainPendingDuringRun();
     }
   }
 }
