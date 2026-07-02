@@ -966,7 +966,7 @@ export class IndexingPipeline {
         })),
       getSymbolByFqn: (fqn: string) => {
         const s = store.getSymbolByFqn(fqn);
-        return s ? { id: s.id, symbolId: s.symbol_id } : undefined;
+        return s ? { id: s.id, symbolId: s.symbol_id, name: s.name, kind: s.kind } : undefined;
       },
       getNodeId: (nodeType: string, refId: number) => store.getNodeId(nodeType, refId),
       createNodeIfNeeded: (nodeType: string, refId: number) => store.createNode(nodeType, refId),

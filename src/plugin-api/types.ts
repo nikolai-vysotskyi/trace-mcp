@@ -16,14 +16,17 @@ export interface EdgeTypeDeclaration {
 // --- Raw symbols from LanguagePlugin ---
 
 export interface RawSymbol {
-  symbolId: string; // 'app/Models/User.php::User#class'
+  // symbolId/byteStart/byteEnd are auto-filled by file-persister when a
+  // (typically metadata-only, framework-derived) symbol omits them — see
+  // persistSymbolsAndEntities. Optional here to match that runtime contract.
+  symbolId?: string; // 'app/Models/User.php::User#class'
   name: string;
   kind: SymbolKind;
   fqn?: string; // 'App\Models\User'
   parentSymbolId?: string;
   signature?: string;
-  byteStart: number;
-  byteEnd: number;
+  byteStart?: number;
+  byteEnd?: number;
   lineStart?: number;
   lineEnd?: number;
   metadata?: Record<string, unknown>;
@@ -163,6 +166,7 @@ type PluginCategory =
   | 'state'
   | 'api'
   | 'realtime'
+  | 'messaging'
   | 'testing'
   | 'tooling'
   | 'view';
@@ -263,7 +267,9 @@ export interface ResolveContext {
     lineEnd?: number | null;
     metadata?: Record<string, unknown> | null;
   }[];
-  getSymbolByFqn(fqn: string): { id: number; symbolId: string } | undefined;
+  getSymbolByFqn(
+    fqn: string,
+  ): { id: number; symbolId: string; name: string; kind: string } | undefined;
   getNodeId(nodeType: string, refId: number): number | undefined;
   createNodeIfNeeded(nodeType: string, refId: number): number;
   /** Read file content — uses Pass 1 cache when available, falls back to disk. */

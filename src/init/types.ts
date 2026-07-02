@@ -28,6 +28,7 @@ export interface DetectedFramework {
     | 'state'
     | 'api'
     | 'realtime'
+    | 'messaging'
     | 'testing'
     | 'tooling'
     | 'view';
