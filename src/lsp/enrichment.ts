@@ -164,6 +164,69 @@ export class LspEnrichmentPass {
   /**
    * Enrich edges for all symbols of a given language.
    */
+  /**
+   * Ensure `uri` is open in the LSP client, opening it on first sight.
+   * Returns false if the file couldn't be read (e.g. deleted since indexing)
+   * or the document is already open — either way the caller should treat
+   * "false + already in openedFiles" and "false + read failure" the same:
+   * check `openedFiles.has(uri)` after calling to distinguish them.
+   */
+  private async ensureFileOpen(
+    client: LspClient,
+    uri: string,
+    filePath: string,
+    language: string,
+    openedFiles: Set<string>,
+  ): Promise<boolean> {
+    if (openedFiles.has(uri)) return true;
+    try {
+      const absPath = resolve(this.rootPath, filePath);
+      const content = readFileSync(absPath, 'utf-8');
+      const langId = getLanguageId(filePath) ?? language;
+      await client.openDocument(uri, langId, content);
+      openedFiles.add(uri);
+      return true;
+    } catch {
+      // File may have been deleted since indexing
+      return false;
+    }
+  }
+
+  /**
+   * Run the full LSP round-trip for one symbol: open its file, prepare call
+   * hierarchy at its position, fetch outgoing calls, and upgrade/insert edges
+   * for each. Mutates `result` counters directly (edgesFailed/symbolsQueried).
+   */
+  private async enrichSymbol(
+    client: LspClient,
+    language: string,
+    entry: SymbolWithFile,
+    openedFiles: Set<string>,
+    existingEdges: Map<string, number>,
+    result: EnrichmentResult,
+  ): Promise<void> {
+    const { symbol, file } = entry;
+    const absPath = resolve(this.rootPath, file.path);
+    const uri = pathToFileURL(absPath).href;
+
+    const opened = await this.ensureFileOpen(client, uri, file.path, language, openedFiles);
+    if (!opened) return;
+
+    const pos = symbolToLspPosition(symbol, file, this.rootPath);
+    const items = await client.prepareCallHierarchy(pos.uri, pos.line, pos.character);
+    if (items.length === 0) {
+      result.edgesFailed++;
+      return;
+    }
+
+    const outgoing = await client.outgoingCalls(items[0]);
+    result.symbolsQueried++;
+
+    for (const call of outgoing) {
+      this.processOutgoingCall(symbol, call, existingEdges, result);
+    }
+  }
+
   private async enrichLanguage(
     client: LspClient,
     language: string,
@@ -179,46 +242,13 @@ export class LspEnrichmentPass {
     for (let i = 0; i < symbols.length; i += this.batchSize) {
       const batch = symbols.slice(i, i + this.batchSize);
 
-      for (const { symbol, file } of batch) {
+      for (const entry of batch) {
         try {
-          // Ensure file is open in LSP
-          const absPath = resolve(this.rootPath, file.path);
-          const uri = pathToFileURL(absPath).href;
-
-          if (!openedFiles.has(uri)) {
-            try {
-              const content = readFileSync(absPath, 'utf-8');
-              const langId = getLanguageId(file.path) ?? language;
-              await client.openDocument(uri, langId, content);
-              openedFiles.add(uri);
-            } catch {
-              // File may have been deleted since indexing
-              continue;
-            }
-          }
-
-          // Get LSP position for this symbol
-          const pos = symbolToLspPosition(symbol, file, this.rootPath);
-
-          // Prepare call hierarchy at this position
-          const items = await client.prepareCallHierarchy(pos.uri, pos.line, pos.character);
-          if (items.length === 0) {
-            result.edgesFailed++;
-            continue;
-          }
-
-          // Get outgoing calls
-          const outgoing = await client.outgoingCalls(items[0]);
-          result.symbolsQueried++;
-
-          // Process each outgoing call
-          for (const call of outgoing) {
-            this.processOutgoingCall(symbol, call, existingEdges, result);
-          }
+          await this.enrichSymbol(client, language, entry, openedFiles, existingEdges, result);
         } catch (e) {
           result.edgesFailed++;
           logger.debug(
-            { symbol: symbol.symbol_id, error: (e as Error).message },
+            { symbol: entry.symbol.symbol_id, error: (e as Error).message },
             'LSP enrichment failed for symbol',
           );
         }
