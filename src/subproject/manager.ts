@@ -15,7 +15,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getDbPath } from '../global.js';
 import { logger } from '../logger.js';
-import { extractRoutesFromDb, parseContracts } from '../topology/contract-parser.js';
+import {
+  extractRoutesFromDb,
+  parseContracts,
+  type ParsedContract,
+} from '../topology/contract-parser.js';
 import { detectServices } from '../topology/service-detector.js';
 import type { ClientCallRow, TopologyStore } from '../topology/topology-db.js';
 import { scanClientCalls, scanEndpointLiterals } from './scanner.js';
@@ -101,6 +105,66 @@ export interface SubprojectGraphResult {
 
 // Re-export so existing callers importing from manager.ts still work
 export type { SubprojectSearchItem, SubprojectSearchResult } from './subproject-search.js';
+
+// ════════════════════════════════════════════════════════════════════════
+// CONTRACT RESOLUTION HELPERS
+// Pure functions extracted out of SubprojectManager#registerContracts (the
+// module's most complex method) — neither depends on `this`, both only need
+// serviceRoot/repoRoot, so they're plain functions rather than private methods.
+// ════════════════════════════════════════════════════════════════════════
+
+/** Resolve explicitly-configured contract paths (opts.contractPaths) against repoRoot. */
+function resolveExplicitContracts(repoRoot?: string, explicitPaths?: string[]): ParsedContract[] {
+  const resolved: ParsedContract[] = [];
+  if (!explicitPaths || !repoRoot) return resolved;
+
+  for (const cp of explicitPaths) {
+    const absContract = path.resolve(repoRoot, cp);
+    if (!fs.existsSync(absContract)) continue;
+    const additional = parseContracts(path.dirname(absContract));
+    resolved.push(...additional.filter((c) => path.resolve(repoRoot, c.specPath) === absContract));
+  }
+  return resolved;
+}
+
+/**
+ * Fallback contract source: extract routes from the trace-mcp index DB when a
+ * service ships no formal OpenAPI/GraphQL/Proto spec (Laravel, Next.js, Express, etc).
+ * Tries the service's own DB first, then falls back to a parent monorepo DB
+ * filtered to the service's subdirectory.
+ */
+function extractContractFromIndexDb(serviceRoot: string, repoRoot?: string): ParsedContract | null {
+  const serviceDbPath = getDbPath(serviceRoot);
+  const fromOwnDb = extractRoutesFromDb(serviceDbPath);
+  if (fromOwnDb) return fromOwnDb;
+
+  if (!repoRoot || repoRoot === serviceRoot) return null;
+
+  const parentDbPath = getDbPath(repoRoot);
+  const relPrefix = path.relative(repoRoot, serviceRoot);
+  return extractRoutesFromDb(parentDbPath, relPrefix);
+}
+
+/**
+ * Find which registered service a client call's file belongs to: exact
+ * repo_root match first, then longest prefix match. Handles the case where a
+ * parent folder is registered as a repo but services live in subdirectories
+ * (e.g. repo_root="the/" but service.repo_root="the/fair-front/").
+ * Extracted out of buildCrossServiceEdges() — pure given the pre-sorted
+ * (longest-repo_root-first) services array, so the first hit is most specific.
+ */
+function findSourceService<T extends { repo_root: string }>(
+  callFilePath: string,
+  repoRoot: string,
+  sortedServices: T[],
+): T | undefined {
+  const callPath = callFilePath.startsWith('/') ? callFilePath : `/${callFilePath}`;
+  return sortedServices.find((s) => {
+    if (s.repo_root === repoRoot) return true;
+    const svcRoot = s.repo_root.endsWith('/') ? s.repo_root : `${s.repo_root}/`;
+    return callPath.startsWith(svcRoot) || callFilePath.startsWith(svcRoot);
+  });
+}
 
 // ════════════════════════════════════════════════════════════════════════
 // MANAGER
@@ -532,40 +596,21 @@ export class SubprojectManager {
     explicitPaths?: string[],
   ): void {
     const contracts = parseContracts(serviceRoot);
-
-    if (explicitPaths && repoRoot) {
-      for (const cp of explicitPaths) {
-        const absContract = path.resolve(repoRoot, cp);
-        if (fs.existsSync(absContract)) {
-          const additional = parseContracts(path.dirname(absContract));
-          contracts.push(
-            ...additional.filter((c) => path.resolve(repoRoot, c.specPath) === absContract),
-          );
-        }
-      }
-    }
+    contracts.push(...resolveExplicitContracts(repoRoot, explicitPaths));
 
     // Fallback: if no formal contracts found, try to extract routes from the
     // trace-mcp index DB (already indexed by the pipeline). This covers Laravel,
     // Next.js, Express, etc. that don't ship OpenAPI/GraphQL/Proto specs.
     if (contracts.length === 0) {
-      // 1. Try the service's own DB (if it was indexed standalone)
-      const serviceDbPath = getDbPath(serviceRoot);
-      let fromDb = extractRoutesFromDb(serviceDbPath);
-
-      // 2. If service was indexed as part of a parent monorepo (common case when
-      //    the user runs `trace-mcp index the/`), the DB lives at the parent root.
-      //    Filter routes to this service's subdirectory using pathPrefix.
-      //    The prefix must be relative to the parent root (file paths in DB are relative).
-      if (!fromDb && repoRoot && repoRoot !== serviceRoot) {
-        const parentDbPath = getDbPath(repoRoot);
-        const relPrefix = path.relative(repoRoot, serviceRoot);
-        fromDb = extractRoutesFromDb(parentDbPath, relPrefix);
-      }
-
+      const fromDb = extractContractFromIndexDb(serviceRoot, repoRoot);
       if (fromDb) contracts.push(fromDb);
     }
 
+    this.persistContracts(serviceId, contracts);
+  }
+
+  /** Insert parsed contracts (+ their endpoints/events) for a service. */
+  private persistContracts(serviceId: number, contracts: ParsedContract[]): void {
     for (const contract of contracts) {
       const contractId = this.topoStore.insertContract(serviceId, {
         contractType: contract.type,
@@ -738,16 +783,7 @@ export class SubprojectManager {
         const targetEndpoint = endpointById.get(call.matched_endpoint_id as number);
         if (!targetEndpoint) continue;
 
-        // Find source service: exact match first, then longest prefix match (handles
-        // the case where a parent folder is registered as a repo but services live
-        // in subdirectories, e.g. repo_root="the/" but service.repo_root="the/fair-front/").
-        const callPath = call.file_path.startsWith('/') ? call.file_path : `/${call.file_path}`;
-        // sortedServices is longest-repo_root-first, so the first hit is the most specific.
-        const sourceService = sortedServices.find((s) => {
-          if (s.repo_root === repo.repo_root) return true;
-          const svcRoot = s.repo_root.endsWith('/') ? s.repo_root : `${s.repo_root}/`;
-          return callPath.startsWith(svcRoot) || call.file_path.startsWith(svcRoot);
-        });
+        const sourceService = findSourceService(call.file_path, repo.repo_root, sortedServices);
         if (!sourceService || sourceService.id === targetEndpoint.service_id) continue;
 
         this.topoStore.insertCrossServiceEdge({
