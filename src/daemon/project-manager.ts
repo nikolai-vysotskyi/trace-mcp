@@ -32,6 +32,7 @@ import { detectGitWorktree } from '../project-root.js';
 import { isDangerousProjectRoot, setupProject } from '../project-setup.js';
 import {
   clearPendingReindex,
+  descendantExcludeGlobs,
   findOverlappingProjects,
   getProject,
   listProjects,
@@ -76,6 +77,12 @@ export interface ManagedProject {
    * `config.lsp?.enabled`).
    */
   lspEnricher?: BackgroundLspEnricher | null;
+  /**
+   * Epoch ms of the last request/watcher touch routed to this project.
+   * Updated via `ProjectManager.touchActivity()`. Drives the idle-unload
+   * sweep — see `project_idle_unload_minutes` config key.
+   */
+  lastAccessedAt: number;
 }
 
 async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): Promise<void> {
@@ -149,6 +156,9 @@ export class ProjectManager {
    *  lifetime. Owned by cli.ts; injected here so tests can verify the wiring
    *  without dragging the HTTP layer in. */
   private resourcePool: ProjectResourcePool | null = null;
+  /** Idle-unload sweep timer — see startIdleUnloadSweep(). Null when not running
+   *  (never started, or stopped via stopIdleUnloadSweep()/shutdown()). */
+  private idleUnloadTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(opts?: { resourcePool?: ProjectResourcePool }) {
     this.resourcePool = opts?.resourcePool ?? null;
@@ -214,7 +224,10 @@ export class ProjectManager {
     const dbPath = getDbPath(indexRoot);
     ensureGlobalDirs();
 
-    const db = initializeDatabase(dbPath);
+    const db = initializeDatabase(dbPath, {
+      cacheMb: config.index_cache_mb,
+      mmapMb: config.index_mmap_mb,
+    });
     writeServerPid(db);
     const store = new Store(db);
     const registry = PluginRegistry.createWithDefaults();
@@ -376,6 +389,7 @@ export class ProjectManager {
       status: 'starting',
       aiAbortController,
       lspEnricher,
+      lastAccessedAt: Date.now(),
       cancelDebouncedAI: () => {
         debouncedSummarize.cancel();
         debouncedEmbed.cancel();
@@ -515,6 +529,10 @@ export class ProjectManager {
         projectRoot,
         config,
         async (paths) => {
+          // A filesystem change is real activity too — keep the idle-unload
+          // sweep from evicting a project that's being actively edited, even
+          // if no MCP session is connected (e.g. IDE-only editing).
+          managed.lastAccessedAt = Date.now();
           const watchStart = performance.now();
           const stats = getReindexStats();
           // Dedup against the recent-reindex cache: if the same Edit fired
@@ -635,11 +653,56 @@ export class ProjectManager {
         async (deleted) => {
           pipeline.deleteFiles(deleted);
         },
+        { descendantExcludeGlobs: descendantExcludeGlobs(projectRoot) },
       );
+    }
+
+    // A registered ancestor of this new project already has a live watcher
+    // whose ignore list was snapshotted before this project existed — it is
+    // now stale and would double-watch/double-index everything under
+    // `projectRoot` until restarted. Recompute and restart in place (only
+    // for ancestors this daemon actually manages in-memory; an ancestor that
+    // was never addProject()'d has nothing to restart). Gated on `persist`
+    // alone: that's what controls registry membership (setupProject() above)
+    // and thus what descendantExcludeGlobs() reports for `projectRoot` — a
+    // project can be registered (persist: true) without this call starting a
+    // live watcher for it (watch: false), and the ancestor still needs to
+    // exclude that subtree either way.
+    if (persist) {
+      await this.restartManagedAncestorWatchers(projectRoot);
     }
 
     logger.info({ projectRoot, watch, persist }, 'Project added to daemon');
     return managed;
+  }
+
+  /**
+   * Restart the watcher of every currently-managed project whose root is a
+   * strict ancestor of `changedRoot`, recomputing descendantExcludeGlobs()
+   * so the ancestor's ignore list picks up `changedRoot` having just been
+   * registered (addProject) or unregistered (removeProject). Cheap and rare:
+   * this only runs on registration changes, never on the watcher's hot path.
+   */
+  private async restartManagedAncestorWatchers(changedRoot: string): Promise<void> {
+    for (const managed of this.projects.values()) {
+      if (managed.root === changedRoot) continue;
+      const rel = path.relative(managed.root, changedRoot);
+      const isStrictAncestor = rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+      if (!isStrictAncestor) continue;
+      try {
+        await managed.watcher.restartWithExcludes(descendantExcludeGlobs(managed.root));
+        logger.info(
+          { ancestor: managed.root, changedRoot },
+          'Restarted ancestor watcher with recomputed descendant excludes',
+        );
+      } catch (err) {
+        logger.warn(
+          { error: err, ancestor: managed.root, changedRoot },
+          'Failed to restart ancestor watcher after registration change (non-fatal — ' +
+            'excludes will still be recomputed on next daemon restart via loadAllRegistered)',
+        );
+      }
+    }
   }
 
   /**
@@ -819,6 +882,11 @@ export class ProjectManager {
       };
     }
     unregisterProject(root);
+    // Mirror addProject(): a managed ancestor's watcher ignore list may have
+    // been scoped around this now-unregistered root and would otherwise stay
+    // stale (harmlessly over-excluding) until the next daemon restart.
+    // Recompute so the ancestor resumes owning these now-orphaned files.
+    await this.restartManagedAncestorWatchers(root);
     logger.info(
       {
         projectRoot: root,
@@ -841,11 +909,98 @@ export class ProjectManager {
   }
 
   /**
+   * Record a request/watcher touch for `root`, resetting its idle-unload
+   * clock. Call this at every point that routes work to a specific project
+   * (session connect/close, REST reindex-file, watcher-driven reindex, etc —
+   * mirrors the call sites of cli.ts's `pokeActivity`). No-op if the project
+   * isn't currently loaded.
+   */
+  touchActivity(root: string): void {
+    const managed = this.projects.get(root);
+    if (managed) managed.lastAccessedAt = Date.now();
+  }
+
+  /**
+   * Unload every currently-loaded project idle longer than `idleMs`, except:
+   *  - a project still `starting`/`indexing` (unloading mid-index would abort
+   *    real work, not reclaim idle memory);
+   *  - a project with connected clients/SSE subscribers, per
+   *    `resourcePool.getRefCount(root) > 0` — the same client-tracking
+   *    `daemon_idle_exit_minutes` relies on, scoped per-project.
+   *
+   * Unloading calls the same in-memory teardown as `removeProject()`
+   * (`stopProject`) WITHOUT touching the on-disk registry, so the project
+   * stays listed and is re-added lazily the next time a request for its root
+   * arrives (existing `addProject()` cold-start path — 503 + Retry-After
+   * while it warms, see cli.ts serve-http Phase 5.1).
+   *
+   * Returns the roots that were unloaded (mainly for tests/telemetry).
+   */
+  async unloadIdleProjects(idleMs: number): Promise<string[]> {
+    if (idleMs <= 0) return [];
+    const now = Date.now();
+    const candidates: string[] = [];
+    for (const managed of this.projects.values()) {
+      if (managed.status === 'starting' || managed.status === 'indexing') continue;
+      if (now - managed.lastAccessedAt < idleMs) continue;
+      if ((this.resourcePool?.getRefCount(managed.root) ?? 0) > 0) continue;
+      candidates.push(managed.root);
+    }
+    for (const root of candidates) {
+      logger.info({ projectRoot: root, idleMs }, 'Unloading idle project (stays registered)');
+      await this.stopProject(root);
+    }
+    return candidates;
+  }
+
+  /**
+   * Start the periodic idle-unload sweep. `intervalMs` defaults to 5 minutes
+   * per the design; `idleMs` is `project_idle_unload_minutes * 60_000` (0
+   * disables — no timer is armed). Idempotent: calling twice replaces the
+   * previous timer. The interval is unref'd so it never keeps the daemon
+   * process alive on its own.
+   *
+   * `onUnloaded` fires after each sweep tick that unloaded at least one
+   * project — cli.ts uses it to tear down its per-project bookkeeping
+   * (progress listener etc.), which would otherwise pin the unloaded
+   * project's ProgressState for the daemon's lifetime.
+   */
+  startIdleUnloadSweep(
+    idleMs: number,
+    opts?: { intervalMs?: number; onUnloaded?: (roots: string[]) => void },
+  ): void {
+    this.stopIdleUnloadSweep();
+    if (idleMs <= 0) return;
+    this.idleUnloadTimer = setInterval(
+      () => {
+        this.unloadIdleProjects(idleMs)
+          .then((roots) => {
+            if (roots.length > 0) opts?.onUnloaded?.(roots);
+          })
+          .catch((err) => {
+            logger.warn({ err: serializeError(err) }, 'Idle-unload sweep failed (non-fatal)');
+          });
+      },
+      opts?.intervalMs ?? 5 * 60_000,
+    );
+    this.idleUnloadTimer.unref?.();
+  }
+
+  /** Stop the periodic idle-unload sweep, if running. Safe to call when not running. */
+  stopIdleUnloadSweep(): void {
+    if (this.idleUnloadTimer) {
+      clearInterval(this.idleUnloadTimer);
+      this.idleUnloadTimer = null;
+    }
+  }
+
+  /**
    * Shut down all projects in-memory. Does NOT unregister from the on-disk
    * registry — the daemon may be restarting (e.g. version-mismatch respawn,
    * supervisor relaunch) and must not lose the user's project list.
    */
   async shutdown(): Promise<void> {
+    this.stopIdleUnloadSweep();
     const roots = Array.from(this.projects.keys());
     await Promise.all(roots.map((root) => this.stopProject(root)));
     if (this.sharedPool) {
