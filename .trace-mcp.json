@@ -1,4 +1,14 @@
 {
   "include": ["src/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
-  "exclude": ["node_modules/**", "dist/**", ".git/**", "**/.env", "**/.env.*"]
+  "exclude": ["node_modules/**", "dist/**", ".git/**", "**/.env", "**/.env.*"],
+  "quality_gates": {
+    "enabled": true,
+    "fail_on": "error",
+    "rules": {
+      "max_cyclomatic_complexity": { "threshold": 130, "severity": "warning" },
+      "max_circular_import_chains": { "threshold": 0, "severity": "error" },
+      "max_tech_debt_grade": { "threshold": "D", "severity": "warning" },
+      "max_security_critical_findings": { "threshold": 2, "severity": "error" }
+    }
+  }
 }
