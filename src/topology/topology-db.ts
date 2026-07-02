@@ -1,109 +1,56 @@
 /**
  * Topology Store — manages the cross-service topology database (~/.trace-mcp/topology.db).
  * Separate from per-repo DBs. Stores services, API contracts, endpoints, events, and cross-service edges.
+ *
+ * This class is a thin façade over per-entity operation modules
+ * (`topology-services`, `topology-contracts`, `topology-endpoints`,
+ * `topology-events`, `topology-edges`, `topology-subprojects`,
+ * `topology-client-calls`, `topology-snapshots`). Schema lifecycle
+ * (constructor / preMigrate / migrate / runOnce / close) stays here; every
+ * entity method delegates to its module. Row shapes live in the dependency-free
+ * leaf `topology-types` and are re-exported below for public-API back-compat.
  */
 
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
+import { ServiceOperations } from './topology-services.js';
+import { ContractOperations } from './topology-contracts.js';
+import { EndpointOperations } from './topology-endpoints.js';
+import { EventOperations } from './topology-events.js';
+import { CrossServiceEdgeOperations } from './topology-edges.js';
+import { SubprojectOperations } from './topology-subprojects.js';
+import { ClientCallOperations } from './topology-client-calls.js';
+import { SnapshotOperations } from './topology-snapshots.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export interface ServiceRow {
-  id: number;
-  name: string;
-  repo_root: string;
-  db_path: string;
-  service_type: string | null;
-  detection_source: string | null;
-  project_group: string | null;
-  metadata: string | null;
-  indexed_at: string;
-}
-
-export interface ContractRow {
-  id: number;
-  service_id: number;
-  contract_type: string;
-  spec_path: string;
-  version: string | null;
-  content_hash: string | null;
-  parsed_spec: string;
-  indexed_at: string;
-}
-
-export interface EndpointRow {
-  id: number;
-  contract_id: number;
-  service_id: number;
-  method: string | null;
-  path: string;
-  operation_id: string | null;
-  request_schema: string | null;
-  response_schema: string | null;
-  metadata: string | null;
-}
-
-interface EventChannelRow {
-  id: number;
-  contract_id: number | null;
-  service_id: number;
-  channel_name: string;
-  direction: string;
-  payload_schema: string | null;
-  metadata: string | null;
-}
-
-export interface CrossServiceEdgeRow {
-  id: number;
-  source_service_id: number;
-  target_service_id: number;
-  edge_type: string;
-  source_ref: string | null;
-  target_ref: string | null;
-  confidence: number;
-  metadata: string | null;
-}
-
-export interface SubprojectRow {
-  id: number;
-  name: string;
-  repo_root: string;
-  project_root: string;
-  db_path: string | null;
-  contract_paths: string | null;
-  added_at: string;
-  last_synced: string | null;
-  metadata: string | null;
-}
-
-export interface ClientCallRow {
-  id: number;
-  source_repo_id: number;
-  target_repo_id: number | null;
-  file_path: string;
-  line: number | null;
-  call_type: string;
-  method: string | null;
-  url_pattern: string;
-  matched_endpoint_id: number | null;
-  confidence: number;
-  metadata: string | null;
-}
-
-export interface ContractSnapshotRow {
-  id: number;
-  contract_id: number;
-  service_id: number;
-  version: string | null;
-  spec_path: string;
-  content_hash: string;
-  endpoints_json: string;
-  events_json: string;
-  snapshot_at: string;
-}
+// Row shapes live in `topology-types.ts` so the extracted per-entity operation
+// modules can import them without closing an import cycle back through this
+// store. Re-exported here to preserve the public API — external callers keep
+// importing row types from `./topology-db.js`.
+export type {
+  ServiceRow,
+  ContractRow,
+  EndpointRow,
+  EventChannelRow,
+  CrossServiceEdgeRow,
+  SubprojectRow,
+  ClientCallRow,
+  ContractSnapshotRow,
+} from './topology-types.js';
+import type {
+  ServiceRow,
+  ContractRow,
+  EndpointRow,
+  EventChannelRow,
+  CrossServiceEdgeRow,
+  SubprojectRow,
+  ClientCallRow,
+  ContractSnapshotRow,
+} from './topology-types.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // SCHEMA DDL
@@ -237,74 +184,17 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_service ON contract_snapshots(service_i
 // TOPOLOGY STORE
 // ════════════════════════════════════════════════════════════════════════
 
-// Cache for normalizeEndpointPattern(): endpoint/URL patterns repeat heavily across
-// linkClientCallsToEndpoints() calls (same small set of endpoint paths gets re-normalized
-// for every unlinked client call, and re-normalized again on every reindex). Pure string
-// transform, so a plain unbounded-within-process Map is safe — never goes stale, and the
-// key space is bounded by the number of distinct path patterns actually seen (small
-// relative to calls × endpoints). Cleared only implicitly on process exit.
-const normalizeCache = new Map<string, string>();
-
-/** Normalize: /api/users/{id} and /api/users/:id → /api/users/{*}. Memoized — see normalizeCache. */
-function normalizeEndpointPattern(p: string): string {
-  const cached = normalizeCache.get(p);
-  if (cached !== undefined) return cached;
-  const normalized = p
-    .replace(/\{[^}]+\}/g, '{*}')
-    .replace(/:[\w]+/g, '{*}')
-    .replace(/\/+$/, '');
-  normalizeCache.set(p, normalized);
-  return normalized;
-}
-
-/**
- * Match a client call URL pattern to the best-fitting endpoint.
- * Normalizes path params ({id}, :id) and compares.
- */
-function findBestEndpointMatch(
-  urlPattern: string,
-  method: string | null,
-  endpoints: Array<EndpointRow & { service_name: string }>,
-): (EndpointRow & { service_name: string; confidence: number }) | null {
-  const normalizedUrl = normalizeEndpointPattern(urlPattern);
-  // Skip overly generic URL patterns — they match everything and produce false positives
-  if (!normalizedUrl || normalizedUrl === '/' || normalizedUrl === '') return null;
-
-  let bestMatch: (EndpointRow & { service_name: string; confidence: number }) | null = null;
-  let bestScore = 0;
-
-  for (const ep of endpoints) {
-    const normalizedEp = normalizeEndpointPattern(ep.path);
-    // Skip root endpoints — too generic to produce meaningful matches
-    if (!normalizedEp || normalizedEp === '/' || normalizedEp === '') continue;
-
-    // Exact match
-    if (normalizedUrl === normalizedEp) {
-      const methodBonus =
-        method && ep.method && method.toUpperCase() === ep.method.toUpperCase() ? 0.2 : 0;
-      const score = 1.0 + methodBonus;
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = { ...ep, confidence: Math.min(score, 1.0) };
-      }
-      continue;
-    }
-
-    // Partial: url ends with the endpoint path
-    if (normalizedUrl.endsWith(normalizedEp) || normalizedEp.endsWith(normalizedUrl)) {
-      const score = 0.7;
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = { ...ep, confidence: score };
-      }
-    }
-  }
-
-  return bestMatch;
-}
-
 export class TopologyStore {
   public readonly db: Database.Database;
+
+  private readonly services: ServiceOperations;
+  private readonly contracts: ContractOperations;
+  private readonly endpoints: EndpointOperations;
+  private readonly events: EventOperations;
+  private readonly edges: CrossServiceEdgeOperations;
+  private readonly subprojects: SubprojectOperations;
+  private readonly clientCalls: ClientCallOperations;
+  private readonly snapshots: SnapshotOperations;
 
   constructor(dbPath: string, opts?: { readonly?: boolean }) {
     this.db = new Database(dbPath, { readonly: opts?.readonly ?? false });
@@ -323,6 +213,24 @@ export class TopologyStore {
       this.migrate();
       logger.debug({ dbPath }, 'Topology database initialized');
     }
+
+    // Per-entity operation modules — each takes the raw DB handle; the two that
+    // read across entities receive a small callback deps object instead of
+    // importing sibling op classes (which would risk an import cycle).
+    this.services = new ServiceOperations(this.db);
+    this.contracts = new ContractOperations(this.db);
+    this.endpoints = new EndpointOperations(this.db);
+    this.events = new EventOperations(this.db);
+    this.edges = new CrossServiceEdgeOperations(this.db);
+    this.subprojects = new SubprojectOperations(this.db, {
+      deleteService: (id) => this.services.deleteService(id),
+    });
+    this.clientCalls = new ClientCallOperations(this.db, {
+      getAllEndpoints: () => this.endpoints.getAllEndpoints(),
+      getAllServices: () => this.services.getAllServices(),
+      getAllSubprojects: () => this.subprojects.getAllSubprojects(),
+    });
+    this.snapshots = new SnapshotOperations(this.db);
   }
 
   /**
@@ -520,86 +428,29 @@ export class TopologyStore {
     projectGroup?: string;
     metadata?: Record<string, unknown>;
   }): number {
-    const existing = this.db.prepare('SELECT id FROM services WHERE name = ?').get(input.name) as
-      | { id: number }
-      | undefined;
-    if (existing) {
-      this.db
-        .prepare(`
-        UPDATE services SET repo_root = ?, db_path = ?, service_type = COALESCE(?, service_type),
-          detection_source = COALESCE(?, detection_source),
-          project_group = COALESCE(?, project_group),
-          metadata = COALESCE(?, metadata),
-          indexed_at = datetime('now')
-        WHERE id = ?
-      `)
-        .run(
-          input.repoRoot,
-          input.dbPath,
-          input.serviceType ?? null,
-          input.detectionSource ?? null,
-          input.projectGroup ?? null,
-          input.metadata ? JSON.stringify(input.metadata) : null,
-          existing.id,
-        );
-      return existing.id;
-    }
-
-    return this.db
-      .prepare(`
-      INSERT INTO services (name, repo_root, db_path, service_type, detection_source, project_group, metadata, indexed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `)
-      .run(
-        input.name,
-        input.repoRoot,
-        input.dbPath,
-        input.serviceType ?? null,
-        input.detectionSource ?? null,
-        input.projectGroup ?? null,
-        input.metadata ? JSON.stringify(input.metadata) : null,
-      ).lastInsertRowid as number;
+    return this.services.upsertService(input);
   }
 
   getService(name: string): ServiceRow | undefined {
-    return this.db.prepare('SELECT * FROM services WHERE name = ?').get(name) as
-      | ServiceRow
-      | undefined;
+    return this.services.getService(name);
   }
 
   getAllServices(): ServiceRow[] {
-    return this.db.prepare('SELECT * FROM services ORDER BY name').all() as ServiceRow[];
+    return this.services.getAllServices();
   }
 
   updateServiceGroup(serviceId: number, projectGroup: string | null): void {
-    this.db
-      .prepare('UPDATE services SET project_group = ? WHERE id = ?')
-      .run(projectGroup, serviceId);
+    this.services.updateServiceGroup(serviceId, projectGroup);
   }
 
   getServicesWithEndpointCounts(
     projectRoot?: string,
   ): Array<ServiceRow & { endpoint_count: number }> {
-    if (projectRoot) {
-      return this.db
-        .prepare(`
-        SELECT s.*, (SELECT COUNT(*) FROM api_endpoints WHERE service_id = s.id) as endpoint_count
-        FROM services s
-        WHERE s.repo_root IN (SELECT repo_root FROM subprojects WHERE project_root = ?)
-        ORDER BY s.project_group NULLS LAST, s.name
-      `)
-        .all(projectRoot) as Array<ServiceRow & { endpoint_count: number }>;
-    }
-    return this.db
-      .prepare(`
-      SELECT s.*, (SELECT COUNT(*) FROM api_endpoints WHERE service_id = s.id) as endpoint_count
-      FROM services s ORDER BY s.project_group NULLS LAST, s.name
-    `)
-      .all() as Array<ServiceRow & { endpoint_count: number }>;
+    return this.services.getServicesWithEndpointCounts(projectRoot);
   }
 
   deleteService(id: number): void {
-    this.db.prepare('DELETE FROM services WHERE id = ?').run(id);
+    this.services.deleteService(id);
   }
 
   // ── Contracts ────────────────────────────────────────────────────────
@@ -614,40 +465,15 @@ export class TopologyStore {
       parsedSpec: string;
     },
   ): number {
-    return this.db
-      .prepare(`
-      INSERT INTO api_contracts (service_id, contract_type, spec_path, version, content_hash, parsed_spec, indexed_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-    `)
-      .run(
-        serviceId,
-        input.contractType,
-        input.specPath,
-        input.version ?? null,
-        input.contentHash ?? null,
-        input.parsedSpec,
-      ).lastInsertRowid as number;
+    return this.contracts.insertContract(serviceId, input);
   }
 
   getContractsByService(serviceId: number): ContractRow[] {
-    return this.db
-      .prepare('SELECT * FROM api_contracts WHERE service_id = ?')
-      .all(serviceId) as ContractRow[];
+    return this.contracts.getContractsByService(serviceId);
   }
 
   deleteContractsByService(serviceId: number): void {
-    // client_calls.matched_endpoint_id references api_endpoints(id) without ON DELETE CASCADE/SET NULL,
-    // so cascading the contract delete would hit an FK violation. Null out those matches first —
-    // linkClientCallsToEndpoints() will re-resolve them after fresh endpoints are inserted.
-    this.db.transaction(() => {
-      this.db
-        .prepare(`
-        UPDATE client_calls SET matched_endpoint_id = NULL
-        WHERE matched_endpoint_id IN (SELECT id FROM api_endpoints WHERE service_id = ?)
-      `)
-        .run(serviceId);
-      this.db.prepare('DELETE FROM api_contracts WHERE service_id = ?').run(serviceId);
-    })();
+    this.contracts.deleteContractsByService(serviceId);
   }
 
   // ── Endpoints ────────────────────────────────────────────────────────
@@ -664,65 +490,22 @@ export class TopologyStore {
       metadata?: Record<string, unknown>;
     }>,
   ): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO api_endpoints (contract_id, service_id, method, path, operation_id, request_schema, response_schema, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    this.db.transaction(() => {
-      for (const ep of endpoints) {
-        stmt.run(
-          contractId,
-          serviceId,
-          ep.method ?? null,
-          ep.path,
-          ep.operationId ?? null,
-          ep.requestSchema ?? null,
-          ep.responseSchema ?? null,
-          ep.metadata ? JSON.stringify(ep.metadata) : null,
-        );
-      }
-    })();
+    this.endpoints.insertEndpoints(contractId, serviceId, endpoints);
   }
 
   getEndpointsByService(serviceId: number): EndpointRow[] {
-    return this.db
-      .prepare('SELECT * FROM api_endpoints WHERE service_id = ?')
-      .all(serviceId) as EndpointRow[];
+    return this.endpoints.getEndpointsByService(serviceId);
   }
 
   findEndpointByPath(
     pathQuery: string,
     method?: string,
   ): Array<EndpointRow & { service_name: string }> {
-    // Escape LIKE wildcards in user input
-    const escaped = pathQuery.replace(/%/g, '\\%').replace(/_/g, '\\_');
-    const pattern = `%${escaped}%`;
-    if (method) {
-      return this.db
-        .prepare(`
-        SELECT e.*, s.name as service_name FROM api_endpoints e
-        JOIN services s ON e.service_id = s.id
-        WHERE e.path LIKE ? ESCAPE '\\' AND e.method = ?
-      `)
-        .all(pattern, method) as Array<EndpointRow & { service_name: string }>;
-    }
-    return this.db
-      .prepare(`
-      SELECT e.*, s.name as service_name FROM api_endpoints e
-      JOIN services s ON e.service_id = s.id
-      WHERE e.path LIKE ? ESCAPE '\\'
-    `)
-      .all(pattern) as Array<EndpointRow & { service_name: string }>;
+    return this.endpoints.findEndpointByPath(pathQuery, method);
   }
 
   getAllEndpoints(): Array<EndpointRow & { service_name: string }> {
-    return this.db
-      .prepare(`
-      SELECT e.*, s.name as service_name FROM api_endpoints e
-      JOIN services s ON e.service_id = s.id
-      ORDER BY s.name, e.path
-    `)
-      .all() as Array<EndpointRow & { service_name: string }>;
+    return this.endpoints.getAllEndpoints();
   }
 
   // ── Event Channels ──────────────────────────────────────────────────
@@ -736,21 +519,11 @@ export class TopologyStore {
       payloadSchema?: string;
     }>,
   ): void {
-    const stmt = this.db.prepare(`
-      INSERT INTO event_channels (contract_id, service_id, channel_name, direction, payload_schema)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    this.db.transaction(() => {
-      for (const ch of channels) {
-        stmt.run(contractId, serviceId, ch.channelName, ch.direction, ch.payloadSchema ?? null);
-      }
-    })();
+    this.events.insertEventChannels(contractId, serviceId, channels);
   }
 
   getEventsByService(serviceId: number): EventChannelRow[] {
-    return this.db
-      .prepare('SELECT * FROM event_channels WHERE service_id = ?')
-      .all(serviceId) as EventChannelRow[];
+    return this.events.getEventsByService(serviceId);
   }
 
   matchProducersConsumers(): Array<{
@@ -758,27 +531,7 @@ export class TopologyStore {
     publishers: string[];
     subscribers: string[];
   }> {
-    const rows = this.db
-      .prepare(`
-      SELECT ec.channel_name, ec.direction, s.name as service_name
-      FROM event_channels ec
-      JOIN services s ON ec.service_id = s.id
-      ORDER BY ec.channel_name
-    `)
-      .all() as Array<{ channel_name: string; direction: string; service_name: string }>;
-
-    const map = new Map<string, { publishers: string[]; subscribers: string[] }>();
-    for (const row of rows) {
-      if (!map.has(row.channel_name))
-        map.set(row.channel_name, { publishers: [], subscribers: [] });
-      const entry = map.get(row.channel_name)!;
-      if (row.direction === 'publish') entry.publishers.push(row.service_name);
-      else entry.subscribers.push(row.service_name);
-    }
-
-    return [...map.entries()]
-      .filter(([, v]) => v.publishers.length > 0 && v.subscribers.length > 0)
-      .map(([channel, v]) => ({ channel, ...v }));
+    return this.events.matchProducersConsumers();
   }
 
   // ── Cross-Service Edges ─────────────────────────────────────────────
@@ -792,55 +545,21 @@ export class TopologyStore {
     confidence?: number;
     metadata?: Record<string, unknown>;
   }): number {
-    return this.db
-      .prepare(`
-      INSERT OR IGNORE INTO cross_service_edges
-        (source_service_id, target_service_id, edge_type, source_ref, target_ref, confidence, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `)
-      .run(
-        input.sourceServiceId,
-        input.targetServiceId,
-        input.edgeType,
-        input.sourceRef ?? null,
-        input.targetRef ?? null,
-        input.confidence ?? 1.0,
-        input.metadata ? JSON.stringify(input.metadata) : null,
-      ).lastInsertRowid as number;
+    return this.edges.insertCrossServiceEdge(input);
   }
 
   getAllCrossServiceEdges(): Array<
     CrossServiceEdgeRow & { source_name: string; target_name: string }
   > {
-    return this.db
-      .prepare(`
-      SELECT e.*, s1.name as source_name, s2.name as target_name
-      FROM cross_service_edges e
-      JOIN services s1 ON e.source_service_id = s1.id
-      JOIN services s2 ON e.target_service_id = s2.id
-      ORDER BY e.confidence DESC
-    `)
-      .all() as Array<CrossServiceEdgeRow & { source_name: string; target_name: string }>;
+    return this.edges.getAllCrossServiceEdges();
   }
 
   getEdgesBySource(serviceId: number): Array<CrossServiceEdgeRow & { target_name: string }> {
-    return this.db
-      .prepare(`
-      SELECT e.*, s.name as target_name FROM cross_service_edges e
-      JOIN services s ON e.target_service_id = s.id
-      WHERE e.source_service_id = ?
-    `)
-      .all(serviceId) as Array<CrossServiceEdgeRow & { target_name: string }>;
+    return this.edges.getEdgesBySource(serviceId);
   }
 
   getEdgesByTarget(serviceId: number): Array<CrossServiceEdgeRow & { source_name: string }> {
-    return this.db
-      .prepare(`
-      SELECT e.*, s.name as source_name FROM cross_service_edges e
-      JOIN services s ON e.source_service_id = s.id
-      WHERE e.target_service_id = ?
-    `)
-      .all(serviceId) as Array<CrossServiceEdgeRow & { source_name: string }>;
+    return this.edges.getEdgesByTarget(serviceId);
   }
 
   // ── Stats ──────────────────────────────────────────────────────────
@@ -872,65 +591,23 @@ export class TopologyStore {
     contractPaths?: string[];
     metadata?: Record<string, unknown>;
   }): number {
-    const existing = this.db
-      .prepare('SELECT id FROM subprojects WHERE repo_root = ? AND project_root = ?')
-      .get(input.repoRoot, input.projectRoot) as { id: number } | undefined;
-    if (existing) {
-      this.db
-        .prepare(`
-        UPDATE subprojects SET name = ?, db_path = COALESCE(?, db_path),
-          contract_paths = COALESCE(?, contract_paths),
-          metadata = COALESCE(?, metadata), last_synced = datetime('now')
-        WHERE id = ?
-      `)
-        .run(
-          input.name,
-          input.dbPath ?? null,
-          input.contractPaths ? JSON.stringify(input.contractPaths) : null,
-          input.metadata ? JSON.stringify(input.metadata) : null,
-          existing.id,
-        );
-      return existing.id;
-    }
-
-    return this.db
-      .prepare(`
-      INSERT INTO subprojects (name, repo_root, project_root, db_path, contract_paths, metadata, added_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-    `)
-      .run(
-        input.name,
-        input.repoRoot,
-        input.projectRoot,
-        input.dbPath ?? null,
-        input.contractPaths ? JSON.stringify(input.contractPaths) : null,
-        input.metadata ? JSON.stringify(input.metadata) : null,
-      ).lastInsertRowid as number;
+    return this.subprojects.upsertSubproject(input);
   }
 
   getSubproject(nameOrRoot: string, projectRoot?: string): SubprojectRow | undefined {
-    if (projectRoot) {
-      return this.db
-        .prepare('SELECT * FROM subprojects WHERE (name = ? OR repo_root = ?) AND project_root = ?')
-        .get(nameOrRoot, nameOrRoot, projectRoot) as SubprojectRow | undefined;
-    }
-    return this.db
-      .prepare('SELECT * FROM subprojects WHERE name = ? OR repo_root = ?')
-      .get(nameOrRoot, nameOrRoot) as SubprojectRow | undefined;
+    return this.subprojects.getSubproject(nameOrRoot, projectRoot);
   }
 
   getSubprojectsByProject(projectRoot: string): SubprojectRow[] {
-    return this.db
-      .prepare('SELECT * FROM subprojects WHERE project_root = ? ORDER BY name')
-      .all(projectRoot) as SubprojectRow[];
+    return this.subprojects.getSubprojectsByProject(projectRoot);
   }
 
   getAllSubprojects(): SubprojectRow[] {
-    return this.db.prepare('SELECT * FROM subprojects ORDER BY name').all() as SubprojectRow[];
+    return this.subprojects.getAllSubprojects();
   }
 
   deleteSubproject(id: number): void {
-    this.db.prepare('DELETE FROM subprojects WHERE id = ?').run(id);
+    this.subprojects.deleteSubproject(id);
   }
 
   /**
@@ -940,58 +617,11 @@ export class TopologyStore {
    * Returns counts of deleted rows for logging.
    */
   removeByRepoRoot(repoRoot: string): { subprojects: number; services: number } {
-    const result = { subprojects: 0, services: 0 };
-
-    const services = this.db
-      .prepare('SELECT id FROM services WHERE repo_root = ?')
-      .all(repoRoot) as Array<{ id: number }>;
-
-    // Whole removal runs in ONE transaction so a mid-way FK failure can't leave
-    // a half-deleted repo behind.
-    this.db.transaction(() => {
-      if (services.length > 0) {
-        // client_calls.matched_endpoint_id REFERENCES api_endpoints(id) with NO
-        // `ON DELETE` action — so deleting a service (which cascade-deletes its
-        // api_endpoints) throws "FOREIGN KEY constraint failed" whenever ANOTHER
-        // repo's client call matched one of those endpoints. Detach those
-        // references first (the column is nullable), then the cascade is safe.
-        const placeholders = services.map(() => '?').join(',');
-        const ids = services.map((s) => s.id);
-        this.db
-          .prepare(
-            `UPDATE client_calls SET matched_endpoint_id = NULL
-             WHERE matched_endpoint_id IN (
-               SELECT id FROM api_endpoints WHERE service_id IN (${placeholders})
-             )`,
-          )
-          .run(...ids);
-
-        // Delete all services rooted in this path (cascades to contracts,
-        // endpoints, events, edges, snapshots).
-        for (const svc of services) {
-          this.deleteService(svc.id);
-        }
-        result.services = services.length;
-      }
-
-      // Delete subproject entry last. source_repo_id cascades, but
-      // client_calls.target_repo_id REFERENCES subprojects(id) has NO `ON DELETE`
-      // — other repos pointing AT this one would block the delete. Detach first.
-      const sub = this.getSubproject(repoRoot);
-      if (sub) {
-        this.db
-          .prepare('UPDATE client_calls SET target_repo_id = NULL WHERE target_repo_id = ?')
-          .run(sub.id);
-        this.deleteSubproject(sub.id);
-        result.subprojects = 1;
-      }
-    })();
-
-    return result;
+    return this.subprojects.removeByRepoRoot(repoRoot);
   }
 
   updateSubprojectSyncTime(id: number): void {
-    this.db.prepare("UPDATE subprojects SET last_synced = datetime('now') WHERE id = ?").run(id);
+    this.subprojects.updateSubprojectSyncTime(id);
   }
 
   // ── Client Calls ──────────────────────────────────────────────────
@@ -1010,185 +640,32 @@ export class TopologyStore {
       metadata?: Record<string, unknown>;
     }>,
   ): void {
-    const stmt = this.db.prepare(`
-      INSERT OR IGNORE INTO client_calls
-        (source_repo_id, target_repo_id, file_path, line, call_type, method, url_pattern,
-         matched_endpoint_id, confidence, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    this.db.transaction(() => {
-      for (const c of calls) {
-        stmt.run(
-          c.sourceRepoId,
-          c.targetRepoId ?? null,
-          c.filePath,
-          c.line ?? null,
-          c.callType,
-          c.method ?? null,
-          c.urlPattern,
-          c.matchedEndpointId ?? null,
-          c.confidence ?? 0.5,
-          c.metadata ? JSON.stringify(c.metadata) : null,
-        );
-      }
-    })();
+    this.clientCalls.insertClientCalls(calls);
   }
 
   deleteClientCallsByRepo(repoId: number): void {
-    this.db.prepare('DELETE FROM client_calls WHERE source_repo_id = ?').run(repoId);
+    this.clientCalls.deleteClientCallsByRepo(repoId);
   }
 
   getClientCallsByEndpoint(
     endpointId: number,
   ): Array<ClientCallRow & { source_repo_name: string }> {
-    return this.db
-      .prepare(`
-      SELECT cc.*, sp.name as source_repo_name FROM client_calls cc
-      JOIN subprojects sp ON cc.source_repo_id = sp.id
-      WHERE cc.matched_endpoint_id = ?
-      ORDER BY cc.confidence DESC
-    `)
-      .all(endpointId) as Array<ClientCallRow & { source_repo_name: string }>;
+    return this.clientCalls.getClientCallsByEndpoint(endpointId);
   }
 
   getClientCallsByRepo(repoId: number): ClientCallRow[] {
-    return this.db
-      .prepare('SELECT * FROM client_calls WHERE source_repo_id = ? ORDER BY file_path, line')
-      .all(repoId) as ClientCallRow[];
+    return this.clientCalls.getClientCallsByRepo(repoId);
   }
 
   getClientCallsForTarget(
     targetRepoId: number,
   ): Array<ClientCallRow & { source_repo_name: string }> {
-    return this.db
-      .prepare(`
-      SELECT cc.*, sp.name as source_repo_name FROM client_calls cc
-      JOIN subprojects sp ON cc.source_repo_id = sp.id
-      WHERE cc.target_repo_id = ?
-      ORDER BY cc.confidence DESC
-    `)
-      .all(targetRepoId) as Array<ClientCallRow & { source_repo_name: string }>;
+    return this.clientCalls.getClientCallsForTarget(targetRepoId);
   }
 
   /** Match unlinked client calls to known endpoints. Returns number of newly linked calls. */
   linkClientCallsToEndpoints(): number {
-    // Match by URL pattern similarity, respecting project_group isolation.
-    // fair-front should only match fair-laravel endpoints, not thewed-laravel's.
-    const unlinked = this.db
-      .prepare('SELECT * FROM client_calls WHERE matched_endpoint_id IS NULL')
-      .all() as ClientCallRow[];
-
-    const endpoints = this.getAllEndpoints();
-    const services = this.getAllServices();
-    const allRepos = this.getAllSubprojects();
-
-    // Build service_id → project_group lookup
-    const serviceGroup = new Map<number, string | null>();
-    // Build service_id → repo_root lookup (replaces a per-matched-call
-    // `SELECT repo_root FROM services WHERE id = ?`).
-    const serviceRepoRoot = new Map<number, string>();
-    // Build repo_root → service lookup (replaces the per-repo `services.find(...)` below).
-    const serviceByRepoRoot = new Map<string, (typeof services)[number]>();
-    for (const svc of services) {
-      serviceGroup.set(svc.id, svc.project_group ?? null);
-      serviceRepoRoot.set(svc.id, svc.repo_root);
-      if (!serviceByRepoRoot.has(svc.repo_root)) serviceByRepoRoot.set(svc.repo_root, svc);
-    }
-
-    // Build repo_root → subproject_id lookup (replaces a per-matched-call
-    // `SELECT id FROM subprojects WHERE repo_root = ?`).
-    const repoIdByRoot = new Map<string, number>();
-    for (const repo of allRepos) {
-      if (!repoIdByRoot.has(repo.repo_root)) repoIdByRoot.set(repo.repo_root, repo.id);
-    }
-
-    // Build source_repo_id → { projectGroup, serviceId } lookup
-    const repoInfo = new Map<number, { group: string | null; serviceId: number | null }>();
-    for (const repo of allRepos) {
-      const svc = serviceByRepoRoot.get(repo.repo_root);
-      repoInfo.set(repo.id, { group: svc?.project_group ?? null, serviceId: svc?.id ?? null });
-    }
-
-    // Pre-group endpoints by project_group once (was previously an O(endpoints) `.filter()`
-    // re-run for EVERY unlinked call — with thousands of calls and endpoints this dominated
-    // reindex time; see plan-indexer-perf topology hotspot). Endpoints and their group
-    // membership are fixed for the duration of this method, so grouping once and caching the
-    // self/other split per (group, serviceId) pair turns an O(calls × endpoints) scan into
-    // O(endpoints) up front plus O(1) lookups per call.
-    const endpointsByGroup = new Map<
-      string | null,
-      Array<EndpointRow & { service_name: string }>
-    >();
-    for (const ep of endpoints) {
-      const epGroup = serviceGroup.get(ep.service_id) ?? null;
-      const list = endpointsByGroup.get(epGroup);
-      if (list) list.push(ep);
-      else endpointsByGroup.set(epGroup, [ep]);
-    }
-
-    // Cache of (group, serviceId) → { self, other } endpoint subsets, built lazily since the
-    // number of distinct (group, serviceId) pairs actually hit is typically far smaller than
-    // the number of unlinked calls.
-    const splitCache = new Map<
-      string,
-      {
-        self: Array<EndpointRow & { service_name: string }>;
-        other: Array<EndpointRow & { service_name: string }>;
-      }
-    >();
-
-    let linked = 0;
-
-    const updateStmt = this.db.prepare(
-      'UPDATE client_calls SET matched_endpoint_id = ?, target_repo_id = ?, confidence = ? WHERE id = ?',
-    );
-
-    this.db.transaction(() => {
-      for (const call of unlinked) {
-        const info = repoInfo.get(call.source_repo_id);
-        const sourceGroup = info?.group ?? null;
-        const sourceServiceId = info?.serviceId ?? null;
-
-        const groupEndpoints = endpointsByGroup.get(sourceGroup) ?? [];
-
-        const splitKey = `${sourceGroup ?? ''} ${sourceServiceId ?? ''}`;
-        let split = splitCache.get(splitKey);
-        if (!split) {
-          const self: Array<EndpointRow & { service_name: string }> = [];
-          const other: Array<EndpointRow & { service_name: string }> = [];
-          for (const ep of groupEndpoints) {
-            if (sourceServiceId != null && ep.service_id === sourceServiceId) self.push(ep);
-            else other.push(ep);
-          }
-          split = { self, other };
-          splitCache.set(splitKey, split);
-        }
-
-        // Self-first matching: prefer endpoints from the SAME service as the client call.
-        // This prevents cross-project false positives when multiple services share
-        // identical route paths (e.g., copy-pasted Nova components across Laravel apps).
-        let match =
-          sourceServiceId != null
-            ? findBestEndpointMatch(call.url_pattern, call.method, split.self)
-            : null;
-
-        // Fall back to other services in the same group only if no self-match found.
-        if (!match) {
-          match = findBestEndpointMatch(call.url_pattern, call.method, split.other);
-        }
-        if (match) {
-          // Find the repo for this service via pre-built maps (was two per-call SELECTs).
-          const matchRepoRoot = serviceRepoRoot.get(match.service_id);
-          const targetRepoId =
-            matchRepoRoot != null ? (repoIdByRoot.get(matchRepoRoot) ?? null) : null;
-
-          updateStmt.run(match.id, targetRepoId ?? null, match.confidence, call.id);
-          linked++;
-        }
-      }
-    })();
-
-    return linked;
+    return this.clientCalls.linkClientCallsToEndpoints();
   }
 
   // ── Contract Snapshots ───────────────────────────────────────────
@@ -1204,46 +681,19 @@ export class TopologyStore {
       eventsJson: string;
     },
   ): number {
-    const result = this.db
-      .prepare(`
-      INSERT INTO contract_snapshots (contract_id, service_id, version, spec_path, content_hash, endpoints_json, events_json, snapshot_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-      .run(
-        contractId,
-        serviceId,
-        input.version,
-        input.specPath,
-        input.contentHash,
-        input.endpointsJson,
-        input.eventsJson,
-        new Date().toISOString(),
-      );
-    return Number(result.lastInsertRowid);
+    return this.snapshots.insertContractSnapshot(contractId, serviceId, input);
   }
 
   getContractSnapshots(contractId: number, limit = 50): ContractSnapshotRow[] {
-    return this.db
-      .prepare(
-        'SELECT * FROM contract_snapshots WHERE contract_id = ? ORDER BY snapshot_at DESC LIMIT ?',
-      )
-      .all(contractId, limit) as ContractSnapshotRow[];
+    return this.snapshots.getContractSnapshots(contractId, limit);
   }
 
   getLatestSnapshot(contractId: number): ContractSnapshotRow | undefined {
-    return this.db
-      .prepare(
-        'SELECT * FROM contract_snapshots WHERE contract_id = ? ORDER BY snapshot_at DESC LIMIT 1',
-      )
-      .get(contractId) as ContractSnapshotRow | undefined;
+    return this.snapshots.getLatestSnapshot(contractId);
   }
 
   getSnapshotsByService(serviceId: number, limit = 50): ContractSnapshotRow[] {
-    return this.db
-      .prepare(
-        'SELECT * FROM contract_snapshots WHERE service_id = ? ORDER BY snapshot_at DESC LIMIT ?',
-      )
-      .all(serviceId, limit) as ContractSnapshotRow[];
+    return this.snapshots.getSnapshotsByService(serviceId, limit);
   }
 
   // ── Subproject Stats ─────────────────────────────────────────────
