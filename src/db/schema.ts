@@ -1918,14 +1918,18 @@ export function disableFts5Triggers(db: Database.Database): void {
 }
 
 /**
- * Re-enable FTS5 triggers and rebuild the FTS5 index from scratch.
- * This is faster than per-row trigger fires during batch inserts.
+ * (Re)create the FTS5 sync triggers only — no rebuild.
+ *
+ * Idempotent (`CREATE TRIGGER IF NOT EXISTS`) and cheap: it touches no rows,
+ * so it is safe to call on every incremental reindex. This is the durability
+ * guard for the single-file / small-batch path: if a prior bulk run crashed
+ * between disableFts5Triggers() and enableFts5Triggers(), the triggers were
+ * left dropped and every later incremental symbol write silently skipped FTS,
+ * leaving edited symbols unsearchable by name. Re-arming them here (idempotent
+ * no-op when already present) closes that hole without an O(all-symbols)
+ * rebuild per edit.
  */
-export function enableFts5Triggers(db: Database.Database): void {
-  // Rebuild FTS5 index from current symbols table content
-  db.exec("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')");
-
-  // Restore triggers for subsequent single-row operations
+export function ensureFts5Triggers(db: Database.Database): void {
   db.exec(`CREATE TRIGGER IF NOT EXISTS symbols_ai AFTER INSERT ON symbols BEGIN
     INSERT INTO symbols_fts(rowid, name, fqn, signature, summary)
     VALUES (new.id, new.name, new.fqn, new.signature, new.summary);
@@ -1940,6 +1944,24 @@ export function enableFts5Triggers(db: Database.Database): void {
     INSERT INTO symbols_fts(rowid, name, fqn, signature, summary)
     VALUES (new.id, new.name, new.fqn, new.signature, new.summary);
   END`);
+}
+
+/**
+ * Re-enable FTS5 triggers and rebuild the FTS5 index from scratch.
+ * This is faster than per-row trigger fires during batch inserts.
+ *
+ * MUST be paired with disableFts5Triggers() in a try/finally so a throw
+ * mid-batch can never leave the triggers dropped (which would silently
+ * desync FTS on every subsequent incremental write). The rebuild reads the
+ * current symbols table, so calling it on the error path also re-syncs FTS
+ * to whatever partial symbol state landed before the throw.
+ */
+export function enableFts5Triggers(db: Database.Database): void {
+  // Rebuild FTS5 index from current symbols table content
+  db.exec("INSERT INTO symbols_fts(symbols_fts) VALUES('rebuild')");
+
+  // Restore triggers for subsequent single-row operations
+  ensureFts5Triggers(db);
 }
 
 export function getTableNames(db: Database.Database): string[] {
