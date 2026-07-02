@@ -117,7 +117,7 @@
     "hono": ">=4.12.25",
     "@hono/node-server": ">=1.19.14",
     "js-yaml": "^4.2.0",
-    "vite": ">=7.3.2",
+    "vite": ">=8.0.16",
     "undici": ">=7.28.0"
   },
   "pnpm": {
@@ -127,7 +127,8 @@
       "protobufjs@<8.6.0": ">=8.6.0",
       "hono": ">=4.12.25",
       "js-yaml": "^4.2.0",
-      "undici": ">=7.28.0"
+      "undici": ">=7.28.0",
+      "vite": ">=8.0.16"
     },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
