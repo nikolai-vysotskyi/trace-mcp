@@ -4,7 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { projectHash } from '../../src/global.js';
-import { markToolConsultation } from '../../src/server/consultation-markers.js';
+import {
+  __resetConsultationMarkersForTests,
+  markToolConsultation,
+} from '../../src/server/consultation-markers.js';
 
 const TEST_ROOT = path.join(os.tmpdir(), `trace-mcp-test-consultation-${process.pid}`);
 
@@ -24,6 +27,8 @@ afterEach(() => {
   } catch {
     /* may not exist */
   }
+  // Reset the per-process dedup caches so the next test re-creates the wiped dir.
+  __resetConsultationMarkersForTests();
 });
 
 describe('markToolConsultation', () => {

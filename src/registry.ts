@@ -35,11 +35,36 @@ function emptyRegistry(): Registry {
   return { version: 1, projects: {} };
 }
 
+// mtime-keyed cache of the parsed registry. Every exported reader (getProject,
+// resolveRegisteredAncestor, listProjects, ...) calls loadRegistry, and the
+// per-/mcp-request resolveDeepestKnownRoot path hits it on every tool call —
+// previously re-reading + JSON.parsing the whole registry.json each time. We
+// keep the parsed object and hand callers a structuredClone so they can mutate
+// their copy freely (registerProject etc. mutate then saveRegistry) without
+// corrupting the cache.
+// ponytail: mtime is the cross-process invalidation signal (another daemon/CLI
+// writing the file bumps it); within-process writes drop the cache explicitly
+// in saveRegistry. Ceiling: sub-mtime-resolution double-writes from a *foreign*
+// process could serve one stale read — acceptable for a registry that changes
+// on register/unregister only.
+let _registryCache: { mtimeMs: number; reg: Registry } | null = null;
+
 function loadRegistry(): Registry {
-  if (!fs.existsSync(REGISTRY_PATH)) return emptyRegistry();
+  let mtimeMs: number;
+  try {
+    mtimeMs = fs.statSync(REGISTRY_PATH).mtimeMs;
+  } catch {
+    return emptyRegistry(); // no registry file yet
+  }
+  if (_registryCache && _registryCache.mtimeMs === mtimeMs) {
+    return structuredClone(_registryCache.reg);
+  }
   try {
     const raw = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
-    if (raw.version === 1 && raw.projects) return raw as Registry;
+    if (raw.version === 1 && raw.projects) {
+      _registryCache = { mtimeMs, reg: raw as Registry };
+      return structuredClone(raw as Registry);
+    }
     return emptyRegistry();
   } catch {
     return emptyRegistry();
@@ -49,6 +74,7 @@ function loadRegistry(): Registry {
 function saveRegistry(reg: Registry): void {
   ensureGlobalDirs();
   atomicWriteJson(REGISTRY_PATH, reg);
+  _registryCache = null; // force reload on next read (new mtime + fresh object)
 }
 
 export function registerProject(

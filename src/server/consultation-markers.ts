@@ -23,15 +23,37 @@ function markerDir(projectRoot: string): string {
   return path.join(os.tmpdir(), `trace-mcp-consulted-${projectHash(path.resolve(projectRoot))}`);
 }
 
+// Per-process dedup: markers are existence-only (empty files) and the guard
+// hook just checks presence, so re-marking a file already marked this process
+// is a pure no-op syscall. On a busy session this fires thousands of times
+// (get_symbol/get_outline/...), so skip the mkdir+write when nothing changes.
+const _ensuredDirs = new Set<string>();
+const _writtenMarkers = new Set<string>();
+
 /** Write a consultation marker for a file. Non-blocking, best-effort. */
 function markConsulted(projectRoot: string, relPath: string): void {
   try {
     const dir = markerDir(projectRoot);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, fileHash(relPath)), '', { flag: 'w' });
+    const markerPath = path.join(dir, fileHash(relPath));
+    if (_writtenMarkers.has(markerPath)) return; // already marked this process
+    if (!_ensuredDirs.has(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      _ensuredDirs.add(dir);
+    }
+    fs.writeFileSync(markerPath, '', { flag: 'w' });
+    // ponytail: bound the dedup set — clearing only costs one repeat write.
+    if (_writtenMarkers.size >= 50_000) _writtenMarkers.clear();
+    _writtenMarkers.add(markerPath);
   } catch {
     /* best-effort — never block tool execution */
   }
+}
+
+/** Test-only: clear the per-process dedup caches so tests that wipe the marker
+ *  directory between cases re-create it. No production caller. */
+export function __resetConsultationMarkersForTests(): void {
+  _ensuredDirs.clear();
+  _writtenMarkers.clear();
 }
 
 /** Extract file paths from tool params that indicate file consultation. */
