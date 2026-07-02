@@ -819,9 +819,9 @@ function analyzeFile(content: string, filePath: string, language: string): Taint
       // BUT only when the numeric/boolean narrowing still holds at the sink.
       //
       // A variable can be numeric at one point and then reassigned to an
-      // attacker-controlled string before the sink (e.g.
-      //   let x = Number(a); ...; x = req.query.evil; db.query(`... ${x}`)).
-      // If a taint-carrying assignment to the same sink variable happens AFTER
+      // attacker-controlled string before the sink (e.g. narrowed to a number,
+      // then overwritten with untrusted input right before it flows into a
+      // query). If a taint-carrying assignment to the same sink variable happens AFTER
       // the type evidence and BEFORE the sink, the numeric/boolean type is
       // stale and pruning it would hide a real vulnerability. When in doubt we
       // under-prune (report the flow) rather than risk a false negative.
