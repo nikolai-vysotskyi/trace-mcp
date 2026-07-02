@@ -109,6 +109,80 @@ function isCommandAvailable(command: string): boolean {
 }
 
 /**
+ * Build specs from the user's explicit `lsp.servers` config entries.
+ * Mutates `seen` so the caller's auto-detect pass won't re-add a language
+ * the user already pinned explicitly.
+ */
+function resolveExplicitServers(config: TraceMcpConfig, seen: Set<string>): LspServerSpec[] {
+  const specs: LspServerSpec[] = [];
+  if (!config.lsp?.servers) return specs;
+
+  for (const [language, serverConfig] of Object.entries(config.lsp.servers)) {
+    if (seen.has(language)) continue;
+    seen.add(language);
+
+    if (!isCommandAvailable(serverConfig.command)) {
+      logger.info(
+        { language, command: serverConfig.command },
+        'LSP server command not found, skipping',
+      );
+      continue;
+    }
+
+    specs.push({
+      language,
+      command: serverConfig.command,
+      args: serverConfig.args ?? [],
+      initializationOptions: serverConfig.initializationOptions as
+        | Record<string, unknown>
+        | undefined,
+      timeoutMs: serverConfig.timeout_ms ?? 30_000,
+    });
+  }
+
+  return specs;
+}
+
+/**
+ * Build specs for auto-detected servers (known language servers whose
+ * project markers are present and whose command resolves on PATH).
+ * Skips any language already present in `seen` (explicit config wins).
+ */
+function resolveAutoDetectedServers(
+  config: TraceMcpConfig,
+  rootPath: string,
+  indexedLanguages: Set<string>,
+  seen: Set<string>,
+): LspServerSpec[] {
+  const specs: LspServerSpec[] = [];
+  if (config.lsp?.auto_detect === false) return specs;
+
+  for (const known of KNOWN_SERVERS) {
+    if (seen.has(known.language)) continue;
+    if (!indexedLanguages.has(known.language)) continue;
+    if (!known.detect(rootPath)) continue;
+    if (!isCommandAvailable(known.command)) {
+      logger.debug(
+        { language: known.language, command: known.command },
+        'LSP server not installed',
+      );
+      continue;
+    }
+
+    seen.add(known.language);
+    specs.push({
+      language: known.language,
+      command: known.command,
+      args: known.args,
+      initializationOptions: known.initializationOptions,
+      timeoutMs: config.lsp?.servers?.[known.language]?.timeout_ms ?? 30_000,
+    });
+  }
+
+  return specs;
+}
+
+/**
  * Resolve which LSP servers to start based on config + auto-detection.
  * Returns specs for servers that are both relevant and available.
  */
@@ -117,59 +191,8 @@ export function resolveServers(
   rootPath: string,
   indexedLanguages: Set<string>,
 ): LspServerSpec[] {
-  const specs: LspServerSpec[] = [];
   const seen = new Set<string>();
-
-  // 1. Explicit server configs from user
-  if (config.lsp?.servers) {
-    for (const [language, serverConfig] of Object.entries(config.lsp.servers)) {
-      if (seen.has(language)) continue;
-      seen.add(language);
-
-      if (!isCommandAvailable(serverConfig.command)) {
-        logger.info(
-          { language, command: serverConfig.command },
-          'LSP server command not found, skipping',
-        );
-        continue;
-      }
-
-      specs.push({
-        language,
-        command: serverConfig.command,
-        args: serverConfig.args ?? [],
-        initializationOptions: serverConfig.initializationOptions as
-          | Record<string, unknown>
-          | undefined,
-        timeoutMs: serverConfig.timeout_ms ?? 30_000,
-      });
-    }
-  }
-
-  // 2. Auto-detect additional servers
-  if (config.lsp?.auto_detect !== false) {
-    for (const known of KNOWN_SERVERS) {
-      if (seen.has(known.language)) continue;
-      if (!indexedLanguages.has(known.language)) continue;
-      if (!known.detect(rootPath)) continue;
-      if (!isCommandAvailable(known.command)) {
-        logger.debug(
-          { language: known.language, command: known.command },
-          'LSP server not installed',
-        );
-        continue;
-      }
-
-      seen.add(known.language);
-      specs.push({
-        language: known.language,
-        command: known.command,
-        args: known.args,
-        initializationOptions: known.initializationOptions,
-        timeoutMs: config.lsp?.servers?.[known.language]?.timeout_ms ?? 30_000,
-      });
-    }
-  }
-
-  return specs;
+  const explicit = resolveExplicitServers(config, seen);
+  const autoDetected = resolveAutoDetectedServers(config, rootPath, indexedLanguages, seen);
+  return [...explicit, ...autoDetected];
 }
