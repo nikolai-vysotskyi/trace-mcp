@@ -113,7 +113,7 @@
     "sqlite-vec": "^0.1.9"
   },
   "overrides": {
-    "protobufjs": ">=7.5.5",
+    "protobufjs": ">=8.6.0",
     "hono": ">=4.12.25",
     "@hono/node-server": ">=1.19.14",
     "js-yaml": "^4.2.0",
@@ -124,7 +124,7 @@
     "overrides": {
       "zod": "4.3.6",
       "qs@<6.15.2": ">=6.15.2",
-      "protobufjs@<7.5.8": ">=7.5.8",
+      "protobufjs@<8.6.0": ">=8.6.0",
       "hono": ">=4.12.25",
       "js-yaml": "^4.2.0",
       "undici": ">=7.28.0"
