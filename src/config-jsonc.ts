@@ -46,10 +46,22 @@ export function modifyGlobalConfigJsonc(jsonPath: (string | number)[], value: un
 // High-level: save / remove project config (comment-safe replacements)
 // ---------------------------------------------------------------------------
 
-/** Save per-project config section in the global config file (JSONC-safe). */
+/**
+ * Save per-project config section in the global config file (JSONC-safe).
+ *
+ * `modifyGlobalConfigJsonc` replaces the whole object at the path, so a bare
+ * re-register (init --force / add --force) would silently drop caller-omitted
+ * keys — e.g. a user-added `ignore` block — since callers here only ever pass
+ * `{root, include, exclude}`. Merge onto the existing section first so
+ * caller-supplied keys win but unrelated keys survive (#218).
+ */
 export function saveProjectConfigJsonc(projectRoot: string, config: Record<string, unknown>): void {
   ensureGlobalDirs();
-  modifyGlobalConfigJsonc(['projects', projectRoot], config);
+  const existing = parse(readGlobalConfigText()) as
+    | { projects?: Record<string, Record<string, unknown>> }
+    | undefined;
+  const existingSection = existing?.projects?.[projectRoot] ?? {};
+  modifyGlobalConfigJsonc(['projects', projectRoot], { ...existingSection, ...config });
 }
 
 /** Remove a per-project config section from the global config file (JSONC-safe). */
