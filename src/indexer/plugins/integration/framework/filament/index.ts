@@ -36,6 +36,48 @@ import type {
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
 
+// ── use-statement / FQN resolution ──────────────────────────────
+// The extraction regexes below capture *short* class references (e.g. `User`,
+// `UserResource`). To resolve them to indexed symbols in Pass 2 we need their
+// fully-qualified name, which we recover from the file's `use` imports and its
+// own `namespace` declaration.
+const USE_STMT_RE = /use\s+([\w\\]+?)(?:\s+as\s+(\w+))?\s*;/g;
+const NAMESPACE_RE = /namespace\s+([\w\\]+)\s*;/;
+
+/** Build alias → FQN map from a file's `use` statements. */
+function buildUseMap(source: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const re = new RegExp(USE_STMT_RE.source, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    const fqn = m[1].replace(/^\\/, '');
+    const alias = m[2] ?? fqn.split('\\').pop()!;
+    map.set(alias, fqn);
+  }
+  return map;
+}
+
+/**
+ * Resolve a class reference to a fully-qualified name. Already-qualified
+ * references (containing `\`) are returned as-is (leading slash trimmed);
+ * short references are looked up in the `use` map, falling back to the
+ * file's own namespace, then the bare name.
+ */
+function resolveFqn(ref: string, useMap: Map<string, string>, namespace: string): string {
+  const clean = ref.replace(/^\\/, '');
+  if (clean.includes('\\')) {
+    // A partially-qualified ref like `Pages\ListUsers` may still be relative to
+    // an alias (`use App\...\UserResource as Pages`) or to the file namespace.
+    const head = clean.split('\\')[0];
+    const aliased = useMap.get(head);
+    if (aliased) return `${aliased}\\${clean.slice(head.length + 1)}`;
+    return namespace ? `${namespace}\\${clean}` : clean;
+  }
+  const mapped = useMap.get(clean);
+  if (mapped) return mapped;
+  return namespace ? `${namespace}\\${clean}` : clean;
+}
+
 // ── regex patterns ──────────────────────────────────────────────
 
 // Panel provider
@@ -213,11 +255,6 @@ function extractClassRefs(block: string): string[] {
   return refs;
 }
 
-function shortClass(fqcn: string): string {
-  const parts = fqcn.split('\\');
-  return parts[parts.length - 1];
-}
-
 function extractActionNames(block: string): string[] {
   const names: string[] = [];
   for (const m of block.matchAll(MAKE_CALL_RE)) {
@@ -388,7 +425,7 @@ export class FilamentPlugin implements FrameworkPlugin {
   }
 
   extractNodes(
-    filePath: string,
+    _filePath: string,
     content: Buffer,
     language: string,
   ): TraceMcpResult<FileParseResult> {
@@ -401,7 +438,12 @@ export class FilamentPlugin implements FrameworkPlugin {
       return ok({ status: 'ok', symbols: [] });
     }
 
-    const result: FileParseResult = { status: 'ok', symbols: [], edges: [] };
+    // Pass 1 only records the framework role + metadata. Edge emission moved to
+    // resolveEdges (Pass 2): edges must reference indexed symbol nodes, which
+    // are not yet available here. Emitting {source,target} string edges in Pass 1
+    // produced edges the resolver could not bind (no sourceSymbolId /
+    // sourceNodeType), so the whole Filament graph was silently dropped.
+    const result: FileParseResult = { status: 'ok', symbols: [] };
 
     // ── Panel Provider ──────────────────────────────────────────
     if (source.includes('extends PanelProvider')) {
@@ -421,103 +463,16 @@ export class FilamentPlugin implements FrameworkPlugin {
         authFeatures: authFeatures.length > 0 ? authFeatures : undefined,
       };
 
-      // Resources
-      for (const m of source.matchAll(PANEL_RESOURCES_RE)) {
-        for (const cls of extractClassRefs(m[1])) {
-          result.edges!.push({
-            source: filePath,
-            target: shortClass(cls),
-            edgeType: 'filament_panel_resource',
-            metadata: { class: cls },
-          });
-        }
-      }
-
-      // Pages
-      for (const m of source.matchAll(PANEL_PAGES_RE)) {
-        for (const cls of extractClassRefs(m[1])) {
-          result.edges!.push({
-            source: filePath,
-            target: shortClass(cls),
-            edgeType: 'filament_panel_page',
-            metadata: { class: cls },
-          });
-        }
-      }
-
-      // Widgets
-      for (const m of source.matchAll(PANEL_WIDGETS_RE)) {
-        for (const cls of extractClassRefs(m[1])) {
-          result.edges!.push({
-            source: filePath,
-            target: shortClass(cls),
-            edgeType: 'filament_panel_widget',
-            metadata: { class: cls },
-          });
-        }
-      }
-
-      // Plugins
-      for (const m of source.matchAll(PANEL_PLUGINS_RE)) {
-        // plugin instances: new SomePlugin(), SomePlugin::make()
-        for (const cls of m[1].matchAll(/new\s+(\w+)\s*\(|(\w+)::make\s*\(/g)) {
-          const name = cls[1] ?? cls[2];
-          if (name) {
-            result.edges!.push({
-              source: filePath,
-              target: name,
-              edgeType: 'filament_panel_plugin',
-              metadata: { plugin: name },
-            });
-          }
-        }
-      }
-
-      // Tenancy
+      // Tenancy (metadata only; the class→class edge is emitted in resolveEdges)
       const tenantMatch = PANEL_TENANT_RE.exec(source);
       if (tenantMatch) {
-        result.edges!.push({
-          source: filePath,
-          target: shortClass(tenantMatch[1]),
-          edgeType: 'filament_panel_tenant',
-          metadata: { model: tenantMatch[1] },
-        });
         result.metadata.tenantModel = tenantMatch[1];
-      }
-
-      // Discovery patterns
-      for (const m of source.matchAll(PANEL_DISCOVER_RE)) {
-        const kind = m[1].toLowerCase(); // Resources, Pages, Widgets, Clusters
-        result.edges!.push({
-          source: filePath,
-          target: m[2],
-          edgeType:
-            kind === 'clusters'
-              ? 'filament_panel_cluster'
-              : kind === 'resources'
-                ? 'filament_panel_resource'
-                : kind === 'pages'
-                  ? 'filament_panel_page'
-                  : 'filament_panel_widget',
-          metadata: { discovery: true, directory: m[2], namespace: m[3] },
-        });
       }
     }
 
     // ── Resource ────────────────────────────────────────────────
     if (source.includes('extends Resource')) {
       result.frameworkRole = 'filament_resource';
-
-      // Model binding
-      const modelMatch = RESOURCE_MODEL_RE.exec(source);
-      if (modelMatch) {
-        result.edges!.push({
-          source: filePath,
-          target: shortClass(modelMatch[1]),
-          edgeType: 'filament_resource_model',
-          metadata: { model: modelMatch[1] },
-        });
-      }
 
       // Global search
       const titleAttr = RECORD_TITLE_ATTR_RE.exec(source);
@@ -529,42 +484,8 @@ export class FilamentPlugin implements FrameworkPlugin {
         };
       }
 
-      // Cluster membership
-      const clusterMatch = RESOURCE_CLUSTER_RE.exec(source);
-      if (clusterMatch) {
-        result.edges!.push({
-          source: filePath,
-          target: shortClass(clusterMatch[1]),
-          edgeType: 'filament_cluster_member',
-          metadata: { cluster: clusterMatch[1] },
-        });
-      }
-
-      // Resource pages
-      for (const m of source.matchAll(RESOURCE_PAGE_RE)) {
-        result.edges!.push({
-          source: filePath,
-          target: shortClass(m[2]),
-          edgeType: 'filament_resource_page',
-          metadata: { slug: m[1], route: m[3], page: m[2] },
-        });
-      }
-
-      // Relation managers
-      for (const m of source.matchAll(RELATION_CLASS_RE)) {
-        result.edges!.push({
-          source: filePath,
-          target: shortClass(m[1]),
-          edgeType: 'filament_resource_relation',
-          metadata: { class: m[1] },
-        });
-      }
-
       // Navigation metadata
       this.extractNavigationMeta(source, result);
-
-      // Shared extraction for forms, tables, infolists, actions
-      this.extractComponentEdges(source, filePath, result);
     }
 
     // ── Custom Page (requires Filament\Pages\Page import) ────────
@@ -577,23 +498,11 @@ export class FilamentPlugin implements FrameworkPlugin {
 
       // Navigation metadata
       this.extractNavigationMeta(source, result);
-
-      // Cluster membership
-      const clusterMatch = RESOURCE_CLUSTER_RE.exec(source);
-      if (clusterMatch) {
-        result.edges!.push({
-          source: filePath,
-          target: shortClass(clusterMatch[1]),
-          edgeType: 'filament_cluster_member',
-          metadata: { cluster: clusterMatch[1] },
-        });
-      }
     }
 
     // ── Resource sub-pages (ListRecords, CreateRecord, EditRecord, ViewRecord, ManageRecords) ──
     if (/extends\s+(ListRecords|CreateRecord|EditRecord|ViewRecord|ManageRecords)/.test(source)) {
       result.frameworkRole = result.frameworkRole ?? 'filament_resource_page';
-      this.extractComponentEdges(source, filePath, result);
     }
 
     // ── Cluster ─────────────────────────────────────────────────
@@ -610,8 +519,6 @@ export class FilamentPlugin implements FrameworkPlugin {
       if (relMatch) {
         result.metadata = { ...result.metadata, relationship: relMatch[1] };
       }
-
-      this.extractComponentEdges(source, filePath, result);
     }
 
     // ── Widget ──────────────────────────────────────────────────
@@ -633,23 +540,11 @@ export class FilamentPlugin implements FrameworkPlugin {
       if (polling) {
         result.metadata = { ...result.metadata, pollingInterval: polling[1] };
       }
-
-      this.extractComponentEdges(source, filePath, result);
     }
 
     // ── Importer ────────────────────────────────────────────────
     if (source.includes('extends Importer')) {
       result.frameworkRole = 'filament_importer';
-
-      const modelMatch = IMPORTER_MODEL_RE.exec(source);
-      if (modelMatch) {
-        result.edges!.push({
-          source: filePath,
-          target: shortClass(modelMatch[1]),
-          edgeType: 'filament_importer',
-          metadata: { model: modelMatch[1] },
-        });
-      }
 
       const columns: string[] = [];
       for (const m of source.matchAll(IMPORT_COLUMN_RE)) columns.push(m[1]);
@@ -662,36 +557,11 @@ export class FilamentPlugin implements FrameworkPlugin {
     if (source.includes('extends Exporter')) {
       result.frameworkRole = 'filament_exporter';
 
-      const modelMatch = IMPORTER_MODEL_RE.exec(source);
-      if (modelMatch) {
-        result.edges!.push({
-          source: filePath,
-          target: shortClass(modelMatch[1]),
-          edgeType: 'filament_exporter',
-          metadata: { model: modelMatch[1] },
-        });
-      }
-
       const columns: string[] = [];
       for (const m of source.matchAll(EXPORT_COLUMN_RE)) columns.push(m[1]);
       if (columns.length > 0) {
         result.metadata = { ...result.metadata, exportColumns: columns };
       }
-    }
-
-    // ── Notifications ───────────────────────────────────────────
-    if (NOTIFICATION_RE.test(source)) {
-      const notifType = NOTIFICATION_DB_RE.test(source)
-        ? 'database'
-        : NOTIFICATION_BROADCAST_RE.test(source)
-          ? 'broadcast'
-          : 'flash';
-      result.edges!.push({
-        source: filePath,
-        target: 'Notification',
-        edgeType: 'filament_notification',
-        metadata: { type: notifType },
-      });
     }
 
     // ── Livewire interop ────────────────────────────────────────
@@ -701,105 +571,9 @@ export class FilamentPlugin implements FrameworkPlugin {
     if (traits.length > 0) {
       result.frameworkRole = result.frameworkRole ?? 'filament_livewire';
       result.metadata = { ...result.metadata, filamentTraits: [...new Set(traits)] };
-      // If it has HasTable/HasForms, extract component edges
-      this.extractComponentEdges(source, filePath, result);
     }
 
     return ok(result);
-  }
-
-  /** Extract form fields, layout, table columns/filters/actions, infolist entries, and actions from source */
-  private extractComponentEdges(source: string, filePath: string, result: FileParseResult): void {
-    for (const m of source.matchAll(MAKE_CALL_RE)) {
-      const component = m[1];
-      const name = m[2];
-
-      if (FORM_FIELD_COMPONENTS.has(component)) {
-        result.edges!.push({
-          source: filePath,
-          target: name,
-          edgeType: 'filament_form_field',
-          metadata: { component, field: name },
-        });
-      } else if (FORM_LAYOUT_COMPONENTS.has(component)) {
-        result.edges!.push({
-          source: filePath,
-          target: name,
-          edgeType: 'filament_form_layout',
-          metadata: { component, label: name },
-        });
-      } else if (TABLE_COLUMN_COMPONENTS.has(component)) {
-        result.edges!.push({
-          source: filePath,
-          target: name,
-          edgeType: 'filament_table_column',
-          metadata: { component, column: name },
-        });
-      } else if (TABLE_FILTER_COMPONENTS.has(component)) {
-        result.edges!.push({
-          source: filePath,
-          target: name,
-          edgeType: 'filament_table_filter',
-          metadata: { component, filter: name },
-        });
-      } else if (ACTION_COMPONENTS.has(component)) {
-        result.edges!.push({
-          source: filePath,
-          target: name || component,
-          edgeType: 'filament_resource_action',
-          metadata: { component, action: name || component },
-        });
-      } else if (INFOLIST_ENTRY_COMPONENTS.has(component)) {
-        result.edges!.push({
-          source: filePath,
-          target: name,
-          edgeType: 'filament_infolist_entry',
-          metadata: { component, entry: name },
-        });
-      }
-    }
-
-    // Table-level action blocks (->actions([...]), ->headerActions([...]), ->bulkActions([...]))
-    for (const m of source.matchAll(TABLE_ACTIONS_RE)) {
-      for (const name of extractActionNames(m[1])) {
-        result.edges!.push({
-          source: filePath,
-          target: name,
-          edgeType: 'filament_table_action',
-          metadata: { scope: 'row', action: name },
-        });
-      }
-    }
-    for (const m of source.matchAll(TABLE_HEADER_ACTIONS_RE)) {
-      for (const name of extractActionNames(m[1])) {
-        result.edges!.push({
-          source: filePath,
-          target: name,
-          edgeType: 'filament_table_action',
-          metadata: { scope: 'header', action: name },
-        });
-      }
-    }
-    for (const m of source.matchAll(TABLE_BULK_ACTIONS_RE)) {
-      for (const name of extractActionNames(m[1])) {
-        result.edges!.push({
-          source: filePath,
-          target: name,
-          edgeType: 'filament_table_action',
-          metadata: { scope: 'bulk', action: name },
-        });
-      }
-    }
-
-    // Relationship calls on form fields
-    for (const m of source.matchAll(RELATIONSHIP_CALL_RE)) {
-      result.edges!.push({
-        source: filePath,
-        target: m[1],
-        edgeType: 'filament_relationship',
-        metadata: { relationship: m[1], display: m[2] },
-      });
-    }
   }
 
   /** Extract navigation metadata from a resource, page, or cluster */
@@ -820,7 +594,225 @@ export class FilamentPlugin implements FrameworkPlugin {
     }
   }
 
-  resolveEdges(_ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
-    return ok([]);
+  /**
+   * Pass 2: emit resolvable edges.
+   *
+   * Every edge carries a real source (`sourceNodeType:'symbol' + sourceRefId`)
+   * — the enclosing panel/resource/… class symbol — so the edge-resolver can
+   * bind it to a graph node. Targets split by semantics:
+   *  - class references (panel→resource/page/widget/tenant, resource→model,
+   *    resource→relation-manager, resource→page, cluster membership,
+   *    importer/exporter→model) resolve to the referenced class symbol via
+   *    `getSymbolByFqn` and emit `targetRefId`.
+   *  - field/column/action/entry NAMES resolve to a virtual
+   *    `filament-<kind>::<name>` target symbol (following the `s3-bucket::`
+   *    precedent), letting the edge land without a matching code symbol.
+   */
+  resolveEdges(ctx: ResolveContext): TraceMcpResult<RawEdge[]> {
+    const edges: RawEdge[] = [];
+
+    for (const file of ctx.getAllFiles()) {
+      if (file.language !== 'php') continue;
+      const source = ctx.readFile(file.path);
+      if (!source || !isFilamentFile(source)) continue;
+
+      const useMap = buildUseMap(source);
+      const namespace = NAMESPACE_RE.exec(source)?.[1] ?? '';
+
+      // Enclosing class symbol = source of every edge in this file.
+      const symbols = ctx.getSymbolsByFile(file.id);
+      const enclosing = symbols.find((s) => s.kind === 'class');
+      if (!enclosing) continue;
+      const sourceRefId = enclosing.id;
+
+      // Resolve a class ref to a symbol node, else null.
+      const classTarget = (ref: string): number | null => {
+        const fqn = resolveFqn(ref, useMap, namespace);
+        const sym = ctx.getSymbolByFqn(fqn);
+        return sym ? sym.id : null;
+      };
+
+      const pushClassEdge = (
+        ref: string,
+        edgeType: string,
+        metadata: Record<string, unknown>,
+      ): void => {
+        const targetRefId = classTarget(ref);
+        if (targetRefId == null) return;
+        edges.push({
+          sourceNodeType: 'symbol',
+          sourceRefId,
+          targetNodeType: 'symbol',
+          targetRefId,
+          edgeType,
+          resolution: 'ast_resolved',
+          metadata,
+        });
+      };
+
+      const pushNameEdge = (
+        kind: string,
+        name: string,
+        edgeType: string,
+        metadata: Record<string, unknown>,
+      ): void => {
+        edges.push({
+          sourceNodeType: 'symbol',
+          sourceRefId,
+          targetSymbolId: `filament-${kind}::${name}`,
+          edgeType,
+          resolution: 'text_matched',
+          metadata,
+        });
+      };
+
+      // ── Panel Provider ──────────────────────────────────────
+      if (source.includes('extends PanelProvider')) {
+        for (const m of source.matchAll(PANEL_RESOURCES_RE))
+          for (const cls of extractClassRefs(m[1]))
+            pushClassEdge(cls, 'filament_panel_resource', { class: cls });
+        for (const m of source.matchAll(PANEL_PAGES_RE))
+          for (const cls of extractClassRefs(m[1]))
+            pushClassEdge(cls, 'filament_panel_page', { class: cls });
+        for (const m of source.matchAll(PANEL_WIDGETS_RE))
+          for (const cls of extractClassRefs(m[1]))
+            pushClassEdge(cls, 'filament_panel_widget', { class: cls });
+
+        for (const m of source.matchAll(PANEL_PLUGINS_RE))
+          for (const cls of m[1].matchAll(/new\s+(\w+)\s*\(|(\w+)::make\s*\(/g)) {
+            const name = cls[1] ?? cls[2];
+            if (name) pushClassEdge(name, 'filament_panel_plugin', { plugin: name });
+          }
+
+        const tenantMatch = PANEL_TENANT_RE.exec(source);
+        if (tenantMatch)
+          pushClassEdge(tenantMatch[1], 'filament_panel_tenant', { model: tenantMatch[1] });
+      }
+
+      // ── Resource ────────────────────────────────────────────
+      if (source.includes('extends Resource')) {
+        const modelMatch = RESOURCE_MODEL_RE.exec(source);
+        if (modelMatch)
+          pushClassEdge(modelMatch[1], 'filament_resource_model', { model: modelMatch[1] });
+
+        const clusterMatch = RESOURCE_CLUSTER_RE.exec(source);
+        if (clusterMatch)
+          pushClassEdge(clusterMatch[1], 'filament_cluster_member', { cluster: clusterMatch[1] });
+
+        for (const m of source.matchAll(RESOURCE_PAGE_RE))
+          pushClassEdge(m[2], 'filament_resource_page', { slug: m[1], route: m[3], page: m[2] });
+
+        for (const m of source.matchAll(RELATION_CLASS_RE))
+          pushClassEdge(m[1], 'filament_resource_relation', { class: m[1] });
+
+        this.resolveComponentEdges(source, pushNameEdge);
+      }
+
+      // ── Custom Page ─────────────────────────────────────────
+      if (
+        source.includes('extends Page') &&
+        source.includes('Filament\\Pages\\Page') &&
+        !source.includes('extends PanelProvider')
+      ) {
+        const clusterMatch = RESOURCE_CLUSTER_RE.exec(source);
+        if (clusterMatch)
+          pushClassEdge(clusterMatch[1], 'filament_cluster_member', { cluster: clusterMatch[1] });
+      }
+
+      // ── Resource sub-pages / Relation Manager / Widget / Livewire (component edges) ──
+      if (
+        /extends\s+(ListRecords|CreateRecord|EditRecord|ViewRecord|ManageRecords)/.test(source) ||
+        source.includes('extends RelationManager') ||
+        /extends\s+(StatsOverviewWidget|ChartWidget|Widget|TableWidget)/.test(source)
+      ) {
+        this.resolveComponentEdges(source, pushNameEdge);
+      }
+
+      // ── Importer / Exporter model binding ───────────────────
+      if (source.includes('extends Importer')) {
+        const modelMatch = IMPORTER_MODEL_RE.exec(source);
+        if (modelMatch) pushClassEdge(modelMatch[1], 'filament_importer', { model: modelMatch[1] });
+      }
+      if (source.includes('extends Exporter')) {
+        const modelMatch = IMPORTER_MODEL_RE.exec(source);
+        if (modelMatch) pushClassEdge(modelMatch[1], 'filament_exporter', { model: modelMatch[1] });
+      }
+
+      // ── Notifications ───────────────────────────────────────
+      if (NOTIFICATION_RE.test(source)) {
+        const notifType = NOTIFICATION_DB_RE.test(source)
+          ? 'database'
+          : NOTIFICATION_BROADCAST_RE.test(source)
+            ? 'broadcast'
+            : 'flash';
+        pushNameEdge('notification', notifType, 'filament_notification', { type: notifType });
+      }
+
+      // ── Livewire interop → component edges ──────────────────
+      // LIVEWIRE_*_RE are global regexes; build stateless copies for .test() to
+      // avoid lastIndex leaking across files.
+      const hasTraits =
+        new RegExp(LIVEWIRE_TRAITS_RE.source).test(source) ||
+        new RegExp(LIVEWIRE_CONTRACTS_RE.source).test(source);
+      if (hasTraits && !source.includes('extends Resource')) {
+        this.resolveComponentEdges(source, pushNameEdge);
+      }
+    }
+
+    return ok(edges);
+  }
+
+  /**
+   * Emit form-field / layout / column / filter / action / infolist / relationship
+   * edges as virtual-target name edges via `pushName`.
+   */
+  private resolveComponentEdges(
+    source: string,
+    pushName: (
+      kind: string,
+      name: string,
+      edgeType: string,
+      metadata: Record<string, unknown>,
+    ) => void,
+  ): void {
+    for (const m of source.matchAll(MAKE_CALL_RE)) {
+      const component = m[1];
+      const name = m[2];
+
+      if (FORM_FIELD_COMPONENTS.has(component)) {
+        pushName('field', name, 'filament_form_field', { component, field: name });
+      } else if (FORM_LAYOUT_COMPONENTS.has(component)) {
+        pushName('layout', name, 'filament_form_layout', { component, label: name });
+      } else if (TABLE_COLUMN_COMPONENTS.has(component)) {
+        pushName('column', name, 'filament_table_column', { component, column: name });
+      } else if (TABLE_FILTER_COMPONENTS.has(component)) {
+        pushName('filter', name, 'filament_table_filter', { component, filter: name });
+      } else if (ACTION_COMPONENTS.has(component)) {
+        pushName('action', name || component, 'filament_resource_action', {
+          component,
+          action: name || component,
+        });
+      } else if (INFOLIST_ENTRY_COMPONENTS.has(component)) {
+        pushName('entry', name, 'filament_infolist_entry', { component, entry: name });
+      }
+    }
+
+    // Table-level action blocks (->actions([...]), ->headerActions([...]), ->bulkActions([...]))
+    for (const m of source.matchAll(TABLE_ACTIONS_RE))
+      for (const name of extractActionNames(m[1]))
+        pushName('action', name, 'filament_table_action', { scope: 'row', action: name });
+    for (const m of source.matchAll(TABLE_HEADER_ACTIONS_RE))
+      for (const name of extractActionNames(m[1]))
+        pushName('action', name, 'filament_table_action', { scope: 'header', action: name });
+    for (const m of source.matchAll(TABLE_BULK_ACTIONS_RE))
+      for (const name of extractActionNames(m[1]))
+        pushName('action', name, 'filament_table_action', { scope: 'bulk', action: name });
+
+    // Relationship calls on form fields
+    for (const m of source.matchAll(RELATIONSHIP_CALL_RE))
+      pushName('relationship', m[1], 'filament_relationship', {
+        relationship: m[1],
+        display: m[2],
+      });
   }
 }
