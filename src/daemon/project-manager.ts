@@ -81,15 +81,22 @@ export interface ManagedProject {
 async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): Promise<void> {
   if (config.topology?.enabled === false) return;
   if (config.topology?.auto_discover === false) return;
+  // WHY finally-close: this runs once per addProject() (every register + every
+  // daemon-restart reload of every project). Without close() each call leaked a
+  // better-sqlite3 handle + fds on the shared topology.db, accumulating over the
+  // daemon's lifetime. Mirror of runSubprojectAutoSyncSafe / dropTopologyRows.
+  let topoStore: TopologyStore | undefined;
   try {
     ensureGlobalDirs();
-    const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+    topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
     const manager = new SubprojectManager(topoStore);
     await manager.autoDiscoverSubprojects(projectRoot, {
       contractPaths: config.topology?.contract_globs,
     });
   } catch (err) {
     logger.warn({ error: err, projectRoot }, 'Subproject auto-sync failed (non-fatal)');
+  } finally {
+    topoStore?.close();
   }
 }
 
