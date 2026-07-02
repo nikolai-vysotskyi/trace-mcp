@@ -38,11 +38,8 @@
  * Off by default. Opt-in via `config.memory.background.enabled = true`.
  */
 
-import type { AIProvider } from '../../ai/interfaces.js';
-import { createAIProvider } from '../../ai/index.js';
 import type { TraceMcpConfig } from '../../config.js';
 import { logger } from '../../logger.js';
-import { DECISIONS_DB_PATH, ensureGlobalDirs } from '../../global.js';
 import { DecisionStore } from '../decision-store.js';
 import {
   runClusterStage,
@@ -55,6 +52,7 @@ import {
   type TuneStageResult,
 } from './stages.js';
 import { SerialQueue } from './serial-queue.js';
+import { MemorySchedulerResourceOps } from './memory-scheduler-resource-ops.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -164,22 +162,19 @@ export class MemoryScheduler {
   private readonly bg: MemoryBackgroundConfig;
   private readonly queue = new SerialQueue();
   private readonly states = new Map<string, SchedulerProjectState>();
-  /** Cached AI providers per project. Built lazily on first stage need. */
-  private readonly aiProviders = new Map<string, AIProvider | null>();
+  private readonly resources: MemorySchedulerResourceOps;
   private readonly now: () => number;
   private timer: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
-  private ownsDecisionStore = false;
-  private decisionStore: DecisionStore | null = null;
 
   constructor(opts: MemorySchedulerOptions) {
     this.opts = opts;
     this.bg = resolveBackgroundConfig(opts.config);
     this.now = opts.now ?? (() => Date.now());
-    if (opts.decisionStore) {
-      this.decisionStore = opts.decisionStore;
-      this.ownsDecisionStore = false;
-    }
+    this.resources = new MemorySchedulerResourceOps({
+      config: opts.config,
+      decisionStore: opts.decisionStore,
+    });
   }
 
   /** True when `config.memory.background.enabled === true`. */
@@ -201,7 +196,7 @@ export class MemoryScheduler {
     try {
       for (const project of this.opts.projectManager.listProjects()) {
         if (!this.states.has(project.root)) {
-          this.states.set(project.root, this.hydrateOrInitState(project.root));
+          this.states.set(project.root, this.resources.hydrateOrInitState(project.root));
         }
       }
     } catch (err) {
@@ -238,14 +233,7 @@ export class MemoryScheduler {
     } catch {
       /* SerialQueue.drain swallows errors — defensive only */
     }
-    if (this.ownsDecisionStore && this.decisionStore) {
-      try {
-        this.decisionStore.close();
-      } catch {
-        /* defensive */
-      }
-      this.decisionStore = null;
-    }
+    this.resources.closeOwnedStore();
   }
 
   /**
@@ -257,12 +245,12 @@ export class MemoryScheduler {
     if (!this.bg.enabled || this.stopped) return;
     const ts = this.now();
     if (projectRoot) {
-      const st = this.states.get(projectRoot) ?? this.hydrateOrInitState(projectRoot);
+      const st = this.states.get(projectRoot) ?? this.resources.hydrateOrInitState(projectRoot);
       st.lastActivityAt = ts;
       this.states.set(projectRoot, st);
     } else {
       for (const project of this.opts.projectManager.listProjects()) {
-        const st = this.states.get(project.root) ?? this.hydrateOrInitState(project.root);
+        const st = this.states.get(project.root) ?? this.resources.hydrateOrInitState(project.root);
         st.lastActivityAt = ts;
         this.states.set(project.root, st);
       }
@@ -317,7 +305,7 @@ export class MemoryScheduler {
 
   private computeDueStages(project: SchedulerProjectListing): StageName[] {
     const now = this.now();
-    const st = this.states.get(project.root) ?? this.hydrateOrInitState(project.root);
+    const st = this.states.get(project.root) ?? this.resources.hydrateOrInitState(project.root);
     this.states.set(project.root, st);
 
     // Honour back-off for the whole project.
@@ -360,7 +348,7 @@ export class MemoryScheduler {
     if (st.lastTuneAt && now - st.lastTuneAt < this.bg.tuneCooldownSec * 1000) {
       return false;
     }
-    const store = this.ensureDecisionStore();
+    const store = this.resources.ensureDecisionStore();
     if (!store) return false;
     let eventCount = 0;
     try {
@@ -391,9 +379,9 @@ export class MemoryScheduler {
   }
 
   private isClusterDue(project: SchedulerProjectListing, st: SchedulerProjectState): boolean {
-    const store = this.ensureDecisionStore();
+    const store = this.resources.ensureDecisionStore();
     if (!store) return false;
-    const aiProvider = this.ensureAiProvider(project);
+    const aiProvider = this.resources.ensureAiProvider(project);
     if (!aiProvider) return false;
     let totalActive = 0;
     try {
@@ -424,9 +412,9 @@ export class MemoryScheduler {
     const everyN = memoCfg?.regenerateEveryN ?? this.opts.config.memory?.memo?.regenerateEveryN;
     const threshold = typeof everyN === 'number' ? everyN : 50;
 
-    const store = this.ensureDecisionStore();
+    const store = this.resources.ensureDecisionStore();
     if (!store) return false;
-    const aiProvider = this.ensureAiProvider(project);
+    const aiProvider = this.resources.ensureAiProvider(project);
     if (!aiProvider) return false;
     let sinceLast = 0;
     try {
@@ -459,9 +447,9 @@ export class MemoryScheduler {
   }
 
   private async runStage(project: SchedulerProjectListing, stage: StageName): Promise<void> {
-    const store = this.ensureDecisionStore();
+    const store = this.resources.ensureDecisionStore();
     if (!store) return;
-    const aiProvider = this.ensureAiProvider(project);
+    const aiProvider = this.resources.ensureAiProvider(project);
     const projectConfig = project.config ?? this.opts.config;
     const inferenceModel = projectConfig.ai?.inference_model ?? 'default';
     const st = this.states.get(project.root)!;
@@ -503,7 +491,7 @@ export class MemoryScheduler {
         st.lastMineAt = this.now();
         onSuccess(result);
         if (!result.ok && !result.skipped) onFailure(result.error);
-        this.persistStateAsync(project.root, {
+        this.resources.persistStateAsync(project.root, {
           last_mine_at: st.lastMineAt,
           consecutive_failures: st.consecutiveFailures,
         });
@@ -535,7 +523,7 @@ export class MemoryScheduler {
         }
         onSuccess(result);
         if (!result.ok && !result.skipped) onFailure(result.error);
-        this.persistStateAsync(project.root, {
+        this.resources.persistStateAsync(project.root, {
           last_cluster_at: st.lastClusterAt,
           consecutive_failures: st.consecutiveFailures,
         });
@@ -554,7 +542,7 @@ export class MemoryScheduler {
         st.lastMemoAt = this.now();
         onSuccess(result);
         if (!result.ok && !result.skipped) onFailure(result.error);
-        this.persistStateAsync(project.root, {
+        this.resources.persistStateAsync(project.root, {
           last_memo_at: st.lastMemoAt,
           consecutive_failures: st.consecutiveFailures,
         });
@@ -593,7 +581,7 @@ export class MemoryScheduler {
         }
         onSuccess(result);
         if (!result.ok && !result.skipped) onFailure(result.error);
-        this.persistStateAsync(project.root, {
+        this.resources.persistStateAsync(project.root, {
           last_tune_at: st.lastTuneAt,
           last_tune_event_count: st.lastTuneEventCount ?? null,
           consecutive_failures: st.consecutiveFailures,
@@ -608,123 +596,13 @@ export class MemoryScheduler {
       // sudden OOM or programmer error must not kill the scheduler.
       const msg = (err as Error)?.message ?? String(err);
       onFailure(msg);
-      this.persistStateAsync(project.root, {
+      this.resources.persistStateAsync(project.root, {
         consecutive_failures: st.consecutiveFailures,
       });
       logger.warn(
         { projectRoot: project.root, stage, err: msg },
         'memory-scheduler: stage threw unexpectedly',
       );
-    }
-  }
-
-  // ────────────────────────────────────────────────────────────────────
-  // INTERNAL — RESOURCE RESOLUTION
-  // ────────────────────────────────────────────────────────────────────
-
-  private initState(): SchedulerProjectState {
-    return {
-      pendingStages: new Set<StageName>(),
-      consecutiveFailures: 0,
-    };
-  }
-
-  /**
-   * Build per-project state, hydrating timestamps from the durable
-   * `scheduler_state` table when possible. Falls back to a fresh
-   * `initState()` when no row exists OR the store can't be opened
-   * (e.g. read-only filesystem in tests).
-   *
-   * Hydration is best-effort — any failure logs and returns init state.
-   */
-  private hydrateOrInitState(projectRoot: string): SchedulerProjectState {
-    const fresh = this.initState();
-    const store = this.ensureDecisionStore();
-    if (!store) return fresh;
-    try {
-      const row = store.getSchedulerState(projectRoot);
-      if (!row) return fresh;
-      if (row.last_mine_at !== null) fresh.lastMineAt = row.last_mine_at;
-      if (row.last_cluster_at !== null) fresh.lastClusterAt = row.last_cluster_at;
-      if (row.last_memo_at !== null) fresh.lastMemoAt = row.last_memo_at;
-      if (row.last_tune_at !== null) fresh.lastTuneAt = row.last_tune_at;
-      if (row.last_tune_event_count !== null) {
-        fresh.lastTuneEventCount = row.last_tune_event_count;
-      }
-      fresh.consecutiveFailures = row.consecutive_failures;
-      return fresh;
-    } catch (err) {
-      logger.debug?.(
-        { projectRoot, err: (err as Error)?.message ?? String(err) },
-        'memory-scheduler: hydrateOrInitState fell back to init state',
-      );
-      return fresh;
-    }
-  }
-
-  /**
-   * Fire-and-forget persistence of per-project scheduler bookkeeping.
-   * MUST NEVER block or throw out of stage completion — a failed write
-   * here is a missed restart-resume, not a stage failure.
-   */
-  private persistStateAsync(
-    projectRoot: string,
-    patch: {
-      last_mine_at?: number | null;
-      last_cluster_at?: number | null;
-      last_memo_at?: number | null;
-      last_tune_at?: number | null;
-      last_tune_event_count?: number | null;
-      consecutive_failures?: number;
-    },
-  ): void {
-    const store = this.ensureDecisionStore();
-    if (!store) return;
-    try {
-      store.upsertSchedulerState({ project_root: projectRoot, ...patch });
-    } catch (err) {
-      logger.debug?.(
-        { projectRoot, err: (err as Error)?.message ?? String(err) },
-        'memory-scheduler: persistStateAsync failed — restart will not see this tick',
-      );
-    }
-  }
-
-  private ensureDecisionStore(): DecisionStore | null {
-    if (this.decisionStore) return this.decisionStore;
-    try {
-      ensureGlobalDirs();
-      this.decisionStore = new DecisionStore(DECISIONS_DB_PATH);
-      this.ownsDecisionStore = true;
-      return this.decisionStore;
-    } catch (err) {
-      logger.warn(
-        { err: (err as Error)?.message ?? String(err) },
-        'memory-scheduler: failed to open DecisionStore — disabling',
-      );
-      return null;
-    }
-  }
-
-  private ensureAiProvider(project: SchedulerProjectListing): AIProvider | null {
-    const key = project.root;
-    if (this.aiProviders.has(key)) return this.aiProviders.get(key) ?? null;
-    const cfg = project.config ?? this.opts.config;
-    if (!cfg.ai?.enabled) {
-      this.aiProviders.set(key, null);
-      return null;
-    }
-    try {
-      const provider = createAIProvider(cfg);
-      this.aiProviders.set(key, provider);
-      return provider;
-    } catch (err) {
-      logger.warn(
-        { projectRoot: project.root, err: (err as Error)?.message ?? String(err) },
-        'memory-scheduler: createAIProvider failed — disabling AI stages for project',
-      );
-      this.aiProviders.set(key, null);
-      return null;
     }
   }
 }
