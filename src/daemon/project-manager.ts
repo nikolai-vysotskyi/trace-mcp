@@ -417,8 +417,7 @@ export class ProjectManager {
             { projectRoot, error: String(err) },
             'Initial indexing hit FOREIGN KEY violation — likely stale data from older schema. Retrying with force=true.',
           );
-          try {
-            await this.indexAllLimit!(() => pipeline.indexAll(true));
+          const finishRecovery = async (via: string): Promise<void> => {
             managed.status = 'ready';
             if (needsForcedReindex) {
               try {
@@ -430,16 +429,56 @@ export class ProjectManager {
             runSummarization();
             runEmbeddings();
             await runSubprojectAutoSync(projectRoot, config);
-            logger.info({ projectRoot }, 'Project indexing complete (force-reindex recovery)');
+            logger.info({ projectRoot }, `Project indexing complete (${via})`);
+          };
+          try {
+            await this.indexAllLimit!(() => pipeline.indexAll(true));
+            await finishRecovery('force-reindex recovery');
             return;
           } catch (retryErr) {
-            managed.status = 'error';
-            managed.error = `Force-reindex after FK recovery still failed: ${String(retryErr)}`;
-            logger.error(
-              { error: serializeError(retryErr), projectRoot, originalError: String(err) },
-              'Force-reindex recovery also failed',
+            // The in-place force-reindex retry re-ran against the wedged rows
+            // with foreign_keys = ON (the DB was non-empty, so it never entered
+            // bulk-load mode) and hit the same violation. If this is still a FK
+            // error, escalate ONCE to a hard table reset: wipe the graph tables
+            // in place so the follow-up run starts from an empty index, enters
+            // bulk-load mode (foreign_keys = OFF) and rebuilds cleanly — the
+            // programmatic equivalent of deleting + rebuilding the index DB
+            // file, but without closing the shared handle. Any non-FK failure,
+            // or a failure that survives the hard reset, is terminal: we set an
+            // error status and stop. There is no third attempt, so recovery can
+            // never loop.
+            if (!isForeignKeyError(retryErr)) {
+              managed.status = 'error';
+              managed.error = `Force-reindex after FK recovery still failed: ${String(retryErr)}`;
+              logger.error(
+                { error: serializeError(retryErr), projectRoot, originalError: String(err) },
+                'Force-reindex recovery also failed',
+              );
+              return;
+            }
+            logger.warn(
+              { projectRoot, error: String(retryErr) },
+              'In-place force-reindex still hit FOREIGN KEY violation — hard-resetting index tables and rebuilding from scratch.',
             );
-            return;
+            try {
+              this.hardResetIndexTables(store);
+              await this.indexAllLimit!(() => pipeline.indexAll(true));
+              await finishRecovery('force-reindex recovery after hard reset');
+              return;
+            } catch (hardErr) {
+              managed.status = 'error';
+              managed.error = `Index rebuild after FK hard reset still failed: ${String(hardErr)}`;
+              logger.error(
+                {
+                  error: serializeError(hardErr),
+                  projectRoot,
+                  originalError: String(err),
+                  retryError: String(retryErr),
+                },
+                'FK hard-reset recovery also failed — giving up (no further retry)',
+              );
+              return;
+            }
           }
         }
         managed.status = 'error';
@@ -576,6 +615,81 @@ export class ProjectManager {
 
     logger.info({ projectRoot }, 'Project added to daemon');
     return managed;
+  }
+
+  /**
+   * FK-recovery hard reset. Wipes every graph/data table on the project's
+   * INDEX database in place, leaving the schema, seed rows (node_types,
+   * edge_types), version tracking (schema_meta, schema_migrations) and the
+   * server PID row intact. After this returns the index is genuinely empty
+   * (`symbols` has 0 rows), so the follow-up `indexAll(true)` re-enters
+   * bulk-load mode — which sets `foreign_keys = OFF` — and rebuilds the graph
+   * from scratch instead of colliding with the stale rows that wedged the
+   * in-place force-reindex.
+   *
+   * Why in-place rather than close → delete file → reopen: the project's
+   * `store`, `pipeline`, `serverHandle`, watcher callbacks and AI pipelines
+   * all capture THIS exact `Store`/`Database` handle by closure. Swapping the
+   * on-disk file would require re-wiring every one of them and would race the
+   * live watcher. Clearing the tables on the shared handle keeps all wiring
+   * valid and needs no lock coordination beyond the pipeline's own `_lock`
+   * (held by the caller, which awaits the failed `indexAll` before calling us).
+   *
+   * SCOPE: this touches ONLY the index DB reachable via `store.db`. The
+   * decisions.db and topology.db handles live in a separate resource pool and
+   * are never opened here — the FK error is always thrown inside an index
+   * write transaction, so the index DB is the only database to rebuild.
+   *
+   * Idempotent and drift-proof: the table list is enumerated from
+   * `sqlite_master` at runtime rather than hard-coded, so a future migration
+   * that adds a table is cleared automatically. FTS5 virtual + shadow tables
+   * are skipped — they are content-external mirrors of `symbols` and stay
+   * consistent through the `symbols_ad` delete trigger.
+   */
+  private hardResetIndexTables(store: Store): void {
+    const db = store.db;
+    // Tables that must survive the wipe: seed/reference data the schema
+    // depends on, version tracking, and the daemon PID lock row.
+    const PRESERVE = new Set([
+      'node_types',
+      'edge_types',
+      'schema_meta',
+      'schema_migrations',
+      'server_state',
+    ]);
+    const rows = db
+      .prepare(
+        `SELECT name FROM sqlite_master
+         WHERE type = 'table'
+           AND name NOT LIKE 'sqlite_%'
+           AND name NOT LIKE '%_fts'
+           AND name NOT LIKE '%_fts_%'`,
+      )
+      .all() as Array<{ name: string }>;
+    const targets = rows.map((r) => r.name).filter((name) => !PRESERVE.has(name));
+
+    // FK enforcement OFF for the duration of the wipe so we can clear tables in
+    // any order without tripping the very constraint we are recovering from.
+    // Restored to ON in the finally block regardless of outcome — leaving a
+    // live daemon handle with FK OFF would silently mask real violations.
+    db.pragma('foreign_keys = OFF');
+    try {
+      const wipe = db.transaction(() => {
+        for (const name of targets) {
+          db.exec(`DELETE FROM "${name}"`);
+        }
+      });
+      wipe();
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+    // Flush the WAL so the empty state is durable in the main DB file and the
+    // next reader/opener doesn't inherit a bloated WAL from the wipe.
+    try {
+      db.pragma('wal_checkpoint(TRUNCATE)');
+    } catch (err) {
+      logger.debug({ err }, 'wal_checkpoint after FK hard reset failed (non-fatal)');
+    }
   }
 
   /**
