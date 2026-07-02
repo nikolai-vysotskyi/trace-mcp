@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { findSubprojectRootForPath } from '../resolve.js';
+import { findSubprojectRootForPath, isKnownSubproject } from '../resolve.js';
 
 /**
  * findSubprojectRootForPath picks the DEEPEST registered subproject repo_root
@@ -60,5 +60,31 @@ describe('findSubprojectRootForPath', () => {
     expect(
       findSubprojectRootForPath('/repos/the/fair/fair-front', join(dir, 'nope.db')),
     ).toBeNull();
+  });
+});
+
+describe('isKnownSubproject', () => {
+  it('is true when the path is itself a registered subproject repo_root', () => {
+    expect(isKnownSubproject('/repos/the/fair/fair-front', dbPath)).toBe(true);
+  });
+
+  it('is false for a path merely nested inside a subproject (not the root)', () => {
+    // Under fair-front but not the registered root — read-mostly serving must
+    // bind to the root, so a nested cwd is not "itself" a subproject.
+    expect(isKnownSubproject('/repos/the/fair/fair-front/app/pages', dbPath)).toBe(false);
+  });
+
+  it('is false for the container when a deeper subproject exists under the cwd', () => {
+    // `/repos/the` is a registered subproject too, so it IS known when queried
+    // directly — guards against the deepest-ancestor logic misfiring.
+    expect(isKnownSubproject('/repos/the', dbPath)).toBe(true);
+  });
+
+  it('is false for an unrelated path', () => {
+    expect(isKnownSubproject('/repos/unrelated', dbPath)).toBe(false);
+  });
+
+  it('is false when the topology db is missing', () => {
+    expect(isKnownSubproject('/repos/the/fair/fair-front', join(dir, 'nope.db'))).toBe(false);
   });
 });

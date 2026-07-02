@@ -167,9 +167,20 @@ export class ProjectManager {
   }
 
   /** Set up and start indexing for a single project. */
-  async addProject(projectRoot: string): Promise<ManagedProject> {
+  async addProject(
+    projectRoot: string,
+    opts?: { watch?: boolean; persist?: boolean },
+  ): Promise<ManagedProject> {
     const existing = this.projects.get(projectRoot);
     if (existing) return existing;
+
+    // Read-mostly mode (a registered subproject served on-demand): index once,
+    // no fs watcher, no registry.json / config-file writes. Stays in-memory for
+    // the daemon's lifetime but is never restored as a watched project on the
+    // next restart — it is re-resolved from topology.db on each connect. Keeps
+    // umbrella repos with many subprojects from spawning N watchers (#209).
+    const watch = opts?.watch ?? true;
+    const persist = opts?.persist ?? true;
 
     const worktreeInfo = detectGitWorktree(projectRoot);
     const indexRoot = worktreeInfo?.mainRoot ?? projectRoot;
@@ -181,8 +192,11 @@ export class ProjectManager {
       );
     }
 
-    // Standard registration: detect, config, DB, registry
-    setupProject(projectRoot);
+    // Standard registration: detect, config, DB, registry. Skipped for
+    // read-mostly subprojects so they leave no config file in the repo and no
+    // registry.json entry — loadConfig() below still yields a valid default
+    // config, and the DB is created by initializeDatabase() a few lines down.
+    if (persist) setupProject(projectRoot);
 
     const configResult = await loadConfig(projectRoot);
     if (configResult.isErr()) {
@@ -486,134 +500,138 @@ export class ProjectManager {
         logger.error({ error: serializeError(err), projectRoot }, 'Initial indexing failed');
       });
 
-    // Start file watcher
-    await watcher.start(
-      projectRoot,
-      config,
-      async (paths) => {
-        const watchStart = performance.now();
-        const stats = getReindexStats();
-        // Dedup against the recent-reindex cache: if the same Edit fired
-        // both parcel-watcher and the PostToolUse hook (or register_edit),
-        // the second arrival is a no-op. Compute a POSIX-relative key
-        // matching the form used by reindex-file-handler.ts.
-        const toRel = (p: string): string => {
-          const rel = path.isAbsolute(p) ? path.relative(projectRoot, p) : p;
-          return path.sep === '\\' ? rel.split('\\').join('/') : rel;
-        };
-        const skipped: string[] = [];
-        const toIndex: string[] = [];
-        for (const p of paths) {
-          const rel = toRel(p);
-          if (shouldSkipRecentReindex(projectRoot, rel)) {
-            skipped.push(rel);
-          } else {
-            toIndex.push(p);
+    // Start file watcher (skipped in read-mostly mode — see `watch` above).
+    // Agent-driven edits still reindex via register_edit / the PostToolUse hook;
+    // only external (IDE) edits go unnoticed until the next connect's indexAll.
+    if (watch) {
+      await watcher.start(
+        projectRoot,
+        config,
+        async (paths) => {
+          const watchStart = performance.now();
+          const stats = getReindexStats();
+          // Dedup against the recent-reindex cache: if the same Edit fired
+          // both parcel-watcher and the PostToolUse hook (or register_edit),
+          // the second arrival is a no-op. Compute a POSIX-relative key
+          // matching the form used by reindex-file-handler.ts.
+          const toRel = (p: string): string => {
+            const rel = path.isAbsolute(p) ? path.relative(projectRoot, p) : p;
+            return path.sep === '\\' ? rel.split('\\').join('/') : rel;
+          };
+          const skipped: string[] = [];
+          const toIndex: string[] = [];
+          for (const p of paths) {
+            const rel = toRel(p);
+            if (shouldSkipRecentReindex(projectRoot, rel)) {
+              skipped.push(rel);
+            } else {
+              toIndex.push(p);
+            }
           }
-        }
-        for (const rel of skipped) {
-          const elapsedMs = Math.round(performance.now() - watchStart);
-          logger.info(
-            {
-              event: 'reindex-file',
-              project: projectRoot,
-              path: rel,
+          for (const rel of skipped) {
+            const elapsedMs = Math.round(performance.now() - watchStart);
+            logger.info(
+              {
+                event: 'reindex-file',
+                project: projectRoot,
+                path: rel,
+                pathSource: 'watcher',
+                skippedRecent: true,
+                skippedHash: false,
+                indexed: 0,
+                elapsedMs,
+              },
+              'reindex-file telemetry',
+            );
+            stats.record({
               pathSource: 'watcher',
               skippedRecent: true,
               skippedHash: false,
               indexed: 0,
               elapsedMs,
-            },
-            'reindex-file telemetry',
-          );
-          stats.record({
-            pathSource: 'watcher',
-            skippedRecent: true,
-            skippedHash: false,
-            indexed: 0,
-            elapsedMs,
-          });
-        }
-        if (toIndex.length === 0) return;
+            });
+          }
+          if (toIndex.length === 0) return;
 
-        let result: { indexed?: number; skipped?: number; changedFileIds?: number[] } | undefined;
-        let watchErr: unknown;
-        try {
-          result = await pipeline.indexFiles(toIndex);
-        } catch (err) {
-          watchErr = err;
-          throw err;
-        } finally {
-          const elapsedMs = Math.round(performance.now() - watchStart);
-          const indexed = result?.indexed ?? 0;
-          const skippedRows = result?.skipped ?? 0;
-          const skippedHash = indexed === 0 && skippedRows > 0;
-          for (const p of toIndex) {
-            const relPosix = toRel(p);
-            if (watchErr) {
-              logger.error(
-                {
-                  event: 'reindex-file',
-                  project: projectRoot,
-                  path: relPosix,
+          let result: { indexed?: number; skipped?: number; changedFileIds?: number[] } | undefined;
+          let watchErr: unknown;
+          try {
+            result = await pipeline.indexFiles(toIndex);
+          } catch (err) {
+            watchErr = err;
+            throw err;
+          } finally {
+            const elapsedMs = Math.round(performance.now() - watchStart);
+            const indexed = result?.indexed ?? 0;
+            const skippedRows = result?.skipped ?? 0;
+            const skippedHash = indexed === 0 && skippedRows > 0;
+            for (const p of toIndex) {
+              const relPosix = toRel(p);
+              if (watchErr) {
+                logger.error(
+                  {
+                    event: 'reindex-file',
+                    project: projectRoot,
+                    path: relPosix,
+                    pathSource: 'watcher',
+                    skippedRecent: false,
+                    skippedHash: false,
+                    indexed: 0,
+                    elapsedMs,
+                    err: watchErr,
+                    error: String(watchErr),
+                  },
+                  'reindex-file telemetry (error)',
+                );
+                stats.record({
                   pathSource: 'watcher',
                   skippedRecent: false,
                   skippedHash: false,
                   indexed: 0,
                   elapsedMs,
-                  err: watchErr,
-                  error: String(watchErr),
-                },
-                'reindex-file telemetry (error)',
-              );
-              stats.record({
-                pathSource: 'watcher',
-                skippedRecent: false,
-                skippedHash: false,
-                indexed: 0,
-                elapsedMs,
-                error: true,
-              });
-            } else {
-              logger.info(
-                {
-                  event: 'reindex-file',
-                  project: projectRoot,
-                  path: relPosix,
+                  error: true,
+                });
+              } else {
+                logger.info(
+                  {
+                    event: 'reindex-file',
+                    project: projectRoot,
+                    path: relPosix,
+                    pathSource: 'watcher',
+                    skippedRecent: false,
+                    skippedHash,
+                    indexed,
+                    elapsedMs,
+                  },
+                  'reindex-file telemetry',
+                );
+                stats.record({
                   pathSource: 'watcher',
                   skippedRecent: false,
                   skippedHash,
                   indexed,
                   elapsedMs,
-                },
-                'reindex-file telemetry',
-              );
-              stats.record({
-                pathSource: 'watcher',
-                skippedRecent: false,
-                skippedHash,
-                indexed,
-                elapsedMs,
-              });
+                });
+              }
             }
           }
-        }
-        debouncedSummarize();
-        debouncedEmbed();
-        // Phase 3: schedule scoped LSP enrichment off the hot path. Only
-        // fires when LSP is enabled in config (lspEnricher is null
-        // otherwise) and only for IDs the pipeline actually touched.
-        if (lspEnricher && result?.changedFileIds && result.changedFileIds.length > 0) {
-          lspEnricher.scheduleEnrichment(result.changedFileIds);
-        }
-      },
-      undefined,
-      async (deleted) => {
-        pipeline.deleteFiles(deleted);
-      },
-    );
+          debouncedSummarize();
+          debouncedEmbed();
+          // Phase 3: schedule scoped LSP enrichment off the hot path. Only
+          // fires when LSP is enabled in config (lspEnricher is null
+          // otherwise) and only for IDs the pipeline actually touched.
+          if (lspEnricher && result?.changedFileIds && result.changedFileIds.length > 0) {
+            lspEnricher.scheduleEnrichment(result.changedFileIds);
+          }
+        },
+        undefined,
+        async (deleted) => {
+          pipeline.deleteFiles(deleted);
+        },
+      );
+    }
 
-    logger.info({ projectRoot }, 'Project added to daemon');
+    logger.info({ projectRoot, watch, persist }, 'Project added to daemon');
     return managed;
   }
 
