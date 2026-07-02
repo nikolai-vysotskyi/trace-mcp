@@ -9,7 +9,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, type Stats, statSync } from 'node:fs';
+import { type Dirent, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Store } from '../../db/store.js';
 import { TraceignoreMatcher } from '../../utils/traceignore.js';
@@ -156,30 +156,40 @@ function manualSearch(
   const regex = new RegExp(escapeRegex(query), 'gi');
   const traceignore = new TraceignoreMatcher(projectRoot);
 
-  function walk(dir: string): void {
+  // Depth cap guards against directory cycles the Dirent gate can't see (e.g.
+  // bind mounts). Symlink cycles themselves (Ansible Molecule's self-referential
+  // `roles/<role> -> ../../../` layout, #218) are already excluded: Dirent uses
+  // lstat semantics, so a symlinked directory reports false for both
+  // isDirectory() and isFile() and the entry is skipped entirely.
+  const MAX_WALK_DEPTH = 20;
+
+  function walk(dir: string, depth = 0): void {
     if (matches.length >= limit) return;
-    let entries: string[];
+    if (depth > MAX_WALK_DEPTH) return;
+    let entries: Dirent[];
     try {
-      entries = readdirSync(dir);
+      entries = readdirSync(dir, { withFileTypes: true });
     } catch {
       return;
     }
 
     for (const entry of entries) {
       if (matches.length >= limit) return;
-      if (traceignore.isSkippedDir(entry)) continue;
+      if (traceignore.isSkippedDir(entry.name)) continue;
 
-      const full = path.join(dir, entry);
-      let stat: Stats;
-      try {
-        stat = statSync(full);
-      } catch {
-        continue;
-      }
+      const full = path.join(dir, entry.name);
 
-      if (stat.isDirectory()) {
-        walk(full);
-      } else if (stat.isFile() && stat.size < 512 * 1024) {
+      if (entry.isDirectory()) {
+        walk(full, depth + 1);
+      } else if (entry.isFile()) {
+        let size: number;
+        try {
+          size = statSync(full).size;
+        } catch {
+          continue;
+        }
+        if (size >= 512 * 1024) continue;
+
         const rel = path.relative(projectRoot, full);
         if (traceignore.isIgnored(rel)) continue;
         try {

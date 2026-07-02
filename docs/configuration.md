@@ -120,6 +120,7 @@ You can add more via `.traceignore` or the `ignore.directories` config key.
 | `root` | `string` | `"."` | Project root directory |
 | `include` | `string[]` | Auto-detected | Glob patterns for files to index |
 | `exclude` | `string[]` | Common exclusions | Glob patterns to skip |
+| `follow_symlinks` | `boolean` | `false` | Follow directory symlinks during file discovery. Leave off unless you know the tree is free of symlink cycles — enabling it on a tree with a cycle (e.g. Ansible Molecule's `roles/<role>/molecule/<scenario>/roles/<role> -> ../../../` layout) can silently truncate traversal. Symlinked *files* are always skipped regardless of this setting. |
 | `ignore.directories` | `string[]` | `[]` | Extra directory names to skip (added to built-in list) |
 | `ignore.patterns` | `string[]` | `[]` | Extra gitignore-style patterns to exclude from indexing |
 | `plugins` | `string[]` | `[]` | Paths to custom plugins |

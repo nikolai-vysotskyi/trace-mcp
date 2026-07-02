@@ -854,6 +854,11 @@ export const TraceMcpConfigSchema = z.object({
     '**/.eggs/**',
     '**/*.egg-info/**',
   ]),
+  // Directory symlinks are not followed during indexing by default — a symlink
+  // cycling back to an ancestor (e.g. Ansible Molecule's `roles/<role> -> ../../../`
+  // layout) would otherwise make fast-glob recurse until the OS raises
+  // ENAMETOOLONG (#218). Opt in only for trees known to be cycle-free.
+  follow_symlinks: z.boolean().default(false),
   ignore: IgnoreConfigSchema,
   frameworks: FrameworkConfigSchema,
   ai: AiConfigSchema,

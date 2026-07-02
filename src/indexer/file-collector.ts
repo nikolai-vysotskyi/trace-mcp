@@ -38,6 +38,10 @@ export async function collectFiles(params: FileCollectorParams): Promise<string[
   // `test/**` include) made fast-glob throw ENOTDIR and abort the whole
   // initial index, bricking the project in 'error' state. Traversal errors
   // (ENOTDIR/EACCES/ELOOP) must skip the entry, not kill indexing.
+  // followSymbolicLinks: directory symlinks are not followed by default
+  // (config.follow_symlinks) — cycle safety (issue #218, Ansible Molecule's
+  // self-referential `roles/<role> -> ../../../` layout), consistent with
+  // FileExtractor already skipping symlinked files.
   let entries = await fg(config.include, {
     cwd: rootPath,
     ignore,
@@ -45,6 +49,7 @@ export async function collectFiles(params: FileCollectorParams): Promise<string[
     absolute: false,
     onlyFiles: true,
     suppressErrors: true,
+    followSymbolicLinks: config.follow_symlinks,
   });
 
   // Monorepo / folder-of-projects: the directory-rooted include globs
@@ -66,6 +71,7 @@ export async function collectFiles(params: FileCollectorParams): Promise<string[
         absolute: false,
         onlyFiles: true,
         suppressErrors: true,
+        followSymbolicLinks: config.follow_symlinks,
       });
       if (wsEntries.length > 0) {
         const merged = new Set(entries);
@@ -88,6 +94,7 @@ export async function collectFiles(params: FileCollectorParams): Promise<string[
         absolute: false,
         onlyFiles: true,
         suppressErrors: true,
+        followSymbolicLinks: config.follow_symlinks,
       });
       if (entries.length > 0) {
         logger.info(
