@@ -18,9 +18,9 @@ All user-supplied paths are validated before any file is read.
 
 Symlinks can be used to escape the project root and read arbitrary files.
 
-* **Symlinks are always skipped** — `fs.lstatSync()` detects symlinks without following them.
-* When a symlink is encountered during indexing, it is logged as a warning and excluded.
-* There is no option to follow symlinks — this is a hard security boundary.
+* **Symlinked files are always skipped at extraction time** — `fs.lstatSync()` detects symlinks without following them, regardless of any config setting. When a symlink is encountered during indexing, it is logged as a warning and excluded. This is a hard security boundary with no opt-out.
+* **Directory symlinks are not followed during file discovery by default** (`follow_symlinks: false`). This prevents a directory symlink that cycles back to an ancestor — e.g. Ansible Molecule's `roles/<role>/molecule/<scenario>/roles/<role> -> ../../../` layout — from making the glob walker recurse until the OS raises `ENAMETOOLONG` (#218).
+* Setting `follow_symlinks: true` only widens *discovery* (which directories the glob walker descends into) — it does not disable the always-on file-level symlink rejection above. Enable it only for trees known to be free of symlink cycles; on a tree with a cycle it can silently truncate traversal once fast-glob's internal error suppression kicks in.
 
 ---
 

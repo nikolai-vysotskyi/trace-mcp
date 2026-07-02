@@ -35,18 +35,34 @@ export class EnvIndexer {
   }
 
   async indexEnvFiles(force: boolean): Promise<void> {
+    try {
+      await this.indexEnvFilesUnsafe(force);
+    } catch (err) {
+      logger.warn({ err }, 'Env indexing failed — skipping');
+    }
+  }
+
+  private async indexEnvFilesUnsafe(force: boolean): Promise<void> {
     await initContentHasher();
     // Default config.exclude contains `**/.env` / `**/.env.*` to keep env files out of
     // the code index. EnvIndexer only records keys + inferred types/formats (no values),
     // so those patterns would wrongly hide our input — filter them before globbing.
     const ignore = this.config.exclude.filter((p) => !isEnvFilePattern(p));
 
+    // followSymbolicLinks defaults to false (config.follow_symlinks) — a directory
+    // symlink cycling back to an ancestor (e.g. Ansible Molecule's
+    // `roles/<role> -> ../../../` layout) would otherwise make fast-glob recurse
+    // until ENAMETOOLONG (#218). suppressErrors: true is a second layer of defense
+    // on top of the outer try/catch — traversal errors should skip .env discovery,
+    // not abort indexing.
     const envPaths = await fg(ENV_GLOB, {
       cwd: this.rootPath,
       ignore,
       dot: true,
       absolute: false,
       onlyFiles: true,
+      followSymbolicLinks: this.config.follow_symlinks,
+      suppressErrors: true,
     });
 
     if (envPaths.length === 0) return;
