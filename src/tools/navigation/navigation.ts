@@ -363,7 +363,7 @@ export async function search(
       offset,
       mode: 'fts',
     });
-    const cached = getCachedSearch(cacheKey, symbolCount);
+    const cached = getCachedSearch(store.db, cacheKey, symbolCount);
     if (cached) {
       // `_warning` is metadata about THIS call, not the cached result body
       // — re-stamp it so a cache hit doesn't hide the silent-degradation
@@ -534,7 +534,7 @@ export async function search(
     result._warning =
       'semantic="on" was requested but no AI provider is available; results came from lexical (FTS5) search. Configure an AI provider + run `embed_repo` for hybrid ranking.';
   }
-  if (cacheable && cacheKey) putCachedSearch(cacheKey, result, symbolCount);
+  if (cacheable && cacheKey) putCachedSearch(store.db, cacheKey, result, symbolCount);
   return result;
 }
 

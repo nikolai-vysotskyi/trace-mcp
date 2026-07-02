@@ -5,12 +5,22 @@ interface EdgeRecord {
   target_node_id: number;
 }
 
-/** Cached PageRank result keyed by DB filename + edge count */
-let _cache: { dbName: string; edgeCount: number; result: Map<number, number> } | null = null;
+/**
+ * Cached PageRank result keyed by the Database *instance* (not its name).
+ *
+ * In-memory SQLite databases all report `db.name === ':memory:'`, so keying on
+ * the filename collides across distinct in-memory DBs (tests, and every project
+ * in the multi-project daemon) — a `{dbName, edgeCount}` slot would serve one
+ * DB's result for another DB with the same edge count. Keying on the Database
+ * object itself makes the cache identity-scoped, and the entry is still
+ * validated by the resolved-edge COUNT to catch graph mutations.
+ */
+let _cache: WeakMap<object, { edgeCount: number; result: Map<number, number> }> = new WeakMap();
 
 /** Invalidate the cache (call after bulk edge inserts, e.g. reindex) */
 export function invalidatePageRankCache(): void {
-  _cache = null;
+  // WeakMap has no clear(); reassign a fresh instance to drop all entries.
+  _cache = new WeakMap();
 }
 
 /**
@@ -37,12 +47,12 @@ export function computePageRank(
   // check is a redundant defense-in-depth guard, not the source of truth for
   // staleness. Edge insert/delete (the dominant real-world case) still
   // changes the unfiltered total and is still caught.
-  const dbName = db.name;
   const countRow = db.prepare('SELECT COUNT(*) as cnt FROM edges').get() as {
     cnt: number;
   };
-  if (_cache && _cache.dbName === dbName && _cache.edgeCount === countRow.cnt) {
-    return _cache.result;
+  const cached = _cache.get(db);
+  if (cached && cached.edgeCount === countRow.cnt) {
+    return cached.result;
   }
 
   const edges = db
@@ -115,6 +125,6 @@ export function computePageRank(
     }
   }
 
-  _cache = { dbName, edgeCount: countRow.cnt, result: scores };
+  _cache.set(db, { edgeCount: countRow.cnt, result: scores });
   return scores;
 }

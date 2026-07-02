@@ -46,6 +46,11 @@ function makeConfig(): TraceMcpConfig {
 // Pure unit tests (no Store needed)
 // ═══════════════════════════════════════════════════════════════════
 
+// A plain object is a valid WeakMap key. Using the SAME object for every call
+// in these unit tests preserves the exact single-DB LRU / staleness / hit
+// behavior the assertions below rely on.
+const DB = {} as unknown as import('better-sqlite3').Database;
+
 describe('search-cache (pure)', () => {
   beforeEach(() => resetSearchCache());
 
@@ -80,83 +85,117 @@ describe('search-cache (pure)', () => {
       total: 1,
       search_mode: 'fts' as const,
     };
-    putCachedSearch(key, value, 100);
-    const got = getCachedSearch(key, 100);
+    putCachedSearch(DB, key, value, 100);
+    const got = getCachedSearch(DB, key, 100);
     expect(got).not.toBeNull();
     expect(got!.total).toBe(1);
-    expect(getSearchCacheStats().hits).toBe(1);
+    expect(getSearchCacheStats(DB).hits).toBe(1);
   });
 
   it('does not cache empty results', () => {
-    putCachedSearch('k-empty', { items: [], total: 0, search_mode: 'fts' }, 100);
-    expect(getSearchCacheStats().size).toBe(0);
+    putCachedSearch(DB, 'k-empty', { items: [], total: 0, search_mode: 'fts' }, 100);
+    expect(getSearchCacheStats(DB).size).toBe(0);
   });
 
   it('staleness: symbol count change invalidates entry', () => {
     const key = 'k-stale';
     putCachedSearch(
+      DB,
       key,
       { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
       100,
     );
-    expect(getCachedSearch(key, 101)).toBeNull(); // stale → miss
-    expect(getCachedSearch(key, 100)).toBeNull(); // and now also gone
+    expect(getCachedSearch(DB, key, 101)).toBeNull(); // stale → miss
+    expect(getCachedSearch(DB, key, 100)).toBeNull(); // and now also gone
   });
 
   it('LRU eviction: oldest entry is dropped when over MAX', () => {
     // MAX = 128. Insert 130 to force 2 evictions.
     for (let i = 0; i < 130; i++) {
       putCachedSearch(
+        DB,
         `k-${i}`,
         { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
         100,
       );
     }
-    const stats = getSearchCacheStats();
+    const stats = getSearchCacheStats(DB);
     expect(stats.size).toBe(128);
     expect(stats.evictions).toBe(2);
     // The first two should be gone
-    expect(getCachedSearch('k-0', 100)).toBeNull();
-    expect(getCachedSearch('k-1', 100)).toBeNull();
+    expect(getCachedSearch(DB, 'k-0', 100)).toBeNull();
+    expect(getCachedSearch(DB, 'k-1', 100)).toBeNull();
     // The last should still be there
-    expect(getCachedSearch('k-129', 100)).not.toBeNull();
+    expect(getCachedSearch(DB, 'k-129', 100)).not.toBeNull();
   });
 
   it('LRU bump: hit moves entry to most-recent', () => {
     putCachedSearch(
+      DB,
       'a',
       { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
       100,
     );
     putCachedSearch(
+      DB,
       'b',
       { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
       100,
     );
     // Touch 'a' so it becomes most-recent
-    getCachedSearch('a', 100);
+    getCachedSearch(DB, 'a', 100);
     // Fill remaining slots
     for (let i = 0; i < 127; i++) {
       putCachedSearch(
+        DB,
         `k-${i}`,
         { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
         100,
       );
     }
     // 'b' should have been evicted (oldest), 'a' should still be present
-    expect(getCachedSearch('b', 100)).toBeNull();
-    expect(getCachedSearch('a', 100)).not.toBeNull();
+    expect(getCachedSearch(DB, 'b', 100)).toBeNull();
+    expect(getCachedSearch(DB, 'a', 100)).not.toBeNull();
   });
 
   it('invalidateSearchCache clears all entries', () => {
     putCachedSearch(
+      DB,
       'a',
       { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
       100,
     );
-    expect(getSearchCacheStats().size).toBe(1);
-    invalidateSearchCache();
-    expect(getSearchCacheStats().size).toBe(0);
+    expect(getSearchCacheStats(DB).size).toBe(1);
+    invalidateSearchCache(); // global clear (no db) resets the whole WeakMap
+    expect(getSearchCacheStats(DB).size).toBe(0);
+  });
+
+  it('invalidateSearchCache(db) clears only that DB, leaving others intact', () => {
+    const DB_A = {} as unknown as import('better-sqlite3').Database;
+    const DB_B = {} as unknown as import('better-sqlite3').Database;
+    const entry = { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 };
+    putCachedSearch(DB_A, 'k', entry, 100);
+    putCachedSearch(DB_B, 'k', entry, 100);
+    invalidateSearchCache(DB_A);
+    expect(getSearchCacheStats(DB_A).size).toBe(0);
+    expect(getSearchCacheStats(DB_B).size).toBe(1);
+    expect(getCachedSearch(DB_B, 'k', 100)).not.toBeNull();
+  });
+
+  it('cross-DB isolation: entry stored under one DB is invisible under another', () => {
+    const DB_A = {} as unknown as import('better-sqlite3').Database;
+    const DB_B = {} as unknown as import('better-sqlite3').Database;
+    // Same key + same symbolCount + same query params under two distinct DB
+    // objects (models :memory: collision across parallel tests / daemon
+    // projects). Before the per-DB WeakMap fix these collided.
+    putCachedSearch(
+      DB_A,
+      'shared-key',
+      { items: [{ symbol: {} as any, file: {} as any, score: 1 }], total: 1 },
+      100,
+    );
+    expect(getCachedSearch(DB_B, 'shared-key', 100)).toBeNull(); // miss under DB_B
+    expect(getCachedSearch(DB_A, 'shared-key', 100)).not.toBeNull(); // hit under DB_A
   });
 });
 
@@ -180,41 +219,41 @@ describe('search-cache (integration)', () => {
   beforeEach(() => resetSearchCache());
 
   it('second identical search() hits the cache', async () => {
-    const before = getSearchCacheStats();
+    const before = getSearchCacheStats(store.db);
     await search(store, 'UserController');
-    const afterFirst = getSearchCacheStats();
+    const afterFirst = getSearchCacheStats(store.db);
     expect(afterFirst.misses).toBe(before.misses + 1);
 
     await search(store, 'UserController');
-    const afterSecond = getSearchCacheStats();
+    const afterSecond = getSearchCacheStats(store.db);
     expect(afterSecond.hits).toBe(afterFirst.hits + 1);
   });
 
   it('different queries do not collide', async () => {
     await search(store, 'UserController');
     await search(store, 'DashboardController');
-    const stats = getSearchCacheStats();
+    const stats = getSearchCacheStats(store.db);
     expect(stats.size).toBeGreaterThanOrEqual(2);
   });
 
   it('different limits cache separately', async () => {
     await search(store, 'UserController', undefined, 5);
     await search(store, 'UserController', undefined, 10);
-    const stats = getSearchCacheStats();
+    const stats = getSearchCacheStats(store.db);
     expect(stats.size).toBeGreaterThanOrEqual(2);
   });
 
   it('zero-result query is not cached (stays fresh for negative evidence)', async () => {
     await search(store, 'xyzzyplugh99nonexistent');
-    const stats = getSearchCacheStats();
+    const stats = getSearchCacheStats(store.db);
     expect(stats.size).toBe(0);
   });
 
   it('reindex via pipeline invalidates the cache', async () => {
     await search(store, 'UserController');
-    expect(getSearchCacheStats().size).toBeGreaterThan(0);
+    expect(getSearchCacheStats(store.db).size).toBeGreaterThan(0);
     const pipeline = new IndexingPipeline(store, registry, makeConfig(), FIXTURE_DIR);
     await pipeline.indexAll();
-    expect(getSearchCacheStats().size).toBe(0);
+    expect(getSearchCacheStats(store.db).size).toBe(0);
   });
 });
