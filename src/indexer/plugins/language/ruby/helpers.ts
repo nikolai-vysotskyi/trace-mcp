@@ -5,6 +5,7 @@
 import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 import type { TSNode } from '../../../../parser/tree-sitter.js';
+export type { TSNode } from '../../../../parser/tree-sitter.js';
 
 /** Build a symbol ID following the convention: `path::Name#kind` */
 export function makeSymbolId(

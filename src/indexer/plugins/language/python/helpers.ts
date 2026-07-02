@@ -3,6 +3,7 @@
  * Extracts AST-walking logic to keep the main plugin under 300 lines.
  */
 import type { TSNode } from '../../../../parser/tree-sitter.js';
+export type { TSNode } from '../../../../parser/tree-sitter.js';
 import type { RawEdge, RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 import { detectMinPythonVersion } from './version-features.js';
 

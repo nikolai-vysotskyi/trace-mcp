@@ -5,6 +5,7 @@
 import type { RawSymbol, SymbolKind } from '../../../../plugin-api/types.js';
 
 import type { TSNode } from '../../../../parser/tree-sitter.js';
+export type { TSNode } from '../../../../parser/tree-sitter.js';
 
 /** Extract the namespace string from the root program node. */
 export function extractNamespace(rootNode: TSNode): string | undefined {
