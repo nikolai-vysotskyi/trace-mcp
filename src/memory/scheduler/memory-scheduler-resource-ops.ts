@@ -22,7 +22,7 @@ import type {
   SchedulerProjectListing,
   StageName,
   SchedulerProjectState,
-} from './memory-scheduler.js';
+} from './memory-scheduler-types.js';
 
 export interface MemorySchedulerResourceOptions {
   config: TraceMcpConfig;

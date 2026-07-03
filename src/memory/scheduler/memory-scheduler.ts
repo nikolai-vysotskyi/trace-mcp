@@ -53,39 +53,18 @@ import {
 } from './stages.js';
 import { SerialQueue } from './serial-queue.js';
 import { MemorySchedulerResourceOps } from './memory-scheduler-resource-ops.js';
+import type {
+  StageName,
+  SchedulerProjectState,
+  SchedulerProjectListing,
+} from './memory-scheduler-types.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
 // ════════════════════════════════════════════════════════════════════════
 
-export type StageName = 'mine' | 'cluster' | 'memo' | 'tune';
-
-/**
- * A project's view of the scheduler's per-project state. Kept in memory
- * only — restarting the daemon resets everything; the underlying stores
- * (decisions, clusters, memos) are durable on their own.
- */
-export interface SchedulerProjectState {
-  lastMineAt?: number;
-  lastClusterAt?: number;
-  lastMemoAt?: number;
-  lastTuneAt?: number;
-  lastActivityAt?: number;
-  pendingStages: Set<StageName>;
-  consecutiveFailures: number;
-  /** Epoch ms at which a project re-enters the rotation after a back-off. */
-  backoffUntil?: number;
-  /**
-   * Decision count snapshot the last time a cluster run completed. Used
-   * to detect "≥ clusterEveryNDecisions added" without expensive scans.
-   */
-  decisionsAtLastCluster?: number;
-  /**
-   * Review-event count at the last tune run. Used to detect
-   * "≥ tuneEveryNNewEvents accumulated" without expensive scans.
-   */
-  lastTuneEventCount?: number;
-}
+// Re-exported for back-compat — these were previously defined in this file.
+export type { StageName, SchedulerProjectState, SchedulerProjectListing };
 
 export interface MemoryBackgroundConfig {
   enabled: boolean;
@@ -98,18 +77,6 @@ export interface MemoryBackgroundConfig {
   failureBackoffSec: number;
   tuneCooldownSec: number;
   tuneEveryNNewEvents: number;
-}
-
-/**
- * Minimal shape `MemoryScheduler` consumes from the project manager.
- * Avoids a circular type dep on `src/daemon/project-manager.ts` while
- * still letting tests inject a fake.
- */
-export interface SchedulerProjectListing {
-  /** Project root path (used as the in-memory state key). */
-  root: string;
-  /** Per-project trace-mcp config (for memo enabled/everyN, etc.). */
-  config?: TraceMcpConfig;
 }
 
 export interface SchedulerProjectSource {
