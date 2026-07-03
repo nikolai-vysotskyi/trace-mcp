@@ -183,6 +183,13 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      - name: Typecheck (tsc --noEmit)
+        # Guards against type rot: tsup/esbuild AND vitest transpile WITHOUT
+        # typechecking, so type errors otherwise ship silently — in 2026-07 tsc
+        # had accumulated 165 unnoticed errors over ~2 months (one hid a real
+        # framework edge-drop bug). This step keeps `pnpm run typecheck` green.
+        run: pnpm run typecheck
+
       # Tar instead of relying on actions/upload-artifact to walk node_modules
       # (≈30k files). A single tarball uploads ~5-10× faster.
       - name: Pack build output
