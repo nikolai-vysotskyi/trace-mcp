@@ -130,8 +130,9 @@ describe('saveGlobalSettingsJsonc — deep-merge + comment-safe write (#221)', (
   it('removes a key when the payload sends an explicit null', () => {
     const result = configJsonc.saveGlobalSettingsJsonc({ ai: { model: null } });
 
-    expect(result.ai.model).toBeUndefined();
-    expect(result.ai.provider).toBe('openai'); // sibling survives removal
+    const ai = result.ai as Record<string, unknown>;
+    expect(ai.model).toBeUndefined();
+    expect(ai.provider).toBe('openai'); // sibling survives removal
 
     const written = parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8'));
     expect(written.ai.model).toBeUndefined();
