@@ -186,8 +186,10 @@ describe('installGuardHook', () => {
 
       const copies = mockFs.copyFileSync.mock.calls.map((c) => String(c[1]));
       expect(copies.some((dest) => dest.endsWith('trace-mcp-guard.cmd'))).toBe(true);
-      expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(true);
-      expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-md-tour.ps1'))).toBe(true);
+      // Aux .ps1 helpers are written (not copied) so a UTF-8 BOM can be prepended.
+      const ps1Writes = mockFs.writeFileSync.mock.calls.map((c) => String(c[0]));
+      expect(ps1Writes.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(true);
+      expect(ps1Writes.some((dest) => dest.endsWith('trace-mcp-guard-md-tour.ps1'))).toBe(true);
     } finally {
       Object.defineProperty(process, 'platform', { value: origPlatform, configurable: true });
     }
@@ -210,9 +212,12 @@ describe('installGuardHook', () => {
 
       installGuardHook({ global: true });
 
-      const copies = mockFs.copyFileSync.mock.calls.map((c) => String(c[1]));
-      expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(false);
-      expect(copies.some((dest) => dest.endsWith('trace-mcp-guard-md-tour.ps1'))).toBe(false);
+      const writes = [
+        ...mockFs.copyFileSync.mock.calls.map((c) => String(c[1])),
+        ...mockFs.writeFileSync.mock.calls.map((c) => String(c[0])),
+      ];
+      expect(writes.some((dest) => dest.endsWith('trace-mcp-guard-read.ps1'))).toBe(false);
+      expect(writes.some((dest) => dest.endsWith('trace-mcp-guard-md-tour.ps1'))).toBe(false);
     },
   );
 
