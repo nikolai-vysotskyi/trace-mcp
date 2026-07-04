@@ -176,6 +176,13 @@ class TrackedEmbeddingService implements EmbeddingService {
   providerName(): string {
     return this.inner.providerName?.() ?? this.provider;
   }
+  async probeDimensions(signal?: AbortSignal): Promise<number> {
+    // Proxy to the wrapped service so dimension auto-detection (Ollama) still
+    // runs when the pipeline holds this tracking wrapper instead of the raw one.
+    return this.inner.probeDimensions
+      ? this.inner.probeDimensions(signal)
+      : this.inner.dimensions();
+  }
 }
 
 class TrackedInferenceService implements InferenceService {

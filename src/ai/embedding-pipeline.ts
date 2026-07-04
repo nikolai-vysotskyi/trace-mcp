@@ -7,13 +7,32 @@ import { logger } from '../logger.js';
 import type { ProgressState } from '../progress.js';
 import { warnIfCloudEmbeddingProvider } from './cloud-warning.js';
 import type { EmbeddingService, VectorStore } from './interfaces.js';
-import { ProviderMismatchError } from './vector-store.js';
+import { DimensionMismatchError, ProviderMismatchError } from './vector-store.js';
 
 const DEFAULT_BATCH_SIZE = 50;
 /** Trip the circuit breaker after this many consecutive batch failures. */
 const FAILURE_THRESHOLD = 2;
 /** How long to skip embedding work after the breaker trips. */
 const COOLDOWN_MS = 10 * 60 * 1000;
+
+/**
+ * Failure diagnostics for a single {@link EmbeddingPipeline} run, so callers
+ * (embed_repo) can surface *why* nothing was embedded instead of silently
+ * reporting "completed" with 0 coverage.
+ */
+export interface EmbeddingRunDiagnostics {
+  /** Count of batches that threw during this run. */
+  failedBatches: number;
+  /** True when the circuit breaker tripped (>= FAILURE_THRESHOLD failures). */
+  breakerTripped: boolean;
+  /** Message from the most recent batch failure, if any. */
+  lastError?: string;
+  /**
+   * True when every failure was a dimension mismatch — the most actionable
+   * case (config dim != model dim). Lets embed_repo point at the exact fix.
+   */
+  dimensionMismatch: boolean;
+}
 
 /** Construction-time knobs for {@link EmbeddingPipeline}. */
 export interface EmbeddingPipelineOptions {
@@ -39,6 +58,19 @@ export class EmbeddingPipeline {
   private breakerNotified = false;
   /** Resolved auto-rebuild flag — defaults to true for back-compat. */
   private readonly autoRebuild: boolean;
+  /** Failure accounting for the current/last run — surfaced to embed_repo. */
+  private diagnostics: EmbeddingRunDiagnostics = {
+    failedBatches: 0,
+    breakerTripped: false,
+    dimensionMismatch: false,
+  };
+  /** Per-run latch: set once a non-dimension-mismatch failure is seen. */
+  private sawNonMismatchFailure = false;
+
+  /** Snapshot of why the last run embedded fewer symbols than expected. */
+  getLastRunDiagnostics(): EmbeddingRunDiagnostics {
+    return { ...this.diagnostics };
+  }
 
   constructor(
     private store: Store,
@@ -55,8 +87,14 @@ export class EmbeddingPipeline {
    * On mismatch, drops the vector table and re-stamps the meta. The follow-up
    * indexUnembedded call will repopulate. Idempotent and cached after first run.
    */
-  private ensureConsistent(): void {
+  private async ensureConsistent(): Promise<void> {
     if (this.consistent) return;
+    // Let providers that can't reliably default their dimension (Ollama) probe
+    // the model's real output length before we stamp the vector store. Skipped
+    // when the dimension is already known (explicit config or a prior probe).
+    if (this.embeddingService.probeDimensions) {
+      await this.embeddingService.probeDimensions();
+    }
     const dim = this.embeddingService.dimensions();
     const model = this.embeddingService.modelName();
     const provider = this.embeddingService.providerName?.() ?? 'unknown';
@@ -110,7 +148,7 @@ export class EmbeddingPipeline {
   }
 
   async indexSymbol(symbolId: number, text: string): Promise<void> {
-    this.ensureConsistent();
+    await this.ensureConsistent();
     const embedding = await this.embeddingService.embed(text);
     if (embedding.length > 0) {
       this.vectorStore.insert(symbolId, embedding);
@@ -131,8 +169,17 @@ export class EmbeddingPipeline {
     if (signal?.aborted) return 0;
 
     this.inFlight = true;
+    // Reset per-run failure accounting so getLastRunDiagnostics() reflects only
+    // this run. The breaker counters (consecutiveFailures/disabledUntilMs) are
+    // intentionally NOT reset — they persist across runs by design.
+    this.diagnostics = {
+      failedBatches: 0,
+      breakerTripped: false,
+      dimensionMismatch: false,
+    };
+    this.sawNonMismatchFailure = false;
     try {
-      this.ensureConsistent();
+      await this.ensureConsistent();
       const totalToEmbed = this.store.countUnembeddedSymbols();
       if (totalToEmbed === 0) return 0;
 
@@ -225,8 +272,21 @@ export class EmbeddingPipeline {
       }
     } catch (e) {
       logger.error({ error: e }, 'Embedding batch failed');
+      // Record the failure so embed_repo can surface it instead of reporting a
+      // silent "completed with 0 embedded".
+      this.diagnostics.failedBatches++;
+      this.diagnostics.lastError = e instanceof Error ? e.message : String(e);
+      // dimensionMismatch means "every failure this run was a dimension
+      // mismatch" — a single non-mismatch failure clears it permanently.
+      if (e instanceof DimensionMismatchError) {
+        if (!this.sawNonMismatchFailure) this.diagnostics.dimensionMismatch = true;
+      } else {
+        this.sawNonMismatchFailure = true;
+        this.diagnostics.dimensionMismatch = false;
+      }
       this.consecutiveFailures++;
       if (this.consecutiveFailures >= FAILURE_THRESHOLD && !this.breakerNotified) {
+        this.diagnostics.breakerTripped = true;
         this.disabledUntilMs = Date.now() + COOLDOWN_MS;
         this.breakerNotified = true;
         logger.warn(

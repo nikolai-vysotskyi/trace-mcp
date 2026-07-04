@@ -23,6 +23,15 @@ export interface EmbeddingService {
    * services that don't override this default to "unknown".
    */
   providerName?(): string;
+  /**
+   * Detect the model's true output dimensionality by embedding a probe string,
+   * caching the result for subsequent {@link dimensions} calls. Providers with
+   * a reliable per-model default (OpenAI, ONNX, Voyage, Gemini) don't implement
+   * this. Ollama does: model dims vary widely and its blanket default is a
+   * guess, so probing avoids stamping the vector store with a wrong dimension.
+   * Returns the real dimension, or 0 if the probe fails / yields nothing.
+   */
+  probeDimensions?(signal?: AbortSignal): Promise<number>;
 }
 
 export interface ChatMessage {
