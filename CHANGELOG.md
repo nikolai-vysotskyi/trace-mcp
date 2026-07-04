@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.45.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.44.0...v1.45.0) (2026-07-04)
+
+
+### Features
+
+* **daemon:** idle project unload, per-connection SQLite memory caps, ancestor watcher restart ([a63fb66](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a63fb66159daf749d623511eda94a547defcd1e1))
+
+
+### Bug Fixes
+
+* **ai:** auto-detect Ollama embedding dimension + surface embed_repo failures ([68249bc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/68249bc7f23e6949283c68707f5541aa20558a49)), closes [#223](https://github.com/nikolai-vysotskyi/trace-mcp/issues/223)
+* **config:** preserve user-added keys when rewriting a project config section ([bfb5b93](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bfb5b93ae159d7b62532c7f389bd6301729253e4))
+* **daemon:** close topology.db handle in runSubprojectAutoSync (fd leak) ([27b2418](https://github.com/nikolai-vysotskyi/trace-mcp/commit/27b2418165eb2b815ba34d6dce6b8e5a3721cb6e))
+* **dashboard:** deep-merge PUT /api/settings and preserve JSONC comments ([7510769](https://github.com/nikolai-vysotskyi/trace-mcp/commit/751076953f4e579f9a8b6cf7d28c81ffeacbf185)), closes [#221](https://github.com/nikolai-vysotskyi/trace-mcp/issues/221)
+* **indexer:** electron & filament edges were silently dropped — rewrite + tests (3/3) ([fb84beb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fb84beb04783c2d82846acc5704c8f8751583cf7))
+* **indexer:** import TSNode locally in language helpers (keep re-export) ([8a6ee59](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8a6ee5955e31bf2f187aff74410f3cdf3be87531))
+* **indexer:** import TSNode locally in language helpers instead of dead re-export ([dba6233](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dba6233de793952c0af2257140638dfd17ead9fb))
+* **indexer:** stop following directory symlinks during file discovery ([c6bda46](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c6bda462160397bdae910b0cc640a68ed63cfa63)), closes [#218](https://github.com/nikolai-vysotskyi/trace-mcp/issues/218)
+* **init:** accept string content in withPs1Bom + align hooks test with BOM write path ([03a77ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/03a77abb138f6e5809de3a01a38581861b792266))
+* **init:** write .ps1 launcher/hook artifacts with a UTF-8 BOM + ASCII-only templates ([66ba15c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/66ba15cb0d3d93fabfb9aa49709aaec8fe1838fd)), closes [#224](https://github.com/nikolai-vysotskyi/trace-mcp/issues/224)
+* **tests:** type the unknown config section before member access in jsonc-merge test ([7872942](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7872942ffdda0e02693a485c2931c5422e2fa159))
+* **types:** restore tsc gate (1/3) — core plugin-api types match runtime ([524bf06](https://github.com/nikolai-vysotskyi/trace-mcp/commit/524bf0645d6c86c4e9c210c12ef5e85803769f2a))
+* **types:** restore tsc gate (2/3) — mechanical/drift/noise across 38 files ([33e9ed1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/33e9ed185f5ed677f85c7eac9935785f11013911))
+
+
+### Performance
+
+* **daemon:** cache registry reads + dedup consultation markers on the hot path ([bdce2a2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bdce2a209211de5020b2eeb65eea3d6d262f1ab6))
+
+
+### Refactoring
+
+* **indexer:** extract extractAndPersist from IndexingPipeline (137 -&gt; 115 cyclomatic) ([7fd7b36](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7fd7b36c373bf67477645bab770b7a6c2699dda6))
+* **memory-scheduler:** extract shared types into a dependency-free leaf module to break the resource-ops cycle ([93f983d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/93f983da2d5615936020c47dc74f5c09849ec90a))
+* **memory:** extract MemorySchedulerResourceOps from MemoryScheduler ([f528d00](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f528d00dde43f5fd46878b5c5f6c43a000c95ab7))
+
+
+### Documentation
+
+* **taint-analysis:** reword example comment to avoid self-triggering the SQL-injection scanner ([cd68c36](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cd68c362263bfed287542770a3b749258f6f5639))
+
+
+### Chores
+
+* **quality-gates:** calibrate thresholds from today's cleanup + scanner review ([7e17144](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7e17144dec37a383d4d12052962510bbfba41d8d))
+
+
+### CI/CD
+
+* add tsc --noEmit typecheck gate to prevent type rot ([5cd4a03](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5cd4a03336386a882383b60b02d9f71b3fbe61ec))
+
 ## [1.44.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.43.3...v1.44.0) (2026-07-02)
 
 
