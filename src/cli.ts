@@ -53,6 +53,7 @@ import { upgradeCommand } from './cli/upgrade.js';
 import { visualizeCommand } from './cli/visualize.js';
 import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
+import { saveGlobalSettingsJsonc } from './config-jsonc.js';
 import { isDaemonRunning } from './daemon/client.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { MemoryScheduler } from './memory/scheduler/memory-scheduler.js';
@@ -2351,14 +2352,9 @@ program
             return;
           }
 
-          // Merge with existing config (shallow per top-level key)
-          const existing = loadGlobalConfigRaw();
-          const merged = { ...existing };
-          for (const [key, value] of Object.entries(incoming)) {
-            if (value !== undefined) merged[key] = value;
-          }
-          ensureGlobalDirs();
-          atomicWriteJson(GLOBAL_CONFIG_PATH, merged);
+          // Deep-merge onto the existing JSONC config so sibling nested keys
+          // survive and comments/formatting aren't destroyed (#221).
+          const merged = saveGlobalSettingsJsonc(incoming);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ status: 'updated', settings: merged }));
         } catch (e) {

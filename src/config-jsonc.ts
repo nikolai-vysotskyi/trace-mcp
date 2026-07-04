@@ -70,6 +70,78 @@ export function removeProjectConfigJsonc(projectRoot: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Dashboard settings (PUT /api/settings): deep-merge + comment-safe write
+// ---------------------------------------------------------------------------
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Recursively walk `incoming` and apply one jsonc-parser edit per leaf path
+ * that differs from `existing`, so untouched sibling keys — nested or not —
+ * are left completely alone (both their value and their surrounding comments).
+ *
+ * Nulls mean "remove this key" (consistent with `modifyGlobalConfigJsonc`,
+ * where passing `undefined` removes the key at that path — `null` is the only
+ * way a JSON payload can express that intent). Arrays and primitives replace
+ * the existing value wholesale rather than merging element-by-element.
+ */
+function applySettingsDiff(
+  text: string,
+  jsonPath: (string | number)[],
+  incoming: Record<string, unknown>,
+  existing: Record<string, unknown>,
+): string {
+  let result = text;
+  for (const [key, value] of Object.entries(incoming)) {
+    if (value === undefined) continue; // absent from payload — leave untouched
+    const path = [...jsonPath, key];
+    const existingValue = existing[key];
+
+    if (value === null) {
+      // Explicit null → remove the key entirely.
+      if (existingValue === undefined) continue; // nothing to remove
+      const edits = modify(result, path, undefined, FORMAT_OPTS);
+      if (edits.length > 0) result = applyEdits(result, edits);
+      continue;
+    }
+
+    if (isPlainObject(value) && isPlainObject(existingValue)) {
+      // Both sides are objects — recurse so sibling nested keys survive.
+      result = applySettingsDiff(result, path, value, existingValue);
+      continue;
+    }
+
+    // Leaf value (or object replacing a non-object, or a brand-new key).
+    const edits = modify(result, path, value, FORMAT_OPTS);
+    if (edits.length > 0) result = applyEdits(result, edits);
+  }
+  return result;
+}
+
+/**
+ * Deep-merge an incoming settings payload (e.g. from the dashboard's
+ * `PUT /api/settings`) into the global JSONC config, preserving comments and
+ * any nested keys the payload doesn't mention (#221).
+ *
+ * Returns the fully merged config object (parsed post-write) so callers can
+ * echo it back in an API response.
+ */
+export function saveGlobalSettingsJsonc(
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  ensureGlobalDirs();
+  const text = readGlobalConfigText();
+  const existing = (parse(text) as Record<string, unknown> | null) ?? {};
+  const updatedText = applySettingsDiff(text, [], incoming, existing);
+  if (updatedText !== text) {
+    atomicWriteString(GLOBAL_CONFIG_PATH, updatedText, { mode: 0o600 });
+  }
+  return (parse(updatedText) as Record<string, unknown> | null) ?? {};
+}
+
+// ---------------------------------------------------------------------------
 // Config migration: merge new keys from DEFAULT_CONFIG_JSONC into existing
 // ---------------------------------------------------------------------------
 
