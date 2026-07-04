@@ -25,8 +25,9 @@ export function hasUtf8Bom(buf: Buffer): boolean {
  * file and the content doesn't already begin with a BOM. Non-.ps1 destinations
  * and already-BOMed buffers are returned unchanged.
  */
-export function withPs1Bom(destPath: string, content: Buffer): Buffer {
-  if (!destPath.toLowerCase().endsWith('.ps1')) return content;
-  if (hasUtf8Bom(content)) return content;
-  return Buffer.concat([UTF8_BOM, content]);
+export function withPs1Bom(destPath: string, content: Buffer | string): Buffer {
+  const buf = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf-8');
+  if (!destPath.toLowerCase().endsWith('.ps1')) return buf;
+  if (hasUtf8Bom(buf)) return buf;
+  return Buffer.concat([UTF8_BOM, buf]);
 }
