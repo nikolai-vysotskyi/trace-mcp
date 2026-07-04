@@ -189,6 +189,7 @@ This enables semantic/hybrid `search` and `query_by_intent` with zero configurat
     "inference_model": "gemma4:e4b",
     "fast_model": "gemma4:e4b",
     "embedding_model": "qwen3-embedding:0.6b",
+    "embedding_dimensions": 1024,
     "summarize_on_index": true,
     "summarize_batch_size": 20,
     "summarize_kinds": ["class", "function", "method", "interface", "trait", "enum", "type"],
@@ -196,6 +197,18 @@ This enables semantic/hybrid `search` and `query_by_intent` with zero configurat
   }
 }
 ```
+
+> **Ollama embedding dimensions — match your model.** Ollama embedding models
+> vary in output dimensionality (`nomic-embed-text` → 768, `qwen3-embedding:0.6b`
+> → 1024, `mxbai-embed-large` → 1024, etc.). When `ai.embedding_dimensions` is
+> **omitted**, trace-mcp auto-detects the real dimension by probing the model on
+> first use, so you don't have to set it. When you **do** set it, the value MUST
+> equal the model's real dimension — a wrong value makes every vector insert fail
+> with a dimension mismatch, and `embed_repo` then returns `status: "error"`
+> (`dimension_mismatch`) rather than a silent 0-coverage "completed". If you
+> switch to a model with a different dimension, either update
+> `embedding_dimensions` to match (or remove it) and re-run
+> `embed_repo({ force: true })`.
 
 ### Full setup — OpenAI
 

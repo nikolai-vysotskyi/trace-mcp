@@ -24,11 +24,37 @@ interface OllamaConfig {
 }
 
 class OllamaEmbeddingService implements EmbeddingService {
+  /**
+   * Resolved dimension. Seeded from the explicitly configured value; when none
+   * is configured it starts at the fallback default and is overwritten with the
+   * model's real vector length after the first embed or an explicit probe.
+   */
+  private dims: number;
+  /** True once we've adopted a dimension from a real embedding response. */
+  private detected: boolean;
+
   constructor(
     private baseUrl: string,
     private model: string,
-    private dims: number,
-  ) {}
+    /**
+     * Dimension from `ai.embedding_dimensions`. A positive value is trusted and
+     * pins the dimension (no auto-detection). When undefined / 0 we auto-detect
+     * from the model's real output instead of trusting {@link fallbackDims}.
+     */
+    configuredDims: number | undefined,
+    private fallbackDims = 768,
+  ) {
+    if (configuredDims && configuredDims > 0) {
+      // Operator pinned the dimension explicitly — trust it, never auto-detect.
+      this.dims = configuredDims;
+      this.detected = true;
+    } else {
+      // No explicit config: use the fallback until a real response reveals the
+      // model's true dimensionality (probeDimensions or the first embedBatch).
+      this.dims = fallbackDims;
+      this.detected = false;
+    }
+  }
 
   async embed(text: string, _task?: EmbeddingTask, signal?: AbortSignal): Promise<number[]> {
     const results = await this.embedBatch([text], undefined, signal);
@@ -41,7 +67,7 @@ class OllamaEmbeddingService implements EmbeddingService {
     signal?: AbortSignal,
   ): Promise<number[][]> {
     const allowPrivateNetworks = isExplicitlyLocalUrl(this.baseUrl);
-    return withRetry(
+    const embeddings = await withRetry(
       async () => {
         const resp = await safeFetch(
           `${this.baseUrl}/api/embed`,
@@ -63,6 +89,42 @@ class OllamaEmbeddingService implements EmbeddingService {
       },
       { label: 'Ollama embeddings' },
     );
+    this.adoptDimension(embeddings[0]?.length);
+    return embeddings;
+  }
+
+  /**
+   * When the dimension wasn't pinned in config, learn it from a real embedding
+   * response so the vector store gets stamped with the model's true dimension
+   * rather than the blanket fallback default.
+   */
+  private adoptDimension(vectorLength: number | undefined): void {
+    if (this.detected) return;
+    if (typeof vectorLength === 'number' && vectorLength > 0) {
+      if (vectorLength !== this.dims) {
+        logger.info(
+          { model: this.model, detected: vectorLength, fallback: this.fallbackDims },
+          'Ollama embedding dimension auto-detected from model output',
+        );
+      }
+      this.dims = vectorLength;
+      this.detected = true;
+    }
+  }
+
+  async probeDimensions(signal?: AbortSignal): Promise<number> {
+    if (this.detected) return this.dims;
+    try {
+      const [vec] = await this.embedBatch(['probe'], undefined, signal);
+      // adoptDimension already ran inside embedBatch; fall back defensively.
+      if (vec && vec.length > 0) return vec.length;
+    } catch (e) {
+      logger.warn(
+        { error: e, model: this.model },
+        'Ollama embedding dimension probe failed — using fallback default',
+      );
+    }
+    return this.detected ? this.dims : 0;
   }
 
   dimensions(): number {
@@ -184,10 +246,14 @@ export class OllamaProvider implements AIProvider {
   }
 
   embedding(): EmbeddingService {
+    // Pass the configured dimension through untouched (undefined when unset) so
+    // the service auto-detects the model's real dimension instead of blindly
+    // stamping the 768 fallback — many Ollama models (e.g. qwen3-embedding:0.6b
+    // at 1024) differ, and a wrong stamp makes every insert fail silently.
     return new OllamaEmbeddingService(
       this.config.baseUrl,
       this.config.embeddingModel,
-      this.config.embeddingDimensions ?? 768,
+      this.config.embeddingDimensions,
     );
   }
 

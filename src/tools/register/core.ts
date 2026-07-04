@@ -111,7 +111,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'embed_repo',
-    'Precompute and cache symbol embeddings for semantic / hybrid search. Embeddings are also computed lazily on first semantic query, but calling this once after a fresh index avoids the first-query latency spike. Requires AI provider to be enabled in config (ollama/openai). Set force=true to drop and recompute all existing embeddings. Mutates the vector store; idempotent. Use after reindex when you plan to use semantic search. Returns JSON: { status, indexed_this_run, total_embedded, coverage_pct, duration_ms }.',
+    'Precompute and cache symbol embeddings for semantic / hybrid search. Embeddings are also computed lazily on first semantic query, but calling this once after a fresh index avoids the first-query latency spike. Requires AI provider to be enabled in config (ollama/openai). Set force=true to drop and recompute all existing embeddings. Mutates the vector store; idempotent. Use after reindex when you plan to use semantic search. Returns JSON: { status, indexed_this_run, total_embedded, coverage_pct, duration_ms }. If embedding batches fail (e.g. a dimension mismatch between the model and the vector store, or an unreachable provider) it returns status "error" with a diagnostic message and failed_batches count instead of a silent "completed" with 0 coverage.',
     {
       batch_size: z
         .number()
@@ -239,6 +239,58 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
           duration_ms: Date.now() - startedAt,
           embedded: totalEmbedded,
         });
+
+        // Surface swallowed batch failures. Without this, a dimension mismatch
+        // (config dim != model dim) or a tripped circuit breaker leaves
+        // embed_repo reporting "completed" with 0 coverage and no hint why.
+        const diag = pipeline.getLastRunDiagnostics();
+        const coveragePct = totalSymbols > 0 ? Math.round((totalEmbedded / totalSymbols) * 100) : 0;
+        const embeddedNothingButHadWork = indexed === 0 && totalEmbedded === 0 && totalSymbols > 0;
+        if (diag.failedBatches > 0 || diag.breakerTripped || embeddedNothingButHadWork) {
+          const active = {
+            provider: embeddingService.providerName?.() ?? 'unknown',
+            model: embeddingService.modelName(),
+            dimensions: embeddingService.dimensions(),
+          };
+          const hint = diag.dimensionMismatch
+            ? `Embedding dimension mismatch: the ${active.provider} model "${active.model}" returned vectors that don't match the ${active.dimensions}-dim vector store. ` +
+              `Set ai.embedding_dimensions to the model's real dimension (or remove it to auto-detect), then re-run embed_repo with force=true.`
+            : diag.breakerTripped
+              ? `The embedding service failed repeatedly and the circuit breaker tripped. Check that the ${active.provider} provider at the configured base_url is reachable and the model "${active.model}" is available, then re-run embed_repo.`
+              : `Embedding produced no vectors despite ${totalSymbols} indexed symbols. Check the ${active.provider} provider configuration and logs.`;
+          logger.warn(
+            { diagnostics: diag, active, totalEmbedded, totalSymbols },
+            'embed_repo completed with failures — surfacing to caller',
+          );
+          return {
+            content: [
+              {
+                type: 'text',
+                text: j({
+                  status: 'error',
+                  error: diag.dimensionMismatch
+                    ? 'dimension_mismatch'
+                    : diag.breakerTripped
+                      ? 'embedding_service_failing'
+                      : 'no_embeddings_produced',
+                  message: hint,
+                  failed_batches: diag.failedBatches,
+                  breaker_tripped: diag.breakerTripped,
+                  last_error: diag.lastError,
+                  indexed_this_run: indexed,
+                  total_embedded: totalEmbedded,
+                  total_symbols: totalSymbols,
+                  coverage_pct: coveragePct,
+                  active,
+                  duration_ms: Date.now() - startedAt,
+                  force: effectiveForce,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
         return {
           content: [
             {
@@ -248,8 +300,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
                 indexed_this_run: indexed,
                 total_embedded: totalEmbedded,
                 total_symbols: totalSymbols,
-                coverage_pct:
-                  totalSymbols > 0 ? Math.round((totalEmbedded / totalSymbols) * 100) : 0,
+                coverage_pct: coveragePct,
                 duration_ms: Date.now() - startedAt,
                 force: effectiveForce,
               }),
