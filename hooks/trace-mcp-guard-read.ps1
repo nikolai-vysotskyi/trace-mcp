@@ -1,5 +1,5 @@
 # trace-mcp-guard-read.ps1 v0.11.0
-# Windows helper for trace-mcp-guard.cmd — implements the Read-handler repeat-read
+# Windows helper for trace-mcp-guard.cmd - implements the Read-handler repeat-read
 # dedup logic (per-session allowed read counter with mtime reset).
 #
 # Called by trace-mcp-guard.cmd on PreToolUse Read events. Writes one decision
@@ -15,8 +15,8 @@
 #   TMG_FILE       - absolute file path being read
 #   TMG_SESSION    - session id
 #   TMG_ROOT       - project root (pwd of the Claude Code session)
-#   TMG_OFFSET     - Read offset parameter (if set, targeted pre-Edit read → ALLOW)
-#   TMG_LIMIT      - Read limit parameter  (if set, targeted pre-Edit read → ALLOW)
+#   TMG_OFFSET     - Read offset parameter (if set, targeted pre-Edit read -> ALLOW)
+#   TMG_LIMIT      - Read limit parameter  (if set, targeted pre-Edit read -> ALLOW)
 #
 # This script is side-effecting: it writes state files under
 #   $env:TEMP\trace-mcp-reads-<session>\<file-hash>        ("count:mtime")
@@ -38,7 +38,7 @@ if (-not $filePath -or -not $sessionId) {
     exit 0
 }
 
-# Targeted pre-Edit reads (offset or limit present) — always allow.
+# Targeted pre-Edit reads (offset or limit present) - always allow.
 # Read-before-Edit must keep working even under strict enforcement.
 if ($tmgOffset -and $tmgOffset -ne '') {
     Write-Output 'ALLOW'
@@ -101,7 +101,7 @@ if ($curMtime -ne $prevMtime) {
     $prevCount = 0
 }
 
-# Limit exceeded → deny.
+# Limit exceeded -> deny.
 if ($prevCount -ge $REPEAT_READ_LIMIT) {
     Write-Output ("LIMIT:" + $prevCount)
     exit 0
@@ -128,7 +128,7 @@ if ($projectRoot) {
     }
 }
 
-# Already tracked this session (even after mtime reset) → skip first-time friction.
+# Already tracked this session (even after mtime reset) -> skip first-time friction.
 if ($hadState) {
     $newCount = $prevCount + 1
     Set-Content -LiteralPath $readState -Value ("{0}:{1}" -f $newCount, $curMtime) -NoNewline

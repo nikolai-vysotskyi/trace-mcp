@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { atomicWriteJson } from '../utils/atomic-write.js';
+import { withPs1Bom } from './ps1-bom.js';
 import type { InitStepResult } from './types.js';
 import {
   GUARD_HOOK_VERSION,
@@ -343,7 +344,9 @@ function installHook(
         const auxSrc = findAuxFile(aux.file);
         if (!auxSrc) continue; // soft-fail: main script still works, fallback path handles missing helper
         const auxDest = path.join(path.dirname(dest), aux.file);
-        fs.copyFileSync(auxSrc, auxDest);
+        // Prepend a UTF-8 BOM for .ps1 helpers so Windows PowerShell 5.1 decodes
+        // them as UTF-8 regardless of the machine's system codepage.
+        fs.writeFileSync(auxDest, withPs1Bom(auxDest, fs.readFileSync(auxSrc)));
         if (!IS_WINDOWS) fs.chmodSync(auxDest, 0o644);
       }
     }

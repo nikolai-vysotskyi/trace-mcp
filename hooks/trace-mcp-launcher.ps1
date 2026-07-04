@@ -1,7 +1,7 @@
 # trace-mcp-launcher v0.2.0 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
-# Managed by trace-mcp — do not edit by hand. Re-run `trace-mcp init` to refresh.
+# Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
 
 #Requires -Version 5.1
 
@@ -71,7 +71,7 @@ function Test-CliFile {
     return (Test-Path -LiteralPath $Path -PathType Leaf)
 }
 
-# --- 3. Fast path: config is good → exec directly ---
+# --- 3. Fast path: config is good -> exec directly ---
 if ((Test-NodeBinary $NodePath) -and (Test-CliFile $CliPath)) {
     Write-LauncherLog "exec(config) node=$NodePath cli=$CliPath argc=$($args.Count)"
     & $NodePath $CliPath @args
@@ -144,7 +144,7 @@ function Find-Cli {
 if (-not (Test-NodeBinary $NodePath)) {
     $NodePath = Find-Node
     if (-not $NodePath) {
-        Die 'node binary not found — install Node.js (nodejs.org / nvs / nvm-windows / volta) or set TRACE_MCP_NODE_OVERRIDE'
+        Die 'node binary not found - install Node.js (nodejs.org / nvs / nvm-windows / volta) or set TRACE_MCP_NODE_OVERRIDE'
     }
     Write-LauncherLog "probe: node=$NodePath"
 }
@@ -152,7 +152,7 @@ if (-not (Test-NodeBinary $NodePath)) {
 if (-not (Test-CliFile $CliPath)) {
     $CliPath = Find-Cli $NodePath
     if (-not $CliPath) {
-        Die "trace-mcp package not found for node=$NodePath — run: npm i -g trace-mcp && trace-mcp init"
+        Die "trace-mcp package not found for node=$NodePath - run: npm i -g trace-mcp && trace-mcp init"
     }
     Write-LauncherLog "probe: cli=$CliPath"
 }

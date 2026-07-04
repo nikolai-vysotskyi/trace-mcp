@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { withPs1Bom } from './ps1-bom.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
 
@@ -218,7 +219,9 @@ export function installLauncher(opts: InstallLauncherOpts): InitStepResult {
   for (const a of ARTIFACTS) {
     const src = findLauncherSource(a.src);
     const artifactDest = path.join(binDir, a.dest);
-    const content = fs.readFileSync(src);
+    // Prepend a UTF-8 BOM for .ps1 artifacts so Windows PowerShell 5.1 decodes
+    // them as UTF-8 regardless of the machine's system codepage (cp1251 etc.).
+    const content = withPs1Bom(artifactDest, fs.readFileSync(src));
     const tmp = `${artifactDest}.tmp.${process.pid}.${Date.now()}`;
     fs.writeFileSync(tmp, content, { mode: a.mode });
     fs.renameSync(tmp, artifactDest);
