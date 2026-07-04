@@ -1,5 +1,5 @@
 # trace-mcp-guard-md-tour.ps1 v0.9.0
-# Windows helper for trace-mcp-guard.cmd — implements the .md doc-tour
+# Windows helper for trace-mcp-guard.cmd - implements the .md doc-tour
 # detection mirrored from the bash hook (v0.9).
 #
 # Called by trace-mcp-guard.cmd on PreToolUse Read events for .md files.
@@ -9,7 +9,7 @@
 #   - If the file IS in a source-tree directory, increment a per-session
 #     counter. When the counter reaches TRACE_MCP_GUARD_MD_HINT_THRESHOLD
 #     (default 3), emit a full PreToolUse JSON with additionalContext
-#     suggesting get_feature_context / get_task_context. Read still passes —
+#     suggesting get_feature_context / get_task_context. Read still passes -
 #     this is a hint, not a block.
 #
 # Inputs (environment variables):
@@ -68,7 +68,7 @@ if ($root) {
 }
 $rel = $rel -replace '\\', '/'
 
-$hint = "trace-mcp guard: ${count}x .md reads inside source dirs this session — looks like a doc tour. For per-feature docs co-located with code, get_feature_context / get_task_context is usually faster than reading docs file-by-file. Reading $rel is allowed; this is a hint, not a block.`nAlternatives:`n- get_feature_context { ""description"": ""what these docs describe"" }`n- get_task_context { ""task"": ""what you are working on"" }`n- search { ""query"": ""keyword"", ""file_pattern"": ""**/*.md"" } — find specific doc by name"
+$hint = "trace-mcp guard: ${count}x .md reads inside source dirs this session - looks like a doc tour. For per-feature docs co-located with code, get_feature_context / get_task_context is usually faster than reading docs file-by-file. Reading $rel is allowed; this is a hint, not a block.`nAlternatives:`n- get_feature_context { ""description"": ""what these docs describe"" }`n- get_task_context { ""task"": ""what you are working on"" }`n- search { ""query"": ""keyword"", ""file_pattern"": ""**/*.md"" } - find specific doc by name"
 
 $payload = [ordered]@{
     hookSpecificOutput = [ordered]@{
