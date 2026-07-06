@@ -14,6 +14,8 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  endsMidClause,
+  hasTableRemnant,
   isValidMinedDecision,
   minedDecisionRejectReason,
   startsMidClause,
@@ -90,6 +92,58 @@ describe('minedDecisionRejectReason — reporter garbage examples', () => {
   });
 });
 
+describe('minedDecisionRejectReason — #231 follow-up live survivors', () => {
+  it('rejects #101: code-span title with a Cyrillic tail + unbalanced backtick', () => {
+    // Real survivor: the big `atomicWriteJson(...)` code span inflated the
+    // Latin ratio so the Cyrillic tail slipped the ratio check; the trailing
+    // backtick is also unbalanced. Either signal is a valid reject.
+    const reason = minedDecisionRejectReason(
+      '`atomicWriteJson(path, data)` — пишет в `path',
+      'A complete-enough English summary sentence about atomic writes to disk here.',
+    );
+    expect(reason).not.toBeNull();
+    expect(['non_english', 'title_truncated']).toContain(reason);
+  });
+
+  it('rejects #77: dangling imperative tail ("… Make it")', () => {
+    expect(
+      minedDecisionRejectReason(
+        '`applyCodemod` — sync regex over many files. Make it',
+        'A real English summary about running codemods synchronously across the tree here.',
+      ),
+    ).toBe('title_truncated');
+  });
+
+  it('rejects #78: markdown table-row remnant ("| | P1")', () => {
+    expect(
+      minedDecisionRejectReason(
+        '`diff_graph_snapshots` — graph evolution over time | | P1',
+        'A real English summary describing snapshot graph diffing over time in enough words.',
+      ),
+    ).toBe('title_truncated');
+  });
+
+  it('rejects #75: numbered-list fragment, unclosed paren + bold, Cyrillic tail', () => {
+    const reason = minedDecisionRejectReason(
+      '15. **Snapshot graph diff over time** (урок v2.3.2',
+      'A real English summary describing the snapshot graph diff idea in enough words here.',
+    );
+    expect(reason).not.toBeNull();
+    // Unbalanced "(" is caught as title_truncated; the Cyrillic "урок" is
+    // caught as non_english. Both are legitimate reject reasons.
+    expect(['title_truncated', 'non_english']).toContain(reason);
+  });
+
+  it('rejects a content field cut mid-clause ("… migrate to")', () => {
+    expect(
+      minedDecisionRejectReason(
+        'Move the config writer onto the atomic helper',
+        'we decided the legacy writer is unsafe and that all callers should migrate to',
+      ),
+    ).toBe('content_truncated');
+  });
+});
+
 describe('minedDecisionRejectReason — legitimate decisions pass', () => {
   it('accepts a complete decision sentence + real summary', () => {
     expect(
@@ -119,6 +173,40 @@ describe('minedDecisionRejectReason — legitimate decisions pass', () => {
       ),
     ).toBe(true);
   });
+
+  it('accepts a complete sentence whose title embeds a balanced code span', () => {
+    // The #101 shape done RIGHT: balanced code span, English prose, no cut.
+    expect(
+      minedDecisionRejectReason(
+        'Use `atomicWriteJson(path, data)` for all state-file writes to prevent torn JSON',
+        'Every writer routes through the helper so a crash mid-write can never leave a partial file.',
+      ),
+    ).toBeNull();
+  });
+
+  it('accepts a decision that ends in a code span', () => {
+    expect(
+      isValidMinedDecision(
+        'Route all config persistence through `atomicWriteJson`',
+        'The helper writes to a temp file then renames, so concurrent readers never see a partial `config.json`',
+      ),
+    ).toBe(true);
+  });
+
+  it('accepts a decision ending on a bare period', () => {
+    expect(
+      isValidMinedDecision(
+        'Adopt Redis for the session cache layer',
+        'We decided to use Redis for caching because its TTL and eviction fit our session model.',
+      ),
+    ).toBe(true);
+  });
+
+  it('does not flag a legit title that merely contains a single shell pipe example', () => {
+    // A lone pipe inside prose (not a doubled cell, not a trailing priority
+    // cell) must not be mistaken for a table remnant.
+    expect(hasTableRemnant('Pipe build output through `tsc | biome` in the CI gate')).toBe(false);
+  });
 });
 
 describe('startsMidClause', () => {
@@ -146,5 +234,45 @@ describe('startsMidClause', () => {
     'the JSONB indexing path', // bare article — legitimate regex capture
   ])('does not flag a legitimate start: %s', (s) => {
     expect(startsMidClause(s)).toBe(false);
+  });
+});
+
+describe('endsMidClause', () => {
+  it.each([
+    'sync regex over many files. Make it',
+    'Migrate the config writer to',
+    'Wrap every write with',
+    'This defers the snapshot work and',
+    'Choose Postgres because',
+    'Keep the retry budget under',
+  ])('flags mid-clause tail: %s', (s) => {
+    expect(endsMidClause(s)).toBe(true);
+  });
+
+  it.each([
+    'Use Postgres over MySQL for JSONB support',
+    'The helper renames the temp file atomically.',
+    'Route writes through `atomicWriteJson`',
+    'Adopt Redis for the session cache layer',
+    'Ship the P0 batch this week', // ends "week" (content word), not dangling
+  ])('does not flag a complete tail: %s', (s) => {
+    expect(endsMidClause(s)).toBe(false);
+  });
+});
+
+describe('hasTableRemnant', () => {
+  it.each([
+    'graph evolution over time | | P1',
+    'Do the thing | P0 | later stuff | P1',
+    'Ship it | P0',
+  ])('flags table remnant: %s', (s) => {
+    expect(hasTableRemnant(s)).toBe(true);
+  });
+
+  it.each([
+    'Use Postgres over MySQL for JSONB support',
+    'Pipe build output through `tsc | biome` in CI',
+  ])('does not flag legit prose: %s', (s) => {
+    expect(hasTableRemnant(s)).toBe(false);
   });
 });
