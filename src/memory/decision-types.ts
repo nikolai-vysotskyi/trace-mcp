@@ -153,6 +153,13 @@ export interface DecisionQuery {
    */
   order_by?: 'recency' | 'heat' | 'created_at';
   /**
+   * Provenance ranking. When true (default) for the `recency`/`created_at`
+   * orderings, manually-authored (`source='manual'`) and explicitly-approved
+   * (`review_status='approved'`) decisions rank ABOVE auto-mined rows, which
+   * are noisier. Set `false` to restore pure recency ordering. No effect on
+   * `order_by='heat'` (heat already blends signal). */
+  rank_by_provenance?: boolean;
+  /**
    * Heat scoring overrides for `order_by='heat'`. Optional — defaults come
    * from `memory.heat.*` config or hard-coded defaults in `computeHeat`.
    */

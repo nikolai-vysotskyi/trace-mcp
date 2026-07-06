@@ -15,6 +15,7 @@ import { logger } from '../logger.js';
 import { detectGitWorktree } from '../project-root.js';
 import { getCurrentBranch } from '../utils/git-branch.js';
 import { computeConfidence } from './decision-confidence.js';
+import { minedDecisionRejectReason } from './decision-quality.js';
 import { mineProviderSessions } from './conversation-miner-providers.js';
 import type { DecisionInput, DecisionStore, DecisionType } from './decision-store.js';
 import { type LlmExtractedDecision, extractDecisionsWithLlm } from './llm-extractor.js';
@@ -690,6 +691,9 @@ function adaptLlmDecisions(
     const cleanTitle = sanitizeTitle(d.title);
     if (cleanTitle === null) continue;
     if (isContentNonEnglish(d.content)) continue;
+    // Same truncation gate the regex path applies — a model can still emit a
+    // dangling clause or a too-short summary. Reject before it is stored.
+    if (minedDecisionRejectReason(cleanTitle, d.content) !== null) continue;
     const heuristic = computeConfidence({
       title: cleanTitle,
       content: d.content,
