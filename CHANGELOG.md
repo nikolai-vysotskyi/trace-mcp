@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.45.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.45.1...v1.45.2) (2026-07-06)
+
+
+### Bug Fixes
+
+* **memory:** tighten mined-decision quality gate (code spans, dangling tails, table remnants) ([1933076](https://github.com/nikolai-vysotskyi/trace-mcp/commit/19330762979fdc8e1349c2ebd10b985782eadeab)), closes [#233](https://github.com/nikolai-vysotskyi/trace-mcp/issues/233)
+
 ## [1.45.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.45.0...v1.45.1) (2026-07-06)
 
 
