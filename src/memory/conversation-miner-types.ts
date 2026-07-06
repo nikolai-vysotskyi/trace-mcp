@@ -17,6 +17,7 @@
  */
 
 import type { DecisionType } from './decision-types.js';
+import { minedDecisionRejectReason } from './decision-quality.js';
 import { isContentNonEnglish, sanitizeTitle } from './title-extractor.js';
 
 // ════════════════════════════════════════════════════════════════════════
@@ -321,6 +322,14 @@ export function extractDecisions(turns: ConversationTurn[]): ExtractedDecision[]
         // candidates whose surrounding context is predominantly non-English
         // even if the title slice itself happened to land in Latin chars.
         if (isContentNonEnglish(content)) continue;
+
+        // Quality gate: reject truncated mid-sentence / mid-word fragments
+        // before they become stored "knowledge". The title is a bounded regex
+        // group that can open on a mid-clause conjunction ("so let's monitor
+        // it over the rest of this"); the content is a raw ±200-char window
+        // that can be a single chopped token ("ming).", "budget |") or carry
+        // a broken UTF-8 decode ("оп."). See decision-quality.ts.
+        if (minedDecisionRejectReason(title, content) !== null) continue;
 
         const confidence = Math.min(pattern.confidence * boosterMultiplier, 0.99);
 

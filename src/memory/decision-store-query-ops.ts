@@ -151,8 +151,20 @@ export class QueryOperations {
       return scored.slice(offset, offset + limit).map((s) => s.row);
     }
 
-    const orderClause =
-      orderBy === 'created_at' ? 'ORDER BY d.created_at DESC' : 'ORDER BY d.valid_from DESC';
+    // Provenance ranking: manually authored / explicitly approved decisions
+    // are trustworthy signal and must rank above auto-mined rows, which are
+    // noisier (see the session-decision-miner truncation class). A store can
+    // be >95% mined; without this, a handful of hand-written decisions drown
+    // under recency. `source='manual'` and `review_status='approved'` both
+    // get the top rank; everything else (mined/auto, review_status NULL)
+    // falls to the recency tiebreaker below. Opt out with
+    // `rank_by_provenance: false` to restore pure recency ordering.
+    const provenanceRank =
+      query.rank_by_provenance === false
+        ? ''
+        : "CASE WHEN d.source = 'manual' OR d.review_status = 'approved' THEN 0 ELSE 1 END ASC, ";
+    const recencyClause = orderBy === 'created_at' ? 'd.created_at DESC' : 'd.valid_from DESC';
+    const orderClause = `ORDER BY ${provenanceRank}${recencyClause}`;
     const sql = `SELECT d.* FROM decisions d ${where} ${orderClause} LIMIT ? OFFSET ?`;
     params.push(limit, offset);
 
