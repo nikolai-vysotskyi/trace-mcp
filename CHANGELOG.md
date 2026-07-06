@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.45.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.45.2...v1.45.3) (2026-07-06)
+
+
+### Bug Fixes
+
+* **init:** run Windows hooks through hidden PowerShell wrappers (no console flashing) ([aa2ce31](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aa2ce31a7372e5e4493456b55a4b9055963fbb19)), closes [#230](https://github.com/nikolai-vysotskyi/trace-mcp/issues/230)
+
 ## [1.45.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.45.1...v1.45.2) (2026-07-06)
 
 
