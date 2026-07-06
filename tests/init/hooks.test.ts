@@ -332,6 +332,194 @@ describe('installReindexHook', () => {
   });
 });
 
+// --- Windows hidden-hook launcher (issue #230) -------------------------------
+// On Windows every hook must be registered through the hidden PowerShell shim
+// (`powershell.exe ... -WindowStyle Hidden -File trace-mcp-hidden-run.ps1
+// "<hook>.cmd"`) instead of `cmd /c "<hook>.cmd"`, so no console window flashes
+// on each Edit/Write/MultiEdit. `IS_WINDOWS`/`HOOK_EXT` are module-level
+// constants, so the platform must be stubbed BEFORE importing the module.
+describe('Windows hidden-hook command form (issue #230)', () => {
+  async function importOnPlatform(platform: NodeJS.Platform) {
+    const origPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+    vi.resetModules();
+    const mod = await import('../../src/init/hooks.js');
+    return {
+      mod,
+      restore: () =>
+        Object.defineProperty(process, 'platform', {
+          value: origPlatform,
+          configurable: true,
+        }),
+    };
+  }
+
+  it('registers reindex through hidden PowerShell wrapper referencing a .ps1 shim on win32', async () => {
+    const { mod, restore } = await importOnPlatform('win32');
+    try {
+      mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+        const s = String(p);
+        if (s.includes('hooks') && s.includes('trace-mcp-reindex.cmd') && !s.includes('.claude'))
+          return true;
+        if (s.includes('hooks') && s.includes('trace-mcp-hidden-run.ps1') && !s.includes('.claude'))
+          return true;
+        if (s.includes('.claw')) return false;
+        return false;
+      });
+
+      mod.installReindexHook({ global: true });
+
+      const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+        String(c[0]).includes('settings.json'),
+      );
+      const settings = JSON.parse(String(writeCall![1]).trim());
+      const command = settings.hooks.PostToolUse[0].hooks[0].command as string;
+
+      // Hidden PowerShell form — not the flashing `cmd /c` form.
+      expect(command).toContain('powershell.exe');
+      expect(command).toContain('-WindowStyle Hidden');
+      expect(command).toContain('-NoProfile');
+      expect(command).toContain('-NonInteractive');
+      expect(command).toContain('-ExecutionPolicy Bypass');
+      expect(command).toContain('-File');
+      expect(command).toContain('trace-mcp-hidden-run.ps1');
+      // Still runs the real .cmd hook (passed as the target argument).
+      expect(command).toContain('trace-mcp-reindex.cmd');
+      expect(command).not.toContain('cmd /c');
+
+      // The hidden-run shim is written (with BOM) alongside the .cmd.
+      const ps1Writes = mockFs.writeFileSync.mock.calls.map((c) => String(c[0]));
+      expect(ps1Writes.some((dest) => dest.endsWith('trace-mcp-hidden-run.ps1'))).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it('installs the hidden-run shim for a plainCommand hook too (session-start)', async () => {
+    const { mod, restore } = await importOnPlatform('win32');
+    try {
+      mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+        const s = String(p);
+        if (
+          s.includes('hooks') &&
+          s.includes('trace-mcp-session-start.cmd') &&
+          !s.includes('.claude')
+        )
+          return true;
+        if (s.includes('hooks') && s.includes('trace-mcp-hidden-run.ps1') && !s.includes('.claude'))
+          return true;
+        if (s.includes('.claw')) return false;
+        return false;
+      });
+
+      mod.installSessionStartHook({ global: true });
+
+      const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+        String(c[0]).includes('settings.json'),
+      );
+      const settings = JSON.parse(String(writeCall![1]).trim());
+      const command = settings.hooks.SessionStart[0].hooks[0].command as string;
+      expect(command).toContain('powershell.exe');
+      expect(command).toContain('-WindowStyle Hidden');
+      expect(command).toContain('trace-mcp-hidden-run.ps1');
+      expect(command).toContain('trace-mcp-session-start.cmd');
+
+      const ps1Writes = mockFs.writeFileSync.mock.calls.map((c) => String(c[0]));
+      expect(ps1Writes.some((dest) => dest.endsWith('trace-mcp-hidden-run.ps1'))).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it('rewrites an existing `cmd /c` reindex registration to the hidden form on reinstall (upgrade path)', async () => {
+    const { mod, restore } = await importOnPlatform('win32');
+    try {
+      // Old-style settings.json entry a pre-#230 install would have left behind.
+      const legacy = JSON.stringify({
+        hooks: {
+          PostToolUse: [
+            {
+              matcher: 'Edit|Write|MultiEdit',
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'cmd /c "C:\\Users\\u\\.claude\\hooks\\trace-mcp-reindex.cmd"',
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+        const s = String(p);
+        if (s.includes('settings.json')) return true;
+        if (s.includes('hooks') && s.includes('trace-mcp-reindex.cmd') && !s.includes('.claude'))
+          return true;
+        if (s.includes('hooks') && s.includes('trace-mcp-hidden-run.ps1') && !s.includes('.claude'))
+          return true;
+        if (s.includes('.claw')) return false;
+        return false;
+      });
+      mockFs.readFileSync.mockImplementation((p: fs.PathLike) => {
+        if (String(p).includes('settings.json')) return legacy;
+        return '{}';
+      });
+
+      mod.installReindexHook({ global: true });
+
+      const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+        String(c[0]).includes('settings.json'),
+      );
+      const settings = JSON.parse(String(writeCall![1]).trim());
+      // Not duplicated — the existing entry is rewritten in place.
+      expect(settings.hooks.PostToolUse).toHaveLength(1);
+      const command = settings.hooks.PostToolUse[0].hooks[0].command as string;
+      expect(command).not.toContain('cmd /c');
+      expect(command).toContain('powershell.exe');
+      expect(command).toContain('-WindowStyle Hidden');
+      expect(command).toContain('trace-mcp-hidden-run.ps1');
+    } finally {
+      restore();
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'registers the plain hook path (no PowerShell wrapper) on non-win32',
+    async () => {
+      const { mod, restore } = await importOnPlatform('linux');
+      try {
+        mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+          const s = String(p).replace(/\\/g, '/');
+          if (s.includes('trace-mcp-reindex') && !s.includes('.claude')) return true;
+          if (s.includes('.claw')) return false;
+          return false;
+        });
+
+        mod.installReindexHook({ global: true });
+
+        const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+          String(c[0]).includes('settings.json'),
+        );
+        const settings = JSON.parse(String(writeCall![1]).trim());
+        const command = settings.hooks.PostToolUse[0].hooks[0].command as string;
+        expect(command).not.toContain('powershell');
+        expect(command).not.toContain('WindowStyle');
+        expect(command).toContain('trace-mcp-reindex.sh');
+
+        // No hidden-run shim on non-Windows.
+        const writes = [
+          ...mockFs.copyFileSync.mock.calls.map((c) => String(c[1])),
+          ...mockFs.writeFileSync.mock.calls.map((c) => String(c[0])),
+        ];
+        expect(writes.some((dest) => dest.endsWith('trace-mcp-hidden-run.ps1'))).toBe(false);
+      } finally {
+        restore();
+      }
+    },
+  );
+});
+
 describe('installLifecycleHooks', () => {
   it('returns one skipped step per hook on dry run', () => {
     const results = installLifecycleHooks({ dryRun: true });

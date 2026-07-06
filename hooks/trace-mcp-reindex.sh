@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trace-mcp-reindex v0.3.0
+# trace-mcp-reindex v0.4.0
 # trace-mcp PostToolUse auto-reindex hook
 # Daemon-first: posts to the running daemon's /api/projects/reindex-file
 # endpoint via curl (no Node startup). Falls back to a cold subprocess
