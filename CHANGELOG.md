@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.45.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.45.0...v1.45.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* **memory:** reject truncated fragments in session decision mining ([78accf0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/78accf001ea4e7839318fefceac859ce5566e120)), closes [#231](https://github.com/nikolai-vysotskyi/trace-mcp/issues/231)
+
 ## [1.45.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.44.0...v1.45.0) (2026-07-04)
 
 
