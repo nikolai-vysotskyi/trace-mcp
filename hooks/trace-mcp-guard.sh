@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.11.0
+# trace-mcp-guard v0.12.0
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
 #
 # v0.11 changes (enforcement tier — TRACE_MCP_ENFORCE):

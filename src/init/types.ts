@@ -80,12 +80,16 @@ export interface InitReport {
   steps: InitStepResult[];
 }
 
-export const GUARD_HOOK_VERSION = '0.11.0';
-export const REINDEX_HOOK_VERSION = '0.3.0';
-export const PRECOMPACT_HOOK_VERSION = '0.2.0';
-export const WORKTREE_HOOK_VERSION = '0.2.0';
-export const SESSION_START_HOOK_VERSION = '0.1.0';
-export const USER_PROMPT_SUBMIT_HOOK_VERSION = '0.1.0';
-export const STOP_HOOK_VERSION = '0.1.0';
-export const SESSION_END_HOOK_VERSION = '0.1.0';
+// Versions bumped for the Windows hidden-hook launcher (issue #230): every
+// Windows hook now registers as a hidden PowerShell command instead of
+// `cmd /c`. The bump makes `trace-mcp init` treat existing installs as
+// outdated and rewrite the registered command + install the hidden-run shim.
+export const GUARD_HOOK_VERSION = '0.12.0';
+export const REINDEX_HOOK_VERSION = '0.4.0';
+export const PRECOMPACT_HOOK_VERSION = '0.3.0';
+export const WORKTREE_HOOK_VERSION = '0.3.0';
+export const SESSION_START_HOOK_VERSION = '0.2.0';
+export const USER_PROMPT_SUBMIT_HOOK_VERSION = '0.2.0';
+export const STOP_HOOK_VERSION = '0.2.0';
+export const SESSION_END_HOOK_VERSION = '0.2.0';
 export const LAUNCHER_VERSION = '0.2.0';

@@ -1,5 +1,5 @@
 @echo off
-REM trace-mcp-guard v0.11.0
+REM trace-mcp-guard v0.12.0
 REM trace-mcp PreToolUse guard (Windows)
 REM Blocks Read/Grep/Glob/Bash on source code files + Agent(Explore) subagents - redirects to trace-mcp tools.
 REM Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).

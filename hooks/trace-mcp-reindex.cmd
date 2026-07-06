@@ -1,5 +1,5 @@
 @echo off
-REM trace-mcp-reindex v0.1.0
+REM trace-mcp-reindex v0.4.0
 REM trace-mcp PostToolUse auto-reindex hook (Windows)
 REM Triggers incremental reindex after Edit/Write/MultiEdit on code files.
 REM Runs trace-mcp index-file in the background - non-blocking.

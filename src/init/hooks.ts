@@ -25,13 +25,44 @@ const IS_WINDOWS = process.platform === 'win32';
 const HOOK_EXT = IS_WINDOWS ? '.cmd' : '.sh';
 
 /**
+ * Windows-only PowerShell shim that runs a .cmd hook inside a hidden console.
+ * Installed alongside every Windows hook (see WINDOWS_HIDDEN_AUX). See the
+ * script header and issue #230 for why plain `cmd /c` is not used on Windows.
+ */
+const HIDDEN_RUN_PS1 = 'trace-mcp-hidden-run.ps1';
+
+/**
+ * Aux-file descriptor injected into every hook on Windows so the hidden-run
+ * shim is always present next to the .cmd it launches.
+ */
+const WINDOWS_HIDDEN_AUX: { file: string; platforms?: NodeJS.Platform[] } = {
+  file: HIDDEN_RUN_PS1,
+  platforms: ['win32'],
+};
+
+/**
  * Build the hook command string — platform-aware.
+ *
+ * On non-Windows the hook path is executed directly.
+ *
+ * On Windows the hook is a .cmd, but registering it as `cmd /c "...cmd"` makes
+ * a visible console window flash on every invocation (issue #230). Instead we
+ * launch a hidden PowerShell shim that runs the .cmd inside a hidden console:
+ *
+ *   powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass
+ *     -WindowStyle Hidden -File "<dir>\trace-mcp-hidden-run.ps1" "<dir>\<hook>.cmd"
+ *
+ * The shim forwards stdin (the hook JSON payload), relays stdout/stderr, and
+ * propagates the exit code, so hook behavior is identical — just windowless.
+ *
  * Claude Code does not substitute {{tool_name}} in hook commands; tool info
- * is delivered to the hook via stdin JSON. Hooks read `tool_name` from stdin
- * via jq, so no env var prefix is needed.
+ * is delivered to the hook via stdin JSON. Hooks read `tool_name` from stdin,
+ * so no env var prefix is needed.
  */
 function hookCommand(hookPath: string): string {
-  return IS_WINDOWS ? `cmd /c "${hookPath}"` : hookPath;
+  if (!IS_WINDOWS) return hookPath;
+  const shim = path.join(path.dirname(hookPath), HIDDEN_RUN_PS1);
+  return `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "${shim}" "${hookPath}"`;
 }
 
 function plainHookCommand(hookPath: string): string {
@@ -337,18 +368,22 @@ function installHook(
     fs.copyFileSync(hookSrc, dest);
     if (!IS_WINDOWS) fs.chmodSync(dest, 0o755);
 
-    // Copy aux files (e.g. Windows .ps1 helper) into the same hooks dir.
-    if (desc.auxFiles) {
-      for (const aux of desc.auxFiles) {
-        if (aux.platforms && !aux.platforms.includes(process.platform)) continue;
-        const auxSrc = findAuxFile(aux.file);
-        if (!auxSrc) continue; // soft-fail: main script still works, fallback path handles missing helper
-        const auxDest = path.join(path.dirname(dest), aux.file);
-        // Prepend a UTF-8 BOM for .ps1 helpers so Windows PowerShell 5.1 decodes
-        // them as UTF-8 regardless of the machine's system codepage.
-        fs.writeFileSync(auxDest, withPs1Bom(auxDest, fs.readFileSync(auxSrc)));
-        if (!IS_WINDOWS) fs.chmodSync(auxDest, 0o644);
-      }
+    // Copy aux files (e.g. Windows .ps1 helpers) into the same hooks dir.
+    // On Windows every hook is launched through the hidden-run shim, so that
+    // shim is always installed next to the .cmd it runs (issue #230).
+    const auxFiles = [...(desc.auxFiles ?? [])];
+    if (IS_WINDOWS && !auxFiles.some((a) => a.file === HIDDEN_RUN_PS1)) {
+      auxFiles.push(WINDOWS_HIDDEN_AUX);
+    }
+    for (const aux of auxFiles) {
+      if (aux.platforms && !aux.platforms.includes(process.platform)) continue;
+      const auxSrc = findAuxFile(aux.file);
+      if (!auxSrc) continue; // soft-fail: main script still works, fallback path handles missing helper
+      const auxDest = path.join(path.dirname(dest), aux.file);
+      // Prepend a UTF-8 BOM for .ps1 helpers so Windows PowerShell 5.1 decodes
+      // them as UTF-8 regardless of the machine's system codepage.
+      fs.writeFileSync(auxDest, withPs1Bom(auxDest, fs.readFileSync(auxSrc)));
+      if (!IS_WINDOWS) fs.chmodSync(auxDest, 0o644);
     }
 
     const sPath = settingsPath(client, !!opts.global);
