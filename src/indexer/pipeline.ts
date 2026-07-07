@@ -599,6 +599,10 @@ export class IndexingPipeline {
     }
 
     if (this._postprocessLevel === 'full' && !this._isIncremental && result.indexed > 0) {
+      // #237: yield before the (synchronous, potentially multi-second) graph
+      // snapshot capture so /health can be serviced between edge resolution and
+      // snapshotting on a full reindex.
+      await new Promise<void>((r) => setImmediate(r));
       try {
         // P02 Task DAG: graph-snapshots is scheduled via this._dag. The Task
         // wrapper is a pure adapter — it calls `captureGraphSnapshots(store,
@@ -738,6 +742,12 @@ export class IndexingPipeline {
     if (scope === undefined) this._lastFullResolveMs = Date.now();
     const yieldLoop = () => new Promise<void>((r) => setImmediate(r));
     const edgeResolver = new EdgeResolver(this.getPipelineState());
+    // #237: the postprocess (edge-resolution) phase runs right after extraction
+    // hits 100%, and in the field SIGTERMs delivered during this window were
+    // only processed once it finished — i.e. this phase starves the event loop
+    // and /health. Yield before the first (heaviest, cross-file) resolver pass
+    // so the loop can service a health check between extraction and resolution.
+    await yieldLoop();
     await edgeResolver.resolveEdges(
       this.buildProjectContext(),
       this.buildResolveContext(scope),

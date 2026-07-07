@@ -7,6 +7,8 @@
 // server is wired (see src/server/transport-hardening.ts).
 import { hardenStdio } from './server/transport-hardening.js';
 import { installProcessSafetyNet } from './server/process-safety-net.js';
+import { startParentDeathWatch } from './server/parent-death-watch.js';
+import { armBoundedExit } from './server/bounded-shutdown.js';
 import { startDaemonLogRotation } from './daemon/lifecycle.js';
 
 if (process.argv.includes('serve') || process.argv.length === 2) {
@@ -55,6 +57,7 @@ import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
 import { saveGlobalSettingsJsonc } from './config-jsonc.js';
 import { isDaemonRunning } from './daemon/client.js';
+import { buildHealthPayload } from './daemon/health-payload.js';
 import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { MemoryScheduler } from './memory/scheduler/memory-scheduler.js';
 import { ProjectManager } from './daemon/project-manager.js';
@@ -352,6 +355,13 @@ program
       if (shuttingDown) return;
       shuttingDown = true;
       logger.info({ reason }, 'Shutting down trace-mcp server');
+      // #236 defect 2: orphaned sessions survived SIGTERM because graceful
+      // shutdown could hang (drain that never resolves, or the event loop
+      // starved by a synchronous indexing loop so this continuation never ran)
+      // — only SIGKILL worked. Arm a bounded hard-exit so a wedged session
+      // cannot outlive its shutdown signal. Unref'd, so it never keeps the
+      // process alive on its own.
+      armBoundedExit(reason);
       try {
         await session.shutdown(reason);
       } catch (err) {
@@ -372,6 +382,14 @@ program
     });
     process.stdin.on('close', () => {
       void shutdown('stdin-close');
+    });
+    // #236 defect 1b: stdin close is the primary parent-death signal, but in
+    // the field ~20 orphans kept running with their stdin fd held open via an
+    // inherited pipe (ppid became 1, host long dead). Poll ppid as a cheap
+    // fallback so a reparented-to-init session shuts itself down.
+    startParentDeathWatch((reason) => {
+      logger.warn({ reason }, 'Detected orphaned session (parent died) — shutting down');
+      void shutdown(reason);
     });
 
     logger.info(
@@ -794,6 +812,15 @@ program
 
     const startedAt = Date.now();
 
+    // #237: the listener binds BEFORE startup indexing (Phase 5.1 defers
+    // loadAllRegistered to the listen() callback), so /health answers from the
+    // first millisecond. But during the initial reindex of all registered
+    // projects the daemon is alive yet not warmed. Report status "starting"
+    // until that finishes so clients wait/back off instead of concluding the
+    // daemon is dead and respawning it (the restart-war root cause). Flipped to
+    // true at the end of the post-listen bootstrap below.
+    let startupComplete = false;
+
     const httpServer = http.createServer(async (req, res) => {
       const clientIp = req.socket.remoteAddress ?? 'unknown';
 
@@ -1085,14 +1112,15 @@ program
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
-          JSON.stringify({
-            status: 'ok',
-            transport: 'http',
-            version: PKG_VERSION,
-            uptime: Math.floor((Date.now() - startedAt) / 1000),
-            pid: process.pid,
-            projects,
-          }),
+          JSON.stringify(
+            buildHealthPayload({
+              startupComplete,
+              version: PKG_VERSION,
+              uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+              pid: process.pid,
+              projects,
+            }),
+          ),
         );
         return;
       }
@@ -2629,7 +2657,14 @@ program
       res.end();
     });
 
+    let daemonShuttingDown = false;
     const shutdown = async (reason?: string) => {
+      // Re-entrancy guard: a SIGTERM delivered while the event loop was starved
+      // by an indexing run only gets *processed* at the next yield, and a second
+      // signal (or an idle-exit racing the signal) could re-enter this. Run the
+      // cleanup once.
+      if (daemonShuttingDown) return;
+      daemonShuttingDown = true;
       // Field debugging of the 60s restart loop (desktop-app /health watchdog
       // firing `daemon restart` against a warming daemon) was blind because
       // shutdowns left no trace of WHO asked. Always say why we're going down.
@@ -2639,6 +2674,12 @@ program
         { reason: reason ?? 'unknown', uptimeSec: Math.floor((Date.now() - startedAt) / 1000) },
         'Daemon shutting down',
       );
+      // #237 point 3 / #236 defect 2 (daemon path): graceful shutdown awaits
+      // async cleanup and only exits from httpServer.close()'s callback. If a
+      // close hangs or the event loop is starved, the daemon would never die on
+      // a legitimate SIGTERM. Arm a bounded hard-exit so termination is
+      // guaranteed within a bounded time. Unref'd — never keeps the process up.
+      armBoundedExit(reason ?? 'unknown');
       // Close SSE connections
       for (const res of sseConnections) {
         try {
@@ -2866,6 +2907,13 @@ program
         } catch (err) {
           logger.error({ err }, 'loadAllRegistered failed during cold-start');
         }
+
+        // #237: startup indexing is done (registered projects loaded, or
+        // errored — either way the daemon is warmed and serving, not
+        // "starting"). Flip BEFORE the best-effort steps below so /health
+        // reports "ok" the moment the blocking work finishes. The cwd-add and
+        // grammar warm-up that follow are non-gating.
+        startupComplete = true;
 
         // Soft GC: prune expired session DBs (>7 days) from ~/.trace-mcp/index/.
         // Conservative — never touches live or orphan_* categories. The
