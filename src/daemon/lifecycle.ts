@@ -60,6 +60,14 @@ export interface EnsureResult {
   strategy?: 'launchd' | 'detached' | 'already-running' | 'none';
 }
 
+/**
+ * How long a client waits for a provably-alive-but-unresponsive daemon to
+ * answer /health again before treating it as wedged and restarting (#237). A
+ * heavy reindex can starve the event loop for a couple of minutes; this window
+ * must comfortably exceed that so a busy daemon is never killed mid-index.
+ */
+const ALIVE_DAEMON_BACKOFF_MS = 180_000;
+
 // ── Opt-out sentinel (#202) ─────────────────────────────────────────
 // A user who prefers pure stdio can remove the daemon and expect it to stay
 // gone. `trace-mcp daemon stop` records an explicit opt-out; auto-spawn then
@@ -513,6 +521,20 @@ function stopDaemonByPid(): void {
   }
 }
 
+/**
+ * Is a daemon process provably alive right now? True when daemon.pid names a
+ * live, ownership-verified process (guards PID reuse via the start-token).
+ *
+ * This is the "provably alive" probe the respawn policy leans on (#237): an
+ * unreachable /health during a heavy indexing run does NOT mean the daemon is
+ * dead — the event loop is just starved and can't answer. A client that would
+ * otherwise kill+restart the daemon must first ask this; if it's true, the
+ * daemon is busy, not gone, and killing it only feeds the restart war.
+ */
+export function isDaemonProcessAlive(): boolean {
+  return readDaemonPid() !== null;
+}
+
 function ensureDaemonGeneric(port: number): EnsureResult {
   if (readDaemonPid() !== null) {
     return { ok: true, alreadyRunning: true, strategy: 'already-running' };
@@ -794,7 +816,35 @@ export async function tryAutoSpawnDaemon(
       return { ok: true };
     }
 
-    // Daemon didn't come up in time. One retry with restart (kills zombie if any).
+    // #237 restart-war guard: /health didn't answer in time — but that is NOT
+    // proof the daemon is dead. During a heavy reindex the event loop is
+    // starved and can't answer /health for minutes, even though the process is
+    // alive and making progress. If the daemon process is provably alive
+    // (daemon.pid names a live, ownership-verified process), do NOT kill+restart
+    // it — that is exactly what fed the restart war (hook-spawned CLIs killing a
+    // busy daemon on every Edit). Back off with a generous window instead.
+    if (isDaemonProcessAlive()) {
+      logger.info(
+        { port },
+        'Daemon /health slow but process is alive (likely indexing) — backing off instead of restarting',
+      );
+      // Generous multi-minute wait: an indexing run can starve /health for a
+      // couple of minutes. Kill+restart is reserved for a genuinely gone or
+      // wedged-beyond-recovery process.
+      const backoffUp = await waitForDaemonUp(port, ALIVE_DAEMON_BACKOFF_MS);
+      if (backoffUp) {
+        logger.info({ port }, 'Daemon became responsive after back-off — no restart needed');
+        return { ok: true, alreadyRunning: true };
+      }
+      // Still no /health after a multi-minute wait AND still alive — genuinely
+      // wedged. Fall through to restart as a last resort.
+      logger.warn(
+        { port, backoffMs: ALIVE_DAEMON_BACKOFF_MS },
+        'Daemon still unresponsive after back-off despite live process — restarting as last resort',
+      );
+    }
+
+    // Daemon is gone (or wedged beyond the back-off). One retry with restart.
     logger.warn({ port, timeoutMs }, 'Daemon did not come up in time, attempting restart');
     const restartResult = restartDaemon({ port });
     if (!restartResult.ok) {

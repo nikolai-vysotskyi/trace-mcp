@@ -1,7 +1,12 @@
 import { DEFAULT_DAEMON_PORT } from '../global.js';
 
 export interface DaemonHealthResponse {
-  status: 'ok';
+  /**
+   * `"starting"` means the daemon has bound its listener and is answering
+   * /health but is still running startup indexing (#237). It is ALIVE — a
+   * "starting" response must never be interpreted as a dead daemon.
+   */
+  status: 'ok' | 'starting';
   transport: 'http';
   /** Daemon version (PKG_VERSION of the running serve-http process). */
   version?: string;
@@ -9,6 +14,19 @@ export interface DaemonHealthResponse {
   pid?: number;
   uptime?: number;
   projects?: { root: string; status: string }[];
+  /** Present only while `status === "starting"`. */
+  phase?: 'startup_index';
+  /** Present only while `status === "starting"`: cheap per-project progress. */
+  progress?: { projectsReady: number; projectsTotal: number };
+}
+
+/**
+ * A daemon that responds to /health at all is alive — whether it reports "ok"
+ * or "starting". Every "is the daemon dead → respawn" decision must go through
+ * this so a live-but-indexing daemon is never respawned (#237 restart war).
+ */
+export function isDaemonAlive(health: DaemonHealthResponse | null): boolean {
+  return health !== null;
 }
 
 /**
