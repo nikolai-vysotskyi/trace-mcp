@@ -68,7 +68,7 @@ export const initCommand = new Command('init')
   .option('--skip-app', 'Do not install or update the menu bar app')
   .option(
     '--mcp-client <name>',
-    'Force MCP client: claude-code | claw-code | claude-desktop | cursor | windsurf | continue | junie | codex | hermes | amp | warp | factory-droid',
+    'Force MCP client: claude-code | claw-code | claude-desktop | cursor | windsurf | continue | junie | codex | hermes | amp | warp | factory-droid | cline | kilocode | antigravity | kimi',
   )
   .option('--force', 'Overwrite existing configuration')
   .option('--dry-run', 'Show what would be done without writing files')
@@ -163,6 +163,10 @@ export const initCommand = new Command('init')
             'amp',
             'warp',
             'factory-droid',
+            'cline',
+            'kilocode',
+            'antigravity',
+            'kimi',
           ];
           const detectedNames = new Set(mcpClients.map((c) => c.name));
 
@@ -918,6 +922,10 @@ function formatClientName(name: string): string {
     amp: 'AMP',
     warp: 'Warp',
     'factory-droid': 'Factory Droid',
+    cline: 'Cline',
+    kilocode: 'Kilo Code',
+    antigravity: 'Antigravity',
+    kimi: 'Kimi Code CLI',
   };
   return names[name] ?? name;
 }

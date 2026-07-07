@@ -144,9 +144,42 @@ describe('getMcpClientStatuses', () => {
       'hermes',
       'warp',
       'jetbrains-ai',
+      'cline',
+      'kilocode',
+      'antigravity',
+      'kimi',
     ]) {
       expect(names.has(expected as never)).toBe(true);
     }
+  });
+
+  it('reports missing → up_to_date round-trip for cline, antigravity, kimi', () => {
+    const clients: Array<'cline' | 'antigravity' | 'kimi'> = ['cline', 'antigravity', 'kimi'];
+    // Missing before any write.
+    for (const c of clients) {
+      const [before] = getMcpClientStatuses(projectRoot, 'global', [c]);
+      expect(before.status, `${c} should start missing`).toBe('missing');
+      expect(typeof before.configPath).toBe('string');
+    }
+    // up_to_date immediately after write.
+    for (const c of clients) {
+      configureMcpClients([c], projectRoot, { scope: 'global' });
+      const [after] = getMcpClientStatuses(projectRoot, 'global', [c]);
+      expect(after.status, `${c} should be up_to_date`).toBe('up_to_date');
+      expect(after.staleReason).toBeUndefined();
+    }
+  });
+
+  it('flags cline `stale` reason="command" when the launcher path drifts', () => {
+    configureMcpClients(['cline'], projectRoot, { scope: 'global' });
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['cline']);
+    const configPath = s.configPath as string;
+    const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    c.mcpServers['trace-mcp'].command = '/old/launcher/path';
+    fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
+    const [drifted] = getMcpClientStatuses(projectRoot, 'global', ['cline']);
+    expect(drifted.status).toBe('stale');
+    expect(drifted.staleReason).toBe('command');
   });
 
   it('reports codex as `unknown` (presence-only) when section exists', () => {

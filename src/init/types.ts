@@ -48,7 +48,11 @@ export interface DetectedMcpClient {
     | 'hermes'
     | 'amp'
     | 'warp'
-    | 'factory-droid';
+    | 'factory-droid'
+    | 'cline'
+    | 'kilocode'
+    | 'antigravity'
+    | 'kimi';
   configPath: string;
   hasTraceMcp: boolean;
 }

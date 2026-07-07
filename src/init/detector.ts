@@ -331,6 +331,64 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
     }
   }
 
+  // VS Code User data dir — Cline and KiloCode (VS Code extensions) both keep
+  // their MCP settings under globalStorage/<extension-id>/settings/ inside it.
+  // Verified paths (mid-2026):
+  //   macOS:   ~/Library/Application Support/Code/User
+  //   Windows: %APPDATA%\Code\User
+  //   Linux:   ~/.config/Code/User
+  // Source: https://code.visualstudio.com/docs/getstarted/settings#_settings-file-locations
+  const vscodeUserDir =
+    platform === 'darwin'
+      ? path.join(HOME, 'Library', 'Application Support', 'Code', 'User')
+      : platform === 'win32'
+        ? path.join(process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'), 'Code', 'User')
+        : path.join(HOME, '.config', 'Code', 'User');
+
+  // Cline (saoudrizwan.claude-dev): standard `mcpServers` JSON at
+  // globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json.
+  // Global-only (VS Code globalStorage has no per-project variant). We only
+  // report it as detected when the extension's settings dir exists, to avoid
+  // surfacing a client the user hasn't installed.
+  // Source: https://docs.cline.bot / cline_mcp_settings.json documented shape.
+  {
+    const clineDir = path.join(
+      vscodeUserDir,
+      'globalStorage',
+      'saoudrizwan.claude-dev',
+      'settings',
+    );
+    if (fs.existsSync(clineDir)) {
+      checkConfig('cline', path.join(clineDir, 'cline_mcp_settings.json'));
+    }
+  }
+
+  // KiloCode (kilocode.kilo-code): legacy VS Code extension format uses standard
+  // `mcpServers` JSON at globalStorage/kilocode.kilo-code/settings/mcp_settings.json.
+  // Global-only. NOTE: KiloCode >= v7 (CLI) migrated to a non-standard shape at
+  // ~/.config/kilo/kilo.jsonc (top-level `mcp` key, `command` as array,
+  // `type: local`). We target only the standard-shape legacy extension config
+  // here — detection is gated on the extension's settings dir existing.
+  // Sources: https://github.com/Kilo-Org/kilocode-legacy/blob/main/docs/file-locations.md
+  //          https://github.com/Kilo-Org/kilocode/issues/6481
+  {
+    const kiloDir = path.join(vscodeUserDir, 'globalStorage', 'kilocode.kilo-code', 'settings');
+    if (fs.existsSync(kiloDir)) {
+      checkConfig('kilocode', path.join(kiloDir, 'mcp_settings.json'));
+    }
+  }
+
+  // Antigravity (Google's agentic IDE, Windsurf lineage): standard `mcpServers`
+  // JSON at ~/.gemini/config/mcp_config.json. Global-only (no documented
+  // per-project config as of mid-2026).
+  // Source: https://medium.com/google-cloud/configuring-mcp-servers-and-skills-for-antigravity-cli-and-ide-a938c7eebb78
+  checkConfig('antigravity', path.join(HOME, '.gemini', 'config', 'mcp_config.json'));
+
+  // Kimi Code CLI (Moonshot): standard `mcpServers` JSON at ~/.kimi/mcp.json,
+  // "compatible with other MCP clients". Global-only.
+  // Source: https://moonshotai.github.io/kimi-cli/en/customization/mcp.html
+  checkConfig('kimi', path.join(HOME, '.kimi', 'mcp.json'));
+
   return clients;
 }
 

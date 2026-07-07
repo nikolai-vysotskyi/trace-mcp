@@ -193,6 +193,148 @@ describe('Factory Droid writer', () => {
   });
 });
 
+// VS Code globalStorage base for Cline / KiloCode (extensions), per-OS.
+function vscodeUserDir(home: string): string {
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Application Support', 'Code', 'User');
+  }
+  if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming'), 'Code', 'User');
+  }
+  return path.join(home, '.config', 'Code', 'User');
+}
+
+describe('Cline detection', () => {
+  it('detects cline_mcp_settings.json under globalStorage saoudrizwan.claude-dev', () => {
+    const dir = path.join(
+      vscodeUserDir(fakeHome),
+      'globalStorage',
+      'saoudrizwan.claude-dev',
+      'settings',
+    );
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'cline_mcp_settings.json'),
+      JSON.stringify({
+        mcpServers: { 'trace-mcp': { command: '/bin/true', args: ['serve'] } },
+      }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    const cline = clients.find((c) => c.name === 'cline');
+    expect(cline).toBeDefined();
+    expect(cline?.hasTraceMcp).toBe(true);
+  });
+
+  it('does not report cline when the extension settings dir is absent', () => {
+    const clients = detectMcpClients(projectRoot);
+    expect(clients.find((c) => c.name === 'cline')).toBeUndefined();
+  });
+});
+
+describe('KiloCode detection', () => {
+  it('detects mcp_settings.json under globalStorage kilocode.kilo-code', () => {
+    const dir = path.join(
+      vscodeUserDir(fakeHome),
+      'globalStorage',
+      'kilocode.kilo-code',
+      'settings',
+    );
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'mcp_settings.json'),
+      JSON.stringify({ mcpServers: { other: { command: 'x', args: [] } } }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    const kilo = clients.find((c) => c.name === 'kilocode');
+    expect(kilo).toBeDefined();
+    expect(kilo?.hasTraceMcp).toBe(false);
+  });
+});
+
+describe('Antigravity detection', () => {
+  it('detects ~/.gemini/config/mcp_config.json with trace-mcp entry', () => {
+    const dir = path.join(fakeHome, '.gemini', 'config');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, 'mcp_config.json'),
+      JSON.stringify({
+        mcpServers: { 'trace-mcp': { command: '/bin/true', args: ['serve'] } },
+      }),
+    );
+    const clients = detectMcpClients(projectRoot);
+    const anti = clients.find((c) => c.name === 'antigravity');
+    expect(anti?.hasTraceMcp).toBe(true);
+  });
+});
+
+describe('Kimi detection', () => {
+  it('detects ~/.kimi/mcp.json without trace-mcp', () => {
+    const dir = path.join(fakeHome, '.kimi');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'mcp.json'), JSON.stringify({ mcpServers: {} }));
+    const clients = detectMcpClients(projectRoot);
+    const kimi = clients.find((c) => c.name === 'kimi');
+    expect(kimi).toBeDefined();
+    expect(kimi?.hasTraceMcp).toBe(false);
+  });
+});
+
+describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', () => {
+  it('Cline: creates cline_mcp_settings.json with trace-mcp serve entry', () => {
+    const results = configureMcpClients(['cline'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('created');
+    const file = path.join(
+      vscodeUserDir(fakeHome),
+      'globalStorage',
+      'saoudrizwan.claude-dev',
+      'settings',
+      'cline_mcp_settings.json',
+    );
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    const entry = parsed.mcpServers['trace-mcp'];
+    expect(entry.args).toEqual(['serve']);
+    expect(entry.cwd).toBe(projectRoot);
+    // Standard shape clients must not carry the Claude-only alwaysLoad flag.
+    expect(entry.alwaysLoad).toBeUndefined();
+  });
+
+  it('KiloCode: creates mcp_settings.json and preserves existing servers', () => {
+    const file = path.join(
+      vscodeUserDir(fakeHome),
+      'globalStorage',
+      'kilocode.kilo-code',
+      'settings',
+      'mcp_settings.json',
+    );
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ mcpServers: { linear: { command: 'npx', args: ['@linear/mcp'] } } }),
+    );
+    configureMcpClients(['kilocode'], projectRoot, { scope: 'global' });
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers.linear).toBeDefined();
+    expect(parsed.mcpServers['trace-mcp'].args).toEqual(['serve']);
+  });
+
+  it('Antigravity: writes ~/.gemini/config/mcp_config.json', () => {
+    const results = configureMcpClients(['antigravity'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('created');
+    const file = path.join(fakeHome, '.gemini', 'config', 'mcp_config.json');
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace-mcp'].args).toEqual(['serve']);
+  });
+
+  it('Kimi: writes ~/.kimi/mcp.json and reports already_configured on re-run', () => {
+    const first = configureMcpClients(['kimi'], projectRoot, { scope: 'global' });
+    expect(first[0].action).toBe('created');
+    const file = path.join(fakeHome, '.kimi', 'mcp.json');
+    expect(fs.existsSync(file)).toBe(true);
+    const second = configureMcpClients(['kimi'], projectRoot, { scope: 'global' });
+    expect(second[0].action).toBe('already_configured');
+  });
+});
+
 describe('Warp configuration', () => {
   it('always returns skipped with paste-snippet detail', () => {
     const results = configureMcpClients(['warp'], projectRoot, { scope: 'global' });
