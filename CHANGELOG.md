@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.46.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.45.3...v1.46.0) (2026-07-07)
+
+
+### Features
+
+* **init:** add KiloCode, Cline, Antigravity, Kimi MCP client auto-configuration ([ed20612](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ed206126724ec6525efc98a7b3e73fe8dfe11845)), closes [#76](https://github.com/nikolai-vysotskyi/trace-mcp/issues/76)
+
+
+### Bug Fixes
+
+* **daemon:** kill the restart war — session parent-death + SIGTERM bounded exit, /health "starting" during any indexing ([8dbea96](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8dbea96c2a421656ace117966549660b0afc2c8a)), closes [#236](https://github.com/nikolai-vysotskyi/trace-mcp/issues/236) [#237](https://github.com/nikolai-vysotskyi/trace-mcp/issues/237)
+
 ## [1.45.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.45.2...v1.45.3) (2026-07-06)
 
 
