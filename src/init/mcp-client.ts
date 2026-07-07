@@ -686,6 +686,10 @@ const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
   'hermes',
   'jetbrains-ai',
   'warp',
+  'cline',
+  'kilocode',
+  'antigravity',
+  'kimi',
 ];
 
 /**
@@ -795,8 +799,9 @@ function detectClientStatus(
       }
     }
     default: {
-      // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie
-      // all use the standard mcpServers JSON shape compared by entryMatches().
+      // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie,
+      // cline, kilocode, antigravity, kimi all use the standard mcpServers JSON
+      // shape compared by entryMatches().
       const present = (() => {
         try {
           const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
@@ -916,7 +921,57 @@ function getConfigPath(
     case 'hermes':
       // Hermes Agent is always-global; project scope is a no-op here.
       return path.join(process.env.HERMES_HOME ?? path.join(HOME, '.hermes'), 'config.yaml');
+    case 'cline':
+      // Cline (VS Code extension saoudrizwan.claude-dev): standard mcpServers JSON,
+      // global-only (lives in VS Code globalStorage, no per-project variant).
+      // Source: cline_mcp_settings.json documented shape.
+      return path.join(
+        vscodeUserDir(),
+        'globalStorage',
+        'saoudrizwan.claude-dev',
+        'settings',
+        'cline_mcp_settings.json',
+      );
+    case 'kilocode':
+      // KiloCode legacy VS Code extension (kilocode.kilo-code): standard mcpServers
+      // JSON, global-only. The newer CLI (>= v7) uses a non-standard ~/.config/kilo/
+      // kilo.jsonc shape we deliberately do not write; we target the standard
+      // extension config only.
+      return path.join(
+        vscodeUserDir(),
+        'globalStorage',
+        'kilocode.kilo-code',
+        'settings',
+        'mcp_settings.json',
+      );
+    case 'antigravity':
+      // Antigravity (Google agentic IDE): standard mcpServers JSON, global-only.
+      // Source: ~/.gemini/config/mcp_config.json.
+      return path.join(HOME, '.gemini', 'config', 'mcp_config.json');
+    case 'kimi':
+      // Kimi Code CLI (Moonshot): standard mcpServers JSON at ~/.kimi/mcp.json,
+      // global-only. Source: https://moonshotai.github.io/kimi-cli/en/customization/mcp.html
+      return path.join(HOME, '.kimi', 'mcp.json');
     default:
       return null;
   }
+}
+
+/**
+ * VS Code User data dir — Cline and KiloCode (VS Code extensions) store their
+ * MCP settings under globalStorage/<extension-id>/settings/ inside it. Verified
+ * per-OS locations (mid-2026):
+ *   macOS:   ~/Library/Application Support/Code/User
+ *   Windows: %APPDATA%\Code\User
+ *   Linux:   ~/.config/Code/User
+ * Source: https://code.visualstudio.com/docs/getstarted/settings#_settings-file-locations
+ */
+function vscodeUserDir(): string {
+  if (process.platform === 'darwin') {
+    return path.join(HOME, 'Library', 'Application Support', 'Code', 'User');
+  }
+  if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA ?? path.join(HOME, 'AppData', 'Roaming'), 'Code', 'User');
+  }
+  return path.join(HOME, '.config', 'Code', 'User');
 }
