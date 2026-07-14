@@ -21,6 +21,9 @@ importers:
       '@ast-grep/napi':
         specifier: ^0.44.0
         version: 0.44.0
+      '@blackwell-systems/gcf':
+        specifier: 2.4.0
+        version: 2.4.0
       '@clack/prompts':
         specifier: ^1.2.0
         version: 1.4.0
@@ -298,6 +301,10 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@blackwell-systems/gcf@2.4.0':
+    resolution: {integrity: sha512-lLEZCzNMYVk630iaVVPPhcQtmCjhPRETRlwk/JAptGE0SEL6ZMHfA9HZPornuMvvpGeyrimRjj9Yb2nYQNS1og==}
+    hasBin: true
 
   '@bramus/specificity@2.4.2':
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
@@ -2893,6 +2900,8 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.5.0':
     optional: true
+
+  '@blackwell-systems/gcf@2.4.0': {}
 
   '@bramus/specificity@2.4.2':
     dependencies:

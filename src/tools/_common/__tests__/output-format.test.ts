@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import { decodeGeneric } from '@blackwell-systems/gcf';
 import { decode as toonDecode } from '@toon-format/toon';
-import { OutputFormatSchema, encodeResponse, isToonRequested } from '../output-format.js';
+import {
+  OutputFormatSchema,
+  encodeResponse,
+  isGcfRequested,
+  isToonRequested,
+} from '../output-format.js';
 
 describe('output-format', () => {
   describe('OutputFormatSchema', () => {
-    it('accepts json, markdown, toon and undefined', () => {
+    it('accepts json, markdown, toon, gcf and undefined', () => {
       expect(OutputFormatSchema.parse('json')).toBe('json');
       expect(OutputFormatSchema.parse('markdown')).toBe('markdown');
       expect(OutputFormatSchema.parse('toon')).toBe('toon');
+      expect(OutputFormatSchema.parse('gcf')).toBe('gcf');
       expect(OutputFormatSchema.parse(undefined)).toBeUndefined();
     });
 
@@ -86,6 +93,55 @@ describe('output-format', () => {
     });
   });
 
+  describe('encodeResponse — gcf', () => {
+    it('encodes a tabular array and round-trips via decodeGeneric()', () => {
+      const payload = [
+        { a: 1, b: 'x' },
+        { a: 2, b: 'y' },
+      ];
+      const out = encodeResponse(payload, 'gcf');
+      expect(out).toBeTruthy();
+      expect(out.length).toBeGreaterThan(0);
+      expect(out).toContain('a');
+      expect(out).toContain('b');
+      const decoded = decodeGeneric(out);
+      expect(decoded).toEqual(payload);
+    });
+
+    it('encodes nested objects losslessly', () => {
+      const payload = {
+        items: [
+          { id: 1, name: 'foo' },
+          { id: 2, name: 'bar' },
+        ],
+        total: 2,
+      };
+      const out = encodeResponse(payload, 'gcf');
+      const decoded = decodeGeneric(out);
+      expect(decoded).toEqual(payload);
+    });
+
+    it('falls back to JSON.stringify for a primitive string', () => {
+      const out = encodeResponse('plain string', 'gcf');
+      expect(out).toBe(JSON.stringify('plain string'));
+    });
+
+    it('falls back to JSON.stringify for a primitive number', () => {
+      const out = encodeResponse(42, 'gcf');
+      expect(out).toBe(JSON.stringify(42));
+    });
+
+    it('falls back to JSON.stringify for null', () => {
+      const out = encodeResponse(null, 'gcf');
+      expect(out).toBe(JSON.stringify(null));
+    });
+
+    it('falls back to JSON.stringify for undefined', () => {
+      const out = encodeResponse(undefined, 'gcf');
+      expect(out).toBe(JSON.stringify(undefined));
+    });
+  });
+
   describe('encodeResponse — markdown', () => {
     it('throws because markdown is tool-specific', () => {
       expect(() => encodeResponse({ a: 1 }, 'markdown')).toThrow(/markdown is tool-specific/);
@@ -109,6 +165,27 @@ describe('output-format', () => {
       expect(isToonRequested(null)).toBe(false);
       expect(isToonRequested(42)).toBe(false);
       expect(isToonRequested({})).toBe(false);
+    });
+  });
+
+  describe('isGcfRequested', () => {
+    it('narrows correctly for "gcf"', () => {
+      const v: unknown = 'gcf';
+      expect(isGcfRequested(v)).toBe(true);
+      if (isGcfRequested(v)) {
+        const t: 'gcf' = v;
+        expect(t).toBe('gcf');
+      }
+    });
+
+    it('returns false for other formats', () => {
+      expect(isGcfRequested('json')).toBe(false);
+      expect(isGcfRequested('markdown')).toBe(false);
+      expect(isGcfRequested('toon')).toBe(false);
+      expect(isGcfRequested(undefined)).toBe(false);
+      expect(isGcfRequested(null)).toBe(false);
+      expect(isGcfRequested(42)).toBe(false);
+      expect(isGcfRequested({})).toBe(false);
     });
   });
 });

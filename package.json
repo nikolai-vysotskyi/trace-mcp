@@ -70,6 +70,7 @@
   },
   "dependencies": {
     "@ast-grep/napi": "^0.44.0",
+    "@blackwell-systems/gcf": "2.4.0",
     "@clack/prompts": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@parcel/watcher": "^2.5.6",
