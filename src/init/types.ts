@@ -96,4 +96,4 @@ export const SESSION_START_HOOK_VERSION = '0.2.0';
 export const USER_PROMPT_SUBMIT_HOOK_VERSION = '0.2.0';
 export const STOP_HOOK_VERSION = '0.2.0';
 export const SESSION_END_HOOK_VERSION = '0.2.0';
-export const LAUNCHER_VERSION = '0.2.0';
+export const LAUNCHER_VERSION = '0.3.0';

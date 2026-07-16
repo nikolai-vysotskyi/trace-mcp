@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.2.0 (Windows)
+# trace-mcp-launcher v0.3.0 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
