@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.2.0
+# trace-mcp-launcher v0.3.0
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a minimal
 # probe fallback for when the config is stale (e.g. Node was reinstalled).

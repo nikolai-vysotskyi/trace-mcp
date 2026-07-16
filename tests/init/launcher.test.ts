@@ -197,3 +197,18 @@ describe('setupLauncher (install + config)', () => {
     expect(readLauncherConfig().version).toBe('2.0.0');
   });
 });
+
+describe('Windows launcher .cmd template', () => {
+  // Static content check — runs on every platform since it just reads the
+  // template file, not a spawned process. The cmd->powershell hop does not
+  // inherit windowsHide from the MCP client's spawn(), so -WindowStyle Hidden
+  // is required to avoid a flashing console on first daemon start.
+  it('invokes powershell.exe with -WindowStyle Hidden before -File', () => {
+    const cmdPath = path.resolve(__dirname, '..', '..', 'hooks', 'trace-mcp-launcher.cmd');
+    const body = fs.readFileSync(cmdPath, 'utf-8');
+    expect(body).toContain(`trace-mcp-launcher v${LAUNCHER_VERSION}`);
+    expect(body).toContain('powershell.exe');
+    expect(body).toContain('-WindowStyle Hidden');
+    expect(body.indexOf('-WindowStyle Hidden')).toBeLessThan(body.indexOf('-File'));
+  });
+});
