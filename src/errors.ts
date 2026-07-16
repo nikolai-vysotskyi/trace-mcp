@@ -47,9 +47,15 @@ export function formatToolError(error: TraceMcpError): object {
     message: 'message' in error ? error.message : 'detail' in error ? error.detail : error.code,
   };
 
-  if (error.code === 'NOT_FOUND' && error.candidates?.length) {
-    base.suggestions = error.candidates;
-    base.help = 'Use search() to find the correct symbol_id';
+  if (error.code === 'NOT_FOUND') {
+    base.message = `'${error.id}' is not in the index`;
+    if (error.candidates?.length) {
+      base.suggestions = error.candidates;
+      base.help = 'Use search() to find the correct symbol_id';
+    } else {
+      base.help =
+        'If this is a file path, it may not match the configured include globs — check `include`/`exclude` in .trace-mcp.json and reindex. Otherwise use search() to locate the symbol.';
+    }
   }
 
   return { error: base };
