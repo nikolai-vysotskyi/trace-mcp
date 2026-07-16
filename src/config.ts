@@ -807,6 +807,11 @@ export const TraceMcpConfigSchema = z.object({
     // excluded virtualenv/cache dirs so Python coverage does not depend on a
     // particular layout. Mirrors the existing global markdown glob below.
     '**/*.{py,pyi}',
+    // .NET solutions place projects at arbitrary root dirs (core/, data/,
+    // identity/, Source/ ...) rather than src/lib/app, so a directory-rooted
+    // glob misses most of the code (#242, piranha.core). Index every `.cs`
+    // outside the excluded build-output dirs, mirroring the Python glob above.
+    '**/*.cs',
     'database/migrations/**/*.php',
     'resources/js/**/*.{vue,ts,tsx,js,jsx}',
     'resources/assets/**/*.{vue,ts,tsx,js,jsx}',
@@ -853,6 +858,12 @@ export const TraceMcpConfigSchema = z.object({
     '**/.ruff_cache/**',
     '**/.eggs/**',
     '**/*.egg-info/**',
+    // .NET build output. `obj/` holds compiler-generated .cs (AssemblyInfo,
+    // *.g.cs) that the global `**/*.cs` include must not pull in. `bin/` is
+    // scoped to Debug/Release so Rust's `src/bin/*.rs` convention still works.
+    '**/obj/**',
+    '**/bin/Debug/**',
+    '**/bin/Release/**',
   ]),
   // Directory symlinks are not followed during indexing by default — a symlink
   // cycling back to an ancestor (e.g. Ansible Molecule's `roles/<role> -> ../../../`

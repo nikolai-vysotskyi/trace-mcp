@@ -76,6 +76,50 @@ describe('config', () => {
     expect(matched.some((m) => m.includes('__pycache__/'))).toBe(false);
   });
 
+  it('default include globs index a .NET solution with arbitrary project roots (#242)', async () => {
+    // Regression: piranha.core keeps projects under core/, data/, identity/ —
+    // none of the directory-rooted globs (src/, lib/, app/ ...) matched, so
+    // get_outline returned NOT_FOUND for every .cs file. The global `**/*.cs`
+    // include must discover them while skipping obj/ and bin/{Debug,Release}
+    // build output.
+    tmpDir = createTmpDir('trace-mcp-dotnet-');
+    const files = [
+      'core/Piranha/App.cs',
+      'data/Piranha.Data.EF/Module.cs',
+      'identity/Piranha.AspNetCore.Identity/Startup.cs',
+      'test/Piranha.Tests/AppTests.cs',
+      // build output that must be excluded
+      'data/Piranha.Data.EF/obj/Debug/net8.0/Piranha.Data.EF.AssemblyInfo.cs',
+      'core/Piranha/bin/Debug/net8.0/Generated.cs',
+      'core/Piranha/bin/Release/net8.0/Generated.cs',
+      // Rust bin convention must survive the bin/ exclusion
+      'src/bin/main.rs',
+    ];
+    for (const f of files) {
+      const abs = path.join(tmpDir, f);
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, '// x\n');
+    }
+
+    const config = (await loadConfig(tmpDir))._unsafeUnwrap();
+    const matched = await fg(config.include, {
+      cwd: tmpDir,
+      ignore: config.exclude,
+      dot: false,
+      onlyFiles: true,
+    });
+
+    expect(matched).toContain('core/Piranha/App.cs');
+    expect(matched).toContain('data/Piranha.Data.EF/Module.cs');
+    expect(matched).toContain('identity/Piranha.AspNetCore.Identity/Startup.cs');
+    expect(matched).toContain('test/Piranha.Tests/AppTests.cs');
+    expect(matched).toContain('src/bin/main.rs');
+
+    expect(matched.some((m) => m.includes('/obj/'))).toBe(false);
+    expect(matched.some((m) => m.includes('/bin/Debug/'))).toBe(false);
+    expect(matched.some((m) => m.includes('/bin/Release/'))).toBe(false);
+  });
+
   it('loads .trace-mcp.json config file', async () => {
     tmpDir = createTmpDir('trace-mcp-test-');
     const configFile = path.join(tmpDir, '.trace-mcp.json');
