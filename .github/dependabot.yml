@@ -87,3 +87,22 @@ updates:
     commit-message:
       prefix: chore(ci)
       include: scope
+    groups:
+      # codeql-action's init / analyze / upload-sarif steps MUST move in
+      # lockstep: a mixed version pair fails CodeQL with
+      # "Loaded a configuration file for version X, but running version Y".
+      # Keep every github/codeql-action ref in a single PR across all update
+      # types so it can never be split into individually-failing PRs.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
+        update-types:
+          - major
+          - minor
+          - patch
+      # Batch remaining routine minor/patch action bumps into one PR.
+      # Major bumps of other actions are left as individual PRs for review.
+      github-actions-minor-patch:
+        update-types:
+          - minor
+          - patch
