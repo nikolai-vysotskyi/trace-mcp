@@ -46,14 +46,52 @@ interface DiffHunk {
 }
 
 /**
+ * Read the remote's default branch via the local `refs/remotes/origin/HEAD`
+ * symref (set by `git clone` / `git remote set-head origin -a`). Returns
+ * e.g. "origin/main". Undefined if unset or no `origin` remote.
+ */
+function detectOriginHeadBranch(rootPath: string): string | undefined {
+  try {
+    const ref = execFileSync(
+      'git',
+      ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
+      { cwd: rootPath, encoding: 'utf-8', timeout: 5_000, env: safeGitEnv(), stdio: 'pipe' },
+    ).trim();
+    return ref || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Read the current branch's configured upstream (e.g. "origin/develop").
+ * Undefined if HEAD is detached or has no upstream configured.
+ */
+function detectUpstreamBranch(rootPath: string): string | undefined {
+  try {
+    const ref = execFileSync(
+      'git',
+      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+      { cwd: rootPath, encoding: 'utf-8', timeout: 5_000, env: safeGitEnv(), stdio: 'pipe' },
+    ).trim();
+    return ref || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Auto-detect the base branch and return merge-base with the target ref.
- * Priority: configured defaultBaseBranch → main → master → err.
+ * Priority: configured defaultBaseBranch (exclusive, no further fallback)
+ * → origin/HEAD symref → current branch's upstream → "main" → "master" → err.
+ * The origin/HEAD and upstream probes cover repos whose default branch is
+ * neither "main" nor "master" (e.g. "develop", "trunk").
  */
 function detectBaseBranch(
   rootPath: string,
   until: string,
   defaultBaseBranch?: string,
-): TraceMcpResult<string> {
+): TraceMcpResult<{ base: string; mergeBase: string }> {
   // `until` is already validated by the caller; defend against accidental
   // misuse if a future caller wires it up wrong.
   if (!isSafeGitRef(until)) {
@@ -63,10 +101,21 @@ function detectBaseBranch(
     });
   }
 
-  const candidates = defaultBaseBranch ? [defaultBaseBranch] : ['main', 'master'];
+  const candidates: string[] = [];
+  if (defaultBaseBranch) {
+    candidates.push(defaultBaseBranch);
+  } else {
+    const originHead = detectOriginHeadBranch(rootPath);
+    if (originHead) candidates.push(originHead);
+    const upstream = detectUpstreamBranch(rootPath);
+    if (upstream) candidates.push(upstream);
+    candidates.push('main', 'master');
+  }
 
+  const tried: string[] = [];
   for (const candidate of candidates) {
-    if (!isSafeGitRef(candidate)) continue;
+    if (!isSafeGitRef(candidate) || tried.includes(candidate)) continue;
+    tried.push(candidate);
     try {
       const mergeBase = execFileSync('git', ['merge-base', candidate, until], {
         cwd: rootPath,
@@ -75,16 +124,16 @@ function detectBaseBranch(
         env: safeGitEnv(),
         stdio: 'pipe',
       }).trim();
-      return ok(mergeBase);
+      return ok({ base: candidate, mergeBase });
     } catch {
       // try next candidate
     }
   }
 
-  const tried = candidates.map((c) => `"${c}"`).join(', ');
+  const triedStr = tried.map((c) => `"${c}"`).join(', ') || 'none';
   return err({
     code: 'VALIDATION_ERROR',
-    message: `Cannot auto-detect base branch (tried ${tried}). Please provide an explicit "since" ref or set git.defaultBaseBranch in config.`,
+    message: `Cannot auto-detect base branch (tried ${triedStr}). Please provide an explicit "since" ref or set git.defaultBaseBranch in config.`,
   });
 }
 
@@ -122,7 +171,7 @@ export function getChangedSymbols(
   } else {
     const detected = detectBaseBranch(rootPath, until, opts.defaultBaseBranch);
     if (detected.isErr()) return detected as never;
-    since = detected.value;
+    since = detected.value.mergeBase;
   }
 
   const range = `${since}..${until}`;
@@ -377,8 +426,8 @@ export function compareBranches(
   } else {
     const detected = detectBaseBranch(rootPath, branch, opts.defaultBaseBranch);
     if (detected.isErr()) return detected as never;
-    mergeBase = detected.value;
-    base = opts.defaultBaseBranch ?? 'main';
+    mergeBase = detected.value.mergeBase;
+    base = detected.value.base;
   }
 
   // Count commits in range
