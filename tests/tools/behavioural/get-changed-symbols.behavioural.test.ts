@@ -29,12 +29,31 @@ interface GitMock {
   nameStatus?: string;
   /** Output for `git diff --unified=0 …`. */
   unified?: string;
+  /** Output for `git symbolic-ref --short refs/remotes/origin/HEAD`, or throws if unset. */
+  originHead?: string;
+  /** Output for `git rev-parse --abbrev-ref --symbolic-full-name @{upstream}`, or throws if unset. */
+  upstream?: string;
+  /** Base-branch names that fail merge-base (simulates "branch doesn't exist"). */
+  mergeBaseFailsFor?: string[];
 }
 
 function mockGit(g: GitMock): void {
   mockExec.mockImplementation(((_cmd: string, args: readonly string[] | undefined) => {
     const a = (args ?? []) as string[];
-    if (a[0] === 'merge-base') return g.mergeBase ?? 'abc1234';
+    if (a[0] === 'symbolic-ref') {
+      if (g.originHead === undefined) throw new Error('no origin HEAD');
+      return g.originHead;
+    }
+    if (a[0] === 'rev-parse' && a.includes('@{upstream}')) {
+      if (g.upstream === undefined) throw new Error('no upstream');
+      return g.upstream;
+    }
+    if (a[0] === 'merge-base') {
+      const candidate = a[1];
+      if (g.mergeBaseFailsFor?.includes(candidate))
+        throw new Error(`unknown revision: ${candidate}`);
+      return g.mergeBase ?? 'abc1234';
+    }
     if (a[0] === 'diff' && a.includes('--name-status')) return g.nameStatus ?? '';
     if (a[0] === 'diff' && a.includes('--unified=0')) return g.unified ?? '';
     return '';
@@ -206,5 +225,73 @@ describe('getChangedSymbols() — behavioural contract', () => {
     });
     expect(mergeBaseCall).toBeDefined();
     expect(result.value.since).toBe('merge-base-sha');
+  });
+
+  it('falls back to origin/HEAD when default branch is neither main nor master', () => {
+    mockGit({
+      originHead: 'origin/trunk',
+      mergeBase: 'trunk-merge-base',
+      nameStatus: 'M\tsrc/auth/login.ts',
+      unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+    });
+
+    const result = getChangedSymbols(store, '/proj', { until: 'HEAD' });
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+
+    expect(result.value.since).toBe('trunk-merge-base');
+    const mergeBaseCall = mockExec.mock.calls.find((c) => (c[1] as string[])[0] === 'merge-base');
+    expect((mergeBaseCall?.[1] as string[])[1]).toBe('origin/trunk');
+  });
+
+  it('falls back to the upstream branch when origin/HEAD is unset', () => {
+    mockGit({
+      // no originHead → symbolic-ref throws
+      upstream: 'origin/develop',
+      mergeBase: 'develop-merge-base',
+      nameStatus: 'M\tsrc/auth/login.ts',
+      unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+    });
+
+    const result = getChangedSymbols(store, '/proj', { until: 'HEAD' });
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+
+    expect(result.value.since).toBe('develop-merge-base');
+    const mergeBaseCall = mockExec.mock.calls.find((c) => (c[1] as string[])[0] === 'merge-base');
+    expect((mergeBaseCall?.[1] as string[])[1]).toBe('origin/develop');
+  });
+
+  it('still falls back to main/master when origin/HEAD and upstream are both unset', () => {
+    mockGit({
+      // no originHead, no upstream → both probes throw
+      mergeBaseFailsFor: ['main'],
+      mergeBase: 'master-merge-base',
+      nameStatus: 'M\tsrc/auth/login.ts',
+      unified: '+++ b/src/auth/login.ts\n@@ -5,3 +5,5 @@\n',
+    });
+
+    const result = getChangedSymbols(store, '/proj', { until: 'HEAD' });
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) return;
+
+    expect(result.value.since).toBe('master-merge-base');
+  });
+
+  it('an explicit defaultBaseBranch config is tried exclusively (no main/master fallback)', () => {
+    mockGit({
+      mergeBaseFailsFor: ['release'],
+      nameStatus: '',
+      unified: '',
+    });
+
+    const result = getChangedSymbols(store, '/proj', {
+      until: 'HEAD',
+      defaultBaseBranch: 'release',
+    });
+    expect(result.isErr()).toBe(true);
+    if (!result.isErr()) return;
+    expect(result.error.message).toContain('"release"');
+    expect(result.error.message).not.toContain('"main"');
   });
 });
