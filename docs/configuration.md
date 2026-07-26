@@ -383,7 +383,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 ```jsonc
 {
   "tools": {
-    "preset": "full",                    // "full" | "minimal" | custom preset
+    "preset": "standard",                // "full" | "standard" | "minimal" | "review" | "architecture"
     "description_verbosity": "full",     // "full" | "minimal" | "none"
     "instructions_verbosity": "full",    // "full" | "minimal" | "none" — controls the tool-routing block
     "agent_behavior": "off",             // "strict" | "minimal" | "off" — see below
@@ -395,7 +395,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"full"` | Tool preset (`full`, `minimal`, or custom name from `~/.trace-mcp/presets/`) |
+| `tools.preset` | `"standard"` | Tool preset: `standard` (~50 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (~16 tools), `review`, `architecture`, or `full` (all ~170 tools, opt-in) |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
