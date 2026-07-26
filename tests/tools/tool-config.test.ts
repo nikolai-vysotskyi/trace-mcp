@@ -3,6 +3,27 @@ import { TraceMcpConfigSchema } from '../../src/config.js';
 import { resolvePreset, TOOL_PRESETS } from '../../src/tools/project/presets.js';
 
 describe('Tool config schema', () => {
+  it('defaults tools.preset to "standard", not "full" (TRA-5: trim default surface)', () => {
+    const result = TraceMcpConfigSchema.safeParse({ tools: {} });
+    expect(result.success).toBe(true);
+    expect(result.data?.tools?.preset).toBe('standard');
+  });
+
+  it('the default preset registers well under half of the full tool surface', () => {
+    // Guards against the "170 tools loaded by default" regression this issue fixed.
+    const standard = resolvePreset('standard');
+    expect(standard).toBeInstanceOf(Set);
+    expect((standard as Set<string>).size).toBeLessThan(80);
+  });
+
+  it('every non-full preset carries register_edit and batch', () => {
+    for (const [name, tools] of Object.entries(TOOL_PRESETS)) {
+      if (tools === 'all') continue;
+      expect(tools, `preset "${name}" is missing register_edit`).toContain('register_edit');
+      expect(tools, `preset "${name}" is missing batch`).toContain('batch');
+    }
+  });
+
   it('accepts descriptions override in tools config', () => {
     const result = TraceMcpConfigSchema.safeParse({
       tools: {

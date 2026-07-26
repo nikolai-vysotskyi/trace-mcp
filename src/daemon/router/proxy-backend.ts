@@ -3,6 +3,7 @@ import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { logger } from '../../logger.js';
 import { resolveWorktreeAware, worktreeHint } from '../../registry-worktree.js';
 import { resolveDeepestKnownRoot } from '../../subproject/resolve.js';
+import { isTransientError, withRetry } from '../../utils/retry.js';
 import type { Backend } from './types.js';
 
 /**
@@ -164,7 +165,17 @@ export class ProxyBackend implements Backend {
     // Cache the handshake so we can replay it if the daemon session dies.
     if (isInitializeRequest(msg)) this.initializeFrame = msg;
     try {
-      await this.httpTransport.send(msg);
+      // Transient network blips (daemon mid-restart, dropped connection) are
+      // common during a daemon respawn; retry a couple of times with short
+      // backoff before falling through to the heavier session-lost recovery
+      // or surfacing an error to the client (#TRA-6).
+      await withRetry(() => this.httpTransport!.send(msg), {
+        maxAttempts: 3,
+        initialDelayMs: 200,
+        maxDelayMs: 800,
+        label: 'ProxyBackend.send',
+        isRetryable: isTransientError,
+      });
       return;
     } catch (err) {
       // Only recover from a lost daemon session, and never for the initialize
