@@ -215,17 +215,41 @@ describe('ProxyBackend daemon-restart recovery', () => {
     expect((transports[1]!.sent[2] as { id: number }).id).toBe(5);
   });
 
-  it('propagates non-session errors without re-initializing', async () => {
+  it('propagates non-session errors without re-initializing once retries are exhausted', async () => {
     const backend = makeBackend();
     await backend.start();
     await backend.send(initFrame(1));
 
     const first = transports[0]!;
+    let calls = 0;
     first.send = async () => {
+      calls++;
       throw new Error('ECONNRESET socket hang up');
     };
 
     await expect(backend.send(toolCall(2))).rejects.toThrow(/ECONNRESET/);
-    expect(transports).toHaveLength(1);
+    expect(transports).toHaveLength(1); // retried on the same transport, no reinit
+    expect(calls).toBe(3); // exhausted the transient-retry budget
+  });
+
+  it('retries a transient transport error and succeeds without hard-failing the request', async () => {
+    const backend = makeBackend();
+    await backend.start();
+    await backend.send(initFrame(1));
+
+    const first = transports[0]!;
+    const realSend = first.send.bind(first);
+    let attempts = 0;
+    first.send = async (msg) => {
+      attempts++;
+      if (attempts < 3) throw new TypeError('fetch failed');
+      return realSend(msg);
+    };
+
+    await backend.send(toolCall(2));
+
+    expect(attempts).toBe(3);
+    expect(transports).toHaveLength(1); // no reinit needed — same transport recovered
+    expect(first.sent.map(methodOf)).toEqual(['initialize', 'tools/call']);
   });
 });
