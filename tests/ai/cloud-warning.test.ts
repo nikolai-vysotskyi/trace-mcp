@@ -20,18 +20,13 @@ beforeEach(() => {
 });
 
 describe('isCloudProvider / isLocalProvider', () => {
-  it.each([
-    'openai',
-    'gemini',
-    'voyage',
-    'vertex',
-    'minimax',
-    'azure-openai',
-    'groq',
-  ])('recognises %s as cloud', (p) => {
-    expect(isCloudProvider(p)).toBe(true);
-    expect(isLocalProvider(p)).toBe(false);
-  });
+  it.each(['openai', 'gemini', 'voyage', 'vertex', 'minimax', 'azure-openai', 'groq'])(
+    'recognises %s as cloud',
+    (p) => {
+      expect(isCloudProvider(p)).toBe(true);
+      expect(isLocalProvider(p)).toBe(false);
+    },
+  );
 
   it.each(['ollama', 'onnx', 'fallback'])('recognises %s as local', (p) => {
     expect(isLocalProvider(p)).toBe(true);
