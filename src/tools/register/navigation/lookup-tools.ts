@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from '../_zod-helpers.js';
@@ -10,6 +9,7 @@ import { decisionsForImpact } from '../../../memory/enrichment.js';
 import { aggregateFreshness, computeFileFreshness } from '../../../scoring/freshness.js';
 import { computeRetrievalConfidence } from '../../../scoring/retrieval-confidence.js';
 import type { ServerContext } from '../../../server/types.js';
+import { validatePath } from '../../../utils/security.js';
 import { withLock } from '../../../utils/pid-lock.js';
 import { getChangeImpact } from '../../analysis/impact.js';
 import { getFileOutline, getSymbol } from '../../navigation/navigation.js';
@@ -27,12 +27,17 @@ import { OutputFormatSchema, encodeResponse } from '../../_common/output-format.
  * when the retry is worth attempting (the file exists on disk).
  */
 async function autoIndexOnDemand(ctx: ServerContext, filePath: string): Promise<boolean> {
-  const absPath = path.resolve(ctx.projectRoot, filePath);
-  if (!fs.existsSync(absPath)) return false;
+  const checked = validatePath(filePath, ctx.projectRoot);
+  if (checked.isErr()) return false;
+  if (!fs.existsSync(checked.value)) return false;
   try {
     const pipeline = new IndexingPipeline(ctx.store, ctx.registry, ctx.config, ctx.projectRoot);
     await withLock(
-      { lockDir: LOCKS_DIR, name: `${projectHash(ctx.projectRoot)}-reindex`, op: 'get_outline-autoindex' },
+      {
+        lockDir: LOCKS_DIR,
+        name: `${projectHash(ctx.projectRoot)}-reindex`,
+        op: 'get_outline-autoindex',
+      },
       () => pipeline.indexFiles([filePath]),
     );
   } catch {
@@ -194,7 +199,11 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         }
       }
 
-      const outlineOpts = { nested: nested === true, minLocForNesting: min_loc_for_nesting, projectRoot };
+      const outlineOpts = {
+        nested: nested === true,
+        minLocForNesting: min_loc_for_nesting,
+        projectRoot,
+      };
       let result = await getFileOutline(store, filePath, outlineOpts);
       let autoIndexed = false;
       let existsOnDisk = false;
@@ -208,7 +217,11 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
       if (result.isErr()) {
         const error =
           result.error.code === 'NOT_FOUND' && !result.error.reason
-            ? notFound(result.error.id, result.error.candidates, existsOnDisk ? 'not_indexed' : 'not_found')
+            ? notFound(
+                result.error.id,
+                result.error.candidates,
+                existsOnDisk ? 'not_indexed' : 'not_found',
+              )
             : result.error;
         return {
           content: [{ type: 'text', text: j(formatToolError(error)) }],

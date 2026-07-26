@@ -20,7 +20,11 @@ export function parseError(file: string, message: string, partial = false): Trac
   return { code: 'PARSE_ERROR', file, partial, message };
 }
 
-export function notFound(id: string, candidates?: string[], reason?: NotFoundReason): TraceMcpError {
+export function notFound(
+  id: string,
+  candidates?: string[],
+  reason?: NotFoundReason,
+): TraceMcpError {
   return { code: 'NOT_FOUND', id, candidates, reason };
 }
 

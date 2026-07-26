@@ -29,7 +29,12 @@ interface CapturedTool {
 function makeCapturingServer(): { server: unknown; captured: CapturedTool[] } {
   const captured: CapturedTool[] = [];
   const server = {
-    tool: (name: string, _description: string, _shape: Record<string, z.ZodTypeAny>, handler: Handler) => {
+    tool: (
+      name: string,
+      _description: string,
+      _shape: Record<string, z.ZodTypeAny>,
+      handler: Handler,
+    ) => {
       captured.push({ name, handler });
     },
   };
@@ -58,7 +63,13 @@ describe('get_outline — auto-index on NOT_FOUND (TRA-4)', () => {
     const ctx = {
       store,
       registry,
-      config: { root: tmpDir, include: ['src/**/*.ts'], exclude: [], db: { path: ':memory:' }, plugins: [] },
+      config: {
+        root: tmpDir,
+        include: ['src/**/*.ts'],
+        exclude: [],
+        db: { path: ':memory:' },
+        plugins: [],
+      },
       projectRoot: tmpDir,
       guardPath: () => null,
       j: (v: unknown) => JSON.stringify(v),
