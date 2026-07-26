@@ -1,11 +1,16 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { optionalNonEmptyString } from '../_zod-helpers.js';
-import { formatToolError } from '../../../errors.js';
+import { formatToolError, notFound } from '../../../errors.js';
+import { LOCKS_DIR, projectHash } from '../../../global.js';
+import { IndexingPipeline } from '../../../indexer/pipeline.js';
 import { decisionsForImpact } from '../../../memory/enrichment.js';
 import { aggregateFreshness, computeFileFreshness } from '../../../scoring/freshness.js';
 import { computeRetrievalConfidence } from '../../../scoring/retrieval-confidence.js';
 import type { ServerContext } from '../../../server/types.js';
+import { withLock } from '../../../utils/pid-lock.js';
 import { getChangeImpact } from '../../analysis/impact.js';
 import { getFileOutline, getSymbol } from '../../navigation/navigation.js';
 import { getRelatedSymbols } from '../../navigation/related.js';
@@ -13,6 +18,28 @@ import { fallbackOutline } from '../../navigation/zero-index.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../../shared/confidence.js';
 import { compactOutlineSymbols, DetailLevelSchema, isMinimal } from '../../_common/detail-level.js';
 import { OutputFormatSchema, encodeResponse } from '../../_common/output-format.js';
+
+/**
+ * On a get_outline miss, the file may simply not be indexed yet (new/renamed
+ * file, cold start). Rather than surface a bare NOT_FOUND that pushes the
+ * caller to a full Read, parse just this one file on demand — the same
+ * single-file path `register_edit` already uses — and retry. Returns true
+ * when the retry is worth attempting (the file exists on disk).
+ */
+async function autoIndexOnDemand(ctx: ServerContext, filePath: string): Promise<boolean> {
+  const absPath = path.resolve(ctx.projectRoot, filePath);
+  if (!fs.existsSync(absPath)) return false;
+  try {
+    const pipeline = new IndexingPipeline(ctx.store, ctx.registry, ctx.config, ctx.projectRoot);
+    await withLock(
+      { lockDir: LOCKS_DIR, name: `${projectHash(ctx.projectRoot)}-reindex`, op: 'get_outline-autoindex' },
+      () => pipeline.indexFiles([filePath]),
+    );
+  } catch {
+    // Best-effort: fall through and let the caller re-check the store.
+  }
+  return true;
+}
 
 /**
  * Registers direct symbol/file lookup tools: `get_symbol`, `get_outline`,
@@ -51,8 +78,12 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         verifyAgainstGit: verify_against_git,
       });
       if (result.isErr()) {
+        const error =
+          result.error.code === 'NOT_FOUND' && !result.error.reason
+            ? notFound(result.error.id, result.error.candidates, 'unknown_symbol')
+            : result.error;
         return {
-          content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+          content: [{ type: 'text', text: j(formatToolError(error)) }],
           isError: true,
         };
       }
@@ -163,14 +194,24 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         }
       }
 
-      const result = await getFileOutline(store, filePath, {
-        nested: nested === true,
-        minLocForNesting: min_loc_for_nesting,
-        projectRoot,
-      });
+      const outlineOpts = { nested: nested === true, minLocForNesting: min_loc_for_nesting, projectRoot };
+      let result = await getFileOutline(store, filePath, outlineOpts);
+      let autoIndexed = false;
+      let existsOnDisk = false;
+      if (result.isErr() && result.error.code === 'NOT_FOUND') {
+        existsOnDisk = await autoIndexOnDemand(ctx, filePath);
+        if (existsOnDisk) {
+          result = await getFileOutline(store, filePath, outlineOpts);
+          autoIndexed = result.isOk();
+        }
+      }
       if (result.isErr()) {
+        const error =
+          result.error.code === 'NOT_FOUND' && !result.error.reason
+            ? notFound(result.error.id, result.error.candidates, existsOnDisk ? 'not_indexed' : 'not_found')
+            : result.error;
         return {
-          content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+          content: [{ type: 'text', text: j(formatToolError(error)) }],
           isError: true,
         };
       }
@@ -189,6 +230,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         path: result.value.path,
         language: result.value.language,
         symbols: projectedSymbols,
+        ...(autoIndexed ? { _auto_indexed: true } : {}),
         ...(isMinimal(detail_level)
           ? { detail_level: 'minimal' as const }
           : {
