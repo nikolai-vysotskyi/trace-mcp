@@ -483,7 +483,7 @@ export function createServer(
   }
 
   // Install tool gate (preset filtering, description overrides, savings/journal wrapping)
-  const presetName = process.env.TRACE_MCP_PRESET ?? config.tools?.preset ?? 'full';
+  const presetName = process.env.TRACE_MCP_PRESET ?? config.tools?.preset ?? 'standard';
   const presetResult = resolvePreset(presetName);
   const activePreset = presetResult ?? 'all';
 
