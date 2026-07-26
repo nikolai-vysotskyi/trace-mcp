@@ -17,6 +17,11 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_feature_context',
     'suggest_queries',
     'get_index_health',
+    // register_edit/batch are core infra (every edit-and-reindex loop and
+    // every multi-query round-trip needs them) — every non-full preset
+    // must carry them, not just 'full'.
+    'register_edit',
+    'batch',
     // Live decision-memory quartet on the minimal preset:
     //   remember = remember_decision (live agent write into the decision graph)
     //   recall   = query_decisions   (FTS search across captured decisions)
@@ -44,6 +49,8 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_feature_context',
     'suggest_queries',
     'get_index_health',
+    'register_edit',
+    'batch',
     // navigation+
     'get_related_symbols',
     'get_context_bundle',
@@ -53,13 +60,23 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_implementations',
     'reindex',
     'get_env_vars',
+    'get_changed_symbols',
     // analysis
     'get_dead_code',
+    'remove_dead_code',
+    'get_dead_exports',
     'get_circular_imports',
     'get_complexity_report',
     'check_rename',
     'get_coupling',
     'detect_antipatterns',
+    'check_duplication',
+    'get_control_flow',
+    // quality & security (top real-world usage per TRA-3 session mining)
+    'check_quality_gates',
+    'scan_security',
+    'self_audit',
+    'apply_codemod',
     // framework (gated further by has())
     'get_request_flow',
     'get_component_tree',
@@ -104,6 +121,8 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_dead_code',
     'get_complexity_report',
     'detect_antipatterns',
+    'register_edit',
+    'batch',
   ],
 
   architecture: [
@@ -111,6 +130,8 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'get_index_health',
     'search',
     'get_outline',
+    'register_edit',
+    'batch',
     'get_circular_imports',
     'get_coupling',
     'get_pagerank',

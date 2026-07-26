@@ -214,7 +214,12 @@ const ToolDescriptionOverrideSchema = z.union([
 
 const ToolsConfigSchema = z
   .object({
-    preset: z.string().default('full'),
+    // Default trimmed to 'standard' (~50 tools) per TRA-5: session mining of
+    // 1813 local sessions showed only 64/~170 tools ever get called, and the
+    // top dozen cover the vast majority of calls. 'full' remains available
+    // as an explicit opt-in (config `tools.preset: "full"` or
+    // `TRACE_MCP_PRESET=full`) for anyone who wants the entire surface.
+    preset: z.string().default('standard'),
     include: z.array(z.string()).optional(),
     exclude: z.array(z.string()).optional(),
     descriptions: z.record(z.string(), ToolDescriptionOverrideSchema).optional(),
