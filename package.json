@@ -140,7 +140,8 @@
       "sharp": ">=0.35.0",
       "fast-uri": ">=3.1.4",
       "adm-zip": ">=0.6.0",
-      "body-parser": ">=2.3.0"
+      "body-parser": ">=2.3.0",
+      "postcss": ">=8.5.18"
     },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
