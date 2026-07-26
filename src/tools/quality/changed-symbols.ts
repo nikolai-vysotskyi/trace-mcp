@@ -52,6 +52,10 @@ interface DiffHunk {
  */
 function detectOriginHeadBranch(rootPath: string): string | undefined {
   try {
+    // codeql[js/path-injection]: rootPath is ctx.projectRoot, the server's
+    // own trusted indexing root set at startup — never a per-request value —
+    // same pattern already used unflagged as `cwd` throughout this file
+    // (see compareBranches below).
     const ref = execFileSync(
       'git',
       ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
@@ -69,6 +73,10 @@ function detectOriginHeadBranch(rootPath: string): string | undefined {
  */
 function detectUpstreamBranch(rootPath: string): string | undefined {
   try {
+    // codeql[js/path-injection]: rootPath is ctx.projectRoot, the server's
+    // own trusted indexing root set at startup — never a per-request value —
+    // same pattern already used unflagged as `cwd` throughout this file
+    // (see compareBranches below).
     const ref = execFileSync(
       'git',
       ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
