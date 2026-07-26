@@ -52,14 +52,20 @@ interface DiffHunk {
  */
 function detectOriginHeadBranch(rootPath: string): string | undefined {
   try {
-    // codeql[js/path-injection]: rootPath is ctx.projectRoot, the server's
-    // own trusted indexing root set at startup — never a per-request value —
-    // same pattern already used unflagged as `cwd` throughout this file
-    // (see compareBranches below).
+    // rootPath is ctx.projectRoot, the server's own trusted indexing root
+    // set at startup — never a per-request value — same pattern already
+    // used unflagged as `cwd` throughout this file (see compareBranches).
+    const gitOpts = {
+      cwd: rootPath, // codeql[js/path-injection]: see trust note above
+      encoding: 'utf-8' as const,
+      timeout: 5_000,
+      env: safeGitEnv(),
+      stdio: 'pipe' as const,
+    };
     const ref = execFileSync(
       'git',
       ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
-      { cwd: rootPath, encoding: 'utf-8', timeout: 5_000, env: safeGitEnv(), stdio: 'pipe' },
+      gitOpts,
     ).trim();
     return ref || undefined;
   } catch {
@@ -73,14 +79,20 @@ function detectOriginHeadBranch(rootPath: string): string | undefined {
  */
 function detectUpstreamBranch(rootPath: string): string | undefined {
   try {
-    // codeql[js/path-injection]: rootPath is ctx.projectRoot, the server's
-    // own trusted indexing root set at startup — never a per-request value —
-    // same pattern already used unflagged as `cwd` throughout this file
-    // (see compareBranches below).
+    // rootPath is ctx.projectRoot, the server's own trusted indexing root
+    // set at startup — never a per-request value — same pattern already
+    // used unflagged as `cwd` throughout this file (see compareBranches).
+    const gitOpts = {
+      cwd: rootPath, // codeql[js/path-injection]: see trust note above
+      encoding: 'utf-8' as const,
+      timeout: 5_000,
+      env: safeGitEnv(),
+      stdio: 'pipe' as const,
+    };
     const ref = execFileSync(
       'git',
       ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
-      { cwd: rootPath, encoding: 'utf-8', timeout: 5_000, env: safeGitEnv(), stdio: 'pipe' },
+      gitOpts,
     ).trim();
     return ref || undefined;
   } catch {
