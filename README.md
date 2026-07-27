@@ -1,3 +1,5 @@
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fnikolai-vysotskyi%2Ftrace-mcp.svg)](https://mcptoplist.com/server/glama%2Fnikolai-vysotskyi%2Ftrace-mcp)
+
 <p align="center">
   <img src="packages/app/build/icon-256.png" alt="trace-mcp logo" width="128" />
 </p>
