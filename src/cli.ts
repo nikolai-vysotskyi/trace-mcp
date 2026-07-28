@@ -3152,14 +3152,23 @@ program
       console.log('No projects registered. Run `trace-mcp add` in a project directory.');
     } else {
       console.log('Registered projects:\n');
+      let staleCount = 0;
       for (const p of projects) {
         const lastIdx = p.lastIndexed ? new Date(p.lastIndexed).toLocaleString() : 'never';
+        const rootExists = fs.existsSync(p.root);
         const dbExists = fs.existsSync(p.dbPath) ? 'ok' : 'missing';
-        console.log(`  ${p.name}`);
+        console.log(`  ${p.name}${rootExists ? '' : '  [STALE — folder deleted]'}`);
         console.log(`    Root: ${p.root}`);
         console.log(`    DB: ${dbExists}`);
         console.log(`    Last indexed: ${lastIdx}`);
         console.log();
+        if (!rootExists) staleCount++;
+      }
+      if (staleCount > 0) {
+        console.log(
+          `${staleCount} stale entr${staleCount === 1 ? 'y' : 'ies'} (folder deleted). ` +
+            'Clean up with `trace-mcp doctor --fix` or `trace-mcp prune --apply`.',
+        );
       }
     }
   });
