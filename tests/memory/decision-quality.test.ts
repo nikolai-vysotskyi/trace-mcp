@@ -15,6 +15,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   endsMidClause,
+  hasEllipsis,
+  hasNarrationMarker,
   hasTableRemnant,
   isValidMinedDecision,
   minedDecisionRejectReason,
@@ -206,6 +208,69 @@ describe('minedDecisionRejectReason — legitimate decisions pass', () => {
     // A lone pipe inside prose (not a doubled cell, not a trailing priority
     // cell) must not be mistaken for a table remnant.
     expect(hasTableRemnant('Pipe build output through `tsc | biome` in the CI gate')).toBe(false);
+  });
+});
+
+describe('minedDecisionRejectReason — #17 narration-noise survivors', () => {
+  it('rejects a bare result verb with dropped object ("Nailed — ...")', () => {
+    const reason = minedDecisionRejectReason(
+      "nailed — and it's not flaky, it's a stale-cache + image-rotation interaction",
+      'A real English summary long enough to pass the content-length floor here.',
+    );
+    expect(reason).toBe('title_narration');
+  });
+
+  it('rejects "confirmed with hard numbers" as a bare result-verb tail', () => {
+    expect(
+      minedDecisionRejectReason(
+        'confirmed with hard numbers',
+        'A real English summary long enough to pass the content-length floor here.',
+      ),
+    ).toBe('title_narration');
+  });
+
+  it('rejects the exact generic placeholder title "investigation"', () => {
+    expect(
+      minedDecisionRejectReason(
+        'investigation',
+        'Phase 1 root cause investigation into the flaky test failures across the suite.',
+      ),
+    ).toBe('title_narration');
+  });
+
+  it('rejects first-person planning narration ("found. Let me verify...")', () => {
+    expect(
+      minedDecisionRejectReason(
+        'found. Let me verify by also checking tests and callers',
+        'A real English summary long enough to pass the content-length floor here.',
+      ),
+    ).toBe('title_narration');
+  });
+
+  it('rejects a title carrying an explicit ellipsis truncation marker', () => {
+    expect(
+      minedDecisionRejectReason(
+        'a type mismatch at a call site (...), all 3 confined to...',
+        'A real English summary long enough to pass the content-length floor here.',
+      ),
+    ).not.toBeNull();
+  });
+
+  it('rejects content that trails off with an ellipsis', () => {
+    expect(
+      minedDecisionRejectReason(
+        'Use PostgreSQL over MySQL for JSONB support',
+        'We chose PostgreSQL because its JSONB indexing fit our query patterns better...',
+      ),
+    ).toBe('content_truncated');
+  });
+
+  it('does not flag a legitimate title using "found" as a real verb with an object', () => {
+    expect(hasNarrationMarker('Found a race condition in the cache invalidation path')).toBe(false);
+  });
+
+  it('does not flag legitimate prose containing three literal dots mid-sentence', () => {
+    expect(hasEllipsis('Use PostgreSQL over MySQL for JSONB support')).toBe(false);
   });
 });
 
