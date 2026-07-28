@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.46.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.46.0...v1.46.1) (2026-07-27)
+
+
+### Bug Fixes
+
+* auto-index unindexed files on get_outline NOT_FOUND miss ([#260](https://github.com/nikolai-vysotskyi/trace-mcp/issues/260)) ([0e4a807](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0e4a80731be7fe35ee21af1eaf9dfabc6b95af35))
+* **config:** index .cs files at arbitrary .NET project roots ([#242](https://github.com/nikolai-vysotskyi/trace-mcp/issues/242)) ([ed2cdc1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ed2cdc1c77d64a9772581dc2ccf40ad7e499aa6b))
+* **daemon:** retry transient transport errors in ProxyBackend.send ([#257](https://github.com/nikolai-vysotskyi/trace-mcp/issues/257)) ([22453de](https://github.com/nikolai-vysotskyi/trace-mcp/commit/22453de9d757e9088b864a8ab71c917f1bb38802))
+* **init:** hide PowerShell console window in Windows launcher shim ([5ddd61a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5ddd61a3f6e621de252ff9bd1f53d2bc8a6c60b0))
+* **quality:** get_changed_symbols base-branch auto-detection for non-main/master repos ([#258](https://github.com/nikolai-vysotskyi/trace-mcp/issues/258)) ([1393644](https://github.com/nikolai-vysotskyi/trace-mcp/commit/139364415a1c8c71abaa251c8dd187ad21197fd9))
+* **tools:** default preset to standard (~50 tools), not full (~170) ([#259](https://github.com/nikolai-vysotskyi/trace-mcp/issues/259)) ([1c39322](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1c39322644691b8c3670c9c9087dc0127b150450))
+
+
+### Chores
+
+* **ci:** group github-actions dependabot updates ([#250](https://github.com/nikolai-vysotskyi/trace-mcp/issues/250)) ([c745589](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c745589c225398de425ac94d896d7fa70730b56c))
+* **deps:** bump postcss to close Dependabot alert [#65](https://github.com/nikolai-vysotskyi/trace-mcp/issues/65) ([#261](https://github.com/nikolai-vysotskyi/trace-mcp/issues/261)) ([cb18080](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cb18080d070c8080818f4706424a6bef6dc4d00f))
+* **deps:** patch 7 open Dependabot alerts via pnpm overrides ([#256](https://github.com/nikolai-vysotskyi/trace-mcp/issues/256)) ([4994510](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4994510113b55952ef722dce1aab1e90af4b7438))
+
 ## [1.46.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.45.3...v1.46.0) (2026-07-07)
 
 
