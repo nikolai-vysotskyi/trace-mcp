@@ -223,6 +223,58 @@ const DANGLING_TAIL_TOKENS = new Set([
   'apply',
 ]);
 
+/**
+ * Bare self-referential result-announcement verbs with no object — either
+ * standing entirely alone, or cut off by punctuation right after the verb
+ * ("Nailed —...", "Found. Let me verify..."). A real decision reads as an
+ * imperative or noun phrase with a specific object; a lone narration verb is
+ * the tail of a longer chat turn with its subject/reason sliced away. Unlike
+ * {@link MID_CLAUSE_OPENERS} (dropped SUBJECT), this catches a dropped
+ * OBJECT/REASON after a narration verb — a distinct truncation shape (#17).
+ * Deliberately does NOT match "Found a race condition..." — a verb followed
+ * by a real object phrase is a legitimate discovery-type decision.
+ */
+const NARRATION_LEAD_VERBS =
+  /^(nailed|confirmed|found|verified|fixed|solved|spotted|discovered)\b(?:$|\s*[—–,.:])/i;
+
+/**
+ * Narration verb followed by generic, non-specific filler ("with hard
+ * numbers", "with the logs") rather than a concrete object — the object was
+ * dropped and replaced with vague evidentiary hand-waving. Distinct from
+ * {@link NARRATION_LEAD_VERBS}: this shape has real words after the verb, so
+ * it needs its own narrow match to avoid flagging genuine specific objects.
+ */
+const NARRATION_VERB_WITH_FILLER =
+  /^(confirmed|verified)\s+with\s+(the\s+)?(hard\s+numbers|numbers|logs|data)$/i;
+
+/**
+ * First-person planning/narration phrases — an agent thinking out loud
+ * mid-task ("Let me verify...", "Let's check...", "I'll look at...") rather
+ * than recording a decision after the fact. These are mined verbatim from
+ * chat prose and read as noise, never as durable knowledge (#17).
+ */
+const NARRATION_PHRASES = /\b(let me|let's|i'll|i will|we'll|going to)\b/i;
+
+/**
+ * Exact-match (case-insensitive, trimmed) generic titles: single vague nouns
+ * a regex/LLM extractor can lift from a heading or a stray sentence without
+ * capturing any of the specifics that would make it a usable decision (#17).
+ */
+const GENERIC_TITLE_STOPLIST = new Set([
+  'investigation',
+  'analysis',
+  'debugging',
+  'summary',
+  'root cause',
+  'the bug',
+  'the fix',
+  'the issue',
+  'the problem',
+  'confirmed',
+  'verified',
+  'found it',
+]);
+
 /** Minimum number of real words the content field must carry. A summary of
  *  one or two words ("оп.", "ming).") is never a usable decision. */
 const MIN_CONTENT_WORDS = 4;
@@ -341,7 +393,14 @@ export function endsMidWord(s: string): boolean {
 export function endsMidClause(s: string): boolean {
   // Strip trailing whitespace and terminal punctuation that a real sentence
   // could legitimately carry, but keep it if it ends the clause cleanly.
-  const trimmed = s.trimEnd().replace(/[)\]}"'`]+$/, '');
+  // Also strips a trailing ellipsis first: `sanitizeTitle` appends "..." to
+  // an otherwise-complete title purely as a soft length-clamp indicator, so
+  // "...across nodes..." must be judged on the word BEFORE the ellipsis
+  // ("nodes" — fine), not treated as truncation on its own.
+  const trimmed = s
+    .trimEnd()
+    .replace(/(?:\.\.\.|…)+$/, '')
+    .replace(/[)\]}"'`]+$/, '');
   if (!trimmed) return false;
   // A clean terminator means the clause closed — not truncated.
   if (/[.!?:;]$/.test(trimmed)) return false;
@@ -392,10 +451,18 @@ export function hasTableRemnant(s: string): boolean {
  *                          code spans are stripped) AND via the ratio heuristic.
  *   - `title_too_short`  — title under MIN_TITLE_CHARS after trim.
  *   - `title_mid_clause` — title opens on a mid-sentence continuation token.
- *   - `title_truncated`  — title ends mid-clause on a dangling token, carries an
+ *   - `title_narration`  — title reads as chat narration, not a standalone
+ *                          decision statement (bare result verb with dropped
+ *                          object, first-person planning language, or an
+ *                          exact generic placeholder like "investigation").
+ *   - `title_truncated`  — title ends mid-clause on a dangling token (a trailing
+ *                          "..." is stripped first, since a soft length-clamp
+ *                          appends one to otherwise-complete titles), carries an
  *                          unbalanced code/paren/bold marker, or shows table-row
  *                          remnants ("| |", "| P1").
- *   - `content_truncated`— content ends mid-clause or carries an unbalanced marker.
+ *   - `content_truncated`— content ends mid-clause, carries an unbalanced marker,
+ *                          or contains an ellipsis (the content window is never
+ *                          ellipsis-suffixed on purpose, unlike the title).
  *   - `content_too_short`— content under the word / char floor.
  *   - `broken_encoding`  — U+FFFD replacement char anywhere (chopped UTF-8).
  *
@@ -431,6 +498,11 @@ export function minedDecisionRejectReason(title: string, content: string): strin
   // Title must not be a dangling continuation of an earlier clause.
   if (startsMidClause(t)) return 'title_mid_clause';
 
+  // Title reads as narration lifted from chat prose, not a standalone
+  // decision statement (bare result verb, first-person planning, generic
+  // placeholder). See #17.
+  if (hasNarrationMarker(t)) return 'title_narration';
+
   // Title truncation: cut on a dangling tail token, an unbalanced structural
   // marker (open code span / paren / bold), or an orphan table-row remnant.
   if (endsMidClause(t) || hasUnbalancedMarkers(t) || hasTableRemnant(t)) {
@@ -441,12 +513,40 @@ export function minedDecisionRejectReason(title: string, content: string): strin
   if (c.length < MIN_CONTENT_CHARS) return 'content_too_short';
   if (countWords(c) < MIN_CONTENT_WORDS) return 'content_too_short';
 
+  if (hasEllipsis(c)) return 'content_truncated';
+
   // Content truncation: same dangling-tail / unbalanced-marker signals. Table
   // remnants are a title-only shape (the content window is prose), so we skip
   // that check on content to keep false positives near zero.
   if (endsMidClause(c) || hasUnbalancedMarkers(c)) return 'content_truncated';
 
   return null;
+}
+
+/**
+ * True when a string carries a literal ellipsis ("...", "…") — an explicit
+ * "content continues elsewhere" marker. The generic terminator check in
+ * {@link endsMidClause} treats a trailing "." as clause-closing, but an
+ * ellipsis means the opposite: the extractor window ran out mid-thought.
+ */
+export function hasEllipsis(s: string): boolean {
+  return /\.\.\.|…/.test(s);
+}
+
+/**
+ * True when a title reads as narration lifted from chat prose rather than a
+ * standalone decision statement: a bare result-announcement verb with its
+ * object dropped ("Nailed — ..."), first-person planning language ("Let me
+ * verify..."), or an exact generic placeholder ("investigation"). See #17.
+ */
+export function hasNarrationMarker(s: string): boolean {
+  const trimmed = s.trim();
+  if (!trimmed) return false;
+  if (GENERIC_TITLE_STOPLIST.has(trimmed.toLowerCase())) return true;
+  if (NARRATION_LEAD_VERBS.test(trimmed)) return true;
+  if (NARRATION_VERB_WITH_FILLER.test(trimmed)) return true;
+  if (NARRATION_PHRASES.test(trimmed)) return true;
+  return false;
 }
 
 /** Convenience boolean wrapper over {@link minedDecisionRejectReason}. */
