@@ -21,7 +21,12 @@ import {
 } from '../init/launcher.js';
 import { LAUNCHER_VERSION } from '../init/types.js';
 import { findProjectRoot } from '../project-root.js';
-import { findOverlappingProjects, inspectRegistry } from '../registry.js';
+import {
+  findOverlappingProjects,
+  inspectRegistry,
+  pruneStaleProjects,
+  unregisterProject,
+} from '../registry.js';
 
 const _SEVERITY_ICON: Record<ConflictSeverity, string> = {
   critical: 'X',
@@ -59,6 +64,15 @@ export const doctorCommand = new Command('doctor')
       // stale registrations (deleted folders, missing/corrupt DBs) that would
       // otherwise only manifest as runtime "Project not found" errors.
       const registry = diagnoseRegistry();
+      const hasRegistryIssues = registry.staleCount > 0 || registry.overlaps.length > 0;
+
+      // --fix / --dry-run also clean up the registry itself (TRA-18): missing-root
+      // entries and overlap containers have one unambiguous remediation each, so
+      // (unlike project conflicts) they don't need an interactive per-item prompt.
+      const registryFix: RegistryFixResult | null =
+        hasRegistryIssues && (opts.fix || opts.dryRun)
+          ? fixRegistryIssues(registry, { dryRun: opts.dryRun })
+          : null;
 
       // Detect project root (optional — doctor works without it)
       let projectRoot: string | undefined;
@@ -75,7 +89,9 @@ export const doctorCommand = new Command('doctor')
       if (opts.json) {
         if (opts.fix || opts.dryRun) {
           const results = fixAllConflicts(conflicts, { dryRun: opts.dryRun });
-          console.log(JSON.stringify({ registry, conflicts, fixes: results }, null, 2));
+          console.log(
+            JSON.stringify({ registry, registryFix, conflicts, fixes: results }, null, 2),
+          );
         } else {
           console.log(JSON.stringify({ registry, ...report }, null, 2));
         }
@@ -83,6 +99,7 @@ export const doctorCommand = new Command('doctor')
       }
 
       printRegistryReport(registry);
+      if (registryFix) printRegistryFixResult(registryFix, { dryRun: !!opts.dryRun });
 
       // --- No conflicts ---
       if (conflicts.length === 0) {
@@ -229,7 +246,7 @@ interface RegistryOverlapReport {
   descendantRoot: string;
 }
 
-interface RegistryHealthReport {
+export interface RegistryHealthReport {
   registryPath: string;
   registryExists: boolean;
   registryCorrupt: boolean;
@@ -254,7 +271,7 @@ function checkDbReadable(dbPath: string): boolean {
   }
 }
 
-function diagnoseRegistry(): RegistryHealthReport {
+export function diagnoseRegistry(): RegistryHealthReport {
   const inspection = inspectRegistry();
   const entries: RegistryEntryHealth[] = inspection.entries.map((e) => {
     let status: RegistryEntryStatus;
@@ -280,6 +297,56 @@ function diagnoseRegistry(): RegistryHealthReport {
       descendantRoot: o.descendant.root,
     })),
   };
+}
+
+export interface RegistryFixResult {
+  /** Roots removed (or, in dry-run, that would be removed) because the folder is gone. */
+  removedMissingRoots: string[];
+  /** Ancestor roots removed (or previewed) because a descendant is also registered. */
+  removedOverlapContainers: string[];
+}
+
+/**
+ * Apply (or preview, when dryRun) the two registry remediations `doctor` already
+ * knows how to describe: drop entries whose folder is gone (same as `prune --apply`'s
+ * registry sweep), and drop the *ancestor* of an overlapping pair — the descendant is
+ * always the more specific, intentional registration, so removing the container is the
+ * unambiguous fix `printRegistryReport` already tells the user to run by hand.
+ */
+export function fixRegistryIssues(
+  r: RegistryHealthReport,
+  opts: { dryRun?: boolean },
+): RegistryFixResult {
+  const missingRoots = r.entries.filter((e) => e.status === 'missing_root').map((e) => e.root);
+  const overlapContainers = [...new Set(r.overlaps.map((o) => o.ancestorRoot))];
+
+  if (opts.dryRun) {
+    return { removedMissingRoots: missingRoots, removedOverlapContainers: overlapContainers };
+  }
+
+  const removedMissingRoots = pruneStaleProjects();
+  for (const root of overlapContainers) unregisterProject(root);
+  return { removedMissingRoots, removedOverlapContainers: overlapContainers };
+}
+
+function printRegistryFixResult(fix: RegistryFixResult, opts: { dryRun: boolean }): void {
+  const lines: string[] = [];
+  const verb = opts.dryRun ? 'Would remove' : 'Removed';
+  if (fix.removedMissingRoots.length > 0) {
+    lines.push(
+      `${verb} ${fix.removedMissingRoots.length} stale entr${fix.removedMissingRoots.length === 1 ? 'y' : 'ies'} (folder deleted):`,
+    );
+    for (const r of fix.removedMissingRoots) lines.push(`  ${shortPath(r)}`);
+  }
+  if (fix.removedOverlapContainers.length > 0) {
+    lines.push(
+      `${verb} ${fix.removedOverlapContainers.length} overlap container${fix.removedOverlapContainers.length === 1 ? '' : 's'}:`,
+    );
+    for (const r of fix.removedOverlapContainers) lines.push(`  ${shortPath(r)}`);
+  }
+  if (lines.length === 0) return;
+  console.log(lines.join('\n'));
+  console.log('');
 }
 
 const REGISTRY_STATUS_LABEL: Record<RegistryEntryStatus, string> = {
