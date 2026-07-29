@@ -199,7 +199,10 @@ describe('detectConflicts', () => {
 
     const report = detectConflicts(root);
     const jcm = report.conflicts.find(
-      (c) => c.category === 'claude_md' && c.target.startsWith(root) && c.competitor === 'jcodemunch-mcp',
+      (c) =>
+        c.category === 'claude_md' &&
+        c.target.startsWith(root) &&
+        c.competitor === 'jcodemunch-mcp',
     );
     expect(jcm).toBeDefined();
     expect(jcm!.severity).toBe('critical');
