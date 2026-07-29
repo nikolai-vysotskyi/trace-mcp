@@ -536,6 +536,11 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
 
     for (const { pattern, competitor, marker } of COMPETING_CLAUDE_MD_PATTERNS) {
       if (pattern.test(content)) {
+        // Block markers are unambiguous injected control blocks — always flag.
+        // Bare name/API mentions can also appear in files that *reject* the
+        // competitor (e.g. "never call jcodemunch tools"); skip those.
+        if (!marker && isNegatedMention(content, pattern)) continue;
+
         const id = `claude_md:${competitor}:${filePath}`;
         // Avoid duplicate entries for same file+competitor
         if (conflicts.some((c) => c.id === id)) continue;
@@ -562,6 +567,25 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
   }
 
   return conflicts;
+}
+
+/** Words/phrases indicating a mention rejects/deprecates the competitor rather than directing its use. */
+const NEGATION_PATTERN =
+  /\b(never|don't|do not|deprecated|stop using|instead of|avoid|reject|must not|no longer|banned|forbidden|disallow(?:ed)?)\b/i;
+
+/**
+ * True if every line matching `pattern` also carries negation language
+ * (e.g. "never call jcodemunch") — i.e. the file rejects the competitor
+ * rather than directing the AI to prefer it.
+ */
+function isNegatedMention(content: string, pattern: RegExp): boolean {
+  let sawMatch = false;
+  for (const line of content.split(/\r?\n/)) {
+    if (!pattern.test(line)) continue;
+    sawMatch = true;
+    if (!NEGATION_PATTERN.test(line)) return false;
+  }
+  return sawMatch;
 }
 
 /** Check if content has a markdown heading containing the competitor name. */

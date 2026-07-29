@@ -177,6 +177,37 @@ describe('detectConflicts', () => {
     expect(claudeConflicts.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('does not flag CLAUDE.md that rejects the competing tool', () => {
+    const root = fixture({
+      'CLAUDE.md':
+        '# Project\n\njCodeMunch is deprecated for this user. Never call jcodemunch tools; ' +
+        'use trace-mcp equivalents instead.',
+    });
+
+    const report = detectConflicts(root);
+    const claudeConflicts = report.conflicts.filter(
+      (c) => c.category === 'claude_md' && c.target.startsWith(root),
+    );
+    expect(claudeConflicts).toHaveLength(0);
+  });
+
+  it('still flags a marker block even when surrounding text uses negation words', () => {
+    const root = fixture({
+      'CLAUDE.md':
+        '# Project\n\n<!-- jcodemunch:start -->\nNever skip jcodemunch tools\n<!-- jcodemunch:end -->',
+    });
+
+    const report = detectConflicts(root);
+    const jcm = report.conflicts.find(
+      (c) =>
+        c.category === 'claude_md' &&
+        c.target.startsWith(root) &&
+        c.competitor === 'jcodemunch-mcp',
+    );
+    expect(jcm).toBeDefined();
+    expect(jcm!.severity).toBe('critical');
+  });
+
   it('does not flag clean CLAUDE.md', () => {
     const root = fixture({
       'CLAUDE.md': '# Project\n\nUse trace-mcp tools for code navigation.\n',
