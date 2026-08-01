@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { WindowTabBar } from './components/WindowTabBar';
+import { Button } from './lattice/ui';
 import { Activity } from './tabs/Activity';
 import { AskTab } from './tabs/AskTab';
 import { Clients } from './tabs/Clients';
@@ -374,14 +375,13 @@ function useTheme() {
   return { theme: effective, toggle };
 }
 
-function ThemeToggle() {
-  const { theme, toggle } = useTheme();
+function ThemeToggle({ theme, toggle }: { theme: Theme; toggle: () => void }) {
   // Show the icon for the destination, not the current state — matches the
   // user's mental model ("click moon → it gets dark").
   const goingTo: Theme = theme === 'dark' ? 'light' : 'dark';
   const label = goingTo === 'dark' ? 'Switch to dark mode' : 'Switch to light mode';
   return (
-    <button type="button" onClick={toggle} className="icon-button" aria-label={label} title={label}>
+    <Button variant="mini" onClick={toggle} aria-label={label} title={label}>
       {goingTo === 'dark' ? (
         // Moon (crescent) — currently light, click to go dark.
         <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -408,7 +408,7 @@ function ThemeToggle() {
           </g>
         </svg>
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -419,9 +419,13 @@ function ThemeToggle() {
 function SidebarFooter({
   active,
   onOpenSettingsInPlace,
+  theme,
+  onToggleTheme,
 }: {
   active: boolean;
   onOpenSettingsInPlace?: () => void;
+  theme: Theme;
+  onToggleTheme: () => void;
 }) {
   const handleSettings = () => {
     if (onOpenSettingsInPlace) {
@@ -433,14 +437,10 @@ function SidebarFooter({
   };
   return (
     <div className="sidebar-footer">
-      <button
-        type="button"
-        className={`nav-button${active ? ' active' : ''}`}
-        onClick={handleSettings}
-      >
+      <Button variant="text" active={active} onClick={handleSettings}>
         Settings
-      </button>
-      <ThemeToggle />
+      </Button>
+      <ThemeToggle theme={theme} toggle={onToggleTheme} />
     </div>
   );
 }
@@ -705,6 +705,7 @@ function ProjectContent({
 export function App() {
   const { view, tab, root } = getUrlParams();
   const isProject = view === 'project' && root !== null;
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const [globalTab, setGlobalTab] = useState<GlobalTab>(normalizeGlobalTab(tab));
   const [projectTab, setProjectTab] = useState<ProjectTab>('overview');
@@ -798,7 +799,11 @@ export function App() {
   const isGraphGpu = isGraph; // alias — the Graph tab *is* the GPU graph now
 
   return (
-    <div className="flex flex-col h-screen" style={{ background: 'var(--bg-primary)' }}>
+    <div
+      className="ws-stage flex flex-col h-screen"
+      data-mode={theme}
+      style={{ background: 'var(--frame)' }}
+    >
       {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
       {/* Windows custom tab bar (hidden on macOS — native tabs handle it) */}
       <WindowTabBar />
@@ -815,12 +820,9 @@ export function App() {
           }
         >
           <aside
-            className="flex flex-col pt-3 pb-3 px-1.5 gap-0.5 h-full"
+            className="ws-island flex flex-col pt-3 pb-3 px-1.5 gap-0.5 h-full"
             style={
               {
-                border: '1px solid var(--sidebar-border)',
-                borderRadius: 12,
-                background: 'var(--sidebar-bg)',
                 WebkitAppRegion: 'no-drag',
               } as React.CSSProperties
             }
@@ -828,22 +830,16 @@ export function App() {
             {isProject ? (
               <>
                 {PROJECT_TABS.map((t) => (
-                  <button
-                    type="button"
+                  <Button
                     key={t.id}
+                    variant="text"
+                    active={projectTab === t.id}
                     onClick={() => setProjectTab(t.id)}
-                    className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"
-                    style={
-                      {
-                        color:
-                          projectTab === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        background: projectTab === t.id ? 'var(--bg-active)' : 'transparent',
-                        WebkitAppRegion: 'no-drag',
-                      } as React.CSSProperties
-                    }
+                    className="w-full text-left"
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
                   >
                     {t.label}
-                  </button>
+                  </Button>
                 ))}
 
                 {/* Divider + File explorer */}
@@ -857,21 +853,16 @@ export function App() {
             ) : (
               <>
                 {GLOBAL_TABS.map((t) => (
-                  <button
-                    type="button"
+                  <Button
                     key={t.id}
+                    variant="text"
+                    active={globalTab === t.id}
                     onClick={() => setGlobalTab(t.id)}
-                    className="text-left px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors"
-                    style={
-                      {
-                        color: globalTab === t.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        background: globalTab === t.id ? 'var(--bg-active)' : 'transparent',
-                        WebkitAppRegion: 'no-drag',
-                      } as React.CSSProperties
-                    }
+                    className="w-full text-left"
+                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
                   >
                     {t.label}
-                  </button>
+                  </Button>
                 ))}
 
                 {/* Divider + Recent projects */}
@@ -886,6 +877,8 @@ export function App() {
             <SidebarFooter
               active={!isProject && globalTab === 'settings'}
               onOpenSettingsInPlace={isProject ? undefined : () => setGlobalTab('settings')}
+              theme={theme}
+              onToggleTheme={toggleTheme}
             />
           </aside>
 

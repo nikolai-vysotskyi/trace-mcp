@@ -1,0 +1,1140 @@
+/* ============================================================================
+   Lattice — Workspace island layer  (island.css)
+   Ported from the Liquid Glass · macOS 26 design bundle (ui_kits/workspace).
+   The Lattice "Island" theme (Dark + Light): FLAT, BORDERLESS
+   islands — solid-fill rounded surfaces floating on a frame-colored background.
+   The contrast between island and frame IS the edge (no glass, no strokes).
+
+   Scoped under `.ws-stage[data-mode=…]` so it carries its own token set and does
+   NOT collide with the global app.css tokens. Activated only inside the
+   Workspace layout mode (WorkspaceShell), leaving the legacy layout untouched.
+   ============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   ISLAND DARK
+   ---------------------------------------------------------------------------- */
+.ws-stage[data-mode="dark"] {
+  /* "Islands" look: the frame (rails, top bar, status bar, and
+     the gaps between islands) is LIGHTER than the islands, so the dark editor /
+     tree / DB islands "float" on a medium-gray frame. (Earlier we had frame
+     DARKER than islands, which read as a near-black surround; the user asked
+     for the lighter-frame arrangement instead.)
+     Values: #2b2d30 panel frame, #1e1f22 island surface. */
+  --frame: #2b2d30;
+  --frame-top: #313338;
+  --island: #18191b;
+  --text-1: #ced0d6;
+  --text-2: #868a91;
+  --text-3: #6d7177;
+  --accent: #3574f0;
+  --accent-soft: #2e436e;
+  --sel-bg: #2f5cc9;
+  --sel-text: #ffffff;
+  --row-hover: rgba(255, 255, 255, 0.055);
+  --sep: rgba(255, 255, 255, 0.07);
+  --ignored-text: #b08a5a;
+  --ignored-bg: #2a211a;
+  /* Project-tree folder icon — two-tone (fill + border; IntelliJ Platform icon,
+     see NOTICE). Regular fill/stroke follow folder_dark.svg; hidden/excluded are
+     the same icon tinted tan / orange for the row color-coding. */
+  --folder-fill: #43454a;
+  --folder-stroke: #ced0d6;
+  --folder-hidden-fill: #3b3020;
+  --folder-hidden-stroke: #c79a63;
+  --folder-excluded-fill: #3e2f1c;
+  --folder-excluded-stroke: #d98b3a;
+  --mod-text: #6aa1ea;
+  --add-text: #62b07a;
+  --tab-active-bg: rgba(255, 255, 255, 0.10);
+  --kbd-bg: rgba(255, 255, 255, 0.07);
+  --green: #5fb865;
+  --db-blue: #6f9bea;
+  --db-purple: #b08cf0;
+  --db-gold: #e3b341;
+  --db-table: #7aaee0;
+  --menu-bg: #2b2d30;
+  --menu-ring: #43454a;
+  --seg-thumb: #34373c;
+  --seg-thumb-text: #ffffff;
+  --seg-thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  /* Floating-overlay surface — flat "Islands" menu (design-system
+     Menu & Popover section): SOLID --menu-bg, 0.5px ring + soft drop + a faint
+     top-edge highlight. No glass / backdrop-blur (the islands are flat). */
+  --menu-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.08),
+    0 14px 44px rgba(0, 0, 0, 0.5),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+  /* Overlay fill for floating menus / popovers. Kept DARKER than the design's
+     demo value (#2e3034) per preference — over the live dark panels a lighter
+     fill glows; the menu reads as raised via a crisp 0.5px top-edge + the ring
+     shadow instead of via brightness. */
+  --menu-surface: #232427;
+  --menu-border: rgba(255, 255, 255, 0.08);
+  /* Liquid Glass · macOS 26 — floating overlays (menus, popovers, pickers).
+     Islands stay flat; the OVERLAYS adopt the design system's vibrancy material
+     (components.css .mac-menu / .mac-popover), verbatim dark values. */
+  --glass-fill: linear-gradient(180deg, rgba(74, 76, 88, 0.58), rgba(40, 41, 49, 0.74));
+  --glass-border: rgba(255, 255, 255, 0.22);
+  --glass-inner-hi: inset 0 0.5px 0 rgba(255, 255, 255, 0.28);
+  --popover-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 10px 30px rgba(0, 0, 0, 0.55);
+  /* The composer is DOCKED on the flat island, not a floating overlay — so it
+     must NOT wear --popover-shadow's 30px halo, which smears into a muddy ring
+     on a near-black bg. Contained elevation instead: a hairline ring + a faint
+     top edge-light (what actually reads as "raised" on dark) + a short ambient
+     shadow — no big blur. */
+  --composer-shadow:
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.09),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+/* ----------------------------------------------------------------------------
+   ISLAND LIGHT
+   ---------------------------------------------------------------------------- */
+.ws-stage[data-mode="light"] {
+  --frame: #e9eaee;
+  --frame-top: #edeef3;
+  --island: #ffffff;
+  --text-1: #2b2d30;
+  --text-2: #818594;
+  --text-3: #9ca0ab;
+  --accent: #3574f0;
+  --accent-soft: #d6e2ff;
+  --sel-bg: #3574f0;
+  --sel-text: #ffffff;
+  --row-hover: rgba(0, 0, 0, 0.055);
+  --sep: rgba(0, 0, 0, 0.08);
+  --ignored-text: #9a7b3c;
+  --ignored-bg: #fff7e8;
+  /* Project-tree folder icon — two-tone (fill + border; IntelliJ Platform icon,
+     see NOTICE). Regular fill/stroke follow folder.svg; hidden/excluded are the
+     same icon tinted tan / orange for the row color-coding. */
+  --folder-fill: #ebecf0;
+  --folder-stroke: #6c707e;
+  --folder-hidden-fill: #f3ead9;
+  --folder-hidden-stroke: #a07c3e;
+  --folder-excluded-fill: #f6e6d2;
+  --folder-excluded-stroke: #c2772b;
+  --mod-text: #3574f0;
+  --add-text: #3a8a4f;
+  --tab-active-bg: #d8dbe2;
+  --kbd-bg: rgba(0, 0, 0, 0.05);
+  --green: #3a8a4f;
+  --db-blue: #3574f0;
+  --db-purple: #8a5cf0;
+  --db-gold: #b8860b;
+  --db-table: #2e7dd0;
+  --menu-bg: #ffffff;
+  --menu-ring: #c4c7cf;
+  --seg-thumb: #ffffff;
+  --seg-thumb-text: #2b2d30;
+  --seg-thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  --shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  /* Floating-overlay surface — flat white menu, 0.5px ring + soft drop. */
+  --menu-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.1),
+    0 14px 40px rgba(0, 0, 0, 0.2);
+  --menu-surface: #ffffff;
+  --menu-border: rgba(0, 0, 0, 0.07);
+  /* Liquid Glass · macOS 26 — floating overlays (light material). */
+  --glass-fill: rgba(246, 246, 248, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-inner-hi: inset 0 0.5px 0 rgba(255, 255, 255, 0.7);
+  --popover-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.07),
+    0 2px 6px rgba(0, 0, 0, 0.07),
+    0 10px 30px rgba(0, 0, 0, 0.16);
+  /* Light: a drop shadow reads cleanly on a pale bg, so a soft, SHORT one is the
+     right "docked card" cue — just not the popover halo. */
+  --composer-shadow:
+    inset 0 0 0 0.5px rgba(0, 0, 0, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+/* ---- Tunables ---------------------------------------------------------- */
+.ws-stage {
+  --rail-w: 40px;
+  --tree-w: 300px;
+  --db-w: 300px;
+  --term-h: 200px;
+  --island-r: 12px;
+  --gap: 6px;
+  /* Liquid Glass radii (macOS 26 concentric scale) for floating overlays. */
+  --r-sm: 6px;
+  --r-lg: 10px;
+  --r-xl: 12px;
+  color: var(--text-1);
+
+  /* ---- Status palette (shared by Badge / StatusDot primitives) ----------
+     Canonical accent hues for status, previously re-hardcoded in every domain
+     stylesheet. `-hue` is the saturated base; `-fg` the readable text/dot fill.
+     Theme-independent (these read cleanly on both island surfaces). */
+  --status-green-hue: #2f9e6e;  --status-green-fg: #43b07f;
+  --status-red-hue:   #e0563a;  --status-red-fg:   #e0735c;
+  --status-gold-hue:  #c9962f;  --status-gold-fg:  #cda23f;
+  --status-blue-hue:  #3574f0;  --status-blue-fg:  #6f9bf6;
+  --status-pink-hue:  #d6469b;  --status-pink-fg:  #d96cb0;
+}
+
+/* ============================================================================
+   STATUS PALETTE — shared Badge + StatusDot primitives (ui/Badge, ui/StatusDot)
+   ONE tone scale to replace the scattered per-domain badge/pill/dot classes.
+   ============================================================================ */
+.ws-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em;
+  padding: 2px 7px; border-radius: 5px; white-space: nowrap;
+  background: var(--row-hover); color: var(--text-2);
+}
+.ws-badge.t-neutral { background: var(--row-hover); color: var(--text-2); }
+.ws-badge.t-accent  { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.ws-badge.t-green   { background: color-mix(in srgb, var(--status-green-hue) 16%, transparent); color: var(--status-green-fg); }
+.ws-badge.t-red     { background: color-mix(in srgb, var(--status-red-hue) 16%, transparent); color: var(--status-red-fg); }
+.ws-badge.t-gold    { background: color-mix(in srgb, var(--status-gold-hue) 18%, transparent); color: var(--status-gold-fg); }
+.ws-badge.t-blue    { background: color-mix(in srgb, var(--status-blue-hue) 16%, transparent); color: var(--status-blue-fg); }
+.ws-badge.t-pink    { background: color-mix(in srgb, var(--status-pink-hue) 16%, transparent); color: var(--status-pink-fg); }
+/* outline: transparent fill + colored ring */
+.ws-badge.outline { background: transparent; border: 1px solid currentColor; }
+.ws-badge.outline.t-neutral { color: var(--text-3); border-color: var(--sep); }
+.ws-badge.outline.t-accent  { color: var(--accent); }
+.ws-badge.outline.t-green   { color: var(--status-green-fg); }
+.ws-badge.outline.t-red     { color: var(--status-red-fg); }
+.ws-badge.outline.t-gold    { color: var(--status-gold-fg); }
+.ws-badge.outline.t-blue    { color: var(--status-blue-fg); }
+.ws-badge.outline.t-pink    { color: var(--status-pink-fg); }
+
+.ws-statusdot {
+  display: inline-block; flex: none; border-radius: 50%;
+  background: var(--text-3);
+}
+.ws-statusdot.t-neutral { background: var(--text-3); }
+.ws-statusdot.t-accent  { background: var(--accent); }
+.ws-statusdot.t-green   { background: var(--status-green-hue); }
+.ws-statusdot.t-red     { background: var(--status-red-hue); }
+.ws-statusdot.t-gold    { background: var(--status-gold-hue); }
+.ws-statusdot.t-blue    { background: var(--status-blue-hue); }
+.ws-statusdot.t-pink    { background: var(--status-pink-hue); }
+.ws-statusdot.pulse {
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
+  animation: ws-pulse 2.4s ease-in-out infinite;
+}
+.ws-statusdot.pulse.t-green { color: var(--status-green-hue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-green-hue) 22%, transparent); }
+.ws-statusdot.pulse.t-red   { color: var(--status-red-hue);   box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-red-hue) 22%, transparent); }
+
+/* ---- Stage: fills the window content area BELOW the custom WindowTabBar. ----
+   Was position:absolute/inset:0, which painted OVER the WindowTabBar strip that
+   App.tsx renders above the shell. Now it flows as a flex child (flex:1) inside
+   App.tsx's `.flex.flex-col.h-screen` column, so the tab strip sits above it and
+   the stage fills the rest. */
+.ws-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--frame);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+
+/* The window frame is the Electron window itself; the stage IS the frame. */
+.ws-win {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--frame);
+  overflow: hidden;
+}
+
+/* ============================================================================
+   TOP BAR — project tabs (browser style)
+   ============================================================================ */
+.ws-topbar {
+  height: 42px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+  background: linear-gradient(180deg, var(--frame-top), var(--frame));
+  -webkit-app-region: drag;
+}
+.ws-topbar > * { -webkit-app-region: no-drag; }
+.ws-lights { display: flex; align-items: center; gap: 8px; padding-right: 6px; }
+.ws-light { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.ws-light.c { background: #ff5f57; }
+.ws-light.m { background: #febc2e; }
+.ws-light.z { background: #28c840; }
+
+.ws-ptabs { display: flex; align-items: center; gap: 3px; flex: 1; min-width: 0; overflow: hidden; }
+.ws-ptab {
+  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 7px 0 9px;
+  border-radius: 8px; font-size: 13px; color: var(--text-2); cursor: default;
+  max-width: 210px; transition: background .12s, color .12s;
+}
+.ws-ptab:hover { background: var(--row-hover); }
+.ws-ptab.is-active { background: var(--island); color: var(--text-1); box-shadow: var(--shadow); }
+.ws-ptab .ic {
+  width: 18px; height: 18px; border-radius: 5px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 8px; font-weight: 800; letter-spacing: -0.02em;
+}
+.ws-ptab .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-ptab .x {
+  width: 17px; height: 17px; border-radius: 4px; flex: none;
+  display: flex; align-items: center; justify-content: center; color: var(--text-3);
+  opacity: 0; transition: opacity .12s, background .12s;
+}
+.ws-ptab:hover .x, .ws-ptab.is-active .x { opacity: 0.8; }
+.ws-ptab .x:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-ptab-add {
+  width: 28px; height: 28px; flex: none; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; color: var(--text-2);
+  cursor: default; transition: background .12s, color .12s;
+}
+.ws-ptab-add:hover { background: var(--row-hover); color: var(--text-1); }
+
+/* the agent avatar mark (Solar "black hole", see NOTICE) */
+.ws-ai-star { width: 18px; height: 18px; display: block; }
+
+/* ============================================================================
+   BODY : left rail | islands | right rail
+   ============================================================================ */
+.ws-body { flex: 1; display: flex; min-height: 0; }
+
+/* ---- Icon rails (flat on frame) ---------------------------------------- */
+.ws-rail {
+  width: var(--rail-w); flex: none; display: flex; flex-direction: column; align-items: center;
+  padding: 4px 0; gap: 2px;
+}
+.ws-rail .spring { flex: 1; }
+.ws-rail-btn {
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  border-radius: 7px; color: var(--text-2); cursor: default; position: relative;
+  transition: background .12s, color .12s;
+}
+.ws-rail-btn:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-rail-btn.is-active { color: var(--accent); background: var(--accent-soft); }
+.ws-stage[data-mode="light"] .ws-rail-btn.is-active { color: var(--accent); }
+.ws-rail-div { width: 18px; height: 1px; background: var(--sep); margin: 5px auto; flex: none; }
+.ws-rail-btn:active { cursor: grabbing; }
+.ws-rail-btn.is-dragging { opacity: .4; }
+/* Update-count badge, bottom-right of the icon (VS Code activity-bar style). */
+.ws-rail-badge {
+  position: absolute; right: 1px; bottom: 1px;
+  min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8.5px; font-weight: 700; line-height: 1;
+  color: #fff; background: var(--accent);
+  border-radius: 7px; pointer-events: none;
+}
+/* Insertion line shown above/below the hovered icon while dragging. */
+.ws-rail-btn.drop-before::after,
+.ws-rail-btn.drop-after::after {
+  content: ''; position: absolute; left: 3px; right: 3px; height: 2px;
+  background: var(--accent); border-radius: 2px; pointer-events: none;
+}
+.ws-rail-btn.drop-before::after { top: -3px; }
+.ws-rail-btn.drop-after::after { bottom: -3px; }
+.ws-rail.is-drop {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -3px; border-radius: 10px;
+}
+/* Bottom dock of a rail — Settings + the terminal toggle, pinned below the
+   spring. Always rendered (even empty) so it stays a reliable drop target for a
+   gear / terminal dragged back down. */
+.ws-rail-bottom {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: 100%; flex: none; min-height: 34px; padding-top: 2px;
+}
+.ws-rail-bottom.is-drop {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: 1.5px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -3px; border-radius: 10px;
+}
+
+/* ---- Middle column: holds the islands, gap-separated -------------------- */
+.ws-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: var(--gap) 0; }
+.ws-panes { flex: 1; display: flex; min-height: 0; }
+
+/* ---- Resize handles (occupy the gap between islands) -------------------- */
+.ws-resize { flex: none; position: relative; display: flex; align-items: center; justify-content: center; }
+.ws-resize.col { width: var(--gap); cursor: col-resize; align-self: stretch; }
+.ws-resize.row { height: var(--gap); cursor: row-resize; }
+.ws-resize::after { content: ""; background: transparent; transition: background .12s; }
+.ws-resize.col::after { width: 2px; height: 100%; }
+.ws-resize.row::after { height: 2px; width: 100%; }
+/* Accent line ONLY while a drag is genuinely in flight (body.ws-resizing). A
+   plain :hover or a stuck `is-dragging` class would otherwise leave a persistent
+   blue vertical strip at the panel↔editor boundary. */
+body.ws-resizing .ws-resize.is-dragging::after { background: var(--accent); }
+/* While a panel resize is in flight, make embedded web-contents (Claude editor,
+   <webview> agents, the monaco workbench) transparent to the pointer so the
+   window-level mousemove keeps firing as the cursor crosses them. Without this
+   the drag stalls the instant the cursor enters the Claude Code panel. */
+body.ws-resizing webview,
+body.ws-resizing iframe,
+body.ws-resizing .monaco-workbench,
+body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
+.ws-resize::before { content: ""; position: absolute; inset: -2px; }
+.ws-resize.col::before { inset: 0 -3px; }
+.ws-resize.row::before { inset: -3px 0; }
+
+/* ============================================================================
+   ISLAND — flat solid surface, rounded, NO border
+   ============================================================================ */
+.ws-island {
+  display: flex; flex-direction: column; min-height: 0;
+  background: var(--island);
+  border-radius: var(--island-r);
+  box-shadow: var(--shadow);
+  /* Clip children to the rounded rect — otherwise the editor/chat/composer
+     content paints a square rectangle over the island's bottom corners (the
+     box-shadow lives outside the box, so it's unaffected). Inner scroll lives
+     on .ws-island-body / .cm-scroller / .ws-ed-tabs, so clipping here is safe. */
+  overflow: hidden;
+}
+.ws-island.tree { width: var(--tree-w); flex: none; }
+.ws-island.db { width: var(--db-w); flex: none; }
+.ws-island.editor { flex: 1; min-width: 0; }
+.ws-island.is-hidden { display: none; }
+
+/* Canonical island header — ONE strict row, shared height + the hairline
+   bottom divider with the editor's tab strip (.ws-ed-head). Every island
+   (Project, Extensions, Commit, Database, AI Chat, Terminal) renders this, so
+   they all read uniform. Height matches .ws-ed-head (38px); flex-wrap is off so
+   the row can never spill to a second line — it clips instead. */
+.ws-island-head {
+  height: 38px; flex: none; display: flex; flex-wrap: nowrap; align-items: center; gap: 6px;
+  padding: 0 6px 0 14px;
+  border-bottom: 0.5px solid var(--sep);
+}
+.ws-island-title {
+  display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600;
+  color: var(--text-1); cursor: default; white-space: nowrap; min-width: 0; overflow: hidden;
+}
+.ws-island-title .chev { color: var(--text-2); display: flex; }
+.ws-island-actions { margin-left: auto; display: flex; align-items: center; gap: 1px; }
+.ws-mini {
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  border-radius: 5px; color: var(--text-2); cursor: default; transition: background .12s, color .12s;
+}
+.ws-mini:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-island-body { flex: 1; overflow-y: auto; overflow-x: auto; padding-bottom: 6px; }
+
+/* a side-panel slot whose width is controlled by the layout */
+.ws-panel-slot { flex: none; display: flex; min-height: 0; }
+.ws-panel-slot > .ws-island { width: 100% !important; flex: 1 1 auto; }
+/* Terminal docked into a side slot fills the column (the slot owns the size);
+   its bottom-strip inline height/flex is dropped in 'side' mode. */
+.ws-panel-slot > .ws-island.terminal.is-side { height: 100%; }
+
+/* ============================================================================
+   PROJECT FILE TREE
+   ============================================================================ */
+.ws-tree { font-size: 13.5px; user-select: none; min-width: max-content; padding-top: 4px; }
+.ws-node {
+  display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px 0 0;
+  white-space: nowrap; cursor: default; position: relative;
+  min-width: 100%; box-sizing: border-box;
+}
+.ws-node:hover { background: var(--row-hover); }
+.ws-node.is-selected { background: var(--accent); }
+.ws-node .twist {
+  width: 18px; flex: none; display: flex; align-items: center; justify-content: center;
+  color: var(--text-2); transition: transform .12s;
+}
+.ws-node .twist.open { transform: rotate(90deg); }
+.ws-node .twist.leaf { visibility: hidden; }
+/* The chevron is the expand/collapse affordance (rows only select) — signal it. */
+.ws-node .twist:not(.leaf) { cursor: pointer; }
+.ws-node .nm { white-space: nowrap; flex: 0 0 auto; color: var(--text-1); }
+.ws-node .tag { font-size: 12px; color: var(--text-2); margin-left: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+.ws-node.is-selected .nm, .ws-node.is-selected .tag { color: var(--sel-text); }
+.ws-node.is-selected .twist, .ws-node.is-selected .ws-fileico { color: rgba(255, 255, 255, 0.92); }
+.ws-node.ignored .nm { color: var(--ignored-text); }
+.ws-node.ignored:not(.is-selected) { background: var(--ignored-bg); }
+.ws-node.ignored:hover:not(.is-selected) { background: color-mix(in srgb, var(--ignored-text) 16%, transparent); }
+.ws-node.mod .nm { color: var(--mod-text); }
+.ws-node.add .nm { color: var(--add-text); }
+.ws-node.ignored.is-selected .nm { color: var(--sel-text); }
+
+.ws-fileico { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--text-2); }
+.ws-fileico svg { width: 16px; height: 16px; display: block; }
+/* File-type icons (FileTypeGlyph; IntelliJ Platform set, see NOTICE). Colored
+   16×16 SVGs; the span is sized inline (16 in the tree, 14/15 in git/commit
+   panels) and the svg fills it. File-type color is kept even on selected rows. */
+.ws-fticon { flex: none; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.ws-fticon svg { display: block; width: 100%; height: 100%; }
+
+/* drag chip — compact ghost shown while dragging a tree node */
+.ws-drag-chip {
+  position: fixed; top: -1000px; left: -1000px; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 30px; padding: 0 12px 0 10px; max-width: 280px;
+  font-size: 13px; font-weight: 500; color: var(--text-1); white-space: nowrap;
+  background: var(--island); border: 0.5px solid var(--sep);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+.ws-drag-chip .nm { overflow: hidden; text-overflow: ellipsis; }
+.ws-drag-chip .ws-fileico { color: var(--text-2); }
+
+/* ============================================================================
+   STATUS BAR — on the frame, flat
+   ============================================================================ */
+.ws-status {
+  height: 26px; flex: none; display: flex; align-items: center;
+  padding: 0 8px 0 12px; font-size: 12px; color: var(--text-2);
+  background: var(--frame);
+}
+.ws-status .crumbs { display: flex; align-items: center; gap: 6px; }
+.ws-status .crumbs .sep { opacity: 0.55; display: flex; }
+.ws-status .si {
+  display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
+  border-radius: 5px; cursor: default; white-space: nowrap; transition: background .12s;
+}
+.ws-status .si:hover { background: var(--row-hover); }
+.ws-status .spring { flex: 1; }
+.ws-status .pill {
+  display: inline-flex; align-items: center; height: 17px; padding: 0 9px; border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--green) 55%, transparent);
+  color: var(--green); font-size: 11px; font-weight: 600;
+}
+
+/* density bump */
+.ws-stage[data-density="spacious"] .ws-node { height: 29px; }
+
+/* thin scrollbars */
+.ws-island-body::-webkit-scrollbar { width: 11px; height: 11px; }
+.ws-island-body::-webkit-scrollbar-corner { background: transparent; }
+.ws-island-body::-webkit-scrollbar-track { background: transparent; }
+.ws-island-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-2) 40%, transparent); border-radius: 7px;
+  border: 3px solid transparent; background-clip: content-box;
+}
+.ws-island-body::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--text-2) 60%, transparent); background-clip: content-box;
+}
+
+/* ============================================================================
+   UNIFIED CENTER EDITOR — tab strip + body host
+   ============================================================================ */
+.ws-island.editor.file { min-width: 0; }
+.ws-ed-head {
+  height: 38px; flex: none; display: flex; align-items: stretch; gap: 6px;
+  padding: 0 6px 0 0; border-bottom: 0.5px solid var(--sep);
+}
+.ws-ed-tabs { display: flex; align-items: stretch; gap: 0; flex: 1; min-width: 0; overflow-x: auto; }
+.ws-ed-tabs::-webkit-scrollbar { height: 0; }
+/* macOS 26 "Project tabs" (Liquid Glass · Segmented Control & Tabs): flat
+   segments divided by hairlines. The active tab fills with the selected-surface
+   tint instead of an underline; its leading glyph picks up the accent; the close
+   affordance is revealed on hover. */
+.ws-ed-tab {
+  display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 8px 0 12px;
+  font-size: 13px; color: var(--text-2); cursor: default; white-space: nowrap;
+  border-right: 0.5px solid var(--sep); transition: color .12s, background .12s;
+  flex: none; position: relative; max-width: 240px;
+}
+.ws-ed-tab:last-child { border-right-color: transparent; }
+/* First tab is flush to the editor's left edge (native window-tab look); round
+   its leading corner to the island radius so the active fill anchors into the
+   corner instead of leaving a strip of island colour beside it. */
+.ws-ed-tab:first-child { border-top-left-radius: var(--island-r); }
+.ws-ed-tab:hover { background: var(--row-hover); }
+.ws-ed-tab.is-active { color: var(--text-1); background: var(--tab-active-bg); }
+/* active leading glyph adopts the accent — file/view/diff icons only; brand
+   source marks (Claude/Codex) and TS/JS badges keep their identity colors. */
+.ws-ed-tab.is-active .ws-fileico { color: var(--accent); }
+.ws-ed-tab .nm { overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+.ws-ed-tab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-2); flex: none; }
+.ws-ed-tab .x {
+  width: 17px; height: 17px; border-radius: 4px; flex: none;
+  display: flex; align-items: center; justify-content: center; color: var(--text-3);
+  opacity: 0; transition: opacity .12s, background .12s;
+}
+.ws-ed-tab:hover .x, .ws-ed-tab.is-active .x { opacity: 0.85; }
+.ws-ed-tab .x:hover { background: var(--row-hover); color: var(--text-1); }
+/* Drag-to-reorder: dim the lifted tab and paint an accent insertion line on the
+   leading/trailing edge of the tab the cursor hovers (mirrors the rail). */
+.ws-ed-tab.is-dragging { opacity: .4; }
+.ws-ed-tab.drop-before::after,
+.ws-ed-tab.drop-after::after {
+  content: ''; position: absolute; top: 4px; bottom: 4px; width: 2px;
+  background: var(--accent); border-radius: 2px; pointer-events: none; z-index: 2;
+}
+.ws-ed-tab.drop-before::after { left: -1px; }
+.ws-ed-tab.drop-after::after { right: -1px; }
+/* chat source logo (Claude Code / Codex) or AI star — fixed leading slot */
+.ws-ed-tab .ws-tabchat { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; }
+.ws-ed-tab .ws-tabchat .ws-ai-star,
+.ws-ed-tab .ws-tabchat .ws-srcmark { width: 15px; height: 15px; }
+/* New-chat affordance pinned just after the last tab (VS Code-style "+"). */
+.ws-ed-newtab {
+  flex: none; align-self: center; margin: 0 2px 0 4px;
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border: none; background: transparent;
+  border-radius: 6px; color: var(--text-3); cursor: default;
+  transition: background .12s, color .12s;
+}
+.ws-ed-newtab:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-ed-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.ws-ed-body { flex: 1; min-height: 0; display: flex; }
+.ws-ed-body > * { flex: 1; min-width: 0; min-height: 0; }
+
+/* empty-center placeholder */
+.ws-center-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 40px;
+}
+.ws-center-empty .gi { width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; opacity: 0.9; }
+.ws-center-empty .gi .ws-ai-star { width: 40px; height: 40px; }
+.ws-center-empty .t { font-size: 17px; font-weight: 650; color: var(--text-1); }
+.ws-center-empty .s { font-size: 13.5px; color: var(--text-3); max-width: 380px; line-height: 1.5; }
+.ws-center-empty .ws-primary { margin-top: 6px; }
+
+/* ============================================================================
+   INTELLIGENCE VIEWS — Graph · Activity · Memory (center-stage)
+   ============================================================================ */
+.ws-island.view { flex: 1; min-width: 0; overflow: hidden; container-type: inline-size; }
+.ws-stage[data-mode="dark"] .ws-island.view {
+  --gv-node: #6f9be6; --gv-edge: rgba(120, 150, 210, 0.15); --gv-hot: #8fd6ff;
+  --glass: color-mix(in srgb, var(--island) 72%, transparent);
+  --glass-line: rgba(255, 255, 255, 0.08);
+}
+.ws-stage[data-mode="light"] .ws-island.view {
+  --gv-node: #8aa9e0; --gv-edge: rgba(120, 150, 210, 0.30); --gv-hot: #2f86d8;
+  --glass: color-mix(in srgb, var(--island) 80%, transparent);
+  --glass-line: rgba(0, 0, 0, 0.06);
+}
+
+/* shared toolbars */
+.ws-view-bar {
+  flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; row-gap: 8px;
+  padding: 11px 16px; border-bottom: 0.5px solid var(--sep); min-height: 42px;
+}
+.ws-view-subbar {
+  flex: none; display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; row-gap: 8px;
+  padding: 10px 16px; border-bottom: 0.5px solid var(--sep);
+}
+.ws-view-subbar.flush { border-bottom: 0; padding: 0; }
+.ws-view-bar .grow, .ws-view-subbar .grow { flex: 1; }
+.ws-tdiv { width: 0.5px; align-self: stretch; margin: 4px 2px; background: var(--sep); flex: none; }
+
+/* segmented pill control */
+.ws-seg2 { display: inline-flex; gap: 2px; padding: 3px; background: var(--row-hover); border-radius: 9px; flex: none; }
+.ws-seg2 .s2 {
+  border: 0; background: transparent; cursor: default; color: var(--text-2);
+  font-family: inherit; font-size: 13px; font-weight: 550; padding: 5px 13px; border-radius: 7px;
+  transition: background .12s, color .12s;
+}
+.ws-seg2 .s2:hover { color: var(--text-1); }
+.ws-seg2 .s2.is-active { background: var(--accent); color: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+.ws-seg2.mini { padding: 2px; }
+.ws-seg2.mini .s2 { padding: 3px 8px; font-size: 11.5px; font-weight: 600; }
+
+/* chip / text buttons */
+.ws-chipbtn, .ws-textbtn {
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 12px;
+  border: 0.5px solid var(--sep); background: transparent; border-radius: 9px;
+  font-family: inherit; font-size: 12.5px; font-weight: 500; color: var(--text-1);
+  cursor: default; transition: background .12s, border-color .12s, color .12s; white-space: nowrap; flex: none;
+}
+.ws-chipbtn:hover, .ws-textbtn:hover { background: var(--row-hover); }
+.ws-chipbtn.icon { width: 30px; padding: 0; justify-content: center; font-size: 15px; }
+.ws-chipbtn.toggle.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
+.ws-textbtn { border-color: transparent; color: var(--text-2); padding: 0 8px; }
+.ws-chipbtn kbd, .ws-search.sm kbd {
+  font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4px;
+  background: var(--row-hover); color: var(--text-2);
+}
+
+/* search field */
+.ws-search.sm {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px;
+  border-radius: 9px; background: var(--row-hover); color: var(--text-3); min-width: 190px; flex: none;
+}
+.ws-search.sm input { border: 0; background: none; outline: 0; color: var(--text-1); font-family: inherit; font-size: 13px; width: 100%; }
+
+/* ── Unified search · "centered idle → slides left on focus" (Liquid Glass) ───
+   The single search component for the whole app (see SearchField.tsx). Idle: the
+   magnifier + placeholder sit CENTERED in a capsule; on focus/typing the unit
+   slides to the left edge, the input fades in, and the placeholder fades once
+   there's a query — plus an accent focus ring. Durations are deliberately LONGER
+   than the source design (slide .42s vs .2s) for a smoother, slower feel.
+   Fills its container (width:100%); wrap it to size it per context. */
+.ws-sbar {
+  position: relative;
+  width: 100%;
+  /* Never shrink below a size where the centered placeholder gets cramped. Paired
+     with the `white-space: nowrap` on .unit, the label can NEVER fall onto two
+     lines — at worst it clips, but it won't below this width either. */
+  min-width: 168px;
+  height: 30px;
+  border-radius: 999px;
+  box-sizing: border-box;
+  /* Design --fill-tertiary: a translucent neutral gray that reads clearly on both
+     dark and light backings (the app's --row-hover is too faint for a standalone pill). */
+  background: rgba(118, 118, 128, 0.16);
+  overflow: hidden;
+  transition:
+    background 0.36s cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 0.36s ease;
+}
+.ws-sbar:hover { background: rgba(118, 118, 128, 0.2); }
+.ws-sbar input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-1);
+  padding: 0 12px 0 32px;
+  box-sizing: border-box;
+  opacity: 0;
+  transition: opacity 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.ws-sbar .unit {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* Keep the magnifier + label on ONE line. Without this, an absolutely-positioned
+     centered unit is width-constrained to the right half of the field, so the
+     placeholder wraps ("Search" / "chats") whenever the field is narrow. */
+  white-space: nowrap;
+  color: var(--text-3);
+  pointer-events: none;
+  transition:
+    left 0.42s cubic-bezier(0.32, 0.72, 0, 1),
+    transform 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.ws-sbar .unit .ph { font-size: 13px; transition: opacity 0.22s ease; }
+.ws-sbar.is-active input { opacity: 1; }
+.ws-sbar.is-active .unit { left: 11px; transform: translate(0, -50%); }
+.ws-sbar.is-active.is-filled .ph { opacity: 0; }
+.ws-sbar.is-active {
+  background: rgba(118, 118, 128, 0.24);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
+}
+/* layout helper: grow to fill a flex toolbar */
+.ws-sbar.grow { flex: 1 1 auto; }
+
+/* inline-label filter field */
+.ws-ff {
+  flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 12px; border-radius: 9px; border: 0.5px solid var(--sep);
+  background: var(--row-hover); color: var(--text-3); transition: border-color .12s, background .12s;
+}
+.ws-ff:focus-within { border-color: var(--accent); background: var(--island); }
+.ws-ff .ff-lab {
+  flex: none; font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text-3); padding-right: 9px; border-right: 0.5px solid var(--sep);
+}
+.ws-ff input { flex: 1; min-width: 0; border: 0; background: none; outline: 0; color: var(--text-1); font-family: inherit; font-size: 13px; }
+
+/* depth control group */
+.ws-depth { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.ws-depth .lab { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+.ws-stepper { display: inline-flex; align-items: center; border: 0.5px solid var(--sep); border-radius: 9px; overflow: hidden; }
+.ws-stepper button { width: 28px; height: 30px; border: 0; background: transparent; color: var(--text-2); cursor: default; display: flex; align-items: center; justify-content: center; }
+.ws-stepper button:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-stepper span { min-width: 26px; text-align: center; font-size: 13px; color: var(--text-1); font-variant-numeric: tabular-nums; }
+
+/* live + zoom */
+.ws-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-1); font-weight: 500; }
+.ws-live .dot { width: 7px; height: 7px; border-radius: 50%; background: #2f9e6e; box-shadow: 0 0 0 3px color-mix(in srgb, #2f9e6e 22%, transparent); animation: ws-pulse 2.4s ease-in-out infinite; }
+@keyframes ws-pulse { 0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, #2f9e6e 26%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, #2f9e6e 8%, transparent); } }
+
+/* primary button */
+.ws-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 32px; padding: 0 14px; border: 0; border-radius: 9px;
+  background: var(--accent); color: #fff; font-family: inherit; font-size: 13px; font-weight: 600; cursor: default;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); flex: none;
+}
+.ws-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+
+/* ---- ACTIVITY --------------------------------------------------------- */
+.ws-av-cards {
+  flex: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 12px;
+  padding: 16px; border-bottom: 0.5px solid var(--sep);
+}
+.ws-statcard { min-width: 0; }
+.ws-statcard {
+  display: flex; flex-direction: column; gap: 8px; padding: 13px 15px; border-radius: 13px;
+  border: 0.5px solid var(--glass-line); background: var(--glass);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 4px 14px rgba(0, 0, 0, 0.10);
+}
+.ws-statcard .sc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; row-gap: 6px; }
+.ws-statcard .sc-lab { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); }
+.ws-statcard .sc-val { font-size: 30px; font-weight: 700; line-height: 1; color: var(--text-1); font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 6px; }
+.ws-statcard .sc-val.warn { color: #e0735c; }
+.ws-statcard .sc-unit { font-size: 12.5px; font-weight: 500; color: var(--text-3); letter-spacing: 0; }
+.ws-statcard .sc-sub { font-size: 11.5px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-statcard .sc-spark { display: flex; align-items: flex-end; gap: 3px; height: 22px; }
+.ws-statcard .sc-spark span { flex: 1; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 2px 2px 0 0; min-height: 3px; }
+.ws-statcard .sc-spark span:last-child { background: var(--accent); }
+.ws-statcard .sc-meter { height: 6px; border-radius: 4px; background: var(--row-hover); overflow: hidden; }
+.ws-statcard .sc-meter span { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.ws-statcard .sc-meter span.warn { background: #e0735c; }
+.ws-statcard .sc-pills { display: flex; gap: 8px; }
+.ws-statcard .sc-pills span { font-size: 12px; padding: 3px 9px; border-radius: 20px; background: var(--row-hover); color: var(--text-3); }
+.ws-statcard .sc-pills .ok { color: #43b07f; background: color-mix(in srgb, #2f9e6e 14%, transparent); }
+.ws-statcard .sc-pills b { font-weight: 700; margin-right: 3px; }
+
+.ws-av-head {
+  flex: none; display: grid; grid-template-columns: 10px minmax(130px, 1fr) minmax(0, 1.6fr) 100px 122px 60px; align-items: center; gap: 14px;
+  padding: 9px 18px; border-bottom: 0.5px solid var(--sep);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3);
+}
+.ws-av-head .r { text-align: right; }
+.ws-av-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-av-list { padding: 2px 0; }
+.ws-av-row {
+  display: grid; grid-template-columns: 10px minmax(130px, 1fr) minmax(0, 1.6fr) 100px 122px 60px; align-items: center; gap: 14px;
+  padding: 9px 18px; font-size: 13px; border-bottom: 0.5px solid var(--sep);
+}
+.ws-av-row:hover { background: var(--row-hover); }
+.ws-av-row.err { background: color-mix(in srgb, #e0563a 7%, transparent); }
+.ws-av-row .st { width: 8px; height: 8px; border-radius: 50%; }
+.ws-av-row .st.ok { background: #2f9e6e; }
+.ws-av-row .st.bad { background: #e0563a; box-shadow: 0 0 0 3px color-mix(in srgb, #e0563a 18%, transparent); }
+.ws-av-row .tool { font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 12.5px; color: var(--text-1); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.ws-av-row .params { color: var(--text-2); font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-av-row .sess { font-size: 11px; color: var(--text-2); padding: 2px 9px; border-radius: 20px; background: var(--row-hover); justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-av-row .durcell { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
+.ws-av-row .durcell .bar { width: 64px; height: 5px; border-radius: 3px; background: var(--row-hover); overflow: hidden; }
+.ws-av-row .durcell .bar span { display: block; height: 100%; border-radius: 3px; }
+.ws-av-row .durcell .bar span.fast { background: #2f9e6e; }
+.ws-av-row .durcell .bar span.mid { background: #c9962f; }
+.ws-av-row .durcell .bar span.slow { background: #e0563a; }
+.ws-av-row .dur { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; min-width: 46px; text-align: right; }
+.ws-av-row .dur.fast { color: #43b07f; }
+.ws-av-row .dur.mid { color: #cda23f; }
+.ws-av-row .dur.slow { color: #e0735c; }
+.ws-av-row .time { font-size: 11.5px; color: var(--text-3); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ---- MEMORY ----------------------------------------------------------- */
+.ws-mv-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; overflow-x: hidden; }
+.ws-mv-top { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+.ws-mv-top .ws-statcard.wide { flex: 1 1 200px; }
+.ws-mv-top .ws-statcard.grow2 { flex: 3 1 320px; min-width: 0; }
+
+.ws-mv-dist { display: flex; height: 12px; border-radius: 7px; overflow: hidden; gap: 2px; }
+.ws-mv-dist .seg { height: 100%; border-radius: 3px; opacity: 0.95; }
+.ws-mv-dist .seg.blue { background: #5b8df5; } .ws-mv-dist .seg.red { background: #e0735c; }
+.ws-mv-dist .seg.pink { background: #d96cb0; } .ws-mv-dist .seg.gray { background: var(--text-3); }
+.ws-mv-dist .seg.gold { background: #cda23f; } .ws-mv-dist .seg.green { background: #43b07f; }
+.ws-mv-cats { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
+.mv-cat {
+  display: inline-flex; align-items: center; gap: 7px; border: 0.5px solid var(--sep); cursor: default; white-space: nowrap;
+  font-family: inherit; font-size: 12px; font-weight: 550; color: var(--text-2);
+  padding: 4px 11px 4px 8px; border-radius: 20px; background: transparent; transition: background .12s, border-color .12s, color .12s;
+}
+.mv-cat:hover { background: var(--row-hover); color: var(--text-1); }
+.mv-cat .swatch { width: 8px; height: 8px; border-radius: 50%; }
+.mv-cat.blue .swatch { background: #5b8df5; } .mv-cat.red .swatch { background: #e0735c; }
+.mv-cat.pink .swatch { background: #d96cb0; } .mv-cat.gray .swatch { background: var(--text-3); }
+.mv-cat.gold .swatch { background: #cda23f; } .mv-cat.green .swatch { background: #43b07f; }
+.mv-cat b { font-weight: 700; color: var(--text-1); }
+.mv-cat.is-active { background: var(--accent); border-color: transparent; color: #fff; }
+.mv-cat.is-active b { color: #fff; } .mv-cat.is-active .swatch { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
+
+.mv-badge { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; padding: 2px 7px; border-radius: 5px; white-space: nowrap; }
+.mv-badge.outline { background: transparent; border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); color: var(--accent); }
+.mv-badge.blue { background: color-mix(in srgb, #3574f0 16%, transparent); color: #6f9bf6; }
+.mv-badge.red { background: color-mix(in srgb, #e0563a 16%, transparent); color: #e0735c; }
+.mv-badge.pink { background: color-mix(in srgb, #d6469b 16%, transparent); color: #d96cb0; }
+.mv-badge.gray { background: var(--row-hover); color: var(--text-2); }
+.mv-badge.gold { background: color-mix(in srgb, #c9962f 18%, transparent); color: #cda23f; }
+.mv-badge.green { background: color-mix(in srgb, #2f9e6e 16%, transparent); color: #43b07f; }
+
+.ws-mv-listhead { display: flex; align-items: baseline; justify-content: space-between; }
+.ws-mv-listhead span { font-size: 13.5px; font-weight: 600; color: var(--text-1); }
+.ws-mv-listhead .found { font-size: 12px; font-weight: 400; color: var(--text-3); }
+.ws-mv-list { display: flex; flex-direction: column; gap: 8px; }
+.ws-mv-row {
+  display: flex; align-items: stretch; gap: 12px; padding: 13px 14px 13px 0;
+  border: 0.5px solid var(--sep); border-radius: 12px; background: var(--island);
+  transition: border-color .12s, transform .08s;
+}
+.ws-mv-row:hover { border-color: color-mix(in srgb, var(--text-3) 40%, transparent); }
+.ws-mv-row .accent { width: 3px; border-radius: 3px; flex: none; margin: 2px 0; }
+.ws-mv-row.blue .accent { background: #5b8df5; } .ws-mv-row.red .accent { background: #e0735c; }
+.ws-mv-row.pink .accent { background: #d96cb0; } .ws-mv-row.gray .accent { background: var(--text-3); }
+.ws-mv-row.gold .accent { background: #cda23f; } .ws-mv-row.green .accent { background: #43b07f; }
+.ws-mv-row .body { flex: 1; min-width: 0; }
+.ws-mv-row .line1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.ws-mv-row .line1 .t { font-size: 14px; color: var(--text-1); font-weight: 500; }
+.ws-mv-row .date { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-3); margin-top: 6px; }
+.ws-mv-row .acts { display: flex; align-items: center; gap: 8px; flex: none; }
+.ws-mv-row .acts button { border: 0.5px solid var(--sep); background: transparent; cursor: default; font-family: inherit; font-size: 12.5px; padding: 5px 11px; border-radius: 7px; }
+.ws-mv-row .acts .edit { color: var(--text-1); }
+.ws-mv-row .acts .edit:hover { background: var(--row-hover); }
+.ws-mv-row .acts .inval { color: #e0563a; border-color: color-mix(in srgb, #e0563a 35%, transparent); }
+.ws-mv-row .acts .inval:hover { background: color-mix(in srgb, #e0563a 12%, transparent); }
+.ws-mv-row .acts .chev { color: var(--text-3); display: flex; }
+
+/* ---- container-query responsiveness (responds to PANE width) ---------- */
+@container (max-width: 660px) {
+  .ws-av-head, .ws-av-row { grid-template-columns: 10px minmax(120px, 1fr) minmax(0, 1.4fr) 92px 60px 56px; gap: 12px; }
+  .ws-av-row .durcell .bar { display: none; }
+}
+@container (max-width: 520px) {
+  .ws-av-head, .ws-av-row { grid-template-columns: 10px minmax(110px, 1fr) minmax(0, 1.5fr) 56px; gap: 12px; }
+  .ws-av-row .sess, .ws-av-head .sess-h, .ws-av-row .time, .ws-av-head .time-h { display: none; }
+  .ws-view-bar .ws-textbtn, .ws-view-bar .ws-tdiv { display: none; }
+}
+@container (max-width: 400px) {
+  .ws-av-cards { grid-template-columns: 1fr 1fr; }
+}
+
+/* ============================================================================
+   MENU & POPOVER — Liquid Glass · macOS 26  (floating overlays)
+   Mirrors the design system's .mac-menu / .mac-popover spec (components.css).
+   Shared by: editor-tab right-click, the Project +/⋮ headers, tree context menu.
+   ============================================================================ */
+.ws-ctx-scrim { position: fixed; inset: 0; z-index: 90; }
+
+@keyframes ws-pop-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.ws-ctx-menu {
+  position: fixed;
+  z-index: 91;
+  min-width: 220px;
+  padding: 5px;
+  border-radius: 11px;
+  background: var(--menu-surface);
+  border: 0.5px solid var(--menu-border);
+  box-shadow: var(--menu-shadow);
+  transform-origin: top left;
+  animation: ws-pop-in 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@supports (corner-shape: superellipse(1.8)) {
+  .ws-ctx-menu { corner-shape: superellipse(1.8); }
+}
+.ws-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+}
+.ws-ctx-item:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.ws-ctx-item:disabled { color: var(--text-3); cursor: default; }
+/* Leading icon column — muted, white on accent hover (macOS idiom). */
+.ws-ctx-item .ws-ctx-ico {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+}
+.ws-ctx-item:hover:not(:disabled) .ws-ctx-ico { color: rgba(255, 255, 255, 0.85); }
+/* Trailing shortcut hint (⌘C etc.) — tertiary, dims to white on hover. */
+.ws-ctx-item .ws-ctx-sc {
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.ws-ctx-item:hover:not(:disabled) .ws-ctx-sc { color: rgba(255, 255, 255, 0.85); }
+/* Section header inside a menu (grouped menu). */
+.ws-ctx-section {
+  padding: 8px 9px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  user-select: none;
+}
+.ws-ctx-section:first-child { padding-top: 4px; }
+
+/* ── Confirmation popover (.mac-popover) — paired with the context menu ──── */
+.ws-popover {
+  position: fixed;
+  z-index: 91;
+  width: 240px;
+  padding: 14px;
+  border-radius: 11px;
+  background: var(--menu-surface);
+  border: 0.5px solid var(--menu-border);
+  box-shadow: var(--menu-shadow);
+  transform-origin: top left;
+  animation: ws-pop-in 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@supports (corner-shape: superellipse(1.8)) {
+  .ws-popover { corner-shape: superellipse(1.8); }
+}
+.ws-popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  letter-spacing: -0.01em;
+}
+.ws-popover-body {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.42;
+  color: var(--text-2);
+}
+.ws-popover-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ws-popover-btn {
+  height: 24px;
+  padding: 0 11px;
+  border: 0.5px solid var(--menu-ring);
+  border-radius: var(--r-sm);
+  background: var(--island);
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: default;
+  transition: background 0.12s, filter 0.12s;
+}
+.ws-popover-btn:hover { background: var(--row-hover); }
+.ws-popover-btn.prominent {
+  border-color: transparent;
+  background: var(--accent);
+  color: #fff;
+}
+.ws-popover-btn.prominent:hover { filter: brightness(1.06); }
+.ws-popover-btn.danger {
+  border-color: transparent;
+  background: #e0563a;
+  color: #fff;
+}
+.ws-popover-btn.danger:hover { filter: brightness(1.06); }
+
+/* ── narrow shell: rails stay, panels auto-collapsed by JS ─────────────── */
+.ws-stage.is-narrow .ws-rail-div { margin: 4px auto; }
+
+/* ── shared sidebar footer (SidebarFooter.tsx) ─────────────────────────────
+   Bottom section reused by the AI Chat panel and the Menu sidebar: a Settings
+   row with a light/dark theme segment, and an Upgrade button. Ported verbatim
+   from the design bundle (workspace.css) so both shells match 1:1. */
+.ws-stage .ws-codex-foot {
+  flex: none;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 0.5px solid var(--sep);
+}
+.ws-stage .ws-foot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ws-stage .ws-foot-row .grow {
+  flex: 1;
+}
+/* Settings entry reuses the codex-item look but is a real button (pointer). */
+.ws-stage .ws-foot-settings {
+  flex: 0 1 auto;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+/* Theme switch — segmented control, both icons always shown. */
+.ws-stage .ws-theme-seg {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  gap: 2px;
+  background: var(--row-hover);
+  border: 0.5px solid var(--sep);
+  border-radius: 8px;
+}
+.ws-stage .ws-theme-seg .tseg {
+  width: 30px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.ws-stage .ws-theme-seg .tseg:hover {
+  color: var(--text-1);
+}
+.ws-stage .ws-theme-seg .tseg.is-active {
+  background: var(--seg-thumb);
+  color: var(--seg-thumb-text);
+  box-shadow: var(--seg-thumb-shadow);
+}
+.ws-stage .ws-upgrade {
+  height: 30px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-1);
+  background: var(--row-hover);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  transition: background 0.12s;
+}
+.ws-stage .ws-upgrade:hover {
+  background: color-mix(in srgb, var(--text-1) 14%, transparent);
+}
+.ws-stage .ws-upgrade.is-soon,
+.ws-stage .ws-upgrade.is-soon:hover {
+  opacity: 0.45;
+  cursor: default;
+  background: var(--row-hover);
+}
+.ws-stage .ws-upgrade .ws-soon {
+  margin-left: 5px;
+  font-size: 11px;
+  opacity: 0.8;
+}
