@@ -1,0 +1,18 @@
+{
+  "name": "trace-mcp",
+  "owner": {
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "plugins": [
+    {
+      "name": "trace-mcp",
+      "source": "./.codex-plugin",
+      "description": "Framework-aware code intelligence: semantic search, refactoring, change-impact, security scanning, and decision memory across 60+ frameworks and 81 languages.",
+      "version": "1.46.1",
+      "author": {
+        "name": "Nikolai Vysotskyi"
+      }
+    }
+  ]
+}
