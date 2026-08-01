@@ -24,6 +24,14 @@ export interface RegistryEntry {
    * the desktop app's /health watchdog into a restart loop. See updater.ts.
    */
   pendingReindexForVersion?: string;
+  /**
+   * ISO timestamp of the first time this root was observed missing. Set by
+   * {@link sweepMissingRoots}, cleared the moment the root reappears (e.g. an
+   * unmounted drive). Lets the automatic startup sweep wait out a grace period
+   * before deleting, instead of `pruneStaleProjects`'s immediate removal (fine
+   * for that path since it only runs on explicit `doctor --fix`/`prune --apply`).
+   */
+  missingRootSince?: string;
 }
 
 interface Registry {
@@ -248,6 +256,66 @@ export function pruneStaleProjects(): string[] {
 
   if (removed.length > 0) saveRegistry(reg);
   return removed;
+}
+
+const MISSING_ROOT_SIDECARS = ['', '-wal', '-shm', '-journal'] as const;
+
+export interface MissingRootSweepResult {
+  /** Roots removed (grace period elapsed) — their DBs were also deleted. */
+  removed: string[];
+  /** Roots newly observed missing this run (grace period just started). */
+  newlyMissing: string[];
+}
+
+/**
+ * Automatic, unattended counterpart to `pruneStaleProjects` (TRA-36). Runs on
+ * daemon startup: a root missing for the first time only gets timestamped, not
+ * removed, so a transiently-unmounted drive doesn't lose its registration. Only
+ * once a root has stayed missing for `graceDays` does this deregister it AND
+ * delete its DB — unlike `pruneStaleProjects`, which only unregisters and is
+ * reserved for the explicit, human-reviewed `doctor --fix` / `prune --apply` path.
+ */
+export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
+  const reg = loadRegistry();
+  const graceMs = graceDays * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const removed: string[] = [];
+  const newlyMissing: string[] = [];
+  let changed = false;
+
+  for (const [root, entry] of Object.entries(reg.projects)) {
+    if (fs.existsSync(root)) {
+      if (entry.missingRootSince) {
+        delete entry.missingRootSince;
+        changed = true;
+      }
+      continue;
+    }
+
+    if (!entry.missingRootSince) {
+      entry.missingRootSince = new Date().toISOString();
+      newlyMissing.push(root);
+      changed = true;
+      continue;
+    }
+
+    const missingSinceMs = Date.parse(entry.missingRootSince);
+    if (Number.isNaN(missingSinceMs) || now - missingSinceMs < graceMs) continue;
+
+    delete reg.projects[root];
+    removed.push(root);
+    changed = true;
+    for (const suffix of MISSING_ROOT_SIDECARS) {
+      try {
+        fs.unlinkSync(entry.dbPath + suffix);
+      } catch {
+        /* missing sidecar or already gone — fine */
+      }
+    }
+  }
+
+  if (changed) saveRegistry(reg);
+  return { removed, newlyMissing };
 }
 
 export interface RegistryFileInspection {
