@@ -210,7 +210,9 @@ describe('Conversation Miner — extraction patterns', () => {
 });
 
 describe('Conversation Miner — "X over Y" noise (TRA-34)', () => {
-  function assistantTurn(text: string): import('../../src/memory/conversation-miner.js').ConversationTurn {
+  function assistantTurn(
+    text: string,
+  ): import('../../src/memory/conversation-miner.js').ConversationTurn {
     return {
       role: 'assistant',
       text,
