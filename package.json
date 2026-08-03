@@ -100,7 +100,7 @@
     "@types/picomatch": "^4.0.3",
     "fast-check": "^4.6.0",
     "gpt-tokenizer": "^3.4.0",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.1",
     "lint-staged": "17.2.0",
     "simple-git-hooks": "2.13.1",
     "tsup": "^8.4.0",
