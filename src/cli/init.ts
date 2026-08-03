@@ -20,7 +20,7 @@ import {
   cleanupLegacyHooks,
 } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
-import { configureMcpClients } from '../init/mcp-client.js';
+import { configureMcpClients, type McpScope } from '../init/mcp-client.js';
 import { writeStampedVersion } from '../init/version-stamp.js';
 
 declare const PKG_VERSION_INJECTED: string;
@@ -74,6 +74,7 @@ export const initCommand = new Command('init')
   .option('--dry-run', 'Show what would be done without writing files')
   .option('--json', 'Output results as JSON (implies --yes)')
   .option('--index', 'Also register and index the current project')
+  .option('--scope <scope>', 'Where to write the MCP client config: project | global', 'global')
   .action(
     async (opts: {
       yes?: boolean;
@@ -86,8 +87,15 @@ export const initCommand = new Command('init')
       dryRun?: boolean;
       json?: boolean;
       index?: boolean;
+      scope?: string;
     }) => {
       const nonInteractive = opts.yes || opts.json || opts.dryRun;
+
+      if (opts.scope !== undefined && opts.scope !== 'project' && opts.scope !== 'global') {
+        console.error(`Invalid --scope value: "${opts.scope}". Must be "project" or "global".`);
+        process.exit(1);
+      }
+      const mcpScope: McpScope = opts.scope === 'project' ? 'project' : 'global';
 
       // Ensure global directory structure + migrate config
       let migrationStep: InitStepResult | undefined;
@@ -350,6 +358,7 @@ export const initCommand = new Command('init')
             installTweakcc,
             agentBehavior,
             claudeMdScope,
+            scope: mcpScope,
             force: opts.force,
             dryRun: opts.dryRun,
           });
@@ -366,6 +375,7 @@ export const initCommand = new Command('init')
           installTweakcc,
           agentBehavior,
           claudeMdScope,
+          scope: mcpScope,
           force: opts.force,
           dryRun: opts.dryRun,
         });
@@ -622,6 +632,7 @@ function executeSteps(
     installTweakcc: boolean;
     agentBehavior: 'strict' | 'off';
     claudeMdScope: 'global' | 'skip';
+    scope: McpScope;
     force?: boolean;
     dryRun?: boolean;
   },
@@ -630,21 +641,24 @@ function executeSteps(
   // because the MCP registration's `command` field points at the shim path.
   steps.push(...setupLauncher({ dryRun: opts.dryRun, force: opts.force, pkgVersion: PKG_VERSION }));
 
-  // 1. MCP clients (always global)
+  // 1. MCP clients
   if (opts.selectedClients.length > 0) {
     const clientResults = configureMcpClients(opts.selectedClients, process.cwd(), {
-      scope: 'global',
+      scope: opts.scope,
       dryRun: opts.dryRun,
     });
     steps.push(...clientResults);
   }
 
   // 2. IDE rules (Cursor .mdc, Windsurf .windsurfrules)
+  const ideRulesGlobal = opts.scope === 'global';
   if (opts.selectedClients.includes('cursor')) {
-    steps.push(installCursorRules(process.cwd(), { dryRun: opts.dryRun, global: true }));
+    steps.push(installCursorRules(process.cwd(), { dryRun: opts.dryRun, global: ideRulesGlobal }));
   }
   if (opts.selectedClients.includes('windsurf')) {
-    steps.push(installWindsurfRules(process.cwd(), { dryRun: opts.dryRun, global: true }));
+    steps.push(
+      installWindsurfRules(process.cwd(), { dryRun: opts.dryRun, global: ideRulesGlobal }),
+    );
   }
 
   // 3. PreToolUse guard hook + PostToolUse auto-reindex hook

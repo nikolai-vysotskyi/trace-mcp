@@ -60,6 +60,38 @@ describe('getMcpClientStatuses', () => {
     expect(s.staleReason).toBeUndefined();
   });
 
+  it('scope: "project" writes to <projectRoot>/.mcp.json instead of the global config', () => {
+    const [result] = configureMcpClients(['claude-code'], projectRoot, { scope: 'project' });
+    const projectConfigPath = path.join(projectRoot, '.mcp.json');
+
+    expect(result.target).toBe(projectConfigPath);
+    expect(fs.existsSync(projectConfigPath)).toBe(true);
+    expect(fs.existsSync(path.join(fakeHome, '.claude.json'))).toBe(false);
+
+    const [s] = getMcpClientStatuses(projectRoot, 'project', ['claude-code']);
+    expect(s.status).toBe('up_to_date');
+  });
+
+  it.each(['claude-desktop', 'hermes', 'cline', 'kilocode', 'antigravity', 'kimi'] as const)(
+    'skips --scope project for global-only client %s instead of overwriting the global config',
+    (client) => {
+      // Simulate an existing global entry written from a different project.
+      const otherProjectRoot = path.join(sandbox, 'other-project');
+      fs.mkdirSync(otherProjectRoot, { recursive: true });
+      configureMcpClients([client], otherProjectRoot, { scope: 'global' });
+      const [globalStatusBefore] = getMcpClientStatuses(otherProjectRoot, 'global', [client]);
+
+      const [result] = configureMcpClients([client], projectRoot, { scope: 'project' });
+
+      expect(result.action).toBe('skipped');
+      expect(result.detail).toMatch(/does not support project-scoped config/);
+
+      // The global entry (from the other project) must be untouched.
+      const [globalStatusAfter] = getMcpClientStatuses(otherProjectRoot, 'global', [client]);
+      expect(globalStatusAfter.status).toBe(globalStatusBefore.status);
+    },
+  );
+
   it('flags `stale` with reason="alwaysLoad" when the on-disk entry lacks the new flag', () => {
     // First let init write a fresh entry, then strip the alwaysLoad field —
     // simulating an installation done before the alwaysLoad fix shipped.

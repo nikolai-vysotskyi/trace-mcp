@@ -81,6 +81,22 @@ const ALWAYS_LOAD_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
 ]);
 
 /**
+ * Clients whose config location is inherently global-only — `getConfigPath`
+ * returns the same user-level path regardless of `scope`. Requesting
+ * `--scope project` for one of these must not silently fall back to writing
+ * global (that would overwrite another project's entry, e.g. its `cwd`,
+ * while reporting success as if it were project-scoped).
+ */
+const GLOBAL_ONLY_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
+  'claude-desktop',
+  'hermes',
+  'cline',
+  'kilocode',
+  'antigravity',
+  'kimi',
+]);
+
+/**
  * Build the MCP command entry. All clients use the stable launcher shim at
  * ~/.trace-mcp/bin/trace-mcp — the shim resolves node + dist/cli.js at
  * runtime from launcher.env (or probe fallback), so the MCP registration
@@ -90,7 +106,7 @@ function buildMcpEntry(): { command: string } {
   return { command: getLauncherPath() };
 }
 
-type McpScope = 'global' | 'project';
+export type McpScope = 'global' | 'project';
 
 /**
  * Configure selected MCP clients to use trace-mcp.
@@ -105,6 +121,19 @@ export function configureMcpClients(
   const results: InitStepResult[] = [];
 
   for (const name of clientNames) {
+    // Reject rather than silently ignore --scope project for clients whose
+    // config location is always global (see GLOBAL_ONLY_CLIENTS) — writing
+    // global anyway would overwrite another project's entry while reporting
+    // success as if project-scoped.
+    if (opts.scope === 'project' && GLOBAL_ONLY_CLIENTS.has(name)) {
+      results.push({
+        target: name,
+        action: 'skipped',
+        detail: `${name} does not support project-scoped config; it is always configured globally. Skipped --scope project for this client.`,
+      });
+      continue;
+    }
+
     // JetBrains AI Assistant: config stored in IDE XML (llm.mcpServers.xml), not editable as JSON.
     // If Claude Desktop is also selected, user can "Import from Claude" in the IDE.
     if (name === 'jetbrains-ai') {
