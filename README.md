@@ -288,6 +288,19 @@ trace-mcp add         # register current project for indexing
 
 All state lives in `~/.trace-mcp/` — your project directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
 
+**Using Claude Code or Codex CLI?** After `npm install -g trace-mcp`, skip `trace-mcp init`'s client-wiring step and install the plugin directly instead — no `git clone` needed either way:
+
+```bash
+# Claude Code
+claude plugin install @nikolai-vysotskyi/trace-mcp
+
+# Codex CLI
+codex plugin marketplace add nikolai-vysotskyi/trace-mcp
+codex plugin install trace-mcp@nikolai-vysotskyi-trace-mcp
+```
+
+Both register the `trace-mcp` MCP server plus the Bash guard hook in one step. Details: [`.claude-plugin/README.md`](.claude-plugin/README.md) · [`.codex-plugin/README.md`](.codex-plugin/README.md).
+
 Then in your MCP client:
 
 ```
