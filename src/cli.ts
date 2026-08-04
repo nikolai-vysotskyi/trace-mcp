@@ -89,7 +89,12 @@ import { ensureInitialized, warmUpGrammars } from './parser/tree-sitter.js';
 import { PluginRegistry } from './plugin-api/registry.js';
 import { detectGitWorktree, findProjectRoot, hasRootMarkers } from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
-import { getProject, listProjects, resolveRegisteredAncestor } from './registry.js';
+import {
+  getProject,
+  listProjects,
+  pruneStaleProjects,
+  resolveRegisteredAncestor,
+} from './registry.js';
 import { isKnownSubproject, resolveDeepestKnownRoot } from './subproject/resolve.js';
 import {
   buildAmbiguousProjectError,
@@ -189,6 +194,49 @@ function collectKnownLanguages(projects: ManagedProject[]): string[] {
     }
   }
   return [...langs];
+}
+
+/**
+ * Soft GC (TRA-23): prune DB categories that are unambiguous garbage —
+ * expired session DBs, and orphan DBs/registry rows whose project root is
+ * confirmed gone from disk. Never touches `orphan_unregistered` (DB present
+ * but no matching registry row could just be a project not yet re-added) or
+ * `stray_small` (small-but-live projects) — those still require the explicit
+ * `trace-mcp prune --apply`/`--aggressive` review path. Called at daemon
+ * startup and hourly thereafter so ephemeral per-run workdirs (e.g. Multica
+ * task workdirs, deleted the moment the run ends) don't accumulate orphaned
+ * indexes for the life of a long-running daemon.
+ */
+function softGcSweep(): void {
+  try {
+    const summary = pruneIndexDir({
+      apply: true,
+      sessionTtlDays: 7,
+      onlyCategories: ['session_expired', 'orphan_missing_root'],
+    });
+    const deletedCount = summary.deleted.length;
+    if (deletedCount > 0) {
+      const freedMb = Math.round(summary.freedBytes / 1_048_576);
+      logger.info(
+        { deletedFiles: deletedCount, freedMb },
+        `Pruned ${deletedCount} expired/orphaned index DBs (${freedMb} MB freed)`,
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, 'pruneIndexDir soft-prune failed (non-fatal)');
+  }
+
+  try {
+    const removed = pruneStaleProjects();
+    if (removed.length > 0) {
+      logger.info(
+        { removed },
+        `Pruned ${removed.length} stale registry entr${removed.length === 1 ? 'y' : 'ies'}`,
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, 'pruneStaleProjects soft-prune failed (non-fatal)');
+  }
 }
 
 async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): Promise<void> {
@@ -2915,26 +2963,12 @@ program
         // grammar warm-up that follow are non-gating.
         startupComplete = true;
 
-        // Soft GC: prune expired session DBs (>7 days) from ~/.trace-mcp/index/.
-        // Conservative — never touches live or orphan_* categories. The
-        // explicit `trace-mcp prune` CLI handles those after user review.
-        try {
-          const summary = pruneIndexDir({
-            apply: true,
-            sessionTtlDays: 7,
-            onlyCategories: ['session_expired'],
-          });
-          const deletedCount = summary.deleted.length;
-          if (deletedCount > 0) {
-            const freedMb = Math.round(summary.freedBytes / 1_048_576);
-            logger.info(
-              { deletedFiles: deletedCount, freedMb },
-              `Pruned ${deletedCount} expired session DBs (${freedMb} MB freed)`,
-            );
-          }
-        } catch (err) {
-          logger.warn({ err }, 'pruneIndexDir soft-prune failed (non-fatal)');
-        }
+        // Soft GC (TRA-23): run once now, then hourly for the life of the
+        // daemon — long-running daemons otherwise only swept at startup
+        // while orphans (e.g. ephemeral per-run workdirs) keep accumulating.
+        softGcSweep();
+        const softGcTimer = setInterval(softGcSweep, 60 * 60_000);
+        softGcTimer.unref();
 
         // If cwd is a project not yet registered, add it too.
         const cwd = process.cwd();
