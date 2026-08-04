@@ -261,6 +261,13 @@ describe('TopologyStore', () => {
       const repo = store.getSubproject('synced');
       expect(repo!.last_synced).not.toBeNull();
     });
+
+    it('rejects registering the filesystem root as a subproject repo_root (#273)', () => {
+      expect(() =>
+        store.upsertSubproject({ name: 'root', repoRoot: '/', projectRoot: PROJECT }),
+      ).toThrow(/filesystem root/);
+      expect(store.getAllSubprojects()).toHaveLength(0);
+    });
   });
 
   describe('client calls', () => {
