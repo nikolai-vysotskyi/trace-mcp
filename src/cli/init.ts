@@ -70,6 +70,7 @@ export const initCommand = new Command('init')
     '--mcp-client <name>',
     'Force MCP client: claude-code | claw-code | claude-desktop | cursor | windsurf | continue | junie | codex | hermes | amp | warp | factory-droid | cline | kilocode | antigravity | kimi',
   )
+  .option('--scope <scope>', 'MCP config target: project | global', 'global')
   .option('--force', 'Overwrite existing configuration')
   .option('--dry-run', 'Show what would be done without writing files')
   .option('--json', 'Output results as JSON (implies --yes)')
@@ -82,11 +83,17 @@ export const initCommand = new Command('init')
       skipClaudeMd?: boolean;
       skipApp?: boolean;
       mcpClient?: string;
+      scope: string;
       force?: boolean;
       dryRun?: boolean;
       json?: boolean;
       index?: boolean;
     }) => {
+      if (opts.scope !== 'project' && opts.scope !== 'global') {
+        console.error(`Invalid --scope "${opts.scope}" — must be "project" or "global".`);
+        process.exit(1);
+      }
+      const scope = opts.scope;
       const nonInteractive = opts.yes || opts.json || opts.dryRun;
 
       // Ensure global directory structure + migrate config
@@ -350,6 +357,7 @@ export const initCommand = new Command('init')
             installTweakcc,
             agentBehavior,
             claudeMdScope,
+            scope,
             force: opts.force,
             dryRun: opts.dryRun,
           });
@@ -366,6 +374,7 @@ export const initCommand = new Command('init')
           installTweakcc,
           agentBehavior,
           claudeMdScope,
+          scope,
           force: opts.force,
           dryRun: opts.dryRun,
         });
@@ -622,6 +631,7 @@ function executeSteps(
     installTweakcc: boolean;
     agentBehavior: 'strict' | 'off';
     claudeMdScope: 'global' | 'skip';
+    scope: 'project' | 'global';
     force?: boolean;
     dryRun?: boolean;
   },
@@ -630,10 +640,10 @@ function executeSteps(
   // because the MCP registration's `command` field points at the shim path.
   steps.push(...setupLauncher({ dryRun: opts.dryRun, force: opts.force, pkgVersion: PKG_VERSION }));
 
-  // 1. MCP clients (always global)
+  // 1. MCP clients
   if (opts.selectedClients.length > 0) {
     const clientResults = configureMcpClients(opts.selectedClients, process.cwd(), {
-      scope: 'global',
+      scope: opts.scope,
       dryRun: opts.dryRun,
     });
     steps.push(...clientResults);
