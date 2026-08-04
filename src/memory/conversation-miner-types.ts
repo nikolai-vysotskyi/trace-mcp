@@ -189,12 +189,19 @@ const DECISION_PATTERNS: DecisionPattern[] = [
     confidence: 0.8,
     titleExtractor: (m) => truncateTitle(`Use ${m[1].trim()}: ${m[2].trim()}`),
   },
-  // "X instead of Y" / "X over Y"
+  // "X instead of Y" / "X rather than Y". `over` was dropped from this
+  // alternation (#TRA-34): it's an ordinary preposition ("the issue in
+  // `in_progress` over `in_review`", "the contentious zone over the pool")
+  // that fires on any comparison-shaped sentence, decision or not. "instead
+  // of" / "rather than" are decision-specific idioms with far lower false
+  // positive rates. Genuine "chose X over Y" phrasing is still caught by the
+  // decided/chose/going-with pattern above, which requires an explicit
+  // decision verb.
   {
-    pattern: /(\S+(?:\s+\S+){0,3})\s+(?:instead of|over|rather than)\s+(\S+(?:\s+\S+){0,3})\b/gi,
+    pattern: /(\S+(?:\s+\S+){0,3})\s+(?:instead of|rather than)\s+(\S+(?:\s+\S+){0,3})\b/gi,
     type: 'tech_choice',
     confidence: 0.75,
-    titleExtractor: (m) => truncateTitle(`${m[1].trim()} over ${m[2].trim()}`),
+    titleExtractor: (m) => truncateTitle(`${m[1].trim()} instead of ${m[2].trim()}`),
   },
   // Bug root causes: "the bug was", "root cause", "the issue was", "caused by"
   {
