@@ -2,7 +2,7 @@
  * CLI: trace-mcp memory — decision memory commands.
  *
  * Usage:
- *   trace-mcp memory mine [--project=.] [--force] [--min-confidence=0.6]
+ *   trace-mcp memory mine [--project=.] [--force] [--min-confidence=0.45]
  *   trace-mcp memory search "query" [--project=.] [--limit=20]
  *   trace-mcp memory stats [--project=.]
  *   trace-mcp memory decisions [--project=.] [--type=tech_choice] [--search="query"] [--branch=current|all|<name>]
@@ -21,6 +21,7 @@ import {
   exportDecisionsAsJsonl,
   exportDecisionsAsMarkdown,
 } from '../memory/decision-exporter.js';
+import { DEFAULT_REJECT_THRESHOLD } from '../memory/conversation-miner-types.js';
 import { DecisionStore, type DecisionType } from '../memory/decision-store.js';
 import { indexSessions } from '../memory/session-indexer.js';
 import { assembleWakeUp } from '../memory/wake-up.js';
@@ -42,8 +43,11 @@ memoryCommand
   .description('Mine Claude Code / Claw Code session logs for decisions')
   .option('--project <path>', 'Project root to mine (default: current directory)', process.cwd())
   .option('--force', 'Re-mine already processed sessions')
-  .option('--min-confidence <n>', 'Minimum confidence threshold (default: 0.6)', '0.6')
-  .action(async (opts: { project: string; force?: boolean; minConfidence: string }) => {
+  .option(
+    '--min-confidence <n>',
+    `Reject floor — decisions below this are dropped (default: ${DEFAULT_REJECT_THRESHOLD}, same as the automated mining scheduler)`,
+  )
+  .action(async (opts: { project: string; force?: boolean; minConfidence?: string }) => {
     const store = openStore();
     try {
       const projectRoot = path.resolve(opts.project);
@@ -52,7 +56,8 @@ memoryCommand
       const result = await mineSessions(store, {
         projectRoot,
         force: opts.force,
-        minConfidence: parseFloat(opts.minConfidence),
+        minConfidence:
+          opts.minConfidence !== undefined ? parseFloat(opts.minConfidence) : undefined,
       });
 
       console.log(`\n  Sessions scanned: ${result.sessions_scanned}`);
@@ -250,6 +255,11 @@ memoryCommand
       console.log(`  Sessions indexed: ${indexedSessions.length}`);
       console.log(`  Content chunks:   ${chunkCount}`);
       console.log();
+      if (stats.total === 0 && minedCount > 0) {
+        console.log(
+          `  0 decisions from ${minedCount} mined sessions — sessions already scanned at the previous threshold won't be re-examined. Try \`trace-mcp memory mine --force --min-confidence <lower>\`.\n`,
+        );
+      }
       if (Object.keys(stats.by_type).length > 0) {
         console.log('  By type:');
         for (const [type, count] of Object.entries(stats.by_type)) {
@@ -308,6 +318,11 @@ memoryCommand
       console.log(
         `Memory: ${wakeUp.memory.total_decisions} decisions, ${wakeUp.memory.sessions_mined} sessions mined, ${wakeUp.memory.sessions_indexed} indexed`,
       );
+      if (wakeUp.memory.total_decisions === 0 && wakeUp.memory.sessions_mined > 0) {
+        console.log(
+          `Tip: 0 decisions from ${wakeUp.memory.sessions_mined} mined sessions — try \`trace-mcp memory mine --force --min-confidence <lower>\` to re-examine them.`,
+        );
+      }
       console.log(`Estimated tokens: ${wakeUp.estimated_tokens}`);
     } finally {
       store.close();
