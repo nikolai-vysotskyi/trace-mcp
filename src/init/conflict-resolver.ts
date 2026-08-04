@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { atomicWriteJson } from '../utils/atomic-write.js';
-import type { Conflict } from './conflict-detector.js';
+import { NEGATION_PATTERN, type Conflict } from './conflict-detector.js';
 
 type FixAction = 'removed' | 'disabled' | 'cleaned' | 'skipped';
 
@@ -387,6 +387,13 @@ function fixClaudeMdBlock(conflict: Conflict, opts: { dryRun?: boolean }): FixRe
       };
     }
 
+    // Strategy 4: bare mentions with no marker/heading — comment out just the
+    // matching lines so they stop being read as instructions, instead of
+    // leaving the conflict as a manual-only fix.
+    if (updated === content && conflict.detectionPattern) {
+      updated = commentOutMatchingLines(updated, conflict.detectionPattern);
+    }
+
     // Clean up excessive blank lines left behind
     updated = `${updated.replace(/\n{3,}/g, '\n\n').trim()}\n`;
 
@@ -503,6 +510,24 @@ function removeFromMemoryIndex(deletedFilePath: string): void {
   } catch {
     /* best-effort */
   }
+}
+
+/**
+ * Comment out individual lines matching a competing-tool detection pattern,
+ * skipping lines that already reject the competitor (negated mentions) or
+ * are already wrapped in a comment. Used as a fallback when a bare mention
+ * has no marker block or heading section to remove wholesale.
+ */
+function commentOutMatchingLines(content: string, pattern: RegExp): string {
+  let changed = false;
+  const lines = content.split('\n').map((line) => {
+    if (/^\s*<!--/.test(line)) return line; // already commented
+    if (!pattern.test(line) || NEGATION_PATTERN.test(line)) return line;
+    changed = true;
+    const safeText = line.replace(/-->/g, '--&gt;');
+    return `<!-- trace-mcp: disabled by doctor --fix, competing-tool directive: ${safeText.trim()} -->`;
+  });
+  return changed ? lines.join('\n') : content;
 }
 
 /**
