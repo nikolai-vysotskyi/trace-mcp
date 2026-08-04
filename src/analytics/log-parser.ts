@@ -1,7 +1,9 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { logger } from '../logger.js';
+import { safeGitEnv } from '../utils/git-env.js';
 
 // --- Interfaces ---
 
@@ -419,13 +421,103 @@ function listSessionFiles(projectDirName: string): { filePath: string; mtime: nu
     });
 }
 
-/** List all session files across all projects (Claude Code) */
-export function listAllSessions(): {
+/**
+ * Forward-encode a filesystem path into a Claude Code project directory name.
+ * Inverse of `decodeDirName` (which has to disk-probe because the encoding
+ * is lossy); encoding itself is just "/" → "-", so no disk access is needed.
+ */
+function encodeDirName(projectPath: string): string {
+  return projectPath.replace(/[\\/]+/g, '-');
+}
+
+/**
+ * Best-effort list of git worktree paths sharing `root`'s repo (main root +
+ * every linked worktree), via `git worktree list`. Empty on any failure
+ * (not a repo, git missing, timeout) — callers treat that as "just `root`".
+ */
+function listGitWorktrees(root: string): string[] {
+  try {
+    const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: root,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 1500,
+      env: safeGitEnv(),
+    });
+    return out
+      .split('\n')
+      .filter((line) => line.startsWith('worktree '))
+      .map((line) => line.slice('worktree '.length).trim());
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * List session files for exactly one project, without scanning every
+ * registered project on the machine. Resolves the small, bounded set of
+ * candidate directories (the project root + its known git worktrees) and
+ * stats only those — see TRA-48.
+ */
+function listSessionsForProject(projectRoot: string): {
   filePath: string;
   projectPath: string;
   client: ClientType;
   mtime: number;
 }[] {
+  const results: { filePath: string; projectPath: string; client: ClientType; mtime: number }[] =
+    [];
+  const candidates = new Set<string>([projectRoot, ...listGitWorktrees(projectRoot)]);
+
+  for (const candidate of candidates) {
+    // Claude Code: ~/.claude/projects/<encoded-path>/<session-id>.jsonl
+    const dirName = encodeDirName(candidate);
+    for (const { filePath, mtime } of listSessionFiles(dirName)) {
+      results.push({ filePath, projectPath: candidate, client: 'claude-code', mtime });
+    }
+
+    // Claw Code: <project>/.claw/sessions/<session-id>.jsonl
+    const sessionsDir = path.join(candidate, CLAW_SESSIONS_DIR_NAME);
+    if (!fs.existsSync(sessionsDir)) continue;
+    try {
+      const entries = fs.readdirSync(sessionsDir, { withFileTypes: true });
+      for (const e of entries) {
+        if (!e.isFile() || !e.name.endsWith('.jsonl')) continue;
+        const filePath = path.join(sessionsDir, e.name);
+        try {
+          const stat = fs.statSync(filePath);
+          results.push({
+            filePath,
+            projectPath: candidate,
+            client: 'claw-code',
+            mtime: stat.mtimeMs,
+          });
+        } catch {
+          /* skip */
+        }
+      }
+    } catch {
+      /* skip */
+    }
+  }
+
+  return results;
+}
+
+/**
+ * List all session files across all projects (Claude Code + Claw Code).
+ * Pass `projectRoot` to short-circuit directory discovery to just that
+ * project (+ its git worktrees) instead of scanning every registered
+ * project on the machine — see TRA-48.
+ */
+export function listAllSessions(projectRoot?: string): {
+  filePath: string;
+  projectPath: string;
+  client: ClientType;
+  mtime: number;
+}[] {
+  if (projectRoot) return listSessionsForProject(projectRoot);
+
   const results: { filePath: string; projectPath: string; client: ClientType; mtime: number }[] =
     [];
 
