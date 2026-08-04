@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.46.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.46.1...v1.46.2) (2026-07-29)
+
+
+### Bug Fixes
+
+* **init:** doctor false-positives on CLAUDE.md files that reject a competing tool ([#266](https://github.com/nikolai-vysotskyi/trace-mcp/issues/266)) ([54b47dc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/54b47dc00c49d51e9eab03454811b3fb959dad5a))
+* **memory:** reject narration noise in mined decisions (title_narration) ([#268](https://github.com/nikolai-vysotskyi/trace-mcp/issues/268)) ([42ba04f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/42ba04f991143a6af327c9b86551efc8373d4eca)), closes [#17](https://github.com/nikolai-vysotskyi/trace-mcp/issues/17)
+* **registry:** doctor --fix/--dry-run clean up stale entries and overlaps ([#267](https://github.com/nikolai-vysotskyi/trace-mcp/issues/267)) ([513a177](https://github.com/nikolai-vysotskyi/trace-mcp/commit/513a1772cc59e29856bcb6b2cb328f7373f5659c))
+
 ## [1.46.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.46.0...v1.46.1) (2026-07-27)
 
 
