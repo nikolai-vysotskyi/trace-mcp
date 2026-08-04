@@ -61,6 +61,7 @@
     "hooks",
     "scripts",
     ".claude-plugin",
+    ".codex-plugin",
     "LICENSE",
     "README.md"
   ],
