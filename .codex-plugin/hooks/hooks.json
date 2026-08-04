@@ -1,0 +1,16 @@
+{
+  "description": "trace-mcp guard hook: blocks Bash exploration on source trees in favor of trace-mcp tools. Codex has no PreCompact-equivalent event, so the Claude Code plugin's pre-compact snapshot hook is not ported here (see .claude-plugin/hooks/hooks.json).",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PLUGIN_ROOT}/../hooks/trace-mcp-guard.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
