@@ -74,6 +74,9 @@ CONTEXT=$(printf '%s' "$WAKE_JSON" | jq -r '
     (
       if ((.decisions.recent // []) | length) > 0 then
         "Recent decisions:"
+      elif (.memory.sessions_mined // 0) > 0 then
+        "No recent decisions yet — " + ((.memory.sessions_mined // 0) | tostring)
+          + " sessions already mined found none. Try `trace-mcp memory mine --force --min-confidence <lower>` to re-examine them."
       else
         "No recent decisions yet — run `trace-mcp memory mine` to extract from session logs."
       end
