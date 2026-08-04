@@ -196,13 +196,22 @@ Across 11 structured task categories, recomputation drops by **up to ~99% per ca
 
 **Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten** — fewer tokens, lower latency, and one clean answer instead of ten partial ones.
 
-### Run it on your codebase
+### Run it yourself
 
 ```bash
 npx trace-mcp benchmark .
 ```
 
-Per-category token savings against your actual repo in ~5 minutes — no install, no signup, all local. Numbers above are from trace-mcp's own TypeScript/Vue codebase (929 files, 5,197 symbols) under structured benchmarks; production reduction on mixed workloads will be lower (typically 30–60% depending on stack), but the per-task patterns hold for any well-supported stack.
+Per-category token savings against your actual repo in ~5 minutes — no install, no signup, all local. It reads an *existing* index, so run `trace-mcp index .` first if the project isn't registered yet. Numbers above are from trace-mcp's own TypeScript/Vue codebase (929 files, 5,197 symbols) under structured benchmarks; production reduction on mixed workloads will be lower (typically 30–60% depending on stack), but the per-task patterns hold for any well-supported stack.
+
+**This is a synthetic estimate**, not measured savings: the "without trace-mcp" side is computed from file sizes in the index, and the "with trace-mcp" side from per-scenario multipliers — not from actual tool calls. It shows the theoretical ceiling. To measure real savings from your own usage, run trace-mcp for a while, then:
+
+```bash
+trace-mcp analytics savings   # real sessions: reads vs. what trace-mcp would have cost
+trace-mcp analytics optimize  # recommendations based on your actual usage
+```
+
+See [docs/analytics.md](docs/analytics.md) for details.
 
 <details>
 <summary>Methodology</summary>
@@ -278,6 +287,19 @@ trace-mcp add         # register current project for indexing
 - `add` — detects frameworks, creates the per-project index, registers the project. Re-run in every project you want trace-mcp to understand.
 
 All state lives in `~/.trace-mcp/` — your project directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
+
+**Using Claude Code or Codex CLI?** After `npm install -g trace-mcp`, skip `trace-mcp init`'s client-wiring step and install the plugin directly instead — no `git clone` needed either way:
+
+```bash
+# Claude Code
+claude plugin install @nikolai-vysotskyi/trace-mcp
+
+# Codex CLI
+codex plugin marketplace add nikolai-vysotskyi/trace-mcp
+codex plugin install trace-mcp@nikolai-vysotskyi-trace-mcp
+```
+
+Both register the `trace-mcp` MCP server plus the Bash guard hook in one step. Details: [`.claude-plugin/README.md`](.claude-plugin/README.md) · [`.codex-plugin/README.md`](.codex-plugin/README.md).
 
 Then in your MCP client:
 

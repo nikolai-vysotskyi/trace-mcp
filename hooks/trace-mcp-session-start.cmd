@@ -40,7 +40,7 @@ powershell -NoProfile -Command ^
   "    $link = if ($d.symbol) { ' -> ' + $d.symbol } elseif ($d.file) { ' -> ' + $d.file } else { '' };" ^
   "    $lines += '  - #' + $d.id + ' [' + $d.type + '] ' + $title + $link;" ^
   "  }" ^
-  "} else { $lines += 'No recent decisions yet -- run trace-mcp memory mine.' };" ^
+  "} elseif ($w.memory.sessions_mined -gt 0) { $lines += 'No recent decisions yet -- ' + $w.memory.sessions_mined + ' sessions already mined found none. Try `trace-mcp memory mine --force --min-confidence <lower>` to re-examine them.' } else { $lines += 'No recent decisions yet -- run trace-mcp memory mine.' };" ^
   "$lines += 'Memory: ' + $w.memory.sessions_mined + ' sessions mined, ' + $w.memory.sessions_indexed + ' indexed, ' + $w.memory.total_decisions + ' total decisions';" ^
   "$lines += 'Tip: call get_wake_up / query_decisions for richer context.';" ^
   "$ctx = $lines -join \"`n\";" ^
