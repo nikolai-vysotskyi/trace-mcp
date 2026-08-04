@@ -61,6 +61,17 @@ describe('findSubprojectRootForPath', () => {
       findSubprojectRootForPath('/repos/the/fair/fair-front', join(dir, 'nope.db')),
     ).toBeNull();
   });
+
+  it('skips a stray repo_root="/" row instead of matching everything (#273)', () => {
+    const badDb = join(dir, 'corrupt-topology.db');
+    const db = new Database(badDb);
+    db.exec('CREATE TABLE subprojects (id INTEGER PRIMARY KEY, repo_root TEXT NOT NULL)');
+    db.prepare('INSERT INTO subprojects (repo_root) VALUES (?)').run('/');
+    db.close();
+
+    // An unregistered path must fall through to null, not resolve to "/".
+    expect(findSubprojectRootForPath('/some/unregistered/path', badDb)).toBeNull();
+  });
 });
 
 describe('isKnownSubproject', () => {

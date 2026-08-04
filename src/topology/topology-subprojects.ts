@@ -9,8 +9,22 @@
  * rather than importing `ServiceOperations` back, which would risk a cycle.
  */
 
+import path from 'node:path';
 import type Database from 'better-sqlite3';
 import type { SubprojectRow } from './topology-types.js';
+
+/**
+ * True when `repoRoot` IS a filesystem root ("/", "C:\"), not merely close to
+ * one. A row like this makes `findSubprojectRootForPath` resolve every
+ * unregistered path to it (longest-ancestor-match logic sees "/" as an
+ * ancestor of everything) — see #273. Same guard class as
+ * `isDangerousProjectRoot` in project-setup.ts, scoped to just the root case
+ * since a subproject is always nested under a project.
+ */
+function isFilesystemRoot(repoRoot: string): boolean {
+  const resolved = path.resolve(repoRoot);
+  return resolved === path.parse(resolved).root;
+}
 
 export interface SubprojectOperationDeps {
   /** Delete a service row (cascades to its contracts/endpoints/events/edges/snapshots). */
@@ -31,6 +45,14 @@ export class SubprojectOperations {
     contractPaths?: string[];
     metadata?: Record<string, unknown>;
   }): number {
+    if (isFilesystemRoot(input.repoRoot)) {
+      throw new Error(
+        `Refusing to register subproject repo_root "${input.repoRoot}": filesystem root. ` +
+          'This is almost always a bad detection result — a subproject must point to a ' +
+          'specific repo directory, not "/".',
+      );
+    }
+
     const existing = this.db
       .prepare('SELECT id FROM subprojects WHERE repo_root = ? AND project_root = ?')
       .get(input.repoRoot, input.projectRoot) as { id: number } | undefined;

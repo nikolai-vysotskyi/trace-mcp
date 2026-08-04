@@ -29,6 +29,10 @@ export function findSubprojectRootForPath(cwd: string, dbPath = TOPOLOGY_DB_PATH
     let best: string | null = null;
     for (const { repo_root } of rows) {
       const r = path.resolve(repo_root);
+      // A filesystem-root row is always bad data (see #273): `upsertSubproject`
+      // rejects writing one, but skip it defensively too so an already-corrupt
+      // registry self-heals instead of resolving every unregistered path to "/".
+      if (r === path.parse(r).root) continue;
       // Among ancestors-of-`abs`, the longest path is the deepest ancestor.
       if (isAncestorOrSelf(r, abs) && (best === null || r.length > best.length)) best = r;
     }
