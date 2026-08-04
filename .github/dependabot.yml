@@ -23,6 +23,13 @@ updates:
         update-types:
           - version-update:semver-minor
           - version-update:semver-major
+      # better-sqlite3 13.x's N-API prebuilds segfault on `new Database()`
+      # (reproduces with a bare `require('better-sqlite3')` script, no
+      # trace-mcp code involved — see TRA-51). Re-evaluate once upstream
+      # ships a fixed 13.x release.
+      - dependency-name: "better-sqlite3"
+        update-types:
+          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production
