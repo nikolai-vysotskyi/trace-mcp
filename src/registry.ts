@@ -189,6 +189,38 @@ export function findOverlappingProjects(): RegistryOverlap[] {
   return overlaps;
 }
 
+export interface NewRootOverlap {
+  /** The already-registered project this candidate root would overlap with. */
+  existing: RegistryEntry;
+  /** Whether `existing` would become the container (ancestor) of the candidate, or land inside it. */
+  relation: 'existing_contains_candidate' | 'candidate_contains_existing';
+}
+
+/**
+ * Check whether registering `candidateRoot` would create a new container/nested
+ * overlap (see findOverlappingProjects) with an already-registered project.
+ * Lets `add` warn/block *before* creating a new overlap instead of only
+ * surfacing it after the fact via `doctor`. Declared multi-root parent/child
+ * pairs are intentional and not reported.
+ */
+export function findOverlapForNewRoot(candidateRoot: string): NewRootOverlap | null {
+  const absCandidate = path.resolve(candidateRoot);
+  for (const entry of listProjects()) {
+    if (entry.root === absCandidate) continue;
+    if (entry.type === 'multi-root' && entry.children?.includes(absCandidate)) continue;
+
+    const relFromEntry = path.relative(entry.root, absCandidate);
+    if (relFromEntry !== '' && !relFromEntry.startsWith('..') && !path.isAbsolute(relFromEntry)) {
+      return { existing: entry, relation: 'existing_contains_candidate' };
+    }
+    const relToEntry = path.relative(absCandidate, entry.root);
+    if (relToEntry !== '' && !relToEntry.startsWith('..') && !path.isAbsolute(relToEntry)) {
+      return { existing: entry, relation: 'candidate_contains_existing' };
+    }
+  }
+  return null;
+}
+
 export function listProjects(): RegistryEntry[] {
   const reg = loadRegistry();
   return Object.values(reg.projects);

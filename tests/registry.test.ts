@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ensureGlobalDirs, REGISTRY_PATH } from '../src/global.js';
 import {
+  findOverlapForNewRoot,
   findOverlappingProjects,
   registerProject,
   resolveRegisteredAncestor,
@@ -124,5 +125,46 @@ describe('findOverlappingProjects', () => {
     registerProject(b);
 
     expect(findOverlappingProjects()).toEqual([]);
+  });
+});
+
+describe('findOverlapForNewRoot', () => {
+  it('returns null for a disjoint candidate', () => {
+    registerProject(makeTmpRepo());
+    expect(findOverlapForNewRoot(makeTmpRepo())).toBeNull();
+  });
+
+  it('flags a candidate nested inside an already-registered project', () => {
+    const container = makeTmpRepo();
+    const nested = path.join(container, 'my-app');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'package.json'), '{}');
+    registerProject(container);
+
+    const overlap = findOverlapForNewRoot(nested);
+    expect(overlap?.relation).toBe('existing_contains_candidate');
+    expect(overlap?.existing.root).toBe(container);
+  });
+
+  it('flags a candidate that would contain an already-registered project', () => {
+    const container = makeTmpRepo();
+    const nested = path.join(container, 'my-app');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'package.json'), '{}');
+    registerProject(nested);
+
+    const overlap = findOverlapForNewRoot(container);
+    expect(overlap?.relation).toBe('candidate_contains_existing');
+    expect(overlap?.existing.root).toBe(nested);
+  });
+
+  it('does not flag a declared multi-root child', () => {
+    const parent = makeTmpRepo();
+    const child = path.join(parent, 'svc-a');
+    fs.mkdirSync(child, { recursive: true });
+    fs.writeFileSync(path.join(child, 'package.json'), '{}');
+    registerProject(parent, { type: 'multi-root', children: [child] });
+
+    expect(findOverlapForNewRoot(child)).toBeNull();
   });
 });
