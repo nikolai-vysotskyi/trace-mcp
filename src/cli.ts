@@ -52,6 +52,7 @@ import { searchCommand } from './cli/search.js';
 import { statusCommand } from './cli/status.js';
 import { subprojectCommand } from './cli/subproject.js';
 import { upgradeCommand } from './cli/upgrade.js';
+import { sweepMissingRoots } from './registry.js';
 import { visualizeCommand } from './cli/visualize.js';
 import type { TraceMcpConfig } from './config.js';
 import { loadConfig, loadGlobalConfigRaw, validateConfigUpdate } from './config.js';
@@ -2969,6 +2970,22 @@ program
         softGcSweep();
         const softGcTimer = setInterval(softGcSweep, 60 * 60_000);
         softGcTimer.unref();
+
+        // Soft GC (TRA-36): deregister + delete the DB for projects whose root
+        // has been gone for >7 days (e.g. ephemeral per-run container workdirs
+        // that are never coming back). First sighting only timestamps the entry
+        // so a transiently-unmounted drive isn't punished — see sweepMissingRoots.
+        try {
+          const { removed } = sweepMissingRoots(7);
+          if (removed.length > 0) {
+            logger.info(
+              { removedRoots: removed },
+              `Deregistered ${removed.length} project(s) with a root missing >7 days`,
+            );
+          }
+        } catch (err) {
+          logger.warn({ err }, 'sweepMissingRoots failed (non-fatal)');
+        }
 
         // If cwd is a project not yet registered, add it too.
         const cwd = process.cwd();

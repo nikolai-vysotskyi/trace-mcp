@@ -99,6 +99,66 @@ describe('registry health (#168)', () => {
     });
   });
 
+  // TRA-36: registry.json otherwise accumulates one dead entry per ephemeral
+  // Multica container workdir forever — sweepMissingRoots is the automatic,
+  // unattended counterpart to pruneStaleProjects that daemon startup runs.
+  describe('sweepMissingRoots', () => {
+    it('does not remove a root missing for the first time — only timestamps it', () => {
+      const gone = makeProjectDir('gamma');
+      registry.registerProject(gone);
+      fs.rmSync(gone, { recursive: true, force: true });
+
+      const result = registry.sweepMissingRoots(7);
+      expect(result.removed).toEqual([]);
+      expect(result.newlyMissing).toEqual([gone]);
+      expect(registry.listProjects().map((e) => e.root)).toEqual([gone]);
+      expect(registry.getProject(gone)?.missingRootSince).toBeTruthy();
+    });
+
+    it('clears missingRootSince if the root reappears', () => {
+      const flaky = makeProjectDir('flaky');
+      registry.registerProject(flaky);
+      fs.rmSync(flaky, { recursive: true, force: true });
+      registry.sweepMissingRoots(7);
+      expect(registry.getProject(flaky)?.missingRootSince).toBeTruthy();
+
+      fs.mkdirSync(flaky, { recursive: true });
+      registry.sweepMissingRoots(7);
+      expect(registry.getProject(flaky)?.missingRootSince).toBeUndefined();
+    });
+
+    it('removes the entry and deletes its DB once the grace period has elapsed', () => {
+      const gone = makeProjectDir('gamma');
+      const entry = registry.registerProject(gone);
+      fs.mkdirSync(path.dirname(entry.dbPath), { recursive: true });
+      fs.writeFileSync(entry.dbPath, 'fake-db');
+      fs.writeFileSync(`${entry.dbPath}-wal`, 'fake-wal');
+      fs.rmSync(gone, { recursive: true, force: true });
+
+      // Simulate the grace period already having elapsed.
+      registry.sweepMissingRoots(7);
+      const reg = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
+      reg.projects[gone].missingRootSince = new Date(
+        Date.now() - 8 * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      fs.writeFileSync(REGISTRY_PATH, JSON.stringify(reg));
+
+      const result = registry.sweepMissingRoots(7);
+      expect(result.removed).toEqual([gone]);
+      expect(registry.listProjects()).toEqual([]);
+      expect(fs.existsSync(entry.dbPath)).toBe(false);
+      expect(fs.existsSync(`${entry.dbPath}-wal`)).toBe(false);
+    });
+
+    it('is a no-op when every registered folder still exists', () => {
+      const a = makeProjectDir('alpha');
+      registry.registerProject(a);
+
+      expect(registry.sweepMissingRoots(7)).toEqual({ removed: [], newlyMissing: [] });
+      expect(registry.listProjects()).toHaveLength(1);
+    });
+  });
+
   // #209: an umbrella root registered alongside its child repos double-indexed
   // every child file (parent DB + child DB), pinning the daemon in reindex churn
   // that starved idle MCP sessions into "Session expired". The most-specific
