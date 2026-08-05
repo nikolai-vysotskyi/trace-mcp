@@ -161,7 +161,7 @@ export function indexSessions(
   } = {},
 ): IndexResult {
   const start = Date.now();
-  const sessions = listAllSessions();
+  const sessions = listAllSessions(opts.projectRoot);
 
   let scanned = 0;
   let indexed = 0;
