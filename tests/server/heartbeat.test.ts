@@ -38,14 +38,25 @@ describe('status sentinel (heartbeat)', () => {
     try {
       expect(fs.existsSync(handle.path)).toBe(true);
       const status = JSON.parse(fs.readFileSync(handle.path, 'utf-8'));
-      expect(status.schema).toBe(1);
+      expect(status.schema).toBe(2);
       expect(status.pid).toBe(process.pid);
+      expect(status.transport).toBe('stdio');
       expect(typeof status.started_at).toBe('string');
       expect(typeof status.last_heartbeat_at).toBe('string');
       expect(status.last_successful_tool_call_at).toBeNull();
       expect(status.tool_calls_total).toBe(0);
       expect(status.tool_calls_failed).toBe(0);
       expect(status.mcp_sessions_active).toBe(0);
+    } finally {
+      handle.stop();
+    }
+  });
+
+  it('records the transport passed to startHeartbeat', () => {
+    const handle = startHeartbeat(projectDir, 'http');
+    try {
+      const status = JSON.parse(fs.readFileSync(handle.path, 'utf-8'));
+      expect(status.transport).toBe('http');
     } finally {
       handle.stop();
     }
