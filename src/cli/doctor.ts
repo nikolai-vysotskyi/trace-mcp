@@ -99,7 +99,11 @@ export const doctorCommand = new Command('doctor')
       }
 
       printRegistryReport(registry);
-      if (registryFix) printRegistryFixResult(registryFix, { dryRun: !!opts.dryRun });
+      if (registryFix) {
+        printRegistryFixResult(registryFix, { dryRun: !!opts.dryRun });
+      } else if (opts.fixInteractive && hasRegistryIssues) {
+        printRegistryFixResult(await fixRegistryIssuesInteractive(registry), { dryRun: false });
+      }
 
       // --- No conflicts ---
       if (conflicts.length === 0) {
@@ -327,6 +331,40 @@ export function fixRegistryIssues(
   const removedMissingRoots = pruneStaleProjects();
   for (const root of overlapContainers) unregisterProject(root);
   return { removedMissingRoots, removedOverlapContainers: overlapContainers };
+}
+
+/**
+ * Interactive counterpart to {@link fixRegistryIssues}: asks once for the missing-root
+ * sweep and once per overlapping pair, so `--fix-interactive` covers registry issues too
+ * instead of leaving them to a separate manual `prune`/`remove` step.
+ */
+export async function fixRegistryIssuesInteractive(
+  r: RegistryHealthReport,
+): Promise<RegistryFixResult> {
+  const removedMissingRoots: string[] = [];
+  const missingRoots = r.entries.filter((e) => e.status === 'missing_root');
+  if (missingRoots.length > 0) {
+    const answer = await p.confirm({
+      message: `Remove ${missingRoots.length} stale registry entr${missingRoots.length === 1 ? 'y' : 'ies'} (folder deleted)?`,
+      initialValue: true,
+    });
+    if (!p.isCancel(answer) && answer) removedMissingRoots.push(...pruneStaleProjects());
+  }
+
+  const removedOverlapContainers: string[] = [];
+  const overlapsByContainer = new Map(r.overlaps.map((o) => [o.ancestorRoot, o]));
+  for (const o of overlapsByContainer.values()) {
+    const answer = await p.confirm({
+      message: `Remove overlap container "${o.ancestorName}" (${shortPath(o.ancestorRoot)}), keeping "${o.descendantName}"?`,
+      initialValue: true,
+    });
+    if (!p.isCancel(answer) && answer) {
+      unregisterProject(o.ancestorRoot);
+      removedOverlapContainers.push(o.ancestorRoot);
+    }
+  }
+
+  return { removedMissingRoots, removedOverlapContainers };
 }
 
 function printRegistryFixResult(fix: RegistryFixResult, opts: { dryRun: boolean }): void {
