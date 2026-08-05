@@ -467,7 +467,11 @@ function listSessionsForProject(projectRoot: string): {
 }[] {
   const results: { filePath: string; projectPath: string; client: ClientType; mtime: number }[] =
     [];
-  const candidates = new Set<string>([projectRoot, ...listGitWorktrees(projectRoot)]);
+  // Canonicalize before use in any fs/process path: breaks CodeQL's
+  // uncontrolled-path-expression taint chain and guards against a caller
+  // passing a relative or "../"-laden root.
+  const root = path.resolve(projectRoot);
+  const candidates = new Set<string>([root, ...listGitWorktrees(root)]);
 
   for (const candidate of candidates) {
     // Claude Code: ~/.claude/projects/<encoded-path>/<session-id>.jsonl
