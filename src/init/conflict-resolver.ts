@@ -524,7 +524,7 @@ function commentOutMatchingLines(content: string, pattern: RegExp): string {
     if (/^\s*<!--/.test(line)) return line; // already commented
     if (!pattern.test(line) || NEGATION_PATTERN.test(line)) return line;
     changed = true;
-    const safeText = line.replace(/-->/g, '--&gt;');
+    const safeText = line.replace(/--!?>/g, '--&gt;');
     return `<!-- trace-mcp: disabled by doctor --fix, competing-tool directive: ${safeText.trim()} -->`;
   });
   return changed ? lines.join('\n') : content;
