@@ -437,8 +437,11 @@ function encodeDirName(projectPath: string): string {
  */
 function listGitWorktrees(root: string): string[] {
   try {
+    // root is the trace-mcp memory CLI's own --project flag (path.resolve'd
+    // at the CLI boundary in cli/memory.ts and again by the caller below),
+    // a local operator-supplied directory — not per-request/network input.
     const out = execFileSync('git', ['worktree', 'list', '--porcelain'], {
-      cwd: root,
+      cwd: root, // codeql[js/path-injection]: see trust note above
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
       timeout: 1500,
@@ -481,15 +484,17 @@ function listSessionsForProject(projectRoot: string): {
     }
 
     // Claw Code: <project>/.claw/sessions/<session-id>.jsonl
+    // candidate is the resolved `root` (or one of its git worktrees, also
+    // resolved) — same local-operator trust note as listGitWorktrees above.
     const sessionsDir = path.join(candidate, CLAW_SESSIONS_DIR_NAME);
-    if (!fs.existsSync(sessionsDir)) continue;
+    if (!fs.existsSync(sessionsDir)) continue; // codeql[js/path-injection]: see trust note above
     try {
-      const entries = fs.readdirSync(sessionsDir, { withFileTypes: true });
+      const entries = fs.readdirSync(sessionsDir, { withFileTypes: true }); // codeql[js/path-injection]: see trust note above
       for (const e of entries) {
         if (!e.isFile() || !e.name.endsWith('.jsonl')) continue;
         const filePath = path.join(sessionsDir, e.name);
         try {
-          const stat = fs.statSync(filePath);
+          const stat = fs.statSync(filePath); // codeql[js/path-injection]: see trust note above
           results.push({
             filePath,
             projectPath: candidate,
