@@ -14,6 +14,12 @@
  * back to allowing Read with a warning instead of hard-blocking. This
  * closes the legitimate fallback case (crashed server, "session not found")
  * without re-introducing the retry-bypass loophole.
+ *
+ * `transport` records which command produced this sentinel ("stdio" for
+ * `serve` / the daemon backing it, "http" for `serve-http`). The guard hook
+ * compares it against the calling client's configured transport (from
+ * .mcp.json) so a `serve-http` process can't be mistaken for a live `serve`
+ * (stdio) session — see GH #297.
  */
 
 import fs from 'node:fs';
@@ -25,11 +31,14 @@ import { projectHash } from '../global.js';
 const FLUSH_INTERVAL_ACTIVE_MS = 5_000;
 /** Slower flush cadence while no sessions are active (back-off). */
 const FLUSH_INTERVAL_IDLE_MS = 30_000;
-const STATUS_SCHEMA_VERSION = 1;
+const STATUS_SCHEMA_VERSION = 2;
+
+export type ServerTransport = 'stdio' | 'http';
 
 interface StatusState {
   schema: number;
   pid: number;
+  transport: ServerTransport;
   started_at: string;
   last_heartbeat_at: string;
   last_successful_tool_call_at: string | null;
@@ -52,6 +61,7 @@ export interface HeartbeatHandle {
   getState(): Readonly<{
     schema: number;
     pid: number;
+    transport: ServerTransport;
     started_at: string;
     last_heartbeat_at: string;
     last_successful_tool_call_at: string | null;
@@ -79,7 +89,10 @@ function legacyHeartbeatPath(projectRoot: string): string {
  * Best-effort: any I/O error is swallowed — status is a hint, never a
  * hard requirement for tool execution.
  */
-export function startHeartbeat(projectRoot: string): HeartbeatHandle {
+export function startHeartbeat(
+  projectRoot: string,
+  transport: ServerTransport = 'stdio',
+): HeartbeatHandle {
   const file = statusPath(projectRoot);
   const legacy = legacyHeartbeatPath(projectRoot);
   const startedAt = new Date().toISOString();
@@ -87,6 +100,7 @@ export function startHeartbeat(projectRoot: string): HeartbeatHandle {
   const state: StatusState = {
     schema: STATUS_SCHEMA_VERSION,
     pid: process.pid,
+    transport,
     started_at: startedAt,
     last_heartbeat_at: startedAt,
     last_successful_tool_call_at: null,
