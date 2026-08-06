@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.12.0
+# trace-mcp-guard v0.13.0
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.13 changes (transport-aware liveness — fixes GH #297):
+#   - Status JSON now carries `transport` ("stdio" | "http" — which command
+#     produced the sentinel). If PROJECT_ROOT/.mcp.json declares a different
+#     transport for trace-mcp, the heartbeat is proof of the WRONG process
+#     being alive (e.g. a leftover `serve-http` while the client is
+#     configured for stdio `serve`) — treated as dead instead of trusted.
+#   - `mcp_sessions_active == 0` now marks the channel dead unconditionally
+#     (previously only checked when tool_calls_total > 0, which meant "no
+#     client ever connected" was invisible to the stall detector).
+#   - Requires trace-mcp server writing the `transport` field (schema 2);
+#     older status JSON without it simply skips the transport check.
 #
 # v0.11 changes (enforcement tier — TRACE_MCP_ENFORCE):
 #   - New env var TRACE_MCP_ENFORCE with three values:
@@ -391,6 +403,48 @@ if (( HEARTBEAT_DEAD == 0 )) && [[ -f "$STATUS_FILE" ]]; then
         HEARTBEAT_REASON="trace-mcp MCP channel stalled — no successful tool call for ${QUIET}s (threshold ${STALL_THRESHOLD_SEC}s)"
       fi
     fi
+  fi
+fi
+
+# No-client-connected detection (GH #297 defect 2): mcp_sessions_active == 0
+# is an unambiguous signal that no MCP client is actually attached to this
+# process, even when tool_calls_total is 0 (so the stall check above never
+# fires) and the heartbeat itself is fresh (the process is alive and ticking
+# on its own). Without this, a running-but-never-connected server looks
+# identical to a healthy one and the guard hard-blocks demanding tools the
+# session doesn't have.
+if (( HEARTBEAT_DEAD == 0 )) && [[ -f "$STATUS_FILE" ]]; then
+  STATUS_SESSIONS=$(jq -r '.mcp_sessions_active // -1' "$STATUS_FILE" 2>/dev/null || echo -1)
+  if [[ "$STATUS_SESSIONS" =~ ^[0-9]+$ ]] && (( STATUS_SESSIONS == 0 )); then
+    HEARTBEAT_DEAD=1
+    HEARTBEAT_REASON="trace-mcp process is alive but no MCP client is connected (mcp_sessions_active: 0)"
+  fi
+fi
+
+# Transport mismatch detection (GH #297 defect 1): the status JSON's
+# `transport` field records whether the process behind it is `serve`
+# (stdio) or `serve-http`. If PROJECT_ROOT/.mcp.json declares trace-mcp with
+# a transport that doesn't match, the heartbeat is proof of the WRONG
+# process being alive — e.g. a `serve-http` left running while the client is
+# configured for stdio `serve`, which never actually started. Only checked
+# when both the status file's transport and an unambiguous client
+# expectation are available; absent either, we can't tell and don't guess.
+if (( HEARTBEAT_DEAD == 0 )) && [[ -f "$STATUS_FILE" ]] && [[ -f "$PROJECT_ROOT/.mcp.json" ]]; then
+  STATUS_TRANSPORT=$(jq -r '.transport // empty' "$STATUS_FILE" 2>/dev/null || echo "")
+  # trace-mcp entries with a "type"/"url" key are HTTP; entries with a
+  # "command" key (no type/url) are stdio. Skip silently on missing/malformed
+  # config or an entry not named trace-mcp/trace-mcp-http rather than guess.
+  EXPECTED_TRANSPORT=$(jq -r '
+    (.mcpServers // {}) as $s
+    | ($s["trace-mcp"] // $s["trace-mcp-http"] // empty) as $e
+    | if ($e | length) == 0 then empty
+      elif ($e.type == "http") or ($e.url != null) then "http"
+      elif ($e.command != null) then "stdio"
+      else empty end
+  ' "$PROJECT_ROOT/.mcp.json" 2>/dev/null || echo "")
+  if [[ -n "$STATUS_TRANSPORT" ]] && [[ -n "$EXPECTED_TRANSPORT" ]] && [[ "$STATUS_TRANSPORT" != "$EXPECTED_TRANSPORT" ]]; then
+    HEARTBEAT_DEAD=1
+    HEARTBEAT_REASON="trace-mcp heartbeat is from a '${STATUS_TRANSPORT}' process but .mcp.json configures trace-mcp as '${EXPECTED_TRANSPORT}' — the transport your client actually connects over is not running"
   fi
 fi
 

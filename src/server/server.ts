@@ -221,6 +221,15 @@ export interface ServerDeps {
    * broadcastEvent, stamping the project root onto each event.
    */
   onPipelineEvent?: (event: PipelineLifecycleEvent) => void;
+  /**
+   * Which transport this createServer() call is serving. Stamped into the
+   * status sentinel (heartbeat.ts) so the guard hook can tell a `serve-http`
+   * process apart from a `serve` (stdio) one instead of treating any fresh
+   * heartbeat as proof the client's configured transport is live. Defaults
+   * to 'stdio' — the daemon and the local-backend fallback both serve stdio
+   * sessions; only cli.ts's `serve-http` command passes 'http'.
+   */
+  transport?: 'stdio' | 'http';
 }
 
 /**
@@ -491,7 +500,7 @@ export function createServer(
   // Records tool-call counters + last successful call timestamp so the v0.8+
   // hook can distinguish "process up but MCP channel stalled" from a healthy
   // server, and the desktop app can render the project status badge.
-  const heartbeat = startHeartbeat(projectRoot);
+  const heartbeat = startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
 
   const { _originalTool, registeredToolNames, toolHandlers } = installToolGate(
     server,

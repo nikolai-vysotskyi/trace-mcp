@@ -107,23 +107,38 @@ function writeStatus(
   status: {
     tool_calls_total: number;
     last_successful_tool_call_at: string | null;
+    mcp_sessions_active?: number;
+    transport?: 'stdio' | 'http';
   },
 ): string {
   const real = fs.realpathSync(cwd);
   const file = path.join(TMP_BASE, `trace-mcp-status-${projectHash(real)}.json`);
+  const { mcp_sessions_active = 1, transport = 'stdio', ...rest } = status;
   fs.writeFileSync(
     file,
     JSON.stringify({
-      schema: 1,
+      schema: 2,
       pid: 12345,
+      transport,
       started_at: new Date().toISOString(),
       last_heartbeat_at: new Date().toISOString(),
-      ...status,
+      ...rest,
       last_failed_tool_call_at: null,
       tool_calls_failed: 0,
-      mcp_sessions_active: 1,
+      mcp_sessions_active,
     }),
   );
+  return file;
+}
+
+/** Write a project-level .mcp.json declaring trace-mcp's configured transport. */
+function writeMcpJson(cwd: string, kind: 'stdio' | 'http'): string {
+  const file = path.join(cwd, '.mcp.json');
+  const entry =
+    kind === 'stdio'
+      ? { command: 'trace-mcp', args: ['serve'] }
+      : { type: 'http', url: 'http://127.0.0.1:3741/mcp' };
+  fs.writeFileSync(file, JSON.stringify({ mcpServers: { 'trace-mcp': entry } }));
   return file;
 }
 
@@ -403,6 +418,73 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
       last_successful_tool_call_at: null,
     });
     const file = path.join(projectDir, 'cold.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  // ─── No-client-connected / transport mismatch (GH #297) ─────────
+
+  it('mcp_sessions_active=0 falls back to allow even with zero tool calls (no client ever connected)', () => {
+    writeStatus(projectDir, {
+      tool_calls_total: 0,
+      last_successful_tool_call_at: null,
+      mcp_sessions_active: 0,
+    });
+    const file = path.join(projectDir, 'noclient.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain('no MCP client is connected');
+  });
+
+  it('mcp_sessions_active > 0 does NOT trigger the no-client fallback', () => {
+    writeStatus(projectDir, {
+      tool_calls_total: 0,
+      last_successful_tool_call_at: null,
+      mcp_sessions_active: 1,
+    });
+    const file = path.join(projectDir, 'hasclient.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  it('transport mismatch: serve-http heartbeat while .mcp.json configures stdio falls back to allow', () => {
+    writeStatus(projectDir, {
+      tool_calls_total: 5,
+      last_successful_tool_call_at: new Date().toISOString(),
+      mcp_sessions_active: 1,
+      transport: 'http',
+    });
+    writeMcpJson(projectDir, 'stdio');
+    const file = path.join(projectDir, 'mismatch.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain("'http'");
+    expect(decision.context ?? '').toContain("'stdio'");
+  });
+
+  it('transport match: stdio heartbeat with .mcp.json configuring stdio still enforces strict', () => {
+    writeStatus(projectDir, {
+      tool_calls_total: 5,
+      last_successful_tool_call_at: new Date().toISOString(),
+      mcp_sessions_active: 1,
+      transport: 'stdio',
+    });
+    writeMcpJson(projectDir, 'stdio');
+    const file = path.join(projectDir, 'match.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  it('no .mcp.json present: transport check is skipped, heartbeat trusted as-is', () => {
+    writeStatus(projectDir, {
+      tool_calls_total: 5,
+      last_successful_tool_call_at: new Date().toISOString(),
+      mcp_sessions_active: 1,
+      transport: 'http',
+    });
+    const file = path.join(projectDir, 'nomcpjson.ts');
     fs.writeFileSync(file, 'export {};');
     expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
   });
