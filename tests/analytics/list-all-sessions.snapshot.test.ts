@@ -18,6 +18,19 @@ vi.mock('os', async () => {
   return { ...actual, default: { ...actual, homedir: fake }, homedir: fake };
 });
 
+// Wrap readdirSync so tests can assert which directories got listed, without
+// trying to redefine the (non-configurable in ESM) `fs` module export directly.
+export const readdirSyncCalls: unknown[] = [];
+vi.mock('node:fs', async () => {
+  const actual = await vi.importActual<typeof fs>('node:fs');
+  const wrapped = (...args: Parameters<typeof fs.readdirSync>) => {
+    readdirSyncCalls.push(args[0]);
+    // biome-ignore lint/suspicious/noExplicitAny: passthrough to overloaded native fn
+    return (actual.readdirSync as any)(...args);
+  };
+  return { ...actual, default: { ...actual, readdirSync: wrapped }, readdirSync: wrapped };
+});
+
 describe('listAllSessions — golden lockdown', () => {
   let fakeHome: string;
   const origEnvHome = process.env.TRACE_MCP_FAKE_HOME;
@@ -47,6 +60,7 @@ describe('listAllSessions — golden lockdown', () => {
     fs.mkdirSync(clawDir, { recursive: true });
     fs.writeFileSync(path.join(clawDir, 'sess-C01.jsonl'), '');
 
+    readdirSyncCalls.length = 0;
     vi.resetModules();
   });
 
@@ -87,5 +101,27 @@ describe('listAllSessions — golden lockdown', () => {
     // Lockdown: new client values must be added deliberately — if this set grows,
     // also update consumers in conversation-miner.ts / session-indexer.ts.
     expect([...clients].sort()).toEqual(['claude-code', 'claw-code']);
+  });
+
+  // TRA-48: listAllSessions(projectRoot) must short-circuit to the target
+  // project's own directories instead of scanning every registered project.
+  it('with a projectRoot, returns only that project and never lists the registry dir', async () => {
+    const { listAllSessions } = await import('../../src/analytics/log-parser.js');
+
+    const claudeRoot = path.join(fakeHome, '.claude', 'projects');
+    const projTargetRoot = path.join(fakeHome, 'target-proj');
+    const encodedTargetDir = projTargetRoot.replace(/[\\/]+/g, '-');
+    fs.mkdirSync(path.join(claudeRoot, encodedTargetDir), { recursive: true });
+    fs.writeFileSync(path.join(claudeRoot, encodedTargetDir, 'sess-t01.jsonl'), '');
+
+    const result = listAllSessions(projTargetRoot)
+      .map((r) => path.relative(fakeHome, r.filePath).replace(/\\/g, '/'))
+      .sort();
+
+    expect(result).toEqual([`.claude/projects/${encodedTargetDir}/sess-t01.jsonl`]);
+
+    // The whole-registry listing (`~/.claude/projects` itself) must never be
+    // read — only the one project directory the caller asked for.
+    expect(readdirSyncCalls).not.toContain(claudeRoot);
   });
 });
