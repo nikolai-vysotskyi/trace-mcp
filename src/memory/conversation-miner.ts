@@ -388,7 +388,7 @@ export async function mineSessions(
   } = {},
 ): Promise<MineResult> {
   const start = Date.now();
-  const sessions = listAllSessions();
+  const sessions = listAllSessions(opts.projectRoot);
   // Legacy `minConfidence` falls back to the default reject floor so behaviour
   // is unchanged for callers that don't opt into the tiered review queue.
   const reviewThreshold = opts.reviewThreshold ?? DEFAULT_REVIEW_THRESHOLD;
