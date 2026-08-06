@@ -13,6 +13,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Command } from 'commander';
+import { listAllSessions } from '../analytics/log-parser.js';
 import { DECISIONS_DB_PATH, ensureGlobalDirs } from '../global.js';
 import { mineSessions } from '../memory/conversation-miner.js';
 import {
@@ -231,13 +232,23 @@ memoryCommand
     try {
       const projectRoot = path.resolve(opts.project);
       const stats = store.getStats(projectRoot);
-      const minedCount = store.getMinedSessionCount();
+      // Scoped to this project's own session files — pairs correctly with
+      // `stats.total`, which is also project-scoped. The unscoped count
+      // (below) is global across every project ever mined on this machine
+      // and previously stood in for this value, which made "0 decisions"
+      // look like a mining failure even when decisions existed under a
+      // different project_root (TRA-60).
+      const minedCount = store.getMinedSessionCountForPaths(
+        listAllSessions(projectRoot).map((s) => s.filePath),
+      );
+      const minedCountAllProjects = store.getMinedSessionCount();
       const chunkCount = store.getSessionChunkCount(projectRoot);
       const indexedSessions = store.getIndexedSessionIds(projectRoot);
 
       const fullStats = {
         ...stats,
         sessions_mined: minedCount,
+        sessions_mined_all_projects: minedCountAllProjects,
         sessions_indexed: indexedSessions.length,
         content_chunks: chunkCount,
       };
@@ -251,13 +262,19 @@ memoryCommand
       console.log(`  Total decisions:  ${stats.total}`);
       console.log(`  Active:           ${stats.active}`);
       console.log(`  Invalidated:      ${stats.invalidated}`);
-      console.log(`  Sessions mined:   ${minedCount}`);
+      console.log(
+        `  Sessions mined:   ${minedCount} (${minedCountAllProjects} across all projects)`,
+      );
       console.log(`  Sessions indexed: ${indexedSessions.length}`);
       console.log(`  Content chunks:   ${chunkCount}`);
       console.log();
       if (stats.total === 0 && minedCount > 0) {
         console.log(
-          `  0 decisions from ${minedCount} mined sessions — sessions already scanned at the previous threshold won't be re-examined. Try \`trace-mcp memory mine --force --min-confidence <lower>\`.\n`,
+          `  0 decisions from ${minedCount} mined sessions for this project — they were scanned but nothing scored above the reject threshold. Try \`trace-mcp memory mine --force --min-confidence <lower>\`.\n`,
+        );
+      } else if (stats.total === 0 && minedCount === 0 && minedCountAllProjects > 0) {
+        console.log(
+          `  No sessions for this project (${projectRoot}) have been mined yet — run \`trace-mcp memory mine\` here. (${minedCountAllProjects} sessions are mined for other projects on this machine.)\n`,
         );
       }
       if (Object.keys(stats.by_type).length > 0) {
