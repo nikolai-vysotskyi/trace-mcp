@@ -702,6 +702,7 @@ program
         onPipelineEvent: (event: import('./server/server.js').PipelineLifecycleEvent) => {
           broadcastEvent({ ...event, project: projectRoot } as DaemonEvent);
         },
+        transport: 'http' as const,
       };
       const handle = createServer(
         managed.store,
