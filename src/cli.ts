@@ -95,6 +95,7 @@ import {
   listProjects,
   pruneStaleProjects,
   resolveRegisteredAncestor,
+  updateLastIndexed,
 } from './registry.js';
 import { isKnownSubproject, resolveDeepestKnownRoot } from './subproject/resolve.js';
 import {
@@ -3048,6 +3049,7 @@ program
     const pipeline = new IndexingPipeline(store, registry, config, resolvedDir);
     const result = await pipeline.indexAll(opts.force ?? false);
     logger.info(result, 'Indexing completed');
+    updateLastIndexed(resolvedDir);
 
     // Auto-discover subprojects: register this project, scan contracts & client calls
     await runSubprojectAutoSync(resolvedDir, config);
