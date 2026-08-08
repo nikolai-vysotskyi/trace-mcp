@@ -269,6 +269,11 @@ export class SubprojectManager {
       projectGroup: string | null;
     }> = [];
 
+    // Cache filesystem scans by repoRoot. When many services share the same root
+    // (e.g. all discovered from a single docker-compose), avoid walking the tree N times.
+    const clientCallScanCache = new Map<string, Awaited<ReturnType<typeof scanClientCalls>>>();
+    const contractScanCache = new Map<string, ReturnType<typeof parseContracts>>();
+
     for (const svc of detected) {
       const repoName = svc.name;
       const dbPath = getDbPath(svc.repoRoot);
@@ -291,9 +296,26 @@ export class SubprojectManager {
         metadata: svc.metadata,
       });
       this.topoStore.deleteContractsByService(serviceId);
-      this.registerContracts(serviceId, svc.repoRoot, absProjectRoot, opts?.contractPaths);
+      if (!contractScanCache.has(svc.repoRoot)) {
+        contractScanCache.set(svc.repoRoot, parseContracts(svc.repoRoot));
+      }
+      this.registerContracts(
+        serviceId,
+        svc.repoRoot,
+        absProjectRoot,
+        opts?.contractPaths,
+        contractScanCache.get(svc.repoRoot),
+      );
 
-      const clientCalls = await this.scanAndLinkClientCalls(repoId, svc.repoRoot);
+      if (!clientCallScanCache.has(svc.repoRoot)) {
+        clientCallScanCache.set(svc.repoRoot, await scanClientCalls(svc.repoRoot));
+      }
+      const clientCalls = await this.scanAndLinkClientCalls(
+        repoId,
+        svc.repoRoot,
+        clientCallScanCache.get(svc.repoRoot),
+        true, // skipLink — one linkClientCallsToEndpoints() call after all services are inserted
+      );
       this.topoStore.updateSubprojectSyncTime(repoId);
       registered.push({
         repoId,
@@ -313,6 +335,10 @@ export class SubprojectManager {
         linkedCalls: clientCalls.linked,
       });
     }
+
+    // One pass over all unlinked calls after ALL services are inserted — O(C×E) once
+    // instead of O(N×C×E) when called once per service inside the loop above.
+    this.topoStore.linkClientCallsToEndpoints();
 
     await this.scanCrossServiceEndpointLiterals(registered);
 
@@ -343,21 +369,45 @@ export class SubprojectManager {
     const allEndpoints = this.topoStore.getAllEndpoints();
     let totalInserted = 0;
 
+    // Group services by repoRoot so each unique directory is walked only once.
+    // When many services share a root (e.g. all discovered from a single docker-compose),
+    // the pre-fix code walked the same tree once per service — O(N) redundant I/O.
+    const rootGroups = new Map<
+      string,
+      Array<{ repoId: number; serviceId: number; projectGroup: string | null }>
+    >();
     for (const repo of registered) {
+      const group = rootGroups.get(repo.repoRoot) ?? [];
+      group.push({
+        repoId: repo.repoId,
+        serviceId: repo.serviceId,
+        projectGroup: repo.projectGroup,
+      });
+      rootGroups.set(repo.repoRoot, group);
+    }
+
+    for (const [repoRoot, services] of rootGroups) {
+      const rootServiceIds = new Set(services.map((s) => s.serviceId));
+      const projectGroups = new Set(services.map((s) => s.projectGroup));
+
+      // Cross-service endpoints: all endpoints belonging to services NOT in this
+      // root group, that share a project_group with at least one service at this root.
       const crossServiceEndpoints = allEndpoints.filter((ep) => {
-        if (ep.service_id === repo.serviceId) return false; // exclude own service
+        if (rootServiceIds.has(ep.service_id)) return false;
         const epService = registered.find((r) => r.serviceId === ep.service_id);
-        // Only match against same-group services we registered in this run
-        return epService != null && epService.projectGroup === repo.projectGroup;
+        return epService != null && projectGroups.has(epService.projectGroup);
       });
       if (crossServiceEndpoints.length === 0) continue;
 
-      const literalCalls = await scanEndpointLiterals(repo.repoRoot, crossServiceEndpoints);
+      const literalCalls = await scanEndpointLiterals(repoRoot, crossServiceEndpoints);
       if (literalCalls.length === 0) continue;
 
+      // Attribute calls to the first repo in this root group. When services share
+      // a root the per-service attribution is ambiguous; one canonical entry is correct.
+      const repoId = services[0].repoId;
       this.topoStore.insertClientCalls(
         literalCalls.map((c) => ({
-          sourceRepoId: repo.repoId,
+          sourceRepoId: repoId,
           filePath: c.filePath,
           line: c.line,
           callType: c.callType,
@@ -523,7 +573,7 @@ export class SubprojectManager {
         this.registerContracts(serviceId, svc.repoRoot, repo.project_root);
       }
 
-      const calls = await this.scanAndLinkClientCalls(repo.id, repo.repo_root);
+      const calls = await this.scanAndLinkClientCalls(repo.id, repo.repo_root, undefined, true);
       clientCallsScanned += calls.scanned;
 
       this.topoStore.updateSubprojectSyncTime(repo.id);
@@ -594,8 +644,9 @@ export class SubprojectManager {
     serviceRoot: string,
     repoRoot?: string,
     explicitPaths?: string[],
+    preScannedContracts?: ReturnType<typeof parseContracts>,
   ): void {
-    const contracts = parseContracts(serviceRoot);
+    const contracts = preScannedContracts ? [...preScannedContracts] : parseContracts(serviceRoot);
     contracts.push(...resolveExplicitContracts(repoRoot, explicitPaths));
 
     // Fallback: if no formal contracts found, try to extract routes from the
@@ -662,9 +713,11 @@ export class SubprojectManager {
   private async scanAndLinkClientCalls(
     repoId: number,
     repoRoot: string,
+    preScanned?: Awaited<ReturnType<typeof scanClientCalls>>,
+    skipLink = false,
   ): Promise<{ scanned: number; linked: number }> {
     this.topoStore.deleteClientCallsByRepo(repoId);
-    const clientCalls = await scanClientCalls(repoRoot);
+    const clientCalls = preScanned ?? (await scanClientCalls(repoRoot));
     if (clientCalls.length > 0) {
       this.topoStore.insertClientCalls(
         clientCalls.map((c) => ({
@@ -678,11 +731,11 @@ export class SubprojectManager {
         })),
       );
     }
+    // When skipLink=true, the caller is responsible for a single linkClientCallsToEndpoints()
+    // call after ALL services are inserted. Calling it once per service produces O(N²×E) work
+    // because each pass re-processes unlinked calls accumulated from all previous services.
+    if (skipLink) return { scanned: clientCalls.length, linked: 0 };
     const linked = this.topoStore.linkClientCallsToEndpoints();
-    // Cross-service edges are global + INSERT OR IGNORE idempotent, so they are built
-    // exactly once per discovery run (by the add()/sync()/autoDiscover() callers) rather
-    // than once per service here — the per-service rebuild was an O(N) repeat of the same
-    // global pass.
     return { scanned: clientCalls.length, linked };
   }
 
