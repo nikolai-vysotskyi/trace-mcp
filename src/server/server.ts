@@ -33,6 +33,7 @@ import {
   getGlobalTelemetrySink,
   setGlobalTelemetrySink,
 } from '../telemetry/index.js';
+import { sendUsagePing } from '../telemetry/usage-ping.js';
 import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
 import { CodexSessionProvider } from '../session/providers/codex.js';
 import { HermesSessionProvider } from '../session/providers/hermes.js';
@@ -302,6 +303,13 @@ export function createServer(
         logger.warn({ err }, 'telemetry.observability_bridge_init_failed');
       });
   }
+
+  // Anonymous active-install ping (opt-out via TRACE_MCP_TELEMETRY=off; inert
+  // until TRACE_MCP_GA_MEASUREMENT_ID/TRACE_MCP_GA_API_SECRET are configured).
+  // Fire-and-forget — never blocks startup, never throws.
+  void sendUsagePing({ version: PKG_VERSION }).catch((err) => {
+    logger.debug({ err }, 'telemetry.usage_ping_unexpected_error');
+  });
 
   // Structural landmarks provider: PageRank top-20 symbols + recently edited symbols
   journal.setLandmarkProvider(() => {

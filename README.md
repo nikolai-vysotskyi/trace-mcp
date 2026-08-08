@@ -331,9 +331,19 @@ trace-mcp runs entirely on your machine. Your source code is never the product.
 - **Indexing happens locally.** The MCP server is a Node process you run yourself — stdio or `http://127.0.0.1:3741`.
 - **Index lives in `~/.trace-mcp/`**, never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
 - **Semantic search is offline by default** — bundled ONNX embeddings, no API keys, no outbound calls. Switch to Ollama (local) or OpenAI (opt-in) via config.
-- **No telemetry.** Nothing is phoned home about your code, queries, or usage.
+- **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below — nothing else is phoned home.
 - **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
 - **To wipe everything**, delete `~/.trace-mcp/`. That is the entire footprint.
+
+### Usage telemetry
+
+trace-mcp sends at most one anonymous ping per day, per install, to help us count active installs. It is:
+
+- **Anonymous** — a random install id (`~/.trace-mcp/telemetry-state.json`), the trace-mcp version, Node major version, and OS platform. No project names, file paths, query content, code, or anything else that could identify you or your codebase.
+- **Opt-out** — set `TRACE_MCP_TELEMETRY=off` to disable it entirely.
+- **Small blast radius by construction** — transport is [GA4's Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4), a single HTTP POST, not a custom backend or SDK.
+
+Source: [`src/telemetry/usage-ping.ts`](src/telemetry/usage-ping.ts).
 
 For security-sensitive environments, review [SECURITY.md](SECURITY.md) before use.
 
