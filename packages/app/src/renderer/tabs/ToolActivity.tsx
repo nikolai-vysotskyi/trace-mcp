@@ -207,6 +207,7 @@ function tokenizeParams(
   const fileSpans: { start: number; end: number; file: string }[] = [];
   FILE_PATH_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
+  // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos -- FILE_PATH_RE is a single bounded character class + literal extension list, no nested/overlapping quantifiers, so no catastrophic backtracking.
   while ((m = FILE_PATH_RE.exec(text)) !== null) {
     fileSpans.push({ start: m.index, end: m.index + m[1].length, file: m[1] });
   }

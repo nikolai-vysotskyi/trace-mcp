@@ -75,6 +75,7 @@ interface MetricsSetters {
 /** Fetch the dashboard cache once. Exported so tests can drive it directly. */
 export async function fetchMetricsOnce(setters: MetricsSetters): Promise<void> {
   try {
+    // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
     const res = await fetch(`${BASE}/api/dashboard/projects`);
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -140,6 +141,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
+      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       await fetch(`${BASE}/api/dashboard/refresh`, { method: 'POST' });
     } catch {
       // Best-effort; still fetch even if invalidation failed.

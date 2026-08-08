@@ -193,6 +193,7 @@ export function AskTab({ root }: { root: string }) {
   // Create a new session
   const createSession = useCallback(async () => {
     try {
+      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       const r = await fetch(`${BASE}/api/ask/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -298,6 +299,7 @@ export function AskTab({ root }: { root: string }) {
     // Auto-create session if none selected
     if (!sessionId) {
       try {
+        // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
         const r = await fetch(`${BASE}/api/ask/sessions`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

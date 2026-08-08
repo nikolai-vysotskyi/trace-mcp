@@ -64,7 +64,14 @@ export function validateField(field: FieldDef, value: unknown): string | null {
     case 'string': {
       if (typeof value !== 'string') return 'Must be a string';
       if (field.pattern) {
+        // ReDoS guard: cap input length before regexing. These fields hold
+        // short config values (paths, URLs, ids); nothing legitimate needs
+        // more than this, and it bounds worst-case backtracking cost
+        // regardless of how the field's pattern is authored.
+        const MAX_PATTERN_INPUT_LENGTH = 500;
+        if (value.length > MAX_PATTERN_INPUT_LENGTH) return `Too long (max ${MAX_PATTERN_INPUT_LENGTH} chars)`;
         try {
+          // nosemgrep: ajinabraham.njsscan.dos.regex_injection.regex_injection_dos -- field.pattern is authored in this file's static schema, not user input; the length cap above bounds worst-case cost on the user-controlled value being tested.
           if (!new RegExp(field.pattern).test(value)) return `Must match: ${field.pattern}`;
         } catch {
           /* invalid pattern, skip */

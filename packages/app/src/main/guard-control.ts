@@ -446,10 +446,22 @@ export function installHook(opts: { sourceScript: string }): {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 
+  // Read directly rather than existsSync()-then-read/write: an existence
+  // check followed by a later write on the same path is a TOCTOU race
+  // (the file could be replaced/symlinked in between). ENOENT from the
+  // read itself tells us "doesn't exist" atomically.
   let parsed: Record<string, unknown> = {};
-  if (fs.existsSync(settingsFile)) {
+  let raw: string | undefined;
+  try {
+    raw = fs.readFileSync(settingsFile, 'utf-8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    }
+    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
+  }
+  if (raw !== undefined) {
     try {
-      const raw = fs.readFileSync(settingsFile, 'utf-8');
       parsed = JSON.parse(raw);
     } catch (e) {
       return { ok: false, error: `settings.json is not valid JSON: ${String(e)}` };
@@ -461,8 +473,6 @@ export function installHook(opts: { sourceScript: string }): {
     } catch (e) {
       return { ok: false, error: `failed to backup settings.json: ${String(e)}` };
     }
-  } else {
-    fs.mkdirSync(path.dirname(settingsFile), { recursive: true });
   }
 
   const hooks = (parsed.hooks ??= {}) as Record<string, unknown>;
@@ -513,12 +523,20 @@ export function uninstallHook(): {
   error?: string;
 } {
   const settingsFile = claudeSettingsPath();
-  if (!fs.existsSync(settingsFile)) {
-    return { ok: true, removed: false };
+  // Same TOCTOU concern as installHook: read directly instead of
+  // existsSync()-then-read/write, and treat ENOENT as "nothing to remove".
+  let raw: string;
+  try {
+    raw = fs.readFileSync(settingsFile, 'utf-8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { ok: true, removed: false };
+    }
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
   let parsed: Record<string, unknown> = {};
   try {
-    parsed = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+    parsed = JSON.parse(raw);
   } catch (e) {
     return { ok: false, error: `settings.json is not valid JSON: ${String(e)}` };
   }
@@ -651,7 +669,18 @@ export function setBypass(projectRoot: string, minutes: number): void {
     }
     return;
   }
-  fs.writeFileSync(file, 'manual');
+  // The bypass sentinel lives at a predictable path in the shared OS temp
+  // dir, so a stat-then-write here would follow a symlink another user
+  // planted at that path. Unlink whatever is there first (unlink acts on
+  // the link itself, never the target) then create exclusively so we only
+  // ever write to a file we just created, with permissions restricted to
+  // the current user.
+  try {
+    fs.unlinkSync(file);
+  } catch {
+    /* not present */
+  }
+  fs.writeFileSync(file, 'manual', { flag: 'wx', mode: 0o600 });
   const future = new Date(Date.now() + minutes * 60_000);
   fs.utimesSync(file, future, future);
 }

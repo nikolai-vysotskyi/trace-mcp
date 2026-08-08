@@ -105,6 +105,7 @@ export function useDaemon() {
   // Fetch project list
   const fetchProjects = useCallback(async () => {
     try {
+      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       const res = await fetch(`${BASE}/api/projects`);
       if (!res.ok) throw new Error(res.statusText);
       const json = await res.json();
@@ -121,6 +122,7 @@ export function useDaemon() {
   // Fetch client list
   const fetchClients = useCallback(async () => {
     try {
+      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       const res = await fetch(`${BASE}/api/clients`);
       if (!res.ok) throw new Error(res.statusText);
       const json = await res.json();
@@ -134,6 +136,7 @@ export function useDaemon() {
   // Fetch settings + daemon info
   const fetchSettings = useCallback(async () => {
     try {
+      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       const res = await fetch(`${BASE}/api/settings`);
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
@@ -308,6 +311,7 @@ export function useDaemon() {
   // Actions
   const addProject = useCallback(async (root: string) => {
     try {
+      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       await fetch(`${BASE}/api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -362,6 +366,7 @@ export function useDaemon() {
       for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 500));
         try {
+          // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
           const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(500) });
           if (res.ok) {
             ready = true;
@@ -388,6 +393,7 @@ export function useDaemon() {
   const updateSettings = useCallback(
     async (patch: Record<string, unknown>) => {
       try {
+        // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
         await fetch(`${BASE}/api/settings`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },

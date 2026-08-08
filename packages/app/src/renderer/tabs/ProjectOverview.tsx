@@ -220,6 +220,7 @@ export function ProjectOverview({
     try {
       const folder = await api.selectFolder();
       if (!folder) return;
+      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       await fetch(`${BASE}/api/projects/subprojects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -249,6 +250,7 @@ export function ProjectOverview({
 
   const handleUpdateGroup = async (serviceId: number, projectGroup: string | null) => {
     try {
+      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       const res = await fetch(`${BASE}/api/projects/services`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

@@ -329,6 +329,7 @@ export function AIActivity() {
 
   const fetchActivity = useCallback(async () => {
     try {
+      // nosemgrep: typescript.react.security.react-insecure-request -- talks to the app's own local daemon (127.0.0.1), not a remote endpoint.
       const res = await fetch('http://127.0.0.1:3741/api/ai/activity?limit=100');
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
