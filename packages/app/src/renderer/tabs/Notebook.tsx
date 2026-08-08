@@ -36,8 +36,7 @@ interface Cell {
 
 function makeCell(): Cell {
   return {
-    // nosemgrep: ajinabraham.njsscan.crypto.crypto_node.node_insecure_random_generator -- local UI element id, not a security-sensitive value.
-    id: `cell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `cell-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, // nosemgrep: ajinabraham.njsscan.crypto.crypto_node.node_insecure_random_generator -- local UI element id, not a security-sensitive value.
     tool: 'search',
     args: { query: '' },
     status: 'idle',

@@ -97,8 +97,7 @@ export function matchesFilter(text: string, pattern: string): boolean {
   if (!pattern) return true;
   if (isRegexLiteral(pattern)) {
     const re = tryCompileRegex(pattern);
-    // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos -- local client-side filter box; a user typing a pathological regex only hangs their own session, no cross-user or server DoS surface.
-    if (re) return re.test(text);
+    if (re) return re.test(text); // nosemgrep: ajinabraham.njsscan.dos.regex_dos.regex_dos -- local client-side filter box; a user typing a pathological regex only hangs their own session, no cross-user or server DoS surface.
     // Broken pattern: fall back to substring on the body so partial typing
     // (e.g. user is mid-edit) still narrows results predictably.
     const body = pattern.slice(1, pattern.lastIndexOf('/'));

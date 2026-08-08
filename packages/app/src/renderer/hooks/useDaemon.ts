@@ -105,8 +105,7 @@ export function useDaemon() {
   // Fetch project list
   const fetchProjects = useCallback(async () => {
     try {
-      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
-      const res = await fetch(`${BASE}/api/projects`);
+      const res = await fetch(`${BASE}/api/projects`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const json = await res.json();
       const data: ProjectInfo[] = json.projects ?? json;
@@ -122,8 +121,7 @@ export function useDaemon() {
   // Fetch client list
   const fetchClients = useCallback(async () => {
     try {
-      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
-      const res = await fetch(`${BASE}/api/clients`);
+      const res = await fetch(`${BASE}/api/clients`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const json = await res.json();
       const data: ClientInfo[] = json.clients ?? json;
@@ -136,8 +134,7 @@ export function useDaemon() {
   // Fetch settings + daemon info
   const fetchSettings = useCallback(async () => {
     try {
-      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
-      const res = await fetch(`${BASE}/api/settings`);
+      const res = await fetch(`${BASE}/api/settings`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       setSettings(data);
@@ -311,8 +308,7 @@ export function useDaemon() {
   // Actions
   const addProject = useCallback(async (root: string) => {
     try {
-      // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
-      await fetch(`${BASE}/api/projects`, {
+      await fetch(`${BASE}/api/projects`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ root }),
@@ -366,8 +362,7 @@ export function useDaemon() {
       for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 500));
         try {
-          // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
-          const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(500) });
+          const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(500) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
           if (res.ok) {
             ready = true;
             break;
@@ -393,8 +388,7 @@ export function useDaemon() {
   const updateSettings = useCallback(
     async (patch: Record<string, unknown>) => {
       try {
-        // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
-        await fetch(`${BASE}/api/settings`, {
+        await fetch(`${BASE}/api/settings`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),

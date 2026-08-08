@@ -836,8 +836,7 @@ function DecisionsView({ root }: { root: string }) {
   };
 
   const handleAdd = async (values: DecisionFormValues) => {
-    // nosemgrep: typescript.react.security.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
-    const res = await fetch(`${BASE}/api/projects/decisions`, {
+    const res = await fetch(`${BASE}/api/projects/decisions`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

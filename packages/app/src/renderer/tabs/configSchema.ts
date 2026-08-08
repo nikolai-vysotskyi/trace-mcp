@@ -71,8 +71,7 @@ export function validateField(field: FieldDef, value: unknown): string | null {
         const MAX_PATTERN_INPUT_LENGTH = 500;
         if (value.length > MAX_PATTERN_INPUT_LENGTH) return `Too long (max ${MAX_PATTERN_INPUT_LENGTH} chars)`;
         try {
-          // nosemgrep: ajinabraham.njsscan.dos.regex_injection.regex_injection_dos -- field.pattern is authored in this file's static schema, not user input; the length cap above bounds worst-case cost on the user-controlled value being tested.
-          if (!new RegExp(field.pattern).test(value)) return `Must match: ${field.pattern}`;
+          if (!new RegExp(field.pattern).test(value)) return `Must match: ${field.pattern}`; // nosemgrep: ajinabraham.njsscan.dos.regex_injection.regex_injection_dos -- field.pattern is authored in this file's static schema, not user input; the length cap above bounds worst-case cost on the user-controlled value being tested.
         } catch {
           /* invalid pattern, skip */
         }

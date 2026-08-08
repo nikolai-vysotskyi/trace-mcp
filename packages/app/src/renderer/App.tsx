@@ -751,8 +751,7 @@ export function App() {
     e.preventDefault();
     dragging.current = true;
     document.body.style.cursor = 'col-resize';
-    // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_username -- CSS `userSelect` property name matched the "username" secret heuristic; no credential involved.
-    document.body.style.userSelect = 'none';
+    document.body.style.userSelect = 'none'; // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_username -- CSS `userSelect` property name matched the "username" secret heuristic; no credential involved.
   }, []);
 
   useEffect(() => {
