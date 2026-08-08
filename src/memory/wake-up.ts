@@ -12,6 +12,7 @@
  */
 
 import * as path from 'node:path';
+import { listAllSessions } from '../analytics/log-parser.js';
 import type { Store } from '../db/store.js';
 import type { DecisionRow, DecisionStore, DecisionType } from './decision-store.js';
 import { verifyDecisions } from './decision-verification.js';
@@ -56,6 +57,19 @@ export interface WakeUpContext {
 // ════════════════════════════════════════════════════════════════════════
 // ASSEMBLY
 // ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Project-scoped mined-session count. `getMinedSessionCount()` alone counts
+ * every session ever mined across ALL projects on the machine — pairing that
+ * global number with the project-scoped `stats.total` misleadingly implies
+ * "N sessions mined, 0 decisions" even when decisions exist, just filed
+ * under a different project_root (see TRA-60).
+ */
+function minedSessionCountFor(decisionStore: DecisionStore, projectRoot: string): number {
+  return decisionStore.getMinedSessionCountForPaths(
+    listAllSessions(projectRoot).map((s) => s.filePath),
+  );
+}
 
 function compactDecision(d: DecisionRow): WakeUpContext['decisions']['recent'][0] {
   const entry: WakeUpContext['decisions']['recent'][0] = {
@@ -108,7 +122,7 @@ export function assembleWakeUp(
   // aggregate work on this session-start hot path for an identical result.
   const stats = decisionStore.getStats(projectRoot);
   const activeCount = stats.active;
-  const minedCount = decisionStore.getMinedSessionCount();
+  const minedCount = minedSessionCountFor(decisionStore, projectRoot);
   const indexedSessions = decisionStore.getIndexedSessionIds(projectRoot);
 
   const result: WakeUpContext = {
@@ -398,7 +412,7 @@ export function assembleWakeUpSplit(
 
   // Stable: stats (aggregate counters, do not move per-turn).
   const stats = decisionStore.getStats(projectRoot);
-  const minedCount = decisionStore.getMinedSessionCount();
+  const minedCount = minedSessionCountFor(decisionStore, projectRoot);
   const indexedSessions = decisionStore.getIndexedSessionIds(projectRoot);
 
   // Stable: top topics (P1.1 cluster overlay). Slow-moving topical labels —

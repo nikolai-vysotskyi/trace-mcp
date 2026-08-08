@@ -101,6 +101,9 @@ describe('assembleWakeUp', () => {
       project_root: '/projects/myapp',
       source: 'mined',
     });
+    // Marked mined under an unrelated path that isn't on disk under
+    // '/projects/myapp' — sessions_mined is now scoped to the queried
+    // project's own session files (TRA-60), so this must NOT be counted.
     store.markSessionMined('/fake/session.jsonl', 1);
     store.addSessionChunks([
       {
@@ -115,7 +118,7 @@ describe('assembleWakeUp', () => {
 
     const ctx = assembleWakeUp(store, '/projects/myapp');
     expect(ctx.memory.total_decisions).toBe(1);
-    expect(ctx.memory.sessions_mined).toBe(1);
+    expect(ctx.memory.sessions_mined).toBe(0);
     expect(ctx.memory.sessions_indexed).toBe(1);
     expect(ctx.memory.by_type.tech_choice).toBe(1);
   });

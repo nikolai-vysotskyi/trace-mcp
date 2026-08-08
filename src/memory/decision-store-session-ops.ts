@@ -59,6 +59,22 @@ export class SessionOperations {
   }
 
   /**
+   * Count of `paths` that already have a `mined_sessions` row. Used to scope
+   * the global mined-session count down to "sessions belonging to project X",
+   * since `mined_sessions` has no `project_root` column of its own — callers
+   * resolve the project's session paths first (e.g. via `listAllSessions`)
+   * and pass them here.
+   */
+  getMinedSessionCountForPaths(paths: string[]): number {
+    if (paths.length === 0) return 0;
+    const placeholders = paths.map(() => '?').join(',');
+    const row = this.db
+      .prepare(`SELECT COUNT(*) as c FROM mined_sessions WHERE session_path IN (${placeholders})`)
+      .get(...paths) as { c: number };
+    return row.c;
+  }
+
+  /**
    * Get the next-read cursor for a previously-mined session.
    *
    * Semantics:

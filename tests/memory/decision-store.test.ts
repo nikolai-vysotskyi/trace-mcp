@@ -251,6 +251,28 @@ describe('DecisionStore', () => {
       expect(store.isSessionMined('/path/to/session.jsonl')).toBe(true);
       expect(store.getMinedSessionCount()).toBe(1);
     });
+
+    it('scopes the mined count to a given set of session paths (TRA-60)', () => {
+      // getMinedSessionCount() is intentionally global — no project_root
+      // column exists on mined_sessions. Callers that need a project-scoped
+      // count (wake-up, `memory stats`) resolve the project's own session
+      // paths first (via listAllSessions) and pass them here, so a project
+      // with zero mined sessions of its own doesn't get credited with
+      // sessions mined for unrelated projects.
+      store.markSessionMined('/projects/a/session-1.jsonl', 3);
+      store.markSessionMined('/projects/b/session-2.jsonl', 0);
+
+      expect(store.getMinedSessionCount()).toBe(2);
+      expect(store.getMinedSessionCountForPaths(['/projects/a/session-1.jsonl'])).toBe(1);
+      expect(
+        store.getMinedSessionCountForPaths([
+          '/projects/a/session-1.jsonl',
+          '/projects/b/session-2.jsonl',
+        ]),
+      ).toBe(2);
+      expect(store.getMinedSessionCountForPaths(['/projects/c/never-mined.jsonl'])).toBe(0);
+      expect(store.getMinedSessionCountForPaths([])).toBe(0);
+    });
   });
 
   describe('code-aware queries', () => {

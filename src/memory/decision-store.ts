@@ -798,6 +798,11 @@ export class DecisionStore {
     return this.sessionOps.getMinedSessionCount();
   }
 
+  /** Scoped variant of {@link getMinedSessionCount} — counts only `paths` that are mined. */
+  getMinedSessionCountForPaths(paths: string[]): number {
+    return this.sessionOps.getMinedSessionCountForPaths(paths);
+  }
+
   /**
    * Get the next-read cursor for a previously-mined session.
    *
