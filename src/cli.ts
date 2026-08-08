@@ -3049,6 +3049,14 @@ program
     const pipeline = new IndexingPipeline(store, registry, config, resolvedDir);
     const result = await pipeline.indexAll(opts.force ?? false);
     logger.info(result, 'Indexing completed');
+    const skippedDirs = pipeline.getSkippedTopLevelDirs();
+    if (skippedDirs.length > 0) {
+      logger.info(
+        { skippedDirs },
+        'Top-level folders skipped by built-in/config ignore rules — see ' +
+          '"Getting a skipped folder indexed" in docs/configuration.md',
+      );
+    }
     updateLastIndexed(resolvedDir);
 
     // Auto-discover subprojects: register this project, scan contracts & client calls
