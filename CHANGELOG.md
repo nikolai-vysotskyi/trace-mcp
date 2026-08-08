@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.47.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.46.2...v1.47.0) (2026-08-08)
+
+
+### Features
+
+* **init:** add --scope project|global for MCP config target ([#282](https://github.com/nikolai-vysotskyi/trace-mcp/issues/282)) ([#284](https://github.com/nikolai-vysotskyi/trace-mcp/issues/284)) ([51be60d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/51be60dccb04ab116f5beff89c166946db84d709))
+* **plugin:** add Codex CLI plugin, document one-step install in README ([#278](https://github.com/nikolai-vysotskyi/trace-mcp/issues/278)) ([8c17ce0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8c17ce0955dabe7246da560235dc2c04ba30c9cc))
+
+
+### Bug Fixes
+
+* **guard:** distinguish stdio vs http heartbeat, treat 0 sessions as dead ([#301](https://github.com/nikolai-vysotskyi/trace-mcp/issues/301)) ([167dc01](https://github.com/nikolai-vysotskyi/trace-mcp/commit/167dc01206e6894f6a3bcad45e007ef6c4af0080))
+* **memory:** drop bare "over" from tech_choice mining pattern (TRA-34) ([#276](https://github.com/nikolai-vysotskyi/trace-mcp/issues/276)) ([a3b3c3e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a3b3c3eb88e1398d2b5f69342da7f98714658bdf))
+* **memory:** scope mined-session count to project, not global ([#303](https://github.com/nikolai-vysotskyi/trace-mcp/issues/303)) ([c5f0754](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c5f0754c74bd29586a702e6486512986e96cba96))
+* **memory:** scope session discovery to the target project (TRA-48) ([#293](https://github.com/nikolai-vysotskyi/trace-mcp/issues/293)) ([18fde5e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/18fde5ef21df597c0faa6cf4e07b2129b93d0013))
+* **memory:** stop CLI mine defaulting stricter than the tuned reject floor ([#272](https://github.com/nikolai-vysotskyi/trace-mcp/issues/272)) ([08bb295](https://github.com/nikolai-vysotskyi/trace-mcp/commit/08bb2959ea0e28f03cdebf55386f58c5f06f46fd))
+* **plugin:** bump .codex-plugin manifest versions to match package.json (1.46.2) ([#295](https://github.com/nikolai-vysotskyi/trace-mcp/issues/295)) ([13ecf04](https://github.com/nikolai-vysotskyi/trace-mcp/commit/13ecf0496f62c385db745c929c54901cc4bc005a))
+* **registry:** doctor --fix-interactive handles registry issues too ([#291](https://github.com/nikolai-vysotskyi/trace-mcp/issues/291)) ([f10efa5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f10efa5c171d02c3da0d25476486640e4ebccbbc))
+* **registry:** stamp lastIndexed on daemon-driven and CLI index runs (TRA-59) ([#302](https://github.com/nikolai-vysotskyi/trace-mcp/issues/302)) ([f100366](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f10036636b2252f53bbe1b28663ac7e4e7acf26d))
+* **topology:** reject and self-heal filesystem-root subproject repo_root ([#273](https://github.com/nikolai-vysotskyi/trace-mcp/issues/273)) ([#275](https://github.com/nikolai-vysotskyi/trace-mcp/issues/275)) ([c595ccd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c595ccd2590ff63f3e6ba3edff07ad21ffa40281))
+
+
+### Documentation
+
+* surface benchmark command and clarify synthetic estimate vs real savings ([#283](https://github.com/nikolai-vysotskyi/trace-mcp/issues/283)) ([581d458](https://github.com/nikolai-vysotskyi/trace-mcp/commit/581d4589d45fa022e140df3d205fd86b7e6b4b12)), closes [#277](https://github.com/nikolai-vysotskyi/trace-mcp/issues/277)
+
+
+### Chores
+
+* **deps:** bump undici and postcss overrides to close 6 Dependabot alerts ([#300](https://github.com/nikolai-vysotskyi/trace-mcp/issues/300)) ([353a3ce](https://github.com/nikolai-vysotskyi/trace-mcp/commit/353a3ce021bf96dfa20576558917164b78a82cba))
+* **deps:** ignore better-sqlite3 major bumps (13.x prebuilds segfault) ([#296](https://github.com/nikolai-vysotskyi/trace-mcp/issues/296)) ([3974066](https://github.com/nikolai-vysotskyi/trace-mcp/commit/397406643c0e9e23cdb1aa14ea642ff74364a63c))
+
 ## [1.46.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.46.1...v1.46.2) (2026-07-29)
 
 
