@@ -344,7 +344,10 @@ export async function getTaskContext(
   // ─── Step 5: PageRank ───
 
   const pagerankMap = computePageRank(store.db);
-  const maxPr = Math.max(...pagerankMap.values(), 0.001);
+  let maxPr = 0.001;
+  for (const v of pagerankMap.values()) {
+    if (v > maxPr) maxPr = v;
+  }
   const now = new Date();
 
   // ─── Step 6: Classify and score into sections ───
