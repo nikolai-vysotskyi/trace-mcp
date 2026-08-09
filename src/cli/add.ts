@@ -31,7 +31,13 @@ import {
 async function runIndexing(
   projectRoot: string,
   opts: { json?: boolean },
-): Promise<{ indexed: number; skipped: number; errors: number; durationMs: number } | null> {
+): Promise<{
+  indexed: number;
+  skipped: number;
+  errors: number;
+  durationMs: number;
+  skippedDirs: string[];
+} | null> {
   const configResult = await loadConfig(projectRoot);
   if (configResult.isErr()) {
     if (!opts.json) {
@@ -54,6 +60,7 @@ async function runIndexing(
       skipped: result.skipped,
       errors: result.errors,
       durationMs: result.durationMs,
+      skippedDirs: pipeline.getSkippedTopLevelDirs(),
     };
   } catch (err) {
     if (!opts.json) {
@@ -221,6 +228,12 @@ async function handleMultiRoot(
         `Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`,
       );
       lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
+      if (indexResult.skippedDirs.length > 0) {
+        lines.push(
+          `Skipped top-level folders: ${indexResult.skippedDirs.join(', ')}\n` +
+            `  (built-in/config skip rules — see "Getting a skipped folder indexed" in docs/configuration.md)`,
+        );
+      }
     }
     p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
     if (indexResult) {
@@ -438,6 +451,12 @@ export const addCommand = new Command('add')
             `Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`,
           );
           lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
+          if (indexResult.skippedDirs.length > 0) {
+            lines.push(
+              `Skipped top-level folders: ${indexResult.skippedDirs.join(', ')}\n` +
+                `  (un-skip via "ignore.directories" in .trace-mcp/.config.json — see docs/configuration.md)`,
+            );
+          }
         }
         p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
         if (indexResult) {

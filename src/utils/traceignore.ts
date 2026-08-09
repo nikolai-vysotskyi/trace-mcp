@@ -122,6 +122,24 @@ export class TraceignoreMatcher {
     return this.skipDirs;
   }
 
+  /**
+   * Top-level directories directly under `rootPath` that this matcher would
+   * skip entirely — used to tell users after indexing "your k8s/ folder was
+   * never scanned" instead of leaving skips invisible (#124).
+   */
+  getSkippedTopLevelDirs(rootPath: string): string[] {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(rootPath, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    return entries
+      .filter((e) => e.isDirectory() && this.isIgnored(e.name))
+      .map((e) => e.name)
+      .sort();
+  }
+
   /** Convert rules to fast-glob ignore patterns for collectFiles. */
   toFastGlobIgnore(): string[] {
     const patterns: string[] = [];

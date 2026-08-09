@@ -109,7 +109,25 @@ These directories are always skipped (no configuration needed):
 
 `node_modules`, `.git`, `dist`, `build`, `.next`, `__pycache__`, `.venv`, `vendor`, `.trace-mcp`, `coverage`, `.turbo`
 
-You can add more via `.traceignore` or the `ignore.directories` config key.
+You can add **more** directory names to skip via `.traceignore` or the `ignore.directories` config key — both only *add* to the skip list, they don't remove anything from it.
+
+`trace-mcp add` / `trace-mcp index` print a "Skipped top-level folders" line after indexing listing every top-level directory that got skipped this way, so a folder missing from the index isn't a silent surprise.
+
+### Getting a skipped folder indexed
+
+Two different things can leave a folder out of the index — check which one applies:
+
+1. **The folder name collides with a built-in skip dir** (e.g. you have your own `vendor/` or `build/` with real source in it). There's currently no per-project way to un-skip a built-in name — rename the folder, or [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) if this collision is common enough to warrant a config override.
+2. **The folder just isn't a built-in skip dir, but nothing in `include` matches its files** (e.g. a `k8s/` folder of YAML manifests — no default `include` pattern covers `*.yaml`). Add an explicit pattern:
+
+   ```jsonc
+   // .trace-mcp/.config.json
+   {
+     "include": ["k8s/**/*.{yaml,yml}"]
+   }
+   ```
+
+   `include` in a per-project config file **replaces** the built-in list rather than adding to it (config merge is shallow) — copy the defaults from [`src/config.ts`](../src/config.ts) alongside your addition if you still want the rest of the project indexed.
 
 ---
 

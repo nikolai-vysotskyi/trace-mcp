@@ -290,6 +290,16 @@ export class IndexingPipeline {
     return this._dag;
   }
 
+  /**
+   * Top-level directories under the project root skipped by default ignore
+   * rules (built-in skip dirs, `ignore.directories` config, `.traceignore`).
+   * Only meaningful after `indexAll()` has run at least once, since that's
+   * when `_traceignore` is built.
+   */
+  getSkippedTopLevelDirs(): string[] {
+    return this._traceignore?.getSkippedTopLevelDirs(this.rootPath) ?? [];
+  }
+
   getPipelineState(): PipelineState {
     return {
       store: this.store,
