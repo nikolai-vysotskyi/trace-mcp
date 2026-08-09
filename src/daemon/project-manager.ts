@@ -37,6 +37,7 @@ import {
   getProject,
   listProjects,
   unregisterProject,
+  updateLastIndexed,
 } from '../registry.js';
 import type { ServerHandle } from '../server/server.js';
 import { createServer } from '../server/server.js';
@@ -431,6 +432,7 @@ export class ProjectManager {
     this.indexAllLimit!(() => pipeline.indexAll(needsForcedReindex))
       .then(async () => {
         managed.status = 'ready';
+        updateLastIndexed(projectRoot);
         if (needsForcedReindex) {
           try {
             clearPendingReindex(projectRoot);
@@ -454,6 +456,7 @@ export class ProjectManager {
           );
           const finishRecovery = async (via: string): Promise<void> => {
             managed.status = 'ready';
+            updateLastIndexed(projectRoot);
             if (needsForcedReindex) {
               try {
                 clearPendingReindex(projectRoot);

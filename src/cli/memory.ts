@@ -2,7 +2,7 @@
  * CLI: trace-mcp memory — decision memory commands.
  *
  * Usage:
- *   trace-mcp memory mine [--project=.] [--force] [--min-confidence=0.6]
+ *   trace-mcp memory mine [--project=.] [--force] [--min-confidence=0.45]
  *   trace-mcp memory search "query" [--project=.] [--limit=20]
  *   trace-mcp memory stats [--project=.]
  *   trace-mcp memory decisions [--project=.] [--type=tech_choice] [--search="query"] [--branch=current|all|<name>]
@@ -13,6 +13,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Command } from 'commander';
+import { listAllSessions } from '../analytics/log-parser.js';
 import { DECISIONS_DB_PATH, ensureGlobalDirs } from '../global.js';
 import { mineSessions } from '../memory/conversation-miner.js';
 import {
@@ -21,6 +22,7 @@ import {
   exportDecisionsAsJsonl,
   exportDecisionsAsMarkdown,
 } from '../memory/decision-exporter.js';
+import { DEFAULT_REJECT_THRESHOLD } from '../memory/conversation-miner-types.js';
 import { DecisionStore, type DecisionType } from '../memory/decision-store.js';
 import { indexSessions } from '../memory/session-indexer.js';
 import { assembleWakeUp } from '../memory/wake-up.js';
@@ -42,8 +44,11 @@ memoryCommand
   .description('Mine Claude Code / Claw Code session logs for decisions')
   .option('--project <path>', 'Project root to mine (default: current directory)', process.cwd())
   .option('--force', 'Re-mine already processed sessions')
-  .option('--min-confidence <n>', 'Minimum confidence threshold (default: 0.6)', '0.6')
-  .action(async (opts: { project: string; force?: boolean; minConfidence: string }) => {
+  .option(
+    '--min-confidence <n>',
+    `Reject floor — decisions below this are dropped (default: ${DEFAULT_REJECT_THRESHOLD}, same as the automated mining scheduler)`,
+  )
+  .action(async (opts: { project: string; force?: boolean; minConfidence?: string }) => {
     const store = openStore();
     try {
       const projectRoot = path.resolve(opts.project);
@@ -52,7 +57,8 @@ memoryCommand
       const result = await mineSessions(store, {
         projectRoot,
         force: opts.force,
-        minConfidence: parseFloat(opts.minConfidence),
+        minConfidence:
+          opts.minConfidence !== undefined ? parseFloat(opts.minConfidence) : undefined,
       });
 
       console.log(`\n  Sessions scanned: ${result.sessions_scanned}`);
@@ -226,13 +232,23 @@ memoryCommand
     try {
       const projectRoot = path.resolve(opts.project);
       const stats = store.getStats(projectRoot);
-      const minedCount = store.getMinedSessionCount();
+      // Scoped to this project's own session files — pairs correctly with
+      // `stats.total`, which is also project-scoped. The unscoped count
+      // (below) is global across every project ever mined on this machine
+      // and previously stood in for this value, which made "0 decisions"
+      // look like a mining failure even when decisions existed under a
+      // different project_root (TRA-60).
+      const minedCount = store.getMinedSessionCountForPaths(
+        listAllSessions(projectRoot).map((s) => s.filePath),
+      );
+      const minedCountAllProjects = store.getMinedSessionCount();
       const chunkCount = store.getSessionChunkCount(projectRoot);
       const indexedSessions = store.getIndexedSessionIds(projectRoot);
 
       const fullStats = {
         ...stats,
         sessions_mined: minedCount,
+        sessions_mined_all_projects: minedCountAllProjects,
         sessions_indexed: indexedSessions.length,
         content_chunks: chunkCount,
       };
@@ -246,10 +262,21 @@ memoryCommand
       console.log(`  Total decisions:  ${stats.total}`);
       console.log(`  Active:           ${stats.active}`);
       console.log(`  Invalidated:      ${stats.invalidated}`);
-      console.log(`  Sessions mined:   ${minedCount}`);
+      console.log(
+        `  Sessions mined:   ${minedCount} (${minedCountAllProjects} across all projects)`,
+      );
       console.log(`  Sessions indexed: ${indexedSessions.length}`);
       console.log(`  Content chunks:   ${chunkCount}`);
       console.log();
+      if (stats.total === 0 && minedCount > 0) {
+        console.log(
+          `  0 decisions from ${minedCount} mined sessions for this project — they were scanned but nothing scored above the reject threshold. Try \`trace-mcp memory mine --force --min-confidence <lower>\`.\n`,
+        );
+      } else if (stats.total === 0 && minedCount === 0 && minedCountAllProjects > 0) {
+        console.log(
+          `  No sessions for this project (${projectRoot}) have been mined yet — run \`trace-mcp memory mine\` here. (${minedCountAllProjects} sessions are mined for other projects on this machine.)\n`,
+        );
+      }
       if (Object.keys(stats.by_type).length > 0) {
         console.log('  By type:');
         for (const [type, count] of Object.entries(stats.by_type)) {
@@ -308,6 +335,11 @@ memoryCommand
       console.log(
         `Memory: ${wakeUp.memory.total_decisions} decisions, ${wakeUp.memory.sessions_mined} sessions mined, ${wakeUp.memory.sessions_indexed} indexed`,
       );
+      if (wakeUp.memory.total_decisions === 0 && wakeUp.memory.sessions_mined > 0) {
+        console.log(
+          `Tip: 0 decisions from ${wakeUp.memory.sessions_mined} mined sessions — try \`trace-mcp memory mine --force --min-confidence <lower>\` to re-examine them.`,
+        );
+      }
       console.log(`Estimated tokens: ${wakeUp.estimated_tokens}`);
     } finally {
       store.close();

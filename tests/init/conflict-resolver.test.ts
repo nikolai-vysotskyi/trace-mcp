@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { commentOutJsonKey } from '../../src/init/conflict-resolver.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { detectConflicts } from '../../src/init/conflict-detector.js';
+import { commentOutJsonKey, fixConflict } from '../../src/init/conflict-resolver.js';
 
 describe('commentOutJsonKey', () => {
   it('comments out a multi-line server entry', () => {
@@ -104,5 +108,88 @@ describe('commentOutJsonKey', () => {
       (l) => !l.trimStart().startsWith('//') && l.includes('jcodemunch'),
     );
     expect(uncommented).toHaveLength(0);
+  });
+});
+
+describe('fixClaudeMdBlock — bare mention fallback (TRA-49)', () => {
+  const tmpDirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of tmpDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  function fixture(files: Record<string, string>): string {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-conflict-fix-'));
+    tmpDirs.push(root);
+    for (const [name, content] of Object.entries(files)) {
+      fs.writeFileSync(path.join(root, name), content);
+    }
+    return root;
+  }
+
+  it('is fixable and comments out a bare tool-reference line instead of requiring manual fix', () => {
+    const root = fixture({
+      'CLAUDE.md':
+        '# Project\n\nAlways use get_file_outline from jcodemunch for file exploration.\n',
+    });
+
+    const conflict = detectConflicts(root).conflicts.find(
+      (c) =>
+        c.category === 'claude_md' &&
+        c.competitor === 'jcodemunch-mcp' &&
+        c.target.startsWith(root),
+    )!;
+    expect(conflict).toBeDefined();
+    expect(conflict.fixable).toBe(true);
+
+    const result = fixConflict(conflict);
+    expect(result.action).toBe('cleaned');
+
+    const updated = fs.readFileSync(conflict.target, 'utf-8');
+    expect(updated).toContain('<!-- trace-mcp: disabled by doctor --fix');
+    expect(updated).not.toMatch(/^Always use get_file_outline/m);
+    // Unrelated content survives untouched.
+    expect(updated).toContain('# Project');
+  });
+
+  it('leaves negated mentions alone even inside an otherwise-fixed file', () => {
+    const root = fixture({
+      'CLAUDE.md':
+        '# Project\n\nUse get_file_outline from jcodemunch for exploration.\n' +
+        'Never call jcodemunch tools for anything else; prefer trace-mcp.\n',
+    });
+
+    const conflict = detectConflicts(root).conflicts.find(
+      (c) =>
+        c.category === 'claude_md' &&
+        c.competitor === 'jcodemunch-mcp' &&
+        c.target.startsWith(root),
+    )!;
+    const result = fixConflict(conflict);
+    expect(result.action).toBe('cleaned');
+
+    const updated = fs.readFileSync(conflict.target, 'utf-8');
+    expect(updated).toContain('Never call jcodemunch tools for anything else');
+    expect(updated).not.toMatch(/^Use get_file_outline/m);
+  });
+
+  it('dry-run reports the fix without touching the file', () => {
+    const root = fixture({
+      'CLAUDE.md': '# Project\n\nAlways use get_file_outline from jcodemunch.\n',
+    });
+
+    const conflict = detectConflicts(root).conflicts.find(
+      (c) =>
+        c.category === 'claude_md' &&
+        c.competitor === 'jcodemunch-mcp' &&
+        c.target.startsWith(root),
+    )!;
+    const original = fs.readFileSync(conflict.target, 'utf-8');
+
+    const result = fixConflict(conflict, { dryRun: true });
+    expect(result.action).toBe('cleaned');
+    expect(fs.readFileSync(conflict.target, 'utf-8')).toBe(original);
   });
 });

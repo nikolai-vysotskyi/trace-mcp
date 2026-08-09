@@ -19,6 +19,7 @@ import { PluginRegistry } from '../plugin-api/registry.js';
 import { discoverChildProjects, findProjectRoot, hasRootMarkers } from '../project-root.js';
 import { setupProject } from '../project-setup.js';
 import {
+  findOverlapForNewRoot,
   findParentProject,
   getProject,
   listProjects,
@@ -30,7 +31,13 @@ import {
 async function runIndexing(
   projectRoot: string,
   opts: { json?: boolean },
-): Promise<{ indexed: number; skipped: number; errors: number; durationMs: number } | null> {
+): Promise<{
+  indexed: number;
+  skipped: number;
+  errors: number;
+  durationMs: number;
+  skippedDirs: string[];
+} | null> {
   const configResult = await loadConfig(projectRoot);
   if (configResult.isErr()) {
     if (!opts.json) {
@@ -53,6 +60,7 @@ async function runIndexing(
       skipped: result.skipped,
       errors: result.errors,
       durationMs: result.durationMs,
+      skippedDirs: pipeline.getSkippedTopLevelDirs(),
     };
   } catch (err) {
     if (!opts.json) {
@@ -220,6 +228,12 @@ async function handleMultiRoot(
         `Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`,
       );
       lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
+      if (indexResult.skippedDirs.length > 0) {
+        lines.push(
+          `Skipped top-level folders: ${indexResult.skippedDirs.join(', ')}\n` +
+            `  (built-in/config skip rules — see "Getting a skipped folder indexed" in docs/configuration.md)`,
+        );
+      }
     }
     p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
     if (indexResult) {
@@ -242,170 +256,214 @@ export const addCommand = new Command('add')
   .option('--force', 'Re-register even if already registered')
   .option('--no-index', 'Skip indexing after registration')
   .option('--json', 'Output results as JSON')
-  .action(async (dir: string, opts: { force?: boolean; index?: boolean; json?: boolean }) => {
-    const resolvedDir = path.resolve(dir);
-    if (!fs.existsSync(resolvedDir)) {
-      console.error(`Directory does not exist: ${resolvedDir}`);
-      process.exit(1);
-    }
-
-    // 1. Detect project root (or discover child projects)
-    //    Priority: current dir > already-registered parent > multi-root discovery
-    let projectRoot: string | undefined;
-    if (hasRootMarkers(resolvedDir)) {
-      // Current directory has root markers — use it directly, don't walk up
-      projectRoot = resolvedDir;
-    } else {
-      // No markers in current dir — check if a parent is already registered
-      try {
-        const parentRoot = findProjectRoot(resolvedDir);
-        const parentEntry = getProject(parentRoot);
-        if (parentEntry) {
-          // Parent is already registered — use it
-          projectRoot = parentRoot;
-        }
-      } catch {
-        // No root markers found anywhere up the tree
-      }
-
-      if (!projectRoot) {
-        // Try multi-root discovery in subdirectories
-        const children = discoverChildProjects(resolvedDir);
-        if (children.length > 0) {
-          await handleMultiRoot(resolvedDir, children, opts);
-          return;
-        }
-        console.error(
-          `Could not find project root from ${resolvedDir}. ` +
-            `No root markers (package.json, .git, composer.json, etc.) found in this directory, ` +
-            `and no child projects discovered in subdirectories.`,
-        );
+  .option(
+    '--allow-overlap',
+    'Register even if this root contains, or is contained by, an already-registered project',
+  )
+  .action(
+    async (
+      dir: string,
+      opts: { force?: boolean; index?: boolean; json?: boolean; allowOverlap?: boolean },
+    ) => {
+      const resolvedDir = path.resolve(dir);
+      if (!fs.existsSync(resolvedDir)) {
+        console.error(`Directory does not exist: ${resolvedDir}`);
         process.exit(1);
       }
-    }
 
-    const isInteractive = !opts.json;
-
-    if (isInteractive) {
-      p.intro('trace-mcp add');
-      if (projectRoot !== resolvedDir) {
-        p.note(`Detected project root: ${projectRoot}`, 'Root');
-      }
-    }
-
-    // Guard: warn if this project is already part of a multi-root
-    const parentEntry = findParentProject(projectRoot);
-    if (parentEntry && !opts.force) {
-      if (opts.json) {
-        console.log(JSON.stringify({ status: 'child_of_multi_root', parent: parentEntry }));
+      // 1. Detect project root (or discover child projects)
+      //    Priority: current dir > already-registered parent > multi-root discovery
+      let projectRoot: string | undefined;
+      if (hasRootMarkers(resolvedDir)) {
+        // Current directory has root markers — use it directly, don't walk up
+        projectRoot = resolvedDir;
       } else {
-        p.note(
-          `This project is already part of multi-root index: ${parentEntry.name}\n` +
-            `Root: ${parentEntry.root}`,
-          'Multi-root',
-        );
-        p.outro('Use --force to register it separately.');
-      }
-      return;
-    }
-
-    // 2. Check if already registered
-    const existing = getProject(projectRoot);
-    if (existing && !opts.force) {
-      if (opts.json) {
-        console.log(JSON.stringify({ status: 'already_registered', project: existing }));
-      } else {
-        p.note(
-          `Already registered: ${existing.name}\nDB: ${shortPath(existing.dbPath)}`,
-          'Existing',
-        );
-        p.outro('Use --force to re-register.');
-      }
-      return;
-    }
-
-    // 3–8. Standard project setup: detect → config → DB → register
-    const { entry, detection, dbPath, migrated } = setupProject(projectRoot, {
-      force: opts.force,
-      migrateOldDb: true,
-    });
-
-    if (isInteractive) {
-      const detectedLines: string[] = [];
-      if (detection.languages.length > 0) {
-        detectedLines.push(`Languages: ${detection.languages.join(', ')}`);
-      }
-      if (detection.frameworks.length > 0) {
-        detectedLines.push(
-          `Frameworks: ${detection.frameworks.map((f: DetectedFramework) => (f.version ? `${f.name} ${f.version}` : f.name)).join(', ')}`,
-        );
-      }
-      if (detection.packageManagers.length > 0) {
-        detectedLines.push(
-          `Package managers: ${detection.packageManagers.map((pm: PackageManagerInfo) => pm.type).join(', ')}`,
-        );
-      }
-      if (detectedLines.length > 0) {
-        p.note(detectedLines.join('\n'), 'Detected');
-      }
-    }
-
-    // 9. Index immediately (unless --no-index)
-    let indexResult: Awaited<ReturnType<typeof runIndexing>> = null;
-    if (opts.index !== false) {
-      if (isInteractive) {
-        const spin = p.spinner();
-        spin.start('Indexing project...');
-        indexResult = await runIndexing(projectRoot, opts);
-        if (indexResult) {
-          spin.stop(
-            `Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`,
-          );
-        } else {
-          spin.stop('Indexing skipped');
+        // No markers in current dir — check if a parent is already registered
+        try {
+          const parentRoot = findProjectRoot(resolvedDir);
+          const parentEntry = getProject(parentRoot);
+          if (parentEntry) {
+            // Parent is already registered — use it
+            projectRoot = parentRoot;
+          }
+        } catch {
+          // No root markers found anywhere up the tree
         }
-      } else {
-        indexResult = await runIndexing(projectRoot, opts);
-      }
-    }
 
-    // 10. Report
-    if (opts.json) {
-      console.log(
-        JSON.stringify(
-          {
-            status: existing ? 're-registered' : 'registered',
-            project: entry,
-            migrated,
-            detection: {
-              languages: detection.languages,
-              frameworks: detection.frameworks.map((f: DetectedFramework) => f.name),
+        if (!projectRoot) {
+          // Try multi-root discovery in subdirectories
+          const children = discoverChildProjects(resolvedDir);
+          if (children.length > 0) {
+            await handleMultiRoot(resolvedDir, children, opts);
+            return;
+          }
+          console.error(
+            `Could not find project root from ${resolvedDir}. ` +
+              `No root markers (package.json, .git, composer.json, etc.) found in this directory, ` +
+              `and no child projects discovered in subdirectories.`,
+          );
+          process.exit(1);
+        }
+      }
+
+      const isInteractive = !opts.json;
+
+      if (isInteractive) {
+        p.intro('trace-mcp add');
+        if (projectRoot !== resolvedDir) {
+          p.note(`Detected project root: ${projectRoot}`, 'Root');
+        }
+      }
+
+      // Guard: warn if this project is already part of a multi-root
+      const parentEntry = findParentProject(projectRoot);
+      if (parentEntry && !opts.force) {
+        if (opts.json) {
+          console.log(JSON.stringify({ status: 'child_of_multi_root', parent: parentEntry }));
+        } else {
+          p.note(
+            `This project is already part of multi-root index: ${parentEntry.name}\n` +
+              `Root: ${parentEntry.root}`,
+            'Multi-root',
+          );
+          p.outro('Use --force to register it separately.');
+        }
+        return;
+      }
+
+      // 2. Check if already registered
+      const existing = getProject(projectRoot);
+      if (existing && !opts.force) {
+        if (opts.json) {
+          console.log(JSON.stringify({ status: 'already_registered', project: existing }));
+        } else {
+          p.note(
+            `Already registered: ${existing.name}\nDB: ${shortPath(existing.dbPath)}`,
+            'Existing',
+          );
+          p.outro('Use --force to re-register.');
+        }
+        return;
+      }
+
+      // Guard: registering this root would create a new container/nested overlap
+      // with an already-registered project — same accidental double-indexing
+      // `doctor` detects after the fact (TRA-24), caught here before it happens.
+      if (!opts.allowOverlap) {
+        const overlap = findOverlapForNewRoot(projectRoot);
+        if (overlap) {
+          const { existing: overlapping, relation } = overlap;
+          if (opts.json) {
+            console.log(
+              JSON.stringify({ status: 'overlap_detected', existing: overlapping, relation }),
+            );
+          } else {
+            const detail =
+              relation === 'existing_contains_candidate'
+                ? `"${overlapping.name}" (${shortPath(overlapping.root)}) already contains this project.`
+                : `This would register a container over already-registered ` +
+                  `"${overlapping.name}" (${shortPath(overlapping.root)}).`;
+            p.note(
+              `${detail}\nOverlapping roots index and watch the same files twice — every change costs double CPU.`,
+              'Overlapping roots',
+            );
+            p.outro(
+              'Use --allow-overlap to register anyway, or `trace-mcp remove` one of them first.',
+            );
+          }
+          return;
+        }
+      }
+
+      // 3–8. Standard project setup: detect → config → DB → register
+      const { entry, detection, dbPath, migrated } = setupProject(projectRoot, {
+        force: opts.force,
+        migrateOldDb: true,
+      });
+
+      if (isInteractive) {
+        const detectedLines: string[] = [];
+        if (detection.languages.length > 0) {
+          detectedLines.push(`Languages: ${detection.languages.join(', ')}`);
+        }
+        if (detection.frameworks.length > 0) {
+          detectedLines.push(
+            `Frameworks: ${detection.frameworks.map((f: DetectedFramework) => (f.version ? `${f.name} ${f.version}` : f.name)).join(', ')}`,
+          );
+        }
+        if (detection.packageManagers.length > 0) {
+          detectedLines.push(
+            `Package managers: ${detection.packageManagers.map((pm: PackageManagerInfo) => pm.type).join(', ')}`,
+          );
+        }
+        if (detectedLines.length > 0) {
+          p.note(detectedLines.join('\n'), 'Detected');
+        }
+      }
+
+      // 9. Index immediately (unless --no-index)
+      let indexResult: Awaited<ReturnType<typeof runIndexing>> = null;
+      if (opts.index !== false) {
+        if (isInteractive) {
+          const spin = p.spinner();
+          spin.start('Indexing project...');
+          indexResult = await runIndexing(projectRoot, opts);
+          if (indexResult) {
+            spin.stop(
+              `Indexed ${indexResult.indexed} files in ${formatDuration(indexResult.durationMs)}`,
+            );
+          } else {
+            spin.stop('Indexing skipped');
+          }
+        } else {
+          indexResult = await runIndexing(projectRoot, opts);
+        }
+      }
+
+      // 10. Report
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              status: existing ? 're-registered' : 'registered',
+              project: entry,
+              migrated,
+              detection: {
+                languages: detection.languages,
+                frameworks: detection.frameworks.map((f: DetectedFramework) => f.name),
+              },
+              indexing: indexResult ?? undefined,
             },
-            indexing: indexResult ?? undefined,
-          },
-          null,
-          2,
-        ),
-      );
-    } else {
-      const lines: string[] = [];
-      lines.push(`Project: ${entry.name}`);
-      lines.push(`Root: ${projectRoot}`);
-      lines.push(`DB: ${shortPath(dbPath)}`);
-      if (migrated) {
-        lines.push(`Migrated existing index from .trace-mcp/index.db`);
-      }
-      if (indexResult) {
-        lines.push(
-          `Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`,
+            null,
+            2,
+          ),
         );
-        lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
-      }
-      p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
-      if (indexResult) {
-        p.outro('Project registered and indexed.');
       } else {
-        p.outro('Project registered. Run `trace-mcp index` to index it.');
+        const lines: string[] = [];
+        lines.push(`Project: ${entry.name}`);
+        lines.push(`Root: ${projectRoot}`);
+        lines.push(`DB: ${shortPath(dbPath)}`);
+        if (migrated) {
+          lines.push(`Migrated existing index from .trace-mcp/index.db`);
+        }
+        if (indexResult) {
+          lines.push(
+            `Indexed: ${indexResult.indexed} files (${indexResult.skipped} skipped, ${indexResult.errors} errors)`,
+          );
+          lines.push(`Duration: ${formatDuration(indexResult.durationMs)}`);
+          if (indexResult.skippedDirs.length > 0) {
+            lines.push(
+              `Skipped top-level folders: ${indexResult.skippedDirs.join(', ')}\n` +
+                `  (un-skip via "ignore.directories" in .trace-mcp/.config.json — see docs/configuration.md)`,
+            );
+          }
+        }
+        p.note(lines.join('\n'), existing ? 'Re-registered' : 'Registered');
+        if (indexResult) {
+          p.outro('Project registered and indexed.');
+        } else {
+          p.outro('Project registered. Run `trace-mcp index` to index it.');
+        }
       }
-    }
-  });
+    },
+  );

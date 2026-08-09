@@ -6,13 +6,9 @@
     "name": "Nikolai Vysotskyi",
     "url": "https://github.com/nikolai-vysotskyi"
   },
+  "homepage": "https://github.com/nikolai-vysotskyi/trace-mcp",
+  "repository": "https://github.com/nikolai-vysotskyi/trace-mcp",
   "license": "MIT",
-  "commands": [],
-  "mcpServers": {
-    "trace-mcp": {
-      "command": "trace-mcp"
-    }
-  },
   "keywords": [
     "mcp",
     "code-intelligence",
@@ -28,5 +24,6 @@
     "decisions",
     "memory"
   ],
-  "repository": "https://github.com/nikolai-vysotskyi/trace-mcp"
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json"
 }

@@ -545,7 +545,8 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
         // Avoid duplicate entries for same file+competitor
         if (conflicts.some((c) => c.id === id)) continue;
 
-        // Fixable if we have markers OR if competitor name appears in a markdown heading
+        // Fixable via marker/heading removal, or (as a fallback) by commenting
+        // out the individual matching lines — see fixClaudeMdBlock's Strategy 4.
         const hasSection = hasCompetitorSection(content, competitor);
 
         conflicts.push({
@@ -560,7 +561,8 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
               : `Found references to ${competitor} tools/APIs. These instructions may cause the AI to prefer competing tools over trace-mcp.`,
           target: filePath,
           competitor,
-          fixable: !!marker || hasSection,
+          detectionPattern: pattern,
+          fixable: true,
         });
       }
     }
@@ -570,7 +572,7 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
 }
 
 /** Words/phrases indicating a mention rejects/deprecates the competitor rather than directing its use. */
-const NEGATION_PATTERN =
+export const NEGATION_PATTERN =
   /\b(never|don't|do not|deprecated|stop using|instead of|avoid|reject|must not|no longer|banned|forbidden|disallow(?:ed)?)\b/i;
 
 /**

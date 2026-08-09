@@ -189,6 +189,12 @@ const EXCLUDE_DIRS = new Set([
   'coverage',
   '.cache',
   'tmp',
+  // Python virtualenvs — contain thousands of stdlib/package files, never project source
+  '.venv',
+  'venv',
+  'env',
+  '.env',
+  'site-packages',
   // Exclude test directories — test HTTP calls are not production API dependencies
   'tests',
   'test',

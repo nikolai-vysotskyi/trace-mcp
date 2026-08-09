@@ -209,6 +209,52 @@ describe('Conversation Miner — extraction patterns', () => {
   });
 });
 
+describe('Conversation Miner — "X over Y" noise (TRA-34)', () => {
+  function assistantTurn(
+    text: string,
+  ): import('../../src/memory/conversation-miner.js').ConversationTurn {
+    return {
+      role: 'assistant',
+      text,
+      timestamp: new Date().toISOString(),
+      referenced_files: [],
+      referenced_symbols: [],
+    };
+  }
+
+  it('does not extract a tech_choice from an ordinary sentence containing bare "over"', async () => {
+    const { extractDecisions } = await import('../../src/memory/conversation-miner.js');
+    // Real-world noise sampled from TRA-34: comparison-shaped prose that has
+    // nothing to do with a tech decision, just the word "over" between two
+    // short phrases.
+    const decisions = extractDecisions([
+      assistantTurn(
+        'I flipped the issue in `in_progress` over `in_review` since no work has landed yet.',
+      ),
+      assistantTurn(
+        'These samples come from the contentious zone over the first-N-per-class pool.',
+      ),
+    ]);
+    expect(decisions.some((d) => d.type === 'tech_choice')).toBe(false);
+  });
+
+  it('still extracts "X instead of Y" as a tech_choice', async () => {
+    const { extractDecisions } = await import('../../src/memory/conversation-miner.js');
+    const decisions = extractDecisions([
+      assistantTurn('We are using PostgreSQL instead of MySQL for JSONB support.'),
+    ]);
+    expect(decisions.some((d) => d.type === 'tech_choice')).toBe(true);
+  });
+
+  it('still extracts a real "chose X over Y" decision via the decided/chose pattern', async () => {
+    const { extractDecisions } = await import('../../src/memory/conversation-miner.js');
+    const decisions = extractDecisions([
+      assistantTurn('We chose PostgreSQL over MySQL because we need JSONB support.'),
+    ]);
+    expect(decisions.length).toBeGreaterThan(0);
+  });
+});
+
 describe('Conversation Miner — privacy filtering', () => {
   it('strips <private> blocks before mining', async () => {
     const { stripPrivacyTags } = await import('../../src/memory/conversation-miner.js');
