@@ -204,7 +204,7 @@ export const DEFAULT_CONFIG_JSONC = `{
 
   // ── Tool exposure ────────────────────────────────────────────────
   "tools": {
-    "preset": "full",                            // "full" | "minimal" | custom preset name
+    "preset": "standard",                        // "standard" | "full" | "minimal" | custom preset name
     // "include": [],                            // whitelist specific tools
     // "exclude": [],                            // blacklist specific tools
     // "descriptions": {},                       // override tool descriptions
