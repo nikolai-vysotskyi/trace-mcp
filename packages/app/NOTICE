@@ -1,0 +1,40 @@
+This product includes third-party artwork. The following attributions are
+required by the respective licenses. Covers the Lattice design system's icon
+set (src/renderer/lattice/icons.tsx, src/renderer/lattice/fileIcons.generated.ts),
+ported from the trace-mcp-app (Codechats) private repo — see its own NOTICE
+for the full, unabridged attribution list this was extracted from.
+
+================================================================================
+IntelliJ Platform icons (New UI icon set)
+================================================================================
+File-type and folder icons in src/renderer/lattice/fileIcons.generated.ts and
+src/renderer/lattice/icons.tsx are from the IntelliJ Platform,
+Copyright (c) JetBrains s.r.o.
+Source: https://github.com/JetBrains/intellij-community
+        (platform/icons/src/expui/; python plugin icons)
+License: Apache License, Version 2.0
+         https://www.apache.org/licenses/LICENSE-2.0
+Regenerated via scripts/generate-file-icons.mjs (trace-mcp-app repo).
+
+================================================================================
+Devicon
+================================================================================
+The TypeScript file-type icon is from Devicon.
+Source: https://github.com/devicons/devicon
+License: MIT
+
+================================================================================
+Solar Icon Set
+================================================================================
+The agent avatar mark ("black hole") in src/renderer/lattice/icons.tsx is from
+the Solar icon set by 480 Design.
+Source: https://www.figma.com/community/file/1166831539721848736
+License: Creative Commons Attribution 4.0 (CC BY 4.0)
+         https://creativecommons.org/licenses/by/4.0/
+
+================================================================================
+Lucide
+================================================================================
+Some interface glyphs are derived from Lucide.
+Source: https://github.com/lucide-icons/lucide
+License: ISC

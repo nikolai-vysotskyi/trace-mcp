@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Lattice design system (ported from Codechats — see TRA-27/TRA-30). Scoped
+   entirely under `.ws-stage[data-mode="dark"|"light"]`, so it cannot leak
+   into or collide with the tokens below. */
+@import "./styles/island.css";
 
 :root {
   --bg-primary: rgba(246, 246, 246, 0.92);
