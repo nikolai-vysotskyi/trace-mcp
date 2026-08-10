@@ -38,7 +38,10 @@ export function symbolToLspPosition(
 export function lspUriToRelPath(uri: string, rootPath: string): string | null {
   try {
     const absPath = fileURLToPath(uri);
-    const rel = relative(rootPath, absPath);
+    // node:path's `relative` returns OS-native separators (backslashes on
+    // Windows), but the symbol store keys file paths with POSIX separators
+    // regardless of host OS — normalize so `store.getFile()` lookups match.
+    const rel = relative(rootPath, absPath).split('\\').join('/');
     // Reject paths outside rootPath
     if (rel.startsWith('..') || rel.startsWith('/')) return null;
     return rel;

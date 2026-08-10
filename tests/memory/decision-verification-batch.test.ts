@@ -69,12 +69,33 @@ function baseRow(over: Partial<DecisionRow>): DecisionRow {
 /**
  * Install a `git` shim earlier on PATH that appends its subcommand to a log
  * file, then execs the real git. Returns { binDir, logFile, realGit }.
+ *
+ * Windows has no shebang-script executable format: `CreateProcess` resolves
+ * bare `git` via PATHEXT (.COM/.EXE/.BAT/.CMD/...), so an extension-less
+ * `#!/bin/bash` file is never invoked — the real `git.exe` elsewhere on PATH
+ * answers instead, the shim's log file stays empty, and every call-count
+ * assertion below reads 0. Emit a `.cmd` shim on win32 so PATHEXT resolution
+ * finds it ahead of the real git.
  */
 function installGitSpy(tmp: string): { binDir: string; logFile: string; env: NodeJS.ProcessEnv } {
-  const realGit = execFileSync('bash', ['-lc', 'command -v git'], { encoding: 'utf8' }).trim();
   const dir = path.join(tmp, 'bin');
   fs.mkdirSync(dir, { recursive: true });
   const logFile = path.join(tmp, 'git-calls.log');
+
+  if (process.platform === 'win32') {
+    const realGit = execFileSync('where', ['git'], { encoding: 'utf8' }).trim().split(/\r?\n/)[0];
+    const shim = path.join(dir, 'git.cmd');
+    // JSON.stringify would double-escape the path's backslashes for a batch
+    // file (it's not being JSON-parsed here) — quote the raw Windows path instead.
+    fs.writeFileSync(shim, `@echo off\r\necho %1>>"${logFile}"\r\n"${realGit}" %*\r\n`);
+    return {
+      binDir: dir,
+      logFile,
+      env: { ...process.env, PATH: `${dir};${process.env.PATH ?? ''}` },
+    };
+  }
+
+  const realGit = execFileSync('bash', ['-lc', 'command -v git'], { encoding: 'utf8' }).trim();
   const shim = path.join(dir, 'git');
   fs.writeFileSync(
     shim,
