@@ -47,6 +47,9 @@ interface RealSavingsReport {
     sessionsWithoutTraceMcp: { count: number; avgTokensPerSession: number; avgToolCalls: number };
     difference: { tokensSavedPct: number; fewerToolCallsPct: number };
   };
+
+  /** Set when zero session data was found both on disk and in the aggregation — see TRA-76. */
+  _warnings?: string[];
 }
 
 const MODEL_PRICING: Record<string, number> = {

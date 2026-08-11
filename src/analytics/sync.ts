@@ -2,6 +2,43 @@ import { logger } from '../logger.js';
 import type { AnalyticsStore } from './analytics-store.js';
 import { listAllSessions, parseSessionFile } from './log-parser.js';
 
+/**
+ * Warning to attach when a tool found zero session data both in the
+ * discoverable log files AND in its aggregated result — the "unreachable
+ * data source" case from TRA-76, distinct from "checked, genuinely nothing
+ * to report" (which happens when logs exist but the requested period/session
+ * has no matches).
+ */
+export function buildNoSessionDataWarning(projectPath: string | undefined): string[] {
+  const scope = projectPath ? `project path "${projectPath}"` : 'any registered project';
+  return [
+    `No session log files found for ${scope} under ~/.claude/projects or <project>/.claw/sessions. ` +
+      'These analytics tools are scoped to session logs produced on this machine — this is expected ' +
+      'when running from a fresh checkout, a remote/cloud sandbox, or CI that never ran a local ' +
+      'Claude Code / Claw Code session here, not necessarily "nothing to report."',
+  ];
+}
+
+/**
+ * Attach a `_warnings` entry to `report` only when BOTH the aggregated
+ * result is empty AND no session log files were discoverable on disk —
+ * i.e. "the data source is unreachable", not "checked, nothing to report
+ * for this period". Pure decision function so it's unit-testable without
+ * mocking the filesystem; callers do the (cheap) `listAllSessions(...)`
+ * lookup themselves. See TRA-76.
+ */
+export function attachNoSessionDataWarning<T extends { _warnings?: string[] }>(
+  report: T,
+  aggregationIsEmpty: boolean,
+  noFilesOnDisk: boolean,
+  projectPath: string | undefined,
+): T {
+  if (aggregationIsEmpty && noFilesOnDisk) {
+    report._warnings = buildNoSessionDataWarning(projectPath);
+  }
+  return report;
+}
+
 interface SyncResult {
   files_scanned: number;
   files_parsed: number;
