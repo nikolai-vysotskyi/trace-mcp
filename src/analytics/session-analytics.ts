@@ -1,6 +1,7 @@
 import type { AnalyticsStore } from './analytics-store.js';
+import { listAllSessions } from './log-parser.js';
 import { analyzeOptimizations, type OptimizationReport } from './rules.js';
-import { syncAnalytics, syncProjectAnalytics } from './sync.js';
+import { attachNoSessionDataWarning, syncAnalytics, syncProjectAnalytics } from './sync.js';
 
 export type { OptimizationReport } from './rules.js';
 
@@ -25,6 +26,8 @@ interface SessionAnalytics {
   topTools: { name: string; calls: number; outputTokensEst: number }[];
   topFiles: { path: string; reads: number; tokensEst: number }[];
   modelsUsed: Record<string, { sessions: number; tokens: number }>;
+  /** Set when zero session data was found both on disk and in the aggregation — see TRA-76. */
+  _warnings?: string[];
 }
 
 export function getSessionAnalytics(
@@ -44,7 +47,7 @@ export function getSessionAnalytics(
     sessionId: opts.sessionId,
   });
 
-  return {
+  const analytics: SessionAnalytics = {
     period: opts.sessionId ? `session:${opts.sessionId}` : period,
     sessionsCount: result.sessions_count,
     totals: {
@@ -77,6 +80,15 @@ export function getSessionAnalytics(
     })),
     modelsUsed: result.models_used,
   };
+
+  attachNoSessionDataWarning(
+    analytics,
+    result.sessions_count === 0,
+    listAllSessions(opts.projectPath).length === 0,
+    opts.projectPath,
+  );
+
+  return analytics;
 }
 
 export function getOptimizationReport(
@@ -96,5 +108,17 @@ export function getOptimizationReport(
     sessionId: opts.sessionId,
   });
 
-  return analyzeOptimizations(toolCallRows, opts.sessionId ? `session:${opts.sessionId}` : period);
+  const report = analyzeOptimizations(
+    toolCallRows,
+    opts.sessionId ? `session:${opts.sessionId}` : period,
+  );
+
+  attachNoSessionDataWarning(
+    report,
+    toolCallRows.length === 0,
+    listAllSessions(opts.projectPath).length === 0,
+    opts.projectPath,
+  );
+
+  return report;
 }

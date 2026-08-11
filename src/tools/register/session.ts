@@ -4,9 +4,10 @@ import { optionalNonEmptyString } from './_zod-helpers.js';
 import { OutputFormatSchema, encodeResponse } from '../_common/output-format.js';
 import { AnalyticsStore } from '../../analytics/analytics-store.js';
 import { formatBenchmarkMarkdown, runBenchmark } from '../../analytics/benchmark.js';
+import { listAllSessions } from '../../analytics/log-parser.js';
 import { analyzeRealSavings } from '../../analytics/real-savings.js';
 import { getOptimizationReport, getSessionAnalytics } from '../../analytics/session-analytics.js';
-import { syncAnalytics } from '../../analytics/sync.js';
+import { attachNoSessionDataWarning, syncAnalytics } from '../../analytics/sync.js';
 import { detectCoverage } from '../../analytics/tech-detector.js';
 import { listBundles, loadAllBundles } from '../../bundles.js';
 import { runRetriever } from '../../retrieval/index.js';
@@ -421,6 +422,12 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
             period: period ?? 'week',
           });
           const result = analyzeRealSavings(store, toolCalls, period ?? 'week');
+          attachNoSessionDataWarning(
+            result,
+            toolCalls.length === 0,
+            listAllSessions(projectRoot).length === 0,
+            projectRoot,
+          );
           return { content: [{ type: 'text', text: j(result) }] };
         } finally {
           analyticsStore.close();

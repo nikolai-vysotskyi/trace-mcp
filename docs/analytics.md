@@ -50,6 +50,10 @@ Session logs (JSONL)                   Project manifests
 
 Both formats are auto-detected during sync. No configuration needed.
 
+### Local-machine scoping
+
+`get_session_analytics`, `get_optimization_report`, `get_real_savings`, and `analyze_perf` (for `window` other than `"session"`) only see session logs that physically exist on the machine running the MCP server — they read `~/.claude/projects/<encoded-path>/` and `<project>/.claw/sessions/` directly, they do not fetch data from any other machine. If you invoke them from a fresh checkout, a remote/cloud agent runtime, or a CI sandbox that never ran a local Claude Code / Claw Code session for this project, there is nothing to find and the tools report that. `get_session_analytics`/`get_optimization_report`/`get_real_savings` distinguish this from "checked, nothing to report" by adding a `_warnings` field when both the discoverable log files and the aggregated result are empty. `analyze_perf` with a persistent `window` additionally requires `telemetry.enabled: true` in config (off by default) and returns an explicit `error` when it's off.
+
 ### JSONL format differences
 
 | | Claude Code | Claw Code |

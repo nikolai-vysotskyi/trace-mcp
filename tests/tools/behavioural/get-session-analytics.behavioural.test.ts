@@ -230,6 +230,26 @@ describe('getSessionAnalytics() — behavioural contract', () => {
     expect(result.modelsUsed).toEqual({});
   });
 
+  it('TRA-76: zero sessionsCount + no discoverable log files → _warnings surfaces the unreachable-source signal', () => {
+    // listAllSessions is mocked to [] module-wide (see top of file), so with
+    // no data seeded into the store either, both signals are empty.
+    const result = getSessionAnalytics(store, { period: 'all', projectPath: PROJECT });
+    expect(result.sessionsCount).toBe(0);
+    expect(result._warnings).toBeDefined();
+    expect(result._warnings?.[0]).toContain(PROJECT);
+  });
+
+  it('TRA-76: no _warnings when sessionsCount is non-zero, even though listAllSessions is mocked empty', () => {
+    seedSession(store, {
+      id: 'sess-with-data',
+      projectPath: PROJECT,
+      startedAt: new Date().toISOString(),
+    });
+    const result = getSessionAnalytics(store, { period: 'all', projectPath: PROJECT });
+    expect(result.sessionsCount).toBe(1);
+    expect(result._warnings).toBeUndefined();
+  });
+
   it('top-tool entries carry { name, calls, outputTokensEst }', () => {
     seedSession(store, {
       id: 'sess-shape',
