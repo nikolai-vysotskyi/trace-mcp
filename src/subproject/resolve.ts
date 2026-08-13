@@ -4,21 +4,7 @@ import Database from 'better-sqlite3';
 import { TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
 import { resolveRegisteredAncestor } from '../registry.js';
-
-/**
- * Normalize to a POSIX-separator absolute path without letting `path.resolve`
- * rewrite an already-absolute path onto the current drive. On win32,
- * `path.resolve('/repos/the')` treats the leading `/` as drive-relative and
- * returns `D:\repos\the` — corrupting repo_root values that are stored (or,
- * in tests, fixtured) as plain POSIX paths. Only genuinely relative paths go
- * through `path.resolve` (against `process.cwd()`); already-absolute paths
- * (POSIX `/...` or Windows `C:\...`) are just separator-normalized.
- */
-function toPosixAbsolute(p: string): string {
-  const slashified = p.replace(/\\/g, '/');
-  const isAbsolute = path.posix.isAbsolute(slashified) || /^[a-zA-Z]:\//.test(slashified);
-  return isAbsolute ? path.posix.normalize(slashified) : path.resolve(p).replace(/\\/g, '/');
-}
+import { toPosixAbsolute } from '../utils/posix-path.js';
 
 /** True when `p` is `ancestor` itself or lives underneath it. */
 function isAncestorOrSelf(ancestor: string, p: string): boolean {
