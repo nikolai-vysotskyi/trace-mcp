@@ -274,6 +274,81 @@ export function descendantExcludeGlobs(root: string): string[] {
   );
 }
 
+/** Directory names never worth descending into while scanning for nested repos. */
+const NESTED_REPO_SCAN_SKIP_DIRS = new Set([
+  'node_modules',
+  'vendor',
+  '.git',
+  'dist',
+  'build',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'target',
+  '.next',
+  '.nuxt',
+  '.turbo',
+  '.cache',
+]);
+
+export interface UnregisteredNestedRepo {
+  parentName: string;
+  parentRoot: string;
+  nestedRepoRoot: string;
+}
+
+/**
+ * Find sibling repos (their own `.git`) living under a registered project's
+ * tree that were never registered themselves — the "zero index coverage" gap
+ * (TRA-86), distinct from findOverlappingProjects' "both registered, doubly
+ * indexed" case. A nested repo in a language/framework the parent's include
+ * globs don't reach (e.g. a Vue frontend sibling under a Laravel root) is
+ * invisible to search/get_symbol even though its files exist on disk, and
+ * nothing else catches it since it was never added to the registry.
+ *
+ * Bounded to `maxDepth` directories below each registered root — deep enough
+ * for the common "workspace/service-a, workspace/service-b" layout without
+ * risking a pathological walk on huge trees. Stops descending the moment it
+ * finds a `.git`, registered or not, so nested-inside-nested repos are only
+ * reported once (at the outermost unregistered boundary).
+ */
+export function findUnregisteredNestedRepos(maxDepth = 4): UnregisteredNestedRepo[] {
+  const parents = listProjects();
+  const registeredRoots = new Set(parents.map((e) => e.root));
+  const results: UnregisteredNestedRepo[] = [];
+
+  const walk = (dir: string, depth: number, parent: RegistryEntry) => {
+    if (depth > maxDepth) return;
+    let children: fs.Dirent[];
+    try {
+      children = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const child of children) {
+      if (!child.isDirectory() || NESTED_REPO_SCAN_SKIP_DIRS.has(child.name)) continue;
+      const childPath = path.join(dir, child.name);
+      if (fs.existsSync(path.join(childPath, '.git'))) {
+        if (!registeredRoots.has(childPath)) {
+          results.push({
+            parentName: parent.name,
+            parentRoot: parent.root,
+            nestedRepoRoot: childPath,
+          });
+        }
+        continue; // boundary reached either way — don't recurse past a repo root
+      }
+      walk(childPath, depth + 1, parent);
+    }
+  };
+
+  for (const parent of parents) {
+    walk(parent.root, 1, parent);
+  }
+
+  return results;
+}
+
 /** Remove entries whose root directory no longer exists. Returns removed paths. */
 export function pruneStaleProjects(): string[] {
   const reg = loadRegistry();
