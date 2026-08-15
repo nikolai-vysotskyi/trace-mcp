@@ -1,4 +1,7 @@
 import * as parcelWatcher from '@parcel/watcher';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
 import { FileWatcher } from '../../src/indexer/watcher.js';
@@ -275,5 +278,44 @@ describe('FileWatcher', () => {
 
   it('stop before start does not throw', async () => {
     await expect(watcher.stop()).resolves.not.toThrow();
+  });
+
+  // ── .gitignore filtering (TRA-85 — gitignored log/DB churn) ────
+
+  describe('.gitignore filtering', () => {
+    let tmpRoot: string;
+
+    beforeEach(() => {
+      tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-watcher-gitignore-'));
+      fs.writeFileSync(path.join(tmpRoot, '.gitignore'), '*.log\nlogs/\n');
+    });
+
+    afterEach(() => {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    });
+
+    it('drops gitignored paths before onChanges without ever reaching the pipeline', async () => {
+      const onChanges = vi.fn().mockResolvedValue(undefined);
+      await watcher.start(tmpRoot, mockConfig, onChanges);
+
+      await capturedCallback(null, [
+        { type: 'update', path: path.join(tmpRoot, 'daemon.log') },
+        { type: 'update', path: path.join(tmpRoot, 'logs', 'app.log') },
+        { type: 'update', path: path.join(tmpRoot, 'src', 'app.ts') },
+      ]);
+      await timer.flush();
+
+      expect(onChanges).toHaveBeenCalledWith([path.join(tmpRoot, 'src', 'app.ts')]);
+    });
+
+    it('drops gitignored deletes too', async () => {
+      const onDeletes = vi.fn().mockResolvedValue(undefined);
+      await watcher.start(tmpRoot, mockConfig, vi.fn(), undefined, onDeletes);
+
+      await capturedCallback(null, [{ type: 'delete', path: path.join(tmpRoot, 'daemon.log') }]);
+      await timer.flush();
+
+      expect(onDeletes).not.toHaveBeenCalled();
+    });
   });
 });
