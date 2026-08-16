@@ -6,6 +6,7 @@ import { ensureGlobalDirs, REGISTRY_PATH } from '../src/global.js';
 import {
   findOverlapForNewRoot,
   findOverlappingProjects,
+  findUnregisteredNestedRepos,
   registerProject,
   resolveRegisteredAncestor,
 } from '../src/registry.js';
@@ -125,6 +126,56 @@ describe('findOverlappingProjects', () => {
     registerProject(b);
 
     expect(findOverlappingProjects()).toEqual([]);
+  });
+});
+
+describe('findUnregisteredNestedRepos', () => {
+  it('returns empty when a registered root has no nested repos', () => {
+    registerProject(makeTmpRepo());
+    expect(findUnregisteredNestedRepos()).toEqual([]);
+  });
+
+  it('flags a sibling repo with its own .git that was never registered', () => {
+    const parent = makeTmpRepo();
+    const sibling = path.join(parent, 'assetfeed-frontend');
+    fs.mkdirSync(path.join(sibling, '.git'), { recursive: true });
+    registerProject(parent);
+
+    const found = findUnregisteredNestedRepos();
+    expect(found).toHaveLength(1);
+    expect(found[0].parentRoot).toBe(parent);
+    expect(found[0].nestedRepoRoot).toBe(sibling);
+  });
+
+  it('does not flag a nested repo that is itself registered', () => {
+    const parent = makeTmpRepo();
+    const sibling = path.join(parent, 'assetfeed-frontend');
+    fs.mkdirSync(path.join(sibling, '.git'), { recursive: true });
+    registerProject(parent);
+    registerProject(sibling);
+
+    expect(findUnregisteredNestedRepos()).toEqual([]);
+  });
+
+  it('does not descend past a nested repo boundary (no nested-in-nested duplicates)', () => {
+    const parent = makeTmpRepo();
+    const sibling = path.join(parent, 'assetfeed-frontend');
+    const innerGit = path.join(sibling, 'vendor', 'some-lib');
+    fs.mkdirSync(path.join(sibling, '.git'), { recursive: true });
+    fs.mkdirSync(path.join(innerGit, '.git'), { recursive: true });
+    registerProject(parent);
+
+    const found = findUnregisteredNestedRepos();
+    expect(found).toHaveLength(1);
+    expect(found[0].nestedRepoRoot).toBe(sibling);
+  });
+
+  it('skips node_modules/vendor/.git while scanning', () => {
+    const parent = makeTmpRepo();
+    fs.mkdirSync(path.join(parent, 'node_modules', 'some-pkg', '.git'), { recursive: true });
+    registerProject(parent);
+
+    expect(findUnregisteredNestedRepos()).toEqual([]);
   });
 });
 

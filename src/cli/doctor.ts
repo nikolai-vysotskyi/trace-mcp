@@ -23,6 +23,7 @@ import { LAUNCHER_VERSION } from '../init/types.js';
 import { findProjectRoot } from '../project-root.js';
 import {
   findOverlappingProjects,
+  findUnregisteredNestedRepos,
   inspectRegistry,
   pruneStaleProjects,
   unregisterProject,
@@ -64,7 +65,10 @@ export const doctorCommand = new Command('doctor')
       // stale registrations (deleted folders, missing/corrupt DBs) that would
       // otherwise only manifest as runtime "Project not found" errors.
       const registry = diagnoseRegistry();
-      const hasRegistryIssues = registry.staleCount > 0 || registry.overlaps.length > 0;
+      const hasRegistryIssues =
+        registry.staleCount > 0 ||
+        registry.overlaps.length > 0 ||
+        registry.unregisteredNestedRepos.length > 0;
 
       // --fix / --dry-run also clean up the registry itself (TRA-18): missing-root
       // entries and overlap containers have one unambiguous remediation each, so
@@ -250,6 +254,12 @@ interface RegistryOverlapReport {
   descendantRoot: string;
 }
 
+interface UnregisteredNestedRepoReport {
+  parentName: string;
+  parentRoot: string;
+  nestedRepoRoot: string;
+}
+
 export interface RegistryHealthReport {
   registryPath: string;
   registryExists: boolean;
@@ -258,6 +268,8 @@ export interface RegistryHealthReport {
   staleCount: number;
   /** Project pairs where one registered root contains another — double indexing/watching. */
   overlaps: RegistryOverlapReport[];
+  /** Sibling repos (own `.git`) found under a registered root that were never registered — zero index coverage. */
+  unregisteredNestedRepos: UnregisteredNestedRepoReport[];
 }
 
 /** Open a project DB read-only and run a trivial query to confirm it's intact. */
@@ -300,6 +312,7 @@ export function diagnoseRegistry(): RegistryHealthReport {
       descendantName: o.descendant.name,
       descendantRoot: o.descendant.root,
     })),
+    unregisteredNestedRepos: findUnregisteredNestedRepos(),
   };
 }
 
@@ -432,6 +445,18 @@ function printRegistryReport(r: RegistryHealthReport): void {
       '  Overlapping roots index and watch the same files twice — every change costs ' +
         'double CPU. Keep the per-project registrations and remove the container: ' +
         '`trace-mcp remove <container-path>`.',
+    );
+  }
+  for (const nr of r.unregisteredNestedRepos) {
+    console.log(
+      `  [WARNING (unregistered nested repo)] "${nr.parentName}" (${shortPath(nr.parentRoot)}) ` +
+        `contains an unregistered repo: ${shortPath(nr.nestedRepoRoot)}`,
+    );
+  }
+  if (r.unregisteredNestedRepos.length > 0) {
+    console.log(
+      '  Files under these repos have zero index coverage — searches/lookups will silently ' +
+        'miss them. Register each one: `trace-mcp add <nested-repo-path>`.',
     );
   }
   console.log('');
