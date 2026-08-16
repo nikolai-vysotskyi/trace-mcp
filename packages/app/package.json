@@ -18,8 +18,8 @@
   },
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
-    "@cosmos.gl/graph": "3.0.0-beta.9",
-    "menubar": "^9.5.0",
+    "@cosmos.gl/graph": "3.4.0",
+    "menubar": "^9.5.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.0"
   },
@@ -37,22 +37,36 @@
       "electron-winstaller",
       "esbuild",
       "sharp"
-    ]
+    ],
+    "overrides": {
+      "tmp": ">=0.2.6",
+      "@babel/core": ">=7.29.6",
+      "vite": "$vite",
+      "tar": ">=7.5.18",
+      "form-data": ">=4.0.6",
+      "dompurify": ">=3.4.13",
+      "undici": "^6.28.0",
+      "js-yaml": "^4.3.1",
+      "brace-expansion@<1.1.16": ">=1.1.16",
+      "brace-expansion@>=2.0.0 <2.1.2": ">=2.1.2",
+      "brace-expansion@>=3.0.0 <5.0.7": ">=5.0.7",
+      "postcss": ">=8.5.23"
+    }
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.0",
-    "@types/node": "^25.9.1",
-    "@types/react": "^19.2.15",
-    "@types/react-dom": "^19.1.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^4.4.1",
-    "autoprefixer": "^10.5.0",
-    "electron": "^41.10.3",
-    "electron-builder": "^26.0.12",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "sharp": "^0.35.0",
-    "tailwindcss": "^4.3.0",
+    "autoprefixer": "^10.5.4",
+    "electron": "^41.10.4",
+    "electron-builder": "^26.15.7",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sharp": "^0.35.3",
+    "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
-    "vite": "^6.3.2"
+    "vite": "^6.4.3"
   }
 }

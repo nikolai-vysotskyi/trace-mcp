@@ -74,11 +74,11 @@
     "@clack/prompts": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@parcel/watcher": "^2.5.6",
-    "@toon-format/toon": "4.1.0",
+    "@toon-format/toon": "4.1.1",
     "@vue/compiler-sfc": "^3.5.32",
     "better-sqlite3": "^12.9.0",
     "commander": "^14.0.3",
-    "cosmiconfig": "^9.0.0",
+    "cosmiconfig": "^10.0.0",
     "fast-glob": "^3.3.3",
     "fastest-levenshtein": "^1.0.16",
     "jsonc-parser": "^3.3.1",
@@ -118,14 +118,15 @@
     "protobufjs": ">=8.6.6",
     "hono": ">=4.12.25",
     "@hono/node-server": ">=2.0.5",
-    "js-yaml": "^4.2.0",
+    "js-yaml": "^4.3.1",
     "vite": "$vite",
     "undici": ">=8.9.0",
     "esbuild": ">=0.28.1",
     "sharp": ">=0.35.0",
     "fast-uri": ">=3.1.4",
     "adm-zip": ">=0.6.0",
-    "body-parser": ">=2.3.0"
+    "body-parser": ">=2.3.0",
+    "nanoid": ">=3.3.17"
   },
   "pnpm": {
     "overrides": {
@@ -134,7 +135,7 @@
       "protobufjs@<8.6.6": ">=8.6.6",
       "hono": ">=4.12.25",
       "@hono/node-server": ">=2.0.5",
-      "js-yaml": "^4.2.0",
+      "js-yaml": "^4.3.1",
       "undici": ">=8.9.0",
       "vite": ">=8.0.16",
       "esbuild": ">=0.28.1",
@@ -142,7 +143,8 @@
       "fast-uri": ">=3.1.4",
       "adm-zip": ">=0.6.0",
       "body-parser": ">=2.3.0",
-      "postcss": ">=8.5.23"
+      "postcss": ">=8.5.23",
+      "nanoid": ">=3.3.17"
     },
     "onlyBuiltDependencies": [
       "@parcel/watcher",
