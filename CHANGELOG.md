@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.47.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.47.0...v1.47.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* **analytics:** surface _warnings when session data source is unreachable (TRA-76) ([#319](https://github.com/nikolai-vysotskyi/trace-mcp/issues/319)) ([74b49f1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/74b49f170aed0e6f3648080ba1f1220fe25015ed))
+* **deps:** patch Dependabot alerts reintroduced by packages/app restore ([#309](https://github.com/nikolai-vysotskyi/trace-mcp/issues/309)) ([a1e13be](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a1e13bee34754b48391af4d4bd32e84ccf5a40d0))
+* **watcher:** apply .gitignore filtering to file-watcher events (TRA-85) ([#327](https://github.com/nikolai-vysotskyi/trace-mcp/issues/327)) ([32dee04](https://github.com/nikolai-vysotskyi/trace-mcp/commit/32dee042ac8bb6a21cee018e68e6e779dd27f6d9))
+
+
+### Chores
+
+* add .gitattributes forcing LF line endings ([#326](https://github.com/nikolai-vysotskyi/trace-mcp/issues/326)) ([e19f512](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e19f5129e0619527e5064bc65dd12ac5c7f48076))
+
 ## [1.47.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.46.2...v1.47.0) (2026-08-09)
 
 
