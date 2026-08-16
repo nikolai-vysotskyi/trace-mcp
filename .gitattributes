@@ -1,0 +1,6 @@
+# Force LF for all text files. Without this, Windows runners checkout with
+# core.autocrlf=true and convert LF -> CRLF, which breaks shebang-line
+# stripping for .mjs scripts imported by vitest/esbuild (e.g. scripts/
+# calibrate-health-metrics.mjs imported by its test) — surfaces as
+# "SyntaxError: Invalid or unexpected token" on windows-latest CI only.
+* text=auto eol=lf
