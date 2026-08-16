@@ -4,6 +4,7 @@ import type * as parcelWatcher from '@parcel/watcher';
 import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
+import { GitignoreMatcher } from '../utils/gitignore.js';
 import { TraceignoreMatcher } from '../utils/traceignore.js';
 
 type ParcelWatcherModule = typeof parcelWatcher;
@@ -152,6 +153,11 @@ export class FileWatcher {
 
     const watcher = await loadParcelWatcher();
     const traceignore = new TraceignoreMatcher(rootPath, config.ignore ?? {});
+    // Mirrors the full scan's ignore stack (IndexingPipeline.runPipeline) so a
+    // gitignored file never reaches pipeline.indexFiles() on a watcher event
+    // either — previously only .traceignore/config.exclude gated events here,
+    // so gitignored log/DB churn re-ran the full pipeline every debounce cycle.
+    const gitignore = new GitignoreMatcher(rootPath);
     const ignoreDirs = [...traceignore.getSkipDirs()].map((d) => path.join(rootPath, d));
     // config.exclude globs (e.g. **/storage/**, **/node_modules/**) gate
     // collectFiles() but historically NOT watcher events — so runtime churn
@@ -181,6 +187,7 @@ export class FileWatcher {
           const rel = path.relative(rootPath, p);
           if (isExcluded(rel.split(path.sep).join('/'))) return false;
           if (isOwnedByDescendant?.(rel.split(path.sep).join('/'))) return false;
+          if (gitignore.isIgnored(rel)) return false;
           return !traceignore.isIgnored(rel);
         };
 
