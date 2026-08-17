@@ -22,6 +22,12 @@ beforeEach(async () => {
 
   vi.stubEnv('HOME', fakeHome);
   vi.stubEnv('USERPROFILE', fakeHome);
+  // Cline/KiloCode config paths resolve via `process.env.APPDATA` directly
+  // (not HOME/os.homedir()), since that's the real Windows convention. On a
+  // real Windows runner APPDATA is always set, so leaving it unstubbed makes
+  // those clients read/write the CI machine's actual global VS Code
+  // settings — outside the sandbox and leaking state across tests (TRA-73).
+  vi.stubEnv('APPDATA', path.join(fakeHome, 'AppData', 'Roaming'));
   vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
   vi.resetModules();
   ({ getMcpClientStatuses, configureMcpClients } = await import('../../src/init/mcp-client.js'));

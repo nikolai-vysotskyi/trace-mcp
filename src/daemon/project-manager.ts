@@ -84,6 +84,17 @@ export interface ManagedProject {
    * sweep — see `project_idle_unload_minutes` config key.
    */
   lastAccessedAt: number;
+  /**
+   * The fire-and-forget initial `indexAll()` chain (indexing → summarization →
+   * embeddings → subproject auto-sync, incl. any FK-recovery retries) kicked
+   * off by `addProject()`. Never rejects — every branch of the chain catches
+   * its own errors into `managed.status = 'error'`. `stopProject()` awaits
+   * this before closing `managed.db` so a still-open topology.db handle from
+   * `runSubprojectAutoSync()` can't outlive teardown (Windows holds file
+   * handles exclusively, so a stale handle blocks the caller's subsequent
+   * directory cleanup with EBUSY).
+   */
+  initialIndexPromise?: Promise<void>;
 }
 
 async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): Promise<void> {
@@ -429,7 +440,7 @@ export class ProjectManager {
         'Lazy post-update reindex: forcing full index rebuild for this project',
       );
     }
-    this.indexAllLimit!(() => pipeline.indexAll(needsForcedReindex))
+    managed.initialIndexPromise = this.indexAllLimit!(() => pipeline.indexAll(needsForcedReindex))
       .then(async () => {
         managed.status = 'ready';
         updateLastIndexed(projectRoot);
@@ -806,6 +817,17 @@ export class ProjectManager {
       logger.warn(
         { error: err, projectRoot: root },
         'lspEnricher.cancel() failed during stopProject (non-fatal)',
+      );
+    }
+    // Wait for the background initial-index chain (indexAll → summarize/embed →
+    // subproject auto-sync) to finish so its topology.db handle is closed
+    // before we tear down this project — see initialIndexPromise's doc comment.
+    try {
+      await managed.initialIndexPromise;
+    } catch (err) {
+      logger.warn(
+        { error: err, projectRoot: root },
+        'initialIndexPromise rejected during stopProject (non-fatal)',
       );
     }
     await managed.watcher.stop();

@@ -21,6 +21,12 @@ beforeEach(async () => {
 
   vi.stubEnv('HOME', fakeHome);
   vi.stubEnv('USERPROFILE', fakeHome);
+  // Cline/KiloCode config paths resolve via `process.env.APPDATA` directly
+  // (real Windows convention), not HOME/os.homedir(). On a real Windows
+  // runner APPDATA is always set, so leaving it unstubbed makes those
+  // clients read/write the CI machine's actual global VS Code settings —
+  // outside the sandbox and leaking state across tests (TRA-73).
+  vi.stubEnv('APPDATA', path.join(fakeHome, 'AppData', 'Roaming'));
   // os.homedir() on macOS reads getpwuid_r, not $HOME — env stubs alone are
   // not enough. Spy on os.homedir() so the module-level `const HOME =
   // os.homedir()` captures the sandbox path. Without this, every test that

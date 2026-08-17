@@ -425,9 +425,14 @@ function listSessionFiles(projectDirName: string): { filePath: string; mtime: nu
  * Forward-encode a filesystem path into a Claude Code project directory name.
  * Inverse of `decodeDirName` (which has to disk-probe because the encoding
  * is lossy); encoding itself is just "/" → "-", so no disk access is needed.
+ *
+ * Also folds a Windows drive-letter colon (`C:\...`) into the same "-"
+ * separator run: `:` is illegal inside an NTFS path *segment* (only legal as
+ * the drive suffix at position 1), so leaving it in would make the encoded
+ * name itself impossible to mkdir/lookup on Windows.
  */
 function encodeDirName(projectPath: string): string {
-  return projectPath.replace(/[\\/]+/g, '-');
+  return projectPath.replace(/[\\/:]+/g, '-');
 }
 
 /**

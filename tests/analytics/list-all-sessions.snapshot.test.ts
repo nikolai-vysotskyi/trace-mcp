@@ -110,7 +110,11 @@ describe('listAllSessions — golden lockdown', () => {
 
     const claudeRoot = path.join(fakeHome, '.claude', 'projects');
     const projTargetRoot = path.join(fakeHome, 'target-proj');
-    const encodedTargetDir = projTargetRoot.replace(/[\\/]+/g, '-');
+    // Mirror log-parser.ts's encodeDirName exactly (not exported — this is a
+    // deliberate re-derivation, not an import, so it also folds the ":" in a
+    // Windows drive letter (e.g. "C:\...") into the same "-" run; otherwise
+    // the mkdirSync below fails on Windows (":" is illegal in a path segment).
+    const encodedTargetDir = projTargetRoot.replace(/[\\/:]+/g, '-');
     fs.mkdirSync(path.join(claudeRoot, encodedTargetDir), { recursive: true });
     fs.writeFileSync(path.join(claudeRoot, encodedTargetDir, 'sess-t01.jsonl'), '');
 

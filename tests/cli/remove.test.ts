@@ -10,6 +10,7 @@
  * DB file, or terminal prompt.
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -114,7 +115,11 @@ describe('remove — not registered', () => {
 
     await run(['/proj/no-markers', '--json']);
 
-    expect(mockGetProject).toHaveBeenCalledWith('/proj/no-markers');
+    // remove.ts's fallback uses `resolvedDir = path.resolve(dir)`, not the raw
+    // arg — on win32 `path.resolve('/proj/...')` rewrites the leading "/" onto
+    // the current drive, so the expectation must go through the same resolve()
+    // the SUT applies (TRA-73).
+    expect(mockGetProject).toHaveBeenCalledWith(path.resolve('/proj/no-markers'));
   });
 });
 
