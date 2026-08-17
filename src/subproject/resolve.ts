@@ -4,11 +4,12 @@ import Database from 'better-sqlite3';
 import { TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
 import { resolveRegisteredAncestor } from '../registry.js';
+import { toPosixAbsolute } from '../utils/posix-path.js';
 
 /** True when `p` is `ancestor` itself or lives underneath it. */
 function isAncestorOrSelf(ancestor: string, p: string): boolean {
-  const rel = path.relative(ancestor, p);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  const rel = path.posix.relative(ancestor, p);
+  return rel === '' || (!rel.startsWith('..') && !path.posix.isAbsolute(rel));
 }
 
 /**
@@ -18,7 +19,7 @@ function isAncestorOrSelf(ancestor: string, p: string): boolean {
  * query, run only at session bootstrap / recovery.
  */
 export function findSubprojectRootForPath(cwd: string, dbPath = TOPOLOGY_DB_PATH): string | null {
-  const abs = path.resolve(cwd);
+  const abs = toPosixAbsolute(cwd);
   if (!fs.existsSync(dbPath)) return null;
   let db: Database.Database | null = null;
   try {
@@ -28,11 +29,11 @@ export function findSubprojectRootForPath(cwd: string, dbPath = TOPOLOGY_DB_PATH
     }[];
     let best: string | null = null;
     for (const { repo_root } of rows) {
-      const r = path.resolve(repo_root);
+      const r = toPosixAbsolute(repo_root);
       // A filesystem-root row is always bad data (see #273): `upsertSubproject`
       // rejects writing one, but skip it defensively too so an already-corrupt
       // registry self-heals instead of resolving every unregistered path to "/".
-      if (r === path.parse(r).root) continue;
+      if (r === path.posix.parse(r).root) continue;
       // Among ancestors-of-`abs`, the longest path is the deepest ancestor.
       if (isAncestorOrSelf(r, abs) && (best === null || r.length > best.length)) best = r;
     }
@@ -58,7 +59,7 @@ export function findSubprojectRootForPath(cwd: string, dbPath = TOPOLOGY_DB_PATH
  * which equals `root` exactly when `root` is the registered subproject.
  */
 export function isKnownSubproject(root: string, dbPath = TOPOLOGY_DB_PATH): boolean {
-  return findSubprojectRootForPath(root, dbPath) === path.resolve(root);
+  return findSubprojectRootForPath(root, dbPath) === toPosixAbsolute(root);
 }
 
 /**

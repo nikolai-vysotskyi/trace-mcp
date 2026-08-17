@@ -9,7 +9,19 @@
  * `verifyDecisions` now collapses the `git show` half into a SINGLE
  * `git cat-file --batch` invocation for the whole batch, so the worst case
  * drops from ~2*N spawns to ~N+1. This test counts real git process spawns
- * via a PATH shim and asserts the blob-read side is batched.
+ * via `GIT_TRACE` and asserts the blob-read side is batched.
+ *
+ * WHY GIT_TRACE instead of a PATH shim: an earlier version of this test put a
+ * spy script named `git` on PATH ahead of the real binary. That works on
+ * POSIX (a `#!/bin/bash` shebang file is directly executable), but Node
+ * refused to run it on Windows: a bare `.cmd`/`.bat` shim resolved via
+ * PATHEXT can no longer be spawned without `shell: true` (Node's fix for
+ * CVE-2024-27980 — see GHSA-9v9h-cgj8-h64p), and production code intentionally
+ * spawns `git` without a shell. The shim's log file stayed empty and every
+ * call-count assertion silently read 0. `GIT_TRACE` is git's OWN
+ * instrumentation (writes one trace line per invocation to the given file,
+ * identical format on every OS), so it counts real subcommand spawns without
+ * depending on how the OS resolves/executes the `git` executable.
  *
  * Correctness (identical verdicts) is covered by decision-verification-cache
  * and decision-verification tests; here we only assert the spawn-count win and
@@ -67,46 +79,33 @@ function baseRow(over: Partial<DecisionRow>): DecisionRow {
 }
 
 /**
- * Install a `git` shim earlier on PATH that appends its subcommand to a log
- * file, then execs the real git. Returns { binDir, logFile, realGit }.
+ * Count how many `git <subcommand> ...` invocations a `GIT_TRACE` log
+ * recorded. Git's own trace output emits one line per built-in invocation,
+ * e.g. `... trace: built-in: git cat-file --batch` — stable, OS-independent
+ * format (it's git's C code, not a shell feature).
  */
-function installGitSpy(tmp: string): { binDir: string; logFile: string; env: NodeJS.ProcessEnv } {
-  const realGit = execFileSync('bash', ['-lc', 'command -v git'], { encoding: 'utf8' }).trim();
-  const dir = path.join(tmp, 'bin');
-  fs.mkdirSync(dir, { recursive: true });
-  const logFile = path.join(tmp, 'git-calls.log');
-  const shim = path.join(dir, 'git');
-  fs.writeFileSync(
-    shim,
-    `#!/bin/bash\necho "$1" >> ${JSON.stringify(logFile)}\nexec ${JSON.stringify(realGit)} "$@"\n`,
-    { mode: 0o755 },
-  );
-  return {
-    binDir: dir,
-    logFile,
-    env: { ...process.env, PATH: `${dir}:${process.env.PATH ?? ''}` },
-  };
+function countGitInvocations(traceLog: string, subcommand: string): number {
+  const re = new RegExp(`trace: built-in: git ${subcommand}(?:\\s|$)`, 'g');
+  return (traceLog.match(re) ?? []).length;
 }
 
 describe('verifyDecisions — batched blob reads on the scattered worst case', () => {
   let repo: string;
   let store: Store;
   let logFile: string;
-  let spyEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
     repo = fs.mkdtempSync(path.join(os.tmpdir(), 'dec-verify-batch-'));
     git(repo, ['init', '-q']);
     store = new Store(initializeDatabase(':memory:'));
     fs.mkdirSync(path.join(repo, 'src'), { recursive: true });
-    const spy = installGitSpy(repo);
-    logFile = spy.logFile;
-    spyEnv = spy.env;
+    logFile = `${repo}.trace.log`;
   });
 
   afterEach(() => {
     store.db.close();
     fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(logFile, { force: true });
   });
 
   it('reads N distinct-file blobs with a single cat-file batch, not N git show spawns', () => {
@@ -143,23 +142,24 @@ describe('verifyDecisions — batched blob reads on the scattered worst case', (
       );
     }
 
-    // Run verification under the git spy so we can count `show` vs `cat-file`.
+    // Run verification with GIT_TRACE on so we can count `show` vs `cat-file`
+    // spawns. `safeGitEnv()` (production code's spawn env) spreads
+    // `process.env` at call time, so setting it here is enough — no PATH or
+    // executable-format tricks needed.
     fs.writeFileSync(logFile, '');
-    const prevPath = process.env.PATH;
-    process.env.PATH = spyEnv.PATH as string;
+    const prevTrace = process.env.GIT_TRACE;
+    process.env.GIT_TRACE = logFile;
     let out: ReturnType<typeof verifyDecisions>;
     try {
       out = verifyDecisions(decisions, store, repo);
     } finally {
-      process.env.PATH = prevPath;
+      if (prevTrace === undefined) delete process.env.GIT_TRACE;
+      else process.env.GIT_TRACE = prevTrace;
     }
 
-    const calls = fs
-      .readFileSync(logFile, 'utf8')
-      .split('\n')
-      .filter((l) => l.trim().length > 0);
-    const showCount = calls.filter((c) => c === 'show').length;
-    const catFileCount = calls.filter((c) => c === 'cat-file').length;
+    const traceLog = fs.readFileSync(logFile, 'utf8');
+    const showCount = countGitInvocations(traceLog, 'show');
+    const catFileCount = countGitInvocations(traceLog, 'cat-file');
 
     // All N verdicts must be "ok" (unchanged since createdAt) — correctness.
     expect(out.every((d) => !(d as { stale?: boolean }).stale)).toBe(true);

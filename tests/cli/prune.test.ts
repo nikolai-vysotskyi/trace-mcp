@@ -10,6 +10,7 @@
  * way the production code computes them.
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { projectHash } from '../../src/global.js';
 import * as registry from '../../src/registry.js';
@@ -75,7 +76,11 @@ describe('scanIndexDir', () => {
 
   it('classifies a registered, existing project root as live', () => {
     const root = '/Users/x/projects/myapp';
-    const hash = projectHash(root);
+    // buildRegistryIndex() hashes `path.resolve(entry.root)`, not the raw
+    // literal — on win32 `path.resolve('/Users/...')` rewrites the leading
+    // "/" onto the current drive, so the fixture hash must go through the
+    // same resolve() the production code applies (TRA-73).
+    const hash = projectHash(path.resolve(root));
     mockListProjects.mockReturnValue([
       { name: 'myapp', root, dbPath: `/idx/myapp-${hash}.db`, lastIndexed: null, addedAt: 'x' },
     ]);
@@ -94,12 +99,12 @@ describe('scanIndexDir', () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0].category).toBe('live');
     expect(candidates[0].hash).toBe(hash);
-    expect(candidates[0].registeredRoot).toBe(root);
+    expect(candidates[0].registeredRoot).toBe(path.resolve(root));
   });
 
   it('classifies a DB whose registered root no longer exists as orphan_missing_root', () => {
     const root = '/Users/x/projects/deleted-app';
-    const hash = projectHash(root);
+    const hash = projectHash(path.resolve(root));
     mockListProjects.mockReturnValue([
       {
         name: 'deleted-app',
@@ -224,7 +229,7 @@ describe('pruneIndexDir', () => {
 
   it('does NOT delete a live project even with apply=true', () => {
     const root = '/Users/x/projects/myapp';
-    const hash = projectHash(root);
+    const hash = projectHash(path.resolve(root));
     mockListProjects.mockReturnValue([
       { name: 'myapp', root, dbPath: `/idx/myapp-${hash}.db`, lastIndexed: null, addedAt: 'x' },
     ]);
