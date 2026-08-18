@@ -349,6 +349,43 @@ export function findUnregisteredNestedRepos(maxDepth = 4): UnregisteredNestedRep
   return results;
 }
 
+/**
+ * Path shape Multica's `repo checkout` uses for one-shot agent-run workdirs:
+ * `.../multica_workspaces_<host>/<workspace-id>/<run-id>/workdir`. Each task
+ * run gets a brand-new directory, so a project matching this shape is queried
+ * exactly once, for the lifetime of that single run, and never touched again.
+ */
+const EPHEMERAL_WORKDIR_PATTERN =
+  /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir$/i;
+
+export interface EphemeralProjectCandidate {
+  name: string;
+  root: string;
+  addedAt: string;
+  ageHours: number;
+}
+
+/**
+ * Registered projects whose root looks like a one-shot Multica agent-run
+ * checkout (TRA-94) and were added more than `minAgeHours` ago. Nothing else
+ * ever revisits these — the run that created them finished long ago — but
+ * they stay registered forever, permanently reindexed alongside real
+ * projects and holding onto their index DB on disk.
+ */
+export function findEphemeralProjects(minAgeHours = 24): EphemeralProjectCandidate[] {
+  const now = Date.now();
+  const out: EphemeralProjectCandidate[] = [];
+  for (const entry of listProjects()) {
+    if (!EPHEMERAL_WORKDIR_PATTERN.test(entry.root)) continue;
+    const addedMs = Date.parse(entry.addedAt);
+    if (Number.isNaN(addedMs)) continue;
+    const ageHours = (now - addedMs) / (60 * 60 * 1000);
+    if (ageHours < minAgeHours) continue;
+    out.push({ name: entry.name, root: entry.root, addedAt: entry.addedAt, ageHours });
+  }
+  return out;
+}
+
 /** Remove entries whose root directory no longer exists. Returns removed paths. */
 export function pruneStaleProjects(): string[] {
   const reg = loadRegistry();
