@@ -23,8 +23,8 @@ importers:
   .:
     dependencies:
       '@cosmos.gl/graph':
-        specifier: 3.4.0
-        version: 3.4.0
+        specifier: 3.4.1
+        version: 3.4.1
       menubar:
         specifier: ^9.5.3
         version: 9.5.3(electron@41.10.4)
@@ -170,9 +170,9 @@ packages:
     resolution: {integrity: sha512-eY+Yn3dCqTGmyiq2QRU66lA5FL8lqqqvecHt0fF3uHONIa7ToYsaCiWV8lOKqAs0Rb2SjixiKFROngnulPtt2g==}
     engines: {node: ^22.18.0 || >=24.11.0}
 
-  '@cosmos.gl/graph@3.4.0':
-    resolution: {integrity: sha512-qxpkXKIVxy7F/ulE5LSfFU3dP3DLsMijnXI7OwmNamDwHrSFPm4yMhCdVBDkj7RTAeRO4k7bAO6FLeVSwBZSeQ==}
-    engines: {node: '>=18.0.0', npm: '>=7.0.0'}
+  '@cosmos.gl/graph@3.4.1':
+    resolution: {integrity: sha512-dPbc2g+Hbu2djVjd7fkMqth8lvcjzFM1/byCbzF45kqkRAx7snMm0zifPR3xFL+THVHfy3x4Ep9uuQgPaxrQDg==}
+    engines: {node: '>=22.0.0', npm: '>=10.0.0'}
 
   '@electron-internal/extract-zip@1.0.5':
     resolution: {integrity: sha512-+bqFCP98pLI0Tt0XQo1TmlXtwjWchISndDOxCkEcIuUgXWpBnLyRI+2DU+mesvnMMX6L1XDqYNA0lXNDHd/yiA==}
@@ -2704,7 +2704,7 @@ snapshots:
       '@babel/helper-string-parser': 8.0.0
       '@babel/helper-validator-identifier': 8.0.4
 
-  '@cosmos.gl/graph@3.4.0':
+  '@cosmos.gl/graph@3.4.1':
     dependencies:
       '@luma.gl/core': 9.3.6
       '@luma.gl/engine': 9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))

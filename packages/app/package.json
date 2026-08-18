@@ -18,7 +18,7 @@
   },
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
-    "@cosmos.gl/graph": "3.4.0",
+    "@cosmos.gl/graph": "3.4.1",
     "menubar": "^9.5.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.0"
