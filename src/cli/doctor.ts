@@ -22,6 +22,8 @@ import {
 import { LAUNCHER_VERSION } from '../init/types.js';
 import { findProjectRoot } from '../project-root.js';
 import {
+  type EphemeralProjectCandidate,
+  findEphemeralProjects,
   findOverlappingProjects,
   findUnregisteredNestedRepos,
   inspectRegistry,
@@ -68,7 +70,8 @@ export const doctorCommand = new Command('doctor')
       const hasRegistryIssues =
         registry.staleCount > 0 ||
         registry.overlaps.length > 0 ||
-        registry.unregisteredNestedRepos.length > 0;
+        registry.unregisteredNestedRepos.length > 0 ||
+        registry.ephemeralProjects.length > 0;
 
       // --fix / --dry-run also clean up the registry itself (TRA-18): missing-root
       // entries and overlap containers have one unambiguous remediation each, so
@@ -270,6 +273,8 @@ export interface RegistryHealthReport {
   overlaps: RegistryOverlapReport[];
   /** Sibling repos (own `.git`) found under a registered root that were never registered — zero index coverage. */
   unregisteredNestedRepos: UnregisteredNestedRepoReport[];
+  /** One-shot Multica agent-run workdirs that are still registered long after their run ended (TRA-94). */
+  ephemeralProjects: EphemeralProjectCandidate[];
 }
 
 /** Open a project DB read-only and run a trivial query to confirm it's intact. */
@@ -313,6 +318,7 @@ export function diagnoseRegistry(): RegistryHealthReport {
       descendantRoot: o.descendant.root,
     })),
     unregisteredNestedRepos: findUnregisteredNestedRepos(),
+    ephemeralProjects: findEphemeralProjects(),
   };
 }
 
@@ -321,14 +327,19 @@ export interface RegistryFixResult {
   removedMissingRoots: string[];
   /** Ancestor roots removed (or previewed) because a descendant is also registered. */
   removedOverlapContainers: string[];
+  /** One-shot Multica agent-run workdirs removed (or previewed) because they're past the TTL. */
+  removedEphemeralProjects: string[];
 }
 
 /**
- * Apply (or preview, when dryRun) the two registry remediations `doctor` already
- * knows how to describe: drop entries whose folder is gone (same as `prune --apply`'s
- * registry sweep), and drop the *ancestor* of an overlapping pair — the descendant is
- * always the more specific, intentional registration, so removing the container is the
- * unambiguous fix `printRegistryReport` already tells the user to run by hand.
+ * Apply (or preview, when dryRun) the registry remediations `doctor` already knows
+ * how to describe: drop entries whose folder is gone (same as `prune --apply`'s
+ * registry sweep), drop the *ancestor* of an overlapping pair — the descendant is
+ * always the more specific, intentional registration, so removing the container is
+ * the unambiguous fix `printRegistryReport` already tells the user to run by hand —
+ * and unregister stale one-shot Multica workdirs (TRA-94). Unregistering the latter
+ * doesn't free their index DB by itself — it turns them into `orphan_unregistered`
+ * candidates for `trace-mcp prune --apply` to actually delete.
  */
 export function fixRegistryIssues(
   r: RegistryHealthReport,
@@ -336,14 +347,24 @@ export function fixRegistryIssues(
 ): RegistryFixResult {
   const missingRoots = r.entries.filter((e) => e.status === 'missing_root').map((e) => e.root);
   const overlapContainers = [...new Set(r.overlaps.map((o) => o.ancestorRoot))];
+  const ephemeralRoots = r.ephemeralProjects.map((e) => e.root);
 
   if (opts.dryRun) {
-    return { removedMissingRoots: missingRoots, removedOverlapContainers: overlapContainers };
+    return {
+      removedMissingRoots: missingRoots,
+      removedOverlapContainers: overlapContainers,
+      removedEphemeralProjects: ephemeralRoots,
+    };
   }
 
   const removedMissingRoots = pruneStaleProjects();
   for (const root of overlapContainers) unregisterProject(root);
-  return { removedMissingRoots, removedOverlapContainers: overlapContainers };
+  for (const root of ephemeralRoots) unregisterProject(root);
+  return {
+    removedMissingRoots,
+    removedOverlapContainers: overlapContainers,
+    removedEphemeralProjects: ephemeralRoots,
+  };
 }
 
 /**
@@ -377,7 +398,21 @@ export async function fixRegistryIssuesInteractive(
     }
   }
 
-  return { removedMissingRoots, removedOverlapContainers };
+  const removedEphemeralProjects: string[] = [];
+  if (r.ephemeralProjects.length > 0) {
+    const answer = await p.confirm({
+      message: `Unregister ${r.ephemeralProjects.length} one-shot Multica workdir project${r.ephemeralProjects.length === 1 ? '' : 's'} (run finished, never revisited)?`,
+      initialValue: true,
+    });
+    if (!p.isCancel(answer) && answer) {
+      for (const e of r.ephemeralProjects) {
+        unregisterProject(e.root);
+        removedEphemeralProjects.push(e.root);
+      }
+    }
+  }
+
+  return { removedMissingRoots, removedOverlapContainers, removedEphemeralProjects };
 }
 
 function printRegistryFixResult(fix: RegistryFixResult, opts: { dryRun: boolean }): void {
@@ -394,6 +429,13 @@ function printRegistryFixResult(fix: RegistryFixResult, opts: { dryRun: boolean 
       `${verb} ${fix.removedOverlapContainers.length} overlap container${fix.removedOverlapContainers.length === 1 ? '' : 's'}:`,
     );
     for (const r of fix.removedOverlapContainers) lines.push(`  ${shortPath(r)}`);
+  }
+  if (fix.removedEphemeralProjects.length > 0) {
+    lines.push(
+      `${verb} ${fix.removedEphemeralProjects.length} one-shot Multica workdir project${fix.removedEphemeralProjects.length === 1 ? '' : 's'} ` +
+        `(follow up with 'trace-mcp prune --apply' to reclaim their index DBs):`,
+    );
+    for (const r of fix.removedEphemeralProjects) lines.push(`  ${shortPath(r)}`);
   }
   if (lines.length === 0) return;
   console.log(lines.join('\n'));
@@ -457,6 +499,20 @@ function printRegistryReport(r: RegistryHealthReport): void {
     console.log(
       '  Files under these repos have zero index coverage — searches/lookups will silently ' +
         'miss them. Register each one: `trace-mcp add <nested-repo-path>`.',
+    );
+  }
+  for (const e of r.ephemeralProjects) {
+    console.log(
+      `  [WARNING (stale one-shot workdir)] "${e.name}" (${shortPath(e.root)}) — ` +
+        `added ${Math.round(e.ageHours / 24)}d ago, never revisited`,
+    );
+  }
+  if (r.ephemeralProjects.length > 0) {
+    console.log(
+      '  These look like one-shot Multica agent-run checkouts: the run that created them is ' +
+        'long finished and nothing will ever query them again, but they still get permanently ' +
+        'reindexed. Unregister with `trace-mcp remove <path>`, then `trace-mcp prune --apply` ' +
+        'to reclaim their index DBs.',
     );
   }
   console.log('');

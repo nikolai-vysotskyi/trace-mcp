@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ensureGlobalDirs, REGISTRY_PATH } from '../src/global.js';
 import {
+  findEphemeralProjects,
   findOverlapForNewRoot,
   findOverlappingProjects,
   findUnregisteredNestedRepos,
@@ -32,6 +33,21 @@ function makeTmpRepo(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-resolve-'));
   fs.writeFileSync(path.join(dir, 'package.json'), '{}');
   return dir;
+}
+
+/** A path shaped like a one-shot Multica agent-run checkout (TRA-94). */
+function makeEphemeralWorkdir(): string {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-ephemeral-'));
+  const dir = path.join(base, 'multica_workspaces_test.multica.ai', 'ws-123', 'run-456', 'workdir');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'package.json'), '{}');
+  return dir;
+}
+
+function setAddedAt(root: string, iso: string): void {
+  const reg = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
+  reg.projects[root].addedAt = iso;
+  fs.writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2));
 }
 
 describe('resolveRegisteredAncestor', () => {
@@ -217,5 +233,42 @@ describe('findOverlapForNewRoot', () => {
     registerProject(parent, { type: 'multi-root', children: [child] });
 
     expect(findOverlapForNewRoot(child)).toBeNull();
+  });
+});
+
+describe('findEphemeralProjects', () => {
+  it('ignores projects whose root does not look like a one-shot Multica workdir', () => {
+    const repo = makeTmpRepo();
+    registerProject(repo);
+    setAddedAt(repo, new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString());
+
+    expect(findEphemeralProjects()).toEqual([]);
+  });
+
+  it('ignores a freshly-added ephemeral workdir (younger than minAgeHours)', () => {
+    const workdir = makeEphemeralWorkdir();
+    registerProject(workdir);
+
+    expect(findEphemeralProjects()).toEqual([]);
+  });
+
+  it('flags an ephemeral workdir older than the default 24h threshold', () => {
+    const workdir = makeEphemeralWorkdir();
+    registerProject(workdir);
+    setAddedAt(workdir, new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString());
+
+    const found = findEphemeralProjects();
+    expect(found).toHaveLength(1);
+    expect(found[0].root).toBe(workdir);
+    expect(found[0].ageHours).toBeGreaterThanOrEqual(48);
+  });
+
+  it('respects a custom minAgeHours threshold', () => {
+    const workdir = makeEphemeralWorkdir();
+    registerProject(workdir);
+    setAddedAt(workdir, new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
+
+    expect(findEphemeralProjects(24)).toEqual([]);
+    expect(findEphemeralProjects(1)).toHaveLength(1);
   });
 });
