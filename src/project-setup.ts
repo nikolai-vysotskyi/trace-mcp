@@ -15,8 +15,9 @@ import { ensureGlobalDirs, getDbPath } from './global.js';
 import { generateConfig } from './init/config-generator.js';
 import type { DetectionResult } from './init/types.js';
 import { detectProject } from './init/detector.js';
-import type { RegistryEntry } from './registry.js';
-import { getProject, registerProject } from './registry.js';
+import { logger } from './logger.js';
+import type { NewRootOverlap, RegistryEntry } from './registry.js';
+import { findOverlapForNewRoot, getProject, registerProject } from './registry.js';
 
 export interface ProjectSetupResult {
   entry: RegistryEntry;
@@ -24,6 +25,14 @@ export interface ProjectSetupResult {
   dbPath: string;
   migrated: boolean;
   isNew: boolean;
+  /**
+   * Set when this root overlaps an already-registered project (ancestor or
+   * descendant, excluding declared multi-root children). Registering nested
+   * repos separately is supported (the ancestor's watcher/index excludes the
+   * descendant — see #209), but the overlap is worth surfacing to whoever
+   * called `setupProject` since it's easy to form by accident.
+   */
+  overlapWarning?: NewRootOverlap;
 }
 
 /**
@@ -81,6 +90,10 @@ export function isDangerousProjectRoot(absRoot: string): string | null {
  * 5. Register in global registry
  *
  * Idempotent when `force` is false — returns existing entry if already registered.
+ * Also checks for ancestor/descendant overlap with an already-registered
+ * project (see `findOverlapForNewRoot`) and logs a warning plus returns it as
+ * `overlapWarning` — registration still proceeds, since a nested repo
+ * registered on its own is a supported pattern, not necessarily a mistake.
  */
 export function setupProject(
   projectRoot: string,
@@ -119,6 +132,29 @@ export function setupProject(
       migrated: false,
       isNew: false,
     };
+  }
+
+  // Prevention gap (TRA-95): findOverlapForNewRoot() existed with full test
+  // coverage but nothing ever called it before writing a new registry entry,
+  // so overlapping registrations kept forming with zero signal until someone
+  // ran `doctor`. Check here, the one choke point every registration path
+  // goes through, and surface it — but don't block: a nested repo registered
+  // on its own is a supported pattern (the ancestor's watcher/index excludes
+  // it, see #209 / project-manager-ancestor-watcher.test.ts), so refusing
+  // outright would break that flow.
+  const overlap = findOverlapForNewRoot(absRoot);
+  if (overlap) {
+    const { existing, relation } = overlap;
+    const detail =
+      relation === 'existing_contains_candidate'
+        ? `nested inside the already-registered project "${existing.root}"`
+        : `would contain the already-registered project "${existing.root}"`;
+    logger.warn(
+      { candidateRoot: absRoot, existingRoot: existing.root, relation },
+      `Registering "${absRoot}": ${detail}. If unintentional, this double-indexes shared files; ` +
+        `run \`trace-mcp doctor\` to review, or register "${existing.root}" as a multi-root ` +
+        `project with "${absRoot}" listed as a child.`,
+    );
   }
 
   // 1. Detect project
@@ -169,5 +205,12 @@ export function setupProject(
   // 6. Register in global registry
   const entry = registerProject(absRoot);
 
-  return { entry, detection, dbPath, migrated, isNew: !existing };
+  return {
+    entry,
+    detection,
+    dbPath,
+    migrated,
+    isNew: !existing,
+    overlapWarning: overlap ?? undefined,
+  };
 }
