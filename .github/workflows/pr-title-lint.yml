@@ -8,7 +8,7 @@ name: PR Title Lint
 # (see TRA-104: a50aee2/b678ff4/8149659 all merged with non-conventional
 # titles and produced zero release PRs across 7+ merged commits).
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, edited, synchronize, reopened]
 
 permissions:
