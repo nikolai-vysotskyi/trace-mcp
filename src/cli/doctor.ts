@@ -322,13 +322,38 @@ export function diagnoseRegistry(): RegistryHealthReport {
   };
 }
 
+export interface BlockedOverlapContainer {
+  root: string;
+  name: string;
+  /** Unregistered nested repos under this container that would lose all index coverage. */
+  orphanedPaths: string[];
+}
+
 export interface RegistryFixResult {
   /** Roots removed (or, in dry-run, that would be removed) because the folder is gone. */
   removedMissingRoots: string[];
   /** Ancestor roots removed (or previewed) because a descendant is also registered. */
   removedOverlapContainers: string[];
+  /**
+   * Overlap containers `--fix` deliberately left alone (TRA-111): unregistering
+   * them would drop index coverage for a nested repo that is only reachable via
+   * the container's broad indexing and was never registered on its own. Fix via
+   * `trace-mcp add <orphanedPath>` (register the orphan) then re-run doctor, or
+   * `trace-mcp remove <root>` to accept the coverage loss explicitly.
+   */
+  blockedOverlapContainers: BlockedOverlapContainer[];
   /** One-shot Multica agent-run workdirs removed (or previewed) because they're past the TTL. */
   removedEphemeralProjects: string[];
+}
+
+/** Nested-repo paths under `containerRoot` that only have coverage via the container. */
+function orphanedPathsForContainer(
+  containerRoot: string,
+  unregisteredNestedRepos: RegistryHealthReport['unregisteredNestedRepos'],
+): string[] {
+  return unregisteredNestedRepos
+    .filter((nr) => nr.parentRoot === containerRoot)
+    .map((nr) => nr.nestedRepoRoot);
 }
 
 /**
@@ -340,19 +365,37 @@ export interface RegistryFixResult {
  * and unregister stale one-shot Multica workdirs (TRA-94). Unregistering the latter
  * doesn't free their index DB by itself — it turns them into `orphan_unregistered`
  * candidates for `trace-mcp prune --apply` to actually delete.
+ *
+ * An overlap container is only auto-removed when doing so is loss-free. If an
+ * unregistered nested repo under it depends on the container's broad indexing for
+ * its only coverage (TRA-111), the container is reported in `blockedOverlapContainers`
+ * instead — removing it there would silently zero out that repo's index coverage.
  */
 export function fixRegistryIssues(
   r: RegistryHealthReport,
   opts: { dryRun?: boolean },
 ): RegistryFixResult {
   const missingRoots = r.entries.filter((e) => e.status === 'missing_root').map((e) => e.root);
-  const overlapContainers = [...new Set(r.overlaps.map((o) => o.ancestorRoot))];
+  const allOverlapContainers = [...new Set(r.overlaps.map((o) => o.ancestorRoot))];
   const ephemeralRoots = r.ephemeralProjects.map((e) => e.root);
+
+  const overlapContainers: string[] = [];
+  const blockedOverlapContainers: BlockedOverlapContainer[] = [];
+  for (const root of allOverlapContainers) {
+    const orphanedPaths = orphanedPathsForContainer(root, r.unregisteredNestedRepos);
+    if (orphanedPaths.length > 0) {
+      const name = r.overlaps.find((o) => o.ancestorRoot === root)?.ancestorName ?? root;
+      blockedOverlapContainers.push({ root, name, orphanedPaths });
+    } else {
+      overlapContainers.push(root);
+    }
+  }
 
   if (opts.dryRun) {
     return {
       removedMissingRoots: missingRoots,
       removedOverlapContainers: overlapContainers,
+      blockedOverlapContainers,
       removedEphemeralProjects: ephemeralRoots,
     };
   }
@@ -363,6 +406,7 @@ export function fixRegistryIssues(
   return {
     removedMissingRoots,
     removedOverlapContainers: overlapContainers,
+    blockedOverlapContainers,
     removedEphemeralProjects: ephemeralRoots,
   };
 }
@@ -386,15 +430,25 @@ export async function fixRegistryIssuesInteractive(
   }
 
   const removedOverlapContainers: string[] = [];
+  const blockedOverlapContainers: BlockedOverlapContainer[] = [];
   const overlapsByContainer = new Map(r.overlaps.map((o) => [o.ancestorRoot, o]));
   for (const o of overlapsByContainer.values()) {
+    const orphanedPaths = orphanedPathsForContainer(o.ancestorRoot, r.unregisteredNestedRepos);
+    const warning =
+      orphanedPaths.length > 0
+        ? `\n  WARNING: also drops index coverage for ${orphanedPaths.length} unregistered nested repo${orphanedPaths.length === 1 ? '' : 's'}:\n` +
+          orphanedPaths.map((p) => `    ${shortPath(p)}`).join('\n')
+        : '';
     const answer = await p.confirm({
-      message: `Remove overlap container "${o.ancestorName}" (${shortPath(o.ancestorRoot)}), keeping "${o.descendantName}"?`,
-      initialValue: true,
+      message: `Remove overlap container "${o.ancestorName}" (${shortPath(o.ancestorRoot)}), keeping "${o.descendantName}"?${warning}`,
+      initialValue: orphanedPaths.length === 0,
     });
-    if (!p.isCancel(answer) && answer) {
+    if (p.isCancel(answer)) continue;
+    if (answer) {
       unregisterProject(o.ancestorRoot);
       removedOverlapContainers.push(o.ancestorRoot);
+    } else if (orphanedPaths.length > 0) {
+      blockedOverlapContainers.push({ root: o.ancestorRoot, name: o.ancestorName, orphanedPaths });
     }
   }
 
@@ -412,7 +466,12 @@ export async function fixRegistryIssuesInteractive(
     }
   }
 
-  return { removedMissingRoots, removedOverlapContainers, removedEphemeralProjects };
+  return {
+    removedMissingRoots,
+    removedOverlapContainers,
+    blockedOverlapContainers,
+    removedEphemeralProjects,
+  };
 }
 
 function printRegistryFixResult(fix: RegistryFixResult, opts: { dryRun: boolean }): void {
@@ -429,6 +488,20 @@ function printRegistryFixResult(fix: RegistryFixResult, opts: { dryRun: boolean 
       `${verb} ${fix.removedOverlapContainers.length} overlap container${fix.removedOverlapContainers.length === 1 ? '' : 's'}:`,
     );
     for (const r of fix.removedOverlapContainers) lines.push(`  ${shortPath(r)}`);
+  }
+  if (fix.blockedOverlapContainers.length > 0) {
+    lines.push(
+      `Left ${fix.blockedOverlapContainers.length} overlap container${fix.blockedOverlapContainers.length === 1 ? '' : 's'} in place ` +
+        '(removing would drop index coverage for unregistered nested repos):',
+    );
+    for (const b of fix.blockedOverlapContainers) {
+      lines.push(`  ${b.name} (${shortPath(b.root)})`);
+      for (const orphan of b.orphanedPaths) lines.push(`    at risk: ${shortPath(orphan)}`);
+    }
+    lines.push(
+      "  Register the orphaned path(s) with 'trace-mcp add <path>', then re-run doctor — " +
+        "or 'trace-mcp remove <container>' to accept the coverage loss explicitly.",
+    );
   }
   if (fix.removedEphemeralProjects.length > 0) {
     lines.push(

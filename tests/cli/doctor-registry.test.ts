@@ -91,4 +91,54 @@ describe('doctor registry fix (TRA-18)', () => {
     expect(fix.removedOverlapContainers).toEqual([]);
     expect(registry.listProjects()).toHaveLength(1);
   });
+
+  // TRA-111: an overlap container is NOT the same risk as a "folder deleted"
+  // stale entry — unregistering it can drop index coverage for sibling repos
+  // under the container root that are only reachable via its broad indexing
+  // and were never registered themselves. --fix must not remove it silently.
+  it('--fix does NOT remove an overlap container that still covers an unregistered nested repo', () => {
+    const container = makeProjectDir('general');
+    const registeredChild = makeProjectDir('general/thewed');
+    const orphan = makeProjectDir('general/15carats');
+    fs.mkdirSync(path.join(orphan, '.git')); // makes it look like its own repo
+    registry.registerProject(container);
+    registry.registerProject(registeredChild);
+
+    const report = doctor.diagnoseRegistry();
+    expect(report.overlaps).toHaveLength(1);
+    expect(report.unregisteredNestedRepos).toEqual([
+      { parentName: 'general', parentRoot: container, nestedRepoRoot: orphan },
+    ]);
+
+    const fix = doctor.fixRegistryIssues(report, { dryRun: false });
+
+    expect(fix.removedOverlapContainers).toEqual([]);
+    expect(fix.blockedOverlapContainers).toEqual([
+      { root: container, name: 'general', orphanedPaths: [orphan] },
+    ]);
+    // container stays registered — index coverage for `orphan` is preserved
+    expect(
+      registry
+        .listProjects()
+        .map((e) => e.root)
+        .sort(),
+    ).toEqual([container, registeredChild].sort());
+  });
+
+  it('dry-run reports blocked overlap containers without touching the registry', () => {
+    const container = makeProjectDir('general');
+    const registeredChild = makeProjectDir('general/thewed');
+    const orphan = makeProjectDir('general/15carats');
+    fs.mkdirSync(path.join(orphan, '.git'));
+    registry.registerProject(container);
+    registry.registerProject(registeredChild);
+
+    const report = doctor.diagnoseRegistry();
+    const fix = doctor.fixRegistryIssues(report, { dryRun: true });
+
+    expect(fix.removedOverlapContainers).toEqual([]);
+    expect(fix.blockedOverlapContainers).toEqual([
+      { root: container, name: 'general', orphanedPaths: [orphan] },
+    ]);
+  });
 });
