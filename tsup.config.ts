@@ -106,5 +106,14 @@ const require = __tmcpCreateRequire(import.meta.url);`,
   },
   define: {
     PKG_VERSION_INJECTED: JSON.stringify(version),
+    // Default GA4 Measurement Protocol credentials for the anonymous
+    // active-install ping (src/telemetry/usage-ping.ts), supplied by CI as
+    // build-time secrets (TRACE_MCP_GA_MEASUREMENT_ID/TRACE_MCP_GA_API_SECRET
+    // in the `npm` GitHub Actions environment) — never committed here. Local
+    // dev builds get empty strings, so the ping stays inert unless the
+    // runtime env vars of the same name are set. Fully disabled at runtime
+    // via TRACE_MCP_TELEMETRY=off.
+    GA_MEASUREMENT_ID_INJECTED: JSON.stringify(process.env.TRACE_MCP_GA_MEASUREMENT_ID ?? ''),
+    GA_API_SECRET_INJECTED: JSON.stringify(process.env.TRACE_MCP_GA_API_SECRET ?? ''),
   },
 });

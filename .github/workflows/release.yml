@@ -135,6 +135,11 @@ jobs:
       TRACE_MCP_NO_POSTINSTALL: '1'
       TRACE_MCP_NO_AUTO_UPDATE: '1'
       CI: 'true'
+      # Baked into the published build's anonymous active-install ping
+      # (src/telemetry/usage-ping.ts) via tsup.config.ts's `define` block.
+      # TRACE_MCP_TELEMETRY=off still disables it at runtime.
+      TRACE_MCP_GA_MEASUREMENT_ID: ${{ secrets.TRACE_MCP_GA_MEASUREMENT_ID }}
+      TRACE_MCP_GA_API_SECRET: ${{ secrets.TRACE_MCP_GA_API_SECRET }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
