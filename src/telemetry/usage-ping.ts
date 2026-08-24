@@ -10,16 +10,24 @@
  *
  * Transport is GA4's Measurement Protocol (a plain HTTP POST to a Google
  * endpoint) rather than a self-hosted collector, so there's no backend to
- * run or maintain. It is fully inert — this function no-ops — until both
- * TRACE_MCP_GA_MEASUREMENT_ID and TRACE_MCP_GA_API_SECRET are set, which
- * this package does not ship with. See README "Usage telemetry" for how to
- * configure and opt out.
+ * run or maintain. TRACE_MCP_GA_MEASUREMENT_ID/TRACE_MCP_GA_API_SECRET
+ * override at runtime; published builds fall back to credentials baked in
+ * at build time via tsup's `define` (same mechanism as PKG_VERSION_INJECTED)
+ * so installs report without per-user setup. See README "Usage telemetry"
+ * for how to opt out (TRACE_MCP_TELEMETRY=off).
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../logger.js';
 import { TELEMETRY_STATE_PATH } from '../shared/paths.js';
+
+declare const GA_MEASUREMENT_ID_INJECTED: string;
+const GA_MEASUREMENT_ID_DEFAULT =
+  typeof GA_MEASUREMENT_ID_INJECTED !== 'undefined' ? GA_MEASUREMENT_ID_INJECTED : '';
+declare const GA_API_SECRET_INJECTED: string;
+const GA_API_SECRET_DEFAULT =
+  typeof GA_API_SECRET_INJECTED !== 'undefined' ? GA_API_SECRET_INJECTED : '';
 
 interface TelemetryState {
   installId: string;
@@ -68,8 +76,8 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
   const env = opts.env ?? process.env;
   if (isDisabled(env)) return;
 
-  const measurementId = env.TRACE_MCP_GA_MEASUREMENT_ID;
-  const apiSecret = env.TRACE_MCP_GA_API_SECRET;
+  const measurementId = env.TRACE_MCP_GA_MEASUREMENT_ID || GA_MEASUREMENT_ID_DEFAULT;
+  const apiSecret = env.TRACE_MCP_GA_API_SECRET || GA_API_SECRET_DEFAULT;
   if (!measurementId || !apiSecret) return;
 
   const state = loadOrCreateState();
