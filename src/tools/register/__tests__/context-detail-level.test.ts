@@ -42,7 +42,7 @@ function seedStore(store: Store): void {
 function buildContext(store: Store): ServerContext {
   const stub = {
     store,
-    projectRoot: '/tmp/fake-project',
+    projectRoot: '/nonexistent/fake-project',
     embeddingService: null,
     vectorStore: null,
     reranker: null,
