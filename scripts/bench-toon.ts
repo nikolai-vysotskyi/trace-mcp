@@ -97,7 +97,7 @@ function findTool(captured: CapturedTool[], name: string): CapturedTool {
 
 function baseCtxStub(overrides: Record<string, unknown>): ServerContext {
   const stub = {
-    projectRoot: '/tmp/fake-project',
+    projectRoot: '/nonexistent/fake-project',
     config: {},
     registry: { getAllFrameworkPlugins: () => [] },
     embeddingService: null,

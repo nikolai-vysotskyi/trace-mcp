@@ -33,8 +33,14 @@ export function readByteRange(
 // range, which excludes the wrapping `export_statement` and standalone keywords
 // like `async` / `default` / visibility modifiers. We extend the slice back to
 // capture them so the returned `source` matches what the developer wrote.
-const LEADING_MODIFIER_RE =
-  /^(?:export\s+default\s+async\s+|export\s+default\s+|export\s+async\s+|export\s+|default\s+async\s+|default\s+|async\s+|public\s+|private\s+|protected\s+|static\s+|abstract\s+|readonly\s+|declare\s+)+$/;
+//
+// Only single-keyword alternatives — a compound alternative like
+// `export\s+async\s+` alongside its parts `export\s+` and `async\s+` is
+// ambiguous under `+` repetition (matchable as one rep or two), which is
+// exactly the shape that causes catastrophic backtracking (CodeQL js/redos).
+// The `+` loop already accepts any keyword sequence, so compounds are redundant.
+const MODIFIER_WORD = 'export|default|async|public|private|protected|static|abstract|readonly|declare';
+const LEADING_MODIFIER_RE = new RegExp(`^(?:${MODIFIER_WORD})(?:\\s+(?:${MODIFIER_WORD}))*\\s+$`);
 
 /**
  * Read source for a symbol, extending the byte range backward on the same line
