@@ -31,7 +31,9 @@ import { TopologyStore } from '../../topology/topology-db.js';
 import { trailingDebounce } from '../../util/debounce.js';
 import { BackgroundLspEnricher } from '../../lsp/background-enricher.js';
 import { serializeError } from '../log-error.js';
+import { createLightweightProjectRelay } from '../project-relay.js';
 import { getReindexStats } from '../reindex-stats.js';
+import type { ProjectRelay } from '../../server/types.js';
 import { seedSessionDbFromShared, sweepOrphanedSessionDbs } from './session-db.js';
 import type { Backend } from './types.js';
 
@@ -99,6 +101,13 @@ export class LocalBackend implements Backend {
    * before the DB closes.
    */
   private lspEnricher: BackgroundLspEnricher | null = null;
+  /**
+   * Cross-project relay for call_project_tool. LocalBackend manages exactly
+   * one project and has no ProjectManager/ResourcePool to reuse, so this
+   * opens OTHER registered projects' already-indexed databases directly (no
+   * indexAll(), no watcher) — see src/daemon/project-relay.ts.
+   */
+  private readonly projectRelay: ProjectRelay = createLightweightProjectRelay();
 
   constructor(opts: LocalBackendOptions) {
     this.opts = opts;
@@ -416,6 +425,7 @@ export class LocalBackend implements Backend {
     this.handle = createServer(this.store, this.registry, config, projectRoot, this.progress, {
       topoStore: this.topoStore,
       decisionStore: this.decisionStore,
+      projectRelay: this.projectRelay,
     });
 
     const [client, server] = InMemoryTransport.createLinkedPair();
@@ -460,6 +470,13 @@ export class LocalBackend implements Backend {
       /* best-effort */
     }
     this.lspEnricher = null;
+
+    // Close any cross-project handles opened via call_project_tool.
+    try {
+      this.projectRelay.dispose();
+    } catch {
+      /* best-effort */
+    }
 
     // Stop accepting new MCP messages immediately.
     // Detach our onmessage so router never receives stale output.

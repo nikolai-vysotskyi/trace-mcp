@@ -6,7 +6,7 @@
  * + progress. Same selection / mutation contract as WorkspaceTableView.
  */
 import { type MouseEvent, useState } from 'react';
-import { StatusDot } from '../components/StatusDot';
+import { StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
 import { ProjectMetricsBadges } from './components/ProjectMetricsBadges';
 import { type ProjectViewModel, statusLabel, statusToDot } from './types';
@@ -48,6 +48,7 @@ function CompactRow({
   onRemove,
 }: RowProps) {
   const [confirm, setConfirm] = useState(false);
+  const dotTone = statusToDot(project.displayStatus);
   const stop = (e: MouseEvent) => e.stopPropagation();
   const mutationAllowed = canMutate && project.inDaemon;
   const isIndexing = project.displayStatus === 'indexing' || project.displayStatus === 'computing';
@@ -77,7 +78,7 @@ function CompactRow({
             aria-label={`Select ${shortPath(project.root)}`}
           />
         </span>
-        <StatusDot status={statusToDot(project.displayStatus)} />
+        <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
         <div className="flex-1 min-w-0">
           <div
             className="text-xs font-medium truncate"

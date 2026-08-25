@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OllamaPanel } from '../components/OllamaPanel';
-import { StatusDot } from '../components/StatusDot';
+import { StatusDot } from '../lattice/ui';
 import { useDaemon } from '../hooks/useDaemon';
 import {
   CONFIG_SCHEMA,
@@ -1893,7 +1893,7 @@ export function Settings() {
           marginBottom: 16,
         }}
       >
-        <StatusDot status="active" />
+        <StatusDot tone="green" pulse />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Daemon</div>
           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
