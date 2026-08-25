@@ -27,7 +27,7 @@ importers:
         version: 3.4.1
       menubar:
         specifier: ^9.5.3
-        version: 9.5.3(electron@41.10.5)
+        version: 9.5.3(electron@41.10.6)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
@@ -54,8 +54,8 @@ importers:
         specifier: ^10.5.4
         version: 10.5.4(postcss@8.5.26)
       electron:
-        specifier: ^41.10.5
-        version: 41.10.5
+        specifier: ^41.10.6
+        version: 41.10.6
       electron-builder:
         specifier: ^26.15.7
         version: 26.15.7(electron-builder-squirrel-windows@26.15.7)
@@ -1439,8 +1439,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@41.10.5:
-    resolution: {integrity: sha512-grSJOhLddanWX1UfE8B4xA2kOOduUCfpYoOQ2D4zEYte8lSQtrd1HYbV4xErsZmm+V+1Q3yzCQLBsCxEIiw/QQ==}
+  electron@41.10.6:
+    resolution: {integrity: sha512-NEB7QnVpT2p8S9U5jOCPAtCyhl1WjRT/ODvJP6ec1/dZRUmf/EjYVOBb/dthCmJh4bISqpAroGJ/xRRxX7VwJw==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -3856,7 +3856,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@41.10.5:
+  electron@41.10.6:
     dependencies:
       '@electron-internal/extract-zip': 1.0.5
       '@electron/get': 5.1.0
@@ -4458,9 +4458,9 @@ snapshots:
     dependencies:
       '@types/mdast': 4.0.4
 
-  menubar@9.5.3(electron@41.10.5):
+  menubar@9.5.3(electron@41.10.6):
     dependencies:
-      electron: 41.10.5
+      electron: 41.10.6
       electron-positioner: 4.1.0
 
   micromark-core-commonmark@2.0.3:
