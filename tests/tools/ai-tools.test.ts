@@ -67,7 +67,7 @@ describe('AI Tools registration', () => {
         embeddingService: null,
         vectorStore: null,
         reranker: null,
-        projectRoot: '/tmp/fake',
+        projectRoot: '/nonexistent/fake',
       });
     }).not.toThrow();
   });
