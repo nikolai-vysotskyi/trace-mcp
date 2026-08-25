@@ -10,6 +10,7 @@ import type { ServerContext } from '../../../server/types.js';
 import { getFeatureContext } from '../../navigation/context.js';
 import { getContextBundle } from '../../navigation/context-bundle.js';
 import { buildNegativeEvidence } from '../../shared/evidence.js';
+import { compactContextItems, DetailLevelSchema, isMinimal } from '../../_common/detail-level.js';
 import { OutputFormatSchema, encodeResponse } from '../../_common/output-format.js';
 import { withRecallTimeout } from '../../../utils/recall-timeout.js';
 
@@ -121,11 +122,12 @@ export function registerContextTools(server: McpServer, ctx: ServerContext): voi
         .max(100000)
         .optional()
         .describe('Max tokens for assembled context (default 4000)'),
+      detail_level: DetailLevelSchema,
       output_format: OutputFormatSchema.describe(
         'Output format. "json" (default) returns structured items; "markdown" returns LLM-friendly fenced code blocks (~15-20% token savings, easier for the model to read); "toon" returns Token-Oriented Object Notation — 30-60% fewer tokens, lossless.',
       ),
     },
-    async ({ description, token_budget, output_format }) => {
+    async ({ description, token_budget, detail_level, output_format }) => {
       const budgetState = {
         totalCalls: savings.getSessionStats().total_calls,
         totalRawTokens: savings.getSessionStats().total_raw_tokens,
@@ -174,11 +176,9 @@ export function registerContextTools(server: McpServer, ctx: ServerContext): voi
       // FeatureContextItem carries the path as `filePath`; enrichItemsWithFreshness
       // keys off `file`. Provide it so per-item freshness actually resolves instead
       // of silently defaulting to 'fresh'.
-      const freshened = enrichItemsWithFreshness(
-        store,
-        projectRoot,
-        result.items.map((it) => ({ ...it, file: it.filePath })),
-      );
+      const baseItems = result.items.map((it) => ({ ...it, file: it.filePath }));
+      const projectedItems = isMinimal(detail_level) ? compactContextItems(baseItems) : baseItems;
+      const freshened = enrichItemsWithFreshness(store, projectRoot, projectedItems);
       const top = freshened.items[0];
       const confidence = computeRetrievalConfidence({
         scores: freshened.items.map((i) => Number((i as { score?: number }).score ?? 0)),
@@ -197,6 +197,7 @@ export function registerContextTools(server: McpServer, ctx: ServerContext): voi
             : {}),
         },
       };
+      if (isMinimal(detail_level)) payload.detail_level = 'minimal';
       if (output_format === 'markdown') {
         const md = renderItemsMarkdown(
           (

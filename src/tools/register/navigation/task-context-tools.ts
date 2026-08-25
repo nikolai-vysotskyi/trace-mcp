@@ -6,6 +6,7 @@ import { renderSectionsMarkdown } from '../../../scoring/markdown-render.js';
 import { computeRetrievalConfidence } from '../../../scoring/retrieval-confidence.js';
 import type { ServerContext } from '../../../server/types.js';
 import { getTaskContext } from '../../navigation/task-context.js';
+import { compactContextItems, DetailLevelSchema, isMinimal } from '../../_common/detail-level.js';
 
 /**
  * Registers `get_task_context` — the all-in-one dev-task context assembler
@@ -36,6 +37,7 @@ export function registerTaskContextTools(server: McpServer, ctx: ServerContext):
           'Context strategy: minimal (fast, essential only), broad (default, wide net), deep (follow full execution chains)',
         ),
       include_tests: z.boolean().optional().describe('Include relevant test files (default true)'),
+      detail_level: DetailLevelSchema,
       output_format: z
         .enum(['json', 'markdown'])
         .optional()
@@ -43,7 +45,7 @@ export function registerTaskContextTools(server: McpServer, ctx: ServerContext):
           'Output format. "json" (default) returns structured fields; "markdown" returns a single LLM-optimized document with code fences (~15-20% token savings).',
         ),
     },
-    async ({ task, token_budget, focus, include_tests, output_format }) => {
+    async ({ task, token_budget, focus, include_tests, detail_level, output_format }) => {
       const budgetState = {
         totalCalls: savings.getSessionStats().total_calls,
         totalRawTokens: savings.getSessionStats().total_raw_tokens,
@@ -66,6 +68,15 @@ export function registerTaskContextTools(server: McpServer, ctx: ServerContext):
           : { data: result };
       if (adaptive.reduced) {
         output._budget_adaptive = { budget: adaptive.budget, reason: adaptive.reason };
+      }
+      if (isMinimal(detail_level) && output.sections && typeof output.sections === 'object') {
+        const sections = output.sections as Record<string, unknown[]>;
+        for (const key of Object.keys(sections)) {
+          sections[key] = compactContextItems(
+            sections[key] as Parameters<typeof compactContextItems>[0],
+          );
+        }
+        output.detail_level = 'minimal';
       }
       // Per-symbol _freshness + summary in _meta
       if (Array.isArray(output.symbols) && (output.symbols as unknown[]).length > 0) {
