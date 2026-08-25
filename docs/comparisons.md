@@ -2,7 +2,7 @@
 
 trace-mcp is not just a code intelligence server — it combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Other projects solve one of these; trace-mcp unifies all three.
 
-_Last updated: July 1, 2026. Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues). This revision re-verifies the April 2026 peer set, refreshes star/version/feature facts (several moved sharply), and adds new entrants: Kage, grafel, GitNexus, Code Pathfinder, CodeGraphContext, tokensave. Competitor facts current as of June 2026 — star counts drift, treat as approximate. The "Honest assessment" section below was updated after six of seven identified gaps shipped and went through an adversarial deep-validation pass._
+_Last updated: August 25, 2026. Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues). This revision re-verifies star counts against the live GitHub API — several jumped by 3-4x since July (viral GitHub-trending spikes are common in this space and can reverse just as fast), so treat every count below as a snapshot, not a ranking. Two new entrants crossed 60K+ stars this cycle and aren't profiled in the tables yet: a Python codebase-to-knowledge-graph tool (110K+ stars, no vector store, deterministic AST parsing) and a tool-output compression layer for coding agents (67K+ stars, library/proxy/MCP server). Both worth a follow-up deep-dive next revision. The "Honest assessment" section below was updated after six of seven identified gaps shipped and went through an adversarial deep-validation pass._
 
 ## vs. token-efficient code exploration
 
@@ -10,7 +10,7 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 
 | Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp | cymbal |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | — | ~26.7K | 8.8K | ~19K | 1.6K | ~18.1K | 165 |
+| **GitHub stars** | — | 28.1K | 8.8K | ~19K | 2.6K | ~18.1K | 165 |
 | Tree-sitter AST parsing | ✅ 81 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ 23 langs + Jupyter | ✅ 70+ languages | ✅ 158 languages | ✅ 22 languages |
 | Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output (98% reduction) | ✅ | ✅ core focus (~95% reduction) | ✅ | ✅ outline/show/context |
 | Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ incremental knowledge graph | ✅ import graph | ✅ knowledge graph | ✅ refs/importers |
@@ -24,7 +24,7 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Session memory | ✅ built-in | ❌ | ✅ SQLite FTS5 journal | ❌ | ✅ index persistence | ✅ persistent graph | ❌ |
 | Written in | TypeScript | TypeScript | TypeScript | Python | Python | C | Go |
 
-_New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (~70% reduction); **tokensave** (40+ tools, 30+ langs, pre-indexed semantic KG); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync). `cymbal` and `Context Mode` could not be re-verified in June 2026 — possibly renamed or inactive._
+_New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (~70% reduction); **tokensave** (40+ tools, 30+ langs, pre-indexed semantic KG); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync; went viral this cycle, now 68K+ stars, claiming ~59% fewer tokens / ~70% fewer tool calls across its own benchmark set — unverified by us). `cymbal` and `Context Mode` could not be re-verified in June 2026 — possibly renamed or inactive._
 
 ## vs. AI session memory
 
@@ -32,7 +32,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 
 | Capability | trace-mcp | Kage | MemPalace | claude-mem | mem0 / OpenMemory | engram | ConPort |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | — | new (2026) | ~56.7K | ~21.5K | ~53K | 2.7K | 761 |
+| **GitHub stars** | — | new (2026) | ~56.7K | 91.8K | ~53K | 2.7K | 761 |
 | Cross-session context carryover | ✅ `get_session_resume` + decisions | ✅ git-committed packets | ✅ wings/rooms | ✅ core focus | ✅ multi-level (User/Session/Agent) | ✅ branch-scoped handoffs | ✅ |
 | Cross-session content search | ✅ `search_sessions` FTS5 | partial (JSON packets) | ✅ vector+keyword+temporal (+optional rerank), 96.6% R@5 LongMemEval | ✅ SQLite + Chroma hybrid | ✅ hierarchical, ≤7K tok/retrieval (94.4 LongMemEval) | ✅ local ONNX embeddings | ✅ vector semantic |
 | Decision knowledge graph | ✅ temporal, code-linked | ✅ temporal, code-linked | ✅ temporal + "Closets" storage | ❌ | ✅ temporal + state-key supersession | ❌ | ✅ project-level |
