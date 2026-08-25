@@ -114,6 +114,14 @@ Files matching `.gitignore` patterns are **indexed for graph metadata** (symbols
 
 ---
 
+## Code-Scanning Alert Triage Policy
+
+CodeQL and Semgrep run on every push/PR with `security-extended` + OWASP/nodejsscan rulesets, which surfaces a structural false-positive shape specific to this codebase: **`js/path-injection`**. Nearly every MCP tool takes a `file_path`-shaped argument, and the sanitizer (`validatePath()` / `guardPath()`, see above) runs in the tool-registration wrapper (`src/tools/register/*.ts`) one call away from the implementation function CodeQL flags — interprocedural taint tracking doesn't follow the sanitizer across that boundary. Per the precedent set in alerts #1068/#1069 ("local read-only search under the registered project root, same trust domain as the CLI/MCP user"), this bucket is dismissed in bulk as **won't fix** whenever the flagged path either passes through `validatePath()`/`guardPath()` before use, or is sourced from already-validated indexed data (e.g. `file_path` columns populated at index time). New `js/path-injection` alerts should be checked against this pattern and dismissed with the same justification rather than left to accumulate — but a path that reaches a sink *without* going through the wrapper is a real bug, not this exception.
+
+The remaining volume buckets (`ajinabraham.njsscan.dos.regex_dos`, `js/insecure-temporary-file`, `js/file-system-race`) are **not** covered by this exception — they involve regex-shape and TOCTOU analysis that has to be judged per call site, not by a single architectural argument, and a lazy blanket dismissal here would hide a real bug class (this tool is designed to scan arbitrary — including untrusted/third-party — codebases, so a crafted file triggering catastrophic backtracking in one of the scanner's own detection regexes is a plausible local DoS). These are tracked for individual review rather than dismissed.
+
+---
+
 ## Artisan Command Whitelist
 
 trace-mcp can optionally execute Laravel Artisan commands for runtime metadata (routes, models, events).
