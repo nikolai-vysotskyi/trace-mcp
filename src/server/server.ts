@@ -49,6 +49,7 @@ import { registerGitTools } from '../tools/register/git.js';
 import { registerKnowledgeTools } from '../tools/register/knowledge.js';
 import { registerMemoryTools } from '../tools/register/memory.js';
 import { registerNavigationTools } from '../tools/register/navigation.js';
+import { registerProjectsTools } from '../tools/register/projects.js';
 import { registerQualityTools } from '../tools/register/quality.js';
 import { registerRetrievalTools } from '../tools/register/retrieval.js';
 import { registerRefactoringTools } from '../tools/register/refactoring.js';
@@ -61,7 +62,7 @@ import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
 import { buildInstructions } from './instructions.js';
 import { installToolGate } from './tool-gate.js';
-import type { MetaContext, ServerContext } from './types.js';
+import type { MetaContext, ProjectRelay, ServerContext, ToolHandlerMap } from './types.js';
 
 /** Compact JSON — no pretty-printing, strip nulls; saves 25–35% tokens on every response.
  * Every string in the payload is run through {@link sanitizeValue} first to defuse
@@ -231,6 +232,13 @@ export interface ServerDeps {
    * sessions; only cli.ts's `serve-http` command passes 'http'.
    */
   transport?: 'stdio' | 'http';
+  /**
+   * Cross-project relay for `call_project_tool` (see ServerContext.projectRelay
+   * in ./types.js). Wired by cli.ts (daemon session creation) and by
+   * LocalBackend (stdio). Omitted in contexts with no relay wiring (CLI
+   * fallback commands, unit tests) — the tool then reports itself unavailable.
+   */
+  projectRelay?: ProjectRelay;
 }
 
 /**
@@ -244,6 +252,14 @@ export interface ServerHandle {
    * (GET /api/projects/journal) without reaching into createServer internals.
    */
   journal: SessionJournal;
+  /**
+   * Name → gated handler map for in-process tool dispatch without a second MCP
+   * transport/session. Same map the `batch` tool uses for same-project calls;
+   * `call_project_tool`'s cross-project relay (src/daemon/project-relay.ts)
+   * looks up a DIFFERENT project's server by this field instead of opening a
+   * second live MCP connection.
+   */
+  toolHandlers: ToolHandlerMap;
   /** Flush session data and close owned resources. Safe to call multiple times. */
   dispose: () => void;
 }
@@ -636,6 +652,7 @@ export function createServer(
     // unit tests) can register tools without crashing. cli.ts overrides
     // this with the broadcastEvent-bound callback.
     onPipelineEvent: deps?.onPipelineEvent ?? (() => {}),
+    projectRelay: deps?.projectRelay ?? null,
   };
 
   const metaCtx: MetaContext = {
@@ -671,11 +688,12 @@ export function createServer(
   registerGitTools(server, ctx);
   registerRefactoringTools(server, ctx);
   registerAdvancedTools(server, ctx);
+  registerProjectsTools(server, ctx);
   registerQualityTools(server, ctx);
   registerMemoryTools(server, ctx);
   registerRetrievalTools(server, ctx);
   registerKnowledgeTools(server, ctx);
   registerSessionTools(server, metaCtx);
 
-  return { server, journal, dispose };
+  return { server, journal, dispose, toolHandlers };
 }
