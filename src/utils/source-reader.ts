@@ -39,7 +39,8 @@ export function readByteRange(
 // ambiguous under `+` repetition (matchable as one rep or two), which is
 // exactly the shape that causes catastrophic backtracking (CodeQL js/redos).
 // The `+` loop already accepts any keyword sequence, so compounds are redundant.
-const MODIFIER_WORD = 'export|default|async|public|private|protected|static|abstract|readonly|declare';
+const MODIFIER_WORD =
+  'export|default|async|public|private|protected|static|abstract|readonly|declare';
 const LEADING_MODIFIER_RE = new RegExp(`^(?:${MODIFIER_WORD})(?:\\s+(?:${MODIFIER_WORD}))*\\s+$`);
 
 /**
