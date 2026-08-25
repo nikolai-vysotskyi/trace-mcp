@@ -66,13 +66,14 @@ describe('getMcpClientStatuses', () => {
     expect(s.staleReason).toBeUndefined();
   });
 
-  it('flags `stale` with reason="alwaysLoad" when the on-disk entry lacks the new flag', () => {
-    // First let init write a fresh entry, then strip the alwaysLoad field —
-    // simulating an installation done before the alwaysLoad fix shipped.
+  it('flags `stale` with reason="alwaysLoad" when the on-disk entry carries a stale flag (GH #354)', () => {
+    // Simulate an installation done by a pre-#354 `init`, which used to
+    // write `alwaysLoad: true`. init no longer writes it, so an entry that
+    // still has it should now be flagged stale (not treated as healthy).
     configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
     const configPath = path.join(fakeHome, '.claude.json');
     const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    delete c.mcpServers['trace-mcp'].alwaysLoad;
+    c.mcpServers['trace-mcp'].alwaysLoad = true;
     fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
 
     const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
@@ -130,6 +131,15 @@ describe('getMcpClientStatuses', () => {
     expect(s.status).toBe('up_to_date');
     // Sanity: ensure the entry on disk indeed has no alwaysLoad field.
     const onDisk = JSON.parse(fs.readFileSync(s.configPath as string, 'utf-8'));
+    expect(onDisk.mcpServers['trace-mcp'].alwaysLoad).toBeUndefined();
+  });
+
+  it('does not set alwaysLoad on claude-code either (GH #354)', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.status).toBe('up_to_date');
+    const configPath = path.join(fakeHome, '.claude.json');
+    const onDisk = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     expect(onDisk.mcpServers['trace-mcp'].alwaysLoad).toBeUndefined();
   });
 

@@ -63,22 +63,18 @@ interface McpServerEntry {
   cwd?: string;
   env?: Record<string, string>;
   /**
-   * Claude Code (and Claw) only: tells the host to skip ToolSearch deferral
-   * and load every tool from this server into context at session start. We
-   * set it during `trace-mcp init` because trace-mcp's value is in being
-   * available from turn one — if our 128-tool surface lands behind a search
-   * step, agents reach for native Bash/Grep before discovering the cheaper
-   * trace-mcp equivalent. Documented at https://code.claude.com/docs/en/mcp
-   * (mcpServers["..."].alwaysLoad).
+   * Legacy field, never written by `init` anymore (GH #354): setting it
+   * server-wide forced Claude Code to load all ~169 tools into the system
+   * prompt (~52k tokens) instead of the per-tool `_meta: {
+   * 'anthropic/alwaysLoad': true }` stamp already applied by
+   * `stampAlwaysLoad()` (src/server/tool-gate-helpers.ts) to the 15
+   * first-five-minutes tools, which gives the same "available from turn
+   * one" property at ~6.9k tokens. Kept on the type only so drift detection
+   * (`entryMatches`/`pinpointEntryDrift`) can recognize and flag a `true`
+   * left over from an older `trace-mcp init` run as stale.
    */
   alwaysLoad?: boolean;
 }
-
-/** Hosts that recognize the `alwaysLoad` flag in mcpServers entries. */
-const ALWAYS_LOAD_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
-  'claude-code',
-  'claw-code',
-]);
 
 /**
  * Build the MCP command entry. All clients use the stable launcher shim at
@@ -403,8 +399,8 @@ function entryMatches(configPath: string, expected: McpServerEntry): boolean {
     if (expected.env || current.env) {
       if (JSON.stringify(current.env ?? {}) !== JSON.stringify(expected.env ?? {})) return false;
     }
-    // alwaysLoad must match — when we expect it set, an older entry without
-    // it is stale and should be refreshed in place (no --force needed).
+    // alwaysLoad must match — we never expect it set anymore (GH #354), so a
+    // stale `true` left by an older `init` is flagged and refreshed away.
     if ((current.alwaysLoad ?? false) !== (expected.alwaysLoad ?? false)) return false;
     return true;
   } catch {
@@ -646,8 +642,9 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
 // MCP Clients screen. Tells you, for each client we know how to configure,
 // whether the config file currently on disk has a trace-mcp entry that
 // matches what `trace-mcp init` would write right now. The desktop app uses
-// this to swap "Install" → "Update" when a flag we now write (e.g.
-// alwaysLoad) is missing from a previously-installed entry.
+// this to swap "Install" → "Update" when a field we manage has drifted —
+// including a stale `alwaysLoad: true` left by a pre-#354 `init` run, which
+// we now want stripped rather than reapplied.
 // ---------------------------------------------------------------------------
 
 /**
@@ -706,9 +703,7 @@ function buildExpectedEntry(
   if (scope === 'global' || (name !== 'claude-code' && name !== 'claw-code')) {
     base.cwd = projectRoot;
   }
-  if (ALWAYS_LOAD_CLIENTS.has(name)) {
-    base.alwaysLoad = true;
-  }
+  // alwaysLoad is intentionally never set here — see McpServerEntry.alwaysLoad.
   if (name === 'factory-droid') {
     return { type: 'stdio', ...base };
   }
