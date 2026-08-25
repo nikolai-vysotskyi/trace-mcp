@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StatusDot } from '../components/StatusDot';
+import { StatusDot, type Tone } from '../lattice/ui';
 import { type ClientInfo, useDaemon } from '../hooks/useDaemon';
 
 // ── All supported MCP clients (same order as CLI init) ────────────
@@ -121,11 +121,11 @@ function LevelPopover({
 }
 
 // ── Connected-client helpers ──────────────────────────────────────
-function clientStatus(client: ClientInfo): 'active' | 'idle' | 'disconnected' {
+function clientStatus(client: ClientInfo): Tone {
   const elapsed = Date.now() - new Date(client.lastSeen).getTime();
-  if (elapsed < 30_000) return 'active';
-  if (elapsed < 120_000) return 'idle';
-  return 'disconnected';
+  if (elapsed < 30_000) return 'green';
+  if (elapsed < 120_000) return 'gold';
+  return 'neutral';
 }
 
 function timeAgo(iso: string): string {
@@ -156,7 +156,7 @@ function ConnectedClientRow({ client }: { client: ClientInfo }) {
       className="flex items-center gap-2 px-2 py-1.5 rounded-md"
       style={{ background: 'var(--bg-secondary)' }}
     >
-      <StatusDot status={status} />
+      <StatusDot tone={status} pulse={status === 'green'} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>

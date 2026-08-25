@@ -12,7 +12,7 @@
  * `useWorkspaceProjects` — the parent shell owns that state.
  */
 import { type MouseEvent, useEffect, useRef, useState } from 'react';
-import { StatusDot } from '../components/StatusDot';
+import { StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
 import {
   type ProjectViewModel,
@@ -215,6 +215,7 @@ function Row({
 }) {
   const stop = (e: MouseEvent) => e.stopPropagation();
   const tdNum = 'px-3 py-2 tabular-nums text-right';
+  const dotTone = statusToDot(project.displayStatus);
 
   return (
     <tr
@@ -248,7 +249,7 @@ function Row({
 
       <td className="px-3 py-2 max-w-[180px]">
         <div className="flex items-center gap-1.5">
-          <StatusDot status={statusToDot(project.displayStatus)} />
+          <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
           <span style={{ color: 'var(--text-secondary)' }}>{statusLabel(project.displayStatus)}</span>
         </div>
         {project.error && (

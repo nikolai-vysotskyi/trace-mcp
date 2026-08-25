@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { GuardBadge } from './GuardBadge';
-import { StatusDot } from './StatusDot';
+import { StatusDot, type Tone } from '../lattice/ui';
 
 interface ProgressSnapshot {
   phase: string;
@@ -27,11 +27,11 @@ function shortPath(root: string): string {
     .replace(/^[A-Z]:\\Users\\[^\\]+/, home);
 }
 
-function statusToDot(status: string): 'active' | 'idle' | 'error' | 'disconnected' {
-  if (status === 'indexing') return 'active';
-  if (status === 'error') return 'error';
-  if (status === 'ready') return 'active';
-  return 'disconnected';
+function statusToDot(status: string): Tone {
+  if (status === 'indexing') return 'green';
+  if (status === 'error') return 'red';
+  if (status === 'ready') return 'green';
+  return 'neutral';
 }
 
 function statusLabel(status: string): string {
@@ -52,6 +52,7 @@ export function ProjectRow({
   onClick,
 }: ProjectRowProps) {
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const dotTone = statusToDot(status);
 
   return (
     <div
@@ -68,7 +69,7 @@ export function ProjectRow({
       }}
     >
       <div className="flex items-center gap-2">
-        <StatusDot status={statusToDot(status)} />
+        <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
         <div className="flex-1 min-w-0">
           <div
             className="text-xs font-medium truncate"

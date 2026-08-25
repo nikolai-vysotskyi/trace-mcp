@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ProjectStatsModal } from '../components/ProjectStatsModal';
-import { StatusDot } from '../components/StatusDot';
+import { StatusDot, type Tone } from '../lattice/ui';
 import { useDaemon } from '../hooks/useDaemon';
 
 interface ProjectStats {
@@ -265,14 +265,14 @@ export function ProjectOverview({
     setEditingGroup(null);
   };
 
-  const statusDot =
+  const statusDot: Tone =
     status === 'indexing'
-      ? ('idle' as const)
+      ? 'gold'
       : status === 'error'
-        ? ('error' as const)
+        ? 'red'
         : status === 'ready'
-          ? ('active' as const)
-          : ('disconnected' as const);
+          ? 'green'
+          : 'neutral';
 
   const hasGaps =
     coverage &&
@@ -294,7 +294,7 @@ export function ProjectOverview({
       {/* ── Hero header ──────────────────────────────── */}
       <div className="pt-1">
         <div className="flex items-center gap-2.5">
-          <StatusDot status={statusDot} />
+          <StatusDot tone={statusDot} pulse={statusDot === 'green'} />
           <h2
             className="text-[17px] font-semibold leading-tight truncate flex-1 min-w-0"
             style={{ color: 'var(--text-primary)', letterSpacing: '-0.022em' }}

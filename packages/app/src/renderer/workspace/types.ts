@@ -27,6 +27,7 @@
  */
 
 import type { ProgressSnapshot, ProjectState } from '../hooks/useDaemon';
+import type { Tone } from '../lattice/ui';
 
 // ── Canonical enums (mirror Dashboard.tsx / server schema) ──────────────────
 
@@ -428,19 +429,17 @@ export function compareViewModels(
  * Map canonical status → StatusDot palette. Kept here so every view renders
  * the dot the same way.
  */
-export function statusToDot(
-  status: ProjectHealthStatus,
-): 'active' | 'idle' | 'error' | 'disconnected' {
+export function statusToDot(status: ProjectHealthStatus): Tone {
   switch (status) {
     case 'ok':
-      return 'active';
+      return 'green';
     case 'indexing':
     case 'computing':
-      return 'idle';
+      return 'gold';
     case 'error':
-      return 'error';
+      return 'red';
     case 'not_loaded':
-      return 'disconnected';
+      return 'neutral';
   }
 }
 
