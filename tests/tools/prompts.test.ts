@@ -73,7 +73,12 @@ describe('MCP Prompts', () => {
 
     const store = createMockStore();
     const registry = createMockRegistry();
-    registerPrompts(server, { store, registry, config: defaultConfig, projectRoot: '/tmp/test' });
+    registerPrompts(server, {
+      store,
+      registry,
+      config: defaultConfig,
+      projectRoot: '/nonexistent/test',
+    });
   });
 
   it('registers all 5 prompts', () => {
