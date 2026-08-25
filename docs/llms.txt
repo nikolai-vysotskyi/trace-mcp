@@ -1,0 +1,18 @@
+# trace-mcp
+
+> trace-mcp is a framework-aware MCP server that serves precomputed code intelligence — a dependency graph, full-text search, impact analysis, and decision memory — to cut token usage for AI coding agents. It understands 48+ frameworks across 68 languages and exposes ~170 MCP tools over stdio or HTTP.
+
+## Docs
+
+- [Tools reference](https://trace-mcp.com/tools-reference.html): Full list of the 44+ MCP tools and 2 resources trace-mcp exposes, registered dynamically per detected framework.
+- [How trace-mcp compares](https://trace-mcp.com/comparisons.html): Feature-by-feature comparison against other code-graph and code-intelligence MCP servers.
+- [Configuration](https://trace-mcp.com/configuration.html): All config file options; trace-mcp works out of the box without one.
+- [Architecture](https://trace-mcp.com/architecture.html): The two-pass indexing pipeline and how the dependency graph is built and stored.
+- [Supported frameworks & languages](https://trace-mcp.com/supported-frameworks.html): The 68 supported languages and the frameworks each plugin understands.
+- [Session Analytics & Coverage Intelligence](https://trace-mcp.com/analytics.html): The built-in engine that parses agent session logs and tracks token savings and waste.
+- [TOON Token Savings — Measured](https://trace-mcp.com/toon-savings.html): Real-world token measurements for the TOON output format across trace-mcp tools.
+- [Decision memory](https://trace-mcp.com/decision-memory.html): The persistent decision knowledge graph linking architectural decisions and tradeoffs to code.
+- [Telemetry & Observability](https://trace-mcp.com/telemetry.html): The OpenTelemetry-compatible span emitter for AI provider calls and MCP tool invocations.
+- [Quality gates](https://trace-mcp.com/quality-gates.html): How `.trace-mcp.json` quality-gate thresholds are configured and calibrated.
+- [System Prompt Routing via tweakcc](https://trace-mcp.com/tweakcc.html): Wiring trace-mcp tool usage directly into Claude Code's system prompt via tweakcc.
+- [Development](https://trace-mcp.com/development.html): Local setup, build, and test instructions for contributing to trace-mcp.
