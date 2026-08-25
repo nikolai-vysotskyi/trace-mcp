@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
+Disallow: /*.md$
 
 Sitemap: https://trace-mcp.com/sitemap.xml
