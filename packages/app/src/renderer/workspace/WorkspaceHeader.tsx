@@ -8,6 +8,7 @@
  * Receives all data + state via props; does not call useWorkspaceProjects.
  */
 import { type ReactNode, useEffect, useState } from 'react';
+import { Icon } from '../lattice/icons';
 import {
   EMPTY_FILTER,
   type ProjectHealthStatus,
@@ -115,7 +116,7 @@ function KpiCell({ label, value, compact = false, active = false, onClick, accen
 // ── Chip ──────────────────────────────────────────────────────────────────
 
 interface ChipProps {
-  label: string;
+  label: ReactNode;
   active: boolean;
   onClick: () => void;
   accent?: string;
@@ -128,7 +129,7 @@ function Chip({ label, active, onClick, accent, title }: ChipProps) {
       type="button"
       onClick={onClick}
       title={title}
-      className="text-[11px] px-2 py-0.5 rounded-full font-medium transition-colors whitespace-nowrap"
+      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium transition-colors whitespace-nowrap"
       style={{
         background: active ? accent ?? 'var(--accent)' : 'var(--fill-control)',
         color: active ? '#fff' : 'var(--text-secondary)',
@@ -298,7 +299,7 @@ export function WorkspaceHeader({
           </div>
 
           <Chip
-            label="🔒 Security"
+            label={<><Icon name="lock" size={11} /> Security</>}
             active={filter.hasSecurityFindings === true}
             accent="#ff3b30"
             onClick={() =>
@@ -310,7 +311,7 @@ export function WorkspaceHeader({
             title="Projects with critical or high security findings"
           />
           <Chip
-            label="💀 Dead"
+            label={<><Icon name="bug_report" size={11} /> Dead</>}
             active={filter.hasDeadExports === true}
             accent="#ff9f0a"
             onClick={() =>

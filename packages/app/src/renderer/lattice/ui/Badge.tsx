@@ -17,6 +17,7 @@ export interface BadgeProps {
   tone?: Tone;
   variant?: 'solid' | 'outline';
   className?: string;
+  title?: string;
   children: ReactNode;
 }
 
@@ -24,10 +25,15 @@ export function Badge({
   tone = 'neutral',
   variant = 'solid',
   className,
+  title,
   children,
 }: BadgeProps): ReactNode {
   const cls = ['ws-badge', `t-${tone}`, variant === 'outline' ? 'outline' : '', className ?? '']
     .filter(Boolean)
     .join(' ');
-  return <span className={cls}>{children}</span>;
+  return (
+    <span className={cls} title={title}>
+      {children}
+    </span>
+  );
 }
