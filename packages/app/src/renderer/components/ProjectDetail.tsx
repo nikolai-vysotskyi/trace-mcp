@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { StatusDot } from './StatusDot';
+import { StatusDot, type Tone } from '../lattice/ui';
 
 interface ProgressSnapshot {
   phase: string;
@@ -36,15 +36,16 @@ function shortPath(root: string): string {
     .replace(/^[A-Z]:\\Users\\[^\\]+/, '~');
 }
 
-function statusToDot(status?: string): 'active' | 'idle' | 'error' | 'disconnected' {
-  if (status === 'indexing') return 'idle';
-  if (status === 'error') return 'error';
-  if (status === 'ready') return 'active';
-  return 'disconnected';
+function statusToDot(status?: string): Tone {
+  if (status === 'indexing') return 'gold';
+  if (status === 'error') return 'red';
+  if (status === 'ready') return 'green';
+  return 'neutral';
 }
 
 export function ProjectDetail({ root, status, progress, onBack, onReindex }: ProjectDetailProps) {
   const [stats, setStats] = useState<ProjectStats | null>(null);
+  const dotTone = statusToDot(status);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -80,7 +81,7 @@ export function ProjectDetail({ root, status, progress, onBack, onReindex }: Pro
       {/* Project name & path */}
       <div>
         <div className="flex items-center gap-2">
-          <StatusDot status={statusToDot(status)} />
+          <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
           <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
             {projectName(root)}
           </h2>

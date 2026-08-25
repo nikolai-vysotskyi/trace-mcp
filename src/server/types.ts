@@ -18,6 +18,38 @@ import type { TopologyStore } from '../topology/topology-db.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 
+/** Name → gated handler map for in-process tool dispatch without a second MCP
+ *  transport/session. Populated by `installToolGate` inside `createServer()`
+ *  and exposed on `ServerHandle.toolHandlers` — the same map the `batch` tool
+ *  (session.ts) already uses for same-project dispatch. */
+export type ToolHandlerMap = Map<
+  string,
+  (params: Record<string, unknown>) => Promise<ToolResponse>
+>;
+
+/**
+ * Cross-project relay for the `call_project_tool` MCP tool (projects.ts).
+ * Two implementations exist (src/daemon/project-relay.ts):
+ *  - the daemon/HTTP runtime reuses `ProjectManager` + `ProjectResourcePool`
+ *    (a target project already warm in the daemon is served directly; a cold
+ *    one is lazily opened via `ProjectManager.addProject(root, { watch: false,
+ *    persist: false })`, the same read-mostly path used for subprojects).
+ *  - the stdio runtime (no daemon assumed) opens the target project's
+ *    already-indexed database directly — no indexAll(), no file watcher.
+ * `undefined` when neither wiring applies (e.g. isolated unit tests) —
+ * call_project_tool then reports the relay as unavailable instead of throwing.
+ */
+export interface ProjectRelay {
+  /** Registered project roots this relay accepts as a `call_project_tool` target. */
+  listRelayTargets(): string[];
+  /** Resolve + open (or reuse a cached) target project's tool-handler map.
+   *  Returns null when `targetRoot` isn't a registered project, or is
+   *  registered but has never been indexed. */
+  openProject(targetRoot: string): Promise<{ toolHandlers: ToolHandlerMap } | null>;
+  /** Release everything this relay opened. Idempotent. */
+  dispose(): void;
+}
+
 /**
  * R09 v2 — pipeline-lifecycle event shapes emitted by MCP tools
  * (embed_repo, snapshot_graph) and relayed by the daemon to the
@@ -74,6 +106,12 @@ export interface ServerContext {
    * Wired by createServer() from ServerDeps.onPipelineEvent.
    */
   onPipelineEvent: (event: PipelineLifecycleEvent) => void;
+  /**
+   * Cross-project relay wired by cli.ts (daemon) / LocalBackend (stdio).
+   * Null when not wired (e.g. unit tests) — `call_project_tool` reports the
+   * relay as unavailable rather than throwing.
+   */
+  projectRelay: ProjectRelay | null;
 }
 
 /** Extended context for meta tools that bypass preset gate */

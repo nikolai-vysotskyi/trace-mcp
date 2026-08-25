@@ -37,6 +37,7 @@ import { bundlesCommand } from './cli/bundles.js';
 import { checkCommand } from './cli/check.js';
 import { clientsCommand } from './cli/clients.js';
 import { ciReportCommand } from './cli/ci.js';
+import { scanSecurityCommand } from './cli/scan-security.js';
 import { daemonCommand } from './cli/daemon.js';
 import { consentCommand } from './cli/consent.js';
 import { detectLlmCommand } from './cli/detect-llm.js';
@@ -63,6 +64,7 @@ import { DaemonIdleMonitor } from './daemon/idle-monitor.js';
 import { MemoryScheduler } from './memory/scheduler/memory-scheduler.js';
 import { ProjectManager } from './daemon/project-manager.js';
 import type { ManagedProject } from './daemon/project-manager.js';
+import { createDaemonProjectRelay } from './daemon/project-relay.js';
 import { handleReindexFile } from './daemon/reindex-file-handler.js';
 import { StdioSession } from './daemon/router/session.js';
 import { initializeDatabase } from './db/schema.js';
@@ -657,6 +659,9 @@ program
     // disposes the project's pool entry (two SQLite handles otherwise leak per
     // removed project for the daemon's lifetime).
     projectManager.setResourcePool(resourcePool);
+    // Cross-project relay for call_project_tool — additive wiring on top of
+    // the existing ProjectManager/ProjectResourcePool, not a second pool.
+    const projectRelay = createDaemonProjectRelay(projectManager, resourcePool);
 
     // Per-session MCP transports: sessionId → transport
     // Multiple clients can connect to the same project simultaneously.
@@ -703,6 +708,7 @@ program
           broadcastEvent({ ...event, project: projectRoot } as DaemonEvent);
         },
         transport: 'http' as const,
+        projectRelay,
       };
       const handle = createServer(
         managed.store,
@@ -2763,6 +2769,7 @@ program
       }
       sessionTransports.clear();
       projectSessions.clear();
+      projectRelay.dispose();
       resourcePool.disposeAll();
       idleMonitor.stop();
       await memoryScheduler.stop();
@@ -3245,6 +3252,7 @@ program.addCommand(detectLlmCommand);
 program.addCommand(consentCommand);
 program.addCommand(ciReportCommand);
 program.addCommand(checkCommand);
+program.addCommand(scanSecurityCommand);
 program.addCommand(clientsCommand);
 program.addCommand(bundlesCommand);
 program.addCommand(subprojectCommand);
