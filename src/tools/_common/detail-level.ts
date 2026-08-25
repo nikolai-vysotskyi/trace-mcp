@@ -126,3 +126,34 @@ export function compactUsageRefs(refs: UsageRefFull[]): UsageRefMinimal[] {
     name: r.symbol?.name,
   }));
 }
+
+// ─── Feature/task context items (source-bearing) ──────────────────────────
+// get_feature_context and get_task_context share the same item shape
+// (symbolId, name, kind, fqn, filePath, score, detail, content, tokens).
+// Minimal drops the ranking/type metadata but keeps the source snippet —
+// that's the whole point of these two tools.
+
+export interface ContextItemFull {
+  name: string;
+  filePath?: string;
+  file?: string;
+  content?: string;
+  tokens?: number;
+  [key: string]: unknown;
+}
+
+export interface ContextItemMinimal {
+  name: string;
+  file: string;
+  content: string;
+  tokens: number | undefined;
+}
+
+export function compactContextItems(items: ReadonlyArray<ContextItemFull>): ContextItemMinimal[] {
+  return items.map((it) => ({
+    name: it.name,
+    file: it.filePath ?? it.file ?? '',
+    content: it.content ?? '',
+    tokens: it.tokens,
+  }));
+}
