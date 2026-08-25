@@ -108,6 +108,15 @@ A subproject is any working repository that is part of your project's ecosystem:
 | `subproject_add_repo` | Add a subproject, bound to the current project (or specify `project` param for external subprojects) |
 | `subproject_sync` | Re-scan all subprojects: contracts, client calls, and re-link |
 
+### Cross-project
+
+Every session is attached to one project, but these two tools reach across to any OTHER project already registered with trace-mcp (`~/.trace-mcp/registry.json`) — see [Configuration](configuration.md#cross-project-tools).
+
+| Tool | What it does |
+|---|---|
+| `list_projects` | List registered project roots (name, type, last-indexed), plus known subprojects |
+| `call_project_tool` | Run any other trace-mcp tool against a DIFFERENT registered project's already-indexed data; returns that tool's response verbatim |
+
 ## Decision memory
 
 See [Decision memory](decision-memory.md) for full documentation.
