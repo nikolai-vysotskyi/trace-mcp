@@ -353,35 +353,17 @@ jobs:
           if-no-files-found: warn
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Quality gates — informational-only visibility, not (yet) SARIF.
+  # Quality gates — informational-only visibility, plus SARIF upload.
   #
   # Informational-only for now (continue-on-error) — this repo doesn't yet
   # pass its own default quality gates (see decision-store.ts refactor);
-  # tighten to a hard gate once that lands.
+  # tighten to a hard gate once that lands. The SARIF upload runs regardless:
+  # it feeds the GitHub code-scanning dashboard, which is a display surface,
+  # not a required check.
   #
-  # SCOPE NOTE — why this is NOT a SARIF-upload job, despite check_quality_gates
-  # and scan_security both supporting output_format: "sarif" as MCP tools:
-  #   - `check_quality_gates`'s SARIF path is not exposed via the `trace-mcp`
-  #     CLI: `dist/cli.js check` only supports `--format text|json`
-  #     (src/cli/check.ts, checkCommand). The pure mapper that would produce
-  #     SARIF (qualityGateReportToSarif, src/tools/quality/sarif.ts) is real,
-  #     but it is bundled *inside* the dist/cli.js and dist/index.js closures
-  #     by tsup (tsup.config.ts entry points are only index/cli/extract-worker,
-  #     `noExternal: [/.*/]`) — it is not re-exported from src/index.ts
-  #     (checked: only TraceMcpConfig, loadConfig, initializeDatabase, Store,
-  #     TraceMcpError/Result, PluginRegistry, FrameworkPlugin/LanguagePlugin/
-  #     PluginManifest, createServer are exported), so nothing in dist/ can
-  #     `require()` it from a workflow step.
-  #   - `scan_security` has NO CLI command at all — it's registered only as
-  #     an MCP tool (src/tools/register/git.ts, scanSecurity from
-  #     src/tools/quality/security-scan.ts), and calling it directly would
-  #     require constructing a Store/DB handle the same way the MCP server
-  #     does, which is not a lightweight workflow-step operation.
-  # Bridging either gap would mean adding new src/ exports — out of scope for
-  # a workflow-only change. So this job runs the one real, already-existing
-  # CLI surface (`check --format json`) for PR visibility, and does NOT
-  # attempt to fabricate a SARIF or security-scan step. Revisit once a CLI
-  # (or exported library) entrypoint for SARIF output actually ships.
+  # `check --format sarif` (src/cli/check.ts) now exposes the existing
+  # qualityGateReportToSarif mapper (src/tools/quality/sarif.ts) through the
+  # CLI, so no MCP client is needed to get findings into code scanning.
   # ───────────────────────────────────────────────────────────────────────────
   quality-gates-report:
     needs: build
@@ -389,6 +371,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -430,6 +413,66 @@ jobs:
             cat quality-gates.json 2>/dev/null || echo "(no output captured)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate quality gates SARIF
+        continue-on-error: true
+        run: node dist/cli.js check --format sarif --fail-on none > quality-gates.sarif
+
+      - name: Upload quality gates SARIF
+        if: hashFiles('quality-gates.sarif') != ''
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: quality-gates.sarif
+          category: trace-mcp-quality-gates
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Security scan — pattern-based OWASP Top-10 findings via `scan-security`
+  # (src/cli/scan-security.ts, bridges scanSecurity to a CLI entrypoint),
+  # uploaded as SARIF for the GitHub code-scanning dashboard.
+  #
+  # Informational for now (continue-on-error): this is visibility, not a
+  # required check, until findings on this repo are triaged.
+  # ───────────────────────────────────────────────────────────────────────────
+  security-scan-report:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Download build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-output
+
+      - name: Unpack build output
+        run: |
+          tar --use-compress-program=unzstd -xf build-output.tar.zst 2>/dev/null || \
+            tar -xzf build-output.tar.zst
+          rm build-output.tar.zst
+
+      - name: Index project
+        run: node dist/cli.js index . --force
+
+      - name: Run security scan (SARIF)
+        continue-on-error: true
+        run: node dist/cli.js scan-security --format sarif --fail-on none > security-scan.sarif
+
+      - name: Upload security scan SARIF
+        if: hashFiles('security-scan.sarif') != ''
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: security-scan.sarif
+          category: trace-mcp-security-scan
 
   # ───────────────────────────────────────────────────────────────────────────
   # App typecheck/build — runs only when packages/app/** changed (or on push

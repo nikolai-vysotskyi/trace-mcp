@@ -157,10 +157,10 @@ function makeBackend() {
     indexer: { workers: 1 },
   } as unknown as TraceMcpConfig;
   return new LocalBackend({
-    projectRoot: '/tmp/trace-mcp-test-project',
-    indexRoot: '/tmp/trace-mcp-test-project',
+    projectRoot: '/nonexistent/trace-mcp-test-project',
+    indexRoot: '/nonexistent/trace-mcp-test-project',
     config,
-    sharedDbPath: '/tmp/trace-mcp-reentry.db',
+    sharedDbPath: '/nonexistent/trace-mcp-reentry.db',
   });
 }
 

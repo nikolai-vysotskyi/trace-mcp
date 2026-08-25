@@ -3,10 +3,10 @@
  * config currently matches what `trace-mcp init` would write.
  *
  * Used by the desktop app's MCP Clients screen to decide between an
- * "Install" and an "Update" button: when a flag we now write (e.g.
- * `alwaysLoad: true` for Claude Code) is missing from a previously
- * installed entry, the row should prompt the user to refresh the config
- * rather than pretend the integration is healthy.
+ * "Install" and an "Update" button: when a managed field has drifted from
+ * what `init` would write now — including a stale `alwaysLoad: true` left
+ * by a pre-#354 `init` run — the row should prompt the user to refresh the
+ * config rather than pretend the integration is healthy.
  */
 
 import { Command } from 'commander';

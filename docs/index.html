@@ -111,10 +111,59 @@
   }
   </script>
 
-  <!-- ── Fonts ── -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Doto:wght@400;700&family=Space+Grotesk:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <!-- ── Fonts (self-hosted — see docs/fonts/) ── -->
+  <link rel="preload" href="/fonts/space-grotesk-variable-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/doto-variable-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <style>
+    @font-face {
+      font-family: 'Space Grotesk';
+      font-style: normal;
+      font-weight: 300 700;
+      font-display: swap;
+      src: url(/fonts/space-grotesk-variable-latin.woff2) format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: 'Doto';
+      font-style: normal;
+      font-weight: 400 700;
+      font-display: swap;
+      src: url(/fonts/doto-variable-latin.woff2) format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: 'Space Mono';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(/fonts/space-mono-400-latin.woff2) format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: 'Space Mono';
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url(/fonts/space-mono-700-latin.woff2) format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    /* Metric-matched fallbacks (real OS/2 ascent/descent/lineGap from the woff2 files above) so the
+       swap from system font to webfont doesn't reflow the layout. */
+    @font-face {
+      font-family: 'Space Grotesk Fallback';
+      src: local('Arial');
+      ascent-override: 98.4%;
+      descent-override: 29.2%;
+      line-gap-override: 0%;
+    }
+    @font-face {
+      font-family: 'Space Mono Fallback';
+      src: local('Courier New');
+      ascent-override: 112%;
+      descent-override: 36.1%;
+      line-gap-override: 0%;
+    }
+  </style>
 
   <script>
     // Set theme and theme-color before first paint to avoid flash.
@@ -157,8 +206,8 @@
       --color-scheme: dark;
 
       --font-display: 'Doto', 'Space Mono', monospace;
-      --font-body: 'Space Grotesk', system-ui, sans-serif;
-      --font-mono: 'Space Mono', 'JetBrains Mono', monospace;
+      --font-body: 'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif;
+      --font-mono: 'Space Mono', 'Space Mono Fallback', 'JetBrains Mono', monospace;
     }
 
     :root[data-theme="light"] {
@@ -863,7 +912,7 @@
       letter-spacing: -0.04em;
       margin-bottom: 24px;
     }
-    .pipe-step h4 {
+    .pipe-step h3 {
       font-family: var(--font-body);
       font-size: 20px;
       font-weight: 700;
@@ -1019,7 +1068,7 @@
       color: var(--text-display);
       letter-spacing: -0.04em;
     }
-    .qs-step-body h4 {
+    .qs-step-body h3 {
       font-family: var(--font-mono);
       font-size: 11px;
       letter-spacing: 0.1em;
@@ -1095,7 +1144,7 @@
       cursor: pointer;
     }
     .faq summary::-webkit-details-marker { display: none; }
-    .faq summary h4 {
+    .faq summary h3 {
       font-family: var(--font-body);
       font-size: 20px;
       font-weight: 600;
@@ -1422,7 +1471,7 @@
       font-size: 22px;
       line-height: 1;
     }
-    .pain-punchline .muted { color: var(--text-disabled); }
+    .pain-punchline .muted { color: var(--text-secondary); }
     @media (max-width: 700px) {
       .pain-item { grid-template-columns: 48px 1fr; gap: 16px; padding: 22px 0; }
       .pain-text { font-size: 17px; }
@@ -1563,7 +1612,7 @@
       color: var(--text-disabled);
     }
     .compare-col.agent .compare-sub { color: var(--success); }
-    .compare-col h4 {
+    .compare-col h3 {
       font-family: var(--font-body);
       font-size: 22px;
       font-weight: 700;
@@ -1694,7 +1743,7 @@
       background: var(--success);
       border-radius: 50%;
     }
-    .sec-item h4 {
+    .sec-item h3 {
       font-family: var(--font-body);
       font-size: 18px;
       font-weight: 700;
@@ -1889,7 +1938,7 @@
             <span class="trust-badge-bottom">Y Combinator alum</span>
           </span>
         </a>
-        <a class="trust-badge" href="https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/LICENSE" target="_blank" rel="noopener" aria-label="MIT licensed">
+        <a class="trust-badge" href="https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/LICENSE" target="_blank" rel="noopener" aria-label="License: open source, MIT">
           <span class="trust-badge-mark" aria-hidden="true">MIT</span>
           <span class="trust-badge-text">
             <span class="trust-badge-top">License</span>
@@ -2111,7 +2160,7 @@
       <div class="pipeline reveal">
         <div class="pipe-step">
           <div class="pipe-num">01</div>
-          <h4>Connect your repository</h4>
+          <h3>Connect your repository</h3>
           <p>Run <code>trace-mcp add</code> in your repo. Frameworks are detected automatically &mdash; Laravel, Django, Next.js, NestJS, Rails, 58 in total.</p>
           <div class="tags">
             <span class="tag">cli</span>
@@ -2121,7 +2170,7 @@
         </div>
         <div class="pipe-step">
           <div class="pipe-num">02</div>
-          <h4>Index into a graph</h4>
+          <h3>Index into a graph</h3>
           <p>Tree-sitter parses symbols, plugins resolve framework edges, optional LSP enriches with compiler-grade call data. Stored locally in SQLite + FTS5.</p>
           <div class="tags">
             <span class="tag">tree-sitter</span>
@@ -2131,7 +2180,7 @@
         </div>
         <div class="pipe-step">
           <div class="pipe-num">03</div>
-          <h4>Expose to your agents</h4>
+          <h3>Expose to your agents</h3>
           <p>138 MCP tools become available in Claude Code, Cursor, Windsurf, VS Code &mdash; or any custom agent that speaks MCP over stdio or HTTP.</p>
           <div class="tags">
             <span class="tag">mcp</span>
@@ -2186,7 +2235,7 @@
         </div>
       </div>
 
-      <p class="tool-more">+ 133 more &mdash; impact analysis, decision memory, security, architecture. <a href="https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/docs/tools-reference.md" target="_blank">Full reference &rarr;</a></p>
+      <p class="tool-more">+ 133 more &mdash; impact analysis, decision memory, security, architecture. <a href="/tools-reference.html">Full reference &rarr;</a></p>
     </div>
   </section>
 
@@ -2204,7 +2253,7 @@
       <div class="compare-grid reveal">
         <div class="compare-col human">
           <span class="compare-sub">/ Human-first tools</span>
-          <h4>Search results for the agent to re-read</h4>
+          <h3>Search results for the agent to re-read</h3>
           <ul>
             <li>Returns files and snippets &mdash; the agent still has to traverse them</li>
             <li>Same query, same output, every turn &mdash; no reuse across calls</li>
@@ -2214,7 +2263,7 @@
         </div>
         <div class="compare-col agent">
           <span class="compare-sub">/ Agent-native trace-mcp</span>
-          <h4>A precomputed graph the agent reuses</h4>
+          <h3>A precomputed graph the agent reuses</h3>
           <ul>
             <li>138 tools that return answers, not files to read</li>
             <li>One incremental index, queried per task &mdash; not rebuilt per turn</li>
@@ -2332,17 +2381,17 @@
       <div class="security-grid reveal">
         <div class="sec-item">
           <span class="sec-tag">Local-first</span>
-          <h4>Repository-level access control</h4>
+          <h3>Repository-level access control</h3>
           <p>One SQLite database per project under <code>~/.trace-mcp/</code>. Nothing is written inside your repo unless you opt in.</p>
         </div>
         <div class="sec-item">
           <span class="sec-tag">Zero egress</span>
-          <h4>Secure handling of code</h4>
+          <h3>Secure handling of code</h3>
           <p>No API keys, no cloud services. Bundled ONNX embeddings. Fully offline after first install.</p>
         </div>
         <div class="sec-item">
           <span class="sec-tag">Audited writes</span>
-          <h4>Safe modification workflows</h4>
+          <h3>Safe modification workflows</h3>
           <p>Every refactor has a dry-run preview and diff review. Guard hook blocks destructive operations from agents.</p>
         </div>
       </div>
@@ -2431,7 +2480,7 @@
           <div class="qs-step reveal">
             <div class="qs-step-num">01</div>
             <div class="qs-step-body">
-              <h4>/ Install Globally</h4>
+              <h3>/ Install Globally</h3>
               <div class="qs-cmd">npm install -g trace-mcp</div>
               <p>Installs the <code>trace-mcp</code> CLI from npm. ~30 seconds. Requires Node.js 20 or newer. Prefer pnpm or yarn? <code>pnpm add -g trace-mcp</code> / <code>yarn global add trace-mcp</code> work too.</p>
             </div>
@@ -2439,7 +2488,7 @@
           <div class="qs-step reveal">
             <div class="qs-step-num">02</div>
             <div class="qs-step-body">
-              <h4>/ Wire Into Your Agent</h4>
+              <h3>/ Wire Into Your Agent</h3>
               <div class="qs-cmd">trace-mcp init</div>
               <p>One-time global setup. Auto-detects installed MCP clients (Claude Code, Cursor, Windsurf, Claude Desktop, Codex, JetBrains AI, &hellip;), wires trace-mcp into each, installs the guard hook, and adds routing rules to <code>~/.claude/CLAUDE.md</code>. Run once per machine.</p>
             </div>
@@ -2447,7 +2496,7 @@
           <div class="qs-step reveal">
             <div class="qs-step-num">03</div>
             <div class="qs-step-body">
-              <h4>/ Register Each Project</h4>
+              <h3>/ Register Each Project</h3>
               <div class="qs-cmd">cd ~/projects/my-app &amp;&amp; trace-mcp add</div>
               <p>Detects frameworks, builds the per-project index, registers the project. The file watcher keeps the graph incrementally fresh from here on. Re-run in every repo you want trace-mcp to understand.</p>
             </div>
@@ -2496,42 +2545,42 @@
       <div class="faq-list">
         <details class="faq">
           <summary>
-            <h4>Do I need API keys or a cloud account?</h4>
+            <h3>Do I need API keys or a cloud account?</h3>
             <span class="toggle">+</span>
           </summary>
           <div class="answer">No. trace-mcp is fully local. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI &mdash; but everything else runs without external services.</div>
         </details>
         <details class="faq">
           <summary>
-            <h4>Where does the index live?</h4>
+            <h3>Where does the index live?</h3>
             <span class="toggle">+</span>
           </summary>
           <div class="answer">In <code>~/.trace-mcp/</code> &mdash; one SQLite database per project, plus shared decision and topology databases. Nothing is written into your project directory unless you opt in with <code>.traceignore</code> or <code>.trace-mcp/.config.json</code>.</div>
         </details>
         <details class="faq">
           <summary>
-            <h4>Does it work for monorepos and multi-service codebases?</h4>
+            <h3>Does it work for monorepos and multi-service codebases?</h3>
             <span class="toggle">+</span>
           </summary>
           <div class="answer">Yes. <code>subproject_add_repo</code> links separate repositories into a unified topology. Cross-service impact analysis traces API calls across service boundaries with confidence scores.</div>
         </details>
         <details class="faq">
           <summary>
-            <h4>How does it stay up-to-date?</h4>
+            <h3>How does it stay up-to-date?</h3>
             <span class="toggle">+</span>
           </summary>
           <div class="answer">A file watcher (300ms debounce) reindexes changed files incrementally. Content-hashed &mdash; unchanged files are skipped. The graph is always current without manual reindex.</div>
         </details>
         <details class="faq">
           <summary>
-            <h4>What about my framework? Is it supported?</h4>
+            <h3>What about my framework? Is it supported?</h3>
             <span class="toggle">+</span>
           </summary>
           <div class="answer">81 languages and 58 framework integrations ship out of the box. For unsupported frameworks, the plugin API is open &mdash; write a custom plugin in TypeScript, register it via <code>~/.trace-mcp/plugins/</code>. Most plugins are ~200&ndash;500 lines.</div>
         </details>
         <details class="faq">
           <summary>
-            <h4>Is it safe to run on production codebases?</h4>
+            <h3>Is it safe to run on production codebases?</h3>
             <span class="toggle">+</span>
           </summary>
           <div class="answer">All MCP tools are read-only by default. Refactoring tools (<code>apply_rename</code>, <code>apply_codemod</code>) require explicit confirmation and support dry-run preview. The guard hook blocks accidental destructive operations from your AI agent.</div>
@@ -2591,10 +2640,21 @@
       </div>
       <div class="footer-col">
         <h5>/ Resources</h5>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/docs/tools-reference.md" target="_blank">Tool reference</a>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/docs/configuration.md" target="_blank">Configuration</a>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/docs/architecture.md" target="_blank">Architecture</a>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/docs/supported-frameworks.md" target="_blank">Supported stack</a>
+        <a href="/tools-reference.html">Tool reference</a>
+        <a href="/configuration.html">Configuration</a>
+        <a href="/architecture.html">Architecture</a>
+        <a href="/supported-frameworks.html">Supported stack</a>
+        <a href="/comparisons.html">Comparisons</a>
+        <a href="/analytics.html">Analytics</a>
+      </div>
+      <div class="footer-col">
+        <h5>/ More docs</h5>
+        <a href="/decision-memory.html">Decision memory</a>
+        <a href="/toon-savings.html">TOON savings</a>
+        <a href="/telemetry.html">Telemetry</a>
+        <a href="/quality-gates.html">Quality gates</a>
+        <a href="/tweakcc.html">tweakcc</a>
+        <a href="/development.html">Development</a>
       </div>
       <div class="footer-col">
         <h5>/ Source</h5>

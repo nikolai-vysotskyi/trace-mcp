@@ -83,7 +83,7 @@ function gitBuf(text: string): string {
 
 // Project root that does not exist on disk — readSymbolSource will throw on
 // openSync, so getSymbol falls back to symbol.signature as indexed source.
-const PROJECT_ROOT = '/tmp/trace-mcp-test-nonexistent-' + Math.random().toString(36).slice(2);
+const PROJECT_ROOT = '/nonexistent/trace-mcp-test-' + Math.random().toString(36).slice(2);
 
 // ─── tests ───────────────────────────────────────────────────────────────────
 

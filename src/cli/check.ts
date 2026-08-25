@@ -21,6 +21,7 @@ import {
   type QualityGatesConfig,
   QualityGatesConfigSchema,
 } from '../tools/quality/quality-gates.js';
+import { qualityGateReportToSarif } from '../tools/quality/sarif.js';
 
 function resolveDbPath(projectRoot: string): string {
   const entry = getProject(projectRoot);
@@ -31,7 +32,7 @@ function resolveDbPath(projectRoot: string): string {
 export const checkCommand = new Command('check')
   .description('Run quality gate checks against the indexed project (exit code 0 = pass, 1 = fail)')
   .option('--config <path>', 'Path to config file with quality_gates section')
-  .option('--format <fmt>', 'Output format: text | json (default: text)', 'text')
+  .option('--format <fmt>', 'Output format: text | json | sarif (default: text)', 'text')
   .option('--index', 'Re-index the project before checking', false)
   .option('--fail-on <level>', 'Override fail_on: error | warning | none')
   .action(async (opts: { config?: string; format: string; index: boolean; failOn?: string }) => {
@@ -119,7 +120,9 @@ export const checkCommand = new Command('check')
     db.close();
 
     // Output
-    if (opts.format === 'json') {
+    if (opts.format === 'sarif') {
+      process.stdout.write(`${JSON.stringify(qualityGateReportToSarif(report), null, 2)}\n`);
+    } else if (opts.format === 'json') {
       process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     } else {
       process.stdout.write(formatGateReport(report));

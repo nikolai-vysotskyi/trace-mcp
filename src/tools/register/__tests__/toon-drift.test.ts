@@ -44,7 +44,7 @@ function makeCapturingServer(): { server: unknown; captured: CapturedTool[] } {
 
 function baseCtx(overrides: Record<string, unknown> = {}): ServerContext {
   const stub = {
-    projectRoot: '/tmp/fake-project',
+    projectRoot: '/nonexistent/fake-project',
     config: {},
     registry: { getAllFrameworkPlugins: () => [] },
     embeddingService: null,
