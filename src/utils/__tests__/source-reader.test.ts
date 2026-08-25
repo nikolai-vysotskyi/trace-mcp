@@ -43,9 +43,7 @@ describe('readSymbolSource', () => {
     const file = writeTempFile(content);
     cleanup.push(file);
     const byteStart = content.indexOf('function');
-    expect(readSymbolSource(file, byteStart, content.length - 1, false)).toBe(
-      'function foo() {}',
-    );
+    expect(readSymbolSource(file, byteStart, content.length - 1, false)).toBe('function foo() {}');
   });
 
   it('does not exponentially backtrack on many repetitions of "export async "', () => {
