@@ -259,6 +259,29 @@ describe('check — output format', () => {
     const written = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(() => JSON.parse(written)).not.toThrow();
   });
+
+  it('prints a SARIF log with --format sarif', async () => {
+    mockEvaluateQualityGates.mockReturnValue({
+      summary: { result: 'PASS' },
+      gates: [
+        {
+          rule: 'max_cyclomatic_complexity',
+          status: 'warning',
+          actual: 141,
+          threshold: 130,
+          message: 'Gate violated',
+        },
+      ],
+      // biome-ignore lint/suspicious/noExplicitAny: minimal report stub
+    } as any);
+
+    await run(['--format', 'sarif']);
+
+    const written = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    const parsed = JSON.parse(written);
+    expect(parsed.version).toBe('2.1.0');
+    expect(parsed.runs[0].results[0].ruleId).toBe('max_cyclomatic_complexity');
+  });
 });
 
 describe('check — exit codes', () => {
