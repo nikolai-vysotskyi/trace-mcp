@@ -619,6 +619,44 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     ).toBe(false);
   });
 
+  // TRA-152: recursive/pathless grep-cat-find bypassed the extension-anchored
+  // check because no filename with a code extension ever appears in the
+  // command string. This is the dominant real-world shape (recursive search
+  // over a directory), not an edge case.
+  it('denies recursive/pathless grep on known source directories', () => {
+    const cases = [
+      "grep -rn 'foo' src/",
+      "grep -rln -i 'avif' app/",
+      'grep -r foo packages/',
+      'find lib/ -name "*Service*"',
+    ];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(false);
+    }
+  });
+
+  it('denies grep/cat on code files even when the extension is not at the end of the command', () => {
+    const cases = ['cat src/App.tsx | wc -l', "grep -n 'foo' src/foo.ts | head -5"];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(false);
+    }
+  });
+
+  it('still allows grep/cat/find with no code extension and no source-dir argument', () => {
+    const cases = [
+      "grep -rn 'TODO' docs/",
+      "grep -i 'foo' README.md",
+      'cat package.json',
+      'find . -name "*.md"',
+    ];
+    for (const command of cases) {
+      const decision = runGuard('Bash', { command }, sessionId, projectDir);
+      expect(decision.allowed, `command: "${command}"`).toBe(true);
+    }
+  });
+
   it('denies git show on code files', () => {
     expect(
       runGuard('Bash', { command: 'git show HEAD:src/foo.ts' }, sessionId, projectDir).allowed,
