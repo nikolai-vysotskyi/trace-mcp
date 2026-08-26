@@ -13,12 +13,13 @@ import { z } from 'zod';
 import type { ProjectRelay, ServerContext, ToolResponse } from '../../../server/types.js';
 import { registerProjectsTools } from '../projects.js';
 
-// call_project_tool compares against path.resolve(project), so test fixtures
-// must go through the same normalization — a bare POSIX literal like
-// '/repo/a' resolves to a drive-letter path on Windows and never matches.
-const repoA = path.resolve('/repo/a');
-const repoB = path.resolve('/repo/b');
-const repoUnknown = path.resolve('/repo/unknown');
+// `call_project_tool` compares path.resolve(project) against the registered
+// list, so tests must resolve these the same way — a hardcoded POSIX literal
+// like '/repo/a' never matches on Windows, where path.resolve normalizes it
+// to a drive-letter path.
+const REPO_A = path.resolve('/repo/a');
+const REPO_B = path.resolve('/repo/b');
+const REPO_UNKNOWN = path.resolve('/repo/unknown');
 
 type Handler = (args: Record<string, unknown>) => Promise<ToolResponse>;
 
@@ -119,7 +120,7 @@ describe('call_project_tool', () => {
     registerProjectsTools(server as never, ctxStub({ projectRelay: null }));
     const { handler } = findTool(captured, 'call_project_tool');
 
-    const response = await handler({ project: '/repo/a', tool: 'get_project_map', args: {} });
+    const response = await handler({ project: REPO_A, tool: 'get_project_map', args: {} });
     expect(response.isError).toBe(true);
     const body = parseText(response) as { error: { code: string } };
     expect(body.error.code).toBe('relay_unavailable');
@@ -127,7 +128,7 @@ describe('call_project_tool', () => {
 
   it('returns a structured unknown_project error listing what IS registered', async () => {
     const relay: ProjectRelay = {
-      listRelayTargets: () => [repoA, repoB],
+      listRelayTargets: () => [REPO_A, REPO_B],
       openProject: vi.fn(async () => null),
       dispose: () => undefined,
     };
@@ -135,22 +136,22 @@ describe('call_project_tool', () => {
     registerProjectsTools(server as never, ctxStub({ projectRelay: relay }));
     const { handler } = findTool(captured, 'call_project_tool');
 
-    const response = await handler({ project: repoUnknown, tool: 'get_project_map', args: {} });
+    const response = await handler({ project: REPO_UNKNOWN, tool: 'get_project_map', args: {} });
     expect(response.isError).toBe(true);
     const body = parseText(response) as {
       error: { code: string; data: { reason: string; registered: string[]; requested: string } };
     };
     expect(body.error.code).toBe('unknown_project');
     expect(body.error.data.reason).toBe('unknown_project');
-    expect(body.error.data.registered).toEqual([repoA, repoB]);
-    expect(body.error.data.requested).toBe(repoUnknown);
+    expect(body.error.data.registered).toEqual([REPO_A, REPO_B]);
+    expect(body.error.data.requested).toBe(REPO_UNKNOWN);
     // openProject must not even be attempted for a root that isn't registered.
     expect(relay.openProject).not.toHaveBeenCalled();
   });
 
   it('returns unknown_project when the project is registered but openProject() cannot open it', async () => {
     const relay: ProjectRelay = {
-      listRelayTargets: () => [repoA],
+      listRelayTargets: () => [REPO_A],
       openProject: vi.fn(async () => null),
       dispose: () => undefined,
     };
@@ -158,7 +159,7 @@ describe('call_project_tool', () => {
     registerProjectsTools(server as never, ctxStub({ projectRelay: relay }));
     const { handler } = findTool(captured, 'call_project_tool');
 
-    const response = await handler({ project: repoA, tool: 'get_project_map', args: {} });
+    const response = await handler({ project: REPO_A, tool: 'get_project_map', args: {} });
     expect(response.isError).toBe(true);
     const body = parseText(response) as { error: { code: string; data: { reason: string } } };
     expect(body.error.code).toBe('unknown_project');
@@ -167,7 +168,7 @@ describe('call_project_tool', () => {
 
   it('returns a structured unknown_tool error for a tool name not registered on the target project', async () => {
     const relay: ProjectRelay = {
-      listRelayTargets: () => [repoA],
+      listRelayTargets: () => [REPO_A],
       openProject: vi.fn(async () => ({ toolHandlers: new Map() })),
       dispose: () => undefined,
     };
@@ -175,7 +176,7 @@ describe('call_project_tool', () => {
     registerProjectsTools(server as never, ctxStub({ projectRelay: relay }));
     const { handler } = findTool(captured, 'call_project_tool');
 
-    const response = await handler({ project: repoA, tool: 'not_a_real_tool', args: {} });
+    const response = await handler({ project: REPO_A, tool: 'not_a_real_tool', args: {} });
     expect(response.isError).toBe(true);
     const body = parseText(response) as { error: { code: string; data: { tool: string } } };
     expect(body.error.code).toBe('unknown_tool');
@@ -189,7 +190,7 @@ describe('call_project_tool', () => {
       }),
     );
     const relay: ProjectRelay = {
-      listRelayTargets: () => [repoA],
+      listRelayTargets: () => [REPO_A],
       openProject: vi.fn(async () => ({ toolHandlers: new Map([['get_symbol', targetHandler]]) })),
       dispose: () => undefined,
     };
@@ -198,7 +199,7 @@ describe('call_project_tool', () => {
     const { handler } = findTool(captured, 'call_project_tool');
 
     const response = await handler({
-      project: repoA,
+      project: REPO_A,
       tool: 'get_symbol',
       args: { fqn: 'Foo.bar' },
     });
