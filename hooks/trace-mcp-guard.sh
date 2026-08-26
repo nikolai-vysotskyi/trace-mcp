@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.13.0
+# trace-mcp-guard v0.14.0
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.14 changes (fixes TRA-152 — recursive/pathless grep-cat bypass):
+#   - The Bash grep/rg/find/cat/head/tail/etc. code-exploration rule required
+#     a code-file extension at the very END of the command string ($-anchored
+#     CODE_EXT_RE). That never matched recursive/pathless forms with no
+#     filename at all (`grep -rn foo src/`, `grep -rln -i avif app/`), nor
+#     commands where the filename isn't the last token (`cat src/App.tsx |
+#     wc -l`) — the dominant real-world shape of these commands.
+#   - Fix: the rule now also fires on a known source-tree directory argument
+#     (same SOURCE_DIR_RE heuristic the ls/find rule already used), and the
+#     extension check itself no longer requires the match to be at the end
+#     of the command.
 #
 # v0.13 changes (transport-aware liveness — fixes GH #297):
 #   - Status JSON now carries `transport` ("stdio" | "http" — which command
@@ -768,6 +780,16 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
     fi
   fi
 
+  # ─── Shared source-dir heuristic ──────────────────────────────────
+  # Used by both the `ls`/`find` rule below and the grep/cat/etc rule further
+  # down. Matching on known source-tree directory names (rather than
+  # requiring a trailing file extension on the whole command) is what lets
+  # these rules catch pathless/recursive forms like `grep -rn foo src/` or
+  # `find src -type f` where no filename with an extension ever appears.
+  SOURCE_DIR_RE='(^|[ /])(src|lib|packages|apps?|server|client|pkg|internal|modules|services|pipelines|cmd)([/ ]|$)'
+  EXCLUDE_DIR_RE='(node_modules|vendor|dist|build|coverage|\.git|\.trace-mcp|target|out)/'
+  SAFE_ROOT_RE='(^|[ ])(/tmp|/var|/private|/usr|/etc|~/|\$HOME)'
+
   # `ls` / `find` on source-tree paths — code exploration disguised as listing.
   # Allows: `ls`, `ls .`, `ls -la`, `ls /tmp/...`, `ls dist/`, `find . -name foo`,
   #         `find /tmp -type f`.
@@ -778,9 +800,9 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
   # Note: the existing `find` rule below catches `find ... *.ts` via code-ext
   # match; this rule additionally catches `find src -type f` (no extension).
   if echo "$COMMAND" | grep -qE '(^|[ |;&]|xargs +)(ls|find)( |$)' \
-     && echo "$COMMAND" | grep -qE '(^|[ /])(src|lib|packages|apps?|server|client|pkg|internal|modules|services|pipelines|cmd)([/ ]|$)' \
-     && ! echo "$COMMAND" | grep -qE '(node_modules|vendor|dist|build|coverage|\.git|\.trace-mcp|target|out)/' \
-     && ! echo "$COMMAND" | grep -qE '(^|[ ])(/tmp|/var|/private|/usr|/etc|~/|\$HOME)'; then
+     && echo "$COMMAND" | grep -qE "$SOURCE_DIR_RE" \
+     && ! echo "$COMMAND" | grep -qE "$EXCLUDE_DIR_RE" \
+     && ! echo "$COMMAND" | grep -qE "$SAFE_ROOT_RE"; then
     backoff_hit "bash-ls-find"
     deny \
       "Use trace-mcp instead of \\\"ls\\\"/\\\"find\\\" on source-tree paths — it knows your project structure." \
@@ -795,8 +817,21 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
   # Code exploration via shell on code files — block.
   # Triggers: grep/rg/find/cat/head/tail/less/more/awk/sed/bat/code/subl/view
   # appearing as a command (start of line or after pipe / && / ; / xargs)
-  # combined with a code-file extension somewhere in the command.
-  if echo "$COMMAND" | grep -qE '(^|[ |;&]|xargs +)(grep|rg|find|cat|head|tail|less|more|awk|sed|bat|view|subl|code)( |$)' && echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
+  # combined with EITHER:
+  #   - a code-file extension anywhere in the command, not just at the very
+  #     end — `$CODE_EXT_RE` is `$`-anchored (correct for whole-path matches
+  #     elsewhere in this script) but was being reused here to test substrings
+  #     of a whole command line, which misses `cat src/App.tsx | wc -l` and
+  #     anything with flags/pipes after the file path, OR
+  #   - a known source-tree directory argument with no extension at all —
+  #     `grep -rn foo src/`, `grep -rln -i avif app/` — the dominant
+  #     real-world shape (recursive/pathless search), which the old
+  #     extension-only check never matched.
+  CODE_EXT_ANYWHERE_RE='\.(ts|tsx|js|jsx|mjs|cjs|py|pyi|go|rs|java|kt|kts|rb|php|cs|cpp|c|h|hpp|swift|scala|vue|svelte|astro|blade\.php)([^a-zA-Z0-9]|$)'
+  if echo "$COMMAND" | grep -qE '(^|[ |;&]|xargs +)(grep|rg|find|cat|head|tail|less|more|awk|sed|bat|view|subl|code)( |$)' \
+     && ! echo "$COMMAND" | grep -qE "$EXCLUDE_DIR_RE" \
+     && ! echo "$COMMAND" | grep -qE "$SAFE_ROOT_RE" \
+     && { echo "$COMMAND" | grep -qiE "$CODE_EXT_ANYWHERE_RE" || echo "$COMMAND" | grep -qE "$SOURCE_DIR_RE"; }; then
     backoff_hit "bash-code-shell"
     deny \
       "Use trace-mcp instead of shell commands for code exploration." \
