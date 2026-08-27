@@ -11,6 +11,7 @@ import {
   deletePin,
   invalidatePinsCache,
   listPins,
+  type RankingPinRow,
   upsertPin,
 } from '../../scoring/pins.js';
 import { invalidatePageRankCache } from '../../scoring/pagerank.js';
@@ -755,7 +756,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'pin_symbol',
-    'Boost (or demote) a specific symbol in PageRank-driven ranking by setting a multiplicative weight. Pinned symbols also boost their containing file via the same weight. Use to surface canonical examples or architectural keystones. Capped at 50 active pins per project. Returns JSON: { ok, pin? }.',
+    'Boost (or demote) a specific symbol in PageRank-driven ranking by setting a multiplicative weight. Pinned symbols also boost their containing file via the same weight. Use to surface canonical examples or architectural keystones. Capped at 50 active pins per project. Prefer `pin` for new integrations. Returns JSON: { ok, pin? }.',
     {
       symbol_id: z.string().min(1).max(512).describe('Symbol FQN to pin'),
       weight: pinWeightSchema,
@@ -782,7 +783,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'pin_file',
-    'Boost (or demote) a specific file in PageRank-driven ranking by setting a multiplicative weight on its PageRank score. Use to surface canonical examples, architectural keystones, or files central to a work-in-progress feature. Capped at 50 active pins per project. Returns JSON: { ok, pin? }.',
+    'Boost (or demote) a specific file in PageRank-driven ranking by setting a multiplicative weight on its PageRank score. Use to surface canonical examples, architectural keystones, or files central to a work-in-progress feature. Capped at 50 active pins per project. Prefer `pin` for new integrations. Returns JSON: { ok, pin? }.',
     {
       file_path: z.string().min(1).max(512).describe('File path to pin (project-relative)'),
       weight: pinWeightSchema,
@@ -804,6 +805,63 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         };
       }
       return { content: [{ type: 'text', text: j({ ok: true, pin: result.row }) }] };
+    },
+  );
+
+  server.tool(
+    'pin',
+    'Boost (or demote) a symbol and/or file in PageRank-driven ranking by setting a multiplicative weight. Unifies pin_symbol/pin_file — pass symbol_id and/or file_path (at least one required; pass both to pin them together with the same weight). Capped at 50 active pins per project. Returns JSON: { ok, pins, errors? }.',
+    {
+      symbol_id: z.string().min(1).max(512).optional().describe('Symbol FQN to pin'),
+      file_path: z
+        .string()
+        .min(1)
+        .max(512)
+        .optional()
+        .describe('File path to pin (project-relative)'),
+      weight: pinWeightSchema,
+      expires_in_days: pinExpirySchema,
+    },
+    async ({ symbol_id, file_path, weight, expires_in_days }) => {
+      if (!symbol_id && !file_path) {
+        return {
+          content: [
+            { type: 'text', text: j({ ok: false, error: 'symbol_id or file_path required' }) },
+          ],
+          isError: true,
+        };
+      }
+      const expiresInMs = defaultExpiryMs(expires_in_days);
+      const pins: RankingPinRow[] = [];
+      const errors: Array<{ scope: 'symbol' | 'file'; error: string }> = [];
+      if (symbol_id) {
+        const result = upsertPin(store.db, {
+          scope: 'symbol',
+          target_id: symbol_id,
+          weight,
+          expires_in_ms: expiresInMs,
+          created_by: 'user',
+        });
+        if (result.ok && result.row) pins.push(result.row);
+        else errors.push({ scope: 'symbol', error: result.reason ?? 'unknown error' });
+      }
+      if (file_path) {
+        const result = upsertPin(store.db, {
+          scope: 'file',
+          target_id: file_path,
+          weight,
+          expires_in_ms: expiresInMs,
+          created_by: 'user',
+        });
+        if (result.ok && result.row) pins.push(result.row);
+        else errors.push({ scope: 'file', error: result.reason ?? 'unknown error' });
+      }
+      bustRankingCaches();
+      const ok = errors.length === 0;
+      return {
+        content: [{ type: 'text', text: j(ok ? { ok, pins } : { ok, pins, errors }) }],
+        ...(ok ? {} : { isError: true }),
+      };
     },
   );
 
