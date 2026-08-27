@@ -177,7 +177,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_federation_impact',
-      'Aggregates cross-repo impact into ONE call: if you change an endpoint, service, or symbol, this combines subproject client-call impact (which repos/files call it), cross-service edge impact (dependent services via HTTP/event edges), and contract drift (spec vs implementation) into a single blast-radius report — instead of manually chaining get_subproject_impact + get_cross_service_impact + get_contract_drift. Requires at least one of endpoint or service. Read-only. Returns JSON: { target, affected_clients, affected_services, contract_drift, risk_level, summary, total_affected }.',
+      'Aggregates cross-repo blast-radius into ONE call: subproject client-call impact, cross-service edge impact, and contract drift for an endpoint/service/symbol — instead of chaining get_subproject_impact + get_cross_service_impact + get_contract_drift. Requires endpoint or service. Read-only. Returns { target, affected_clients, affected_services, contract_drift, risk_level, summary, total_affected }.',
       {
         endpoint: optionalNonEmptyString(512).describe(
           'Endpoint path or pattern (e.g. /api/users). Used to find client callers and service-level impact.',
@@ -248,7 +248,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'subproject_add_repo',
-      'Add a repository as a subproject of the current project. Pass `repo_path` for a local checkout, or `git_url` to shallow-clone a remote repo into .trace-mcp/subprojects/<owner>/<repo> first (idempotent — re-runs reuse the existing clone). A subproject is any working repository in your ecosystem: microservices, frontends, backends, shared libraries, CLI tools. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), scans for HTTP client calls, and links them to known endpoints. Mutates the topology store; idempotent. Returns JSON: { added, services, contracts, clientCalls, cloned? }.',
+      'Add a repository (microservice, frontend, shared library, etc.) as a subproject of the current project — pass `repo_path` for a local checkout or `git_url` to shallow-clone one first. Discovers services, parses API contracts (OpenAPI/gRPC/GraphQL), and links HTTP client calls to known endpoints. Mutates the topology store; idempotent. Returns { added, services, contracts, clientCalls, cloned? }.',
       {
         repo_path: z
           .string()
@@ -322,7 +322,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'detect_topic_tunnels',
-      'Cross-project topic tunnels: links between registered subprojects that share canonical entities — package names from manifests (package.json / composer.json / pyproject.toml / Cargo.toml / go.mod), declared dependencies (top-level only), and human contributors from `git shortlog` (bots filtered out). Two subprojects are tunnelled when their entity sets overlap; the tunnel weight emphasises shared people and project names over common dependencies (typescript, eslint, etc. are down-weighted to 25% to avoid noise). Use to discover hidden cross-repo coupling, surface "this team also owns that repo", or seed cross-project search. Read-only — no DB writes. Returns JSON: { tunnels: [{ project_a, project_b, shared: [{ kind, canonical, display }], weight }], total }.',
+      'Cross-project topic tunnels: links between registered subprojects that share canonical entities — manifest package names, declared dependencies, and human contributors (bots filtered). Weight emphasizes shared people/project names over common deps. Use to discover hidden cross-repo coupling ("this team also owns that repo"). Read-only. Returns { tunnels: [{ project_a, project_b, shared: [{ kind, canonical, display }], weight }], total }.',
       {
         min_weight: z
           .number()
@@ -770,7 +770,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'graph_query',
-    'Trace how named symbols relate in the dependency graph → returns subgraph + Mermaid diagram. Input is NATURAL LANGUAGE only — NOT SQL. Must contain symbol/class names (e.g. "How does AuthService reach Database?", "What depends on UserModel?", "trace the flow of LoginHandler"). SQL-shaped input (SELECT/FROM/WHERE/JOIN…) is rejected with VALIDATION_ERROR — there is no SQL endpoint for the index. Weakly-grounded anchors (single-word collisions with many symbols) are dropped via god-name filter. Use for ad-hoc graph exploration. For structured call graph use get_call_graph instead. Read-only. Returns JSON: { nodes, edges, mermaid, truncated? }.',
+    'Trace how named symbols relate in the dependency graph → returns subgraph + Mermaid diagram. Input is NATURAL LANGUAGE only, not SQL, and must contain symbol/class names (e.g. "How does AuthService reach Database?"); SQL-shaped input is rejected. For structured call graph use get_call_graph instead. Read-only. Returns { nodes, edges, mermaid, truncated? }.',
     {
       query: z
         .string()
@@ -988,7 +988,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_graph_timeline',
-    'SIMPLIFIED first version of a continuous graph-evolution timeline: samples evenly-spaced historical commits across the requested window (via git log, same sampling strategy as get_complexity_trend) and reports file-count + commit churn (files changed/insertions/deletions) per period, with a short narrative diff marker (e.g. "+12 files, 8 commit(s), +540/-120 lines"). Symbol/edge counts are reported for the current HEAD snapshot only — NOT reconstructed per historical commit (that would require re-indexing the full tree at every sampled commit, which this tool deliberately avoids). For point-in-time named checkpoints use snapshot_graph + diff_graph_snapshots instead. Requires git. Read-only. Returns JSON: { since_days, granularity, periods: [{ period, commit, date, file_count, commits_in_period, files_changed, insertions, deletions, narrative }], current: { files, symbols, edges_by_type }, _tier, _methodology }.',
+    'Samples evenly-spaced historical commits (via git log) and reports file-count + commit churn per period with a short narrative diff. Symbol/edge counts are for the current HEAD only — not reconstructed per historical commit. For point-in-time named checkpoints use snapshot_graph + diff_graph_snapshots instead. Requires git. Read-only. Returns { since_days, granularity, periods: [{ period, commit, date, file_count, commits_in_period, files_changed, insertions, deletions, narrative }], current: { files, symbols, edges_by_type }, _tier, _methodology }.',
     {
       since_days: z
         .number()
@@ -1308,7 +1308,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'predict_bugs',
-    'Heuristic bug-risk triage: ranks files by a multi-signal score (git churn, fix-commit ratio, complexity, coupling, PageRank importance, author count), NOT a validated predictor. Each prediction includes a numeric score, risk bucket (low/medium/high/critical) AND a confidence_level (low/medium/high/multi_signal) counting how many independent signals actually fired. The score is a prioritization heuristic — on this repo, a temporal-holdout calibration (scripts/calibrate-health-metrics.mjs) shows the git signals rank future-fixed files above chance (churn Spearman ~0.3, ~2x precision@K lift over random), which is useful for triage but far from a guarantee. Result envelope includes _methodology disclosure with limitations. Cached for 1 hour; use refresh=true to recompute. Requires git. Use to prioritize where to look first, not to certify a file as buggy. For complexity+churn hotspots only use get_risk_hotspots instead. Read-only. Returns JSON: { predictions: [{ file, score, risk, confidence_level, signals }], total }.',
+    'Heuristic bug-risk triage: ranks files by a multi-signal score (git churn, fix-commit ratio, complexity, coupling, PageRank, author count) — a prioritization heuristic, not a validated predictor. Each result has a risk bucket and confidence_level based on how many signals fired. Cached 1h; refresh=true to recompute. Requires git. For complexity+churn hotspots only use get_risk_hotspots instead. Read-only. Returns { predictions: [{ file, score, risk, confidence_level, signals }], total }.',
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
       min_score: z
@@ -1455,7 +1455,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_file_health_timeline',
-    'Aggregates get_complexity_trend, get_coupling_trend, and get_git_churn into ONE time-series response per file: for each historical snapshot, reports complexity (max/avg cyclomatic), coupling (ca/ce/instability), and a lightweight per-point risk_score, plus a whole-window churn summary — so "is this file getting healthier or worse over time" is answerable in one call instead of three. For cross-file bug-risk ranking use predict_bugs instead (different, more thorough scoring model). Requires git. Read-only. Returns JSON: { file, current, historical: [{ date, commit, max_cyclomatic, avg_cyclomatic, ca, ce, instability, risk_score }], churn, trend }.',
+    'Aggregates get_complexity_trend, get_coupling_trend, and get_git_churn into ONE per-file time series (complexity, coupling, risk_score per snapshot, plus churn summary) — "is this file getting healthier or worse over time" in one call instead of three. For cross-file bug-risk ranking use predict_bugs instead. Requires git. Read-only. Returns { file, current, historical: [{ date, commit, max_cyclomatic, avg_cyclomatic, ca, ce, instability, risk_score }], churn, trend }.',
     {
       file_path: z.string().min(1).max(512).describe('File path to analyze'),
       since_days: z

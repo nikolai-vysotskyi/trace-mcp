@@ -170,7 +170,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dead_exports',
-    'Find exported symbols whose `export` keyword has no external consumer. Each item carries `signals` (which detectors fired) and `recommendation`: `"remove_export_keyword"` when the symbol is still used inside its own file (just un-export it, keep the declaration), `"delete_symbol"` when no in-file usage was detected. NOTE: this tool flags dead EXPORT KEYWORDS, not necessarily dead SYMBOLS. For strict dead-symbol detection (multi-signal: import graph + call graph + barrel re-exports + intra-file usage, only flags symbols with NO incoming references anywhere) use `get_dead_code` instead — it will reject anything `get_dead_exports` tags `remove_export_keyword`. Paginated: caps result list at `limit` (default 100, max 500); when more exist the response includes `truncated: true` and `total_dead` reflects the full count. Read-only. Returns JSON: { dead_exports: [{ symbol_id, name, kind, file, line, signals, recommendation }], total_dead, total_exports, truncated? }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Find exported symbols with no external consumer (flags the `export` keyword, not necessarily a dead symbol — `recommendation` is `remove_export_keyword` if still used in-file, else `delete_symbol`). For strict whole-codebase dead-symbol detection use `get_dead_code` instead. Paginated via `limit`. Read-only. Returns { dead_exports: [{ symbol_id, name, kind, file, line, signals, recommendation }], total_dead, total_exports, truncated? }. Set output_format: "toon" for lossless token savings.',
     {
       file_pattern: z
         .string()
@@ -273,7 +273,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'generate_insights_report',
-    'Single-call narrative health snapshot: god files (PageRank), architectural bridges (edge bottlenecks), risk hotspots (complexity × churn), edge resolution-tier breakdown, and gap counts (dead exports, untested, cycles). Aggregates already-computed metrics into ~2K tokens of Markdown plus a structured payload. Use at the start of a session to orient yourself instead of chaining get_pagerank + get_risk_hotspots + get_edge_bottlenecks + self_audit. Read-only. Returns JSON: { generated_at, totals, resolution_tiers, god_files, bridges, hotspots, gaps, markdown }.',
+    'Single-call narrative health snapshot: god files, architectural bridges, risk hotspots, edge resolution-tier breakdown, and gap counts (dead exports, untested, cycles) — use at session start instead of chaining get_pagerank + get_risk_hotspots + get_edge_bottlenecks + self_audit. Read-only. Returns { generated_at, totals, resolution_tiers, god_files, bridges, hotspots, gaps, markdown }.',
     {
       top_n: z.number().int().min(1).max(20).optional().describe('Items per section (default: 5)'),
     },
@@ -371,7 +371,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_edge_bottlenecks',
-    'Find architectural bottleneck edges in the import graph: edges sitting on many shortest paths (edge betweenness, Brandes), edges whose removal would disconnect the graph (bridges, Tarjan), and nodes that are single points of failure (articulation points). Score combines structural centrality with co-change weight (bottleneckScore = betweenness × (1 + coChangeWeight)). Use to identify edges to monitor during refactoring and to prioritize decoupling work. For general importance use get_pagerank instead. Read-only. Returns JSON: { edges: [{ sourceFile, targetFile, betweenness, coChangeWeight, bottleneckScore, isBridge }], articulationPoints: [...], stats }.',
+    'Find architectural bottleneck edges in the import graph: high edge-betweenness edges, bridges (removal disconnects the graph), and articulation-point nodes (single points of failure). bottleneckScore combines centrality with co-change weight. Use to prioritize decoupling work; for general importance use get_pagerank instead. Read-only. Returns { edges: [{ sourceFile, targetFile, betweenness, coChangeWeight, bottleneckScore, isBridge }], articulationPoints: [...], stats }.',
     {
       top_n: z
         .number()
@@ -658,7 +658,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'check_duplication',
-    'Check if a function/class name already exists elsewhere in the codebase before creating it. Prevents duplicating existing logic. Call with just a `name` when planning new code (an existing match means the name is taken — this is expected when used as a pre-create check), or `symbol_id` to check an existing symbol against others (the supplied symbol_id is always excluded from results — a symbol is never its own duplicate). Use `exclude_symbol_id` to suppress additional known symbols. Returns scored matches — score ≥0.7 means high likelihood of duplication, review the existing symbol before proceeding. Read-only. Returns JSON: { duplicates: [{ symbol_id, name, file, score }], hasDuplication }.',
+    'Check if a function/class name already exists before creating it, to avoid duplicating logic. Pass `name` when planning new code, or `symbol_id` to check an existing symbol against others (auto-excluded from its own results). Score >=0.7 means likely duplication. Read-only. Returns { duplicates: [{ symbol_id, name, file, score }], hasDuplication }.',
     {
       symbol_id: z
         .string()

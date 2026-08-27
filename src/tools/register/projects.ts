@@ -52,7 +52,7 @@ export function registerProjectsTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'call_project_tool',
-    "Relay a trace-mcp tool call to a DIFFERENT registered project than this session's own (cross-project dispatch). Use list_projects first to find valid `project` roots. The named `tool` runs with its normal schema/contract against the target project's already-indexed data — no new indexing or file watching is started for it. Read-only relay (mutating tools still run their own normal effects on the TARGET project). Returns JSON: the target tool's own response verbatim, or `{ error: { code, message, data } }` when `project` isn't registered or `tool` isn't a known tool name.",
+    "Relay a trace-mcp tool call to a DIFFERENT registered project than this session's own (cross-project dispatch). Use list_projects first to find valid `project` roots. The named `tool` runs with its normal schema/contract against the target project's already-indexed data. Returns the target tool's own response verbatim, or `{ error: { code, message, data } }` when `project`/`tool` is invalid.",
     {
       project: z
         .string()

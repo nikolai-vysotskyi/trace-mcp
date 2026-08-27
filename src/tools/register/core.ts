@@ -55,7 +55,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'reindex',
-    'Trigger (re)indexing of the project or a subdirectory. Mutates the local index (SQLite). Use after major file changes; for single-file updates prefer register_edit instead. The optional `postprocess` flag controls how much work runs after raw symbol extraction: "full" (default) does everything; "minimal" skips LSP enrichment + env-var scan + git history snapshots (~30-50% faster on warm CI runs); "none" also skips edge resolution and gives you raw symbols only. Idempotent — safe to re-run. Returns JSON: { status, totalFiles, indexed, skipped, errors, durationMs, postprocess }.',
+    'Trigger (re)indexing of the project or a subdirectory. Mutates the local index (SQLite). Use after major file changes; for single-file updates prefer register_edit instead. See `postprocess` param for full/minimal/none depth control. Idempotent. Returns { status, totalFiles, indexed, skipped, errors, durationMs, postprocess }.',
     {
       path: z
         .string()
@@ -111,7 +111,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'embed_repo',
-    'Precompute and cache symbol embeddings for semantic / hybrid search. Embeddings are also computed lazily on first semantic query, but calling this once after a fresh index avoids the first-query latency spike. Requires AI provider to be enabled in config (ollama/openai). Set force=true to drop and recompute all existing embeddings. Mutates the vector store; idempotent. Use after reindex when you plan to use semantic search. Returns JSON: { status, indexed_this_run, total_embedded, coverage_pct, duration_ms }. If embedding batches fail (e.g. a dimension mismatch between the model and the vector store, or an unreachable provider) it returns status "error" with a diagnostic message and failed_batches count instead of a silent "completed" with 0 coverage.',
+    'Precompute and cache symbol embeddings for semantic/hybrid search, avoiding first-query latency (embeddings otherwise compute lazily). Requires an AI provider enabled in config (ollama/openai). Mutates the vector store; idempotent. Returns { status, indexed_this_run, total_embedded, coverage_pct, duration_ms } — status "error" with diagnostics on batch failure instead of a silent zero-coverage "completed".',
     {
       batch_size: z
         .number()
@@ -670,7 +670,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_env_vars',
-    'List environment variable keys from .env files with inferred value types/formats. Never exposes actual values — only keys, types (string/number/boolean/empty), and formats (url/email/ip/path/uuid/json/base64/csv/dsn/etc). Read-only, no side effects, safe for secrets. Use to understand project configuration without accessing actual values. Pass `redacted: true` together with `file` to receive a line-by-line redacted view of that one file (keys + type hints, no values) — useful when ordering and comments matter, e.g. when reviewing a config layout. Returns JSON grouped by file by default: { [file]: [{ key, type, format, comment }] }.',
+    'List environment variable keys from .env files with inferred value types/formats — never exposes actual values, safe for secrets. See `redacted`+`file` params for a line-by-line redacted view of one file. Read-only. Returns { [file]: [{ key, type, format, comment }] } grouped by file by default.',
     {
       pattern: z
         .string()

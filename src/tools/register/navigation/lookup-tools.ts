@@ -141,7 +141,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'get_outline',
-    'Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens. For reading one symbol\'s source, follow up with get_symbol. Pass `nested: true` to expand large top-level symbols (default ≥100 LOC) into their inner function-like declarations — each child carries `parentId` + `depth` (max depth 3). Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd, parentId?, depth? }] }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Get all symbols for a file (signatures only, no bodies) — use instead of Read to understand a file before editing, much cheaper in tokens. Follow up with get_symbol to read one symbol\'s source. See `nested` param to expand large symbols into inner declarations. Read-only. Returns { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd, parentId?, depth? }] }. Set output_format: "toon" for lossless token savings.',
     {
       path: z.string().max(512).describe('Relative file path'),
       detail_level: DetailLevelSchema,
@@ -262,7 +262,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'get_change_impact',
-    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents (complexity, coverage, exports), module groups, affected tests, co-change hidden couplings. Supports diff-aware mode via symbol_ids to scope analysis to only changed symbols. Use before modifying code to understand blast radius. For quick risk assessment without full report, use assess_change_risk instead. Read-only. Returns JSON: { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
+    'Full change impact report: risk score + mitigations, breaking change detection, enriched dependents, module groups, affected tests, co-change hidden couplings. Use before modifying code to understand blast radius; for a quick risk score only use assess_change_risk instead. Read-only. Returns { risk, dependents, affectedTests, breakingChanges, totalAffected }.',
     {
       file_path: optionalNonEmptyString(512).describe('Relative file path to analyze'),
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to analyze'),

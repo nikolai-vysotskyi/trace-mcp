@@ -456,7 +456,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Repo Packing ---
   server.tool(
     'pack_context',
-    'Pack project context into a single document for external LLMs. Intelligent selection by graph importance, fits within token budget. Better than Repomix for focused context. Strategies: most_relevant (default — feature/PageRank ranked), core_first (PageRank always wins, surfaces architecturally central code), compact (signatures only — drops source bodies, lets outlines cover much more of the repo per token). Read-only. Use when sharing project context with external tools. Returns XML/Markdown/JSON with selected code within budget.',
+    'Pack project context into a single document for external LLMs — intelligent selection by graph importance, fits within a token budget (see `strategy` param for ranking options). Read-only. Returns XML/Markdown/JSON with selected code within budget.',
     {
       scope: z
         .enum(['project', 'module', 'feature'])
@@ -539,7 +539,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
 
   server.tool(
     'check_quality_gates',
-    'Run configurable quality gate checks against the project. Returns pass/fail for each gate (complexity, coupling, circular imports, dead exports, tech debt, security, antipatterns, code smells). Designed for CI integration — AI can verify gates pass before committing. Use before PR/commit to ensure quality standards. Read-only. When no gates are defined (no `quality_gates` in config and no inline `config.rules`), the result is `NO_GATES_CONFIGURED` with a `_warnings` advisory — NOT a misleading `PASS`. Pass `use_default_gates: true` to opt in to a conservative built-in ruleset (max_cyclomatic=30 error, max_circular_import_chains=0 error, max_coupling_instability=0.9 warning). Returns JSON: { gates, summary: { result: "PASS"|"FAIL"|"WARNING"|"NO_GATES_CONFIGURED", ... }, _warnings?, _defaults_used? }.',
+    'Run configurable quality gate checks (complexity, coupling, circular imports, dead exports, tech debt, security, antipatterns, code smells) — pass/fail per gate, for CI integration and pre-commit checks. When no gates are configured, returns `NO_GATES_CONFIGURED` rather than a misleading PASS; pass `use_default_gates: true` for a conservative built-in ruleset. Read-only. Returns { gates, summary: { result: "PASS"|"FAIL"|"WARNING"|"NO_GATES_CONFIGURED", ... }, _warnings?, _defaults_used? }.',
     {
       scope: z
         .enum(['project', 'changed'])
@@ -683,7 +683,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Edit-Safety Preflight ---
   server.tool(
     'check_edit_safe',
-    'Edit-safety preflight: before you MODIFY a symbol or file, get ONE verdict for "is this safe to edit and what must I preserve". Fuses signature impact (cross-file importers depending on the current contract), cyclomatic complexity (regression-prone bodies), and test-coverage presence into a single verdict tier (safe_to_edit / untested / complexity_risk / signature_impact) with ranked blockers, a one-line recommended action, and a confidence score. Complements assess_change_risk (continuous risk score) — this names the dominant blocker and what to preserve. Read-only. Returns JSON: { verdict, recommended_action, blockers: [{ signal, severity, detail }], confidence, signals }.',
+    'Edit-safety preflight: before modifying a symbol or file, get one verdict tier (safe_to_edit / untested / complexity_risk / signature_impact) fusing signature impact, cyclomatic complexity, and test coverage, with ranked blockers and a recommended action. Complements assess_change_risk (continuous score) by naming the dominant blocker. Read-only. Returns { verdict, recommended_action, blockers: [{ signal, severity, detail }], confidence, signals }.',
     {
       file_path: optionalNonEmptyString(512).describe('File path to check before editing'),
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to check before editing'),

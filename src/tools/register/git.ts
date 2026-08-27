@@ -72,7 +72,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_risk_hotspots',
-    'Code hotspots: files with both high complexity AND high git churn (Adam Tornhill methodology). Score = complexity × log(1 + commits). This is a heuristic triage ranking, not a validated risk metric — churn alone correlates only moderately with where bugs are later fixed (Spearman ~0.3 on this repo via scripts/calibrate-health-metrics.mjs), so treat the ranking as "look here first", not a guarantee. Each entry includes a confidence_level (low/medium/multi_signal) counting how many of the two independent signals fired strongly. Result envelope includes _methodology disclosure and _warnings when git is unavailable. Requires git. Use to prioritize refactoring. For per-file bug-risk triage use predict_bugs instead. Read-only. Returns JSON: { hotspots: [{ file, score, complexity, commits, confidence_level }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Files with both high complexity AND high git churn (score = complexity × log(1+commits)); a heuristic triage ranking, not a validated risk metric (churn correlates only moderately with actual bugs). Requires git. For per-file bug-risk triage use predict_bugs instead. Read-only. Returns { hotspots: [{ file, score, complexity, commits, confidence_level }], total }. Set output_format: "toon" for lossless token savings.',
     {
       since_days: z
         .number()
@@ -122,7 +122,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_dead_code',
-    'Dead code detection. Two modes: (1) "multi-signal" (default) combines import graph, call graph, and barrel export analysis with confidence scores. (2) "reachability" runs forward BFS from auto-detected entry points (tests, package.json main/bin, src/{cli,main,index}, routes, framework-tagged controllers) — stricter but more accurate when entry points are enumerable. Pass entry_points to add custom roots. Both modes emit _methodology and _warnings. Use for comprehensive dead code analysis. For quick export-only scan use get_dead_exports; to safely remove detected dead code use remove_dead_code. Read-only. Returns JSON: { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total }.',
+    'Whole-codebase dead code detection. `mode: "multi-signal"` (default) combines import/call graph + barrel exports with confidence scores; `"reachability"` runs forward BFS from auto-detected entry points (add custom roots via entry_points) — stricter when entry points are enumerable. For a quick export-only scan use get_dead_exports; to remove results use remove_dead_code. Read-only. Returns { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total }.',
     {
       file_pattern: z
         .string()
@@ -245,7 +245,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'detect_antipatterns',
-    'Detect performance & design antipatterns: N+1 query risks, missing eager loading, unbounded queries, event listener leaks (via callSites — framework-managed listeners like Livewire/Socket.IO/NestJS gateways/Mongoose/Sequelize hooks are excluded), circular ORM association cycles, missing FK indexes, memory leaks (unbounded caches, closure-captured growing collections), god classes (>=25 methods or >=500 LOC), long methods (>=60 LOC), long parameter lists (>=6 params), deep nesting (>=5 indent levels). ORM-scoped signals require an active ORM plugin; size/complexity detectors (god_class, long_method, long_parameter_list, deep_nesting) run on every indexed symbol. For ES/CJS import cycles use get_circular_imports. For code quality (TODOs, debug artifacts, hardcoded values) use scan_code_smells. For security use scan_security. Read-only. Returns JSON: { findings: [{ category, severity, file, line, message, suggestion }], total }.',
+    'Detect performance & design antipatterns: N+1 queries, missing eager loading, unbounded queries, event listener leaks, circular ORM associations, missing FK indexes, memory leaks, god classes, long methods/parameter lists, deep nesting (see `category` enum for the full list). ORM-scoped signals need an active ORM plugin. For import cycles use get_circular_imports; for TODOs/debug artifacts use scan_code_smells; for security use scan_security. Read-only. Returns { findings: [{ category, severity, file, line, message, suggestion }], total }.',
     {
       category: z
         .array(
@@ -310,7 +310,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'scan_code_smells',
-    'Find deferred work and shortcuts: TODO/FIXME/HACK/XXX comments, empty functions & stubs, hardcoded values (IPs, URLs, credentials, magic numbers, feature flags), debug artifacts (console.log, debugger, var_dump, dd, binding.pry, pdb.set_trace, dbg!, printStackTrace, and 20+ other per-language debug markers). Surfaces technical debt that grep alone misses by combining comment scanning, symbol body analysis, and context-aware false-positive filtering. Use for code quality audit / pre-release checks. For performance-specific antipatterns use detect_antipatterns; for security issues use scan_security. Read-only. Returns JSON: { findings: [{ category, priority, file, line, message }], total, summary }.',
+    'Find deferred work and shortcuts: TODO/FIXME/HACK/XXX comments, empty functions/stubs, hardcoded values (IPs, URLs, credentials, magic numbers), and debug artifacts (console.log, debugger, var_dump, and 20+ other per-language markers). Combines comment scanning + symbol body analysis with false-positive filtering — catches more than grep. For performance antipatterns use detect_antipatterns; for security use scan_security. Read-only. Returns { findings: [{ category, priority, file, line, message }], total, summary }.',
     {
       category: z
         .array(z.enum(['todo_comment', 'empty_function', 'hardcoded_value', 'debug_artifact']))
@@ -361,7 +361,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'detect_ast_clones',
-    'Find Type-2 AST clones across the codebase: functions/methods with identical structure after normalizing identifiers and literals. Unlike check_duplication (name/signature similarity — Type-1-ish), this parses each function body with tree-sitter, replaces identifiers and literals with a placeholder, and hashes the AST subtree. Reports groups of structurally identical symbols — prime candidates for DRY refactoring or extracting a shared helper. Supported languages: TypeScript, JavaScript, Python, Ruby, Go, Java, Rust, PHP, C, C++, C#, Swift, Kotlin, Scala, Elixir. Read-only. Returns JSON: { groups: [{ hash, size, loc, symbols: [{ symbol_id, name, file, line_start, line_end }] }], total_groups, total_duplicated_symbols, files_scanned, symbols_scanned }.',
+    'Find Type-2 AST clones: functions/methods with identical structure after normalizing identifiers and literals (tree-sitter body hashing). Unlike check_duplication (name/signature similarity), this catches structurally identical code under different names — prime DRY-refactor candidates. Supports TS/JS/Python/Ruby/Go/Java/Rust/PHP/C/C++/C#/Swift/Kotlin/Scala/Elixir. Read-only. Returns { groups: [{ hash, size, loc, symbols: [{ symbol_id, name, file, line_start, line_end }] }], total_groups, total_duplicated_symbols, files_scanned, symbols_scanned }.',
     {
       min_loc: z
         .number()
@@ -411,7 +411,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'taint_analysis',
-    'Track flow of untrusted data from sources (HTTP params, env vars, file reads) to dangerous sinks (SQL queries, exec, innerHTML, redirects). Framework-aware: knows Express req.params, Laravel $request->input, Django request.GET, FastAPI Query(), etc. Reports unsanitized flows with CWE IDs and fix suggestions. Type-aware: flows that terminate at a provably non-string value (numeric/boolean coercion such as Math.floor(), (int) casts, comparison results) are pruned, since a string-injection sink cannot be exploited by a number/boolean. Heuristic, regex-based intra/inter-procedural analysis — not a sound dataflow engine; treat results as triage. Use for data-flow security analysis. For pattern-based OWASP scanning use scan_security instead. Read-only. Returns JSON: { flows: [{ source, sink, path, sanitized, cwe, suggestion }], total }.',
+    'Track flow of untrusted data from sources (HTTP params, env vars, file reads) to dangerous sinks (SQL queries, exec, innerHTML, redirects). Framework-aware (Express, Laravel, Django, FastAPI, etc). Reports unsanitized flows with CWE IDs and fix suggestions; prunes flows provably coerced to non-string values. Heuristic regex-based analysis, not a sound dataflow engine — treat as triage. For pattern-based OWASP scanning use scan_security instead. Read-only. Returns { flows: [{ source, sink, path, sanitized, cwe, suggestion }], total }.',
     {
       scope: optionalNonEmptyString(512).describe('Directory to scan (default: whole project)'),
       sources: z
