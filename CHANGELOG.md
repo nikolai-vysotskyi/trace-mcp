@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.48.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.1...v1.48.2) (2026-08-27)
+
+
+### Bug Fixes
+
+* **app:** apply staged update on any quit, not just explicit Restart ([#376](https://github.com/nikolai-vysotskyi/trace-mcp/issues/376)) ([b817ef9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b817ef9dd68ff86c457c1ca7fa827cbd22162eea))
+* **daemon:** re-check npm registry periodically, not just at startup ([#372](https://github.com/nikolai-vysotskyi/trace-mcp/issues/372)) ([475cb69](https://github.com/nikolai-vysotskyi/trace-mcp/commit/475cb69fb40efdb9bd11ed0e86345dfacc641229))
+* deep-glob fallback masked by unrelated global include pattern (TRA-184) ([#374](https://github.com/nikolai-vysotskyi/trace-mcp/issues/374)) ([803f7c3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/803f7c3c00e9a690cab6185cb3b6d7160fb1a145))
+* **registry:** reject /private/tmp as a project root (TRA-185) ([#373](https://github.com/nikolai-vysotskyi/trace-mcp/issues/373)) ([168e311](https://github.com/nikolai-vysotskyi/trace-mcp/commit/168e3118a46c56038e22fa37da852b9ec1abba1a))
+
+
+### Documentation
+
+* refresh product roadmap — 2 items shipped, add tool-schema tax (TRA-188) ([#375](https://github.com/nikolai-vysotskyi/trace-mcp/issues/375)) ([5bf51d9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5bf51d9e55b7afe19773346595b74f8b656736f5))
+
+
+### CI/CD
+
+* switch release-PR auto-approve to a schedule trigger (TRA-171) ([#370](https://github.com/nikolai-vysotskyi/trace-mcp/issues/370)) ([2411bb2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2411bb22995ad39c2bb2b7ecbabf9d23de28c138))
+
 ## [1.48.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.0...v1.48.1) (2026-08-27)
 
 
