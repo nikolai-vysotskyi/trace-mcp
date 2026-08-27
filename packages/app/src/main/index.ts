@@ -4,6 +4,10 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import { createTray, showMenuWindow } from './tray';
+import {
+  hasPendingUpdate as hasPendingUpdateImpl,
+  trySpawnApplyHelper as trySpawnApplyHelperImpl,
+} from './apply-pending-helper';
 
 // SharedArrayBuffer needed for cosmos.gl workers. GPU compositing + Skia
 // renderer are kept ON — disabling them forces a per-frame CPU readback of
@@ -1071,11 +1075,7 @@ const APPLY_HELPER = app.isPackaged
   : path.join(__dirname, '..', '..', '..', '..', 'scripts', 'apply-pending-update.mjs');
 
 function hasPendingUpdate(): boolean {
-  try {
-    return fs.existsSync(PENDING_ZIP) && fs.existsSync(PENDING_VERSION);
-  } catch {
-    return false;
-  }
+  return hasPendingUpdateImpl({ pendingZip: PENDING_ZIP, pendingVersion: PENDING_VERSION });
 }
 
 const PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
@@ -1112,29 +1112,32 @@ ipcMain.handle('check-pending-update', () => {
   return { pending: false };
 });
 
-// IPC: restart the app. If a staged update is waiting, spawn a detached helper
-// that swaps the bundle once this process exits, then relaunches the new app.
+function trySpawnApplyHelper(): boolean {
+  return trySpawnApplyHelperImpl(
+    { pendingZip: PENDING_ZIP, pendingVersion: PENDING_VERSION, applyHelper: APPLY_HELPER },
+    process.pid,
+  );
+}
+
+// IPC: restart the app. If a staged update is waiting, apply it; otherwise
+// just relaunch.
 ipcMain.handle('restart-app', () => {
-  if (hasPendingUpdate() && fs.existsSync(APPLY_HELPER)) {
-    try {
-      const child = spawn(process.execPath, [APPLY_HELPER, String(process.pid)], {
-        detached: true,
-        stdio: 'ignore',
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-      });
-      child.unref();
-      console.error(`[trace-mcp] spawned apply-pending-update helper pid=${child.pid}`);
-      app.exit(0);
-      return;
-    } catch (err) {
-      console.error(
-        `[trace-mcp] spawn apply-pending-update failed, falling back to relaunch:`,
-        err,
-      );
-    }
+  if (trySpawnApplyHelper()) {
+    app.exit(0);
+    return;
   }
   app.relaunch();
   app.exit(0);
+});
+
+// This is a tray app that keeps running when its window is closed, so the
+// only ways users actually exit are the tray's "Quit" item and Cmd+Q — both
+// call app.quit() directly, never the restart-app IPC above. Without this
+// hook, a staged update sits on disk forever because nothing ever applies
+// it: the bundle stays stale no matter how many times "Update" is clicked.
+// Apply on any quit path too, so quitting also self-heals a stale bundle.
+app.on('before-quit', () => {
+  trySpawnApplyHelper();
 });
 
 app.whenReady().then(() => {
