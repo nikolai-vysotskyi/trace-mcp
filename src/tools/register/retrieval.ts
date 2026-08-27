@@ -22,13 +22,49 @@ import type { FeelingLuckyResult } from '../../retrieval/retrievers/feeling-luck
 
 type AnyResult = LexicalResult | SemanticResult | HybridResult | SummaryResult | FeelingLuckyResult;
 
-interface NormalizedItem {
+export interface NormalizedItem {
   symbol_id: string;
   name: string | null;
   file: string | null;
   line: number | null;
   score: number;
   snippet?: string;
+}
+
+export type NamedSearchModeResult =
+  | { ok: true; mode: string; items: NormalizedItem[]; total: number }
+  | { ok: false; mode: string; available: readonly string[] };
+
+/**
+ * Shared dispatch for the named-retriever search modes (TRA-200 — used by
+ * both `search_with_mode` and `search`'s `retriever` param, so the two
+ * surfaces can never drift in behavior). Not a class/registry singleton —
+ * cheap to construct per call, same as the original `search_with_mode`
+ * handler did.
+ */
+export async function runNamedSearchMode(
+  ctx: ServerContext,
+  { query, mode, limit }: { query: string; mode: string; limit?: number },
+): Promise<NamedSearchModeResult> {
+  const modes = createDefaultSearchModeRegistry({
+    store: ctx.store,
+    embedding: ctx.embeddingService,
+    vectorStore: ctx.vectorStore,
+  });
+  const retriever = modes.getMode(mode);
+  if (!retriever) {
+    return { ok: false, mode, available: modes.listModes() };
+  }
+  // The retrievers do not share a single query-input shape: most consume `text`,
+  // but the graph-completion retriever reads `query`. Pass both so any retriever
+  // gets the field it expects without the dispatcher needing per-mode branches.
+  const items = (await runRetriever(retriever, {
+    text: query,
+    query,
+    limit,
+  } as unknown as Parameters<typeof runRetriever>[1])) as AnyResult[];
+  const normalized = items.map((it) => normalize(it, ctx));
+  return { ok: true, mode, items: normalized, total: normalized.length };
 }
 
 /**
@@ -84,11 +120,6 @@ const SEARCH_WITH_MODE_DESCRIPTION = [
 
 export function registerRetrievalTools(server: McpServer, ctx: ServerContext): void {
   const { j } = ctx;
-  const modes = createDefaultSearchModeRegistry({
-    store: ctx.store,
-    embedding: ctx.embeddingService,
-    vectorStore: ctx.vectorStore,
-  });
 
   server.tool(
     'search_with_mode',
@@ -102,43 +133,23 @@ export function registerRetrievalTools(server: McpServer, ctx: ServerContext): v
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default 20)'),
     },
     async ({ query, mode, limit }) => {
-      const resolvedMode = mode ?? 'feeling_lucky';
-      const retriever = modes.getMode(resolvedMode);
-      if (!retriever) {
+      const result = await runNamedSearchMode(ctx, { query, mode: mode ?? 'feeling_lucky', limit });
+      if (!result.ok) {
         return {
           content: [
             {
               type: 'text',
-              text: j({
-                error: 'unknown_mode',
-                mode: resolvedMode,
-                available: modes.listModes(),
-              }),
+              text: j({ error: 'unknown_mode', mode: result.mode, available: result.available }),
             },
           ],
           isError: true,
         };
       }
-
-      // The retrievers do not share a single query-input shape: most consume `text`,
-      // but the graph-completion retriever reads `query`. Pass both so any retriever
-      // gets the field it expects without the dispatcher needing per-mode branches.
-      const items = (await runRetriever(retriever, {
-        text: query,
-        query,
-        limit,
-      } as unknown as Parameters<typeof runRetriever>[1])) as AnyResult[];
-      const normalized = items.map((it) => normalize(it, ctx));
-
       return {
         content: [
           {
             type: 'text',
-            text: j({
-              mode: resolvedMode,
-              items: normalized,
-              total: normalized.length,
-            }),
+            text: j({ mode: result.mode, items: result.items, total: result.total }),
           },
         ],
       };
