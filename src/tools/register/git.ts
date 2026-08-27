@@ -22,6 +22,7 @@ import {
   type TaintSourceKind,
   taintAnalysis,
 } from '../quality/taint-analysis.js';
+import { getDeadExports } from '../analysis/introspect.js';
 import { getDeadCodeReachability, getDeadCodeV2 } from '../refactoring/dead-code.js';
 import { checkRenameSafe } from '../refactoring/rename-check.js';
 import { GIT_CHURN_METHODOLOGY } from '../shared/confidence.js';
@@ -122,7 +123,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_dead_code',
-    'Dead code detection. Two modes: "multi-signal" (default) combines import graph, call graph, and barrel export analysis with confidence scores; "reachability" runs forward BFS from auto-detected entry points (tests, package.json main/bin, src/{cli,main,index}, routes, framework controllers) — stricter when entry points are enumerable. Pass entry_points for custom roots. For quick export-only scan use get_dead_exports; to remove detected code use remove_dead_code. Read-only. Returns JSON: { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total }.',
+    'Dead code detection. Modes: "multi-signal" (default) combines import graph, call graph, and barrel export analysis with confidence scores; "reachability" runs forward BFS from auto-detected entry points (tests, package.json main/bin, src/{cli,main,index}, routes, framework controllers) — stricter when entry points are enumerable; "exports_only" is the fast export-keyword-only scan (same as get_dead_exports, which stays available as its own tool). Pass entry_points for custom roots. To remove detected code use remove_dead_code. Read-only. Returns JSON: { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total } — exports_only mode returns { dead_exports, total_dead, total_exports, truncated? } instead (see get_dead_exports).',
     {
       file_pattern: z
         .string()
@@ -137,9 +138,15 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .describe(
           '[multi-signal mode] Min confidence to report (default: 0.5 = at least 2 of 3 signals)',
         ),
-      limit: z.number().int().min(1).max(500).optional().describe('Max results (default: 50)'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(500)
+        .optional()
+        .describe('Max results (default: 50, or 100 for exports_only)'),
       mode: z
-        .enum(['multi-signal', 'reachability'])
+        .enum(['multi-signal', 'reachability', 'exports_only'])
         .optional()
         .describe('Detection algorithm (default: multi-signal)'),
       entry_points: z
@@ -149,6 +156,10 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .describe('[reachability mode] Extra entry-point file paths (repo-relative)'),
     },
     async ({ file_pattern, threshold, limit, mode, entry_points }) => {
+      if (mode === 'exports_only') {
+        const result = getDeadExports(store, file_pattern, limit ?? 100, projectRoot);
+        return { content: [{ type: 'text', text: jh('get_dead_code', result) }] };
+      }
       const result =
         mode === 'reachability'
           ? getDeadCodeReachability(store, {
