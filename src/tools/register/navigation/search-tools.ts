@@ -109,7 +109,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         .boolean()
         .optional()
         .describe(
-          'Enable Signal Fusion Pipeline — multi-channel WRR ranking across lexical (BM25), structural (PageRank), similarity (embeddings), and identity (exact/prefix/segment match). Produces better results than single-channel search.',
+          'Enable Signal Fusion — multi-channel WRR ranking across lexical (BM25), structural (PageRank), similarity (embeddings), and identity (exact/prefix match). Better results than single-channel search.',
         ),
       fusion_weights: z
         .object({
@@ -132,7 +132,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         .enum(RETRIEVAL_MODES)
         .optional()
         .describe(
-          'Memoir-style retrieval mode: single (default — top-K), tiered (high/medium/low buckets), drill (scoped to drill_from), flat (raw FTS, no PageRank), get (exact lookup). Omit to auto-pick (path-shaped query → get, otherwise → single).',
+          'Retrieval mode: single (default, top-K), tiered (high/medium/low buckets), drill (scoped to drill_from), flat (raw FTS, no PageRank), get (exact lookup). Omit to auto-pick (path-shaped query → get, else single).',
         ),
       drill_from: z
         .string()
@@ -143,7 +143,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         ),
       detail_level: DetailLevelSchema,
       output_format: OutputFormatSchema.describe(
-        'Output format. "json" (default) returns JSON; "toon" returns Token-Oriented Object Notation — 30-60% fewer tokens, lossless. "markdown" is unsupported here and behaves as json.',
+        '"json" (default) or "toon" (lossless, 30-60% fewer tokens). "markdown" is unsupported here and behaves as json.',
       ),
     },
     async ({

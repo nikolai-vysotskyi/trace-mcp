@@ -42,7 +42,7 @@ export function registerTaskContextTools(server: McpServer, ctx: ServerContext):
         .enum(['json', 'markdown'])
         .optional()
         .describe(
-          'Output format. "json" (default) returns structured fields; "markdown" returns a single LLM-optimized document with code fences (~15-20% token savings).',
+          '"json" (default, structured fields) or "markdown" (single LLM-optimized document with code fences, ~15-20% cheaper).',
         ),
     },
     async ({ task, token_budget, focus, include_tests, detail_level, output_format }) => {

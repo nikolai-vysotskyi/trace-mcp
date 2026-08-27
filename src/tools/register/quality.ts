@@ -297,13 +297,13 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .boolean()
         .optional()
         .describe(
-          'E14 — add CLAUDE.md drift detection (dead_tool_ref, dead_skill_ref, dead_command_ref, oversized_section). Default false for back-compat.',
+          'Add CLAUDE.md drift detection (dead_tool_ref, dead_skill_ref, dead_command_ref, oversized_section). Default false for back-compat.',
         ),
       drift_only: z
         .boolean()
         .optional()
         .describe(
-          'E14 — restrict output to drift-class categories only (dead_path + dead_*_ref + oversized_section). Implies include_drift. Use when you only care about agent-config drift.',
+          'Restrict output to drift-class categories only (dead_path + dead_*_ref + oversized_section). Implies include_drift.',
         ),
     },
     async ({ config_files, fix_suggestions, include_drift, drift_only }) => {
@@ -488,7 +488,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .enum(['most_relevant', 'core_first', 'compact'])
         .optional()
         .describe(
-          'Packing strategy (default: most_relevant). core_first = PageRank always wins. compact = drops source bodies, allows much wider outline coverage.',
+          'Packing strategy (default most_relevant). core_first = PageRank always wins; compact = drops source bodies for wider outline coverage.',
         ),
       include_budget_report: z
         .boolean()
@@ -550,7 +550,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .boolean()
         .optional()
         .describe(
-          'Opt-in to the conservative built-in default ruleset when no `quality_gates` config and no inline `config.rules` are provided. Default false — when false and no gates configured, returns `NO_GATES_CONFIGURED`.',
+          'Opt-in to the conservative built-in ruleset when no `quality_gates` config / inline `config.rules` exist. Default false — otherwise returns `NO_GATES_CONFIGURED`.',
         ),
       config: z
         .object({
@@ -571,7 +571,7 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
         .enum(['json', 'sarif'])
         .optional()
         .describe(
-          'Output format. "json" (default) returns the native gate report; "sarif" emits a SARIF 2.1.0 log (only warning/error gates become results) for code-scanning ingestion.',
+          '"json" (default, native gate report) or "sarif" (2.1.0 log, warning/error gates only) for code-scanning ingestion.',
         ),
     },
     async ({
