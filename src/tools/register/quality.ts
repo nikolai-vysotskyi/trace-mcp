@@ -11,6 +11,10 @@ import { generateDocs } from '../project/generate-docs.js';
 import { getPackageDeps } from '../project/package-deps.js';
 import { auditConfig, scanInstalledSkills } from '../quality/audit-config.js';
 import { compareBranches, getChangedSymbols } from '../quality/changed-symbols.js';
+import { assessChangeRisk } from '../analysis/predictive-intelligence.js';
+import { getChangeImpact } from '../analysis/impact.js';
+import { decisionsForImpact } from '../../memory/enrichment.js';
+import { CHANGE_IMPACT_METHODOLOGY } from '../shared/confidence.js';
 import { checkEditSafe } from '../quality/check-edit-safe.js';
 import { collectCoChanges, getCoChanges, persistCoChanges } from '../quality/co-changes.js';
 import {
@@ -45,7 +49,7 @@ function collectRegisteredToolNames(server: McpServer): Set<string> {
 }
 
 export function registerQualityTools(server: McpServer, ctx: ServerContext): void {
-  const { store, registry, config, projectRoot, j } = ctx;
+  const { store, registry, config, projectRoot, j, jh, decisionStore } = ctx;
 
   // --- Co-Change Analysis ---
   server.tool(
@@ -683,16 +687,73 @@ export function registerQualityTools(server: McpServer, ctx: ServerContext): voi
   // --- Edit-Safety Preflight ---
   server.tool(
     'check_edit_safe',
-    'Edit-safety preflight: before modifying a symbol or file, get one verdict for "is this safe to edit and what must I preserve". Fuses signature impact, cyclomatic complexity, and test coverage into a verdict tier (safe_to_edit / untested / complexity_risk / signature_impact) with ranked blockers and a recommended action. Complements assess_change_risk (continuous score) by naming the dominant blocker. Read-only. Returns JSON: { verdict, recommended_action, blockers: [{ signal, severity, detail }], confidence, signals }.',
+    'Edit-safety preflight: before modifying a symbol or file, get one verdict for "is this safe to edit and what must I preserve". Fuses signature impact, cyclomatic complexity, and test coverage into a verdict tier (safe_to_edit / untested / complexity_risk / signature_impact) with ranked blockers and a recommended action. See `depth` to escalate to a continuous risk score or the full impact report instead. Read-only. Returns JSON: { verdict, recommended_action, blockers: [{ signal, severity, detail }], confidence, signals }.',
     {
       file_path: optionalNonEmptyString(512).describe('File path to check before editing'),
       symbol_id: optionalNonEmptyString(512).describe('Symbol ID to check before editing'),
+      depth: z
+        .enum(['verdict', 'score', 'full'])
+        .optional()
+        .describe(
+          'verdict (default): blocker-tier verdict. score: same as assess_change_risk (continuous risk score + factors). full: same as get_change_impact (dependents, affected tests, breaking changes).',
+        ),
     },
-    async ({ file_path, symbol_id }) => {
+    async ({ file_path, symbol_id, depth }) => {
       if (file_path) {
         const blocked = ctx.guardPath(file_path);
         if (blocked) return blocked;
       }
+
+      if (depth === 'score') {
+        const result = assessChangeRisk(store, projectRoot, {
+          filePath: file_path,
+          symbolId: symbol_id,
+          sinceDays: config.predictive?.git_since_days,
+          weights: config.predictive?.weights?.change_risk,
+        });
+        if (result.isErr())
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
+        return { content: [{ type: 'text', text: j(result.value) }] };
+      }
+
+      if (depth === 'full') {
+        const result = getChangeImpact(
+          store,
+          { filePath: file_path, symbolId: symbol_id },
+          3,
+          200,
+          projectRoot,
+        );
+        if (result.isErr())
+          return {
+            content: [{ type: 'text', text: j(formatToolError(result.error)) }],
+            isError: true,
+          };
+        const includeMethodology =
+          result.value.totalAffected === 0 ||
+          result.value.risk?.level === 'high' ||
+          result.value.risk?.level === 'critical';
+        const payload: Record<string, unknown> = includeMethodology
+          ? { ...result.value, _methodology: CHANGE_IMPACT_METHODOLOGY }
+          : { ...result.value };
+        if (decisionStore) {
+          const linkedDecisions = decisionsForImpact(
+            decisionStore,
+            projectRoot,
+            { symbolId: symbol_id, filePath: file_path },
+            result.value.dependents?.map((d) => d.path),
+            undefined,
+            undefined,
+            store,
+          );
+          if (linkedDecisions.length > 0) payload.linked_decisions = linkedDecisions;
+        }
+        return { content: [{ type: 'text', text: jh('get_change_impact', payload) }] };
+      }
+
       const result = checkEditSafe(
         store,
         { filePath: file_path, symbolId: symbol_id },
