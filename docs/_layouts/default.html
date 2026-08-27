@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: 'en-US' }}">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    {% seo %}
+
+    <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+    <style>
+      .site-brand { font-weight: 600; font-size: 1.25em; margin-bottom: 1.5em; }
+      .site-brand a { text-decoration: none; }
+      .docs-nav { color: #57606a; font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <div class="container-lg px-3 my-5 markdown-body">
+      <p class="site-brand"><a href="{{ '/' | relative_url }}">trace-mcp</a></p>
+
+      {{ content }}
+
+      <hr>
+      <p class="docs-nav">
+        See also:
+        <a href="{{ '/tools-reference.html' | relative_url }}">Tools reference</a> ·
+        <a href="{{ '/architecture.html' | relative_url }}">Architecture</a> ·
+        <a href="{{ '/configuration.html' | relative_url }}">Configuration</a> ·
+        <a href="{{ '/' | relative_url }}">Home</a>
+      </p>
+    </div>
+
+    <script>
+      // ponytail: GH Pages default theme renders GFM tables with no header scope;
+      // kramdown has no scope option and custom converters aren't allowed on Pages,
+      // so patch it client-side instead of hand-editing every <th>.
+      document.querySelectorAll('table').forEach(function (table) {
+        table.querySelectorAll('thead th').forEach(function (th) {
+          th.setAttribute('scope', 'col');
+        });
+        table.querySelectorAll('tbody tr').forEach(function (row) {
+          var firstCell = row.querySelector('td, th');
+          if (firstCell && firstCell.tagName === 'TH') {
+            firstCell.setAttribute('scope', 'row');
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

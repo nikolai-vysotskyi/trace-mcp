@@ -1,3 +1,8 @@
+---
+title: "Code Graph MCP Server Comparison: trace-mcp vs Repomix, Serena & 20+ alternatives"
+description: "Compare trace-mcp against Repomix, Serena, Kage, codebase-memory-mcp and 20+ MCP code-graph tools — capabilities, language support, GitHub stars. Last verified August 2026."
+---
+
 # How trace-mcp compares
 
 <script type="application/ld+json">
@@ -163,3 +168,10 @@ Which entries above got a real read of their architecture/code and a concrete ta
 Priority for next deep-dive: **codebase-memory-mcp** (largest peer by stars — 40.7K — with a published benchmark preprint we haven't independently verified) and **codegraph** (68.2K stars, unverified self-reported benchmark claims) are the two highest-value surface-level entries left to profile properly.
 
 **Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
+
+## Next steps
+
+- See the full [tools reference](/tools-reference.html) for every MCP tool trace-mcp exposes, grouped by framework.
+- Read the [architecture](/architecture.html) page for how the indexing pipeline, storage, and LSP enrichment fit together.
+- Check [supported frameworks & languages](/supported-frameworks.html) to confirm your stack is covered.
+- [Get started](/#install) — trace-mcp works out of the box, no configuration required.
