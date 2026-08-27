@@ -1,5 +1,30 @@
 # Tools reference
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Tools reference",
+  "description": "Full list of the 44+ MCP tools and 2 resources trace-mcp exposes, registered dynamically per detected framework.",
+  "url": "https://trace-mcp.com/tools-reference.html",
+  "datePublished": "2026-04-05",
+  "dateModified": "2026-04-15",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/tools-reference.html"
+  }
+}
+</script>
 trace-mcp exposes 44+ MCP tools and 2 resources.
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
