@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.49.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.5...v1.49.0) (2026-08-27)
+
+
+### Features
+
+* **check_edit_safe:** add depth param to unify with assess_change_risk / get_change_impact (TRA-197) ([#392](https://github.com/nikolai-vysotskyi/trace-mcp/issues/392)) ([425a0c1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/425a0c1d434c5525dffc7c21c8c5aaa147c2ae0a))
+* **get_dead_code:** add exports_only mode, alias get_dead_exports (TRA-199) ([#393](https://github.com/nikolai-vysotskyi/trace-mcp/issues/393)) ([290f7dc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/290f7dcbdde5172757724d5eaa1e09b4e3b28d13))
+* **get_untested_symbols:** add scope param, alias get_untested_exports (TRA-203) ([#394](https://github.com/nikolai-vysotskyi/trace-mcp/issues/394)) ([ef80540](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ef80540abb5c4bd1d791ae7e80265075272f5e35))
+* **pins:** add unified pin tool, alias pin_file/pin_symbol (TRA-196) ([#391](https://github.com/nikolai-vysotskyi/trace-mcp/issues/391)) ([5035195](https://github.com/nikolai-vysotskyi/trace-mcp/commit/50351951d9ec688f1ec9f0595842c1c70c1acffd))
+* **search:** add retriever param to unify with search_with_mode (TRA-200) ([#388](https://github.com/nikolai-vysotskyi/trace-mcp/issues/388)) ([2192dd3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2192dd35494eef10c2750b145e27861fbf544baa))
+
 ## [1.48.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.4...v1.48.5) (2026-08-27)
 
 
