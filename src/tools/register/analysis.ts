@@ -753,58 +753,83 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
     return days * 24 * 60 * 60 * 1000;
   }
 
+  function doPin(
+    scope: 'symbol' | 'file',
+    target_id: string,
+    weight: number | undefined,
+    expires_in_days: number | undefined,
+  ) {
+    const result = upsertPin(store.db, {
+      scope,
+      target_id,
+      weight,
+      expires_in_ms: defaultExpiryMs(expires_in_days),
+      created_by: 'user',
+    });
+    bustRankingCaches();
+    if (!result.ok) {
+      return {
+        content: [{ type: 'text' as const, text: j({ ok: false, error: result.reason }) }],
+        isError: true,
+      };
+    }
+    return { content: [{ type: 'text' as const, text: j({ ok: true, pin: result.row }) }] };
+  }
+
+  server.tool(
+    'pin',
+    'Boost (or demote) a symbol or file in PageRank-driven ranking by setting a multiplicative weight. Pass exactly one of symbol_id or file_path. Pinning a symbol also boosts its containing file via the same weight. Use to surface canonical examples or architectural keystones. Capped at 50 active pins per project. Preferred over the deprecated pin_symbol/pin_file aliases. Returns JSON: { ok, pin? }.',
+    {
+      symbol_id: z.string().min(1).max(512).optional().describe('Symbol FQN to pin'),
+      file_path: z
+        .string()
+        .min(1)
+        .max(512)
+        .optional()
+        .describe('File path to pin (project-relative)'),
+      weight: pinWeightSchema,
+      expires_in_days: pinExpirySchema,
+    },
+    async ({ symbol_id, file_path, weight, expires_in_days }) => {
+      if (!symbol_id === !file_path) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: j({ ok: false, error: 'Provide exactly one of symbol_id or file_path' }),
+            },
+          ],
+          isError: true,
+        };
+      }
+      return symbol_id
+        ? doPin('symbol', symbol_id, weight, expires_in_days)
+        : doPin('file', file_path as string, weight, expires_in_days);
+    },
+  );
+
   server.tool(
     'pin_symbol',
-    'Boost (or demote) a specific symbol in PageRank-driven ranking by setting a multiplicative weight. Pinned symbols also boost their containing file via the same weight. Use to surface canonical examples or architectural keystones. Capped at 50 active pins per project. Returns JSON: { ok, pin? }.',
+    '[Deprecated: prefer `pin` with symbol_id] Boost (or demote) a specific symbol in PageRank-driven ranking by setting a multiplicative weight. Pinned symbols also boost their containing file via the same weight. Use to surface canonical examples or architectural keystones. Capped at 50 active pins per project. Returns JSON: { ok, pin? }.',
     {
       symbol_id: z.string().min(1).max(512).describe('Symbol FQN to pin'),
       weight: pinWeightSchema,
       expires_in_days: pinExpirySchema,
     },
-    async ({ symbol_id, weight, expires_in_days }) => {
-      const result = upsertPin(store.db, {
-        scope: 'symbol',
-        target_id: symbol_id,
-        weight,
-        expires_in_ms: defaultExpiryMs(expires_in_days),
-        created_by: 'user',
-      });
-      bustRankingCaches();
-      if (!result.ok) {
-        return {
-          content: [{ type: 'text', text: j({ ok: false, error: result.reason }) }],
-          isError: true,
-        };
-      }
-      return { content: [{ type: 'text', text: j({ ok: true, pin: result.row }) }] };
-    },
+    async ({ symbol_id, weight, expires_in_days }) =>
+      doPin('symbol', symbol_id, weight, expires_in_days),
   );
 
   server.tool(
     'pin_file',
-    'Boost (or demote) a specific file in PageRank-driven ranking by setting a multiplicative weight on its PageRank score. Use to surface canonical examples, architectural keystones, or files central to a work-in-progress feature. Capped at 50 active pins per project. Returns JSON: { ok, pin? }.',
+    '[Deprecated: prefer `pin` with file_path] Boost (or demote) a specific file in PageRank-driven ranking by setting a multiplicative weight on its PageRank score. Use to surface canonical examples, architectural keystones, or files central to a work-in-progress feature. Capped at 50 active pins per project. Returns JSON: { ok, pin? }.',
     {
       file_path: z.string().min(1).max(512).describe('File path to pin (project-relative)'),
       weight: pinWeightSchema,
       expires_in_days: pinExpirySchema,
     },
-    async ({ file_path, weight, expires_in_days }) => {
-      const result = upsertPin(store.db, {
-        scope: 'file',
-        target_id: file_path,
-        weight,
-        expires_in_ms: defaultExpiryMs(expires_in_days),
-        created_by: 'user',
-      });
-      bustRankingCaches();
-      if (!result.ok) {
-        return {
-          content: [{ type: 'text', text: j({ ok: false, error: result.reason }) }],
-          isError: true,
-        };
-      }
-      return { content: [{ type: 'text', text: j({ ok: true, pin: result.row }) }] };
-    },
+    async ({ file_path, weight, expires_in_days }) =>
+      doPin('file', file_path, weight, expires_in_days),
   );
 
   server.tool(
