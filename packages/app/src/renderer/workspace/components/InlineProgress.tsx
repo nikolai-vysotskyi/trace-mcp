@@ -13,7 +13,10 @@ export interface InlineProgressProps {
  * indexing UI consistent across views. Returns `null` when no progress.
  */
 export function InlineProgress({ progress, hint }: InlineProgressProps) {
-  if (!progress) return null;
+  // Guard the fields, not just the object: a drifted daemon payload must
+  // render nothing rather than "undefined · ready NaN%" with a full bar.
+  if (!progress || typeof progress.phase !== 'string' || !Number.isFinite(progress.percent))
+    return null;
   const percent = Math.max(0, Math.min(100, progress.percent));
   const label = hint && hint !== progress.phase ? `${progress.phase} · ${hint}` : progress.phase;
   return (
