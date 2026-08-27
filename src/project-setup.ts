@@ -62,6 +62,9 @@ export function isDangerousProjectRoot(absRoot: string): string | null {
     '/Library',
     '/private',
     '/tmp',
+    // macOS resolves the /tmp symlink to /private/tmp; some MCP clients hand
+    // trace-mcp the already-resolved cwd, which bypassed the '/tmp' check above.
+    '/private/tmp',
     '/var',
     '/etc',
     '/bin',
