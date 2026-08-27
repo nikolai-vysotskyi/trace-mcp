@@ -71,6 +71,46 @@ function countServerToolCalls(): number {
   return total;
 }
 
+function countServerResourceCalls(): number {
+  const out = execSync(
+    `grep -lE "server\\.resource\\(" ${join(REPO_ROOT, 'src/tools/register')}/*.ts`,
+    { encoding: 'utf-8' },
+  )
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+  let total = 0;
+  for (const file of out) {
+    const body = readFileSync(file, 'utf-8');
+    const matches = body.match(/server\.resource\(/g);
+    if (matches) total += matches.length;
+  }
+  return total;
+}
+
+/**
+ * Every `<NUMBER>+? <unit>` occurrence in the text, not just the first —
+ * TRA-174 found the same file contradicting itself (llms.txt claimed both
+ * "170 MCP tools" and "44+ MCP tools"), which a first-match-only check
+ * would never catch.
+ */
+function findAllClaims(unit: RegExp, text: string): Claim[] {
+  const claims: Claim[] = [];
+  for (const line of text.split('\n')) {
+    const re = new RegExp(`(\\d+)\\+?\\s+${unit.source}`, 'g');
+    let m: RegExpExecArray | null;
+    // biome-ignore lint/suspicious/noAssignInExpressions: standard regex-exec-loop idiom
+    while ((m = re.exec(line))) {
+      claims.push({
+        count: Number.parseInt(m[1], 10),
+        rawLine: line.trim(),
+        description: unit.source,
+      });
+    }
+  }
+  return claims;
+}
+
 describe('README numeric claims', () => {
   const readme = readReadme();
   const registry = PluginRegistry.createWithDefaults();
@@ -121,5 +161,111 @@ describe('README numeric claims', () => {
     // owns the cross-file version assertion; we just confirm the package.json
     // version exists so the README-claims test refuses to run on a corrupted manifest.
     expect(pkg.version.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * TRA-174: trace-mcp.com's homepage, llms.txt and comparisons.md each stated
+ * a different language/framework/tool count — and llms.txt contradicted
+ * itself in the same file. Every doc surface must agree with the live
+ * registry counts, and with each other.
+ */
+describe('docs site numeric claims (TRA-174)', () => {
+  const registry = PluginRegistry.createWithDefaults();
+  const langPlugins = registry.getLanguagePlugins().length;
+  const fwPlugins = registry.getAllFrameworkPlugins().length;
+  const toolCount = countServerToolCalls();
+  const resourceCount = countServerResourceCalls();
+
+  // comparisons.md is excluded here — its tables legitimately contain many
+  // competitors' language/tool counts (e.g. "158 languages", "40+ tools"),
+  // so a whole-file scan would false-positive on numbers that aren't about
+  // trace-mcp. It gets its own targeted, column-scoped check below instead.
+  const docs: Array<{ path: string; tolerance: number }> = [
+    { path: 'docs/index.html', tolerance: 2 },
+    { path: 'docs/llms.txt', tolerance: 2 },
+    { path: 'docs/tools-reference.md', tolerance: 5 },
+    { path: 'docs/quality-gates.md', tolerance: 5 },
+  ];
+
+  for (const { path, tolerance } of docs) {
+    it(`${path}: every "languages" claim matches the registry (±${tolerance})`, () => {
+      const text = readFileSync(join(REPO_ROOT, path), 'utf-8');
+      for (const claim of findAllClaims(/languages?/, text)) {
+        if (!within(langPlugins, claim.count, tolerance)) {
+          throw new Error(
+            `${path} claims ${claim.count} languages; registry has ${langPlugins}. Line: "${claim.rawLine}"`,
+          );
+        }
+      }
+    });
+
+    it(`${path}: every "frameworks/integrations" claim matches the registry (±${tolerance})`, () => {
+      const text = readFileSync(join(REPO_ROOT, path), 'utf-8');
+      for (const claim of findAllClaims(
+        /(?:frameworks?|integrations?|framework integrations?)/,
+        text,
+      )) {
+        if (!within(fwPlugins, claim.count, tolerance)) {
+          throw new Error(
+            `${path} claims ${claim.count} frameworks/integrations; registry has ${fwPlugins}. Line: "${claim.rawLine}"`,
+          );
+        }
+      }
+    });
+
+    it(`${path}: every "MCP tools" claim matches the source of truth (±${tolerance})`, () => {
+      const text = readFileSync(join(REPO_ROOT, path), 'utf-8');
+      for (const claim of findAllClaims(/(?:MCP )?tools?/, text)) {
+        if (!within(toolCount, claim.count, tolerance)) {
+          throw new Error(
+            `${path} claims ${claim.count} tools; src/tools/register/*.ts contains ${toolCount} server.tool(...) registrations. Line: "${claim.rawLine}"`,
+          );
+        }
+      }
+    });
+  }
+
+  it("comparisons.md: trace-mcp's own column (first data cell per row) matches the registry", () => {
+    // Row label -> which metric its trace-mcp cell should match, and tolerance.
+    const rowChecks: Array<{ labelPrefix: string; expected: number; tolerance: number }> = [
+      { labelPrefix: 'Tree-sitter AST parsing', expected: langPlugins, tolerance: 2 },
+      { labelPrefix: 'Languages', expected: langPlugins, tolerance: 2 },
+      { labelPrefix: 'Framework-aware edges', expected: fwPlugins, tolerance: 5 },
+      { labelPrefix: 'Framework integrations', expected: fwPlugins, tolerance: 5 },
+      { labelPrefix: 'Code intelligence included', expected: toolCount, tolerance: 5 },
+      { labelPrefix: 'MCP tools', expected: toolCount, tolerance: 5 },
+    ];
+    const text = readFileSync(join(REPO_ROOT, 'docs/comparisons.md'), 'utf-8');
+    for (const line of text.split('\n')) {
+      const cells = line.split('|').map((c) => c.trim());
+      // Table row shape: ["", "<label>", "<trace-mcp cell>", ...competitors, ""]
+      if (cells.length < 3) continue;
+      const check = rowChecks.find((r) => cells[1] === r.labelPrefix);
+      if (!check) continue;
+      const m = cells[2].match(/(\d+)/);
+      if (!m) continue;
+      const claimCount = Number.parseInt(m[1], 10);
+      if (!within(check.expected, claimCount, check.tolerance)) {
+        throw new Error(
+          `docs/comparisons.md row "${check.labelPrefix}": trace-mcp cell claims ${claimCount}, ` +
+            `registry has ${check.expected}. Line: "${line.trim()}"`,
+        );
+      }
+    }
+  });
+
+  it('llms.txt and tools-reference.md agree on the resource count', () => {
+    const llms = readFileSync(join(REPO_ROOT, 'docs/llms.txt'), 'utf-8');
+    const toolsRef = readFileSync(join(REPO_ROOT, 'docs/tools-reference.md'), 'utf-8');
+    for (const text of [llms, toolsRef]) {
+      for (const claim of findAllClaims(/resources?/, text)) {
+        if (!within(resourceCount, claim.count, 2)) {
+          throw new Error(
+            `claims ${claim.count} resources; src/tools/register/*.ts contains ${resourceCount} server.resource(...) registrations. Line: "${claim.rawLine}"`,
+          );
+        }
+      }
+    }
   });
 });

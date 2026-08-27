@@ -1,6 +1,6 @@
 ---
-title: "Supported Languages & Frameworks — 68 languages, 58 framework integrations"
-description: "Full list of languages and frameworks trace-mcp understands out of the box — web frameworks, ORMs, UI libraries, and tooling, across 68 languages."
+title: "Supported Languages & Frameworks — 80 languages, 85 framework integrations"
+description: "Full list of languages and frameworks trace-mcp understands out of the box — web frameworks, ORMs, UI libraries, and tooling, across 80 languages."
 ---
 
 # Supported frameworks & languages
@@ -10,7 +10,7 @@ description: "Full list of languages and frameworks trace-mcp understands out of
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "Supported frameworks & languages",
-  "description": "The 68 supported languages and the frameworks each plugin understands.",
+  "description": "The 80 supported languages and the frameworks each plugin understands.",
   "url": "https://trace-mcp.com/supported-frameworks.html",
   "datePublished": "2026-04-05",
   "dateModified": "2026-04-05",
@@ -30,7 +30,7 @@ description: "Full list of languages and frameworks trace-mcp understands out of
   }
 }
 </script>
-## Languages (68)
+## Languages (80)
 
 ### Tree-sitter (full AST parsing)
 
@@ -50,6 +50,10 @@ description: "Full list of languages and frameworks trace-mcp understands out of
 | **Scala** | Classes, objects, traits, enums, case classes, methods, vals, type aliases, given instances |
 | **Vue SFC** | Components, script setup symbols, template analysis |
 | **HTML** | Script/link references, meta tags, form elements, custom elements |
+| **Astro** | Components, frontmatter script block, props |
+| **Prisma schema** | Models, fields, relations, enums |
+| **GraphQL** | Types, queries, mutations, resolvers, fragments |
+| **Solidity** | Contracts, functions, modifiers, events, structs |
 
 ### Regex-based (symbol extraction)
 
@@ -110,6 +114,14 @@ description: "Full list of languages and frameworks trace-mcp understands out of
 | **FORM** | Symbols, indices, vectors, functions, tables, procedures, modules |
 | **Magma** | Functions, procedures, intrinsics, types, records |
 | **Wolfram / Mathematica** | Function definitions (SetDelayed), packages, usage strings, options |
+| **Pascal / Delphi** | Units, classes, interfaces, procedures, functions |
+| **Ada** | Packages, procedures, functions, types, tasks |
+| **PowerShell** | Functions, cmdlets, modules, parameters |
+| **Apex** | Classes, interfaces, triggers, methods |
+| **PL/SQL** | Packages, procedures, functions, triggers, types |
+| **Nim** | Procs, types, modules, templates |
+| **Tcl** | Procs, namespaces, variables |
+| **D** | Modules, classes, structs, functions |
 
 ---
 

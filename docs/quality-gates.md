@@ -38,7 +38,7 @@ these after any large refactor round — don't treat them as permanent.
 ## max_cyclomatic_complexity: 130 (warning)
 
 The generic default of 30 fires on nearly every language/framework plugin in
-this repo — dispatch tables for 68 languages and 48+ frameworks are
+this repo — dispatch tables for 80 languages and 85 frameworks are
 inherently branchy. After decomposing every class that was a genuine
 god-object (`DecisionStore` 262→96, `TopologyStore` 125→49,
 `IndexingPipeline` 137→115, plus tool-gate/api-routes/memory-tools splits),

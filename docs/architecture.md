@@ -218,10 +218,10 @@ src/
 │   └── service-detector.ts #   Subproject discovery (Docker Compose, flat/grouped workspace, monolith fallback)
 ├── indexer/
 │   ├── plugins/
-│   │   ├── language/       # 68 languages — PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, Rust,
+│   │   ├── language/       # 80 languages — PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, Rust,
 │   │   │                   #   C/C++/C#, Swift, Dart, Scala, Zig, OCaml, Clojure, F#, Elm,
 │   │   │                   #   CUDA, COBOL, Verilog, GLSL, Svelte, MATLAB, Lean, Wolfram, …
-│   │   └── integration/    # 48 plugins organized by category:
+│   │   └── integration/    # 85 plugins organized by category:
 │   │       ├── framework/  #   Laravel, Django, Rails, Spring, NestJS, Express, FastAPI,
 │   │       │               #   Flask, Hono, Fastify, Nuxt, Next.js
 │   │       ├── orm/        #   Prisma, TypeORM, Sequelize, Mongoose, SQLAlchemy, Drizzle
@@ -254,7 +254,7 @@ src/
 │   ├── benchmark.ts        #   Synthetic benchmark (5 scenarios)
 │   ├── tech-detector.ts    #   Manifest parser + coverage assessment
 │   └── known-packages.ts   #   Catalog of ~200 known packages
-├── tools/                  # 50+ MCP tool implementations
+├── tools/                  # 170 MCP tool implementations
 ├── scoring/                # PageRank, BM25, hybrid scoring, structured assembly
 ├── plugin-api/             # Plugin registry, loader, executor, test harness
 ├── init/                   # Setup & detection (Claude Code, Claw Code, Cursor, Windsurf, Continue)

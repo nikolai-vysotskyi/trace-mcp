@@ -1,6 +1,6 @@
 ---
 title: "trace-mcp MCP Tools Reference — every code-intelligence tool, by framework"
-description: "Full reference for trace-mcp's 44+ MCP tools and 2 resources — navigation, refactoring, impact analysis, security, and framework-aware queries. Tools register dynamically based on what your repo uses."
+description: "Full reference for trace-mcp's 170 MCP tools and 9 resources — navigation, refactoring, impact analysis, security, and framework-aware queries. Tools register dynamically based on what your repo uses."
 ---
 
 # Tools reference
@@ -10,7 +10,7 @@ description: "Full reference for trace-mcp's 44+ MCP tools and 2 resources — n
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "Tools reference",
-  "description": "Full list of the 44+ MCP tools and 2 resources trace-mcp exposes, registered dynamically per detected framework.",
+  "description": "Full list of the 170 MCP tools and 9 resources trace-mcp exposes, registered dynamically per detected framework.",
   "url": "https://trace-mcp.com/tools-reference.html",
   "datePublished": "2026-04-05",
   "dateModified": "2026-04-15",
@@ -30,7 +30,7 @@ description: "Full reference for trace-mcp's 44+ MCP tools and 2 resources — n
   }
 }
 </script>
-trace-mcp exposes 44+ MCP tools and 2 resources.
+trace-mcp exposes 170 MCP tools and 9 resources.
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
 
