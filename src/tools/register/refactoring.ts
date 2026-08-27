@@ -64,7 +64,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'extract_function',
-    'Extract a line range out of an enclosing function into a new named helper (AST-aware, TypeScript/JavaScript). Computes the parameter list via free-variable analysis (identifiers read in the slice but declared outside it, including closure captures) and a return value (a binding declared in the slice and used after it). The helper is inserted after the enclosing function and the slice is replaced by a call. Dry-run by default — preview the edits + extracted_params + return_value, then re-call with dry_run=false to apply. Returns JSON: { success, edits, extracted_params, return_value, confidence, files_modified }.',
+    'Extract a line range out of an enclosing function into a new named helper (AST-aware, TypeScript/JavaScript). Computes the parameter list via free-variable analysis and a return value from bindings used after the slice. The helper is inserted after the enclosing function; the slice becomes a call. Dry-run by default — preview, then re-call with dry_run=false to apply. Returns JSON: { success, edits, extracted_params, return_value, confidence, files_modified }.',
     {
       file_path: z.string().max(512).describe('File path (relative to project root)'),
       start_line: z.number().int().min(1).describe('First line to extract (1-indexed, inclusive)'),
@@ -96,7 +96,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
 
   server.tool(
     'apply_codemod',
-    'Structural (AST-aware) or regex find-and-replace across files. Default engine "auto": when the pattern is an ast-grep pattern (concrete syntax with $META metavariables, e.g. "foo($$$ARGS)") supported code files (.ts/.tsx/.js/.jsx) are matched syntactically — so occurrences inside strings and comments are NOT touched. Plain regex patterns fall back to the text engine. Dry-run by default — first call shows preview (with engine_used), second call with dry_run=false applies. Potentially destructive. Always preview with dry_run=true first. Returns JSON: { success, engine_used, dry_run, matches, files_modified, total_replacements, total_files }.',
+    'Structural (AST-aware) or regex find-and-replace across files. Default engine "auto": ast-grep patterns (e.g. "foo($$$ARGS)") match syntactically on .ts/.tsx/.js/.jsx — strings/comments untouched; plain regex falls back to the text engine. Dry-run by default (preview with engine_used); re-call with dry_run=false to apply. Potentially destructive — always preview first. Returns JSON: { success, engine_used, dry_run, matches, files_modified, total_replacements, total_files }.',
     {
       pattern: z
         .string()

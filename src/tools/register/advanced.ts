@@ -322,7 +322,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'detect_topic_tunnels',
-      'Cross-project topic tunnels: links between registered subprojects that share canonical entities — package names from manifests (package.json / composer.json / pyproject.toml / Cargo.toml / go.mod), declared dependencies (top-level only), and human contributors from `git shortlog` (bots filtered out). Two subprojects are tunnelled when their entity sets overlap; the tunnel weight emphasises shared people and project names over common dependencies (typescript, eslint, etc. are down-weighted to 25% to avoid noise). Use to discover hidden cross-repo coupling, surface "this team also owns that repo", or seed cross-project search. Read-only — no DB writes. Returns JSON: { tunnels: [{ project_a, project_b, shared: [{ kind, canonical, display }], weight }], total }.',
+      'Cross-project topic tunnels: links between registered subprojects sharing canonical entities — manifest package names, top-level declared dependencies, and git contributors (bots filtered). Tunnel weight favors shared people/project names over common deps (noisy deps down-weighted). Use to discover hidden cross-repo coupling or seed cross-project search. Read-only. Returns JSON: { tunnels: [{ project_a, project_b, shared: [{ kind, canonical, display }], weight }], total }.',
       {
         min_weight: z
           .number()
@@ -988,7 +988,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_graph_timeline',
-    'SIMPLIFIED first version of a continuous graph-evolution timeline: samples evenly-spaced historical commits across the requested window (via git log, same sampling strategy as get_complexity_trend) and reports file-count + commit churn (files changed/insertions/deletions) per period, with a short narrative diff marker (e.g. "+12 files, 8 commit(s), +540/-120 lines"). Symbol/edge counts are reported for the current HEAD snapshot only — NOT reconstructed per historical commit (that would require re-indexing the full tree at every sampled commit, which this tool deliberately avoids). For point-in-time named checkpoints use snapshot_graph + diff_graph_snapshots instead. Requires git. Read-only. Returns JSON: { since_days, granularity, periods: [{ period, commit, date, file_count, commits_in_period, files_changed, insertions, deletions, narrative }], current: { files, symbols, edges_by_type }, _tier, _methodology }.',
+    'Graph-evolution timeline: samples evenly-spaced historical commits (via git log) and reports file-count + commit churn per period, with a short narrative diff marker. Symbol/edge counts reflect the current HEAD only, not reconstructed per historical commit. For point-in-time named checkpoints use snapshot_graph + diff_graph_snapshots instead. Requires git. Read-only. Returns JSON: { since_days, granularity, periods: [{ period, commit, date, file_count, commits_in_period, files_changed, insertions, deletions, narrative }], current: { files, symbols, edges_by_type }, _tier, _methodology }.',
     {
       since_days: z
         .number()
@@ -1308,7 +1308,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'predict_bugs',
-    'Heuristic bug-risk triage: ranks files by a multi-signal score (git churn, fix-commit ratio, complexity, coupling, PageRank importance, author count), NOT a validated predictor. Each prediction includes a numeric score, risk bucket (low/medium/high/critical) AND a confidence_level (low/medium/high/multi_signal) counting how many independent signals actually fired. The score is a prioritization heuristic — on this repo, a temporal-holdout calibration (scripts/calibrate-health-metrics.mjs) shows the git signals rank future-fixed files above chance (churn Spearman ~0.3, ~2x precision@K lift over random), which is useful for triage but far from a guarantee. Result envelope includes _methodology disclosure with limitations. Cached for 1 hour; use refresh=true to recompute. Requires git. Use to prioritize where to look first, not to certify a file as buggy. For complexity+churn hotspots only use get_risk_hotspots instead. Read-only. Returns JSON: { predictions: [{ file, score, risk, confidence_level, signals }], total }.',
+    "Heuristic bug-risk triage: ranks files by git churn, fix-commit ratio, complexity, coupling, PageRank, and author count — a prioritization heuristic, NOT a validated predictor (calibration notes in the response's _methodology field). Cached 1h; refresh=true to recompute. Requires git. Use to prioritize where to look, not to certify a file as buggy. For complexity+churn only use get_risk_hotspots instead. Read-only. Returns JSON: { predictions: [{ file, score, risk, confidence_level, signals }], total }.",
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
       min_score: z
@@ -1455,7 +1455,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_file_health_timeline',
-    'Aggregates get_complexity_trend, get_coupling_trend, and get_git_churn into ONE time-series response per file: for each historical snapshot, reports complexity (max/avg cyclomatic), coupling (ca/ce/instability), and a lightweight per-point risk_score, plus a whole-window churn summary — so "is this file getting healthier or worse over time" is answerable in one call instead of three. For cross-file bug-risk ranking use predict_bugs instead (different, more thorough scoring model). Requires git. Read-only. Returns JSON: { file, current, historical: [{ date, commit, max_cyclomatic, avg_cyclomatic, ca, ce, instability, risk_score }], churn, trend }.',
+    'Aggregates get_complexity_trend, get_coupling_trend, and get_git_churn into one per-file time series: complexity, coupling, and a lightweight risk_score per historical snapshot, plus a whole-window churn summary. Answers "is this file getting healthier or worse" in one call. For cross-file bug-risk ranking use predict_bugs instead. Requires git. Read-only. Returns JSON: { file, current, historical: [{ date, commit, max_cyclomatic, avg_cyclomatic, ca, ce, instability, risk_score }], churn, trend }.',
     {
       file_path: z.string().min(1).max(512).describe('File path to analyze'),
       since_days: z
