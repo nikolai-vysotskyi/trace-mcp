@@ -1,0 +1,41 @@
+name: Approve release-please PR runs
+
+# release-please (see release.yml) opens/rebases its release PR by pushing
+# with secrets.GITHUB_TOKEN. GitHub doesn't recognize that bot push as a
+# repo collaborator for pull_request-triggered runs, so CI/CodeQL/Semgrep/
+# Eval land in "action_required" on every rebase — even though the PR is
+# same-repo, not a fork (see TRA-171). pull_request_target runs are exempt
+# from that approval gate regardless of actor, so use one here purely to
+# call the approve-run API; it never checks out or executes PR code.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  actions: write
+
+jobs:
+  approve:
+    if: >-
+      github.event.pull_request.user.login == 'github-actions[bot]' &&
+      startsWith(github.event.pull_request.head.ref, 'release-please--')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Approve any action_required runs for this PR's head SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          approved_any=false
+          for attempt in $(seq 1 6); do
+            run_ids=$(gh api "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}&status=action_required" --jq '.workflow_runs[].id')
+            for id in $run_ids; do
+              echo "Approving run $id"
+              gh api -X POST "repos/${REPO}/actions/runs/${id}/approve" && approved_any=true
+            done
+            if [ "$approved_any" = true ]; then
+              break
+            fi
+            sleep 15
+          done
