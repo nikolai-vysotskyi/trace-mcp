@@ -11,8 +11,8 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { getAppDistRepo } from '../../scripts/app-dist-repo.mjs';
 
-// The compiled app lives in a separate PUBLIC distribution repo (the source is
-// private). See scripts/app-dist-repo.mjs. Overridable via TRACE_MCP_APP_DIST_REPO.
+// The compiled app is published as release assets on this repo. See
+// scripts/app-dist-repo.mjs. Overridable via TRACE_MCP_APP_DIST_REPO.
 const GITHUB_REPO = getAppDistRepo();
 
 const isMac = process.platform === 'darwin';
