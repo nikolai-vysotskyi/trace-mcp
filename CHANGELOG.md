@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.48.5](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.4...v1.48.5) (2026-08-27)
+
+
+### Bug Fixes
+
+* point app auto-update at trace-mcp releases, not deleted trace-mcp-app-dist ([#386](https://github.com/nikolai-vysotskyi/trace-mcp/issues/386)) ([6c14f18](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6c14f18a1d6d78a780862c28c3527067c8ebb2ac))
+
+
+### Documentation
+
+* fix remaining stale comments about the deleted app-dist repo ([#387](https://github.com/nikolai-vysotskyi/trace-mcp/issues/387)) ([b47b0ad](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b47b0ad55a86dd3d80005659b528ec2433510b67))
+* update roadmap — TRA-186 shipped, tool-consolidation scoping is next ([#384](https://github.com/nikolai-vysotskyi/trace-mcp/issues/384)) ([8007125](https://github.com/nikolai-vysotskyi/trace-mcp/commit/80071259bbd9a1c1d35a265440b099b1624aeb67))
+
 ## [1.48.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.3...v1.48.4) (2026-08-27)
 
 
