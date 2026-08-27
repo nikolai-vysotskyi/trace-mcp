@@ -512,6 +512,10 @@ jobs:
         working-directory: packages/app
         run: pnpm run typecheck
 
+      - name: Test
+        working-directory: packages/app
+        run: pnpm run test
+
       - name: Build (renderer + main)
         working-directory: packages/app
         run: pnpm run build
