@@ -2913,6 +2913,33 @@ program
       }
     }
 
+    // ── Registry auto-update watchdog (TRA-180) ──────────────────
+    // checkAndInstallUpdate only runs once, at process startup. A daemon kept
+    // alive for weeks by launchd/tray or a long-lived stdio client that never
+    // reconnects therefore never re-hits the npm registry, so it can silently
+    // sit on a stale version indefinitely (unlike the local-staleness check
+    // above, which only catches upgrades installed by some *other* process).
+    // Poll on the same cadence as the configured check interval — the cache
+    // inside checkAndInstallUpdate makes this a cheap no-op between real
+    // registry checks.
+    if (PKG_VERSION !== '0.0.0-dev' && globalRaw.auto_update !== false) {
+      const intervalHours =
+        typeof globalRaw.auto_update_check_interval_hours === 'number'
+          ? globalRaw.auto_update_check_interval_hours
+          : 12;
+      const updateWatchdog = setInterval(() => {
+        void checkAndInstallUpdate({ checkIntervalHours: intervalHours }).then((updated) => {
+          if (updated) {
+            logger.info(
+              'Auto-update: new version installed — shutting down so supervisor respawns',
+            );
+            void shutdown('auto-update');
+          }
+        });
+      }, intervalHours * 3_600_000);
+      updateWatchdog.unref();
+    }
+
     httpServer.listen(port, host, () => {
       const projectCount = projectManager.listProjects().length;
       logger.info(
