@@ -168,6 +168,7 @@ export function Workspace() {
     <div className="flex flex-col h-full overflow-hidden relative">
       <WorkspaceHeader
         kpis={kpis}
+        metricsLoading={data.metricsLoading}
         filter={filter}
         onFilterChange={setFilter}
         view={view}

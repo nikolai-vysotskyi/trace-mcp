@@ -21,6 +21,8 @@ import {
 
 export interface WorkspaceHeaderProps {
   kpis: WorkspaceKpis;
+  /** Metric-backed KPI tiles show a placeholder instead of `0` while true. */
+  metricsLoading?: boolean;
   filter: WorkspaceFilter;
   onFilterChange: (next: WorkspaceFilter) => void;
   view: ViewMode;
@@ -72,15 +74,25 @@ interface KpiCellProps {
   active?: boolean;
   onClick?: () => void;
   accent?: 'ok' | 'warn' | 'busy';
+  /** Render a placeholder instead of `value` — the number isn't known yet. */
+  pending?: boolean;
 }
 
-function KpiCell({ label, value, compact = false, active = false, onClick, accent }: KpiCellProps) {
+function KpiCell({
+  label,
+  value,
+  compact = false,
+  active = false,
+  onClick,
+  accent,
+  pending = false,
+}: KpiCellProps) {
   const interactive = onClick !== undefined;
   const color =
     accent === 'ok'
-      ? '#34c759'
+      ? 'var(--success)'
       : accent === 'warn'
-      ? '#ff9f0a'
+      ? 'var(--warning)'
       : accent === 'busy'
       ? 'var(--accent)'
       : 'var(--text-primary)';
@@ -99,9 +111,10 @@ function KpiCell({ label, value, compact = false, active = false, onClick, accen
     >
       <span
         className="text-base font-semibold tabular-nums leading-tight"
-        style={{ color: active ? '#fff' : color }}
+        style={{ color: active ? '#fff' : pending ? 'var(--text-tertiary)' : color }}
       >
-        {compact ? formatCompact(value) : value.toLocaleString()}
+        {/* ponytail: em dash, not a shimmer block — same box, no digit, no CSS. */}
+        {pending ? '—' : compact ? formatCompact(value) : value.toLocaleString()}
       </span>
       <span
         className="text-[10px] font-medium leading-tight mt-0.5"
@@ -199,6 +212,7 @@ function Spinner() {
 
 export function WorkspaceHeader({
   kpis,
+  metricsLoading = false,
   filter,
   onFilterChange,
   view,
@@ -234,12 +248,13 @@ export function WorkspaceHeader({
             active={filter.preset === null && filter.statuses === null && filter.grades === null && filter.query === ''}
             onClick={() => onFilterChange(EMPTY_FILTER)}
           />
-          <KpiCell label="Files" value={kpis.totalFiles} compact />
-          <KpiCell label="Symbols" value={kpis.totalSymbols} compact />
+          <KpiCell label="Files" value={kpis.totalFiles} compact pending={metricsLoading} />
+          <KpiCell label="Symbols" value={kpis.totalSymbols} compact pending={metricsLoading} />
           <KpiCell
             label="Healthy"
             value={kpis.healthy}
             accent="ok"
+            pending={metricsLoading}
             active={filter.preset === 'healthy'}
             onClick={() => togglePreset('healthy')}
           />
@@ -247,6 +262,7 @@ export function WorkspaceHeader({
             label="Needs attention"
             value={kpis.needsAttention}
             accent="warn"
+            pending={metricsLoading}
             active={filter.preset === 'needs_attention'}
             onClick={() => togglePreset('needs_attention')}
           />

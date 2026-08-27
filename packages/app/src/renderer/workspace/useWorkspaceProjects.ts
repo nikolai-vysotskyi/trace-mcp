@@ -54,6 +54,12 @@ export function detectCompletionInDiff(
 export interface UseWorkspaceProjectsResult {
   projects: ProjectViewModel[];
   loading: boolean;
+  /**
+   * True until the first `/api/dashboard/projects` response lands. The project
+   * list arrives seconds earlier, so `loading` is already false while every
+   * metric is still zero — consumers must not render metric numbers yet.
+   */
+  metricsLoading: boolean;
   refreshing: boolean;
   error: string | null;
   connected: boolean;
@@ -183,6 +189,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   return {
     projects,
     loading,
+    metricsLoading: !metricsLoaded,
     refreshing,
     error,
     connected: daemon.connected,
