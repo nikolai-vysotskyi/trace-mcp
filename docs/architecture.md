@@ -1,5 +1,30 @@
 # Architecture
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Architecture",
+  "description": "The two-pass indexing pipeline and how the dependency graph is built and stored.",
+  "url": "https://trace-mcp.com/architecture.html",
+  "datePublished": "2026-04-05",
+  "dateModified": "2026-04-14",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/architecture.html"
+  }
+}
+</script>
 ## Indexing pipeline
 
 trace-mcp uses a two-pass indexing pipeline:

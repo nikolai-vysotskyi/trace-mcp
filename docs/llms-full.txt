@@ -1,0 +1,2909 @@
+# trace-mcp — Full documentation
+
+> Concatenated full text of all trace-mcp docs pages, for AI systems that ingest one file instead of following links. See /llms.txt for the linked index.
+
+---
+
+# Tools reference
+
+trace-mcp exposes 44+ MCP tools and 2 resources.
+
+Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
+
+---
+
+## Project
+
+| Tool | What it does |
+|---|---|
+| `get_project_map` | Project overview — detected frameworks, directory structure, entry points |
+| `get_index_health` | Index stats — file count, symbol count, edge count, errors |
+| `reindex` | Trigger full or incremental re-indexing |
+| `get_env_vars` | List environment variable keys from `.env` files with inferred value types |
+| `get_plugin_registry` | List all registered indexer plugins and the edge types they emit |
+
+## Navigation
+
+| Tool | What it does |
+|---|---|
+| `search` | Full-text search (FTS5 + BM25) with kind / language / file pattern filters |
+| `get_symbol` | Look up a symbol by ID or FQN — returns source code |
+| `get_outline` | All symbols in a file — signatures only, no bodies |
+| `find_usages` | Find all places that reference a symbol or file (imports, calls, renders, dispatches) |
+
+## Framework intelligence
+
+| Tool | What it does | When available |
+|---|---|---|
+| `get_component_tree` | Build component render tree from a root file | Vue, Nuxt, Inertia |
+| `get_change_impact` | Reverse dependency graph — what depends on this file or symbol. Each dependent symbol includes `hasTestReach` (whether any test that covers the file also references that specific symbol) | Always |
+| `get_task_context` | **Graph-aware context engine** — describe a dev task, get the optimal code subgraph (execution paths, tests, types) adapted to task type (bugfix/feature/refactor) | Always |
+| `get_feature_context` | NLP-driven context assembly — describe a feature, get relevant code within a token budget | Always |
+| `get_request_flow` | Trace request flow for a URL+method: route → middleware → controller → service | Express, NestJS, Laravel, FastAPI, Flask, DRF, Spring, Rails, Fastify, Hono, tRPC |
+| `get_middleware_chain` | Trace middleware chain for a route URL | Express, NestJS, FastAPI, Flask |
+| `get_event_graph` | Event/signal/task dispatch graph | Laravel, NestJS, Django, Celery, Socket.io |
+| `get_model_context` | Full model context: relationships, schema, metadata | Eloquent, Prisma, TypeORM, Drizzle, Mongoose, Sequelize, SQLAlchemy |
+| `get_schema` | Database schema reconstructed from migrations or ORM definitions | Eloquent, Prisma, TypeORM, Drizzle, Mongoose, Sequelize, SQLAlchemy |
+| `get_livewire_context` | Full Livewire component context: properties, actions, events, view, children | Laravel |
+| `get_nova_resource` | Full Laravel Nova resource context: model, fields, actions, filters, lenses, metrics | Laravel |
+| `get_state_stores` | List stores/slices with state, actions, and dispatch sites | Zustand, Redux |
+
+## NestJS
+
+| Tool | What it does |
+|---|---|
+| `get_module_graph` | Build module dependency graph (modules → imports → controllers → providers → exports) |
+| `get_di_tree` | Trace dependency injection tree (what a service injects + who injects it) |
+
+## React Native
+
+| Tool | What it does |
+|---|---|
+| `get_navigation_graph` | Build navigation tree from screens, navigators, and deep links |
+| `get_screen_context` | Full screen context: navigator, navigation edges, deep link, platform variants, native modules |
+
+## Code analysis
+
+| Tool | What it does |
+|---|---|
+| `get_import_graph` | File-level dependency graph: what a file imports and what imports it |
+| `get_call_graph` | Bidirectional call graph centered on a symbol (who it calls + who calls it) |
+| `get_tests_for` | Find test files and test functions that cover a given symbol or file |
+| `get_implementations` | Find all classes that implement or extend a given interface/base class |
+| `get_type_hierarchy` | Walk TypeScript class/interface hierarchy: ancestors and descendants |
+| `get_api_surface` | List all exported symbols (public API) of a file or matching files |
+| `get_dead_exports` | Find exported symbols never imported by any other file (dead code candidates) |
+| `get_untested_exports` | Find exported public symbols with no matching test file (test coverage gaps) |
+| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). More thorough than `get_untested_exports` |
+| `self_audit` | One-shot project health: dead exports, untested code, dependency hotspots, heritage metrics |
+
+## Quality & security
+
+| Tool | What it does |
+|---|---|
+| `scan_security` | OWASP Top-10 vulnerability scan: SQL injection, XSS, command injection, path traversal, hardcoded secrets, insecure crypto, open redirects, SSRF |
+| `taint_analysis` | Track untrusted data from sources (HTTP params, env vars, file reads) to dangerous sinks (SQL, exec, innerHTML). Framework-aware, cross-file |
+| `scan_code_smells` | Find TODO/FIXME/HACK comments, empty functions, hardcoded values, magic numbers |
+| `detect_antipatterns` | Performance antipattern detection |
+| `check_quality_gates` | Quality gate validation against configurable thresholds |
+| `export_security_context` | Export security context for MCP server analysis — enrichment JSON for [skill-scan](https://github.com/kkdub/skill-scan): tool registrations with annotations, transitive call graphs classified by security category, sensitive data flows, capability maps |
+
+## Topology & subprojects
+
+Enabled by default (`topology.enabled: true`). See [Configuration](configuration.md#topology--subprojects).
+
+### Service topology
+
+| Tool | What it does |
+|---|---|
+| `get_service_map` | Map of all services, their APIs, and inter-service dependencies (auto-detects from Docker Compose) |
+| `get_cross_service_impact` | Impact of changing an endpoint or event — which services are affected |
+| `get_api_contract` | API contract (OpenAPI/gRPC/GraphQL) for a service |
+| `get_service_deps` | External service dependencies: outgoing and incoming |
+| `get_contract_drift` | Mismatches between API spec and implementation |
+
+### Subprojects
+
+A subproject is any working repository that is part of your project's ecosystem: microservices, frontends, backends, shared libraries, CLI tools, etc. A project auto-detects its subprojects on indexing, or you can add external ones manually.
+
+| Tool | What it does |
+|---|---|
+| `get_subproject_graph` | All subprojects, cross-subproject connections, and stats |
+| `get_subproject_impact` | Cross-subproject impact: find all client code that would break if an endpoint changes. Resolves to symbol level when per-subproject indexes exist |
+| `get_subproject_clients` | Find all client calls across subprojects that call a specific endpoint |
+| `subproject_add_repo` | Add a subproject, bound to the current project (or specify `project` param for external subprojects) |
+| `subproject_sync` | Re-scan all subprojects: contracts, client calls, and re-link |
+
+### Cross-project
+
+Every session is attached to one project, but these two tools reach across to any OTHER project already registered with trace-mcp (`~/.trace-mcp/registry.json`) — see [Configuration](configuration.md#cross-project-tools).
+
+| Tool | What it does |
+|---|---|
+| `list_projects` | List registered project roots (name, type, last-indexed), plus known subprojects |
+| `call_project_tool` | Run any other trace-mcp tool against a DIFFERENT registered project's already-indexed data; returns that tool's response verbatim |
+
+## Decision memory
+
+See [Decision memory](decision-memory.md) for full documentation.
+
+| Tool | What it does |
+|---|---|
+| `mine_sessions` | Extract decisions from Claude Code / Claw Code session logs (pattern-based, 0 LLM calls) |
+| `add_decision` | Manually record a decision with code linkage + service scoping |
+| `query_decisions` | Query by type/service/symbol/file/tag + FTS5 search + temporal filtering |
+| `invalidate_decision` | Mark a decision as superseded (preserved for historical queries) |
+| `get_decision_timeline` | Chronological history of decisions for a project/symbol/file |
+| `get_decision_stats` | Knowledge graph overview: counts by type, source, sessions mined/indexed |
+| `index_sessions` | Index conversation content for cross-session search |
+| `search_sessions` | FTS5 search across all past session conversations |
+| `get_wake_up` | Compact orientation (~300 tokens): project + active decisions + stats. Auto-mines on first call |
+
+Decisions auto-enrich code intelligence: `get_change_impact` shows `linked_decisions`, `plan_turn` shows `related_decisions`, `get_session_resume` shows `active_decisions`.
+
+## Session Analytics
+
+See [Analytics](analytics.md) for full documentation.
+
+| Tool | What it does |
+|---|---|
+| `get_session_analytics` | Token usage, cost breakdown by tool/server, top files, models used |
+| `get_optimization_report` | Detect token waste patterns (8 rules) with savings estimates |
+| `get_real_savings` | Analyze actual sessions: how much trace-mcp saves vs raw file reads |
+| `benchmark_project` | Synthetic benchmark: raw reads vs trace-mcp compact responses (5 scenarios) |
+| `get_coverage_report` | Technology profile: deps from manifests, coverage by trace-mcp plugins, gaps |
+| `get_usage_trends` | Daily token usage trends over time |
+| `get_session_stats` | Real-time token savings for the current session |
+| `audit_config` | Audit AI agent config files for stale refs, dead paths, bloat, scope leaks |
+
+Supports **Claude Code** and **Claw Code** session logs (auto-detected).
+
+## CI/PR reports (CLI)
+
+Not an MCP tool — a CLI command for CI pipelines:
+
+```bash
+trace-mcp ci-report --base main --head HEAD --format markdown --output report.md
+trace-mcp ci-report --base main --head HEAD --fail-on high
+```
+
+Generates a change impact report with blast radius, risk scores, test coverage gaps, architecture violations, and dead code. See [README](../README.md#cipr-change-impact-reports) for GitHub Action setup.
+
+## Security context export (CLI)
+
+Export security context for MCP server analysis — generates enrichment JSON for [skill-scan](https://github.com/kkdub/skill-scan):
+
+```bash
+# Export to file
+trace-mcp export-security-context -o enrichment.json
+
+# Limit scope and call graph depth
+trace-mcp export-security-context --scope src/tools --depth 4
+
+# Re-index before export
+trace-mcp export-security-context --index -o enrichment.json
+
+# Use with skill-scan
+trace-mcp export-security-context -o ctx.json && skill-scan scan . --enrich ctx.json
+```
+
+Output contains: MCP tool registrations with annotations, transitive call graphs classified by security category (`file_read`, `file_write`, `network_outbound`, `env_read`, `shell_exec`, `crypto`, `serialization`), sensitive data flows, and per-file capability maps.
+
+## AI-powered (optional)
+
+Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-configuration).
+
+| Tool | What it does |
+|---|---|
+| `explain_symbol` | AI-generated explanation of a symbol's purpose and behavior |
+| `suggest_tests` | AI-generated test case suggestions for a symbol |
+| `review_change` | AI-powered review of a file change |
+| `find_similar` | Find semantically similar symbols using vector search + AI reranking |
+| `explain_architecture` | AI-powered architecture analysis of a module or feature area |
+
+---
+
+## Resources
+
+| Resource | URI | Description |
+|---|---|---|
+| Project map | `project://map` | JSON project overview |
+| Index health | `project://health` | Index status |
+
+---
+
+## Usage examples
+
+| Scenario | Tool to use |
+|---|---|
+| "Add a new field to the User model" | `get_change_impact` — shows all dependents: model, migration, request validation, Vue props |
+| "What components does this page use?" | `get_component_tree` — full render tree with props/slots |
+| "Refactor the auth flow" | `get_task_context("refactor the auth flow")` — intent-aware context with full execution paths |
+| "Quick keyword context" | `get_feature_context("authentication")` — assembles relevant code in one call |
+| "Does the Vue page match the controller response?" | Prop mismatch detection flags drift automatically at index time |
+| "What's the DB schema?" | `get_schema` — reconstructed from migrations, no DB needed |
+| "Trace a request end-to-end" | `get_request_flow("/api/users", "GET")` — full chain |
+| "What NestJS modules does this depend on?" | `get_module_graph` — full dependency tree |
+| "Find untested code" | `get_untested_symbols` — deep analysis with "unreached"/"imported_not_called" classification. Or lighter: `get_untested_exports` + `self_audit` |
+| "Explain this complex service" | `explain_symbol` — AI-generated explanation with context |
+| "What repos call this endpoint?" | `get_subproject_clients("/api/users")` — all client calls across repos |
+| "Will this API change break anything?" | `get_subproject_impact` — cross-repo impact with symbol resolution |
+| "Show me all service connections" | `get_subproject_graph` — repos, edges, stats |
+| "Starting work on a task" | `get_task_context("fix the login bug")` — full execution context adapted to bugfix/feature/refactor |
+| "PR impact report" | `trace-mcp ci-report --base main --head HEAD` — blast radius, risk score, test gaps |
+| "How much am I spending on tokens?" | `get_session_analytics` — full breakdown by tool, file, model |
+| "Where am I wasting tokens?" | `get_optimization_report` — detects repeated reads, bash-grep, large files |
+| "How much would trace-mcp save?" | `get_real_savings` — compares actual reads vs compact alternatives |
+| "Quick efficiency benchmark" | `benchmark_project` — 92%+ reduction on typical projects |
+| "What tech isn't covered?" | `get_coverage_report` — gaps in plugin coverage for your deps |
+
+---
+
+# How trace-mcp compares
+
+trace-mcp is not just a code intelligence server — it combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Other projects solve one of these; trace-mcp unifies all three.
+
+_Last updated: August 26, 2026 (star-count and new-entrant refresh). Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues). This revision re-verifies star counts against the live GitHub API — several jumped by 3-4x since July (viral GitHub-trending spikes are common in this space and can reverse just as fast), so treat every count below as a snapshot, not a ranking. The two 60K+-star entrants flagged in a previous revision got their deep-dive: **Graphify** (110.6K stars, Python, deterministic AST-to-knowledge-graph skill/MCP server, no vector store) and **Headroom** (67.6K stars, Python, reversible tool-output/JSON/log compression layer — library, HTTP proxy, or MCP server). Neither closes a real gap for us: Graphify's edge provenance tagging (`EXTRACTED`/`INFERRED`/`AMBIGUOUS`) is a 3-tier scheme trace-mcp's existing 4-tier `resolution_tier` (`scip_resolved`/`lsp_resolved`/`ast_resolved`/`ast_inferred`/`text_matched`) already exceeds, and its Cypher/GraphML export is a feature trace-mcp already ships (`export_graph`). Headroom compresses arbitrary tool output generically (JSON/logs/RAG chunks) rather than understanding code structure — orthogonal to a code-graph server, not a lane worth chasing. See their rows/footnotes below. The "Honest assessment" section below was updated after six of seven identified gaps shipped and went through an adversarial deep-validation pass._
+
+## vs. token-efficient code exploration
+
+Tools that help AI agents read code with fewer tokens — AST parsing, outlines, context packing.
+
+| Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp | cymbal |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **GitHub stars** | — | 28.1K | 8.8K | ~19K | 2.6K | 40.7K | 165 |
+| Tree-sitter AST parsing | ✅ 81 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ 23 langs + Jupyter | ✅ 70+ languages | ✅ 158 languages | ✅ 22 languages |
+| Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output (98% reduction) | ✅ | ✅ core focus (~95% reduction) | ✅ | ✅ outline/show/context |
+| Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ incremental knowledge graph | ✅ import graph | ✅ knowledge graph | ✅ refs/importers |
+| Framework-aware edges | ✅ 68 integrations (22 web frameworks, 8 ORMs, 6 UI libs, 32 tooling) | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
+| Impact analysis | ✅ reverse dep traversal + decorator filter | ❌ | ❌ | ✅ blast-radius + Leiden communities | ✅ blast radius + decorator filter | ✅ detect_changes | ✅ impact command |
+| Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ✅ graph-based | ✅ AST-based, bidirectional | ✅ trace_call_path | ✅ refs/importers |
+| Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ | ❌ |
+| Security scanning | ✅ OWASP Top-10, taint | ✅ Secretlint | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Multi-repo subprojects | ✅ cross-repo API linking | ✅ remote repos | ❌ | ✅ multi-repo daemon | ✅ GitHub repos | ✅ cross-service HTTP linking | ❌ |
+| IaC as graph nodes | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ K8s/Kustomize/HCL/Docker | ❌ |
+| Session memory | ✅ built-in | ❌ | ✅ SQLite FTS5 journal | ❌ | ✅ index persistence | ✅ persistent graph | ❌ |
+| Written in | TypeScript | TypeScript | TypeScript | Python | Python | C | Go |
+
+_New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (~70% reduction); **tokensave** (601 stars, 40+ tools, 30+ langs, pre-indexed semantic KG); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync; went viral this cycle, now 68.2K stars, claiming ~59% fewer tokens / ~70% fewer tool calls across its own benchmark set — unverified by us); **Headroom** (67.6K stars — not a code-graph tool, a generic reversible compression layer for tool outputs/JSON/logs/RAG chunks, deployable as library/proxy/MCP server; its `CodeCompressor` is AST-aware for 7 languages but purely for shrinking output bytes, with no graph, no symbol index, no cross-file edges — complements rather than competes with token-efficient *symbol* lookup); **repo-context-mcp** (nduc99911, 103 stars, TypeScript — three tools: `repo_map` directory tree + entrypoint detection, `search_code` substring grep, `pack_context` token-budgeted markdown pack; no AST parsing, no symbol index, no dependency graph — a lighter-weight cousin of Repomix, not a code-graph competitor). `cymbal` and `Context Mode` could not be re-verified in June 2026 — possibly renamed or inactive._
+
+**codebase-memory-mcp's stars more than doubled since the last revision (18.1K → 40.7K verified via GitHub API) — the fastest single-project jump we've tracked in this doc.** Its authors also published a benchmark preprint (arXiv 2603.27277: "Codebase-Memory: Tree-Sitter-Based Knowledge Graphs for LLM Code Exploration via MCP") reporting 83% answer quality, 10× fewer tokens, and 2.1× fewer tool calls vs. file-by-file exploration across 31 real-world repos — the first published third-party-style benchmark from a direct code-graph peer (vs. the self-reported numbers most others cite). We have not independently reproduced it. This doesn't change our positioning (see "Honest assessment" below) but is worth flagging: a fast-growing peer with a real benchmark paper is a sharper competitive signal than a star count alone.
+
+## vs. AI session memory
+
+Tools that persist context across AI agent sessions — activity logs, knowledge graphs, memory compression.
+
+| Capability | trace-mcp | Kage | MemPalace | claude-mem | mem0 / OpenMemory | engram | ConPort |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **GitHub stars** | — | new (2026) | ~56.7K | 91.8K | ~53K | 2.7K | 761 |
+| Cross-session context carryover | ✅ `get_session_resume` + decisions | ✅ git-committed packets | ✅ wings/rooms | ✅ core focus | ✅ multi-level (User/Session/Agent) | ✅ branch-scoped handoffs | ✅ |
+| Cross-session content search | ✅ `search_sessions` FTS5 | partial (JSON packets) | ✅ vector+keyword+temporal (+optional rerank), 96.6% R@5 LongMemEval | ✅ SQLite + Chroma hybrid | ✅ hierarchical, ≤7K tok/retrieval (94.4 LongMemEval) | ✅ local ONNX embeddings | ✅ vector semantic |
+| Decision knowledge graph | ✅ temporal, code-linked | ✅ temporal, code-linked | ✅ temporal + "Closets" storage | ❌ | ✅ temporal + state-key supersession | ❌ | ✅ project-level |
+| Code-graph-aware memory | ✅ decisions → symbols & files | ✅ **+ citation verification (staleness check)** | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only |
+| Auto-extraction from sessions | ✅ pattern-based (0 LLM calls); hybrid LLM opt-in | ❌ agent-written | ❌ verbatim, zero extraction | ✅ AI-compressed + citations | ✅ single-pass hierarchical LLM | ❌ | ❌ |
+| Wake-up context | ✅ ~300 tok (code-linked decisions) | — | ✅ ~170 tok (AAAK) | ✅ progressive disclosure (~10×) + Endless Mode | ❌ | ❌ | ❌ |
+| Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
+| Service/subproject scoping | ✅ decisions per service | ❌ | ✅ wings per project | ❌ | ❌ | ✅ per branch | ✅ per workspace |
+| Published retrieval benchmark | ❌ | ❌ | ✅ LongMemEval / LoCoMo / MemBench | ❌ | ✅ LoCoMo / LongMemEval / BEAM | ❌ | ❌ |
+| Code intelligence included | ✅ 131+ tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Works as standalone memory | ❌ code-focused | ✅ git-native, code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
+| Written in | TypeScript | — | Python | TypeScript | TS + Python | Go / Rust | Python |
+
+> **Key difference:** MemPalace stores "decided to use PostgreSQL" as text in ChromaDB. trace-mcp stores the same decision **linked to `src/db/connection.ts::Pool#class`** — and when you run `get_change_impact` on that symbol, the decision shows up in `linked_decisions`. General-purpose memory tools remember *what you said*. trace-mcp remembers *what you said* AND *which code it's about*.
+>
+> **Where the field moved (April → June 2026):** (1) Retrieval became a *published number* — mem0 (94.4 LongMemEval, ≤7K tok/retrieval) and MemPalace (96.6% R@5) both ship benchmarks; trace-mcp's decision recall is still FTS5-only with no published figure. (2) **Kage** is the first peer to share trace-mcp's code-linked-memory premise *and* add what trace-mcp lacks: it verifies each memory's cited code at recall and diff time, withholding decisions whose code was renamed/deleted (claimed 0% stale-served). (3) mem0 added search-time temporal decay (1.5× recency / 0.3× stale) and state-key supersession — close analogs to trace-mcp's `order_by:"heat"` and `invalidate_decision`, but automatic.
+
+## vs. documentation generation & RAG
+
+Tools that generate docs from code or provide embedding-based code search for AI retrieval.
+
+| Capability | trace-mcp | Repomix | DeepContext | smart-coding-mcp | mcp-local-rag¹ | knowledge-rag¹ |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **GitHub stars** | — | ~26.7K | ~300 | ~200 | ~200 | ~60 |
+| Real-time code understanding | ✅ live graph, always current | ❌ snapshot at pack time | ❌ manual reindex | partial (opt-in watcher) | ❌ | partial (file watcher) |
+| Auto-generated project docs | ✅ `generate_docs` from graph | ❌ raw file dump | ❌ | ❌ | ❌ | ❌ |
+| Semantic code search | ✅ `search` + `query_by_intent` | ❌ no search | ✅ Jina embeddings | ✅ nomic embeddings | ✅ vector search | ✅ hybrid + reranking |
+| Framework-aware context | ✅ routes, models, components | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Task-focused context | ✅ `get_task_context` — code subgraph | ❌ packs everything | ❌ | ❌ | ❌ | ❌ |
+| No doc maintenance needed | ✅ derived from code | ✅ repacks on demand | ❌ manual reindex | partial (auto on startup) | ❌ manual ingest | partial (auto-reindex) |
+| Works offline, no API keys | ✅ graph + FTS5 + bundled ONNX embeddings | ✅ | ❌ requires cloud API | ❌ requires local embeddings | ❌ requires local embeddings | ❌ requires local embeddings |
+| Incremental updates | ✅ file watcher, content hash | ❌ full repack | ✅ SHA-256 hashing | ✅ file hash + opt-in watcher | ❌ | ✅ mtime + dedup |
+| Written in | TypeScript | TypeScript | TypeScript | JavaScript | TypeScript | Python |
+
+_¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown) — not code-specific. Included for comparison as they occupy adjacent mindshare._
+
+> **Key difference:** RAG tools answer "find code similar to this query." trace-mcp answers "show me the execution path, the dependencies, and the tests for this feature." Graph traversal finds structurally relevant code that embedding similarity misses — and never returns stale results because the graph updates incrementally with every file save. (Independent evidence: the *CodeCompass* study, arXiv 2602.20048, reports +23.2 pp on hidden-dependency tasks from graph navigation over grep-style retrieval.)
+
+## vs. code graph MCP servers
+
+| Capability | trace-mcp | Serena | code-review-graph | codebase-memory-mcp | SocratiCode | Narsil-MCP | Roam-Code |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **GitHub stars** | — | ~28.5K | ~19K | 40.7K | ~900 | ~100 | ~500 |
+| Languages | 79 | 40+ (via LSP) | 23 + Jupyter | 158 | 19 | 32 | 28 |
+| Framework integrations | 68 (22 web fw + 8 ORM + 6 UI + 32 tooling) | ❌ | ❌ (Python entry points only) | ❌ | ❌ | ❌ | ~15 (ORM N+1 / API drift only) |
+| Cross-language edges | ✅ | ❌ | ❌ | ✅ cross-service HTTP | ✅ polyglot dep graph | ❌ | ✅ PHP↔TS API drift |
+| MCP tools | 131+ | ~55 | ~28 | 14 | 21 | 90 | 224 |
+| Session memory | ✅ | ✅ (manual notes) | ❌ | ✅ | ❌ | ❌ | ❌ |
+| CI/PR reports | ✅ | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
+| Multi-repo subprojects | ✅ | ❌ | ✅ multi-repo daemon | ✅ cross-service | ✅ cross-project search | ❌ | ❌ |
+| Control-flow / data-flow | ✅ CFG w/ basic blocks + loop back-edges + dataflow | ❌ | ❌ | ❌ | ❌ | ✅ CFG w/ basic blocks + loop edges; type-aware taint | ❌ |
+| Security scanning | ✅ OWASP/taint, type-aware pruning | ❌ | ❌ | ❌ | ❌ | ✅ 147 rules (taint/OWASP/CWE) + SBOM + OSV/supply-chain | ❌ |
+| IaC as graph nodes | ✅ K8s/Kustomize/HCL/Docker, cross-file resolved to real nodes | ❌ | ❌ | ✅ K8s/Kustomize/HCL/Docker | ❌ | ❌ | ❌ |
+| Compiler-grade precision | ✅ opt-in LSP + offline SCIP ingestion (`scip_resolved` tier) | ✅ live LSP (rename/refs/diagnostics) | ❌ | ❌ | ❌ | ❌ | ❌ |
+| SARIF / CI-scanning output | ✅ 2.1.0, OASIS-schema-validated | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
+| Graph visualization | ✅ desktop app (cosmos.gl) | ❌ | ❌ | ✅ 3D web UI | ✅ interactive HTML | ✅ SPA frontend | ❌ |
+| Knowledge graph queries | ✅ `graph_query` | ❌ | ❌ | ✅ Cypher-like | ❌ | ✅ SPARQL / RDF | ❌ |
+| Refactoring tools | ✅ rename/move/signature/codemod/extract¹ | ✅ rename/move/inline/safe-delete | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Antipatterns / clone detection | ✅ 11 antipatterns + 4 code smells (debug artifacts across 10 langs) + AST Type-2 subtree hashing + name/signature duplication | ❌ | ❌ | ✅ MinHash near-clone + Louvain communities | ❌ | ❌ | ✅ 23 patterns + AST Type-2 subtree hashing |
+| Architecture governance | ✅ | ❌ | ✅ Leiden communities | ✅ Louvain communities | ❌ | ❌ | ✅ change-safety gates |
+| Token savings tracking | ✅ | ❌ | ✅ (6.8×–49×) | ✅ | ✅ (~61% claimed) | ❌ | ✅ (~92% claimed) |
+| Written in | TypeScript | Python | Python | C | TypeScript | Rust | Python |
+
+_¹ `apply_codemod` now rewrites on `@ast-grep/napi` (true AST pattern matching, metavariable substitution, no false matches in strings/comments) with automatic regex fallback for non-AST languages; the native binding loads lazily and degrades to regex instead of crashing if missing. `extract_function` is re-enabled with AST free-variable analysis — it detects genuine multi-return-value slices and rejects them with a structured error rather than silently dropping a binding, and lowers `confidence` on shadowed-variable cases instead of misreporting them as clean (see "where competitors lead" below for what deep validation found)._
+
+_New entrants since April 2026 (direct code-graph MCP peers): **grafel** (Rust, multi-repo daemon, cross-repo + IaC topology, watcher-driven, FlatBuffer in-memory graph); **GitNexus** (MCP-native KG, Leiden communities with cohesion scores); **Code Pathfinder** (5-pass AST indexing, NL queries, dataflow); **CodeGraphContext / CGC** (tree-sitter **+ optional SCIP indexers** → property graph — the one peer already wiring in SCIP for compiler-grade refs); **Graphify** (Python, 110.6K stars — deterministic tree-sitter AST → knowledge graph over 13 languages plus docs/SQL schemas/configs/PDFs/images, no vector store, `/graphify` Claude Code skill or standalone `--mcp` server, `--neo4j` Cypher export, `--wiki` crawlable markdown output; 3-tier edge provenance (`EXTRACTED`/`INFERRED`/`AMBIGUOUS`) is coarser than trace-mcp's 4-tier `resolution_tier`, and it has no refactoring tools, security scanning, or framework-aware edges). Serena shipped a live debugger tool (breakpoints / variable inspection) in v1.5.x — out of the static-graph lane but notable._
+
+> **Why framework awareness matters:** A graph that knows `UserController` exists but doesn't know it renders `Users/Show.vue` via Inertia is missing the edges that matter most. Framework integrations turn a syntax graph into a **semantic** graph — the agent sees the same connections a developer sees.
+
+## Honest assessment: where competitors lead
+
+No tool is uniformly ahead. trace-mcp is the only one combining framework-aware code intelligence + a refactoring engine + code-linked session memory in a single local MCP server — but on individual axes, specialists go deeper. As of July 2026, six of the seven gaps identified in the June re-verification have shipped and gone through an adversarial deep-validation pass (not just unit tests — a second pass that tried specifically to break each feature). That pass surfaced real bugs, which is itself worth being transparent about:
+
+**Shipped and adversarially validated:**
+
+- **AST-based rewrite engine.** `apply_codemod` now runs on `@ast-grep/napi` (true AST pattern matching, metavariable substitution, no false matches in strings/comments), auto-falling back to the regex engine for non-AST languages. `extract_function` is re-enabled with AST free-variable analysis. Deep validation found and fixed a real crash risk: the native `.node` binding can be silently dropped by npm's known optional-dependency bug (npm/cli#4828), and the codemod/extract modules did static top-level imports of it — meaning a missing binding **crashed the whole MCP server at startup**. Fixed with lazy loading and graceful degradation (verified via a real fresh `npm install` reproducing the drop). Also found and fixed: a shadowed-variable slice could reference the wrong out-of-scope binding in the generated `return`; a genuine multi-return-value slice silently dropped the second binding instead of being rejected; a zero-match codemod returned a hard tool-call error for the normal "nothing to change" outcome.
+- **Compiler-grade reference precision via SCIP.** A new `scip_resolved` edge tier (above `lsp_resolved`) ingests precomputed `.scip` indexes (scip-typescript / scip-python / rust-analyzer→SCIP) offline — no live language-server process needed. Deep validation ran a **real `scip-typescript` indexer** end-to-end (not just synthetic protobuf bytes) and found the subsystem produced **zero `scip_resolved` edges on any real input, ever** — two decoder bugs (a length-field evaluation-order bug that corrupted every subsequent read; range fields decoded as zig-zag instead of plain varint, corrupting every position) had passed the original synthetic tests only because the hand-written test fixture shared the same wrong assumptions as the buggy decoder. Both fixed and locked in with a permanent captured-`.scip` regression fixture.
+- **Staleness verification of code-linked memory.** `query_decisions`/`get_wake_up` now verify a decision's linked `symbol_id` still resolves and its source is unchanged since `created_at` before serving it — the Kage-style guarantee. Deep validation found the "fail open" contract (never hide a decision just because verification itself errored) was not actually enforced — an internal Store error propagated uncaught, and the recall-timeout fallback then silently returned an *empty* list, i.e. fail-closed data loss disguised as fail-open. Fixed. Also found and fixed a performance issue: verifying 100 decisions could take ~3.1s (synchronous git subprocess spawns per decision); memoized to ~95ms for the common case of decisions clustered on a handful of files (the fully-scattered worst case is unchanged and remains open, see below).
+- **Decision-retrieval quality + a tracked benchmark.** `query_decisions` now fuses FTS5 + embedding similarity (reusing the existing Signal Fusion engine) with FTS5 as the zero-dependency fallback, plus a tracked recall@k/MRR benchmark. Deep validation found the benchmark *script* itself was broken (pointed at a build path that doesn't exist under this repo's bundled output) and had silently drifted from the tracked fixture it was supposed to measure. Fixed to run against the real fixture; corrected numbers: recall@1=0.594, recall@3=recall@5=0.969, MRR=0.823.
+- **SARIF 2.1.0 output.** `scan_security` / `detect_antipatterns` / `check_quality_gates` now support `output_format: "sarif"`. Deep validation installed a JSON-schema validator and checked real generated payloads against the actual OASIS SARIF 2.1.0 schema (not just eyeballed the shape) — all required fields validated across all three finding shapes. Also found and fixed: the embedded `$schema` URL pointed at a moved/dead (404) location; corrected to the canonical OASIS URL.
+- **Real CFG with loop back-edges.** `get_control_flow` now emits loop back-edges, loop-exit edges, and try/catch/finally merge nodes instead of a branch-only tree. Deep validation found and fixed a real pre-existing bug independent of the back-edge feature: the do-while detector matched *any* identifier starting with "do" (`doOuter()`, `document.write()`, `download(x)`) as a loop, injecting phantom back-edges and corrupting cyclomatic complexity on ordinary code. Verified separately: nested loops get correctly independent back-edges, `break` doesn't create a false back-edge, `continue` is modeled distinctly, switch/case fallthrough is branches not a flattened block.
+- **Type-aware SAST.** `taint_analysis` now prunes flows that provably terminate at a non-string value (numeric/boolean coercion). Deep validation focused on the highest-risk failure mode for a security tool — silent false negatives from over-pruning — and found two real ones: a variable narrowed to numeric at one point but reassigned to attacker-controlled string input *before* the sink was still (wrongly) pruned; string concatenation and template-literal taint propagation (`s = '' + id`, `` `p-${id}` ``) wasn't tracked at all, producing zero flows for classic injection shapes. Both fixed; verified the fixes don't regress the pruning itself (`String(x)` casts and non-sanitizing look-alike wrappers still flag correctly).
+- **IaC as first-class graph nodes.** K8s manifests, Kustomize overlays, and docker-compose→Dockerfile links are now `Resource`/`Module` graph nodes with `imports` edges, not just `get_artifacts` discoveries. Deep validation found the cross-file resolution was worse than "not wired": Kustomize/compose import edges were persisting as **useless source→source self-loops**, and a second bug meant multiple resource references (`resources: [a.yaml, b.yaml]`) silently collapsed into a single edge because they shared one SQLite `INSERT OR IGNORE` key. Fixed with a real post-pass resolver (modeled on the existing wikilink resolver) that now correctly traverses Kustomize Module → Resource and compose service → Dockerfile. Also found Terraform/HCL module→source edges were fully implemented but silently dropped at persist time for lack of a source symbol — fixed.
+
+**Still genuinely open (honest, not closed by the validation pass):**
+
+- **Validated code-health metric.** A temporal-holdout calibration script now correlates `predict_bugs`/`get_risk_hotspots` against real future-fix commits on this repo (churn Spearman ≈0.34, precision@20 ≈2.1–2.4× over random) and the tool descriptions were reworded to honest "heuristic triage" language. This is evidence, not CodeScene-grade external validation — the gap to a peer-reviewed, cross-repo-validated metric remains.
+- **Worst-case decision-verification latency.** The memoization fix above only helps when decisions cluster on a handful of files; a batch fully scattered across N distinct files is still O(N) git subprocess spawns. An async/batched redesign would be needed to bound the worst case.
+- **CFG is line-based, not AST-based**, and taint analysis remains lexical/regex, not a real dataflow engine — both are known architectural ceilings, not just untested edge cases; a full AST/dataflow rewrite of either is out of scope for now.
+
+**Deliberately NOT chasing (out of lane or vanity):** live runtime debugger (Serena — runtime, not static graph); counterfactual architecture simulation / multi-agent swarm (Roam-Code — unverified, speculative); the 158-language count race (codebase-memory-mcp — trace-mcp's 79+ already covers the real-world long tail); tool-count arms race (Roam 224, Narsil 90 — quality of edges beats tool count); verbatim chat storage and 20× "Endless Mode" (MemPalace / claude-mem — trace-mcp's extract-then-store model is deliberate, and Endless Mode adds 60–90s latency per tool).
+
+## Profiling depth tracker
+
+Which entries above got a real read of their architecture/code and a concrete take-or-pass decision, vs. which are still table rows filled from README/star-count checks only. Used to pick where the next competitor-intel pass digs deeper instead of re-scanning the same surface facts.
+
+**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace.
+
+**Tracked, still surface-level only (README + stars, no code/architecture read yet):** Serena, code-review-graph, codebase-memory-mcp, SocratiCode, Narsil-MCP, Roam-Code, Repomix, tokensave, jCodeMunch, Context Mode, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, codegraph, repo-context-mcp, grafel, GitNexus, Code Pathfinder, CodeGraphContext/CGC.
+
+Priority for next deep-dive: **codebase-memory-mcp** (largest peer by stars — 40.7K — with a published benchmark preprint we haven't independently verified) and **codegraph** (68.2K stars, unverified self-reported benchmark claims) are the two highest-value surface-level entries left to profile properly.
+
+**Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
+
+---
+
+# Configuration
+
+Configuration is optional — trace-mcp works out of the box for standard projects.
+
+---
+
+## How config works
+
+All trace-mcp state lives in `~/.trace-mcp/`:
+
+```
+~/.trace-mcp/
+  .config.json              # global config + per-project sections
+  registry.json             # registered projects
+  index/
+    my-app-a1b2c3d4e5f6.db  # per-project databases
+```
+
+### Config merge order
+
+1. **Global defaults** — `~/.trace-mcp/.config.json` (top-level keys)
+2. **Per-project section** — `~/.trace-mcp/.config.json → projects["/path/to/project"]` (created by `trace-mcp add`)
+3. **Local override** — `.trace-mcp.json` in the project directory (optional, for project-specific overrides)
+4. **Zod schema defaults** — fallback values
+
+### Global config example
+
+`~/.trace-mcp/.config.json`:
+```jsonc
+{
+  // Global defaults (apply to all projects)
+  "ai": {
+    "enabled": true
+    // provider defaults to "onnx" — local embeddings, no API keys
+  },
+  "security": {
+    "max_file_size_bytes": 524288
+  },
+
+  // Per-project settings (created by `trace-mcp add`)
+  "projects": {
+    "/Users/me/projects/my-app": {
+      "root": ".",
+      "include": ["app/**/*.php", "routes/**/*.php", "src/**/*.{ts,vue}"],
+      "exclude": ["vendor/**", "node_modules/**"]
+    },
+    "/Users/me/projects/api": {
+      "root": ".",
+      "include": ["src/**/*.ts"],
+      "exclude": ["node_modules/**", "dist/**"]
+    }
+  }
+}
+```
+
+### Per-project config file (optional)
+
+You can place a config file at `.trace-mcp/.config.json` in your project root to override settings without editing the global config:
+
+```jsonc
+// /path/to/project/.trace-mcp/.config.json
+{
+  "include": ["src/**/*.ts", "lib/**/*.ts"],
+  "exclude": ["node_modules/**", "dist/**", "coverage/**"],
+  "ignore": {
+    "directories": ["generated", "proto"],
+    "patterns": ["**/fixtures/**", "**/*.generated.ts"]
+  }
+}
+```
+
+Alternative locations (checked in order): `.trace-mcp/.config.json`, `.trace-mcp.json`, `.trace-mcp`, `.config/trace-mcp.json`, `package.json` (under `"trace-mcp"` key).
+
+---
+
+## .traceignore
+
+Place a `.traceignore` file in your project root to exclude files and directories from indexing. It uses the same syntax as `.gitignore`:
+
+```gitignore
+# Skip generated code
+generated/
+**/generated/**
+
+# Skip protobuf definitions
+proto/
+
+# Skip test fixtures
+tests/fixtures/
+
+# Skip specific file patterns
+*.generated.ts
+*.pb.go
+
+# Negation — re-include something
+!proto/important.proto
+```
+
+### Difference from .gitignore
+
+| | `.gitignore` | `.traceignore` |
+|---|---|---|
+| **Effect** | Files are indexed for the dependency graph, but source content is hidden from AI output | Files are **completely skipped** — not indexed at all |
+| **Use case** | Secrets, credentials, env files | Generated code, vendored deps, large data files |
+
+### Built-in skip directories
+
+These directories are always skipped (no configuration needed):
+
+`node_modules`, `.git`, `dist`, `build`, `.next`, `__pycache__`, `.venv`, `vendor`, `.trace-mcp`, `coverage`, `.turbo`
+
+You can add **more** directory names to skip via `.traceignore` or the `ignore.directories` config key — both only *add* to the skip list, they don't remove anything from it.
+
+`trace-mcp add` / `trace-mcp index` print a "Skipped top-level folders" line after indexing listing every top-level directory that got skipped this way, so a folder missing from the index isn't a silent surprise.
+
+### Getting a skipped folder indexed
+
+Two different things can leave a folder out of the index — check which one applies:
+
+1. **The folder name collides with a built-in skip dir** (e.g. you have your own `vendor/` or `build/` with real source in it). There's currently no per-project way to un-skip a built-in name — rename the folder, or [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) if this collision is common enough to warrant a config override.
+2. **The folder just isn't a built-in skip dir, but nothing in `include` matches its files** (e.g. a `k8s/` folder of YAML manifests — no default `include` pattern covers `*.yaml`). Add an explicit pattern:
+
+   ```jsonc
+   // .trace-mcp/.config.json
+   {
+     "include": ["k8s/**/*.{yaml,yml}"]
+   }
+   ```
+
+   `include` in a per-project config file **replaces** the built-in list rather than adding to it (config merge is shallow) — copy the defaults from [`src/config.ts`](../src/config.ts) alongside your addition if you still want the rest of the project indexed.
+
+---
+
+## Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `root` | `string` | `"."` | Project root directory |
+| `include` | `string[]` | Auto-detected | Glob patterns for files to index |
+| `exclude` | `string[]` | Common exclusions | Glob patterns to skip |
+| `follow_symlinks` | `boolean` | `false` | Follow directory symlinks during file discovery. Leave off unless you know the tree is free of symlink cycles — enabling it on a tree with a cycle (e.g. Ansible Molecule's `roles/<role>/molecule/<scenario>/roles/<role> -> ../../../` layout) can silently truncate traversal. Symlinked *files* are always skipped regardless of this setting. |
+| `ignore.directories` | `string[]` | `[]` | Extra directory names to skip (added to built-in list) |
+| `ignore.patterns` | `string[]` | `[]` | Extra gitignore-style patterns to exclude from indexing |
+| `plugins` | `string[]` | `[]` | Paths to custom plugins |
+| `security.secret_patterns` | `string[]` | Common patterns | Regex patterns for secret filtering |
+| `security.max_file_size_bytes` | `number` | `524288` | Max file size to index (bytes) |
+
+### Framework-specific options
+
+```jsonc
+{
+  "frameworks": {
+    "laravel": {
+      "artisan": {
+        "enabled": true,    // Enable artisan integration
+        "timeout": 10000    // Command timeout in ms
+      },
+      "graceful_degradation": true  // Continue if artisan fails
+    }
+  }
+}
+```
+
+---
+
+## AI configuration
+
+AI features enable semantic search (vector embeddings) and optional LLM-powered summarization. trace-mcp supports three embedding providers, with a **zero-config local option** as the default.
+
+### Provider overview
+
+| Provider | Embeddings | LLM (summarization) | Requires | Setup |
+|---|---|---|---|---|
+| **`onnx`** (default) | ✅ local, offline | ❌ | `@huggingface/transformers` (optional dep) | Zero-config — model auto-downloads (~23 MB) on first use |
+| **`ollama`** | ✅ via Ollama | ✅ via Ollama | Running Ollama instance | Install Ollama + pull models |
+| **`lmstudio`** | ✅ via LM Studio | ✅ via LM Studio | LM Studio server running | OpenAI-compatible, no API key |
+| **`openai`** | ✅ | ✅ | API key | `api_key` or `OPENAI_API_KEY` env |
+| **`anthropic`** | ❌ (no embeddings API) | ✅ | API key | `api_key` or `ANTHROPIC_API_KEY` env |
+| **`gemini`** | ✅ | ✅ | API key | Google Generative Language API (consumer) — `api_key` (AIza…) or `GEMINI_API_KEY` env |
+| **`vertex`** | ✅ | ✅ | OAuth token + GCP project | Google Vertex AI (GCP) — `api_key` = access token, plus `vertex_project` + `vertex_location` |
+| **`voyage`** | ✅ (code-tuned) | ❌ | API key | Voyage AI embeddings only — pair with another provider for inference |
+| **`mistral`** / **`groq`** / **`together`** / **`deepseek`** / **`xai`** | ✅ | ✅ | API key | OpenAI-compatible endpoints — per-provider `*_API_KEY` env |
+
+### Minimal setup — local embeddings (no API keys)
+
+```jsonc
+{
+  "ai": {
+    "enabled": true
+    // provider defaults to "onnx"
+    // model defaults to Xenova/all-MiniLM-L6-v2 (384 dims, Apache 2.0)
+    // auto-downloads ~23 MB on first embed_repo or semantic search
+  }
+}
+```
+
+This enables semantic/hybrid `search` and `query_by_intent` with zero configuration. No API keys, no external services, works fully offline after first model download.
+
+### Full setup — Ollama (embeddings + LLM summarization)
+
+```jsonc
+{
+  "ai": {
+    "enabled": true,
+    "provider": "ollama",
+    "base_url": "http://localhost:11434",
+    "inference_model": "gemma4:e4b",
+    "fast_model": "gemma4:e4b",
+    "embedding_model": "qwen3-embedding:0.6b",
+    "embedding_dimensions": 1024,
+    "summarize_on_index": true,
+    "summarize_batch_size": 20,
+    "summarize_kinds": ["class", "function", "method", "interface", "trait", "enum", "type"],
+    "concurrency": 4
+  }
+}
+```
+
+> **Ollama embedding dimensions — match your model.** Ollama embedding models
+> vary in output dimensionality (`nomic-embed-text` → 768, `qwen3-embedding:0.6b`
+> → 1024, `mxbai-embed-large` → 1024, etc.). When `ai.embedding_dimensions` is
+> **omitted**, trace-mcp auto-detects the real dimension by probing the model on
+> first use, so you don't have to set it. When you **do** set it, the value MUST
+> equal the model's real dimension — a wrong value makes every vector insert fail
+> with a dimension mismatch, and `embed_repo` then returns `status: "error"`
+> (`dimension_mismatch`) rather than a silent 0-coverage "completed". If you
+> switch to a model with a different dimension, either update
+> `embedding_dimensions` to match (or remove it) and re-run
+> `embed_repo({ force: true })`.
+
+### Full setup — OpenAI
+
+```jsonc
+{
+  "ai": {
+    "enabled": true,
+    "provider": "openai",
+    "api_key": "sk-...",
+    "inference_model": "gpt-4o-mini",
+    "embedding_model": "text-embedding-3-small",
+    "embedding_dimensions": 1536,
+    "summarize_on_index": true
+  }
+}
+```
+
+### Full setup — Google Gemini (consumer API)
+
+Uses the Google Generative Language API (`generativelanguage.googleapis.com`) with a simple `AIza…` API key from [ai.google.dev](https://ai.google.dev). For GCP-governed workloads, use the `vertex` provider instead.
+
+```jsonc
+{
+  "ai": {
+    "enabled": true,
+    "provider": "gemini",
+    "api_key": "AIza...",
+    "inference_model": "gemini-2.5-flash",
+    "embedding_model": "text-embedding-004",
+    "embedding_dimensions": 768
+  }
+}
+```
+
+### Full setup — Google Vertex AI (GCP)
+
+Uses Vertex AI with a short-lived OAuth2 access token (~1h TTL). Generate via `gcloud auth print-access-token` — you're responsible for refreshing it.
+
+```jsonc
+{
+  "ai": {
+    "enabled": true,
+    "provider": "vertex",
+    "api_key": "ya29....",                // `gcloud auth print-access-token`
+    "vertex_project": "my-gcp-project",
+    "vertex_location": "us-central1",
+    "inference_model": "gemini-2.5-flash",
+    "embedding_model": "text-embedding-005",
+    "embedding_dimensions": 768
+  }
+}
+```
+
+Environment variables: `GOOGLE_ACCESS_TOKEN`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` are honored when the config fields are unset.
+
+### Full setup — Voyage AI (embeddings only)
+
+Voyage specializes in retrieval-grade embeddings. `voyage-code-3` is tuned for source code and is the recommended default for this project. Voyage has no inference API — keep `features.inference` disabled, or layer Voyage embeddings on top of Anthropic/OpenAI/Ollama for summarization by switching providers per-capability in your own setup.
+
+```jsonc
+{
+  "ai": {
+    "enabled": true,
+    "provider": "voyage",
+    "api_key": "pa-...",                   // or VOYAGE_API_KEY env
+    "embedding_model": "voyage-code-3",
+    "embedding_dimensions": 1024,
+    "features": { "embedding": true, "inference": false, "fast_inference": false }
+  }
+}
+```
+
+### All options
+
+| Option | Default | Description |
+|---|---|---|
+| `ai.enabled` | `false` | Enable AI features |
+| `ai.provider` | `"onnx"` | `onnx`, `ollama`, `lmstudio`, `openai`, `anthropic`, `gemini`, `vertex`, `voyage`, `mistral`, `groq`, `together`, `deepseek`, `xai` |
+| `ai.base_url` | — | Custom API endpoint (providers that honor it) |
+| `ai.api_key` | — | API key, or OAuth access token for `vertex`. Env fallbacks: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_ACCESS_TOKEN`, `VOYAGE_API_KEY`, etc. |
+| `ai.vertex_project` | — | Vertex only — GCP project ID (or `GOOGLE_CLOUD_PROJECT` env) |
+| `ai.vertex_location` | `us-central1` | Vertex only — GCP region (or `GOOGLE_CLOUD_LOCATION` env) |
+| `ai.inference_model` | — | LLM for explanations and reviews (ollama/openai only) |
+| `ai.fast_model` | — | Faster LLM for lightweight tasks (ollama/openai only) |
+| `ai.embedding_model` | auto per provider | `"Xenova/all-MiniLM-L6-v2"` (onnx), `"qwen3-embedding:0.6b"` (ollama), `"text-embedding-3-small"` (openai) |
+| `ai.embedding_dimensions` | auto per provider | `384` (onnx), `768` (ollama), `1536` (openai) |
+| `ai.summarize_on_index` | `false` | Auto-summarize symbols after indexing (requires ollama/openai with LLM model) |
+| `ai.summarize_batch_size` | `20` | Symbols per summarization batch |
+| `ai.summarize_kinds` | `["class", "function", ...]` | Symbol kinds to summarize |
+| `ai.concurrency` | `1` | Max parallel requests to AI provider (1–32) |
+| `ai.reranker_model` | — | Model for search result reranking (ollama/openai only) |
+
+> **ONNX provider details:** Uses `@huggingface/transformers` (installed as optional dependency). The default model `Xenova/all-MiniLM-L6-v2` is Apache 2.0 licensed, produces 384-dimensional L2-normalized mean-pooled vectors, and weighs ~23 MB. The model is cached locally after first download. You can use any ONNX-compatible model from HuggingFace by setting `embedding_model`.
+
+> **Ollama parallelism:** When setting `concurrency` > 1, you must also configure Ollama to handle parallel requests. The desktop app UI does not expose this setting — use one of these methods:
+>
+> **Option 1 — Environment variable for the desktop app (macOS):**
+> ```bash
+> launchctl setenv OLLAMA_NUM_PARALLEL 4
+> ```
+> Then quit and reopen the Ollama app. The variable persists until logout.
+>
+> **Option 2 — Run from terminal instead of the desktop app:**
+> ```bash
+> OLLAMA_NUM_PARALLEL=4 ollama serve
+> ```
+>
+> **Option 3 — Persist via shell profile** (add to `~/.zshrc`):
+> ```bash
+> export OLLAMA_NUM_PARALLEL=4
+> ```
+> Then `source ~/.zshrc` and restart Ollama.
+>
+> Set `OLLAMA_NUM_PARALLEL` to match your `ai.concurrency` value. Higher parallelism uses more VRAM/RAM — start with 2–4 and increase if your hardware allows.
+
+---
+
+## LSP enrichment
+
+trace-mcp can optionally use Language Server Protocol (LSP) servers to enrich call graph edges with **compiler-grade type resolution**. This resolves dynamic dispatch, interface polymorphism, generics, and other cases that tree-sitter AST analysis alone cannot handle.
+
+**Disabled by default** — opt-in via configuration. When enabled, LSP runs as a post-indexing enrichment pass (Pass 3) after the standard tree-sitter indexing completes. If an LSP server is not installed or fails to start, indexing continues normally without LSP edges.
+
+```jsonc
+{
+  "lsp": {
+    "enabled": true,              // default: false — must opt-in
+    "auto_detect": true,          // default: true — auto-detect available LSP servers
+    "max_concurrent_servers": 2,  // default: 2 — limit parallel LSP processes
+    "enrichment_timeout_ms": 120000, // default: 120000 — overall enrichment timeout
+    "batch_size": 100,            // default: 100 — symbols per batch
+    "servers": {                  // optional: override auto-detected server commands
+      "typescript": {
+        "command": "npx",
+        "args": ["typescript-language-server", "--stdio"],
+        "timeout_ms": 30000
+      }
+    }
+  }
+}
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `lsp.enabled` | `false` | Enable LSP enrichment pass |
+| `lsp.auto_detect` | `true` | Auto-detect available LSP servers based on project files |
+| `lsp.max_concurrent_servers` | `2` | Maximum number of LSP servers running simultaneously |
+| `lsp.enrichment_timeout_ms` | `120000` | Overall timeout for the entire LSP enrichment pass |
+| `lsp.batch_size` | `100` | Number of symbols to process per batch |
+| `lsp.servers.<lang>.command` | — | Override the LSP server command for a language |
+| `lsp.servers.<lang>.args` | `[]` | Arguments for the LSP server command |
+| `lsp.servers.<lang>.timeout_ms` | `30000` | Per-request timeout for this server |
+| `lsp.servers.<lang>.initializationOptions` | — | Custom LSP initialization options |
+
+### Auto-detected servers
+
+| Language | Server | Detection |
+|---|---|---|
+| TypeScript/JavaScript | `typescript-language-server` | `tsconfig.json` or `package.json` exists |
+| Python | `pyright-langserver` | `pyproject.toml`, `requirements.txt`, or `setup.py` exists |
+| Go | `gopls` | `go.mod` exists |
+| Rust | `rust-analyzer` | `Cargo.toml` exists |
+
+Servers are only started if the corresponding language has files in the index AND the server binary is available on PATH.
+
+---
+
+## Tool exposure & agent behavior
+
+The `tools.*` section controls what the MCP server injects into every session — tool set, instruction verbosity, and optional agent behavior rules.
+
+```jsonc
+{
+  "tools": {
+    "preset": "standard",                // "full" | "standard" | "minimal" | "review" | "architecture"
+    "description_verbosity": "full",     // "full" | "minimal" | "none"
+    "instructions_verbosity": "full",    // "full" | "minimal" | "none" — controls the tool-routing block
+    "agent_behavior": "off",             // "strict" | "minimal" | "off" — see below
+    "meta_fields": true,                 // true | false | ["_hints", "_budget_warning", ...]
+    "compact_schemas": false             // strip advanced params from tool schemas (saves tokens)
+  }
+}
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `tools.preset` | `"standard"` | Tool preset: `standard` (~50 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (~16 tools), `review`, `architecture`, or `full` (all ~170 tools, opt-in) |
+| `tools.include` | — | Whitelist specific tools by name |
+| `tools.exclude` | — | Blacklist specific tools by name |
+| `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
+| `tools.instructions_verbosity` | `"full"` | Server-level instructions (the tool-routing block). `full` ~2K tokens, `minimal` ~200 |
+| `tools.agent_behavior` | `"off"` | Behavior rules appended to instructions — see [Agent behavior rules](#agent-behavior-rules) |
+| `tools.meta_fields` | `true` | Meta fields in responses (`_hints`, `_budget_warning`, etc.). Set `false` or list to narrow |
+| `tools.compact_schemas` | `false` | Strip advanced/optional params from tool schemas. Cuts schema size 40–60% |
+
+### Agent behavior rules
+
+`tools.agent_behavior` appends generic discipline rules (anti-sycophancy, anti-fabrication, goal-driven execution, 2-strike session hygiene, no drive-by refactors) to the server instructions. These are client-agnostic — every MCP-compatible client (Claude Code, Cursor, Codex, Windsurf, …) receives them.
+
+| Value | What ships | When to use |
+|---|---|---|
+| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere (CLAUDE.md, tweakcc), or don't want opinionated rules |
+| `"minimal"` | One rule: never fabricate paths/symbols/APIs — call `search`/`get_symbol`/run the command | Minimal nudge tied to trace-mcp tool use, no personality prescription |
+| `"strict"` | 8 rules: no flattery, disagree on wrong premises, never fabricate, stop when confused, goal-driven execution, verify before reporting "done", 2-strike rule, surgical changes only | Max-tier default — aligns agent behavior across a team |
+
+**Auto-set by `trace-mcp init`:** picking the **Max** enforcement level writes `"agent_behavior": "strict"` to your global config. Picking Base/Standard writes `"off"`. Re-run `init` to change tiers — the value updates idempotently.
+
+**Why it lives in MCP instructions (not CLAUDE.md or tweakcc):**
+- Cross-client — Cursor/Codex/Windsurf users get the same behavior without CC-specific setup.
+- Auto-updates on `npm upgrade trace-mcp` — no re-init required to pull new rule wording.
+- Single source of truth alongside the tool-routing block.
+
+If you want to override in one project without affecting others, put `"agent_behavior": "off"` (or any other value) in that project's `.trace-mcp/.config.json` — per-project config takes precedence over global.
+
+### 4-tier resolution system
+
+Every edge in the call graph carries a `resolution_tier` indicating how it was resolved:
+
+| Tier | Source | Confidence |
+|---|---|---|
+| `lsp_resolved` | LSP call hierarchy | Compiler-grade (highest) |
+| `ast_resolved` | Tree-sitter + module resolution | Static AST (default) |
+| `ast_inferred` | Heuristic inference from imports | Medium |
+| `text_matched` | Name/text similarity matching | Lowest |
+
+The `get_call_graph` tool reports a `resolution_tiers` summary showing the distribution across all edges, so you can see how much of the graph has compiler-grade confidence.
+
+---
+
+## Topology & subprojects
+
+trace-mcp includes a **topology layer** for cross-service analysis and a **subproject layer** for linking dependency graphs across subprojects within a project.
+
+A **subproject** is any working repository that is part of your project's ecosystem: microservices, frontends, backends, shared libraries, CLI tools, etc. Each directory with its own root marker (`package.json`, `composer.json`, `go.mod`, etc.) is a subproject. A project contains one or more subprojects; the project itself is not a subproject. Subprojects can live inside the project directory (e.g. `project/frontend/`) or outside it (added manually via `subproject add`).
+
+Both topology and subprojects are **enabled by default** — every indexed project auto-detects its subprojects.
+
+```jsonc
+{
+  "topology": {
+    "enabled": true,           // default: true — enable topology + subproject tools
+    "auto_discover": true,     // default: true — auto-detect and register subprojects on indexing
+    "auto_detect": true,       // default: true — auto-detect from Docker Compose
+    "repos": [],               // additional repo paths to include in topology
+    "contract_globs": []       // explicit contract file patterns (e.g. ["api/openapi.yaml"])
+  }
+}
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `topology.enabled` | `true` | Enable topology and subproject tools |
+| `topology.auto_discover` | `true` | Auto-detect and register subprojects on every index |
+| `topology.auto_detect` | `true` | Auto-detect subprojects from Docker Compose / workspace structure |
+| `topology.repos` | `[]` | Additional repo paths to include in the topology graph |
+| `topology.contract_globs` | — | Explicit paths to API contract files (relative to project root) |
+
+### Auto-discovery flow
+
+When a project is indexed (via `serve`, `serve-http`, or `index`):
+
+1. **Subprojects are detected** within the project root using these strategies (in order):
+   - **Docker Compose** — parses `docker-compose.yml` / `compose.yml` for service definitions
+   - **Flat workspace** — scans first-level subdirectories for root markers (`package.json`, `composer.json`, `go.mod`, etc.). Requires ≥2 found (e.g. `project/frontend/` + `project/backend/`)
+   - **Grouped workspace** — scans two levels deep (`root/group/service/`). Requires ≥2 found (e.g. `project/org/service-a/` + `project/org/service-b/`)
+   - **Monolith fallback** — treats the project root as a single subproject
+2. Each detected subproject is **registered** and bound to the project in `~/.trace-mcp/topology.db`
+3. **API contracts** are parsed (OpenAPI, GraphQL SDL, Protobuf) for each subproject
+4. Code is **scanned** for HTTP/gRPC client calls (fetch, axios, Http::, requests, etc.)
+5. Client calls are **matched** to known endpoints from other subprojects
+6. **Cross-subproject edges** are created
+
+This is non-blocking — the server starts immediately, and subproject syncs in the background.
+
+### Disabling
+
+To disable auto-discovery while keeping topology tools:
+```jsonc
+{ "topology": { "enabled": true, "auto_discover": false } }
+```
+
+To disable everything:
+```jsonc
+{ "topology": { "enabled": false } }
+```
+
+### Subproject CLI
+
+```bash
+# Add a subproject (can be inside or outside project dir)
+trace-mcp subproject add --repo=../service-b --project=. [--contract=openapi.yaml] [--name=my-service]
+trace-mcp subproject remove <name-or-path>
+trace-mcp subproject list [--project=.] [--json]
+trace-mcp subproject sync
+trace-mcp subproject impact --endpoint=/api/users [--method=GET] [--service=user-svc]
+```
+
+### Supported contract formats
+
+| Format | Auto-detected files |
+|---|---|
+| **OpenAPI / Swagger** | `openapi.yml`, `openapi.yaml`, `openapi.json`, `swagger.yml`, `swagger.yaml`, `swagger.json`, `api-spec.yml`, `api-spec.yaml`, `api-spec.json` |
+| **GraphQL SDL** | `schema.graphql`, `schema.gql` |
+| **Protobuf / gRPC** | `*.proto` |
+
+### Supported client call patterns
+
+The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported languages:
+
+| Pattern | Languages | Example |
+|---|---|---|
+| `fetch()` | JS/TS | `fetch('/api/users')` |
+| `axios.*()` | JS/TS | `axios.get('/api/users')` |
+| `Http::*()` | PHP/Laravel | `Http::post('/api/orders')` |
+| `requests.*()` | Python | `requests.get('https://api.example.com/users')` |
+| `http.Get/Post()` | Go | `http.Get("http://svc/api/users")` |
+| `RestTemplate.*()` | Java/Kotlin | `.getForObject("/api/users")` |
+| gRPC stubs | All | `client.GetUser()` |
+| GraphQL operations | All | `query GetUser { ... }` |
+
+### Cross-project tools
+
+Every MCP session is still attached to exactly one project (see [stdio vs HTTP](#stdio-vs-http--choosing-your-setup)) — but two tools let an agent reach across to any OTHER project already registered with trace-mcp, without opening a second MCP connection:
+
+- **`list_projects`** — lists every project in `~/.trace-mcp/registry.json` (root, name, type, last-indexed timestamp), plus known subprojects when topology is enabled for the current session.
+- **`call_project_tool { project, tool, args }`** — runs any of the ~170 normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
+
+This is read-only relay wiring — it never starts indexing or a file watcher for the target project. In the HTTP daemon, a target project already warm in memory is served directly; a cold one is opened on demand via the same read-mostly path used for on-demand subprojects. Under `stdio` (no daemon), the target project's existing index database is opened directly; a project that has never been indexed cannot be relayed to.
+
+No existing tool's schema changes because of this — `call_project_tool` dispatches to the target project's own registered handler for `tool`, so that tool's contract is exactly what it is when called directly.
+
+---
+
+## Supported MCP clients
+
+`trace-mcp init` detects installed MCP clients and writes a `trace-mcp` server entry into each one's native config format. Pick clients interactively, or pass `--mcp-client <name>` for non-interactive runs.
+
+| Client | Config path | Format | Top-level key | Notes |
+|---|---|---|---|---|
+| Claude Code | `~/.claude.json`, `<project>/.mcp.json` | JSON | `mcpServers` | Supports Base / Standard / Max enforcement tiers (hooks, tweakcc) |
+| Claw Code | `~/.claw/settings.json`, `<project>/.claw.json` | JSON | `mcpServers` | Same enforcement tiers as Claude Code |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) | JSON | `mcpServers` | Quit Claude.app before init — it overwrites foreign keys on preference flush |
+| Cursor | `~/.cursor/mcp.json`, `<project>/.cursor/mcp.json` | JSON | `mcpServers` | Also writes `.cursor/rules/trace-mcp.mdc` |
+| Windsurf | `~/.windsurf/mcp.json`, `<project>/.windsurf/mcp.json` | JSON | `mcpServers` | Also writes `.windsurfrules` |
+| Continue | `~/.continue/mcpServers/mcp.json` | JSON | `mcpServers` | |
+| Junie | `~/.junie/mcp/mcp.json` | JSON | `mcpServers` | |
+| JetBrains AI Assistant | IDE-internal XML | — | — | Manual: Settings → Tools → AI Assistant → MCP. Use "Import from Claude" if Claude Desktop is configured |
+| Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.trace-mcp]` | |
+| Hermes Agent | `$HERMES_HOME/config.yaml` (default `~/.hermes/config.yaml`) | YAML | `mcp_servers` | Always global; also writes `AGENTS.md` and pre-allowlists hooks |
+| **AMP** (Sourcegraph) | `~/.config/amp/settings.json[c]`, `<project>/.amp/settings.json[c]` | JSON / JSONC | `amp.mcpServers` (literal dot in key) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
+| **Warp** | Cloud-synced storage (no writable file) | — | — | Manual: Settings → Agents → MCP servers → + Add → paste JSON. If Claude Code is also configured, enable "File-based MCP servers" so Warp inherits trace-mcp from `~/.claude.json`. Also writes `AGENTS.md` |
+| **Factory Droid** | `~/.factory/mcp.json`, `<project>/.factory/mcp.json` | JSON | `mcpServers` (entries need `type: "stdio"`) | Also writes `AGENTS.md` |
+| **Cline** | `<VS Code User>/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | JSON | `mcpServers` | VS Code extension; global-only (globalStorage has no per-project variant). Detected only when the extension's settings dir exists |
+| **Kilo Code** | `<VS Code User>/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` | JSON | `mcpServers` | Legacy VS Code extension config. The newer Kilo CLI (≥ v7) uses a non-standard `~/.config/kilo/kilo.jsonc` shape (`mcp` key, `command` as array) that trace-mcp does not write — configure that manually if you use the CLI |
+| **Antigravity** (Google) | `~/.gemini/config/mcp_config.json` | JSON | `mcpServers` | Global-only (no documented per-project config as of mid-2026) |
+| **Kimi Code CLI** (Moonshot) | `~/.kimi/mcp.json` | JSON | `mcpServers` | Global-only; format is compatible with other MCP clients |
+
+> `<VS Code User>` is `~/Library/Application Support/Code/User` (macOS), `%APPDATA%\Code\User` (Windows), or `~/.config/Code/User` (Linux).
+
+**Enforcement tiers (Claude Code / Claw / Desktop only):**
+- **Base** — `CLAUDE.md` block with tool routing rules.
+- **Standard** — Base + PreToolUse guard hooks that intercept built-in Read/Grep/Glob.
+- **Max** — Standard + tweakcc system-prompt patches and strict agent-behavior rules.
+
+For all other clients only the Base tier applies — there is no equivalent of Claude Code hooks or tweakcc in those tools.
+
+---
+
+## stdio vs HTTP — choosing your setup
+
+trace-mcp speaks MCP over two transports. Which one to pick depends on whether you want a process per repo or one long-lived daemon serving many projects.
+
+### stdio — recommended for per-repo agent sessions
+
+`trace-mcp serve` runs the server over stdio. Your MCP client launches one process per session with the working directory set to the repo you opened, so the project is auto-detected from there — no URL, no `?project=`, and each session is isolated to its own repo. No daemon is required: it runs in-process, and if a daemon happens to be running it transparently reuses the warm index.
+
+Wire it up without touching a committed file:
+
+```bash
+# Across all your projects (stored in ~/.claude.json, not committed):
+claude mcp add --scope user trace-mcp -- npx -y trace-mcp@latest serve
+
+# Just one project, not committed (local scope):
+claude mcp add --scope local trace-mcp -- npx -y trace-mcp@latest serve
+```
+
+To share one config with the whole team, commit a portable stdio entry to `.mcp.json` — it carries no machine-specific URL or path:
+
+```json
+{
+  "mcpServers": {
+    "trace-mcp": { "command": "npx", "args": ["-y", "trace-mcp@latest", "serve"] }
+  }
+}
+```
+
+Each developer's session spawns its own per-repo process; nothing is shared or hardcoded. Avoid committing an absolute HTTP URL such as `http://127.0.0.1:3741/mcp?project=/Users/you/...` — that path only exists on your machine and would break for everyone else.
+
+### HTTP daemon — one warm index shared across many projects
+
+`trace-mcp serve-http` runs a long-lived daemon (default `127.0.0.1:3741`) that holds warm indexes for several registered projects and backs the desktop app. MCP clients connect with the target project in the URL:
+
+```
+http://127.0.0.1:3741/mcp?project=/absolute/path/to/repo
+```
+
+The daemon multiplexes projects — one process serves all of them — but each MCP registration is bound to a single project via `?project=` (or, for clients that cannot append a query string, the `X-Trace-Project` header or `params._meta["traceMcp/projectRoot"]`). Pick this when you want one warm index reused across sessions and tools and you're comfortable managing the per-registration URL. For one-session-per-repo workflows, stdio is simpler.
+
+> **One project per session.** Both transports resolve exactly one project per MCP session — stdio from the working directory, HTTP from `?project=`. A single session cannot query across repositories today; to work with several repos, register each (`trace-mcp add <path>`) and add one MCP entry per repo (HTTP) or open one session per repo (stdio). Cross-repo queries inside a single session — useful for multi-repo/pseudo-monorepo setups — are tracked as an enhancement in [#199](https://github.com/nikolai-vysotskyi/trace-mcp/issues/199).
+
+| | stdio | HTTP daemon |
+|---|---|---|
+| Process model | one per session | one shared daemon |
+| Project scope | auto-detected from cwd | `?project=` per registration |
+| Config | command, no URL | URL with absolute path |
+| Warm-index reuse | per session (shared if a daemon is running) | always shared |
+| Best for | per-repo agent sessions, committed team config | desktop app, many projects, one shared index |
+
+---
+
+## Hermes Agent sessions
+
+Hermes Agent (NousResearch) stores conversations in a SQLite database at `$HERMES_HOME/state.db` (default `~/.hermes/state.db`) plus one DB per profile under `<home>/profiles/<name>/state.db`. trace-mcp reads these read-only and exposes them through:
+
+- `discover_hermes_sessions` — MCP tool that lists sessions without mining or indexing them.
+- `mine_sessions` — if you pass a `project_root`, the decision miner also walks every Hermes session it can see and records any decisions it finds under that project. When `project_root` is absent Hermes is skipped entirely — global conversations are deliberately not attributed to a guessed project.
+
+Hermes sessions are global (no per-project binding in the upstream schema). Do not expect project scoping on the provider side.
+
+```jsonc
+{
+  "hermes": {
+    "enabled": "auto",       // "auto" (default) | true | false
+    "home_override": null,   // override $HERMES_HOME / ~/.hermes resolution
+    "profile": null          // scope discovery to <home>/profiles/<name>/
+  }
+}
+```
+
+With `enabled: "auto"` the provider is registered at boot; discovery returns an empty list when no `state.db` exists, so there is no penalty on machines that don't use Hermes.
+
+---
+
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `TRACE_MCP_LOG_LEVEL` | Log level (debug, info, warn, error) |
+| `HERMES_HOME` | Override for Hermes Agent storage root (default `~/.hermes`). Read by `discover_hermes_sessions` and the Hermes session provider. |
+
+---
+
+## CLI
+
+```bash
+# Setup
+trace-mcp init                 # One-time global setup (MCP clients, hooks, CLAUDE.md)
+trace-mcp add [dir]            # Register a project for indexing
+trace-mcp list                 # List all registered projects
+trace-mcp upgrade [dir]        # Upgrade all projects (or specific one) — migrations + reindex
+
+# Server
+trace-mcp serve                # Start MCP server (stdio transport)
+trace-mcp serve-http           # Start HTTP/SSE server (default: 127.0.0.1:3741)
+  -p, --port <port>            # Custom port
+  --host <host>                # Custom host
+
+# Manual indexing
+trace-mcp index <dir>          # Index a project directory
+  -f, --force                  # Force reindex all files
+
+# Subprojects (= services bound to projects)
+trace-mcp subproject add       # Add a subproject to a project
+  --repo <path>                # Subproject/service path (required)
+  --project <path>             # Project this subproject belongs to (required)
+  --contract <paths...>        # Explicit contract file paths
+  --name <name>                # Display name
+trace-mcp subproject remove <name-or-path>   # Remove a subproject
+trace-mcp subproject list                    # List subprojects
+  --project <path>             # Filter to a specific project
+  --json                       # Output as JSON
+trace-mcp subproject sync                    # Re-scan all subprojects
+trace-mcp subproject impact                  # Cross-subproject impact analysis
+  --endpoint <path>            # Endpoint path pattern
+  --method <method>            # HTTP method filter
+  --service <name>             # Service name filter
+  --json                       # Output as JSON
+
+# Hooks
+trace-mcp setup-hooks          # Install guard hook (blocks Read/Grep/Glob/Bash on code + Agent(Explore))
+  --global                     # Install globally
+  --uninstall                  # Remove hook
+
+# Analytics (see docs/analytics.md)
+trace-mcp analytics sync       # Parse session logs into analytics DB
+  --full                       # Force full rescan
+trace-mcp analytics report     # Token usage report
+  --period <p>                 # today, week, month, all (default: week)
+trace-mcp analytics optimize   # Optimization recommendations
+trace-mcp analytics savings    # Real savings analysis
+trace-mcp analytics benchmark  # Synthetic token efficiency benchmark
+  --queries <n>                # Queries per scenario (default: 10)
+  --format <fmt>               # text, json, markdown
+trace-mcp analytics coverage   # Technology coverage report
+trace-mcp analytics trends     # Daily usage trends
+  --days <n>                   # Number of days (default: 30)
+```
+
+---
+
+## Security
+
+- **Path traversal protection** — all file access validated against project root
+- **Symlink detection** — prevents escape from project boundary
+- **Secret pattern filtering** — configurable regex patterns filter out secrets from tool output
+- **File size limits** — per-file byte cap prevents OOM on large files
+- **Artisan whitelist** — only safe artisan commands allowed (when Laravel integration is enabled)
+- **HTTP rate limiting** — 60 req/min per IP on HTTP/SSE transport
+
+---
+
+# Architecture
+
+## Indexing pipeline
+
+trace-mcp uses a two-pass indexing pipeline:
+
+```
+Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
+    │
+    ▼
+┌──────────────────────────────────────────┐
+│  Pass 1 — Per-file extraction            │
+│  Language plugins (tree-sitter) →        │
+│    symbols (functions, classes, etc.)     │
+│  Integration plugins →                   │
+│    routes, components, migrations,       │
+│    events, models, schemas, variants     │
+└────────────────────┬─────────────────────┘
+                     │
+                     ▼
+┌──────────────────────────────────────────┐
+│  Pass 2 — Cross-file resolution          │
+│  Module resolvers:                       │
+│    PSR-4 · ES modules · Python modules  │
+│  Integration plugins resolveEdges():     │
+│    Vue component references              │
+│    Inertia render → page mapping         │
+│    Blade template inheritance            │
+│    ORM relationship resolution           │
+│    Route → controller binding            │
+│  → unified directed edge graph           │
+└────────────────────┬─────────────────────┘
+                     │
+                     ▼
+┌──────────────────────────────────────────┐
+│  Per-project SQLite (WAL mode) + FTS5   │
+│  nodes · edges · symbols · routes       │
+│  + optional: embeddings · summaries     │
+└────────────────────┬─────────────────────┘
+                     │
+                     ▼
+┌──────────────────────────────────────────┐
+│  Subprojects (auto, post-index)         │
+│  Topology DB (~/.trace-mcp/topology.db) │
+│  Auto-detect services per project       │
+│  Contracts · Endpoints · Client calls   │
+│  Cross-service impact edges             │
+└──────────────────────────────────────────┘
+```
+
+**Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
+
+When AI is enabled, a background pipeline runs after indexing to generate summaries and embeddings for key symbols.
+
+### Storage
+
+All state is centralized in `~/.trace-mcp/`:
+
+```
+~/.trace-mcp/
+  .config.json              # global config + per-project settings
+  registry.json             # project registry (all added projects)
+  topology.db               # cross-service topology + subproject graph
+  analytics.db              # session analytics (cross-project)
+  savings.json              # cumulative token savings tracker
+  index/
+    my-app-a1b2c3d4e5f6.db  # per-project SQLite databases
+    api-server-b2c3d4e5.db
+```
+
+Each project gets its own SQLite database, named `<project-basename>-<sha256-hash-of-path>.db`. The project registry tracks which projects are registered, their root paths, and last index time. Nothing is stored in the project directory itself.
+
+The **topology database** (`topology.db`) is shared across all projects. It stores:
+- **Subprojects** (= services) — bound to projects, auto-detected or manually added
+- **API contracts** — parsed OpenAPI, GraphQL SDL, Protobuf specs
+- **Endpoints** — normalized API endpoints extracted from contracts
+- **Client calls** — HTTP/gRPC/GraphQL calls discovered in code
+- **Cross-subproject edges** — links between client calls and endpoints
+
+Each subproject is bound to a project via `project_root`. A project can have multiple subprojects (frontend, backend, etc.), and the same subproject can belong to multiple projects.
+
+The **decision memory database** (`decisions.db`) is also shared across all projects. It stores:
+- **Decisions** — architectural decisions, tech choices, bug root causes, preferences, etc., each with temporal validity (`valid_from`/`valid_until`) and optional code linkage (`symbol_id`, `file_path`, `service_name`)
+- **Session chunks** — chunked conversation content from AI session logs, FTS5-indexed for cross-session search
+- **Mined sessions tracker** — prevents re-processing already-mined session files
+
+Decisions are auto-enriched into code intelligence tool responses (`get_change_impact`, `plan_turn`, `get_session_resume`) via the enrichment layer in `src/memory/enrichment.ts`.
+
+---
+
+## Plugin system
+
+Plugins are the core extensibility mechanism. There are two types:
+
+### Language plugins
+
+Located in `src/indexer/plugins/language/`. Each plugin handles symbol extraction for one language using tree-sitter.
+
+Registered plugins: PHP, TypeScript/JavaScript, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS.
+
+### Integration plugins
+
+Located in `src/indexer/plugins/integration/`, organized by category:
+
+| Category | Plugins | What they do |
+|---|---|---|
+| `framework/` | Laravel, Django, Rails, Spring, NestJS, Express, FastAPI, Flask, Hono, Fastify, Nuxt, Next.js | Route, controller, middleware extraction |
+| `orm/` | Prisma, TypeORM, Sequelize, Mongoose, SQLAlchemy, Drizzle | Model, relationship, migration extraction |
+| `view/` | React, Vue, React Native, Blade, Inertia, shadcn, MUI, Ant Design, Headless UI, Nuxt UI | Component tree, prop, render analysis |
+| `api/` | GraphQL, tRPC, DRF | Schema, endpoint, resolver extraction |
+| `validation/` | Zod, Pydantic | Schema definition extraction |
+| `state/` | Zustand | Store, action, selector extraction |
+| `realtime/` | Socket.io | Event handler, namespace extraction |
+| `testing/` | Testing | Test suite, fixture, coverage analysis |
+| `tooling/` | Celery, n8n, data-fetching | Task, workflow, query hook extraction |
+
+### Plugin interface
+
+Every integration plugin implements `FrameworkPlugin`:
+
+```typescript
+interface FrameworkPlugin {
+  manifest: PluginManifest;           // name, version, priority, dependencies
+  detect(ctx: ProjectContext): boolean; // returns true if framework detected
+  registerSchema(): NodeTypes & EdgeTypes; // declares symbol/edge types
+  extractNodes?(filePath, content, language): FileParseResult; // extract symbols
+  resolveEdges?(ctx: ResolveContext): RawEdge[]; // resolve inter-symbol edges
+}
+```
+
+Detection runs once on startup. Only plugins whose `detect()` returns `true` participate in indexing.
+
+Plugins are loaded in topological order (respecting dependencies) and by priority (lower = earlier).
+
+---
+
+## Module resolution
+
+Three module resolvers handle cross-file imports:
+
+| Resolver | Languages | What it resolves |
+|---|---|---|
+| **ES modules** | TypeScript, JavaScript, Vue | `import` / `require` with tsconfig paths, barrel exports |
+| **PSR-4** | PHP | Namespace-based autoloading per `composer.json` |
+| **Python modules** | Python | Relative/absolute imports, `__init__.py` packages |
+
+---
+
+## Scoring & ranking
+
+`src/scoring/` contains algorithms for ranking search results and context assembly:
+
+- **BM25** — full-text relevance via FTS5
+- **PageRank** — symbol importance based on the dependency graph
+- **Hybrid scoring** — combines BM25 + graph signals
+- **Structured assembly** — assembles context within a token budget, maximizing coverage
+
+---
+
+## Tech stack
+
+| Component | Technology |
+|---|---|
+| Parsing | [tree-sitter](https://tree-sitter.github.io/) (PHP, TS, Python, Go, Java, Kotlin, Ruby, HTML, CSS), [@vue/compiler-sfc](https://github.com/vuejs/core) |
+| Database | [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) — WAL mode, FTS5, vector storage |
+| Module resolution | [oxc-resolver](https://github.com/nicolo-ribaudo/oxc-resolver) (ESM/CJS), PSR-4, Python modules |
+| AI | Ollama / OpenAI — embeddings, summarization, reranking, inference caching |
+| Validation | [Zod](https://zod.dev) — config + input validation |
+| Error handling | [neverthrow](https://github.com/supermacro/neverthrow) — Rust-style `Result<T, E>` |
+| Logging | [pino](https://getpino.io/) — structured JSON logging |
+| MCP | [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) |
+| Build | tsup · vitest · TypeScript 5.7 |
+
+---
+
+## Project structure
+
+```
+src/
+├── ai/                     # Embeddings, reranker, summarization, vector store, inference caching
+├── db/                     # SQLite schema, store, FTS5
+├── subproject/             # Subproject layer (subprojects = services, bound to projects)
+│   ├── manager.ts          #   Add/remove/sync subprojects, auto-discover projects, cross-subproject impact
+│   └── scanner.ts          #   HTTP/gRPC/GraphQL client call scanner
+├── topology/               # Cross-service topology layer
+│   ├── topology-db.ts      #   Topology + subproject SQLite store (subprojects bound to projects via project_root)
+│   ├── contract-parser.ts  #   OpenAPI, GraphQL SDL, Protobuf parsers
+│   └── service-detector.ts #   Subproject discovery (Docker Compose, flat/grouped workspace, monolith fallback)
+├── indexer/
+│   ├── plugins/
+│   │   ├── language/       # 68 languages — PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, Rust,
+│   │   │                   #   C/C++/C#, Swift, Dart, Scala, Zig, OCaml, Clojure, F#, Elm,
+│   │   │                   #   CUDA, COBOL, Verilog, GLSL, Svelte, MATLAB, Lean, Wolfram, …
+│   │   └── integration/    # 48 plugins organized by category:
+│   │       ├── framework/  #   Laravel, Django, Rails, Spring, NestJS, Express, FastAPI,
+│   │       │               #   Flask, Hono, Fastify, Nuxt, Next.js
+│   │       ├── orm/        #   Prisma, TypeORM, Sequelize, Mongoose, SQLAlchemy, Drizzle
+│   │       ├── view/       #   React, Vue, React Native, Blade, Inertia, shadcn, MUI,
+│   │       │               #   Ant Design, Headless UI, Nuxt UI
+│   │       ├── api/        #   GraphQL, tRPC, DRF
+│   │       ├── validation/ #   Zod, Pydantic
+│   │       ├── state/      #   Zustand
+│   │       ├── realtime/   #   Socket.io
+│   │       ├── testing/    #   Playwright, Cypress, Jest, Vitest, Mocha
+│   │       └── tooling/    #   Celery, n8n, data-fetching
+│   ├── resolvers/          # PSR-4, ES module, Python module resolution
+│   ├── pipeline.ts         # Two-pass indexing engine
+│   ├── watcher.ts          # File change watcher
+│   └── monorepo.ts         # Monorepo workspace detection
+├── memory/                 # Decision memory (cross-session knowledge graph)
+│   ├── decision-store.ts   #   SQLite store: decisions + session chunks + FTS5
+│   ├── conversation-miner.ts # Pattern-based decision extraction from JSONL logs
+│   ├── session-indexer.ts  #   Chunked session content indexer for search
+│   ├── wake-up.ts          #   L0/L1/L2 wake-up context assembler
+│   ├── enrichment.ts       #   Decision injection into code intelligence results
+│   └── index.ts            #   Barrel export
+├── analytics/              # Session analytics engine
+│   ├── log-parser.ts       #   JSONL parser (Claude Code + Claw Code)
+│   ├── analytics-store.ts  #   SQLite storage for parsed sessions
+│   ├── sync.ts             #   Incremental session log sync
+│   ├── session-analytics.ts #  Analytics query facade
+│   ├── rules.ts            #   8 optimization rules (repeated reads, bash-grep, etc.)
+│   ├── real-savings.ts     #   Real savings analysis (Read vs get_symbol)
+│   ├── benchmark.ts        #   Synthetic benchmark (5 scenarios)
+│   ├── tech-detector.ts    #   Manifest parser + coverage assessment
+│   └── known-packages.ts   #   Catalog of ~200 known packages
+├── tools/                  # 50+ MCP tool implementations
+├── scoring/                # PageRank, BM25, hybrid scoring, structured assembly
+├── plugin-api/             # Plugin registry, loader, executor, test harness
+├── init/                   # Setup & detection (Claude Code, Claw Code, Cursor, Windsurf, Continue)
+├── utils/                  # Env parser, hasher, security, source reader, token counter
+├── server.ts               # MCP server factory
+├── config.ts               # Cosmiconfig + Zod validation
+├── errors.ts               # Error types (neverthrow)
+├── logger.ts               # Pino logger setup
+├── cli.ts                  # Commander CLI (serve, serve-http, index, subproject, analytics)
+├── cli-analytics.ts        # Analytics CLI subcommands (sync, report, optimize, benchmark, coverage, savings, trends)
+└── cli-subproject.ts       # Subproject CLI subcommands (add --project, list --project, etc.)
+```
+
+---
+
+# Supported frameworks & languages
+
+## Languages (68)
+
+### Tree-sitter (full AST parsing)
+
+| Language | What's extracted |
+|---|---|
+| **PHP** | Classes, interfaces, traits, enums, functions, methods, properties, constants, namespaces |
+| **TypeScript / JavaScript** | Functions, classes, variables, types, interfaces, enums, exports, JSX/TSX |
+| **Python** | Functions, classes, decorators, attributes, module variables |
+| **Go** | Functions, methods, types (structs, interfaces), constants, variables, packages |
+| **Java** | Classes, interfaces, enums, annotation types, methods, fields |
+| **Kotlin** | Classes, functions, properties |
+| **Ruby** | Classes, modules, methods, constants |
+| **Rust** | Functions, structs, enums, traits, impl blocks, macros, constants, modules |
+| **C** | Functions, structs, enums, unions, typedefs, macros, global variables |
+| **C++** | Classes, structs, namespaces, enums, functions, methods, templates, type aliases |
+| **C#** | Namespaces, classes, interfaces, structs, enums, records, delegates, methods, properties |
+| **Scala** | Classes, objects, traits, enums, case classes, methods, vals, type aliases, given instances |
+| **Vue SFC** | Components, script setup symbols, template analysis |
+| **HTML** | Script/link references, meta tags, form elements, custom elements |
+
+### Regex-based (symbol extraction)
+
+| Language | What's extracted |
+|---|---|
+| **CSS / SCSS / SASS / LESS** | Custom properties, classes, IDs, mixins, keyframes, font-face |
+| **Swift** | Classes, structs, enums, protocols, functions, properties, typealiases |
+| **Dart** | Classes, mixins, enums, functions, getters/setters, factory constructors |
+| **Objective-C** | Classes, protocols, methods (full selectors), properties, C functions |
+| **Elixir** | Modules, functions, macros, guards, type specs, callbacks |
+| **Erlang** | Modules, exported functions, records, macros, type specs |
+| **Haskell** | Modules, data types, type classes, type signatures, instances |
+| **Gleam** | Functions, types, constants |
+| **Scala** | Packages, case classes, objects, traits, enums, defs, vals |
+| **Groovy** | Classes, interfaces, enums, traits, methods |
+| **Bash** | Functions, readonly/exported constants |
+| **Lua** | Functions, module methods, local variables |
+| **Perl** | Subroutines, packages |
+| **GDScript** | Functions, classes, enums, signals, constants, variables |
+| **R** | Functions, S4 classes/generics/methods |
+| **Julia** | Functions, structs, modules, macros, constants |
+| **Nix** | Attribute bindings, function definitions |
+| **SQL** | Tables, views, functions, procedures, triggers, CTEs, schemas, types |
+| **HCL / Terraform** | Resources, data sources, modules, variables, outputs, providers |
+| **Protocol Buffers** | Messages, enums, services, RPCs |
+| **XML / XUL / XSD** | Root element, id/name attributes, namespaces, XSD types, XSLT templates |
+| **YAML** | Top-level keys |
+| **JSON** | First-level keys |
+| **TOML** | Tables, array-of-tables, key-value bindings |
+| **Assembly** | Labels, procedures, macros, equates, sections, directives |
+| **Fortran** | Subroutines, functions, modules, programs, types |
+| **AutoHotkey** | Functions, classes, static methods |
+| **Verse (UEFN)** | Classes, methods, properties, variables |
+| **AL (Business Central)** | Tables, pages, codeunits, enums, procedures, triggers |
+| **Blade (Laravel)** | Sections, components, slots, includes, extends |
+| **EJS** | Functions, constants (from scriptlet blocks) |
+| **Zig** | Functions, structs, enums, unions, constants, variables, test declarations |
+| **OCaml** | Let/val bindings, type definitions, modules, classes, exceptions |
+| **Clojure** | defn, def, defmacro, defprotocol, defrecord, deftype, ns declarations |
+| **F#** | Let bindings, members, type definitions, modules, exceptions |
+| **Elm** | Functions, type aliases, custom types, ports, modules |
+| **CUDA** | Kernels (__global__), device/host functions, structs, __constant__/__shared__ vars |
+| **COBOL** | PROGRAM-ID, divisions, sections, paragraphs, data items (01–77 levels), conditions (88) |
+| **Verilog / SystemVerilog** | Modules, interfaces, packages, classes, functions, tasks, parameters |
+| **GLSL** | Functions, structs, uniforms, varyings, layout qualifiers, constants |
+| **Meson** | Projects, executables, libraries, dependencies, custom targets, subdirs |
+| **Vim Script** | Functions, commands, variables (g:/s:/b:), augroups |
+| **Common Lisp** | defun, defmacro, defclass, defstruct, defpackage, defvar, defconstant |
+| **Emacs Lisp** | defun, defmacro, defvar, defcustom, defconst, define-*-mode, defgroup |
+| **Dockerfile** | FROM stages, ARG/ENV declarations, EXPOSE ports, ENTRYPOINT/CMD |
+| **Makefile** | Targets, variable definitions, define blocks, .PHONY |
+| **CMake** | Functions, macros, projects, add_executable/add_library, options |
+| **INI / Config** | Sections, key-value pairs (.ini, .cfg, .conf, .properties, .editorconfig) |
+| **Svelte** | Props (export let / $props), reactive declarations, runes ($state/$derived), snippets |
+| **Markdown** | Headings (h1–h4), link definitions, code block languages |
+| **MATLAB / Octave** | Functions, classdef, properties blocks, global/persistent variables |
+| **Lean 4** | def, theorem, lemma, structure, class, inductive, abbrev, namespace |
+| **FORM** | Symbols, indices, vectors, functions, tables, procedures, modules |
+| **Magma** | Functions, procedures, intrinsics, types, records |
+| **Wolfram / Mathematica** | Function definitions (SetDelayed), packages, usage strings, options |
+
+---
+
+## Backend frameworks
+
+| Framework | What's extracted |
+|---|---|
+| **Laravel** | Routes, controllers, Eloquent relations, migrations, FormRequests, events/listeners, middleware, broadcasting |
+| **Laravel Livewire** | Components, properties, actions, events, views, child components |
+| **Laravel Nova** | Resources, fields, actions, filters, lenses, metrics |
+| **Filament** | Resources, relation managers, panels, widgets |
+| **Spatie Laravel Data** | Data objects, transformations |
+| **Laravel Pennant** | Feature flag definitions |
+| **Django** | Models, URL patterns, views (CBV + FBV), admin registrations, signals, forms |
+| **Django REST Framework** | Serializers, ViewSets, API endpoints |
+| **FastAPI** | Route definitions, path/query parameters, request models |
+| **Flask** | Routes, blueprints, request handlers |
+| **Express** | Routes, middleware, error handlers, param handlers |
+| **NestJS** | Controllers, modules, services, decorators, DI tree |
+| **Fastify** | Routes, hooks, plugins |
+| **Hono** | Routes, middleware |
+| **Next.js** | API routes, pages, `getServerSideProps`, `getStaticProps` |
+| **Rails** | Routes, controllers, models, migrations, associations |
+| **Spring** | Beans, controllers, services, JPA entities |
+| **tRPC** | Routers, procedures, type definitions |
+
+---
+
+## Frontend frameworks
+
+| Framework | What's extracted |
+|---|---|
+| **Vue** | Components (Options + Composition API), `defineProps`, `defineEmits`, composables, render trees |
+| **Nuxt** | File-based routing, auto-imports, `useFetch` / `useAsyncData`, server API routes, layouts, middleware |
+| **React** | Components (functional + class), hooks, props |
+| **React Native** | Native components, navigation patterns, screens, deep links, platform variants |
+| **Blade** | `@extends`, `@include`, `@component`, `<x-*>` directives, template inheritance |
+| **Inertia.js** | `Inertia::render()` calls, controller ↔ Vue page mapping, prop extraction & validation |
+
+---
+
+## UI component libraries
+
+| Library | What's extracted |
+|---|---|
+| **shadcn/ui** | Component registry, CVA/TV variant definitions, Radix primitive composition, sub-component exports |
+| **Nuxt UI** | Theme overrides from `app.config.ts`, UForm schemas, Tailwind Variants (`tv()`) definitions, color mode |
+| **Material-UI** | Component usage, theme customization |
+| **Ant Design** | Component usage patterns |
+| **Headless UI** | Unstyled component composition |
+
+---
+
+## Data & ORM
+
+| Library | What's extracted |
+|---|---|
+| **Eloquent** (Laravel) | Models, relationships, scopes, casts, schema from migrations |
+| **Prisma** | Data models from `schema.prisma`, relations |
+| **TypeORM** | Entities, relations, repositories |
+| **Drizzle** | Schema definitions, table relations |
+| **Sequelize** | Models, associations, migrations |
+| **Mongoose** | Schemas, models, middleware |
+| **SQLAlchemy** | ORM models, relationships, columns, constraints |
+
+---
+
+## Validation & schema
+
+| Library | What's extracted |
+|---|---|
+| **Zod** | Schema definitions, type inference |
+| **Pydantic** | BaseModel subclasses, field types, ORM mode references |
+
+---
+
+## API & realtime
+
+| Library | What's extracted |
+|---|---|
+| **GraphQL** | Schemas, resolvers, type definitions |
+| **Socket.io** | Event handlers, namespaces, rooms |
+
+---
+
+## State management
+
+| Library | What's extracted |
+|---|---|
+| **Zustand** | Store definitions, actions, selectors |
+
+---
+
+## Tooling & automation
+
+| Plugin | What's extracted |
+|---|---|
+| **Celery** | Task definitions, routing, schedules |
+| **n8n** | Workflow nodes, connections, parameters, credentials |
+| **Data fetching** | React Query, SWR — query hooks, mutations, cache config |
+| **Testing** | Playwright, Cypress, Jest, Vitest, Mocha — test suites, fixtures |
+
+---
+
+# Session Analytics & Coverage Intelligence
+
+trace-mcp includes a built-in analytics engine that parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage.
+
+---
+
+## How it works
+
+```
+Session logs (JSONL)                   Project manifests
+  Claude Code: ~/.claude/projects/       package.json, composer.json,
+  Claw Code: <project>/.claw/sessions/  requirements.txt, go.mod, ...
+         │                                        │
+         ▼                                        ▼
+┌─────────────────────────┐         ┌──────────────────────────┐
+│  Log Parser             │         │  Tech Detector           │
+│  Extracts:              │         │  Parses manifests,       │
+│  - tool calls + results │         │  classifies deps,        │
+│  - token usage          │         │  matches against         │
+│  - model info           │         │  known-packages catalog  │
+│  - target files         │         │  (~200 packages)         │
+└──────────┬──────────────┘         └──────────┬───────────────┘
+           │                                   │
+           ▼                                   ▼
+┌─────────────────────────┐         ┌──────────────────────────┐
+│  Analytics DB (SQLite)  │         │  Coverage Report         │
+│  ~/.trace-mcp/          │         │  covered / gaps /        │
+│    analytics.db         │         │  unknown deps            │
+│  Tables:                │         └──────────────────────────┘
+│  - sessions             │
+│  - tool_calls           │
+│  - sync_state           │
+└──────────┬──────────────┘
+           │
+     ┌─────┴──────┬──────────────┬─────────────────┐
+     ▼            ▼              ▼                  ▼
+ Analytics    Optimization    Real Savings       Benchmark
+ Report       Report          Analysis           Engine
+ (per tool,   (8 rules,       (Read vs           (synthetic,
+  per file,    savings est.)   get_symbol)        5 scenarios)
+  per model)
+```
+
+### Supported clients
+
+| Client | Session log location | Config files |
+|--------|---------------------|--------------|
+| **Claude Code** | `~/.claude/projects/<encoded-path>/<session-id>.jsonl` | `CLAUDE.md`, `.claude/settings.json` |
+| **Claw Code** | `<project>/.claw/sessions/<session-id>.jsonl` | `.claw.json`, `.claw/settings.json` |
+
+Both formats are auto-detected during sync. No configuration needed.
+
+### Local-machine scoping
+
+`get_session_analytics`, `get_optimization_report`, `get_real_savings`, and `analyze_perf` (for `window` other than `"session"`) only see session logs that physically exist on the machine running the MCP server — they read `~/.claude/projects/<encoded-path>/` and `<project>/.claw/sessions/` directly, they do not fetch data from any other machine. If you invoke them from a fresh checkout, a remote/cloud agent runtime, or a CI sandbox that never ran a local Claude Code / Claw Code session for this project, there is nothing to find and the tools report that. `get_session_analytics`/`get_optimization_report`/`get_real_savings` distinguish this from "checked, nothing to report" by adding a `_warnings` field when both the discoverable log files and the aggregated result are empty. `analyze_perf` with a persistent `window` additionally requires `telemetry.enabled: true` in config (off by default) and returns an explicit `error` when it's off.
+
+### JSONL format differences
+
+| | Claude Code | Claw Code |
+|--|-------------|-----------|
+| Record types | `{type: "assistant"}`, `{type: "user"}` | `{type: "message"}` with `message.role` |
+| Tool result delivery | Embedded in `user` message | Separate `tool` role message |
+| Tool input format | JSON object | JSON string (parsed automatically) |
+| Session metadata | `timestamp`, `sessionId` on each record | `{type: "session_meta"}` header record |
+
+---
+
+## MCP Tools
+
+### `get_session_analytics`
+
+Token usage, cost breakdown by tool/server, top files, models used. Auto-syncs logs before querying.
+
+```
+get_session_analytics({ period?: "today" | "week" | "month" | "all" })
+```
+
+Returns: session count, total tokens (input/output/cache), estimated cost, breakdown by tool server (builtin, trace-mcp, jcodemunch, phpstorm, ...), top tools by token output, top files by read tokens, models used.
+
+### `get_optimization_report`
+
+Detects wasteful tool call patterns and recommends trace-mcp alternatives.
+
+```
+get_optimization_report({ period?: "today" | "week" | "month" | "all" })
+```
+
+**8 built-in rules:**
+
+| Rule | Severity | Detects | Recommends |
+|------|----------|---------|------------|
+| `repeated-file-read` | high | Same file Read 3+ times per session | `get_outline` + `get_symbol` |
+| `bash-grep` | high | `Bash` with grep/rg/ack commands | `search` tool |
+| `bash-cat` | medium | `Bash` with cat/head/tail commands | `get_symbol` or `Read` |
+| `large-file-read` | medium | `Read` with output > 5000 chars | `get_outline` → `get_symbol` |
+| `phpstorm-read-indexed` | medium | PhpStorm file read on indexed files | `get_symbol` |
+| `phpstorm-search-indexed` | medium | PhpStorm text search on indexed project | `search` |
+| `unused-trace-tools` | low | Sessions without trace-mcp but with Read/Grep | Enable trace-mcp tools |
+| `agent-for-indexed` | medium | Agent subagent calls (~50K tokens each) | `get_feature_context` / `get_task_context` |
+
+### `get_real_savings`
+
+Analyzes actual session logs to compute how much could be saved by using trace-mcp instead of raw file reads. For each `Read`/`Bash cat`/PhpStorm read, finds the file in the index and estimates the compact alternative cost.
+
+```
+get_real_savings({ period?: "today" | "week" | "month" | "all" })
+```
+
+Returns: per-file breakdown (reads, current tokens, alternative tokens, savings %), tool replacement stats, and A/B comparison (sessions with vs without trace-mcp).
+
+### `benchmark_project`
+
+Synthetic benchmark comparing raw file reads vs trace-mcp compact responses.
+
+```
+benchmark_project({ queries?: number, seed?: number, format?: "json" | "markdown" })
+```
+
+**5 scenarios:** symbol lookup, file exploration, search, impact analysis, call graph. Uses actual index data with seeded randomness for reproducibility.
+
+### `get_coverage_report`
+
+Technology profile — which dependencies are covered by trace-mcp plugins and which are not.
+
+```
+get_coverage_report()
+```
+
+Parses: `package.json`, `composer.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Gemfile`. Classifies each dependency by category (framework/orm/ui/testing/infra/utility) and priority (high/medium/low/none). Reports covered deps, gaps, and unknowns.
+
+### `get_usage_trends`
+
+Daily token usage trends over time.
+
+```
+get_usage_trends({ days?: number })
+```
+
+Returns daily breakdown: sessions, tokens, estimated cost, tool calls. Good for spotting cost spikes and tracking optimization progress.
+
+### `get_session_stats`
+
+Real-time token savings of the current trace-mcp session (in-memory tracker, no log parsing).
+
+```
+get_session_stats()
+```
+
+### `audit_config`
+
+Audit AI agent config files (CLAUDE.md, .cursorrules, .claw.json, etc.) for stale references, dead paths, token bloat, scope leaks, and redundancy.
+
+```
+audit_config()
+```
+
+---
+
+## CLI Commands
+
+All analytics commands are under `trace-mcp analytics`:
+
+```bash
+# Sync session logs into analytics DB
+trace-mcp analytics sync [--full]
+
+# Token usage report
+trace-mcp analytics report [--period today|week|month|all] [--format text|json]
+
+# Optimization recommendations
+trace-mcp analytics optimize [--period today|week|month|all] [--format text|json]
+
+# Real savings analysis
+trace-mcp analytics savings [--period today|week|month|all] [--format text|json]
+
+# Synthetic benchmark
+trace-mcp analytics benchmark [--queries 10] [--seed 42] [--format text|json|markdown]
+
+# Technology coverage
+trace-mcp analytics coverage [--format text|json]
+
+# Usage trends
+trace-mcp analytics trends [--days 30] [--format text|json]
+```
+
+---
+
+## Storage
+
+Analytics data lives in `~/.trace-mcp/analytics.db` (separate from project indexes):
+
+```sql
+sessions       — one row per parsed session (tokens, model, timestamps)
+tool_calls     — one row per tool call (name, server, output size, target file)
+sync_state     — file paths + mtime for incremental sync
+```
+
+Session savings (in-memory tracker) persist to `~/.trace-mcp/savings.json`.
+
+### Incremental sync
+
+`analytics sync` only re-parses files whose mtime has changed since last sync. Use `--full` to force a complete rescan. Sync runs automatically before every analytics tool call.
+
+---
+
+## Example output
+
+### `trace-mcp analytics report`
+
+```
+📊 Session Analytics (week)
+
+Sessions: 24
+Tool calls: 1203
+Input tokens: 346,523
+Output tokens: 1,200,000
+Cache read: 8,500,000
+Estimated cost: $61.86
+
+Top tools:
+  Read: 380 calls (~350,000 tokens)
+  Bash: 290 calls (~95,000 tokens)
+  Edit: 180 calls (~12,000 tokens)
+  mcp__trace-mcp__search: 45 calls (~8,000 tokens)
+
+Top files:
+  src/server.ts: 35 reads (~45,000 tokens)
+  src/db/store.ts: 22 reads (~32,000 tokens)
+```
+
+### `trace-mcp analytics optimize`
+
+```
+🔍 Optimization Report (week)
+
+Current usage: 1,200,000 tokens (~$6.00)
+
+[high] repeated-file-read: 85 occurrences
+  Current: 350,000 tokens → Potential: 70,000 tokens
+  Savings: 280,000 tokens (80%)
+  Use get_outline + get_symbol instead of reading the full file repeatedly.
+
+[high] bash-grep: 42 occurrences
+  Current: 95,000 tokens → Potential: 19,000 tokens
+  Savings: 76,000 tokens (80%)
+  Use trace-mcp search tool instead of Bash grep/rg.
+
+Total potential savings: 400,000 tokens (~$2.00, 33%)
+```
+
+### `trace-mcp analytics benchmark`
+
+```
+⚡ Token Efficiency Benchmark
+
+Project: /Users/me/my-app
+Index: 651 files, 3342 symbols
+
+symbol_lookup: 41,211 → 2,098 tokens (94.9% reduction)
+file_exploration: 16,366 → 762 tokens (95.3% reduction)
+search: 22,860 → 8,000 tokens (65.0% reduction)
+impact_analysis: 96,717 → 4,841 tokens (95.0% reduction)
+call_graph: 178,661 → 10,723 tokens (94.0% reduction)
+composite_task: 71,076 → 2,033 tokens (97.1% reduction)
+
+Total: 426,891 → 28,457 (93.3% reduction)
+```
+
+---
+
+# TOON Token Savings — Measured
+
+This document captures real-world token measurements for the TOON output
+format wired across trace-mcp tools, plus the independent `search_text`
+`grouping: "by_file"` reshape.
+
+## TL;DR — which tools support TOON
+
+After benchmarking, TOON is wired only on the five tools where it is a clear
+net win on representative payloads:
+
+| tool                  | measured savings | why                                                     |
+|-----------------------|-----------------:|---------------------------------------------------------|
+| `query_decisions`     | **+31.4%**       | Homogeneous row-shaped decisions; pure table mode.      |
+| `get_outline`         | **+28.8%**       | Flat symbol records; pure table mode.                   |
+| `get_changed_symbols` | **+21.5%**       | Flat change records; pure table mode.                   |
+| `search`              | **+16.4%**       | Flat item records; mild table-mode amortization.        |
+| `get_feature_context` |  **+7.9%**       | Mostly flat items; modest gain.                         |
+
+For every other tool TOON is off by default and the parameter is not
+accepted in the schema.
+
+## Why we removed TOON from 4 tools
+
+| tool                | measured | reason                                                                                          |
+|---------------------|---------:|-------------------------------------------------------------------------------------------------|
+| `find_usages`       |  -17.5%  | Each reference carries a nested `symbol{}` block → list mode → header overhead per row.         |
+| `search_text`       |  -25.5%  | Multi-line `context[]` arrays per match → list mode. Use `grouping: "by_file"` for +20.8% instead. |
+| `get_artifacts`     |  -15.2%  | Artifact kinds are heterogeneous; field schemas diverge between rows → list mode.               |
+| `get_context_bundle`|  -10.1%  | Nested `primary`/`imports` structure plus small typical size — fixed TOON preamble dominates.   |
+
+`@toon-format/toon` remains a project dependency because the five keepers
+above still rely on it.
+
+## Internal mechanism — table mode vs list mode
+
+TOON has two output shapes (driven entirely by the encoder, not by the
+caller):
+
+- **Table mode** (`[N]{col1, col2, col3}:`) — emitted only when every row in
+  an array contains the **same scalar-only fields** (string, number, bool,
+  null). One header amortizes over all rows; each row collapses to a single
+  CSV-like line. This is where TOON wins.
+- **List mode** (YAML-style nested keys) — emitted when any row has a
+  nested object, an inner array, or differs in field set. Each row pays its
+  own field labels; the header amortization disappears. TOON loses here vs
+  JSON because JSON's `{"k":` is already terse.
+
+The `scripts/toon-diagnostic-2.ts` script reproduces the breakeven curve.
+Sample output (n = rows per array, Δ% = TOON savings over JSON):
+
+```
+N  | scalar-only (table)   | with array tags         | with nested obj
+   | json   toon  Δ%   mode| json   toon  Δ%    mode | json   toon  Δ%    mode
+---|----------------------|------------------------|------------------------
+ 10|  185    130  +29.7  T |  255   333  -30.6   L  |  354   443  -25.1   L
+ 20|  365    250  +31.5  T |  505   663  -31.3   L  |  704   883  -25.4   L
+ 50|  905    610  +32.6  T | 1255  1653  -31.7   L  | 1754  2203  -25.6   L
+100| 1805   1210  +33.0  T | 2505  3303  -31.9   L  | 3504  4403  -25.7   L
+```
+
+Key observations:
+
+- A **single inner `tags: [...]` array per row collapses the win into a
+  ~30% regression** — the encoder falls out of table mode.
+- A **single nested `symbol: {...}` object per row** is similarly fatal
+  (~25% regression).
+- Table-mode wins grow with column count: for 20 scalar columns × 20 rows
+  the encoder reaches **+47.4%** vs JSON. This matches what `query_decisions`
+  hits in production.
+
+The four loser tools all land in list mode by construction:
+`find_usages` has nested `symbol{}`, `search_text` has `context[]`,
+`get_artifacts` row shapes vary per kind, `get_context_bundle` payloads
+are deeply nested and small.
+
+## Methodology
+
+- Script: [`scripts/bench-toon.ts`](../scripts/bench-toon.ts) for the
+  per-tool numbers; [`scripts/toon-diagnostic-2.ts`](../scripts/toon-diagnostic-2.ts)
+  for the table-vs-list-mode curve.
+- Invocation pattern: each registered MCP tool's closure is captured via a
+  fake `server.tool(...)`. This bypasses the MCP transport but exercises the
+  identical handler code that ships in production.
+- Corpus for live-DB scenarios: a snapshot copy of the trace-mcp self-index
+  (1,501 indexed files, 9,467 symbols).
+- Corpus for fixture-only scenarios (`query_decisions`,
+  `get_changed_symbols`): in-memory stores seeded with realistic shapes.
+- Tokenizer: [`gpt-tokenizer`](https://www.npmjs.com/package/gpt-tokenizer)
+  with the **cl100k_base** encoding. This is a GPT-4 / Claude family proxy.
+  Anthropic's tokenizer is not publicly released; cl100k_base is the
+  closest open approximation.
+- Roundtrip assertion: every TOON output is decoded via
+  `@toon-format/toon`'s `decode()` and structurally compared to the JSON
+  payload, with a ~1e-6 relative tolerance for float precision.
+
+Run it:
+
+```bash
+pnpm exec tsx scripts/bench-toon.ts
+pnpm exec tsx scripts/toon-diagnostic-2.ts
+```
+
+## Overall — JSON vs TOON (original 9-tool sweep)
+
+| scenario | json_tokens | toon_tokens | savings_pct | json_bytes | toon_bytes | bytes_savings_pct | notes |
+|---|---:|---:|---:|---:|---:|---:|---|
+| search query=register limit=30 | 3319 | 2776 | **16.4%** | 12052 | 9729 | 19.3% | KEEP — 25 items |
+| get_outline store.ts | 5330 | 3793 | **28.8%** | 19520 | 13216 | 32.3% | KEEP — 92 symbols |
+| find_usages fqn=Store | 46662 | 54840 | -17.5% | 190771 | 206704 | -8.4% | REMOVED — 567 references |
+| get_feature_context token_budget=2000 | 2965 | 2730 | **7.9%** | 10810 | 9787 | 9.5% | KEEP — 11 items |
+| get_context_bundle encodeResponse | 129 | 142 | -10.1% | 470 | 465 | 1.1% | REMOVED — small payload |
+| query_decisions limit=20 | 3129 | 2146 | **31.4%** | 11062 | 6960 | 37.1% | KEEP — 20 decisions |
+| get_artifacts limit=50 | 1391 | 1602 | -15.2% | 4636 | 5233 | -12.9% | REMOVED — 30 artifacts |
+| get_changed_symbols since=HEAD~1 | 288 | 226 | **21.5%** | 892 | 557 | 37.6% | KEEP — 0 changes |
+| search_text flat (toon) | 2160 | 2710 | -25.5% | 7850 | 8394 | -6.9% | REMOVED — 50 hits |
+
+## search_text — flat vs by_file (TOON removed, grouping kept)
+
+All percentages are computed against the **flat-json baseline** (2160 tokens
+/ 7850 bytes for the same 50-hit corpus). `output_format: "toon"` is no
+longer accepted on this tool; `grouping: "by_file"` stays and is the
+recommended optimisation.
+
+| scenario | json_tokens | savings_pct | json_bytes | bytes_savings_pct | notes |
+|---|---:|---:|---:|---:|---|
+| search_text flat (default) | 2160 | 0% | 7850 | 0% | baseline |
+| search_text by_file | 1710 | **+20.8%** | 5826 | +25.8% | 8 files, 50 hits |
+
+`grouping: "by_file"` is a pure structural reshape — it deduplicates file
+paths under nested `files[].hits[]` buckets. It is lossless and independent
+of `output_format`.
+
+## Caveats
+
+1. **Tokenizer**: cl100k_base is a *proxy* for Anthropic's tokenizer. Real
+   Claude-side savings can differ by ±2-3 percentage points.
+2. **Float precision**: TOON rounds high-precision floats below ~8
+   significant digits (e.g. PageRank scores). For human-readable outputs
+   this is invisible; for callers that hash JSON output, it is a real
+   semantic difference.
+3. **Single-sample bench**: each scenario runs once. The retrieval tools are
+   deterministic given a fixed DB, so this is fine for token counts.
+4. **Corpus is one repo**: trace-mcp's self-index. Results will shift on
+   other codebases — wider repos with longer file paths boost `by_file`
+   more; repos with sparser fields and shorter strings boost TOON more.
+
+## Recommendation
+
+- TOON is enabled (and worth selecting via `output_format: "toon"`) on
+  exactly five tools: `query_decisions`, `get_outline`, `get_changed_symbols`,
+  `search`, `get_feature_context`.
+- For everything else, JSON is the default and the only accepted output
+  format. The encoder regression on heterogeneous / nested / small payloads
+  outweighs any benefit.
+- For `search_text`, prefer `grouping: "by_file"` when paths repeat across
+  hits — that is a clean +20.8% lossless win and is unrelated to TOON.
+- Document the float-precision caveat for callers that hash or diff
+  responses.
+
+## Wave 2 candidates — measured
+
+Forecasted savings if the same `output_format: "toon"` switch were wired into
+each of the candidates below. **These tools are NOT wired** — this is a
+measurement-only pass to decide which to wire in a follow-up.
+
+Each row encodes the JSON payload returned by the production handler, then
+re-encodes the same payload via `encodeResponse(..., "toon")`. Tokenised
+with cl100k_base, roundtripped via `@toon-format/toon`'s `decode()` against
+the parsed JSON with the loose-float comparator. Sorted by `savings_pct`
+descending.
+
+| scenario | items | json_tokens | toon_tokens | savings_pct | mode | notes |
+|---|---:|---:|---:|---:|:---:|---|
+| get_risk_hotspots limit=30 | 30 | 1338 | 758 | **+43.3%** | table | flat scalar rows |
+| analyze_perf top=30 | 15 | 530 | 301 | **+43.2%** | table | seeded latency stats, 7 scalar columns |
+| get_git_churn limit=50 | 50 | 2634 | 1604 | **+39.1%** | table | flat scalar rows |
+| get_coupling limit=50 | 50 | 1733 | 1096 | **+36.8%** | table | flat scalar rows |
+| get_pagerank limit=50 | 50 | 1634 | 1045 | **+36.0%** | table | only 2 columns but very repetitive |
+| get_complexity_report limit=50 | 50 | 3057 | 2075 | **+32.1%** | table | flat scalar rows |
+| get_refactor_candidates limit=40 | 40 | 1932 | 1387 | **+28.2%** | table | flat scalar rows |
+| predict_bugs limit=40 | 40 | 8877 | 6965 | **+21.5%** | table | risky-control beat the prediction — see Surprises |
+| get_dead_exports (project-wide) | 404 | 17581 | 13857 | **+21.2%** | table | flat scalar rows |
+| get_untested_exports (project-wide) | 464 | 25964 | 20451 | **+21.2%** | table | flat scalar rows |
+| list_pins (2 seeded) | 2 | 88 | 71 | +19.3% | table | tiny payload — fixed preamble dominates |
+| get_untested_symbols max_results=80 | 80 | 14280 | 13098 | +8.3% | table | signature strings dilute the win |
+| get_tests_for output-format.ts | 1 | 44 | 44 | 0% | table | single-row payload — no amortization |
+| get_dead_code limit=30 | 30 | 2425 | 2822 | **-16.4%** | list | nested `signals{}` object per row → list mode |
+| get_implementations name=LanguagePlugin | 33 | 2292 | 2683 | **-17.1%** | list | `via: string \| string[]` → list mode |
+
+Skipped on this corpus (no bundles installed locally):
+- `list_bundles` — empty payload
+- `search_bundles` — empty payload
+
+## Wave 2 recommendation
+
+**Wire `output_format: "toon"` into these 10 tools** — every one is in table
+mode with the loose-float roundtrip clean, and savings cross the **+15%
+cutoff** we established for the original five keepers:
+
+| tool | measured savings | mode |
+|---|---:|:---:|
+| `get_risk_hotspots` | +43.3% | table |
+| `analyze_perf` | +43.2% | table |
+| `get_git_churn` | +39.1% | table |
+| `get_coupling` | +36.8% | table |
+| `get_pagerank` | +36.0% | table |
+| `get_complexity_report` | +32.1% | table |
+| `get_refactor_candidates` | +28.2% | table |
+| `predict_bugs` | +21.5% | table |
+| `get_dead_exports` | +21.2% | table |
+| `get_untested_exports` | +21.2% | table |
+
+**Do not wire** these — savings below the +15% cutoff or list-mode regression:
+
+| tool | measured | reason |
+|---|---:|---|
+| `list_pins` | +19.3% above cutoff, but typical payload is ~2-10 rows × 88-300 tokens — TOON's fixed preamble dominates at this scale and a single pin payload is already small. Wire only if usage tests show consistent ≥10-pin payloads in practice. |
+| `get_untested_symbols` | +8.3% | Per-row `signature` and `level` strings drown out the column-header amortization. |
+| `get_tests_for` | 0% | Single-row payloads are typical; no amortization possible. |
+| `get_dead_code` | -16.4% | Nested `signals{ import_graph, call_graph, barrel_exports }` per row forces list mode. |
+| `get_implementations` | -17.1% | `via: string \| string[]` makes row shapes heterogeneous → list mode. |
+
+## Wave 2 surprises
+
+1. **`predict_bugs` landed in table mode at +21.5%.** Prediction said the
+   per-row `signals: string[]` array would force list mode (-25%-ish, like
+   `find_usages`). What actually happens: in this corpus most predictions
+   have an *empty* `signals` array, and the TOON encoder keeps table mode
+   when every row's array field has the same length. The win is real but
+   could degrade on a repo where `signals` is densely populated — re-measure
+   before wiring on a high-churn repo.
+2. **`list_pins` (2 seeded rows) only saves 19.3%.** The fixed TOON preamble
+   is ~10-15 tokens; on a 2-row payload it eats most of the column-header
+   amortization. The savings curve crosses +30% somewhere around 8-10 pins.
+3. **`get_pagerank` saves +36.0% on just two columns (`file`, `score`).**
+   The win is driven entirely by the repetitive `file` paths — TOON strips
+   the per-row key labels, JSON repeats `"file":` for every row.
+4. **`get_implementations` regressed even though no row's `via` was an
+   array** in this run (33 implementors of LanguagePlugin, all with single
+   `extends`). The encoder still went list mode — likely because of the
+   union-typed field shape across encoder probing, or because some rows have
+   `signature: null`. Investigate before wiring.
+5. **`analyze_perf` is tied for first place at +43.2%** — that is the
+   strongest predicted candidate by a wide margin, despite being seeded with
+   synthetic latency stats. A real persistent-telemetry payload (24h/7d
+   windows) would benefit even more.
+
+---
+
+# Decision memory
+
+trace-mcp includes a persistent decision knowledge graph that captures architectural decisions, tech choices, bug root causes, preferences, and conventions — linked to the code they're about.
+
+## Why
+
+Every conversation with an AI agent produces decisions that disappear when the session ends. Six months of daily AI use = thousands of decisions lost. General-purpose memory tools (MemPalace, OpenMemory, Mem0) store these as text. trace-mcp stores them **linked to code symbols and files** — so when you ask "what breaks if I change this?", you also see *why it was built that way*.
+
+## What "why" actually looks like
+
+The system tries to capture the kinds of reasoning that disappear from the diff but matter when someone returns to the code months later:
+
+- **The alternative that was rejected and the reason** — "went with Postgres JSONB over a separate document store because transactional updates had to span relational and semi-structured data in the same write." Without the rejected branch, future readers re-litigate the same choice.
+- **The constraint that forced the hand** — legal, performance budget, deadline, an upstream dependency we don't control. Captured as `tradeoff` decisions with the constraint named, so when the constraint disappears the decision is flagged as revisitable.
+- **The failure mode behind a fix** — for `bug_root_cause`, what actually went wrong, not what got patched. "Request body parser ran before auth middleware, so unauthenticated payloads hit the DB," not "added auth check." The fix is in the diff; the failure mode isn't.
+- **The thing that was tried first and didn't work** — recovered from session logs by `mine_sessions`, because agents rarely volunteer their own dead ends. This is the highest-value content and the easiest to lose without dedicated capture.
+- **The local convention being established** — "all new endpoints go through `withAuth` even if the route looks public." Stops the next agent from reinventing or violating it.
+
+Each of these is linked to the symbol or file it's about, so the next agent who touches that code sees the reasoning surface automatically through `get_change_impact` or `plan_turn` — they don't have to know the decision exists to find it.
+
+## Architecture
+
+```
+              ┌──────────────────────────────────────────┐
+              │              CAPTURE PATHS                │
+              │                                            │
+  add_decision│  remember_decision   │   mine_sessions     │
+  (manual,    │  (live agent write,  │   (post-hoc, scans  │
+   conf=1.0)  │   confidence-scored) │    JSONL logs,      │
+              │                      │    pattern-matched) │
+              └────────┬──────────────┬──────────┬─────────┘
+                       │              │          │
+                       ▼              ▼          ▼
+              ┌──────────────────────────────────────────┐
+              │  Memoir-style review queue                │
+              │   confidence ≥ 0.75 → active (default)    │
+              │   0.45 ≤ conf < 0.75 → pending review     │
+              │   confidence < 0.45  → dropped            │
+              │   (approve_decision / reject_decision)    │
+              └────────────────┬──────────────────────────┘
+                               │
+                               ▼
+              ┌──────────────────────────────────────────┐
+              │  Decision Store (decisions.db)            │
+              │  SQLite + FTS5 (porter stemming)          │
+              │  ┌────────────┐  ┌────────────────────┐   │
+              │  │ decisions  │  │  session_chunks    │   │
+              │  │ code-linked│  │  cross-session     │   │
+              │  │ temporal   │  │  content search    │   │
+              │  │ branch-aware│  │                    │   │
+              │  └────────────┘  └────────────────────┘   │
+              └────────────────┬──────────────────────────┘
+                               │
+                               ▼
+              ┌──────────────────────────────────────────┐
+              │  Enrichment Layer                         │
+              │  get_change_impact  → linked_decisions    │
+              │  plan_turn          → related_decisions   │
+              │  get_session_resume → active_decisions    │
+              │  get_wake_up        → orientation context │
+              └──────────────────────────────────────────┘
+```
+
+## Decision types
+
+| Type | What it captures | Example |
+|---|---|---|
+| `architecture_decision` | Structural choices | "Migrating from REST to GraphQL" |
+| `tech_choice` | Technology selections | "PostgreSQL over MySQL for JSONB support" |
+| `bug_root_cause` | Why bugs happened | "Missing null check in auth middleware" |
+| `preference` | Team/personal preferences | "Always use named exports" |
+| `tradeoff` | Acknowledged tradeoffs | "Accept higher latency for stronger consistency" |
+| `discovery` | New learnings | "Discovered that Prisma doesn't support CTEs" |
+| `convention` | Coding conventions | "From now on, use snake_case for DB columns" |
+
+## Memoir-style review queue
+
+Not everything an agent observes is worth keeping. The capture pipeline routes every write through a three-tier confidence gate so high-signal decisions enter the graph immediately while borderline ones queue for a human, and noise is dropped:
+
+| Confidence | Routing | `review_status` |
+|---|---|---|
+| ≥ `review_threshold` (default **0.75**) | Active — visible in `query_decisions` by default | `null` (auto-approved) |
+| `[reject_threshold, review_threshold)` | Queued for human approval | `'pending'` |
+| < `reject_threshold` (default **0.45**) | Dropped, not persisted | n/a |
+
+Both thresholds are configurable via the `decisions.review_threshold` and `decisions.reject_threshold` keys in config, or per-call on `mine_sessions` and `remember_decision`.
+
+Manage the queue with `approve_decision` / `reject_decision`; inspect it with `query_decisions { include_pending: true }` or `query_decisions { review_status: "pending" }`. `add_decision` bypasses the gate (it's the explicit, human-curated path — confidence is pinned to 1.0).
+
+## Confidence scoring
+
+The score that drives the review queue combines a base prior with multiplicative boosts for signals that correlate with usefulness:
+
+| Signal | Effect |
+|---|---|
+| Decision is linked to a `symbol_id` or `file_path` | + code-ref boost |
+| `content` length ≥ 200 chars | + length boost |
+| At least one tag attached | + tags boost |
+| Type is high-signal (`architecture_decision`, `bug_root_cause`, `tradeoff`) | + type boost |
+| Decision is scoped to a `service_name` | + service boost |
+
+For mined decisions, the pattern's intrinsic confidence (see [Extraction patterns](#extraction-patterns)) is additionally multiplied by `1 + 0.05 × n` where `n` is the number of context boosters (`because`, `reason`, `pros and cons`, `alternative`, `architecture`, `design decision`) found in the surrounding turn.
+
+The implementation lives in [`src/memory/decision-confidence.ts`](../src/memory/decision-confidence.ts).
+
+## MCP tools
+
+### Capture
+
+| Tool | Description |
+|---|---|
+| `add_decision` | Manually record a decision. Bypasses the review queue (confidence = 1.0). Accepts `title`, `content`, `type`, `service_name`, `symbol_id`, `file_path`, `tags`, `git_branch`. |
+| `remember_decision` | Live agent-write path. Confidence-scores the input and routes through the review queue. Per-session dedup + rate-limit so the agent can't spam the store. Use during a session to capture decisions in real time. |
+| `mine_sessions` | Scan Claude Code / Claw Code JSONL logs and extract decisions via pattern matching (no LLM calls). Skips already-processed sessions. Results also flow through the review queue. |
+| `index_sessions` | Index conversation content (chunked) for cross-session search. Enables `search_sessions`. |
+
+### Review queue
+
+| Tool | Description |
+|---|---|
+| `approve_decision` | Promote a `pending` decision to active. |
+| `reject_decision` | Mark a `pending` decision as rejected (kept for audit, hidden by default). |
+
+### Read & query
+
+| Tool | Description |
+|---|---|
+| `query_decisions` | Query with filters: `type`, `service_name`, `symbol_id`, `file_path`, `tag`, `search` (FTS5), `as_of` (temporal), `git_branch`, `include_pending`, `review_status`. |
+| `invalidate_decision` | Mark a decision as superseded. It remains in the graph for historical queries. |
+| `get_decision_timeline` | Chronological view of decisions for a project, symbol, or file. |
+| `get_decision_stats` | Overview: total/active/invalidated, by type, by source, mined/indexed session counts. |
+
+### Search & orientation
+
+| Tool | Description |
+|---|---|
+| `search_sessions` | Full-text search across all past session conversations. "What did we discuss about auth last month?" |
+| `get_wake_up` | Compact orientation (~300 tokens) at session start: project identity + active decisions + memory stats. Auto-mines on first call if the store is empty. |
+| `get_session_resume` | Cross-session context carryover: focus files, key searches, and dead-end queries from recent past sessions, alongside active decisions. |
+
+## Code linkage
+
+Decisions can be linked to:
+
+- **Symbols** — `symbol_id: "src/auth/provider.ts::AuthProvider#class"` — any symbol in the code graph
+- **Files** — `file_path: "src/auth/provider.ts"` — a specific file
+- **Services** — `service_name: "auth-api"` — a service/subproject within the project
+
+When linked, decisions automatically surface in code intelligence tools:
+
+```
+get_change_impact(symbol_id="src/auth/provider.ts::AuthProvider#class")
+→ {
+    ...impact analysis...,
+    linked_decisions: [
+      { id: 42, title: "Use Clerk for auth", type: "tech_choice",
+        symbol: "src/auth/provider.ts::AuthProvider#class", when: "2025-06-01" }
+    ]
+  }
+```
+
+## Temporal validity
+
+Every decision has a `valid_from` timestamp (when it was made) and an optional `valid_until` (when it was superseded):
+
+- **Active decisions** — `valid_until IS NULL` — currently in effect
+- **Invalidated decisions** — `valid_until IS NOT NULL` — superseded but preserved for history
+
+Query modes:
+
+```
+query_decisions()                              # active only (default)
+query_decisions(as_of="2025-01-15T00:00:00Z")  # what was active on Jan 15
+query_decisions(include_invalidated=true)       # full history
+```
+
+## Service scoping
+
+In projects with multiple services (subprojects), decisions can be scoped to a specific service:
+
+```
+add_decision(
+  title="Use JWT for service-to-service auth",
+  service_name="auth-api",
+  type="tech_choice"
+)
+
+query_decisions(service_name="auth-api")     # only auth-api decisions
+query_decisions()                            # all project decisions
+get_decision_stats()                         # shows available_services
+```
+
+## Extraction patterns
+
+The conversation miner uses 8 regex-based patterns to extract decisions from assistant messages:
+
+| Pattern | Matches | Type | Confidence |
+|---|---|---|---|
+| "decided to", "going with", "chose X" | Architecture choices | `architecture_decision` | 0.85 |
+| "using X because", "picked X for" | Technology selections | `tech_choice` | 0.80 |
+| "X instead of Y", "X over Y" | Comparisons | `tech_choice` | 0.75 |
+| "the bug was", "root cause", "caused by" | Bug analysis | `bug_root_cause` | 0.85 |
+| "prefer", "always use", "never use" | Preferences | `preference` | 0.70 |
+| "tradeoff", "downside is" | Tradeoffs | `tradeoff` | 0.75 |
+| "discovered that", "turns out" | Learnings | `discovery` | 0.80 |
+| "from now on", "the rule is" | Conventions | `convention` | 0.80 |
+
+Context boosters ("because", "reasoning", "pros and cons", "architecture") increase confidence by 5% each.
+
+Auto-tagging detects topics: auth, database, api, testing, performance, security, devops, typescript, refactoring, migration.
+
+## What we deliberately don't record
+
+Decision memory is for content that disappears when the chat log is gone. It explicitly avoids storing things that can be recovered from the code or git history:
+
+- **The diff itself** — `git log -p` is authoritative.
+- **Who touched what** — `git blame` and `git shortlog` answer this.
+- **Current code state** — read the file; the index has an outline.
+
+The mining pipeline also filters non-user content before it reaches the store. Block-tagged regions stripped during ingestion:
+
+| Tag | Reason |
+|---|---|
+| `<private>…</private>` | User-curated "do not remember this" |
+| `<persisted-output>…</persisted-output>` | Tool-output capture, often hundreds of KB of file contents |
+| `<system-reminder>…</system-reminder>` | Runtime nudges, not user-authored |
+| `<ide_selection>…</ide_selection>` | IDE selection echo (may contain sensitive code) |
+| `<task-notification>…</task-notification>` | Autonomous protocol payloads from background agents |
+| `<local-command-stdout>…</local-command-stdout>` | Captured shell output (may contain secrets) |
+
+`<command-message>` and `<command-name>` are kept — those wrap real user slash-commands and are part of the conversation. Implementation: `stripPrivacyTags` in [`src/memory/conversation-miner.ts`](../src/memory/conversation-miner.ts).
+
+## CLI
+
+```bash
+trace-mcp memory mine [--project=.] [--force] [--min-confidence=0.6]
+trace-mcp memory index [--project=.] [--force]
+trace-mcp memory search "query" [--project=.] [--limit=20]
+trace-mcp memory decisions [--project=.] [--type=tech_choice] [--search="query"] [--json]
+trace-mcp memory stats [--project=.] [--json]
+trace-mcp memory timeline [--project=.] [--file=path] [--symbol=id]
+```
+
+## Storage
+
+All decision memory is stored in `~/.trace-mcp/decisions.db` (SQLite, WAL mode). Tables:
+
+- `decisions` — decision records with code linkage, temporal validity, service scoping
+- `decisions_fts` — FTS5 virtual table for full-text search over decisions
+- `session_chunks` — chunked conversation content from session logs
+- `session_chunks_fts` — FTS5 virtual table for cross-session content search
+- `mined_sessions` — tracking which sessions have been processed
+
+Key columns on `decisions`:
+
+| Column | Purpose |
+|---|---|
+| `title`, `content`, `type` | The decision itself |
+| `project_root`, `service_name` | Where it applies (project + optional subproject) |
+| `symbol_id`, `file_path` | What code it's about (drives auto-surfacing in impact tools) |
+| `tags` | JSON array for categorization and filtering |
+| `valid_from`, `valid_until` | Temporal validity (`valid_until = NULL` means active) |
+| `git_branch` | Branch scoping (`NULL` = branch-agnostic, visible everywhere) |
+| `source` | `'manual'` (added via `add_decision`), `'mined'` (extracted from logs), or `'auto'` (live agent write) |
+| `confidence` | `0..1` score driving the review queue (always `1.0` for `'manual'`) |
+| `review_status` | `NULL` = auto-approved, `'pending'` = awaiting review, `'approved'`, `'rejected'` |
+| `session_id` | Provenance — which session produced this decision |
+
+---
+
+# Telemetry & Observability
+
+trace-mcp ships a pluggable observability bridge (P13) that emits
+OpenTelemetry-compatible spans for every AI provider call and every MCP tool
+invocation. The default sink is `noop` — opt-in only.
+
+## Quickstart (3 commands)
+
+```bash
+# 1. Stand up a local OTLP collector (Jaeger all-in-one).
+cd ops/telemetry && docker compose up -d && cd -
+
+# 2. Enable the bridge for this project (.trace-mcp.json is gitignored).
+cat > .trace-mcp.json <<'JSON'
+{
+  "telemetry": {
+    "observability": {
+      "enabled": true,
+      "sink": "otlp",
+      "otlp": { "endpoint": "http://localhost:4318/v1/traces" }
+    }
+  }
+}
+JSON
+
+# 3. Run anything — spans land in Jaeger UI at http://localhost:16686.
+pnpm run build && node dist/cli.js eval run --dataset default
+```
+
+## Where spans appear
+
+Open <http://localhost:16686>, pick `trace-mcp` from the **Service** dropdown,
+click **Find Traces**.
+
+## Span topology
+
+| Span name              | Origin                                | Key attributes                                                                                |
+| ---------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `tool.<name>`          | `src/server/tool-gate.ts`             | `tool.name`, `duration_ms`, `tool.is_error`                                                   |
+| `ai.embed`             | `TrackedEmbeddingService.embed`       | `ai.provider`, `ai.model`, `ai.url`, `ai.input_size`, `ai.output_size`, `duration_ms`         |
+| `ai.embed_batch`       | `TrackedEmbeddingService.embedBatch`  | as above + batch counts                                                                       |
+| `ai.generate`          | `TrackedInferenceService.generate`    | `ai.provider`, `ai.model`, `ai.max_tokens`, `ai.temperature`, `ai.input_size`, `duration_ms`  |
+| `ai.generate_stream`   | `TrackedInferenceService.generateStream` | as above                                                                                   |
+
+Errors thrown by the wrapped call surface as a span `exception` event
+(`exception.type`, `exception.message`, `exception.stacktrace`) with span
+status `ERROR`. The error is rethrown so caller control flow is unchanged.
+
+## Switching sinks
+
+In `.trace-mcp.json` (or `~/.trace-mcp/.config.json` for a global default):
+
+| Goal                         | Config                                                                                              |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| Disabled (default)           | `telemetry.observability.enabled: false` or omit the block                                          |
+| Local Jaeger / collector     | `sink: "otlp"`, `otlp.endpoint: "http://localhost:4318/v1/traces"`                                  |
+| Hosted OTLP (e.g. Honeycomb) | `sink: "otlp"`, `otlp.endpoint: "https://api.honeycomb.io/v1/traces"`, `otlp.headers: { "x-honeycomb-team": "…" }` |
+| Langfuse cloud               | `sink: "langfuse"`, `langfuse.publicKey: "pk-…"`, `langfuse.secretKey: "sk-…"`                      |
+| Fan-out to both              | `sink: "multi"` + both `otlp` and `langfuse` blocks                                                 |
+| Probabilistic sampling       | `sampleRate: 0.1` (10% of spans kept)                                                               |
+
+All sinks lazy-load — paying for `noop` is free, paying for `otlp` only loads
+when `sink === "otlp"`.
+
+## Adding a custom span from your own code
+
+The public API lives in `src/telemetry/index.ts`:
+
+```ts
+import {
+  getGlobalTelemetrySink,
+  instrumentAsync,
+} from './telemetry/index.js';
+
+// Time an async function and auto-record exceptions.
+await instrumentAsync(
+  getGlobalTelemetrySink(),
+  'my.operation',
+  { 'my.attr': 42 },
+  async (span) => {
+    // ... your work ...
+    span.setAttribute('result.count', items.length);
+    return items;
+  },
+);
+
+// Manual span lifecycle.
+const span = getGlobalTelemetrySink().startSpan('my.op', { foo: 'bar' });
+try {
+  // ...
+  span.setStatus('ok');
+} catch (err) {
+  span.recordError(err);
+  throw err;
+} finally {
+  span.end();
+}
+```
+
+`instrumentAiCall` and `instrumentToolCall` convenience wrappers exist for
+the two standardised attribute schemas — prefer them when emitting AI or
+tool-flavoured spans so dashboards stay consistent.
+
+## Cleanup
+
+```bash
+cd ops/telemetry && docker compose down -v
+rm .trace-mcp.json   # if you don't want telemetry enabled going forward
+```
+
+## Performance
+
+- `noop` sink: a class allocation per span + 4 no-op method calls. Measured
+  overhead is below the per-call jitter floor (~sub-microsecond).
+- `otlp` sink: buffers spans in memory; flushes when 50 spans accumulate or
+  every 5 s. Each flush is a single POST to `/v1/traces`. The export is
+  fire-and-forget — `onError` logs at `warn` but never blocks the caller.
+- `sampleRate < 1`: a `SamplingSink` wraps the real sink and rolls a
+  `Math.random()` per `startSpan` / `emit`. Kept spans cost the full export
+  path; dropped spans are noop.
+
+## Troubleshooting
+
+- **No spans in Jaeger.** Confirm `telemetry.observability.enabled` resolves
+  to `true` (`node dist/cli.js config show`). Confirm the endpoint matches
+  the Jaeger OTLP HTTP port (`4318` by default). Watch the trace-mcp log for
+  `telemetry.otlp_export_failed` — most often a 404 on the path or a
+  hostname typo.
+- **Spans appear once then never refresh.** Jaeger memory store evicts after
+  ~10k traces. Restart the container or switch to `badger` storage.
+- **Container can't reach trace-mcp.** This direction never happens — the
+  SDK is the client; Jaeger is the server. Always `http://localhost:4318`
+  from the trace-mcp side.
+
+---
+
+# Quality gates — this project's thresholds
+
+`.trace-mcp.json`'s `quality_gates.rules` overrides the CLI's generic defaults
+(`max_cyclomatic_complexity: 30`, `max_security_critical_findings: 0`) with
+numbers calibrated against this codebase's actual, reviewed state. Re-derive
+these after any large refactor round — don't treat them as permanent.
+
+## max_cyclomatic_complexity: 130 (warning)
+
+The generic default of 30 fires on nearly every language/framework plugin in
+this repo — dispatch tables for 68 languages and 48+ frameworks are
+inherently branchy. After decomposing every class that was a genuine
+god-object (`DecisionStore` 262→96, `TopologyStore` 125→49,
+`IndexingPipeline` 137→115, plus tool-gate/api-routes/memory-tools splits),
+the remaining top offenders are all language/framework plugins whose
+complexity is domain-necessary, not accidental: `DartLanguagePlugin` (123),
+`FastAPIPlugin` (119), `CppLanguagePlugin` (117), `LaravelPlugin` (105),
+`ObjCLanguagePlugin` / `OcamlLanguagePlugin` (103). 130 sits just above that
+accepted ceiling — today's classes pass silently, but a genuinely new outlier
+above it still trips the warning.
+
+## max_security_critical_findings: 2 (error)
+
+`scan_security` is a regex-based scanner with no data-flow analysis (a full
+taint/dataflow rewrite was explicitly scoped out — see `docs/comparisons.md`).
+It cannot see past a runtime-validated identifier or a value's closed
+provenance. Two findings are reviewed and accepted as false positives, not
+suppressed silently:
+
+- `src/ai/vec-extension.ts:134` — `this.table` is a single hardcoded literal
+  set once at field declaration, additionally guarded by
+  `assertSafeSqliteIdentifier()` right before the `DROP TABLE` call
+  (defense in depth against future code changes, not because this path is
+  reachable today).
+- `src/daemon/project-manager.ts:704` — `name` is drawn from
+  `sqlite_master`'s own table-name catalog (a fixed, developer-controlled
+  enumeration of ~30 literal `CREATE TABLE` names), never from project/user
+  input.
+
+The threshold is 2, not 0, so a **third** critical finding — new or
+otherwise — still fails the gate and forces review. If either of these two
+findings' code changes such that the value could become externally
+influenced, re-audit before assuming the finding is still a false positive.
+
+## max_circular_import_chains: 0 (error), max_tech_debt_grade: D (warning)
+
+Unchanged from the CLI defaults — no evidence-based reason to relax either.
+
+---
+
+# System Prompt Routing via tweakcc
+
+> **Requires:** [tweakcc](https://github.com/Piebald-AI/tweakcc) — a tool that patches Claude Code's system prompts directly.
+
+---
+
+## Why system prompt routing?
+
+The common failure mode with trace-mcp routing isn't forgetting — it's **skipping**. Claude sees the CLAUDE.md policy and reaches for `Read` or `Grep` anyway because native tools feel faster under pressure or in long sessions — especially after context compression drops the CLAUDE.md block.
+
+trace-mcp has three enforcement layers:
+
+| Layer | Mechanism | Strength |
+|-------|-----------|----------|
+| **Base** — CLAUDE.md policy | Soft rules in project instructions | Weakest — ignored under cognitive load or after context compression |
+| **Standard** — hooks | PreToolUse guards intercept tool calls at runtime | Medium — stderr warnings, allows Read for edits, catches violations |
+| **Max** — system prompt rewrites (this doc) + agent behavior rules | Patch Claude's core tool descriptions via tweakcc; inject anti-sycophancy + goal-driven discipline rules via MCP instructions | Strongest — model internalizes the preference from the start, behaves like a senior engineer by default |
+
+Each layer **adds on top** of the previous ones — nothing gets removed. tweakcc is an optional amplifier, not a replacement.
+
+Picking **Max** during `trace-mcp init` does two things beyond Standard:
+1. Installs tweakcc system-prompt rewrites (the 8 files below).
+2. Writes `tools.agent_behavior: "strict"` to your global config — this is delivered via MCP instructions to every client (Claude Code, Cursor, Codex, Windsurf), not just CC. See [Agent behavior rules](configuration.md#agent-behavior-rules).
+
+---
+
+## Architecture
+
+### Base (CLAUDE.md only)
+
+```
+CLAUDE.md (soft)
+  routing policy tables
+```
+
+### Standard (current default after `trace-mcp init`)
+
+```
+CLAUDE.md (soft)  →  PreToolUse guard (hard)  →  PostToolUse reindex (auto)
+  routing policy      blocks Read/Grep/Glob/     index-file after Edit/Write
+                      Bash on code files +
+                      Agent(Explore) subagents
+
+                  →  PreCompact hook (auto)   →  Worktree hook (auto)
+                      injects session snapshot    registers new worktrees
+```
+
+### Max (Standard + tweakcc + agent_behavior rules)
+
+```
+System prompts (deep)   →  MCP instructions (every session)  →  CLAUDE.md (soft)  →  PreToolUse guard (hard)  →  PostToolUse/PreCompact/Worktree (auto)
+  routing built into        tool routing + agent_behavior=       full policy          catches remaining 5%        unchanged
+  core tool descriptions    "strict" (anti-sycophancy,            (reinforcement)
+                            goal-driven, 2-strike rule)
+```
+
+All existing hooks stay. tweakcc adds the deepest layer — the model never sees "use Grep for code search" in its tool descriptions; it sees "use trace-mcp search" from the start. `agent_behavior: "strict"` runs in parallel via MCP instructions, making the agent behave like a senior engineer by default: no flattery, disagreement on wrong premises, no fabrication, no drive-by refactors, verification before reporting "done".
+
+---
+
+## Prompt Rewrites (8 files)
+
+All files are tweakcc prompt fragments. Only the content below the YAML frontmatter is replaced.
+
+### 1. Read files (`system-prompt-tool-usage-read-files.md`)
+
+```
+Before reading any source code file, call trace-mcp get_outline to see its
+structure first. To read specific symbols, use get_symbol (by symbol_id or fqn)
+or get_context_bundle (symbol + its imports, or batch multiple symbol_ids) instead
+of reading the whole file. Use Read for non-code files (.md, .json, .yaml, .toml,
+.env, .txt, .html, images, PDFs) and when you need complete file content before
+editing with Edit/Write. Never use cat, head, tail, or sed to read any file.
+```
+
+### 2. Search content (`system-prompt-tool-usage-search-content.md`)
+
+```
+To search code by symbol name (function, class, method, variable), use trace-mcp
+search — narrow with kind=, language=, file_pattern=, implements=, extends=.
+To search for strings, comments, TODOs, or patterns in source code, use trace-mcp
+search_text (supports regex, context_lines for surrounding code). For semantic
+usages (imports, calls, renders, dispatches), use find_usages. Use Grep only for
+searching non-code file content (.md, .json, .yaml, .txt, .env, config files).
+Never invoke grep or rg via Bash.
+```
+
+### 3. Search files (`system-prompt-tool-usage-search-files.md`)
+
+```
+To browse project structure, use trace-mcp get_project_map (summary_only for
+overview, or full for detailed structure). To find symbols in specific paths, use
+search with file_pattern= filter. To see what's in a specific file, use
+get_outline. Use Glob only when finding non-code files by name pattern. Never use
+find or ls via Bash for file discovery.
+```
+
+### 4. Reserve Bash (`system-prompt-tool-usage-reserve-bash.md`)
+
+```
+Reserve Bash exclusively for system commands and terminal operations: builds
+(pnpm run build), tests (pnpm test, vitest, pytest), git commands, package managers,
+docker, kubectl, and similar. Never use Bash for code exploration — do not run
+grep, rg, find, cat, head, or tail on source code files through it. Use trace-mcp
+MCP tools for all code reading and searching. If unsure whether a dedicated tool
+exists, default to the dedicated tool.
+```
+
+### 5. Direct search (`system-prompt-tool-usage-direct-search.md`)
+
+```
+For directed codebase searches (finding a specific function, class, or method),
+use trace-mcp search directly — it is faster and more precise than text search.
+Narrow results with kind= (function, class, method, interface, type, variable),
+language=, file_pattern=, implements=, extends=. For text pattern searches in
+code, use trace-mcp search_text. Use native search tools only for non-code files.
+```
+
+### 6. Delegate exploration (`system-prompt-tool-usage-delegate-exploration.md`)
+
+```
+For broader codebase exploration, start with trace-mcp: get_project_map for
+project overview, get_task_context for all-in-one task context (replaces manual
+chaining of search → get_symbol → Read). When the project is unfamiliar, call
+suggest_queries for orientation. Never spawn Agent(Explore) subagents for code
+exploration — use get_task_context or get_feature_context instead (50x cheaper).
+Agent subagents are only for: writing code in parallel, running tests, web research.
+```
+
+### 7. Subagent guidance (`system-prompt-tool-usage-subagent-guidance.md`)
+
+```
+Use subagents only for tasks that require actual execution: writing code in
+parallel (background workers), running tests, web/external research, or Plan mode.
+Never use Agent(Explore) or Agent(general-purpose) for code exploration, review,
+or analysis — each subprocess costs ~50K tokens in overhead. Instead use trace-mcp:
+get_task_context (all-in-one task context), get_feature_context (NL query),
+batch (multiple lookups in one call), find_usages, get_call_graph.
+```
+
+### 8. Read first (`system-prompt-doing-tasks-read-first.md`)
+
+```
+Do not propose changes to code you haven't understood. Before modifying code, use
+trace-mcp to build context: get_outline to see the file's structure, get_symbol
+or get_context_bundle to read the relevant symbols, and get_change_impact to
+understand the blast radius. For complete task context in one call, use
+get_task_context with a natural language description of your task.
+
+Use batch to combine multiple independent trace-mcp calls into a single request
+(e.g., get_outline for 3 files + search for a symbol).
+
+For non-code files (.md, .json, .yaml, .toml, .env, .txt, .html), use Read
+directly.
+```
+
+---
+
+## Verification
+
+After installing the tweakcc rewrites, verify with these test prompts:
+
+| Test prompt | Expected behavior |
+|---|---|
+| "Find the main function in this project" | Uses trace-mcp `search`, not `Grep` |
+| "What does UserService do?" | Uses `get_outline` + `get_symbol`, not `Read` |
+| "Show me the project structure" | Uses `get_project_map`, not `Glob` or `ls` |
+| "Search for TODO comments" | Uses `search_text`, not `Grep` |
+| "Read the README" | Uses `Read` (non-code file — correct) |
+| "Search package.json for the version" | Uses `Grep` or `Read` (non-code file — correct) |
+| Edit a `.ts` file | PostToolUse hook fires, re-indexes automatically |
+| "What breaks if I change this function?" | Uses `get_change_impact`, not guessing |
+| "Explore the plugin architecture" | Uses `get_task_context`, not Agent(Explore) |
+| "Analyze the indexing pipeline" | Uses `get_task_context`/`get_feature_context`, not Agent |
+
+---
+
+## Combining with hooks (recommended)
+
+System prompt routing and hooks are **complementary**, not exclusive. Run both for maximum enforcement:
+
+- **tweakcc prompts** handle the 95% case — Claude reaches for trace-mcp by default
+- **PreToolUse guard** catches the remaining 5% under cognitive load or in very long sessions
+- **PostToolUse reindex** keeps the index fresh (zero model overhead)
+- **PreCompact hook** injects session snapshot to prevent compaction amnesia
+- **Worktree hook** auto-registers new worktrees
+
+This layered approach gives the strongest enforcement with the least friction.
+
+---
+
+## Rollback
+
+To revert: restore original tweakcc prompt files. No changes to CLAUDE.md, hooks, or settings are needed — the existing Standard setup continues to work independently.
+
+---
+
+# Development
+
+## Setup
+
+```bash
+git clone https://github.com/nikolai-vysotskyi/trace-mcp.git
+cd trace-mcp
+pnpm install
+pnpm run build
+```
+
+## Scripts
+
+| Script | What it does |
+|---|---|
+| `pnpm run build` | TypeScript compilation via tsup |
+| `pnpm run dev` | Watch mode (tsup --watch) |
+| `pnpm run test` | Run all tests (vitest) |
+| `pnpm run test:watch` | Watch mode for tests |
+| `pnpm run typecheck` | TypeScript type checking (`tsc --noEmit`) |
+| `pnpm run lint` | Same as `typecheck` (legacy alias) |
+| `pnpm run format` | Auto-format the repo with Biome |
+| `pnpm run format:check` | Check formatting without writing |
+| `pnpm run biome:ci` | Full Biome check (formatter + linter) — same as CI |
+| `pnpm run serve` | Start MCP server (dev) |
+
+## Code style — Biome
+
+Formatter and linter are unified under [Biome](https://biomejs.dev). Config lives in `biome.jsonc` at the repo root.
+
+- **Formatter**: 2-space indent, single quotes, semicolons, trailing comma all, 100-col line width. Runs across `src/`, `tests/`, and `packages/app/`.
+- **Linter**: only a hand-picked subset is enabled as errors today (correctness + style + selected complexity rules). `recommended: false` — we ramp rules in incrementally rather than turning them all on at once. See `biome.jsonc` for the current set.
+- **Pre-commit hook**: `simple-git-hooks` + `lint-staged` run `biome check --write` only on staged files. Set `SKIP_SIMPLE_GIT_HOOKS=1` to bypass for emergencies.
+- **CI**: a fast `biome` job runs `biome ci --diagnostic-level=error` and gates the heavier `impact-report` and `app-typecheck` jobs.
+- **Editor**: `.vscode/extensions.json` recommends the official `biomejs.biome` extension. JetBrains users can install the [Biome plugin](https://plugins.jetbrains.com/plugin/22761-biome).
+- **`git blame`**: `.git-blame-ignore-revs` lists the formatter mass-pass commit. Enable locally with `git config blame.ignoreRevsFile .git-blame-ignore-revs`. GitHub honors it on the web.
+
+### Ramping new lint rules
+
+When promoting a new rule:
+
+1. Add it to `biome.jsonc` at severity `warn` first to see the blast radius (`pnpm exec biome lint --reporter=summary`).
+2. If the rule has a safe auto-fix, run `pnpm exec biome lint --write --only=<rule-id>`. Review the diff.
+3. For unsafe fixes (e.g. `useExhaustiveDependencies` removing deps, `useButtonType` guessing `type="button"`): hand-fix or scope via `overrides` in `biome.jsonc`.
+4. Once violations hit zero, promote severity to `error`.
+5. Mass-fix commits should be added to `.git-blame-ignore-revs`.
+
+### Remaining warning burndown
+
+`pnpm run biome:ci` exits clean (**0 errors**). The remaining warnings are the
+`noExplicitAny` backlog (~170, scoped to `src/` and `packages/app/` — tests are
+overridden to `off` because mocks and AST fixtures intentionally use `any`).
+
+These should be fixed incrementally as files are touched, and require real
+domain types — not blanket replacement with `unknown`:
+
+- **Python parsers** (`src/indexer/plugins/integration/{framework/fastapi,framework/flask,orm/sqlalchemy}/index.ts`) — tree-sitter `TSNode` shape varies per language; the existing `any` casts should become discriminated unions over node `type`.
+- **CLI surface** (`src/cli.ts`) — Commander.js untyped `opts` objects; should be replaced with per-command `interface CliOpts`.
+- **Analytics store** (`src/analytics/`) — `better-sqlite3` row callbacks; `Row` types should be defined per query.
+- **Doc/refactoring tools** (`src/tools/{project,refactoring,framework,analysis,quality}/*`) — generic graph visitor patterns; need per-visitor type unions.
+
+Promote `suspicious/noExplicitAny` from warn to error once the backlog is gone.
+
+## Tests
+
+```bash
+pnpm run test                       # All tests (1668 tests, ~2s)
+pnpm run test --run <pattern>  # Run specific test files
+pnpm run test:watch             # Watch mode
+```
+
+Test files live alongside source or in `tests/`:
+
+```
+tests/
+├── ai/              # AI pipeline tests
+├── ci/              # CI report generator and formatter tests
+├── frameworks/      # Framework plugin tests (per-framework)
+├── tools/           # MCP tool integration tests
+├── integration/     # End-to-end indexing tests
+├── e2e/             # CLI and protocol tests
+├── db/              # Database layer tests
+├── indexer/         # Indexing pipeline tests
+├── parsers/         # Language parser tests
+├── resolvers/       # Module resolver tests
+├── scoring/         # Scoring algorithm tests
+└── fixtures/        # Test fixtures (sample projects)
+```
+
+---
+
+## Adding a new integration plugin
+
+1. Create a directory under the appropriate category in `src/indexer/plugins/integration/`:
+
+```
+src/indexer/plugins/integration/framework/my-framework/
+├── index.ts
+└── helpers.ts (optional)
+```
+
+2. Implement `FrameworkPlugin`:
+
+```typescript
+import { FrameworkPlugin, PluginManifest } from '../../../../plugin-api/types.js';
+
+const manifest: PluginManifest = {
+  name: 'my-framework',
+  version: '1.0.0',
+  languages: ['typescript'],
+  priority: 20,
+};
+
+export const MyFrameworkPlugin: FrameworkPlugin = {
+  manifest,
+
+  detect(ctx) {
+    // Check package.json, config files, etc.
+    return ctx.hasDependency('my-framework');
+  },
+
+  registerSchema() {
+    return {
+      nodeTypes: ['my_framework_route'],
+      edgeTypes: ['my_framework_handles'],
+    };
+  },
+
+  extractNodes(filePath, content, language) {
+    // Parse file and return symbols
+    return { symbols: [], edges: [] };
+  },
+
+  resolveEdges(ctx) {
+    // Resolve cross-file relationships
+    return [];
+  },
+};
+```
+
+3. Register the plugin in `src/indexer/plugins/integration/framework/index.ts` (or the appropriate category index).
+
+4. Write tests in `tests/frameworks/my-framework.test.ts`.
+
+---
+
+## Adding a new language plugin
+
+1. Create files in `src/indexer/plugins/language/my-lang/`:
+
+```
+src/indexer/plugins/language/my-lang/
+├── index.ts
+└── helpers.ts
+```
+
+2. Use tree-sitter for parsing. See existing plugins for patterns (e.g., `typescript/index.ts`).
+
+3. Register in `src/indexer/plugins/language/index.ts`.
+
+---
+
+## Plugin test harness
+
+The `src/plugin-api/test-harness.ts` module provides utilities for testing plugins in isolation:
+
+```typescript
+import { createTestHarness } from '../src/plugin-api/test-harness.js';
+
+const harness = createTestHarness(MyPlugin);
+const result = await harness.indexFile('test.ts', sourceCode);
+expect(result.symbols).toContainEqual(expect.objectContaining({ name: 'myFunction' }));
+```
+
