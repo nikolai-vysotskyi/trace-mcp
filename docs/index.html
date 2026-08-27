@@ -70,7 +70,7 @@
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
     "alternateName": "trace-mcp — Recomputation → Reuse for AI Systems",
-    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 99% less redundant processing. Framework-aware dependency graph via MCP, 81 languages, 58 integrations.",
+    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 99% less redundant processing. Framework-aware dependency graph via MCP, 80 languages, 85 integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
     "applicationCategory": "DeveloperApplication",
@@ -103,8 +103,8 @@
       "40–50% fewer tokens on average across real agent workflows",
       "Up to 2× effective capacity at the same context budget",
       "Up to 99% less redundant processing in structured tasks (code navigation, dependency traversal)",
-      "Framework-aware dependency graph (58 integrations, 81 languages)",
-      "138 MCP tools for navigation, impact analysis, refactoring",
+      "Framework-aware dependency graph (85 integrations, 80 languages)",
+      "170 MCP tools for navigation, impact analysis, refactoring",
       "Local-first: SQLite + bundled ONNX embeddings, zero API keys",
       "Native Model Context Protocol integration"
     ]
@@ -2105,8 +2105,8 @@
       <div class="definition reveal">
         <div class="def-text">
           <h3>This is how agents stop <span class="em">recomputing and start reusing.</span></h3>
-          <p><strong>Computed once</strong> &mdash; every symbol, every edge, across 81 languages in one directed graph. The agent queries it instead of rediscovering it each turn.</p>
-          <p><strong>Framework-aware</strong> &mdash; routes to controllers, Inertia to Vue, Eloquent to migrations. 58 integrations capture edges the agent would otherwise reconstruct from raw files.</p>
+          <p><strong>Computed once</strong> &mdash; every symbol, every edge, across 80 languages in one directed graph. The agent queries it instead of rediscovering it each turn.</p>
+          <p><strong>Framework-aware</strong> &mdash; routes to controllers, Inertia to Vue, Eloquent to migrations. 85 integrations capture edges the agent would otherwise reconstruct from raw files.</p>
           <p><strong>Compiler-grade where it matters</strong> &mdash; optional LSP enrichment with <code>tsserver</code>, <code>pyright</code>, <code>gopls</code> for call resolution that survives across calls.</p>
           <p><strong>Reused, not rebuilt</strong> &mdash; 300ms file-watcher debounce and content-hashed incremental reindex keep the graph fresh without redoing finished work.</p>
         </div>
@@ -2181,7 +2181,7 @@
         <div class="pipe-step">
           <div class="pipe-num">03</div>
           <h3>Expose to your agents</h3>
-          <p>138 MCP tools become available in Claude Code, Cursor, Windsurf, VS Code &mdash; or any custom agent that speaks MCP over stdio or HTTP.</p>
+          <p>170 MCP tools become available in Claude Code, Cursor, Windsurf, VS Code &mdash; or any custom agent that speaks MCP over stdio or HTTP.</p>
           <div class="tags">
             <span class="tag">mcp</span>
             <span class="tag">stdio + http</span>
@@ -2265,7 +2265,7 @@
           <span class="compare-sub">/ Agent-native trace-mcp</span>
           <h3>A precomputed graph the agent reuses</h3>
           <ul>
-            <li>138 tools that return answers, not files to read</li>
+            <li>170 tools that return answers, not files to read</li>
             <li>One incremental index, queried per task &mdash; not rebuilt per turn</li>
             <li>Single graph across every symbol, edge, and framework</li>
             <li>Native MCP protocol, zero adapter code</li>
@@ -2290,7 +2290,7 @@
       <div class="diff-block reveal">
         <ul class="diff-list">
           <li><span class="num">/ 01</span><span><strong>Computed once, queried many times</strong> &mdash; a graph, not a text index that gets re-ranked every turn.</span></li>
-          <li><span class="num">/ 02</span><span><strong>Framework-aware edges</strong> across 58 integrations &mdash; routes, ORMs, views, DI captured up front, not rediscovered from raw files.</span></li>
+          <li><span class="num">/ 02</span><span><strong>Framework-aware edges</strong> across 85 integrations &mdash; routes, ORMs, views, DI captured up front, not rediscovered from raw files.</span></li>
           <li><span class="num">/ 03</span><span><strong>Tools that return answers</strong>, not snippets to read &mdash; <code>get_change_impact</code>, <code>get_call_graph</code>, <code>find_usages</code> over a precomputed structure.</span></li>
           <li><span class="num">/ 04</span><span><strong>Reuse survives the session</strong> &mdash; incremental reindex, decision memory, agent-behavior rules keep cost from rebounding.</span></li>
         </ul>
@@ -2404,7 +2404,7 @@
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">011 / Ecosystem</span></div>
         <div>
-          <h2 class="section-title">58 integrations. <span class="em">81 languages.</span></h2>
+          <h2 class="section-title">85 integrations. <span class="em">80 languages.</span></h2>
           <p class="section-lede">Each integration adds framework-specific edges &mdash; routes, components, migrations, queries &mdash; not just syntax parsing. Plugin API is open: write your own for a niche framework in under a day.</p>
         </div>
       </div>
@@ -2576,7 +2576,7 @@
             <h3>What about my framework? Is it supported?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">81 languages and 58 framework integrations ship out of the box. For unsupported frameworks, the plugin API is open &mdash; write a custom plugin in TypeScript, register it via <code>~/.trace-mcp/plugins/</code>. Most plugins are ~200&ndash;500 lines.</div>
+          <div class="answer">80 languages and 85 framework integrations ship out of the box. For unsupported frameworks, the plugin API is open &mdash; write a custom plugin in TypeScript, register it via <code>~/.trace-mcp/plugins/</code>. Most plugins are ~200&ndash;500 lines.</div>
         </details>
         <details class="faq">
           <summary>

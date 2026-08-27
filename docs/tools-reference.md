@@ -1,6 +1,6 @@
 # Tools reference
 
-trace-mcp exposes 44+ MCP tools and 2 resources.
+trace-mcp exposes 170 MCP tools and 9 resources.
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
 
