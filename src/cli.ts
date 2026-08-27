@@ -27,6 +27,7 @@ const PKG_VERSION =
 
 import http from 'node:http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { stripRedundantSchemaKeyword } from './server/schema-shim.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { aiTracker } from './ai/index.js';
 import { detectCoverageRecursive } from './analytics/tech-detector.js';
@@ -682,9 +683,11 @@ program
       // Pre-allocate the session id so the journal callback below can stamp
       // each emitted event with the same id the MCP transport will use.
       const sessionId = randomUUID();
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => sessionId,
-      });
+      const transport = stripRedundantSchemaKeyword(
+        new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => sessionId,
+        }),
+      );
 
       // Each session needs its own Server instance since the MCP SDK's Server
       // only supports one transport at a time. All sessions share the same

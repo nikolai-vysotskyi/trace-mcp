@@ -4,6 +4,7 @@ import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { TraceMcpConfig } from '../../config.js';
 import { logger } from '../../logger.js';
 import { checkVersionDrift, versionDriftMessage } from '../../init/version-stamp.js';
+import { stripRedundantSchemaKeyword } from '../../server/schema-shim.js';
 import { disarmStdoutGuard } from '../../server/transport-hardening.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
@@ -85,7 +86,7 @@ export class StdioSession {
 
   constructor(opts: StdioSessionOptions) {
     this.opts = opts;
-    this.stdio = new StdioServerTransport();
+    this.stdio = stripRedundantSchemaKeyword(new StdioServerTransport());
     this.router = new MessageRouter({
       sendToClient: (msg) => this.stdio.send(msg),
       drainTimeoutMs: opts.drainTimeoutMs ?? 5_000,
