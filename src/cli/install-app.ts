@@ -4,6 +4,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import https from 'node:https';
 import os from 'node:os';
@@ -110,10 +111,11 @@ function fetchLatestRelease(
   });
 }
 
-/** Download a file from URL, following redirects */
-function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<void> {
+/** Download a file from URL, following redirects. Resolves with its SHA-256 digest. */
+function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<string> {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
+    const hash = crypto.createHash('sha256');
     const doGet = (targetUrl: string, redirects = 0) => {
       if (redirects > 5) {
         reject(new Error('Too many redirects'));
@@ -130,10 +132,11 @@ function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<voi
             reject(new Error(`Download failed: HTTP ${res.statusCode}`));
             return;
           }
+          res.on('data', (chunk) => hash.update(chunk));
           res.pipe(file);
           file.on('finish', () => {
             file.close();
-            resolve();
+            resolve(hash.digest('hex'));
           });
         })
         .on('error', (err) => {
@@ -143,6 +146,55 @@ function downloadFile(url: string, dest: string, timeoutMs = 60000): Promise<voi
     };
     doGet(url);
   });
+}
+
+/**
+ * Locate the `<asset>.sha256` sibling published alongside every release asset.
+ * Exported so the fail-closed behaviour can be asserted without the network.
+ */
+export function findChecksumAsset<T extends { name: string }>(
+  assets: T[],
+  assetName: string,
+): T | undefined {
+  return assets.find((a) => a.name === `${assetName}.sha256`);
+}
+
+/**
+ * Parse a `.sha256` manifest: either a bare digest or `<digest>  <filename>`
+ * (sha256sum format). Mirrors scripts/postinstall-app.mjs::parseSha256Manifest.
+ */
+export function parseSha256Manifest(text: string, assetName: string): string | null {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  for (const line of lines) {
+    const bare = line.match(/^([a-f0-9]{64})$/i);
+    if (bare) return bare[1].toLowerCase();
+    const pair = line.match(/^([a-f0-9]{64})\s+\*?(.+)$/i);
+    if (pair && path.basename(pair[2]) === assetName) return pair[1].toLowerCase();
+  }
+  return null;
+}
+
+/**
+ * Fail closed: throws unless `actualDigest` matches the digest the manifest
+ * publishes for `assetName`. An unparseable manifest is treated as a mismatch.
+ */
+export function assertDigestMatches(
+  actualDigest: string,
+  manifestText: string,
+  assetName: string,
+): void {
+  const expected = parseSha256Manifest(manifestText, assetName);
+  if (!expected) {
+    throw new Error(`Checksum manifest for ${assetName} is unreadable — refusing to install`);
+  }
+  if (expected !== actualDigest.toLowerCase()) {
+    throw new Error(
+      `Checksum mismatch for ${assetName}: expected ${expected}, got ${actualDigest.toLowerCase()} — refusing to install`,
+    );
+  }
 }
 
 /** Pin the app to the macOS Dock (persistent-apps) if not already present. */
@@ -311,10 +363,30 @@ export async function installGuiApp(opts: InstallGuiAppOptions = {}): Promise<In
       };
     }
 
-    // 2. Download to temp
+    // 2. Refuse to install anything we cannot verify. Every release asset ships
+    //    a `<name>.sha256` sibling; no sibling means no install (same
+    //    fail-closed rule as scripts/postinstall-app.mjs).
+    const checksumAsset = findChecksumAsset(release!.assets, asset.name);
+    if (!checksumAsset) {
+      return {
+        installed: false,
+        error: `No ${asset.name}.sha256 checksum published for release ${release!.tag} — refusing to install an unverified artifact`,
+      };
+    }
+
+    // 3. Download to temp and verify before anything is executed or extracted
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-app-'));
     const archivePath = path.join(tmpDir, asset.name);
-    await downloadFile(asset.url, archivePath);
+    try {
+      const actualDigest = await downloadFile(asset.url, archivePath);
+      const manifestPath = path.join(tmpDir, checksumAsset.name);
+      await downloadFile(checksumAsset.url, manifestPath, 15_000);
+      assertDigestMatches(actualDigest, fs.readFileSync(manifestPath, 'utf-8'), asset.name);
+    } catch (err) {
+      // Never leave an unverified artifact behind for anything else to pick up.
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      throw err;
+    }
 
     // 3. Ensure install dir exists
     fs.mkdirSync(INSTALL_DIR, { recursive: true });
