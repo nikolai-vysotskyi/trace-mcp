@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.48.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.0...v1.48.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* unify language/framework/tool counts across marketing docs ([#369](https://github.com/nikolai-vysotskyi/trace-mcp/issues/369)) ([4e34e97](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4e34e97189d73b3ab8c944b3bf04825c197931ef))
+
+
+### Documentation
+
+* fix duplicate H1, untargeted titles, unscoped tables, dead-end internal links (TRA-173) ([#368](https://github.com/nikolai-vysotskyi/trace-mcp/issues/368)) ([61436ea](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61436ea25c346c29ed478a5a9ad1d8e277dd8630))
+* **site:** close AI-search (GEO) gaps — FAQPage schema, TechArticle dates, llms-full.txt (TRA-175) ([#367](https://github.com/nikolai-vysotskyi/trace-mcp/issues/367)) ([ac1f543](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ac1f543b70db3ff25dce5228611255c793d14bd0))
+
+
+### CI/CD
+
+* auto-approve release-please PR workflow runs (TRA-171) ([#365](https://github.com/nikolai-vysotskyi/trace-mcp/issues/365)) ([8007391](https://github.com/nikolai-vysotskyi/trace-mcp/commit/80073916fb5fc33a01136c823b363957eda1d3ad))
+
 ## [1.48.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.47.1...v1.48.0) (2026-08-27)
 
 
