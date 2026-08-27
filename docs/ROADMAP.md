@@ -10,29 +10,28 @@ removed here once it ships, is superseded, or turns out not to matter.
 
 ## Where the product stands
 
-Both items that were "ready to start" in the last revision have shipped:
-**CI-native PR intelligence** (TRA-127, `.github/workflows/pr-comment.yml` —
-blast radius + quality gate comments on this repo's own PRs) and the
-**multi-project tool surface** (TRA-93/TRA-143, PR #357 — `list_projects` +
-`call_project_tool` relay, shipped as "Option B" rather than a per-tool
-`project` param retrofit). Per `docs/comparisons.md`'s own honest
-self-assessment, six of seven competitive gaps from the last deep pass are
-also shipped and adversarially re-validated. The two remaining technical
-gaps (a peer-reviewed bug-risk metric; CFG/taint staying line-based/lexical
-instead of full AST/dataflow) are known architectural ceilings, not
-low-hanging fruit — leave them tracked in `comparisons.md`, not here.
+Both items that were "ready to start" two revisions ago shipped:
+**CI-native PR intelligence** (TRA-127) and the **multi-project tool
+surface** (TRA-93/TRA-143). The item that replaced them last revision has
+now also shipped: **TRA-186's tool-schema-tax cut** landed in two releases
+(v1.48.3 PR #377, v1.48.4 PR #380) — tool description text 73,947→~64k
+chars, per-parameter description text 32,281→30,245 chars, both now
+regression-guarded by `tool-schema-budget.test.ts`. That's a real but modest
+cut (~6% off the ~203k-char/~50.7k-token baseline Nikolai measured), because
+the investigation surfaced the actual shape of the cost: of the ~94k
+inputSchema chars, only ~30-32k is prose (`.describe()` text) we control —
+the remaining ~60k+ is structural JSON Schema (`type`, `required`, `enum`,
+`minimum`/`maximum`) generated from legitimate parameter counts, which
+**cannot shrink without removing parameters or consolidating tools** —
+both are breaking MCP tool-contract changes, not prose edits. See item 1
+below for the resulting next step.
 
-That clears the board of concrete, already-scoped work — which is exactly
-when it's worth checking a premise `comparisons.md` has been asserting as a
-strength: **170 MCP tools** is listed as a differentiator against Serena
-(~55), code-review-graph (~28), SocratiCode (~21) in every comparison table.
-Nikolai's own measurement (TRA-186) says the same number is a **~52-53k
-token tax paid at every session start** on any MCP client without deferred/
-lazy tool loading — 91% of the total tool-schema weight in a real session.
-Tool *count* as a marketing number and tool *count* as a token-start-cost
-liability are the same fact read two different ways; the fix is not "add
-more tools" or "remove tools" but making the number stop being something a
-client pays for before it's used — see item 1 below.
+Per `docs/comparisons.md`'s own honest self-assessment, six of seven
+competitive gaps from the last deep pass are shipped and adversarially
+re-validated. The two remaining technical gaps (a peer-reviewed bug-risk
+metric; CFG/taint staying line-based/lexical instead of full AST/dataflow)
+are known architectural ceilings, not low-hanging fruit — leave them
+tracked in `comparisons.md`, not here.
 
 The other standing question is unchanged: **who trace-mcp serves and how
 far the current single-developer, single-repo model can stretch before it
@@ -40,21 +39,22 @@ needs to change shape.**
 
 ## Ready to start
 
-### 1. Cut the session-start tool-schema tax (TRA-186)
-Already filed with measurements attached (171 tools / ~203k chars / ~50.7k
-tokens of schemas+descriptions, before a single tool is called) and
-assigned out for an audit-and-trim pass: heaviest offenders
-(`search` ~1233 tok, `query_decisions` ~1098 tok, `plan_refactoring` ~589
-tok) get description trims, redundant/overlapping tools get flagged for
-consolidation, and MCP's lazy-registration/pagination options get evaluated
-for shrinking the always-paid baseline.
+### 1. Scope tool-consolidation candidates into per-tool migration issues (follow-up to TRA-186)
+TRA-186's own investigation named the candidate list (pin_file/pin_symbol,
+discover_claude_sessions/discover_hermes_sessions, search/search_with_mode,
+the three "is it safe to edit" tools, and others surfaced during the trim)
+and explicitly recommended **not** folding consolidation into that issue,
+since each merge is a breaking MCP tool-contract change and needs its own
+migration note (which callers break, what the replacement call looks like).
+This item is: pull that list into scoped issues, one (or a small related
+group) per issue, each with a concrete before/after tool signature and a
+migration note — a design/scoping pass, not a code-first pass.
 
-**Why now:** this is a direct product-credibility problem, not a nice-to-have
-— trace-mcp's whole pitch is cutting agent token usage, and paying 50k+
-tokens just to *see* the tool list undercuts that pitch on exactly the
-clients (Claude Desktop, other non-lazy-loading agents, local models) least
-able to absorb it. It's also cheap relative to payoff: this is schema/
-description editing and tool consolidation, not new architecture.
+**Why now:** it's the only remaining lever that moves the ~50k baseline
+materially (prose trimming is now regression-tested and tapped out at ~6%).
+It's also the more consequential kind of change — every merge is a contract
+break for anyone with the old tool name pinned — so it deserves the
+scoping rigor TRA-186 asked for, not a batch rewrite done casually.
 
 ## Big bet — needs a design pass before any code
 
