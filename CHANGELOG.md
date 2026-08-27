@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.50.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.49.0...v1.50.0) (2026-08-27)
+
+
+### Features
+
+* **get_wake_up:** add scope param to unify with get_session_resume / get_project_memo (TRA-206) ([#395](https://github.com/nikolai-vysotskyi/trace-mcp/issues/395)) ([35d72df](https://github.com/nikolai-vysotskyi/trace-mcp/commit/35d72df0c90dd8c71d71b9d78ca52d664024950f))
+
+
+### Bug Fixes
+
+* **install-app:** verify SHA-256 before extracting or executing release assets (TRA-219) ([#397](https://github.com/nikolai-vysotskyi/trace-mcp/issues/397)) ([3fe0614](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3fe0614175b883701c1682590acd234040b3efea))
+
 ## [1.49.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.5...v1.49.0) (2026-08-27)
 
 
