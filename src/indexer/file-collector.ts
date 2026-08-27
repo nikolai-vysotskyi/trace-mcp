@@ -1,4 +1,5 @@
 import fg from 'fast-glob';
+import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
 import { descendantExcludeGlobs } from '../registry.js';
@@ -52,42 +53,47 @@ export async function collectFiles(params: FileCollectorParams): Promise<string[
     followSymbolicLinks: config.follow_symlinks,
   });
 
+  const rootedPatterns = config.include.filter((p) => !p.startsWith('**/'));
+
   // Monorepo / folder-of-projects: the directory-rooted include globs
   // (src/**, app/**, routes/**, ...) only match at the container root, so
   // nested subprojects are missed (e.g. `the/15carats/15carats-laravel/routes`).
   // When workspaces are detected, also discover files with those patterns
   // anchored to each workspace. Global `**/...` patterns already span the whole
-  // tree, so only re-anchor the directory-rooted ones. This is deterministic
-  // and complete — unlike the entries===0 deep-glob fallback below, which never
-  // fires when a root-level file (a stray README, a `**/*.md`) matched first.
-  if (workspaces.length > 0) {
-    const rooted = config.include.filter((p) => !p.startsWith('**/'));
-    if (rooted.length > 0) {
-      const wsPatterns = workspaces.flatMap((ws) => rooted.map((p) => `${ws.path}/${p}`));
-      const wsEntries = await fg(wsPatterns, {
-        cwd: rootPath,
-        ignore,
-        dot: false,
-        absolute: false,
-        onlyFiles: true,
-        suppressErrors: true,
-        followSymbolicLinks: config.follow_symlinks,
-      });
-      if (wsEntries.length > 0) {
-        const merged = new Set(entries);
-        for (const e of wsEntries) merged.add(e);
-        entries = [...merged];
-      }
+  // tree, so only re-anchor the directory-rooted ones.
+  if (workspaces.length > 0 && rootedPatterns.length > 0) {
+    const wsPatterns = workspaces.flatMap((ws) => rootedPatterns.map((p) => `${ws.path}/${p}`));
+    const wsEntries = await fg(wsPatterns, {
+      cwd: rootPath,
+      ignore,
+      dot: false,
+      absolute: false,
+      onlyFiles: true,
+      suppressErrors: true,
+      followSymbolicLinks: config.follow_symlinks,
+    });
+    if (wsEntries.length > 0) {
+      const merged = new Set(entries);
+      for (const e of wsEntries) merged.add(e);
+      entries = [...merged];
     }
   }
 
-  // Workspace/monorepo fallback: if nothing matched, all code is nested deeper
-  // (e.g. root/project/service/src/**). Re-try with **/<pattern> prefixed globs.
-  if (entries.length === 0) {
-    const deepPatterns = config.include.filter((p) => !p.startsWith('**/')).map((p) => `**/${p}`);
-
-    if (deepPatterns.length > 0) {
-      entries = await fg(deepPatterns, {
+  // Workspace/monorepo fallback: the rooted patterns found nothing at the
+  // project root, so all code is nested deeper (e.g. root/project/service/src/**,
+  // or a repo checked out into a subdirectory of the registered project root).
+  // Re-try those patterns with a `**/` prefix. Gated on the ROOTED patterns
+  // having zero matches specifically — not on `entries.length === 0` overall,
+  // which an unrelated GLOBAL pattern (e.g. `**/*.md` catching a stray
+  // top-level README) can make non-zero even while every rooted pattern
+  // missed completely, silently skipping this fallback and leaving the index
+  // stuck at whatever the global patterns happened to touch.
+  if (rootedPatterns.length > 0) {
+    const isRootedMatch = picomatch(rootedPatterns, { dot: true });
+    const rootedMatched = entries.some((e) => isRootedMatch(e));
+    if (!rootedMatched) {
+      const deepPatterns = rootedPatterns.map((p) => `**/${p}`);
+      const deepEntries = await fg(deepPatterns, {
         cwd: rootPath,
         ignore,
         dot: false,
@@ -96,11 +102,14 @@ export async function collectFiles(params: FileCollectorParams): Promise<string[
         suppressErrors: true,
         followSymbolicLinks: config.follow_symlinks,
       });
-      if (entries.length > 0) {
+      if (deepEntries.length > 0) {
         logger.info(
-          { count: entries.length, root: rootPath },
-          'Workspace root detected — using deep glob patterns',
+          { count: deepEntries.length, root: rootPath },
+          'Rooted include patterns found nothing at project root — using deep glob patterns',
         );
+        const merged = new Set(entries);
+        for (const e of deepEntries) merged.add(e);
+        entries = [...merged];
       }
     }
   }
