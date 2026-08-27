@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.48.4](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.3...v1.48.4) (2026-08-27)
+
+
+### Performance
+
+* **mcp:** trim per-param describe() text, add param-description budget guard (TRA-186) ([#380](https://github.com/nikolai-vysotskyi/trace-mcp/issues/380)) ([73942ec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/73942ec8182158376c2bde8a7b84f2ccb38833d6))
+
 ## [1.48.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.2...v1.48.3) (2026-08-27)
 
 
