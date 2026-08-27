@@ -170,7 +170,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dead_exports',
-    'Find exported symbols whose `export` keyword has no external consumer. Each item carries `signals` (which detectors fired) and `recommendation`: `"remove_export_keyword"` when the symbol is still used inside its own file (just un-export it, keep the declaration), `"delete_symbol"` when no in-file usage was detected. NOTE: this tool flags dead EXPORT KEYWORDS, not necessarily dead SYMBOLS. For strict dead-symbol detection (multi-signal: import graph + call graph + barrel re-exports + intra-file usage, only flags symbols with NO incoming references anywhere) use `get_dead_code` instead — it will reject anything `get_dead_exports` tags `remove_export_keyword`. Paginated: caps result list at `limit` (default 100, max 500); when more exist the response includes `truncated: true` and `total_dead` reflects the full count. Read-only. Returns JSON: { dead_exports: [{ symbol_id, name, kind, file, line, signals, recommendation }], total_dead, total_exports, truncated? }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Find exported symbols whose `export` keyword has no external consumer. Flags dead EXPORT KEYWORDS, not necessarily dead symbols — `recommendation` is `"remove_export_keyword"` if still used in-file, `"delete_symbol"` if not. For strict dead-symbol detection (no incoming references anywhere) use `get_dead_code` instead. Paginated (`limit`, default 100, max 500; `truncated`/`total_dead` when more exist). Read-only. Returns JSON: { dead_exports: [{ symbol_id, name, kind, file, line, signals, recommendation }], total_dead, total_exports, truncated? }. Supports `output_format: "toon"`.',
     {
       file_pattern: z
         .string()
@@ -371,7 +371,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_edge_bottlenecks',
-    'Find architectural bottleneck edges in the import graph: edges sitting on many shortest paths (edge betweenness, Brandes), edges whose removal would disconnect the graph (bridges, Tarjan), and nodes that are single points of failure (articulation points). Score combines structural centrality with co-change weight (bottleneckScore = betweenness × (1 + coChangeWeight)). Use to identify edges to monitor during refactoring and to prioritize decoupling work. For general importance use get_pagerank instead. Read-only. Returns JSON: { edges: [{ sourceFile, targetFile, betweenness, coChangeWeight, bottleneckScore, isBridge }], articulationPoints: [...], stats }.',
+    'Find architectural bottleneck edges in the import graph: edges on many shortest paths (betweenness), edges whose removal would disconnect the graph (bridges), and single-point-of-failure nodes (articulation points). bottleneckScore = betweenness × (1 + coChangeWeight). Use to prioritize decoupling work. For general importance use get_pagerank instead. Read-only. Returns JSON: { edges: [{ sourceFile, targetFile, betweenness, coChangeWeight, bottleneckScore, isBridge }], articulationPoints: [...], stats }.',
     {
       top_n: z
         .number()
@@ -658,7 +658,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'check_duplication',
-    'Check if a function/class name already exists elsewhere in the codebase before creating it. Prevents duplicating existing logic. Call with just a `name` when planning new code (an existing match means the name is taken — this is expected when used as a pre-create check), or `symbol_id` to check an existing symbol against others (the supplied symbol_id is always excluded from results — a symbol is never its own duplicate). Use `exclude_symbol_id` to suppress additional known symbols. Returns scored matches — score ≥0.7 means high likelihood of duplication, review the existing symbol before proceeding. Read-only. Returns JSON: { duplicates: [{ symbol_id, name, file, score }], hasDuplication }.',
+    'Check if a function/class name already exists before creating it. Pass `name` when planning new code, or `symbol_id` to check an existing symbol against others (excluded from its own results). `exclude_symbol_id` suppresses known matches. Score ≥0.7 means high likelihood of duplication — review before proceeding. Read-only. Returns JSON: { duplicates: [{ symbol_id, name, file, score }], hasDuplication }.',
     {
       symbol_id: z
         .string()

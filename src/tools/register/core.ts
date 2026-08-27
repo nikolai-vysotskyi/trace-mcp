@@ -111,7 +111,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'embed_repo',
-    'Precompute and cache symbol embeddings for semantic / hybrid search. Embeddings are also computed lazily on first semantic query, but calling this once after a fresh index avoids the first-query latency spike. Requires AI provider to be enabled in config (ollama/openai). Set force=true to drop and recompute all existing embeddings. Mutates the vector store; idempotent. Use after reindex when you plan to use semantic search. Returns JSON: { status, indexed_this_run, total_embedded, coverage_pct, duration_ms }. If embedding batches fail (e.g. a dimension mismatch between the model and the vector store, or an unreachable provider) it returns status "error" with a diagnostic message and failed_batches count instead of a silent "completed" with 0 coverage.',
+    'Precompute and cache symbol embeddings for semantic / hybrid search. Also computed lazily on first semantic query — call this once after a fresh index to avoid that latency spike. Requires an AI provider (ollama/openai) enabled in config. force=true recomputes all embeddings. Mutates the vector store; idempotent. Returns JSON: { status, indexed_this_run, total_embedded, coverage_pct, duration_ms }. Failed batches return status "error" with a diagnostic and failed_batches count, never a silent 0-coverage "completed".',
     {
       batch_size: z
         .number()
@@ -670,7 +670,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_env_vars',
-    'List environment variable keys from .env files with inferred value types/formats. Never exposes actual values — only keys, types (string/number/boolean/empty), and formats (url/email/ip/path/uuid/json/base64/csv/dsn/etc). Read-only, no side effects, safe for secrets. Use to understand project configuration without accessing actual values. Pass `redacted: true` together with `file` to receive a line-by-line redacted view of that one file (keys + type hints, no values) — useful when ordering and comments matter, e.g. when reviewing a config layout. Returns JSON grouped by file by default: { [file]: [{ key, type, format, comment }] }.',
+    'List environment variable keys from .env files with inferred value types/formats. Never exposes actual values — only keys, types, and formats (url/email/ip/path/uuid/json/base64/csv/dsn/etc). Safe for secrets. Pass `redacted: true` with `file` for a line-by-line redacted view of one file (keys + type hints, no values, preserves order/comments). Returns JSON grouped by file: { [file]: [{ key, type, format, comment }] }.',
     {
       pattern: z
         .string()
