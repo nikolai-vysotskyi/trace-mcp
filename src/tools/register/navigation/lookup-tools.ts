@@ -141,7 +141,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'get_outline',
-    'Get all symbols for a file (signatures only, no bodies). Use instead of Read to understand a file before editing — much cheaper in tokens. For reading one symbol\'s source, follow up with get_symbol. Pass `nested: true` to expand large top-level symbols (default ≥100 LOC) into their inner function-like declarations — each child carries `parentId` + `depth` (max depth 3). Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd, parentId?, depth? }] }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Get all symbols for a file (signatures only, no bodies) — cheaper than Read for understanding a file before editing. Follow up with get_symbol to read one symbol\'s source. `nested: true` expands large top-level symbols (default ≥100 LOC) into inner declarations, each carrying `parentId` + `depth` (max 3). Read-only. Returns JSON: { path, language, symbols: [{ symbolId, name, kind, signature, lineStart, lineEnd, parentId?, depth? }] }. Supports `output_format: "toon"`.',
     {
       path: z.string().max(512).describe('Relative file path'),
       detail_level: DetailLevelSchema,

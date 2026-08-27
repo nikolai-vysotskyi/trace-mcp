@@ -108,7 +108,7 @@ export function registerContextTools(server: McpServer, ctx: ServerContext): voi
 
   server.tool(
     'get_feature_context',
-    'Search code by keyword/topic → returns ranked source code snippets within a token budget. Use when you need to READ actual code for a concept or feature. For structured task context with tests and entry points, use get_task_context instead. For symbol metadata without source, use search. Read-only. Returns JSON (default) or Markdown: { items: [{ symbol_id, name, file, source, score }], token_usage } | { content: "...markdown..." }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads. Hard-capped by `memory.recall.timeoutMs` (default 5000 ms); on timeout returns `{ items: [], token_usage, degraded: true }` so the agent turn never blocks on slow IO.',
+    'Search code by keyword/topic → returns ranked source snippets within a token budget. Use when you need to READ actual code for a concept or feature. For structured task context with tests and entry points use get_task_context instead; for symbol metadata without source use search. Read-only. Returns JSON (default) or Markdown: { items: [{ symbol_id, name, file, source, score }], token_usage } | { content: "...markdown..." }. Supports `output_format: "toon"`. Capped by `memory.recall.timeoutMs` (default 5000ms); on timeout returns `{ items: [], token_usage, degraded: true }`.',
     {
       description: z
         .string()
