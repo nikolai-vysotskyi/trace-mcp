@@ -1,5 +1,30 @@
 # TOON Token Savings — Measured
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "TOON Token Savings \u2014 Measured",
+  "description": "Real-world token measurements for the TOON output format across trace-mcp tools.",
+  "url": "https://trace-mcp.com/toon-savings.html",
+  "datePublished": "2026-05-15",
+  "dateModified": "2026-05-15",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/toon-savings.html"
+  }
+}
+</script>
 This document captures real-world token measurements for the TOON output
 format wired across trace-mcp tools, plus the independent `search_text`
 `grouping: "by_file"` reshape.

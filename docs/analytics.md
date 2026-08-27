@@ -1,5 +1,30 @@
 # Session Analytics & Coverage Intelligence
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Session Analytics & Coverage Intelligence",
+  "description": "The built-in engine that parses agent session logs and tracks token savings and waste.",
+  "url": "https://trace-mcp.com/analytics.html",
+  "datePublished": "2026-04-05",
+  "dateModified": "2026-08-10",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/analytics.html"
+  }
+}
+</script>
 trace-mcp includes a built-in analytics engine that parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage.
 
 ---

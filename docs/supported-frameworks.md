@@ -1,5 +1,30 @@
 # Supported frameworks & languages
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Supported frameworks & languages",
+  "description": "The 68 supported languages and the frameworks each plugin understands.",
+  "url": "https://trace-mcp.com/supported-frameworks.html",
+  "datePublished": "2026-04-05",
+  "dateModified": "2026-04-05",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/supported-frameworks.html"
+  }
+}
+</script>
 ## Languages (68)
 
 ### Tree-sitter (full AST parsing)
