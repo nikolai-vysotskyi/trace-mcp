@@ -19,6 +19,46 @@ export interface ProjectState extends ProjectInfo {
   progress?: ProgressSnapshot;
 }
 
+/**
+ * Raw `project_status.progress` payload from the daemon: one entry per
+ * pipeline, not the flat `ProgressSnapshot` the UI renders.
+ * Source of truth: `ProgressSnapshot` in `src/progress.ts`.
+ */
+export interface DaemonProgress {
+  indexing?: DaemonPipelineProgress;
+  summarization?: DaemonPipelineProgress;
+  embedding?: DaemonPipelineProgress;
+}
+
+export interface DaemonPipelineProgress {
+  phase: string;
+  processed: number;
+  total: number;
+  percentage: number | null;
+  elapsedMs: number;
+}
+
+const PIPELINES = ['indexing', 'summarization', 'embedding'] as const;
+
+/**
+ * Flatten the daemon's per-pipeline progress onto the single bar the UI
+ * shows: the first pipeline that is actually running, or `undefined` when
+ * none is — an idle project must render no bar and no phase label.
+ */
+export function toProgressSnapshot(raw: DaemonProgress | undefined): ProgressSnapshot | undefined {
+  for (const name of PIPELINES) {
+    const p = raw?.[name];
+    if (p?.phase !== 'running') continue;
+    return {
+      phase: name,
+      current: p.processed ?? 0,
+      total: p.total ?? 0,
+      percent: typeof p.percentage === 'number' ? p.percentage : 0,
+    };
+  }
+  return undefined;
+}
+
 export interface ClientInfo {
   id: string;
   name?: string;
@@ -53,7 +93,8 @@ type SSEEvent =
       project: string;
       status: string;
       error?: string;
-      progress?: ProgressSnapshot;
+      /** Nested per-pipeline shape from the daemon — see DaemonProgress. */
+      progress?: DaemonProgress;
     }
   | {
       type: 'indexing_progress';
@@ -172,7 +213,12 @@ export function useDaemon() {
         setProjects((prev) =>
           prev.map((p) =>
             p.root === event.project
-              ? { ...p, status: event.status, error: event.error, progress: event.progress }
+              ? {
+                  ...p,
+                  status: event.status,
+                  error: event.error,
+                  progress: toProgressSnapshot(event.progress),
+                }
               : p,
           ),
         );
