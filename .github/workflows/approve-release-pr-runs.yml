@@ -4,38 +4,42 @@ name: Approve release-please PR runs
 # with secrets.GITHUB_TOKEN. GitHub doesn't recognize that bot push as a
 # repo collaborator for pull_request-triggered runs, so CI/CodeQL/Semgrep/
 # Eval land in "action_required" on every rebase — even though the PR is
-# same-repo, not a fork (see TRA-171). pull_request_target runs are exempt
-# from that approval gate regardless of actor, so use one here purely to
-# call the approve-run API; it never checks out or executes PR code.
+# same-repo, not a fork (see TRA-171).
+#
+# A pull_request_target trigger here does NOT work around that: pushes
+# made with GITHUB_TOKEN don't trigger *any* workflow event, not just
+# pull_request (this is the same loop-prevention rule release.yml's
+# impact-report job already works around — see the comment above it).
+# Confirmed via TRA-171 follow-up: the pull_request_target-triggered
+# version of this workflow never fired for a single release-please
+# rebase. Poll on a schedule instead, which is immune to that rule.
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened]
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
 
 permissions:
   actions: write
+  pull-requests: read
 
 jobs:
   approve:
-    if: >-
-      github.event.pull_request.user.login == 'github-actions[bot]' &&
-      startsWith(github.event.pull_request.head.ref, 'release-please--')
     runs-on: ubuntu-latest
     steps:
-      - name: Approve any action_required runs for this PR's head SHA
+      - name: Approve any action_required runs on open release-please PRs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          approved_any=false
-          for attempt in $(seq 1 6); do
-            run_ids=$(gh api "repos/${REPO}/actions/runs?head_sha=${HEAD_SHA}&status=action_required" --jq '.workflow_runs[].id')
+          pr_shas=$(gh pr list --repo "${REPO}" --search "head:release-please--branches--" --json headRefOid --jq '.[].headRefOid')
+          if [ -z "$pr_shas" ]; then
+            echo "No open release-please PRs."
+            exit 0
+          fi
+          for sha in $pr_shas; do
+            run_ids=$(gh api "repos/${REPO}/actions/runs?head_sha=${sha}&status=action_required" --jq '.workflow_runs[].id')
             for id in $run_ids; do
-              echo "Approving run $id"
-              gh api -X POST "repos/${REPO}/actions/runs/${id}/approve" && approved_any=true
+              echo "Approving run $id (head $sha)"
+              gh api -X POST "repos/${REPO}/actions/runs/${id}/approve"
             done
-            if [ "$approved_any" = true ]; then
-              break
-            fi
-            sleep 15
           done
