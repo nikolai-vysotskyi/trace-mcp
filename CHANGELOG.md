@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.48.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.47.1...v1.48.0) (2026-08-27)
+
+
+### Features
+
+* add detail_level to get_feature_context / get_task_context (GH [#334](https://github.com/nikolai-vysotskyi/trace-mcp/issues/334)) ([#353](https://github.com/nikolai-vysotskyi/trace-mcp/issues/353)) ([9c30a2f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9c30a2f2fec6f13f39a5e1d1269e2abc554b814c))
+* **ci:** SARIF upload for quality gates + security scan (TRA-127) ([#349](https://github.com/nikolai-vysotskyi/trace-mcp/issues/349)) ([a4c520f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a4c520f8e3239ba6f44d1fb799ce379034acc76d))
+* **config:** add tools.default_detail_level global verbosity default (TRA-168) ([#364](https://github.com/nikolai-vysotskyi/trace-mcp/issues/364)) ([a78a9cd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a78a9cd0b453d2aa39247c1627c118ddb982aa7c))
+* **mcp:** add list_projects + call_project_tool cross-project relay (TRA-93) ([#357](https://github.com/nikolai-vysotskyi/trace-mcp/issues/357)) ([e1cde20](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e1cde20cf83192cd85d7c1100415ce4b3d7bfc2f))
+
+
+### Bug Fixes
+
+* **app:** migrate status dots to Lattice tokens, delete duplicate StatusDot ([#352](https://github.com/nikolai-vysotskyi/trace-mcp/issues/352)) ([a3045eb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a3045eb62bf3d91477f5a024b649068969df3601))
+* **app:** replace emoji glyphs + hardcoded colors with Lattice Icon/Badge ([#351](https://github.com/nikolai-vysotskyi/trace-mcp/issues/351)) ([f6268ac](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f6268acd905e9f6f759ec950ff23d1c7c491d12a))
+* **doctor:** don't silently drop coverage when --fix removes overlap containers ([#338](https://github.com/nikolai-vysotskyi/trace-mcp/issues/338)) ([744cbf4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/744cbf4596591e8c9af99038a9156b39175542e4))
+* **hooks:** catch recursive/pathless grep-cat in trace-mcp-guard ([#361](https://github.com/nikolai-vysotskyi/trace-mcp/issues/361)) ([408a85c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/408a85cf39180888a18ad4fc259601f53d674207))
+* **init:** stop writing alwaysLoad:true, flag it as stale instead (TRA-142) ([#355](https://github.com/nikolai-vysotskyi/trace-mcp/issues/355)) ([18bb652](https://github.com/nikolai-vysotskyi/trace-mcp/commit/18bb652dc95f4250ea5c8c233654572b0af4d0dd))
+* **release:** enforce Conventional Commit PR titles (TRA-104) ([#335](https://github.com/nikolai-vysotskyi/trace-mcp/issues/335)) ([933b9b1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/933b9b1ce01976be49d1366d854c6acb05fe52c8))
+* replace insecure /tmp literal paths in test fixtures with /nonexistent (CodeQL js/insecure-temporary-file [#247](https://github.com/nikolai-vysotskyi/trace-mcp/issues/247)) ([#358](https://github.com/nikolai-vysotskyi/trace-mcp/issues/358)) ([4e0035f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4e0035fdfcf418a5b5508f87bdf15efe8076309d))
+* resolve CodeQL js/redos and js/insecure-temporary-file alerts in source-reader.ts ([#356](https://github.com/nikolai-vysotskyi/trace-mcp/issues/356)) ([6939be2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6939be25deaec5dcdb1dd16ba2584799df408f26))
+* resolve mocked project roots via path.resolve in call_project_tool tests ([#360](https://github.com/nikolai-vysotskyi/trace-mcp/issues/360)) ([a5f57ee](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a5f57ee4d6bd9e499b5573ca4db7d9e98b129a11))
+* **site:** self-host fonts, fix heading order, contrast, a11y name mismatch ([#347](https://github.com/nikolai-vysotskyi/trace-mcp/issues/347)) ([b783e21](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b783e21b7634bc7be62ff3da64b38c8a7c10efaa))
+* **test:** resolve mocked project paths via path.resolve on Windows (TRA-151) ([#359](https://github.com/nikolai-vysotskyi/trace-mcp/issues/359)) ([5410897](https://github.com/nikolai-vysotskyi/trace-mcp/commit/54108974a1219b17989028acb2da8645bc4b0163))
+
+
+### Performance
+
+* **memory:** batch git commit-lookup in decision staleness verification ([#348](https://github.com/nikolai-vysotskyi/trace-mcp/issues/348)) ([7652ef0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7652ef0bcc89cc0a93443d4a42bdbe76ac4430de))
+
+
+### Documentation
+
+* add product roadmap (TRA-124) ([#343](https://github.com/nikolai-vysotskyi/trace-mcp/issues/343)) ([b203e3f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b203e3fc4cb8d46d083295c7efd860dc7423d9c4))
+* deep-dive the two flagged 60K+-star entrants (Graphify, Headroom) ([#362](https://github.com/nikolai-vysotskyi/trace-mcp/issues/362)) ([32d997d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/32d997dec1ee7f455a7822bb0416ccc0fb14fe81))
+* document solo-maintainer review model ([#346](https://github.com/nikolai-vysotskyi/trace-mcp/issues/346)) ([6f149ef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6f149efbeaaf23c00bbc70b29177c7be5c42fed7))
+* refresh competitor star counts (verified via GitHub API) ([#344](https://github.com/nikolai-vysotskyi/trace-mcp/issues/344)) ([c660d44](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c660d446f8212c30ef3d4c8a42fe4ce47cf781d5))
+* refresh competitor stars, add repo-context-mcp entrant, add profiling tracker (TRA-162) ([#363](https://github.com/nikolai-vysotskyi/trace-mcp/issues/363)) ([3d474fa](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3d474fa7822a3d1b1d82253a35fc68141efcd283))
+* **security:** document code-scanning alert triage policy ([#350](https://github.com/nikolai-vysotskyi/trace-mcp/issues/350)) ([50c6bd6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/50c6bd63fccfc512ef6c3c0963cb7bcbc5d9aa7e))
+* **site:** link docs pages internally, fix sitemap, add llms.txt ([#345](https://github.com/nikolai-vysotskyi/trace-mcp/issues/345)) ([82b4262](https://github.com/nikolai-vysotskyi/trace-mcp/commit/82b4262d5e43a1429d0e3d7f7390b67ce71c2318))
+
 ## [1.47.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.47.0...v1.47.1) (2026-08-16)
 
 
