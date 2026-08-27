@@ -1,0 +1,5 @@
+title: trace-mcp
+description: A structured map of your codebase for AI agents. trace-mcp indexes your repo once so agents stop re-reading the same files every turn — ~40–50% fewer tokens on average, faster responses, more reliable at scale. Open source, local-first, MCP-native.
+url: https://trace-mcp.com
+lang: en
+markdown: kramdown
