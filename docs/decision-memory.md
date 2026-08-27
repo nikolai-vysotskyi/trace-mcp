@@ -1,3 +1,8 @@
+---
+title: "Decision Memory — a persistent knowledge graph for architectural decisions"
+description: "trace-mcp's decision knowledge graph captures architectural decisions, tech choices, bug root causes, preferences, and conventions — linked to the code they're about."
+---
+
 # Decision memory
 
 trace-mcp includes a persistent decision knowledge graph that captures architectural decisions, tech choices, bug root causes, preferences, and conventions — linked to the code they're about.

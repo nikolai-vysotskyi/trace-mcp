@@ -1,3 +1,8 @@
+---
+title: "Telemetry & Observability — OpenTelemetry spans for every MCP tool call"
+description: "trace-mcp's pluggable observability bridge emits OpenTelemetry-compatible spans for every AI provider call and every MCP tool call."
+---
+
 # Telemetry & Observability
 
 trace-mcp ships a pluggable observability bridge (P13) that emits

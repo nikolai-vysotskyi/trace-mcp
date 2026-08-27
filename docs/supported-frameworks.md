@@ -1,3 +1,8 @@
+---
+title: "Supported Languages & Frameworks — 68 languages, 58 framework integrations"
+description: "Full list of languages and frameworks trace-mcp understands out of the box — web frameworks, ORMs, UI libraries, and tooling, across 68 languages."
+---
+
 # Supported frameworks & languages
 
 ## Languages (68)
