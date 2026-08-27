@@ -1,5 +1,35 @@
+---
+title: "Telemetry & Observability — OpenTelemetry spans for every MCP tool call"
+description: "trace-mcp's pluggable observability bridge emits OpenTelemetry-compatible spans for every AI provider call and every MCP tool call."
+---
+
 # Telemetry & Observability
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Telemetry & Observability",
+  "description": "The OpenTelemetry-compatible span emitter for AI provider calls and MCP tool invocations.",
+  "url": "https://trace-mcp.com/telemetry.html",
+  "datePublished": "2026-05-13",
+  "dateModified": "2026-05-13",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/telemetry.html"
+  }
+}
+</script>
 trace-mcp ships a pluggable observability bridge (P13) that emits
 OpenTelemetry-compatible spans for every AI provider call and every MCP tool
 invocation. The default sink is `noop` — opt-in only.

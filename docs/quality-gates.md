@@ -1,5 +1,35 @@
+---
+title: "Quality Gates Reference — complexity, security, and coverage thresholds"
+description: "How trace-mcp's quality_gates.rules in .trace-mcp.json override CLI defaults for cyclomatic complexity, security findings, and coverage — with this project's own thresholds as a worked example."
+---
+
 # Quality gates — this project's thresholds
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Quality gates \u2014 this project's thresholds",
+  "description": "How .trace-mcp.json quality-gate thresholds are configured and calibrated.",
+  "url": "https://trace-mcp.com/quality-gates.html",
+  "datePublished": "2026-07-02",
+  "dateModified": "2026-07-02",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/quality-gates.html"
+  }
+}
+</script>
 `.trace-mcp.json`'s `quality_gates.rules` overrides the CLI's generic defaults
 (`max_cyclomatic_complexity: 30`, `max_security_critical_findings: 0`) with
 numbers calibrated against this codebase's actual, reviewed state. Re-derive

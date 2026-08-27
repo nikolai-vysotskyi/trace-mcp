@@ -1,5 +1,35 @@
+---
+title: "System Prompt Routing via tweakcc — pairing trace-mcp with Claude Code"
+description: "How to pair trace-mcp with tweakcc to patch Claude Code's system prompts and route tool selection toward trace-mcp instead of native file reads."
+---
+
 # System Prompt Routing via tweakcc
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "System Prompt Routing via tweakcc",
+  "description": "Wiring trace-mcp tool usage directly into Claude Code's system prompt via tweakcc.",
+  "url": "https://trace-mcp.com/tweakcc.html",
+  "datePublished": "2026-04-07",
+  "dateModified": "2026-05-18",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/tweakcc.html"
+  }
+}
+</script>
 > **Requires:** [tweakcc](https://github.com/Piebald-AI/tweakcc) — a tool that patches Claude Code's system prompts directly.
 
 ---

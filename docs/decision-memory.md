@@ -1,5 +1,35 @@
+---
+title: "Decision Memory — a persistent knowledge graph for architectural decisions"
+description: "trace-mcp's decision knowledge graph captures architectural decisions, tech choices, bug root causes, preferences, and conventions — linked to the code they're about."
+---
+
 # Decision memory
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Decision memory",
+  "description": "The persistent decision knowledge graph linking architectural decisions and tradeoffs to code.",
+  "url": "https://trace-mcp.com/decision-memory.html",
+  "datePublished": "2026-04-13",
+  "dateModified": "2026-05-17",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/decision-memory.html"
+  }
+}
+</script>
 trace-mcp includes a persistent decision knowledge graph that captures architectural decisions, tech choices, bug root causes, preferences, and conventions — linked to the code they're about.
 
 ## Why

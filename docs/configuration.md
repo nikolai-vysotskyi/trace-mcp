@@ -1,5 +1,35 @@
+---
+title: "trace-mcp Configuration Reference — all config options (works with none)"
+description: "Every trace-mcp config option in .trace-mcp.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. Configuration is optional; trace-mcp works out of the box for standard projects."
+---
+
 # Configuration
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Configuration",
+  "description": "All config file options; trace-mcp works out of the box without one.",
+  "url": "https://trace-mcp.com/configuration.html",
+  "datePublished": "2026-04-05",
+  "dateModified": "2026-08-08",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/configuration.html"
+  }
+}
+</script>
 Configuration is optional — trace-mcp works out of the box for standard projects.
 
 ---

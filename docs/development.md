@@ -1,5 +1,35 @@
+---
+title: "Contributing to trace-mcp — local setup, build, and test"
+description: "How to set up trace-mcp for local development: install, build, run the test suite, and the conventions to follow before opening a PR."
+---
+
 # Development
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Development",
+  "description": "Local setup, build, and test instructions for contributing to trace-mcp.",
+  "url": "https://trace-mcp.com/development.html",
+  "datePublished": "2026-04-05",
+  "dateModified": "2026-05-08",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/development.html"
+  }
+}
+</script>
 ## Setup
 
 ```bash

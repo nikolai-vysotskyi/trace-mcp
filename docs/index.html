@@ -111,6 +111,80 @@
   }
   </script>
 
+  <!-- ── Structured Data (FAQPage) ── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is the best MCP server for giving Claude Code codebase context?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes ~170 MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 85 framework integrations, and typically cuts token usage 40–50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I reduce Claude Code token usage?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The biggest lever is stopping repeated full-file reads: instead of having the agent re-read and re-traverse the same files every turn, give it precomputed code intelligence it can query directly. trace-mcp does this by indexing your repository once into a dependency graph, then exposing MCP tools like get_outline, get_symbol, find_usages, and get_change_impact that return only the relevant symbols and relationships instead of whole files. Teams typically see 40–50% fewer tokens per session, since navigation, dependency lookups, and impact analysis become single tool calls instead of multi-file exploration. Install it with 'npm install -g trace-mcp', point Claude Code at it over MCP, and it indexes locally with no cloud calls or API keys required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need API keys or a cloud account?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. trace-mcp is fully local. The default semantic search uses a bundled ONNX model (~23 MB, downloaded once on first use). For optional LLM summarization you can plug in Ollama or OpenAI — but everything else runs without external services."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where does the index live?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "In ~/.trace-mcp/ — one SQLite database per project, plus shared decision and topology databases. Nothing is written into your project directory unless you opt in with .traceignore or .trace-mcp/.config.json."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does it work for monorepos and multi-service codebases?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. subproject_add_repo links separate repositories into a unified topology. Cross-service impact analysis traces API calls across service boundaries with confidence scores."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does it stay up-to-date?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "A file watcher (300ms debounce) reindexes changed files incrementally. Content-hashed — unchanged files are skipped. The graph is always current without manual reindex."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What about my framework? Is it supported?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "80 languages and 85 framework integrations ship out of the box. For unsupported frameworks, the plugin API is open — write a custom plugin in TypeScript, register it via ~/.trace-mcp/plugins/. Most plugins are ~200–500 lines."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is it safe to run on production codebases?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "All MCP tools are read-only by default. Refactoring tools (apply_rename, apply_codemod) require explicit confirmation and support dry-run preview. The guard hook blocks accidental destructive operations from your AI agent."
+        }
+      }
+    ]
+  }
+  </script>
+
   <!-- ── Fonts (self-hosted — see docs/fonts/) ── -->
   <link rel="preload" href="/fonts/space-grotesk-variable-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/fonts/doto-variable-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -1871,7 +1945,7 @@
       </h1>
 
       <p class="hero-desc">
-        A structured map of your codebase for AI agents. trace-mcp indexes your repo once and serves it through MCP &mdash; so agents query a precomputed graph instead of re-reading the same files on every turn.
+        trace-mcp is a framework-aware MCP server that serves precomputed code intelligence &mdash; a dependency graph, full-text search, impact analysis, and decision memory &mdash; to cut token usage for AI coding agents. It indexes your repo once and serves it through MCP, so agents query a precomputed graph instead of re-reading the same files on every turn.
       </p>
 
       <ul class="hero-bullets">
@@ -2543,6 +2617,20 @@
       </div>
 
       <div class="faq-list">
+        <details class="faq">
+          <summary>
+            <h3>What is the best MCP server for giving Claude Code codebase context?</h3>
+            <span class="toggle">+</span>
+          </summary>
+          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes ~170 MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 85 framework integrations, and typically cuts token usage 40&ndash;50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
+        </details>
+        <details class="faq">
+          <summary>
+            <h3>How do I reduce Claude Code token usage?</h3>
+            <span class="toggle">+</span>
+          </summary>
+          <div class="answer">The biggest lever is stopping repeated full-file reads: instead of having the agent re-read and re-traverse the same files every turn, give it precomputed code intelligence it can query directly. trace-mcp does this by indexing your repository once into a dependency graph, then exposing MCP tools like <code>get_outline</code>, <code>get_symbol</code>, <code>find_usages</code>, and <code>get_change_impact</code> that return only the relevant symbols and relationships instead of whole files. Teams typically see 40&ndash;50% fewer tokens per session, since navigation, dependency lookups, and impact analysis become single tool calls instead of multi-file exploration. Install it with <code>npm install -g trace-mcp</code>, point Claude Code at it over MCP, and it indexes locally with no cloud calls or API keys required.</div>
+        </details>
         <details class="faq">
           <summary>
             <h3>Do I need API keys or a cloud account?</h3>

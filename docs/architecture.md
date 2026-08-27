@@ -1,5 +1,35 @@
+---
+title: "trace-mcp Architecture — indexing pipeline, storage, and MCP server internals"
+description: "How trace-mcp indexes a codebase into a queryable graph: tree-sitter parsing, SQLite + FTS5 storage, optional LSP enrichment, and the MCP server that serves it all."
+---
+
 # Architecture
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Architecture",
+  "description": "The two-pass indexing pipeline and how the dependency graph is built and stored.",
+  "url": "https://trace-mcp.com/architecture.html",
+  "datePublished": "2026-04-05",
+  "dateModified": "2026-04-14",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/architecture.html"
+  }
+}
+</script>
 ## Indexing pipeline
 
 trace-mcp uses a two-pass indexing pipeline:
@@ -191,7 +221,7 @@ src/
 │   │   ├── language/       # 80 languages — PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, Rust,
 │   │   │                   #   C/C++/C#, Swift, Dart, Scala, Zig, OCaml, Clojure, F#, Elm,
 │   │   │                   #   CUDA, COBOL, Verilog, GLSL, Svelte, MATLAB, Lean, Wolfram, …
-│   │   └── integration/    # 48 plugins organized by category:
+│   │   └── integration/    # 85 plugins organized by category:
 │   │       ├── framework/  #   Laravel, Django, Rails, Spring, NestJS, Express, FastAPI,
 │   │       │               #   Flask, Hono, Fastify, Nuxt, Next.js
 │   │       ├── orm/        #   Prisma, TypeORM, Sequelize, Mongoose, SQLAlchemy, Drizzle
