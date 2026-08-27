@@ -217,7 +217,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .enum(['json', 'sarif'])
         .optional()
         .describe(
-          'Output format. "json" (default) returns the native finding shape; "sarif" emits a SARIF 2.1.0 log for GitHub/GitLab/Azure code-scanning ingestion.',
+          '"json" (default, native finding shape) or "sarif" (2.1.0 log) for GitHub/GitLab/Azure code-scanning ingestion.',
         ),
     },
     async ({ scope, rules, severity_threshold, output_format }) => {
@@ -285,7 +285,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .enum(['json', 'sarif'])
         .optional()
         .describe(
-          'Output format. "json" (default) returns the native finding shape; "sarif" emits a SARIF 2.1.0 log for code-scanning ingestion.',
+          '"json" (default, native finding shape) or "sarif" (2.1.0 log) for code-scanning ingestion.',
         ),
     },
     async ({ category, file_pattern, severity_threshold, limit, output_format }) => {

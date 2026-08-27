@@ -117,6 +117,26 @@ const TOTAL_DESCRIPTION_CHAR_BUDGET = 72_000;
 // — if a tool grows past it, the fix is almost always "move detail into the
 // per-param describe() or the response docs", not a longer top-level string.
 const PER_TOOL_DESCRIPTION_CHAR_CEILING = 800;
+// Baseline measured 2026-08-27 (TRA-186 phase 2): ~30.2k chars of top-level
+// param describe() text after the second trim pass (down from ~32.3k). This
+// is the controllable slice of inputSchema — the rest (~60k+) is structural
+// JSON Schema (type/required/enum/min/max) tied to legitimate parameter
+// counts, not prose we write; cutting it further means removing parameters,
+// a breaking MCP contract change out of scope for a description trim.
+const TOTAL_PARAM_DESCRIPTION_CHAR_BUDGET = 34_000;
+
+// Sums each field's top-level `.description` (zod v4 attaches it directly).
+// Deliberately shallow — nested object/array param schemas in this codebase
+// don't carry their own per-field describe() calls, so a shallow walk
+// already captures the controllable text.
+function sumParamDescriptions(schemaShape: Record<string, z.ZodTypeAny>): number {
+  let total = 0;
+  for (const field of Object.values(schemaShape)) {
+    const desc = (field as { description?: unknown }).description;
+    if (typeof desc === 'string') total += desc.length;
+  }
+  return total;
+}
 
 describe('MCP tool-schema token budget guardrail (TRA-186)', () => {
   const tools = captureAllTools();
@@ -144,5 +164,14 @@ describe('MCP tool-schema token budget guardrail (TRA-186)', () => {
       `Tool description(s) exceed ${PER_TOOL_DESCRIPTION_CHAR_CEILING} chars:\n${offenders.join('\n')}\n` +
         'Move detail into per-param describe() text or the docs site instead of the top-level description.',
     ).toBe(0);
+  });
+
+  it('keeps total param describe() text under budget', () => {
+    const total = tools.reduce((sum, t) => sum + sumParamDescriptions(t.schemaShape), 0);
+    expect(
+      total,
+      `Total param describe() chars (${total}) exceeds the budget (${TOTAL_PARAM_DESCRIPTION_CHAR_BUDGET}). ` +
+        'Trim per-param descriptions before raising this budget — see TRA-186.',
+    ).toBeLessThanOrEqual(TOTAL_PARAM_DESCRIPTION_CHAR_BUDGET);
   });
 });

@@ -124,7 +124,7 @@ export function registerContextTools(server: McpServer, ctx: ServerContext): voi
         .describe('Max tokens for assembled context (default 4000)'),
       detail_level: DetailLevelSchema,
       output_format: OutputFormatSchema.describe(
-        'Output format. "json" (default) returns structured items; "markdown" returns LLM-friendly fenced code blocks (~15-20% token savings, easier for the model to read); "toon" returns Token-Oriented Object Notation — 30-60% fewer tokens, lossless.',
+        '"json" (default, structured items), "markdown" (fenced code blocks, ~15-20% cheaper), or "toon" (lossless, 30-60% fewer tokens).',
       ),
     },
     async ({ description, token_budget, detail_level, output_format }) => {
