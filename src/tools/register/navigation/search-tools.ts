@@ -31,6 +31,8 @@ import {
 import { OutputFormatSchema, encodeResponse } from '../../_common/output-format.js';
 import { createSearchToolRetriever } from '../../../retrieval/retrievers/search-tool-retriever.js';
 import { runRetriever } from '../../../retrieval/types.js';
+import { SEARCH_MODE_NAMES } from '../../../retrieval/modes/registry.js';
+import { runNamedSearchMode } from '../retrieval.js';
 
 /**
  * Registers `search` and `suggest_queries` — the entry-point search tools.
@@ -45,7 +47,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'search',
-    'Search symbols by name, kind, or text. Use instead of Grep for functions, classes, methods, variables. For raw text/comment search use search_text; for references to a known symbol use find_usages. Filters: kind/language/file_pattern/implements/extends/decorator. fuzzy=true for typo-tolerant search. semantic="on" for conceptual queries (needs an AI provider + embed_repo run once). fusion=true for multi-channel ranking (BM25 + PageRank + embeddings + identity match). See the `mode` param for retrieval strategy (single/tiered/drill/flat/get). Read-only. Returns JSON: { items: [{ symbol_id, name, kind, fqn, signature, file, line, score }], total, search_mode } — mode-specific shape when mode!=single. Supports `output_format: "toon"`.',
+    'Search symbols by name, kind, or text. Use instead of Grep for functions, classes, methods, variables. For raw text/comment search use search_text; for references to a known symbol use find_usages. Filters: kind/language/file_pattern/implements/extends/decorator. fuzzy=true for typo-tolerant search. semantic="on" for conceptual queries (needs an AI provider + embed_repo run once). fusion=true for multi-channel ranking (BM25 + PageRank + embeddings + identity match). See the `mode` param for retrieval strategy (single/tiered/drill/flat/get), or `retriever` for a single named algorithm instead. Read-only. Returns JSON: { items: [{ symbol_id, name, kind, fqn, signature, file, line, score }], total, search_mode } — mode-specific shape when mode!=single. Supports `output_format: "toon"`.',
     {
       query: z.string().min(1).max(500).describe('Search query'),
       kind: z
@@ -141,6 +143,12 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         .describe(
           'Drill scope for mode="drill" — a file path or symbol_id. Results are restricted to the subtree rooted here.',
         ),
+      retriever: z
+        .enum(SEARCH_MODE_NAMES)
+        .optional()
+        .describe(
+          'Run one named retrieval algorithm (lexical/semantic/hybrid/summary/feeling_lucky/graph_completion) instead of the mode-based dispatcher — same as search_with_mode. Ignores mode/filters/fuzzy/fusion; response is { retriever, items, total }.',
+        ),
       detail_level: DetailLevelSchema,
       output_format: OutputFormatSchema.describe(
         '"json" (default) or "toon" (lossless, 30-60% fewer tokens). "markdown" is unsupported here and behaves as json.',
@@ -166,11 +174,43 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
       fusion_debug,
       mode,
       drill_from,
+      retriever,
       detail_level,
       output_format,
     }) => {
       const encode = (payload: unknown): string =>
         output_format === 'toon' ? encodeResponse(payload, 'toon') : jh('search', payload);
+
+      // Named-retriever path: bypasses the mode-based shaping dispatcher below
+      // entirely, mirroring `search_with_mode`'s own (simpler) behavior exactly —
+      // both call the same `runNamedSearchMode` helper, so they can't drift.
+      if (retriever) {
+        const result = await runNamedSearchMode(ctx, { query, mode: retriever, limit });
+        if (!result.ok) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: encode({
+                  error: 'unknown_mode',
+                  retriever: result.mode,
+                  available: result.available,
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: encode({ retriever: result.mode, items: result.items, total: result.total }),
+            },
+          ],
+        };
+      }
+
       // Resolve effective mode. Explicit `mode` wins; otherwise heuristic.
       // (Kept here so the zero-index / tiered branches below can branch on it
       // before the retriever runs. The retriever recomputes the same value
@@ -226,13 +266,13 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
       // helpers used previously — no behavioural change. See
       // src/retrieval/retrievers/search-tool-retriever.ts and the equivalence
       // tests in src/retrieval/__tests__/search-tool-equivalence.test.ts.
-      const retriever = createSearchToolRetriever({
+      const searchToolRetriever = createSearchToolRetriever({
         store,
         vectorStore: vectorStore ?? null,
         embeddingService: embeddingService ?? null,
         reranker: reranker ?? null,
       });
-      const retrieverResults = await runRetriever(retriever, {
+      const retrieverResults = await runRetriever(searchToolRetriever, {
         query,
         filters: {
           kind,
