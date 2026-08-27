@@ -43,8 +43,8 @@ let PENDING_ZIP = '';
 let PENDING_VERSION = '';
 let PENDING_CHECKSUM = '';
 
-// The compiled app lives in a separate PUBLIC distribution repo (the source
-// is private). See scripts/app-dist-repo.mjs. Overridable via env.
+// The compiled app is published as release assets on this repo. See
+// scripts/app-dist-repo.mjs. Overridable via env.
 const GITHUB_REPO = getAppDistRepo();
 
 if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
