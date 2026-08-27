@@ -186,7 +186,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
           'Service name. Used for cross-service edge impact and contract drift.',
         ),
         symbol_id: optionalNonEmptyString(512).describe(
-          'Symbol FQN being changed (informational — included in the target field; per-repo symbol resolution happens automatically when per-repo indexes exist).',
+          'Symbol FQN being changed (informational, included in the target field; resolved automatically when per-repo indexes exist).',
         ),
         method: optionalNonEmptyString(10).describe('HTTP method filter (e.g. GET, POST)'),
       },
@@ -1216,14 +1216,14 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
         .max(30_000)
         .optional()
         .describe(
-          'Wall-clock budget in milliseconds. Catastrophic-backtracking regex cannot pin a worker beyond this. Default 2000. Set 0 to disable.',
+          'Wall-clock budget in ms — caps a catastrophic-backtracking regex. Default 2000; 0 disables.',
         ),
       grouping: z
         .enum(['flat', 'by_file'])
         .optional()
         .default('flat')
         .describe(
-          'Payload shape. "flat" returns a single matches[] array (default). "by_file" groups hits under each file — saves tokens on long paths with many hits.',
+          'Payload shape. "flat" (default) is a single matches[] array; "by_file" groups hits per file — saves tokens on long paths with many hits.',
         ),
     },
     async ({

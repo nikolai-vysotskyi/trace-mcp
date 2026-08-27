@@ -72,7 +72,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         .boolean()
         .optional()
         .describe(
-          'When true, compare the indexed source against the current git HEAD slice for that file and line range. If they differ, the response includes `git_mismatch: true` indicating the index may be stale. Read-only — never writes. Silently skipped when git is unavailable or the file is not tracked.',
+          'Compare the indexed source against the current git HEAD slice; mismatches set `git_mismatch: true` in the response (index may be stale). Read-only. Silently skipped when git is unavailable or the file is untracked.',
         ),
     },
     async ({ symbol_id, fqn, max_lines, verify_against_git }) => {
@@ -149,7 +149,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         .boolean()
         .optional()
         .describe(
-          'When true, walks the body of each top-level symbol whose LOC exceeds min_loc_for_nesting and emits inner function-like declarations as additional rows carrying `parentId` + `depth`. Default false — fully backward compatible.',
+          'Walk the body of each top-level symbol past min_loc_for_nesting and emit inner declarations as extra rows carrying `parentId` + `depth`. Default false.',
         ),
       min_loc_for_nesting: z
         .number()
@@ -161,7 +161,7 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
           'Minimum (line_end - line_start) for a top-level symbol to be expanded when nested=true. Default 100.',
         ),
       output_format: OutputFormatSchema.describe(
-        'Output format. "json" (default) returns JSON; "toon" returns Token-Oriented Object Notation — 30-60% fewer tokens, lossless. "markdown" is unsupported here and behaves as json.',
+        '"json" (default) or "toon" (lossless, 30-60% fewer tokens). "markdown" is unsupported here and behaves as json.',
       ),
     },
     async ({ path: filePath, detail_level, nested, min_loc_for_nesting, output_format }) => {

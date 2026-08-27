@@ -185,7 +185,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .optional()
         .default(100)
         .describe(
-          'Maximum number of dead exports to return (default 100, max 500). When more exist, response carries `truncated: true` and `total_dead` reflects the full count.',
+          'Max dead exports to return (default 100, max 500). When more exist, response carries `truncated: true` and `total_dead` reflects the full count.',
         ),
       output_format: OutputFormatSchema,
     },
@@ -253,7 +253,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .boolean()
         .optional()
         .describe(
-          'When true, include symbols from non-code files (markdown, json, yaml, …). Default: false — only TypeScript, JavaScript, Python, Go, Ruby, Rust, Java, PHP, C#, Swift, Kotlin, Scala, Elixir, Dart, C, C++, Objective-C symbols are considered.',
+          'Include symbols from non-code files (markdown, json, yaml, …). Default false — only source-code symbols are considered.',
         ),
     },
     async ({ file_pattern, max_results, include_non_code }) => {
@@ -317,7 +317,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .boolean()
         .optional()
         .describe(
-          'Include test files in cycle detection. Default false — paths matching tests/**, **/*.test.*, **/*.spec.*, **/__tests__/** are excluded because they routinely produce spurious cycles (test imports source, while an indexer scan adds a reverse imports edge into the fixture).',
+          'Include test files in cycle detection. Default false — test paths are excluded because they routinely produce spurious cycles (test imports source, indexer adds a reverse edge into the fixture).',
         ),
     },
     async ({ include_tests }) => {
@@ -356,7 +356,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .boolean()
         .optional()
         .describe(
-          'When true, include markdown notes (.md/.mdx/.markdown/.qmd) in the ranking. Default: false — they crowd out real code in top-N otherwise.',
+          'Include markdown notes (.md/.mdx/.markdown/.qmd) in the ranking. Default false — they crowd out real code in top-N otherwise.',
         ),
       output_format: OutputFormatSchema,
     },
@@ -665,7 +665,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .max(512)
         .optional()
         .describe(
-          'Existing symbol ID to check for duplicates (auto-excluded from results — a symbol is never reported as a duplicate of itself)',
+          'Existing symbol ID to check for duplicates (auto-excluded from its own results)',
         ),
       name: z
         .string()
@@ -686,7 +686,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .union([z.string().max(512), z.array(z.string().max(512)).max(50)])
         .optional()
         .describe(
-          'Suppress specific symbol(s) from results. Useful in name-only mode to exclude a known canonical match (e.g. when checking before adding a sibling symbol).',
+          'Suppress specific symbol(s) from results — e.g. exclude a known canonical match when checking before adding a sibling symbol.',
         ),
     },
     async ({ symbol_id, name, kind, threshold, exclude_symbol_id }) => {

@@ -35,7 +35,7 @@ const SCOPE_SCHEMA = z
 const STRATEGY_SCHEMA = z
   .enum(['most_relevant', 'core_first', 'compact'])
   .describe(
-    'Pack strategy: most_relevant (default; feature/PageRank ranked), core_first (PageRank wins, surfaces architecturally central code), compact (signatures only — drops source bodies, lets outlines cover much more of the repo per token)',
+    'Pack strategy: most_relevant (default, feature/PageRank ranked), core_first (PageRank wins, surfaces architecturally central code), compact (signatures only, no source bodies).',
   );
 
 export function registerKnowledgeTools(server: McpServer, ctx: ServerContext): void {
@@ -142,7 +142,7 @@ export function registerKnowledgeTools(server: McpServer, ctx: ServerContext): v
         .enum(['answer', 'prompt-only'])
         .optional()
         .describe(
-          'answer (default): call the AI provider and return its reply; prompt-only: return the assembled prompt without calling the AI',
+          'answer (default) calls the AI provider and returns its reply; prompt-only returns the assembled prompt without calling the AI.',
         ),
       max_tokens: z
         .number()

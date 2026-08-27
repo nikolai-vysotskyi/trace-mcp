@@ -369,9 +369,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
     {
       mode: z
         .enum(['drop-orphans', 'drop-vec', 'rebuild-fts'])
-        .describe(
-          'Repair mode: drop-orphans, drop-vec (forces a re-embed), or rebuild-fts (refreshes the FTS5 inverted index from symbols).',
-        ),
+        .describe('Repair mode — see tool description for what each mode does.'),
     },
     async ({ mode }) => {
       try {
@@ -633,7 +631,7 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         .max(500)
         .optional()
         .describe(
-          'Natural-language description of what you are about to do — drives the next_steps ranking. If omitted, returns the "understand" suggestion set.',
+          'What you are about to do — drives next_steps ranking. Omit for the "understand" suggestion set.',
         ),
       intent: z
         .enum(['understand', 'review', 'refactor', 'debug', 'add_feature'])

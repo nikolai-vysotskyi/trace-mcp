@@ -103,13 +103,13 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
         .min(1)
         .max(1000)
         .describe(
-          'Pattern to match. ast-grep pattern (e.g. "foo($$$ARGS)", "console.log($A)") for the AST engine, or a JavaScript regex for the text engine.',
+          'Pattern to match: ast-grep pattern (e.g. "foo($$$ARGS)") for the AST engine, or a JS regex for the text engine.',
         ),
       replacement: z
         .string()
         .max(1000)
         .describe(
-          'Replacement template. AST engine: substitute captured metavariables ($A, $$$ARGS, or positional $1/$2). Regex engine: $1, $2 capture groups.',
+          'Replacement template. AST engine: metavariables ($A, $$$ARGS, or $1/$2). Regex engine: $1, $2 capture groups.',
         ),
       file_pattern: z
         .string()
@@ -124,7 +124,7 @@ export function registerRefactoringTools(server: McpServer, ctx: ServerContext):
         .enum(['auto', 'ast', 'regex'])
         .optional()
         .describe(
-          'Engine: "auto" (default — AST for ast-grep patterns on supported code files, else regex), "ast" (force ast-grep), "regex" (force text regex).',
+          'Engine: "auto" (default, AST for ast-grep patterns on supported files, else regex), "ast" (force), "regex" (force).',
         ),
       confirm_large: z
         .boolean()
