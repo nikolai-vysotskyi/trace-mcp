@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.48.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.2...v1.48.3) (2026-08-27)
+
+
+### Performance
+
+* **mcp:** trim heaviest tool descriptions to cut schema-load token tax (TRA-186) ([#377](https://github.com/nikolai-vysotskyi/trace-mcp/issues/377)) ([b2f3a09](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b2f3a095d0579dcab1e988ee5d060d5b14c3d3f7))
+
 ## [1.48.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.48.1...v1.48.2) (2026-08-27)
 
 
