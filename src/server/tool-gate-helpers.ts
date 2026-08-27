@@ -195,6 +195,8 @@ export interface GatedCallbackContext {
   recordToolCall?: (success: boolean) => void;
   onJournalEntry?: (data: JournalEntryCallbackData) => void;
   sessionId?: string;
+  /** True when this tool's registered schema declares a `detail_level` param. */
+  supportsDetailLevel?: boolean;
 }
 
 /** Emit a journal-broadcast entry for the most recent journal record. */
@@ -249,6 +251,23 @@ function resolveWireFormat(ctx: GatedCallbackContext, params: Record<string, unk
       : undefined;
   if (callFormat !== undefined) delete params._format;
   return callFormat ?? (ctx.config.tools?.default_format as WireFormat | undefined) ?? 'json';
+}
+
+/**
+ * Fill in `params.detail_level` from `config.tools.default_detail_level` when
+ * the tool's own schema declares a `detail_level` param and the caller didn't
+ * pass one. An explicit per-call value always wins — this only ever sets the
+ * field when it is `undefined`. No-op for tools without a `detail_level` param
+ * (`ctx.supportsDetailLevel` is only true when `installToolGate` found that
+ * key in the tool's registered schema).
+ */
+export function applyDetailLevelDefault(
+  ctx: GatedCallbackContext,
+  params: Record<string, unknown>,
+): void {
+  if (!ctx.supportsDetailLevel || params.detail_level !== undefined) return;
+  const configDefault = ctx.config.tools?.default_detail_level;
+  if (configDefault !== undefined) params.detail_level = configDefault;
 }
 
 /** Dedup fast-path: returns a response when a duplicate is served, else null. */
@@ -357,6 +376,7 @@ export function createGatedCallback(
     const params =
       cbArgs[0] && typeof cbArgs[0] === 'object' ? (cbArgs[0] as Record<string, unknown>) : {};
 
+    applyDetailLevelDefault(ctx, params);
     const effectiveFormat = resolveWireFormat(ctx, params);
 
     // Budget-driven auto-defaults: at warning/critical level, silently cap

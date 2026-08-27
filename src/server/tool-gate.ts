@@ -12,6 +12,7 @@ import {
   createGatedCallback,
   type GatedCallbackContext,
   injectAnnotations,
+  schemaIndexOf,
   type SchemaTransformConfig,
   stampAlwaysLoad,
 } from './tool-gate-helpers.js';
@@ -112,7 +113,16 @@ export function installToolGate(
       toolHandlers.set(name, async (params: Record<string, unknown>) => {
         return (await originalCb(params)) as ToolResponse;
       });
-      args[cbIdx] = createGatedCallback(gatedCallbackContext(name), originalCb);
+      const schema = args[schemaIndexOf(args)];
+      const supportsDetailLevel = !!(
+        schema &&
+        typeof schema === 'object' &&
+        'detail_level' in schema
+      );
+      args[cbIdx] = createGatedCallback(
+        { ...gatedCallbackContext(name), supportsDetailLevel },
+        originalCb,
+      );
     }
 
     // Inject ToolAnnotations before the callback so the MCP SDK registers

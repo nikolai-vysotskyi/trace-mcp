@@ -258,6 +258,14 @@ const ToolsConfigSchema = z
      *  - 'auto': encode both, ship compact when it beats JSON by ≥15% bytes; else fall back to JSON.
      *  Per-call override: pass `_format` in tool params to opt one call into a different mode. */
     default_format: z.enum(['json', 'compact', 'auto']).default('json'),
+    /** Global default for the `detail_level` param on tools that expose one
+     *  (search, get_outline, find_usages, get_feature_context, get_task_context, ...).
+     *  Unset (default): each tool keeps its own hardcoded default ('default' —
+     *  full fields). Set to 'minimal' to make every such call terse by default
+     *  project-wide, without touching per-call behavior for callers that pass
+     *  `detail_level` explicitly — an explicit per-call value always wins over
+     *  this config default. */
+    default_detail_level: z.enum(['minimal', 'default', 'full']).optional(),
   })
   .optional();
 
