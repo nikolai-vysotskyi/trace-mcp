@@ -13,7 +13,7 @@ description: "Compare trace-mcp against Repomix, Serena, Kage, codebase-memory-m
   "description": "Feature-by-feature comparison against other code-graph and code-intelligence MCP servers.",
   "url": "https://trace-mcp.com/comparisons.html",
   "datePublished": "2026-04-18",
-  "dateModified": "2026-07-01",
+  "dateModified": "2026-08-28",
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",
@@ -32,7 +32,7 @@ description: "Compare trace-mcp against Repomix, Serena, Kage, codebase-memory-m
 </script>
 trace-mcp is not just a code intelligence server — it combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Other projects solve one of these; trace-mcp unifies all three.
 
-_Last updated: August 26, 2026 (star-count and new-entrant refresh). Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues). This revision re-verifies star counts against the live GitHub API — several jumped by 3-4x since July (viral GitHub-trending spikes are common in this space and can reverse just as fast), so treat every count below as a snapshot, not a ranking. The two 60K+-star entrants flagged in a previous revision got their deep-dive: **Graphify** (110.6K stars, Python, deterministic AST-to-knowledge-graph skill/MCP server, no vector store) and **Headroom** (67.6K stars, Python, reversible tool-output/JSON/log compression layer — library, HTTP proxy, or MCP server). Neither closes a real gap for us: Graphify's edge provenance tagging (`EXTRACTED`/`INFERRED`/`AMBIGUOUS`) is a 3-tier scheme trace-mcp's existing 4-tier `resolution_tier` (`scip_resolved`/`lsp_resolved`/`ast_resolved`/`ast_inferred`/`text_matched`) already exceeds, and its Cypher/GraphML export is a feature trace-mcp already ships (`export_graph`). Headroom compresses arbitrary tool output generically (JSON/logs/RAG chunks) rather than understanding code structure — orthogonal to a code-graph server, not a lane worth chasing. See their rows/footnotes below. The "Honest assessment" section below was updated after six of seven identified gaps shipped and went through an adversarial deep-validation pass._
+_Last updated: August 28, 2026 (deep-dive pass on the two largest peers + star/feature re-verification). Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues). This revision re-verifies star counts against the live GitHub API — several jumped by 3-4x since July (viral GitHub-trending spikes are common in this space and can reverse just as fast), so treat every count below as a snapshot, not a ranking. The two 60K+-star entrants flagged in a previous revision got their deep-dive: **Graphify** (110.6K stars, Python, deterministic AST-to-knowledge-graph skill/MCP server, no vector store) and **Headroom** (67.6K stars, Python, reversible tool-output/JSON/log compression layer — library, HTTP proxy, or MCP server). Neither closes a real gap for us: Graphify's edge provenance tagging (`EXTRACTED`/`INFERRED`/`AMBIGUOUS`) is a 3-tier scheme trace-mcp's existing 4-tier `resolution_tier` (`scip_resolved`/`lsp_resolved`/`ast_resolved`/`ast_inferred`/`text_matched`) already exceeds, and its Cypher/GraphML export is a feature trace-mcp already ships (`export_graph`). Headroom compresses arbitrary tool output generically (JSON/logs/RAG chunks) rather than understanding code structure — orthogonal to a code-graph server, not a lane worth chasing. See their rows/footnotes below. The "Honest assessment" section below was updated after six of seven identified gaps shipped and went through an adversarial deep-validation pass._
 
 ## vs. token-efficient code exploration
 
@@ -40,8 +40,8 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 
 | Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp | cymbal |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | 100 | 28.1K | 8.8K | ~19K | 2.6K | 40.7K | 165 |
-| Tree-sitter AST parsing | ✅ 80 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ 23 langs + Jupyter | ✅ 70+ languages | ✅ 158 languages | ✅ 22 languages |
+| **GitHub stars** | 100 | 28.1K | 8.8K | ~19K | 2.6K | 41.0K | 165 |
+| Tree-sitter AST parsing | ✅ 80 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ 23 langs + Jupyter | ✅ 70+ languages | ✅ 161 languages | ✅ 22 languages |
 | Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output (98% reduction) | ✅ | ✅ core focus (~95% reduction) | ✅ | ✅ outline/show/context |
 | Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ incremental knowledge graph | ✅ import graph | ✅ knowledge graph | ✅ refs/importers |
 | Framework-aware edges | ✅ 85 integrations | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
@@ -54,9 +54,9 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Session memory | ✅ built-in | ❌ | ✅ SQLite FTS5 journal | ❌ | ✅ index persistence | ✅ persistent graph | ❌ |
 | Written in | TypeScript | TypeScript | TypeScript | Python | Python | C | Go |
 
-_New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (~70% reduction); **tokensave** (601 stars, 40+ tools, 30+ langs, pre-indexed semantic KG); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync; went viral this cycle, now 68.2K stars, claiming ~59% fewer tokens / ~70% fewer tool calls across its own benchmark set — unverified by us); **Headroom** (67.6K stars — not a code-graph tool, a generic reversible compression layer for tool outputs/JSON/logs/RAG chunks, deployable as library/proxy/MCP server; its `CodeCompressor` is AST-aware for 7 languages but purely for shrinking output bytes, with no graph, no symbol index, no cross-file edges — complements rather than competes with token-efficient *symbol* lookup); **repo-context-mcp** (nduc99911, 103 stars, TypeScript — three tools: `repo_map` directory tree + entrypoint detection, `search_code` substring grep, `pack_context` token-budgeted markdown pack; no AST parsing, no symbol index, no dependency graph — a lighter-weight cousin of Repomix, not a code-graph competitor). `cymbal` and `Context Mode` could not be re-verified in June 2026 — possibly renamed or inactive._
+_New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (~70% reduction); **tokensave** (601 stars, 40+ tools, 30+ langs, pre-indexed semantic KG); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync; went viral this cycle, now 68.5K stars, claiming ~59% fewer tokens / ~70% fewer tool calls across its own benchmark set — unverified by us); **Headroom** (67.6K stars — not a code-graph tool, a generic reversible compression layer for tool outputs/JSON/logs/RAG chunks, deployable as library/proxy/MCP server; its `CodeCompressor` is AST-aware for 7 languages but purely for shrinking output bytes, with no graph, no symbol index, no cross-file edges — complements rather than competes with token-efficient *symbol* lookup); **repo-context-mcp** (nduc99911, 103 stars, TypeScript — three tools: `repo_map` directory tree + entrypoint detection, `search_code` substring grep, `pack_context` token-budgeted markdown pack; no AST parsing, no symbol index, no dependency graph — a lighter-weight cousin of Repomix, not a code-graph competitor). `cymbal` and `Context Mode` could not be re-verified in June 2026 — possibly renamed or inactive._
 
-**codebase-memory-mcp's stars more than doubled since the last revision (18.1K → 40.7K verified via GitHub API) — the fastest single-project jump we've tracked in this doc.** Its authors also published a benchmark preprint (arXiv 2603.27277: "Codebase-Memory: Tree-Sitter-Based Knowledge Graphs for LLM Code Exploration via MCP") reporting 83% answer quality, 10× fewer tokens, and 2.1× fewer tool calls vs. file-by-file exploration across 31 real-world repos — the first published third-party-style benchmark from a direct code-graph peer (vs. the self-reported numbers most others cite). We have not independently reproduced it. This doesn't change our positioning (see "Honest assessment" below) but is worth flagging: a fast-growing peer with a real benchmark paper is a sharper competitive signal than a star count alone.
+**codebase-memory-mcp's stars more than doubled over two revisions (18.1K → 41.0K verified via GitHub API) — the fastest single-project jump we've tracked in this doc.** Its authors also published a benchmark preprint (arXiv 2603.27277: "Codebase-Memory: Tree-Sitter-Based Knowledge Graphs for LLM Code Exploration via MCP") reporting 83% answer quality, 10× fewer tokens, and 2.1× fewer tool calls vs. file-by-file exploration across 31 real-world repos — the first published third-party-style benchmark from a direct code-graph peer (vs. the self-reported numbers most others cite). We have not independently reproduced it. This doesn't change our positioning (see "Honest assessment" below) but is worth flagging: a fast-growing peer with a real benchmark paper is a sharper competitive signal than a star count alone.
 
 ## vs. AI session memory
 
@@ -74,7 +74,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 | Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
 | Service/subproject scoping | ✅ decisions per service | ❌ | ✅ wings per project | ❌ | ❌ | ✅ per branch | ✅ per workspace |
 | Published retrieval benchmark | ❌ | ❌ | ✅ LongMemEval / LoCoMo / MemBench | ❌ | ✅ LoCoMo / LongMemEval / BEAM | ❌ | ❌ |
-| Code intelligence included | ✅ 170 tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Code intelligence included | ✅ 172 tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Works as standalone memory | ❌ code-focused | ✅ git-native, code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
 | Written in | TypeScript | — | Python | TypeScript | TS + Python | Go / Rust | Python |
 
@@ -107,11 +107,11 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 
 | Capability | trace-mcp | Serena | code-review-graph | codebase-memory-mcp | SocratiCode | Narsil-MCP | Roam-Code |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **GitHub stars** | 100 | ~28.5K | ~19K | 40.7K | ~900 | ~100 | ~500 |
-| Languages | 80 | 40+ (via LSP) | 23 + Jupyter | 158 | 19 | 32 | 28 |
+| **GitHub stars** | 100 | ~28.5K | ~19K | 41.0K | ~900 | ~100 | ~500 |
+| Languages | 80 | 40+ (via LSP) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | 85 | ❌ | ❌ (Python entry points only) | ❌ | ❌ | ❌ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✅ | ❌ | ❌ | ✅ cross-service HTTP | ✅ polyglot dep graph | ❌ | ✅ PHP↔TS API drift |
-| MCP tools | 170 | ~55 | ~28 | 14 | 21 | 90 | 224 |
+| MCP tools advertised (default) | 172 (~52K tok) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok) | 21 | 90 | 224 |
 | Session memory | ✅ | ✅ (manual notes) | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✅ | ❌ | ✅ multi-repo daemon | ✅ cross-service | ✅ cross-project search | ❌ | ❌ |
@@ -134,6 +134,18 @@ _New entrants since April 2026 (direct code-graph MCP peers): **grafel** (Rust, 
 
 > **Why framework awareness matters:** A graph that knows `UserController` exists but doesn't know it renders `Users/Show.vue` via Inertia is missing the edges that matter most. Framework integrations turn a syntax graph into a **semantic** graph — the agent sees the same connections a developer sees.
 
+## Deep dive: how the two largest peers shape their tool surface
+
+Both of the biggest projects in this space (by stars) made the same product call, independently, and it is the one place they are clearly ahead of trace-mcp today. Verified by reading their source on August 28, 2026, not their READMEs.
+
+**The 68.5K-star entrant (colbymchenry/codegraph, v1.6.0, TypeScript with a Rust kernel)** defines eight MCP tools — search, callers, callees, impact, node, explore, status, files — and by default **advertises exactly one of them**. `DEFAULT_MCP_TOOLS` is the single-element set `{explore}`; the rest stay fully implemented and re-enablable through a `CODEGRAPH_MCP_TOOLS` allowlist env var, but are not listed to agents. The stated reason, in a source comment: every other tool is a narrower slice of what `explore` already does, and *presence itself steers mis-picks*. Their whole advertised surface costs roughly **1.9K tokens** (~390 tokens of schema plus a ~5.8K-character server-instructions block). Two further mechanisms are worth noting: (1) `explore` carries a per-project **adaptive output budget** — total output cap, default file count, per-file cap and clustering threshold all tier on indexed file count, explicitly kept under the host's ~25K-char inline tool-result cap so the result is never externalised to a file the agent has to read back; (2) their file-reading tool deliberately mirrors the host's native Read contract byte-for-byte (`offset`/`limit`, `<n>\t<line>` output, "safe to Edit from") so it can be substituted for Read rather than competing with it.
+
+**The 41.0K-star entrant (DeusData/codebase-memory-mcp, pure C)** ships 15 MCP tools (~7K tokens of schema) and adds **tool profiles**: `--tool-profile=scout` exposes 7, `--tool-profile=analysis` exposes 11, default exposes all 15. Re-verified this pass: 161 languages (up from 158), Hybrid LSP semantic type resolution across 12 languages, and two tools we had not catalogued — `manage_adr` (create/replace an Architecture Decision Record document) and `ingest_traces` (ingest runtime caller/callee counts to enrich the graph). Supply-chain posture is a deliberate selling point: SLSA Level 3, VirusTotal scanning of three behaviourally identical release candidates, OpenSSF Scorecard.
+
+**Take:** `manage_adr` is a flat markdown document with get/update/sections modes — not code-linked memory, and no reason to copy it; trace-mcp's decisions already bind to symbol IDs and surface inside `get_change_impact`. `ingest_traces` is a genuinely missing capability (runtime-observed dynamic call edges that static analysis cannot see) but is a three-field payload — a thin veneer, worth revisiting only if users ask. The 161-language race stays out of lane, as before.
+
+**What we are taking:** a *default* tool surface small enough to be honest about. trace-mcp already has the machinery — `TOOL_PRESETS` (`minimal` 24 tools, `standard` 55, `full` 172) plus a `tools.include`/`tools.exclude` gate — and `standard` is already the coded default. Measured this pass against a real `initialize` + `tools/list` round-trip, the presets work perfectly with `TRACE_MCP_NO_DAEMON=1` (24 / 55 / 172 tools = 9.1K / 18.9K / 51.6K tokens) and are **silently bypassed on the default daemon-backed path**, which pins every session at 172 tools / ~52K tokens whatever the preset says. That is a bug, not a design gap, and it is tracked separately. Until it is fixed, the number in the table above is the number users actually pay.
+
 ## Honest assessment: where competitors lead
 
 No tool is uniformly ahead. trace-mcp is the only one combining framework-aware code intelligence + a refactoring engine + code-linked session memory in a single local MCP server — but on individual axes, specialists go deeper. As of July 2026, six of the seven gaps identified in the June re-verification have shipped and gone through an adversarial deep-validation pass (not just unit tests — a second pass that tried specifically to break each feature). That pass surfaced real bugs, which is itself worth being transparent about:
@@ -151,21 +163,25 @@ No tool is uniformly ahead. trace-mcp is the only one combining framework-aware 
 
 **Still genuinely open (honest, not closed by the validation pass):**
 
+- **Advertised tool-surface cost.** Measured August 28, 2026: trace-mcp's `tools/list` is 172 tools / ~52K tokens, plus ~2.1K tokens of server instructions, paid by every client without deferred tool loading on every session. The two largest peers advertise ~1.9K and ~7K tokens respectively — 27× and 7× cheaper — by shipping a small default surface with the rest opt-in. trace-mcp has the same mechanism built and it does not take effect on the shipped path; nothing here is architecturally hard, it is simply not true today.
+
 - **Validated code-health metric.** A temporal-holdout calibration script now correlates `predict_bugs`/`get_risk_hotspots` against real future-fix commits on this repo (churn Spearman ≈0.34, precision@20 ≈2.1–2.4× over random) and the tool descriptions were reworded to honest "heuristic triage" language. This is evidence, not CodeScene-grade external validation — the gap to a peer-reviewed, cross-repo-validated metric remains.
 - **Worst-case decision-verification latency.** The memoization fix above only helps when decisions cluster on a handful of files; a batch fully scattered across N distinct files is still O(N) git subprocess spawns. An async/batched redesign would be needed to bound the worst case.
 - **CFG is line-based, not AST-based**, and taint analysis remains lexical/regex, not a real dataflow engine — both are known architectural ceilings, not just untested edge cases; a full AST/dataflow rewrite of either is out of scope for now.
 
-**Deliberately NOT chasing (out of lane or vanity):** live runtime debugger (Serena — runtime, not static graph); counterfactual architecture simulation / multi-agent swarm (Roam-Code — unverified, speculative); the 158-language count race (codebase-memory-mcp — trace-mcp's 80 already covers the real-world long tail); tool-count arms race (Roam 224, Narsil 90 — quality of edges beats tool count); verbatim chat storage and 20× "Endless Mode" (MemPalace / claude-mem — trace-mcp's extract-then-store model is deliberate, and Endless Mode adds 60–90s latency per tool).
+**Deliberately NOT chasing (out of lane or vanity):** live runtime debugger (Serena — runtime, not static graph); counterfactual architecture simulation / multi-agent swarm (Roam-Code — unverified, speculative); the 161-language count race (codebase-memory-mcp — trace-mcp's 80 already covers the real-world long tail); the tool-count arms race for its own sake (Roam 224, Narsil 90 — quality of edges beats tool count; note this is a claim about which tools to *build*, not about how many to advertise by default, where we are currently behind — see above); verbatim chat storage and 20× "Endless Mode" (MemPalace / claude-mem — trace-mcp's extract-then-store model is deliberate, and Endless Mode adds 60–90s latency per tool).
 
 ## Profiling depth tracker
 
 Which entries above got a real read of their architecture/code and a concrete take-or-pass decision, vs. which are still table rows filled from README/star-count checks only. Used to pick where the next competitor-intel pass digs deeper instead of re-scanning the same surface facts.
 
-**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace.
+**Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace, codebase-memory-mcp, codegraph.
 
-**Tracked, still surface-level only (README + stars, no code/architecture read yet):** Serena, code-review-graph, codebase-memory-mcp, SocratiCode, Narsil-MCP, Roam-Code, Repomix, tokensave, jCodeMunch, Context Mode, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, codegraph, repo-context-mcp, grafel, GitNexus, Code Pathfinder, CodeGraphContext/CGC.
+**Tracked, still surface-level only (README + stars, no code/architecture read yet):** Serena, code-review-graph, SocratiCode, Narsil-MCP, Roam-Code, Repomix, tokensave, jCodeMunch, Context Mode, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, repo-context-mcp, grafel, GitNexus, Code Pathfinder, CodeGraphContext/CGC, LeanKG, SDL-MCP, CodeGraph (codegraph-ai), marm-memory.
 
-Priority for next deep-dive: **codebase-memory-mcp** (largest peer by stars — 40.7K — with a published benchmark preprint we haven't independently verified) and **codegraph** (68.2K stars, unverified self-reported benchmark claims) are the two highest-value surface-level entries left to profile properly.
+Newly spotted this pass, not yet profiled: **LeanKG** (FreePeak, 215 stars, Rust, token-reduction framing); **SDL-MCP** (GlitterKill, 468 stars, TypeScript — symbol-graph plus an explicit *context-budget policy* layer, the closest thing yet to a peer treating the budget itself as the product); **CodeGraph** (codegraph-ai, 74 stars, C — 42 MCP tools, 38 languages, VS Code extension); **marm-memory** (338 stars, Python — session history + codebase index + concept graph in one SQLite layer).
+
+Priority for next deep-dive: **SDL-MCP** (its budget-policy layer is directly adjacent to the surface-cost work above) and **Serena** (~28.5K stars, the largest peer never profiled beyond its README, and the only one with live LSP as its core premise rather than an opt-in tier).
 
 **Bottom line:** trace-mcp's moat — framework-aware graph + refactoring + code-linked memory in one local MCP — is intact and unmatched as a *combination*. Six of seven gaps identified in the June 2026 re-verification are now shipped; the adversarial validation pass that followed found and fixed 15+ real bugs (several of them "the feature silently didn't work at all," not cosmetic) rather than taking the initial implementation on faith. The one deliberately-open gap (a peer-reviewed validated health metric) is honestly labeled as such rather than oversold.
 
