@@ -202,6 +202,21 @@ describe('ProjectOverview surface', () => {
     expect(screen.queryByText('Not indexed')).toBeNull();
   });
 
+  it('does not call a project the daemon forgot "not indexed"', async () => {
+    /* Seen on the shipped build: the daemon's registry reset, so the project
+       was absent from its list while the on-disk index still reported 2,196
+       files. "Status: Not indexed" sat one row above "Files indexed 2,196". */
+    daemon.projects = [];
+    daemon.loading = false;
+    daemon.connected = true;
+    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText('Not tracked')).toBeTruthy();
+    expect(screen.queryByText('Not indexed')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Re-add project' })).toBeTruthy();
+  });
+
   it('says the daemon is unreachable rather than blaming the project', async () => {
     daemon.projects = [];
     daemon.loading = false;

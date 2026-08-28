@@ -496,17 +496,26 @@ export function ProjectOverview({
           ? 'green'
           : 'neutral';
 
+  /* The daemon can answer with a list that simply does not contain this project
+     while an index for it is still on disk — its registry resets, ours doesn't.
+     Calling that "Not indexed" one row above "Files indexed 2,196" is a
+     contradiction the user has to resolve; "Not tracked" is what actually
+     happened, and re-adding the project is what fixes it. */
+  const untracked = !listPending && !project && (stats?.files ?? 0) > 0;
+
   const statusLabel = listPending
     ? connected
       ? 'Checking…'
       : 'Daemon unreachable'
-    : status === 'indexing'
-      ? 'Indexing'
-      : status === 'ready'
-        ? 'Ready'
-        : status === 'error'
-          ? 'Error'
-          : 'Not indexed';
+    : untracked
+      ? 'Not tracked'
+      : status === 'indexing'
+        ? 'Indexing'
+        : status === 'ready'
+          ? 'Ready'
+          : status === 'error'
+            ? 'Error'
+            : 'Not indexed';
 
   const likelyUnknown = useMemo(
     () => coverage?.unknown.filter((u) => u.needs_plugin === 'likely') ?? [],
@@ -585,7 +594,7 @@ export function ProjectOverview({
           )
         ) : (
           <Button variant="prominent" icon="add" onClick={() => addProject(root)}>
-            Index project
+            {untracked ? 'Re-add project' : 'Index project'}
           </Button>
         )}
 
