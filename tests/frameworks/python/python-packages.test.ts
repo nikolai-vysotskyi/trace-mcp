@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AnthropicPythonPlugin } from '../../../src/indexer/plugins/integration/tooling/anthropic-py/index.js';
 import { AttrsPyPlugin } from '../../../src/indexer/plugins/integration/tooling/attrs-py/index.js';
+import { ClickPlugin } from '../../../src/indexer/plugins/integration/tooling/click/index.js';
 import { OpenAIPythonPlugin } from '../../../src/indexer/plugins/integration/tooling/openai-py/index.js';
 import { PythonAsyncPlugin } from '../../../src/indexer/plugins/integration/tooling/python-async/index.js';
 import { PythonHttpClientsPlugin } from '../../../src/indexer/plugins/integration/tooling/python-http/index.js';
@@ -8,7 +9,9 @@ import { PythonImagingPlugin } from '../../../src/indexer/plugins/integration/to
 import { PythonMLPlugin } from '../../../src/indexer/plugins/integration/tooling/python-ml/index.js';
 import { PythonScientificPlugin } from '../../../src/indexer/plugins/integration/tooling/python-scientific/index.js';
 import { TqdmPyPlugin } from '../../../src/indexer/plugins/integration/tooling/tqdm-py/index.js';
+import { MarshmallowPlugin } from '../../../src/indexer/plugins/integration/validation/marshmallow/index.js';
 import { Jinja2Plugin } from '../../../src/indexer/plugins/integration/view/jinja2/index.js';
+import type { ProjectContext } from '../../../src/plugin-api/types.js';
 
 type AnyPlugin =
   | PythonHttpClientsPlugin
@@ -20,7 +23,14 @@ type AnyPlugin =
   | PythonAsyncPlugin
   | AttrsPyPlugin
   | TqdmPyPlugin
+  | ClickPlugin
+  | MarshmallowPlugin
   | Jinja2Plugin;
+
+/** A ProjectContext whose only dependency source is an in-memory requirements.txt. */
+function pyProject(requirementsTxt: string): ProjectContext {
+  return { rootPath: '/nonexistent', requirementsTxt } as ProjectContext;
+}
 
 async function extract(
   plugin: AnyPlugin,
@@ -585,5 +595,167 @@ for i in tqdm(range(10)): pass
 `,
     );
     expect(r.edges ?? []).toEqual([]);
+  });
+});
+
+describe('ClickPlugin', () => {
+  const plugin = new ClickPlugin();
+
+  it('manifest', () => {
+    expect(plugin.manifest.name).toBe('click');
+    expect(plugin.manifest.category).toBe('tooling');
+  });
+
+  it('detects the click dependency', () => {
+    expect(plugin.detect!(pyProject('click==8.3.3'))).toBe(true);
+    expect(plugin.detect!(pyProject('flask==3.0.0'))).toBe(false);
+  });
+
+  it('skips files without a click import', async () => {
+    const r = await extract(
+      plugin,
+      `
+@notclick.command()
+def hello():
+    pass
+`,
+    );
+    expect(r.edges ?? []).toEqual([]);
+  });
+
+  const CLI = `
+import click
+
+@click.group()
+@click.option("--verbose", is_flag=True)
+def cli(verbose):
+    pass
+
+@cli.command()
+@click.argument("name")
+@click.option("--greeting", default="hi")
+def say_hello(name, greeting):
+    pass
+
+@click.command("deploy")
+def deploy_cmd():
+    pass
+
+cli.add_command(deploy_cmd)
+`;
+
+  it('extracts commands and groups', async () => {
+    const r = await extract(plugin, CLI);
+    expect(r.frameworkRole).toBe('click_cli');
+    const commands = r.edges!.filter((e) => e.edgeType === 'click_command');
+    expect(commands.map((e) => e.metadata?.name).sort()).toEqual(['cli', 'deploy', 'say-hello']);
+    expect(commands.find((e) => e.metadata?.name === 'cli')?.metadata?.kind).toBe('group');
+  });
+
+  it('exposes commands as CLI routes', async () => {
+    const r = await extract(plugin, CLI);
+    expect(r.routes!.map((x) => x.uri)).toContain('say-hello');
+    expect(r.routes!.every((x) => x.method === 'CLI')).toBe(true);
+  });
+
+  it('extracts options and arguments per command', async () => {
+    const r = await extract(plugin, CLI);
+    const params = r.edges!.filter(
+      (e) => e.edgeType === 'click_param' && e.metadata?.command === 'say-hello',
+    );
+    expect(params.map((e) => `${e.metadata?.kind}:${e.metadata?.param}`).sort()).toEqual([
+      'argument:name',
+      'option:--greeting',
+    ]);
+  });
+
+  it('links subcommands to their group via decorator and add_command', async () => {
+    const r = await extract(plugin, CLI);
+    const subs = r.edges!.filter((e) => e.edgeType === 'click_subcommand');
+    expect(subs.every((e) => e.metadata?.group === 'cli')).toBe(true);
+    expect(subs.map((e) => e.metadata?.command).sort()).toEqual(['deploy', 'say-hello']);
+  });
+});
+
+describe('MarshmallowPlugin', () => {
+  const plugin = new MarshmallowPlugin();
+
+  it('manifest', () => {
+    expect(plugin.manifest.name).toBe('marshmallow');
+    expect(plugin.manifest.category).toBe('validation');
+  });
+
+  it('detects the marshmallow dependency', () => {
+    expect(plugin.detect!(pyProject('marshmallow==4.3.0'))).toBe(true);
+    expect(plugin.detect!(pyProject('flask==3.0.0'))).toBe(false);
+  });
+
+  it('skips files without a marshmallow import', async () => {
+    const r = await extract(
+      plugin,
+      `
+class UserSchema(Schema):
+    name = fields.Str()
+`,
+    );
+    expect(r.edges ?? []).toEqual([]);
+  });
+
+  const SCHEMAS = `
+from marshmallow import Schema, fields, validates, post_load
+
+class AddressSchema(Schema):
+    city = fields.Str(required=True)
+
+class UserSchema(Schema):
+    name = fields.Str(required=True)
+    age = fields.Int()
+    address = fields.Nested(AddressSchema)
+    tags = fields.List(fields.Nested("TagSchema"))
+    partner = fields.Nested(lambda: UserSchema(exclude=("partner",)))
+
+    @validates("name", "age")
+    def validate_fields(self, value, data_key):
+        pass
+
+    @post_load
+    def make_user(self, data, **kwargs):
+        return data
+`;
+
+  it('extracts field types per schema', async () => {
+    const r = await extract(plugin, SCHEMAS);
+    expect(r.frameworkRole).toBe('marshmallow_schema');
+    const typed = r.edges!.filter(
+      (e) => e.edgeType === 'marshmallow_field_type' && e.metadata?.schema === 'UserSchema',
+    );
+    expect(typed.map((e) => `${e.metadata?.field}:${e.metadata?.fieldType}`)).toEqual([
+      'name:Str',
+      'age:Int',
+      'address:Nested',
+      'tags:List',
+      'partner:Nested',
+    ]);
+  });
+
+  it('extracts schema-to-schema references from Nested', async () => {
+    const r = await extract(plugin, SCHEMAS);
+    const nested = r.edges!.filter((e) => e.edgeType === 'marshmallow_nested');
+    expect(nested.map((e) => e.metadata?.target).sort()).toEqual([
+      'AddressSchema',
+      'TagSchema',
+      'UserSchema',
+    ]);
+    expect(nested.every((e) => e.metadata?.schema === 'UserSchema')).toBe(true);
+  });
+
+  it('extracts validation and lifecycle hooks', async () => {
+    const r = await extract(plugin, SCHEMAS);
+    const hooks = r.edges!.filter((e) => e.edgeType === 'marshmallow_hook');
+    expect(hooks.map((e) => `${e.metadata?.hook}:${e.metadata?.method}`).sort()).toEqual([
+      'post_load:make_user',
+      'validates:validate_fields',
+    ]);
+    expect(hooks.every((e) => e.metadata?.schema === 'UserSchema')).toBe(true);
   });
 });
