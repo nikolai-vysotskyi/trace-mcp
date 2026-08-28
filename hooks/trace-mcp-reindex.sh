@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# trace-mcp-reindex v0.4.0
+# trace-mcp-reindex v0.4.1
 # trace-mcp PostToolUse auto-reindex hook
 # Daemon-first: posts to the running daemon's /api/projects/reindex-file
 # endpoint via curl (no Node startup). Falls back to a cold subprocess
@@ -65,29 +65,46 @@ STATS_HOME="${TRACE_MCP_HOME:-$HOME/.trace-mcp}"
 STATS_FILE="$STATS_HOME/hook-stats.jsonl"
 STATS_MAX_BYTES=$((10 * 1024 * 1024))
 
-# Portable millisecond timestamp. Prefer EPOCHREALTIME (bash 5) — strip the
+# Portable millisecond clock. Prefer EPOCHREALTIME (bash 5) — strip the
 # decimal point to get ms. Fall back to GNU date, then python.
+#
+# The strategy is resolved ONCE, at load. The previous version re-probed on
+# every call, so under bash 3.2 (macOS system bash — no EPOCHREALTIME) each
+# now_ms cost three processes (date + grep + python3) and a hook run cost
+# nine, purely to read a clock. That is the slowest path in the hook and the
+# widest window for anything watching it to time out.
+if [[ -n "${EPOCHREALTIME:-}" ]]; then
+  MS_CLOCK=bash
+else
+  _ms_probe=$(date +%s%3N 2>/dev/null || true)
+  if [[ "$_ms_probe" =~ ^[0-9]+$ ]]; then
+    MS_CLOCK=date
+  else
+    MS_CLOCK=python3
+  fi
+  unset _ms_probe
+fi
+
 now_ms() {
-  if [[ -n "${EPOCHREALTIME:-}" ]]; then
-    local s="${EPOCHREALTIME%.*}"
-    local us="${EPOCHREALTIME#*.}"
-    # us is always 6 digits in bash 5; take first 3 for ms.
-    printf '%s%s' "$s" "${us:0:3}"
-    return
-  fi
-  if date +%s%3N 2>/dev/null | grep -qE '^[0-9]+$'; then
-    date +%s%3N
-    return
-  fi
-  python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo 0
+  case "$MS_CLOCK" in
+    bash)
+      local s="${EPOCHREALTIME%.*}"
+      local us="${EPOCHREALTIME#*.}"
+      # us is always 6 digits in bash 5; take first 3 for ms.
+      printf '%s%s' "$s" "${us:0:3}"
+      ;;
+    date) date +%s%3N ;;
+    *) python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo 0 ;;
+  esac
 }
 
 write_stat() {
   local path_kind="$1"
   local reason="$2"
   local wall_ms="$3"
-  local ts
-  ts=$(now_ms)
+  # Callers already read the clock to close out WALL_MS — reuse it rather
+  # than paying for another reading.
+  local ts="$4"
   mkdir -p "$STATS_HOME" 2>/dev/null || return 0
   # Rotate when over ~10 MB. Truncate (not delete) so concurrent appenders
   # keep their fd alive; data loss is acceptable for telemetry.
@@ -118,7 +135,7 @@ END_MS=$(now_ms)
 WALL_MS=$((END_MS - START_MS))
 
 if [[ "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
-  write_stat "daemon" "ok" "$WALL_MS"
+  write_stat "daemon" "ok" "$WALL_MS" "$END_MS"
   exit 0
 fi
 
@@ -142,9 +159,9 @@ esac
 # misleading fake reindex time.
 if command -v trace-mcp >/dev/null 2>&1; then
   nohup trace-mcp index-file "$FILE_PATH" >/dev/null 2>&1 &
-  write_stat "cli" "$REASON" "$WALL_MS"
+  write_stat "cli" "$REASON" "$WALL_MS" "$END_MS"
 else
-  write_stat "skipped" "$REASON" "$WALL_MS"
+  write_stat "skipped" "$REASON" "$WALL_MS" "$END_MS"
 fi
 
 exit 0
