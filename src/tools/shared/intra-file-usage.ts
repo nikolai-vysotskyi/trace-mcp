@@ -82,16 +82,26 @@ export function makeIntraFileReader(
     let content: string | null = null;
     if (projectRoot) {
       const abs = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+      let fd: number | undefined;
       try {
-        // statSync throws (ENOENT) the same way existsSync-then-statSync would
-        // report "missing" — no separate existsSync check needed, and this
-        // avoids the TOCTOU window between checking and stat-ing.
-        const stat = fs.statSync(abs);
+        // Stat and read the same open fd rather than statSync(path) then
+        // readFileSync(path) — two path-based calls still race (the file
+        // can change between them) even without an explicit existsSync.
+        fd = fs.openSync(abs, 'r');
+        const stat = fs.fstatSync(fd);
         if (stat.size <= 2 * 1024 * 1024) {
-          content = fs.readFileSync(abs, 'utf-8');
+          content = fs.readFileSync(fd, 'utf-8');
         }
       } catch {
         /* missing or unreadable file — fall back to "no intra-file evidence" */
+      } finally {
+        if (fd !== undefined) {
+          try {
+            fs.closeSync(fd);
+          } catch {
+            /* already closed or unclosable — nothing more we can do */
+          }
+        }
       }
     }
     cache.set(filePath, content);
