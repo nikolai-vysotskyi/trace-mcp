@@ -44,7 +44,7 @@ const GRADE_COLOR: Record<TechDebtGrade, string> = {
   B: '#30d158',
   C: '#ffcc00',
   D: '#ff9f0a',
-  F: '#ff3b30',
+  F: 'var(--destructive)',
 };
 
 // ── Sortable header cell ──────────────────────────────────────────────────
@@ -146,7 +146,7 @@ function ActionCell({
             setConfirm(false);
           }}
           className="text-[11px] px-1.5 py-0.5 rounded font-medium"
-          style={{ background: '#ff3b30', color: '#fff' }}
+          style={{ background: 'var(--destructive)', color: '#fff' }}
         >
           Remove
         </button>
@@ -253,7 +253,7 @@ function Row({
           <span style={{ color: 'var(--text-secondary)' }}>{statusLabel(project.displayStatus)}</span>
         </div>
         {project.error && (
-          <div className="text-[10px] mt-0.5 truncate" style={{ color: '#ff3b30' }} title={project.error}>
+          <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--destructive)' }} title={project.error}>
             {project.error}
           </div>
         )}
@@ -321,7 +321,7 @@ function Row({
         ) : (
           <span
             style={{
-              color: project.securityFindings > 0 ? '#ff3b30' : 'var(--text-tertiary)',
+              color: project.securityFindings > 0 ? 'var(--destructive)' : 'var(--text-tertiary)',
               fontWeight: project.securityFindings > 0 ? 600 : undefined,
             }}
           >
