@@ -13,6 +13,7 @@ import {
   REGISTRY_PATH,
 } from './global.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
+import { readIfExists } from './utils/safe-fs.js';
 
 export interface RegistryEntry {
   name: string;
@@ -547,12 +548,13 @@ export interface RegistryFileInspection {
  * report can tell the user which one they're looking at.
  */
 export function inspectRegistry(): RegistryFileInspection {
-  if (!fs.existsSync(REGISTRY_PATH)) {
+  const content = readIfExists(REGISTRY_PATH);
+  if (content === null) {
     return { exists: false, corrupt: false, entries: [] };
   }
   let raw: unknown;
   try {
-    raw = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
+    raw = JSON.parse(content);
   } catch {
     return { exists: true, corrupt: true, entries: [] };
   }

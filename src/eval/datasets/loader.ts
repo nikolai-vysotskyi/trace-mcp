@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { readIfExists } from '../../utils/safe-fs.js';
 import type { BenchmarkDataset } from '../types.js';
 
 const BenchmarkCaseSchema = z.object({
@@ -81,9 +82,10 @@ export function loadDataset(slug: string): BenchmarkDataset {
   let lastErr: unknown = null;
   for (const dir of dirs) {
     const filePath = path.join(dir, `${slug}.json`);
-    if (!fs.existsSync(filePath)) continue;
     try {
-      const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      const text = readIfExists(filePath);
+      if (text === null) continue;
+      const raw = JSON.parse(text);
       const parsed = BenchmarkDatasetSchema.parse(raw);
       if (parsed.id !== slug) {
         throw new Error(

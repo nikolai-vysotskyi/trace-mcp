@@ -6,6 +6,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 
 const START_MARKER = '<!-- trace-mcp:start -->';
@@ -56,11 +57,11 @@ export function installCursorRules(
     : path.join(projectRoot, '.cursor');
   const rulesDir = path.join(base, 'rules');
   const filePath = path.join(rulesDir, 'trace-mcp.mdc');
+  const existing = readIfExists(filePath);
 
   if (opts.dryRun) {
-    if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      if (content === CURSOR_RULE) {
+    if (existing !== null) {
+      if (existing === CURSOR_RULE) {
         return { target: filePath, action: 'skipped', detail: 'Already up to date' };
       }
       return { target: filePath, action: 'skipped', detail: 'Would update trace-mcp.mdc' };
@@ -68,9 +69,8 @@ export function installCursorRules(
     return { target: filePath, action: 'skipped', detail: 'Would create trace-mcp.mdc' };
   }
 
-  if (fs.existsSync(filePath)) {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    if (content === CURSOR_RULE) {
+  if (existing !== null) {
+    if (existing === CURSOR_RULE) {
       return { target: filePath, action: 'already_configured' };
     }
     fs.writeFileSync(filePath, CURSOR_RULE);
@@ -97,29 +97,27 @@ export function installWindsurfRules(
   const filePath = opts.global
     ? path.join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.windsurfrules')
     : path.join(projectRoot, '.windsurfrules');
+  const existing = readIfExists(filePath);
 
   if (opts.dryRun) {
-    if (!fs.existsSync(filePath)) {
+    if (existing === null) {
       return { target: filePath, action: 'skipped', detail: 'Would create .windsurfrules' };
     }
-    const content = fs.readFileSync(filePath, 'utf-8');
-    if (content.includes(START_MARKER)) {
+    if (existing.includes(START_MARKER)) {
       return { target: filePath, action: 'skipped', detail: 'Would update trace-mcp block' };
     }
     return { target: filePath, action: 'skipped', detail: 'Would append trace-mcp block' };
   }
 
-  if (!fs.existsSync(filePath)) {
+  if (existing === null) {
     fs.writeFileSync(filePath, `${WINDSURF_BLOCK}\n`);
     return { target: filePath, action: 'created' };
   }
 
-  const content = fs.readFileSync(filePath, 'utf-8');
-
-  if (content.includes(START_MARKER)) {
+  if (existing.includes(START_MARKER)) {
     const re = new RegExp(`${escapeRegex(START_MARKER)}[\\s\\S]*?${escapeRegex(END_MARKER)}`, 'm');
-    const updated = content.replace(re, WINDSURF_BLOCK);
-    if (updated === content) {
+    const updated = existing.replace(re, WINDSURF_BLOCK);
+    if (updated === existing) {
       return { target: filePath, action: 'already_configured' };
     }
     fs.writeFileSync(filePath, updated);
@@ -127,8 +125,8 @@ export function installWindsurfRules(
   }
 
   // Append
-  const separator = content.endsWith('\n') ? '\n' : '\n\n';
-  fs.writeFileSync(filePath, `${content + separator + WINDSURF_BLOCK}\n`);
+  const separator = existing.endsWith('\n') ? '\n' : '\n\n';
+  fs.writeFileSync(filePath, `${existing + separator + WINDSURF_BLOCK}\n`);
   return { target: filePath, action: 'updated', detail: 'Appended trace-mcp block' };
 }
 

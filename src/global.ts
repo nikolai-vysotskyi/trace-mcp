@@ -279,7 +279,9 @@ export function ensureGlobalDirs(): void {
 
   // Seed default config on first run so users see all available parameters.
   // 'wx' = O_CREAT|O_EXCL: atomically create-only, no separate existsSync
-  // check that could race with another process creating the file first.
+  // check that could race with another process creating the file first
+  // (TRA-256). Same cross-module-import constraint as above rules out the
+  // shared src/utils/safe-fs.ts helper here.
   try {
     fs.writeFileSync(GLOBAL_CONFIG_PATH, DEFAULT_CONFIG_JSONC, { flag: 'wx' });
     if (process.platform !== 'win32') {

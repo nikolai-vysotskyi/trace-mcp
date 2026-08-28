@@ -18,6 +18,7 @@ import Database from 'better-sqlite3';
 import { TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
+import { readIfExists } from './utils/safe-fs.js';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -59,9 +60,10 @@ function getManifestPath(): string {
 
 function loadManifest(): BundleManifest {
   const p = getManifestPath();
-  if (!fs.existsSync(p)) return { bundles: [] };
   try {
-    return JSON.parse(fs.readFileSync(p, 'utf-8'));
+    const raw = readIfExists(p);
+    if (raw === null) return { bundles: [] };
+    return JSON.parse(raw);
   } catch {
     return { bundles: [] };
   }
