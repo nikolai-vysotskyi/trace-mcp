@@ -1,7 +1,8 @@
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 
 /**
@@ -22,6 +23,34 @@ import { PluginRegistry } from '../../src/plugin-api/registry.js';
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..');
 const README_PATH = join(REPO_ROOT, 'README.md');
+
+/**
+ * TRA-263: the docs pages no longer hardcode the tool count — they read
+ * `docs/_data/counts.yml` through Liquid, because TRA-174's prose fix drifted
+ * again (138 / 164 / 165 / ~170 were live on prod at once, two of them on the
+ * same page). The scans below still have to see numbers, so resolve the tags
+ * the way Jekyll will. Preset sizes are NOT in that file — they get an exact
+ * receipt from tests/docs/preset-claims.test.ts instead.
+ */
+const COUNTS = parseYaml(readFileSync(join(REPO_ROOT, 'docs/_data/counts.yml'), 'utf-8')) as Record<
+  string,
+  unknown
+>;
+
+const COUNT_TAG = /\{\{\s*site\.data\.counts\.([a-z0-9_.]+)\s*\}\}/gi;
+
+function lookupCount(path: string): unknown {
+  return path
+    .split('.')
+    .reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], COUNTS);
+}
+
+function readDoc(path: string): string {
+  return readFileSync(join(REPO_ROOT, path), 'utf-8').replace(COUNT_TAG, (whole, key: string) => {
+    const value = lookupCount(key);
+    return typeof value === 'number' ? String(value) : whole;
+  });
+}
 
 function readReadme(): string {
   return readFileSync(README_PATH, 'utf-8');
@@ -207,7 +236,7 @@ describe('docs site numeric claims (TRA-174)', () => {
 
   for (const { path, tolerance, skipLine } of docs) {
     it(`${path}: every "languages" claim matches the registry (±${tolerance})`, () => {
-      const text = readFileSync(join(REPO_ROOT, path), 'utf-8');
+      const text = readDoc(path);
       for (const claim of findAllClaims(/languages?/, text)) {
         if (!within(langPlugins, claim.count, tolerance)) {
           throw new Error(
@@ -218,7 +247,7 @@ describe('docs site numeric claims (TRA-174)', () => {
     });
 
     it(`${path}: every "frameworks/integrations" claim matches the registry (±${tolerance})`, () => {
-      const text = readFileSync(join(REPO_ROOT, path), 'utf-8');
+      const text = readDoc(path);
       for (const claim of findAllClaims(
         /(?:frameworks?|integrations?|framework integrations?)/,
         text,
@@ -232,7 +261,7 @@ describe('docs site numeric claims (TRA-174)', () => {
     });
 
     it(`${path}: every "MCP tools" claim matches the source of truth (±${tolerance})`, () => {
-      const text = readFileSync(join(REPO_ROOT, path), 'utf-8');
+      const text = readDoc(path);
       for (const claim of findAllClaims(/(?:MCP )?tools?/, text)) {
         if (skipLine?.test(claim.rawLine)) continue;
         if (!within(toolCount, claim.count, tolerance)) {
@@ -254,7 +283,7 @@ describe('docs site numeric claims (TRA-174)', () => {
       { labelPrefix: 'Code intelligence included', expected: toolCount, tolerance: 5 },
       { labelPrefix: 'MCP tools', expected: toolCount, tolerance: 5 },
     ];
-    const text = readFileSync(join(REPO_ROOT, 'docs/comparisons.md'), 'utf-8');
+    const text = readDoc('docs/comparisons.md');
     for (const line of text.split('\n')) {
       const cells = line.split('|').map((c) => c.trim());
       // Table row shape: ["", "<label>", "<trace-mcp cell>", ...competitors, ""]
@@ -273,9 +302,44 @@ describe('docs site numeric claims (TRA-174)', () => {
     }
   });
 
+  it('no docs page hardcodes its own tool count any more (TRA-263)', () => {
+    // The per-page scans above only enforce a ±tolerance against the registry,
+    // which is what let 138 / 164 / 165 / ~170 coexist. Reading all of them from
+    // one data file is the part that actually keeps the pages equal.
+    for (const path of ['docs/index.html', 'docs/llms.txt', 'docs/tools-reference.md']) {
+      COUNT_TAG.lastIndex = 0;
+      expect(
+        COUNT_TAG.test(readFileSync(join(REPO_ROOT, path), 'utf-8')),
+        `${path} no longer reads {{ site.data.counts.* }} — keep the number in docs/_data/counts.yml.`,
+      ).toBe(true);
+    }
+  });
+
+  it('every {{ site.data.counts.* }} tag in docs/ resolves to a number (TRA-263)', () => {
+    // Jekyll renders an unknown key as the empty string rather than failing the
+    // build, so a typo would ship as "trace-mcp exposes  MCP tools".
+    const broken: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!/\.(md|html|txt)$/.test(entry.name)) continue;
+        for (const m of readFileSync(full, 'utf-8').matchAll(COUNT_TAG)) {
+          if (typeof lookupCount(m[1]) !== 'number') broken.push(`${entry.name}: ${m[0]}`);
+        }
+      }
+    };
+    walk(join(REPO_ROOT, 'docs'));
+    expect([...new Set(broken)], 'no matching key in docs/_data/counts.yml').toEqual([]);
+  });
+
   it('llms.txt and tools-reference.md agree on the resource count', () => {
-    const llms = readFileSync(join(REPO_ROOT, 'docs/llms.txt'), 'utf-8');
-    const toolsRef = readFileSync(join(REPO_ROOT, 'docs/tools-reference.md'), 'utf-8');
+    const llms = readDoc('docs/llms.txt');
+    const toolsRef = readDoc('docs/tools-reference.md');
     for (const text of [llms, toolsRef]) {
       for (const claim of findAllClaims(/resources?/, text)) {
         if (!within(resourceCount, claim.count, 2)) {

@@ -1,3 +1,8 @@
+---
+# Empty front matter only so Jekyll renders the {{ site.data.counts.* }} tags
+# below (TRA-263). No layout — the page keeps its own hand-written head/OG tags.
+layout: null
+---
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -104,7 +109,7 @@
       "Up to 2× effective capacity at the same context budget",
       "Up to 99% less redundant processing in structured tasks (code navigation, dependency traversal)",
       "Framework-aware dependency graph (85 integrations, 80 languages)",
-      "164 MCP tools for navigation, impact analysis, refactoring",
+      "{{ site.data.counts.tools }} MCP tools for navigation, impact analysis, refactoring",
       "Local-first: SQLite + bundled ONNX embeddings, zero API keys",
       "Native Model Context Protocol integration"
     ]
@@ -122,7 +127,7 @@
         "name": "What is the best MCP server for giving Claude Code codebase context?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes ~164 MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 85 framework integrations, and typically cuts token usage 40–50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
+          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes {{ site.data.counts.tools }} MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 85 framework integrations, and typically cuts token usage 40–50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
         }
       },
       {
@@ -2084,7 +2089,7 @@
         </div>
         <div class="stat">
           <div class="stat-label">MCP Tools</div>
-          <div class="stat-value" data-count="138">0</div>
+          <div class="stat-value" data-count="{{ site.data.counts.tools }}">0</div>
           <div class="stat-trend">read-only or audited</div>
         </div>
         <div class="stat">
@@ -2248,14 +2253,14 @@
           <p>Tree-sitter parses symbols, plugins resolve framework edges, optional LSP enriches with compiler-grade call data. Stored locally in SQLite + FTS5.</p>
           <div class="tags">
             <span class="tag">tree-sitter</span>
-            <span class="tag">164 mcp tools</span>
+            <span class="tag">{{ site.data.counts.tools }} mcp tools</span>
             <span class="tag">local sqlite</span>
           </div>
         </div>
         <div class="pipe-step">
           <div class="pipe-num">03</div>
           <h3>Expose to your agents</h3>
-          <p>164 MCP tools become available in Claude Code, Cursor, Windsurf, VS Code &mdash; or any custom agent that speaks MCP over stdio or HTTP.</p>
+          <p>{{ site.data.counts.tools }} MCP tools become available in Claude Code, Cursor, Windsurf, VS Code &mdash; or any custom agent that speaks MCP over stdio or HTTP.</p>
           <div class="tags">
             <span class="tag">mcp</span>
             <span class="tag">stdio + http</span>
@@ -2278,7 +2283,7 @@
         <div class="section-meta-tag"><span class="label">005 / Core Capabilities</span></div>
         <div>
           <h2 class="section-title">The five calls that <span class="em">replace 90% of recomputation.</span></h2>
-          <p class="section-lede">Five tools from a surface of 138 &mdash; the ones agents reach for first. Each one collapses what would otherwise be a chain of Reads, Greps, and Globs into a single graph query. Token cost drops; the answer gets sharper.</p>
+          <p class="section-lede">Five tools from a surface of {{ site.data.counts.tools }} &mdash; the ones agents reach for first. Each one collapses what would otherwise be a chain of Reads, Greps, and Globs into a single graph query. Token cost drops; the answer gets sharper.</p>
         </div>
       </div>
 
@@ -2340,7 +2345,7 @@
           <span class="compare-sub">/ Agent-native trace-mcp</span>
           <h3>A precomputed graph the agent reuses</h3>
           <ul>
-            <li>164 tools that return answers, not files to read</li>
+            <li>{{ site.data.counts.tools }} tools that return answers, not files to read</li>
             <li>One incremental index, queried per task &mdash; not rebuilt per turn</li>
             <li>Single graph across every symbol, edge, and framework</li>
             <li>Native MCP protocol, zero adapter code</li>
@@ -2626,7 +2631,7 @@
             <h3>What is the best MCP server for giving Claude Code codebase context?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes ~164 MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 85 framework integrations, and typically cuts token usage 40&ndash;50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
+          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes {{ site.data.counts.tools }} MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 85 framework integrations, and typically cuts token usage 40&ndash;50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
         </details>
         <details class="faq">
           <summary>

@@ -43,7 +43,10 @@ function servedCount(preset: string): number {
   return allToolNames().filter((name) => filter(name)).length;
 }
 
-const DOCS = ['docs/configuration.md', 'docs/llms-full.txt'];
+// comparisons.md stated its own preset sizes (`minimal` 24, `standard` 55) and
+// drifted for exactly as long as it was outside this list (TRA-263). Its claims
+// were reworded into the `<preset>` (N tools) shape so they land in scope here.
+const DOCS = ['docs/configuration.md', 'docs/llms-full.txt', 'docs/comparisons.md'];
 const PRESETS = ['standard', 'minimal', 'review', 'architecture'];
 
 describe('documented tool-preset sizes', () => {
