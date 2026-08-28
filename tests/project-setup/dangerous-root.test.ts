@@ -63,6 +63,11 @@ describe('isDangerousProjectRoot', () => {
 
     test('rejects a drive root', () => {
       expect(isDangerousProjectRoot('C:\\')).toBe('filesystem root');
+      expect(isDangerousProjectRoot('C:\\\\\\')).toBe('filesystem root');
+    });
+
+    test('tolerates duplicate separators', () => {
+      expect(isDangerousProjectRoot('C:\\\\Windows\\\\System32\\')).toBe('system directory');
     });
 
     test('does not reject a real project nested under a system dir', () => {

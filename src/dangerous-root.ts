@@ -73,7 +73,10 @@ export function isDangerousProjectRoot(absRoot: string): string | null {
   // a platform gate would make these untestable off Windows.
   const driveRelative = /^[a-zA-Z]:[\\/](.*)$/.exec(absRoot);
   if (driveRelative) {
-    const tail = driveRelative[1].replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+    // Split rather than trim with a quantified regex: '\\+$' backtracks
+    // quadratically on a path of many backslashes (js/polynomial-redos), and
+    // splitting also collapses duplicate separators for free.
+    const tail = driveRelative[1].split(/[\\/]/).filter(Boolean).join('\\').toLowerCase();
     if (tail === '') return 'filesystem root';
     if (WINDOWS_SYSTEM_DIRS.has(tail)) return 'system directory';
   }
