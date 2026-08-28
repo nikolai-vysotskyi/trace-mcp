@@ -124,15 +124,18 @@ describe('README numeric claims', () => {
   const fwPlugins = registry.getAllFrameworkPlugins().length;
   const toolCount = countServerToolCalls();
 
-  it('frameworks count in README is within tolerance of registered framework plugins', () => {
-    const claim = findClaim(/framework integrations?/, readme, 'frameworks-integration count');
-    expect(claim, 'no "X framework integrations" claim found in README').not.toBeNull();
-    if (!claim) return;
-    if (!within(fwPlugins, claim.count, 5)) {
-      throw new Error(
-        `README claims ${claim.count} framework integrations; registry has ${fwPlugins}. ` +
-          `Update README.md line: "${claim.rawLine}"`,
-      );
+  it('every frameworks count in README is within tolerance of registered framework plugins', () => {
+    // TRA-272: same first-match-only gap as the languages check below — README
+    // states this number twice and only the first one was ever verified.
+    const claims = findAllClaims(/framework integrations?/, readme);
+    expect(claims.length, 'no "X framework integrations" claim found in README').toBeGreaterThan(0);
+    for (const claim of claims) {
+      if (!within(fwPlugins, claim.count, 5)) {
+        throw new Error(
+          `README claims ${claim.count} framework integrations; registry has ${fwPlugins}. ` +
+            `Update README.md line: "${claim.rawLine}"`,
+        );
+      }
     }
   });
 
