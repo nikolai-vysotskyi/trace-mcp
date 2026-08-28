@@ -14,23 +14,20 @@
     "dist": "pnpm run build && electron-builder",
     "postinstall": "node scripts/patch-electron-dev.mjs",
     "generate-icons": "node scripts/generate-icons.mjs",
+    "perf": "node scripts/perf-measure.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "@cosmos.gl/graph": "3.4.1",
-    "menubar": "^9.5.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.0"
   },
   "overrides": {
     "@luma.gl/core": "9.2.6",
     "@luma.gl/engine": "9.2.6",
-    "@luma.gl/webgl": "9.2.6",
-    "menubar": {
-      "electron": "$electron"
-    }
+    "@luma.gl/webgl": "9.2.6"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
