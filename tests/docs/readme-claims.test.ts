@@ -181,14 +181,24 @@ describe('docs site numeric claims (TRA-174)', () => {
   // competitors' language/tool counts (e.g. "158 languages", "40+ tools"),
   // so a whole-file scan would false-positive on numbers that aren't about
   // trace-mcp. It gets its own targeted, column-scoped check below instead.
-  const docs: Array<{ path: string; tolerance: number }> = [
+  //
+  // TRA-243: the site surfaces were guarded, but CLAUDE.md and the shipped
+  // skills were not — and both had drifted badly (CLAUDE.md still claimed
+  // "48+ frameworks across 68 languages"; the skills claimed "120+ tools").
+  // `skipLine` exempts lines that legitimately state a *subset* count
+  // (preset sizes, the TOON allowlist) rather than the total.
+  const docs: Array<{ path: string; tolerance: number; skipLine?: RegExp }> = [
     { path: 'docs/index.html', tolerance: 2 },
     { path: 'docs/llms.txt', tolerance: 2 },
     { path: 'docs/tools-reference.md', tolerance: 5 },
     { path: 'docs/quality-gates.md', tolerance: 5 },
+    { path: 'CLAUDE.md', tolerance: 5, skipLine: /output_format|preset/ },
+    { path: 'AGENTS.md', tolerance: 5, skipLine: /output_format|preset/ },
+    { path: 'skills/README.md', tolerance: 5 },
+    { path: 'skills/trace-mcp/SKILL.md', tolerance: 5, skipLine: /output_format|preset/ },
   ];
 
-  for (const { path, tolerance } of docs) {
+  for (const { path, tolerance, skipLine } of docs) {
     it(`${path}: every "languages" claim matches the registry (±${tolerance})`, () => {
       const text = readFileSync(join(REPO_ROOT, path), 'utf-8');
       for (const claim of findAllClaims(/languages?/, text)) {
@@ -217,6 +227,7 @@ describe('docs site numeric claims (TRA-174)', () => {
     it(`${path}: every "MCP tools" claim matches the source of truth (±${tolerance})`, () => {
       const text = readFileSync(join(REPO_ROOT, path), 'utf-8');
       for (const claim of findAllClaims(/(?:MCP )?tools?/, text)) {
+        if (skipLine?.test(claim.rawLine)) continue;
         if (!within(toolCount, claim.count, tolerance)) {
           throw new Error(
             `${path} claims ${claim.count} tools; src/tools/register/*.ts contains ${toolCount} server.tool(...) registrations. Line: "${claim.rawLine}"`,
