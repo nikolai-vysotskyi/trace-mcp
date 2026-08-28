@@ -44,7 +44,7 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Tree-sitter AST parsing | ✅ 80 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ 23 langs + Jupyter | ✅ 70+ languages | ✅ 161 languages | ✅ 22 languages |
 | Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output (98% reduction) | ✅ | ✅ core focus (~95% reduction) | ✅ | ✅ outline/show/context |
 | Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ incremental knowledge graph | ✅ import graph | ✅ knowledge graph | ✅ refs/importers |
-| Framework-aware edges | ✅ 85 integrations | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
+| Framework-aware edges | ✅ 87 integrations | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
 | Impact analysis | ✅ reverse dep traversal + decorator filter | ❌ | ❌ | ✅ blast-radius + Leiden communities | ✅ blast radius + decorator filter | ✅ detect_changes | ✅ impact command |
 | Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ✅ graph-based | ✅ AST-based, bidirectional | ✅ trace_call_path | ✅ refs/importers |
 | Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ | ❌ |
