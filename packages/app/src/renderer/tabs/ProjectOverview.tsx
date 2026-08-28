@@ -26,21 +26,23 @@ import { Icon } from '../lattice/icons';
 import {
   Badge,
   Button,
+  Card,
   ConfirmPopover,
   EmptyState,
+  ListRow,
   Menu,
   MenuItem,
   MenuSeparator,
+  Section,
+  SectionError,
   SegmentedControl,
+  Skeleton,
+  SkeletonRows,
   StatusDot,
+  Toolbar,
   useMenuAnchor,
   type Tone,
 } from '../lattice/ui';
-// ponytail: Skeleton lives next to the workspace surface that introduced it.
-// It is a general primitive and wants to move to lattice/ui, but that means
-// editing four freshly-merged files for no visual change — do it when a third
-// surface needs it.
-import { Skeleton } from '../workspace/components/Skeleton';
 
 interface ProjectStats {
   files: number;
@@ -207,124 +209,6 @@ function buildIssueUrl(gap: CoverageGap | UnknownPackage): string {
     : `## Catalog review\n\n**Package:** \`${gap.name}\` (${gap.version})\n**Ecosystem:** ${(gap as UnknownPackage).ecosystem}\n**Assessment:** ${(gap as UnknownPackage).needs_plugin} — ${(gap as UnknownPackage).reason}\n\nThis dependency is not in the known-packages catalog.\n\n### Expected\nAdd to catalog with appropriate category/priority, or create a plugin if it has framework-level semantics.\n`;
   const labels = isGap ? 'enhancement,plugin-request' : 'enhancement,catalog-review';
   return `https://github.com/${GITHUB_REPO}/issues/new?${new URLSearchParams({ title, body, labels })}`;
-}
-
-// ── Section scaffolding ─────────────────────────────────────────────────────
-
-/** A titled group. Grouping is whitespace + a caption, never a rule. */
-function Section({
-  title,
-  count,
-  trailing,
-  children,
-}: {
-  title: string;
-  count?: number;
-  trailing?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2 px-1 min-h-6">
-        <h3
-          className="flex items-baseline gap-1.5 text-[11px] leading-[13px] font-semibold"
-          style={{ color: 'var(--label-secondary)' }}
-        >
-          {title}
-          {count !== undefined && count > 0 && (
-            <span className="tabular-nums" style={{ color: 'var(--label-secondary)' }}>
-              {count.toLocaleString()}
-            </span>
-          )}
-        </h3>
-        {trailing}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/** Inset grouped-list container. Content, so: opaque, hairline, no shadow. */
-function Card({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div
-      className={`overflow-hidden${className ? ` ${className}` : ''}`}
-      style={{
-        background: 'var(--surface)',
-        borderRadius: 12,
-        border: '0.5px solid var(--separator)',
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** One label/value row of a grouped list. 32px, 13px both sides. */
-function ListRow({
-  label,
-  value,
-  last = false,
-}: {
-  label: string;
-  value: React.ReactNode;
-  last?: boolean;
-}) {
-  return (
-    <div
-      className="flex items-center justify-between gap-3 px-3"
-      style={{
-        minHeight: 32,
-        borderBottom: last ? 'none' : '0.5px solid var(--separator)',
-      }}
-    >
-      <span className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
-        {label}
-      </span>
-      <span
-        className="text-[13px] leading-4 tabular-nums truncate"
-        style={{ color: 'var(--label-secondary)' }}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-/** Rows at the real 32px geometry so nothing moves when the data lands. */
-function SkeletonRows({ rows }: { rows: number }) {
-  return (
-    <div role="status" aria-label="Loading">
-      {Array.from({ length: rows }, (_, i) => (
-        <div
-          key={i}
-          className="flex items-center justify-between px-3"
-          style={{
-            minHeight: 32,
-            borderBottom: i === rows - 1 ? 'none' : '0.5px solid var(--separator)',
-          }}
-        >
-          <Skeleton width={92 + ((i * 29) % 40)} height={11} />
-          <Skeleton width={48 + ((i * 17) % 32)} height={11} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Inline "we couldn't measure this" panel with the one action that helps. */
-function SectionError({ what, onRetry }: { what: string; onRetry: () => void }) {
-  return (
-    <div className="flex items-center gap-2 px-3 py-2">
-      <Icon name="warning" size={14} />
-      <span className="text-[13px] leading-4 flex-1" style={{ color: 'var(--label-secondary)' }}>
-        Couldn't load {what}. The daemon may still be indexing.
-      </span>
-      <Button size="small" onClick={onRetry}>
-        Retry
-      </Button>
-    </div>
-  );
 }
 
 // ── Surface ─────────────────────────────────────────────────────────────────
@@ -543,15 +427,7 @@ export function ProjectOverview({
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Toolbar ──────────────────────────────────────────────────── */}
-      <div
-        className="flex items-center gap-2 px-4 shrink-0 glass relative"
-        style={{
-          height: 52,
-          borderBottom: '0.5px solid transparent',
-          borderBottomColor: scrolled ? 'var(--separator)' : 'transparent',
-          transition: 'border-bottom-color var(--dur-standard) var(--ease-out)',
-        }}
-      >
+      <Toolbar scrolled={scrolled} className="gap-3">
         <StatusDot tone={statusTone} pulse={status === 'indexing'} />
         <div className="min-w-0 flex-1">
           <h2
@@ -631,7 +507,7 @@ export function ProjectOverview({
             />
           </div>
         )}
-      </div>
+      </Toolbar>
 
       {overflowMenu.at && (
         <Menu x={overflowMenu.at.x} y={overflowMenu.at.y} align="end" onClose={overflowMenu.close}>

@@ -257,6 +257,12 @@ ipcMain.handle('open-settings', (_event: Electron.IpcMainInvokeEvent, section?: 
   return { ok: true };
 });
 
+// IPC: open the menu window on the MCP clients tab
+ipcMain.handle('open-clients', () => {
+  showMenuWindow('clients');
+  return { ok: true };
+});
+
 // IPC: get current platform (renderer needs this to decide whether to show custom tabs)
 ipcMain.handle('get-platform', () => process.platform);
 

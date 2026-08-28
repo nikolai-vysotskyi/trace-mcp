@@ -4,6 +4,12 @@
  *   - "AI calls":   embed / LLM / rerank requests (AIActivity, project-agnostic)
  *
  * Active sub-tab persists in localStorage under key 'activity.subtab'.
+ *
+ * This container owns the sub-tab STATE but not a row of its own: it hands the
+ * switcher down and each surface renders it on the leading edge of its single
+ * toolbar. Before TRA-294 the switcher sat in a bar of its own above whatever
+ * the child stacked underneath, which is how the screen ended up with three
+ * control rows and no toolbar.
  */
 import { useEffect, useState } from 'react';
 import { ToolActivity } from './ToolActivity';
@@ -34,30 +40,22 @@ export function Activity({
     try { localStorage.setItem(STORAGE_KEY, sub); } catch { /* ignore quota */ }
   }, [sub]);
 
-  return (
-    <div className="flex flex-col h-full" style={{ color: 'var(--text-primary)' }}>
-      <div
-        className="shrink-0 flex items-center px-3 pt-3 pb-2"
-        style={{ borderBottom: '0.5px solid var(--border-row)' }}
-      >
-        <SegmentedControl
-          options={[
-            { value: 'tool', label: 'Tool calls' },
-            { value: 'ai', label: 'AI calls' },
-          ]}
-          value={sub}
-          onChange={setSub}
-          aria-label="Activity source"
-        />
-      </div>
+  const switcher = (
+    <SegmentedControl
+      className="shrink-0"
+      options={[
+        { value: 'tool', label: 'Tool calls' },
+        { value: 'ai', label: 'AI calls' },
+      ]}
+      value={sub}
+      onChange={setSub}
+      aria-label="Activity source"
+    />
+  );
 
-      <div className="flex-1 min-h-0 overflow-hidden">
-        {sub === 'tool' ? (
-          <ToolActivity root={root} onOpenFileInGraph={onOpenFileInGraph} />
-        ) : (
-          <AIActivity />
-        )}
-      </div>
-    </div>
+  return sub === 'tool' ? (
+    <ToolActivity root={root} subTab={switcher} onOpenFileInGraph={onOpenFileInGraph} />
+  ) : (
+    <AIActivity subTab={switcher} />
   );
 }
