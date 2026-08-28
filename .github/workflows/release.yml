@@ -29,15 +29,17 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      # Deliberately NOT secrets.GITHUB_TOKEN. GitHub suppresses workflow
+      # triggering from GITHUB_TOKEN-authored pushes (loop prevention), so
+      # the release PR's checks either never start or land in
+      # "action_required" on every rebase (TRA-171). A fine-grained PAT
+      # (Contents + Pull requests: read/write) is a real identity, so its
+      # pushes trigger pull_request workflows normally. No `|| GITHUB_TOKEN`
+      # fallback on purpose: if the PAT expires we want a loud failure here,
+      # not a silent slide back into the stuck-checks behaviour.
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
-          # A push made with secrets.GITHUB_TOKEN never triggers workflow
-          # runs (GitHub's loop-prevention rule), so every release-please
-          # rebase left the PR with zero check-runs, stuck until a human
-          # manually approved/re-triggered them (TRA-171). A fine-grained
-          # PAT scoped to this repo (contents:write, pull_requests:write)
-          # is a normal actor and doesn't hit that rule.
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
       - name: Append upgrade instructions to release notes
