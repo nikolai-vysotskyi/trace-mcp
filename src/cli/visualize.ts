@@ -26,7 +26,7 @@ import { visualizeGraph } from '../tools/analysis/visualize.js';
 import { visualizeSubprojectTopology } from '../tools/analysis/visualize-subproject.js';
 import { TopologyStore } from '../topology/topology-db.js';
 
-function openInBrowser(filePath: string): void {
+export function openInBrowser(filePath: string): void {
   const platform = process.platform;
   try {
     if (platform === 'darwin') execSync(`open "${filePath}"`);
