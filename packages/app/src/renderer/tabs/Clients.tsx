@@ -1,5 +1,42 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { StatusDot, type Tone } from '../lattice/ui';
+/**
+ * Clients — the menu window's "MCP clients" surface (TRA-295).
+ *
+ * Layout:
+ *   Toolbar  — 52px glass row: the screen title on the left, one icon button
+ *              (Refresh) on the right. The screen used to have neither a title
+ *              nor a toolbar, and each section carried its own unlabelled 18px
+ *              refresh glyph in its top-right corner.
+ *   Content  — two inset grouped lists capped at a readable measure:
+ *              Supported clients · Active sessions.
+ *
+ * What this replaces, measured on the running app before the rewrite:
+ *   - Ten accent-filled `Connect` buttons stacked vertically — a wall of blue
+ *     far past the ~5% accent budget. Every row action is a bordered button
+ *     now, and NOTHING on this screen is prominent.
+ *   - Rows floating on the bare frame: a leading grey dot, a 12px name, ~1000px
+ *     of dead width, then the button. They are 44px rows of one grouped list.
+ *   - A leading dot that was grey for every supported client and therefore
+ *     unreadable. Connection state is now a dot PLUS the word "Connected", and
+ *     a client with nothing to report carries no dot at all.
+ *   - `Manual` as a right-aligned grey word for JetBrains AI Assistant and
+ *     Warp — an undocumented convention. It is a "Set up manually…" button that
+ *     discloses the actual steps.
+ *   - `401b97c5 http` as a session's primary label: a raw id where the name
+ *     goes. The project leads, the id is a monospace caption.
+ */
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Menu,
+  MenuItem,
+  MenuSection,
+  StatusDot,
+  useMenuAnchor,
+  type Tone,
+} from '../lattice/ui';
+import { Skeleton } from '../workspace/components/Skeleton';
 import { type ClientInfo, useDaemon } from '../hooks/useDaemon';
 
 // ── All supported MCP clients (same order as CLI init) ────────────
@@ -40,7 +77,7 @@ const MANUAL_CLIENTS = new Set<ClientName>(['jetbrains-ai', 'warp']);
 
 const MANUAL_HINTS: Partial<Record<ClientName, string>> = {
   'jetbrains-ai': 'Settings → Tools → AI Assistant → MCP → Add → Command: trace-mcp, Args: serve',
-  warp: 'Settings → Agents → MCP servers → + Add → paste { mcpServers: { "trace-mcp": ... } }',
+  warp: 'Settings → Agents → MCP servers → + Add → paste { mcpServers: { "trace-mcp": … } }',
 };
 
 interface DetectedClient {
@@ -58,69 +95,16 @@ interface RichClientStatus {
   staleReason?: string;
 }
 
-// ── Enforcement level popover ─────────────────────────────────────
+// ── Enforcement levels ────────────────────────────────────────────
 type EnforcementLevel = 'base' | 'standard' | 'max';
 
 const LEVELS: { value: EnforcementLevel; label: string; hint: string }[] = [
   { value: 'base', label: 'Base', hint: 'CLAUDE.md only — soft routing rules' },
-  { value: 'standard', label: 'Standard', hint: 'CLAUDE.md + hooks' },
-  { value: 'max', label: 'Max', hint: 'CLAUDE.md + hooks + tweakcc (recommended)' },
+  { value: 'standard', label: 'Standard', hint: 'CLAUDE.md and hooks' },
+  { value: 'max', label: 'Max', hint: 'CLAUDE.md, hooks and tweakcc — recommended' },
 ];
 
-function LevelPopover({
-  onSelect,
-  onClose,
-}: {
-  onSelect: (level: EnforcementLevel) => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [onClose]);
-
-  return (
-    <div
-      ref={ref}
-      className="absolute right-0 top-full mt-1 z-50 rounded-lg overflow-hidden"
-      style={{
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border)',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-        minWidth: 220,
-      }}
-    >
-      {LEVELS.map((l, i) => (
-        <button
-          type="button"
-          key={l.value}
-          onClick={() => onSelect(l.value)}
-          className="w-full text-left px-3 py-2 transition-colors hover:brightness-110"
-          style={{
-            background: l.value === 'max' ? 'var(--bg-active)' : 'transparent',
-            borderBottom: i < LEVELS.length - 1 ? '0.5px solid var(--border)' : 'none',
-          }}
-        >
-          <div className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
-            {l.label}
-          </div>
-          <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-            {l.hint}
-          </div>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Connected-client helpers ──────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────
 function clientStatus(client: ClientInfo): Tone {
   const elapsed = Date.now() - new Date(client.lastSeen).getTime();
   if (elapsed < 30_000) return 'green';
@@ -142,42 +126,114 @@ const CLIENT_LABELS: Record<string, string> = Object.fromEntries(
   ALL_CLIENTS.map((c) => [c.name, c.label]),
 );
 
-function clientDisplayName(client: ClientInfo): string {
+/** The row's primary label: the project being worked on, then the client that
+    is working on it. The session id is neither, so it is never the headline. */
+function sessionTitle(client: ClientInfo): string {
+  if (client.project) return client.project.split(/[/\\]/).filter(Boolean).pop() ?? client.project;
   if (client.name) return CLIENT_LABELS[client.name] ?? client.name;
-  return client.id.slice(0, 8);
+  return 'Unnamed session';
+}
+
+function shortPath(p: string): string {
+  return p.replace(/^\/Users\/[^/]+/, '~').replace(/^\/home\/[^/]+/, '~');
+}
+
+// ── Section scaffolding (same idiom as Project Overview) ──────────
+
+/** A titled group. Grouping is whitespace and a caption, never a rule. */
+function Section({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h3
+        className="flex items-baseline gap-1.5 px-1 min-h-6 text-[11px] leading-[13px] font-semibold"
+        style={{ color: 'var(--label-secondary)' }}
+      >
+        {title}
+        {count !== undefined && count > 0 && <span className="tabular-nums">{count}</span>}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+/** Inset grouped-list container. Content, so: opaque, hairline, no shadow. */
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="overflow-hidden"
+      style={{
+        background: 'var(--surface)',
+        borderRadius: 12,
+        border: '0.5px solid var(--separator)',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Rows at the real 44px geometry so nothing moves when the data lands. */
+function SkeletonRows({ rows, label }: { rows: number; label: string }) {
+  return (
+    <div role="status" aria-label={label}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          key={i}
+          className="flex items-center justify-between px-3"
+          style={{
+            height: 44,
+            borderBottom: i === rows - 1 ? 'none' : '0.5px solid var(--separator)',
+          }}
+        >
+          <Skeleton width={96 + ((i * 31) % 56)} height={11} />
+          <Skeleton width={64} height={11} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ── Row for a connected session ───────────────────────────────────
-function ConnectedClientRow({ client }: { client: ClientInfo }) {
-  const status = clientStatus(client);
+function ConnectedClientRow({ client, last }: { client: ClientInfo; last: boolean }) {
+  const tone = clientStatus(client);
+  const state = tone === 'green' ? 'Active' : tone === 'orange' ? 'Idle' : 'Stale';
 
   return (
     <div
-      className="flex items-center gap-2 px-2 py-1.5 rounded-md"
-      style={{ background: 'var(--bg-secondary)' }}
+      className="flex items-center gap-2.5 px-3"
+      style={{ height: 44, borderBottom: last ? 'none' : '0.5px solid var(--separator)' }}
     >
-      <StatusDot tone={status} pulse={status === 'green'} />
+      <StatusDot tone={tone} pulse={tone === 'green'} title={state} />
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-            {clientDisplayName(client)}
-          </span>
-          <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-            {client.transport}
-          </span>
+        <div
+          className="text-[13px] leading-4 truncate"
+          style={{ color: 'var(--label)' }}
+          title={client.project ?? undefined}
+        >
+          {sessionTitle(client)}
         </div>
-        {client.project && (
-          <div
-            className="text-[10px] truncate"
-            style={{ color: 'var(--text-secondary)' }}
-            title={client.project}
-          >
-            {client.project.split(/[/\\]/).filter(Boolean).pop()}
-          </div>
-        )}
+        <div
+          className="text-[11px] leading-[13px] truncate"
+          style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-mono)' }}
+        >
+          {client.id.slice(0, 8)} · {client.transport}
+        </div>
       </div>
-      <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-        {timeAgo(client.lastSeen)}
+      {/* The dot's colour is never the only carrier of the state — the word is
+          right next to it, and the timestamp is tabular so the column lines up. */}
+      <span
+        className="text-[11px] leading-[13px] shrink-0"
+        style={{ color: 'var(--label-secondary)' }}
+      >
+        {state} · <span className="tabular-nums">{timeAgo(client.lastSeen)}</span>
       </span>
     </div>
   );
@@ -191,6 +247,7 @@ function SupportedClientRow({
   configPath,
   staleReason,
   configuring,
+  last,
   onConnect,
   onConnectWithLevel,
 }: {
@@ -198,136 +255,132 @@ function SupportedClientRow({
   label: string;
   /**
    * Drives the right-hand control:
-   *   missing       → "Connect" / level popover
-   *   up_to_date    → "Configured"
-   *   stale         → "Update" (rewrites the entry to current expectations)
-   *   unmanageable  → "Manual"
-   *   unknown       → "Configured" (presence-only — Codex TOML, can't compare safely)
+   *   missing       → "Connect" (level menu for the Claude family)
+   *   up_to_date    → a green dot + the word "Connected"
+   *   stale         → "Update available" badge + "Update"
+   *   unmanageable  → "Set up manually…", which discloses the steps
+   *   unknown       → "Connected" (presence-only — Codex TOML, can't compare)
    */
   status: ClientConfigStatus;
   configPath?: string | null;
   staleReason?: string;
   configuring: boolean;
+  last: boolean;
   onConnect: () => void;
   onConnectWithLevel: (level: EnforcementLevel) => void;
 }) {
-  const isManual = MANUAL_CLIENTS.has(name);
-  const hasClaude = CLAUDE_CLIENTS.has(name);
-  const [showLevels, setShowLevels] = useState(false);
+  const isManual = MANUAL_CLIENTS.has(name) || status === 'unmanageable';
+  const hasLevels = CLAUDE_CLIENTS.has(name);
+  const levelMenu = useMenuAnchor();
+  const [showSteps, setShowSteps] = useState(false);
 
+  const connected = status === 'up_to_date' || status === 'unknown';
   const handleConnect = () => {
-    if (hasClaude) {
-      setShowLevels(true);
-    } else {
-      onConnect();
-    }
+    if (hasLevels) levelMenu.open();
+    else onConnect();
   };
 
-  const isPresent = status === 'up_to_date' || status === 'unknown';
-  const dotColor =
-    status === 'up_to_date' || status === 'unknown'
-      ? '#34c759' // green: integration is healthy
-      : status === 'stale'
-        ? '#ff9500' // amber: present but drifted — update available
-        : 'var(--text-tertiary)'; // gray: missing or unmanageable
+  /* One caption slot, and only when there is something to say: where the entry
+     lives, or the manual steps the user asked to see. */
+  const caption =
+    isManual && showSteps
+      ? MANUAL_HINTS[name]
+      : (connected || status === 'stale') && configPath
+        ? shortPath(configPath)
+        : null;
 
   return (
     <div
-      className="flex items-center gap-2 px-2 py-1.5 rounded-md relative"
-      style={{ background: 'var(--bg-secondary)' }}
+      className="flex items-center gap-2.5 px-3"
+      style={{
+        minHeight: 44,
+        paddingTop: caption ? 8 : 0,
+        paddingBottom: caption ? 8 : 0,
+        borderBottom: last ? 'none' : '0.5px solid var(--separator)',
+      }}
     >
-      <div
-        className="w-1.5 h-1.5 rounded-full shrink-0"
-        style={{
-          background: dotColor,
-          opacity: isPresent || status === 'stale' ? 1 : 0.4,
-        }}
-      />
       <div className="flex-1 min-w-0">
-        <span
-          className="text-xs font-medium"
-          style={{
-            color: isPresent || status === 'stale' ? 'var(--text-primary)' : 'var(--text-secondary)',
-          }}
-        >
+        <div className="text-[13px] leading-4 truncate" style={{ color: 'var(--label)' }}>
           {label}
-        </span>
-        {(isPresent || status === 'stale') && configPath && (
-          <div className="text-[10px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-            {configPath.replace(/^\/Users\/[^/]+/, '~')}
-            {status === 'stale' && staleReason && (
-              <span style={{ color: '#ff9500' }}> · drift: {staleReason}</span>
-            )}
-          </div>
-        )}
-        {status === 'missing' && isManual && MANUAL_HINTS[name] && (
-          <div className="text-[10px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-            {MANUAL_HINTS[name]}
+        </div>
+        {caption && (
+          <div
+            className="text-[11px] leading-[13px] truncate"
+            style={{ color: 'var(--label-secondary)' }}
+            title={caption}
+          >
+            {caption}
           </div>
         )}
       </div>
-      {status === 'up_to_date' || status === 'unknown' ? (
-        <span className="text-[10px] shrink-0 font-medium" style={{ color: '#34c759' }}>
-          Configured
-        </span>
-      ) : status === 'unmanageable' || isManual ? (
-        <span className="text-[10px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-          Manual
+
+      {connected ? (
+        /* Colour alone never carries the state: the dot is paired with the word. */
+        <span
+          className="flex items-center gap-1.5 text-[13px] leading-4 shrink-0"
+          style={{ color: 'var(--label-secondary)' }}
+        >
+          <StatusDot tone="green" />
+          Connected
         </span>
       ) : status === 'stale' ? (
-        <button
-          type="button"
-          onClick={handleConnect}
-          disabled={configuring}
-          title={staleReason ? `Drifted field: ${staleReason}` : 'Refresh trace-mcp config'}
-          className="text-[10px] px-2 py-0.5 rounded font-medium transition-colors shrink-0"
-          style={{
-            background: '#ff9500',
-            color: '#fff',
-            opacity: configuring ? 0.6 : 1,
-            cursor: configuring ? 'default' : 'pointer',
-          }}
-        >
-          {configuring ? 'Updating…' : 'Update'}
-        </button>
-      ) : (
         <>
-          <button
-            type="button"
-            onClick={handleConnect}
-            disabled={configuring}
-            className="text-[10px] px-2 py-0.5 rounded font-medium transition-colors shrink-0"
-            style={{
-              background: 'var(--accent)',
-              color: '#fff',
-              opacity: configuring ? 0.6 : 1,
-              cursor: configuring ? 'default' : 'pointer',
-            }}
-          >
-            {configuring ? 'Connecting…' : 'Connect'}
-          </button>
-          {showLevels && (
-            <LevelPopover
-              onSelect={(level) => {
-                setShowLevels(false);
-                onConnectWithLevel(level);
-              }}
-              onClose={() => setShowLevels(false)}
-            />
-          )}
+          <Badge tone="orange" title={staleReason ? `Drifted field: ${staleReason}` : undefined}>
+            Update available
+          </Badge>
+          <Button disabled={configuring} onClick={handleConnect}>
+            {configuring ? 'Updating…' : 'Update'}
+          </Button>
         </>
+      ) : isManual ? (
+        <Button
+          active={showSteps}
+          aria-expanded={showSteps}
+          onClick={() => setShowSteps((v) => !v)}
+        >
+          {showSteps ? 'Hide steps' : 'Set up manually…'}
+        </Button>
+      ) : (
+        <Button
+          ref={levelMenu.ref}
+          disabled={configuring}
+          aria-haspopup={hasLevels ? 'menu' : undefined}
+          aria-expanded={hasLevels ? levelMenu.at !== null : undefined}
+          onClick={handleConnect}
+        >
+          {configuring ? 'Connecting…' : 'Connect'}
+        </Button>
+      )}
+
+      {levelMenu.at && (
+        <Menu x={levelMenu.at.x} y={levelMenu.at.y} align="end" onClose={levelMenu.close}>
+          <MenuSection>Enforcement level</MenuSection>
+          {LEVELS.map((l) => (
+            <MenuItem
+              key={l.value}
+              title={l.hint}
+              onClick={() => {
+                levelMenu.close();
+                onConnectWithLevel(l.value);
+              }}
+            >
+              {l.label}
+            </MenuItem>
+          ))}
+        </Menu>
       )}
     </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────
+// ── Surface ───────────────────────────────────────────────────────
 export function Clients() {
   const { clients, loading, connected, restarting, restartDaemon, fetchClients } = useDaemon();
   const [detected, setDetected] = useState<DetectedClient[]>([]);
   const [statuses, setStatuses] = useState<RichClientStatus[]>([]);
   const [detecting, setDetecting] = useState(true);
   const [configuringClient, setConfiguringClient] = useState<string | null>(null);
+  const [scrolled, setScrolled] = useState(false);
 
   const detectClients = useCallback(async () => {
     setDetecting(true);
@@ -378,41 +431,20 @@ export function Clients() {
     }
   };
 
-  if (!connected && !loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-2">
-        <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-          Daemon not reachable
-        </div>
-        <button
-          type="button"
-          onClick={() => restartDaemon()}
-          disabled={restarting}
-          className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"
-          style={{
-            background: 'var(--fill-control)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            color: 'var(--accent)',
-            border: '0.5px solid var(--border)',
-            boxShadow: 'var(--shadow-control)',
-            cursor: restarting ? 'default' : 'pointer',
-            opacity: restarting ? 0.6 : 1,
-          }}
-        >
-          {restarting ? 'Starting…' : 'Restart Daemon'}
-        </button>
-      </div>
-    );
-  }
+  const refreshAll = () => {
+    detectClients();
+    fetchClients();
+  };
+
+  /* The toolbar owns the pane and always renders — a surface that swaps its
+     whole chrome for an error panel reads as a different screen. */
+  const daemonDown = !connected && !loading;
 
   // Build configured set (client name → best config entry)
   const configuredMap = new Map<string, DetectedClient>();
   for (const d of detected) {
-    if (d.hasTraceMcp) {
-      if (!configuredMap.has(d.name)) {
-        configuredMap.set(d.name, d);
-      }
+    if (d.hasTraceMcp && !configuredMap.has(d.name)) {
+      configuredMap.set(d.name, d);
     }
   }
   const statusMap = new Map<string, RichClientStatus>();
@@ -454,122 +486,106 @@ export function Clients() {
         return 3;
     }
   };
-  const sortedClients = [...ALL_CLIENTS].sort((a, b) => {
-    const ra = sortRank(resolveStatus(a.name).status);
-    const rb = sortRank(resolveStatus(b.name).status);
-    return ra - rb;
-  });
+  const sortedClients = [...ALL_CLIENTS].sort(
+    (a, b) => sortRank(resolveStatus(a.name).status) - sortRank(resolveStatus(b.name).status),
+  );
+
+  const sessions = [...clients].sort(
+    (a, b) => new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime(),
+  );
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-4">
-      {/* Section 1: Supported clients / configuration */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Supported Clients
-          </h2>
-          <button
-            type="button"
-            onClick={() => detectClients()}
-            className="p-1 rounded-md transition-colors hover:opacity-80"
-            style={{ color: 'var(--text-secondary)' }}
-            title="Refresh"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M1.5 1.5v4h4" />
-              <path d="M1.5 5.5A6.5 6.5 0 0 1 14.5 8" />
-              <path d="M14.5 14.5v-4h-4" />
-              <path d="M14.5 10.5A6.5 6.5 0 0 1 1.5 8" />
-            </svg>
-          </button>
-        </div>
-
-        {detecting ? (
-          <div className="text-xs py-2 text-center" style={{ color: 'var(--text-tertiary)' }}>
-            Detecting clients…
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {sortedClients.map((c) => {
-              const s = resolveStatus(c.name);
-              return (
-                <SupportedClientRow
-                  key={c.name}
-                  name={c.name}
-                  label={c.label}
-                  status={s.status}
-                  configPath={s.configPath}
-                  staleReason={s.staleReason}
-                  configuring={configuringClient === c.name}
-                  onConnect={() => handleConnect(c.name)}
-                  onConnectWithLevel={(level) => handleConnect(c.name, level)}
-                />
-              );
-            })}
-          </div>
-        )}
+    <div className="flex flex-col h-full min-h-0">
+      {/* ── Toolbar ──────────────────────────────────────────────────── */}
+      <div
+        className="flex items-center gap-3 px-4 shrink-0 glass"
+        style={{
+          height: 52,
+          borderBottom: '0.5px solid transparent',
+          borderBottomColor: scrolled ? 'var(--separator)' : 'transparent',
+          transition: 'border-bottom-color var(--dur-standard) var(--ease-out)',
+        }}
+      >
+        <h2
+          className="flex-1 min-w-0 text-[17px] leading-[22px] font-semibold truncate"
+          style={{ color: 'var(--label)', letterSpacing: '-0.01em' }}
+        >
+          MCP clients
+        </h2>
+        <Button
+          variant="icon"
+          icon="refresh"
+          onClick={refreshAll}
+          aria-label="Refresh clients"
+          title="Refresh clients"
+        />
       </div>
 
-      {/* Section 2: Live connected sessions */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Active Sessions
-          </h2>
-          <button
-            type="button"
-            onClick={() => fetchClients()}
-            className="p-1 rounded-md transition-colors hover:opacity-80"
-            style={{ color: 'var(--text-secondary)' }}
-            title="Refresh"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M1.5 1.5v4h4" />
-              <path d="M1.5 5.5A6.5 6.5 0 0 1 14.5 8" />
-              <path d="M14.5 14.5v-4h-4" />
-              <path d="M14.5 10.5A6.5 6.5 0 0 1 1.5 8" />
-            </svg>
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="text-xs py-2 text-center" style={{ color: 'var(--text-tertiary)' }}>
-            Loading…
-          </div>
-        ) : clients.length === 0 ? (
-          <div className="text-xs py-2 text-center" style={{ color: 'var(--text-secondary)' }}>
-            No active MCP sessions.
-            <br />
-            <span style={{ color: 'var(--text-tertiary)' }}>
-              Sessions appear when a client connects via trace-mcp serve.
-            </span>
+      {/* ── Content ──────────────────────────────────────────────────── */}
+      <div
+        className="flex-1 overflow-auto"
+        onScroll={(e) => setScrolled((e.target as HTMLElement).scrollTop > 0)}
+      >
+        {daemonDown ? (
+          <div className="flex items-center justify-center h-full">
+            <EmptyState
+              icon="cable"
+              title="Daemon not reachable"
+              subtitle="trace-mcp clients connect through the local daemon. Start it to see and configure them."
+              action={
+                <Button variant="prominent" disabled={restarting} onClick={() => restartDaemon()}>
+                  {restarting ? 'Starting…' : 'Start daemon'}
+                </Button>
+              }
+            />
           </div>
         ) : (
-          <div className="space-y-1">
-            {[...clients]
-              .sort((a, b) => new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime())
-              .map((c) => (
-                <ConnectedClientRow key={c.id} client={c} />
-              ))}
-          </div>
+        <div className="flex flex-col gap-6 px-4 py-4 mx-auto w-full" style={{ maxWidth: 720 }}>
+          <Section title="Supported clients">
+            <Card>
+              {detecting && !statuses.length && !detected.length ? (
+                <SkeletonRows rows={6} label="Detecting clients" />
+              ) : (
+                sortedClients.map((c, i) => {
+                  const s = resolveStatus(c.name);
+                  return (
+                    <SupportedClientRow
+                      key={c.name}
+                      name={c.name}
+                      label={c.label}
+                      status={s.status}
+                      configPath={s.configPath}
+                      staleReason={s.staleReason}
+                      configuring={configuringClient === c.name}
+                      last={i === sortedClients.length - 1}
+                      onConnect={() => handleConnect(c.name)}
+                      onConnectWithLevel={(level) => handleConnect(c.name, level)}
+                    />
+                  );
+                })
+              )}
+            </Card>
+          </Section>
+
+          <Section title="Active sessions" count={sessions.length}>
+            <Card>
+              {loading && sessions.length === 0 ? (
+                <SkeletonRows rows={2} label="Loading sessions" />
+              ) : sessions.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon="hub"
+                  title="No active sessions"
+                  subtitle="A session appears here when a client connects to the daemon."
+                />
+              ) : (
+                sessions.map((c, i) => (
+                  <ConnectedClientRow key={c.id} client={c} last={i === sessions.length - 1} />
+                ))
+              )}
+            </Card>
+          </Section>
+        </div>
         )}
       </div>
     </div>

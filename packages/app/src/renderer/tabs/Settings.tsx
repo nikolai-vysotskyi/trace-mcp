@@ -1,6 +1,48 @@
+/**
+ * Settings — the menu window's configuration surface (TRA-295).
+ *
+ * Layout:
+ *   Toolbar  — 52px glass row: a back button when a section is open, the screen
+ *              title, the search field, and an overflow menu that holds the
+ *              raw-config escape hatch. Nothing here is accent-filled.
+ *   Content  — inset grouped lists capped at a readable measure, each group
+ *              under an 11px caption.
+ *   Bottom   — the unsaved-changes bar, scoped to this pane rather than fixed
+ *              across the whole window (it used to run under the sidebar too).
+ *
+ * What this replaces, measured on the running app before the rewrite:
+ *   - Seven unlabelled groups. macOS settings groups carry titles; these now do.
+ *   - `Edit JSON` as the single most prominent control on the screen — an
+ *     accent-filled button for a raw-config escape hatch. It is a menu item.
+ *   - A 7px blue dot as the only signal that a section differs from its
+ *     defaults, with no legend anywhere. It is the word "Modified".
+ *   - `PID 64806 · Port 3741 · 22s` as the daemon card's headline. The state
+ *     leads; the PID moved behind "Copy daemon details".
+ *   - Title Case section names (`Quality Gates`, `Ignore Rules`, `Tool
+ *     Exposure`, `Per-project Overrides`) — sentence case throughout now.
+ *   - A 928px-wide, 28px-tall, 7px-radius grey search rectangle — the
+ *     SearchField primitive, in the toolbar where a search field belongs.
+ *   - A `?` tooltip glyph that was a 14px non-focusable span: field help is a
+ *     caption under the label, readable without a hover.
+ *   - The `lsp` section, which existed in the schema and was silently dropped
+ *     because it belonged to no group and groups are what the list renders.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OllamaPanel } from '../components/OllamaPanel';
-import { PopUpButton, StatusDot } from '../lattice/ui';
+import { Icon } from '../lattice/icons';
+import {
+  Badge,
+  Button,
+  Chip,
+  EmptyState,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  PopUpButton,
+  SearchField,
+  StatusDot,
+  useMenuAnchor,
+} from '../lattice/ui';
 import { useDaemon } from '../hooks/useDaemon';
 import { type Appearance, APPEARANCE_OPTIONS } from '../theme.js';
 import {
@@ -66,26 +108,64 @@ function fmt(v: unknown): string {
   return String(v);
 }
 
-/* No icon library — clean list like macOS (without icons looks better than fake icons) */
-
-/* Section groups — semantic grouping like macOS System Settings */
-const SECTION_GROUPS: string[][] = [
-  ['_root'], // General (alone)
-  ['ai', 'predictive', 'intent'], // Intelligence
-  ['security', 'quality_gates', 'ignore'], // Quality & Security
-  ['runtime', 'topology'], // Infrastructure
-  ['tools', 'frameworks'], // Development
-  ['logging', 'watch'], // Monitoring
+/* Groups carry titles — macOS System Settings has no unlabelled group, and
+   seven of them in a row read as one undifferentiated list. `lsp` is in
+   Infrastructure: a section that belongs to no group never renders at all. */
+const SECTION_GROUPS: { title: string; keys: string[] }[] = [
+  { title: 'General', keys: ['_root'] },
+  { title: 'Intelligence', keys: ['ai', 'predictive', 'intent'] },
+  { title: 'Quality and security', keys: ['security', 'quality_gates', 'ignore'] },
+  { title: 'Infrastructure', keys: ['runtime', 'topology', 'lsp'] },
+  { title: 'Development', keys: ['tools', 'frameworks'] },
+  { title: 'Monitoring', keys: ['logging', 'watch'] },
 ];
 
-/* ═══ Toggle (38×22) ══════════════════════════════════════════════════ */
+/* ═══ Layout primitives ═══════════════════════════════════════════════
+   The same three shapes the other migrated surfaces use: a captioned Section,
+   an opaque Card with hairline separators, and 36px rows. */
 
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+function Section({ title, children }: { title?: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2">
+      {title && (
+        <h3
+          className="px-1 min-h-6 flex items-center text-[11px] leading-[13px] font-semibold"
+          style={{ color: 'var(--label-secondary)' }}
+        >
+          {title}
+        </h3>
+      )}
+      {children}
+    </section>
+  );
+}
+
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="overflow-hidden"
+      style={{
+        background: 'var(--surface)',
+        borderRadius: 12,
+        border: '0.5px solid var(--separator)',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+const rowBorder = (last: boolean): string => (last ? 'none' : '0.5px solid var(--separator)');
+
+/* ═══ Toggle (38×22 — the AppKit switch size) ═════════════════════════ */
+
+function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={on}
+      aria-label={label}
       onClick={() => onChange(!on)}
       style={{
         position: 'relative',
@@ -93,10 +173,10 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
         height: 22,
         borderRadius: 11,
         padding: 0,
-        background: on ? 'var(--accent)' : 'var(--fill-toggle-off)',
+        background: on ? 'var(--accent-fill)' : 'var(--fill-tertiary)',
         border: 'none',
-        cursor: 'pointer',
-        transition: 'background .2s ease',
+        cursor: 'default',
+        transition: 'background var(--dur-standard) var(--ease-out)',
         flexShrink: 0,
       }}
     >
@@ -108,138 +188,38 @@ function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
           height: 18,
           borderRadius: 9,
           left: on ? 18 : 2,
-          background: '#fff',
-          boxShadow: '0 1px 2px rgba(0,0,0,.2), 0 0 0 .5px rgba(0,0,0,.04)',
-          transition: 'left .2s cubic-bezier(.4,0,.2,1)',
+          /* The AppKit switch knob is white in BOTH appearances, so this is the
+             one place --accent-contrast is right regardless of the track. */
+          background: 'var(--accent-contrast)',
+          boxShadow: '0 1px 2px rgb(0 0 0 / 0.2), 0 0 0 0.5px rgb(0 0 0 / 0.04)',
+          transition: 'left var(--dur-standard) var(--ease-out)',
         }}
       />
     </button>
-  );
-}
-
-/* ═══ Back button ════════════════════════════════════════════════════ */
-
-function BackButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 3,
-        fontSize: 13,
-        color: 'var(--accent)',
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        padding: '0 0 10px',
-        margin: 0,
-      }}
-    >
-      <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
-        <path
-          d="M6 1L1 6L6 11"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      {label}
-    </button>
-  );
-}
-
-/* ═══ Tooltip ═══════════════════════════════════════════════════════ */
-
-function Tooltip({ text }: { text: string }) {
-  const [show, setShow] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
-  return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: tooltip wrapper has no click — onMouseEnter/Leave only show the tooltip; keyboard users get parity via onFocus/onBlur on the inner ⓘ icon.
-    <span
-      ref={ref}
-      style={{ position: 'relative', display: 'inline-flex' }}
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-      onFocus={() => setShow(true)}
-      onBlur={() => setShow(false)}
-    >
-      <span
-        style={{
-          fontSize: 10,
-          color: 'var(--text-tertiary)',
-          width: 14,
-          height: 14,
-          borderRadius: 7,
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'var(--bg-inset)',
-          cursor: 'help',
-          flexShrink: 0,
-          fontWeight: 600,
-        }}
-      >
-        ?
-      </span>
-      {show && (
-        <span
-          style={{
-            position: 'absolute',
-            bottom: '100%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            marginBottom: 6,
-            padding: '6px 10px',
-            borderRadius: 6,
-            background: 'var(--bg-popover, #1a1a1a)',
-            color: 'var(--text-popover, #e0e0e0)',
-            fontSize: 11,
-            lineHeight: '15px',
-            whiteSpace: 'normal',
-            width: 220,
-            boxShadow: '0 4px 12px rgba(0,0,0,.3), 0 0 0 .5px rgba(255,255,255,.08)',
-            zIndex: 100,
-            pointerEvents: 'none',
-          }}
-        >
-          {text}
-        </span>
-      )}
-    </span>
   );
 }
 
 /* ═══ Right chevron ══════════════════════════════════════════════════ */
-
+/* Decoration next to a labelled row, so --label-tertiary is correct here. */
 function ChevronRight() {
   return (
-    <svg width="7" height="12" viewBox="0 0 7 12" fill="none" style={{ flexShrink: 0 }}>
-      <path
-        d="M1 1L6 6L1 11"
-        stroke="var(--text-tertiary)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <span style={{ display: 'flex', color: 'var(--label-tertiary)', flexShrink: 0 }}>
+      <Icon name="chevron_right" size={14} />
+    </span>
   );
 }
 
-/* ═══ Grouped row ════════════════════════════════════════════════════ */
+/* ═══ Field controls ═════════════════════════════════════════════════ */
 
 const inputBase: React.CSSProperties = {
   fontSize: 13,
   fontFamily: 'inherit',
-  height: 22,
-  padding: '0 6px',
-  borderRadius: 5,
-  border: '1px solid var(--border)',
-  background: 'var(--fill-control)',
-  color: 'var(--text-primary)',
-  boxShadow: 'var(--shadow-control)',
+  height: 24,
+  padding: '0 8px',
+  borderRadius: 'var(--radius-input)',
+  border: '0.5px solid var(--separator)',
+  background: 'var(--fill-quaternary)',
+  color: 'var(--label)',
 };
 
 function FieldControl({
@@ -256,32 +236,40 @@ function FieldControl({
   sectionData?: Record<string, unknown>;
 }) {
   const err = validateField(field, value);
-  const errS = err ? { borderColor: 'var(--destructive)' } : {};
+  const errS = err ? { borderColor: 'var(--status-red)' } : {};
   const hint = err ? (
-    <div style={{ fontSize: 11, color: 'var(--destructive)', marginTop: 2 }}>{err}</div>
+    <div
+      className="text-[11px] leading-[13px] mt-1"
+      style={{ color: 'var(--status-red)' }}
+      role="alert"
+    >
+      {err}
+    </div>
   ) : null;
 
   switch (field.type) {
     case 'boolean':
-      return <Toggle on={!!value} onChange={(v) => onChange(v)} />;
+      return <Toggle on={!!value} onChange={(v) => onChange(v)} label={field.label} />;
     case 'select':
       return (
         <button
           type="button"
           onClick={onOpenPicker}
+          aria-label={`${field.label}: ${(value as string) || 'not set'}`}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 4,
+            minHeight: 24,
             background: 'none',
             border: 'none',
-            cursor: 'pointer',
+            cursor: 'default',
             padding: 0,
+            fontSize: 13,
+            color: 'var(--label-secondary)',
           }}
         >
-          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            {(value as string) || '—'}
-          </span>
+          {(value as string) || 'Not set'}
           <ChevronRight />
         </button>
       );
@@ -292,6 +280,7 @@ function FieldControl({
             type="number"
             value={value != null ? String(value) : ''}
             placeholder={field.placeholder}
+            aria-label={field.label}
             min={field.min}
             max={field.max}
             onChange={(e) => {
@@ -310,6 +299,7 @@ function FieldControl({
             type={field.sensitive ? 'password' : 'text'}
             value={(value as string) ?? ''}
             placeholder={field.placeholder}
+            aria-label={field.label}
             onChange={(e) => onChange(e.target.value || undefined)}
             style={{ ...inputBase, ...errS, width: '100%', textAlign: 'right' }}
           />
@@ -331,12 +321,13 @@ function FieldControl({
       return (
         <ArrayCtrl
           value={value as string[] | undefined}
+          label={field.label}
           placeholder={field.placeholder}
           onChange={onChange}
         />
       );
     case 'json':
-      return <JsonCtrl value={value} placeholder={field.description} onChange={onChange} />;
+      return <JsonCtrl value={value} label={field.label} onChange={onChange} />;
     default:
       return null;
   }
@@ -344,10 +335,12 @@ function FieldControl({
 
 function ArrayCtrl({
   value,
+  label,
   placeholder,
   onChange,
 }: {
   value: string[] | undefined;
+  label: string;
   placeholder?: string;
   onChange: (v: unknown) => void;
 }) {
@@ -357,6 +350,7 @@ function ArrayCtrl({
       type="text"
       value={text}
       placeholder={placeholder}
+      aria-label={label}
       onChange={(e) => setText(e.target.value)}
       onBlur={() => {
         const items = text
@@ -365,18 +359,18 @@ function ArrayCtrl({
           .filter(Boolean);
         onChange(items.length ? items : undefined);
       }}
-      style={{ ...inputBase, width: '100%', textAlign: 'left', height: 24 }}
+      style={{ ...inputBase, width: '100%', textAlign: 'left' }}
     />
   );
 }
 
 function JsonCtrl({
   value,
-  placeholder,
+  label,
   onChange,
 }: {
   value: unknown;
-  placeholder?: string;
+  label: string;
   onChange: (v: unknown) => void;
 }) {
   const [text, setText] = useState(() => (value != null ? JSON.stringify(value, null, 2) : ''));
@@ -385,7 +379,7 @@ function JsonCtrl({
     <div style={{ width: '100%' }}>
       <textarea
         value={text}
-        placeholder={placeholder}
+        aria-label={label}
         rows={3}
         onChange={(e) => {
           setText(e.target.value);
@@ -406,25 +400,30 @@ function JsonCtrl({
         }}
         style={{
           fontSize: 12,
-          fontFamily: 'SF Mono, Menlo, monospace',
+          fontFamily: 'var(--font-mono)',
           width: '100%',
-          padding: 6,
-          borderRadius: 5,
+          padding: 8,
+          borderRadius: 'var(--radius-input)',
           resize: 'vertical',
-          border: `1px solid ${error ? 'var(--destructive)' : 'var(--border)'}`,
-          background: 'var(--fill-control)',
-          color: 'var(--text-primary)',
-          boxShadow: 'var(--shadow-control)',
+          border: `0.5px solid ${error ? 'var(--status-red)' : 'var(--separator)'}`,
+          background: 'var(--fill-quaternary)',
+          color: 'var(--label)',
         }}
       />
       {error && (
-        <div style={{ fontSize: 11, color: 'var(--destructive)', marginTop: 2 }}>Invalid JSON</div>
+        <div
+          className="text-[11px] leading-[13px] mt-1"
+          style={{ color: 'var(--status-red)' }}
+          role="alert"
+        >
+          Invalid JSON
+        </div>
       )}
     </div>
   );
 }
 
-/* ═══ Multiselect (checkbox list) ═══════════════════════════════════ */
+/* ═══ Multiselect ═══════════════════════════════════════════════════ */
 
 function MultiselectCtrl({
   field,
@@ -444,32 +443,10 @@ function MultiselectCtrl({
     onChange(next.size > 0 ? [...next] : undefined);
   };
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '4px 0' }}>
-      {options.map((opt) => {
-        const active = selected.has(opt);
-        return (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => toggle(opt)}
-            style={{
-              fontSize: 11,
-              padding: '3px 8px',
-              borderRadius: 5,
-              cursor: 'pointer',
-              border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
-              background: active
-                ? 'color-mix(in srgb, var(--accent) 15%, transparent)'
-                : 'var(--fill-control)',
-              color: active ? 'var(--accent)' : 'var(--text-secondary)',
-              fontWeight: active ? 600 : 400,
-              transition: 'all .15s ease',
-            }}
-          >
-            {opt}
-          </button>
-        );
-      })}
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((opt) => (
+        <Chip key={opt} label={opt} selected={selected.has(opt)} onClick={() => toggle(opt)} />
+      ))}
     </div>
   );
 }
@@ -604,11 +581,9 @@ function useProviderModels(
       // ── All OpenAI-compatible providers ──
       else if (OPENAI_COMPAT_PROVIDERS.has(provider)) {
         const url = baseUrl || defaults?.baseUrl || '';
-        // LM Studio doesn't need an API key, others strip /v1 from baseUrl for fetch
-        const resolvedUrl = url.replace(/\/+$/, '');
-        // Ensure we have /v1 in the path for the models endpoint
-        const modelsUrl = resolvedUrl.endsWith('/v1') ? resolvedUrl : resolvedUrl;
-        setModels(await fetchOpenAICompatModels(modelsUrl, key, label, ctrl.signal));
+        setModels(
+          await fetchOpenAICompatModels(url.replace(/\/+$/, ''), key, label, ctrl.signal),
+        );
       }
     } catch (e) {
       const err = e as Error;
@@ -661,55 +636,50 @@ function ModelSelectCtrl({
     ? models.filter((m) => m.name.toLowerCase().includes(filter.toLowerCase()))
     : models;
 
+  const optionRow: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    width: '100%',
+    minHeight: 28,
+    padding: '0 10px',
+    border: 'none',
+    cursor: 'default',
+    textAlign: 'left',
+    fontSize: 13,
+  };
+
   return (
     <div ref={wrapRef} style={{ position: 'relative', minWidth: 0 }}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`${field.label}: ${current || 'not set'}`}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 4,
+          minHeight: 24,
           background: 'none',
           border: 'none',
-          cursor: 'pointer',
+          cursor: 'default',
           padding: 0,
           maxWidth: 180,
+          fontSize: 13,
+          color: 'var(--label-secondary)',
         }}
       >
-        <span
-          style={{
-            fontSize: 13,
-            color: current ? 'var(--text-secondary)' : 'var(--text-tertiary)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {current || field.placeholder || 'Select model…'}
+        <span className="truncate">{current || field.placeholder || 'Select model…'}</span>
+        <span style={{ display: 'flex', color: 'var(--label-tertiary)', flexShrink: 0 }}>
+          <Icon name={open ? 'expand_less' : 'expand_more'} size={14} />
         </span>
-        <svg
-          width="8"
-          height="5"
-          viewBox="0 0 8 5"
-          fill="none"
-          style={{
-            flexShrink: 0,
-            transform: open ? 'rotate(180deg)' : undefined,
-            transition: 'transform .15s',
-          }}
-        >
-          <path
-            d="M1 1L4 4L7 1"
-            stroke="var(--text-tertiary)"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
       </button>
       {open && (
         <div
+          role="listbox"
+          aria-label={field.label}
           style={{
             position: 'absolute',
             top: '100%',
@@ -718,72 +688,57 @@ function ModelSelectCtrl({
             zIndex: 200,
             width: 260,
             maxHeight: 280,
-            background: 'var(--bg-popover, var(--bg-grouped))',
-            borderRadius: 8,
-            boxShadow: '0 8px 24px rgba(0,0,0,.25), 0 0 0 .5px rgba(255,255,255,.08)',
+            background: 'var(--surface)',
+            borderRadius: 'var(--radius-popover)',
+            border: '0.5px solid var(--separator)',
+            boxShadow: 'var(--shadow-panel)',
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
-          {/* Search */}
-          <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-row)' }}>
-            <input
-              type="text"
-              value={filter}
-              // biome-ignore lint/a11y/noAutofocus: search input only renders inside the model picker dropdown after the user opens it; auto-focus is the expected UX.
+          <div style={{ padding: 8, borderBottom: '0.5px solid var(--separator)' }}>
+            <SearchField
+              grow
               autoFocus
-              placeholder="Filter models…"
-              onChange={(e) => setFilter(e.target.value)}
-              style={{ ...inputBase, width: '100%', height: 26, textAlign: 'left', fontSize: 12 }}
+              value={filter}
+              onChange={setFilter}
+              placeholder="Filter models"
+              aria-label="Filter models"
             />
           </div>
-          {/* List */}
           <div style={{ flex: 1, overflowY: 'auto', maxHeight: 200 }}>
             {loading && (
               <div
-                style={{
-                  padding: '12px 10px',
-                  fontSize: 12,
-                  color: 'var(--text-tertiary)',
-                  textAlign: 'center',
-                }}
+                className="text-[13px] leading-4 text-center"
+                style={{ padding: 12, color: 'var(--label-secondary)' }}
+                role="status"
               >
                 Loading models…
               </div>
             )}
             {error && (
-              <div style={{ padding: '8px 10px', fontSize: 11 }}>
-                <div style={{ color: 'var(--destructive)', marginBottom: 4 }}>{error}</div>
-                <button
-                  type="button"
-                  onClick={refresh}
-                  style={{
-                    fontSize: 11,
-                    color: 'var(--accent)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
+              <div style={{ padding: 8 }}>
+                <div
+                  className="text-[11px] leading-[13px] mb-1.5"
+                  style={{ color: 'var(--status-red)' }}
+                  role="alert"
                 >
+                  {error}
+                </div>
+                <Button size="small" onClick={refresh}>
                   Retry
-                </button>
+                </Button>
               </div>
             )}
             {!loading && !error && filtered.length === 0 && (
               <div
-                style={{
-                  padding: '12px 10px',
-                  fontSize: 12,
-                  color: 'var(--text-tertiary)',
-                  textAlign: 'center',
-                }}
+                className="text-[13px] leading-4 text-center"
+                style={{ padding: 12, color: 'var(--label-secondary)' }}
               >
                 {models.length === 0 ? 'No models found' : 'No matches'}
               </div>
             )}
-            {/* Clear option */}
             {!loading && !error && current && (
               <button
                 type="button"
@@ -793,109 +748,67 @@ function ModelSelectCtrl({
                   setFilter('');
                 }}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '6px 10px',
+                  ...optionRow,
                   background: 'none',
-                  border: 'none',
-                  borderBottom: '1px solid var(--border-row)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
+                  borderBottom: '0.5px solid var(--separator)',
+                  color: 'var(--label-secondary)',
                 }}
               >
-                <span style={{ fontSize: 12, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
-                  Clear selection
-                </span>
+                Clear selection
               </button>
             )}
             {filtered.map((m) => (
               <button
                 type="button"
                 key={m.name}
+                role="option"
+                aria-selected={m.name === current}
                 onClick={() => {
                   onChange(m.name);
                   setOpen(false);
                   setFilter('');
                 }}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  width: '100%',
-                  padding: '6px 10px',
+                  ...optionRow,
+                  color: 'var(--label)',
                   background:
                     m.name === current
-                      ? 'color-mix(in srgb, var(--accent) 12%, transparent)'
+                      ? 'color-mix(in oklab, var(--accent) 12%, transparent)'
                       : 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  borderBottom: '1px solid var(--border-row)',
                 }}
               >
-                <span
-                  style={{
-                    flex: 1,
-                    fontSize: 12,
-                    color: 'var(--text-primary)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {m.name}
-                </span>
+                <span className="flex-1 truncate">{m.name}</span>
                 {m.size && (
-                  <span style={{ fontSize: 10, color: 'var(--text-tertiary)', flexShrink: 0 }}>
+                  <span
+                    className="text-[11px] tabular-nums shrink-0"
+                    style={{ color: 'var(--label-secondary)' }}
+                  >
                     {m.size}
                   </span>
                 )}
                 {m.name === current && (
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    style={{ flexShrink: 0 }}
-                  >
-                    <path
-                      d="M5 13l4 4L19 7"
-                      stroke="var(--accent)"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  <span style={{ display: 'flex', color: 'var(--accent)', flexShrink: 0 }}>
+                    <Icon name="check" size={14} />
+                  </span>
                 )}
               </button>
             ))}
           </div>
-          {/* Manual input fallback */}
-          <div
-            style={{
-              padding: '6px 8px',
-              borderTop: '1px solid var(--border-row)',
-              display: 'flex',
-              gap: 4,
-              alignItems: 'center',
-            }}
-          >
+          <div style={{ padding: 8, borderTop: '0.5px solid var(--separator)' }}>
             <input
               type="text"
-              placeholder="Or type model name…"
+              placeholder="Or type a model name…"
+              aria-label="Type a model name"
               defaultValue=""
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const v = (e.target as HTMLInputElement).value.trim();
-                  if (v) {
-                    onChange(v);
-                    setOpen(false);
-                    setFilter('');
-                  }
-                }
+                if (e.key !== 'Enter') return;
+                const v = (e.target as HTMLInputElement).value.trim();
+                if (!v) return;
+                onChange(v);
+                setOpen(false);
+                setFilter('');
               }}
-              style={{ ...inputBase, flex: 1, height: 24, textAlign: 'left', fontSize: 11 }}
+              style={{ ...inputBase, width: '100%', textAlign: 'left' }}
             />
           </div>
         </div>
@@ -904,20 +817,23 @@ function ModelSelectCtrl({
   );
 }
 
-/* ═══ Screen: Section list (top level) ═══════════════════════════════ */
+/* ═══ Screen: Section list ═══════════════════════════════════════════ */
 
 function SectionList({
   sections,
   config,
   onOpen,
+  onOpenProjects,
+  projectOverrides,
   search,
 }: {
   sections: SectionDef[];
   config: Record<string, unknown>;
   onOpen: (key: string) => void;
+  onOpenProjects: () => void;
+  projectOverrides: number;
   search: string;
 }) {
-  const sectionKeys = new Set(sections.map((s) => s.key));
   const sectionMap = new Map(sections.map((s) => [s.key, s]));
 
   const renderRow = (section: SectionDef, isLast: boolean) => {
@@ -933,73 +849,98 @@ function SectionList({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
+          gap: 8,
           width: '100%',
-          padding: '8px 12px',
+          minHeight: 36,
+          padding: '0 12px',
           background: 'none',
           border: 'none',
-          borderBottom: isLast ? 'none' : '1px solid var(--border-row)',
-          cursor: 'pointer',
+          borderBottom: rowBorder(isLast),
+          cursor: 'default',
           textAlign: 'left',
         }}
       >
-        <span style={{ flex: 1, fontSize: 13, fontWeight: 400, color: 'var(--text-primary)' }}>
+        <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label)' }}>
           {section.label}
         </span>
-        {errors > 0 && <span style={{ fontSize: 11, color: 'var(--destructive)' }}>{errors}</span>}
-        {modified > 0 && !errors && (
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: 4,
-              background: 'var(--accent)',
-              flexShrink: 0,
-            }}
-          />
-        )}
+        {errors > 0 ? (
+          <Badge tone="red">
+            {errors} {errors === 1 ? 'issue' : 'issues'}
+          </Badge>
+        ) : modified > 0 ? (
+          /* The blue dot this replaces was a colour with no legend anywhere in
+             the app. The word says what the colour meant. */
+          <span className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
+            Modified
+          </span>
+        ) : null}
         <ChevronRight />
       </button>
     );
   };
 
-  // Build visible groups: filter each group to only include sections matching search
-  const visibleGroups = SECTION_GROUPS.map((group) =>
-    group.filter((key) => sectionKeys.has(key)).map((key) => sectionMap.get(key)!),
-  ).filter((group) => group.length > 0);
+  const visibleGroups = SECTION_GROUPS.map((g) => ({
+    title: g.title,
+    sections: g.keys.map((k) => sectionMap.get(k)).filter((s): s is SectionDef => s !== undefined),
+  })).filter((g) => g.sections.length > 0);
+
+  const showProjects = !search || 'per-project overrides'.includes(search);
+
+  if (visibleGroups.length === 0 && !showProjects) {
+    return (
+      <p
+        className="text-[13px] leading-4 text-center"
+        style={{ padding: 24, color: 'var(--label-secondary)', margin: 0 }}
+      >
+        No settings match “{search}”.
+      </p>
+    );
+  }
 
   return (
-    <div>
-      {visibleGroups.map((group, gi) => (
-        <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: groups are derived from a static config slice with stable order; no insert/reorder.
-          key={gi}
-          style={{
-            background: 'var(--bg-grouped)',
-            borderRadius: 10,
-            boxShadow: 'var(--shadow-grouped)',
-            overflow: 'hidden',
-            marginBottom: 12,
-          }}
-        >
-          {group.map((s, i) => renderRow(s, i === group.length - 1))}
-        </div>
+    <>
+      {visibleGroups.map((group) => (
+        <Section key={group.title} title={group.title}>
+          <Card>{group.sections.map((s, i) => renderRow(s, i === group.sections.length - 1))}</Card>
+        </Section>
       ))}
 
-      {search && !sections.length && (
-        <p
-          style={{
-            fontSize: 13,
-            textAlign: 'center',
-            padding: 24,
-            color: 'var(--text-tertiary)',
-            margin: 0,
-          }}
-        >
-          No settings match &ldquo;{search}&rdquo;
-        </p>
+      {showProjects && (
+        <Section title="Advanced">
+          <Card>
+            <button
+              type="button"
+              onClick={onOpenProjects}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                minHeight: 36,
+                padding: '0 12px',
+                background: 'none',
+                border: 'none',
+                cursor: 'default',
+                textAlign: 'left',
+              }}
+            >
+              <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label)' }}>
+                Per-project overrides
+              </span>
+              {projectOverrides > 0 && (
+                <span
+                  className="text-[11px] leading-[13px] tabular-nums"
+                  style={{ color: 'var(--label-secondary)' }}
+                >
+                  {projectOverrides}
+                </span>
+              )}
+              <ChevronRight />
+            </button>
+          </Card>
+        </Section>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1015,48 +956,37 @@ function SectionDetail({
   section,
   data,
   onUpdate,
-  onBack,
   onOpenPicker,
 }: {
   section: SectionDef;
   data: Record<string, unknown>;
   onUpdate: (k: string, d: Record<string, unknown>) => void;
-  onBack: () => void;
   onOpenPicker: (p: PickerInfo) => void;
 }) {
   const modified = countModifiedFields(section, data);
   const visible = section.fields.filter((f) => isFieldVisible(f, data));
 
   return (
-    <div>
-      <BackButton label="Settings" onClick={onBack} />
+    <>
+      {section.description && (
+        <p
+          className="text-[13px] leading-4 px-1 -mb-2"
+          style={{ color: 'var(--label-secondary)', margin: 0 }}
+        >
+          {section.description}
+        </p>
+      )}
 
-      {/* Header */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>
-          {section.label}
-        </div>
-        {section.description && (
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-            {section.description}
-          </div>
-        )}
-      </div>
-
-      {/* Fields */}
-      <div
-        style={{
-          background: 'var(--bg-grouped)',
-          borderRadius: 10,
-          boxShadow: 'var(--shadow-grouped)',
-          overflow: 'hidden',
-        }}
-      >
+      <Card>
         {visible.map((field, i) => {
           const value = gv(data, field);
           const hasDef = field.defaultValue !== undefined;
-          const isModified = hasDef && JSON.stringify(value) !== JSON.stringify(field.defaultValue);
           const isSet = value !== undefined && value !== null && value !== '';
+          /* An unset field IS at its default — the daemon applies the default
+             when the key is absent. Comparing `undefined` against the default
+             put a Reset button on almost every row (TRA-295). */
+          const isModified =
+            hasDef && isSet && JSON.stringify(value) !== JSON.stringify(field.defaultValue);
           const isBlock =
             field.type === 'json' || field.type === 'array' || field.type === 'multiselect';
           const changeFn = (v: unknown) => onUpdate(section.key, sv(data, field, v));
@@ -1066,57 +996,38 @@ function SectionDetail({
             <div
               key={`${field.nested ?? ''}.${field.key}.${field.showIf ?? ''}`}
               style={{
-                padding: '0 12px',
-                borderBottom: i < visible.length - 1 ? '1px solid var(--border-row)' : 'none',
+                padding: isBlock ? '8px 12px' : '6px 12px',
+                borderBottom: rowBorder(i === visible.length - 1),
               }}
             >
               <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  minHeight: 36,
-                  padding: isBlock ? '8px 0 4px' : '0',
-                }}
+                className="flex items-center justify-between gap-3"
+                style={{ minHeight: 24 }}
               >
-                <div
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}
-                >
-                  <span
-                    style={{ fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}
-                  >
-                    {field.nested && (
-                      <span style={{ color: 'var(--text-tertiary)' }}>{field.nested}.</span>
-                    )}
+                <div className="min-w-0 flex-1">
+                  {/* The nested key used to be printed inline at label size —
+                      "features.Use embeddings" reads as a typo, and the section
+                      the row lives in already scopes it. */}
+                  <div className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
                     {field.label}
-                  </span>
-                  {field.description && !isBlock && <Tooltip text={field.description} />}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  {showReset && (
-                    <button
-                      type="button"
-                      onClick={() => changeFn(field.defaultValue)}
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--accent)',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: 0,
-                        opacity: 0.7,
-                        flexShrink: 0,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.opacity = '1';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.opacity = '0.7';
-                      }}
+                  </div>
+                  {/* Help is a caption, not a hover: the `?` glyph it replaces
+                      was a 14px non-focusable span, so keyboard users never
+                      reached it and pointer users had to guess it existed. */}
+                  {field.description && (
+                    <div
+                      className="text-[11px] leading-[13px] mt-0.5"
+                      style={{ color: 'var(--label-secondary)' }}
                     >
+                      {field.description}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {showReset && (
+                    <Button size="small" variant="plain" onClick={() => changeFn(field.defaultValue)}>
                       Reset
-                    </button>
+                    </Button>
                   )}
                   {!isBlock && (
                     <FieldControl
@@ -1134,12 +1045,7 @@ function SectionDetail({
                 </div>
               </div>
               {isBlock && (
-                <div style={{ paddingBottom: 8 }}>
-                  {field.description && (
-                    <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 4 }}>
-                      {field.description}
-                    </div>
-                  )}
+                <div className="mt-2">
                   <FieldControl
                     field={field}
                     value={value}
@@ -1151,24 +1057,15 @@ function SectionDetail({
             </div>
           );
         })}
-      </div>
+      </Card>
 
-      {/* Reset all */}
       {modified > 0 && (
-        <div style={{ marginTop: 12, textAlign: 'center' }}>
-          <button
-            type="button"
-            onClick={() => onUpdate(section.key, getSectionDefaults(section))}
-            style={{
-              fontSize: 13,
-              color: 'var(--destructive)',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            Reset All to Defaults
-          </button>
+        <div className="flex justify-center">
+          {/* Bordered, not plain: centred plain text with no chrome reads as a
+              caption, and this one throws away the section's settings. */}
+          <Button onClick={() => onUpdate(section.key, getSectionDefaults(section))}>
+            Reset this section to defaults
+          </Button>
         </div>
       )}
 
@@ -1179,108 +1076,68 @@ function SectionDetail({
       {section.key === 'ai' && data.provider === 'ollama' && (
         <OllamaPanel baseUrl={typeof data.base_url === 'string' ? data.base_url : undefined} />
       )}
-    </div>
+    </>
   );
 }
 
 /* ═══ Screen: Picker (select options) ════════════════════════════════ */
 
-function PickerScreen({
-  picker,
-  sectionLabel,
-  onBack,
-}: {
-  picker: PickerInfo;
-  sectionLabel: string;
-  onBack: () => void;
-}) {
+function PickerScreen({ picker, onBack }: { picker: PickerInfo; onBack: () => void }) {
   const options = picker.field.options ?? [];
+  const row = (isLast: boolean): React.CSSProperties => ({
+    display: 'flex',
+    alignItems: 'center',
+    width: '100%',
+    minHeight: 36,
+    padding: '0 12px',
+    background: 'none',
+    border: 'none',
+    borderBottom: rowBorder(isLast),
+    cursor: 'default',
+    textAlign: 'left',
+  });
+  const check = (
+    <span style={{ display: 'flex', color: 'var(--accent)' }}>
+      <Icon name="check" size={15} />
+    </span>
+  );
+
   return (
-    <div>
-      <BackButton label={sectionLabel} onClick={onBack} />
-      <div
-        style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}
-      >
-        {picker.field.label}
-      </div>
-      <div
-        style={{
-          background: 'var(--bg-grouped)',
-          borderRadius: 10,
-          boxShadow: 'var(--shadow-grouped)',
-          overflow: 'hidden',
+    <Card>
+      <button
+        type="button"
+        role="option"
+        aria-selected={picker.value == null || picker.value === ''}
+        onClick={() => {
+          picker.onChange(undefined);
+          onBack();
         }}
+        style={row(false)}
       >
-        {/* None option */}
+        <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label-secondary)' }}>
+          Not set
+        </span>
+        {(picker.value == null || picker.value === '') && check}
+      </button>
+      {options.map((opt, i) => (
         <button
           type="button"
+          key={opt}
+          role="option"
+          aria-selected={picker.value === opt}
           onClick={() => {
-            picker.onChange(undefined);
+            picker.onChange(opt);
             onBack();
           }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            width: '100%',
-            padding: '0 12px',
-            minHeight: 36,
-            background: 'none',
-            border: 'none',
-            borderBottom: '1px solid var(--border-row)',
-            cursor: 'pointer',
-            textAlign: 'left',
-          }}
+          style={row(i === options.length - 1)}
         >
-          <span style={{ flex: 1, fontSize: 13, color: 'var(--text-tertiary)' }}>None</span>
-          {(picker.value == null || picker.value === '') && (
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M5 13l4 4L19 7"
-                stroke="var(--accent)"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          )}
+          <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label)' }}>
+            {opt}
+          </span>
+          {picker.value === opt && check}
         </button>
-        {options.map((opt, i) => (
-          <button
-            type="button"
-            key={opt}
-            onClick={() => {
-              picker.onChange(opt);
-              onBack();
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              width: '100%',
-              padding: '0 12px',
-              minHeight: 36,
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              textAlign: 'left',
-              borderBottom: i < options.length - 1 ? '1px solid var(--border-row)' : 'none',
-            }}
-          >
-            <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>{opt}</span>
-            {picker.value === opt && (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M5 13l4 4L19 7"
-                  stroke="var(--accent)"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
+      ))}
+    </Card>
   );
 }
 
@@ -1289,11 +1146,9 @@ function PickerScreen({
 function ProjectsScreen({
   config,
   onUpdate,
-  onBack,
 }: {
   config: Record<string, unknown>;
   onUpdate: (c: Record<string, unknown>) => void;
-  onBack: () => void;
 }) {
   const projects = (config.projects ?? {}) as Record<string, unknown>;
   const [newPath, setNewPath] = useState('');
@@ -1312,91 +1167,60 @@ function ProjectsScreen({
   };
 
   return (
-    <div>
-      <BackButton label="Settings" onClick={onBack} />
-      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-        Per-project Overrides
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}>
-        Override global settings for specific projects. Values merge on top.
-      </div>
+    <>
+      <p
+        className="text-[13px] leading-4 px-1 -mb-2"
+        style={{ color: 'var(--label-secondary)', margin: 0 }}
+      >
+        Override global settings for specific projects. Values merge on top of the global config.
+      </p>
 
       {paths.length > 0 && (
-        <div
-          style={{
-            background: 'var(--bg-grouped)',
-            borderRadius: 10,
-            boxShadow: 'var(--shadow-grouped)',
-            overflow: 'hidden',
-            marginBottom: 16,
-          }}
-        >
+        <Card>
           {paths.map((p, i) => (
-            <div
-              key={p}
-              style={{
-                padding: '8px 12px',
-                borderBottom: i < paths.length - 1 ? '1px solid var(--border-row)' : 'none',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div key={p} style={{ padding: '8px 12px', borderBottom: rowBorder(i === paths.length - 1) }}>
+              <div className="flex items-center gap-2">
                 <span
-                  style={{
-                    fontSize: 12,
-                    fontFamily: 'SF Mono, Menlo, monospace',
-                    color: 'var(--text-primary)',
-                    flex: 1,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
+                  className="flex-1 min-w-0 truncate text-[13px] leading-4"
+                  style={{ fontFamily: 'var(--font-mono)', color: 'var(--label)' }}
                   title={p}
                 >
                   {p}
                 </span>
-                <button
-                  type="button"
+                <Button
+                  size="small"
+                  active={editKey === p}
+                  aria-expanded={editKey === p}
                   onClick={() => {
-                    if (editKey === p) setEditKey(null);
-                    else {
-                      setEditKey(p);
-                      setEditJson(JSON.stringify(projects[p], null, 2));
-                      setEditError(false);
+                    if (editKey === p) {
+                      setEditKey(null);
+                      return;
                     }
-                  }}
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--accent)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
+                    setEditKey(p);
+                    setEditJson(JSON.stringify(projects[p], null, 2));
+                    setEditError(false);
                   }}
                 >
                   {editKey === p ? 'Done' : 'Edit'}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  size="small"
+                  variant="plain"
                   onClick={() => {
                     const u = { ...projects };
                     delete u[p];
                     onUpdate({ ...config, projects: u });
                     if (editKey === p) setEditKey(null);
                   }}
-                  style={{
-                    fontSize: 12,
-                    color: 'var(--destructive)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
                 >
                   Remove
-                </button>
+                </Button>
               </div>
               {editKey === p && (
-                <div style={{ marginTop: 6 }}>
+                <div className="mt-2">
                   <textarea
                     value={editJson}
+                    aria-label={`Overrides for ${p}`}
                     rows={4}
                     onChange={(e) => {
                       setEditJson(e.target.value);
@@ -1404,85 +1228,65 @@ function ProjectsScreen({
                     }}
                     style={{
                       fontSize: 12,
-                      fontFamily: 'SF Mono, Menlo, monospace',
+                      fontFamily: 'var(--font-mono)',
                       width: '100%',
-                      padding: 6,
-                      borderRadius: 5,
+                      padding: 8,
+                      borderRadius: 'var(--radius-input)',
                       resize: 'vertical',
-                      border: `1px solid ${editError ? 'var(--destructive)' : 'var(--border)'}`,
-                      background: 'var(--fill-control)',
-                      color: 'var(--text-primary)',
+                      border: `0.5px solid ${editError ? 'var(--status-red)' : 'var(--separator)'}`,
+                      background: 'var(--fill-quaternary)',
+                      color: 'var(--label)',
                     }}
                   />
                   {editError && (
-                    <div style={{ fontSize: 11, color: 'var(--destructive)', marginTop: 2 }}>
+                    <div
+                      className="text-[11px] leading-[13px] mt-1"
+                      style={{ color: 'var(--status-red)' }}
+                      role="alert"
+                    >
                       Invalid JSON
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try {
-                        onUpdate({
-                          ...config,
-                          projects: { ...projects, [p]: JSON.parse(editJson) },
-                        });
-                        setEditError(false);
-                      } catch {
-                        setEditError(true);
-                      }
-                    }}
-                    style={{
-                      marginTop: 6,
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: '#fff',
-                      background: 'var(--accent)',
-                      border: 'none',
-                      borderRadius: 6,
-                      padding: '5px 14px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Apply
-                  </button>
+                  <div className="mt-2">
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        try {
+                          onUpdate({
+                            ...config,
+                            projects: { ...projects, [p]: JSON.parse(editJson) },
+                          });
+                          setEditError(false);
+                        } catch {
+                          setEditError(true);
+                        }
+                      }}
+                    >
+                      Apply
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
           ))}
-        </div>
+        </Card>
       )}
 
-      {/* Add */}
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className="flex gap-2">
         <input
           type="text"
           value={newPath}
           placeholder="/path/to/project"
+          aria-label="Project path"
           onChange={(e) => setNewPath(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
-          style={{ ...inputBase, flex: 1, height: 28 }}
+          style={{ ...inputBase, flex: 1 }}
         />
-        <button
-          type="button"
-          onClick={add}
-          disabled={!newPath.trim()}
-          style={{
-            fontSize: 13,
-            fontWeight: 500,
-            color: '#fff',
-            background: 'var(--accent)',
-            border: 'none',
-            borderRadius: 6,
-            padding: '5px 14px',
-            cursor: 'pointer',
-            opacity: newPath.trim() ? 1 : 0.4,
-          }}
-        >
+        <Button disabled={!newPath.trim()} onClick={add}>
           Add
-        </button>
+        </Button>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -1491,74 +1295,41 @@ function ProjectsScreen({
 function DiffPanel({ entries, onClose }: { entries: DiffEntry[]; onClose: () => void }) {
   if (!entries.length) return null;
   return (
-    <div
-      style={{
-        background: 'var(--bg-grouped)',
-        borderRadius: 10,
-        boxShadow: 'var(--shadow-grouped)',
-        padding: '10px 12px',
-        marginBottom: 16,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 6,
-        }}
-      >
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-          Pending Changes
-        </span>
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            fontSize: 12,
-            color: 'var(--accent)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          Done
-        </button>
-      </div>
-      <div style={{ maxHeight: 140, overflowY: 'auto' }}>
-        {entries.map((e, i) => (
-          <div
-            key={`${e.section}.${e.field}`}
-            style={{
-              fontSize: 12,
-              fontFamily: 'SF Mono, Menlo, monospace',
-              padding: '3px 0',
-              display: 'flex',
-              gap: 6,
-              alignItems: 'baseline',
-              borderBottom: i < entries.length - 1 ? '1px solid var(--border-row)' : 'none',
-            }}
-          >
-            <span style={{ color: 'var(--text-tertiary)', flexShrink: 0 }}>{e.section}</span>
-            <span
+    <Section title="Pending changes">
+      <Card>
+        <div className="flex items-center justify-end px-3 py-1.5" style={{ borderBottom: '0.5px solid var(--separator)' }}>
+          <Button size="small" variant="plain" onClick={onClose}>
+            Hide
+          </Button>
+        </div>
+        <div style={{ maxHeight: 160, overflowY: 'auto' }}>
+          {entries.map((e, i) => (
+            <div
+              key={`${e.section}.${e.field}`}
+              className="flex items-baseline gap-1.5 px-3 py-1 text-[11px] leading-[13px]"
               style={{
-                color: 'var(--text-secondary)',
-                flex: 1,
-                minWidth: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
+                fontFamily: 'var(--font-mono)',
+                borderBottom: rowBorder(i === entries.length - 1),
               }}
             >
-              {e.field}
-            </span>
-            <span style={{ color: 'var(--destructive)', flexShrink: 0 }}>{fmt(e.from)}</span>
-            <span style={{ color: 'var(--text-tertiary)' }}>&rarr;</span>
-            <span style={{ color: 'var(--success)', flexShrink: 0 }}>{fmt(e.to)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+              <span className="shrink-0" style={{ color: 'var(--label-secondary)' }}>
+                {e.section}
+              </span>
+              <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--label)' }}>
+                {e.field}
+              </span>
+              <span className="shrink-0" style={{ color: 'var(--status-red)' }}>
+                {fmt(e.from)}
+              </span>
+              <span style={{ color: 'var(--label-secondary)' }}>→</span>
+              <span className="shrink-0" style={{ color: 'var(--status-green)' }}>
+                {fmt(e.to)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </Section>
   );
 }
 
@@ -1587,86 +1358,41 @@ function BottomBar({
 }) {
   if (!dirty) return null;
   const msg = hasErrors
-    ? 'Fix issues before saving'
+    ? 'Fix the issues above before saving'
     : saveStatus === 'saved'
       ? 'Saved'
       : saveStatus === 'error'
-        ? 'Save failed'
+        ? "Couldn't save — the daemon rejected the change"
         : `${diffCount} unsaved change${diffCount !== 1 ? 's' : ''}`;
-  const btn: React.CSSProperties = {
-    fontSize: 13,
-    fontWeight: 500,
-    border: 'none',
-    borderRadius: 6,
-    padding: '5px 14px',
-    cursor: 'pointer',
-    transition: 'background .15s',
-  };
   return (
+    /* Scoped to this pane. The old bar was `position: fixed` across the whole
+       window, so it ran under the sidebar as well. */
     <div
-      style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '8px 16px',
-        background: 'var(--bg-primary)',
-        borderTop: '1px solid var(--border)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-      }}
+      className="flex items-center gap-2 px-4 shrink-0 glass"
+      role="status"
+      style={{ height: 52, borderTop: '0.5px solid var(--separator)' }}
     >
       <span
+        className="flex-1 min-w-0 truncate text-[13px] leading-4"
         style={{
-          fontSize: 12,
-          flex: 1,
           color: hasErrors
-            ? 'var(--destructive)'
+            ? 'var(--status-red)'
             : saveStatus === 'saved'
-              ? 'var(--success)'
-              : 'var(--text-secondary)',
+              ? 'var(--status-green)'
+              : 'var(--label-secondary)',
         }}
       >
         {msg}
       </span>
       {diffCount > 0 && !hasErrors && (
-        <button
-          type="button"
-          onClick={onToggleDiff}
-          style={{
-            fontSize: 12,
-            color: 'var(--accent)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          {showDiff ? 'Hide' : 'Review'}
-        </button>
+        <Button variant="plain" active={showDiff} onClick={onToggleDiff}>
+          {showDiff ? 'Hide changes' : 'Review changes'}
+        </Button>
       )}
-      <button
-        type="button"
-        onClick={onDiscard}
-        style={{ ...btn, color: 'var(--text-primary)', background: 'var(--bg-inset)' }}
-      >
-        Discard
-      </button>
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={saving || hasErrors}
-        style={{
-          ...btn,
-          color: '#fff',
-          background: hasErrors ? 'var(--text-tertiary)' : 'var(--accent)',
-          opacity: saving ? 0.6 : 1,
-        }}
-      >
+      <Button onClick={onDiscard}>Discard</Button>
+      <Button variant="prominent" disabled={saving || hasErrors} onClick={onSave}>
         {saving ? 'Saving…' : 'Save'}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1685,26 +1411,21 @@ function AppearanceCard({
   onChange: (next: Appearance) => void;
 }) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '8px 12px',
-        background: 'var(--bg-grouped)',
-        borderRadius: 10,
-        boxShadow: 'var(--shadow-grouped)',
-        marginBottom: 12,
-      }}
-    >
-      <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>Appearance</span>
-      <PopUpButton
-        options={APPEARANCE_OPTIONS}
-        value={appearance}
-        onChange={onChange}
-        aria-label="Appearance"
-      />
-    </div>
+    <Section title="Appearance">
+      <Card>
+        <div className="flex items-center gap-2" style={{ minHeight: 36, padding: '0 12px' }}>
+          <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label)' }}>
+            Theme
+          </span>
+          <PopUpButton
+            options={APPEARANCE_OPTIONS}
+            value={appearance}
+            onChange={onChange}
+            aria-label="Appearance"
+          />
+        </div>
+      </Card>
+    </Section>
   );
 }
 
@@ -1734,6 +1455,8 @@ export function Settings({
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [search, setSearch] = useState('');
   const [showDiff, setShowDiff] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const overflow = useMenuAnchor();
   const [screen, setScreen] = useState<Screen>(() => {
     const section = new URLSearchParams(window.location.search).get('section');
     if (section && CONFIG_SCHEMA.some((s) => s.key === section)) {
@@ -1812,296 +1535,243 @@ export function Settings({
     );
   };
 
-  /* Not connected */
-  if (!connected && !loading) {
+  /* The toolbar owns the pane and always renders, so the daemon-down and
+     loading states sit INSIDE the surface rather than replacing it. */
+  if (!settings) {
     return (
-      <>
-        <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
-        <div className="flex flex-col items-center justify-center flex-1 gap-2">
-          <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-            Daemon not reachable
-          </div>
-          <button
-            type="button"
-            onClick={() => restartDaemon()}
-            disabled={restarting}
-            className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"
-            style={{
-              background: 'var(--fill-control)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              color: 'var(--accent)',
-              border: '0.5px solid var(--border)',
-              boxShadow: 'var(--shadow-control)',
-              cursor: restarting ? 'default' : 'pointer',
-              opacity: restarting ? 0.6 : 1,
-            }}
-          >
-            {restarting ? 'Starting…' : 'Restart Daemon'}
-          </button>
-        </div>
-      </>
-    );
-  }
-
-  if (loading || !settings) {
-    return (
-      <>
-        <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
-        <p
-          style={{
-            fontSize: 13,
-            textAlign: 'center',
-            padding: 32,
-            color: 'var(--text-tertiary)',
-            margin: 0,
-          }}
+      <div className="flex flex-col h-full min-h-0">
+        <div
+          className="flex items-center px-4 shrink-0 glass"
+          style={{ height: 52, borderBottom: '0.5px solid transparent' }}
         >
-          Loading…
-        </p>
-      </>
+          <h2
+            className="text-[17px] leading-[22px] font-semibold"
+            style={{ color: 'var(--label)', letterSpacing: '-0.01em' }}
+          >
+            Settings
+          </h2>
+        </div>
+        <div className="flex-1 overflow-auto flex flex-col">
+          <div className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 720 }}>
+            <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
+          </div>
+          <div className="flex-1 flex items-center justify-center">
+          {/* A finished fetch that produced nothing is not still loading. The
+              old code showed "Loading…" forever whenever the daemon answered
+              once and then stopped, which is exactly what a flapping daemon
+              does. */}
+          {loading ? (
+            <span
+              className="text-[13px] leading-4"
+              style={{ color: 'var(--label-secondary)' }}
+              role="status"
+            >
+              Loading settings…
+            </span>
+          ) : (
+            <EmptyState
+              icon="settings"
+              title={connected ? "Couldn't read the settings" : 'Daemon not reachable'}
+              subtitle={
+                connected
+                  ? "The daemon is running but didn't return its configuration. Restarting it usually clears this."
+                  : "Settings live in the daemon's config file, so they can't be read until it is running."
+              }
+              action={
+                <Button variant="prominent" disabled={restarting} onClick={() => restartDaemon()}>
+                  {restarting ? 'Starting…' : connected ? 'Restart daemon' : 'Start daemon'}
+                </Button>
+              }
+            />
+          )}
+          </div>
+        </div>
+      </div>
     );
   }
 
   const { daemon } = settings;
   const filtered = CONFIG_SCHEMA.filter(matchSection);
+  const activeSection =
+    screen.type === 'section'
+      ? CONFIG_SCHEMA.find((s) => s.key === screen.key)
+      : screen.type === 'picker'
+        ? CONFIG_SCHEMA.find((s) => s.key === screen.sectionKey)
+        : undefined;
 
-  const bottomBar = (
-    <BottomBar
-      dirty={dirty}
-      saving={saving}
-      hasErrors={hasErrors}
-      diffCount={diffs.length}
-      showDiff={showDiff}
-      onToggleDiff={() => setShowDiff(!showDiff)}
-      onSave={save}
-      onDiscard={discard}
-      saveStatus={saveStatus}
-    />
-  );
+  const title =
+    screen.type === 'list'
+      ? 'Settings'
+      : screen.type === 'projects'
+        ? 'Per-project overrides'
+        : screen.type === 'picker'
+          ? screen.picker.field.label
+          : (activeSection?.label ?? 'Settings');
 
-  /* ── Picker screen ── */
-  if (screen.type === 'picker') {
-    const sec = CONFIG_SCHEMA.find((s) => s.key === screen.sectionKey);
-    return (
-      <div style={{ paddingBottom: 52 }}>
-        <PickerScreen
-          picker={screen.picker}
-          sectionLabel={sec?.label ?? 'Back'}
-          onBack={() => setScreen({ type: 'section', key: screen.sectionKey })}
-        />
-        {bottomBar}
-      </div>
-    );
-  }
+  const back =
+    screen.type === 'list'
+      ? undefined
+      : screen.type === 'picker'
+        ? () => setScreen({ type: 'section', key: screen.sectionKey })
+        : () => setScreen({ type: 'list' });
 
-  /* ── Projects screen ── */
-  if (screen.type === 'projects') {
-    return (
-      <div style={{ paddingBottom: 52 }}>
-        <ProjectsScreen
-          config={config}
-          onUpdate={updateFull}
-          onBack={() => setScreen({ type: 'list' })}
-        />
-        {bottomBar}
-      </div>
-    );
-  }
+  const copyDaemonDetails = () => {
+    const text = `trace-mcp daemon · PID ${daemon.pid} · port ${daemon.port} · up ${formatUptime(daemon.uptime)} · config ${settings.path}`;
+    void navigator.clipboard?.writeText(text);
+  };
 
-  /* ── Section detail screen ── */
-  if (screen.type === 'section') {
-    const sec = CONFIG_SCHEMA.find((s) => s.key === screen.key);
-    if (!sec) {
-      setScreen({ type: 'list' });
-      return null;
-    }
-    return (
-      <div style={{ paddingBottom: 52 }}>
-        <SectionDetail
-          section={sec}
-          data={sd(config, sec)}
-          onUpdate={update}
-          onBack={() => setScreen({ type: 'list' })}
-          onOpenPicker={(p) => setScreen({ type: 'picker', sectionKey: screen.key, picker: p })}
-        />
-        {showDiff && <DiffPanel entries={diffs} onClose={() => setShowDiff(false)} />}
-        {bottomBar}
-      </div>
-    );
-  }
-
-  /* ── Main list screen ── */
   return (
-    <div style={{ paddingBottom: 52 }}>
-      {/* Daemon card */}
+    <div className="flex flex-col h-full min-h-0">
+      {/* ── Toolbar ──────────────────────────────────────────────────── */}
       <div
+        className="flex items-center gap-3 px-4 shrink-0 glass"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '10px 12px',
-          background: 'var(--bg-grouped)',
-          borderRadius: 10,
-          boxShadow: 'var(--shadow-grouped)',
-          marginBottom: 16,
+          height: 52,
+          borderBottom: '0.5px solid transparent',
+          borderBottomColor: scrolled ? 'var(--separator)' : 'transparent',
+          transition: 'border-bottom-color var(--dur-standard) var(--ease-out)',
         }}
       >
-        <StatusDot tone="green" pulse />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Daemon</div>
-          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
-            PID {daemon.pid} &middot; Port {daemon.port} &middot; {formatUptime(daemon.uptime)}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            const api = window.electronAPI;
-            if (api?.openInEditor) api.openInEditor(settings.path);
-          }}
-          style={{
-            fontSize: 13,
-            fontWeight: 500,
-            color: '#fff',
-            background: 'var(--accent)',
-            border: 'none',
-            borderRadius: 6,
-            padding: '5px 14px',
-            cursor: 'pointer',
-          }}
-        >
-          Edit JSON
-        </button>
-      </div>
-
-      {/* Search */}
-      <div style={{ position: 'relative', marginBottom: 16 }}>
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          style={{
-            position: 'absolute',
-            left: 9,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            color: 'var(--text-tertiary)',
-            pointerEvents: 'none',
-          }}
-        >
-          <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-          <path d="M16 16L20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search"
-          style={{
-            fontSize: 13,
-            fontFamily: 'inherit',
-            width: '100%',
-            height: 28,
-            padding: '0 28px 0 30px',
-            borderRadius: 7,
-            border: '1px solid var(--border)',
-            background: 'var(--fill-control)',
-            color: 'var(--text-primary)',
-            boxShadow: 'var(--shadow-control)',
-          }}
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={() => setSearch('')}
-            style={{
-              position: 'absolute',
-              right: 6,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              width: 18,
-              height: 18,
-              borderRadius: 9,
-              border: 'none',
-              cursor: 'pointer',
-              background: 'var(--bg-inset)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 13,
-              lineHeight: 1,
-              color: 'var(--text-tertiary)',
-            }}
-          >
-            ×
-          </button>
+        {back && (
+          <Button
+            variant="icon"
+            icon="chevron_left"
+            onClick={back}
+            aria-label="Back"
+            title="Back"
+          />
         )}
+        <h2
+          className="flex-1 min-w-0 text-[17px] leading-[22px] font-semibold truncate"
+          style={{ color: 'var(--label)', letterSpacing: '-0.01em' }}
+        >
+          {title}
+        </h2>
+        {screen.type === 'list' && (
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            placeholder="Search settings"
+            aria-label="Search settings"
+          />
+        )}
+        <Button
+          ref={overflow.ref}
+          variant="icon"
+          icon="more_horiz"
+          onClick={() => (overflow.at ? overflow.close() : overflow.open())}
+          aria-haspopup="menu"
+          aria-expanded={overflow.at !== null}
+          aria-label="More actions"
+          title="More actions"
+        />
       </div>
 
-      {(!q || 'appearance'.includes(q) || 'theme'.includes(q)) && (
-        <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
-      )}
-
-      {/* Section list */}
-      <SectionList
-        sections={filtered}
-        config={config}
-        onOpen={(key) => setScreen({ type: 'section', key })}
-        search={search}
-      />
-
-      {/* Per-project row */}
-      {(!q || 'project override'.includes(q)) && (
-        <div
-          style={{
-            background: 'var(--bg-grouped)',
-            borderRadius: 10,
-            boxShadow: 'var(--shadow-grouped)',
-            overflow: 'hidden',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setScreen({ type: 'projects' })}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              width: '100%',
-              padding: '8px 12px',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              textAlign: 'left',
+      {overflow.at && (
+        <Menu x={overflow.at.x} y={overflow.at.y} align="end" onClose={overflow.close}>
+          <MenuItem
+            icon="content_copy"
+            onClick={() => {
+              copyDaemonDetails();
+              overflow.close();
             }}
           >
-            <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>
-              Per-project Overrides
-            </span>
-            {Object.keys((config.projects ?? {}) as object).length > 0 && (
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: 4,
-                  background: 'var(--accent)',
-                  flexShrink: 0,
-                }}
-              />
-            )}
-            <ChevronRight />
-          </button>
-        </div>
+            Copy daemon details
+          </MenuItem>
+          <MenuSeparator />
+          {/* The raw-config escape hatch. It used to be the most prominent
+              control on the screen; a hatch belongs behind a menu. */}
+          <MenuItem
+            icon="code"
+            onClick={() => {
+              window.electronAPI?.openInEditor?.(settings.path);
+              overflow.close();
+            }}
+          >
+            Edit config file…
+          </MenuItem>
+        </Menu>
       )}
 
-      {showDiff && (
-        <div style={{ marginTop: 16 }}>
-          <DiffPanel entries={diffs} onClose={() => setShowDiff(false)} />
+      {/* ── Content ──────────────────────────────────────────────────── */}
+      <div
+        className="flex-1 overflow-auto"
+        onScroll={(e) => setScrolled((e.target as HTMLElement).scrollTop > 0)}
+      >
+        <div className="flex flex-col gap-6 px-4 py-4 mx-auto w-full" style={{ maxWidth: 720 }}>
+          {screen.type === 'list' && (
+            <>
+              {/* Daemon card — the STATE leads. The PID is diagnostic detail
+                  and lives behind "Copy daemon details" in the overflow menu. */}
+              <Card>
+                <div className="flex items-center gap-2.5 px-3" style={{ minHeight: 44 }}>
+                  <StatusDot tone="green" pulse title="Running" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
+                      Daemon
+                    </div>
+                    <div
+                      className="text-[11px] leading-[13px] truncate"
+                      style={{ color: 'var(--label-secondary)' }}
+                    >
+                      Running · port <span className="tabular-nums">{daemon.port}</span> · up{' '}
+                      <span className="tabular-nums">{formatUptime(daemon.uptime)}</span>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {(!q || 'appearance'.includes(q) || 'theme'.includes(q)) && (
+                <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
+              )}
+
+              <SectionList
+                sections={filtered}
+                config={config}
+                onOpen={(key) => setScreen({ type: 'section', key })}
+                onOpenProjects={() => setScreen({ type: 'projects' })}
+                projectOverrides={Object.keys((config.projects ?? {}) as object).length}
+                search={q}
+              />
+            </>
+          )}
+
+          {screen.type === 'section' &&
+            (activeSection ? (
+              <SectionDetail
+                section={activeSection}
+                data={sd(config, activeSection)}
+                onUpdate={update}
+                onOpenPicker={(p) =>
+                  setScreen({ type: 'picker', sectionKey: screen.key, picker: p })
+                }
+              />
+            ) : null)}
+
+          {screen.type === 'picker' && (
+            <PickerScreen
+              picker={screen.picker}
+              onBack={() => setScreen({ type: 'section', key: screen.sectionKey })}
+            />
+          )}
+
+          {screen.type === 'projects' && <ProjectsScreen config={config} onUpdate={updateFull} />}
+
+          {showDiff && <DiffPanel entries={diffs} onClose={() => setShowDiff(false)} />}
         </div>
-      )}
-      {bottomBar}
+      </div>
+
+      <BottomBar
+        dirty={dirty}
+        saving={saving}
+        hasErrors={hasErrors}
+        diffCount={diffs.length}
+        showDiff={showDiff}
+        onToggleDiff={() => setShowDiff(!showDiff)}
+        onSave={save}
+        onDiscard={discard}
+        saveStatus={saveStatus}
+      />
     </div>
   );
 }
@@ -2118,40 +1788,37 @@ export function Settings({
  * window manually.
  */
 function ActivityLink() {
-  const [hover, setHover] = useState(false);
+  /* The click's only effect is off-screen and in another window, so without
+     this the button looked broken: pressed, nothing happened. */
+  const [armed, setArmed] = useState(false);
   const onClick = useCallback(() => {
     try {
       localStorage.setItem('activity.subtab', 'ai');
+      setArmed(true);
     } catch {
       /* ignore quota / disabled storage */
     }
   }, []);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        marginTop: 16,
-        width: '100%',
-        textAlign: 'left',
-        padding: '10px 12px',
-        background: hover ? 'var(--bg-hover)' : 'var(--fill-control)',
-        border: '0.5px solid var(--border)',
-        borderRadius: 10,
-        cursor: 'pointer',
-        color: 'var(--text-primary)',
-        transition: 'background 120ms ease',
-      }}
-    >
-      <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
-        View AI activity
+    <Card>
+      <div className="flex items-center gap-3 px-3" style={{ minHeight: 44 }}>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
+            AI activity
+          </div>
+          <div
+            className="text-[11px] leading-[13px] mt-0.5"
+            style={{ color: armed ? 'var(--status-green)' : 'var(--label-secondary)' }}
+          >
+            {armed
+              ? 'The next project window you open will land on Activity → AI calls.'
+              : 'Recent embed, LLM and rerank requests live in a project window, under Activity.'}
+          </div>
+        </div>
+        <Button disabled={armed} onClick={onClick}>
+          {armed ? 'Ready' : 'Open there next'}
+        </Button>
       </div>
-      <div style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-        Recent embed / LLM / rerank requests live in the Activity tab → AI calls.
-        Open a project window → Activity tab to view.
-      </div>
-    </button>
+    </Card>
   );
 }

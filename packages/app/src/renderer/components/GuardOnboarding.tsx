@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Icon } from '../lattice/icons';
 import { Button } from '../lattice/ui';
 
 type Step = 'detect' | 'cli-missing' | 'cli-stale' | 'install-prompt' | 'installing' | 'installed' | 'skipped';
@@ -12,23 +13,29 @@ interface OnboardingState {
 }
 
 /**
- * One-time onboarding wizard for the trace-mcp guard.
+ * One-time onboarding sheet for the trace-mcp guard.
  * Shown the first time the app launches without a recorded acknowledgement.
  *
  * Flow:
- *   detect  → cli-missing  (terminal — link to install instructions)
- *           → cli-stale    (terminal — prompt to upgrade)
+ *   detect  → cli-missing  (terminal — the install command, with a copy button)
+ *           → cli-stale    (terminal — the upgrade command)
  *           → install-prompt → installing → installed
  *                                         → skipped (user opted out)
  *
- * Nothing renders until detection resolves — the dialog is the first thing a
+ * Nothing renders until detection resolves — the sheet is the first thing a
  * new user ever sees, so it must not flash an empty "Detecting…" panel over a
  * still-loading Workspace. When Claude Code isn't installed there is nothing
- * to offer, so we acknowledge and close without ever showing a dialog.
+ * to offer, so we acknowledge and close without ever showing a sheet.
  *
- * Persistence: writes ~/.claude/.trace-mcp-onboarded once the user reaches
- * a terminal state. Renderer-side via electronAPI? — actually we keep it
- * in localStorage because it's a UI hint, not a security boundary.
+ * Presentation (TRA-295): a macOS sheet, not a centred web modal. It slides
+ * out of the window's top edge, keeps square top corners because it is
+ * attached to that edge, dims what is behind it, traps focus, and closes on
+ * Escape and on a backdrop press. The command it asks the user to run is a
+ * selectable monospace field with a copy button — `user-select: none` is set
+ * globally on `body`, so before this the one thing the dialog existed to
+ * communicate could not be copied.
+ *
+ * Persistence: localStorage, because it is a UI hint, not a security boundary.
  */
 const ONBOARDING_KEY = 'trace-mcp.onboarded.v1';
 
@@ -39,6 +46,8 @@ interface GuardOnboardingProps {
 export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
   const [state, setState] = useState<OnboardingState>({ step: 'detect' });
   const titleId = useId();
+  const bodyId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Ref so the detect effect can close without re-running when App re-renders
   // and hands us a fresh `onClose` identity.
@@ -59,11 +68,7 @@ export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
     const detect = async () => {
       const cliCheck = await window.electronAPI?.guard.checkCliVersion();
       if (cancelled) return;
-      if (!cliCheck) {
-        setState({ step: 'cli-missing' });
-        return;
-      }
-      if (cliCheck.notInstalled) {
+      if (!cliCheck || cliCheck.notInstalled) {
         setState({ step: 'cli-missing' });
         return;
       }
@@ -87,14 +92,11 @@ export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
       }
       if (!installStatus?.claudeDetected) {
         // Claude Code not installed — there is nothing to offer, so don't
-        // interrupt first launch with a dialog just to say "skipped".
+        // interrupt first launch with a sheet just to say "skipped".
         dismissAndPersist();
         return;
       }
-      setState({
-        step: 'install-prompt',
-        cliVersion: cliCheck.current,
-      });
+      setState({ step: 'install-prompt', cliVersion: cliCheck.current });
     };
     detect();
     return () => {
@@ -102,20 +104,51 @@ export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
     };
   }, [dismissAndPersist]);
 
-  // Dismissable while a dialog is actually on screen and idle — not during
+  // Dismissable while a sheet is actually on screen and idle — not during
   // detection (nothing is shown yet) and not mid-install (work in flight).
   const dismissable = state.step !== 'detect' && state.step !== 'installing';
+  const open = state.step !== 'detect';
 
-  // Escape dismisses, same as the primary action. A modal you can't get out of
-  // with the keyboard is a trap on the very first screen of the app.
+  // Escape dismisses, and Tab cycles inside the sheet. A modal you can't get
+  // out of with the keyboard, or that leaks Tab to the Workspace behind it, is
+  // a trap on the very first screen of the app.
   useEffect(() => {
-    if (!dismissable) return;
+    if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') dismissAndPersist();
+      if (e.key === 'Escape') {
+        if (!dismissable) return;
+        e.preventDefault();
+        dismissAndPersist();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = [
+        ...panel.querySelectorAll<HTMLElement>(
+          'button:not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ),
+      ];
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || !panel.contains(active)) {
+        e.preventDefault();
+        first.focus();
+        return;
+      }
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [dismissable, dismissAndPersist]);
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [open, dismissable, dismissAndPersist]);
 
   const install = async () => {
     setState((s) => ({ ...s, step: 'installing' }));
@@ -127,124 +160,174 @@ export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
     setState((s) => ({ ...s, step: 'installed', scriptPath: result.scriptPath }));
   };
 
-  if (state.step === 'detect') return null;
+  if (!open) return null;
+
+  const { title, body } = content(state, install, dismissAndPersist, () =>
+    setState({ step: 'skipped' }),
+  );
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: the scrim is a dismissal affordance, not a control — Escape and the sheet's own buttons are the keyboard paths, and the sheet traps focus above it.
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.4)' }}
+      className="lx-sheet-scrim"
       onClick={dismissable ? dismissAndPersist : undefined}
     >
-      {/* stopPropagation below keeps clicks inside the panel from reaching the
-          backdrop handler; Escape is handled globally above. */}
+      {/* stopPropagation keeps presses inside the sheet from reaching the
+          scrim's dismiss handler; Escape is handled globally above. */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="rounded-lg shadow-2xl p-6 max-w-md w-full"
-        style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}
+        aria-describedby={bodyId}
+        className="lx-sheet"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2
-          id={titleId}
-          className="text-base font-semibold mb-3"
-          style={{ color: 'var(--text-primary)' }}
-        >
-          Set up trace-mcp guard
+        <h2 id={titleId} className="lx-sheet-title">
+          {title}
         </h2>
+        <div id={bodyId} className="lx-sheet-body">
+          {body}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        {state.step === 'cli-missing' && (
-          <div>
-            <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-              The <code>trace-mcp</code> CLI isn't on your PATH. Install it first:
+/** Per-step title and body. Split out so the sheet chrome above stays one
+    shape regardless of which of the six states is showing. */
+function content(
+  state: OnboardingState,
+  install: () => void,
+  dismiss: () => void,
+  skip: () => void,
+): { title: string; body: React.ReactNode } {
+  switch (state.step) {
+    case 'cli-missing':
+      return {
+        title: 'Install the trace-mcp CLI',
+        body: (
+          <>
+            <p className="lx-sheet-text">
+              The app talks to your projects through the <code>trace-mcp</code> command, and it
+              isn't on your PATH yet. Run this in a terminal, then reopen the app.
             </p>
-            <pre
-              className="text-xs px-2 py-1.5 rounded mb-3"
-              style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-            >
-              npm install -g trace-mcp
-            </pre>
-            <ActionRow onPrimary={dismissAndPersist} primaryLabel="Got it" />
-          </div>
-        )}
-
-        {state.step === 'cli-stale' && (
-          <div>
-            <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-              Installed CLI is <code>{state.cliVersion}</code> — this app expects ≥{' '}
-              <code>{state.requiredVersion}</code>. Upgrade:
+            <CommandField command="npm install -g trace-mcp" />
+            <ActionRow onPrimary={dismiss} primaryLabel="Done" />
+          </>
+        ),
+      };
+    case 'cli-stale':
+      return {
+        title: 'Update the trace-mcp CLI',
+        body: (
+          <>
+            <p className="lx-sheet-text">
+              You have <code>{state.cliVersion}</code>; this app needs{' '}
+              <code>{state.requiredVersion}</code> or newer. Run this in a terminal, then reopen
+              the app.
             </p>
-            <pre
-              className="text-xs px-2 py-1.5 rounded mb-3"
-              style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-            >
-              npm install -g trace-mcp@latest
-            </pre>
-            <ActionRow onPrimary={dismissAndPersist} primaryLabel="Got it" />
-          </div>
-        )}
-
-        {state.step === 'install-prompt' && (
-          <div>
-            <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-              Install the trace-mcp guard hook into Claude Code? This routes
-              Read/Grep/Glob/Bash through trace-mcp instead of raw file
-              reads — saves ~30–50% of tokens per session. New projects
-              start in <strong>Coach</strong> mode (hints only, never
-              blocks) and auto-promote to Strict after 7 days.
+            <CommandField command="npm install -g trace-mcp@latest" />
+            <ActionRow onPrimary={dismiss} primaryLabel="Done" />
+          </>
+        ),
+      };
+    case 'install-prompt':
+      return {
+        title: 'Set up the trace-mcp guard',
+        body: (
+          <>
+            <p className="lx-sheet-text">
+              The guard routes Claude Code's Read, Grep, Glob and Bash calls through trace-mcp
+              instead of raw file reads, which saves roughly 30–50% of the tokens in a session.
+              New projects start in Coach mode — hints only, never blocking — and move to Strict
+              after seven days.
             </p>
-            <p className="text-[11px] mb-4" style={{ color: 'var(--text-tertiary)' }}>
-              We'll back up <code>~/.claude/settings.json</code> to{' '}
-              <code>settings.json.bak</code> before editing.
+            <p className="lx-sheet-note">
+              <code>~/.claude/settings.json</code> is backed up to <code>settings.json.bak</code>{' '}
+              before anything is written.
             </p>
             {state.error && (
-              <div className="text-xs mb-2" style={{ color: '#ff3b30' }}>
+              <p className="lx-sheet-error" role="alert">
+                <Icon name="warning" size={14} />
                 {state.error}
-              </div>
+              </p>
             )}
             <ActionRow
               onPrimary={install}
-              primaryLabel="Install"
-              onSecondary={() => {
-                setState({ step: 'skipped' });
-              }}
-              secondaryLabel="Skip"
+              primaryLabel="Install guard"
+              onSecondary={skip}
+              secondaryLabel="Not now"
             />
-          </div>
-        )}
-
-        {state.step === 'installing' && (
-          <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Installing hook…
-          </div>
-        )}
-
-        {state.step === 'installed' && (
-          <div>
-            <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-              Guard installed.
-              {state.scriptPath && (
-                <>
-                  {' '}Hook at <code>{state.scriptPath}</code>.
-                </>
-              )}
-            </p>
-            <p className="text-[11px] mb-4" style={{ color: 'var(--text-tertiary)' }}>
+          </>
+        ),
+      };
+    case 'installing':
+      return {
+        title: 'Installing the guard',
+        body: (
+          <p className="lx-sheet-text" role="status">
+            Writing the hook into Claude Code's settings…
+          </p>
+        ),
+      };
+    case 'installed':
+      return {
+        title: 'Guard installed',
+        body: (
+          <>
+            <p className="lx-sheet-text">
               Restart Claude Code so it picks up the new hook configuration.
             </p>
-            <ActionRow onPrimary={dismissAndPersist} primaryLabel="Done" />
-          </div>
-        )}
-
-        {state.step === 'skipped' && (
-          <div>
-            <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)' }}>
-              Skipped. You can install the guard later from Settings.
+            {state.scriptPath && <CommandField command={state.scriptPath} label="Hook script" />}
+            <ActionRow onPrimary={dismiss} primaryLabel="Done" />
+          </>
+        ),
+      };
+    case 'skipped':
+      return {
+        title: 'Guard not installed',
+        body: (
+          <>
+            <p className="lx-sheet-text">
+              You can install it later from Settings, under AI / embeddings.
             </p>
-            <ActionRow onPrimary={dismissAndPersist} primaryLabel="Close" />
-          </div>
-        )}
-      </div>
+            <ActionRow onPrimary={dismiss} primaryLabel="Close" />
+          </>
+        ),
+      };
+    default:
+      return { title: '', body: null };
+  }
+}
+
+/** A command the user is meant to run. Selectable (the global
+    `user-select: none` on body is overridden here) and copyable in one click —
+    a command you cannot copy is a screenshot, not an instruction. */
+function CommandField({ command, label }: { command: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* clipboard denied — the text is selectable, so ⌘C still works */
+    }
+  };
+
+  return (
+    <div className="lx-sheet-command">
+      <code>{command}</code>
+      <Button
+        variant="icon"
+        size="small"
+        icon={copied ? 'check' : 'content_copy'}
+        onClick={copy}
+        aria-label={copied ? 'Copied' : `Copy ${label ?? 'command'}`}
+        title={copied ? 'Copied' : `Copy ${label ?? 'command'}`}
+      />
     </div>
   );
 }
@@ -258,15 +341,15 @@ interface ActionRowProps {
 
 function ActionRow({ onPrimary, primaryLabel, onSecondary, secondaryLabel }: ActionRowProps) {
   return (
-    <div className="flex gap-2 justify-end">
+    <div className="lx-sheet-actions">
       {onSecondary && secondaryLabel && (
-        <Button variant="chip" onClick={onSecondary}>
+        <Button size="large" onClick={onSecondary}>
           {secondaryLabel}
         </Button>
       )}
-      {/* autoFocus: the dialog must own the keyboard on mount, otherwise Tab
+      {/* autoFocus: the sheet must own the keyboard on mount, otherwise Tab
           and Enter act on the Workspace behind it. */}
-      <Button autoFocus variant="primary" onClick={onPrimary}>
+      <Button autoFocus size="large" variant="prominent" onClick={onPrimary}>
         {primaryLabel}
       </Button>
     </div>
