@@ -184,6 +184,11 @@ one-off `font-size`. They set family, size, leading and tracking together.
 
 Spacing tokens are `--space-2/4/6/8/12/16/20/24/32/40/48`. Nothing at 13, 17 or 25.
 
+This binds the primitives too, not just the surfaces: control padding and gaps are on
+the same scale (a 5px gap, a 9px inset, a Tailwind `2.5` half-step are all defects).
+The check is a scan of every rendered element's computed padding / gap / margin on the
+running renderer, not a read of the stylesheet.
+
 ### Control heights: 20 / 24 / 28. Nothing else.
 
 `packages/app/src/renderer/styles/controls.css` declares one geometry for every control
@@ -273,10 +278,12 @@ truncates, and an optional trailing count in tabular figures. Label text starts 
 x=38 in every row.
 
 **Anything that lives in the sidebar is a row.** Nav items are rows. Settings is a row.
-A row that *carries* a control instead of being one (Appearance) is
-`.ws-sb-row.is-static` — same box, no hover, must not read as clickable. The footer
-was the last strip running its own geometry, and putting it on the row system is what
-made the sidebar read as one thing.
+The idle update banner is a row. The footer was the last strip running its own
+geometry, and putting it on the row system is what made the sidebar read as one thing.
+
+**The sidebar carries navigation, not preferences.** The footer is *one* row —
+Settings. Appearance briefly lived there as a second row and cost 28px at the bottom of
+every window; it belongs in the Settings screen, which is where macOS puts it.
 
 Selection follows the macOS active/inactive pair: `--fill-tertiary` when the sidebar
 does not own focus, `--accent-fill` + `--on-accent` when it does
@@ -484,6 +491,8 @@ new evidence.
 | `listPending` separates "daemon hasn't answered" from "never indexed" | `status ?? 'unknown'` blamed the project for the daemon's silence. |
 | Sidebar footer is `.ws-sb-row`, not its own geometry | One row system for the whole sidebar; the footer's labels started 26px left of every other label. |
 | Appearance is Auto / Light / Dark, with Auto clearing the key | The old `toggle` only ever wrote `light` or `dark`, so one click pinned the app forever and the system listener stopped mattering. |
+| Appearance lives in Settings, not the sidebar footer | A preference is not a navigation destination, and a second footer row cost 28px at the bottom of every window. It renders in Settings' daemon-down and loading states too — the theme is localStorage, not daemon config. |
+| A surface that draws its own toolbar owns its whole pane | Wrapping it in the pane's `p-4` doubles every inset the surface already declares — the workspace KPI row started at x=32 with its first card at y=76. |
 | Paths truncate at the **head**, keeping the tail | The tail is the part that distinguishes siblings; tail-truncation hid the only useful segment. |
 | Sidebar file paths use a `dir`/`name` flex split, not `direction: rtl` | The rtl hack mangled any path containing `.` or `_` runs (`.idea/workspace.xml` → `idea/workspace.xml.`). |
 | Whitespace separates sidebar groups, not rules | Fewer lines, clearer grouping; matches the platform sidebar. |
