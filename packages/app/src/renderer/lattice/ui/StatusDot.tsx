@@ -9,7 +9,8 @@ import type { CSSProperties, ReactNode } from 'react';
 import type { Tone } from './Badge';
 
 export interface StatusDotProps {
-  tone?: Tone;
+  /** `gold`/`pink` are the pre-TRA-290 names for `orange`/`purple`. */
+  tone?: Tone | 'gold' | 'pink';
   /** Diameter in px (default 8). */
   size?: number;
   /** Pulsing halo (live indicator). */
@@ -25,7 +26,8 @@ export function StatusDot({
   className,
   title,
 }: StatusDotProps): ReactNode {
-  const cls = ['ws-statusdot', `t-${tone}`, pulse ? 'pulse' : '', className ?? '']
+  const t = tone === 'gold' ? 'orange' : tone === 'pink' ? 'purple' : tone;
+  const cls = ['ws-statusdot', `t-${t}`, pulse ? 'pulse' : '', className ?? '']
     .filter(Boolean)
     .join(' ');
   return (

@@ -37,7 +37,7 @@ function shortPath(root: string): string {
 }
 
 function statusToDot(status?: string): Tone {
-  if (status === 'indexing') return 'gold';
+  if (status === 'indexing') return 'orange';
   if (status === 'error') return 'red';
   if (status === 'ready') return 'green';
   return 'neutral';

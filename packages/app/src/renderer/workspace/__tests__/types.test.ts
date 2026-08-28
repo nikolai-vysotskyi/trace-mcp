@@ -331,8 +331,8 @@ describe('compareViewModels', () => {
 describe('statusToDot', () => {
   it('maps all canonical statuses', () => {
     expect(statusToDot('ok')).toBe('green');
-    expect(statusToDot('indexing')).toBe('gold');
-    expect(statusToDot('computing')).toBe('gold');
+    expect(statusToDot('indexing')).toBe('orange');
+    expect(statusToDot('computing')).toBe('orange');
     expect(statusToDot('error')).toBe('red');
     expect(statusToDot('not_loaded')).toBe('neutral');
   });

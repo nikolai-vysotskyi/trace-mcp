@@ -185,28 +185,8 @@
    STATUS PALETTE — shared Badge + StatusDot primitives (ui/Badge, ui/StatusDot)
    ONE tone scale to replace the scattered per-domain badge/pill/dot classes.
    ============================================================================ */
-.ws-badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em;
-  padding: 2px 7px; border-radius: 5px; white-space: nowrap;
-  background: var(--row-hover); color: var(--text-2);
-}
-.ws-badge.t-neutral { background: var(--row-hover); color: var(--text-2); }
-.ws-badge.t-accent  { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
-.ws-badge.t-green   { background: color-mix(in srgb, var(--status-green-hue) 16%, transparent); color: var(--status-green-fg); }
-.ws-badge.t-red     { background: color-mix(in srgb, var(--status-red-hue) 16%, transparent); color: var(--status-red-fg); }
-.ws-badge.t-gold    { background: color-mix(in srgb, var(--status-gold-hue) 18%, transparent); color: var(--status-gold-fg); }
-.ws-badge.t-blue    { background: color-mix(in srgb, var(--status-blue-hue) 16%, transparent); color: var(--status-blue-fg); }
-.ws-badge.t-pink    { background: color-mix(in srgb, var(--status-pink-hue) 16%, transparent); color: var(--status-pink-fg); }
-/* outline: transparent fill + colored ring */
-.ws-badge.outline { background: transparent; border: 1px solid currentColor; }
-.ws-badge.outline.t-neutral { color: var(--text-3); border-color: var(--sep); }
-.ws-badge.outline.t-accent  { color: var(--accent); }
-.ws-badge.outline.t-green   { color: var(--status-green-fg); }
-.ws-badge.outline.t-red     { color: var(--status-red-fg); }
-.ws-badge.outline.t-gold    { color: var(--status-gold-fg); }
-.ws-badge.outline.t-blue    { color: var(--status-blue-fg); }
-.ws-badge.outline.t-pink    { color: var(--status-pink-fg); }
+/* Badges moved to controls.css (.lx-badge) — capsule, 11px/500, tinted fill
+   with the saturated hue as the label colour (TRA-290). */
 
 .ws-statusdot {
   display: inline-block; flex: none; border-radius: 50%;
@@ -216,9 +196,9 @@
 .ws-statusdot.t-accent  { background: var(--accent); }
 .ws-statusdot.t-green   { background: var(--status-green-hue); }
 .ws-statusdot.t-red     { background: var(--status-red-hue); }
-.ws-statusdot.t-gold    { background: var(--status-gold-hue); }
+.ws-statusdot.t-orange  { background: var(--status-gold-hue); }
 .ws-statusdot.t-blue    { background: var(--status-blue-hue); }
-.ws-statusdot.t-pink    { background: var(--status-pink-hue); }
+.ws-statusdot.t-purple  { background: var(--status-pink-hue); }
 .ws-statusdot.pulse {
   box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
   animation: ws-pulse 2.4s ease-in-out infinite;
@@ -424,11 +404,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 }
 .ws-island-title .chev { color: var(--text-2); display: flex; }
 .ws-island-actions { margin-left: auto; display: flex; align-items: center; gap: 1px; }
-.ws-mini {
-  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
-  border-radius: 5px; color: var(--text-2); cursor: default; transition: background .12s, color .12s;
-}
-.ws-mini:hover { background: var(--row-hover); color: var(--text-1); }
+/* Island header actions are .lx-btn.v-icon (controls.css) — 24×24, 6px,
+   16px glyph (TRA-290). */
 .ws-island-body { flex: 1; overflow-y: auto; overflow-x: auto; padding-bottom: 6px; }
 
 /* a side-panel slot whose width is controlled by the layout */
@@ -629,111 +606,19 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-view-bar .grow, .ws-view-subbar .grow { flex: 1; }
 .ws-tdiv { width: 0.5px; align-self: stretch; margin: 4px 2px; background: var(--sep); flex: none; }
 
-/* segmented pill control */
-.ws-seg2 { display: inline-flex; gap: 2px; padding: 3px; background: var(--row-hover); border-radius: 9px; flex: none; }
-.ws-seg2 .s2 {
-  border: 0; background: transparent; cursor: default; color: var(--text-2);
-  font-family: inherit; font-size: 13px; font-weight: 550; padding: 5px 13px; border-radius: 7px;
-  transition: background .12s, color .12s;
-}
-.ws-seg2 .s2:hover { color: var(--text-1); }
-.ws-seg2 .s2.is-active { background: var(--accent); color: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
-.ws-seg2.mini { padding: 2px; }
-.ws-seg2.mini .s2 { padding: 3px 8px; font-size: 11.5px; font-weight: 600; }
+/* Segmented control, chip/text buttons and the small search field moved to
+   controls.css (.lx-seg / .lx-btn / .lx-search) — capsules on the 20/24/28
+   height scale (TRA-290). */
 
-/* chip / text buttons */
-.ws-chipbtn, .ws-textbtn {
-  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 12px;
-  border: 0.5px solid var(--sep); background: transparent; border-radius: 9px;
-  font-family: inherit; font-size: 12.5px; font-weight: 500; color: var(--text-1);
-  cursor: default; transition: background .12s, border-color .12s, color .12s; white-space: nowrap; flex: none;
-}
-.ws-chipbtn:hover, .ws-textbtn:hover { background: var(--row-hover); }
-.ws-chipbtn.icon { width: 30px; padding: 0; justify-content: center; font-size: 15px; }
-.ws-chipbtn.toggle.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
-.ws-textbtn { border-color: transparent; color: var(--text-2); padding: 0 8px; }
-.ws-chipbtn kbd, .ws-search.sm kbd {
+.lx-btn kbd {
   font-family: inherit; font-size: 11px; padding: 1px 5px; border-radius: 4px;
   background: var(--row-hover); color: var(--text-2);
 }
 
-/* search field */
-.ws-search.sm {
-  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px;
-  border-radius: 9px; background: var(--row-hover); color: var(--text-3); min-width: 190px; flex: none;
-}
-.ws-search.sm input { border: 0; background: none; outline: 0; color: var(--text-1); font-family: inherit; font-size: 13px; width: 100%; }
-
-/* ── Unified search · "centered idle → slides left on focus" (Liquid Glass) ───
-   The single search component for the whole app (see SearchField.tsx). Idle: the
-   magnifier + placeholder sit CENTERED in a capsule; on focus/typing the unit
-   slides to the left edge, the input fades in, and the placeholder fades once
-   there's a query — plus an accent focus ring. Durations are deliberately LONGER
-   than the source design (slide .42s vs .2s) for a smoother, slower feel.
-   Fills its container (width:100%); wrap it to size it per context. */
-.ws-sbar {
-  position: relative;
-  width: 100%;
-  /* Never shrink below a size where the centered placeholder gets cramped. Paired
-     with the `white-space: nowrap` on .unit, the label can NEVER fall onto two
-     lines — at worst it clips, but it won't below this width either. */
-  min-width: 168px;
-  height: 30px;
-  border-radius: 999px;
-  box-sizing: border-box;
-  /* Design --fill-tertiary: a translucent neutral gray that reads clearly on both
-     dark and light backings (the app's --row-hover is too faint for a standalone pill). */
-  background: rgba(118, 118, 128, 0.16);
-  overflow: hidden;
-  transition:
-    background 0.36s cubic-bezier(0.32, 0.72, 0, 1),
-    box-shadow 0.36s ease;
-}
-.ws-sbar:hover { background: rgba(118, 118, 128, 0.2); }
-.ws-sbar input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font-family: inherit;
-  font-size: 13px;
-  color: var(--text-1);
-  padding: 0 12px 0 32px;
-  box-sizing: border-box;
-  opacity: 0;
-  transition: opacity 0.36s cubic-bezier(0.32, 0.72, 0, 1);
-}
-.ws-sbar .unit {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  /* Keep the magnifier + label on ONE line. Without this, an absolutely-positioned
-     centered unit is width-constrained to the right half of the field, so the
-     placeholder wraps ("Search" / "chats") whenever the field is narrow. */
-  white-space: nowrap;
-  color: var(--text-3);
-  pointer-events: none;
-  transition:
-    left 0.42s cubic-bezier(0.32, 0.72, 0, 1),
-    transform 0.42s cubic-bezier(0.32, 0.72, 0, 1);
-}
-.ws-sbar .unit .ph { font-size: 13px; transition: opacity 0.22s ease; }
-.ws-sbar.is-active input { opacity: 1; }
-.ws-sbar.is-active .unit { left: 11px; transform: translate(0, -50%); }
-.ws-sbar.is-active.is-filled .ph { opacity: 0; }
-.ws-sbar.is-active {
-  background: rgba(118, 118, 128, 0.24);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
-}
-/* layout helper: grow to fill a flex toolbar */
-.ws-sbar.grow { flex: 1 1 auto; }
+/* The unified search field is SearchField.tsx + .lx-search in controls.css.
+   The old `.ws-sbar` centred-placeholder-that-slides-left treatment is gone:
+   it animated `left` (a layout property) over 0.42s and matched nothing on
+   the platform (TRA-290). */
 
 /* inline-label filter field */
 .ws-ff {
@@ -761,14 +646,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-live .dot { width: 7px; height: 7px; border-radius: 50%; background: #2f9e6e; box-shadow: 0 0 0 3px color-mix(in srgb, #2f9e6e 22%, transparent); animation: ws-pulse 2.4s ease-in-out infinite; }
 @keyframes ws-pulse { 0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, #2f9e6e 26%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, #2f9e6e 8%, transparent); } }
 
-/* primary button */
-.ws-primary {
-  display: inline-flex; align-items: center; gap: 6px;
-  height: 32px; padding: 0 14px; border: 0; border-radius: 9px;
-  background: var(--accent); color: #fff; font-family: inherit; font-size: 13px; font-weight: 600; cursor: default;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); flex: none;
-}
-.ws-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+/* The prominent button is .lx-btn.v-prominent in controls.css (TRA-290). */
 
 /* ---- ACTIVITY --------------------------------------------------------- */
 .ws-av-cards {

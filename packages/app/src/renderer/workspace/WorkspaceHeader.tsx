@@ -9,6 +9,7 @@
  */
 import { type ReactNode, useEffect, useState } from 'react';
 import { Icon } from '../lattice/icons';
+import { Button, Chip, ChipGroup, SearchField, SegmentedControl } from '../lattice/ui';
 import {
   EMPTY_FILTER,
   type ProjectHealthStatus,
@@ -33,12 +34,16 @@ export interface WorkspaceHeaderProps {
   rightExtra?: ReactNode;
 }
 
-const STATUS_CHIPS: Array<{ key: ProjectHealthStatus; label: string }> = [
-  { key: 'ok', label: 'OK' },
-  { key: 'indexing', label: 'Indexing' },
-  { key: 'error', label: 'Error' },
+const STATUS_CHIPS: Array<{ key: ProjectHealthStatus; label: string; title: string }> = [
+  { key: 'ok', label: 'OK', title: 'Projects that indexed cleanly' },
+  { key: 'indexing', label: 'Indexing', title: 'Projects currently being indexed' },
+  { key: 'error', label: 'Error', title: 'Projects whose last index failed' },
 ];
 const GRADE_CHIPS: TechDebtGrade[] = ['A', 'B', 'C', 'D', 'F'];
+const VIEW_OPTIONS: Array<{ value: ViewMode; label: string }> = [
+  { value: 'table', label: 'Table' },
+  { value: 'compact', label: 'Compact' },
+];
 
 function isDefaultFilter(f: WorkspaceFilter): boolean {
   return (
@@ -123,69 +128,6 @@ function KpiCell({
         {label}
       </span>
     </button>
-  );
-}
-
-// ── Chip ──────────────────────────────────────────────────────────────────
-
-interface ChipProps {
-  label: ReactNode;
-  active: boolean;
-  onClick: () => void;
-  accent?: string;
-  title?: string;
-}
-
-function Chip({ label, active, onClick, accent, title }: ChipProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium transition-colors whitespace-nowrap"
-      style={{
-        background: active ? accent ?? 'var(--accent)' : 'var(--fill-control)',
-        color: active ? '#fff' : 'var(--text-secondary)',
-        border: `0.5px solid ${active ? accent ?? 'var(--accent)' : 'var(--border)'}`,
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
-// ── View toggle ───────────────────────────────────────────────────────────
-
-interface ViewToggleProps {
-  view: ViewMode;
-  onViewChange: (v: ViewMode) => void;
-}
-
-function ViewToggle({ view, onViewChange }: ViewToggleProps) {
-  const opts: Array<{ key: ViewMode; label: string }> = [
-    { key: 'table', label: 'Table' },
-    { key: 'compact', label: 'Compact' },
-  ];
-  return (
-    <div
-      className="flex items-center rounded-md overflow-hidden"
-      style={{ border: '0.5px solid var(--border)' }}
-    >
-      {opts.map((o) => (
-        <button
-          key={o.key}
-          type="button"
-          onClick={() => onViewChange(o.key)}
-          className="text-[11px] px-2 py-1 font-medium transition-colors"
-          style={{
-            background: view === o.key ? 'var(--accent)' : 'transparent',
-            color: view === o.key ? '#fff' : 'var(--text-secondary)',
-          }}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -277,47 +219,42 @@ export function WorkspaceHeader({
 
         {/* ── Row 2: toolbar ──────────────────────────────────────── */}
         <div className="flex items-center gap-2 flex-wrap">
-          <input
-            type="text"
-            placeholder="Search projects…"
+          <SearchField
             value={queryDraft}
-            onChange={(e) => setQueryDraft(e.target.value)}
-            className="text-xs px-2 py-1 rounded-md outline-none"
-            style={{
-              background: 'var(--bg-secondary)',
-              color: 'var(--text-primary)',
-              border: '1px solid var(--border)',
-              minWidth: 180,
-            }}
+            onChange={setQueryDraft}
+            placeholder="Search projects"
+            aria-label="Search projects"
           />
 
-          <div className="flex items-center gap-1">
-            {STATUS_CHIPS.map((s) => (
+          <ChipGroup label="Status">
+            {STATUS_CHIPS.map((c) => (
               <Chip
-                key={s.key}
-                label={s.label}
-                active={filter.statuses?.includes(s.key) ?? false}
-                onClick={() => onFilterChange({ ...filter, statuses: toggleInList(filter.statuses, s.key) })}
+                key={c.key}
+                label={c.label}
+                title={c.title}
+                selected={filter.statuses?.includes(c.key) ?? false}
+                onClick={() => onFilterChange({ ...filter, statuses: toggleInList(filter.statuses, c.key) })}
               />
             ))}
-          </div>
+          </ChipGroup>
 
-          <div className="flex items-center gap-1">
+          {/* Bare `A B C D F` is unreadable without the group label. */}
+          <ChipGroup label="Grade">
             {GRADE_CHIPS.map((g) => (
               <Chip
                 key={g}
                 label={g}
-                active={filter.grades?.includes(g) ?? false}
+                selected={filter.grades?.includes(g) ?? false}
                 onClick={() => onFilterChange({ ...filter, grades: toggleInList(filter.grades, g) })}
-                title={`Filter by tech-debt grade ${g}`}
+                title={`Tech debt grade ${g}`}
+                aria-label={`Tech debt grade ${g}`}
               />
             ))}
-          </div>
+          </ChipGroup>
 
           <Chip
-            label={<><Icon name="lock" size={11} /> Security</>}
-            active={filter.hasSecurityFindings === true}
-            accent="var(--destructive)"
+            label={<><Icon name="lock" size={12} /> Security</>}
+            selected={filter.hasSecurityFindings === true}
             onClick={() =>
               onFilterChange({
                 ...filter,
@@ -327,9 +264,8 @@ export function WorkspaceHeader({
             title="Projects with critical or high security findings"
           />
           <Chip
-            label={<><Icon name="bug_report" size={11} /> Dead</>}
-            active={filter.hasDeadExports === true}
-            accent="#ff9f0a"
+            label={<><Icon name="bug_report" size={12} /> Dead</>}
+            selected={filter.hasDeadExports === true}
             onClick={() =>
               onFilterChange({
                 ...filter,
@@ -340,32 +276,26 @@ export function WorkspaceHeader({
           />
 
           {!isDefaultFilter(filter) && (
-            <button
-              type="button"
-              onClick={() => onFilterChange(EMPTY_FILTER)}
-              className="text-[11px] px-1.5 py-0.5 rounded font-medium transition-colors hover:bg-[var(--bg-active)]"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
+            <Button variant="plain" onClick={() => onFilterChange(EMPTY_FILTER)}>
               Clear filters
-            </button>
+            </Button>
           )}
 
           <span className="ml-auto flex items-center gap-2">
-            <ViewToggle view={view} onViewChange={onViewChange} />
-            <button
-              type="button"
+            <SegmentedControl
+              options={VIEW_OPTIONS}
+              value={view}
+              onChange={onViewChange}
+              aria-label="View mode"
+            />
+            <Button
+              variant="bordered"
               disabled={refreshing}
               onClick={onRefresh}
-              className="text-[11px] px-2 py-1 rounded font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
-              style={{
-                background: 'var(--fill-control)',
-                color: 'var(--accent)',
-                border: '0.5px solid var(--border)',
-              }}
               title="Refresh metrics"
             >
               {refreshing ? <Spinner /> : 'Refresh'}
-            </button>
+            </Button>
             {rightExtra}
           </span>
         </div>

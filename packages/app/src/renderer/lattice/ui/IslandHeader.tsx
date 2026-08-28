@@ -2,9 +2,9 @@
 
    Every island (Project tree, Commit, Database, Terminal, …) renders the same
    strict 38px header: a leading title (optional icon + chevron) and a trailing
-   actions cluster of .ws-mini buttons. This component owns that contract so the
+   actions cluster of icon buttons. This component owns that contract so the
    rows stay pixel-identical; actions are supplied as children (use <Button
-   variant="mini" …/> or <MiniButton/>).
+   variant="icon" …/> or <MiniButton/>).
 
    The matching `MiniButton` helper covers the common icon-action case. */
 
@@ -55,18 +55,27 @@ export function IslandHeader({
 export interface MiniButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon: string;
   iconSize?: number;
+  /** Icon-only, so both are required — same contract as Button variant="icon". */
+  'aria-label': string;
+  title: string;
 }
 
-/** A 24px icon action button (.ws-mini) for island headers / toolbars. */
+/** A 24×24 icon action button for island headers / toolbars. Thin alias for
+    <Button variant="icon">, kept because header actions read better as
+    <MiniButton icon="refresh" …/>. */
 export function MiniButton({
   icon,
-  iconSize = 15,
+  iconSize = 16,
   className,
   type = 'button',
   ...rest
 }: MiniButtonProps): ReactNode {
   return (
-    <button type={type} className={'ws-mini' + (className ? ' ' + className : '')} {...rest}>
+    <button
+      type={type}
+      className={'lx-btn v-icon sz-regular' + (className ? ' ' + className : '')}
+      {...rest}
+    >
       <Icon name={icon} size={iconSize} />
     </button>
   );

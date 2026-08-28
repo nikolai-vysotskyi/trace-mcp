@@ -124,7 +124,7 @@ function LevelPopover({
 function clientStatus(client: ClientInfo): Tone {
   const elapsed = Date.now() - new Date(client.lastSeen).getTime();
   if (elapsed < 30_000) return 'green';
-  if (elapsed < 120_000) return 'gold';
+  if (elapsed < 120_000) return 'orange';
   return 'neutral';
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EMPTY_FILTER_VALUE, FilterBar, type FilterValue, matchesFilter } from '../components/FilterBar';
+import { SegmentedControl } from '../lattice/ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1885,26 +1886,13 @@ export function MemoryExplorer({ root }: { root: string }) {
   return (
     <div className="space-y-4 pb-4">
       {/* Tab bar */}
-      <div className="flex gap-1">
-        {tabs.map((tab) => {
-          const active = activeTab === tab.key;
-          return (
-            <button
-              type="button"
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className="text-[12px] px-3 py-1.5 rounded-md font-medium transition-all"
-              style={{
-                background: active ? 'var(--accent)' : 'var(--bg-inset)',
-                color: active ? '#fff' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontWeight: active ? 600 : 400,
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
+      <div className="flex">
+        <SegmentedControl
+          options={tabs.map((t) => ({ value: t.key, label: t.label }))}
+          value={activeTab}
+          onChange={setActiveTab}
+          aria-label="Memory section"
+        />
       </div>
 
       {/* Content */}

@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { ToolActivity } from './ToolActivity';
 import { AIActivity } from './AIActivity';
+import { SegmentedControl } from '../lattice/ui';
 
 type SubTab = 'tool' | 'ai';
 const STORAGE_KEY = 'activity.subtab';
@@ -35,13 +36,19 @@ export function Activity({
 
   return (
     <div className="flex flex-col h-full" style={{ color: 'var(--text-primary)' }}>
-      {/* Sub-tab segmented control */}
       <div
-        className="shrink-0 flex items-center gap-1 px-3 pt-3 pb-2"
+        className="shrink-0 flex items-center px-3 pt-3 pb-2"
         style={{ borderBottom: '0.5px solid var(--border-row)' }}
       >
-        <SubTabButton label="Tool calls" active={sub === 'tool'} onClick={() => setSub('tool')} />
-        <SubTabButton label="AI calls"   active={sub === 'ai'}   onClick={() => setSub('ai')} />
+        <SegmentedControl
+          options={[
+            { value: 'tool', label: 'Tool calls' },
+            { value: 'ai', label: 'AI calls' },
+          ]}
+          value={sub}
+          onChange={setSub}
+          aria-label="Activity source"
+        />
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
@@ -52,24 +59,5 @@ export function Activity({
         )}
       </div>
     </div>
-  );
-}
-
-function SubTabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-[11px] px-2.5 py-1 rounded-full transition-all"
-      style={{
-        background: active ? 'var(--accent)' : 'var(--bg-inset)',
-        color: active ? '#fff' : 'var(--text-secondary)',
-        fontWeight: active ? 600 : 400,
-        cursor: 'pointer',
-        border: 'none',
-      }}
-    >
-      {label}
-    </button>
   );
 }

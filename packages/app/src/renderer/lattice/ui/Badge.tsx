@@ -1,39 +1,67 @@
-/* Badge.tsx — small status/label tag for island surfaces (.ws-badge).
+/* Badge.tsx — small status tag (TRA-290).
 
-   Consolidates the dozen ad-hoc badge/pill/tag styles scattered across the
-   domain stylesheets onto ONE tone scale driven by the shared status tokens
-   (see island.css → "STATUS PALETTE / shared badge + dot"). Two looks:
-     variant="solid"   → tinted fill + colored text (default)
-     variant="outline" → transparent fill + colored 1px ring
+   Capsule, 11px/500, sentence case. ONE look: a tinted fill at 18% with the
+   SATURATED HUE as the label colour — every pair is verified ≥ 4.5:1 in both
+   appearances by __tests__/primitives.test.ts.
 
-   Tones map to the canonical app status colors so callers stop re-hardcoding
-   `#2f9e6e` / `#e0563a` / `#cda23f` etc. */
+   What this replaces: 9.5px/700/0.05em with ALL-CAPS callers, and the grade
+   badge that painted #ffffff on #ffcc00 at 1.6:1. There is no `variant`
+   anymore — the outline look was a second thing to keep contrast-correct for
+   no gain. */
 
 import type { ReactNode } from 'react';
 
-export type Tone = 'neutral' | 'accent' | 'green' | 'red' | 'gold' | 'blue' | 'pink';
+export type Tone = 'neutral' | 'accent' | 'green' | 'orange' | 'red' | 'blue' | 'purple';
+
+/** Superseded tone names, mapped so existing call sites keep working. */
+const LEGACY_TONE: Record<string, Tone> = { gold: 'orange', pink: 'purple' };
 
 export interface BadgeProps {
-  tone?: Tone;
-  variant?: 'solid' | 'outline';
+  tone?: Tone | 'gold' | 'pink';
   className?: string;
   title?: string;
+  'aria-label'?: string;
   children: ReactNode;
 }
 
 export function Badge({
   tone = 'neutral',
-  variant = 'solid',
   className,
   title,
+  'aria-label': ariaLabel,
   children,
 }: BadgeProps): ReactNode {
-  const cls = ['ws-badge', `t-${tone}`, variant === 'outline' ? 'outline' : '', className ?? '']
-    .filter(Boolean)
-    .join(' ');
+  const t = LEGACY_TONE[tone] ?? (tone as Tone);
+  const cls = ['lx-badge', `t-${t}`, className ?? ''].filter(Boolean).join(' ');
   return (
-    <span className={cls} title={title}>
+    <span className={cls} title={title} aria-label={ariaLabel}>
       {children}
     </span>
+  );
+}
+
+const GRADE_TONE: Record<string, Tone> = {
+  A: 'green',
+  B: 'green',
+  C: 'orange',
+  D: 'red',
+  F: 'red',
+};
+
+export interface GradeBadgeProps {
+  grade: string;
+}
+
+/** Tech-debt grade. The letter alone means nothing to a screen reader, so the
+    accessible name spells it out. */
+export function GradeBadge({ grade }: GradeBadgeProps): ReactNode {
+  return (
+    <Badge
+      tone={GRADE_TONE[grade] ?? 'neutral'}
+      title={`Tech debt grade ${grade}`}
+      aria-label={`Tech debt grade ${grade}`}
+    >
+      {grade}
+    </Badge>
   );
 }

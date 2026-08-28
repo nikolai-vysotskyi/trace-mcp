@@ -112,6 +112,6 @@ it('uses the Lattice Button primitive for its actions', async () => {
   render(<GuardOnboarding onClose={() => {}} />);
 
   const install = await screen.findByRole('button', { name: 'Install' });
-  expect(install.className).toContain('ws-primary');
-  expect(screen.getByRole('button', { name: 'Skip' }).className).toContain('ws-chipbtn');
+  expect(install.className).toContain('v-prominent');
+  expect(screen.getByRole('button', { name: 'Skip' }).className).toContain('v-bordered');
 });

@@ -6,6 +6,9 @@
 /* Sidebar + window chrome (TRA-291) — loaded after island.css so it can
    override the island treatment on the sidebar region. */
 @import "./styles/sidebar.css";
+/* Control primitives (TRA-290) — capsules, 20/24/28 heights, ≥24px hit
+   targets. Imported LAST so it wins over the legacy island rules it replaces. */
+@import "./styles/controls.css";
 
 :root {
   --bg-primary: rgba(246, 246, 246, 0.92);
@@ -112,72 +115,43 @@ body {
   border-radius: 4px;
 }
 
-/* ── macOS prominent button (filled, bezeled) ───────────────────── */
-/* Used by UpdateBanner. Sized for the narrow sidebar (~24px tall). */
+/* ── Prominent button (UpdateBanner) ─────────────────────────────── */
+/* macOS 26 prominent buttons are a FLAT accent capsule — the gradient + triple
+   box-shadow bezel that used to live here is gone (TRA-290). Full-width and
+   24px tall for the narrow sidebar. */
 .btn-prominent {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 24px;
-  padding: 0 10px;
+  padding: 0 12px;
   font-family: inherit;
-  font-size: 12px;
-  font-weight: 510;
+  font-size: 13px;
+  font-weight: 590;
   letter-spacing: -0.005em;
   color: #fff;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 92%, white 8%) 0%,
-    var(--accent) 100%
-  );
+  background: var(--accent);
   border: none;
-  border-radius: 6px;
-  cursor: pointer;
+  border-radius: 999px;
+  cursor: default;
   user-select: none;
-  /* Bezel: hairline edge, inner top highlight, soft drop shadow. */
-  box-shadow:
-    0 0 0 0.5px color-mix(in srgb, var(--accent) 70%, black 30%),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.28),
-    0 1px 1.5px rgba(0, 0, 0, 0.08);
-  transition:
-    filter 120ms ease,
-    transform 80ms ease,
-    box-shadow 120ms ease;
+  transition: background 120ms ease;
 }
-.btn-prominent:hover {
-  filter: brightness(1.06);
+.btn-prominent:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--accent) 88%, black);
 }
-.btn-prominent:active {
-  filter: brightness(0.94);
-  transform: translateY(0.5px);
-  box-shadow:
-    0 0 0 0.5px color-mix(in srgb, var(--accent) 70%, black 36%),
-    inset 0 1px 2px rgba(0, 0, 0, 0.14);
+.btn-prominent:active:not(:disabled) {
+  background: color-mix(in oklab, var(--accent) 78%, black);
 }
 .btn-prominent:disabled {
-  opacity: 0.55;
-  cursor: default;
-  filter: none;
-  transform: none;
+  opacity: 0.4;
 }
-
-/* Success-tinted variant — used for "Restart to install". */
 .btn-prominent.success {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--success) 92%, white 8%) 0%,
-    var(--success) 100%
-  );
-  box-shadow:
-    0 0 0 0.5px color-mix(in srgb, var(--success) 70%, black 30%),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.28),
-    0 1px 1.5px rgba(0, 0, 0, 0.08);
+  background: var(--success);
 }
-.btn-prominent.success:active {
-  box-shadow:
-    0 0 0 0.5px color-mix(in srgb, var(--success) 70%, black 36%),
-    inset 0 1px 2px rgba(0, 0, 0, 0.14);
+.btn-prominent.success:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--success) 88%, black);
 }
 
 /* ── Update banner: idle row vs notification card ───────────────── */
@@ -218,8 +192,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   margin-left: auto;
   padding: 0;
   background: transparent;
@@ -245,6 +219,14 @@ body {
 }
 .update-refresh.spinning svg {
   animation: update-refresh-spin 800ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .update-refresh.spinning svg {
+    animation: none;
+  }
+  .update-card {
+    animation: none;
+  }
 }
 @keyframes update-refresh-spin {
   from {
@@ -320,12 +302,15 @@ body {
 .sidebar-footer .nav-button {
   flex: 1 1 auto;
   min-width: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
   text-align: left;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 0 10px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: -0.005em;
-  border-radius: 6px;
+  border-radius: 999px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -349,8 +334,8 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   background: transparent;
   border: none;

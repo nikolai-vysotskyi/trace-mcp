@@ -435,7 +435,7 @@ export function statusToDot(status: ProjectHealthStatus): Tone {
       return 'green';
     case 'indexing':
     case 'computing':
-      return 'gold';
+      return 'orange';
     case 'error':
       return 'red';
     case 'not_loaded':

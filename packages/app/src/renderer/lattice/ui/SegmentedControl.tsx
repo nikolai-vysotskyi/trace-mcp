@@ -1,14 +1,11 @@
-/* SegmentedControl.tsx — the island segmented/pill toggle (.ws-seg2).
+/* SegmentedControl.tsx — the one segmented control (TRA-290).
 
-   Replaces hand-rolled `<div className="ws-seg2"><button .s2 .is-active>…`
-   blocks. Emits the canonical island.css markup verbatim, so swapping a call
-   site to this component is a pure JSX dedup with zero visual change.
+   A real macOS track: recessed --fill-tertiary capsule, 2px inset, capsule
+   thumb. The selected thumb is --surface with a hairline — NOT an accent fill,
+   which reads as "toggled on" rather than "this segment is selected".
 
-   `size="mini"` adds the `.mini` modifier (tighter padding / smaller text).
-   Extra layout classes (e.g. the `ov2-seg` width tweak) pass through `className`
-   so per-context sizing is preserved.
-
-   For the NATIVE-WINDOW (.dlg) surface use DlgSegmented (.dlg-seg) instead. */
+   Replaces every ad-hoc pill row in the app (Table|Compact, Decisions|Review|…,
+   Debug|TODOs|…, Tool calls|AI calls, All|Errors). */
 
 import type { ReactNode } from 'react';
 
@@ -23,7 +20,7 @@ export interface SegmentedControlProps<T extends string> {
   options: ReadonlyArray<SegmentedOption<T>>;
   value: T;
   onChange: (value: T) => void;
-  size?: 'default' | 'mini';
+  size?: 'small' | 'regular' | 'large';
   className?: string;
   'aria-label'?: string;
 }
@@ -32,20 +29,18 @@ export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
-  size = 'default',
+  size = 'regular',
   className,
   'aria-label': ariaLabel,
 }: SegmentedControlProps<T>): ReactNode {
-  const cls = ['ws-seg2', size === 'mini' ? 'mini' : '', className ?? '']
-    .filter(Boolean)
-    .join(' ');
+  const cls = ['lx-seg', `sz-${size}`, className ?? ''].filter(Boolean).join(' ');
   return (
     <div className={cls} role="group" aria-label={ariaLabel}>
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
-          className={'s2' + (opt.value === value ? ' is-active' : '')}
+          className={'lx-seg-item' + (opt.value === value ? ' is-active' : '')}
           title={opt.title}
           disabled={opt.disabled}
           aria-pressed={opt.value === value}
