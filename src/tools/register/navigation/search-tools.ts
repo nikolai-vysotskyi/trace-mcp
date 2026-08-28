@@ -47,7 +47,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
 
   server.tool(
     'search',
-    'Search symbols by name, kind, or text. Use instead of Grep for functions, classes, methods, variables. For raw text/comment search use search_text; for references to a known symbol use find_usages. Filters: kind/language/file_pattern/implements/extends/decorator. fuzzy=true for typo-tolerant search. semantic="on" for conceptual queries (needs an AI provider + embed_repo run once). fusion=true for multi-channel ranking (BM25 + PageRank + embeddings + identity match). See the `mode` param for retrieval strategy (single/tiered/drill/flat/get), or `retriever` for a single named algorithm instead. Read-only. Returns JSON: { items: [{ symbol_id, name, kind, fqn, signature, file, line, score }], total, search_mode } — mode-specific shape when mode!=single. Supports `output_format: "toon"`.',
+    'Search symbols by name, kind, or text. Use instead of Grep for functions, classes, methods, variables. For raw text/comment search use search_text; for references to a known symbol use find_usages. Read-only. Returns JSON: { items: [{ symbol_id, name, kind, fqn, signature, file, line, score }], total, search_mode } — mode-specific shape when mode!=single. Supports `output_format: "toon"`.',
     {
       query: z.string().min(1).max(500).describe('Search query'),
       kind: z
@@ -71,87 +71,69 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         .string()
         .max(256)
         .optional()
-        .describe(
-          'Filter to symbols with this decorator/annotation/attribute (e.g. "Injectable", "Route", "Transactional")',
-        ),
+        .describe('Filter to symbols carrying this decorator/annotation/attribute'),
       fuzzy: z
         .boolean()
         .optional()
-        .describe(
-          'Enable fuzzy search (trigram + Levenshtein). Auto-enabled when exact search returns 0 results.',
-        ),
+        .describe('Typo-tolerant search. Auto-enabled when exact search returns 0 results.'),
       fuzzy_threshold: z
         .number()
         .min(0)
         .max(1)
         .optional()
-        .describe('Minimum Jaccard trigram similarity (default 0.3)'),
+        .describe('[fuzzy] Min trigram similarity (default 0.3)'),
       max_edit_distance: z
         .number()
         .int()
         .min(1)
         .max(10)
         .optional()
-        .describe('Maximum Levenshtein edit distance (default 3)'),
+        .describe('[fuzzy] Max edit distance (default 3)'),
       semantic: z
         .enum(['auto', 'on', 'off', 'only'])
         .optional()
         .describe(
-          'Semantic mode: auto (default — hybrid if AI available), on (force hybrid), off (lexical-only), only (pure vector). Requires AI provider + embed_repo for non-"off" modes.',
+          'auto (default): hybrid if AI available. on: force hybrid. off: lexical-only. only: pure vector. Non-"off" needs an AI provider + one embed_repo run.',
         ),
       semantic_weight: z
         .number()
         .min(0)
         .max(1)
         .optional()
-        .describe(
-          'Hybrid fusion weight in [0,1]. 0 = lexical only, 0.5 = balanced (default), 1 = semantic only.',
-        ),
+        .describe('[semantic] 0 = lexical only, 0.5 = balanced (default), 1 = vector only.'),
+      // Per-channel fusion weights are not a call-site knob: they live in
+      // ~/.trace-mcp/tuning.jsonc (written by `tune_weights`) and are picked up
+      // automatically below. The nested object they used to need was the single
+      // most expensive structure in this schema, paid by every client on every
+      // session for a parameter almost nobody set (TRA-240).
       fusion: z
         .boolean()
         .optional()
         .describe(
-          'Enable Signal Fusion — multi-channel WRR ranking across lexical (BM25), structural (PageRank), similarity (embeddings), and identity (exact/prefix match). Better results than single-channel search.',
+          'Enable Signal Fusion — multi-channel WRR ranking across lexical (BM25), structural (PageRank), similarity (embeddings), and identity match. Weights come from `tune_weights`.',
         ),
-      fusion_weights: z
-        .object({
-          lexical: z.number().min(0).max(1).optional(),
-          structural: z.number().min(0).max(1).optional(),
-          similarity: z.number().min(0).max(1).optional(),
-          identity: z.number().min(0).max(1).optional(),
-        })
-        .optional()
-        .describe(
-          'Per-channel weights for fusion (auto-normalized). Defaults: lexical=0.4, structural=0.25, similarity=0.2, identity=0.15.',
-        ),
-      fusion_debug: z
-        .boolean()
-        .optional()
-        .describe('Include per-channel rank contributions in fusion results.'),
       limit: z.number().int().min(1).max(500).optional().describe('Max results (default 20)'),
       offset: z.number().int().min(0).max(50000).optional().describe('Offset for pagination'),
       mode: z
         .enum(RETRIEVAL_MODES)
         .optional()
         .describe(
-          'Retrieval mode: single (default, top-K), tiered (high/medium/low buckets), drill (scoped to drill_from), flat (raw FTS, no PageRank), get (exact lookup). Omit to auto-pick (path-shaped query → get, else single).',
+          'single (default): top-K. tiered: high/medium/low buckets. drill: scoped to drill_from. flat: raw FTS, no PageRank. get: exact lookup. Omit to auto-pick.',
         ),
       drill_from: z
         .string()
         .max(512)
         .optional()
-        .describe(
-          'Drill scope for mode="drill" — a file path or symbol_id. Results are restricted to the subtree rooted here.',
-        ),
+        .describe('[mode="drill"] File path or symbol_id to restrict results to.'),
       retriever: z
         .enum(SEARCH_MODE_NAMES)
         .optional()
         .describe(
-          'Run one named retrieval algorithm (lexical/semantic/hybrid/summary/feeling_lucky/graph_completion) instead of the mode-based dispatcher — same as search_with_mode. Ignores mode/filters/fuzzy/fusion; response is { retriever, items, total }.',
+          'Run one named retrieval algorithm instead of the mode dispatcher. Ignores mode/filters/fuzzy/fusion; returns { retriever, items, total }.',
         ),
       detail_level: DetailLevelSchema,
       output_format: OutputFormatSchema.describe(
-        '"json" (default) or "toon" (lossless, 30-60% fewer tokens). "markdown" is unsupported here and behaves as json.',
+        '"json" (default) or "toon" (lossless, 30-60% fewer tokens). "markdown" behaves as json here.',
       ),
     },
     async ({
@@ -170,8 +152,6 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
       semantic,
       semantic_weight,
       fusion,
-      fusion_weights,
-      fusion_debug,
       mode,
       drill_from,
       retriever,
@@ -182,8 +162,7 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         output_format === 'toon' ? encodeResponse(payload, 'toon') : jh('search', payload);
 
       // Named-retriever path: bypasses the mode-based shaping dispatcher below
-      // entirely, mirroring `search_with_mode`'s own (simpler) behavior exactly —
-      // both call the same `runNamedSearchMode` helper, so they can't drift.
+      // entirely, delegating straight to the shared `runNamedSearchMode` helper.
       if (retriever) {
         const result = await runNamedSearchMode(ctx, { query, mode: retriever, limit });
         if (!result.ok) {
@@ -251,14 +230,12 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
       // normal search but apply a drill filter on the way out.
       const drillScope = effectiveMode === 'drill' ? (drill_from ?? '') : '';
 
-      // When fusion is requested without explicit weights, fall back to per-repo
-      // tuned weights from ~/.trace-mcp/tuning.jsonc (Phase 4b). Explicit
-      // `fusion_weights` from the call always wins.
-      let effectiveFusionWeights = fusion_weights;
-      if (fusion && !effectiveFusionWeights) {
-        const tuned = loadTunedWeights(projectRoot);
-        if (tuned) effectiveFusionWeights = tuned;
-      }
+      // When fusion is requested, weights come from per-repo tuning in
+      // ~/.trace-mcp/tuning.jsonc (Phase 4b); absent that, the retriever's
+      // built-in defaults apply.
+      const effectiveFusionWeights = fusion
+        ? (loadTunedWeights(projectRoot) ?? undefined)
+        : undefined;
 
       // ─── Dispatch via SearchToolRetriever (plans P01 + P03) ────────
       // Every mode (get / flat / single / tiered / drill) now flows through
@@ -291,7 +268,6 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         semanticWeight: semantic_weight,
         fusion,
         fusionWeights: effectiveFusionWeights,
-        fusionDebug: fusion_debug,
         mode: effectiveMode,
         drillFrom: drill_from,
       });

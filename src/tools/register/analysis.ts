@@ -99,7 +99,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_api_surface',
-    'List all exported symbols (public API) of a file or matching files. Use to understand what a module exposes. For finding unused exports use get_dead_exports instead. Read-only. Returns JSON: { files: [{ path, exports: [{ name, kind, signature }] }] }.',
+    'List all exported symbols (public API) of a file or matching files. Use to understand what a module exposes. For finding unused exports use get_dead_code with mode: exports_only. Read-only. Returns JSON: { files: [{ path, exports: [{ name, kind, signature }] }] }.',
     {
       file_pattern: z
         .string()
@@ -170,35 +170,6 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
   );
 
   server.tool(
-    'get_dead_exports',
-    'Deprecated alias for `get_dead_code` with `mode: exports_only` — use that instead. Returns JSON: { dead_exports, total_dead, total_exports, truncated? }. Supports `output_format: "toon"`.',
-    {
-      file_pattern: z
-        .string()
-        .max(512)
-        .optional()
-        .describe('Filter files by glob pattern (e.g. "src/tools/*.ts")'),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(500)
-        .optional()
-        .default(100)
-        .describe(
-          'Max dead exports to return (default 100, max 500). When more exist, response carries `truncated: true` and `total_dead` reflects the full count.',
-        ),
-      output_format: OutputFormatSchema,
-    },
-    async ({ file_pattern, limit, output_format }) => {
-      const result = getDeadExports(store, file_pattern, limit, projectRoot);
-      const fmt = output_format === 'markdown' ? 'json' : output_format;
-      const text = encodeResponse(result, fmt);
-      return { content: [{ type: 'text', text }] };
-    },
-  );
-
-  server.tool(
     'get_import_graph',
     'Show file-level dependency graph: what a file imports and what imports it (requires reindex for ESM edge resolution). Use to understand module dependencies for a specific file. For project-wide coupling analysis use get_coupling; for visual diagram use get_dependency_diagram. Read-only. Returns JSON: { file, imports: [{ path }], importedBy: [{ path }] }.',
     {
@@ -216,27 +187,8 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
   );
 
   server.tool(
-    'get_untested_exports',
-    'Deprecated alias for `get_untested_symbols` with `scope: exports` — use that instead. Returns JSON: { untested, total }. Supports `output_format: "toon"`.',
-    {
-      file_pattern: z
-        .string()
-        .max(512)
-        .optional()
-        .describe('Filter by file glob pattern (e.g. "src/tools/%")'),
-      output_format: OutputFormatSchema,
-    },
-    async ({ file_pattern, output_format }) => {
-      const result = getUntestedExports(store, file_pattern);
-      const fmt = output_format === 'markdown' ? 'json' : output_format;
-      const text = encodeResponse(result, fmt);
-      return { content: [{ type: 'text', text }] };
-    },
-  );
-
-  server.tool(
     'get_untested_symbols',
-    'Find symbols lacking test coverage. scope="all_symbols" (default) classifies each as "unreached" (no test file imports the source) or "imported_not_called" (test imports file but never references this symbol) — by default only source-code languages (TypeScript, Python, Go, Ruby, …) are considered, use include_non_code=true to restore the legacy noisy behaviour. scope="exports_only" is the same fast scan as get_untested_exports, which stays available as its own tool. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file, classification }], total }.',
+    'Find symbols lacking test coverage. scope="all_symbols" (default) classifies each as "unreached" (no test file imports the source) or "imported_not_called" (test imports file but never references this symbol) — by default only source-code languages (TypeScript, Python, Go, Ruby, …) are considered, use include_non_code=true to restore the legacy noisy behaviour. scope="exports_only" is the fast export-keyword-only scan. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file, classification }], total }. Supports `output_format: "toon"`.',
     {
       file_pattern: z
         .string()
@@ -260,22 +212,28 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .enum(['all_symbols', 'exports_only'])
         .optional()
         .describe(
-          'all_symbols (default): full classification. exports_only: same as get_untested_exports.',
+          'all_symbols (default): full classification. exports_only: fast export-only scan.',
         ),
+      // Inherited from the retired `get_untested_exports` alias (TRA-240) so
+      // its TOON support survives the migration — the exports_only payload is
+      // the flat-scalar-row shape TOON measurably wins on.
+      output_format: OutputFormatSchema,
     },
-    async ({ file_pattern, max_results, include_non_code, scope }) => {
+    async ({ file_pattern, max_results, include_non_code, scope, output_format }) => {
       if (scope === 'exports_only') {
         const result = getUntestedExports(store, file_pattern);
-        return { content: [{ type: 'text', text: jh('get_untested_symbols', result) }] };
+        const fmt = output_format === 'markdown' ? 'json' : output_format;
+        return { content: [{ type: 'text', text: encodeResponse(result, fmt) }] };
       }
       const result = getUntestedSymbols(store, file_pattern, max_results, include_non_code);
-      return { content: [{ type: 'text', text: jh('get_untested_symbols', result) }] };
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
+      return { content: [{ type: 'text', text: encodeResponse(result, fmt) }] };
     },
   );
 
   server.tool(
     'self_audit',
-    'Dead code & coverage audit: dead exports, untested public symbols, heritage debt. Use as a one-shot health check combining dead exports + untested symbols + heritage debt. For individual checks use get_dead_exports, get_untested_symbols, or get_dead_code separately. Read-only. Returns JSON: { deadExports, untestedSymbols, heritageDebt, summary }.',
+    'Dead code & coverage audit: dead exports, untested public symbols, heritage debt. Use as a one-shot health check combining dead exports + untested symbols + heritage debt. For individual checks use get_dead_code or get_untested_symbols separately. Read-only. Returns JSON: { deadExports, untestedSymbols, heritageDebt, summary }.',
     {},
     async () => {
       return { content: [{ type: 'text', text: j(selfAudit(store)) }] };
@@ -763,60 +721,6 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
     const days = expiresInDays ?? 7;
     return days * 24 * 60 * 60 * 1000;
   }
-
-  server.tool(
-    'pin_symbol',
-    'Deprecated alias for `pin` (symbol scope) — use `pin` instead. Returns JSON: { ok, pin? }.',
-    {
-      symbol_id: z.string().min(1).max(512).describe('Symbol FQN to pin'),
-      weight: pinWeightSchema,
-      expires_in_days: pinExpirySchema,
-    },
-    async ({ symbol_id, weight, expires_in_days }) => {
-      const result = upsertPin(store.db, {
-        scope: 'symbol',
-        target_id: symbol_id,
-        weight,
-        expires_in_ms: defaultExpiryMs(expires_in_days),
-        created_by: 'user',
-      });
-      bustRankingCaches();
-      if (!result.ok) {
-        return {
-          content: [{ type: 'text', text: j({ ok: false, error: result.reason }) }],
-          isError: true,
-        };
-      }
-      return { content: [{ type: 'text', text: j({ ok: true, pin: result.row }) }] };
-    },
-  );
-
-  server.tool(
-    'pin_file',
-    'Deprecated alias for `pin` (file scope) — use `pin` instead. Returns JSON: { ok, pin? }.',
-    {
-      file_path: z.string().min(1).max(512).describe('File path to pin (project-relative)'),
-      weight: pinWeightSchema,
-      expires_in_days: pinExpirySchema,
-    },
-    async ({ file_path, weight, expires_in_days }) => {
-      const result = upsertPin(store.db, {
-        scope: 'file',
-        target_id: file_path,
-        weight,
-        expires_in_ms: defaultExpiryMs(expires_in_days),
-        created_by: 'user',
-      });
-      bustRankingCaches();
-      if (!result.ok) {
-        return {
-          content: [{ type: 'text', text: j({ ok: false, error: result.reason }) }],
-          isError: true,
-        };
-      }
-      return { content: [{ type: 'text', text: j({ ok: true, pin: result.row }) }] };
-    },
-  );
 
   server.tool(
     'pin',

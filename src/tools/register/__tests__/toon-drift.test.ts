@@ -16,7 +16,6 @@ import { registerMemoryTools } from '../memory.js';
 import { registerNavigationTools } from '../navigation.js';
 import { registerQualityTools } from '../quality.js';
 import { registerRefactoringTools } from '../refactoring.js';
-import { registerRetrievalTools } from '../retrieval.js';
 import { registerSessionTools } from '../session.js';
 
 interface CapturedTool {
@@ -100,7 +99,6 @@ function captureAllTools(): CapturedTool[] {
   registerMemoryTools(s, ctx);
   registerRefactoringTools(s, ctx);
   registerKnowledgeTools(s, ctx);
-  registerRetrievalTools(s, ctx);
   registerSessionTools(s, mctx);
   return captured;
 }
@@ -153,14 +151,14 @@ describe('TOON output_format drift guardrail', () => {
       'get_changed_symbols',
       'get_complexity_report',
       'get_coupling',
-      'get_dead_exports',
+      'get_dead_code',
       'get_feature_context',
       'get_git_churn',
       'get_outline',
       'get_pagerank',
       'get_refactor_candidates',
       'get_risk_hotspots',
-      'get_untested_exports',
+      'get_untested_symbols',
       'query_decisions',
       'search',
     ].sort();

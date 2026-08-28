@@ -210,8 +210,8 @@ descending.
 | get_complexity_report limit=50 | 50 | 3057 | 2075 | **+32.1%** | table | flat scalar rows |
 | get_refactor_candidates limit=40 | 40 | 1932 | 1387 | **+28.2%** | table | flat scalar rows |
 | predict_bugs limit=40 | 40 | 8877 | 6965 | **+21.5%** | table | risky-control beat the prediction — see Surprises |
-| get_dead_exports (project-wide) | 404 | 17581 | 13857 | **+21.2%** | table | flat scalar rows |
-| get_untested_exports (project-wide) | 464 | 25964 | 20451 | **+21.2%** | table | flat scalar rows |
+| get_dead_code mode=exports_only (project-wide) | 404 | 17581 | 13857 | **+21.2%** | table | flat scalar rows |
+| get_untested_symbols scope=exports_only (project-wide) | 464 | 25964 | 20451 | **+21.2%** | table | flat scalar rows |
 | list_pins (2 seeded) | 2 | 88 | 71 | +19.3% | table | tiny payload — fixed preamble dominates |
 | get_untested_symbols max_results=80 | 80 | 14280 | 13098 | +8.3% | table | signature strings dilute the win |
 | get_tests_for output-format.ts | 1 | 44 | 44 | 0% | table | single-row payload — no amortization |
@@ -238,8 +238,8 @@ cutoff** we established for the original five keepers:
 | `get_complexity_report` | +32.1% | table |
 | `get_refactor_candidates` | +28.2% | table |
 | `predict_bugs` | +21.5% | table |
-| `get_dead_exports` | +21.2% | table |
-| `get_untested_exports` | +21.2% | table |
+| `get_dead_code` (`mode: exports_only`) | +21.2% | table |
+| `get_untested_symbols` (`scope: exports_only`) | +21.2% | table |
 
 **Do not wire** these — savings below the +15% cutoff or list-mode regression:
 

@@ -23,7 +23,6 @@ import { registerNavigationTools } from '../navigation.js';
 import { registerProjectsTools } from '../projects.js';
 import { registerQualityTools } from '../quality.js';
 import { registerRefactoringTools } from '../refactoring.js';
-import { registerRetrievalTools } from '../retrieval.js';
 import { registerSessionTools } from '../session.js';
 
 interface CapturedTool {
@@ -108,17 +107,16 @@ function captureAllTools(ctxOverrides: Record<string, unknown> = {}): CapturedTo
   registerMemoryTools(s, ctx);
   registerRefactoringTools(s, ctx);
   registerKnowledgeTools(s, ctx);
-  registerRetrievalTools(s, ctx);
   registerSessionTools(s, mctx);
   return captured;
 }
 
-// Re-measured 2026-08-28 (TRA-239): 56.3k description chars across the
-// always-on tools, after retiring the prose on the deprecated consolidation
-// aliases (TRA-193 kept the old tools registered, so their full descriptions
-// were still being paid). The old 72k ceiling had drifted to ~28% headroom,
-// enough slack to hide a real regression — tightened to track the real number.
-const TOTAL_DESCRIPTION_CHAR_BUDGET = 60_000;
+// Re-measured 2026-08-28 (TRA-240): 55.0k description chars across the
+// always-on tools, after actually removing the seven deprecated consolidation
+// aliases rather than only trimming their prose. TRA-239 got this to 56.3k by
+// cutting the alias descriptions to one-line pointers; deleting the
+// registrations outright took the rest.
+const TOTAL_DESCRIPTION_CHAR_BUDGET = 58_000;
 // No single tool description should need more prose than this to be usable
 // — if a tool grows past it, the fix is almost always "move detail into the
 // per-param describe() or the response docs", not a longer top-level string.
@@ -129,7 +127,7 @@ const PER_TOOL_DESCRIPTION_CHAR_CEILING = 800;
 // JSON Schema (type/required/enum/min/max) tied to legitimate parameter
 // counts, not prose we write; cutting it further means removing parameters,
 // a breaking MCP contract change out of scope for a description trim.
-const TOTAL_PARAM_DESCRIPTION_CHAR_BUDGET = 34_000;
+const TOTAL_PARAM_DESCRIPTION_CHAR_BUDGET = 32_000;
 
 // Sums each field's top-level `.description` (zod v4 attaches it directly).
 // Deliberately shallow — nested object/array param schemas in this codebase
@@ -172,19 +170,22 @@ describe('MCP tool-schema token budget guardrail (TRA-186)', () => {
     ).toBe(0);
   });
 
-  // Measured 2026-08-28 (TRA-239): 90,579 serialized schema chars across the
-  // always-on tools. The description and param-prose budgets above only watch text we write; they are blind to structural schema growth.
-  // TRA-193's consolidations added params to the surviving tool while keeping
-  // the old tool registered as a deprecated alias, so the always-on tax grew
-  // where nothing was measuring it (`search` alone reached ~4.2k schema chars).
-  // The gated groups already get a full-serialized check (TRA-211) — this gives
-  // the always-on set, by far the largest group, the same treatment.
-  const TOTAL_SCHEMA_CHAR_BUDGET = 96_000;
+  // Measured 2026-08-28 (TRA-240): 86,519 serialized schema chars across the
+  // always-on tools, down from TRA-239's 90,579. The description and param-prose
+  // budgets above only watch text we write; they are blind to structural schema
+  // growth. TRA-193's consolidations added params to the surviving tool while
+  // keeping the old tool registered as a deprecated alias, so the always-on tax
+  // grew where nothing was measuring it; TRA-240 retired those seven aliases and
+  // cut `search` back down. The gated groups already get a full-serialized check
+  // (TRA-211) — this gives the always-on set, by far the largest group, the same
+  // treatment.
+  const TOTAL_SCHEMA_CHAR_BUDGET = 90_000;
   // No single tool's serialized schema should need more than this. `search` is
-  // the current worst case; anything approaching it wants params moved into a
-  // sibling tool, not a bigger ceiling. `search` is at 4,034 after absorbing
-  // search_with_mode's modes — it is the one to cut next, not to grandfather.
-  const PER_TOOL_SCHEMA_CHAR_CEILING = 4_200;
+  // still the worst case at 3,119 (down from 4,034 — it lost the nested
+  // fusion_weights object and its duplicated mode prose), with query_decisions
+  // right behind at 3,005. Anything approaching this wants params moved into a
+  // sibling tool, not a bigger ceiling.
+  const PER_TOOL_SCHEMA_CHAR_CEILING = 3_300;
 
   it('keeps total serialized inputSchema size under budget', () => {
     const total = tools.reduce((sum, t) => sum + fullSchemaCharSize(t.schemaShape), 0);

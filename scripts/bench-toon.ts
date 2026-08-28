@@ -814,28 +814,44 @@ async function benchWave2LiveIndex(): Promise<Wave2Result[]> {
       results.push({ kind: 'skipped', reason: `get_coupling: ${(err as Error).message}` });
     }
 
-    // get_dead_exports: { dead_exports: [...], total_dead, total_exports, ... }
+    // get_dead_code mode=exports_only: { dead_exports: [...], total_dead, total_exports, ... }
     try {
-      const tool = findTool(analysis.captured, 'get_dead_exports');
-      const row = await benchUnwired(tool, {}, 'get_dead_exports (project-wide)', (p) => {
-        const arr = (p as { dead_exports?: unknown[] }).dead_exports;
-        return Array.isArray(arr) ? arr.length : 0;
-      });
+      const tool = findTool(git.captured, 'get_dead_code');
+      const row = await benchUnwired(
+        tool,
+        { mode: 'exports_only' },
+        'get_dead_code mode=exports_only (project-wide)',
+        (p) => {
+          const arr = (p as { dead_exports?: unknown[] }).dead_exports;
+          return Array.isArray(arr) ? arr.length : 0;
+        },
+      );
       results.push({ kind: 'row', row });
     } catch (err) {
-      results.push({ kind: 'skipped', reason: `get_dead_exports: ${(err as Error).message}` });
+      results.push({
+        kind: 'skipped',
+        reason: `get_dead_code exports_only: ${(err as Error).message}`,
+      });
     }
 
-    // get_untested_exports: { untested, total }
+    // get_untested_symbols scope=exports_only: { untested, total }
     try {
-      const tool = findTool(analysis.captured, 'get_untested_exports');
-      const row = await benchUnwired(tool, {}, 'get_untested_exports (project-wide)', (p) => {
-        const arr = (p as { untested?: unknown[] }).untested;
-        return Array.isArray(arr) ? arr.length : 0;
-      });
+      const tool = findTool(analysis.captured, 'get_untested_symbols');
+      const row = await benchUnwired(
+        tool,
+        { scope: 'exports_only' },
+        'get_untested_symbols scope=exports_only (project-wide)',
+        (p) => {
+          const arr = (p as { untested?: unknown[] }).untested;
+          return Array.isArray(arr) ? arr.length : 0;
+        },
+      );
       results.push({ kind: 'row', row });
     } catch (err) {
-      results.push({ kind: 'skipped', reason: `get_untested_exports: ${(err as Error).message}` });
+      results.push({
+        kind: 'skipped',
+        reason: `get_untested_symbols exports_only: ${(err as Error).message}`,
+      });
     }
 
     // get_untested_symbols: { untested, total }

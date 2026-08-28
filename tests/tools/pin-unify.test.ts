@@ -1,8 +1,8 @@
 /**
- * TRA-196 — the unified `pin` tool must behave identically to calling
- * `pin_symbol` / `pin_file` directly (same underlying upsertPin calls), and
- * `pin_symbol`/`pin_file` must stay byte-for-byte unchanged as permanent
- * aliases (per TRA-193's migration note — no removal scheduled).
+ * TRA-196 — the unified `pin` tool covers both scopes the `pin_symbol` /
+ * `pin_file` aliases used to serve (same underlying upsertPin calls). Those
+ * aliases were retired in 2.0 (TRA-240); one case here guards that they stay
+ * gone rather than creeping back in additively.
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -39,7 +39,7 @@ function makeCtx(store: ReturnType<typeof createTestStore>): ServerContext {
   } as unknown as ServerContext;
 }
 
-describe('pin (unified) vs pin_symbol/pin_file (TRA-196)', () => {
+describe('pin (unified) — covers the retired pin_symbol/pin_file scopes (TRA-196)', () => {
   let store: ReturnType<typeof createTestStore>;
   let tools: Record<string, RegisteredTool>;
 
@@ -92,28 +92,21 @@ describe('pin (unified) vs pin_symbol/pin_file (TRA-196)', () => {
     expect(parsed.ok).toBe(false);
   });
 
-  it('regression: pin_symbol output shape is unchanged', async () => {
+  it('pin{file_path, weight: 0.5} records a demotion weight', async () => {
     const result = parseText(
-      await tools.pin_symbol.handler({ symbol_id: 'src/foo.ts::Foo#class', weight: 3.0 }, {}),
-    ) as { ok: boolean; pin: { scope: string; target_id: string; weight: number } };
+      await tools.pin.handler({ file_path: 'src/baz.ts', weight: 0.5 }, {}),
+    ) as { ok: boolean; pins: Array<{ scope: string; target_id: string; weight: number }> };
     expect(result.ok).toBe(true);
-    expect(result.pin).toMatchObject({
-      scope: 'symbol',
-      target_id: 'src/foo.ts::Foo#class',
-      weight: 3.0,
-    });
+    expect(result.pins[0]).toMatchObject({ scope: 'file', target_id: 'src/baz.ts', weight: 0.5 });
   });
 
-  it('regression: pin_file output shape is unchanged', async () => {
-    const result = parseText(
-      await tools.pin_file.handler({ file_path: 'src/baz.ts', weight: 0.5 }, {}),
-    ) as { ok: boolean; pin: { scope: string; target_id: string; weight: number } };
-    expect(result.ok).toBe(true);
-    expect(result.pin).toMatchObject({ scope: 'file', target_id: 'src/baz.ts', weight: 0.5 });
+  it('the retired pin_symbol / pin_file aliases are no longer registered (TRA-240)', () => {
+    expect(tools.pin_symbol).toBeUndefined();
+    expect(tools.pin_file).toBeUndefined();
   });
 
   it('regression: unpin and list_pins are untouched by this change', async () => {
-    await tools.pin_file.handler({ file_path: 'src/temp.ts' }, {});
+    await tools.pin.handler({ file_path: 'src/temp.ts' }, {});
     const listed = parseText(await tools.list_pins.handler({}, {})) as { total: number };
     expect(listed.total).toBe(1);
 

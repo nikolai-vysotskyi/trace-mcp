@@ -1,6 +1,7 @@
 /**
  * TRA-206 — `get_wake_up`'s `scope: "resume"` / `"project"` must dispatch
- * to the exact same implementations `get_session_resume` / `get_project_memo`
+ * to the exact same implementations the retired `get_session_resume` /
+ * `get_project_memo` aliases used (TRA-240)
  * use, and both of those tools (permanent aliases) must stay unchanged.
  */
 import fs from 'node:fs';
@@ -92,32 +93,23 @@ describe('get_wake_up { scope } param (TRA-206)', () => {
     fs.rmSync(path.dirname(dbPath), { recursive: true, force: true });
   });
 
-  it('get_wake_up{scope: "resume"} matches get_session_resume', async () => {
-    const viaWakeUp = parseText(await tools.get('get_wake_up')!.handler({ scope: 'resume' }));
-    const viaResume = parseText(await tools.get('get_session_resume')!.handler({}));
-    expect(viaWakeUp).toEqual(viaResume);
-  });
-
-  it('get_wake_up{scope: "project"} matches get_project_memo', async () => {
-    const viaWakeUp = parseText(await tools.get('get_wake_up')!.handler({ scope: 'project' }));
-    const viaMemo = parseText(await tools.get('get_project_memo')!.handler({}));
-    expect(viaWakeUp).toEqual(viaMemo);
-  });
-
-  it('regression: get_session_resume output shape is unchanged', async () => {
-    const result = parseText(await tools.get('get_session_resume')!.handler({})) as Record<
-      string,
-      unknown
-    >;
+  it('get_wake_up{scope: "resume"} emits the retired get_session_resume shape', async () => {
+    const result = parseText(
+      await tools.get('get_wake_up')!.handler({ scope: 'resume' }),
+    ) as Record<string, unknown>;
     expect(result).toHaveProperty('sessions_available');
     expect(result).toHaveProperty('recent_sessions');
   });
 
-  it('regression: get_project_memo output shape is unchanged', async () => {
-    const result = parseText(await tools.get('get_project_memo')!.handler({})) as Record<
-      string,
-      unknown
-    >;
+  it('get_wake_up{scope: "project"} emits the retired get_project_memo shape', async () => {
+    const result = parseText(
+      await tools.get('get_wake_up')!.handler({ scope: 'project' }),
+    ) as Record<string, unknown>;
     expect(result).toHaveProperty('memo');
+  });
+
+  it('the retired get_session_resume / get_project_memo aliases are gone (TRA-240)', () => {
+    expect(tools.get('get_session_resume')).toBeUndefined();
+    expect(tools.get('get_project_memo')).toBeUndefined();
   });
 });

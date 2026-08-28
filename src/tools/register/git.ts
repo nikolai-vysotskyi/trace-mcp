@@ -123,7 +123,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_dead_code',
-    'Dead code detection. Modes: "multi-signal" (default) combines import graph, call graph, and barrel export analysis with confidence scores; "reachability" runs forward BFS from auto-detected entry points (tests, package.json main/bin, src/{cli,main,index}, routes, framework controllers) — stricter when entry points are enumerable; "exports_only" is the fast export-keyword-only scan (same as get_dead_exports, which stays available as its own tool). Pass entry_points for custom roots. To remove detected code use remove_dead_code. Read-only. Returns JSON: { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total } — exports_only mode returns { dead_exports, total_dead, total_exports, truncated? } instead (see get_dead_exports).',
+    'Dead code detection. Modes: "multi-signal" (default) combines import graph, call graph, and barrel export analysis with confidence scores; "reachability" runs forward BFS from auto-detected entry points (tests, package.json main/bin, src/{cli,main,index}, routes, framework controllers) — stricter when entry points are enumerable; "exports_only" is the fast export-keyword-only scan. Pass entry_points for custom roots. To remove detected code use remove_dead_code. Read-only. Returns JSON: { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total } — exports_only mode returns { dead_exports, total_dead, total_exports, truncated? } instead. Supports `output_format: "toon"`.',
     {
       file_pattern: z
         .string()
@@ -154,11 +154,16 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .max(200)
         .optional()
         .describe('[reachability mode] Extra entry-point file paths (repo-relative)'),
+      // Inherited from the retired `get_dead_exports` alias (TRA-240) so its
+      // TOON support survives the migration — the exports_only payload is the
+      // flat-scalar-row shape TOON measurably wins on.
+      output_format: OutputFormatSchema,
     },
-    async ({ file_pattern, threshold, limit, mode, entry_points }) => {
+    async ({ file_pattern, threshold, limit, mode, entry_points, output_format }) => {
+      const fmt = output_format === 'markdown' ? 'json' : output_format;
       if (mode === 'exports_only') {
         const result = getDeadExports(store, file_pattern, limit ?? 100, projectRoot);
-        return { content: [{ type: 'text', text: jh('get_dead_code', result) }] };
+        return { content: [{ type: 'text', text: encodeResponse(result, fmt) }] };
       }
       const result =
         mode === 'reachability'
@@ -195,7 +200,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
           ],
         };
       }
-      return { content: [{ type: 'text', text: jh('get_dead_code', result) }] };
+      return { content: [{ type: 'text', text: encodeResponse(result, fmt) }] };
     },
   );
 

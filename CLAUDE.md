@@ -141,14 +141,14 @@ Allowlist:
 - `get_changed_symbols`
 - `get_complexity_report`
 - `get_coupling`
-- `get_dead_exports`
+- `get_dead_code`
 - `get_feature_context`
 - `get_git_churn`
 - `get_outline`
 - `get_pagerank`
 - `get_refactor_candidates`
 - `get_risk_hotspots`
-- `get_untested_exports`
+- `get_untested_symbols`
 - `query_decisions`
 - `search`
 
@@ -231,7 +231,7 @@ These workflows define which trace-mcp tools MUST be used at each stage. Follow 
 
 ### Deleting code
 1. `get_dead_code` { file_pattern } — verify code is actually dead (multi-signal detection)
-2. `get_dead_exports` { file_pattern } — find unused exports
+2. `get_dead_code` { file_pattern, mode: "exports_only" } — find unused exports
 3. `remove_dead_code` { symbol_id } — safe removal with orphan import detection
 4. NEVER delete code without verifying it's dead first
 

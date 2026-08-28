@@ -13,7 +13,7 @@ IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVE
 | All implementations of an interface | `get_type_hierarchy` | ls/find on directories |
 | All classes implementing X | `search` with `implements` filter | Grep |
 | Project health / coverage gaps | `self_audit` | manual inspection |
-| Dead code / dead exports | `get_dead_code` / `get_dead_exports` | Grep for unused |
+| Dead code / dead exports | `get_dead_code` (`mode: "exports_only"`) | Grep for unused |
 | Context for a task | `get_feature_context` | reading 15 files |
 | Tests for a symbol | `get_tests_for` | Glob + Grep |
 | Untested symbols (deep) | `get_untested_symbols` (classifies "unreached" vs "imported_not_called") | manual audit |

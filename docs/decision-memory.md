@@ -86,7 +86,7 @@ Each of these is linked to the symbol or file it's about, so the next agent who 
               │  Enrichment Layer                         │
               │  get_change_impact  → linked_decisions    │
               │  plan_turn          → related_decisions   │
-              │  get_session_resume → active_decisions    │
+              │  get_wake_up(resume) → active_decisions   │
               │  get_wake_up        → orientation context │
               └──────────────────────────────────────────┘
 ```
@@ -166,7 +166,7 @@ The implementation lives in [`src/memory/decision-confidence.ts`](../src/memory/
 |---|---|
 | `search_sessions` | Full-text search across all past session conversations. "What did we discuss about auth last month?" |
 | `get_wake_up` | Compact orientation (~300 tokens) at session start: project identity + active decisions + memory stats. Auto-mines on first call if the store is empty. |
-| `get_session_resume` | Cross-session context carryover: focus files, key searches, and dead-end queries from recent past sessions, alongside active decisions. |
+| `get_wake_up { scope: "resume" }` | Cross-session context carryover: focus files, key searches, and dead-end queries from recent past sessions, alongside active decisions. |
 
 ## Code linkage
 

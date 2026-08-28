@@ -1,6 +1,6 @@
 ---
 title: "trace-mcp MCP Tools Reference — every code-intelligence tool, by framework"
-description: "Full reference for trace-mcp's 170 MCP tools and 9 resources — navigation, refactoring, impact analysis, security, and framework-aware queries. Tools register dynamically based on what your repo uses."
+description: "Full reference for trace-mcp's 164 MCP tools and 9 resources — navigation, refactoring, impact analysis, security, and framework-aware queries. Tools register dynamically based on what your repo uses."
 ---
 
 # Tools reference
@@ -10,7 +10,7 @@ description: "Full reference for trace-mcp's 170 MCP tools and 9 resources — n
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "Tools reference",
-  "description": "Full list of the 170 MCP tools and 9 resources trace-mcp exposes, registered dynamically per detected framework.",
+  "description": "Full list of the 164 MCP tools and 9 resources trace-mcp exposes, registered dynamically per detected framework.",
   "url": "https://trace-mcp.com/tools-reference.html",
   "datePublished": "2026-04-05",
   "dateModified": "2026-04-15",
@@ -30,7 +30,7 @@ description: "Full reference for trace-mcp's 170 MCP tools and 9 resources — n
   }
 }
 </script>
-trace-mcp exposes 170 MCP tools and 9 resources.
+trace-mcp exposes 164 MCP tools and 9 resources.
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
 
@@ -96,9 +96,7 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | `get_implementations` | Find all classes that implement or extend a given interface/base class |
 | `get_type_hierarchy` | Walk TypeScript class/interface hierarchy: ancestors and descendants |
 | `get_api_surface` | List all exported symbols (public API) of a file or matching files |
-| `get_dead_exports` | Find exported symbols never imported by any other file (dead code candidates) |
-| `get_untested_exports` | Find exported public symbols with no matching test file (test coverage gaps) |
-| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). More thorough than `get_untested_exports` |
+| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). Pass `scope: "exports_only"` for the fast exports-only scan |
 | `self_audit` | One-shot project health: dead exports, untested code, dependency hotspots, heritage metrics |
 
 ## Quality & security
@@ -163,7 +161,7 @@ See [Decision memory](decision-memory.md) for full documentation.
 | `search_sessions` | FTS5 search across all past session conversations |
 | `get_wake_up` | Compact orientation (~300 tokens): project + active decisions + stats. Auto-mines on first call |
 
-Decisions auto-enrich code intelligence: `get_change_impact` shows `linked_decisions`, `plan_turn` shows `related_decisions`, `get_session_resume` shows `active_decisions`.
+Decisions auto-enrich code intelligence: `get_change_impact` shows `linked_decisions`, `plan_turn` shows `related_decisions`, `get_wake_up` shows `active_decisions`.
 
 ## Session Analytics
 
@@ -248,7 +246,7 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 | "What's the DB schema?" | `get_schema` — reconstructed from migrations, no DB needed |
 | "Trace a request end-to-end" | `get_request_flow("/api/users", "GET")` — full chain |
 | "What NestJS modules does this depend on?" | `get_module_graph` — full dependency tree |
-| "Find untested code" | `get_untested_symbols` — deep analysis with "unreached"/"imported_not_called" classification. Or lighter: `get_untested_exports` + `self_audit` |
+| "Find untested code" | `get_untested_symbols` — deep analysis with "unreached"/"imported_not_called" classification. Or lighter: `get_untested_symbols { scope: "exports_only" }` + `self_audit` |
 | "Explain this complex service" | `explain_symbol` — AI-generated explanation with context |
 | "What repos call this endpoint?" | `get_subproject_clients("/api/users")` — all client calls across repos |
 | "Will this API change break anything?" | `get_subproject_impact` — cross-repo impact with symbol resolution |
@@ -260,3 +258,36 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 | "How much would trace-mcp save?" | `get_real_savings` — compares actual reads vs compact alternatives |
 | "Quick efficiency benchmark" | `benchmark_project` — 92%+ reduction on typical projects |
 | "What tech isn't covered?" | `get_coverage_report` — gaps in plugin coverage for your deps |
+
+---
+
+## Migrating from 1.x — retired tools
+
+Seven tools were retired in 2.0. Each had been a deprecated alias for a
+superset tool that already covered it; every call is expressible in the
+replacement without loss of behaviour or response shape.
+
+| Retired tool (1.x) | Replacement (2.0) |
+|---|---|
+| `pin_symbol { symbol_id }` | `pin { symbol_id }` |
+| `pin_file { file_path }` | `pin { file_path }` |
+| `search_with_mode { query, mode }` | `search { query, retriever: mode }` |
+| `get_dead_exports { file_pattern }` | `get_dead_code { file_pattern, mode: "exports_only" }` |
+| `get_untested_exports { file_pattern }` | `get_untested_symbols { file_pattern, scope: "exports_only" }` |
+| `get_session_resume { max_sessions }` | `get_wake_up { scope: "resume", max_sessions }` |
+| `get_project_memo { include_history, limit }` | `get_wake_up { scope: "project", include_history, history_limit }` |
+
+`pin` accepts `symbol_id` and `file_path` together, pinning both at the same
+weight in one call. `get_dead_code` and `get_untested_symbols` inherited
+`output_format: "toon"` from the aliases they replace, so the TOON encoding
+stays available on those payloads.
+
+Two rarely-used `search` tuning parameters were also removed. Per-channel
+fusion weights now come from `~/.trace-mcp/tuning.jsonc` (written by
+`tune_weights`) instead of `fusion_weights` on every call, and `fusion_debug`
+is gone. The nested `fusion_weights` object was the single most expensive
+structure in the whole tool schema, paid by every client on every session.
+
+Together these changes cut the always-on tool surface from 148 to 141
+registrations and the serialized schema every MCP client without lazy tool
+loading pays at session start from 90,579 to 86,519 characters.
