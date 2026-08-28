@@ -3,3 +3,14 @@ description: A structured map of your codebase for AI agents. trace-mcp indexes 
 url: https://trace-mcp.com
 lang: en
 markdown: kramdown
+
+# Give every doc page an og:image / twitter:image. jekyll-seo-tag only reads
+# page-level `image`, not a site-level one, so inject it via defaults —
+# without it the doc pages emit twitter:card=summary with no image and
+# share as a bare link. docs/index.html has no front matter (static file),
+# so it keeps its own hand-written OG tags.
+defaults:
+  - scope:
+      path: ""
+    values:
+      image: /og-image.png
