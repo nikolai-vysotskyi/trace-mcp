@@ -419,4 +419,3 @@ describe('MCP tool-schema budget coverage reconciliation (TRA-211)', () => {
     ).toEqual([]);
   });
 });
-
