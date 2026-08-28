@@ -201,6 +201,12 @@ export interface IndexingPipelineDeps {
    * the pass with real timers.
    */
   reconcileDebounceMs?: number;
+  /**
+   * Debounce window (ms) before the deferred coverage reconcile fires after
+   * incremental churn. Production callers leave this undefined (60s default);
+   * tests inject a huge value and flush explicitly.
+   */
+  coverageReconcileDebounceMs?: number;
 }
 
 export class IndexingPipeline {
@@ -218,6 +224,9 @@ export class IndexingPipeline {
     }
     if (deps?.reconcileDebounceMs !== undefined) {
       this._reconcileDebounceMs = deps.reconcileDebounceMs;
+    }
+    if (deps?.coverageReconcileDebounceMs !== undefined) {
+      this._coverageDebounceMs = deps.coverageReconcileDebounceMs;
     }
     // P02 Task DAG: register the migrated passes once per pipeline instance.
     // Each Task is a thin adapter — the actual work still happens in the
@@ -498,7 +507,12 @@ export class IndexingPipeline {
         }
         relPaths.push(rel);
       }
-      return this.runPipeline(relPaths, false, start);
+      const r = await this.runPipeline(relPaths, false, start);
+      // The watcher/hook path only ever sees the events it was handed. Kick a
+      // debounced coverage check so a project whose on-disk shape changed
+      // drastically converges without an explicit forced reindex (TRA-231).
+      if (r.indexed > 0) this.scheduleCoverageReconcile();
+      return r;
     });
     this._lock = result.catch(() => {});
     return result as Promise<IndexingResult>;
@@ -537,6 +551,7 @@ export class IndexingPipeline {
       total: relPaths.length,
       startedAt: Date.now(),
       completedAt: 0,
+      scope: this._isIncremental ? 'incremental' : 'full',
     });
 
     this._projectContext = undefined;
@@ -880,6 +895,86 @@ export class IndexingPipeline {
     await this._lock;
   }
 
+  /** Debounce window before the deferred coverage reconcile (TRA-231). */
+  private static readonly COVERAGE_RECONCILE_DEBOUNCE_MS = 60_000;
+  /**
+   * Minimum candidate-vs-indexed file gap that counts as real drift. Below
+   * this the incremental path is trusted — a handful of files is what the
+   * watcher reliably delivers, and reacting to a gap of 1 would re-walk the
+   * tree after every ordinary edit.
+   *
+   * ponytail: a plain count heuristic, not a set diff. Files the walk finds
+   * but indexing legitimately drops (parse errors, binary content) inflate
+   * the gap; the cooldown below keeps that from looping. Upgrade to a real
+   * path-set diff if the count ever proves too blunt.
+   */
+  private static readonly COVERAGE_DRIFT_MIN_FILES = 10;
+  /** Minimum quiet period between two coverage reconciles. */
+  private static readonly COVERAGE_RECONCILE_COOLDOWN_MS = 5 * 60_000;
+  private _coverageDebounceMs: number = IndexingPipeline.COVERAGE_RECONCILE_DEBOUNCE_MS;
+  private _coverageTimer: ReturnType<typeof setTimeout> | null = null;
+  private _lastCoverageReconcileMs = 0;
+
+  /**
+   * Schedule a coalesced coverage check. Registration indexes the tree once;
+   * everything after that arrives as watcher-driven `indexFiles()` calls, so a
+   * project whose on-disk shape changes drastically (a repo cloned into an
+   * already-registered workdir) settles at whatever fraction of the tree the
+   * watcher managed to report — TRA-231. The check walks the include globs and
+   * compares the candidate count to the indexed file count; a real gap kicks a
+   * hash-gated `indexAll()`, which is what `reindex({force:true})` used to be
+   * needed for. Coalesced onto a single trailing timer so an edit storm costs
+   * one walk, not N.
+   */
+  private scheduleCoverageReconcile(): void {
+    if (this._coverageTimer) clearTimeout(this._coverageTimer);
+    this._coverageTimer = setTimeout(() => this.fireCoverageReconcile(), this._coverageDebounceMs);
+    // Never keep the process alive just for a pending coverage check.
+    this._coverageTimer.unref?.();
+  }
+
+  /** Timer body — walks the tree and reindexes only when coverage actually drifted. */
+  private fireCoverageReconcile(): void {
+    this._coverageTimer = null;
+    const run = (async () => {
+      if (this._disposed) return;
+      if (
+        Date.now() - this._lastCoverageReconcileMs <
+        IndexingPipeline.COVERAGE_RECONCILE_COOLDOWN_MS
+      ) {
+        return;
+      }
+      const onDisk = (await this.collectFiles()).length;
+      if (this._disposed) return;
+      const indexed = this.store.getStats().totalFiles;
+      const gap = onDisk - indexed;
+      if (gap < IndexingPipeline.COVERAGE_DRIFT_MIN_FILES) return;
+      this._lastCoverageReconcileMs = Date.now();
+      logger.info(
+        { root: this.rootPath, onDisk, indexed, gap },
+        'Coverage drift detected — running a full hash-gated reindex',
+      );
+      await this.indexAll();
+    })();
+    void run.catch((e) => {
+      logger.warn({ error: e }, 'Deferred coverage reconcile failed');
+    });
+    this._coverageReconcileRun = run.catch(() => {});
+  }
+
+  private _coverageReconcileRun: Promise<unknown> = Promise.resolve();
+
+  /**
+   * Test hook: fire a pending coverage reconcile immediately and await it.
+   * No-op when nothing is scheduled.
+   */
+  async __flushCoverageReconcileForTests(): Promise<void> {
+    if (!this._coverageTimer) return;
+    clearTimeout(this._coverageTimer);
+    this.fireCoverageReconcile();
+    await this._coverageReconcileRun;
+  }
+
   /** Pass 3: LSP enrichment — upgrade call graph edges with compiler-grade resolution. */
   private async runLspEnrichment(): Promise<void> {
     if (!this.config.lsp?.enabled) return;
@@ -1065,6 +1160,10 @@ export class IndexingPipeline {
     if (this._reconcileTimer) {
       clearTimeout(this._reconcileTimer);
       this._reconcileTimer = null;
+    }
+    if (this._coverageTimer) {
+      clearTimeout(this._coverageTimer);
+      this._coverageTimer = null;
     }
     if (this._extractPool && this._poolIsOwned) {
       await this._extractPool.terminate();
