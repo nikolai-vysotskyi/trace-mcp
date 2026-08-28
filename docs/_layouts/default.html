@@ -23,9 +23,18 @@
       <hr>
       <p class="docs-nav">
         See also:
-        <a href="{{ '/tools-reference.html' | relative_url }}">Tools reference</a> ·
-        <a href="{{ '/architecture.html' | relative_url }}">Architecture</a> ·
-        <a href="{{ '/configuration.html' | relative_url }}">Configuration</a> ·
+        {%- comment -%}
+          Every doc page, not a hand-picked four. The old footer linked only
+          tools-reference / architecture / configuration, which left the other
+          eight pages on 1–2 inbound internal links each — comparisons.html,
+          the highest-intent page on the site, had exactly one. Driven off
+          site.data.docs_nav so adding a page means one data-file line.
+        {%- endcomment -%}
+        {%- for item in site.data.docs_nav -%}
+          {%- unless page.url == item.url -%}
+            <a href="{{ item.url | relative_url }}">{{ item.title }}</a> ·
+          {%- endunless -%}
+        {%- endfor -%}
         <a href="{{ '/' | relative_url }}">Home</a>
       </p>
     </div>
