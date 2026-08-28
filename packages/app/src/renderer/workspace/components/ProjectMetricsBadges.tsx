@@ -1,20 +1,12 @@
 import { Icon } from '../../lattice/icons';
-import { Badge, type Tone } from '../../lattice/ui';
-import type { ProjectViewModel, TechDebtGrade } from '../types';
+import { Badge, GradeBadge } from '../../lattice/ui';
+import type { ProjectViewModel } from '../types';
 
 export interface ProjectMetricsBadgesProps {
   project: ProjectViewModel;
   /** Compact rendering — smaller chips, drops the "untested" pill. Default false. */
   dense?: boolean;
 }
-
-const GRADE_TONE: Record<TechDebtGrade, Tone> = {
-  A: 'green',
-  B: 'green',
-  C: 'gold',
-  D: 'red',
-  F: 'red',
-};
 
 /**
  * Horizontal strip of small chips summarising health metrics for one project:
@@ -34,22 +26,22 @@ export function ProjectMetricsBadges({ project, dense = false }: ProjectMetricsB
 
   return (
     <div className="flex items-center gap-1 whitespace-nowrap">
-      {grade && (
-        <Badge tone={GRADE_TONE[grade]} variant="outline" title={`Tech-debt grade ${grade}`}>
-          {grade}
-        </Badge>
-      )}
+      {grade && <GradeBadge grade={grade} />}
       {sec > 0 && (
         <Badge
           tone="red"
-          variant="outline"
           title={`${sec} critical+high security finding${sec === 1 ? '' : 's'}`}
+          aria-label={`${sec} critical or high security finding${sec === 1 ? '' : 's'}`}
         >
           <Icon name="lock" size={iconSize} /> {sec}
         </Badge>
       )}
       {dead > 0 && (
-        <Badge tone="gold" variant="outline" title={`${dead} dead export${dead === 1 ? '' : 's'}`}>
+        <Badge
+          tone="orange"
+          title={`${dead} dead export${dead === 1 ? '' : 's'}`}
+          aria-label={`${dead} dead export${dead === 1 ? '' : 's'}`}
+        >
           <Icon name="bug_report" size={iconSize} /> {dead}
         </Badge>
       )}

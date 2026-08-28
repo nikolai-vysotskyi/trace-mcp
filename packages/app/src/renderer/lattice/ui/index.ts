@@ -8,13 +8,25 @@
    out — this app has no standalone OS-window dialogs to theme with them. */
 
 export { Button } from './Button';
-export type { ButtonProps, ButtonVariant } from './Button';
+export type { ButtonProps, ButtonSize, ButtonVariant } from './Button';
 
 export { SegmentedControl } from './SegmentedControl';
 export type { SegmentedControlProps, SegmentedOption } from './SegmentedControl';
 
-export { Badge } from './Badge';
-export type { BadgeProps, Tone } from './Badge';
+export { SearchField } from './SearchField';
+export type { SearchFieldProps } from './SearchField';
+
+export { Chip, ChipGroup } from './Chip';
+export type { ChipProps, ChipGroupProps } from './Chip';
+
+export { Checkbox } from './Checkbox';
+export type { CheckboxProps } from './Checkbox';
+
+export { PopUpButton } from './PopUpButton';
+export type { PopUpButtonProps, PopUpOption } from './PopUpButton';
+
+export { Badge, GradeBadge } from './Badge';
+export type { BadgeProps, GradeBadgeProps, Tone } from './Badge';
 
 export { StatusDot } from './StatusDot';
 export type { StatusDotProps } from './StatusDot';
