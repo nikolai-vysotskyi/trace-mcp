@@ -36,7 +36,7 @@ export function SkeletonTableRows({ rows, rowHeight }: { rows: number; rowHeight
         <div
           key={i}
           className="flex items-center gap-3 px-3"
-          style={{ height: rowHeight, borderBottom: '0.5px solid var(--border-row)' }}
+          style={{ height: rowHeight, borderBottom: '0.5px solid var(--separator)' }}
         >
           <Skeleton width={14} height={14} radius={3} />
           <div className="flex flex-col gap-1">

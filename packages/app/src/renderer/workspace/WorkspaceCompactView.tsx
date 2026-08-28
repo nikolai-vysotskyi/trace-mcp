@@ -77,8 +77,8 @@ function CompactRow({
       className="flex items-center gap-2 px-3 cursor-pointer transition-colors"
       style={{
         minHeight: COMPACT_ROW_H,
-        borderBottom: '0.5px solid var(--border-row)',
-        background: highlighted ? 'var(--bg-active)' : undefined,
+        borderBottom: '0.5px solid var(--separator)',
+        background: highlighted ? 'var(--fill-tertiary)' : undefined,
         outline: cursored ? '2px solid var(--accent)' : undefined,
         outlineOffset: -2,
       }}
@@ -101,18 +101,18 @@ function CompactRow({
         <div className="flex items-baseline gap-2">
           <div
             className="text-[13px] font-medium truncate"
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: 'var(--label)' }}
             title={project.name}
           >
             {project.name || basename(project.root)}
           </div>
-          <div className="text-[11px] shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+          <div className="text-[11px] shrink-0" style={{ color: 'var(--label-secondary)' }}>
             {statusLabel(project.displayStatus)}
           </div>
         </div>
-        <ProjectPath root={project.root} className="text-[11px] text-[var(--text-tertiary)]" />
+        <ProjectPath root={project.root} className="text-[11px] text-[var(--label-secondary)]" />
         {project.error && (
-          <div className="text-[11px] truncate" style={{ color: 'var(--destructive)' }} title={project.error}>
+          <div className="text-[11px] truncate" style={{ color: 'var(--status-red)' }} title={project.error}>
             {project.error}
           </div>
         )}
@@ -176,8 +176,8 @@ export function WorkspaceCompactView({
       className="flex-1 overflow-auto"
       style={{
         borderRadius: 12,
-        border: '0.5px solid var(--border)',
-        background: 'var(--bg-grouped)',
+        border: '0.5px solid var(--separator)',
+        background: 'var(--surface)',
       }}
       onScroll={handleScroll}
       onKeyDown={(e) => {

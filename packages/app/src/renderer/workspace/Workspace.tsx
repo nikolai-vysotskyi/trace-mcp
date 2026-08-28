@@ -16,7 +16,7 @@
  * the pane below explains what happened next to the one action that fixes it.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EmptyState } from '../lattice/ui';
+import { Button, EmptyState } from '../lattice/ui';
 import { addRecentProject, removeRecentProject } from '../recent-projects';
 import { AddProjectControl } from './AddProjectControl';
 import { BulkActionsBar } from './BulkActionsBar';
@@ -85,15 +85,9 @@ function DaemonDownPane({ restarting, onRestart }: { restarting: boolean; onRest
       title="The daemon isn't running"
       subtitle="trace-mcp indexes your projects in a local background service. Start it to see them again — nothing was lost."
       action={
-        <button
-          type="button"
-          onClick={onRestart}
-          disabled={restarting}
-          className="h-7 px-3 rounded-full text-[13px] font-medium disabled:opacity-60"
-          style={{ background: 'var(--accent)', color: '#fff' }}
-        >
+        <Button variant="prominent" size="large" onClick={onRestart} disabled={restarting}>
           {restarting ? 'Starting…' : 'Start daemon'}
-        </button>
+        </Button>
       }
     />
   );
@@ -224,42 +218,26 @@ export function Workspace() {
           role="status"
           className="mx-4 mt-3 px-3 py-2 rounded-lg text-[13px] flex items-center gap-2"
           style={{
-            background: 'color-mix(in srgb, var(--warning) 9%, transparent)',
-            color: 'var(--text-primary)',
-            border: '0.5px solid color-mix(in srgb, var(--warning) 30%, transparent)',
+            background: 'color-mix(in srgb, var(--status-orange) 9%, transparent)',
+            color: 'var(--label)',
+            border: '0.5px solid color-mix(in srgb, var(--status-orange) 30%, transparent)',
           }}
         >
           <span>{banner.message}</span>
           {/* The action belongs next to the sentence that needs it, not 1400px
               away at the far right of the window. */}
           {banner.action === 'restart' ? (
-            <button
-              type="button"
+            <Button
+              size="small"
               onClick={() => void data.restartDaemon()}
               disabled={data.restarting}
-              className="h-6 px-2 rounded-full text-[11px] font-medium disabled:opacity-50 whitespace-nowrap"
-              style={{
-                background: 'var(--fill-control)',
-                color: 'var(--accent)',
-                border: '0.5px solid var(--border)',
-              }}
             >
               {data.restarting ? 'Starting…' : 'Start daemon'}
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
-              onClick={() => void data.refresh()}
-              disabled={data.refreshing}
-              className="h-6 px-2 rounded-full text-[11px] font-medium disabled:opacity-50 whitespace-nowrap"
-              style={{
-                background: 'var(--fill-control)',
-                color: 'var(--accent)',
-                border: '0.5px solid var(--border)',
-              }}
-            >
+            <Button size="small" onClick={() => void data.refresh()} disabled={data.refreshing}>
               {data.refreshing ? 'Retrying…' : 'Try again'}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -271,7 +249,7 @@ export function Workspace() {
           // Skeletons at the final row geometry — nothing moves when data lands.
           <div
             className="flex-1 overflow-hidden"
-            style={{ borderRadius: 12, border: '0.5px solid var(--border)', background: 'var(--bg-grouped)' }}
+            style={{ borderRadius: 12, border: '0.5px solid var(--separator)', background: 'var(--surface)' }}
           >
             <SkeletonTableRows rows={12} rowHeight={ROW_H} />
           </div>
@@ -286,14 +264,9 @@ export function Workspace() {
             title="No projects match this filter"
             subtitle="Clear the filter to see all of your projects again."
             action={
-              <button
-                type="button"
-                onClick={() => setFilter(EMPTY_FILTER)}
-                className="h-7 px-3 rounded-full text-[13px] font-medium"
-                style={{ background: 'var(--accent)', color: '#fff' }}
-              >
+              <Button variant="prominent" size="large" onClick={() => setFilter(EMPTY_FILTER)}>
                 Clear filters
-              </button>
+              </Button>
             }
           />
         ) : view === 'compact' ? (

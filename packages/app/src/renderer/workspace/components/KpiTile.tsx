@@ -38,8 +38,8 @@ const TONE_ICON: Record<KpiTone, string> = {
 };
 
 const TONE_COLOR: Record<KpiTone, string> = {
-  ok: 'var(--success)',
-  warn: 'var(--warning)',
+  ok: 'var(--status-green)',
+  warn: 'var(--status-orange)',
   busy: 'var(--accent)',
 };
 
@@ -52,7 +52,7 @@ export function formatCompact(n: number): string {
 function DeltaChip({ delta, caption }: { delta: number; caption?: string }): ReactNode {
   if (delta === 0) {
     return (
-      <span style={{ color: 'var(--text-tertiary)' }}>
+      <span style={{ color: 'var(--label-secondary)' }}>
         No change{caption ? ` ${caption}` : ''}
       </span>
     );
@@ -61,14 +61,14 @@ function DeltaChip({ delta, caption }: { delta: number; caption?: string }): Rea
   return (
     <span
       className="inline-flex items-center gap-0.5 tabular-nums"
-      style={{ color: up ? 'var(--success)' : 'var(--destructive)' }}
+      style={{ color: up ? 'var(--status-green)' : 'var(--status-red)' }}
     >
       {/* Arrow glyph as well as colour — the direction must survive a
           colour-blind reading and a greyscale screenshot. */}
       <span aria-hidden="true">{up ? '↑' : '↓'}</span>
       {up ? '+' : '−'}
       {formatCompact(Math.abs(delta))}
-      {caption ? <span style={{ color: 'var(--text-tertiary)' }}> {caption}</span> : null}
+      {caption ? <span style={{ color: 'var(--label-secondary)' }}> {caption}</span> : null}
     </span>
   );
 }
@@ -86,7 +86,7 @@ export function KpiTile({
   pending = false,
 }: KpiTileProps) {
   const interactive = onClick !== undefined;
-  const valueColor = tone ? TONE_COLOR[tone] : 'var(--text-primary)';
+  const valueColor = tone ? TONE_COLOR[tone] : 'var(--label)';
 
   return (
     <button
@@ -101,14 +101,14 @@ export function KpiTile({
         flex: '1 1 132px',
         padding: 16,
         borderRadius: 12,
-        background: active ? 'var(--bg-active)' : 'var(--bg-grouped)',
-        border: `0.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+        background: active ? 'var(--fill-tertiary)' : 'var(--surface)',
+        border: `0.5px solid ${active ? 'var(--accent)' : 'var(--separator)'}`,
         cursor: interactive ? 'pointer' : 'default',
       }}
     >
       <span
         className="inline-flex items-center gap-1 text-[11px] leading-[13px] font-medium"
-        style={{ color: active ? 'var(--accent)' : 'var(--text-secondary)' }}
+        style={{ color: active ? 'var(--accent)' : 'var(--label-secondary)' }}
       >
         {tone ? <Icon name={TONE_ICON[tone]} size={11} /> : null}
         {label}
@@ -135,7 +135,7 @@ export function KpiTile({
       {pending ? (
         <Skeleton width={92} height={11} />
       ) : (
-        <span className="text-[11px] leading-[13px]" style={{ color: 'var(--text-tertiary)' }}>
+        <span className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
           {delta !== null ? <DeltaChip delta={delta} caption={deltaCaption} /> : footnote}
         </span>
       )}

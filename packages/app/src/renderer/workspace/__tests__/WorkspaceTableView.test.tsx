@@ -106,14 +106,19 @@ describe('WorkspaceTableView row content', () => {
 
   it('spells the grade badge out for assistive tech', () => {
     const container = renderTable();
-    expect(within(container).getByLabelText('Tech-debt grade B')).toBeTruthy();
+    expect(within(container).getByLabelText('Tech debt grade B')).toBeTruthy();
   });
 
-  it('gives checkboxes a 24px hit target around the 14px control', () => {
+  // The 24px hit target is a controls.css rule on every `input[type=checkbox]`
+  // and is measured in lattice/ui/__tests__/primitives.test.tsx. What this
+  // surface owns is using the real primitive, so it inherits that rule instead
+  // of re-declaring a smaller inline size.
+  it('renders row selection as a labelled native checkbox, not a styled div', () => {
     const container = renderTable();
     const box = within(container).getByLabelText('Select alpha') as HTMLInputElement;
-    expect(box.style.width).toBe('14px');
-    expect(box.parentElement?.className).toContain('w-6');
+    expect(box.tagName).toBe('INPUT');
+    expect(box.type).toBe('checkbox');
+    expect(box.style.width).toBe('');
   });
 });
 

@@ -11,8 +11,7 @@
  * the × button and the context menu drive the same one.
  */
 import type { MouseEvent } from 'react';
-import { Icon } from '../../lattice/icons';
-import { Menu, MenuItem, MenuSeparator } from '../../lattice/ui';
+import { Button, Menu, MenuItem, MenuSeparator } from '../../lattice/ui';
 import type { ProjectViewModel } from '../types';
 
 export interface ProjectActionHandlers {
@@ -33,11 +32,6 @@ export interface ProjectRowActionsProps extends ProjectActionHandlers, RemoveCon
   /** false = daemon disconnected; Re-index/Remove are disabled. */
   canMutate: boolean;
 }
-
-/** 24×24 hit target, 14px glyph — the HIG floor even when the icon is small. */
-const ICON_BTN =
-  'w-6 h-6 inline-flex items-center justify-center rounded-md transition-colors ' +
-  'hover:bg-[var(--bg-active)] disabled:opacity-30';
 
 export function canReindex(project: ProjectViewModel, canMutate: boolean): boolean {
   const indexing = project.displayStatus === 'indexing' || project.displayStatus === 'computing';
@@ -60,64 +54,53 @@ export function ProjectRowActions({
   if (confirming) {
     return (
       <div className="flex items-center gap-1" onClick={stop}>
-        <button
-          type="button"
-          onClick={onCancelRemove}
-          className="h-6 text-[11px] px-2 rounded-full font-medium"
-          style={{
-            background: 'var(--fill-control)',
-            color: 'var(--text-secondary)',
-            border: '0.5px solid var(--border)',
-          }}
-        >
+        <Button size="small" onClick={onCancelRemove}>
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        {/* A destructive FILL, not --status-red: white on --status-red measures
+            3.41:1 in dark. --danger-fill is the same hue tuned for a label. */}
+        <Button
+          size="small"
+          variant="prominent"
+          className="whitespace-nowrap"
+          style={{ background: 'var(--danger-fill)' }}
           onClick={() => onRemove(project.root)}
-          className="h-6 text-[11px] px-2 rounded-full font-medium whitespace-nowrap"
-          style={{ background: 'var(--destructive)', color: '#fff' }}
         >
           Remove project
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="flex items-center gap-0.5" onClick={stop}>
-      <button
-        type="button"
+      {/* variant="icon" is 24×24 with a 16px glyph and will not compile without
+          both a label and a tooltip — an unlabelled × that deletes is not an
+          affordance. */}
+      <Button
+        variant="icon"
+        icon="arrow_right_alt"
         onClick={() => onOpen(project.root)}
-        className={ICON_BTN}
         style={{ color: 'var(--accent)' }}
         aria-label={`Open ${project.name}`}
         title={`Open ${project.name}`}
-      >
-        <Icon name="arrow_right_alt" size={14} />
-      </button>
-      <button
-        type="button"
+      />
+      <Button
+        variant="icon"
+        icon="refresh"
         disabled={!canReindex(project, canMutate)}
         onClick={() => onReindex(project.root)}
-        className={ICON_BTN}
-        style={{ color: 'var(--text-secondary)' }}
         aria-label={`Re-index ${project.name}`}
         title={`Re-index ${project.name}`}
-      >
-        <Icon name="refresh" size={14} />
-      </button>
-      <button
-        type="button"
+      />
+      <Button
+        variant="icon"
+        icon="close"
         disabled={!mutationAllowed}
         onClick={() => onRequestRemove(project.root)}
-        className={ICON_BTN}
-        style={{ color: 'var(--text-tertiary)' }}
         aria-label={`Remove ${project.name} from the workspace`}
         title={`Remove ${project.name} from the workspace`}
-      >
-        <Icon name="close" size={14} />
-      </button>
+      />
     </div>
   );
 }

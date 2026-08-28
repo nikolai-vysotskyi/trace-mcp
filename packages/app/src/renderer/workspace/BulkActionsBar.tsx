@@ -4,6 +4,7 @@
  * Clear. Renders null when nothing selected.
  */
 import { useState } from 'react';
+import { Button } from '../lattice/ui';
 import type { ProjectViewModel } from './types';
 
 export interface BulkActionsBarProps {
@@ -104,115 +105,63 @@ export function BulkActionsBar({ projects, onReindex, onRemove, onClear }: BulkA
     downloadBlob(blob, `trace-mcp-projects-${todayStamp()}.csv`);
   };
 
-  const baseBtn =
-    'text-[11px] px-2 py-1 rounded-md font-medium transition-opacity hover:opacity-80 disabled:opacity-40';
-
   return (
+    // A floating control strip, so it is glass — the one glass layer in the
+    // content pane. `.glass` carries the blur and the reduced-transparency
+    // fallback; only the panel shadow and geometry are local.
     <div
-      className="sticky bottom-2 z-10 mx-auto mt-2 flex w-fit items-center gap-2 px-3 py-1.5 rounded-xl"
+      className="sticky bottom-2 z-10 mx-auto mt-2 flex w-fit items-center gap-2 px-3 py-1.5 glass"
       style={{
-        background: 'var(--bg-secondary)',
-        border: '0.5px solid var(--border)',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
+        borderRadius: 'var(--radius-panel)',
+        border: '0.5px solid var(--separator)',
+        boxShadow: 'var(--shadow-panel)',
       }}
     >
-      <span className="text-[11px] font-medium tabular-nums" style={{ color: 'var(--text-primary)' }}>
+      <span className="text-[11px] font-medium tabular-nums" style={{ color: 'var(--label)' }}>
         {projects.length} selected
       </span>
-      <span style={{ width: 1, height: 14, background: 'var(--border)' }} aria-hidden />
+      <span style={{ width: 1, height: 14, background: 'var(--separator)' }} aria-hidden />
       {!confirmRemove ? (
         <>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void handleReindex()}
-            className={baseBtn}
-            style={{
-              background: 'var(--fill-control)',
-              color: 'var(--accent)',
-              border: '0.5px solid var(--border)',
-            }}
-          >
+          <Button size="small" disabled={busy} onClick={() => void handleReindex()}>
             Re-index
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="small"
             disabled={busy}
             onClick={() => setConfirmRemove(true)}
-            className={baseBtn}
-            style={{
-              background: 'color-mix(in srgb, var(--destructive) 9%, transparent)',
-              color: 'var(--destructive)',
-              border: '0.5px solid color-mix(in srgb, var(--destructive) 25%, transparent)',
-            }}
+            style={{ color: 'var(--status-red)' }}
           >
             Remove
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={handleExportJson}
-            className={baseBtn}
-            style={{
-              background: 'var(--fill-control)',
-              color: 'var(--text-secondary)',
-              border: '0.5px solid var(--border)',
-            }}
-          >
+          </Button>
+          <Button size="small" disabled={busy} onClick={handleExportJson}>
             Export JSON
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={handleExportCsv}
-            className={baseBtn}
-            style={{
-              background: 'var(--fill-control)',
-              color: 'var(--text-secondary)',
-              border: '0.5px solid var(--border)',
-            }}
-          >
+          </Button>
+          <Button size="small" disabled={busy} onClick={handleExportCsv}>
             Export CSV
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onClear}
-            className={baseBtn}
-            style={{ color: 'var(--text-tertiary)' }}
-          >
+          </Button>
+          <Button variant="plain" size="small" disabled={busy} onClick={onClear}>
             Clear
-          </button>
+          </Button>
         </>
       ) : (
         <>
-          <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+          <span className="text-[11px]" style={{ color: 'var(--label-secondary)' }}>
             Remove {projects.length} project{projects.length === 1 ? '' : 's'}?
           </span>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => setConfirmRemove(false)}
-            className={baseBtn}
-            style={{
-              background: 'var(--fill-control)',
-              color: 'var(--text-secondary)',
-              border: '0.5px solid var(--border)',
-            }}
-          >
+          <Button size="small" disabled={busy} onClick={() => setConfirmRemove(false)}>
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          {/* --danger-fill, not --status-red: white on the latter is 3.41:1 dark. */}
+          <Button
+            variant="prominent"
+            size="small"
             disabled={busy}
             onClick={() => void handleRemove()}
-            className={baseBtn}
-            style={{ background: 'var(--destructive)', color: '#fff' }}
+            style={{ background: 'var(--danger-fill)' }}
           >
-            Confirm
-          </button>
+            Remove {projects.length} project{projects.length === 1 ? '' : 's'}
+          </Button>
         </>
       )}
     </div>

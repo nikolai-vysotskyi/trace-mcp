@@ -70,11 +70,11 @@ describe('WorkspaceHeader KPI strip', () => {
   it('colors accented KPI numbers with design tokens, not hardcoded hex', () => {
     renderHeader(false);
     expect(kpiTile('Healthy').querySelector('[data-kpi-value]')!.getAttribute('style')).toContain(
-      'var(--success)',
+      'var(--status-green)',
     );
     expect(
       kpiTile('Needs attention').querySelector('[data-kpi-value]')!.getAttribute('style'),
-    ).toContain('var(--warning)');
+    ).toContain('var(--status-orange)');
   });
 
   it('gives every tile a comparison, never a bare number', () => {

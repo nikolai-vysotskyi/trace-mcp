@@ -84,11 +84,11 @@ const SELECT_COL_W = 32;
 
 /**
  * The surface tokens are translucent (vibrancy), so a pinned cell painted with
- * `--bg-secondary` alone would let the scrolling rows show through. Stack it
- * over `--bg-grouped` the way a normal row is stacked over the pane.
+ * `--fill-quaternary` alone would let the scrolling rows show through. Stack it
+ * over `--surface` the way a normal row is stacked over the pane.
  */
-const overPane = (tint: string) => `linear-gradient(${tint}, ${tint}), var(--bg-grouped)`;
-const STICKY_HEADER_BG = overPane('var(--bg-secondary)');
+const overPane = (tint: string) => `linear-gradient(${tint}, ${tint}), var(--surface)`;
+const STICKY_HEADER_BG = overPane('var(--fill-quaternary)');
 
 /** Sticky cells need their own background — rows slide underneath them. */
 function stickyCell(side: 'left' | 'right', offset: number, bg: string, seam = true): CSSProperties {
@@ -96,7 +96,7 @@ function stickyCell(side: 'left' | 'right', offset: number, bg: string, seam = t
     position: 'sticky',
     [side]: offset,
     background: bg,
-    boxShadow: seam ? (side === 'left' ? '1px 0 0 var(--border)' : '-1px 0 0 var(--border)') : undefined,
+    boxShadow: seam ? (side === 'left' ? '1px 0 0 var(--separator)' : '-1px 0 0 var(--separator)') : undefined,
   };
 }
 
@@ -120,7 +120,7 @@ function Th({ label, tooltip, sortKey, current, dir, onSort, align = 'left', sti
       scope="col"
       aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       className={`px-3 py-2 text-${align} text-[11px] font-medium cursor-pointer select-none whitespace-nowrap`}
-      style={{ color: isActive ? 'var(--accent)' : 'var(--text-secondary)', zIndex: 1, ...sticky }}
+      style={{ color: isActive ? 'var(--accent)' : 'var(--label-secondary)', zIndex: 1, ...sticky }}
       title={tooltip}
       onClick={() => onSort(sortKey)}
     >
@@ -191,7 +191,7 @@ function Row({
   // carry their own opaque background, can follow the row highlight.
   const [hovered, setHovered] = useState(false);
   const highlighted = hovered || cursored || selected;
-  const bg = highlighted ? overPane('var(--bg-active)') : 'var(--bg-grouped)';
+  const bg = highlighted ? overPane('var(--fill-tertiary)') : 'var(--surface)';
 
   return (
     <tr
@@ -199,7 +199,7 @@ function Row({
       className="cursor-pointer transition-colors"
       style={{
         height: ROW_H,
-        borderBottom: '0.5px solid var(--border-row)',
+        borderBottom: '0.5px solid var(--separator)',
         background: highlighted ? bg : undefined,
         outline: cursored ? '2px solid var(--accent)' : undefined,
         outlineOffset: -2,
@@ -223,22 +223,22 @@ function Row({
 
       <td
         className="px-3 max-w-[240px]"
-        style={{ color: 'var(--text-primary)', ...stickyCell('left', SELECT_COL_W, bg) }}
+        style={{ color: 'var(--label)', ...stickyCell('left', SELECT_COL_W, bg) }}
       >
         <div className="truncate font-medium" title={project.name}>
           {project.name}
         </div>
         {/* Head-truncated: sibling checkouts differ in the tail, not the head. */}
-        <ProjectPath root={project.root} className="text-[11px] text-[var(--text-tertiary)]" />
+        <ProjectPath root={project.root} className="text-[11px] text-[var(--label-secondary)]" />
       </td>
 
       <td className="px-3 max-w-[200px]">
         <div className="flex items-center gap-1.5">
           <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
-          <span style={{ color: 'var(--text-secondary)' }}>{statusLabel(project.displayStatus)}</span>
+          <span style={{ color: 'var(--label-secondary)' }}>{statusLabel(project.displayStatus)}</span>
         </div>
         {project.error && (
-          <div className="text-[11px] truncate" style={{ color: 'var(--destructive)' }} title={project.error}>
+          <div className="text-[11px] truncate" style={{ color: 'var(--status-red)' }} title={project.error}>
             {project.error}
           </div>
         )}
@@ -248,7 +248,7 @@ function Row({
         />
       </td>
 
-      <td className="px-3 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+      <td className="px-3 whitespace-nowrap" style={{ color: 'var(--label-secondary)' }}>
         {project.lastIndexed
           ? new Date(project.lastIndexed).toLocaleString(undefined, {
               month: 'short',
@@ -259,19 +259,19 @@ function Row({
           : '—'}
       </td>
 
-      <td className={tdNum} style={{ color: 'var(--text-primary)' }}>
+      <td className={tdNum} style={{ color: 'var(--label)' }}>
         {project.totalFiles?.toLocaleString() ?? '—'}
       </td>
-      <td className={tdNum} style={{ color: 'var(--text-primary)' }}>
+      <td className={tdNum} style={{ color: 'var(--label)' }}>
         {project.totalSymbols?.toLocaleString() ?? '—'}
       </td>
       <td className={tdNum}>
         {project.deadExports === undefined ? (
-          <span style={{ color: 'var(--text-tertiary)' }}>—</span>
+          <span style={{ color: 'var(--label-secondary)' }}>—</span>
         ) : (
           <span
             style={{
-              color: project.deadExports > 0 ? 'var(--warning)' : 'var(--text-secondary)',
+              color: project.deadExports > 0 ? 'var(--status-orange)' : 'var(--label-secondary)',
               fontWeight: project.deadExports > 0 ? 600 : undefined,
             }}
           >
@@ -281,9 +281,9 @@ function Row({
       </td>
       <td className={tdNum}>
         {project.untestedSymbols === undefined ? (
-          <span style={{ color: 'var(--text-tertiary)' }}>—</span>
+          <span style={{ color: 'var(--label-secondary)' }}>—</span>
         ) : (
-          <span style={{ color: project.untestedSymbols > 0 ? 'var(--text-secondary)' : 'var(--text-tertiary)' }}>
+          <span style={{ color: project.untestedSymbols > 0 ? 'var(--label-secondary)' : 'var(--label-secondary)' }}>
             {project.untestedSymbols.toLocaleString()}
           </span>
         )}
@@ -294,16 +294,16 @@ function Row({
           // name — the letter alone means nothing to a screen reader.
           <GradeBadge grade={project.techDebtGrade} />
         ) : (
-          <span style={{ color: 'var(--text-tertiary)' }}>—</span>
+          <span style={{ color: 'var(--label-secondary)' }}>—</span>
         )}
       </td>
       <td className={tdNum}>
         {project.securityFindings === undefined ? (
-          <span style={{ color: 'var(--text-tertiary)' }}>—</span>
+          <span style={{ color: 'var(--label-secondary)' }}>—</span>
         ) : (
           <span
             style={{
-              color: project.securityFindings > 0 ? 'var(--destructive)' : 'var(--text-tertiary)',
+              color: project.securityFindings > 0 ? 'var(--status-red)' : 'var(--label-secondary)',
               fontWeight: project.securityFindings > 0 ? 600 : undefined,
             }}
           >
@@ -389,8 +389,8 @@ export function WorkspaceTableView({
       className="flex-1 overflow-auto"
       style={{
         borderRadius: 12,
-        border: '0.5px solid var(--border)',
-        background: 'var(--bg-grouped)',
+        border: '0.5px solid var(--separator)',
+        background: 'var(--surface)',
       }}
       onScroll={handleScroll}
       onKeyDown={(e) => {
@@ -410,8 +410,8 @@ export function WorkspaceTableView({
       }}
     >
       <table className="w-full border-collapse text-[13px]">
-        <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-secondary)' }}>
-          <tr style={{ borderBottom: '0.5px solid var(--border)' }}>
+        <thead className="sticky top-0 z-10" style={{ background: 'var(--fill-quaternary)' }}>
+          <tr style={{ borderBottom: '0.5px solid var(--separator)' }}>
             <th
               className="px-1 w-8"
               style={{ ...stickyCell('left', 0, STICKY_HEADER_BG, false), zIndex: 1 }}
@@ -460,7 +460,7 @@ export function WorkspaceTableView({
               scope="col"
               className="px-3 py-2 text-left text-[11px] font-medium"
               style={{
-                color: 'var(--text-secondary)',
+                color: 'var(--label-secondary)',
                 zIndex: 1,
                 ...stickyCell('right', 0, STICKY_HEADER_BG),
               }}

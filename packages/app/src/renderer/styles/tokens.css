@@ -26,6 +26,10 @@
   --accent-fill: #0069d9;
   --accent-contrast: #ffffff;
   --on-accent: #ffffff;
+  /* Same problem as --accent-fill, one hue over: --status-red is tuned to read
+     AS text on --surface, which leaves a white label on it at 3.41:1 in dark.
+     Destructive FILLS use this instead. Red text keeps using --status-red. */
+  --danger-fill: #d70015;
 
   --label: rgb(0 0 0 / 0.85);
   /* .55, not Apple's .50: at .50 this measures 3.98:1 on --surface and fails AA
@@ -133,6 +137,7 @@
     --accent-fill: #1272d6;
     --accent-contrast: #ffffff;
     --on-accent: #ffffff;
+    --danger-fill: #d02f24;
     --label: rgb(255 255 255 / 0.92);
     --label-secondary: rgb(255 255 255 / 0.55);
     --label-tertiary: rgb(255 255 255 / 0.28);
@@ -167,6 +172,7 @@
   --accent-fill: #1272d6;
   --accent-contrast: #ffffff;
   --on-accent: #ffffff;
+  --danger-fill: #d02f24;
   --label: rgb(255 255 255 / 0.92);
   --label-secondary: rgb(255 255 255 / 0.55);
   --label-tertiary: rgb(255 255 255 / 0.28);
@@ -205,6 +211,7 @@
   --accent-fill: #0069d9;
   --accent-contrast: #ffffff;
   --on-accent: #ffffff;
+  --danger-fill: #d70015;
   --label: rgb(0 0 0 / 0.85);
   --label-secondary: rgb(0 0 0 / 0.55);
   --label-tertiary: rgb(0 0 0 / 0.26);

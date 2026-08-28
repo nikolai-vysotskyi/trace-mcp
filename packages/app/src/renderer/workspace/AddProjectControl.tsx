@@ -10,6 +10,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from '../lattice/icons';
+import { Button } from '../lattice/ui';
 
 export interface AddProjectControlProps {
   onAdd: (root: string) => Promise<void> | void;
@@ -108,36 +109,29 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
         {/* Empty-state anatomy: 32px monochrome glyph, one 17/600 line, one
             13px sentence, one primary action. */}
         <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
-          <span style={{ color: 'var(--text-tertiary)' }}>
+          <span style={{ color: 'var(--label-secondary)' }}>
             <Icon name="folder_open" size={32} />
           </span>
           <span
-            style={{ fontSize: 17, lineHeight: '22px', fontWeight: 600, color: 'var(--text-primary)' }}
+            style={{ fontSize: 17, lineHeight: '22px', fontWeight: 600, color: 'var(--label)' }}
           >
             No projects yet
           </span>
-          <span className="text-[13px] text-center" style={{ color: 'var(--text-secondary)' }}>
+          <span className="text-[13px] text-center" style={{ color: 'var(--label-secondary)' }}>
             Add a folder to index it, or drop one anywhere in this window.
           </span>
           <div className="flex items-center gap-2 mt-2">
-            <button
-              type="button"
+            <Button
+              variant="prominent"
+              size="large"
               disabled={adding}
               onClick={() => void handlePickFolder()}
-              className="h-7 px-3 rounded-full text-[13px] font-medium transition-opacity disabled:opacity-40"
-              style={{ background: 'var(--accent)', color: '#fff' }}
             >
               Add project
-            </button>
-            <button
-              type="button"
-              disabled={adding}
-              onClick={() => setShowPathInput((v) => !v)}
-              className="h-7 px-3 rounded-full text-[13px] font-medium transition-colors hover:bg-[var(--bg-active)]"
-              style={{ color: 'var(--accent)', border: '0.5px solid var(--border)' }}
-            >
+            </Button>
+            <Button size="large" disabled={adding} onClick={() => setShowPathInput((v) => !v)}>
               Enter path…
-            </button>
+            </Button>
           </div>
           {showPathInput && (
             <PathInput
@@ -171,8 +165,10 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
           onClick={() => void handlePickFolder()}
           className="h-6 pl-2.5 pr-2 text-[11px] font-medium transition-opacity disabled:opacity-40"
           style={{
-            background: 'var(--accent)',
-            color: '#fff',
+            // --accent-fill, not --accent: a white label on --accent measures
+            // 3.65:1 in dark. Split radii, so this cannot be a Button capsule.
+            background: 'var(--accent-fill)',
+            color: 'var(--on-accent)',
             borderRadius: '999px 0 0 999px',
           }}
           title="Choose a folder to index"
@@ -187,8 +183,8 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
           onClick={() => setShowPathInput((v) => !v)}
           className="h-6 w-6 inline-flex items-center justify-center text-[11px] transition-opacity disabled:opacity-40"
           style={{
-            background: 'var(--accent)',
-            color: '#fff',
+            background: 'var(--accent-fill)',
+            color: 'var(--on-accent)',
             borderRadius: '0 999px 999px 0',
             boxShadow: 'inset 1px 0 0 rgb(255 255 255 / 0.25)',
           }}
@@ -202,9 +198,9 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
           <div
             className="absolute right-0 top-8 z-40 p-2 rounded-[10px]"
             style={{
-              background: 'var(--bg-grouped)',
-              border: '0.5px solid var(--border)',
-              boxShadow: '0 8px 24px rgb(0 0 0 / .16)',
+              background: 'var(--surface)',
+              border: '0.5px solid var(--separator)',
+              boxShadow: 'var(--shadow-panel)',
             }}
           >
             <PathInput
@@ -249,30 +245,19 @@ function PathInput({ value, disabled, onChange, onSubmit, onCancel }: PathInputP
         }}
         className="flex-1 text-xs px-2 py-1 rounded-md outline-none disabled:opacity-40"
         style={{
-          background: 'var(--bg-secondary)',
-          color: 'var(--text-primary)',
-          border: '1px solid var(--border)',
+          background: 'var(--fill-quaternary)',
+          color: 'var(--label)',
+          border: '1px solid var(--separator)',
           minWidth: 220,
         }}
       />
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onSubmit}
-        className="text-xs px-2 py-1 rounded-md font-medium disabled:opacity-40"
-        style={{ background: 'var(--accent)', color: '#fff' }}
-      >
-        OK
-      </button>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onCancel}
-        className="text-xs px-2 py-1 rounded-md"
-        style={{ color: 'var(--text-secondary)' }}
-      >
+      {/* "Add" names the outcome; "OK" names nothing. */}
+      <Button variant="prominent" size="small" disabled={disabled} onClick={onSubmit}>
+        Add
+      </Button>
+      <Button variant="plain" size="small" disabled={disabled} onClick={onCancel}>
         Cancel
-      </button>
+      </Button>
     </div>
   );
 }
@@ -283,17 +268,17 @@ function DragOverlay({ visible }: { visible: boolean }) {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
       style={{
-        background: 'rgba(10, 132, 255, 0.10)',
+        background: 'color-mix(in oklab, var(--accent) 10%, transparent)',
         border: '2px dashed var(--accent)',
       }}
     >
       <div
         className="px-4 py-2 rounded-lg text-sm font-medium"
         style={{
-          background: 'var(--bg-secondary)',
+          background: 'var(--fill-quaternary)',
           color: 'var(--accent)',
-          border: '0.5px solid var(--border)',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          border: '0.5px solid var(--separator)',
+          boxShadow: 'var(--shadow-panel)',
         }}
       >
         Drop folder to add as project
