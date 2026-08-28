@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { ProjectStatsModal } from '../components/ProjectStatsModal';
-import { StatusDot, type Tone } from '../lattice/ui';
+import { Icon } from '../lattice/icons';
+import { Badge, Button, SegmentedControl, StatusDot, type Tone } from '../lattice/ui';
 import { useDaemon } from '../hooks/useDaemon';
 
 interface ProjectStats {
@@ -64,29 +65,49 @@ function buildIssueUrl(gap: CoverageGap | UnknownPackage): string {
   return `https://github.com/${GITHUB_REPO}/issues/new?${new URLSearchParams({ title, body, labels })}`;
 }
 
-function coverageColor(pct: number): string {
-  if (pct >= 100) return 'var(--green, #22c55e)';
-  if (pct >= 80) return 'var(--yellow, #eab308)';
-  return 'var(--red, #ef4444)';
+/** Status is never signalled by colour alone — every tone carries a glyph too. */
+function coverageTone(pct: number): { tone: Tone; icon: string } {
+  if (pct >= 100) return { tone: 'green', icon: 'check' };
+  if (pct >= 80) return { tone: 'gold', icon: 'radio' };
+  return { tone: 'red', icon: 'bug_report' };
 }
 
-function priorityBadge(priority: string) {
-  const colors: Record<string, { bg: string; text: string }> = {
-    high: { bg: 'rgba(239,68,68,0.15)', text: '#ef4444' },
-    medium: { bg: 'rgba(234,179,8,0.15)', text: '#eab308' },
-    low: { bg: 'rgba(107,114,128,0.15)', text: '#9ca3af' },
-    likely: { bg: 'rgba(239,68,68,0.15)', text: '#ef4444' },
-    maybe: { bg: 'rgba(234,179,8,0.15)', text: '#eab308' },
-  };
-  const c = colors[priority] ?? colors.low;
-  return (
-    <span
-      className="text-[9px] px-1.5 py-0.5 rounded font-medium uppercase"
-      style={{ background: c.bg, color: c.text }}
-    >
-      {priority}
-    </span>
-  );
+const PRIORITY_TONE: Record<string, Tone> = {
+  high: 'red',
+  medium: 'gold',
+  low: 'neutral',
+  likely: 'red',
+  maybe: 'gold',
+  no: 'neutral',
+};
+
+/**
+ * "2 hours ago · Aug 28, 5:01 PM" — a relative anchor plus the absolute stamp,
+ * because "8/28/2026, 5:01:49 PM" answers neither "is this fresh?" nor "when?".
+ * Exported for the unit test; `now` is injectable so the test is not clock-bound.
+ */
+export function formatLastIndexed(iso: string, now: Date = new Date()): string {
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return iso;
+  const absolute = then.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  const seconds = Math.round((now.getTime() - then.getTime()) / 1000);
+  if (seconds < 0) return absolute;
+  if (seconds < 45) return `just now · ${absolute}`;
+  // [seconds per unit, unit, upper bound in seconds] — first fitting entry wins.
+  const scale: Array<[number, Intl.RelativeTimeFormatUnit, number]> = [
+    [60, 'minute', 3600],
+    [3600, 'hour', 86400],
+    [86400, 'day', 604800],
+    [604800, 'week', Number.POSITIVE_INFINITY],
+  ];
+  const [span, unit] = scale.find(([, , limit]) => seconds < limit) ?? scale[scale.length - 1];
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  return `${rtf.format(-Math.round(seconds / span), unit)} · ${absolute}`;
 }
 
 interface SubprojectInfo {
@@ -126,6 +147,20 @@ interface ServiceInfo {
   projectGroup: string | null;
   endpointCount: number;
 }
+
+const SMELL_TABS = [
+  { value: 'debug_artifact', label: 'Debug' },
+  { value: 'todo_comment', label: 'TODOs' },
+  { value: 'hardcoded_value', label: 'Hardcoded' },
+  { value: 'empty_function', label: 'Stubs' },
+] as const;
+
+const SMELL_EMPTY: Record<SmellFinding['category'], string> = {
+  debug_artifact: 'No leftover console logs or debugger statements.',
+  todo_comment: 'No TODO or FIXME comments in the indexed sources.',
+  hardcoded_value: 'No hardcoded URLs, ports or credentials found.',
+  empty_function: 'No empty function bodies or unimplemented stubs.',
+};
 
 export function ProjectOverview({
   root,
@@ -265,800 +300,770 @@ export function ProjectOverview({
     setEditingGroup(null);
   };
 
-  const statusDot: Tone =
-    status === 'indexing'
-      ? 'gold'
-      : status === 'error'
-        ? 'red'
-        : status === 'ready'
-          ? 'green'
-          : 'neutral';
+  const indexing = status === 'indexing';
+  const statusDot: Tone = indexing
+    ? 'gold'
+    : status === 'error'
+      ? 'red'
+      : status === 'ready'
+        ? 'green'
+        : 'neutral';
 
   const hasGaps =
     coverage &&
     (coverage.gaps.length > 0 ||
       coverage.unknown.filter((u) => u.needs_plugin === 'likely').length > 0);
 
-  const statusLabel =
-    status === 'indexing'
-      ? 'Indexing…'
-      : status === 'ready'
-        ? 'Ready'
-        : status === 'error'
-          ? 'Error'
-          : status;
+  const statusLabel = indexing
+    ? 'Indexing'
+    : status === 'ready'
+      ? 'Ready'
+      : status === 'error'
+        ? 'Error'
+        : 'Not indexed';
+
+  const name = root.split(/[/\\]/).filter(Boolean).pop() ?? root;
 
   return (
     <>
-    <div className="space-y-5 pb-4">
-      {/* ── Hero header ──────────────────────────────── */}
-      <div className="pt-1">
-        <div className="flex items-center gap-2.5">
-          <StatusDot tone={statusDot} pulse={statusDot === 'green'} />
-          <h2
-            className="text-[17px] font-semibold leading-tight truncate flex-1 min-w-0"
-            style={{ color: 'var(--text-primary)', letterSpacing: '-0.022em' }}
-            title={root.split(/[/\\]/).filter(Boolean).pop()}
-          >
-            {root.split(/[/\\]/).filter(Boolean).pop()}
-          </h2>
-          <button
-            type="button"
-            onClick={() => setStatsModalOpen(true)}
-            className="shrink-0 text-[11px] px-2 py-1 rounded font-medium transition-opacity hover:opacity-80"
-            style={{
-              background: 'var(--fill-control)',
-              color: 'var(--accent)',
-              border: '0.5px solid var(--border)',
-            }}
-            title="Open the project stats modal (7 sections)"
-          >
-            View Stats
-          </button>
-        </div>
-        <div
-          className="text-[11px] mt-1 ml-[18px] truncate"
-          style={{ color: 'var(--text-tertiary)', fontFamily: 'SF Mono, Menlo, monospace' }}
-          title={root}
+      <div className="flex flex-col min-h-0" style={{ maxWidth: 1120 }}>
+        {/* ── Surface header: identity left, actions right ─────────────── */}
+        <header
+          className="flex items-start gap-3 pb-3"
+          style={{ borderBottom: '0.5px solid var(--sep)' }}
         >
-          {shortPath(root)}
-        </div>
-
-        {/* Indexing progress inline under header */}
-        {status === 'indexing' && progress?.percent != null && (
-          <div className="mt-3 ml-[18px]">
-            <div
-              className="flex justify-between text-[10px] mb-1"
-              style={{ color: 'var(--text-tertiary)' }}
+          <StatusDot tone={statusDot} pulse={indexing} size={8} className="mt-[7px] shrink-0" />
+          <div className="min-w-0 flex-1">
+            <h2
+              className="text-[17px] font-semibold leading-[22px] truncate"
+              style={{ color: 'var(--text-1)', letterSpacing: '-0.012em' }}
+              title={name}
             >
-              <span className="truncate">{progress.phase}</span>
-              <span className="tabular-nums">{progress.percent}%</span>
-            </div>
+              {name}
+            </h2>
             <div
-              className="h-1 rounded-full overflow-hidden"
-              style={{ background: 'var(--bg-inset)' }}
+              className="text-[11px] leading-[16px] truncate"
+              style={{ color: 'var(--text-2)', fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace' }}
+              title={root}
             >
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{ width: `${progress.percent}%`, background: 'var(--accent)' }}
-              />
+              {shortPath(root)}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* ── Primary action ───────────────────────────── */}
-      {project ? (
-        <button
-          type="button"
-          onClick={() => reindexProject(root)}
-          disabled={status === 'indexing'}
-          className="w-full text-[13px] font-medium transition-all disabled:opacity-40 hover:brightness-110 active:brightness-95"
-          style={{
-            background: 'var(--accent)',
-            color: '#fff',
-            borderRadius: 8,
-            height: 30,
-            boxShadow:
-              '0 0 0 0.5px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08), inset 0 0.5px 0 rgba(255,255,255,0.25)',
-            cursor: status === 'indexing' ? 'default' : 'pointer',
-            letterSpacing: '-0.005em',
-          }}
-        >
-          {status === 'indexing' ? 'Indexing…' : 'Re-index Project'}
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => addProject(root)}
-          className="w-full text-[13px] font-medium transition-all hover:brightness-110 active:brightness-95"
-          style={{
-            background: 'var(--success)',
-            color: '#fff',
-            borderRadius: 8,
-            height: 30,
-            boxShadow:
-              '0 0 0 0.5px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08), inset 0 0.5px 0 rgba(255,255,255,0.25)',
-            letterSpacing: '-0.005em',
-          }}
-        >
-          Index Project
-        </button>
-      )}
-
-      {/* ── Index stats (grouped list) ───────────────── */}
-      {stats && (
-        <div>
-          <div
-            className="text-[11px] mb-1.5 px-3"
-            style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}
-          >
-            Index
-          </div>
-          <div
-            style={{
-              background: 'var(--bg-grouped)',
-              borderRadius: 10,
-              boxShadow: 'var(--shadow-grouped)',
-              overflow: 'hidden',
-            }}
-          >
-            <SettingsRow label="Status" value={statusLabel} />
-            <SettingsRow label="Files indexed" value={stats.files.toLocaleString()} />
-            <SettingsRow label="Symbols" value={stats.symbols.toLocaleString()} />
-            <SettingsRow label="Edges" value={stats.edges.toLocaleString()} />
-            {stats.lastIndexed && (
-              <SettingsRow
-                label="Last indexed"
-                value={new Date(stats.lastIndexed).toLocaleString()}
-                last
-              />
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="chip"
+              icon="monitoring"
+              onClick={() => setStatsModalOpen(true)}
+              title="Open detailed project statistics"
+            >
+              View stats
+            </Button>
+            {project ? (
+              <Button
+                variant="primary"
+                icon="refresh"
+                onClick={() => reindexProject(root)}
+                disabled={indexing}
+                title="Rebuild the index for this project"
+              >
+                Reindex project
+              </Button>
+            ) : (
+              <Button variant="primary" icon="add" onClick={() => addProject(root)}>
+                Index project
+              </Button>
             )}
           </div>
-        </div>
-      )}
+        </header>
 
-      {/* ── Technology Coverage (grouped list) ───────── */}
-      {coverage && (
-        <div>
-          <div className="flex items-baseline justify-between mb-1.5 px-3">
-            <div
-              className="text-[11px]"
-              style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}
-            >
-              Coverage
+        {/* ── Indexing progress — a labelled bar, not a filled slab ────── */}
+        {indexing && (
+          <div className="pt-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-[12px] truncate" style={{ color: 'var(--text-1)' }}>
+                {progress?.phase ? `Indexing · ${progress.phase}` : 'Indexing…'}
+              </span>
+              {progress?.percent != null && (
+                <span
+                  className="text-[12px] tabular-nums shrink-0"
+                  style={{ color: 'var(--text-2)' }}
+                >
+                  {progress.percent}%
+                </span>
+              )}
             </div>
-            <span
-              className="text-[11px] font-semibold tabular-nums"
-              style={{ color: coverageColor(coverage.coverage.coverage_pct) }}
-            >
-              {coverage.coverage.coverage_pct}%
-            </span>
-          </div>
-          <div
-            style={{
-              background: 'var(--bg-grouped)',
-              borderRadius: 10,
-              boxShadow: 'var(--shadow-grouped)',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Progress row */}
-            <div className="px-3 py-2.5" style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+            {progress?.percent != null && (
               <div
-                className="h-1.5 rounded-full overflow-hidden"
-                style={{ background: 'var(--bg-inset)' }}
+                role="progressbar"
+                aria-label="Indexing progress"
+                aria-valuenow={progress.percent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                className="h-[2px] mt-2 overflow-hidden"
+                style={{ background: 'var(--row-hover)', borderRadius: 1 }}
               >
                 <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${coverage.coverage.coverage_pct}%`,
-                    background: coverageColor(coverage.coverage.coverage_pct),
-                  }}
+                  className="h-full transition-[width] duration-300"
+                  style={{ width: `${progress.percent}%`, background: 'var(--accent)' }}
                 />
               </div>
-              <div className="flex justify-between mt-1.5">
-                <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                  {coverage.coverage.covered} of {coverage.coverage.total_significant} covered
-                </span>
-              </div>
-            </div>
-
-            {/* Gaps */}
-            {coverage.gaps.map((gap, i) => {
-              const isLast =
-                i === coverage.gaps.length - 1 &&
-                coverage.unknown.filter((u) => u.needs_plugin === 'likely').length === 0;
-              return (
-                <div
-                  key={gap.name}
-                  className="flex items-center justify-between gap-2 px-3 py-2"
-                  style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)' }}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {priorityBadge(gap.priority)}
-                    <span className="text-[12px] truncate" style={{ color: 'var(--text-primary)' }}>
-                      {gap.name}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openInBrowser(buildIssueUrl(gap))}
-                    className="shrink-0 text-[11px] font-medium transition-colors hover:opacity-80"
-                    style={{
-                      background: 'var(--accent)',
-                      color: '#fff',
-                      borderRadius: 6,
-                      padding: '2px 10px',
-                    }}
-                    title={`Request plugin support for ${gap.name}`}
-                  >
-                    Request
-                  </button>
-                </div>
-              );
-            })}
-
-            {/* Unknown packages that likely need plugins */}
-            {coverage.unknown
-              .filter((u) => u.needs_plugin === 'likely')
-              .map((pkg, i, arr) => (
-                <div
-                  key={pkg.name}
-                  className="flex items-center justify-between gap-2 px-3 py-2"
-                  style={{
-                    borderBottom: i === arr.length - 1 ? 'none' : '0.5px solid var(--border-row)',
-                  }}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {priorityBadge(pkg.needs_plugin)}
-                    <span className="text-[12px] truncate" style={{ color: 'var(--text-primary)' }}>
-                      {pkg.name}
-                    </span>
-                    <span
-                      className="text-[10px] shrink-0"
-                      style={{ color: 'var(--text-tertiary)' }}
-                    >
-                      {pkg.ecosystem}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openInBrowser(buildIssueUrl(pkg))}
-                    className="shrink-0 text-[11px] font-medium transition-colors hover:opacity-80"
-                    style={{
-                      background: 'var(--accent)',
-                      color: '#fff',
-                      borderRadius: 6,
-                      padding: '2px 10px',
-                    }}
-                    title={`Request catalog addition for ${pkg.name}`}
-                  >
-                    Request
-                  </button>
-                </div>
-              ))}
-
-            {/* All covered message */}
-            {!hasGaps && coverage.coverage.total_significant > 0 && (
-              <div
-                className="text-[12px] text-center px-3 py-2"
-                style={{ color: 'var(--success)', borderTop: '0.5px solid var(--border-row)' }}
-              >
-                All significant dependencies are covered
-              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {coverageLoading && !coverage && (
-        <div>
-          <div
-            className="text-[11px] mb-1.5 px-3"
-            style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}
-          >
-            Coverage
-          </div>
-          <div
-            className="px-3 py-3 text-[11px] text-center"
-            style={{
-              background: 'var(--bg-grouped)',
-              borderRadius: 10,
-              boxShadow: 'var(--shadow-grouped)',
-              color: 'var(--text-tertiary)',
-            }}
-          >
-            Analyzing technology coverage…
-          </div>
-        </div>
-      )}
-
-      {/* ── Quality (debug artifacts, TODOs, hardcoded values, empty functions) ── */}
-      {(smells || smellsLoading) && (
-        <div>
-          <div className="flex items-baseline justify-between mb-1.5 px-3">
-            <div
-              className="text-[11px]"
-              style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}
-            >
-              Quality
-            </div>
-            {smells && (
-              <span
-                className="text-[11px] font-semibold tabular-nums"
-                style={{
-                  color:
-                    smells.total === 0
-                      ? 'var(--green, #22c55e)'
-                      : smells.total > 20
-                        ? 'var(--red, #ef4444)'
-                        : 'var(--yellow, #eab308)',
-                }}
-              >
-                {smells.total} finding{smells.total === 1 ? '' : 's'}
+        {/* ── Error ────────────────────────────────────────────────────── */}
+        {status === 'error' && (
+          <Card className="mt-4">
+            <div className="flex items-start gap-2.5 px-3.5 py-3">
+              <span style={{ color: 'var(--status-red-fg)' }} className="mt-[1px] shrink-0">
+                <Icon name="bug_report" size={16} />
               </span>
-            )}
-          </div>
-
-          {/* Category tabs */}
-          <div className="flex gap-1 px-3 mb-2">
-            {(
-              [
-                { key: 'debug_artifact', label: 'Debug' },
-                { key: 'todo_comment', label: 'TODOs' },
-                { key: 'hardcoded_value', label: 'Hardcoded' },
-                { key: 'empty_function', label: 'Stubs' },
-              ] as const
-            ).map((tab) => {
-              const active = smellsCategory === tab.key;
-              return (
-                <button
-                  type="button"
-                  key={tab.key}
-                  onClick={() => setSmellsCategory(tab.key)}
-                  className="text-[11px] px-2 py-1 rounded transition-all"
-                  style={{
-                    background: active ? 'var(--accent)' : 'var(--bg-inset)',
-                    color: active ? '#fff' : 'var(--text-secondary)',
-                    fontWeight: active ? 600 : 400,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div
-            style={{
-              background: 'var(--bg-grouped)',
-              borderRadius: 10,
-              boxShadow: 'var(--shadow-grouped)',
-              overflow: 'hidden',
-            }}
-          >
-            {smellsLoading && !smells && (
-              <div
-                className="px-3 py-3 text-[12px] text-center"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                Scanning…
-              </div>
-            )}
-            {smells && smells.findings.length === 0 && (
-              <div
-                className="px-3 py-3 text-[12px] text-center"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                No {smellsCategory.replace('_', ' ')} findings
-              </div>
-            )}
-            {smells?.findings.slice(0, 25).map((f, i) => {
-              const isLast = i === Math.min(smells.findings.length, 25) - 1;
-              return (
-                <button
-                  type="button"
-                  // biome-ignore lint/suspicious/noArrayIndexKey: composite key (file+line) may collide for multiple smells in the same line; index disambiguates within a stable, sliced 25-item list.
-                  key={`${f.file}:${f.line}:${i}`}
-                  onClick={() => {
-                    const api = window.electronAPI;
-                    if (api?.openInEditor) api.openInEditor(`${root}/${f.file}:${f.line}`);
-                  }}
-                  className="flex items-start justify-between gap-2 px-3 py-2 w-full text-left hover:brightness-110"
-                  style={{
-                    borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div className="flex items-start gap-1.5 min-w-0 flex-1">
-                    {priorityBadge(f.priority)}
-                    <div className="min-w-0 flex-1">
-                      <div
-                        className="text-[12px] truncate"
-                        style={{
-                          color: 'var(--text-primary)',
-                          fontFamily: 'SF Mono, Menlo, monospace',
-                        }}
-                      >
-                        {f.snippet}
-                      </div>
-                      <div
-                        className="text-[10px] mt-0.5 truncate"
-                        style={{ color: 'var(--text-tertiary)' }}
-                      >
-                        {f.file}:{f.line}
-                        {f.tag ? ` · ${f.tag}` : ''}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-            {smells && smells.findings.length > 25 && (
-              <div
-                className="px-3 py-1.5 text-[10px] text-center"
-                style={{
-                  color: 'var(--text-tertiary)',
-                  borderTop: '0.5px solid var(--border-row)',
-                }}
-              >
-                + {smells.findings.length - 25} more
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Services (native grouped list with group headers) ── */}
-      {(() => {
-        // Group services by projectGroup
-        const grouped = new Map<string, ServiceInfo[]>();
-        const existingGroups: string[] = [];
-        for (const svc of svcList) {
-          const key = svc.projectGroup ?? '';
-          if (!grouped.has(key)) {
-            grouped.set(key, []);
-            existingGroups.push(key);
-          }
-          grouped.get(key)!.push(svc);
-        }
-        const groupKeys = [...grouped.keys()].sort((a, b) => {
-          if (!a) return 1; // ungrouped last
-          if (!b) return -1;
-          return a.localeCompare(b);
-        });
-
-        const totalCount = svcList.length;
-
-        return (
-          <div>
-            {/* Section header with + Add button */}
-            <div className="flex items-baseline justify-between mb-1.5 px-3">
-              <div className="flex items-baseline gap-1.5">
-                <span
-                  className="text-[11px]"
-                  style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}
-                >
-                  Services
-                </span>
-                {totalCount > 0 && (
-                  <span
-                    className="text-[11px] tabular-nums"
-                    style={{ color: 'var(--text-tertiary)' }}
-                  >
-                    {totalCount}
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={handleAddService}
-                disabled={addingService}
-                className="text-[12px] transition-colors disabled:opacity-40 flex items-center gap-1 hover:opacity-80"
-                style={{ color: 'var(--accent)' }}
-                title="Add external service"
-              >
-                <svg
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                >
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                Add
-              </button>
-            </div>
-
-            {totalCount === 0 ? (
-              <div
-                className="px-3 py-3 text-[12px] text-center"
-                style={{
-                  background: 'var(--bg-grouped)',
-                  borderRadius: 10,
-                  boxShadow: 'var(--shadow-grouped)',
-                  color: 'var(--text-tertiary)',
-                }}
-              >
-                No services detected.
-                <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-                  Re-index the project or add manually.
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px]" style={{ color: 'var(--text-1)' }}>
+                  Indexing failed
+                </div>
+                <div className="text-[12px] mt-0.5 break-words" style={{ color: 'var(--text-1)' }}>
+                  {project?.error ?? 'The daemon reported an error but gave no detail.'}
                 </div>
               </div>
-            ) : (
-              <div className="space-y-3.5">
-                {groupKeys.map((groupKey) => {
-                  const groupServices = grouped.get(groupKey)!;
-                  return (
-                    <div key={groupKey || '__ungrouped__'}>
-                      {/* Group sub-header */}
-                      <div
-                        className="text-[11px] font-medium mb-1 px-3"
-                        style={{
-                          color: groupKey ? 'var(--accent)' : 'var(--text-tertiary)',
-                          letterSpacing: '-0.01em',
-                        }}
-                      >
-                        {groupKey || 'Ungrouped'}
-                      </div>
+              <Button variant="chip" icon="refresh" onClick={() => reindexProject(root)}>
+                Try again
+              </Button>
+            </div>
+          </Card>
+        )}
 
-                      {/* Service list card */}
-                      <div
-                        style={{
-                          background: 'var(--bg-grouped)',
-                          borderRadius: 10,
-                          boxShadow: 'var(--shadow-grouped)',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {groupServices.map((svc, i) => {
-                          const isLast = i === groupServices.length - 1;
-                          return (
-                            <div
-                              key={svc.id}
-                              className="group flex items-center gap-2 px-3 py-2 transition-colors hover:bg-[var(--bg-active)]"
-                              style={{
-                                borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)',
-                              }}
-                            >
-                              {/* Service icon */}
-                              <div
-                                className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center"
-                                style={{
-                                  background: 'var(--bg-inset)',
-                                  color: 'var(--text-secondary)',
-                                }}
-                              >
-                                <svg
-                                  width="12"
-                                  height="12"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.8"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <rect x="3" y="3" width="18" height="6" rx="1" />
-                                  <rect x="3" y="15" width="18" height="6" rx="1" />
-                                  <line x1="7" y1="6" x2="7.01" y2="6" />
-                                  <line x1="7" y1="18" x2="7.01" y2="18" />
-                                </svg>
-                              </div>
+        {/* ── Never indexed ────────────────────────────────────────────── */}
+        {!project && (
+          <Card className="mt-4">
+            <div className="flex flex-col items-center text-center gap-2 px-4 py-8">
+              <span style={{ color: 'var(--text-2)' }}>
+                <Icon name="account_tree" size={32} />
+              </span>
+              <div className="text-[17px] font-semibold" style={{ color: 'var(--text-1)' }}>
+                Not indexed yet
+              </div>
+              <div className="text-[13px] max-w-[380px]" style={{ color: 'var(--text-1)' }}>
+                trace-mcp needs one pass over this folder before it can answer questions about the
+                code.
+              </div>
+              <Button variant="primary" icon="add" className="mt-1" onClick={() => addProject(root)}>
+                Index project
+              </Button>
+            </div>
+          </Card>
+        )}
 
-                              {/* Service info */}
-                              <div className="flex-1 min-w-0">
-                                <div
-                                  className="text-[13px] truncate leading-tight"
-                                  style={{ color: 'var(--text-primary)' }}
-                                >
-                                  {svc.name}
-                                </div>
-                                <div
-                                  className="text-[10px] truncate mt-0.5"
-                                  style={{
-                                    color: 'var(--text-tertiary)',
-                                    fontFamily: 'SF Mono, Menlo, monospace',
-                                  }}
-                                  title={svc.repoRoot}
-                                >
-                                  {shortPath(svc.repoRoot)}
-                                  {svc.endpointCount > 0 && (
-                                    <span style={{ fontFamily: 'inherit' }}>
-                                      {' · '}
-                                      {svc.endpointCount} endpoints
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
+        {/* ── Sections ─────────────────────────────────────────────────── */}
+        <div className="grid gap-5 pt-5 pb-4 lg:grid-cols-2 items-start">
+          {/* Index */}
+          {stats && (
+            <Section title="Index">
+              <Card>
+                <Row label="Status" value={statusLabel} />
+                <Row label="Files indexed" value={stats.files.toLocaleString()} />
+                <Row label="Symbols" value={stats.symbols.toLocaleString()} />
+                <Row label="Edges" value={stats.edges.toLocaleString()} />
+                {stats.lastIndexed && (
+                  <Row label="Last indexed" value={formatLastIndexed(stats.lastIndexed)} last />
+                )}
+              </Card>
+            </Section>
+          )}
 
-                              {/* Group badge / editor */}
-                              {editingGroup === svc.id ? (
-                                <form
-                                  className="shrink-0 flex items-center"
-                                  onSubmit={(e) => {
-                                    e.preventDefault();
-                                    handleUpdateGroup(svc.id, groupInput);
-                                  }}
-                                >
-                                  <input
-                                    // biome-ignore lint/a11y/noAutofocus: input only mounts when user clicks the group badge (editingGroup === svc.id); auto-focus is the expected UX for inline editors.
-                                    autoFocus
-                                    value={groupInput}
-                                    onChange={(e) => setGroupInput(e.target.value)}
-                                    onBlur={() => handleUpdateGroup(svc.id, groupInput)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Escape') {
-                                        e.preventDefault();
-                                        setEditingGroup(null);
-                                      }
-                                    }}
-                                    placeholder="Group name"
-                                    list={`group-options-${svc.id}`}
-                                    className="w-28 text-[12px] outline-none"
-                                    style={{
-                                      background: 'var(--bg-primary)',
-                                      border: '0.5px solid var(--accent)',
-                                      borderRadius: 6,
-                                      padding: '3px 8px',
-                                      color: 'var(--text-primary)',
-                                      boxShadow: '0 0 0 2px rgba(0,122,255,0.15)',
-                                    }}
-                                  />
-                                  <datalist id={`group-options-${svc.id}`}>
-                                    {existingGroups.filter(Boolean).map((g) => (
-                                      <option key={g} value={g} />
-                                    ))}
-                                  </datalist>
-                                </form>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingGroup(svc.id);
-                                    setGroupInput(svc.projectGroup ?? '');
-                                  }}
-                                  className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-medium flex items-center gap-1"
-                                  style={{
-                                    color: svc.projectGroup
-                                      ? 'var(--accent)'
-                                      : 'var(--text-secondary)',
-                                    background: 'var(--fill-control)',
-                                    border: '0.5px solid var(--border)',
-                                    borderRadius: 6,
-                                    padding: '2px 8px',
-                                    boxShadow: 'var(--shadow-control)',
-                                  }}
-                                  title={
-                                    svc.projectGroup
-                                      ? `Group: ${svc.projectGroup} · click to change`
-                                      : 'Assign to a group'
-                                  }
-                                >
-                                  <svg
-                                    width="10"
-                                    height="10"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
-                                    <line x1="7" y1="7" x2="7.01" y2="7" />
-                                  </svg>
-                                  {svc.projectGroup || 'Group'}
-                                </button>
-                              )}
+          {/* Coverage */}
+          {coverage && (
+            <Section
+              title="Coverage"
+              accessory={
+                <Badge tone={coverageTone(coverage.coverage.coverage_pct).tone} className="sz-11">
+                  <Icon name={coverageTone(coverage.coverage.coverage_pct).icon} size={11} />
+                  <span className="tabular-nums">{coverage.coverage.coverage_pct}%</span>
+                </Badge>
+              }
+            >
+              <Card>
+                <div className="px-3.5 py-3" style={{ borderBottom: '0.5px solid var(--sep)' }}>
+                  <div
+                    role="progressbar"
+                    aria-label="Dependency coverage"
+                    aria-valuenow={coverage.coverage.coverage_pct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    className="h-[2px] overflow-hidden"
+                    style={{ background: 'var(--row-hover)', borderRadius: 1 }}
+                  >
+                    <div
+                      className="h-full transition-[width] duration-500"
+                      style={{
+                        width: `${coverage.coverage.coverage_pct}%`,
+                        background: `var(--status-${coverageTone(coverage.coverage.coverage_pct).tone}-hue)`,
+                      }}
+                    />
+                  </div>
+                  <div className="text-[12px] mt-2" style={{ color: 'var(--text-1)' }}>
+                    <span className="tabular-nums">{coverage.coverage.covered}</span> of{' '}
+                    <span className="tabular-nums">{coverage.coverage.total_significant}</span>{' '}
+                    significant dependencies covered
+                  </div>
+                </div>
 
-                              {/* Graph button */}
-                              {onNavigateToService && (
-                                <button
-                                  type="button"
-                                  onClick={() => onNavigateToService(svc.name)}
-                                  className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-[26px] h-[22px] flex items-center justify-center"
-                                  style={{
-                                    color: 'var(--text-secondary)',
-                                    background: 'var(--fill-control)',
-                                    border: '0.5px solid var(--border)',
-                                    borderRadius: 6,
-                                    boxShadow: 'var(--shadow-control)',
-                                  }}
-                                  title="Open in graph"
-                                >
-                                  <svg
-                                    width="12"
-                                    height="12"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <circle cx="6" cy="6" r="2.5" />
-                                    <circle cx="18" cy="18" r="2.5" />
-                                    <circle cx="18" cy="6" r="2.5" />
-                                    <path d="M8.5 8.5l7 7M8.5 6H15" />
-                                  </svg>
-                                </button>
-                              )}
+                {coverage.gaps.map((gap, i) => (
+                  <GapRow
+                    key={gap.name}
+                    name={gap.name}
+                    priority={gap.priority}
+                    onRequest={() => openInBrowser(buildIssueUrl(gap))}
+                    title={`Request plugin support for ${gap.name}`}
+                    last={
+                      i === coverage.gaps.length - 1 &&
+                      coverage.unknown.filter((u) => u.needs_plugin === 'likely').length === 0
+                    }
+                  />
+                ))}
 
-                              {/* Remove button */}
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveService(svc.name)}
-                                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity w-[22px] h-[22px] flex items-center justify-center rounded-full"
-                                style={{ color: 'var(--text-tertiary)' }}
-                                onMouseEnter={(e) => {
-                                  (e.currentTarget as HTMLElement).style.background =
-                                    'var(--destructive)';
-                                  (e.currentTarget as HTMLElement).style.color = '#fff';
-                                }}
-                                onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-                                  (e.currentTarget as HTMLElement).style.color =
-                                    'var(--text-tertiary)';
-                                }}
-                                title="Remove service"
-                              >
-                                <svg
-                                  width="10"
-                                  height="10"
-                                  viewBox="0 0 10 10"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="1.75"
-                                  strokeLinecap="round"
-                                >
-                                  <path d="M2 2l6 6M8 2l-6 6" />
-                                </svg>
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
+                {coverage.unknown
+                  .filter((u) => u.needs_plugin === 'likely')
+                  .map((pkg, i, arr) => (
+                    <GapRow
+                      key={pkg.name}
+                      name={pkg.name}
+                      note={pkg.ecosystem}
+                      priority={pkg.needs_plugin}
+                      onRequest={() => openInBrowser(buildIssueUrl(pkg))}
+                      title={`Request catalog addition for ${pkg.name}`}
+                      last={i === arr.length - 1}
+                    />
+                  ))}
+
+                {!hasGaps && coverage.coverage.total_significant > 0 && (
+                  <div className="flex items-center gap-2 px-3.5 py-2.5">
+                    <span style={{ color: 'var(--status-green-fg)' }} className="shrink-0">
+                      <Icon name="check" size={14} />
+                    </span>
+                    <span className="text-[13px]" style={{ color: 'var(--text-1)' }}>
+                      Every significant dependency is covered
+                    </span>
+                  </div>
+                )}
+              </Card>
+            </Section>
+          )}
+
+          {coverageLoading && !coverage && (
+            <Section title="Coverage">
+              <Card>
+                <SkeletonRows rows={3} />
+              </Card>
+            </Section>
+          )}
+
+          {/* Quality */}
+          {(smells || smellsLoading) && (
+            <Section
+              title="Quality"
+              accessory={
+                smells && (
+                  <Badge tone={smells.total === 0 ? 'green' : smells.total > 20 ? 'red' : 'gold'} className="sz-11">
+                    <Icon name={smells.total === 0 ? 'check' : 'bug_report'} size={11} />
+                    <span className="tabular-nums">
+                      {smells.total} finding{smells.total === 1 ? '' : 's'}
+                    </span>
+                  </Badge>
+                )
+              }
+            >
+              <div className="mb-2">
+                <SegmentedControl
+                  size="mini"
+                  aria-label="Finding category"
+                  options={SMELL_TABS}
+                  value={smellsCategory}
+                  onChange={setSmellsCategory}
+                />
+              </div>
+              <Card>
+                {smellsLoading && !smells && <SkeletonRows rows={4} />}
+                {smells && smells.findings.length === 0 && (
+                  <div className="flex flex-col items-center text-center gap-1.5 px-4 py-6">
+                    <span style={{ color: 'var(--status-green-fg)' }}>
+                      <Icon name="check" size={20} />
+                    </span>
+                    <div className="text-[13px] max-w-[320px]" style={{ color: 'var(--text-1)' }}>
+                      {SMELL_EMPTY[smellsCategory]}
                     </div>
+                    <Button
+                      variant="text"
+                      icon="refresh"
+                      className="mt-1"
+                      onClick={() => fetchSmells(smellsCategory)}
+                    >
+                      Scan again
+                    </Button>
+                  </div>
+                )}
+                {smells?.findings.slice(0, 25).map((f, i) => {
+                  const isLast =
+                    i === Math.min(smells.findings.length, 25) - 1 && smells.findings.length <= 25;
+                  return (
+                    <button
+                      type="button"
+                      // biome-ignore lint/suspicious/noArrayIndexKey: composite key (file+line) may collide for multiple smells in the same line; index disambiguates within a stable, sliced 25-item list.
+                      key={`${f.file}:${f.line}:${i}`}
+                      onClick={() => {
+                        const api = window.electronAPI;
+                        if (api?.openInEditor) api.openInEditor(`${root}/${f.file}:${f.line}`);
+                      }}
+                      className="relative flex items-start gap-2 px-3.5 py-2 w-full text-left hover:bg-[var(--row-hover)]"
+                      style={{ cursor: 'default' }}
+                    >
+                      <Badge tone={PRIORITY_TONE[f.priority] ?? 'neutral'} className="sz-11 mt-[1px]">
+                        {f.priority}
+                      </Badge>
+                      <span className="min-w-0 flex-1" style={{ display: 'block' }}>
+                        <span
+                          className="text-[12px] truncate"
+                          style={{
+                            display: 'block',
+                            color: 'var(--text-1)',
+                            fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace',
+                          }}
+                        >
+                          {f.snippet}
+                        </span>
+                        <span
+                          className="text-[11px] mt-0.5 truncate"
+                          style={{ display: 'block', color: 'var(--text-2)' }}
+                        >
+                          {f.file}:{f.line}
+                          {f.tag ? ` · ${f.tag}` : ''}
+                        </span>
+                      </span>
+                      {!isLast && <Separator />}
+                    </button>
                   );
                 })}
-              </div>
-            )}
-          </div>
-        );
-      })()}
-    </div>
-    {statsModalOpen && (
-      <ProjectStatsModal root={root} onClose={() => setStatsModalOpen(false)} />
-    )}
+                {smells && smells.findings.length > 25 && (
+                  <div
+                    className="px-3.5 py-2 text-[11px]"
+                    style={{ color: 'var(--text-2)', borderTop: '0.5px solid var(--sep)' }}
+                  >
+                    <span className="tabular-nums">{smells.findings.length - 25}</span> more not
+                    shown
+                  </div>
+                )}
+              </Card>
+            </Section>
+          )}
+
+          {/* Services */}
+          <ServicesSection
+            services={svcList}
+            adding={addingService}
+            editingGroup={editingGroup}
+            groupInput={groupInput}
+            onAdd={handleAddService}
+            onRemove={handleRemoveService}
+            onEditGroup={(id, initial) => {
+              setEditingGroup(id);
+              setGroupInput(initial);
+            }}
+            onGroupInput={setGroupInput}
+            onCommitGroup={handleUpdateGroup}
+            onCancelGroup={() => setEditingGroup(null)}
+            onNavigateToService={onNavigateToService}
+          />
+        </div>
+      </div>
+      {statsModalOpen && <ProjectStatsModal root={root} onClose={() => setStatsModalOpen(false)} />}
     </>
   );
 }
 
-function SettingsRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+/* ── Building blocks ──────────────────────────────────────────────────── */
+
+/** Inset grouped-list container: content surface, hairline, no shadow. */
+function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
-      className="flex items-center justify-between px-3"
+      className={`overflow-hidden${className ? ` ${className}` : ''}`}
       style={{
-        borderBottom: last ? 'none' : '0.5px solid var(--border-row)',
-        minHeight: 32,
+        background: 'var(--island)',
+        border: '0.5px solid var(--sep)',
+        borderRadius: 10,
       }}
     >
-      <span className="text-[13px]" style={{ color: 'var(--text-primary)' }}>
+      {children}
+    </div>
+  );
+}
+
+function Section({
+  title,
+  accessory,
+  children,
+}: {
+  title: string;
+  accessory?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="min-w-0">
+      <div className="flex items-center justify-between gap-2 mb-1.5 px-1 min-h-[20px]">
+        <h3
+          className="text-[11px] font-semibold"
+          style={{ color: 'var(--text-2)', letterSpacing: '0.04em' }}
+        >
+          {title}
+        </h3>
+        {accessory}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Hairline inset to the text origin, the way a native grouped list draws it. */
+function Separator() {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        left: 14,
+        right: 0,
+        bottom: 0,
+        height: '0.5px',
+        background: 'var(--sep)',
+      }}
+    />
+  );
+}
+
+function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
+  return (
+    <div className="relative flex items-center justify-between gap-3 px-3.5" style={{ height: 32 }}>
+      <span className="text-[13px] shrink-0" style={{ color: 'var(--text-1)' }}>
         {label}
       </span>
       <span
-        className="text-[13px] tabular-nums truncate ml-2"
-        style={{ color: 'var(--text-secondary)' }}
+        className="text-[13px] tabular-nums truncate"
+        style={{ color: 'var(--text-2)' }}
+        title={value}
       >
         {value}
       </span>
+      {!last && <Separator />}
+    </div>
+  );
+}
+
+function GapRow({
+  name,
+  note,
+  priority,
+  onRequest,
+  title,
+  last,
+}: {
+  name: string;
+  note?: string;
+  priority: string;
+  onRequest: () => void;
+  title: string;
+  last: boolean;
+}) {
+  return (
+    <div className="relative flex items-center justify-between gap-2 px-3.5 py-2">
+      <div className="flex items-center gap-2 min-w-0">
+        <Badge tone={PRIORITY_TONE[priority] ?? 'neutral'} className="sz-11">{priority}</Badge>
+        <span className="text-[13px] truncate" style={{ color: 'var(--text-1)' }}>
+          {name}
+        </span>
+        {note && (
+          <span className="text-[11px] shrink-0" style={{ color: 'var(--text-2)' }}>
+            {note}
+          </span>
+        )}
+      </div>
+      <Button variant="text" onClick={onRequest} title={title}>
+        Request
+      </Button>
+      {!last && <Separator />}
+    </div>
+  );
+}
+
+/** Skeleton at the final row geometry — no centred spinner, no layout shift. */
+function SkeletonRows({ rows }: { rows: number }) {
+  return (
+    <div>
+      {Array.from({ length: rows }, (_, i) => (
+        <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder list with no identity of its own.
+          key={i}
+          className="relative flex items-center px-3.5"
+          style={{ height: 32 }}
+        >
+          <span
+            style={{
+              display: 'block',
+              height: 9,
+              width: `${45 + ((i * 17) % 30)}%`,
+              borderRadius: 4,
+              background: 'var(--row-hover)',
+            }}
+          />
+          {i < rows - 1 && <Separator />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ServicesSection({
+  services,
+  adding,
+  editingGroup,
+  groupInput,
+  onAdd,
+  onRemove,
+  onEditGroup,
+  onGroupInput,
+  onCommitGroup,
+  onCancelGroup,
+  onNavigateToService,
+}: {
+  services: ServiceInfo[];
+  adding: boolean;
+  editingGroup: number | null;
+  groupInput: string;
+  onAdd: () => void;
+  onRemove: (name: string) => void;
+  onEditGroup: (id: number, initial: string) => void;
+  onGroupInput: (value: string) => void;
+  onCommitGroup: (id: number, group: string | null) => void;
+  onCancelGroup: () => void;
+  onNavigateToService?: (serviceName: string) => void;
+}) {
+  const namedGroups = [...new Set(services.map((s) => s.projectGroup).filter(Boolean))] as string[];
+  // "Ungrouped" is a data-model word. With no named group there is nothing to
+  // disambiguate, so the list is rendered flat and no header is drawn at all.
+  const showGroupHeaders = namedGroups.length > 0;
+  const groups: Array<{ key: string; label: string | null; items: ServiceInfo[] }> = showGroupHeaders
+    ? [
+        ...namedGroups
+          .slice()
+          .sort((a, b) => a.localeCompare(b))
+          .map((g) => ({
+            key: g,
+            label: g,
+            items: services.filter((s) => s.projectGroup === g),
+          })),
+        ...(services.some((s) => !s.projectGroup)
+          ? [
+              {
+                key: '__other__',
+                label: 'Other services',
+                items: services.filter((s) => !s.projectGroup),
+              },
+            ]
+          : []),
+      ]
+    : [{ key: '__all__', label: null, items: services }];
+
+  return (
+    <Section
+      title="Services"
+      accessory={
+        <div className="flex items-center gap-2">
+          {services.length > 0 && (
+            <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-2)' }}>
+              {services.length}
+            </span>
+          )}
+          <Button variant="text" icon="add" onClick={onAdd} disabled={adding}>
+            Add
+          </Button>
+        </div>
+      }
+    >
+      {services.length === 0 ? (
+        <Card>
+          <div className="flex flex-col items-center text-center gap-1.5 px-4 py-6">
+            <span style={{ color: 'var(--text-2)' }}>
+              <Icon name="hub" size={20} />
+            </span>
+            <div className="text-[13px] max-w-[320px]" style={{ color: 'var(--text-1)' }}>
+              No services detected in this project.
+            </div>
+            <Button variant="text" icon="add" className="mt-1" onClick={onAdd} disabled={adding}>
+              Add a service folder
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {groups.map((group) => (
+            <div key={group.key}>
+              {group.label && (
+                <div
+                  className="text-[11px] font-semibold mb-1 px-1"
+                  style={{ color: 'var(--text-2)', letterSpacing: '0.04em' }}
+                >
+                  {group.label}
+                </div>
+              )}
+              <Card>
+                {group.items.map((svc, i) => (
+                  <ServiceRow
+                    key={svc.id}
+                    svc={svc}
+                    last={i === group.items.length - 1}
+                    editing={editingGroup === svc.id}
+                    groupInput={groupInput}
+                    groupOptions={namedGroups}
+                    onEditGroup={onEditGroup}
+                    onGroupInput={onGroupInput}
+                    onCommitGroup={onCommitGroup}
+                    onCancelGroup={onCancelGroup}
+                    onRemove={onRemove}
+                    onNavigateToService={onNavigateToService}
+                  />
+                ))}
+              </Card>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function ServiceRow({
+  svc,
+  last,
+  editing,
+  groupInput,
+  groupOptions,
+  onEditGroup,
+  onGroupInput,
+  onCommitGroup,
+  onCancelGroup,
+  onRemove,
+  onNavigateToService,
+}: {
+  svc: ServiceInfo;
+  last: boolean;
+  editing: boolean;
+  groupInput: string;
+  groupOptions: string[];
+  onEditGroup: (id: number, initial: string) => void;
+  onGroupInput: (value: string) => void;
+  onCommitGroup: (id: number, group: string | null) => void;
+  onCancelGroup: () => void;
+  onRemove: (name: string) => void;
+  onNavigateToService?: (serviceName: string) => void;
+}) {
+  return (
+    <div className="relative flex items-center gap-2.5 px-3.5 py-2 hover:bg-[var(--row-hover)]">
+      <span className="shrink-0" style={{ color: 'var(--text-2)' }}>
+        <Icon name="db_server" size={16} />
+      </span>
+
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] truncate leading-[17px]" style={{ color: 'var(--text-1)' }}>
+          {svc.name}
+        </div>
+        <div
+          className="text-[11px] truncate leading-[15px]"
+          style={{ color: 'var(--text-2)', fontFamily: 'ui-monospace, "SF Mono", Menlo, monospace' }}
+          title={svc.repoRoot}
+        >
+          {shortPath(svc.repoRoot)}
+          {svc.endpointCount > 0 && (
+            <span style={{ fontFamily: 'inherit' }}>
+              {' · '}
+              <span className="tabular-nums">{svc.endpointCount}</span> endpoints
+            </span>
+          )}
+        </div>
+      </div>
+
+      {editing ? (
+        <form
+          className="shrink-0 flex items-center"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onCommitGroup(svc.id, groupInput);
+          }}
+        >
+          <input
+            // biome-ignore lint/a11y/noAutofocus: input only mounts when the user activates the group button; auto-focus is the expected inline-editor behaviour.
+            autoFocus
+            value={groupInput}
+            onChange={(e) => onGroupInput(e.target.value)}
+            onBlur={() => onCommitGroup(svc.id, groupInput)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                onCancelGroup();
+              }
+            }}
+            aria-label={`Group for ${svc.name}`}
+            placeholder="Group name"
+            list={`group-options-${svc.id}`}
+            className="w-32 text-[12px] outline-none"
+            style={{
+              background: 'var(--frame)',
+              border: '0.5px solid var(--accent)',
+              borderRadius: 8,
+              height: 24,
+              padding: '0 8px',
+              color: 'var(--text-1)',
+            }}
+          />
+          <datalist id={`group-options-${svc.id}`}>
+            {groupOptions.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
+        </form>
+      ) : (
+        <Button
+          variant="text"
+          icon="tune"
+          className="shrink-0"
+          onClick={() => onEditGroup(svc.id, svc.projectGroup ?? '')}
+          title={
+            svc.projectGroup ? `Group: ${svc.projectGroup} — change` : `Assign ${svc.name} to a group`
+          }
+        >
+          {svc.projectGroup || 'Group'}
+        </Button>
+      )}
+
+      {onNavigateToService && (
+        <Button
+          variant="mini"
+          icon="account_tree"
+          className="shrink-0"
+          onClick={() => onNavigateToService(svc.name)}
+          aria-label={`Open ${svc.name} in graph`}
+          title="Open in graph"
+        />
+      )}
+
+      <Button
+        variant="mini"
+        icon="close"
+        className="shrink-0"
+        onClick={() => onRemove(svc.name)}
+        aria-label={`Remove ${svc.name}`}
+        title="Remove service"
+      />
+
+      {!last && <Separator />}
     </div>
   );
 }

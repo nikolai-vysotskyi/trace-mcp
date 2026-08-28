@@ -198,6 +198,10 @@
 .ws-badge.t-gold    { background: color-mix(in srgb, var(--status-gold-hue) 18%, transparent); color: var(--status-gold-fg); }
 .ws-badge.t-blue    { background: color-mix(in srgb, var(--status-blue-hue) 16%, transparent); color: var(--status-blue-fg); }
 .ws-badge.t-pink    { background: color-mix(in srgb, var(--status-pink-hue) 16%, transparent); color: var(--status-pink-fg); }
+/* Readable size modifier — 9.5px falls below the 11px floor the design rules
+   set for body-adjacent text, so surfaces that place a badge next to prose
+   (Project Overview) opt into the larger stop. */
+.ws-badge.sz-11 { font-size: 11px; letter-spacing: 0.02em; padding: 2px 8px; }
 /* outline: transparent fill + colored ring */
 .ws-badge.outline { background: transparent; border: 1px solid currentColor; }
 .ws-badge.outline.t-neutral { color: var(--text-3); border-color: var(--sep); }
