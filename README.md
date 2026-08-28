@@ -33,7 +33,7 @@
 
 > AI systems don't scale because they recompute instead of reuse. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it already discovered. Token bills grow. Latency grows. Reasoning quality drops. The model isn't the bottleneck — the recomputation leak is.
 >
-> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 85 framework integrations across 80 languages, 165 tools.
+> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 85 framework integrations across 80 languages, 169 tools.
 >
 > **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP for code and knowledge — no second tool to plug in.
 
@@ -501,7 +501,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
          MCP server (stdio or HTTP/SSE)
-         165 tools · 9 resources
+         169 tools · 9 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
@@ -519,7 +519,7 @@ Full docs live at **[trace-mcp.com](https://trace-mcp.com/)** (same content as `
 | Document | Description |
 |---|---|
 | [Supported frameworks](https://trace-mcp.com/supported-frameworks.html) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
-| [Tools reference](https://trace-mcp.com/tools-reference.html) | All 165 MCP tools with descriptions and usage examples |
+| [Tools reference](https://trace-mcp.com/tools-reference.html) | All 169 MCP tools with descriptions and usage examples |
 | [Configuration](https://trace-mcp.com/configuration.html) | Config options, AI setup, environment variables, security settings |
 | [Architecture](https://trace-mcp.com/architecture.html) | How indexing works, plugin system, project structure, tech stack |
 | [Decision memory](https://trace-mcp.com/decision-memory.html) | Decision knowledge graph, session mining, cross-session search, wake-up context |

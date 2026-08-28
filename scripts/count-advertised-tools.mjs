@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
- * Prints the advertised tool surface — the tool count an MCP client actually
- * sees in `tools/list`, which is the number `docs/_data/counts.yml` quotes.
+ * Prints the tool surface THIS install serves — a real initialize + tools/list
+ * round-trip against the built server. Run after `pnpm run build`.
  *
- * Registration is gated on config and detected frameworks, so this has to be a
- * real initialize + tools/list round-trip against the built server; there is no
- * static list to count. Run after `pnpm run build`.
+ * TRA-268: this is not the number `docs/_data/counts.yml` quotes. Registration
+ * is gated on detected frameworks and on config, so the answer here changes
+ * with the repo and the machine (measured 150 / 165 / 172 across three
+ * environments). The documented number is derived statically instead — see
+ * tests/docs/tool-surface.ts.
  *
  *   pnpm run count:tools [--names]
  */
