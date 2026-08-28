@@ -59,10 +59,9 @@ describe('docs footer nav covers every indexed page', () => {
    */
   it('every lastmod is at least the source page last commit date', async () => {
     const { sourceFor, gitDate, isShallow } = await import('../../scripts/gen-sitemap.mjs');
-    // ponytail: a shallow clone dates every file to the single fetched commit,
-    // so the CI `test` job (fetch-depth 1) would flag untouched pages. The guard
-    // runs on any full clone — local `pnpm test` before a docs PR. Give the job
-    // fetch-depth: 0 if it ever needs to catch this in CI too.
+    // A shallow clone dates every file to the single fetched commit, which would
+    // flag untouched pages — so skip there. The CI `test` job checks out with
+    // fetch-depth: 0 precisely so this guard runs before a docs PR merges.
     if (isShallow()) return;
     const xml = readFileSync(join(DOCS, 'sitemap.xml'), 'utf-8');
     const stale = [
