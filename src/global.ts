@@ -343,10 +343,15 @@ export function getDbPath(projectRoot: string): string {
  * resolve `.js → .ts` imports of sibling modules).
  */
 function resolveGitMetadataDir(root: string): string | null {
+  // Trust note: `root` is the project root this process was pointed at (CLI
+  // argument or cwd of a local developer tool), not a per-request value from
+  // an untrusted caller — the same trust boundary already documented for
+  // `cwd: rootPath` in tools/quality/changed-symbols.ts. Every read below is
+  // inside `<root>/.git`, and every failure is handled by returning null.
   const gitEntry = path.join(root, '.git');
   let stat: fs.Stats;
   try {
-    stat = fs.statSync(gitEntry);
+    stat = fs.statSync(gitEntry); // codeql[js/path-injection]: see trust note above
   } catch {
     return null;
   }
@@ -355,6 +360,10 @@ function resolveGitMetadataDir(root: string): string | null {
 
   let content: string;
   try {
+    // codeql[js/file-system-race]: the stat above discriminates dir-vs-file,
+    // it is not an existence check — if the entry changes underneath us the
+    // read simply throws and we fall back to "not a git repo" (null).
+    // codeql[js/path-injection]: see trust note above
     content = fs.readFileSync(gitEntry, 'utf8').trim();
   } catch {
     return null;
@@ -363,6 +372,7 @@ function resolveGitMetadataDir(root: string): string | null {
   if (!match) return null;
   const worktreeAdminDir = path.resolve(root, match[1].trim());
   try {
+    // codeql[js/path-injection]: see trust note above
     const raw = fs.readFileSync(path.join(worktreeAdminDir, 'commondir'), 'utf8').trim();
     return path.resolve(worktreeAdminDir, raw);
   } catch {
@@ -381,6 +391,9 @@ function resolveGitMetadataDir(root: string): string | null {
 function readGitRemoteUrl(gitDir: string): string | null {
   let configText: string;
   try {
+    // codeql[js/path-injection]: `gitDir` comes from resolveGitMetadataDir,
+    // which only ever returns a path under the trusted project root — see the
+    // trust note there.
     configText = fs.readFileSync(path.join(gitDir, 'config'), 'utf8');
   } catch {
     return null;
