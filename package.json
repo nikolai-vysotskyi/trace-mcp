@@ -26,7 +26,8 @@
     "replay:update-baseline": "tsx scripts/replay-eval.ts --update-baseline",
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs && node scripts/postinstall-control-plane.mjs",
     "prepublishOnly": "pnpm run build",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "docs:sitemap": "node scripts/gen-sitemap.mjs"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
