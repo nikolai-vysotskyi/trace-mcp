@@ -6,6 +6,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TopologyStore } from '../../src/topology/topology-db.js';
 import { pruneDangerousSubprojects } from '../../src/topology/topology-subprojects.js';
 
+// isDangerousProjectRoot's SYSTEM_DIRS list is POSIX absolute paths
+// ('/private/tmp', '/var', …). On Windows those strings match nothing, so
+// fixtures built from them can't trip the guard — the tests below assert a
+// POSIX-only rule, not cross-platform behaviour. Windows has no equivalent
+// entries in that list at all; covering C:\Windows, C:\Users and friends is a
+// real gap, but a separate one from the guard this file exercises (TRA-236).
+const posixOnlyIt = it.skipIf(process.platform === 'win32');
+
 describe('TopologyStore', () => {
   let store: TopologyStore;
   let dbPath: string;
@@ -271,14 +279,14 @@ describe('TopologyStore', () => {
       expect(store.getAllSubprojects()).toHaveLength(0);
     });
 
-    it('rejects a system directory as subproject repo_root (TRA-232)', () => {
+    posixOnlyIt('rejects a system directory as subproject repo_root (TRA-232)', () => {
       expect(() =>
         store.upsertSubproject({ name: 'tmp', repoRoot: '/private/tmp', projectRoot: PROJECT }),
       ).toThrow(/system directory/);
       expect(store.getAllSubprojects()).toHaveLength(0);
     });
 
-    it('rejects a system directory as subproject project_root (TRA-232)', () => {
+    posixOnlyIt('rejects a system directory as subproject project_root (TRA-232)', () => {
       expect(() =>
         store.upsertSubproject({
           name: 'scratch',
@@ -291,7 +299,7 @@ describe('TopologyStore', () => {
   });
 
   describe('dangerous-subproject pruning (TRA-232)', () => {
-    it('drops pre-guard rows rooted under a system dir, keeping valid ones', () => {
+    posixOnlyIt('drops pre-guard rows rooted under a system dir, keeping valid ones', () => {
       const good = store.upsertSubproject({
         name: 'good',
         repoRoot: '/project/api',
@@ -324,8 +332,14 @@ describe('TopologyStore', () => {
         dbPath: '/fake/db',
       });
 
-      expect(pruneDangerousSubprojects(raw)).toEqual({ subprojects: 2, services: 1 });
-      raw.close();
+      // finally, not a bare call: a failing expect here would otherwise leak the
+      // handle and turn one assertion failure into a second EBUSY failure in
+      // afterEach's rmSync on Windows.
+      try {
+        expect(pruneDangerousSubprojects(raw)).toEqual({ subprojects: 2, services: 1 });
+      } finally {
+        raw.close();
+      }
 
       const remaining = store.getAllSubprojects();
       expect(remaining).toHaveLength(1);
