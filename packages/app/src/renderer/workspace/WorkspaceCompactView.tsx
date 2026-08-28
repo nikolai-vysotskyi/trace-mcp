@@ -22,6 +22,9 @@ export interface WorkspaceCompactViewProps {
   canMutate: boolean;
 }
 
+/** U+200E LEFT-TO-RIGHT MARK — see the path element below. */
+const LRM = '\u200e';
+
 function shortPath(root: string): string {
   const trimmed = root.replace(/\/+$/, '');
   const idx = trimmed.lastIndexOf('/');
@@ -59,7 +62,7 @@ function CompactRow({
     <div
       role="button"
       tabIndex={0}
-      className="px-2 py-1.5 rounded-md cursor-pointer transition-all hover:brightness-110"
+      className="px-2 py-1 rounded-md cursor-pointer transition-all hover:brightness-110"
       style={{ background: 'var(--bg-secondary)' }}
       onClick={() => onOpen(project.root)}
       onKeyDown={(e) => {
@@ -80,31 +83,44 @@ function CompactRow({
         </span>
         <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
         <div className="flex-1 min-w-0">
-          <div
-            className="text-xs font-medium truncate"
-            style={{ color: 'var(--text-primary)' }}
-            title={project.name}
-          >
-            {project.name || shortPath(project.root)}
+          {/* Name and status share one line — the dot already carries the tone,
+              so the word costs no extra row height. */}
+          <div className="flex items-baseline gap-2">
+            <div
+              className="text-xs font-medium truncate"
+              style={{ color: 'var(--text-primary)' }}
+              title={project.name}
+            >
+              {project.name || shortPath(project.root)}
+            </div>
+            <div
+              className="text-[10px] shrink-0"
+              style={{ color: 'var(--text-tertiary)' }}
+            >
+              {statusLabel(project.displayStatus)}
+            </div>
           </div>
           <div
             className="text-[10px] truncate"
             style={{
               color: 'var(--text-tertiary)',
+              // `rtl` puts the ellipsis on the left (keep the interesting tail).
+              // The LRM prefix stops the leading "/" — a bidi-neutral character
+              // at the paragraph edge — from being reordered to the far end.
               direction: 'rtl',
               textAlign: 'left',
             }}
             title={project.root}
           >
-            {project.root}
+            {LRM + project.root}
           </div>
-          {project.error ? (
-            <div className="text-[10px] truncate" style={{ color: 'var(--destructive)' }} title={project.error}>
+          {project.error && (
+            <div
+              className="text-[10px] truncate"
+              style={{ color: 'var(--destructive)' }}
+              title={project.error}
+            >
               {project.error}
-            </div>
-          ) : (
-            <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-              {statusLabel(project.displayStatus)}
             </div>
           )}
           <InlineProgress

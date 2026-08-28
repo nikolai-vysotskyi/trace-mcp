@@ -97,7 +97,9 @@ function countServerResourceCalls(): number {
 function findAllClaims(unit: RegExp, text: string): Claim[] {
   const claims: Claim[] = [];
   for (const line of text.split('\n')) {
-    const re = new RegExp(`(\\d+)\\+?\\s+${unit.source}`, 'g');
+    // Case-insensitive: docs/index.html carried a stale "138 mcp tools" tag for
+    // months because the case-sensitive `MCP ` alternative never matched it.
+    const re = new RegExp(`(\\d+)\\+?\\s+${unit.source}`, 'gi');
     let m: RegExpExecArray | null;
     // biome-ignore lint/suspicious/noAssignInExpressions: standard regex-exec-loop idiom
     while ((m = re.exec(line))) {
@@ -196,6 +198,11 @@ describe('docs site numeric claims (TRA-174)', () => {
     { path: 'AGENTS.md', tolerance: 5, skipLine: /output_format|preset/ },
     { path: 'skills/README.md', tolerance: 5 },
     { path: 'skills/trace-mcp/SKILL.md', tolerance: 5, skipLine: /output_format|preset/ },
+    // TRA-259: server.json is the manifest published to the MCP registry and was
+    // never guarded — it still advertised "81 languages, 58 framework
+    // integrations, 138 tools". docs/configuration.md was unguarded too.
+    { path: 'server.json', tolerance: 5 },
+    { path: 'docs/configuration.md', tolerance: 5, skipLine: /output_format|preset/ },
   ];
 
   for (const { path, tolerance, skipLine } of docs) {
