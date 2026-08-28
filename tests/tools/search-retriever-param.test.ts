@@ -1,7 +1,7 @@
 /**
- * TRA-200 — `search`'s `retriever` param must dispatch through the exact
- * same code path as `search_with_mode` (both call `runNamedSearchMode`),
- * so their outputs can never drift, and `search`'s default (no `retriever`)
+ * TRA-200 — `search`'s `retriever` param dispatches through
+ * `runNamedSearchMode`, the same helper the retired `search_with_mode` tool
+ * used (removed in 2.0 — TRA-240). `search`'s default (no `retriever`)
  * behavior must stay byte-for-byte unchanged.
  */
 import path from 'node:path';
@@ -15,7 +15,6 @@ import { TypeScriptLanguagePlugin } from '../../src/indexer/plugins/language/typ
 import { VueLanguagePlugin } from '../../src/indexer/plugins/language/vue/index.js';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
 import { registerSearchTools } from '../../src/tools/register/navigation/search-tools.js';
-import { registerRetrievalTools } from '../../src/tools/register/retrieval.js';
 import type { ServerContext } from '../../src/server/types.js';
 import { createTestStore } from '../test-utils.js';
 
@@ -80,33 +79,30 @@ describe('search { retriever } param (TRA-200)', () => {
 
     const server = new McpServer({ name: 'test', version: '0.0.0' });
     registerSearchTools(server, ctx);
-    registerRetrievalTools(server, ctx);
     tools = getRegisteredTools(server);
   });
 
-  it('search{retriever: "lexical"} returns the same items as search_with_mode{mode: "lexical"}', async () => {
-    const viaSearch = parseText(
+  it('search{retriever: "lexical"} returns the named-retriever response shape', async () => {
+    const result = parseText(
       await tools.search.handler({ query: 'User', retriever: 'lexical' }, {}),
     ) as { retriever: string; items: unknown[]; total: number };
-    const viaSearchWithMode = parseText(
-      await tools.search_with_mode.handler({ query: 'User', mode: 'lexical' }, {}),
-    ) as { mode: string; items: unknown[]; total: number };
 
-    expect(viaSearch.retriever).toBe('lexical');
-    expect(viaSearchWithMode.mode).toBe('lexical');
-    expect(viaSearch.items).toEqual(viaSearchWithMode.items);
-    expect(viaSearch.total).toBe(viaSearchWithMode.total);
+    expect(result.retriever).toBe('lexical');
+    expect(Array.isArray(result.items)).toBe(true);
+    expect(result.total).toBe(result.items.length);
   });
 
-  it('search{retriever: "feeling_lucky"} matches search_with_mode default', async () => {
-    const viaSearch = parseText(
+  it('search{retriever: "feeling_lucky"} dispatches the default named retriever', async () => {
+    const result = parseText(
       await tools.search.handler({ query: 'add', retriever: 'feeling_lucky' }, {}),
-    ) as { items: unknown[] };
-    const viaSearchWithMode = parseText(
-      await tools.search_with_mode.handler({ query: 'add' }, {}),
-    ) as { items: unknown[] };
+    ) as { retriever: string; items: unknown[] };
 
-    expect(viaSearch.items).toEqual(viaSearchWithMode.items);
+    expect(result.retriever).toBe('feeling_lucky');
+    expect(Array.isArray(result.items)).toBe(true);
+  });
+
+  it('the retired search_with_mode alias is no longer registered (TRA-240)', () => {
+    expect(tools.search_with_mode).toBeUndefined();
   });
 
   it('search{retriever} response omits the mode-shaping fields (search_mode, buckets, parent)', async () => {

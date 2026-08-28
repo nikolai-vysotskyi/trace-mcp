@@ -6,15 +6,15 @@
  *
  * Tools covered:
  *   1.  remember_decision
- *   2.  pin_file
- *   3.  pin_symbol
+ *   2.  pin (file scope)
+ *   3.  pin (symbol scope)
  *   4.  list_pins
  *   5.  unpin (file_path)
  *   6.  unpin (symbol_id)
  *   7.  check_claudemd_drift
- *   8.  search_with_mode (lexical)
- *   9.  search_with_mode (feeling_lucky)
- *   10. search_with_mode (graph_completion)
+ *   8.  search retriever=lexical
+ *   9.  search retriever=feeling_lucky
+ *   10. search retriever=graph_completion
  */
 
 import { URLSearchParams } from 'node:url';
@@ -148,7 +148,7 @@ async function main() {
     record('remember_decision', 'FAIL', `exception: ${e.message}`);
   }
 
-  // Need a real symbol_id from search for pin_symbol.
+  // Need a real symbol_id from search for the symbol-scope pin.
   let symId = '';
   try {
     const r = await callTool('search', { query: 'BaseRetriever', kind: 'class', limit: 5 });
@@ -158,23 +158,24 @@ async function main() {
     /* ignore */
   }
 
-  // 2. pin_file
+  // 2. pin (file scope)
   try {
-    const r = await callTool('pin_file', { file_path: 'src/cli.ts', weight: 2.0 });
-    if (r.error) record('pin_file', 'FAIL', `error: ${r.error.message ?? JSON.stringify(r.error)}`);
+    const r = await callTool('pin', { file_path: 'src/cli.ts', weight: 2.0 });
+    if (r.error)
+      record('pin (file scope)', 'FAIL', `error: ${r.error.message ?? JSON.stringify(r.error)}`);
     else {
       const v = r.ok ?? {};
       if (v.ok === true && v.pin && Math.abs((v.pin.weight ?? 0) - 2.0) < 1e-6) {
-        record('pin_file', 'PASS', JSON.stringify(v.pin));
+        record('pin (file scope)', 'PASS', JSON.stringify(v.pin));
       } else {
-        record('pin_file', 'FAIL', `shape mismatch: ${JSON.stringify(v)}`);
+        record('pin (file scope)', 'FAIL', `shape mismatch: ${JSON.stringify(v)}`);
       }
     }
   } catch (e) {
-    record('pin_file', 'FAIL', `exception: ${e.message}`);
+    record('pin (file scope)', 'FAIL', `exception: ${e.message}`);
   }
 
-  // 3. pin_symbol
+  // 3. pin (symbol scope)
   try {
     if (!symId) {
       // try a broader search
@@ -183,22 +184,30 @@ async function main() {
       if (items.length > 0) symId = items[0].symbol_id || items[0].symbolId || '';
     }
     if (!symId) {
-      record('pin_symbol', 'FAIL', 'no symbol_id available — search for BaseRetriever returned 0');
+      record(
+        'pin (symbol scope)',
+        'FAIL',
+        'no symbol_id available — search for BaseRetriever returned 0',
+      );
     } else {
-      const r = await callTool('pin_symbol', { symbol_id: symId, weight: 1.5 });
+      const r = await callTool('pin', { symbol_id: symId, weight: 1.5 });
       if (r.error)
-        record('pin_symbol', 'FAIL', `error: ${r.error.message ?? JSON.stringify(r.error)}`);
+        record(
+          'pin (symbol scope)',
+          'FAIL',
+          `error: ${r.error.message ?? JSON.stringify(r.error)}`,
+        );
       else {
         const v = r.ok ?? {};
         if (v.ok === true && v.pin && Math.abs((v.pin.weight ?? 0) - 1.5) < 1e-6) {
-          record('pin_symbol', 'PASS', JSON.stringify(v.pin));
+          record('pin (symbol scope)', 'PASS', JSON.stringify(v.pin));
         } else {
-          record('pin_symbol', 'FAIL', `shape mismatch: ${JSON.stringify(v)}`);
+          record('pin (symbol scope)', 'FAIL', `shape mismatch: ${JSON.stringify(v)}`);
         }
       }
     }
   } catch (e) {
-    record('pin_symbol', 'FAIL', `exception: ${e.message}`);
+    record('pin (symbol scope)', 'FAIL', `exception: ${e.message}`);
   }
 
   // 4. list_pins
@@ -289,12 +298,12 @@ async function main() {
     record('check_claudemd_drift', 'FAIL', `exception: ${e.message}`);
   }
 
-  // 8. search_with_mode lexical
+  // 8. search retriever=lexical
   try {
-    const r = await callTool('search_with_mode', { query: 'BaseRetriever', mode: 'lexical' });
+    const r = await callTool('search', { query: 'BaseRetriever', retriever: 'lexical' });
     if (r.error)
       record(
-        'search_with_mode lexical',
+        'search retriever=lexical',
         'FAIL',
         `error: ${r.error.message ?? JSON.stringify(r.error)}`,
       );
@@ -314,27 +323,27 @@ async function main() {
         topNFiles.toLowerCase().includes('retrieval') ||
         topNFiles.toLowerCase().includes('baseretriever');
       if (okMode && items.length > 0 && fileMatch) {
-        record('search_with_mode lexical', 'PASS', `top=${items[0].file}`);
+        record('search retriever=lexical', 'PASS', `top=${items[0].file}`);
       } else if (okMode && items.length > 0) {
         record(
-          'search_with_mode lexical',
+          'search retriever=lexical',
           'PARTIAL',
           `top=${items[0].file} (no retrieval/BaseRetriever hit in top-5)`,
         );
       } else {
-        record('search_with_mode lexical', 'FAIL', JSON.stringify(v).slice(0, 200));
+        record('search retriever=lexical', 'FAIL', JSON.stringify(v).slice(0, 200));
       }
     }
   } catch (e) {
-    record('search_with_mode lexical', 'FAIL', `exception: ${e.message}`);
+    record('search retriever=lexical', 'FAIL', `exception: ${e.message}`);
   }
 
-  // 9. search_with_mode feeling_lucky
+  // 9. search retriever=feeling_lucky
   try {
-    const r = await callTool('search_with_mode', { query: 'BaseRetriever', mode: 'feeling_lucky' });
+    const r = await callTool('search', { query: 'BaseRetriever', retriever: 'feeling_lucky' });
     if (r.error)
       record(
-        'search_with_mode feeling_lucky',
+        'search retriever=feeling_lucky',
         'FAIL',
         `error: ${r.error.message ?? JSON.stringify(r.error)}`,
       );
@@ -344,27 +353,27 @@ async function main() {
       // feeling_lucky on PascalCase should route to lexical
       if ((v.mode === 'feeling_lucky' || v.mode === 'lexical') && items.length > 0) {
         record(
-          'search_with_mode feeling_lucky',
+          'search retriever=feeling_lucky',
           'PASS',
           `mode=${v.mode}, items=${items.length}, top=${items[0].file}`,
         );
       } else {
-        record('search_with_mode feeling_lucky', 'FAIL', JSON.stringify(v).slice(0, 200));
+        record('search retriever=feeling_lucky', 'FAIL', JSON.stringify(v).slice(0, 200));
       }
     }
   } catch (e) {
-    record('search_with_mode feeling_lucky', 'FAIL', `exception: ${e.message}`);
+    record('search retriever=feeling_lucky', 'FAIL', `exception: ${e.message}`);
   }
 
-  // 10. search_with_mode graph_completion
+  // 10. search retriever=graph_completion
   try {
-    const r = await callTool('search_with_mode', {
+    const r = await callTool('search', {
       query: 'BaseRetriever',
       mode: 'graph_completion',
     });
     if (r.error)
       record(
-        'search_with_mode graph_completion',
+        'search retriever=graph_completion',
         'FAIL',
         `error: ${r.error.message ?? JSON.stringify(r.error)}`,
       );
@@ -373,16 +382,16 @@ async function main() {
       const items = v.items ?? [];
       if (v.mode === 'graph_completion' && items.length >= 1) {
         record(
-          'search_with_mode graph_completion',
+          'search retriever=graph_completion',
           'PASS',
           `items=${items.length}, top=${items[0].file ?? items[0].name}`,
         );
       } else {
-        record('search_with_mode graph_completion', 'FAIL', JSON.stringify(v).slice(0, 200));
+        record('search retriever=graph_completion', 'FAIL', JSON.stringify(v).slice(0, 200));
       }
     }
   } catch (e) {
-    record('search_with_mode graph_completion', 'FAIL', `exception: ${e.message}`);
+    record('search retriever=graph_completion', 'FAIL', `exception: ${e.message}`);
   }
 
   // Summary

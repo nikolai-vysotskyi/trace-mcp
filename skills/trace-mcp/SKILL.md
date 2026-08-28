@@ -5,7 +5,7 @@ description: Use trace-mcp tools for code navigation, impact analysis, and frame
 
 # trace-mcp — Code Intelligence Routing
 
-trace-mcp is a framework-aware code intelligence MCP server. It exposes 170 tools that return semantic, structured results over a cross-language dependency graph. When trace-mcp is available, it is almost always cheaper and more accurate than native file tools.
+trace-mcp is a framework-aware code intelligence MCP server. It exposes 164 tools that return semantic, structured results over a cross-language dependency graph. When trace-mcp is available, it is almost always cheaper and more accurate than native file tools.
 
 ## When to Use
 
@@ -43,7 +43,7 @@ Activate this skill whenever you need to:
 | DB model relationships | `get_model_context` | reading model + migrations |
 | Component tree | `get_component_tree` | reading component files |
 | Circular dependencies | `get_circular_imports` | manual tracing |
-| Dead code / dead exports | `get_dead_code` / `get_dead_exports` | Grep for unused |
+| Dead code / dead exports | `get_dead_code` (`mode: "exports_only"`) | Grep for unused |
 | Project health / coverage gaps | `self_audit` | manual inspection |
 | Complexity / hotspots | `get_complexity_report` / `get_risk_hotspots` | guessing |
 

@@ -97,7 +97,7 @@ export function getSuggestedQuestions(store: Store): SuggestedQuestionsResult {
       severity: 'medium',
       question: `Should the team triage the ${untested - 3} additional untested framework entry points?`,
       reason: `${untested} entry points lack an obvious test file. Showing the first 3 above.`,
-      follow_up: { tool: 'get_untested_exports', args: {} },
+      follow_up: { tool: 'get_untested_symbols', args: { scope: 'exports_only' } },
     });
   }
 
@@ -142,7 +142,7 @@ export function getSuggestedQuestions(store: Store): SuggestedQuestionsResult {
       question: `Are all ${exportedCount.cnt} exports actually consumed, or has the public surface drifted?`,
       reason:
         'Public APIs accrete over time; a periodic dead-export audit catches code that should have been deleted in a prior PR.',
-      follow_up: { tool: 'get_dead_exports' },
+      follow_up: { tool: 'get_dead_code', args: { mode: 'exports_only' } },
     });
   }
 

@@ -25,7 +25,7 @@ const TOOL_ROUTING_POLICY = `IMPORTANT: For ANY code exploration task, ALWAYS us
 | All implementations of an interface | \`get_type_hierarchy\` | listing directories |
 | All classes implementing X | \`search\` with \`implements\` filter | grep |
 | Project health / coverage gaps | \`self_audit\` | manual inspection |
-| Dead code / dead exports | \`get_dead_code\` / \`get_dead_exports\` | grep for unused |
+| Dead code / dead exports | \`get_dead_code\` (\`mode: "exports_only"\`) | grep for unused |
 | Context for a task | \`get_feature_context\` | reading many files |
 | Tests for a symbol | \`get_tests_for\` | searching test files |
 | HTTP request flow | \`get_request_flow\` | reading route files |

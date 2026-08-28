@@ -114,7 +114,7 @@ The **decision memory database** (`decisions.db`) is also shared across all proj
 - **Session chunks** — chunked conversation content from AI session logs, FTS5-indexed for cross-session search
 - **Mined sessions tracker** — prevents re-processing already-mined session files
 
-Decisions are auto-enriched into code intelligence tool responses (`get_change_impact`, `plan_turn`, `get_session_resume`) via the enrichment layer in `src/memory/enrichment.ts`.
+Decisions are auto-enriched into code intelligence tool responses (`get_change_impact`, `plan_turn`, `get_wake_up`) via the enrichment layer in `src/memory/enrichment.ts`.
 
 ---
 

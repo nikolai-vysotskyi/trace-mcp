@@ -1,7 +1,7 @@
 /**
  * TRA-199 — `get_dead_code`'s `mode: "exports_only"` must dispatch to the
- * exact same `getDeadExports()` call `get_dead_exports` uses, and
- * `get_dead_exports` (the permanent alias) must stay byte-for-byte unchanged.
+ * exact same `getDeadExports()` call the retired `get_dead_exports` alias
+ * used, so it still emits that alias's exact response shape (TRA-240).
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -81,13 +81,20 @@ describe('get_dead_code { mode: "exports_only" } (TRA-199)', () => {
     tools = getRegisteredTools(server);
   });
 
-  it('get_dead_code{mode: "exports_only"} matches get_dead_exports', async () => {
-    const viaDeadCode = parseText(await tools.get_dead_code.handler({ mode: 'exports_only' }, {}));
-    const viaDeadExports = parseText(await tools.get_dead_exports.handler({}, {}));
-    expect(viaDeadCode).toEqual(viaDeadExports);
+  it('get_dead_code{mode: "exports_only"} emits the retired alias response shape', async () => {
+    const result = parseText(
+      await tools.get_dead_code.handler({ mode: 'exports_only' }, {}),
+    ) as Record<string, unknown>;
+    expect(result).toHaveProperty('dead_exports');
+    expect(result).toHaveProperty('total_dead');
+    expect(result).toHaveProperty('total_exports');
   });
 
-  it('get_dead_code{mode: "exports_only"} defaults limit to 100 like get_dead_exports', async () => {
+  it('the retired get_dead_exports alias is no longer registered (TRA-240)', () => {
+    expect(tools.get_dead_exports).toBeUndefined();
+  });
+
+  it('get_dead_code{mode: "exports_only"} still defaults limit to 100', async () => {
     const result = parseText(await tools.get_dead_code.handler({ mode: 'exports_only' }, {})) as {
       total_dead: number;
       total_exports: number;
@@ -100,15 +107,5 @@ describe('get_dead_code { mode: "exports_only" } (TRA-199)', () => {
     const result = parseText(await tools.get_dead_code.handler({}, {})) as Record<string, unknown>;
     expect(result).toHaveProperty('dead_symbols');
     expect(result).not.toHaveProperty('dead_exports');
-  });
-
-  it('regression: get_dead_exports output shape is unchanged', async () => {
-    const result = parseText(await tools.get_dead_exports.handler({}, {})) as Record<
-      string,
-      unknown
-    >;
-    expect(result).toHaveProperty('dead_exports');
-    expect(result).toHaveProperty('total_dead');
-    expect(result).toHaveProperty('total_exports');
   });
 });

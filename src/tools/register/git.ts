@@ -123,7 +123,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'get_dead_code',
-    'Dead code detection. Modes: "multi-signal" (default) combines import graph, call graph, and barrel export analysis with confidence scores; "reachability" runs forward BFS from auto-detected entry points (tests, package.json main/bin, src/{cli,main,index}, routes, framework controllers) — stricter when entry points are enumerable; "exports_only" is the fast export-keyword-only scan (same as get_dead_exports, which stays available as its own tool). Pass entry_points for custom roots. To remove detected code use remove_dead_code. Read-only. Returns JSON: { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total } — exports_only mode returns { dead_exports, total_dead, total_exports, truncated? } instead (see get_dead_exports).',
+    'Dead code detection. Modes: "multi-signal" (default) combines import graph, call graph, and barrel export analysis with confidence scores; "reachability" runs forward BFS from auto-detected entry points (tests, package.json main/bin, src/{cli,main,index}, routes, framework controllers) — stricter when entry points are enumerable; "exports_only" is the fast export-keyword-only scan. Pass entry_points for custom roots. To remove detected code use remove_dead_code. Read-only. Returns JSON: { dead_symbols: [{ symbol_id, name, file, confidence, signals }], total } — exports_only mode returns { dead_exports, total_dead, total_exports, truncated? } instead.',
     {
       file_pattern: z
         .string()
@@ -154,6 +154,11 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .max(200)
         .optional()
         .describe('[reachability mode] Extra entry-point file paths (repo-relative)'),
+      // No output_format here on purpose: the retired `get_dead_exports` alias
+      // carried one, but re-measuring the payload through this tool put it at
+      // -17.3% (TOON list mode — the rows are not uniform enough for table
+      // mode), well under the +15% cutoff the allowlist is built on. Wiring it
+      // anyway would have cost tokens rather than saved them (TRA-240).
     },
     async ({ file_pattern, threshold, limit, mode, entry_points }) => {
       if (mode === 'exports_only') {

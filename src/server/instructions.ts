@@ -45,7 +45,7 @@ export function buildInstructions(
     '- Project health / coverage gaps → `self_audit` (dead exports, untested code, hotspots)',
     '- Deep test coverage gaps → `get_untested_symbols` (all symbols, not just exports; classifies "unreached" vs "imported_not_called")',
     '- Module dependency graph → `get_module_graph` (NestJS) or `get_import_graph`',
-    '- Dead code / dead exports → `get_dead_code` / `get_dead_exports`',
+    '- Dead code / dead exports → `get_dead_code` (`mode: "exports_only"` for exports)',
     '- Circular dependencies → `get_circular_imports`',
     '- Coupling analysis → `get_coupling`',
     '',
