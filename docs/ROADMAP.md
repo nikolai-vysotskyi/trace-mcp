@@ -37,6 +37,29 @@ The other standing question is unchanged: **who trace-mcp serves and how
 far the current single-developer, single-repo model can stretch before it
 needs to change shape.**
 
+## Adoption — metric of record
+
+The adoption metric of record is **active installs**, from the anonymous
+daily ping in `src/telemetry/usage-ping.ts` (one event per install per UTC
+day, opt-out via `TRACE_MCP_TELEMETRY=off`). Read it in the GA4 property
+`G-WSYYT2WZJV`. Refresh the line below monthly so future revisions see a
+trend instead of re-deriving one.
+
+**npm weekly downloads are not an adoption metric** and should not be cited
+as one. Measured 2026-08-28 (TRA-273): 9,013 downloads over 92 days, but
+every daily peak is a publish day — 226 on 08-10 (v1.47.0), 344 on 08-17
+(v1.47.1), 1,322 on 08-27 (nine releases). Strip publish days and the
+baseline is flat at 20–45/day for the whole quarter. The graph measures our
+release cadence and registry mirrors, not users. If it must appear in a
+report, annotate the publish days.
+
+GitHub stars, same date: 101 total (April 58, May 23, June 8, July 5,
+August 6), 14 forks — a launch burst that decayed ~10× and stayed flat.
+
+| Date | Active installs | Notes |
+| --- | --- | --- |
+| 2026-08-28 | _pending GA4 read access_ | Ping verified end to end: published `trace-mcp@2.0.0` carries baked credentials, payload validates against the Measurement Protocol debug endpoint. |
+
 ## Ready to start
 
 ### 1. Scope tool-consolidation candidates into per-tool migration issues (follow-up to TRA-186)
