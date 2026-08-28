@@ -315,7 +315,7 @@ function SkeletonRows({ rows }: { rows: number }) {
 /** Inline "we couldn't measure this" panel with the one action that helps. */
 function SectionError({ what, onRetry }: { what: string; onRetry: () => void }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-2.5">
+    <div className="flex items-center gap-2 px-3 py-2">
       <Icon name="warning" size={14} />
       <span className="text-[13px] leading-4 flex-1" style={{ color: 'var(--label-secondary)' }}>
         Couldn't load {what}. The daemon may still be indexing.
@@ -544,7 +544,7 @@ export function ProjectOverview({
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Toolbar ──────────────────────────────────────────────────── */}
       <div
-        className="flex items-center gap-3 px-4 shrink-0 glass relative"
+        className="flex items-center gap-2 px-4 shrink-0 glass relative"
         style={{
           height: 52,
           borderBottom: '0.5px solid transparent',
@@ -967,7 +967,7 @@ export function ProjectOverview({
                         {groupServices.map((svc, i) => (
                           <div
                             key={svc.id}
-                            className="flex items-center gap-2.5 px-3"
+                            className="flex items-center gap-2 px-3"
                             style={{
                               minHeight: 44,
                               borderBottom:
