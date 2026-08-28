@@ -24,6 +24,7 @@ import {
   type ViewMode,
   type WorkspaceFilter,
   applyFilter,
+  compareViewModels,
   deriveKpis,
 } from './types';
 import { useSelection } from './useSelection';
@@ -124,6 +125,12 @@ export function Workspace() {
 
   // ── Derived ──────────────────────────────────────────────────────────
   const filtered = useMemo(() => applyFilter(data.projects, filter), [data.projects, filter]);
+  // Sort here, not inside a view: every view then renders the same order, and
+  // switching Table ↔ Compact can't silently reshuffle the list.
+  const visible = useMemo(
+    () => [...filtered].sort((a, b) => compareViewModels(a, b, sortKey, sortDir)),
+    [filtered, sortKey, sortDir],
+  );
   const kpis = useMemo(() => deriveKpis(data.projects), [data.projects]);
 
   // ── Selection ────────────────────────────────────────────────────────
@@ -162,7 +169,7 @@ export function Workspace() {
   }
 
   const showEmpty = !data.loading && data.projects.length === 0;
-  const selectedProjects = filtered.filter((p) => selection.selected.has(p.root));
+  const selectedProjects = visible.filter((p) => selection.selected.has(p.root));
 
   return (
     <div className="flex flex-col h-full overflow-hidden relative">
@@ -213,7 +220,7 @@ export function Workspace() {
         </div>
       ) : view === 'compact' ? (
         <WorkspaceCompactView
-          projects={filtered}
+          projects={visible}
           selected={selection.selected}
           canMutate={data.connected}
           onSelectChange={selection.set}
@@ -226,7 +233,7 @@ export function Workspace() {
         />
       ) : (
         <WorkspaceTableView
-          projects={filtered}
+          projects={visible}
           sortKey={sortKey}
           sortDir={sortDir}
           onSort={handleSort}
@@ -234,7 +241,7 @@ export function Workspace() {
           canMutate={data.connected}
           onSelectChange={selection.set}
           onSelectAll={(next) => {
-            if (next) selection.selectAll(filtered);
+            if (next) selection.selectAll(visible);
             else selection.clear();
           }}
           onOpen={openProjectWindow}
