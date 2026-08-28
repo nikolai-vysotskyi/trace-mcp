@@ -48,6 +48,7 @@ import { AnthropicPythonPlugin } from './tooling/anthropic-py/index.js';
 import { AnthropicSdkPlugin } from './tooling/anthropic-sdk/index.js';
 import { CeleryPlugin } from './tooling/celery/index.js';
 import { ClackPlugin } from './tooling/clack/index.js';
+import { ClickPlugin } from './tooling/click/index.js';
 import { CommanderPlugin } from './tooling/commander/index.js';
 import { CosmiconfigPlugin } from './tooling/cosmiconfig/index.js';
 import { DataFetchingPlugin } from './tooling/data-fetching/index.js';
@@ -73,6 +74,7 @@ import { TqdmPyPlugin } from './tooling/tqdm-py/index.js';
 import { TreeSitterPlugin } from './tooling/tree-sitter/index.js';
 import { UvicornPlugin } from './tooling/uvicorn/index.js';
 import { ClassValidatorPlugin } from './validation/class-validator/index.js';
+import { MarshmallowPlugin } from './validation/marshmallow/index.js';
 import { PydanticPlugin } from './validation/pydantic/index.js';
 // --- validation ---
 import { ZodPlugin } from './validation/zod/index.js';
@@ -191,6 +193,8 @@ export function createAllIntegrationPlugins(): FrameworkPlugin[] {
     new PythonAsyncPlugin(),
     new AttrsPyPlugin(),
     new TqdmPyPlugin(),
+    new ClickPlugin(),
+    new MarshmallowPlugin(),
     // view
     new Jinja2Plugin(),
   ];
