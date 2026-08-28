@@ -7,6 +7,10 @@ updates:
       day: monday
       time: "06:00"
       timezone: Etc/UTC
+    # Supply-chain: wait before proposing a freshly published version, so a
+    # compromised-maintainer publish has time to be yanked upstream.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     labels:
       - dependencies
@@ -56,6 +60,10 @@ updates:
       day: monday
       time: "06:00"
       timezone: Etc/UTC
+    # Supply-chain: wait before proposing a freshly published version, so a
+    # compromised-maintainer publish has time to be yanked upstream.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     labels:
       - dependencies
@@ -94,6 +102,10 @@ updates:
       day: monday
       time: "06:00"
       timezone: Etc/UTC
+    # Supply-chain: wait before proposing a freshly published version, so a
+    # compromised-maintainer publish has time to be yanked upstream.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - dependencies

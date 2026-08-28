@@ -26,10 +26,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # --baseline-commit below needs the merge base in local history.
+          fetch-depth: 0
 
+      # Two invocations on purpose (TRA-255). The first is the reporting scan:
+      # full tree, never fails, feeds the code-scanning SARIF. The second is
+      # the *gate*: diff-scoped against the PR base, so this required check
+      # goes red only when the PR itself introduces a finding. Before this,
+      # the whole job ran with `continue-on-error: true` and "Semgrep scan
+      # green" meant nothing more than "the scan executed".
       - name: Run Semgrep
+        env:
+          BASELINE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
         run: |
-          semgrep \
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+          # Scope and rule selection live here + in .semgrepignore.
+          # njsscan's regex_dos fires on every entry of the framework plugins'
+          # static regex-pattern tables (153 alerts, zero of them reachable
+          # user input) — excluded by rule, the rest of p/nodejsscan is kept.
+          set -- \
             --config p/typescript \
             --config p/javascript \
             --config p/owasp-top-ten \
@@ -37,10 +55,16 @@ jobs:
             --config p/security-audit \
             --config p/nodejsscan \
             --config p/cwe-top-25 \
-            --sarif --output semgrep.sarif \
-            --metrics=off \
-            --error
-        continue-on-error: true
+            --exclude-rule ajinabraham.njsscan.dos.regex_dos.regex_dos \
+            --metrics=off
+
+          semgrep "$@" --sarif --output semgrep.sarif || true
+
+          if [ -n "$BASELINE_SHA" ]; then
+            echo "::group::Gate: findings introduced vs ${BASELINE_SHA}"
+            semgrep "$@" --baseline-commit "$BASELINE_SHA" --error
+            echo "::endgroup::"
+          fi
 
       - name: Upload SARIF to code-scanning
         uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
