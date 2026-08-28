@@ -12,7 +12,7 @@
  * are consumed only to render the header indicator. The component does not
  * call `useWorkspaceProjects`.
  */
-import { type MouseEvent, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, type MouseEvent, useEffect, useRef, useState } from 'react';
 import { StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
 import {
@@ -47,6 +47,34 @@ const GRADE_COLOR: Record<TechDebtGrade, string> = {
   F: 'var(--destructive)',
 };
 
+// ── Frozen columns ────────────────────────────────────────────────────────
+//
+// The table is wider than the 732 px viewport of the default 960×700 window,
+// so it scrolls horizontally. Pin the identity columns (checkbox + Project) to
+// the left and Actions to the right, otherwise scrolling right hides which row
+// you are looking at and scrolling left hides Security/Actions entirely.
+
+/** Width of the select-checkbox column; the Project column is offset by it. */
+const SELECT_COL_W = 32;
+
+/**
+ * The surface tokens are translucent (vibrancy), so a pinned cell painted with
+ * `--bg-secondary` alone would let the scrolling rows show through. Stack it
+ * over `--bg-primary` the way a normal row is stacked over the page.
+ */
+const overPage = (tint: string) => `linear-gradient(${tint}, ${tint}), var(--bg-primary)`;
+const STICKY_HEADER_BG = overPage('var(--bg-secondary)');
+
+/** Sticky cells need their own background — rows slide underneath them. */
+function stickyCell(side: 'left' | 'right', offset: number, bg: string, seam = true): CSSProperties {
+  return {
+    position: 'sticky',
+    [side]: offset,
+    background: bg,
+    boxShadow: seam ? (side === 'left' ? '1px 0 0 var(--border)' : '-1px 0 0 var(--border)') : undefined,
+  };
+}
+
 // ── Sortable header cell ──────────────────────────────────────────────────
 
 interface ThProps {
@@ -57,14 +85,15 @@ interface ThProps {
   dir: SortDir;
   onSort: (key: SortKey) => void;
   align?: 'left' | 'right' | 'center';
+  sticky?: CSSProperties;
 }
 
-function Th({ label, tooltip, sortKey, current, dir, onSort, align = 'left' }: ThProps) {
+function Th({ label, tooltip, sortKey, current, dir, onSort, align = 'left', sticky }: ThProps) {
   const isActive = current === sortKey;
   return (
     <th
       className={`px-3 py-2 text-${align} text-[11px] font-semibold cursor-pointer select-none whitespace-nowrap`}
-      style={{ color: isActive ? 'var(--accent)' : 'var(--text-secondary)' }}
+      style={{ color: isActive ? 'var(--accent)' : 'var(--text-secondary)', zIndex: 1, ...sticky }}
       title={tooltip}
       onClick={() => onSort(sortKey)}
     >
@@ -216,20 +245,24 @@ function Row({
   const stop = (e: MouseEvent) => e.stopPropagation();
   const tdNum = 'px-3 py-2 tabular-nums text-right';
   const dotTone = statusToDot(project.displayStatus);
+  // Hover is state rather than a direct style write so the pinned cells, which
+  // carry their own opaque background, can follow the row highlight.
+  const [hovered, setHovered] = useState(false);
+  const bg = hovered ? overPage('var(--bg-secondary)') : 'var(--bg-primary)';
 
   return (
     <tr
       className="cursor-pointer transition-colors"
-      style={{ borderBottom: '0.5px solid var(--border)' }}
+      style={{ borderBottom: '0.5px solid var(--border)', background: hovered ? bg : undefined }}
       onClick={() => onOpen(project.root)}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLTableRowElement).style.background = 'var(--bg-secondary)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLTableRowElement).style.background = '';
-      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <td className="px-2 py-2" onClick={stop}>
+      <td
+        className="px-2 py-2"
+        style={{ ...stickyCell('left', 0, bg, false), width: SELECT_COL_W }}
+        onClick={stop}
+      >
         <input
           type="checkbox"
           checked={selected}
@@ -238,7 +271,10 @@ function Row({
         />
       </td>
 
-      <td className="px-3 py-2 font-medium max-w-[200px]" style={{ color: 'var(--text-primary)' }}>
+      <td
+        className="px-3 py-2 font-medium max-w-[200px]"
+        style={{ color: 'var(--text-primary)', ...stickyCell('left', SELECT_COL_W, bg) }}
+      >
         <div className="truncate" title={project.name}>
           {project.name}
         </div>
@@ -329,7 +365,7 @@ function Row({
           </span>
         )}
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2" style={stickyCell('right', 0, bg)}>
         <ActionCell
           project={project}
           canMutate={canMutate}
@@ -364,10 +400,18 @@ export function WorkspaceTableView({
       <table className="w-full border-collapse text-xs">
         <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-secondary)' }}>
           <tr style={{ borderBottom: '0.5px solid var(--border)' }}>
-            <th className="px-2 py-2 w-8" style={{ background: 'var(--bg-secondary)' }}>
+            <th
+              className="px-2 py-2 w-8"
+              style={{ ...stickyCell('left', 0, STICKY_HEADER_BG, false), zIndex: 1 }}
+            >
               <SelectAllCheckbox total={projects.length} selectedCount={selected.size} onChange={onSelectAll} />
             </th>
-            <Th label="Project" sortKey="name" {...thProps} />
+            <Th
+              label="Project"
+              sortKey="name"
+              sticky={stickyCell('left', SELECT_COL_W, STICKY_HEADER_BG)}
+              {...thProps}
+            />
             <Th label="Status" sortKey="status" {...thProps} />
             <Th label="Last Indexed" sortKey="lastIndexed" {...thProps} />
             <Th label="Files" sortKey="totalFiles" align="right" {...thProps} />
@@ -402,7 +446,11 @@ export function WorkspaceTableView({
             />
             <th
               className="px-3 py-2 text-left text-[11px] font-semibold"
-              style={{ color: 'var(--text-secondary)' }}
+              style={{
+                color: 'var(--text-secondary)',
+                zIndex: 1,
+                ...stickyCell('right', 0, STICKY_HEADER_BG),
+              }}
             >
               Actions
             </th>
