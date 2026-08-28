@@ -17,12 +17,6 @@
   "src/renderer/tabs/Insights.tsx": 2,
   "src/renderer/tabs/MemoryExplorer.tsx": 37,
   "src/renderer/tabs/Notebook.tsx": 1,
-  "src/renderer/tabs/ProjectOverview.tsx": 16,
   "src/renderer/tabs/Settings.tsx": 7,
-  "src/renderer/tabs/ToolActivity.tsx": 33,
-  "src/renderer/workspace/AddProjectControl.tsx": 3,
-  "src/renderer/workspace/BulkActionsBar.tsx": 1,
-  "src/renderer/workspace/WorkspaceCompactView.tsx": 1,
-  "src/renderer/workspace/WorkspaceHeader.tsx": 2,
-  "src/renderer/workspace/WorkspaceTableView.tsx": 2
+  "src/renderer/tabs/ToolActivity.tsx": 33
 }

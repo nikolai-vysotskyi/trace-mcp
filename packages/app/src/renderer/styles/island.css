@@ -581,6 +581,13 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-center-empty .s { font-size: 13px; color: var(--text-3); max-width: 380px; line-height: 1.5; }
 .ws-center-empty .ws-primary { margin-top: 6px; }
 
+/* Compact variant (TRA-293) — an empty SECTION inside a card, not an empty
+   pane. Same anatomy (glyph, line, sentence, action), a third of the height. */
+.ws-center-empty.compact { gap: 6px; padding: 20px 16px; }
+.ws-center-empty.compact .gi { width: 20px; height: 20px; }
+.ws-center-empty.compact .t { font-size: 13px; font-weight: 600; }
+.ws-center-empty.compact .s { font-size: 13px; line-height: 16px; }
+
 /* ============================================================================
    INTELLIGENCE VIEWS — Graph · Activity · Memory (center-stage)
    ============================================================================ */

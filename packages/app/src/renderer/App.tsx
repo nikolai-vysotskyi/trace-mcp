@@ -885,6 +885,10 @@ export function App() {
 
   const isGraph = isProject && projectTab === 'graph';
   const needsFlexLayout = isProject && (projectTab === 'graph' || projectTab === 'ask');
+  /* Surfaces that draw their own toolbar own the whole pane: a 16px inset turns
+     a flush 52px toolbar into a floating white band with the sunken background
+     showing down both sides (TRA-293). */
+  const ownsToolbar = isProject && projectTab === 'overview';
   const isGraphGpu = isGraph; // alias — the Graph tab *is* the GPU graph now
 
   return (
@@ -996,7 +1000,7 @@ export function App() {
             </button>
           </div>
           <div
-            className={`ws-content-body ${isGraphGpu ? 'p-2' : needsFlexLayout ? 'p-1 pt-2' : 'p-4 overflow-y-auto'}`}
+            className={`ws-content-body ${isGraphGpu ? 'p-2' : needsFlexLayout ? 'p-1 pt-2' : ownsToolbar ? '' : 'p-4 overflow-y-auto'}`}
           >
             {isProject ? (
               <ErrorBoundary key={`project:${projectTab}`} label={`${projectTab} tab`}>

@@ -21,6 +21,7 @@ import {
   MenuSeparator,
   SearchField,
   SegmentedControl,
+  useMenuAnchor,
 } from '../lattice/ui';
 import { KpiTile } from './components/KpiTile';
 import {
@@ -112,19 +113,6 @@ function toggleInList<T>(list: T[] | null, value: T): T[] | null {
 function share(n: number, total: number): string {
   if (total === 0) return 'no projects yet';
   return `${Math.round((n / total) * 100)}% of ${total.toLocaleString()} projects`;
-}
-
-// ── Toolbar bits ──────────────────────────────────────────────────────────
-
-/** Anchors a Menu under a toolbar button. */
-function useMenuAnchor() {
-  const ref = useRef<HTMLButtonElement | null>(null);
-  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
-  const open = () => {
-    const r = ref.current?.getBoundingClientRect();
-    setAt(r ? { x: r.right, y: r.bottom + 4 } : { x: 0, y: 52 });
-  };
-  return { ref, at, open, close: () => setAt(null) };
 }
 
 // ── Header ────────────────────────────────────────────────────────────────
