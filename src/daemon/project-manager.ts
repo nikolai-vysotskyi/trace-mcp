@@ -11,7 +11,7 @@ import {
 } from '../ai/index.js';
 import { SummarizationPipeline } from '../ai/summarization-pipeline.js';
 import type { TraceMcpConfig } from '../config.js';
-import { loadConfig } from '../config.js';
+import { loadConfig, loadGlobalConfigRaw } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
 import { ensureGlobalDirs, getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
@@ -46,6 +46,7 @@ import { createServer } from '../server/server.js';
 import { SubprojectManager } from '../subproject/manager.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { trailingDebounce } from '../util/debounce.js';
+import { selectEagerLoadRoots } from './eager-load.js';
 import { serializeError } from './log-error.js';
 import {
   removeProjectArtifacts,
@@ -1102,13 +1103,25 @@ export class ProjectManager {
           'Keep the per-project registrations and `trace-mcp remove` the container root.',
       );
     }
+    // TRA-278: loading every registered project costs ~9 MB of live heap each
+    // before any code is indexed, so a machine with ~100 registered repos paid
+    // multi-GB RSS at every daemon start. Load only the most recently indexed
+    // ones; the rest load lazily on first request (same path as idle-unload).
+    const cap = loadGlobalConfigRaw().daemon_eager_load_projects;
+    const { eager, deferred } = selectEagerLoadRoots(entries, typeof cap === 'number' ? cap : 8);
+    if (deferred.length > 0) {
+      logger.info(
+        { eager: eager.length, deferred: deferred.length },
+        'Deferring cold registered projects to lazy load (daemon_eager_load_projects)',
+      );
+    }
     // Phase 5+7 audit fix: addProject() runs synchronous setup (DB open, plugin
     // registry, watcher start, ~250-500ms each) BEFORE reaching the
     // semaphore-gated indexAll(). Without a gate, N parallel addProject() calls
     // produce a thundering herd of disk I/O at boot. Cap parallel setup at 2.
     const addLimit = pLimit(2);
     const results = await Promise.allSettled(
-      entries.map((entry) => addLimit(() => this.addProject(entry.root))),
+      eager.map((entry) => addLimit(() => this.addProject(entry.root))),
     );
     for (let i = 0; i < results.length; i++) {
       if (results[i].status === 'rejected') {
@@ -1119,14 +1132,17 @@ export class ProjectManager {
         const reason = (results[i] as PromiseRejectedResult).reason;
         logger.error(
           {
-            projectRoot: entries[i].root,
-            dbPath: getDbPath(entries[i].root),
+            projectRoot: eager[i].root,
+            dbPath: getDbPath(eager[i].root),
             error: serializeError(reason),
           },
           'Failed to load registered project',
         );
       }
     }
-    logger.info({ count: this.projects.size, total: entries.length }, 'Loaded registered projects');
+    logger.info(
+      { count: this.projects.size, total: entries.length, deferred: deferred.length },
+      'Loaded registered projects',
+    );
   }
 }

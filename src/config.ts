@@ -980,6 +980,17 @@ export const TraceMcpConfigSchema = z.object({
    */
   project_idle_unload_minutes: z.number().min(0).max(1440).default(30),
   /**
+   * How many registered projects the HTTP daemon loads eagerly at startup,
+   * most-recently-indexed first. The rest stay registered and load lazily on
+   * their first request, exactly like an idle-unloaded project.
+   *
+   * A loaded project costs ~9 MB of live JS heap before it holds any code
+   * (TRA-278), so an unbounded eager load turned ~100 registered repos into a
+   * multi-GB RSS spike at every daemon start. 0 disables the cap and restores
+   * the old load-everything behaviour.
+   */
+  daemon_eager_load_projects: z.number().int().min(0).max(1000).default(8),
+  /**
    * Per-project-connection SQLite page cache size, in MB, applied via
    * `PRAGMA cache_size` on every index DB connection (one per registered
    * project in the daemon). Memory cost scales linearly with project count —
