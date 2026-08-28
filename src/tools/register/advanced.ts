@@ -87,7 +87,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_cross_service_impact',
-      'Analyze cross-service impact of changing an endpoint or event. Shows which services would be affected. Use before modifying a shared endpoint. For within-codebase impact use get_change_impact instead. Read-only. Returns JSON: { service, affectedServices: [{ name, reason }], total }.',
+      'Analyze cross-service impact of changing an endpoint or event. Shows which services would be affected. Use before modifying a shared endpoint. For within-codebase impact use get_change_impact instead; for the full cross-repo blast radius use get_federation_impact. Read-only. Returns JSON: { service, affectedServices: [{ name, reason }], total }.',
       {
         service: z.string().min(1).max(256).describe('Service name'),
         endpoint: optionalNonEmptyString(512).describe('Endpoint path (e.g. /api/users/{id})'),
@@ -225,7 +225,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
     server.tool(
       'get_subproject_impact',
-      'Cross-repo impact analysis: find all client code across subprojects that would break if an endpoint changes. Resolves down to symbol level when per-repo indexes exist. Use before modifying a shared API endpoint. Read-only. Returns JSON: { endpoint, affectedClients: [{ repo, file, line, callType }], total }.',
+      'Cross-repo impact analysis: find all client code across subprojects that would break if an endpoint changes. Resolves down to symbol level when per-repo indexes exist. Use before modifying a shared API endpoint; for the full cross-repo blast radius use get_federation_impact. Read-only. Returns JSON: { endpoint, affectedClients: [{ repo, file, line, callType }], total }.',
       {
         endpoint: z
           .string()
@@ -1308,7 +1308,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'predict_bugs',
-    "Heuristic bug-risk triage: ranks files by git churn, fix-commit ratio, complexity, coupling, PageRank, and author count — a prioritization heuristic, NOT a validated predictor (calibration notes in the response's _methodology field). Cached 1h; refresh=true to recompute. Requires git. Use to prioritize where to look, not to certify a file as buggy. For complexity+churn only use get_risk_hotspots instead. Read-only. Returns JSON: { predictions: [{ file, score, risk, confidence_level, signals }], total }.",
+    "Heuristic bug-risk triage: ranks files by git churn, fix-commit ratio, complexity, coupling, PageRank, and author count — a prioritization heuristic, NOT a validated predictor (calibration notes in the response's _methodology field). Cached 1h; refresh=true to recompute. Requires git. Use to prioritize where to look, not to certify a file as buggy. For complexity+churn only use get_risk_hotspots, for one file's trend over time get_file_health_timeline. Read-only. Returns JSON: { predictions: [{ file, score, risk, confidence_level, signals }], total }.",
     {
       limit: z.number().int().min(1).max(200).optional().describe('Max results (default: 50)'),
       min_score: z
