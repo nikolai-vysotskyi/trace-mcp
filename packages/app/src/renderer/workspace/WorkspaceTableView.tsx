@@ -1,20 +1,31 @@
 /**
  * WorkspaceTableView — sortable wide-table view of merged projects.
  *
- * Port of the legacy Dashboard.tsx table, extended with:
  *  - selection checkbox column (multi-row select + select-all in the header)
  *  - inline progress bar inside the Status cell when a pipeline is running
- *  - per-row Open / Re-index / Remove actions (Remove has two-step confirm)
+ *  - per-row Open / Re-index / Remove actions, and the same set on right-click
  *  - dims Re-index/Remove when `canMutate === false` or `inDaemon === false`
+ *  - ↑ / ↓ move a row cursor, ⏎ opens it; the table is one tab stop
+ *  - rows are windowed past {@link WINDOW_THRESHOLD} so a thousand projects
+ *    cost the same as a hundred
  *
  * Data flows in via props already sorted — the parent shell owns sort state
  * and applies it once so every view shows the same order. `sortKey`/`sortDir`
  * are consumed only to render the header indicator. The component does not
  * call `useWorkspaceProjects`.
  */
-import { type CSSProperties, type MouseEvent, useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type MouseEvent,
+  type UIEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { Checkbox, GradeBadge, StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
+import { ProjectPath } from './components/ProjectPath';
+import { ProjectContextMenu, ProjectRowActions } from './components/ProjectRowActions';
 import {
   type ProjectViewModel,
   type SortDir,
@@ -36,6 +47,29 @@ export interface WorkspaceTableViewProps {
   onRemove: (root: string) => void;
   /** false = daemon disconnected; Re-index/Remove are dimmed. */
   canMutate: boolean;
+  /** Reports the pane's scroll offset so the toolbar can fade in its hairline. */
+  onScroll?: (scrollTop: number) => void;
+}
+
+/** Fixed row height — the windowing maths and the loading skeletons share it. */
+export const ROW_H = 46;
+/** Below this many rows, rendering everything is cheaper than the bookkeeping. */
+export const WINDOW_THRESHOLD = 100;
+const OVERSCAN = 8;
+
+/**
+ * Which slice of `total` rows to render for a scroll offset and viewport.
+ * Exported for the unit test — off-by-one here means blank rows on screen.
+ */
+export function visibleRange(
+  total: number,
+  scrollTop: number,
+  viewportH: number,
+): { start: number; end: number } {
+  if (total <= WINDOW_THRESHOLD || viewportH <= 0) return { start: 0, end: total };
+  const start = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
+  const end = Math.min(total, Math.ceil((scrollTop + viewportH) / ROW_H) + OVERSCAN);
+  return { start, end };
 }
 
 // ── Frozen columns ────────────────────────────────────────────────────────
@@ -51,10 +85,10 @@ const SELECT_COL_W = 32;
 /**
  * The surface tokens are translucent (vibrancy), so a pinned cell painted with
  * `--bg-secondary` alone would let the scrolling rows show through. Stack it
- * over `--bg-primary` the way a normal row is stacked over the page.
+ * over `--bg-grouped` the way a normal row is stacked over the pane.
  */
-const overPage = (tint: string) => `linear-gradient(${tint}, ${tint}), var(--bg-primary)`;
-const STICKY_HEADER_BG = overPage('var(--bg-secondary)');
+const overPane = (tint: string) => `linear-gradient(${tint}, ${tint}), var(--bg-grouped)`;
+const STICKY_HEADER_BG = overPane('var(--bg-secondary)');
 
 /** Sticky cells need their own background — rows slide underneath them. */
 function stickyCell(side: 'left' | 'right', offset: number, bg: string, seam = true): CSSProperties {
@@ -83,22 +117,22 @@ function Th({ label, tooltip, sortKey, current, dir, onSort, align = 'left', sti
   const isActive = current === sortKey;
   return (
     <th
-      className={`px-3 py-2 text-${align} text-[11px] font-semibold cursor-pointer select-none whitespace-nowrap`}
+      scope="col"
+      aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={`px-3 py-2 text-${align} text-[11px] font-medium cursor-pointer select-none whitespace-nowrap`}
       style={{ color: isActive ? 'var(--accent)' : 'var(--text-secondary)', zIndex: 1, ...sticky }}
       title={tooltip}
       onClick={() => onSort(sortKey)}
     >
       {label}
       {isActive && (
-        <span className="ml-1" style={{ color: 'var(--accent)' }}>
+        <span className="ml-1" aria-hidden="true" style={{ color: 'var(--accent)' }}>
           {dir === 'asc' ? '▲' : '▼'}
         </span>
       )}
     </th>
   );
 }
-
-// ── Tristate select-all checkbox ─────────────────────────────────────────
 
 function SelectAllCheckbox({
   total,
@@ -119,132 +153,64 @@ function SelectAllCheckbox({
   );
 }
 
-// ── Action cell (Open / Re-index / Remove) ───────────────────────────────
-
-function ActionCell({
-  project,
-  canMutate,
-  onOpen,
-  onReindex,
-  onRemove,
-}: {
-  project: ProjectViewModel;
-  canMutate: boolean;
-  onOpen: (root: string) => void;
-  onReindex: (root: string) => void;
-  onRemove: (root: string) => void;
-}) {
-  const [confirm, setConfirm] = useState(false);
-  const mutationAllowed = canMutate && project.inDaemon;
-  const isIndexing = project.displayStatus === 'indexing' || project.displayStatus === 'computing';
-
-  const stop = (e: MouseEvent) => e.stopPropagation();
-  const baseBtn =
-    'w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--bg-active)]';
-
-  if (confirm) {
-    return (
-      <div className="flex items-center gap-1" onClick={stop}>
-        <button
-          type="button"
-          onClick={() => setConfirm(false)}
-          className="text-[11px] px-1.5 py-0.5 rounded font-medium"
-          style={{ background: 'var(--fill-control)', color: 'var(--text-secondary)', border: '0.5px solid var(--border)' }}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            onRemove(project.root);
-            setConfirm(false);
-          }}
-          className="text-[11px] px-1.5 py-0.5 rounded font-medium"
-          style={{ background: 'var(--destructive)', color: '#fff' }}
-        >
-          Remove
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-0.5" onClick={stop}>
-      <button
-        type="button"
-        onClick={() => onOpen(project.root)}
-        className={baseBtn}
-        style={{ color: 'var(--accent)' }}
-        title="Open project"
-      >
-        →
-      </button>
-      <button
-        type="button"
-        disabled={!mutationAllowed || isIndexing}
-        onClick={() => onReindex(project.root)}
-        className={`${baseBtn} disabled:opacity-30`}
-        style={{ color: 'var(--text-secondary)' }}
-        title="Re-index"
-      >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M1.5 2.5v4h4" />
-          <path d="M2.3 10a6 6 0 1 0 .9-5.6L1.5 6.5" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        disabled={!mutationAllowed}
-        onClick={() => setConfirm(true)}
-        className={`${baseBtn} disabled:opacity-30`}
-        style={{ color: 'var(--text-tertiary)' }}
-        title="Remove"
-      >
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 4l8 8M12 4l-8 8" />
-        </svg>
-      </button>
-    </div>
-  );
-}
-
 // ── Row ──────────────────────────────────────────────────────────────────
 
-function Row({
-  project,
-  selected,
-  canMutate,
-  onSelectChange,
-  onOpen,
-  onReindex,
-  onRemove,
-}: {
+interface RowProps {
   project: ProjectViewModel;
   selected: boolean;
+  cursored: boolean;
   canMutate: boolean;
+  confirming: boolean;
+  onRequestRemove: (root: string) => void;
+  onCancelRemove: () => void;
   onSelectChange: (root: string, next: boolean) => void;
   onOpen: (root: string) => void;
   onReindex: (root: string) => void;
   onRemove: (root: string) => void;
-}) {
+  onContextMenu: (e: MouseEvent, project: ProjectViewModel) => void;
+}
+
+function Row({
+  project,
+  selected,
+  cursored,
+  canMutate,
+  confirming,
+  onRequestRemove,
+  onCancelRemove,
+  onSelectChange,
+  onOpen,
+  onReindex,
+  onRemove,
+  onContextMenu,
+}: RowProps) {
   const stop = (e: MouseEvent) => e.stopPropagation();
-  const tdNum = 'px-3 py-2 tabular-nums text-right';
+  const tdNum = 'px-3 tabular-nums text-right';
   const dotTone = statusToDot(project.displayStatus);
   // Hover is state rather than a direct style write so the pinned cells, which
   // carry their own opaque background, can follow the row highlight.
   const [hovered, setHovered] = useState(false);
-  const bg = hovered ? overPage('var(--bg-secondary)') : 'var(--bg-primary)';
+  const highlighted = hovered || cursored || selected;
+  const bg = highlighted ? overPane('var(--bg-active)') : 'var(--bg-grouped)';
 
   return (
     <tr
+      aria-selected={selected}
       className="cursor-pointer transition-colors"
-      style={{ borderBottom: '0.5px solid var(--border)', background: hovered ? bg : undefined }}
+      style={{
+        height: ROW_H,
+        borderBottom: '0.5px solid var(--border-row)',
+        background: highlighted ? bg : undefined,
+        outline: cursored ? '2px solid var(--accent)' : undefined,
+        outlineOffset: -2,
+      }}
       onClick={() => onOpen(project.root)}
+      onContextMenu={(e) => onContextMenu(e, project)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       <td
-        className="px-2 py-2"
+        className="px-1"
         style={{ ...stickyCell('left', 0, bg, false), width: SELECT_COL_W }}
         onClick={stop}
       >
@@ -256,24 +222,23 @@ function Row({
       </td>
 
       <td
-        className="px-3 py-2 font-medium max-w-[200px]"
+        className="px-3 max-w-[240px]"
         style={{ color: 'var(--text-primary)', ...stickyCell('left', SELECT_COL_W, bg) }}
       >
-        <div className="truncate" title={project.name}>
+        <div className="truncate font-medium" title={project.name}>
           {project.name}
         </div>
-        <div className="truncate text-[10px]" style={{ color: 'var(--text-tertiary)' }} title={project.root}>
-          {project.root}
-        </div>
+        {/* Head-truncated: sibling checkouts differ in the tail, not the head. */}
+        <ProjectPath root={project.root} className="text-[11px] text-[var(--text-tertiary)]" />
       </td>
 
-      <td className="px-3 py-2 max-w-[180px]">
+      <td className="px-3 max-w-[200px]">
         <div className="flex items-center gap-1.5">
           <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
           <span style={{ color: 'var(--text-secondary)' }}>{statusLabel(project.displayStatus)}</span>
         </div>
         {project.error && (
-          <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--destructive)' }} title={project.error}>
+          <div className="text-[11px] truncate" style={{ color: 'var(--destructive)' }} title={project.error}>
             {project.error}
           </div>
         )}
@@ -283,7 +248,7 @@ function Row({
         />
       </td>
 
-      <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+      <td className="px-3 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
         {project.lastIndexed
           ? new Date(project.lastIndexed).toLocaleString(undefined, {
               month: 'short',
@@ -306,7 +271,7 @@ function Row({
         ) : (
           <span
             style={{
-              color: project.deadExports > 0 ? '#ff9f0a' : 'var(--text-secondary)',
+              color: project.deadExports > 0 ? 'var(--warning)' : 'var(--text-secondary)',
               fontWeight: project.deadExports > 0 ? 600 : undefined,
             }}
           >
@@ -323,8 +288,10 @@ function Row({
           </span>
         )}
       </td>
-      <td className="px-3 py-2 text-center">
+      <td className="px-3 text-center">
         {project.techDebtGrade ? (
+          // GradeBadge carries both the title and the spelled-out accessible
+          // name — the letter alone means nothing to a screen reader.
           <GradeBadge grade={project.techDebtGrade} />
         ) : (
           <span style={{ color: 'var(--text-tertiary)' }}>—</span>
@@ -344,10 +311,13 @@ function Row({
           </span>
         )}
       </td>
-      <td className="px-3 py-2" style={stickyCell('right', 0, bg)}>
-        <ActionCell
+      <td className="px-3" style={stickyCell('right', 0, bg)}>
+        <ProjectRowActions
           project={project}
           canMutate={canMutate}
+          confirming={confirming}
+          onRequestRemove={onRequestRemove}
+          onCancelRemove={onCancelRemove}
           onOpen={onOpen}
           onReindex={onReindex}
           onRemove={onRemove}
@@ -371,16 +341,79 @@ export function WorkspaceTableView({
   onReindex,
   onRemove,
   canMutate,
+  onScroll,
 }: WorkspaceTableViewProps) {
   const thProps = { current: sortKey, dir: sortDir, onSort };
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportH, setViewportH] = useState(0);
+  const [cursor, setCursor] = useState(-1);
+  const [confirmRoot, setConfirmRoot] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; project: ProjectViewModel } | null>(null);
+
+  useEffect(() => {
+    setViewportH(scrollRef.current?.clientHeight ?? 0);
+  }, []);
+
+  const handleScroll = (e: UIEvent<HTMLDivElement>) => {
+    const top = e.currentTarget.scrollTop;
+    setScrollTop(top);
+    setViewportH(e.currentTarget.clientHeight);
+    onScroll?.(top);
+  };
+
+  const { start, end } = visibleRange(projects.length, scrollTop, viewportH);
+  const rows = projects.slice(start, end);
+  const padTop = start * ROW_H;
+  const padBottom = (projects.length - end) * ROW_H;
+
+  const moveCursor = (delta: number) => {
+    const next = Math.min(projects.length - 1, Math.max(0, (cursor < 0 ? -1 : cursor) + delta));
+    setCursor(next);
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = next * ROW_H;
+    if (top < el.scrollTop) el.scrollTop = top;
+    else if (top + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_H - el.clientHeight;
+  };
 
   return (
-    <div className="flex-1 overflow-auto">
-      <table className="w-full border-collapse text-xs">
+    <div
+      ref={scrollRef}
+      // One tab stop for the whole grid, then ↑↓ to move and ⏎ to open — the
+      // list-navigation contract every Mac list follows.
+      tabIndex={0}
+      role="grid"
+      aria-label="Projects"
+      aria-rowcount={projects.length}
+      className="flex-1 overflow-auto"
+      style={{
+        borderRadius: 12,
+        border: '0.5px solid var(--border)',
+        background: 'var(--bg-grouped)',
+      }}
+      onScroll={handleScroll}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          moveCursor(1);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          moveCursor(-1);
+        } else if (e.key === 'Enter' && cursor >= 0 && cursor < projects.length) {
+          e.preventDefault();
+          onOpen(projects[cursor].root);
+        } else if (e.key === 'Escape') {
+          setCursor(-1);
+          setConfirmRoot(null);
+        }
+      }}
+    >
+      <table className="w-full border-collapse text-[13px]">
         <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-secondary)' }}>
           <tr style={{ borderBottom: '0.5px solid var(--border)' }}>
             <th
-              className="px-2 py-2 w-8"
+              className="px-1 w-8"
               style={{ ...stickyCell('left', 0, STICKY_HEADER_BG, false), zIndex: 1 }}
             >
               <SelectAllCheckbox total={projects.length} selectedCount={selected.size} onChange={onSelectAll} />
@@ -392,11 +425,11 @@ export function WorkspaceTableView({
               {...thProps}
             />
             <Th label="Status" sortKey="status" {...thProps} />
-            <Th label="Last Indexed" sortKey="lastIndexed" {...thProps} />
+            <Th label="Last indexed" sortKey="lastIndexed" {...thProps} />
             <Th label="Files" sortKey="totalFiles" align="right" {...thProps} />
             <Th label="Symbols" sortKey="totalSymbols" align="right" {...thProps} />
             <Th
-              label="Dead"
+              label="Dead exports"
               tooltip="Exported symbols never imported anywhere in the project"
               sortKey="deadExports"
               align="right"
@@ -424,7 +457,8 @@ export function WorkspaceTableView({
               {...thProps}
             />
             <th
-              className="px-3 py-2 text-left text-[11px] font-semibold"
+              scope="col"
+              className="px-3 py-2 text-left text-[11px] font-medium"
               style={{
                 color: 'var(--text-secondary)',
                 zIndex: 1,
@@ -436,20 +470,54 @@ export function WorkspaceTableView({
           </tr>
         </thead>
         <tbody>
-          {projects.map((p) => (
+          {padTop > 0 && (
+            <tr aria-hidden="true">
+              <td colSpan={11} style={{ height: padTop, padding: 0 }} />
+            </tr>
+          )}
+          {rows.map((p, i) => (
             <Row
               key={p.root}
               project={p}
               selected={selected.has(p.root)}
+              cursored={start + i === cursor}
               canMutate={canMutate}
+              confirming={confirmRoot === p.root}
+              onRequestRemove={setConfirmRoot}
+              onCancelRemove={() => setConfirmRoot(null)}
               onSelectChange={onSelectChange}
               onOpen={onOpen}
               onReindex={onReindex}
-              onRemove={onRemove}
+              onRemove={(root) => {
+                setConfirmRoot(null);
+                onRemove(root);
+              }}
+              onContextMenu={(e, project) => {
+                e.preventDefault();
+                setMenu({ x: e.clientX, y: e.clientY, project });
+              }}
             />
           ))}
+          {padBottom > 0 && (
+            <tr aria-hidden="true">
+              <td colSpan={11} style={{ height: padBottom, padding: 0 }} />
+            </tr>
+          )}
         </tbody>
       </table>
+
+      {menu && (
+        <ProjectContextMenu
+          project={menu.project}
+          canMutate={canMutate}
+          x={menu.x}
+          y={menu.y}
+          onOpen={onOpen}
+          onReindex={onReindex}
+          onRequestRemove={setConfirmRoot}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 }

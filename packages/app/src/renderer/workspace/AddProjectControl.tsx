@@ -9,6 +9,7 @@
  * (large CTA centred in the tab).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Icon } from '../lattice/icons';
 
 export interface AddProjectControlProps {
   onAdd: (root: string) => Promise<void> | void;
@@ -104,28 +105,35 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
     return (
       <>
         <DragOverlay visible={dragHover} />
-        <div className="flex flex-col items-center justify-center gap-2 py-8">
-          <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
-            No projects registered yet
+        {/* Empty-state anatomy: 32px monochrome glyph, one 17/600 line, one
+            13px sentence, one primary action. */}
+        <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
+          <span style={{ color: 'var(--text-tertiary)' }}>
+            <Icon name="folder_open" size={32} />
           </span>
-          <span className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-            or drop a folder anywhere in this window
+          <span
+            style={{ fontSize: 17, lineHeight: '22px', fontWeight: 600, color: 'var(--text-primary)' }}
+          >
+            No projects yet
           </span>
-          <div className="flex items-center gap-1 mt-2">
+          <span className="text-[13px] text-center" style={{ color: 'var(--text-secondary)' }}>
+            Add a folder to index it, or drop one anywhere in this window.
+          </span>
+          <div className="flex items-center gap-2 mt-2">
             <button
               type="button"
               disabled={adding}
               onClick={() => void handlePickFolder()}
-              className="text-xs px-3 py-1.5 rounded-md font-medium transition-opacity disabled:opacity-40"
+              className="h-7 px-3 rounded-full text-[13px] font-medium transition-opacity disabled:opacity-40"
               style={{ background: 'var(--accent)', color: '#fff' }}
             >
-              + Add project
+              Add project
             </button>
             <button
               type="button"
               disabled={adding}
               onClick={() => setShowPathInput((v) => !v)}
-              className="text-xs px-2 py-1.5 rounded-md font-medium transition-colors hover:bg-[var(--bg-active)]"
+              className="h-7 px-3 rounded-full text-[13px] font-medium transition-colors hover:bg-[var(--bg-active)]"
               style={{ color: 'var(--accent)', border: '0.5px solid var(--border)' }}
             >
               Enter path…
@@ -149,41 +157,67 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
   }
 
   // ── Compact variant ────────────────────────────────────────────────────
+  //
+  // One prominent action per region: a single accent capsule, with manual path
+  // entry folded into its chevron rather than standing next to it as a second,
+  // differently-weighted button.
   return (
     <>
       <DragOverlay visible={dragHover} />
-      <div className="flex items-center gap-1">
+      <div className="relative flex items-center">
         <button
           type="button"
           disabled={adding}
           onClick={() => void handlePickFolder()}
-          className="text-xs px-2 py-1 rounded-md font-medium transition-opacity disabled:opacity-40"
-          style={{ background: 'var(--accent)', color: '#fff' }}
-          title="Choose a folder"
+          className="h-6 pl-2.5 pr-2 text-[11px] font-medium transition-opacity disabled:opacity-40"
+          style={{
+            background: 'var(--accent)',
+            color: '#fff',
+            borderRadius: '999px 0 0 999px',
+          }}
+          title="Choose a folder to index"
         >
           + Add
         </button>
         <button
           type="button"
           disabled={adding}
+          aria-label="Add a project by path"
+          aria-expanded={showPathInput}
           onClick={() => setShowPathInput((v) => !v)}
-          className="text-xs px-2 py-1 rounded-md font-medium transition-colors hover:bg-[var(--bg-active)]"
-          style={{ color: 'var(--accent)', border: '0.5px solid var(--border)' }}
+          className="h-6 w-6 inline-flex items-center justify-center text-[11px] transition-opacity disabled:opacity-40"
+          style={{
+            background: 'var(--accent)',
+            color: '#fff',
+            borderRadius: '0 999px 999px 0',
+            boxShadow: 'inset 1px 0 0 rgb(255 255 255 / 0.25)',
+          }}
           title="Enter path manually"
         >
-          Path
+          <span aria-hidden="true">⌄</span>
         </button>
         {showPathInput && (
-          <PathInput
-            value={path}
-            disabled={adding}
-            onChange={setPath}
-            onSubmit={() => void submit(path)}
-            onCancel={() => {
-              setShowPathInput(false);
-              setPath('');
+          // A popover under the chevron — the toolbar row must not grow a
+          // 220px input and rewrap every other control.
+          <div
+            className="absolute right-0 top-8 z-40 p-2 rounded-[10px]"
+            style={{
+              background: 'var(--bg-grouped)',
+              border: '0.5px solid var(--border)',
+              boxShadow: '0 8px 24px rgb(0 0 0 / .16)',
             }}
-          />
+          >
+            <PathInput
+              value={path}
+              disabled={adding}
+              onChange={setPath}
+              onSubmit={() => void submit(path)}
+              onCancel={() => {
+                setShowPathInput(false);
+                setPath('');
+              }}
+            />
+          </div>
         )}
       </div>
     </>
