@@ -1,0 +1,357 @@
+/* ============================================================================
+   Sidebar + window chrome — macOS 26 (Tahoe) NavigationSplitView (TRA-291)
+
+   The window is `titleBarStyle: 'hiddenInset'` with a native `vibrancy:
+   'sidebar'` NSVisualEffectView behind the whole frame (see main/tray.ts).
+   This stylesheet's job is to keep the SIDEBAR region transparent so that
+   material shows through, and to paint everything else opaque.
+
+   Every colour here reads from the macOS-26 semantic token set (TRA-289) with
+   the current island.css value as the fallback, so the file is correct both
+   before and after the token layer lands.
+   ============================================================================ */
+
+/* island.css leaves `.ws-stage` transparent for the macOS vibrancy view;
+   everywhere else the stage must paint itself. */
+.ws-stage:not([data-platform="mac"]) {
+  background: var(--surface-sunken, var(--island));
+}
+
+.ws-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- Sidebar ------------------------------------------------------------ */
+/* Flush to the window edge, no radius, no shadow: the hairline separator and
+   the material are the edge. Background stays transparent so the native
+   NSVisualEffectView shows through. */
+.ws-sidebar {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Opaque by default — only macOS has an NSVisualEffectView behind the
+     window to show through. */
+  background: var(--surface, var(--island));
+  border-right: 0.5px solid var(--separator, var(--sep));
+  -webkit-app-region: no-drag;
+}
+.ws-stage[data-platform="mac"] .ws-sidebar {
+  background: transparent;
+}
+
+/* 44px strip that the traffic lights sit in. Drag region — this and the
+   content pane's header are the ONLY draggable areas. */
+.ws-sidebar-titlebar {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: drag;
+}
+
+.ws-sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 6px 6px;
+}
+
+/* Group header — whitespace separates groups, not rules. */
+.ws-sb-group {
+  padding: 20px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 14px;
+  letter-spacing: 0.01em;
+  /* --label-secondary, not --label-tertiary: a group header is text a user
+     reads, and tertiary is decoration-only (2.21:1 today). */
+  color: var(--label-secondary, var(--text-2));
+}
+.ws-sb-group:first-child {
+  padding-top: 4px;
+}
+
+/* Row — 28px, 6px radius pill inset 6px from the sidebar edges (the 6px
+   padding on .ws-sidebar-scroll provides the inset). */
+.ws-sb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label, var(--text-1));
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 16px;
+  text-align: left;
+  cursor: default;
+  transition: background 120ms ease;
+  -webkit-app-region: no-drag;
+}
+.ws-sb-row:hover {
+  background: var(--fill-quaternary, var(--row-hover));
+}
+.ws-sb-row .ws-sb-ico {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--label-secondary, var(--text-2));
+}
+.ws-sb-row .ws-sb-ico svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.ws-sb-row .ws-sb-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-sb-row .ws-sb-count {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-secondary, var(--text-2));
+}
+
+/* Selected: accent fill when the sidebar owns focus, neutral fill when not —
+   the standard macOS "active vs inactive selection" pair. */
+.ws-sb-row.is-selected {
+  background: var(--fill-tertiary, rgba(120, 120, 128, 0.24));
+  font-weight: 500;
+}
+.ws-sidebar:focus-within .ws-sb-row.is-selected {
+  background: var(--accent);
+  color: #fff;
+}
+.ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-ico,
+.ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-count {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Trailing affordance revealed on hover (remove-from-recents). */
+.ws-sb-row .ws-sb-trailing {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--label-secondary, var(--text-2));
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease;
+}
+.ws-sb-row:hover .ws-sb-trailing,
+.ws-sb-row .ws-sb-trailing:focus-visible {
+  opacity: 1;
+}
+.ws-sb-row .ws-sb-trailing:hover {
+  background: var(--fill-tertiary, rgba(120, 120, 128, 0.24));
+}
+
+/* File-explorer row: <dir>/<name> where the DIRECTORY truncates and the
+   filename never does. Replaces the `direction: rtl` hack, which mangled
+   any path containing `.` or `_` runs. */
+.ws-sb-path {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+}
+/* The directory absorbs essentially all of the shrink (999 vs 1), so the
+   filename only ever truncates once the directory is down to nothing. */
+.ws-sb-path .dir {
+  flex: 0 999 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--label-secondary, var(--text-2));
+}
+.ws-sb-path .name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sidebar empty / loading states. */
+.ws-sb-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 8px;
+  font-size: 13px;
+  line-height: 17px;
+  color: var(--label-secondary, var(--text-2));
+}
+.ws-sb-empty .gi {
+  width: 20px;
+  height: 20px;
+  color: var(--label-secondary, var(--text-2));
+}
+.ws-sb-empty .act {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: default;
+}
+.ws-sb-empty .act:hover {
+  text-decoration: underline;
+}
+
+/* Skeleton rows share the final 28px geometry, so nothing shifts on load. */
+.ws-sb-skeleton {
+  height: 28px;
+  margin: 0 0 2px;
+  border-radius: 6px;
+  background: var(--fill-quaternary, var(--row-hover));
+  animation: ws-sb-shimmer 1.4s ease-in-out infinite;
+}
+.ws-sb-skeleton:nth-child(2n) {
+  width: 78%;
+}
+.ws-sb-skeleton:nth-child(3n) {
+  width: 62%;
+}
+@keyframes ws-sb-shimmer {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+/* Sort control — native <select> sized to the macOS pop-up button geometry.
+   Swaps to the shared PopUpButton primitive once TRA-290 lands. */
+/* No `appearance: none`: the UA draws the real macOS pop-up button, chevron
+   and all, and picks up `color-scheme` for dark mode. */
+.ws-sb-popup {
+  width: 100%;
+  height: 24px;
+  margin: 4px 0 6px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: default;
+}
+
+/* Resize handle — 6px hit strip straddling the separator, keyboard operable. */
+.ws-sb-resize {
+  flex: none;
+  width: 6px;
+  margin: 0 -3px;
+  z-index: 5;
+  cursor: col-resize;
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+.ws-sb-resize:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 3px;
+}
+
+/* ---- Content pane ------------------------------------------------------- */
+/* Opaque — vibrancy stops at the sidebar's trailing edge. */
+.ws-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-sunken, var(--island));
+}
+
+/* Minimal 44px header: balances the sidebar title strip, carries the sidebar
+   toggle and owns the content pane's drag region. The full toolbar spec is a
+   separate issue — this is chrome, not a toolbar. */
+.ws-content-head {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  -webkit-app-region: drag;
+}
+.ws-content-head > * {
+  -webkit-app-region: no-drag;
+}
+/* Collapsed sidebar on macOS: the traffic lights land on this header instead. */
+.ws-stage[data-platform="mac"] .ws-shell.is-collapsed .ws-content-head {
+  padding-left: 78px;
+}
+.ws-content-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  -webkit-app-region: no-drag;
+}
+
+.ws-chrome-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-secondary, var(--text-2));
+  cursor: default;
+  transition: background 120ms ease, color 120ms ease;
+}
+.ws-chrome-toggle:hover {
+  background: var(--fill-quaternary, var(--row-hover));
+  color: var(--label, var(--text-1));
+}
+
+/* ---- Accessibility ------------------------------------------------------ */
+/* Reduce Transparency: the sidebar must be opaque and readable. macOS turns
+   the NSVisualEffectView opaque on its own; this covers the web layer too. */
+@media (prefers-reduced-transparency: reduce) {
+  /* Must out-specify `.ws-stage[data-platform="mac"] .ws-sidebar` above. */
+  .ws-stage[data-platform="mac"] .ws-sidebar {
+    background: var(--surface, var(--island));
+  }
+}
+@media (prefers-contrast: more) {
+  .ws-stage .ws-sidebar {
+    border-right-color: var(--label-secondary, var(--text-2));
+  }
+  .ws-sb-row.is-selected {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ws-sb-row,
+  .ws-sb-trailing,
+  .ws-chrome-toggle {
+    transition: none;
+  }
+  .ws-sb-skeleton {
+    animation: none;
+  }
+}

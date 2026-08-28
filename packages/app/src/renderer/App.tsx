@@ -2,7 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { WindowTabBar } from './components/WindowTabBar';
+import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
 import { Button } from './lattice/ui';
+import {
+  clampSidebarWidth,
+  readSidebarCollapsed,
+  readSidebarWidth,
+  SIDEBAR_MAX,
+  SIDEBAR_MIN,
+  splitPath,
+  writeSidebarCollapsed,
+  writeSidebarWidth,
+} from './sidebar-prefs.js';
 import { Activity } from './tabs/Activity';
 import { AskTab } from './tabs/AskTab';
 import { Clients } from './tabs/Clients';
@@ -26,9 +37,9 @@ import { Workspace } from './workspace/Workspace';
 type GlobalTab = 'workspace' | 'clients' | 'settings';
 // Settings lives in the sidebar footer (always-visible bottom row), not the top
 // nav. Keep it in the type union so existing routing/state code keeps working.
-const GLOBAL_TABS: { id: GlobalTab; label: string }[] = [
-  { id: 'workspace', label: 'Workspace' },
-  { id: 'clients', label: 'MCP Clients' },
+const GLOBAL_TABS: { id: GlobalTab; label: string; icon: string }[] = [
+  { id: 'workspace', label: 'Workspace', icon: 'grid_view' },
+  { id: 'clients', label: 'MCP Clients', icon: 'cable' },
 ];
 
 /**
@@ -42,15 +53,21 @@ function normalizeGlobalTab(value: string | null | undefined): GlobalTab {
 }
 
 type ProjectTab = 'overview' | 'ask' | 'graph' | 'activity' | 'memory' | 'notebook' | 'insights';
-const PROJECT_TABS: { id: ProjectTab; label: string }[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'ask', label: 'Ask' },
-  { id: 'graph', label: 'Graph' },
-  { id: 'activity', label: 'Activity' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'notebook', label: 'Notebook' },
-  { id: 'insights', label: 'Insights' },
+const PROJECT_TABS: { id: ProjectTab; label: string; icon: string }[] = [
+  { id: 'overview', label: 'Overview', icon: 'grid_view' },
+  { id: 'ask', label: 'Ask', icon: 'forum' },
+  { id: 'graph', label: 'Graph', icon: 'hub' },
+  { id: 'activity', label: 'Activity', icon: 'timeline' },
+  { id: 'memory', label: 'Memory', icon: 'neurology' },
+  { id: 'notebook', label: 'Notebook', icon: 'add_note' },
+  { id: 'insights', label: 'Insights', icon: 'monitoring' },
 ];
+
+/** macOS-only chrome (inset traffic lights, native vibrancy). Synchronous —
+ *  `getPlatform()` is an async IPC round-trip and this gates first paint. */
+function isMacPlatform(): boolean {
+  return /Mac/i.test(navigator.userAgent);
+}
 
 function getUrlParams() {
   const params = new URLSearchParams(window.location.search);
@@ -60,10 +77,6 @@ function getUrlParams() {
     root: params.get('root'),
   };
 }
-
-const SIDEBAR_MIN = 100;
-const SIDEBAR_MAX = 360;
-const SIDEBAR_DEFAULT = 180;
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -78,6 +91,51 @@ import {
 
 export { removeRecentProject };
 
+/** One 28px sidebar row: 16px leading glyph, 13px label, optional trailing. */
+function SidebarRow({
+  icon,
+  glyph,
+  label,
+  selected = false,
+  onClick,
+  onKeyDown,
+  title,
+  count,
+  trailing,
+  rowRef,
+  ...aria
+}: {
+  icon?: string;
+  glyph?: React.ReactNode;
+  label: React.ReactNode;
+  selected?: boolean;
+  onClick: () => void;
+  onKeyDown?: (e: React.KeyboardEvent) => void;
+  title?: string;
+  count?: React.ReactNode;
+  trailing?: React.ReactNode;
+  rowRef?: React.Ref<HTMLButtonElement>;
+} & React.AriaAttributes & { role?: string; tabIndex?: number }) {
+  return (
+    <button
+      type="button"
+      ref={rowRef}
+      className={`ws-sb-row${selected ? ' is-selected' : ''}`}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      title={title}
+      {...aria}
+    >
+      <span className="ws-sb-ico" aria-hidden="true">
+        {glyph ?? (icon ? <Icon name={icon} size={16} /> : null)}
+      </span>
+      {typeof label === 'string' ? <span className="ws-sb-label">{label}</span> : label}
+      {count !== undefined && <span className="ws-sb-count">{count}</span>}
+      {trailing}
+    </button>
+  );
+}
+
 function RecentProjects() {
   const [recent, setRecent] = useState<string[]>(getRecentProjects);
 
@@ -88,71 +146,64 @@ function RecentProjects() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
-  if (recent.length === 0) {
-    return (
-      <div className="px-2.5 py-1 text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-        No recent projects
-      </div>
-    );
-  }
-
   const openProject = (root: string) => {
     addRecentProject(root);
     const api = window.electronAPI;
     api?.openProjectTab(root);
   };
 
-  return (
-    <div
-      className="flex flex-col gap-0.5"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-    >
-      <div
-        className="px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
-        style={{ color: 'var(--text-tertiary)' }}
-      >
-        Recent
+  const pickProject = async () => {
+    const api = window.electronAPI;
+    const picked = await api?.selectFolder?.();
+    if (picked) openProject(picked);
+  };
+
+  if (recent.length === 0) {
+    return (
+      <div className="ws-sb-empty">
+        <Icon name="folder" size={20} className="gi" />
+        <span>No projects opened yet.</span>
+        <button type="button" className="act" onClick={pickProject}>
+          Open a project…
+        </button>
       </div>
+    );
+  }
+
+  return (
+    <>
       {recent.map((root) => (
-        <div
+        <SidebarRow
           key={root}
-          className="group flex items-center rounded-md transition-colors hover:bg-[var(--bg-active)]"
-        >
-          <button
-            type="button"
-            onClick={() => openProject(root)}
-            className="text-left flex-1 min-w-0 px-2.5 py-1 text-[11px] truncate"
-            style={{ color: 'var(--text-secondary)' }}
-            title={root}
-          >
-            {root.split(/[/\\]/).filter(Boolean).pop()}
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              removeRecentProject(root);
-              setRecent(getRecentProjects());
-            }}
-            className="shrink-0 mr-1.5 w-4 h-4 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[var(--bg-secondary)]"
-            style={{ color: 'var(--text-tertiary)' }}
-            title="Remove from recent"
-          >
-            <svg
-              width="8"
-              height="8"
-              viewBox="0 0 8 8"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
+          icon="folder"
+          label={root.split(/[/\\]/).filter(Boolean).pop() ?? root}
+          title={root}
+          onClick={() => openProject(root)}
+          // Keyboard route for the remove affordance — the row is itself a
+          // button, so the ✕ can't be one too (nested interactive content).
+          onKeyDown={(e) => {
+            if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+            e.preventDefault();
+            removeRecentProject(root);
+            setRecent(getRecentProjects());
+          }}
+          trailing={
+            <span
+              className="ws-sb-trailing"
+              aria-hidden="true"
+              title="Remove from recent (⌫)"
+              onClick={(e) => {
+                e.stopPropagation();
+                removeRecentProject(root);
+                setRecent(getRecentProjects());
+              }}
             >
-              <path d="M1 1l6 6M7 1l-6 6" />
-            </svg>
-          </button>
-        </div>
+              <Icon name="close" size={12} />
+            </span>
+          }
+        />
       ))}
-    </div>
+    </>
   );
 }
 
@@ -185,6 +236,8 @@ function ProjectFileExplorer({
   const [sort, setSort] = useState<FileSort>('symbols');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const LIMIT = 30;
 
   // Debounce scope to avoid fetching on every keystroke
@@ -227,88 +280,80 @@ function ProjectFileExplorer({
     return p;
   };
 
-  return (
-    <div
-      className="flex flex-col gap-0.5 min-h-0 flex-1"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-    >
-      {/* Sort picker */}
-      <div className="px-1.5 mb-0.5 relative">
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          <path d="M2 4h12M4 8h8M6 12h4" />
-        </svg>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as FileSort)}
-          className="w-full text-[10px] pl-5 pr-1.5 py-1 rounded-md appearance-none"
-          style={{
-            background: 'var(--bg-secondary)',
-            color: 'var(--text-secondary)',
-            border: '0.5px solid var(--border)',
-            outline: 'none',
-          }}
-        >
-          {FILE_SORT_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
+  // ↑/↓ move the selection, ⏎ opens — standard macOS list keyboard model.
+  const onRowKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    e.preventDefault();
+    const next = e.key === 'ArrowDown' ? index + 1 : index - 1;
+    if (next < 0 || next >= files.length) return;
+    setSelected(files[next].path);
+    listRef.current
+      ?.querySelectorAll<HTMLButtonElement>('.ws-sb-row')
+      [next]?.focus();
+  };
 
-      {/* File list */}
-      <div
-        className="flex-1 overflow-y-auto overflow-x-hidden"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+  return (
+    <>
+      <div className="ws-sb-group">Files</div>
+      {/* Sort — a native pop-up button sized to the macOS 24px geometry.
+          Swaps to the shared PopUpButton primitive once TRA-290 lands. */}
+      <select
+        className="ws-sb-popup"
+        value={sort}
+        aria-label="Sort files by"
+        onChange={(e) => setSort(e.target.value as FileSort)}
       >
-        {loading ? (
-          <div
-            className="px-2.5 py-2 text-[10px] text-center"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            Loading…
-          </div>
-        ) : files.length === 0 ? (
-          <div
-            className="px-2.5 py-2 text-[10px] text-center"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            No files
-          </div>
-        ) : (
-          files.map((f) => (
-            <button
-              type="button"
-              key={f.path}
-              onClick={() => onFileClick(f.path)}
-              className="w-full text-left px-2.5 py-1 text-[10px] truncate rounded-md transition-colors hover:bg-[var(--bg-active)] flex items-center gap-1"
-              style={{ color: 'var(--text-secondary)' }}
-              title={`${shortPath(f.path)} — ${f.symbols} symbols, ${f.edges} edges`}
-            >
-              <span className="truncate flex-1" style={{ direction: 'rtl', textAlign: 'left' }}>
-                {shortPath(f.path)}
-              </span>
-              <span
-                className="shrink-0 text-[9px] tabular-nums"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                {sort === 'edges' ? f.edges : f.symbols}
-              </span>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
+        {FILE_SORT_OPTIONS.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+
+      {loading ? (
+        // Skeletons at the final 28px geometry — nothing shifts on load.
+        <div aria-busy="true" aria-label="Loading files">
+          {Array.from({ length: 6 }, (_, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder list, no identity
+            <div key={i} className="ws-sb-skeleton" />
+          ))}
+        </div>
+      ) : files.length === 0 ? (
+        <div className="ws-sb-empty">
+          <Icon name="description" size={20} className="gi" />
+          <span>No indexed files match this scope.</span>
+        </div>
+      ) : (
+        <div role="tree" aria-label="Project files" ref={listRef}>
+          {files.map((f, i) => {
+            const display = shortPath(f.path);
+            const { dir, name } = splitPath(display);
+            return (
+              <SidebarRow
+                key={f.path}
+                role="treeitem"
+                aria-selected={selected === f.path}
+                selected={selected === f.path}
+                glyph={<FileTypeGlyph ftype={fileKind(f.path).ftype} size={16} />}
+                label={
+                  <span className="ws-sb-path">
+                    {dir && <span className="dir">{dir}</span>}
+                    <span className="name">{name}</span>
+                  </span>
+                }
+                count={sort === 'edges' ? f.edges : f.symbols}
+                title={`${display} — ${f.symbols} symbols, ${f.edges} edges`}
+                onClick={() => {
+                  setSelected(f.path);
+                  onFileClick(f.path);
+                }}
+                onKeyDown={(e) => onRowKeyDown(e, i)}
+              />
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -709,7 +754,8 @@ export function App() {
 
   const [globalTab, setGlobalTab] = useState<GlobalTab>(normalizeGlobalTab(tab));
   const [projectTab, setProjectTab] = useState<ProjectTab>('overview');
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
+  const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [_isFullscreen, setIsFullscreen] = useState(false);
   const dragging = useRef(false);
   const graphRef = useRef<GraphExplorerGPUHandle | null>(null);
@@ -755,14 +801,26 @@ export function App() {
     document.body.style.userSelect = 'none'; // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_username -- CSS `userSelect` property name matched the "username" secret heuristic; no credential involved.
   }, []);
 
+  // One place that owns a width change: state → localStorage → other windows.
+  const applySidebarWidth = useCallback((width: number) => {
+    const clamped = clampSidebarWidth(width);
+    setSidebarWidth(clamped);
+    writeSidebarWidth(clamped);
+    window.electronAPI?.syncSidebarWidth(clamped);
+    return clamped;
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      writeSidebarCollapsed(!prev);
+      return !prev;
+    });
+  }, []);
+
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!dragging.current) return;
-      const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX));
-      setSidebarWidth(newWidth);
-      // Sync to other tabs
-      const api = window.electronAPI;
-      api?.syncSidebarWidth(newWidth);
+      applySidebarWidth(e.clientX);
     };
     const onMouseUp = () => {
       if (!dragging.current) return;
@@ -776,15 +834,51 @@ export function App() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, []);
+  }, [applySidebarWidth]);
 
   // Receive sidebar width from other tabs
   useEffect(() => {
     const api = window.electronAPI;
     if (api?.onSidebarWidthChanged) {
-      return api.onSidebarWidthChanged((w: number) => setSidebarWidth(w));
+      return api.onSidebarWidthChanged((w: number) => setSidebarWidth(clampSidebarWidth(w)));
     }
   }, []);
+
+  // Cross-window sync of the persisted prefs (same-process tabs).
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'trace-mcp-sidebar-width' && e.newValue !== null) {
+        setSidebarWidth(clampSidebarWidth(Number(e.newValue)));
+      } else if (e.key === 'trace-mcp-sidebar-collapsed') {
+        setSidebarCollapsed(e.newValue === '1');
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // ⌘⌥S toggles the sidebar; ⌘1…⌘9 select the nth primary section.
+  useEffect(() => {
+    const sections: string[] = isProject
+      ? PROJECT_TABS.map((t) => t.id)
+      : GLOBAL_TABS.map((t) => t.id);
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.altKey && (e.key === 's' || e.key === 'S' || e.code === 'KeyS')) {
+        e.preventDefault();
+        toggleSidebar();
+        return;
+      }
+      if (e.altKey || e.shiftKey) return;
+      const n = Number(e.key);
+      if (!Number.isInteger(n) || n < 1 || n > 9 || n > sections.length) return;
+      e.preventDefault();
+      if (isProject) setProjectTab(sections[n - 1] as ProjectTab);
+      else setGlobalTab(sections[n - 1] as GlobalTab);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isProject, toggleSidebar]);
 
   // Track fullscreen state
   useEffect(() => {
@@ -802,77 +896,61 @@ export function App() {
     <div
       className="ws-stage flex flex-col h-screen"
       data-mode={theme}
-      style={{ background: 'var(--frame)' }}
+      data-platform={isMacPlatform() ? 'mac' : 'other'}
     >
       {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
       {/* Windows custom tab bar (hidden on macOS — native tabs handle it) */}
       <WindowTabBar />
 
-      <div className="flex flex-1 min-h-0" style={{ padding: 8, gap: 0 }}>
-        {/* Left sidebar */}
-        <div
-          className="shrink-0 relative"
-          style={
-            {
-              width: sidebarWidth,
-              WebkitAppRegion: 'drag',
-            } as React.CSSProperties
-          }
-        >
+      <div className={`ws-shell${sidebarCollapsed ? ' is-collapsed' : ''}`}>
+        {!sidebarCollapsed && (
           <aside
-            className="ws-island flex flex-col pt-3 pb-3 px-1.5 gap-0.5 h-full"
-            style={
-              {
-                WebkitAppRegion: 'no-drag',
-              } as React.CSSProperties
-            }
+            className="ws-sidebar"
+            aria-label="Sidebar"
+            style={{ width: sidebarWidth } as React.CSSProperties}
           >
-            {isProject ? (
-              <>
-                {PROJECT_TABS.map((t) => (
-                  <Button
-                    key={t.id}
-                    variant="text"
-                    active={projectTab === t.id}
-                    onClick={() => setProjectTab(t.id)}
-                    className="w-full text-left"
-                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                  >
-                    {t.label}
-                  </Button>
-                ))}
+            {/* 44px strip the traffic lights live in — and the only draggable
+                part of the sidebar. macOS only: elsewhere there are no inset
+                lights to make room for. */}
+            {isMacPlatform() && <div className="ws-sidebar-titlebar" />}
 
-                {/* Divider + File explorer */}
-                <div style={{ borderTop: '1px solid var(--border-row)', margin: '6px 8px' }} />
-                <ProjectFileExplorer
-                  root={root!}
-                  scope={graphGpuSettings.scope}
-                  onFileClick={openFileInGraph}
-                />
-              </>
-            ) : (
-              <>
-                {GLOBAL_TABS.map((t) => (
-                  <Button
-                    key={t.id}
-                    variant="text"
-                    active={globalTab === t.id}
-                    onClick={() => setGlobalTab(t.id)}
-                    className="w-full text-left"
-                    style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-                  >
-                    {t.label}
-                  </Button>
-                ))}
+            <nav className="ws-sidebar-scroll" aria-label="Sections">
+              {isProject ? (
+                <>
+                  {PROJECT_TABS.map((t) => (
+                    <SidebarRow
+                      key={t.id}
+                      icon={t.icon}
+                      label={t.label}
+                      selected={projectTab === t.id}
+                      aria-current={projectTab === t.id ? 'page' : undefined}
+                      onClick={() => setProjectTab(t.id)}
+                    />
+                  ))}
+                  <ProjectFileExplorer
+                    root={root!}
+                    scope={graphGpuSettings.scope}
+                    onFileClick={openFileInGraph}
+                  />
+                </>
+              ) : (
+                <>
+                  {GLOBAL_TABS.map((t) => (
+                    <SidebarRow
+                      key={t.id}
+                      icon={t.icon}
+                      label={t.label}
+                      selected={globalTab === t.id}
+                      aria-current={globalTab === t.id ? 'page' : undefined}
+                      onClick={() => setGlobalTab(t.id)}
+                    />
+                  ))}
+                  <div className="ws-sb-group">Recent</div>
+                  <RecentProjects />
+                </>
+              )}
+            </nav>
 
-                {/* Divider + Recent projects */}
-                <div style={{ borderTop: '1px solid var(--border-row)', margin: '6px 8px' }} />
-                <RecentProjects />
-              </>
-            )}
-
-            {/* Spacer to push footer to bottom */}
-            <div style={{ flex: 1 }} />
             <UpdateBanner />
             <SidebarFooter
               active={!isProject && globalTab === 'settings'}
@@ -881,44 +959,49 @@ export function App() {
               onToggleTheme={toggleTheme}
             />
           </aside>
+        )}
 
-          {/* Resize handle */}
+        {/* Resize handle — draggable AND keyboard-operable, so the ARIA
+            separator role is honest. */}
+        {!sidebarCollapsed && (
           <div
+            className="ws-sb-resize"
             role="separator"
             aria-orientation="vertical"
             aria-label="Resize sidebar"
             aria-valuenow={sidebarWidth}
             aria-valuemin={SIDEBAR_MIN}
             aria-valuemax={SIDEBAR_MAX}
-            tabIndex={-1}
+            tabIndex={0}
             onMouseDown={onMouseDown}
-            style={
-              {
-                position: 'absolute',
-                top: 0,
-                right: -3,
-                width: 6,
-                height: '100%',
-                cursor: 'col-resize',
-                zIndex: 50,
-                WebkitAppRegion: 'no-drag',
-              } as React.CSSProperties
-            }
+            onKeyDown={(e) => {
+              const step = e.shiftKey ? 40 : 10;
+              if (e.key === 'ArrowLeft') applySidebarWidth(sidebarWidth - step);
+              else if (e.key === 'ArrowRight') applySidebarWidth(sidebarWidth + step);
+              else if (e.key === 'Home') applySidebarWidth(SIDEBAR_MIN);
+              else if (e.key === 'End') applySidebarWidth(SIDEBAR_MAX);
+              else return;
+              e.preventDefault();
+            }}
           />
-        </div>
+        )}
 
         {/* Main content */}
-        <main
-          className={`flex-1 flex flex-col min-h-0 ${isGraphGpu ? 'p-2' : needsFlexLayout ? 'p-1 pt-2' : 'p-4 overflow-y-auto'}`}
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
+        <main className="ws-content">
+          <div className="ws-content-head">
+            <button
+              type="button"
+              className="ws-chrome-toggle"
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+              aria-expanded={!sidebarCollapsed}
+              title={`${sidebarCollapsed ? 'Show' : 'Hide'} sidebar (⌘⌥S)`}
+            >
+              <Icon name="dock_to_right" size={16} />
+            </button>
+          </div>
           <div
-            className={
-              needsFlexLayout
-                ? 'flex-1 min-h-0 flex flex-col overflow-hidden'
-                : 'flex-1 flex flex-col min-h-0'
-            }
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+            className={`ws-content-body ${isGraphGpu ? 'p-2' : needsFlexLayout ? 'p-1 pt-2' : 'p-4 overflow-y-auto'}`}
           >
             {isProject ? (
               <ErrorBoundary key={`project:${projectTab}`} label={`${projectTab} tab`}>

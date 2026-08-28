@@ -73,16 +73,14 @@ function getRendererUrl(params?: Record<string, string>): string {
   return `${base}?${qs}`;
 }
 
-function getTitleBarColor(): string {
-  return nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#f6f6f6';
-}
-
 function createWindowOptions(
   extraOpts?: Partial<Electron.BrowserWindowConstructorOptions>,
 ): Electron.BrowserWindowConstructorOptions {
   const opts: Electron.BrowserWindowConstructorOptions = {
     width: 960,
     height: 700,
+    minWidth: 640,
+    minHeight: 420,
     show: false,
     icon: APP_ICON,
     resizable: true,
@@ -90,7 +88,9 @@ function createWindowOptions(
     maximizable: true,
     fullscreenable: true,
     skipTaskbar: false,
-    backgroundColor: getTitleBarColor(),
+    // Non-mac keeps an opaque backing (only ever visible for the frame before
+    // the renderer's first paint); macOS gets the NSVisualEffectView below.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#f5f5f7',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -98,9 +98,21 @@ function createWindowOptions(
     },
     ...extraOpts,
   };
-  // tabbingIdentifier is macOS-only
   if (isMac) {
+    // tabbingIdentifier is macOS-only
     opts.tabbingIdentifier = TABBING_ID;
+    // Native NSVisualEffectView behind the whole window. The renderer paints
+    // the content pane opaque and leaves the sidebar region transparent, so
+    // only the sidebar reads as vibrant. `visualEffectState: 'followWindow'`
+    // desaturates it when the window loses key, and macOS honours Reduce
+    // Transparency for free — no CSS backdrop-filter fallback needed.
+    opts.titleBarStyle = 'hiddenInset';
+    // y=18 centres the 12px lights on the 44px title strip the sidebar reserves.
+    opts.trafficLightPosition = { x: 14, y: 18 };
+    opts.vibrancy = 'sidebar';
+    opts.visualEffectState = 'followWindow';
+    opts.backgroundColor = '#00000000';
+    opts.transparent = false;
   }
   return opts;
 }
@@ -591,20 +603,13 @@ export function createTray(): Tray {
   checkHealth();
   healthInterval = setInterval(checkHealth, 5_000);
 
-  // Update title bar color + tray icon when system theme changes
-  nativeTheme.on('updated', () => {
-    const color = getTitleBarColor();
-    const allWindows = [menuWindow, ...projectWindows.values()];
-    for (const win of allWindows) {
-      if (win && !win.isDestroyed()) {
-        win.setBackgroundColor(color);
-      }
-    }
-    // On Windows, tray icon color needs to match the taskbar theme
-    if (!isMac) {
+  // On Windows, tray icon color needs to match the taskbar theme. macOS window
+  // chrome needs no repaint — the vibrancy view follows the system appearance.
+  if (!isMac) {
+    nativeTheme.on('updated', () => {
       setTrayIcon(daemonReachable);
-    }
-  });
+    });
+  }
 
   return tray;
 }
