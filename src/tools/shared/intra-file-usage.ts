@@ -81,15 +81,17 @@ export function makeIntraFileReader(
     if (cache.has(filePath)) return cache.get(filePath) ?? null;
     let content: string | null = null;
     if (projectRoot) {
-      const abs = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+      const root = path.resolve(projectRoot);
+      const abs = path.resolve(root, filePath);
+      // Enforce the containment this function's docstring already promises.
+      // Without it an absolute `filePath` silently escapes `projectRoot`.
+      const contained = abs === root || abs.startsWith(root + path.sep);
       let fd: number | undefined;
       try {
+        if (!contained) throw new Error('outside project root');
         // Stat and read the same open fd rather than statSync(path) then
         // readFileSync(path) — two path-based calls still race (the file
         // can change between them) even without an explicit existsSync.
-        // codeql[js/path-injection]: `filePath` is a path this server itself
-        // indexed under `projectRoot`, resolved against that same trusted
-        // root — not a per-request value from an untrusted caller.
         fd = fs.openSync(abs, 'r');
         const stat = fs.fstatSync(fd);
         if (stat.size <= 2 * 1024 * 1024) {

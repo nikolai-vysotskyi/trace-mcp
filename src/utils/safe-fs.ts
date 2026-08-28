@@ -25,15 +25,18 @@ function isEnoent(err: unknown): boolean {
  *
  * Non-ENOENT errors (permission denied, EISDIR, etc.) are rethrown.
  *
- * Trust note: this helper does no path validation on purpose — it is a
- * mechanical replacement for an inline `readFileSync`, so `path` carries
- * exactly the trust its caller already had. Every call site in this repo
- * passes a path derived from the project root or `~/.trace-mcp` that this
- * local CLI was pointed at, never a value from an untrusted request.
+ * Trust note (CodeQL js/path-injection): this helper does no path validation
+ * on purpose — it is a mechanical replacement for an inline `readFileSync`,
+ * so `path` carries exactly the trust its caller already had, no more and no
+ * less. Call sites pass paths under `~/.trace-mcp` or under the project root
+ * the daemon was pointed at; CodeQL traces the latter back to the
+ * `X-Trace-Project` hint on the loopback `/mcp` endpoint. Whether that
+ * endpoint is a trust boundary is a separate, pre-existing question —
+ * see TRA-301. Validating here would only move the check away from the
+ * callers that know what a legal path is.
  */
 export function readIfExists(path: string): string | null {
   try {
-    // codeql[js/path-injection]: see trust note above
     return fs.readFileSync(path, 'utf-8');
   } catch (err) {
     if (isEnoent(err)) return null;
