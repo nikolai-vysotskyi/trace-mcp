@@ -278,9 +278,16 @@ replacement without loss of behaviour or response shape.
 | `get_project_memo { include_history, limit }` | `get_wake_up { scope: "project", include_history, history_limit }` |
 
 `pin` accepts `symbol_id` and `file_path` together, pinning both at the same
-weight in one call. `get_dead_code` and `get_untested_symbols` inherited
-`output_format: "toon"` from the aliases they replace, so the TOON encoding
-stays available on those payloads.
+weight in one call.
+
+One deliberate difference: both retired export-scanning aliases were
+TOON-enabled, but only `get_untested_symbols` inherited `output_format`.
+Re-measuring the payloads through their replacements put
+`get_untested_symbols { scope: "exports_only" }` at **+21.1%** (table mode —
+it keeps TOON), while `get_dead_code { mode: "exports_only" }` came in at
+**-17.3%** (list mode, because its rows are not uniform). That is well under
+the +15% cutoff the TOON allowlist is built on, so wiring it would have cost
+tokens rather than saved them. See [TOON savings](toon-savings.md).
 
 Two rarely-used `search` tuning parameters were also removed. Per-channel
 fusion weights now come from `~/.trace-mcp/tuning.jsonc` (written by
@@ -290,4 +297,4 @@ structure in the whole tool schema, paid by every client on every session.
 
 Together these changes cut the always-on tool surface from 148 to 141
 registrations and the serialized schema every MCP client without lazy tool
-loading pays at session start from 90,579 to 86,519 characters.
+loading pays at session start from 90,579 to 86,217 characters.

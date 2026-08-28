@@ -210,11 +210,11 @@ descending.
 | get_complexity_report limit=50 | 50 | 3057 | 2075 | **+32.1%** | table | flat scalar rows |
 | get_refactor_candidates limit=40 | 40 | 1932 | 1387 | **+28.2%** | table | flat scalar rows |
 | predict_bugs limit=40 | 40 | 8877 | 6965 | **+21.5%** | table | risky-control beat the prediction — see Surprises |
-| get_dead_code mode=exports_only (project-wide) | 404 | 17581 | 13857 | **+21.2%** | table | flat scalar rows |
-| get_untested_symbols scope=exports_only (project-wide) | 464 | 25964 | 20451 | **+21.2%** | table | flat scalar rows |
+| get_untested_symbols scope=exports_only (project-wide) | 907 | 51903 | 40937 | **+21.1%** | table | flat scalar rows |
 | list_pins (2 seeded) | 2 | 88 | 71 | +19.3% | table | tiny payload — fixed preamble dominates |
 | get_untested_symbols max_results=80 | 80 | 14280 | 13098 | +8.3% | table | signature strings dilute the win |
 | get_tests_for output-format.ts | 1 | 44 | 44 | 0% | table | single-row payload — no amortization |
+| get_dead_code mode=exports_only (project-wide) | 100 | 5716 | 6707 | **-17.3%** | list | re-measured via the replacement call — row shapes are not uniform |
 | get_dead_code limit=30 | 30 | 2425 | 2822 | **-16.4%** | list | nested `signals{}` object per row → list mode |
 | get_implementations name=LanguagePlugin | 33 | 2292 | 2683 | **-17.1%** | list | `via: string \| string[]` → list mode |
 
@@ -238,8 +238,7 @@ cutoff** we established for the original five keepers:
 | `get_complexity_report` | +32.1% | table |
 | `get_refactor_candidates` | +28.2% | table |
 | `predict_bugs` | +21.5% | table |
-| `get_dead_code` (`mode: exports_only`) | +21.2% | table |
-| `get_untested_symbols` (`scope: exports_only`) | +21.2% | table |
+| `get_untested_symbols` (`scope: exports_only`) | +21.1% | table |
 
 **Do not wire** these — savings below the +15% cutoff or list-mode regression:
 
@@ -248,7 +247,7 @@ cutoff** we established for the original five keepers:
 | `list_pins` | +19.3% above cutoff, but typical payload is ~2-10 rows × 88-300 tokens — TOON's fixed preamble dominates at this scale and a single pin payload is already small. Wire only if usage tests show consistent ≥10-pin payloads in practice. |
 | `get_untested_symbols` | +8.3% | Per-row `signature` and `level` strings drown out the column-header amortization. |
 | `get_tests_for` | 0% | Single-row payloads are typical; no amortization possible. |
-| `get_dead_code` | -16.4% | Nested `signals{ import_graph, call_graph, barrel_exports }` per row forces list mode. |
+| `get_dead_code` | -16.4% / -17.3% | Nested `signals{ import_graph, call_graph, barrel_exports }` per row forces list mode in the default mode. The `exports_only` payload was carried by the retired `get_dead_exports` alias and had measured +21.2%; re-measured through `get_dead_code { mode: "exports_only" }` in 2026-08 it lands at -17.3%, so it was deliberately *not* moved onto the allowlist (TRA-240). |
 | `get_implementations` | -17.1% | `via: string \| string[]` makes row shapes heterogeneous → list mode. |
 
 ## Wave 2 surprises

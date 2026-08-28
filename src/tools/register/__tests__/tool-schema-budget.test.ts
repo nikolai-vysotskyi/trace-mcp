@@ -170,7 +170,7 @@ describe('MCP tool-schema token budget guardrail (TRA-186)', () => {
     ).toBe(0);
   });
 
-  // Measured 2026-08-28 (TRA-240): 86,519 serialized schema chars across the
+  // Measured 2026-08-28 (TRA-240): 86,217 serialized schema chars across the
   // always-on tools, down from TRA-239's 90,579. The description and param-prose
   // budgets above only watch text we write; they are blind to structural schema
   // growth. TRA-193's consolidations added params to the surviving tool while
@@ -419,3 +419,4 @@ describe('MCP tool-schema budget coverage reconciliation (TRA-211)', () => {
     ).toEqual([]);
   });
 });
+

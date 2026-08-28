@@ -814,26 +814,6 @@ async function benchWave2LiveIndex(): Promise<Wave2Result[]> {
       results.push({ kind: 'skipped', reason: `get_coupling: ${(err as Error).message}` });
     }
 
-    // get_dead_code mode=exports_only: { dead_exports: [...], total_dead, total_exports, ... }
-    try {
-      const tool = findTool(git.captured, 'get_dead_code');
-      const row = await benchUnwired(
-        tool,
-        { mode: 'exports_only' },
-        'get_dead_code mode=exports_only (project-wide)',
-        (p) => {
-          const arr = (p as { dead_exports?: unknown[] }).dead_exports;
-          return Array.isArray(arr) ? arr.length : 0;
-        },
-      );
-      results.push({ kind: 'row', row });
-    } catch (err) {
-      results.push({
-        kind: 'skipped',
-        reason: `get_dead_code exports_only: ${(err as Error).message}`,
-      });
-    }
-
     // get_untested_symbols scope=exports_only: { untested, total }
     try {
       const tool = findTool(analysis.captured, 'get_untested_symbols');
@@ -939,6 +919,26 @@ async function benchWave2LiveIndex(): Promise<Wave2Result[]> {
       git.server as Parameters<typeof registerGitTools>[0],
       baseCtxStub({ store: live.store, projectRoot: live.projectRoot }),
     );
+
+    // get_dead_code mode=exports_only: { dead_exports: [...], total_dead, total_exports, ... }
+    try {
+      const tool = findTool(git.captured, 'get_dead_code');
+      const row = await benchUnwired(
+        tool,
+        { mode: 'exports_only' },
+        'get_dead_code mode=exports_only (project-wide)',
+        (p) => {
+          const arr = (p as { dead_exports?: unknown[] }).dead_exports;
+          return Array.isArray(arr) ? arr.length : 0;
+        },
+      );
+      results.push({ kind: 'row', row });
+    } catch (err) {
+      results.push({
+        kind: 'skipped',
+        reason: `get_dead_code exports_only: ${(err as Error).message}`,
+      });
+    }
 
     // get_complexity_report: { symbols: [...], total }
     try {

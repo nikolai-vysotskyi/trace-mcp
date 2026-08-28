@@ -141,7 +141,7 @@ describe('TOON output_format drift guardrail', () => {
     }
   });
 
-  it('the set of TOON-enabled tools matches the documented allowlist (14 tools)', () => {
+  it('the set of TOON-enabled tools matches the documented allowlist (13 tools)', () => {
     const toonEnabled = tools
       .filter((t) => acceptsToon(t.schemaShape.output_format))
       .map((t) => t.name)
@@ -151,7 +151,6 @@ describe('TOON output_format drift guardrail', () => {
       'get_changed_symbols',
       'get_complexity_report',
       'get_coupling',
-      'get_dead_code',
       'get_feature_context',
       'get_git_churn',
       'get_outline',

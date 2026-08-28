@@ -133,7 +133,7 @@ When you need to Edit a file, minimize what you Read:
 
 ### TOON output format — when to use
 
-14 tools support `output_format: "toon"` for lossless Token-Oriented Object Notation. Pass it whenever the response will be consumed by an LLM. Lossless is a mathematical property of the encoding; the structural win on tabular payloads is a property of the format spec. Actual token savings depend on the consumer's tokenizer and payload shape — see [docs/toon-savings.md](docs/toon-savings.md) for measurements on this repo's self-index. Default remains JSON; TOON is strictly opt-in.
+13 tools support `output_format: "toon"` for lossless Token-Oriented Object Notation. Pass it whenever the response will be consumed by an LLM. Lossless is a mathematical property of the encoding; the structural win on tabular payloads is a property of the format spec. Actual token savings depend on the consumer's tokenizer and payload shape — see [docs/toon-savings.md](docs/toon-savings.md) for measurements on this repo's self-index. Default remains JSON; TOON is strictly opt-in.
 
 Allowlist:
 
@@ -141,7 +141,6 @@ Allowlist:
 - `get_changed_symbols`
 - `get_complexity_report`
 - `get_coupling`
-- `get_dead_code`
 - `get_feature_context`
 - `get_git_churn`
 - `get_outline`
