@@ -30,6 +30,13 @@ updates:
       - dependency-name: "better-sqlite3"
         update-types:
           - version-update:semver-major
+      # commander 15 is ESM-only and requires Node >=22.12, but this
+      # project's support policy is `engines: node >=20` — merging would
+      # silently break installs on Node 20/21 (decided on PR #197).
+      # Revisit once the Node floor moves to 22.
+      - dependency-name: "commander"
+        update-types:
+          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production
