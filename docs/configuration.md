@@ -665,6 +665,8 @@ http://127.0.0.1:3741/mcp?project=/absolute/path/to/repo
 
 The daemon multiplexes projects — one process serves all of them — but each MCP registration is bound to a single project via `?project=` (or, for clients that cannot append a query string, the `X-Trace-Project` header or `params._meta["traceMcp/projectRoot"]`). Pick this when you want one warm index reused across sessions and tools and you're comfortable managing the per-registration URL. For one-session-per-repo workflows, stdio is simpler.
 
+> **The daemon's trust boundary is loopback.** `serve-http` has no authentication: every `/api` route and `/mcp` itself trust the caller, and `?project=` / `X-Trace-Project` / `params._meta["traceMcp/projectRoot"]` can name any directory on the machine — the daemon will index and serve it. On `127.0.0.1` that grants nothing extra, because anything able to reach the port already runs as you and can read those files directly. Binding elsewhere hands that power to the network, so a non-loopback `--host` is refused unless you also pass `--allow-remote`, and even then you are expected to put your own authentication (SSH tunnel, reverse proxy, VPN) in front of the port.
+
 > **One project per session.** Both transports resolve exactly one project per MCP session — stdio from the working directory, HTTP from `?project=`. A single session cannot query across repositories today; to work with several repos, register each (`trace-mcp add <path>`) and add one MCP entry per repo (HTTP) or open one session per repo (stdio). Cross-repo queries inside a single session — useful for multi-repo/pseudo-monorepo setups — are tracked as an enhancement in [#199](https://github.com/nikolai-vysotskyi/trace-mcp/issues/199).
 
 | | stdio | HTTP daemon |
@@ -722,7 +724,8 @@ trace-mcp upgrade [dir]        # Upgrade all projects (or specific one) — migr
 trace-mcp serve                # Start MCP server (stdio transport)
 trace-mcp serve-http           # Start HTTP/SSE server (default: 127.0.0.1:3741)
   -p, --port <port>            # Custom port
-  --host <host>                # Custom host
+  --host <host>                # Custom host (loopback only unless --allow-remote)
+  --allow-remote               # Permit a non-loopback --host (see the trust boundary note)
 
 # Manual indexing
 trace-mcp index <dir>          # Index a project directory
