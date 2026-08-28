@@ -167,6 +167,27 @@
   background: var(--fill-tertiary, rgba(120, 120, 128, 0.24));
 }
 
+/* A row that CARRIES a control instead of being one (Appearance). Same box as
+   every other row; it just must not read as clickable. */
+.ws-sb-row.is-static {
+  cursor: default;
+}
+.ws-sb-row.is-static:hover {
+  background: transparent;
+}
+
+/* ---- Sidebar footer ----------------------------------------------------- */
+/* Pinned below .ws-sidebar-scroll, so the rows above slide under it — that is
+   a scroll edge, and a scroll edge gets the hairline. Same 6px inset as the
+   scroll region, so footer rows land on the same pill geometry as nav rows.
+   The 8px bottom inset reads as concentric with the 12px window corner. */
+.ws-sb-footer {
+  flex: none;
+  padding: 6px 6px 8px;
+  border-top: 0.5px solid var(--separator, var(--sep));
+  -webkit-app-region: no-drag;
+}
+
 /* File-explorer row: <dir>/<name> where the DIRECTORY truncates and the
    filename never does. Replaces the `direction: rtl` hack, which mangled
    any path containing `.` or `_` runs. */

@@ -1,0 +1,105 @@
+/**
+ * @vitest-environment jsdom
+ */
+/* The bug this locks down (TRA-305): the old toggle only ever wrote 'light' or
+ * 'dark', so one click pinned the app forever and the system-appearance
+ * listener stopped mattering. Auto must be reachable again, and reaching it
+ * must clear the stored key rather than store a third value. */
+import { act, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APPEARANCE_OPTIONS, THEME_KEY, useTheme } from '../theme.js';
+
+/** matchMedia is not implemented in jsdom — stand in a controllable one. */
+let systemDark = false;
+const listeners = new Set<() => void>();
+
+beforeEach(() => {
+  systemDark = false;
+  listeners.clear();
+  localStorage.clear();
+  document.documentElement.removeAttribute('data-theme');
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) =>
+      ({
+        media: query,
+        get matches() {
+          return query.includes('dark') && systemDark;
+        },
+        addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+        removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+      }) as unknown as MediaQueryList,
+  );
+});
+
+afterEach(() => vi.unstubAllGlobals());
+
+function setSystem(dark: boolean) {
+  systemDark = dark;
+  act(() => {
+    for (const fn of listeners) fn();
+  });
+}
+
+describe('useTheme', () => {
+  it('offers exactly Auto / Light / Dark', () => {
+    expect(APPEARANCE_OPTIONS.map((o) => o.value)).toEqual(['auto', 'light', 'dark']);
+  });
+
+  it('starts on Auto and follows the system', () => {
+    const { result } = renderHook(() => useTheme());
+    expect(result.current.appearance).toBe('auto');
+    expect(result.current.theme).toBe('light');
+
+    setSystem(true);
+    expect(result.current.theme).toBe('dark');
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+  });
+
+  it('pins the appearance when Light or Dark is picked', () => {
+    const { result } = renderHook(() => useTheme());
+    act(() => result.current.setAppearance('light'));
+
+    expect(result.current.theme).toBe('light');
+    expect(localStorage.getItem(THEME_KEY)).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+
+    // Pinned means pinned: the system flipping no longer moves it.
+    setSystem(true);
+    expect(result.current.theme).toBe('light');
+  });
+
+  it('gets back to Auto, and Auto clears the stored key', () => {
+    const { result } = renderHook(() => useTheme());
+    act(() => result.current.setAppearance('dark'));
+    act(() => result.current.setAppearance('auto'));
+
+    expect(result.current.appearance).toBe('auto');
+    expect(localStorage.getItem(THEME_KEY)).toBeNull();
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+
+    setSystem(true);
+    expect(result.current.theme).toBe('dark');
+  });
+
+  it('restores a stored choice on mount, and ignores junk', () => {
+    localStorage.setItem(THEME_KEY, 'dark');
+    expect(renderHook(() => useTheme()).result.current.appearance).toBe('dark');
+
+    localStorage.setItem(THEME_KEY, 'aubergine');
+    expect(renderHook(() => useTheme()).result.current.appearance).toBe('auto');
+  });
+
+  it('syncs from another window, including a clear back to Auto', () => {
+    const { result } = renderHook(() => useTheme());
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: THEME_KEY, newValue: 'dark' }));
+    });
+    expect(result.current.appearance).toBe('dark');
+
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: THEME_KEY, newValue: null }));
+    });
+    expect(result.current.appearance).toBe('auto');
+  });
+});

@@ -3,7 +3,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { WindowTabBar } from './components/WindowTabBar';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
-import { Button, PopUpButton } from './lattice/ui';
+import { PopUpButton } from './lattice/ui';
 import {
   clampSidebarWidth,
   readSidebarCollapsed,
@@ -28,6 +28,7 @@ import { MemoryExplorer } from './tabs/MemoryExplorer';
 import { Notebook } from './tabs/Notebook';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
+import { type Appearance, APPEARANCE_OPTIONS, useTheme } from './theme.js';
 import { Workspace } from './workspace/Workspace';
 
 // ── URL params determine window type ──────────────────────────
@@ -352,120 +353,26 @@ function ProjectFileExplorer({
   );
 }
 
-// ── Theme override ────────────────────────────────────────────
-// Default = follow system (`prefers-color-scheme`). One click stores an
-// explicit preference in localStorage and sets [data-theme] on <html>; the
-// CSS in app.css gives that attribute higher specificity than the @media
-// rule, so the override wins. Cross-window: when the menu and a project
-// window are both open, a `storage` event syncs them automatically.
-const THEME_KEY = 'trace-mcp-theme';
-type Theme = 'light' | 'dark';
-
-function readStoredTheme(): Theme | null {
-  try {
-    const v = localStorage.getItem(THEME_KEY);
-    return v === 'light' || v === 'dark' ? v : null;
-  } catch {
-    return null;
-  }
-}
-
-function systemTheme(): Theme {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-function useTheme() {
-  const [override, setOverride] = useState<Theme | null>(() => readStoredTheme());
-  const [system, setSystem] = useState<Theme>(() => systemTheme());
-
-  // Apply / remove the data-theme attribute on every change.
-  useEffect(() => {
-    const html = document.documentElement;
-    if (override) html.setAttribute('data-theme', override);
-    else html.removeAttribute('data-theme');
-  }, [override]);
-
-  // Track system theme for the "no override" case.
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = () => setSystem(mq.matches ? 'dark' : 'light');
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-
-  // Cross-window sync: another window stored a new value → reflect it here.
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== THEME_KEY) return;
-      setOverride(e.newValue === 'light' || e.newValue === 'dark' ? e.newValue : null);
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  const effective: Theme = override ?? system;
-  const toggle = useCallback(() => {
-    const next: Theme = effective === 'dark' ? 'light' : 'dark';
-    try {
-      localStorage.setItem(THEME_KEY, next);
-    } catch {}
-    setOverride(next);
-  }, [effective]);
-
-  return { theme: effective, toggle };
-}
-
-function ThemeToggle({ theme, toggle }: { theme: Theme; toggle: () => void }) {
-  // Show the icon for the destination, not the current state — matches the
-  // user's mental model ("click moon → it gets dark").
-  const goingTo: Theme = theme === 'dark' ? 'light' : 'dark';
-  const label = goingTo === 'dark' ? 'Switch to dark mode' : 'Switch to light mode';
-  return (
-    <Button variant="mini" onClick={toggle} aria-label={label} title={label}>
-      {goingTo === 'dark' ? (
-        // Moon (crescent) — currently light, click to go dark.
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path
-            d="M13.2 9.6A5.6 5.6 0 1 1 6.4 2.8a4.6 4.6 0 0 0 6.8 6.8z"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : (
-        // Sun (circle + rays) — currently dark, click to go light.
-        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <circle cx="8" cy="8" r="2.8" stroke="currentColor" strokeWidth="1.4" />
-          <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-            <line x1="8" y1="1.6" x2="8" y2="3.2" />
-            <line x1="8" y1="12.8" x2="8" y2="14.4" />
-            <line x1="1.6" y1="8" x2="3.2" y2="8" />
-            <line x1="12.8" y1="8" x2="14.4" y2="8" />
-            <line x1="3.5" y1="3.5" x2="4.6" y2="4.6" />
-            <line x1="11.4" y1="11.4" x2="12.5" y2="12.5" />
-            <line x1="3.5" y1="12.5" x2="4.6" y2="11.4" />
-            <line x1="11.4" y1="4.6" x2="12.5" y2="3.5" />
-          </g>
-        </svg>
-      )}
-    </Button>
-  );
-}
-
 // ── Sidebar footer ───────────────────────────────────────────
-// Always-visible row at the bottom of the sidebar with Settings on the left
-// and the theme toggle on the right. In project windows, Settings opens the
+// Two rows pinned below the scroll region, in the SAME row system as the nav
+// above them (.ws-sb-row: 28px, 16px leading glyph at x=14, 13px label at x=38)
+// — the footer used to run its own 24px capsule with no glyph, so the last row
+// in the sidebar sat 26px to the left of every label above it.
+//
+// Settings is a navigation destination and stays a real row. Appearance is a
+// control, so its row is static and carries a pop-up button: Auto / Light /
+// Dark, the three states macOS offers. In project windows, Settings opens the
 // menu window via IPC instead of in-place navigation.
 function SidebarFooter({
   active,
   onOpenSettingsInPlace,
-  theme,
-  onToggleTheme,
+  appearance,
+  onAppearanceChange,
 }: {
   active: boolean;
   onOpenSettingsInPlace?: () => void;
-  theme: Theme;
-  onToggleTheme: () => void;
+  appearance: Appearance;
+  onAppearanceChange: (next: Appearance) => void;
 }) {
   const handleSettings = () => {
     if (onOpenSettingsInPlace) {
@@ -476,11 +383,28 @@ function SidebarFooter({
     }
   };
   return (
-    <div className="sidebar-footer">
-      <Button variant="text" active={active} onClick={handleSettings}>
-        Settings
-      </Button>
-      <ThemeToggle theme={theme} toggle={onToggleTheme} />
+    <div className="ws-sb-footer">
+      <SidebarRow
+        icon="settings"
+        label="Settings"
+        selected={active}
+        aria-current={active ? 'page' : undefined}
+        onClick={handleSettings}
+      />
+      {/* Not a button: the row is a label plus a control, so it must not look
+          or behave clickable. `.is-static` drops the hover fill. */}
+      <div className="ws-sb-row is-static">
+        <span className="ws-sb-ico" aria-hidden="true">
+          <Icon name="contrast" size={16} />
+        </span>
+        <span className="ws-sb-label">Appearance</span>
+        <PopUpButton
+          options={APPEARANCE_OPTIONS}
+          value={appearance}
+          onChange={onAppearanceChange}
+          aria-label="Appearance"
+        />
+      </div>
     </div>
   );
 }
@@ -745,7 +669,7 @@ function ProjectContent({
 export function App() {
   const { view, tab, root } = getUrlParams();
   const isProject = view === 'project' && root !== null;
-  const { theme, toggle: toggleTheme } = useTheme();
+  const { theme, appearance, setAppearance } = useTheme();
 
   const [globalTab, setGlobalTab] = useState<GlobalTab>(normalizeGlobalTab(tab));
   const [projectTab, setProjectTab] = useState<ProjectTab>('overview');
@@ -954,8 +878,8 @@ export function App() {
             <SidebarFooter
               active={!isProject && globalTab === 'settings'}
               onOpenSettingsInPlace={isProject ? undefined : () => setGlobalTab('settings')}
-              theme={theme}
-              onToggleTheme={toggleTheme}
+              appearance={appearance}
+              onAppearanceChange={setAppearance}
             />
           </aside>
         )}
