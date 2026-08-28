@@ -3,7 +3,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { WindowTabBar } from './components/WindowTabBar';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
-import { Button } from './lattice/ui';
+import { Button, PopUpButton } from './lattice/ui';
 import {
   clampSidebarWidth,
   readSidebarCollapsed,
@@ -295,20 +295,15 @@ function ProjectFileExplorer({
   return (
     <>
       <div className="ws-sb-group">Files</div>
-      {/* Sort — a native pop-up button sized to the macOS 24px geometry.
-          Swaps to the shared PopUpButton primitive once TRA-290 lands. */}
-      <select
+      {/* Sort — the shared pop-up button primitive (TRA-290). */}
+      <PopUpButton
+        block
         className="ws-sb-popup"
+        options={FILE_SORT_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
         value={sort}
+        onChange={(v) => setSort(v as FileSort)}
         aria-label="Sort files by"
-        onChange={(e) => setSort(e.target.value as FileSort)}
-      >
-        {FILE_SORT_OPTIONS.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      />
 
       {loading ? (
         // Skeletons at the final 28px geometry — nothing shifts on load.

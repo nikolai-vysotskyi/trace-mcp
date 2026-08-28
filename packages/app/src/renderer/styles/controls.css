@@ -1,0 +1,592 @@
+/* ============================================================================
+   Lattice control primitives (TRA-290)
+
+   ONE geometry for every control in the app:
+     heights   20 (small) / 24 (regular) / 28 (large) — nothing else
+     radius    999px (capsule) for anything pill-shaped, 6px for square icon
+               buttons, 50% for dots. No 4/5/8/9/12px control radii.
+     hit area  >= 24x24 for every focusable element, even when the painted
+               visual is smaller (checkbox: 16px visual in a 24px box).
+
+   Classes are prefixed `lx-` and live at the document root — deliberately NOT
+   scoped under `.ws-stage`, because the app renders controls on BOTH the island
+   surface (.ws-stage, island.css tokens) and the plain app surface (app.css
+   tokens). The token shim below is what makes one rule work on both.
+   ============================================================================ */
+
+/* ── PROVISIONAL TOKEN SHIM — delete when TRA-289 lands ────────────────────
+   TRA-289 introduces styles/tokens.css with exactly these semantic names. Until
+   it merges, the primitives would have nothing to reference, so the values are
+   declared here. When tokens.css lands: delete this block (down to END SHIM)
+   and nothing else in this file changes.
+   -------------------------------------------------------------------------- */
+:root {
+  --accent: #007aff;
+  --accent-pressed: #0062d1;
+  --surface: #ffffff;
+  --label: #1d1d1f;
+  --label-secondary: #48484a;
+  --label-tertiary: #6c6c70;
+  --on-accent: #ffffff;
+  --separator: rgba(0, 0, 0, 0.14);
+  --fill-tertiary: rgba(118, 118, 128, 0.12);
+  --fill-quaternary: rgba(118, 118, 128, 0.08);
+  --fill-pressed: rgba(118, 118, 128, 0.2);
+
+  --status-green: #2f9e6e;
+  --status-orange: #c9781f;
+  --status-red: #d4321c;
+  --status-blue: #3574f0;
+  --status-purple: #8a5cf0;
+
+  /* Badge label colours — the saturated hue, darkened until the text clears
+     4.5:1 over its own 18% tint on --surface. Verified by
+     lattice/ui/__tests__/primitives.test.ts, which fails if either drifts. */
+  --badge-neutral-fg: #4a4a4f;
+  --badge-accent-fg: #0a52ab;
+  --badge-green-fg: #17624a;
+  --badge-orange-fg: #7c4310;
+  --badge-red-fg: #9e1f0c;
+  --badge-blue-fg: #1e4794;
+  --badge-purple-fg: #533690;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --accent: #0a84ff;
+    --accent-pressed: #409cff;
+    --surface: #1e1f22;
+    --label: #f5f5f7;
+    --label-secondary: #c7c7cc;
+    --label-tertiary: #98989d;
+    --separator: rgba(255, 255, 255, 0.16);
+    --fill-tertiary: rgba(118, 118, 128, 0.28);
+    --fill-quaternary: rgba(118, 118, 128, 0.2);
+    --fill-pressed: rgba(118, 118, 128, 0.4);
+
+    --status-green: #43b07f;
+    --status-orange: #e8a33d;
+    --status-red: #ef6a52;
+    --status-blue: #6f9bf6;
+    --status-purple: #b08cf0;
+
+    --badge-neutral-fg: #c7c7cc;
+    --badge-accent-fg: #79baff;
+    --badge-green-fg: #6fd4a4;
+    --badge-orange-fg: #f0bb6b;
+    --badge-red-fg: #ff9683;
+    --badge-blue-fg: #9dbcfa;
+    --badge-purple-fg: #c8adf7;
+  }
+}
+
+:root[data-theme='dark'] {
+  --accent: #0a84ff;
+  --accent-pressed: #409cff;
+  --surface: #1e1f22;
+  --label: #f5f5f7;
+  --label-secondary: #c7c7cc;
+  --label-tertiary: #98989d;
+  --separator: rgba(255, 255, 255, 0.16);
+  --fill-tertiary: rgba(118, 118, 128, 0.28);
+  --fill-quaternary: rgba(118, 118, 128, 0.2);
+  --fill-pressed: rgba(118, 118, 128, 0.4);
+
+  --status-green: #43b07f;
+  --status-orange: #e8a33d;
+  --status-red: #ef6a52;
+  --status-blue: #6f9bf6;
+  --status-purple: #b08cf0;
+
+  --badge-neutral-fg: #c7c7cc;
+  --badge-accent-fg: #79baff;
+  --badge-green-fg: #6fd4a4;
+  --badge-orange-fg: #f0bb6b;
+  --badge-red-fg: #ff9683;
+  --badge-blue-fg: #9dbcfa;
+  --badge-purple-fg: #c8adf7;
+}
+
+/* On the island surface the fills sit on --island, not on the app background —
+   re-point --surface so the badge tints composite over the right backing. */
+.ws-stage[data-mode='light'] {
+  --surface: #ffffff;
+}
+.ws-stage[data-mode='dark'] {
+  --surface: #18191b;
+}
+/* ── END SHIM ─────────────────────────────────────────────────────────────── */
+
+/* ============================================================================
+   BUTTON — .lx-btn
+   ============================================================================ */
+.lx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: none;
+  box-sizing: border-box;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--label);
+  /* macOS buttons keep the arrow cursor — the pointer is for links. */
+  cursor: default;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+.lx-btn:disabled {
+  opacity: 0.4;
+}
+
+/* sizes ------------------------------------------------------------------- */
+.lx-btn.sz-small {
+  height: 20px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+.lx-btn.sz-regular {
+  height: 24px;
+}
+.lx-btn.sz-large {
+  height: 28px;
+  padding: 0 14px;
+}
+
+/* variants ---------------------------------------------------------------- */
+.lx-btn.v-prominent {
+  /* Flat accent capsule. macOS 26 dropped the gradient + bezel entirely. */
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  font-weight: 590;
+}
+.lx-btn.v-prominent:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--accent) 88%, black);
+}
+.lx-btn.v-prominent:active:not(:disabled) {
+  background: color-mix(in oklab, var(--accent) 78%, black);
+}
+
+.lx-btn.v-bordered {
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+  color: var(--label);
+}
+.lx-btn.v-bordered:hover:not(:disabled) {
+  background: var(--fill-quaternary);
+}
+.lx-btn.v-bordered:active:not(:disabled) {
+  background: var(--fill-pressed);
+}
+.lx-btn.v-bordered.is-on {
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+  box-shadow: inset 0 0 0 0.5px color-mix(in oklab, var(--accent) 45%, transparent);
+  color: var(--accent);
+}
+
+.lx-btn.v-plain {
+  color: var(--label-secondary);
+  padding: 0 8px;
+}
+.lx-btn.v-plain:hover:not(:disabled) {
+  background: var(--fill-quaternary);
+  color: var(--label);
+}
+.lx-btn.v-plain:active:not(:disabled) {
+  background: var(--fill-pressed);
+}
+.lx-btn.v-plain.is-on {
+  background: var(--fill-tertiary);
+  color: var(--label);
+}
+
+/* Icon-only: the ONE square control. 24x24 box, 6px radius, 16px glyph. */
+.lx-btn.v-icon {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  color: var(--label-secondary);
+}
+.lx-btn.v-icon.sz-small {
+  width: 20px;
+  height: 20px;
+}
+.lx-btn.v-icon.sz-large {
+  width: 28px;
+  height: 28px;
+}
+.lx-btn.v-icon:hover:not(:disabled) {
+  background: var(--fill-quaternary);
+  color: var(--label);
+}
+.lx-btn.v-icon:active:not(:disabled) {
+  background: var(--fill-pressed);
+}
+.lx-btn.v-icon.is-on {
+  background: var(--fill-tertiary);
+  color: var(--accent);
+}
+
+/* ============================================================================
+   SEGMENTED CONTROL — .lx-seg
+   A real track: recessed fill, 2px inset, capsule outer AND capsule thumb.
+   The thumb is --surface with a hairline; it is NOT an accent fill (that reads
+   as a toggle-on state, not as a selected segment).
+   ============================================================================ */
+.lx-seg {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 2px;
+  gap: 2px;
+  background: var(--fill-tertiary);
+  border-radius: 999px;
+}
+.lx-seg.sz-small {
+  height: 20px;
+}
+.lx-seg.sz-large {
+  height: 28px;
+}
+.lx-seg .lx-seg-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 100%;
+  min-width: 24px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--label-secondary);
+  cursor: default;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.lx-seg.sz-small .lx-seg-item {
+  font-size: 12px;
+  padding: 0 9px;
+}
+.lx-seg .lx-seg-item:hover:not(:disabled):not(.is-active) {
+  color: var(--label);
+}
+.lx-seg .lx-seg-item.is-active {
+  background: var(--surface);
+  color: var(--label);
+  font-weight: 590;
+  box-shadow:
+    inset 0 0 0 0.5px var(--separator),
+    0 0.5px 1px rgba(0, 0, 0, 0.12);
+}
+.lx-seg .lx-seg-item:disabled {
+  opacity: 0.4;
+}
+
+/* ============================================================================
+   SEARCH FIELD — .lx-search
+   Capsule, 24px, 13px, leading 14px magnifier. No slide animation: the
+   placeholder starts and stays at the leading edge, like every macOS search
+   field. `Esc` clears (handled in SearchField.tsx).
+   ============================================================================ */
+.lx-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: 24px;
+  min-width: 140px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--fill-tertiary);
+  color: var(--label-tertiary);
+  transition: background 120ms ease;
+}
+.lx-search.grow {
+  flex: 1 1 auto;
+}
+.lx-search:hover {
+  background: var(--fill-quaternary);
+}
+.lx-search:focus-within {
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 0.5px var(--separator),
+    0 0 0 3px color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.lx-search .lx-search-glyph {
+  flex: none;
+  display: flex;
+  color: var(--label-tertiary);
+}
+.lx-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--label);
+}
+.lx-search input::placeholder {
+  color: var(--label-tertiary);
+}
+/* The UA clear button is 13px and unstyleable — we ship our own icon button. */
+.lx-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* ============================================================================
+   CHIP / FILTER CHIP — .lx-chip
+   ============================================================================ */
+.lx-chip-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.lx-chip-group > .lx-chip-group-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--label-tertiary);
+  cursor: default;
+  white-space: nowrap;
+}
+.lx-chip-group > .lx-chip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lx-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: none;
+  box-sizing: border-box;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fill-quaternary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--label-secondary);
+  cursor: default;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.lx-chip:hover:not(:disabled) {
+  background: var(--fill-tertiary);
+}
+/* Multi-select: selected reads as a neutral filled state with a --label label.
+   Accent fill is reserved for single-select, where exactly one chip is on. */
+.lx-chip.is-on {
+  background: var(--fill-tertiary);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+  color: var(--label);
+  font-weight: 590;
+}
+.lx-chip.single.is-on {
+  background: var(--accent);
+  box-shadow: none;
+  color: var(--on-accent, #fff);
+}
+.lx-chip:disabled {
+  opacity: 0.4;
+}
+
+/* ============================================================================
+   BADGE — .lx-badge
+   Capsule, 11px/500, sentence case. Tinted fill at 18% with the SATURATED HUE
+   as the label colour. Never white-on-a-light-fill.
+   Not focusable, so 24px does not apply — 18px keeps it inside a 24px row.
+   ============================================================================ */
+.lx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  /* ponytail: no text-transform. ALL CAPS is banned outside 10px group headers. */
+  background: var(--fill-tertiary);
+  color: var(--badge-neutral-fg);
+}
+.lx-badge.t-neutral {
+  background: var(--fill-tertiary);
+  color: var(--badge-neutral-fg);
+}
+.lx-badge.t-accent {
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  color: var(--badge-accent-fg);
+}
+.lx-badge.t-green {
+  background: color-mix(in oklab, var(--status-green) 18%, transparent);
+  color: var(--badge-green-fg);
+}
+.lx-badge.t-orange {
+  background: color-mix(in oklab, var(--status-orange) 18%, transparent);
+  color: var(--badge-orange-fg);
+}
+.lx-badge.t-red {
+  background: color-mix(in oklab, var(--status-red) 18%, transparent);
+  color: var(--badge-red-fg);
+}
+.lx-badge.t-blue {
+  background: color-mix(in oklab, var(--status-blue) 18%, transparent);
+  color: var(--badge-blue-fg);
+}
+.lx-badge.t-purple {
+  background: color-mix(in oklab, var(--status-purple) 18%, transparent);
+  color: var(--badge-purple-fg);
+}
+
+/* ============================================================================
+   CHECKBOX — 16px visual inside a 24x24 hit target.
+   The transparent 4px border is what grows the box to 24 while keeping the
+   painted square at 16 (background-clip keeps the fill off the border).
+   Applied to every `input[type=checkbox]` in the renderer — the workspace table
+   alone renders ~90 of them, and none should be the 13px UA default.
+   ============================================================================ */
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  flex: none;
+  border: 4px solid transparent;
+  border-radius: 9px; /* 5px inner radius + 4px border = concentric */
+  background: var(--surface) padding-box;
+  box-shadow: inset 0 0 0 1px var(--separator);
+  cursor: default;
+  transition:
+    background 100ms ease,
+    box-shadow 100ms ease;
+}
+input[type='checkbox']:checked {
+  background: var(--accent) padding-box;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 80%, black);
+  /* White checkmark, drawn as a background image so it clips with padding-box. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4 6.4 11.3 12.5 5.2' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+}
+input[type='checkbox']:indeterminate {
+  background: var(--accent) padding-box;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 80%, black);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8h8' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 16px 16px;
+}
+input[type='checkbox']:disabled {
+  opacity: 0.4;
+}
+
+/* ============================================================================
+   POP-UP BUTTON — .lx-popup
+   A macOS pop-up button: 24px bordered capsule, 13px label, chevron-up-down.
+   The <select> keeps its native menu (that IS the platform menu) — only the
+   chrome is ours.
+   ============================================================================ */
+.lx-popup {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 24px;
+  border-radius: 999px;
+}
+.lx-popup select {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  padding: 0 26px 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fill-quaternary);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--label);
+  cursor: default;
+  outline: 0;
+  transition: background 120ms ease;
+}
+.lx-popup select:hover {
+  background: var(--fill-tertiary);
+}
+.lx-popup .lx-popup-chevron {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  pointer-events: none;
+  color: var(--label-secondary);
+}
+
+/* ============================================================================
+   FOCUS RING — one ring for every primitive.
+   ============================================================================ */
+.lx-btn:focus-visible,
+.lx-seg .lx-seg-item:focus-visible,
+.lx-chip:focus-visible,
+.lx-popup select:focus-visible,
+input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lx-btn,
+  .lx-seg .lx-seg-item,
+  .lx-search,
+  .lx-chip,
+  .lx-popup select,
+  input[type='checkbox'] {
+    transition: none;
+  }
+}

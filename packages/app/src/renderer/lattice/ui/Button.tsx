@@ -1,66 +1,86 @@
-/* Button.tsx — the single button primitive for the Lattice island surfaces.
+/* Button.tsx — the single button primitive (TRA-290).
 
-   Wraps the canonical button classes from island.css (NO new styling): pick a
-   `variant` and the component emits the matching class — so call sites stop
-   hand-writing `<button className="ws-primary">` etc. and there is ONE place
-   that knows the markup contract (leading icon slot, toggle state, icon-only).
+   Three sizes, four variants, one radius:
 
-     primary → .ws-primary   accent-filled CTA (32px)
-     chip    → .ws-chipbtn   bordered neutral chip (30px); `iconOnly` → square
-     text    → .ws-textbtn   borderless tertiary text button
-     mini    → .ws-mini      24px icon-only action (island header / toolbar)
+     size     small 20 · regular 24 · large 28    (nothing else exists)
+     variant  prominent  accent capsule, white label — the one default action
+              bordered   0.5px --separator capsule, quaternary fill on hover
+              plain      no chrome until hover
+              icon       24×24 square, 6px radius, 16px glyph
 
-   For the NATIVE-WINDOW (.dlg) surface use DlgButton instead — it speaks the
-   separate `--d-*` token scope (see Dlg.tsx). */
+   Every capsule variant is `border-radius: 999px`. The `icon` variant is the
+   ONLY square control, and it requires both `aria-label` and `title` — the type
+   below will not compile without them, because an icon with neither is
+   unreachable by screen reader AND unexplained by hover.
+
+   The pre-TRA-290 variant names (primary/chip/text/mini) still resolve, mapped
+   onto the new ones, so existing call sites keep working. They are deprecated;
+   don't add new ones. */
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { Icon } from '../icons';
 
-export type ButtonVariant = 'primary' | 'chip' | 'text' | 'mini';
+export type ButtonSize = 'small' | 'regular' | 'large';
+export type ButtonVariant = 'prominent' | 'bordered' | 'plain' | 'icon';
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant;
+/** Superseded names, kept so the migration is not a big-bang rename. */
+export type LegacyButtonVariant = 'primary' | 'chip' | 'text' | 'mini';
+
+const LEGACY: Record<LegacyButtonVariant, ButtonVariant> = {
+  primary: 'prominent',
+  chip: 'bordered',
+  text: 'plain',
+  mini: 'icon',
+};
+
+interface BaseButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  size?: ButtonSize;
   /** Leading icon name (see icons.tsx GLYPHS). */
   icon?: string;
   iconSize?: number;
-  /** chip variant only: render a square icon-only chip (.ws-chipbtn.icon). */
-  iconOnly?: boolean;
-  /** chip variant only: toggle styling (.ws-chipbtn.toggle.is-on when active). */
-  toggle?: boolean;
+  /** Renders the on/selected state (`.is-on`). */
   active?: boolean;
+  /** @deprecated no-op — `active` alone drives the on state now. */
+  toggle?: boolean;
+  /** @deprecated use `variant="icon"`. */
+  iconOnly?: boolean;
 }
 
-const VARIANT_CLASS: Record<ButtonVariant, string> = {
-  primary: 'ws-primary',
-  chip: 'ws-chipbtn',
-  text: 'ws-textbtn',
-  mini: 'ws-mini',
-};
+/** `icon` buttons carry no label, so both of these are mandatory. */
+interface IconButtonProps extends BaseButtonProps {
+  variant: 'icon' | 'mini';
+  'aria-label': string;
+  title: string;
+}
 
-export function Button({
-  variant = 'chip',
-  icon,
-  iconSize,
-  iconOnly = false,
-  toggle = false,
-  active = false,
-  className,
-  children,
-  type = 'button',
-  ...rest
-}: ButtonProps): ReactNode {
-  const cls = [
-    VARIANT_CLASS[variant],
-    variant === 'chip' && iconOnly ? 'icon' : '',
-    variant === 'chip' && toggle ? 'toggle' : '',
-    toggle && active ? 'is-on' : '',
-    !toggle && active ? 'is-active' : '',
-    className ?? '',
-  ]
+interface LabelledButtonProps extends BaseButtonProps {
+  variant?: Exclude<ButtonVariant | LegacyButtonVariant, 'icon' | 'mini'>;
+}
+
+export type ButtonProps = IconButtonProps | LabelledButtonProps;
+
+export function Button(props: ButtonProps): ReactNode {
+  const {
+    variant = 'bordered',
+    size = 'regular',
+    icon,
+    iconSize,
+    active = false,
+    toggle: _toggle,
+    iconOnly: _iconOnly,
+    className,
+    children,
+    type = 'button',
+    ...rest
+  } = props as BaseButtonProps & { variant?: ButtonVariant | LegacyButtonVariant };
+
+  const v: ButtonVariant = (LEGACY as Record<string, ButtonVariant>)[variant] ?? (variant as ButtonVariant);
+
+  const cls = ['lx-btn', `v-${v}`, `sz-${size}`, active ? 'is-on' : '', className ?? '']
     .filter(Boolean)
     .join(' ');
 
-  const glyphSize = iconSize ?? (variant === 'mini' ? 16 : 15);
+  const glyphSize = iconSize ?? (v === 'icon' ? 16 : size === 'small' ? 13 : 15);
 
   return (
     <button type={type} className={cls} {...rest}>

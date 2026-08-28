@@ -6,7 +6,7 @@
  * + progress. Same selection / mutation contract as WorkspaceTableView.
  */
 import { type MouseEvent, useState } from 'react';
-import { StatusDot } from '../lattice/ui';
+import { Checkbox, StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
 import { ProjectMetricsBadges } from './components/ProjectMetricsBadges';
 import { type ProjectViewModel, statusLabel, statusToDot } from './types';
@@ -74,10 +74,9 @@ function CompactRow({
     >
       <div className="flex items-center gap-2">
         <span onClick={stop}>
-          <input
-            type="checkbox"
+          <Checkbox
             checked={selected}
-            onChange={(e) => onSelectChange(project.root, e.target.checked)}
+            onChange={(next) => onSelectChange(project.root, next)}
             aria-label={`Select ${shortPath(project.root)}`}
           />
         </span>

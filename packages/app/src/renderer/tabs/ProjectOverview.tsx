@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ProjectStatsModal } from '../components/ProjectStatsModal';
 import { StatusDot, type Tone } from '../lattice/ui';
 import { useDaemon } from '../hooks/useDaemon';
+import { SegmentedControl } from '../lattice/ui';
 
 interface ProjectStats {
   files: number;
@@ -267,7 +268,7 @@ export function ProjectOverview({
 
   const statusDot: Tone =
     status === 'indexing'
-      ? 'gold'
+      ? 'orange'
       : status === 'error'
         ? 'red'
         : status === 'ready'
@@ -602,33 +603,18 @@ export function ProjectOverview({
           </div>
 
           {/* Category tabs */}
-          <div className="flex gap-1 px-3 mb-2">
-            {(
-              [
-                { key: 'debug_artifact', label: 'Debug' },
-                { key: 'todo_comment', label: 'TODOs' },
-                { key: 'hardcoded_value', label: 'Hardcoded' },
-                { key: 'empty_function', label: 'Stubs' },
-              ] as const
-            ).map((tab) => {
-              const active = smellsCategory === tab.key;
-              return (
-                <button
-                  type="button"
-                  key={tab.key}
-                  onClick={() => setSmellsCategory(tab.key)}
-                  className="text-[11px] px-2 py-1 rounded transition-all"
-                  style={{
-                    background: active ? 'var(--accent)' : 'var(--bg-inset)',
-                    color: active ? '#fff' : 'var(--text-secondary)',
-                    fontWeight: active ? 600 : 400,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+          <div className="flex px-3 mb-2">
+            <SegmentedControl
+              options={[
+                { value: 'debug_artifact', label: 'Debug' },
+                { value: 'todo_comment', label: 'TODOs' },
+                { value: 'hardcoded_value', label: 'Hardcoded' },
+                { value: 'empty_function', label: 'Stubs' },
+              ]}
+              value={smellsCategory}
+              onChange={setSmellsCategory}
+              aria-label="Code smell category"
+            />
           </div>
 
           <div

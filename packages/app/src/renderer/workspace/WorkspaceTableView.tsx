@@ -13,13 +13,12 @@
  * call `useWorkspaceProjects`.
  */
 import { type CSSProperties, type MouseEvent, useEffect, useRef, useState } from 'react';
-import { StatusDot } from '../lattice/ui';
+import { Checkbox, GradeBadge, StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
 import {
   type ProjectViewModel,
   type SortDir,
   type SortKey,
-  type TechDebtGrade,
   statusLabel,
   statusToDot,
 } from './types';
@@ -38,14 +37,6 @@ export interface WorkspaceTableViewProps {
   /** false = daemon disconnected; Re-index/Remove are dimmed. */
   canMutate: boolean;
 }
-
-const GRADE_COLOR: Record<TechDebtGrade, string> = {
-  A: '#34c759',
-  B: '#30d158',
-  C: '#ffcc00',
-  D: '#ff9f0a',
-  F: 'var(--destructive)',
-};
 
 // ── Frozen columns ────────────────────────────────────────────────────────
 //
@@ -118,17 +109,11 @@ function SelectAllCheckbox({
   selectedCount: number;
   onChange: (next: boolean) => void;
 }) {
-  const ref = useRef<HTMLInputElement | null>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    ref.current.indeterminate = selectedCount > 0 && selectedCount < total;
-  }, [selectedCount, total]);
   return (
-    <input
-      ref={ref}
-      type="checkbox"
+    <Checkbox
       checked={total > 0 && selectedCount === total}
-      onChange={(e) => onChange(e.target.checked)}
+      indeterminate={selectedCount > 0 && selectedCount < total}
+      onChange={onChange}
       aria-label="Select all projects"
     />
   );
@@ -263,10 +248,9 @@ function Row({
         style={{ ...stickyCell('left', 0, bg, false), width: SELECT_COL_W }}
         onClick={stop}
       >
-        <input
-          type="checkbox"
+        <Checkbox
           checked={selected}
-          onChange={(e) => onSelectChange(project.root, e.target.checked)}
+          onChange={(next) => onSelectChange(project.root, next)}
           aria-label={`Select ${project.name}`}
         />
       </td>
@@ -341,12 +325,7 @@ function Row({
       </td>
       <td className="px-3 py-2 text-center">
         {project.techDebtGrade ? (
-          <span
-            className="inline-block px-1.5 py-0.5 rounded text-[11px] font-bold"
-            style={{ color: '#fff', background: GRADE_COLOR[project.techDebtGrade] }}
-          >
-            {project.techDebtGrade}
-          </span>
+          <GradeBadge grade={project.techDebtGrade} />
         ) : (
           <span style={{ color: 'var(--text-tertiary)' }}>—</span>
         )}
