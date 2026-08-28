@@ -28,7 +28,17 @@ export function isDangerousProjectRoot(absRoot: string): string | null {
   // User home directory
   if (absRoot === os.homedir()) return 'home directory';
 
-  // Top-level system/user-container directories (POSIX + macOS)
+  // The OS scratch dir itself (%TEMP% / %LOCALAPPDATA%\Temp on Windows,
+  // /var/folders/... on macOS). Covers the per-user temp roots we cannot
+  // enumerate as literals. Subdirectories under it stay allowed.
+  if (absRoot === os.tmpdir()) return 'system directory';
+
+  // Top-level system/user-container directories (POSIX + macOS).
+  // Deliberately checked on every platform, not just POSIX: these strings can
+  // never be a real Windows path, so matching them there costs nothing, and a
+  // platform gate would only make the rule harder to test. The reverse is NOT
+  // true — '/tmp' is meaningless on Windows, so the Windows dirs below are a
+  // separate set rather than additions to this one.
   const SYSTEM_DIRS = new Set([
     '/Users',
     '/home',
@@ -56,5 +66,30 @@ export function isDangerousProjectRoot(absRoot: string): string | null {
   ]);
   if (SYSTEM_DIRS.has(absRoot)) return 'system directory';
 
+  // Windows system directories. Matched on the path *below* the drive root so
+  // the rule is drive-letter-agnostic (a user may be on D:), case-insensitive,
+  // and separator-agnostic. Keyed off the shape of the string rather than
+  // process.platform: 'C:\Windows' is never a legitimate POSIX path either, and
+  // a platform gate would make these untestable off Windows.
+  const driveRelative = /^[a-zA-Z]:[\\/](.*)$/.exec(absRoot);
+  if (driveRelative) {
+    // Split rather than trim with a quantified regex: '\\+$' backtracks
+    // quadratically on a path of many backslashes (js/polynomial-redos), and
+    // splitting also collapses duplicate separators for free.
+    const tail = driveRelative[1].split(/[\\/]/).filter(Boolean).join('\\').toLowerCase();
+    if (tail === '') return 'filesystem root';
+    if (WINDOWS_SYSTEM_DIRS.has(tail)) return 'system directory';
+  }
+
   return null;
 }
+
+const WINDOWS_SYSTEM_DIRS = new Set([
+  'windows',
+  'windows\\system32',
+  'windows\\temp',
+  'users',
+  'program files',
+  'program files (x86)',
+  'programdata',
+]);

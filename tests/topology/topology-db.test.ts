@@ -6,13 +6,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TopologyStore } from '../../src/topology/topology-db.js';
 import { pruneDangerousSubprojects } from '../../src/topology/topology-subprojects.js';
 
-// isDangerousProjectRoot's SYSTEM_DIRS list is POSIX absolute paths
-// ('/private/tmp', '/var', …). On Windows those strings match nothing, so
-// fixtures built from them can't trip the guard — the tests below assert a
-// POSIX-only rule, not cross-platform behaviour. Windows has no equivalent
-// entries in that list at all; covering C:\Windows, C:\Users and friends is a
-// real gap, but a separate one from the guard this file exercises (TRA-236).
-const posixOnlyIt = it.skipIf(process.platform === 'win32');
+/**
+ * TRA-236: `upsertSubproject` runs its fixtures through `path.resolve`, which
+ * rewrites a POSIX path into a drive-rooted one on Windows ('/private/tmp' ->
+ * 'C:\private\tmp'). So the fixture has to be the host's flavour of "system
+ * directory" — hardcoding the POSIX one made these tests fail on the Windows
+ * leg of the cross-platform matrix.
+ */
+const SYS_DIR = process.platform === 'win32' ? 'C:\\Windows' : '/private/tmp';
+const SYS_CHILD = path.join(SYS_DIR, 'scratch-repo');
 
 describe('TopologyStore', () => {
   let store: TopologyStore;
@@ -279,19 +281,19 @@ describe('TopologyStore', () => {
       expect(store.getAllSubprojects()).toHaveLength(0);
     });
 
-    posixOnlyIt('rejects a system directory as subproject repo_root (TRA-232)', () => {
+    it('rejects a system directory as subproject repo_root (TRA-232)', () => {
       expect(() =>
-        store.upsertSubproject({ name: 'tmp', repoRoot: '/private/tmp', projectRoot: PROJECT }),
+        store.upsertSubproject({ name: 'tmp', repoRoot: SYS_DIR, projectRoot: PROJECT }),
       ).toThrow(/system directory/);
       expect(store.getAllSubprojects()).toHaveLength(0);
     });
 
-    posixOnlyIt('rejects a system directory as subproject project_root (TRA-232)', () => {
+    it('rejects a system directory as subproject project_root (TRA-232)', () => {
       expect(() =>
         store.upsertSubproject({
           name: 'scratch',
-          repoRoot: '/private/tmp/scratch-repo',
-          projectRoot: '/private/tmp',
+          repoRoot: SYS_CHILD,
+          projectRoot: SYS_DIR,
         }),
       ).toThrow(/project_root .*system directory/);
       expect(store.getAllSubprojects()).toHaveLength(0);
@@ -299,7 +301,7 @@ describe('TopologyStore', () => {
   });
 
   describe('dangerous-subproject pruning (TRA-232)', () => {
-    posixOnlyIt('drops pre-guard rows rooted under a system dir, keeping valid ones', () => {
+    it('drops pre-guard rows rooted under a system dir, keeping valid ones', () => {
       const good = store.upsertSubproject({
         name: 'good',
         repoRoot: '/project/api',
@@ -311,7 +313,7 @@ describe('TopologyStore', () => {
         `INSERT INTO subprojects (name, repo_root, project_root, added_at)
          VALUES (?, ?, ?, datetime('now'))`,
       );
-      insert.run('scratch', '/private/tmp/scratch-repo', '/private/tmp');
+      insert.run('scratch', SYS_CHILD, SYS_DIR);
       insert.run('', '/', '/');
       expect(store.getAllSubprojects()).toHaveLength(3);
 
@@ -319,7 +321,7 @@ describe('TopologyStore', () => {
       // project's service must survive.
       store.upsertService({
         name: 'scratch-svc',
-        repoRoot: '/private/tmp/scratch-repo',
+        repoRoot: SYS_CHILD,
         serviceType: 'api',
         detectionSource: 'ws',
         dbPath: '/fake/db',
@@ -332,14 +334,8 @@ describe('TopologyStore', () => {
         dbPath: '/fake/db',
       });
 
-      // finally, not a bare call: a failing expect here would otherwise leak the
-      // handle and turn one assertion failure into a second EBUSY failure in
-      // afterEach's rmSync on Windows.
-      try {
-        expect(pruneDangerousSubprojects(raw)).toEqual({ subprojects: 2, services: 1 });
-      } finally {
-        raw.close();
-      }
+      expect(pruneDangerousSubprojects(raw)).toEqual({ subprojects: 2, services: 1 });
+      raw.close();
 
       const remaining = store.getAllSubprojects();
       expect(remaining).toHaveLength(1);
