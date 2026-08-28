@@ -1,0 +1,233 @@
+/* ============================================================================
+   trace-mcp — macOS 26 token layer  (tokens.css)   TRA-289
+   THE single source of truth for colour, type, geometry and motion.
+
+   Every component reads these. A raw hex, a `text-gray-*` class or an off-grid
+   size inside packages/app/src/renderer/** is a bug — `scripts/design-tokens.mjs`
+   fails the build on new ones.
+
+   Contrast rule (WCAG AA, verified by scripts/design-tokens.mjs):
+     --label            body text, headings — the default
+     --label-secondary  secondary but still READABLE text (>= 4.5:1)
+     --label-tertiary   DECORATION ONLY — disabled glyphs, separators, chart
+                        gridlines. Any text a user is meant to read uses
+                        --label-secondary or better. Never --label-tertiary.
+   ============================================================================ */
+
+/* ---- LIGHT (default) ---------------------------------------------------- */
+:root {
+  --accent: #007aff;
+  --accent-contrast: #ffffff;
+
+  --label: rgb(0 0 0 / 0.85);
+  /* .55, not Apple's .50: at .50 this measures 3.98:1 on --surface and fails AA
+     for the body text it actually carries. See the contrast table in TRA-289. */
+  --label-secondary: rgb(0 0 0 / 0.55);
+  --label-tertiary: rgb(0 0 0 / 0.26);
+
+  --separator: rgb(0 0 0 / 0.1);
+  --surface: #ffffff;
+  --surface-sunken: #f5f5f7;
+  --surface-raised: #ffffff;
+
+  --fill-quaternary: rgb(0 0 0 / 0.045);
+  --fill-tertiary: rgb(0 0 0 / 0.08);
+  --fill-secondary: rgb(0 0 0 / 0.12);
+
+  --status-green: #1d7a33;
+  --status-orange: #a55a00;
+  --status-red: #d70015;
+  --status-blue: #0060df;
+
+  --shadow-panel: 0 8px 24px rgb(0 0 0 / 0.16), 0 0 0 0.5px rgb(0 0 0 / 0.08);
+
+  /* ---- Type scale — macOS text styles. Nothing at 9, 12.5, 13.5, 14, 16, 18. */
+  --text-large-title: 26px;
+  --text-title-1: 22px;
+  --text-title-2: 17px;
+  --text-title-3: 15px;
+  --text-body: 13px;
+  --text-callout: 12px;
+  --text-caption: 11px;
+  --text-caption-2: 10px;
+
+  --leading-large-title: 32px;
+  --leading-title-1: 26px;
+  --leading-title-2: 22px;
+  --leading-title-3: 20px;
+  --leading-body: 16px;
+  --leading-callout: 15px;
+  --leading-caption: 13px;
+  --leading-caption-2: 13px;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --font-ui: ui-sans-serif, -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ---- Radius scale — control/badge are capsules, not a px value. */
+  --radius-window: 12px;
+  --radius-panel: 12px;
+  --radius-card: 12px;
+  --radius-popover: 10px;
+  --radius-input: 8px;
+  --radius-row: 6px;
+  --radius-capsule: 999px;
+
+  /* ---- Spacing — 4pt grid. Nothing at 13, 17, 25. */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+  --space-48: 48px;
+
+  /* ---- Motion */
+  --dur-micro: 120ms;
+  --dur-standard: 200ms;
+  --dur-large: 320ms;
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1);
+
+  --focus-ring:
+    0 0 0 3px color-mix(in oklab, var(--accent) 35%, transparent),
+    inset 0 0 0 1px var(--accent);
+}
+
+/* ---- DARK --------------------------------------------------------------- */
+/* Values are duplicated across the three selectors below on purpose: a media
+   query cannot be merged into a selector list, and `.ws-stage[data-mode]` has
+   to work when it disagrees with the root appearance. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --accent: #0a84ff;
+    --label: rgb(255 255 255 / 0.92);
+    --label-secondary: rgb(255 255 255 / 0.55);
+    --label-tertiary: rgb(255 255 255 / 0.28);
+    --separator: rgb(255 255 255 / 0.12);
+    --surface: #1e1e1e;
+    --surface-sunken: #141414;
+    --surface-raised: #2a2a2a;
+    --fill-quaternary: rgb(255 255 255 / 0.06);
+    --fill-tertiary: rgb(255 255 255 / 0.11);
+    --fill-secondary: rgb(255 255 255 / 0.16);
+    --status-green: #30d158;
+    --status-orange: #ff9f0a;
+    --status-red: #ff453a;
+    --status-blue: #0a84ff;
+    --shadow-panel: 0 8px 24px rgb(0 0 0 / 0.45), 0 0 0 0.5px rgb(255 255 255 / 0.08);
+  }
+}
+
+:root[data-theme="dark"],
+.ws-stage[data-mode="dark"] {
+  --accent: #0a84ff;
+  --label: rgb(255 255 255 / 0.92);
+  --label-secondary: rgb(255 255 255 / 0.55);
+  --label-tertiary: rgb(255 255 255 / 0.28);
+  --separator: rgb(255 255 255 / 0.12);
+  --surface: #1e1e1e;
+  --surface-sunken: #141414;
+  --surface-raised: #2a2a2a;
+  --fill-quaternary: rgb(255 255 255 / 0.06);
+  --fill-tertiary: rgb(255 255 255 / 0.11);
+  --fill-secondary: rgb(255 255 255 / 0.16);
+  --status-green: #30d158;
+  --status-orange: #ff9f0a;
+  --status-red: #ff453a;
+  --status-blue: #0a84ff;
+  --shadow-panel: 0 8px 24px rgb(0 0 0 / 0.45), 0 0 0 0.5px rgb(255 255 255 / 0.08);
+}
+
+/* A light stage inside a dark root has to walk the palette back. */
+.ws-stage[data-mode="light"] {
+  --accent: #007aff;
+  --label: rgb(0 0 0 / 0.85);
+  --label-secondary: rgb(0 0 0 / 0.55);
+  --label-tertiary: rgb(0 0 0 / 0.26);
+  --separator: rgb(0 0 0 / 0.1);
+  --surface: #ffffff;
+  --surface-sunken: #f5f5f7;
+  --surface-raised: #ffffff;
+  --fill-quaternary: rgb(0 0 0 / 0.045);
+  --fill-tertiary: rgb(0 0 0 / 0.08);
+  --fill-secondary: rgb(0 0 0 / 0.12);
+  --status-green: #1d7a33;
+  --status-orange: #a55a00;
+  --status-red: #d70015;
+  --status-blue: #0060df;
+  --shadow-panel: 0 8px 24px rgb(0 0 0 / 0.16), 0 0 0 0.5px rgb(0 0 0 / 0.08);
+}
+
+/* ---- Type utilities ------------------------------------------------------
+   Use these instead of a one-off font-size. */
+.t-large-title { font: var(--weight-semibold) var(--text-large-title) / var(--leading-large-title) var(--font-ui); letter-spacing: -0.01em; }
+.t-title-1 { font: var(--weight-semibold) var(--text-title-1) / var(--leading-title-1) var(--font-ui); letter-spacing: -0.01em; }
+.t-title-2 { font: var(--weight-semibold) var(--text-title-2) / var(--leading-title-2) var(--font-ui); }
+.t-title-3 { font: var(--weight-semibold) var(--text-title-3) / var(--leading-title-3) var(--font-ui); }
+.t-body { font: var(--weight-regular) var(--text-body) / var(--leading-body) var(--font-ui); }
+.t-callout { font: var(--weight-regular) var(--text-callout) / var(--leading-callout) var(--font-ui); }
+.t-caption { font: var(--weight-regular) var(--text-caption) / var(--leading-caption) var(--font-ui); letter-spacing: 0.005em; }
+.t-caption-2 { font: var(--weight-medium) var(--text-caption-2) / var(--leading-caption-2) var(--font-ui); letter-spacing: 0.01em; }
+
+/* ---- Glass — navigation and controls only, never content. --------------- */
+.glass {
+  background: color-mix(in oklab, var(--surface) 62%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-color: var(--separator);
+}
+
+/* ---- Accessibility base layer ------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass {
+    background: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root,
+  .ws-stage[data-mode="light"] {
+    --separator: rgb(0 0 0 / 0.28);
+    --label-secondary: rgb(0 0 0 / 0.7);
+    --surface-sunken: #ffffff;
+    --focus-ring:
+      0 0 0 4px color-mix(in oklab, var(--accent) 60%, transparent),
+      inset 0 0 0 1px var(--accent);
+  }
+
+  :root[data-theme="dark"],
+  .ws-stage[data-mode="dark"] {
+    --separator: rgb(255 255 255 / 0.32);
+    --label-secondary: rgb(255 255 255 / 0.75);
+    --surface-sunken: #000000;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --separator: rgb(255 255 255 / 0.32);
+      --label-secondary: rgb(255 255 255 / 0.75);
+      --surface-sunken: #000000;
+    }
+  }
+}

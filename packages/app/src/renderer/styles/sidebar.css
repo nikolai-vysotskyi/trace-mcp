@@ -137,7 +137,7 @@
 }
 .ws-sidebar:focus-within .ws-sb-row.is-selected {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
 }
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-ico,
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-count {

@@ -2,84 +2,39 @@
 /* Lattice design system (ported from Codechats — see TRA-27/TRA-30). Scoped
    entirely under `.ws-stage[data-mode="dark"|"light"]`, so it cannot leak
    into or collide with the tokens below. */
+@import "./styles/tokens.css";
 @import "./styles/island.css";
 /* Sidebar + window chrome (TRA-291) — loaded after island.css so it can
    override the island treatment on the sidebar region. */
 @import "./styles/sidebar.css";
 
+/* Legacy token names kept as ALIASES of tokens.css for one migration step.
+   Each surface sub-issue deletes the aliases it no longer uses (TRA-284). */
 :root {
-  --bg-primary: rgba(246, 246, 246, 0.92);
-  --bg-secondary: rgba(232, 232, 232, 0.6);
-  --bg-tertiary: rgba(210, 210, 210, 0.5);
-  --bg-grouped: #fff;
-  --bg-inset: rgba(0, 0, 0, 0.04);
-  --text-primary: #1d1d1f;
-  --text-secondary: #6e6e73;
-  --text-tertiary: #aeaeb2;
-  --border: rgba(0, 0, 0, 0.12);
-  --border-row: rgba(0, 0, 0, 0.08);
-  --bg-active: rgba(0, 0, 0, 0.06);
-  --sidebar-border: rgba(0, 0, 0, 0.12);
-  --accent: #007aff;
-  --accent-hover: #0062d1;
-  --destructive: #ff3b30;
-  --success: #34c759;
-  --warning: #ff9500;
-  --fill-toggle-off: rgba(120, 120, 128, 0.16);
-  --fill-control: rgba(0, 0, 0, 0.04);
-  --shadow-control: 0 0.5px 1px rgba(0, 0, 0, 0.1), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
-  --shadow-grouped: 0 0.5px 2px rgba(0, 0, 0, 0.06), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg-primary: rgba(10, 10, 12, 0.96);
-    --bg-secondary: rgba(22, 22, 26, 0.7);
-    --bg-tertiary: rgba(34, 34, 38, 0.6);
-    --bg-grouped: rgba(20, 20, 24, 0.95);
-    --bg-inset: rgba(255, 255, 255, 0.04);
-    --text-primary: #f5f5f7;
-    --text-secondary: #98989d;
-    --text-tertiary: #636366;
-    --border: rgba(255, 255, 255, 0.12);
-    --border-row: rgba(255, 255, 255, 0.06);
-    --bg-active: rgba(255, 255, 255, 0.1);
-    --sidebar-border: rgba(255, 255, 255, 0.1);
-    --accent: #0a84ff;
-    --accent-hover: #409cff;
-    --destructive: #ff453a;
-    --success: #30d158;
-    --warning: #ff9f0a;
-    --fill-toggle-off: rgba(120, 120, 128, 0.32);
-    --fill-control: rgba(255, 255, 255, 0.06);
-    --shadow-control: 0 0.5px 1px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
-    --shadow-grouped: 0 0.5px 2px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
-  }
-}
-
-/* Explicit dark — wins over @media when user picks dark on a light system. */
-:root[data-theme="dark"] {
-  --bg-primary: rgba(10, 10, 12, 0.96);
-  --bg-secondary: rgba(22, 22, 26, 0.7);
-  --bg-tertiary: rgba(34, 34, 38, 0.6);
-  --bg-grouped: rgba(20, 20, 24, 0.95);
-  --bg-inset: rgba(255, 255, 255, 0.04);
-  --text-primary: #f5f5f7;
-  --text-secondary: #98989d;
-  --text-tertiary: #636366;
-  --border: rgba(255, 255, 255, 0.12);
-  --border-row: rgba(255, 255, 255, 0.06);
-  --bg-active: rgba(255, 255, 255, 0.1);
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --accent: #0a84ff;
-  --accent-hover: #409cff;
-  --destructive: #ff453a;
-  --success: #30d158;
-  --warning: #ff9f0a;
-  --fill-toggle-off: rgba(120, 120, 128, 0.32);
-  --fill-control: rgba(255, 255, 255, 0.06);
-  --shadow-control: 0 0.5px 1px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
-  --shadow-grouped: 0 0.5px 2px rgba(0, 0, 0, 0.2), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+  --bg-primary: var(--surface-sunken);
+  --bg-secondary: var(--fill-quaternary);
+  --bg-tertiary: var(--fill-tertiary);
+  --bg-grouped: var(--surface);
+  --bg-inset: var(--fill-quaternary);
+  --text-primary: var(--label);
+  --text-secondary: var(--label-secondary);
+  /* Deliberately NOT --label-tertiary: this token carries real reading text
+     (empty states, result counts, KPI labels) and at .26 alpha it measured
+     2.21:1. Decoration-only callers ask for --label-tertiary directly. */
+  --text-tertiary: var(--label-secondary);
+  --border: var(--separator);
+  --border-row: var(--separator);
+  --bg-active: var(--fill-tertiary);
+  --bg-hover: var(--fill-quaternary);
+  --sidebar-border: var(--separator);
+  --accent-hover: color-mix(in oklab, var(--accent) 88%, black);
+  --destructive: var(--status-red);
+  --success: var(--status-green);
+  --warning: var(--status-orange);
+  --fill-toggle-off: var(--fill-tertiary);
+  --fill-control: var(--fill-quaternary);
+  --shadow-control: 0 0 0 0.5px var(--separator);
+  --shadow-grouped: 0 0 0 0.5px var(--separator);
 }
 
 /* Tell the UA to render native form controls in the chosen mode. */
@@ -91,8 +46,9 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-  font-size: 13px;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
   color: var(--text-primary);
   background: transparent;
   margin: 0;
@@ -102,14 +58,14 @@ body {
   overflow: hidden;
 }
 
-/* Remove ugly focus rings, use subtle outline only on keyboard focus */
+/* House focus ring — visible on every focusable element, keyboard only. */
 *:focus {
   outline: none;
 }
 *:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: inherit;
 }
 
 /* ── macOS prominent button (filled, bezeled) ───────────────────── */
