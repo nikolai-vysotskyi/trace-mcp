@@ -101,6 +101,97 @@ export function locateInstalledApp(options = {}) {
 }
 
 /**
+ * Repair an update swap that died halfway through.
+ *
+ * Both swap sites (`postinstall-app.mjs` and `apply-pending-update.mjs`) do:
+ *
+ *     rename(trace-mcp.app -> trace-mcp.app.bak-<pid>)   <-- crash window
+ *     rename(<staged>      -> trace-mcp.app)
+ *     rm -rf trace-mcp.app.bak-<pid>                     <-- crash window
+ *
+ * A reboot, SIGKILL or power loss inside the first window leaves the user with
+ * NO bundle at all — only `trace-mcp.app.bak-<pid>`, which macOS treats as a
+ * plain folder. `locateInstalledApp()` then returns null forever, so both
+ * scripts abort at their first gate and nothing ever retries: the install is
+ * bricked until the user reinstalls by hand. A crash inside the second window
+ * leaks a full Electron bundle (hundreds of MB) that nothing cleans up.
+ *
+ * This scans the directories we could have swapped in and settles both cases:
+ * restore the backup when the live bundle is missing, delete it when it is
+ * not. Only `<appName>.bak-<digits>` is touched — that name is written by us
+ * and by nothing else.
+ *
+ * Best-effort by design: every filesystem error is swallowed, exactly like the
+ * callers that invoke it.
+ *
+ * @param {LocateOptions} [options]
+ * @returns {Array<{ action: 'restored' | 'reclaimed', path: string }>}
+ */
+export function recoverInterruptedSwap(options = {}) {
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'darwin') return [];
+
+  const home = options.homeDir ?? os.homedir();
+  const appName = options.appName ?? APP_NAME;
+  const bundleId = options.bundleId ?? BUNDLE_ID;
+  const plistBuddyBin = options.plistBuddyBin ?? '/usr/libexec/PlistBuddy';
+  const fallbackDirs = options.fallbackDirs ?? [path.join(home, 'Applications'), '/Applications'];
+
+  // The marker's directory is where a drag-installed bundle actually lives, so
+  // it must be scanned too — but the marker cannot be resolved through
+  // locateInstalledApp() here, because after an interrupted swap the path it
+  // names no longer validates. Read the raw path instead.
+  const dirs = new Set(fallbackDirs);
+  const markerAppPath = readMarkerAppPath(path.join(home, '.trace-mcp', LOCATION_MARKER_FILENAME));
+  if (markerAppPath) dirs.add(path.dirname(markerAppPath));
+
+  const backupPattern = new RegExp(`^${escapeRegExp(appName)}\\.bak-\\d+$`);
+  const actions = [];
+
+  for (const dir of dirs) {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    const appPath = path.join(dir, appName);
+    for (const entry of entries) {
+      if (!backupPattern.test(entry)) continue;
+      const backupPath = path.join(dir, entry);
+      try {
+        if (fs.existsSync(appPath)) {
+          fs.rmSync(backupPath, { recursive: true, force: true });
+          actions.push({ action: 'reclaimed', path: backupPath });
+        } else if (isValidAppBundle(backupPath, bundleId, plistBuddyBin)) {
+          // Only restore something that really is our bundle — never promote
+          // a half-extracted directory into the install path.
+          fs.renameSync(backupPath, appPath);
+          actions.push({ action: 'restored', path: appPath });
+        }
+      } catch {
+        /* best-effort; the next run retries */
+      }
+    }
+  }
+
+  return actions;
+}
+
+function readMarkerAppPath(markerPath) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(markerPath, 'utf-8'));
+    return typeof parsed?.appPath === 'string' ? parsed.appPath : null;
+  } catch {
+    return null;
+  }
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Write the location marker. Called by Electron main on every startup with
  * `process.execPath`-derived path. Best-effort: failures are swallowed
  * because losing the marker degrades gracefully to mdfind fallback.
