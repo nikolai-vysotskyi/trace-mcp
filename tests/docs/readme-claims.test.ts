@@ -1,9 +1,14 @@
-import { execSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import { PluginRegistry } from '../../src/plugin-api/registry.js';
+import {
+  advertisedToolCount,
+  allToolNames,
+  frameworkGatedToolNames,
+  resourceCount as countServerResourceCalls,
+} from './tool-surface.js';
 
 /**
  * README-claims regression test.
@@ -82,40 +87,10 @@ function within(actual: number, claim: number, tolerance: number): boolean {
   return Math.abs(actual - claim) <= tolerance;
 }
 
-function countServerToolCalls(): number {
-  // Grep via Node fs rather than shelling out so the test stays portable.
-  const out = execSync(
-    `grep -lE "server\\.tool\\(" ${join(REPO_ROOT, 'src/tools/register')}/*.ts`,
-    { encoding: 'utf-8' },
-  )
-    .trim()
-    .split('\n')
-    .filter(Boolean);
-  let total = 0;
-  for (const file of out) {
-    const body = readFileSync(file, 'utf-8');
-    const matches = body.match(/server\.tool\(/g);
-    if (matches) total += matches.length;
-  }
-  return total;
-}
-
-function countServerResourceCalls(): number {
-  const out = execSync(
-    `grep -lE "server\\.resource\\(" ${join(REPO_ROOT, 'src/tools/register')}/*.ts`,
-    { encoding: 'utf-8' },
-  )
-    .trim()
-    .split('\n')
-    .filter(Boolean);
-  let total = 0;
-  for (const file of out) {
-    const body = readFileSync(file, 'utf-8');
-    const matches = body.match(/server\.resource\(/g);
-    if (matches) total += matches.length;
-  }
-  return total;
-}
+// TRA-268: both counts used to come from a non-recursive `grep .../register/*.ts`,
+// which never saw src/tools/register/navigation/. They now come from
+// ./tool-surface.ts, which walks the tree.
+const countServerToolCalls = advertisedToolCount;
 
 /**
  * Every `<NUMBER>+? <unit>` occurrence in the text, not just the first —
@@ -183,10 +158,42 @@ describe('README numeric claims', () => {
     if (!claim) return;
     if (!within(toolCount, claim.count, 5)) {
       throw new Error(
-        `README claims ${claim.count} tools; src/tools/register/*.ts contains ` +
-          `${toolCount} server.tool(...) registrations. Update README.md line: "${claim.rawLine}"`,
+        `README claims ${claim.count} tools; src/tools/register/ registers ${toolCount} ` +
+          `framework-agnostic tools. Update README.md line: "${claim.rawLine}"`,
       );
     }
+  });
+
+  it('counts tools registered in subdirectories of src/tools/register (TRA-268)', () => {
+    // The old glob was `src/tools/register/*.ts`, so everything under
+    // src/tools/register/navigation/ was invisible and the count only matched
+    // the docs by coincidence.
+    const names = new Set(allToolNames());
+    for (const subdirTool of ['search', 'get_symbol', 'get_outline', 'get_task_context']) {
+      expect(names.has(subdirTool), `${subdirTool} is registered but not counted`).toBe(true);
+    }
+  });
+
+  it('the framework-gate detection still finds the framework-only tools (TRA-268)', () => {
+    // advertisedToolCount() subtracts the tools registered inside
+    // `if (has('vue', ...))`. If framework.ts ever stops using that shape, the
+    // subtraction silently becomes a no-op and the advertised number jumps by
+    // ~13 with no other signal. Fail here instead, where the cause is obvious.
+    const gated = frameworkGatedToolNames();
+    expect(
+      gated.size,
+      'no framework-gated tools found under src/tools/register — the `if (has(...))` ' +
+        'gate shape in framework.ts changed; update frameworkGatedToolNames() in ' +
+        'tests/docs/tool-surface.ts.',
+    ).toBeGreaterThan(5);
+    // A spot-check that we are matching the gate, not every tool in the file:
+    // these three sit in framework.ts but outside any `if (has(...))` block.
+    for (const alwaysOn of ['find_usages', 'get_call_graph', 'get_tests_for']) {
+      expect(gated.has(alwaysOn), `${alwaysOn} is always registered, not framework-gated`).toBe(
+        false,
+      );
+    }
+    expect(gated.has('get_component_tree')).toBe(true);
   });
 
   it('package.json version is referenced consistently in plugin manifests', () => {
@@ -270,7 +277,7 @@ describe('docs site numeric claims (TRA-174)', () => {
         if (skipLine?.test(claim.rawLine)) continue;
         if (!within(toolCount, claim.count, tolerance)) {
           throw new Error(
-            `${path} claims ${claim.count} tools; src/tools/register/*.ts contains ${toolCount} server.tool(...) registrations. Line: "${claim.rawLine}"`,
+            `${path} claims ${claim.count} tools; src/tools/register/ registers ${toolCount} framework-agnostic tools. Line: "${claim.rawLine}"`,
           );
         }
       }
@@ -348,7 +355,7 @@ describe('docs site numeric claims (TRA-174)', () => {
       for (const claim of findAllClaims(/resources?/, text)) {
         if (!within(resourceCount, claim.count, 2)) {
           throw new Error(
-            `claims ${claim.count} resources; src/tools/register/*.ts contains ${resourceCount} server.resource(...) registrations. Line: "${claim.rawLine}"`,
+            `claims ${claim.count} resources; src/tools/register/ contains ${resourceCount} server.resource(...) registrations. Line: "${claim.rawLine}"`,
           );
         }
       }
