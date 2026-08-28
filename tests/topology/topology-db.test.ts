@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TopologyStore } from '../../src/topology/topology-db.js';
+import { pruneDangerousSubprojects } from '../../src/topology/topology-subprojects.js';
 
 describe('TopologyStore', () => {
   let store: TopologyStore;
@@ -267,6 +269,76 @@ describe('TopologyStore', () => {
         store.upsertSubproject({ name: 'root', repoRoot: '/', projectRoot: PROJECT }),
       ).toThrow(/filesystem root/);
       expect(store.getAllSubprojects()).toHaveLength(0);
+    });
+
+    it('rejects a system directory as subproject repo_root (TRA-232)', () => {
+      expect(() =>
+        store.upsertSubproject({ name: 'tmp', repoRoot: '/private/tmp', projectRoot: PROJECT }),
+      ).toThrow(/system directory/);
+      expect(store.getAllSubprojects()).toHaveLength(0);
+    });
+
+    it('rejects a system directory as subproject project_root (TRA-232)', () => {
+      expect(() =>
+        store.upsertSubproject({
+          name: 'scratch',
+          repoRoot: '/private/tmp/scratch-repo',
+          projectRoot: '/private/tmp',
+        }),
+      ).toThrow(/project_root .*system directory/);
+      expect(store.getAllSubprojects()).toHaveLength(0);
+    });
+  });
+
+  describe('dangerous-subproject pruning (TRA-232)', () => {
+    it('drops pre-guard rows rooted under a system dir, keeping valid ones', () => {
+      const good = store.upsertSubproject({
+        name: 'good',
+        repoRoot: '/project/api',
+        projectRoot: '/project',
+      });
+      // Simulate rows written before the guard existed.
+      const raw = new Database(dbPath);
+      const insert = raw.prepare(
+        `INSERT INTO subprojects (name, repo_root, project_root, added_at)
+         VALUES (?, ?, ?, datetime('now'))`,
+      );
+      insert.run('scratch', '/private/tmp/scratch-repo', '/private/tmp');
+      insert.run('', '/', '/');
+      expect(store.getAllSubprojects()).toHaveLength(3);
+
+      // Services discovered under the phantom roots go with them; the valid
+      // project's service must survive.
+      store.upsertService({
+        name: 'scratch-svc',
+        repoRoot: '/private/tmp/scratch-repo',
+        serviceType: 'api',
+        detectionSource: 'ws',
+        dbPath: '/fake/db',
+      });
+      store.upsertService({
+        name: 'good-svc',
+        repoRoot: '/project/api',
+        serviceType: 'api',
+        detectionSource: 'ws',
+        dbPath: '/fake/db',
+      });
+
+      expect(pruneDangerousSubprojects(raw)).toEqual({ subprojects: 2, services: 1 });
+      raw.close();
+
+      const remaining = store.getAllSubprojects();
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe(good);
+      expect(store.getAllServices().map((s) => s.name)).toEqual(['good-svc']);
+    });
+
+    it('is a no-op on a clean registry', () => {
+      store.upsertSubproject({ name: 'ok', repoRoot: '/project/api', projectRoot: '/project' });
+      const raw = new Database(dbPath);
+      expect(pruneDangerousSubprojects(raw)).toEqual({ subprojects: 0, services: 0 });
+      raw.close();
+      expect(store.getAllSubprojects()).toHaveLength(1);
     });
   });
 
