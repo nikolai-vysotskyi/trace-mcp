@@ -183,6 +183,84 @@ describe('resolveProjectForMcpRequest', () => {
     expect(result).toEqual({ kind: 'no-projects' });
   });
 
+  // TRA-286: Claude Cowork/Code sessions spawn the stdio proxy with cwd=/, so
+  // the proxy hinted `?project=/`. The daemon honoured it, refused to index the
+  // filesystem root, and the whole MCP connection failed to start.
+  it('ignores a dangerous ?project= hint and falls back to the single project', () => {
+    const result = resolveProjectForMcpRequest({
+      queryProject: '/',
+      headerProject: '/',
+      body: undefined,
+      projects: [{ root: PROJ_A }],
+      trackedClients: [],
+    });
+    expect(result.kind).toBe('resolved');
+    if (result.kind === 'resolved') {
+      expect(result.projectRoot).toBe(PROJ_A);
+      expect(result.via).toBe('single-project');
+    }
+    expect(result.ignoredDangerousHint).toEqual({
+      projectRoot: '/',
+      reason: 'filesystem root',
+      via: 'query',
+    });
+  });
+
+  it('ignores a dangerous hint and still resolves via tracked client', () => {
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'claude-code' } },
+    };
+    const result = resolveProjectForMcpRequest({
+      queryProject: undefined,
+      headerProject: '/',
+      body,
+      projects: TWO_PROJECTS,
+      trackedClients: [{ name: 'claude-code', project: PROJ_B }],
+    });
+    expect(result.kind).toBe('resolved');
+    if (result.kind === 'resolved') {
+      expect(result.projectRoot).toBe(PROJ_B);
+      expect(result.via).toBe('tracked-client');
+    }
+    expect(result.ignoredDangerousHint?.via).toBe('header');
+  });
+
+  it('reports the dropped hint when the fallback cannot pick a project', () => {
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: { _meta: { 'traceMcp/projectRoot': '/' } },
+    };
+    const result = resolveProjectForMcpRequest({
+      queryProject: undefined,
+      headerProject: undefined,
+      body,
+      projects: TWO_PROJECTS,
+      trackedClients: [],
+    });
+    expect(result.kind).toBe('ambiguous');
+    expect(result.ignoredDangerousHint).toEqual({
+      projectRoot: '/',
+      reason: 'filesystem root',
+      via: 'meta',
+    });
+  });
+
+  it('still honours a real project living under a system directory', () => {
+    const result = resolveProjectForMcpRequest({
+      queryProject: '/tmp/scratch-repo',
+      headerProject: undefined,
+      body: undefined,
+      projects: TWO_PROJECTS,
+      trackedClients: [],
+    });
+    expect(result).toEqual({ kind: 'resolved', projectRoot: '/tmp/scratch-repo', via: 'query' });
+  });
+
   it('precedence: query wins over header wins over meta wins over tracked-client', () => {
     const body = {
       jsonrpc: '2.0',

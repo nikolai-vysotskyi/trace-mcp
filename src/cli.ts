@@ -955,6 +955,13 @@ program
         // {error: '...'} body isn't a valid JSON-RPC response. (issue #168)
         const rpcId = extractRpcId(parsedBody);
 
+        if (resolution.ignoredDangerousHint) {
+          const { projectRoot: hinted, reason, via } = resolution.ignoredDangerousHint;
+          logger.warn(
+            { hinted, reason, via, resolvedAs: resolution.kind },
+            'Ignored dangerous project hint from MCP client — resolved without it (TRA-286)',
+          );
+        }
         if (resolution.kind === 'no-projects') {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(buildNoProjectsError(rpcId)));

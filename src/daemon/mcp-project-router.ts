@@ -20,7 +20,16 @@
  *   5. If exactly one project is registered, use it.
  *   6. If zero projects are registered, return "no-projects".
  *   7. Otherwise return "ambiguous" — the caller renders a 400.
+ *
+ * An explicit hint (1-3) that names a dangerous root (filesystem root, home, a
+ * system directory) is IGNORED rather than honoured: clients spawned with cwd=/
+ * (Claude Cowork/Code sessions) otherwise pinned the session to "/" and the
+ * whole MCP connection failed to start with "-32002 Refusing to index /"
+ * (TRA-286). Falling through to the tracked-client / single-project steps
+ * serves the real project instead.
  */
+
+import { isDangerousProjectRoot } from '../dangerous-root.js';
 
 export interface RegisteredProjectLike {
   root: string;
@@ -31,10 +40,14 @@ export interface TrackedClientLike {
   project: string;
 }
 
-export type ProjectResolution =
+export type ProjectResolution = (
   | { kind: 'resolved'; projectRoot: string; via: ResolutionSource }
   | { kind: 'no-projects' }
-  | { kind: 'ambiguous'; registered: string[] };
+  | { kind: 'ambiguous'; registered: string[] }
+) & {
+  /** Set when an explicit hint was dropped for naming a dangerous root. */
+  ignoredDangerousHint?: { projectRoot: string; reason: string; via: ResolutionSource };
+};
 
 export type ResolutionSource = 'query' | 'header' | 'meta' | 'tracked-client' | 'single-project';
 
@@ -95,26 +108,34 @@ function looksLikeInitialize(body: unknown): boolean {
 export function resolveProjectForMcpRequest(args: ResolveProjectArgs): ProjectResolution {
   const isInit = args.isInitializeRequest ?? looksLikeInitialize;
 
+  let ignoredDangerousHint: ProjectResolution['ignoredDangerousHint'];
+  /** Honour an explicit hint unless it names a dangerous root — then record and drop it. */
+  const useHint = (value: string | undefined, via: ResolutionSource): ProjectResolution | null => {
+    if (!value) return null;
+    const reason = isDangerousProjectRoot(value);
+    if (reason) {
+      ignoredDangerousHint ??= { projectRoot: value, reason, via };
+      return null;
+    }
+    return { kind: 'resolved', projectRoot: value, via };
+  };
+
   const queryProject =
     typeof args.queryProject === 'string' && args.queryProject.length > 0
       ? args.queryProject
       : undefined;
-  if (queryProject) {
-    return { kind: 'resolved', projectRoot: queryProject, via: 'query' };
-  }
+  const fromQuery = useHint(queryProject, 'query');
+  if (fromQuery) return fromQuery;
 
   const headerProject =
     typeof args.headerProject === 'string' && args.headerProject.length > 0
       ? args.headerProject
       : undefined;
-  if (headerProject) {
-    return { kind: 'resolved', projectRoot: headerProject, via: 'header' };
-  }
+  const fromHeader = useHint(headerProject, 'header');
+  if (fromHeader) return fromHeader;
 
-  const metaProject = extractMetaProjectRoot(args.body);
-  if (metaProject) {
-    return { kind: 'resolved', projectRoot: metaProject, via: 'meta' };
-  }
+  const fromMeta = useHint(extractMetaProjectRoot(args.body), 'meta');
+  if (fromMeta) return fromMeta;
 
   if (args.body !== undefined && isInit(args.body)) {
     const clientName = extractInitializeClientName(args.body);
@@ -124,16 +145,26 @@ export function resolveProjectForMcpRequest(args: ResolveProjectArgs): ProjectRe
         (c) => c.name === clientName && registered.has(c.project),
       );
       if (matches.length === 1) {
-        return { kind: 'resolved', projectRoot: matches[0]!.project, via: 'tracked-client' };
+        return {
+          kind: 'resolved',
+          projectRoot: matches[0]!.project,
+          via: 'tracked-client',
+          ignoredDangerousHint,
+        };
       }
     }
   }
 
   if (args.projects.length === 1) {
-    return { kind: 'resolved', projectRoot: args.projects[0]!.root, via: 'single-project' };
+    return {
+      kind: 'resolved',
+      projectRoot: args.projects[0]!.root,
+      via: 'single-project',
+      ignoredDangerousHint,
+    };
   }
   if (args.projects.length === 0) {
-    return { kind: 'no-projects' };
+    return { kind: 'no-projects', ignoredDangerousHint };
   }
-  return { kind: 'ambiguous', registered: args.projects.map((p) => p.root) };
+  return { kind: 'ambiguous', registered: args.projects.map((p) => p.root), ignoredDangerousHint };
 }
