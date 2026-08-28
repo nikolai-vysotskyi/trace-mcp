@@ -514,17 +514,22 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 
 ## Documentation
 
+Full docs live at **[trace-mcp.com](https://trace-mcp.com/)** (same content as `docs/` in this repo).
+
 | Document | Description |
 |---|---|
-| [Supported frameworks](docs/supported-frameworks.md) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
-| [Tools reference](docs/tools-reference.md) | All 164 MCP tools with descriptions and usage examples |
-| [Configuration](docs/configuration.md) | Config options, AI setup, environment variables, security settings |
-| [Architecture](docs/architecture.md) | How indexing works, plugin system, project structure, tech stack |
-| [Decision memory](docs/decision-memory.md) | Decision knowledge graph, session mining, cross-session search, wake-up context |
-| [Analytics](docs/analytics.md) | Session analytics, token savings tracking, optimization reports, benchmarks |
-| [System prompt routing](docs/tweakcc.md) | Optional tweakcc integration for maximum tool routing enforcement |
-| [Comparisons](docs/comparisons.md) | Full side-by-side tables vs. other code intelligence / memory / RAG tools |
-| [Development](docs/development.md) | Building, testing, contributing, adding new plugins |
+| [Supported frameworks](https://trace-mcp.com/supported-frameworks.html) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
+| [Tools reference](https://trace-mcp.com/tools-reference.html) | All 164 MCP tools with descriptions and usage examples |
+| [Configuration](https://trace-mcp.com/configuration.html) | Config options, AI setup, environment variables, security settings |
+| [Architecture](https://trace-mcp.com/architecture.html) | How indexing works, plugin system, project structure, tech stack |
+| [Decision memory](https://trace-mcp.com/decision-memory.html) | Decision knowledge graph, session mining, cross-session search, wake-up context |
+| [Analytics](https://trace-mcp.com/analytics.html) | Session analytics, token savings tracking, optimization reports, benchmarks |
+| [Quality gates](https://trace-mcp.com/quality-gates.html) | Complexity, security and coverage thresholds, and how `quality_gates.rules` overrides the CLI defaults |
+| [TOON savings](https://trace-mcp.com/toon-savings.html) | Measured token savings of the TOON output format on real tool calls |
+| [Telemetry](https://trace-mcp.com/telemetry.html) | OpenTelemetry-compatible spans for every AI provider call and MCP tool call |
+| [System prompt routing](https://trace-mcp.com/tweakcc.html) | Optional tweakcc integration for maximum tool routing enforcement |
+| [Comparisons](https://trace-mcp.com/comparisons.html) | Full side-by-side tables vs. other code intelligence / memory / RAG tools |
+| [Development](https://trace-mcp.com/development.html) | Building, testing, contributing, adding new plugins |
 
 ---
 
