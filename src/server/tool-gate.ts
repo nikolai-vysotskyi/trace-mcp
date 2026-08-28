@@ -16,6 +16,7 @@ import {
   type SchemaTransformConfig,
   stampAlwaysLoad,
 } from './tool-gate-helpers.js';
+import { createToolFilter } from './tool-filter.js';
 import type { ToolResponse } from './types.js';
 
 interface ToolGateResult {
@@ -55,8 +56,6 @@ export function installToolGate(
   onJournalEntry?: (data: JournalEntryCallbackData) => void,
   sessionId?: string,
 ): ToolGateResult {
-  const includeSet = config.tools?.include ? new Set(config.tools.include) : null;
-  const excludeSet = config.tools?.exclude ? new Set(config.tools.exclude) : null;
   const descriptionOverrides = config.tools?.descriptions ?? {};
   const schemaTransformConfig: SchemaTransformConfig = {
     descriptionVerbosity: config.tools?.description_verbosity ?? 'full',
@@ -68,12 +67,9 @@ export function installToolGate(
         : {},
   };
 
-  function toolAllowed(name: string): boolean {
-    if (excludeSet?.has(name)) return false;
-    if (includeSet?.has(name)) return true;
-    if (activePreset === 'all') return true;
-    return activePreset.has(name);
-  }
+  // Shared with the daemon proxy's per-session filter (TRA-250) so the local
+  // and daemon-backed surfaces cannot drift apart.
+  const toolAllowed = createToolFilter(config, activePreset);
 
   const _originalTool = server.tool.bind(server);
   const registeredToolNames: string[] = [];

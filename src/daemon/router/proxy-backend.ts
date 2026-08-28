@@ -35,6 +35,15 @@ export interface ProxyBackendOptions {
    */
   initializeFrame?: JSONRPCMessage;
   /**
+   * Per-session tool-surface filter (preset / tools.include / tools.exclude).
+   * The daemon serves every tool to every session — it has to, since one daemon
+   * backs many sessions with different presets — so the preset can only be
+   * honoured here, at the session boundary: `tools/list` results are filtered
+   * and `tools/call` for a filtered-out tool is rejected without forwarding
+   * (TRA-250). Omit to forward the daemon's full surface unchanged.
+   */
+  toolFilter?: (name: string) => boolean;
+  /**
    * Test seam: build a transport for the resolved /mcp URL + project root.
    * Defaults to a real StreamableHTTPClientTransport.
    */
@@ -80,6 +89,17 @@ function messageId(msg: JSONRPCMessage): string | number | undefined {
   return id === undefined || id === null ? undefined : (id as string | number);
 }
 
+/** JSON-RPC "method not found" — what an MCP client gets for an unknown tool. */
+const METHOD_NOT_FOUND = -32601;
+
+/** Name of the tool a `tools/call` frame targets, if it is one. */
+function toolCallName(msg: JSONRPCMessage): string | undefined {
+  const m = msg as Record<string, unknown>;
+  if (m.method !== 'tools/call') return undefined;
+  const name = (m.params as Record<string, unknown> | undefined)?.name;
+  return typeof name === 'string' ? name : undefined;
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const t = setTimeout(resolve, ms);
@@ -122,6 +142,8 @@ export class ProxyBackend implements Backend {
   /** While re-initializing, swallow the replayed initialize response by id. */
   private pendingReinitId: string | number | null = null;
   private resolveReinit: (() => void) | null = null;
+  /** Ids of in-flight `tools/list` requests, whose responses need filtering. */
+  private readonly pendingToolsListIds = new Set<string | number>();
 
   constructor(opts: ProxyBackendOptions) {
     this.opts = opts;
@@ -164,6 +186,28 @@ export class ProxyBackend implements Backend {
     if (!this.httpTransport) throw new Error('ProxyBackend not started');
     // Cache the handshake so we can replay it if the daemon session dies.
     if (isInitializeRequest(msg)) this.initializeFrame = msg;
+    if (this.opts.toolFilter) {
+      const id = messageId(msg);
+      const called = toolCallName(msg);
+      // A filtered-out tool must be genuinely uncallable, not merely hidden
+      // from tools/list — answer it here instead of forwarding (TRA-250).
+      if (called !== undefined && !this.opts.toolFilter(called)) {
+        if (id !== undefined) {
+          this.onmessage?.({
+            jsonrpc: '2.0',
+            id,
+            error: {
+              code: METHOD_NOT_FOUND,
+              message: `Tool "${called}" is not available in this session's tool preset.`,
+            },
+          } as unknown as JSONRPCMessage);
+        }
+        return;
+      }
+      if ((msg as Record<string, unknown>).method === 'tools/list' && id !== undefined) {
+        this.pendingToolsListIds.add(id);
+      }
+    }
     try {
       // Transient network blips (daemon mid-restart, dropped connection) are
       // common during a daemon respawn; retry a couple of times with short
@@ -260,6 +304,28 @@ export class ProxyBackend implements Backend {
     return this.reestablishing;
   }
 
+  /**
+   * Narrow a daemon `tools/list` reply to this session's preset. The daemon
+   * always answers with its full surface — filtering it out here is what makes
+   * the preset actually reach the client on the daemon path (TRA-250).
+   */
+  private filterToolsListResponse(msg: JSONRPCMessage): JSONRPCMessage {
+    const filter = this.opts.toolFilter;
+    const id = messageId(msg);
+    if (!filter || id === undefined || !this.pendingToolsListIds.delete(id)) return msg;
+    const result = (msg as Record<string, unknown>).result as
+      | { tools?: Array<{ name?: unknown }> }
+      | undefined;
+    if (!Array.isArray(result?.tools)) return msg;
+    const tools = result.tools.filter((t) => typeof t?.name !== 'string' || filter(t.name));
+    if (tools.length === result.tools.length) return msg;
+    logger.debug(
+      { total: result.tools.length, kept: tools.length },
+      'ProxyBackend: filtered tools/list to session preset',
+    );
+    return { ...msg, result: { ...result, tools } } as JSONRPCMessage;
+  }
+
   private wire(transport: ProxyTransport): void {
     transport.onmessage = (msg) => {
       // Swallow the replayed initialize response — the client already received
@@ -268,7 +334,7 @@ export class ProxyBackend implements Backend {
         this.resolveReinit?.();
         return;
       }
-      this.onmessage?.(msg);
+      this.onmessage?.(this.filterToolsListResponse(msg));
     };
     transport.onerror = (err) => {
       logger.warn({ err: String(err) }, 'ProxyBackend: HTTP transport error');
