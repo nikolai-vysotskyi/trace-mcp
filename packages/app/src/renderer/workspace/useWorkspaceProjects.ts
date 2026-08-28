@@ -12,7 +12,7 @@
  * fallback that matches the server-side cache TTL.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useDaemon } from '../hooks/useDaemon';
+import { DAEMON_FETCH_TIMEOUT_MS, useDaemon } from '../hooks/useDaemon';
 import {
   type ProjectHealthMetrics,
   type ProjectViewModel,
@@ -78,20 +78,39 @@ interface MetricsSetters {
   setError: (e: string | null) => void;
 }
 
-/** Fetch the dashboard cache once. Exported so tests can drive it directly. */
-export async function fetchMetricsOnce(setters: MetricsSetters): Promise<void> {
+/**
+ * Turn a raw fetch rejection into something a user can act on. `Failed to
+ * fetch` / `The operation was aborted` are the browser's own words for "the
+ * socket died" and mean nothing to the person reading the banner.
+ */
+export function describeMetricsError(err: unknown): string {
+  const raw = (err as Error)?.message ?? '';
+  if (/failed to fetch|networkerror|load failed|aborted|timed? ?out/i.test(raw)) {
+    return "Couldn't load project metrics — daemon not responding.";
+  }
+  return raw ? `Couldn't load project metrics — ${raw}` : "Couldn't load project metrics.";
+}
+
+/**
+ * Fetch the dashboard cache once. Exported so tests can drive it directly.
+ * Returns true only when metrics actually landed — the caller uses that to
+ * decide whether the KPI strip may stop rendering `—` placeholders.
+ */
+export async function fetchMetricsOnce(setters: MetricsSetters): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/api/dashboard/projects`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+    const res = await fetch(`${BASE}/api/dashboard/projects`, { signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
-      setters.setError(body.error ?? `HTTP ${res.status}`);
-      return;
+      setters.setError(`Couldn't load project metrics — ${body.error ?? `HTTP ${res.status}`}`);
+      return false;
     }
     const data = (await res.json()) as { projects: ProjectHealthMetrics[] };
     setters.setMetrics(data.projects ?? []);
     setters.setError(null);
+    return true;
   } catch (err) {
-    setters.setError((err as Error)?.message ?? 'Failed to load dashboard metrics');
+    setters.setError(describeMetricsError(err));
+    return false;
   }
 }
 
@@ -107,10 +126,12 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Single-flight metrics fetch + loaded-flag bookkeeping.
+  // Single-flight metrics fetch. Only a *successful* fetch clears the loading
+  // flag — otherwise the KPI strip would swap `—` placeholders for hard zeros
+  // and present a failed fetch as real data (TRA-264).
   const fetchMetrics = useCallback(async () => {
-    await fetchMetricsOnce({ setMetrics, setError });
-    setMetricsLoaded(true);
+    const ok = await fetchMetricsOnce({ setMetrics, setError });
+    if (ok) setMetricsLoaded(true);
   }, []);
 
   // Initial fetch + 5-min polling fallback.
@@ -146,7 +167,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetch(`${BASE}/api/dashboard/refresh`, { method: 'POST' }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      await fetch(`${BASE}/api/dashboard/refresh`, { method: 'POST', signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
     } catch {
       // Best-effort; still fetch even if invalidation failed.
     }

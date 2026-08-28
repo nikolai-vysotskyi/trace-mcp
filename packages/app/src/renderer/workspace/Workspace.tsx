@@ -187,10 +187,22 @@ export function Workspace() {
 
       {data.error && (
         <div
-          className="mx-3 mb-2 px-3 py-1.5 rounded-md text-[11px]"
-          style={{ background: '#ff3b3018', color: '#ff3b30', border: '0.5px solid #ff3b3040' }}
+          className="mx-3 mb-2 px-3 py-1.5 rounded-md text-[11px] flex items-center gap-2"
+          style={{
+            background: 'color-mix(in srgb, var(--destructive) 9%, transparent)',
+            color: 'var(--destructive)',
+            border: '0.5px solid color-mix(in srgb, var(--destructive) 25%, transparent)',
+          }}
         >
-          {data.error}
+          <span className="flex-1">{data.error}</span>
+          <button
+            type="button"
+            onClick={() => void data.refresh()}
+            disabled={data.refreshing}
+            className="px-1.5 py-0.5 rounded font-medium hover:bg-[var(--bg-active)] disabled:opacity-50"
+          >
+            {data.refreshing ? 'Retrying…' : 'Retry'}
+          </button>
         </div>
       )}
 
