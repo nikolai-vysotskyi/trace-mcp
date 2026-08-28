@@ -74,7 +74,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 | Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
 | Service/subproject scoping | ✅ decisions per service | ❌ | ✅ wings per project | ❌ | ❌ | ✅ per branch | ✅ per workspace |
 | Published retrieval benchmark | ❌ | ❌ | ✅ LongMemEval / LoCoMo / MemBench | ❌ | ✅ LoCoMo / LongMemEval / BEAM | ❌ | ❌ |
-| Code intelligence included | ✅ 165 tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Code intelligence included | ✅ {{ site.data.counts.tools }} tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Works as standalone memory | ❌ code-focused | ✅ git-native, code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
 | Written in | TypeScript | — | Python | TypeScript | TS + Python | Go / Rust | Python |
 
@@ -111,7 +111,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | 80 | 40+ (via LSP) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | 85 | ❌ | ❌ (Python entry points only) | ❌ | ❌ | ❌ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✅ | ❌ | ❌ | ✅ cross-service HTTP | ✅ polyglot dep graph | ❌ | ✅ PHP↔TS API drift |
-| MCP tools advertised (default) | 165 (~51K tok) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok) | 21 | 90 | 224 |
+| MCP tools advertised (default) | {{ site.data.counts.tools }} (~51K tok) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok) | 21 | 90 | 224 |
 | Session memory | ✅ | ✅ (manual notes) | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✅ | ❌ | ✅ multi-repo daemon | ✅ cross-service | ✅ cross-project search | ❌ | ❌ |
@@ -144,7 +144,7 @@ Both of the biggest projects in this space (by stars) made the same product call
 
 **Take:** `manage_adr` is a flat markdown document with get/update/sections modes — not code-linked memory, and no reason to copy it; trace-mcp's decisions already bind to symbol IDs and surface inside `get_change_impact`. `ingest_traces` is a genuinely missing capability (runtime-observed dynamic call edges that static analysis cannot see) but is a three-field payload — a thin veneer, worth revisiting only if users ask. The 161-language race stays out of lane, as before.
 
-**What we are taking:** a *default* tool surface small enough to be honest about. trace-mcp already has the machinery — `TOOL_PRESETS` (`minimal` 24 tools, `standard` 55, `full` 165) plus a `tools.include`/`tools.exclude` gate — and `standard` is already the coded default. Measured this pass against a real `initialize` + `tools/list` round-trip, the presets work perfectly with `TRACE_MCP_NO_DAEMON=1` (24 / 55 / 165 tools) and are **silently bypassed on the default daemon-backed path**, which pins every session at the full surface whatever the preset says. That is a bug, not a design gap, and it is tracked separately. Until it is fixed, the number in the table above is the number users actually pay.
+**What we are taking:** a *default* tool surface small enough to be honest about. trace-mcp already has the machinery — `TOOL_PRESETS` (`minimal` (24 tools), `standard` (59 tools), `full` ({{ site.data.counts.tools }} tools)) plus a `tools.include`/`tools.exclude` gate — and `standard` is already the coded default. Measured this pass against a real `initialize` + `tools/list` round-trip, the presets work perfectly with `TRACE_MCP_NO_DAEMON=1` (24 / 59 / {{ site.data.counts.tools }} tools) and are **silently bypassed on the default daemon-backed path**, which pins every session at the full surface whatever the preset says. That is a bug, not a design gap, and it is tracked separately. Until it is fixed, the number in the table above is the number users actually pay.
 
 ## Honest assessment: where competitors lead
 
@@ -163,7 +163,7 @@ No tool is uniformly ahead. trace-mcp is the only one combining framework-aware 
 
 **Still genuinely open (honest, not closed by the validation pass):**
 
-- **Advertised tool-surface cost.** Measured August 28, 2026: trace-mcp's `tools/list` is 165 tools / ~50K tokens, plus ~2.1K tokens of server instructions, paid by every client without deferred tool loading on every session. The two largest peers advertise ~1.9K and ~7K tokens respectively — 27× and 7× cheaper — by shipping a small default surface with the rest opt-in. trace-mcp has the same mechanism built and it does not take effect on the shipped path; nothing here is architecturally hard, it is simply not true today.
+- **Advertised tool-surface cost.** Measured August 28, 2026: trace-mcp's `tools/list` is {{ site.data.counts.tools }} tools / ~50K tokens, plus ~2.1K tokens of server instructions, paid by every client without deferred tool loading on every session. The two largest peers advertise ~1.9K and ~7K tokens respectively — 27× and 7× cheaper — by shipping a small default surface with the rest opt-in. trace-mcp has the same mechanism built and it does not take effect on the shipped path; nothing here is architecturally hard, it is simply not true today.
 
 - **Validated code-health metric.** A temporal-holdout calibration script now correlates `predict_bugs`/`get_risk_hotspots` against real future-fix commits on this repo (churn Spearman ≈0.34, precision@20 ≈2.1–2.4× over random) and the tool descriptions were reworded to honest "heuristic triage" language. This is evidence, not CodeScene-grade external validation — the gap to a peer-reviewed, cross-repo-validated metric remains.
 - **Worst-case decision-verification latency.** The memoization fix above only helps when decisions cluster on a handful of files; a batch fully scattered across N distinct files is still O(N) git subprocess spawns. An async/batched redesign would be needed to bound the worst case.
