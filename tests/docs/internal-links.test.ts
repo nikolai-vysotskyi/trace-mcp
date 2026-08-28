@@ -22,9 +22,13 @@ const DOCS = join(REPO_ROOT, 'docs');
 
 function sitemapPaths(): string[] {
   const xml = readFileSync(join(DOCS, 'sitemap.xml'), 'utf-8');
-  return [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)]
-    .map((m) => m[1].replace(/^https:\/\/trace-mcp\.com/, ''))
-    .filter((p) => p !== '/'); // homepage is linked separately in the footer
+  return (
+    [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)]
+      // Anchored with a lookahead on the path separator: without it the pattern
+      // also strips the prefix of a lookalike host like trace-mcp.com.example.org.
+      .map((m) => m[1].replace(/^https:\/\/trace-mcp\.com(?=\/)/, ''))
+      .filter((p) => p !== '/')
+  ); // homepage is linked separately in the footer
 }
 
 function navPaths(): string[] {
