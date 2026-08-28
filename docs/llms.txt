@@ -5,7 +5,7 @@ layout: null
 ---
 # trace-mcp
 
-> trace-mcp is a framework-aware MCP server that serves precomputed code intelligence — a dependency graph, full-text search, impact analysis, and decision memory — to cut token usage for AI coding agents. It understands 85 frameworks across 80 languages and exposes {{ site.data.counts.tools }} MCP tools over stdio or HTTP.
+> trace-mcp is a framework-aware MCP server that serves precomputed code intelligence — a dependency graph, full-text search, impact analysis, and decision memory — to cut token usage for AI coding agents. It understands 87 frameworks across 80 languages and exposes {{ site.data.counts.tools }} MCP tools over stdio or HTTP.
 
 ## Docs
 
