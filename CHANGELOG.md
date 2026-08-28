@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.51.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.50.0...v1.51.0) (2026-08-28)
+
+
+### Features
+
+* **plugins:** add click and marshmallow Python framework plugins ([#409](https://github.com/nikolai-vysotskyi/trace-mcp/issues/409)) ([6cca4a8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6cca4a8a995edf756545aa0827bfb51533d2cb0a))
+
+
+### Bug Fixes
+
+* **app:** don't render KPI zeros before metrics load; use color tokens ([#400](https://github.com/nikolai-vysotskyi/trace-mcp/issues/400)) ([c1e51d9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c1e51d9c96ffbef367778c079c372fd88fa5075d))
+* **app:** normalize daemon project_status progress payload ([#401](https://github.com/nikolai-vysotskyi/trace-mcp/issues/401)) ([deddbba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/deddbba61233a564ad45314fbb546df1bab8bc05))
+* **indexer:** converge coverage after major on-disk change (TRA-231) ([#406](https://github.com/nikolai-vysotskyi/trace-mcp/issues/406)) ([f3bf334](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f3bf334128e2ec855292c4908a0d51e58830663e))
+* **mcp:** strip redundant $schema keyword from tools/list responses ([#398](https://github.com/nikolai-vysotskyi/trace-mcp/issues/398)) ([4f5482a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4f5482a9fa5bcf71791e864515d9776f6f8e7d65))
+* **topology:** route subproject registration through the dangerous-root guard (TRA-232) ([#405](https://github.com/nikolai-vysotskyi/trace-mcp/issues/405)) ([03096b3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/03096b389ced496744c2cc6cd9a10b68f5c36e09))
+
+
+### Documentation
+
+* **tools:** cross-link overlapping impact and risk tools ([#408](https://github.com/nikolai-vysotskyi/trace-mcp/issues/408)) ([ef54002](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ef5400265275df7fbf012454251077f9ec618cb0))
+
+
+### Tests
+
+* **tools:** extend schema-budget guard to conditionally-registered tools ([#407](https://github.com/nikolai-vysotskyi/trace-mcp/issues/407)) ([b1a725f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b1a725f7a4326ba45c491e6632fc26754f97961f))
+* **topology:** gate POSIX-only dangerous-root fixtures off Windows ([#410](https://github.com/nikolai-vysotskyi/trace-mcp/issues/410)) ([2b9ba1f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2b9ba1f2092ebd8a8928672d4a3477034b801735))
+
+
+### Chores
+
+* **deps:** document commander v15 ignore in dependabot.yml ([#402](https://github.com/nikolai-vysotskyi/trace-mcp/issues/402)) ([b3dca9c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b3dca9ce0465cdb115aa806d5e491a9ab16076b2))
+
 ## [1.50.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.49.0...v1.50.0) (2026-08-27)
 
 
