@@ -6,17 +6,18 @@
  *   - Top PageRank-central files (architectural importance)
  *   - Risk hotspots (high complexity × high git churn)
  *
- * Each report is a card on the left; clicking a card focuses it and
- * renders its rows in the detail panel on the right. Per-report refresh
- * + inline loading + error state. Read-only — no destructive tools.
+ * Shape (TRA-296): a single toolbar carrying the screen title, a segmented
+ * report picker and ONE Run action, over one scrolling report pane. The old
+ * list+detail split put a 280px column, a full-height divider and four
+ * accent-filled Run buttons on screen for three items — a picker is the right
+ * shape at that count, and it leaves exactly one primary action visible.
  *
- * Visual style mirrors AskTab.tsx / WorkspaceTableView.tsx — same theme tokens,
- * spacing, and accent button. The renderer/runtime split (this file
- * vs insights-runtime.ts) follows the pattern established by R08
- * (Notebook) so the project-root vitest config can test pure logic
- * without pulling in React under pnpm --frozen-lockfile.
+ * The renderer/runtime split (this file vs insights-runtime.ts) follows the
+ * pattern established by R08 (Notebook) so the project-root vitest config can
+ * test pure logic without pulling in React under pnpm --frozen-lockfile.
  */
 import { useCallback, useState } from 'react';
+import { Badge, Button, EmptyState, SegmentedControl } from '../lattice/ui';
 import {
   INSIGHT_REPORTS,
   REPORT_BY_ID,
@@ -58,6 +59,31 @@ function initialReportStates(): Record<ReportId, ReportState> {
   return states;
 }
 
+/* Empty-state glyphs, one per report — a report pane with no data still needs
+   geometry. Names come from lattice/icons.tsx. */
+const REPORT_ICON: Record<ReportId, string> = {
+  claudemd_drift: 'difference',
+  pagerank: 'hub',
+  risk_hotspots: 'bolt',
+};
+
+/* Severity badges carry a tone so "high" and "low" are not the same grey at a
+   glance. The word stays in the badge — colour is never the only signal. */
+const SEVERITY_TONE: Record<string, 'red' | 'orange' | 'neutral'> = {
+  high: 'red',
+  critical: 'red',
+  medium: 'orange',
+  moderate: 'orange',
+};
+
+/* What the report is DOING, in the user's terms — never the MCP tool id. The
+   tool name is an internal identifier and has no business on screen. */
+const RUNNING_COPY: Record<ReportId, string> = {
+  claudemd_drift: 'Checking agent config against the index…',
+  pagerank: 'Ranking files by import centrality…',
+  risk_hotspots: 'Correlating complexity with git churn…',
+};
+
 // ── Component ────────────────────────────────────────────────────────
 
 export function Insights({
@@ -94,272 +120,175 @@ export function Insights({
 
   const focusedDef = REPORT_BY_ID[focused];
   const focusedState = states[focused];
+  const running = focusedState.status === 'running';
+  const runLabel = running ? 'Running…' : focusedState.status === 'ok' ? 'Refresh' : 'Run';
 
   return (
     <div
       className="flex flex-col h-full"
       style={{ WebkitAppRegion: 'no-drag', overflow: 'hidden' } as React.CSSProperties}
     >
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      {/* Header */}
+      {/* Toolbar — title, report picker, the single primary action. */}
       <div
         style={{
-          padding: '10px 14px 8px',
-          borderBottom: '0.5px solid var(--border)',
           flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-12)',
+          height: 52,
+          padding: '0 var(--space-16)',
+          borderBottom: '0.5px solid var(--separator)',
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Insights</div>
-        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>
-          High-signal project reports. Click a card to focus, then Run.
-        </div>
+        <h1 className="t-title-2" style={{ color: 'var(--label)', margin: 0, flexShrink: 0 }}>
+          Insights
+        </h1>
+        <SegmentedControl
+          aria-label="Report"
+          value={focused}
+          onChange={setFocused}
+          options={INSIGHT_REPORTS.map((r) => ({
+            value: r.id,
+            label: r.title,
+            title: r.description,
+          }))}
+        />
+        <span style={{ flex: 1 }} />
+        {/* One Run on screen at a time: while the report has never been run,
+            the empty state below carries it — repeating it here would put two
+            accent-filled buttons on one screen for one command. */}
+        {focusedState.status !== 'idle' && (
+          <Button
+            variant="prominent"
+            onClick={() => runReport(focused)}
+            disabled={running}
+            aria-label={`${runLabel} ${focusedDef.title}`}
+          >
+            {runLabel}
+          </Button>
+        )}
       </div>
 
-      {/* Two-column body */}
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* Left: report card list */}
-        <div
-          style={{
-            width: 280,
-            flexShrink: 0,
-            borderRight: '0.5px solid var(--border)',
-            overflowY: 'auto',
-            padding: '10px 10px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
-          {INSIGHT_REPORTS.map((r) => {
-            const st = states[r.id];
-            const isFocused = focused === r.id;
-            const count = st.rows?.rows.length ?? null;
-            return (
-              <div
-                key={r.id}
-                style={{
-                  padding: '10px 12px',
-                  borderRadius: 10,
-                  background: isFocused ? 'var(--bg-active)' : 'var(--bg-grouped)',
-                  border: '0.5px solid var(--border)',
-                  boxShadow: 'var(--shadow-grouped)',
-                  cursor: 'pointer',
-                }}
-                onClick={() => setFocused(r.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setFocused(r.id);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-pressed={isFocused}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    marginBottom: 4,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--text-primary)',
-                      flex: 1,
-                    }}
-                  >
-                    {r.title}
-                  </span>
-                  {count !== null && (
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontFamily: 'monospace',
-                        color: 'var(--text-tertiary)',
-                      }}
-                    >
-                      {count}
-                    </span>
-                  )}
-                </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: 'var(--text-secondary)',
-                    marginBottom: 8,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {r.description}
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFocused(r.id);
-                    runReport(r.id);
-                  }}
-                  disabled={st.status === 'running'}
-                  style={{
-                    padding: '4px 12px',
-                    fontSize: 11,
-                    fontWeight: 500,
-                    borderRadius: 6,
-                    background: st.status === 'running' ? 'var(--fill-control)' : 'var(--accent)',
-                    color: st.status === 'running' ? 'var(--text-tertiary)' : '#fff',
-                    border: 'none',
-                    cursor: st.status === 'running' ? 'default' : 'pointer',
-                    boxShadow: 'var(--shadow-control)',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {st.status === 'running' ? 'Running…' : st.status === 'ok' ? 'Refresh' : 'Run'}
-                </button>
+      {/* Report pane — one scroll container. */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <div style={{ padding: 'var(--space-20) var(--space-16)' }}>
+          {focusedState.status !== 'idle' && (
+            <div style={{ marginBottom: 'var(--space-16)' }}>
+              <div className="t-title-3" style={{ color: 'var(--label)' }}>
+                {focusedDef.title}
               </div>
-            );
-          })}
-        </div>
-
-        {/* Right: detail panel */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-              {focusedDef.title}
+              <div className="t-body" style={{ color: 'var(--label-secondary)' }}>
+                {focusedDef.description}
+              </div>
             </div>
-            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', flex: 1 }}>
-              tool: <span style={{ fontFamily: 'monospace' }}>{focusedDef.mcpTool}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => runReport(focused)}
-              disabled={focusedState.status === 'running'}
-              style={{
-                padding: '4px 12px',
-                fontSize: 11,
-                fontWeight: 500,
-                borderRadius: 6,
-                background:
-                  focusedState.status === 'running' ? 'var(--fill-control)' : 'var(--accent)',
-                color: focusedState.status === 'running' ? 'var(--text-tertiary)' : '#fff',
-                border: 'none',
-                cursor: focusedState.status === 'running' ? 'default' : 'pointer',
-                boxShadow: 'var(--shadow-control)',
-                fontFamily: 'inherit',
-              }}
-            >
-              {focusedState.status === 'running'
-                ? 'Running…'
-                : focusedState.status === 'ok'
-                  ? 'Refresh'
-                  : 'Run'}
-            </button>
-          </div>
+          )}
 
           {focusedState.status === 'idle' && (
-            <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-              Click Run to generate this report.
-            </div>
+            <EmptyState
+              icon={REPORT_ICON[focused]}
+              iconSize={32}
+              title={focusedDef.title}
+              subtitle={focusedDef.description}
+              action={
+                <Button variant="prominent" size="large" onClick={() => runReport(focused)}>
+                  Run
+                </Button>
+              }
+            />
           )}
-          {focusedState.status === 'running' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Spinner />
-              <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                Calling {focusedDef.mcpTool}…
-              </span>
-            </div>
-          )}
+
+          {focusedState.status === 'running' && <RowsSkeleton />}
+
           {focusedState.status === 'error' && (
             <div
               role="alert"
+              className="t-body"
               style={{
-                padding: '6px 10px',
-                borderRadius: 6,
-                fontSize: 11,
-                color: 'var(--destructive)',
-                background: 'rgba(255,59,48,0.06)',
-                border: '0.5px solid rgba(255,59,48,0.15)',
+                padding: 'var(--space-8) var(--space-12)',
+                borderRadius: 'var(--radius-input)',
+                color: 'var(--status-red)',
+                background: 'color-mix(in oklab, var(--status-red) 10%, transparent)',
+                boxShadow: 'inset 0 0 0 0.5px color-mix(in oklab, var(--status-red) 35%, transparent)',
               }}
             >
               {focusedState.error}
             </div>
           )}
+
           {focusedState.status === 'ok' && focusedState.rows && (
-            <RowsView rows={focusedState.rows} />
+            <RowsView rows={focusedState.rows} icon={REPORT_ICON[focused]} />
           )}
         </div>
       </div>
+
+      {/* Live region so the run's progress reaches a screen reader — the
+          skeleton alone is silent. */}
+      <span
+        aria-live="polite"
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          overflow: 'hidden',
+          clip: 'rect(0 0 0 0)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {running ? RUNNING_COPY[focused] : ''}
+      </span>
     </div>
   );
 }
 
 // ── Rows view ────────────────────────────────────────────────────────
 
-function RowsView({ rows }: { rows: InsightRows }) {
+function RowsView({ rows, icon }: { rows: InsightRows; icon: string }) {
   if (rows.rows.length === 0) {
     return (
-      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-        No findings — this report came back empty.
-      </div>
+      <EmptyState
+        icon={icon}
+        iconSize={32}
+        title="Nothing to report"
+        subtitle="This report came back empty — nothing in the project matches it right now."
+      />
     );
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       {rows.rows.map((row, i) => (
         <div
           // biome-ignore lint/suspicious/noArrayIndexKey: rows are reconstructed wholesale on each refresh, index is stable within a render.
           key={i}
           style={{
             display: 'flex',
-            alignItems: 'flex-start',
-            gap: 10,
-            padding: '6px 10px',
-            borderRadius: 6,
-            background: 'var(--bg-grouped)',
-            border: '0.5px solid var(--border)',
+            alignItems: 'baseline',
+            gap: 'var(--space-12)',
+            padding: 'var(--space-8) var(--space-12)',
+            borderRadius: 'var(--radius-row)',
+            /* A list, not a stack of cards: the hairline between rows IS the
+               edge. No per-row fill, no per-row border, no shadow. */
+            boxShadow: i === 0 ? undefined : 'inset 0 0.5px 0 var(--separator)',
           }}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
+              className="t-body"
               style={{
-                fontSize: 11,
-                fontFamily: 'monospace',
-                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--label)',
                 wordBreak: 'break-all',
               }}
             >
               {row.primary}
             </div>
             {row.secondary && (
-              <div
-                style={{
-                  fontSize: 10,
-                  color: 'var(--text-tertiary)',
-                  marginTop: 2,
-                }}
-              >
+              <div className="t-caption" style={{ color: 'var(--label-secondary)' }}>
                 {row.secondary}
               </div>
             )}
           </div>
           {row.badge && (
-            <span
-              style={{
-                fontSize: 10,
-                padding: '2px 6px',
-                borderRadius: 4,
-                background: 'var(--fill-control)',
-                color: 'var(--text-secondary)',
-                border: '0.5px solid var(--border)',
-                fontFamily: 'monospace',
-                flexShrink: 0,
-              }}
-            >
-              {row.badge}
-            </span>
+            <Badge tone={SEVERITY_TONE[row.badge.toLowerCase()] ?? 'neutral'}>{row.badge}</Badge>
           )}
         </div>
       ))}
@@ -367,19 +296,44 @@ function RowsView({ rows }: { rows: InsightRows }) {
   );
 }
 
-function Spinner() {
+/* Skeleton at the final geometry — a centred spinner would move the layout
+   when the rows land. */
+function RowsSkeleton() {
   return (
-    <span
-      style={{
-        width: 10,
-        height: 10,
-        borderRadius: '50%',
-        border: '1.5px solid var(--border)',
-        borderTopColor: 'var(--accent)',
-        animation: 'spin 0.8s linear infinite',
-        display: 'inline-block',
-      }}
-      aria-hidden="true"
-    />
+    <div style={{ display: 'flex', flexDirection: 'column' }} aria-hidden="true">
+      <style>{`@keyframes insights-pulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }`}</style>
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-12)',
+            padding: 'var(--space-8) var(--space-12)',
+            boxShadow: i === 0 ? undefined : 'inset 0 0.5px 0 var(--separator)',
+          }}
+        >
+          <div
+            style={{
+              flex: 1,
+              height: 'var(--leading-body)',
+              maxWidth: `${68 - (i % 3) * 12}%`,
+              borderRadius: 'var(--radius-row)',
+              background: 'var(--fill-quaternary)',
+              animation: 'insights-pulse 1.6s var(--ease-out) infinite',
+            }}
+          />
+          <div
+            style={{
+              width: 'var(--space-40)',
+              height: 'var(--leading-body)',
+              borderRadius: 'var(--radius-capsule)',
+              background: 'var(--fill-quaternary)',
+              animation: 'insights-pulse 1.6s var(--ease-out) infinite',
+            }}
+          />
+        </div>
+      ))}
+    </div>
   );
 }

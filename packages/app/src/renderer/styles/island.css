@@ -592,13 +592,15 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
    INTELLIGENCE VIEWS — Graph · Activity · Memory (center-stage)
    ============================================================================ */
 .ws-island.view { flex: 1; min-width: 0; overflow: hidden; container-type: inline-size; }
+/* The graph's own node/edge palette moved to tokens.css as --viz-1…--viz-4 +
+   --viz-other, and its floating-overlay material to --viz-glass / .viz-glass
+   (which carries the prefers-reduced-transparency fallback). The --gv-* aliases
+   that used to live here were declared and never read (TRA-296). */
 .ws-stage[data-mode="dark"] .ws-island.view {
-  --gv-node: #6f9be6; --gv-edge: rgba(120, 150, 210, 0.15); --gv-hot: #8fd6ff;
   --glass: color-mix(in srgb, var(--island) 72%, transparent);
   --glass-line: rgba(255, 255, 255, 0.08);
 }
 .ws-stage[data-mode="light"] .ws-island.view {
-  --gv-node: #8aa9e0; --gv-edge: rgba(120, 150, 210, 0.30); --gv-hot: #2f86d8;
   --glass: color-mix(in srgb, var(--island) 80%, transparent);
   --glass-line: rgba(0, 0, 0, 0.06);
 }

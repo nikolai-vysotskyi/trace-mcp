@@ -356,6 +356,8 @@
   line-height: 1;
   letter-spacing: 0;
   white-space: nowrap;
+  /* Badges routinely carry a count or a score; digits must not jitter. */
+  font-variant-numeric: tabular-nums;
   /* ponytail: no text-transform. ALL CAPS is banned outside 10px group headers. */
   background: var(--fill-tertiary);
   color: var(--badge-neutral-fg);
