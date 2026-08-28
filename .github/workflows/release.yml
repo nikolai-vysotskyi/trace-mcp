@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+# Scorecard flags the three job-level `contents: write` grants below
+# (release-please, and the macOS/Windows build jobs). They are accepted, not
+# oversights: release-please has to push the release branch and cut the tag,
+# and the build jobs upload signed installers as release assets. Both are
+# already scoped to the job, never top-level (TRA-255).
+
 jobs:
   release-please:
     runs-on: ubuntu-latest

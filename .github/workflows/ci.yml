@@ -106,7 +106,14 @@ jobs:
               - 'tsup.config.*'
               - 'vitest.config.*'
               - 'biome.json*'
-              - '.github/workflows/ci.yml'
+              # Any CI/security-scan config, not just ci.yml. `impact-report`
+              # is a required status check but `needs: build`, so a PR that
+              # changes only workflow or scanner config used to leave it
+              # permanently "skipped" — unsatisfiable branch protection, which
+              # meant merging such PRs required an admin override (TRA-255).
+              - '.github/**'
+              - '.npmrc'
+              - '.semgrepignore'
 
   # ───────────────────────────────────────────────────────────────────────────
   # Biome — runs in parallel with build (it doesn't need dist/).

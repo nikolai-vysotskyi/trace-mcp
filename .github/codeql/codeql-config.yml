@@ -1,0 +1,29 @@
+# CodeQL scope for trace-mcp.
+#
+# Why this file exists (TRA-255): with no config, CodeQL ran
+# `security-extended,security-and-quality` over the whole tree and produced
+# 239 open alerts on master, of which 129 were in test/fixture code and 44
+# were pure lint (`js/unused-local-variable` and friends) landing in a
+# *security* alert queue. That drowns real findings and makes the required
+# "CodeQL" check meaningless. Scope it to shipped code, security queries only.
+# Unused locals are already covered by Biome in the lint job.
+
+name: trace-mcp CodeQL config
+
+queries:
+  - uses: security-extended
+
+paths-ignore:
+  # Test code is not attack surface: it runs on developer machines against
+  # fixtures we author. Temp-file and path handling here is deliberate.
+  - tests
+  - "**/__tests__"
+  - "**/*.test.ts"
+  - "**/*.spec.ts"
+  # Build/release/dev tooling, not shipped to users.
+  - scripts
+  # Jekyll site for trace-mcp.com — static templates, no runtime.
+  - docs
+  # Generated / vendored.
+  - dist
+  - "**/node_modules"

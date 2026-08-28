@@ -19,12 +19,16 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  actions: write
-  pull-requests: read
+  contents: read
 
 jobs:
   approve:
     runs-on: ubuntu-latest
+    # Scoped to the one job that needs it (Scorecard TokenPermissions) — a
+    # top-level `actions: write` grants it to every future job in this file.
+    permissions:
+      actions: write
+      pull-requests: read
     steps:
       - name: Approve any action_required runs on open release-please PRs
         env:
