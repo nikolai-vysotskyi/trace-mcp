@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "runs": [
+    {
+      "date": "2026-08-28T13:23:05Z",
+      "app_version": "1.51.1",
+      "commit": "9459d4ce",
+      "env": { "os": "macOS 26.5 (darwin 25.5.0)", "arch": "arm64", "node": "22.22.3" },
+      "samples": 3,
+      "metrics": {
+        "cold_start_ms": 349,
+        "window_interactive_ms": 121,
+        "ui_p95_ms": null,
+        "heap_idle_mb": 9.5,
+        "heap_after_workload_mb": null,
+        "heap_growth_mb_per_hour": null,
+        "main_cpu_idle_pct": 0,
+        "renderer_bundle_kb": 1461,
+        "artifact_mb": { "mac_app_unpacked": 264.8, "mac_asar": 1.6, "win": null }
+      },
+      "raw_samples": [
+        { "cold_start_ms": 349, "window_interactive_ms": 127 },
+        { "cold_start_ms": 362, "window_interactive_ms": 121 },
+        { "cold_start_ms": 332, "window_interactive_ms": 79, "heap_idle_mb": 9.5, "main_cpu_idle_pct": 0 }
+      ],
+      "notes": "Installation run — first entry in the series, no regression comparison possible. Harness: packages/app/scripts/perf-measure.mjs (CDP against a production build, throwaway --user-data-dir per sample). Startup, idle heap and idle CPU are all far inside the absolute ceilings (349 ms vs 3000, 0% vs 2%). Artifact fix landed in this same run: app.asar 21.8 MB -> 1.6 MB and the .app 286 MB -> 265 MB by excluding node_modules from the electron-builder file set (the main process imports only Node builtins + electron; Vite already bundles every renderer dep) and dropping the unused `menubar` dependency. Startup timings are unaffected by that change — the dev launch path never touches the asar; the 439 ms measured earlier in the same session vs 349 ms here is machine warm-up, not a code delta. Measured negative result: stubbing out the 702 KB cosmos.gl chunk (eagerly loaded via a static import in the entry chunk) moved cold start only 439 -> 417 ms (~5%), so lazy-loading the graph view is not worth the refactor at this size. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour not measured this run — they need a fixed indexed project fixture, which the next run should add."
+    }
+  ]
+}
