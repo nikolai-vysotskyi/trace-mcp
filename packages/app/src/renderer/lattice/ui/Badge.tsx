@@ -10,6 +10,7 @@
    no gain. */
 
 import type { ReactNode } from 'react';
+import { Icon } from '../icons';
 
 export type Tone = 'neutral' | 'accent' | 'green' | 'orange' | 'red' | 'blue' | 'purple';
 
@@ -18,6 +19,9 @@ const LEGACY_TONE: Record<string, Tone> = { gold: 'orange', pink: 'purple' };
 
 export interface BadgeProps {
   tone?: Tone | 'gold' | 'pink';
+  /** Leading 11px glyph. A tone is a colour; pairing it with a glyph is what
+      keeps a status badge readable without colour vision. */
+  icon?: string;
   className?: string;
   title?: string;
   'aria-label'?: string;
@@ -26,6 +30,7 @@ export interface BadgeProps {
 
 export function Badge({
   tone = 'neutral',
+  icon,
   className,
   title,
   'aria-label': ariaLabel,
@@ -35,6 +40,7 @@ export function Badge({
   const cls = ['lx-badge', `t-${t}`, className ?? ''].filter(Boolean).join(' ');
   return (
     <span className={cls} title={title} aria-label={ariaLabel}>
+      {icon ? <Icon name={icon} size={11} /> : null}
       {children}
     </span>
   );

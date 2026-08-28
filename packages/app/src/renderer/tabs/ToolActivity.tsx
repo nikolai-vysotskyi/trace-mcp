@@ -28,6 +28,23 @@ import {
   useRef,
   useState,
 } from 'react';
+import { Icon } from '../lattice/icons';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
+  SearchField,
+  SegmentedControl,
+  StatusDot,
+  Toolbar,
+  ToolbarDivider,
+  useMenuAnchor,
+} from '../lattice/ui';
 
 const BASE = 'http://127.0.0.1:3741';
 const MAX_ENTRIES = 1000;
@@ -157,7 +174,7 @@ function highlightMatch(text: string, q: string): ReactNode {
   const idx = lower.indexOf(needle);
   if (idx === -1) return text;
   const markStyle: CSSProperties = {
-    background: 'var(--accent-soft, rgba(0,122,255,0.18))',
+    background: 'color-mix(in oklab, var(--accent) 22%, transparent)',
     color: 'inherit',
     padding: 0,
     borderRadius: 2,
@@ -392,16 +409,21 @@ function DeltaBadge({
   unit: string;
 }) {
   const delta = computeDelta(cur, prev);
-  let color = 'var(--text-tertiary)';
+  let color = 'var(--label-secondary)';
   if (higherIsBad && delta.direction !== 'flat') {
-    color = delta.direction === 'up' ? 'var(--red, #ef4444)' : 'var(--success, #22c55e)';
+    color = delta.direction === 'up' ? 'var(--status-red)' : 'var(--status-green)';
   }
-  const glyph = delta.direction === 'up' ? '▲' : delta.direction === 'down' ? '▼' : '';
+  /* The arrow is not decoration: it is the second channel that carries
+     "better / worse" for anyone who cannot separate the red from the green. */
+  const glyph = delta.direction === 'up' ? '↑' : delta.direction === 'down' ? '↓' : '';
   const title = `vs previous ${windowLabel(windowMs)}: ${prevLabel} → ${curLabel}${unit ? ` ${unit}` : ''}`;
+  /* "184 calls 0%" reads as a broken number. No change is not a delta — the
+     comparison lives in the tooltip and the badge stays out of the way. */
+  if (delta.direction === 'flat') return null;
   return (
     <span
-      className="tabular-nums"
-      style={{ fontSize: 9, color, marginLeft: 3, whiteSpace: 'nowrap' }}
+      className="tabular-nums text-[11px] leading-[13px]"
+      style={{ color, marginLeft: 3, whiteSpace: 'nowrap' }}
       title={title}
     >
       {glyph}
@@ -412,43 +434,17 @@ function DeltaBadge({
 
 // ── Sub-components ────────────────────────────────────────────────────────
 
+/** The tool identifier, as a monospace badge. Identifiers are not prose, so
+    this is the one place sentence case does not apply — `get_outline` is its
+    own name. Tone carries the same signal the row's Error badge spells out. */
 function ToolBadge({ tool, isError }: { tool: string; isError: boolean }) {
-  const bg = isError ? 'rgba(239,68,68,0.15)' : 'rgba(0,122,255,0.1)';
-  const color = isError ? 'var(--red, #ef4444)' : 'var(--accent, #007aff)';
   return (
     <span
-      className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap"
-      style={{ background: bg, color }}
+      className={`lx-badge ${isError ? 't-red' : 't-accent'} shrink-0`}
+      style={{ fontFamily: 'var(--font-mono)' }}
     >
       {tool}
     </span>
-  );
-}
-
-function FilterChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="text-[11px] px-2.5 py-1 rounded-full transition-all shrink-0"
-      style={{
-        background: active ? 'var(--accent)' : 'var(--bg-inset)',
-        color: active ? '#fff' : 'var(--text-secondary)',
-        fontWeight: active ? 600 : 400,
-        cursor: 'pointer',
-        border: 'none',
-      }}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -489,7 +485,9 @@ function EntryRow({
     };
   }, []);
 
-  const rowBg = entry.is_error ? 'rgba(239,68,68,0.06)' : 'transparent';
+  const rowBg = entry.is_error
+    ? 'color-mix(in oklab, var(--status-red) 7%, transparent)'
+    : 'transparent';
   const absoluteTime = new Date(entry.ts).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -532,8 +530,8 @@ function EntryRow({
     <div
       data-entry-idx={entryIdx}
       style={{
-        borderBottom: '0.5px solid var(--border-row)',
-        background: isSelected ? 'var(--bg-active)' : rowBg,
+        borderBottom: '0.5px solid var(--separator)',
+        background: isSelected ? 'var(--fill-tertiary)' : rowBg,
         paddingLeft: indent,
         borderLeft: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
       }}
@@ -553,16 +551,16 @@ function EntryRow({
             onToggleExpand?.();
           }
         }}
-        className="flex items-start gap-2.5 px-3 py-2 w-full text-left"
+        className="flex items-start gap-2 px-3 py-2 w-full text-left"
         style={{
           background: 'none',
           border: 'none',
           cursor: 'pointer',
           minHeight: 36,
-          transition: 'background .1s',
+          transition: 'background var(--dur-micro) var(--ease-out)',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--bg-active)';
+          e.currentTarget.style.background = 'var(--fill-quaternary)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.background = 'none';
@@ -570,22 +568,34 @@ function EntryRow({
       >
         {/* Relative time */}
         <span
-          className="shrink-0 text-[10px] tabular-nums mt-0.5 w-14 text-right"
-          style={{ color: 'var(--text-tertiary)', fontFamily: 'SF Mono, Menlo, monospace' }}
+          className="shrink-0 text-[11px] leading-[13px] tabular-nums mt-1 w-14 text-right"
+          style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-mono)' }}
         >
           {relativeTime(entry.ts)}
         </span>
 
         {/* Tool badge */}
-        <ToolBadge tool={entry.tool} isError={entry.is_error} />
+        <span className="shrink-0 mt-0.5">
+          <ToolBadge tool={entry.tool} isError={entry.is_error} />
+        </span>
+
+        {/* Error is stated, not tinted. Red text and a red row wash are the
+            same channel twice; the badge is what a monochrome reader sees. */}
+        {entry.is_error && (
+          <span className="shrink-0 mt-0.5">
+            <Badge tone="red" icon="warning">
+              Error
+            </Badge>
+          </span>
+        )}
 
         {/* Params summary */}
         <div className="flex-1 min-w-0">
           <div
-            className="text-[12px] truncate leading-snug"
+            className="text-[13px] leading-4 truncate"
             style={{
-              color: entry.is_error ? 'var(--red, #ef4444)' : 'var(--text-primary)',
-              fontFamily: 'SF Mono, Menlo, monospace',
+              color: 'var(--label)',
+              fontFamily: 'var(--font-mono)',
             }}
           >
             {tokenizeParams(
@@ -596,11 +606,10 @@ function EntryRow({
             )}
             {recentlyCopied !== null && (
               <span
-                className="ml-2 text-[10px]"
+                className="ml-2 text-[11px] leading-[13px]"
                 style={{
-                  color: 'var(--success, #22c55e)',
-                  fontFamily: 'inherit',
-                  transition: 'opacity .3s',
+                  color: 'var(--status-green)',
+                  fontFamily: 'var(--font-ui)',
                 }}
                 title={recentlyCopied}
               >
@@ -608,21 +617,22 @@ function EntryRow({
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+          <div
+            className="flex items-center gap-2 mt-0.5 text-[11px] leading-[13px] tabular-nums"
+            style={{ color: 'var(--label-secondary)' }}
+          >
+            <span>
               {entry.result_count} result{entry.result_count === 1 ? '' : 's'}
             </span>
             {entry.latency_ms !== undefined && (
-              <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+              <span>
                 {entry.latency_ms < 1000
-                  ? `${entry.latency_ms}ms`
-                  : `${(entry.latency_ms / 1000).toFixed(1)}s`}
+                  ? `${entry.latency_ms} ms`
+                  : `${(entry.latency_ms / 1000).toFixed(1)} s`}
               </span>
             )}
             {entry.result_tokens !== undefined && (
-              <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                ~{entry.result_tokens} tok
-              </span>
+              <span>~{entry.result_tokens.toLocaleString()} tokens</span>
             )}
           </div>
         </div>
@@ -632,69 +642,74 @@ function EntryRow({
       {expanded && (
         <div
           style={{
-            padding: '4px 12px 8px 76px',
-            fontSize: 11,
-            fontFamily: 'SF Mono, Menlo, monospace',
+            padding: '4px 12px 10px 76px',
+            fontSize: 12,
+            lineHeight: '15px',
+            fontFamily: 'var(--font-mono)',
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
-            gap: '2px 10px',
-            color: 'var(--text-secondary)',
+            gap: '3px 12px',
+            color: 'var(--label)',
           }}
         >
-          <span style={{ color: 'var(--text-tertiary)' }}>Time</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>Time</span>
           <span>{absoluteTime}</span>
 
-          <span style={{ color: 'var(--text-tertiary)' }}>Session</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+            Session
+          </span>
           <span style={{ wordBreak: 'break-all' }}>{entry.session_id}</span>
 
-          <span style={{ color: 'var(--text-tertiary)' }}>Tool</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>Tool</span>
           <span style={{ wordBreak: 'break-all' }}>{entry.tool}</span>
 
-          <span style={{ color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            style={{
+              color: 'var(--label-secondary)',
+              fontFamily: 'var(--font-ui)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
             Params
-            <button
-              type="button"
-              onClick={handleCopyParams}
-              style={{
-                fontSize: 9,
-                padding: '1px 5px',
-                borderRadius: 3,
-                background: 'var(--bg-inset)',
-                color: 'var(--text-secondary)',
-                border: '0.5px solid var(--border-row)',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-              title="Copy full params to clipboard"
-            >
+            <Button size="small" onClick={handleCopyParams} title="Copy full params to clipboard">
               Copy
-            </button>
+            </Button>
           </span>
           <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {entry.params_summary}
           </span>
 
-          <span style={{ color: 'var(--text-tertiary)' }}>Results</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+            Results
+          </span>
           <span>{entry.result_count}</span>
 
           {entry.latency_ms !== undefined && (
             <>
-              <span style={{ color: 'var(--text-tertiary)' }}>Latency</span>
-              <span>{entry.latency_ms}ms</span>
+              <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+                Latency
+              </span>
+              <span>{entry.latency_ms} ms</span>
             </>
           )}
 
           {entry.result_tokens !== undefined && (
             <>
-              <span style={{ color: 'var(--text-tertiary)' }}>Tokens</span>
-              <span>{entry.result_tokens}</span>
+              <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+                Tokens
+              </span>
+              <span>{entry.result_tokens.toLocaleString()}</span>
             </>
           )}
 
           {entry.is_error && (
             <>
-              <span style={{ color: 'var(--red, #ef4444)' }}>Error</span>
-              <span style={{ color: 'var(--red, #ef4444)' }}>This call returned an error.</span>
+              <span style={{ color: 'var(--status-red)', fontFamily: 'var(--font-ui)' }}>Error</span>
+              <span style={{ color: 'var(--status-red)', fontFamily: 'var(--font-ui)' }}>
+                This call returned an error.
+              </span>
             </>
           )}
         </div>
@@ -729,10 +744,10 @@ function StatsSummaryBar({
   const curP95Ms = p95Ms(stats.latency_buckets);
   const errorColor =
     stats.error_rate > 0.1
-      ? 'var(--red, #ef4444)'
+      ? 'var(--status-red)'
       : stats.error_rate > 0.02
-        ? 'var(--orange, #f97316)'
-        : 'var(--text-secondary)';
+        ? 'var(--status-orange)'
+        : 'var(--label)';
 
   // Stops the picker click/key event from bubbling to the bar's expand/collapse handler.
   const stopBubble = (e: { stopPropagation: () => void }) => {
@@ -750,55 +765,38 @@ function StatsSummaryBar({
       }}
       role="button"
       tabIndex={0}
-      className="w-full flex items-center gap-3 px-3 py-1.5 text-left"
+      aria-expanded={expanded}
+      aria-label="Statistics"
+      className="w-full flex items-center gap-3 px-4 py-1.5 text-left"
       style={{
-        background: 'var(--bg-inset)',
+        background: 'var(--surface)',
         border: 'none',
-        borderBottom: '0.5px solid var(--border-row)',
+        borderBottom: '0.5px solid var(--separator)',
         cursor: 'pointer',
       }}
     >
-      <span className="text-[10px] font-semibold" style={{ color: 'var(--text-tertiary)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+      <span
+        className="text-[11px] leading-[13px] font-semibold"
+        style={{ color: 'var(--label-secondary)' }}
+      >
         Stats
       </span>
       {/* Window picker — segmented control, click does not toggle the bar */}
-      <div
-        className="flex items-center gap-0.5"
-        onClick={stopBubble}
-        onKeyDown={stopBubble}
-        role="group"
-        aria-label="Stats window"
-      >
-        {WINDOW_OPTIONS.map((opt) => {
-          const isActive = windowMs === opt.value;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onWindowChange(opt.value);
-              }}
-              className="text-[10px] tabular-nums"
-              style={{
-                padding: '2px 6px',
-                borderRadius: 999,
-                border: isActive ? '0.5px solid var(--accent, #007aff)' : '0.5px solid var(--border-row)',
-                background: isActive ? 'var(--accent, #007aff)' : 'var(--fill-control, transparent)',
-                color: isActive ? 'white' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                fontWeight: isActive ? 600 : 400,
-              }}
-              title={`Show stats for the last ${opt.label}`}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
+      <div onClick={stopBubble} onKeyDown={stopBubble} className="shrink-0">
+        <SegmentedControl
+          size="small"
+          options={WINDOW_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+          value={String(windowMs)}
+          onChange={(v) => onWindowChange(Number(v))}
+          aria-label="Stats window"
+        />
       </div>
-      <span className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-primary)' }}>
+      <span
+        className="flex items-center gap-1 text-[13px] leading-4"
+        style={{ color: 'var(--label)' }}
+      >
         <span className="font-semibold tabular-nums">{stats.total_calls.toLocaleString()}</span>
-        <span style={{ color: 'var(--text-tertiary)' }}>calls</span>
+        <span style={{ color: 'var(--label-secondary)' }}>calls</span>
         {prevStats !== null && (
           <DeltaBadge
             cur={stats.total_calls}
@@ -811,9 +809,12 @@ function StatsSummaryBar({
           />
         )}
       </span>
-      <span className="flex items-center gap-1 text-[11px]" style={{ color: errorColor }}>
+      <span
+        className="flex items-center gap-1 text-[13px] leading-4"
+        style={{ color: errorColor }}
+      >
         <span className="font-semibold tabular-nums">{errorPct}%</span>
-        <span style={{ color: 'var(--text-tertiary)' }}>err</span>
+        <span style={{ color: 'var(--label-secondary)' }}>errors</span>
         {prevStats !== null && (
           <DeltaBadge
             cur={stats.error_rate}
@@ -826,9 +827,12 @@ function StatsSummaryBar({
           />
         )}
       </span>
-      <span className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-primary)' }}>
+      <span
+        className="flex items-center gap-1 text-[13px] leading-4"
+        style={{ color: 'var(--label)' }}
+      >
         <span className="font-semibold tabular-nums">{p95}</span>
-        <span style={{ color: 'var(--text-tertiary)' }}>p95</span>
+        <span style={{ color: 'var(--label-secondary)' }}>p95</span>
         {prevStats !== null && (
           <DeltaBadge
             cur={curP95Ms}
@@ -841,9 +845,22 @@ function StatsSummaryBar({
           />
         )}
       </span>
-      <span className="ml-auto text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-        {expanded ? '▲' : '▼'}
+      <span className="ml-auto flex" style={{ color: 'var(--label-secondary)' }}>
+        <Icon name={expanded ? 'expand_less' : 'expand_more'} size={16} />
       </span>
+    </div>
+  );
+}
+
+/** Chart / group caption. 11px/600 sentence case — the house scale has no
+    10.5px, and ALL-CAPS is reserved for 10px table headers. */
+function ChartTitle({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="text-[11px] leading-[13px] font-semibold mb-1.5"
+      style={{ color: 'var(--label-secondary)' }}
+    >
+      {children}
     </div>
   );
 }
@@ -864,9 +881,7 @@ function HotToolsChart({
   const maxCount = tools[0].count;
   return (
     <div>
-      <div className="text-[10px] font-semibold mb-1.5" style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Hot Tools
-      </div>
+      <ChartTitle>Most-used tools</ChartTitle>
       <div className="flex flex-col gap-1">
         {tools.map((t) => {
           const pct = maxCount > 0 ? (t.count / maxCount) * 100 : 0;
@@ -882,29 +897,45 @@ function HotToolsChart({
               title={`avg ${t.avg_latency_ms}ms · ${t.error_count} errors`}
             >
               <span
-                className="shrink-0 text-[10px] tabular-nums w-24 truncate"
+                className="shrink-0 text-[11px] leading-[13px] tabular-nums w-36 truncate"
                 style={{
-                  color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+                  color: isActive ? 'var(--accent)' : 'var(--label)',
                   fontWeight: isActive ? 600 : 400,
-                  fontFamily: 'SF Mono, Menlo, monospace',
+                  fontFamily: 'var(--font-mono)',
                 }}
               >
                 {t.tool}
               </span>
-              <div className="flex-1 relative h-3 rounded-sm overflow-hidden" style={{ background: 'var(--bg-grouped)' }}>
+              <div
+                className="flex-1 relative h-2 overflow-hidden"
+                style={{ background: 'var(--fill-quaternary)', borderRadius: 2 }}
+              >
                 <div
-                  className="absolute inset-y-0 left-0 rounded-sm"
+                  className="absolute inset-y-0 left-0"
                   style={{
                     width: `${pct}%`,
-                    background: hasErrors
-                      ? 'linear-gradient(90deg, var(--accent, #007aff), var(--red, #ef4444))'
-                      : 'var(--accent, #007aff)',
-                    opacity: isActive ? 1 : 0.6,
-                    transition: 'width 0.3s ease',
+                    borderRadius: 2,
+                    background: 'var(--accent)',
+                    opacity: isActive ? 1 : 0.75,
+                    transition: 'width var(--dur-large) var(--ease-out)',
                   }}
                 />
               </div>
-              <span className="shrink-0 text-[10px] tabular-nums w-7 text-right" style={{ color: 'var(--text-tertiary)' }}>
+              {/* The bar's tone says "this tool errors"; the count says how
+                  many, so the signal survives without colour. */}
+              {hasErrors && (
+                <span
+                  className="shrink-0 text-[11px] leading-[13px] tabular-nums"
+                  style={{ color: 'var(--status-red)' }}
+                  title={`${t.error_count} errors`}
+                >
+                  ⚠ {t.error_count}
+                </span>
+              )}
+              <span
+                className="shrink-0 text-[11px] leading-[13px] tabular-nums w-8 text-right"
+                style={{ color: 'var(--label-secondary)' }}
+              >
                 {t.count}
               </span>
             </button>
@@ -924,12 +955,7 @@ function HotFilesList({ files }: { files: HotFile[] }) {
   const maxCount = files[0].count;
   return (
     <div>
-      <div
-        className="text-[10px] font-semibold mb-1.5"
-        style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}
-      >
-        Hot Files
-      </div>
+      <ChartTitle>Most-read files</ChartTitle>
       <div className="flex flex-col gap-1">
         {files.map((f) => {
           const pct = maxCount > 0 ? (f.count / maxCount) * 100 : 0;
@@ -944,31 +970,29 @@ function HotFilesList({ files }: { files: HotFile[] }) {
               title={f.file}
             >
               <span
-                className="shrink-0 text-[10px] tabular-nums w-32 truncate"
-                style={{
-                  color: 'var(--text-primary)',
-                  fontFamily: 'SF Mono, Menlo, monospace',
-                }}
+                className="shrink-0 text-[11px] leading-[13px] tabular-nums w-32 truncate"
+                style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
               >
                 {displayPath}
               </span>
               <div
-                className="flex-1 relative h-3 rounded-sm overflow-hidden"
-                style={{ background: 'var(--bg-grouped)' }}
+                className="flex-1 relative h-2 overflow-hidden"
+                style={{ background: 'var(--fill-quaternary)', borderRadius: 2 }}
               >
                 <div
-                  className="absolute inset-y-0 left-0 rounded-sm"
+                  className="absolute inset-y-0 left-0"
                   style={{
                     width: `${pct}%`,
-                    background: 'var(--accent, #007aff)',
-                    opacity: 0.6,
-                    transition: 'width 0.3s ease',
+                    borderRadius: 2,
+                    background: 'var(--accent)',
+                    opacity: 0.75,
+                    transition: 'width var(--dur-large) var(--ease-out)',
                   }}
                 />
               </div>
               <span
-                className="shrink-0 text-[10px] tabular-nums w-7 text-right"
-                style={{ color: 'var(--text-tertiary)' }}
+                className="shrink-0 text-[11px] leading-[13px] tabular-nums w-8 text-right"
+                style={{ color: 'var(--label-secondary)' }}
               >
                 {f.count}
               </span>
@@ -987,40 +1011,41 @@ function LatencyHistogram({ buckets }: { buckets: LatencyBucket[] }) {
   const maxCount = Math.max(...buckets.map((b) => b.count), 1);
   return (
     <div>
-      <div className="text-[10px] font-semibold mb-1.5" style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Latency
-      </div>
-      <div className="flex items-end gap-0.5" style={{ height: 40 }}>
+      <ChartTitle>Latency</ChartTitle>
+      {/* One label per bar was 8px and unreadable at any width the panel gets.
+          A histogram's x-axis only has to name its ends; the rest is the
+          shape, and each bar keeps its own bucket in the tooltip. */}
+      <div className="flex items-end gap-0.5" style={{ height: 32 }}>
         {buckets.map((b) => {
           const heightPct = (b.count / maxCount) * 100;
           const label = formatLatencyBucket(b.bucket_ms);
           return (
             <div
               key={b.bucket_ms}
-              className="flex flex-col items-center flex-1"
-              title={`${label}: ${b.count}`}
+              className="flex-1 flex items-end h-full"
+              title={`${label}: ${b.count} call${b.count === 1 ? '' : 's'}`}
             >
-              <div className="w-full flex items-end" style={{ height: 32 }}>
-                <div
-                  className="w-full rounded-t-sm"
-                  style={{
-                    height: `${heightPct}%`,
-                    minHeight: b.count > 0 ? 2 : 0,
-                    background: 'var(--accent, #007aff)',
-                    opacity: 0.7,
-                    transition: 'height 0.3s ease',
-                  }}
-                />
-              </div>
-              <span
-                className="text-[8px] tabular-nums mt-0.5 truncate w-full text-center"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                {label}
-              </span>
+              <div
+                className="w-full"
+                style={{
+                  height: `${heightPct}%`,
+                  minHeight: b.count > 0 ? 2 : 0,
+                  borderRadius: '2px 2px 0 0',
+                  background: 'var(--accent)',
+                  opacity: 0.75,
+                  transition: 'height var(--dur-large) var(--ease-out)',
+                }}
+              />
             </div>
           );
         })}
+      </div>
+      <div
+        className="flex items-center justify-between mt-1 pt-1 text-[11px] leading-[13px] tabular-nums"
+        style={{ color: 'var(--label-secondary)', borderTop: '0.5px solid var(--separator)' }}
+      >
+        <span>{formatLatencyBucket(buckets[0]?.bucket_ms ?? 0)}</span>
+        <span>{formatLatencyBucket(buckets[buckets.length - 1]?.bucket_ms ?? -1)}</span>
       </div>
     </div>
   );
@@ -1046,9 +1071,7 @@ function ErrorGroupsList({
 
   return (
     <div>
-      <div className="text-[10px] font-semibold mb-1.5" style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        Error Groups
-      </div>
+      <ChartTitle>Errors by tool</ChartTitle>
       <div className="flex flex-col gap-0.5">
         {groups.map((g) => {
           const isExpanded = expandedTool === g.tool;
@@ -1058,42 +1081,41 @@ function ErrorGroupsList({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  className="lx-btn v-icon sz-small shrink-0"
                   onClick={() => setExpandedTool(isExpanded ? null : g.tool)}
-                  className="text-[9px] shrink-0"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: '0 2px' }}
+                  aria-expanded={isExpanded}
+                  aria-label={`${isExpanded ? 'Hide' : 'Show'} a sample error for ${g.tool}`}
+                  title={isExpanded ? 'Hide sample' : 'Show sample'}
                 >
-                  {isExpanded ? '▼' : '▶'}
+                  <Icon name={isExpanded ? 'expand_more' : 'chevron_right'} size={14} />
                 </button>
                 <button
                   type="button"
                   onClick={() => onGroupClick(g.tool)}
-                  className="flex-1 text-left text-[10px] truncate"
+                  className="flex-1 text-left text-[11px] leading-[13px] truncate"
                   style={{
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    color: isActive ? 'var(--red, #ef4444)' : 'var(--text-primary)',
+                    color: isActive ? 'var(--status-red)' : 'var(--label)',
                     fontWeight: isActive ? 600 : 400,
-                    fontFamily: 'SF Mono, Menlo, monospace',
+                    fontFamily: 'var(--font-mono)',
                     padding: 0,
                   }}
+                  title={`Show only ${g.tool} errors`}
                 >
                   {g.tool}
                 </button>
-                <span
-                  className="shrink-0 text-[9px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full"
-                  style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--red, #ef4444)' }}
-                >
-                  {g.count}
-                </span>
+                <Badge tone="red">{g.count}</Badge>
               </div>
               {isExpanded && (
                 <div
-                  className="mt-0.5 ml-5 text-[9px] truncate rounded px-1.5 py-1"
+                  className="mt-0.5 ml-5 text-[11px] leading-[13px] truncate px-1.5 py-1"
                   style={{
-                    background: 'rgba(239,68,68,0.06)',
-                    color: 'var(--text-secondary)',
-                    fontFamily: 'SF Mono, Menlo, monospace',
+                    background: 'color-mix(in oklab, var(--status-red) 7%, transparent)',
+                    borderRadius: 6,
+                    color: 'var(--label-secondary)',
+                    fontFamily: 'var(--font-mono)',
                   }}
                   title={g.sample_summary}
                 >
@@ -1211,25 +1233,17 @@ function Sparkline({
 
   return (
     <div>
-      <div className="text-[10px] font-semibold mb-1.5 flex items-center gap-1" style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        <span>Last {windowLabel(windowMs)}</span>
+      <div className="flex items-center gap-1 mb-1.5">
+        <ChartTitle>Last {windowLabel(windowMs)}</ChartTitle>
         {activeRange !== null && (
           <button
             type="button"
             onClick={() => onSelectRange(null)}
             title="Clear time-range filter"
-            style={{
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              cursor: 'pointer',
-              color: 'var(--accent, #007aff)',
-              fontSize: 9,
-              lineHeight: 1,
-              textTransform: 'none',
-            }}
+            aria-label="Clear time-range filter"
+            className="lx-btn v-plain sz-small -mt-1.5"
           >
-            clear ✕
+            Clear
           </button>
         )}
       </div>
@@ -1256,11 +1270,9 @@ function Sparkline({
               style={{
                 height: `${heightPct}%`,
                 minHeight: m.count > 0 ? 2 : 0,
-                background: hasErrors
-                  ? 'var(--red, #ef4444)'
-                  : 'var(--accent, #007aff)',
-                opacity: activeRange !== null ? (inRange ? 0.9 : 0.3) : 0.65,
-                transition: 'height 0.3s ease, opacity 0.15s ease',
+                background: hasErrors ? 'var(--status-red)' : 'var(--accent)',
+                opacity: activeRange !== null ? (inRange ? 1 : 0.3) : 0.75,
+                transition: 'height var(--dur-large) var(--ease-out), opacity var(--dur-micro) var(--ease-out)',
               }}
             />
           );
@@ -1274,7 +1286,7 @@ function Sparkline({
               bottom: 0,
               left: `${(dragRange.lo / byMinute.length) * 100}%`,
               width: `${((dragRange.hi - dragRange.lo + 1) / byMinute.length) * 100}%`,
-              background: 'var(--accent, #007aff)',
+              background: 'var(--accent)',
               opacity: 0.15,
               borderRadius: 2,
               pointerEvents: 'none',
@@ -1310,10 +1322,10 @@ function StatsPanel({
 }) {
   return (
     <div
-      className="shrink-0 px-3 py-2.5 flex flex-col gap-3"
+      className="shrink-0 px-4 py-3 flex flex-col gap-4"
       style={{
-        borderBottom: '0.5px solid var(--border-row)',
-        background: 'var(--bg-grouped)',
+        borderBottom: '0.5px solid var(--separator)',
+        background: 'var(--surface)',
       }}
     >
       {/* Row 1: hot tools + latency histogram side by side */}
@@ -1349,7 +1361,10 @@ function StatsPanel({
               errorsOnly={errorsOnly}
             />
           ) : (
-            <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+            <div
+              className="text-[11px] leading-[13px]"
+              style={{ color: 'var(--label-secondary)' }}
+            >
               No errors in this window.
             </div>
           )}
@@ -1472,37 +1487,33 @@ function SessionGroupHeader({
       onClick={onToggle}
       title={group.session_id}
       className="w-full flex items-center gap-2 px-3 text-left"
+      aria-expanded={!collapsed}
       style={{
-        background: 'var(--bg-inset)',
+        background: 'var(--fill-quaternary)',
         border: 'none',
-        borderBottom: '0.5px solid var(--border-row)',
+        borderBottom: '0.5px solid var(--separator)',
         cursor: 'pointer',
-        height: 24,
+        height: 28,
         fontSize: 11,
-        color: 'var(--text-secondary)',
-        fontFamily: 'SF Mono, Menlo, monospace',
+        lineHeight: '13px',
+        color: 'var(--label-secondary)',
       }}
     >
-      <span style={{ width: 10, color: 'var(--text-tertiary)' }}>
-        {collapsed ? '▶' : '▼'}
+      <span className="flex shrink-0" style={{ color: 'var(--label-secondary)' }}>
+        <Icon name={collapsed ? 'chevron_right' : 'expand_more'} size={14} />
       </span>
-      <span style={{ color: 'var(--text-primary)' }}>{shortId}</span>
-      <span style={{ color: 'var(--text-tertiary)' }}>
+      <span style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}>{shortId}</span>
+      <span className="tabular-nums">
         {group.entries.length} call{group.entries.length === 1 ? '' : 's'}
       </span>
-      <span style={{ color: 'var(--text-tertiary)' }}>
-        from {fromTime} to {toTime}
+      <span className="tabular-nums">
+        {fromTime} – {toTime}
       </span>
       {group.error_count > 0 && (
-        <span
-          className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-          style={{
-            background: 'rgba(239,68,68,0.15)',
-            color: 'var(--red, #ef4444)',
-            fontFamily: 'inherit',
-          }}
-        >
-          {group.error_count} error{group.error_count === 1 ? '' : 's'}
+        <span className="ml-auto">
+          <Badge tone="red" icon="warning">
+            {group.error_count} error{group.error_count === 1 ? '' : 's'}
+          </Badge>
         </span>
       )}
     </button>
@@ -1513,26 +1524,14 @@ function SessionGroupHeader({
 
 const SHORTCUTS: { keys: string; desc: string }[] = [
   { keys: '/', desc: 'Focus search' },
-  { keys: 'j', desc: 'Next entry' },
-  { keys: 'k', desc: 'Previous entry' },
-  { keys: 'Enter', desc: 'Expand / collapse selected' },
-  { keys: 'Esc', desc: 'Blur search · clear search · clear filters · deselect' },
-  { keys: '?', desc: 'Toggle this help' },
+  { keys: '↓ / j', desc: 'Next call' },
+  { keys: '↑ / k', desc: 'Previous call' },
+  { keys: '⏎', desc: 'Expand or collapse the selected call' },
+  { keys: 'Esc', desc: 'Clear the search, then the filters, then the selection' },
+  { keys: '?', desc: 'Show or hide this list' },
 ];
 
 function ShortcutsHelp({ onClose }: { onClose: () => void }) {
-  const chipStyle: CSSProperties = {
-    display: 'inline-block',
-    minWidth: 18,
-    textAlign: 'center',
-    padding: '1px 6px',
-    borderRadius: 5,
-    background: 'var(--bg-inset)',
-    border: '0.5px solid var(--border-row)',
-    fontFamily: 'SF Mono, Menlo, monospace',
-    fontSize: 11,
-    color: 'var(--text-primary)',
-  };
   return (
     <div
       onClick={onClose}
@@ -1540,7 +1539,7 @@ function ShortcutsHelp({ onClose }: { onClose: () => void }) {
       style={{
         position: 'absolute',
         inset: 0,
-        background: 'rgba(0,0,0,0.35)',
+        background: 'rgb(0 0 0 / 0.35)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -1552,39 +1551,55 @@ function ShortcutsHelp({ onClose }: { onClose: () => void }) {
         role="dialog"
         aria-label="Keyboard shortcuts"
         style={{
-          background: 'var(--bg-grouped)',
-          border: '0.5px solid var(--border-row)',
-          borderRadius: 12,
-          padding: '14px 18px',
+          background: 'var(--surface-raised)',
+          border: '0.5px solid var(--separator)',
+          borderRadius: 'var(--radius-panel)',
+          padding: '16px 20px',
           minWidth: 320,
           maxWidth: 420,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+          boxShadow: 'var(--shadow-panel)',
         }}
       >
         <div
-          className="text-[11px] font-semibold mb-2.5"
-          style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+          className="text-[17px] leading-[22px] font-semibold mb-3"
+          style={{ color: 'var(--label)' }}
         >
-          Keyboard Shortcuts
+          Keyboard shortcuts
         </div>
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
-            gap: '6px 12px',
+            gap: '8px 12px',
             alignItems: 'center',
-            fontSize: 12,
-            color: 'var(--text-secondary)',
+            fontSize: 13,
+            lineHeight: '16px',
+            color: 'var(--label)',
           }}
         >
           {SHORTCUTS.map((s) => (
             <div key={s.keys} style={{ display: 'contents' }}>
-              <span style={chipStyle}>{s.keys}</span>
-              <span>{s.desc}</span>
+              <kbd
+                style={{
+                  display: 'inline-block',
+                  minWidth: 24,
+                  textAlign: 'center',
+                  padding: '2px 6px',
+                  borderRadius: 6,
+                  background: 'var(--fill-quaternary)',
+                  boxShadow: 'inset 0 0 0 0.5px var(--separator)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 12,
+                  color: 'var(--label)',
+                }}
+              >
+                {s.keys}
+              </kbd>
+              <span style={{ color: 'var(--label-secondary)' }}>{s.desc}</span>
             </div>
           ))}
         </div>
-        <div className="text-[10px] mt-3" style={{ color: 'var(--text-tertiary)' }}>
+        <div className="text-[11px] leading-[13px] mt-4" style={{ color: 'var(--label-secondary)' }}>
           Press Esc or ? to close.
         </div>
       </div>
@@ -1594,9 +1609,14 @@ function ShortcutsHelp({ onClose }: { onClose: () => void }) {
 
 export function ToolActivity({
   root,
+  subTab,
   onOpenFileInGraph,
 }: {
   root: string;
+  /** The Tool calls | AI calls switcher. Rendered INTO this surface's toolbar
+      rather than above it — two stacked control rows is what TRA-294 exists to
+      remove, and the switcher belongs on the leading edge of the one bar. */
+  subTab?: ReactNode;
   onOpenFileInGraph?: (filePath: string) => void;
 }) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -1625,6 +1645,12 @@ export function ToolActivity({
   const [showHelp, setShowHelp] = useState(false);
   // Ref to the search input so "/" can focus it and Escape can blur it.
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Toolbar scroll-edge hairline — content scrolls UNDER the bar, so the rule
+  // appears on scroll instead of being painted permanently.
+  const [scrolled, setScrolled] = useState(false);
+  const [historyFailed, setHistoryFailed] = useState(false);
+  const overflow = useMenuAnchor();
 
   // ── Pause / clear / export local controls ────────────────────────────
   const [paused, setPaused] = useState(false);
@@ -1773,7 +1799,8 @@ export function ToolActivity({
     try {
       const params = new URLSearchParams({ project: root, limit: '200' });
       const res = await fetch(`${BASE}/api/projects/journal?${params}`);
-      if (res.ok) {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      {
         const data = (await res.json()) as JournalEntry[];
         // Snapshot is newest-first already (server sorts that way)
         setEntries((prev) => {
@@ -1791,8 +1818,12 @@ export function ToolActivity({
           return deduped.slice(0, MAX_ENTRIES);
         });
       }
+      setHistoryFailed(false);
     } catch {
-      /* history is optional — live SSE is the primary source */
+      /* Live SSE is the primary source, so a failed history fetch is not fatal
+         — but it must not read as "no calls yet". That sent you off to connect
+         a client that was already connected (TRA-294). */
+      setHistoryFailed(true);
     }
   }, [root]);
 
@@ -1892,6 +1923,9 @@ export function ToolActivity({
     if (!el) return;
     // If user scrolled more than 60px from top, mark as "scrolled away"
     userScrolledRef.current = el.scrollTop > 60;
+    // Separate threshold: the toolbar's hairline fades in the moment content
+    // slides under it, which is at the first pixel, not at 60.
+    setScrolled(el.scrollTop > 0);
   }, []);
 
   // ── Filter callbacks wired to stats panel ─────────────────────────────
@@ -2029,6 +2063,29 @@ export function ToolActivity({
             e.tool.toLowerCase().includes(queryLower),
         );
 
+  // ── Toolbar-derived state ────────────────────────────────────────────
+  // "Filters" are what the ••• menu and the sparkline set; the free-text query
+  // is not one of them (it has its own field with its own clear button).
+  const activeFilterCount =
+    (errorsOnly ? 1 : 0) + toolFilter.size + (timeRange !== null ? 1 : 0);
+
+  const clearFilters = useCallback(() => {
+    setErrorsOnly(false);
+    setToolFilter(new Set());
+    setTimeRange(null);
+  }, []);
+
+  /** How many calls the filters are holding back — the number the empty state
+      needs to say "clear them" honestly. */
+  const filteredOutCount = entries.length - filtered.length;
+
+  const feedTone = paused ? 'orange' : connected ? 'green' : 'neutral';
+  const feedLabel = paused
+    ? `Paused (${pausedBufferRef.current.length})`
+    : connected
+      ? 'Live'
+      : 'Offline';
+
   // Keep the selected index within bounds as the visible list shrinks/grows.
   // (e.g. a new filter trims the list below the previously-selected index.)
   useEffect(() => {
@@ -2092,12 +2149,15 @@ export function ToolActivity({
           e.preventDefault();
           searchInputRef.current?.focus();
           break;
+        // ↑↓ is what a Mac list responds to; j/k stay for the vim hands.
+        case 'ArrowDown':
         case 'j':
           e.preventDefault();
           setSelectedIdx((i) =>
             filtered.length === 0 ? -1 : Math.min(i + 1, filtered.length - 1),
           );
           break;
+        case 'ArrowUp':
         case 'k':
           e.preventDefault();
           setSelectedIdx((i) => (filtered.length === 0 ? -1 : Math.max(i - 1, 0)));
@@ -2133,269 +2193,159 @@ export function ToolActivity({
 
   return (
     <div
-      className="flex flex-col h-full"
-      style={{ color: 'var(--text-primary)', position: 'relative' }}
+      className="flex flex-col h-full overflow-hidden"
+      style={{ color: 'var(--label)', position: 'relative' }}
     >
-      {/* ── Header ── */}
-      <div
-        className="shrink-0 px-3 pt-3 pb-2"
-        style={{ borderBottom: '0.5px solid var(--border-row)' }}
-      >
-        <div className="flex items-center justify-end gap-1.5 mb-2">
-          {paused ? (
-            <span
-              className="text-[10px] flex items-center gap-1"
-              style={{ color: 'var(--warning, #f97316)' }}
-            >
-              <span
-                className="inline-block w-1.5 h-1.5 rounded-full"
-                style={{ background: 'var(--warning, #f97316)' }}
-              />
-              Paused ({pausedBufferRef.current.length})
-            </span>
-          ) : connected ? (
-            <span
-              className="text-[10px] flex items-center gap-1"
-              style={{ color: 'var(--success, #22c55e)' }}
-            >
-              <span
-                className="inline-block w-1.5 h-1.5 rounded-full"
-                style={{ background: 'var(--success, #22c55e)' }}
-              />
-              Live
-            </span>
-          ) : (
-            <span
-              className="text-[10px] flex items-center gap-1"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              <span
-                className="inline-block w-1.5 h-1.5 rounded-full"
-                style={{ background: 'var(--text-tertiary)' }}
-              />
-              Offline
-            </span>
-          )}
-          <span
-            className="text-[10px] tabular-nums"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            {entries.length.toLocaleString()} calls
-          </span>
-          {/* Pause / Clear / Export — local buffer controls */}
-          <div className="flex items-center gap-0.5 ml-1">
-            <button
-              type="button"
-              onClick={handleTogglePause}
-              title={paused ? 'Resume live feed' : 'Pause live feed'}
-              aria-label={paused ? 'Resume live feed' : 'Pause live feed'}
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 999,
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-tertiary)',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 11,
-                lineHeight: 1,
-                padding: 0,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = 'var(--text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--text-tertiary)';
-              }}
-            >
-              {paused ? '▶' : '⏸'}
-            </button>
-            <button
-              type="button"
-              onClick={handleClear}
-              title="Clear local buffer"
-              aria-label="Clear local buffer"
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 999,
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-tertiary)',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 12,
-                lineHeight: 1,
-                padding: 0,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = 'var(--text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--text-tertiary)';
-              }}
-            >
-              ⌫
-            </button>
-            <button
-              type="button"
-              onClick={handleExport}
-              title="Export filtered entries as JSONL"
-              aria-label="Export filtered entries as JSONL"
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 999,
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-tertiary)',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 12,
-                lineHeight: 1,
-                padding: 0,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = 'var(--text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--text-tertiary)';
-              }}
-            >
-              ⤓
-            </button>
-          </div>
-        </div>
+      {/* ── Toolbar ───────────────────────────────────────────────────
+          ONE row. Before TRA-294 this surface stacked three: a right-aligned
+          floating cluster (● Live · N calls · ⏸ · ⌫ · ⤓) in bare whitespace,
+          then a "Group by session" pill beside a search box, then an
+          All | Errors chip row. Everything that is not the source switch, the
+          feed state or the search now lives behind the overflow menu. */}
+      <Toolbar scrolled={scrolled}>
+        {subTab}
 
-        {/* Search input — case-insensitive substring match across params + tool.
-            Group-by-session toggle lives on the same row, at the left edge. */}
-        <div className="flex items-center justify-between gap-2 mb-2">
-          <button
-            type="button"
+        <ToolbarDivider />
+
+        {/* Feed state. The dot is a tone; the word next to it is the state —
+            "Live" and "Paused" have to survive without colour. */}
+        <span
+          className="flex items-center gap-1.5 shrink-0 text-[11px] leading-[13px]"
+          style={{ color: 'var(--label-secondary)' }}
+        >
+          <StatusDot tone={feedTone} pulse={feedTone === 'green'} />
+          <span style={{ color: 'var(--label)' }}>{feedLabel}</span>
+          <span className="tabular-nums">
+            · {entries.length.toLocaleString()} call{entries.length === 1 ? '' : 's'}
+          </span>
+        </span>
+
+        <span className="flex-1" />
+
+        {/* Active filters read as removable tokens rather than a permanent
+            chip row that is empty most of the time. */}
+        {activeFilterCount > 0 && (
+          <Button
+            variant="bordered"
+            className="is-on shrink-0"
+            icon="close"
+            onClick={clearFilters}
+            title="Clear all filters"
+          >
+            {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
+          </Button>
+        )}
+
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search calls"
+          aria-label="Search calls"
+          inputRef={searchInputRef}
+        />
+
+        <Button
+          variant="icon"
+          icon={paused ? 'play_arrow' : 'pause'}
+          onClick={handleTogglePause}
+          aria-pressed={paused}
+          aria-label={paused ? 'Resume the live feed' : 'Pause the live feed'}
+          title={paused ? 'Resume the live feed' : 'Pause the live feed'}
+        />
+
+        <Button
+          ref={overflow.ref}
+          variant="icon"
+          icon="more_horiz"
+          onClick={() => (overflow.at ? overflow.close() : overflow.open())}
+          aria-haspopup="menu"
+          aria-expanded={overflow.at !== null}
+          aria-label="More actions"
+          title="More actions"
+        />
+      </Toolbar>
+
+      {overflow.at && (
+        <Menu x={overflow.at.x} y={overflow.at.y} align="end" onClose={overflow.close}>
+          <MenuItem
+            showCheckSlot
+            checked={errorsOnly}
+            onClick={() => setErrorsOnly((v) => !v)}
+          >
+            Errors only
+          </MenuItem>
+          <MenuItem
+            showCheckSlot
+            checked={groupBySession}
             onClick={() => setGroupBySession((v) => !v)}
-            title="Group entries by session_id"
-            aria-pressed={groupBySession}
-            className="text-[11px] px-2.5 py-1 rounded-full transition-all shrink-0"
-            style={{
-              background: groupBySession ? 'var(--accent)' : 'var(--bg-inset)',
-              color: groupBySession ? '#fff' : 'var(--text-secondary)',
-              fontWeight: groupBySession ? 600 : 400,
-              cursor: 'pointer',
-              border: 'none',
-            }}
           >
             Group by session
-          </button>
-          <div style={{ position: 'relative', width: 180 }}>
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search params, tool…"
-              aria-label="Search calls"
-              style={{
-                width: '100%',
-                fontSize: 11,
-                padding: query ? '4px 22px 4px 8px' : '4px 8px',
-                background: 'var(--fill-control, var(--bg-inset))',
-                color: 'var(--text-primary)',
-                border: '0.5px solid var(--border-row)',
-                borderRadius: 6,
-                outline: 'none',
-                fontFamily: 'inherit',
-                boxSizing: 'border-box',
-              }}
-            />
-            {query !== '' && (
-              <button
-                type="button"
-                onClick={() => setQuery('')}
-                aria-label="Clear search"
-                title="Clear search"
-                style={{
-                  position: 'absolute',
-                  right: 4,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  padding: '0 4px',
-                  cursor: 'pointer',
-                  color: 'var(--text-tertiary)',
-                  fontSize: 12,
-                  lineHeight: 1,
+          </MenuItem>
+          {top5.length > 0 && (
+            <>
+              <MenuSection>Tools</MenuSection>
+              {top5.map((tool) => (
+                <MenuItem
+                  key={tool}
+                  showCheckSlot
+                  checked={toolFilter.has(tool)}
+                  onClick={() => handleToolClick(tool)}
+                >
+                  {tool}
+                </MenuItem>
+              ))}
+            </>
+          )}
+          {activeFilterCount > 0 && (
+            <>
+              <MenuSeparator />
+              <MenuItem
+                icon="close"
+                onClick={() => {
+                  clearFilters();
+                  overflow.close();
                 }}
               >
-                ×
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Filter chips — All clears the tool set, Errors toggles independently,
-            tool chips toggle membership in the multi-select set. */}
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
-          <FilterChip
-            label="All"
-            active={toolFilter.size === 0}
-            onClick={() => {
-              if (toolFilter.size > 0) setToolFilter(new Set());
-            }}
-          />
-          <FilterChip
-            label="Errors"
-            active={errorsOnly}
-            onClick={() => setErrorsOnly((v) => !v)}
-          />
-          {top5.map((tool) => (
-            <FilterChip
-              key={tool}
-              label={tool}
-              active={toolFilter.has(tool)}
-              onClick={() => {
-                setToolFilter((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(tool)) next.delete(tool);
-                  else next.add(tool);
-                  return next;
-                });
-              }}
-            />
-          ))}
-          {/* Time-range filter chip — present only while a sparkline range is
-              active. Styled like a filter chip but with an accent border to
-              mark it as a special (client-side) filter. ✕ clears the range. */}
-          {timeRange !== null && (
-            <button
-              type="button"
-              onClick={() => setTimeRange(null)}
-              title="Clear time range filter"
-              className="text-[11px] px-2.5 py-1 rounded-full transition-all shrink-0 flex items-center gap-1 tabular-nums"
-              style={{
-                background: 'var(--accent-soft, rgba(0,122,255,0.12))',
-                color: 'var(--accent, #007aff)',
-                border: '0.5px solid var(--accent, #007aff)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              🕒 {new Date(timeRange.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              –
-              {new Date(timeRange.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              <span style={{ marginLeft: 2 }}>✕</span>
-            </button>
+                Clear filters
+              </MenuItem>
+            </>
           )}
-        </div>
-      </div>
+          <MenuSeparator />
+          <MenuItem
+            icon="download"
+            disabled={filtered.length === 0}
+            onClick={() => {
+              handleExport();
+              overflow.close();
+            }}
+          >
+            Export {filtered.length.toLocaleString()} call
+            {filtered.length === 1 ? '' : 's'} as JSONL
+          </MenuItem>
+          <MenuItem
+            danger
+            icon="trash"
+            disabled={entries.length === 0}
+            onClick={() => {
+              handleClear();
+              overflow.close();
+            }}
+          >
+            Clear the local feed
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            icon="tune"
+            shortcut="?"
+            onClick={() => {
+              setShowHelp(true);
+              overflow.close();
+            }}
+          >
+            Keyboard shortcuts
+          </MenuItem>
+        </Menu>
+      )}
 
       {/* ── Stats panel (collapsible) ── */}
       {/* Stats summary bar — always visible when stats are loaded */}
@@ -2426,13 +2376,15 @@ export function ToolActivity({
       {/* ── Error banner ── */}
       {error && (
         <div
-          className="shrink-0 px-3 py-1.5 text-[11px]"
+          role="status"
+          className="shrink-0 flex items-center gap-2 px-4 py-2 text-[13px] leading-4"
           style={{
-            background: 'rgba(239,68,68,0.08)',
-            color: 'var(--red, #ef4444)',
-            borderBottom: '0.5px solid var(--border-row)',
+            background: 'color-mix(in oklab, var(--status-red) 8%, transparent)',
+            color: 'var(--status-red)',
+            borderBottom: '0.5px solid var(--separator)',
           }}
         >
+          <Icon name="warning" size={14} />
           {error}
         </div>
       )}
@@ -2441,25 +2393,57 @@ export function ToolActivity({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto"
-        style={{ background: 'var(--bg-grouped)', borderRadius: '0 0 10px 10px' }}
+        className="flex-1 min-h-0 overflow-y-auto"
+        style={{ background: 'var(--surface)' }}
       >
         {filtered.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center h-full text-center px-6 py-12"
-            style={{ color: 'var(--text-tertiary)' }}
-          >
-            <div className="text-[13px] mb-1">
-              {toolFilter.size === 0 && !errorsOnly && query === '' && timeRange === null
-                ? 'No tool calls yet'
-                : 'No matching entries'}
-            </div>
-            <div className="text-[11px]">
-              {toolFilter.size === 0 && !errorsOnly && query === '' && timeRange === null
-                ? 'Run a tool from Claude Code to see activity here.'
-                : 'Try a different filter or clear the search.'}
-            </div>
-          </div>
+          historyFailed && activeFilterCount === 0 && query === '' ? (
+            <EmptyState
+              icon="warning"
+              iconSize={32}
+              title="Can't reach the indexer"
+              subtitle="The trace-mcp daemon didn't answer, so this project's earlier calls couldn't be loaded. Anything new still arrives live."
+              action={<Button icon="refresh" onClick={() => void fetchHistory()}>Try again</Button>}
+            />
+          ) : activeFilterCount === 0 && query === '' ? (
+            <EmptyState
+              icon="monitoring"
+              iconSize={32}
+              title="No tool calls yet"
+              subtitle="Every trace-mcp call an assistant makes against this project lands here, live. Connect a client to start the feed."
+              action={
+                <Button
+                  variant="prominent"
+                  icon="plugins"
+                  onClick={() => void window.electronAPI?.openClients?.()}
+                >
+                  Connect a client
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon="search"
+              iconSize={32}
+              title="No matching calls"
+              subtitle={
+                activeFilterCount > 0
+                  ? `${filteredOutCount.toLocaleString()} call${filteredOutCount === 1 ? '' : 's'} are hidden by the current filters.`
+                  : 'Nothing in the feed matches that search.'
+              }
+              action={
+                <Button
+                  icon="close"
+                  onClick={() => {
+                    clearFilters();
+                    setQuery('');
+                  }}
+                >
+                  Clear filters and search
+                </Button>
+              }
+            />
+          )
         ) : groupBySession ? (
           groupEntriesBySession(filtered).map((group) => {
             const collapsed = collapsedSessions.has(group.session_id);

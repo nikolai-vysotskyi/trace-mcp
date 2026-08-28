@@ -5,7 +5,7 @@
    centred-placeholder-that-slides-left animation, which animated `left` (a
    layout property) over 0.42s and matched nothing on the platform. */
 
-import { useRef, type ReactNode } from 'react';
+import { useRef, type ReactNode, type RefObject } from 'react';
 import { Icon } from '../icons';
 
 export interface SearchFieldProps {
@@ -17,6 +17,8 @@ export interface SearchFieldProps {
   autoFocus?: boolean;
   className?: string;
   'aria-label'?: string;
+  /** Escape hatch for surfaces that focus the field from a keyboard shortcut. */
+  inputRef?: RefObject<HTMLInputElement | null>;
 }
 
 export function SearchField({
@@ -27,8 +29,10 @@ export function SearchField({
   autoFocus = false,
   className,
   'aria-label': ariaLabel,
+  inputRef: externalRef,
 }: SearchFieldProps): ReactNode {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const localRef = useRef<HTMLInputElement>(null);
+  const inputRef = externalRef ?? localRef;
   const cls = ['lx-search', grow ? 'grow' : '', className ?? ''].filter(Boolean).join(' ');
 
   return (

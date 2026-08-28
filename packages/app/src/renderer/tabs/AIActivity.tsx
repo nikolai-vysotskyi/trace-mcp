@@ -1,6 +1,28 @@
-import { useCallback, useEffect, useState } from 'react';
-
-/* ═══ AI Activity panel ════════════════════════════════════════════ */
+/**
+ * AI Activity — embed / LLM / rerank requests the daemon has made.
+ *
+ * Rebuilt on the macOS 26 layer (TRA-294). What it replaces, measured on the
+ * running surface: three glass "stat pills" (`backdrop-filter: blur(12px)` on
+ * what is content, not chrome) with 10px ALL-CAPS labels; a `MATCH`-style
+ * type badge rendered `meta.label.toUpperCase()` at 9px/700; a status dot that
+ * carried ok / error / pending in colour alone; a 320px-tall scroll box and a
+ * 20px top margin inside a pane that is already full height.
+ */
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Icon } from '../lattice/icons';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  ListRow,
+  SearchField,
+  SectionError,
+  StatusDot,
+  Toolbar,
+  ToolbarDivider,
+  type Tone,
+} from '../lattice/ui';
 
 interface AIEntry {
   id: number;
@@ -25,16 +47,32 @@ interface AIStats {
 
 /* ── Helpers ── */
 
-const TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
-  embed: { label: 'Embed', icon: 'E', color: '#5856d6' },
-  embed_batch: { label: 'Batch', icon: 'B', color: '#af52de' },
-  generate: { label: 'LLM', icon: 'G', color: '#007aff' },
-  generate_stream: { label: 'Stream', icon: 'S', color: '#32ade6' },
-  rerank: { label: 'Rerank', icon: 'R', color: '#ff9500' },
+/* Tones come from the shared status palette, so every series in this surface
+   is contrast-checked once, in tokens.css, instead of six times in hex here. */
+const TYPE_META: Record<string, { label: string; tone: Tone }> = {
+  embed: { label: 'Embed', tone: 'purple' },
+  embed_batch: { label: 'Batch', tone: 'purple' },
+  generate: { label: 'Generate', tone: 'blue' },
+  generate_stream: { label: 'Stream', tone: 'accent' },
+  rerank: { label: 'Rerank', tone: 'orange' },
 };
-const typeMeta = (t: string) =>
-  TYPE_META[t] ?? { label: t, icon: '?', color: 'var(--text-tertiary)' };
-const fmtMs = (ms: number) => (ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`);
+const typeMeta = (t: string): { label: string; tone: Tone } =>
+  TYPE_META[t] ?? { label: t.replace(/_/g, ' '), tone: 'neutral' };
+
+const TYPE_VAR: Record<Tone, string> = {
+  /* A meter segment is decoration, not text, so the neutral series takes the
+     tertiary grey. At --label-secondary it out-weighed the purple/blue/red
+     series beside it and read as a disabled bar (TRA-294). */
+  neutral: 'var(--label-tertiary)',
+  accent: 'var(--accent)',
+  green: 'var(--status-green)',
+  orange: 'var(--status-orange)',
+  red: 'var(--status-red)',
+  blue: 'var(--status-blue)',
+  purple: 'var(--status-purple)',
+};
+
+const fmtMs = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
 const fmtTime = (iso: string) => {
   try {
     return new Date(iso).toLocaleTimeString([], {
@@ -54,8 +92,15 @@ const fmtAgo = (iso: string) => {
   return `${Math.floor(s / 3600)}h ago`;
 };
 
-/* ── Stat card (glass pill) ── */
-function StatPill({
+/** ok / error / pending, said in a word as well as a tone. */
+const STATUS_META: Record<AIEntry['status'], { tone: Tone; label: string; icon?: string }> = {
+  ok: { tone: 'green', label: 'OK' },
+  error: { tone: 'red', label: 'Error', icon: 'warning' },
+  pending: { tone: 'orange', label: 'Running', icon: 'schedule' },
+};
+
+/* ── Metric card — content anatomy: label → value → footnote. No glass. ── */
+function MetricCard({
   label,
   value,
   sub,
@@ -63,75 +108,98 @@ function StatPill({
 }: {
   label: string;
   value: string;
-  sub?: string;
+  sub?: ReactNode;
   color?: string;
 }) {
   return (
-    <div
-      style={{
-        flex: 1,
-        minWidth: 0,
-        padding: '8px 10px',
-        background: 'var(--fill-control)',
-        borderRadius: 10,
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        border: '0.5px solid var(--border)',
-        boxShadow: 'var(--shadow-control)',
-      }}
-    >
-      <div
-        className="text-[10px] font-medium uppercase tracking-wider"
-        style={{ color: 'var(--text-tertiary)', marginBottom: 2 }}
-      >
-        {label}
-      </div>
-      <div
-        className="text-[15px] font-bold tabular-nums"
-        style={{ color: color ?? 'var(--text-primary)', lineHeight: 1.1 }}
-      >
-        {value}
-      </div>
-      {sub && (
-        <div
-          className="text-[10px] tabular-nums"
-          style={{ color: 'var(--text-tertiary)', marginTop: 1 }}
-        >
-          {sub}
+    <Card className="flex-1 min-w-0">
+      <div className="px-3 py-2.5 flex flex-col gap-1">
+        <div className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
+          {label}
         </div>
-      )}
-    </div>
+        <div
+          className="text-[26px] leading-8 font-semibold tabular-nums"
+          style={{ color: color ?? 'var(--label)', letterSpacing: '-0.01em' }}
+        >
+          {value}
+        </div>
+        {sub != null && (
+          <div
+            className="text-[11px] leading-[13px] tabular-nums"
+            style={{ color: 'var(--label-secondary)' }}
+          >
+            {sub}
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }
 
-/* ── Type breakdown mini-bar ── */
-function TypeBar({ stats }: { stats: AIStats }) {
+/** Share-of-requests bar plus its legend — and the legend IS the filter, so
+    the four request types are named once instead of twice (a legend above the
+    list and a chip row below it, saying the same thing). */
+function TypeBar({
+  stats,
+  filter,
+  onFilter,
+}: {
+  stats: AIStats;
+  filter: string | null;
+  onFilter: (next: string | null) => void;
+}) {
   const types = Object.entries(stats.by_type);
   const total = stats.total_requests || 1;
   return (
-    <div
-      style={{
-        display: 'flex',
-        gap: 1,
-        height: 4,
-        borderRadius: 2,
-        overflow: 'hidden',
-        background: 'var(--bg-inset)',
-      }}
-    >
-      {types.map(([type, s]) => (
-        <div
-          key={type}
-          title={`${typeMeta(type).label}: ${s.count}`}
-          style={{
-            width: `${(s.count / total) * 100}%`,
-            background: typeMeta(type).color,
-            minWidth: 2,
-            borderRadius: 1,
-            transition: 'width .3s ease',
-          }}
-        />
-      ))}
+    <div className="flex flex-col gap-2">
+      <div
+        className="flex overflow-hidden"
+        style={{ gap: 1, height: 6, borderRadius: 3, background: 'var(--fill-quaternary)' }}
+      >
+        {types.map(([type, s]) => (
+          <div
+            key={type}
+            title={`${typeMeta(type).label}: ${s.count}`}
+            style={{
+              width: `${(s.count / total) * 100}%`,
+              background: TYPE_VAR[typeMeta(type).tone],
+              minWidth: 2,
+              borderRadius: 2,
+              opacity: filter === null || filter === type ? 1 : 0.3,
+              transition:
+                'width var(--dur-large) var(--ease-out), opacity var(--dur-micro) var(--ease-out)',
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          className={`lx-chip single${filter === null ? ' is-on' : ''}`}
+          aria-pressed={filter === null}
+          onClick={() => onFilter(null)}
+        >
+          All {stats.total_requests.toLocaleString()}
+        </button>
+        {types.map(([type, s]) => {
+          const meta = typeMeta(type);
+          const active = filter === type;
+          return (
+            <button
+              key={type}
+              type="button"
+              className={`lx-chip single${active ? ' is-on' : ''}`}
+              aria-pressed={active}
+              onClick={() => onFilter(active ? null : type)}
+              title={`Show only ${meta.label.toLowerCase()} requests`}
+            >
+              <StatusDot tone={meta.tone} size={6} />
+              {meta.label}
+              <span className="tabular-nums">{s.count}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -140,149 +208,112 @@ function TypeBar({ stats }: { stats: AIStats }) {
 function RequestRow({ entry, isLast }: { entry: AIEntry; isLast: boolean }) {
   const [showDetail, setShowDetail] = useState(false);
   const meta = typeMeta(entry.type);
+  const status = STATUS_META[entry.status];
   const isPending = entry.status === 'pending';
+  const slow = entry.duration_ms > 5000;
 
   return (
-    <div style={{ borderBottom: isLast ? 'none' : '1px solid var(--border-row)' }}>
+    <div style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--separator)' }}>
       <button
         type="button"
         onClick={() => setShowDetail(!showDetail)}
+        aria-expanded={showDetail}
+        className="flex items-center gap-2 w-full text-left px-3"
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          width: '100%',
+          minHeight: 36,
           padding: '7px 12px',
           background: 'none',
           border: 'none',
           cursor: 'pointer',
-          textAlign: 'left',
-          transition: 'background .1s',
+          transition: 'background var(--dur-micro) var(--ease-out)',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--bg-active)';
+          e.currentTarget.style.background = 'var(--fill-quaternary)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.background = 'none';
         }}
       >
-        {/* Status indicator */}
-        <span
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: 4,
-            flexShrink: 0,
-            background:
-              entry.status === 'ok'
-                ? 'var(--success)'
-                : entry.status === 'error'
-                  ? 'var(--destructive)'
-                  : 'var(--warning)',
-            boxShadow: isPending
-              ? '0 0 6px var(--warning)'
-              : entry.status === 'ok'
-                ? '0 0 4px var(--success)'
-                : undefined,
-            animation: isPending ? 'pulse 1.5s ease-in-out infinite' : undefined,
-          }}
+        <StatusDot
+          tone={status.tone}
+          pulse={isPending}
+          title={status.label}
+          className="shrink-0"
         />
+        <Badge tone={meta.tone}>{meta.label}</Badge>
 
-        {/* Type badge */}
         <span
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: '0.03em',
-            padding: '1px 5px',
-            borderRadius: 4,
-            background: `${meta.color}1a`,
-            color: meta.color,
-            flexShrink: 0,
-            fontFamily: 'SF Mono, Menlo, monospace',
-          }}
-        >
-          {meta.label.toUpperCase()}
-        </span>
-
-        {/* Provider + model */}
-        <span
-          className="flex-1 min-w-0 truncate"
-          style={{ fontSize: 12, color: 'var(--text-primary)', fontWeight: 500 }}
+          className="flex-1 min-w-0 truncate text-[13px] leading-4"
+          style={{ color: 'var(--label)', fontWeight: 500 }}
         >
           {entry.provider}
-          <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> {entry.model}</span>
+          <span style={{ color: 'var(--label-secondary)', fontWeight: 400 }}> {entry.model}</span>
         </span>
 
-        {/* Duration or pending */}
+        {entry.status === 'error' && (
+          <Badge tone="red" icon="warning">
+            Error
+          </Badge>
+        )}
+
         <span
-          className="tabular-nums"
+          className="tabular-nums shrink-0 text-[11px] leading-[13px]"
           style={{
-            fontSize: 11,
-            flexShrink: 0,
-            fontFamily: 'SF Mono, Menlo, monospace',
-            color: isPending
-              ? 'var(--warning)'
-              : entry.duration_ms > 5000
-                ? 'var(--destructive)'
-                : entry.duration_ms > 1000
-                  ? 'var(--warning)'
-                  : 'var(--text-secondary)',
+            fontFamily: 'var(--font-mono)',
+            color: slow ? 'var(--status-orange)' : 'var(--label-secondary)',
           }}
+          title={slow ? 'Over 5 seconds' : undefined}
         >
-          {isPending ? '...' : fmtMs(entry.duration_ms)}
+          {isPending ? 'running…' : fmtMs(entry.duration_ms)}
         </span>
 
-        {/* Time ago */}
         <span
-          className="tabular-nums"
-          style={{
-            fontSize: 10,
-            color: 'var(--text-tertiary)',
-            flexShrink: 0,
-            width: 52,
-            textAlign: 'right',
-          }}
+          className="tabular-nums shrink-0 text-[11px] leading-[13px] text-right"
+          style={{ color: 'var(--label-secondary)', width: 56 }}
         >
           {fmtAgo(entry.timestamp)}
         </span>
       </button>
 
-      {/* Expanded detail */}
       {showDetail && (
         <div
           style={{
-            padding: '4px 12px 8px 32px',
-            fontSize: 11,
-            fontFamily: 'SF Mono, Menlo, monospace',
+            padding: '4px 12px 10px 32px',
+            fontSize: 12,
+            lineHeight: '15px',
+            fontFamily: 'var(--font-mono)',
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
-            gap: '2px 10px',
-            color: 'var(--text-secondary)',
+            gap: '3px 12px',
+            color: 'var(--label)',
           }}
         >
-          <span style={{ color: 'var(--text-tertiary)' }}>Time</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>Time</span>
           <span>{fmtTime(entry.timestamp)}</span>
-          <span style={{ color: 'var(--text-tertiary)' }}>URL</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>URL</span>
           <span className="truncate">{entry.url}</span>
-          <span style={{ color: 'var(--text-tertiary)' }}>Input</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+            Input
+          </span>
           <span>
             {entry.type.startsWith('embed')
-              ? `${entry.input_size} items`
+              ? `${entry.input_size.toLocaleString()} items`
               : `${entry.input_size.toLocaleString()} chars`}
           </span>
-          <span style={{ color: 'var(--text-tertiary)' }}>Output</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+            Output
+          </span>
           <span>
             {entry.type.startsWith('embed')
-              ? `${entry.output_size} vectors`
+              ? `${entry.output_size.toLocaleString()} vectors`
               : `${entry.output_size.toLocaleString()} chars`}
           </span>
           {entry.error && (
             <>
-              <span style={{ color: 'var(--destructive)' }}>Error</span>
+              <span style={{ color: 'var(--status-red)', fontFamily: 'var(--font-ui)' }}>Error</span>
               <span
                 style={{
-                  color: 'var(--destructive)',
+                  color: 'var(--status-red)',
                   wordBreak: 'break-word',
                   whiteSpace: 'pre-wrap',
                 }}
@@ -311,13 +342,14 @@ function readPersistedFilter(): string | null {
   }
 }
 
-export function AIActivity() {
+export function AIActivity({ subTab }: { subTab?: ReactNode }) {
   const [entries, setEntries] = useState<AIEntry[]>([]);
   const [stats, setStats] = useState<AIStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(readPersistedFilter);
   const [query, setQuery] = useState('');
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     try {
@@ -367,204 +399,126 @@ export function AIActivity() {
       ? Math.round(stats.total_duration_ms / stats.total_requests)
       : 0;
 
+  const feedTone: Tone = error ? 'red' : hasPending ? 'orange' : 'green';
+  const feedLabel = error ? 'Offline' : hasPending ? 'Running' : 'Idle';
+
   return (
-    <div className="space-y-3" style={{ marginTop: 20 }}>
-      {/* ── Section header ── */}
-      <div className="flex items-center gap-2">
-        <div
-          className="text-[10px] font-semibold uppercase tracking-wider"
-          style={{ color: 'var(--text-tertiary)' }}
+    <div className="flex flex-col h-full overflow-hidden" style={{ color: 'var(--label)' }}>
+      <Toolbar scrolled={scrolled}>
+        {subTab}
+        <ToolbarDivider />
+        <span
+          className="flex items-center gap-1.5 shrink-0 text-[11px] leading-[13px]"
+          style={{ color: 'var(--label-secondary)' }}
         >
-          Activity Monitor
-        </div>
-        {hasPending && (
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              background: 'var(--success)',
-              boxShadow: '0 0 6px var(--success)',
-              animation: 'pulse 1.5s ease-in-out infinite',
-            }}
-          />
-        )}
-        {error && !loading && entries.length === 0 && (
-          <span className="text-[10px]" style={{ color: 'var(--destructive)' }}>
-            Offline
+          <StatusDot tone={feedTone} pulse={hasPending} />
+          <span style={{ color: 'var(--label)' }}>{feedLabel}</span>
+          <span className="tabular-nums">
+            · {entries.length.toLocaleString()} request{entries.length === 1 ? '' : 's'}
           </span>
-        )}
-        <div style={{ marginLeft: 'auto', position: 'relative', width: 180 }}>
-          <input
-            type="text"
-            value={query}
-            onChange={(ev) => setQuery(ev.target.value)}
-            placeholder="Search url, provider, model…"
-            style={{
-              width: '100%',
-              background: 'var(--fill-control)',
-              border: '0.5px solid var(--border)',
-              borderRadius: 6,
-              fontSize: 11,
-              padding: query ? '4px 22px 4px 8px' : '4px 8px',
-              color: 'var(--text-primary)',
-              outline: 'none',
-            }}
-          />
-          {query && (
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={() => setQuery('')}
-              style={{
-                position: 'absolute',
-                right: 4,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-tertiary)',
-                cursor: 'pointer',
-                fontSize: 12,
-                lineHeight: 1,
-                padding: '2px 4px',
-              }}
-            >
-              ×
-            </button>
-          )}
-        </div>
-      </div>
+        </span>
 
-      {/* ── Stats pills ── */}
-      {stats && stats.total_requests > 0 && (
-        <>
-          <div className="flex gap-2">
-            <StatPill
-              label="Requests"
-              value={stats.total_requests.toLocaleString()}
-              sub={`${Object.keys(stats.by_type).length} type${Object.keys(stats.by_type).length !== 1 ? 's' : ''}`}
-            />
-            <StatPill
-              label="Avg latency"
-              value={fmtMs(avgMs)}
-              sub={`total ${fmtMs(stats.total_duration_ms)}`}
-              color={
-                avgMs > 3000 ? 'var(--destructive)' : avgMs > 1000 ? 'var(--warning)' : undefined
-              }
-            />
-            <StatPill
-              label="Errors"
-              value={stats.total_errors.toString()}
-              sub={errorRate > 0 ? `${errorRate}% rate` : 'none'}
-              color={stats.total_errors > 0 ? 'var(--destructive)' : 'var(--success)'}
-            />
-          </div>
-          <TypeBar stats={stats} />
-        </>
-      )}
+        <span className="flex-1" />
 
-      {/* ── Filter chips ── */}
-      {stats && Object.keys(stats.by_type).length > 1 && (
-        <div className="flex gap-1.5 flex-wrap">
-          <button
-            type="button"
+        {filter !== null && (
+          <Button
+            variant="bordered"
+            className="is-on shrink-0"
+            icon="close"
             onClick={() => setFilter(null)}
-            className="text-[10px] font-medium px-2.5 py-1 rounded-full transition-all"
-            style={{
-              background: !filter ? 'var(--accent)' : 'var(--fill-control)',
-              color: !filter ? '#fff' : 'var(--text-secondary)',
-              border: `0.5px solid ${!filter ? 'var(--accent)' : 'var(--border)'}`,
-              cursor: 'pointer',
-            }}
+            title="Show every request type"
           >
-            All
-          </button>
-          {Object.entries(stats.by_type).map(([type, s]) => {
-            const meta = typeMeta(type);
-            const active = filter === type;
-            return (
-              <button
-                key={type}
-                type="button"
-                onClick={() => setFilter(active ? null : type)}
-                className="text-[10px] font-medium px-2.5 py-1 rounded-full transition-all flex items-center gap-1"
-                style={{
-                  background: active ? `${meta.color}22` : 'var(--fill-control)',
-                  color: active ? meta.color : 'var(--text-secondary)',
-                  border: `0.5px solid ${active ? `${meta.color}44` : 'var(--border)'}`,
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(8px)',
-                  WebkitBackdropFilter: 'blur(8px)',
-                }}
-              >
-                {meta.label}
-                <span className="tabular-nums" style={{ opacity: 0.7 }}>
-                  {s.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+            {typeMeta(filter).label}
+          </Button>
+        )}
 
-      {/* ── Request list ── */}
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search requests"
+          aria-label="Search requests"
+        />
+      </Toolbar>
+
       <div
-        style={{
-          background: 'var(--bg-grouped)',
-          borderRadius: 10,
-          boxShadow: 'var(--shadow-grouped)',
-          overflow: 'hidden',
-        }}
+        className="flex-1 min-h-0 overflow-y-auto"
+        onScroll={(e) => setScrolled((e.target as HTMLElement).scrollTop > 0)}
       >
-        <div
-          style={{
-            maxHeight: 320,
-            overflowY: 'auto',
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'var(--text-tertiary) transparent',
-          }}
-        >
-          {loading && entries.length === 0 && (
-            <div className="text-center py-6 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-              Connecting to daemon...
-            </div>
-          )}
-          {!loading && entries.length === 0 && !error && (
-            <div className="text-center py-8 px-4">
-              <div className="text-[13px] font-medium" style={{ color: 'var(--text-secondary)' }}>
-                No AI requests yet
+        <div className="flex flex-col gap-4 px-4 py-4">
+          {stats && stats.total_requests > 0 && (
+            <>
+              <div className="flex gap-3">
+                <MetricCard
+                  label="Requests"
+                  value={stats.total_requests.toLocaleString()}
+                  sub={`${Object.keys(stats.by_type).length} type${Object.keys(stats.by_type).length !== 1 ? 's' : ''}`}
+                />
+                <MetricCard
+                  label="Average latency"
+                  value={fmtMs(avgMs)}
+                  sub={`${fmtMs(stats.total_duration_ms)} total`}
+                  color={
+                    avgMs > 3000
+                      ? 'var(--status-red)'
+                      : avgMs > 1000
+                        ? 'var(--status-orange)'
+                        : undefined
+                  }
+                />
+                <MetricCard
+                  label="Errors"
+                  value={stats.total_errors.toLocaleString()}
+                  sub={errorRate > 0 ? `${errorRate}% of requests` : 'None so far'}
+                  color={stats.total_errors > 0 ? 'var(--status-red)' : undefined}
+                />
               </div>
-              <div className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                Requests appear here during indexing and semantic search
-              </div>
-            </div>
+              <TypeBar stats={stats} filter={filter} onFilter={setFilter} />
+            </>
           )}
-          {error && entries.length === 0 && (
-            <div className="text-center py-6 px-4">
-              <div className="text-[11px] font-medium" style={{ color: 'var(--destructive)' }}>
-                Cannot reach daemon
-              </div>
-              <div className="text-[10px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
-                {error}
-              </div>
-            </div>
-          )}
-          {filtered.map((e, i) => (
-            <RequestRow key={e.id} entry={e} isLast={i === filtered.length - 1} />
-          ))}
-          {(filter || normalizedQuery) && filtered.length === 0 && entries.length > 0 && (
-            <div className="text-center py-4 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
-              {normalizedQuery
-                ? `No requests match "${query}"`
-                : `No ${typeMeta(filter!).label.toLowerCase()} requests`}
-            </div>
-          )}
+
+          <Card>
+            {loading && entries.length === 0 && (
+              <EmptyState compact icon="schedule" title="Connecting to the daemon…" />
+            )}
+            {error && entries.length === 0 && !loading && (
+              <SectionError what="AI request history" onRetry={() => void fetchActivity()} />
+            )}
+            {!loading && !error && entries.length === 0 && (
+              <EmptyState
+                compact
+                icon="neurology"
+                title="No AI requests yet"
+                subtitle="Embedding, generation and rerank calls show up here while a project indexes or a semantic search runs."
+              />
+            )}
+            {filtered.map((e, i) => (
+              <RequestRow key={e.id} entry={e} isLast={i === filtered.length - 1} />
+            ))}
+            {(filter !== null || normalizedQuery !== '') &&
+              filtered.length === 0 &&
+              entries.length > 0 && (
+                <EmptyState
+                  compact
+                  icon="search"
+                  title="No matching requests"
+                  subtitle={`${entries.length.toLocaleString()} request${entries.length === 1 ? '' : 's'} are hidden by the current search and filter.`}
+                  action={
+                    <Button
+                      icon="close"
+                      onClick={() => {
+                        setFilter(null);
+                        setQuery('');
+                      }}
+                    >
+                      Clear filters and search
+                    </Button>
+                  }
+                />
+              )}
+          </Card>
+
         </div>
       </div>
-
-      {/* Pulse animation */}
-      <style>{`@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
     </div>
   );
 }

@@ -50,6 +50,7 @@ declare global {
       }>;
       restartApp: () => Promise<void>;
       openSettings: (section?: string) => Promise<{ ok: boolean }>;
+      openClients: () => Promise<{ ok: boolean }>;
       // Tab management (Windows custom tab bar)
       getPlatform: () => Promise<string>;
       focusTab: (tabId: string) => Promise<{ ok: boolean }>;

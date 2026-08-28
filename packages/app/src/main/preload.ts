@@ -79,6 +79,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restartApp: (): Promise<void> => ipcRenderer.invoke('restart-app'),
   openSettings: (section?: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('open-settings', section),
+  /* Client setup lives in the menu window; the Activity feed that tells you
+     nothing is connected lives in a project window. Without this verb its
+     empty state had no action to offer (TRA-294). */
+  openClients: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('open-clients'),
   // Tab management (Windows custom tab bar)
   getPlatform: (): Promise<string> => ipcRenderer.invoke('get-platform'),
   focusTab: (tabId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('focus-tab', tabId),
