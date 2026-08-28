@@ -1,18 +1,12 @@
 /**
- * P03 — register the `search_with_mode` MCP tool.
+ * Named-retriever dispatch backing `search`'s `retriever` param.
  *
- * This is an ADDITIVE surface. The existing `search` tool continues to
- * work bit-for-bit unchanged. `search_with_mode` is a new dispatcher
- * that routes a query to one of the named retrievers from the
- * `SearchModeRegistry`.
+ * Registers no MCP tool of its own: the `search_with_mode` tool this file
+ * used to expose was retired in 2.0 once `search { retriever }` covered it
+ * (TRA-240). Only the shared dispatch helper survives.
  */
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
 import type { ServerContext } from '../../server/types.js';
-import {
-  createDefaultSearchModeRegistry,
-  SEARCH_MODE_NAMES,
-} from '../../retrieval/modes/registry.js';
+import { createDefaultSearchModeRegistry } from '../../retrieval/modes/registry.js';
 import { runRetriever } from '../../retrieval/index.js';
 import type { LexicalResult } from '../../retrieval/retrievers/lexical-retriever.js';
 import type { SemanticResult } from '../../retrieval/retrievers/semantic-retriever.js';
@@ -36,11 +30,9 @@ export type NamedSearchModeResult =
   | { ok: false; mode: string; available: readonly string[] };
 
 /**
- * Shared dispatch for the named-retriever search modes (TRA-200 — used by
- * both `search_with_mode` and `search`'s `retriever` param, so the two
- * surfaces can never drift in behavior). Not a class/registry singleton —
- * cheap to construct per call, same as the original `search_with_mode`
- * handler did.
+ * Shared dispatch for the named-retriever search modes (TRA-200), reached
+ * through `search { retriever }`. Not a class/registry singleton — cheap to
+ * construct per call.
  */
 export async function runNamedSearchMode(
   ctx: ServerContext,
@@ -102,46 +94,4 @@ function findFilePath(ctx: ServerContext, fileId: number): string | null {
     | { path: string }
     | undefined;
   return row?.path ?? null;
-}
-
-const SEARCH_WITH_MODE_DESCRIPTION =
-  'Deprecated alias for `search` with `retriever` — use `search` instead (same mode names). Returns JSON: { mode, items, total }.';
-
-export function registerRetrievalTools(server: McpServer, ctx: ServerContext): void {
-  const { j } = ctx;
-
-  server.tool(
-    'search_with_mode',
-    SEARCH_WITH_MODE_DESCRIPTION,
-    {
-      query: z.string().min(1).max(500).describe('Search query'),
-      mode: z
-        .enum(SEARCH_MODE_NAMES)
-        .optional()
-        .describe('Named retriever — defaults to feeling_lucky'),
-      limit: z.number().int().min(1).max(200).optional().describe('Max results (default 20)'),
-    },
-    async ({ query, mode, limit }) => {
-      const result = await runNamedSearchMode(ctx, { query, mode: mode ?? 'feeling_lucky', limit });
-      if (!result.ok) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: j({ error: 'unknown_mode', mode: result.mode, available: result.available }),
-            },
-          ],
-          isError: true,
-        };
-      }
-      return {
-        content: [
-          {
-            type: 'text',
-            text: j({ mode: result.mode, items: result.items, total: result.total }),
-          },
-        ],
-      };
-    },
-  );
 }

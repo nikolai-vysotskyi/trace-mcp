@@ -1,5 +1,5 @@
 /**
- * Regression test for the `search_with_mode` MCP dispatcher.
+ * Regression test for the named-retriever dispatcher behind `search { retriever }`.
  *
  * The dispatcher in `src/tools/register/retrieval.ts` runs a registered
  * retriever via `runRetriever(retriever, input)`. Different retrievers
@@ -7,10 +7,10 @@
  * `GraphCompletionRetriever` reads `query`. If the dispatcher only
  * passes one shape, graph_completion silently returns zero items.
  *
- * This test installs a spy retriever via `vi.mock`, calls
- * `search_with_mode` through the registered MCP tool, and asserts the
- * input the retriever received contains BOTH `text` and `query`. That
- * guards against regression to the single-shape input.
+ * This test installs a spy retriever via `vi.mock`, calls the dispatcher
+ * through `search`'s `retriever` param (the `search_with_mode` tool this
+ * used to go through was retired in 2.0 — TRA-240), and asserts the input
+ * the retriever received contains BOTH `text` and `query`.
  */
 import { describe, it, expect, vi } from 'vitest';
 
@@ -53,10 +53,12 @@ vi.mock('../../src/retrieval/modes/registry.js', () => {
   };
 });
 
-describe('search_with_mode dispatcher input shape (regression)', () => {
+describe('named-retriever dispatcher input shape (regression)', () => {
   it('passes both `text` and `query` so retrievers with either contract work', async () => {
     const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-    const { registerRetrievalTools } = await import('../../src/tools/register/retrieval.js');
+    const { registerSearchTools } = await import(
+      '../../src/tools/register/navigation/search-tools.js'
+    );
     const { createTestStore } = await import('../test-utils.js');
 
     const store = createTestStore();
@@ -67,17 +69,21 @@ describe('search_with_mode dispatcher input shape (regression)', () => {
       projectRoot: '/tmp',
       embeddingService: null,
       vectorStore: null,
+      reranker: null,
       j: (v: unknown) => JSON.stringify(v),
-    } as unknown as Parameters<typeof registerRetrievalTools>[1];
+      jh: (_tool: string, v: unknown) => JSON.stringify(v),
+    } as unknown as Parameters<typeof registerSearchTools>[1];
 
-    registerRetrievalTools(server, ctx);
+    registerSearchTools(server, ctx);
 
     const tools = (server as unknown as { _registeredTools: Record<string, { handler: Function }> })
       ._registeredTools;
-    const tool = tools['search_with_mode'];
+    expect(tools['search_with_mode']).toBeUndefined();
+
+    const tool = tools['search'];
     expect(tool).toBeDefined();
 
-    await tool.handler({ query: 'hello world', mode: 'graph_completion' }, {});
+    await tool.handler({ query: 'hello world', retriever: 'graph_completion' }, {});
 
     expect(capture.last).toBeDefined();
     expect(capture.last?.text).toBe('hello world');

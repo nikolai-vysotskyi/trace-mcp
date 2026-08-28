@@ -64,7 +64,6 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     // analysis
     'get_dead_code',
     'remove_dead_code',
-    'get_dead_exports',
     'get_circular_imports',
     'get_complexity_report',
     'check_rename',
@@ -94,7 +93,7 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     // workspace
     'get_workspace_map',
     // session
-    'get_session_resume',
+    'get_wake_up',
     // Live decision-memory quartet (mirrors minimal preset)
     'remember_decision',
     'query_decisions',

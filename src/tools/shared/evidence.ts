@@ -244,9 +244,6 @@ const TOOL_SUGGESTIONS: Record<string, string> = {
   // ─── audit tools — empty result is GOOD news ─────────────────
   get_dead_code:
     'No dead code detected — all symbols have incoming references or are entry points.',
-  get_dead_exports: 'No dead exports found — every exported symbol is imported somewhere.',
-  get_untested_exports:
-    'No untested public exports — every exported symbol has matching test coverage.',
   get_untested_symbols: 'No untested symbols found — every function and class has test coverage.',
   get_circular_imports: 'No circular import chains found in the analyzed scope.',
 

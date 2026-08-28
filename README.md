@@ -33,7 +33,7 @@
 
 > AI systems don't scale because they recompute instead of reuse. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it already discovered. Token bills grow. Latency grows. Reasoning quality drops. The model isn't the bottleneck — the recomputation leak is.
 >
-> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 85 framework integrations across 80 languages, 170 tools.
+> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 85 framework integrations across 80 languages, 164 tools.
 >
 > **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP for code and knowledge — no second tool to plug in.
 
@@ -80,7 +80,7 @@ We started with code intelligence — the hardest, noisiest context most agents 
 
 2. **Code-linked decision memory** — when you record "chose PostgreSQL for JSONB support", it's linked to `src/db/connection.ts::Pool#class`. When someone runs `get_change_impact` on that symbol, they see the decision. MemPalace stores decisions as text; trace-mcp ties them to the dependency graph.
 
-3. **Cross-session intelligence** — past sessions are mined for decisions and indexed for search. When you start a new session, `get_wake_up` gives you orientation in ~300 tokens; `plan_turn` shows relevant past decisions for your task; `get_session_resume` carries over structural context from previous sessions.
+3. **Cross-session intelligence** — past sessions are mined for decisions and indexed for search. When you start a new session, `get_wake_up` gives you orientation in ~300 tokens; `plan_turn` shows relevant past decisions for your task; `get_wake_up { scope: "resume" }` carries over structural context from previous sessions.
 
 4. **Code and knowledge in one graph** — point trace-mcp at a markdown vault (Obsidian, Logseq, plain MD) and the same engine indexes it: each note becomes a `note:<basename>` symbol, headings become nested sections, `[[wikilinks]]` and `![[embeds]]` become graph edges, frontmatter and `#tags` ride on metadata. PageRank, Signal Fusion ranking, embeddings, and rename refactoring all apply unchanged. The agent does not learn a second tool — it learns one graph that happens to contain both your codebase and your second brain.
 
@@ -384,7 +384,7 @@ Decisions, tradeoffs, and discoveries from AI-agent conversations usually vanish
 
 - **Mine** — `mine_sessions` scans Claude Code / Claw Code JSONL logs and extracts decisions via pattern matching (0 LLM calls). Types: architecture, tech choice, bug root cause, tradeoff, convention.
 - **Link** — each decision attaches to a symbol or file; supports service-scoped decisions for subprojects.
-- **Surface** — decisions auto-enrich `get_change_impact`, `plan_turn`, and `get_session_resume`. Temporal validity (`valid_from`/`valid_until`) makes "what was true on 2025-01-15?" queries possible.
+- **Surface** — decisions auto-enrich `get_change_impact`, `plan_turn`, and `get_wake_up`. Temporal validity (`valid_from`/`valid_until`) makes "what was true on 2025-01-15?" queries possible.
 - **Search** — `query_decisions` (FTS5 + filters) for decisions; `search_sessions` for raw conversation content across all past sessions.
 
 ```bash
@@ -501,7 +501,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
          MCP server (stdio or HTTP/SSE)
-         170 tools · 9 resources
+         164 tools · 9 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
@@ -517,7 +517,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 | Document | Description |
 |---|---|
 | [Supported frameworks](docs/supported-frameworks.md) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
-| [Tools reference](docs/tools-reference.md) | All 170 MCP tools with descriptions and usage examples |
+| [Tools reference](docs/tools-reference.md) | All 164 MCP tools with descriptions and usage examples |
 | [Configuration](docs/configuration.md) | Config options, AI setup, environment variables, security settings |
 | [Architecture](docs/architecture.md) | How indexing works, plugin system, project structure, tech stack |
 | [Decision memory](docs/decision-memory.md) | Decision knowledge graph, session mining, cross-session search, wake-up context |

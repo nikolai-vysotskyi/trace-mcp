@@ -6,7 +6,7 @@
 
 # Tools reference
 
-trace-mcp exposes 170 MCP tools and 9 resources.
+trace-mcp exposes 164 MCP tools and 9 resources.
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
 
@@ -72,9 +72,7 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | `get_implementations` | Find all classes that implement or extend a given interface/base class |
 | `get_type_hierarchy` | Walk TypeScript class/interface hierarchy: ancestors and descendants |
 | `get_api_surface` | List all exported symbols (public API) of a file or matching files |
-| `get_dead_exports` | Find exported symbols never imported by any other file (dead code candidates) |
-| `get_untested_exports` | Find exported public symbols with no matching test file (test coverage gaps) |
-| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). More thorough than `get_untested_exports` |
+| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). Pass `scope: "exports_only"` for the fast exports-only scan |
 | `self_audit` | One-shot project health: dead exports, untested code, dependency hotspots, heritage metrics |
 
 ## Quality & security
@@ -139,7 +137,7 @@ See [Decision memory](decision-memory.md) for full documentation.
 | `search_sessions` | FTS5 search across all past session conversations |
 | `get_wake_up` | Compact orientation (~300 tokens): project + active decisions + stats. Auto-mines on first call |
 
-Decisions auto-enrich code intelligence: `get_change_impact` shows `linked_decisions`, `plan_turn` shows `related_decisions`, `get_session_resume` shows `active_decisions`.
+Decisions auto-enrich code intelligence: `get_change_impact` shows `linked_decisions`, `plan_turn` shows `related_decisions`, `get_wake_up` shows `active_decisions`.
 
 ## Session Analytics
 
@@ -224,7 +222,7 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 | "What's the DB schema?" | `get_schema` — reconstructed from migrations, no DB needed |
 | "Trace a request end-to-end" | `get_request_flow("/api/users", "GET")` — full chain |
 | "What NestJS modules does this depend on?" | `get_module_graph` — full dependency tree |
-| "Find untested code" | `get_untested_symbols` — deep analysis with "unreached"/"imported_not_called" classification. Or lighter: `get_untested_exports` + `self_audit` |
+| "Find untested code" | `get_untested_symbols` — deep analysis with "unreached"/"imported_not_called" classification. Or lighter: `get_untested_symbols { scope: "exports_only" }` + `self_audit` |
 | "Explain this complex service" | `explain_symbol` — AI-generated explanation with context |
 | "What repos call this endpoint?" | `get_subproject_clients("/api/users")` — all client calls across repos |
 | "Will this API change break anything?" | `get_subproject_impact` — cross-repo impact with symbol resolution |
@@ -276,7 +274,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 | Capability | trace-mcp | Kage | MemPalace | claude-mem | mem0 / OpenMemory | engram | ConPort |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **GitHub stars** | 100 | new (2026) | ~56.7K | 91.8K | ~53K | 2.7K | 761 |
-| Cross-session context carryover | ✅ `get_session_resume` + decisions | ✅ git-committed packets | ✅ wings/rooms | ✅ core focus | ✅ multi-level (User/Session/Agent) | ✅ branch-scoped handoffs | ✅ |
+| Cross-session context carryover | ✅ `get_wake_up { scope: "resume" }` + decisions | ✅ git-committed packets | ✅ wings/rooms | ✅ core focus | ✅ multi-level (User/Session/Agent) | ✅ branch-scoped handoffs | ✅ |
 | Cross-session content search | ✅ `search_sessions` FTS5 | partial (JSON packets) | ✅ vector+keyword+temporal (+optional rerank), 96.6% R@5 LongMemEval | ✅ SQLite + Chroma hybrid | ✅ hierarchical, ≤7K tok/retrieval (94.4 LongMemEval) | ✅ local ONNX embeddings | ✅ vector semantic |
 | Decision knowledge graph | ✅ temporal, code-linked | ✅ temporal, code-linked | ✅ temporal + "Closets" storage | ❌ | ✅ temporal + state-key supersession | ❌ | ✅ project-level |
 | Code-graph-aware memory | ✅ decisions → symbols & files | ✅ **+ citation verification (staleness check)** | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only |
@@ -285,7 +283,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 | Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
 | Service/subproject scoping | ✅ decisions per service | ❌ | ✅ wings per project | ❌ | ❌ | ✅ per branch | ✅ per workspace |
 | Published retrieval benchmark | ❌ | ❌ | ✅ LongMemEval / LoCoMo / MemBench | ❌ | ✅ LoCoMo / LongMemEval / BEAM | ❌ | ❌ |
-| Code intelligence included | ✅ 170 tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Code intelligence included | ✅ 164 tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Works as standalone memory | ❌ code-focused | ✅ git-native, code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
 | Written in | TypeScript | — | Python | TypeScript | TS + Python | Go / Rust | Python |
 
@@ -322,7 +320,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | 80 | 40+ (via LSP) | 23 + Jupyter | 158 | 19 | 32 | 28 |
 | Framework integrations | 85 | ❌ | ❌ (Python entry points only) | ❌ | ❌ | ❌ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✅ | ❌ | ❌ | ✅ cross-service HTTP | ✅ polyglot dep graph | ❌ | ✅ PHP↔TS API drift |
-| MCP tools | 170 | ~55 | ~28 | 14 | 21 | 90 | 224 |
+| MCP tools | 164 | ~55 | ~28 | 14 | 21 | 90 | 224 |
 | Session memory | ✅ | ✅ (manual notes) | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✅ | ❌ | ✅ multi-repo daemon | ✅ cross-service | ✅ cross-project search | ❌ | ❌ |
@@ -797,7 +795,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"standard"` | Tool preset: `standard` (~50 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (~16 tools), `review`, `architecture`, or `full` (all ~170 tools, opt-in) |
+| `tools.preset` | `"standard"` | Tool preset: `standard` (~50 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (~16 tools), `review`, `architecture`, or `full` (all ~164 tools, opt-in) |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -936,7 +934,7 @@ The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported
 Every MCP session is still attached to exactly one project (see [stdio vs HTTP](#stdio-vs-http--choosing-your-setup)) — but two tools let an agent reach across to any OTHER project already registered with trace-mcp, without opening a second MCP connection:
 
 - **`list_projects`** — lists every project in `~/.trace-mcp/registry.json` (root, name, type, last-indexed timestamp), plus known subprojects when topology is enabled for the current session.
-- **`call_project_tool { project, tool, args }`** — runs any of the ~170 normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
+- **`call_project_tool { project, tool, args }`** — runs any of the ~164 normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
 
 This is read-only relay wiring — it never starts indexing or a file watcher for the target project. In the HTTP daemon, a target project already warm in memory is served directly; a cold one is opened on demand via the same read-mostly path used for on-demand subprojects. Under `stdio` (no daemon), the target project's existing index database is opened directly; a project that has never been indexed cannot be relayed to.
 
@@ -1218,7 +1216,7 @@ The **decision memory database** (`decisions.db`) is also shared across all proj
 - **Session chunks** — chunked conversation content from AI session logs, FTS5-indexed for cross-session search
 - **Mined sessions tracker** — prevents re-processing already-mined session files
 
-Decisions are auto-enriched into code intelligence tool responses (`get_change_impact`, `plan_turn`, `get_session_resume`) via the enrichment layer in `src/memory/enrichment.ts`.
+Decisions are auto-enriched into code intelligence tool responses (`get_change_impact`, `plan_turn`, `get_wake_up`) via the enrichment layer in `src/memory/enrichment.ts`.
 
 ---
 
@@ -1358,7 +1356,7 @@ src/
 │   ├── benchmark.ts        #   Synthetic benchmark (5 scenarios)
 │   ├── tech-detector.ts    #   Manifest parser + coverage assessment
 │   └── known-packages.ts   #   Catalog of ~200 known packages
-├── tools/                  # 170 MCP tool implementations
+├── tools/                  # 164 MCP tool implementations
 ├── scoring/                # PageRank, BM25, hybrid scoring, structured assembly
 ├── plugin-api/             # Plugin registry, loader, executor, test harness
 ├── init/                   # Setup & detection (Claude Code, Claw Code, Cursor, Windsurf, Continue)
@@ -2012,8 +2010,8 @@ descending.
 | get_complexity_report limit=50 | 50 | 3057 | 2075 | **+32.1%** | table | flat scalar rows |
 | get_refactor_candidates limit=40 | 40 | 1932 | 1387 | **+28.2%** | table | flat scalar rows |
 | predict_bugs limit=40 | 40 | 8877 | 6965 | **+21.5%** | table | risky-control beat the prediction — see Surprises |
-| get_dead_exports (project-wide) | 404 | 17581 | 13857 | **+21.2%** | table | flat scalar rows |
-| get_untested_exports (project-wide) | 464 | 25964 | 20451 | **+21.2%** | table | flat scalar rows |
+| get_dead_code mode=exports_only (project-wide) | 404 | 17581 | 13857 | **+21.2%** | table | flat scalar rows |
+| get_untested_symbols scope=exports_only (project-wide) | 464 | 25964 | 20451 | **+21.2%** | table | flat scalar rows |
 | list_pins (2 seeded) | 2 | 88 | 71 | +19.3% | table | tiny payload — fixed preamble dominates |
 | get_untested_symbols max_results=80 | 80 | 14280 | 13098 | +8.3% | table | signature strings dilute the win |
 | get_tests_for output-format.ts | 1 | 44 | 44 | 0% | table | single-row payload — no amortization |
@@ -2040,8 +2038,8 @@ cutoff** we established for the original five keepers:
 | `get_complexity_report` | +32.1% | table |
 | `get_refactor_candidates` | +28.2% | table |
 | `predict_bugs` | +21.5% | table |
-| `get_dead_exports` | +21.2% | table |
-| `get_untested_exports` | +21.2% | table |
+| `get_dead_code` (`mode: exports_only`) | +21.2% | table |
+| `get_untested_symbols` (`scope: exports_only`) | +21.2% | table |
 
 **Do not wire** these — savings below the +15% cutoff or list-mode regression:
 
@@ -2138,7 +2136,7 @@ Each of these is linked to the symbol or file it's about, so the next agent who 
               │  Enrichment Layer                         │
               │  get_change_impact  → linked_decisions    │
               │  plan_turn          → related_decisions   │
-              │  get_session_resume → active_decisions    │
+              │  get_wake_up(resume) → active_decisions   │
               │  get_wake_up        → orientation context │
               └──────────────────────────────────────────┘
 ```
@@ -2218,7 +2216,7 @@ The implementation lives in [`src/memory/decision-confidence.ts`](../src/memory/
 |---|---|
 | `search_sessions` | Full-text search across all past session conversations. "What did we discuss about auth last month?" |
 | `get_wake_up` | Compact orientation (~300 tokens) at session start: project identity + active decisions + memory stats. Auto-mines on first call if the store is empty. |
-| `get_session_resume` | Cross-session context carryover: focus files, key searches, and dead-end queries from recent past sessions, alongside active decisions. |
+| `get_wake_up { scope: "resume" }` | Cross-session context carryover: focus files, key searches, and dead-end queries from recent past sessions, alongside active decisions. |
 
 ## Code linkage
 

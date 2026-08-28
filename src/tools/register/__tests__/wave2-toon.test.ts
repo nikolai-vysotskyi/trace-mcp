@@ -7,7 +7,7 @@
  *
  * Tools covered:
  *   analysis.ts  — get_pagerank, get_coupling, get_refactor_candidates,
- *                  get_dead_exports, get_untested_exports
+ *                  get_untested_symbols (exports_only)
  *   git.ts       — get_risk_hotspots, get_complexity_report, get_git_churn
  *   session.ts   — analyze_perf
  *
@@ -323,35 +323,18 @@ describe('wave2 toon — analysis.ts tools', () => {
     });
   });
 
-  describe('get_dead_exports', () => {
+  describe('get_untested_symbols { scope: "exports_only" }', () => {
     it('toon output round-trips losslessly to the json output', async () => {
-      const tool = findTool(captured, 'get_dead_exports');
-      const jsonRes = await tool.handler({}, {});
-      const toonRes = await tool.handler({ output_format: 'toon' }, {});
+      const tool = findTool(captured, 'get_untested_symbols');
+      const jsonRes = await tool.handler({ scope: 'exports_only' }, {});
+      const toonRes = await tool.handler({ scope: 'exports_only', output_format: 'toon' }, {});
       const jsonPayload = JSON.parse(jsonRes.content[0].text);
       const decoded = toonDecode(toonRes.content[0].text);
       expect(looselyEqual(decoded, jsonPayload)).toBe(true);
     });
     it('markdown output falls back to valid JSON', async () => {
-      const tool = findTool(captured, 'get_dead_exports');
-      const res = await tool.handler({ output_format: 'markdown' }, {});
-      expect(res.content[0].text).toBeTruthy();
-      expect(() => JSON.parse(res.content[0].text)).not.toThrow();
-    });
-  });
-
-  describe('get_untested_exports', () => {
-    it('toon output round-trips losslessly to the json output', async () => {
-      const tool = findTool(captured, 'get_untested_exports');
-      const jsonRes = await tool.handler({}, {});
-      const toonRes = await tool.handler({ output_format: 'toon' }, {});
-      const jsonPayload = JSON.parse(jsonRes.content[0].text);
-      const decoded = toonDecode(toonRes.content[0].text);
-      expect(looselyEqual(decoded, jsonPayload)).toBe(true);
-    });
-    it('markdown output falls back to valid JSON', async () => {
-      const tool = findTool(captured, 'get_untested_exports');
-      const res = await tool.handler({ output_format: 'markdown' }, {});
+      const tool = findTool(captured, 'get_untested_symbols');
+      const res = await tool.handler({ scope: 'exports_only', output_format: 'markdown' }, {});
       expect(res.content[0].text).toBeTruthy();
       expect(() => JSON.parse(res.content[0].text)).not.toThrow();
     });

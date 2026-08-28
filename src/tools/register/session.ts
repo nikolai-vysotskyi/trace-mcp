@@ -661,7 +661,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
 
   server.tool(
     'get_session_snapshot',
-    'Compact session snapshot (~200 tokens) for context recovery after compaction. Returns focus files (by read count), edited files, key searches, and dead ends. Also used by the PreCompact hook to preserve session orientation automatically. Read-only. For full journal use get_session_journal; for cross-session context use get_session_resume. Returns JSON: { focusFiles, editedFiles, keySearches, deadEnds }.',
+    'Compact session snapshot (~200 tokens) for context recovery after compaction. Returns focus files (by read count), edited files, key searches, and dead ends. Also used by the PreCompact hook to preserve session orientation automatically. Read-only. For full journal use get_session_journal; for cross-session context use get_wake_up with scope: "resume". Returns JSON: { focusFiles, editedFiles, keySearches, deadEnds }.',
     {
       max_files: z
         .number()
@@ -697,33 +697,6 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         includeNegativeEvidence: include_negative_evidence,
       });
       return { content: [{ type: 'text', text: j(snapshot) }] };
-    },
-  );
-
-  server.tool(
-    'get_session_resume',
-    "Deprecated alias for `get_wake_up` with `scope: 'sessions'` — use that instead. Returns JSON: { sessions, active_decisions }.",
-    {
-      max_sessions: z
-        .number()
-        .int()
-        .min(1)
-        .max(20)
-        .optional()
-        .describe('Number of past sessions to include (default: 5)'),
-    },
-    async ({ max_sessions }) => {
-      const resume = getSessionResume(projectRoot, max_sessions ?? 5);
-      // Enrich with top active decisions (code-aware memory)
-      const payload: Record<string, unknown> = { ...resume };
-      const ds = ctx.decisionStore;
-      if (ds) {
-        const topDecisions = decisionsForResume(ds, projectRoot, 5);
-        if (topDecisions.length > 0) {
-          payload.active_decisions = topDecisions;
-        }
-      }
-      return { content: [{ type: 'text', text: jh('get_session_resume', payload) }] };
     },
   );
 

@@ -373,7 +373,7 @@ const hintGenerators: Record<string, HintGenerator> = {
     const warnings = arr(dig(r, 'warnings'));
     if (warnings.some((w) => str(w).includes('re-export'))) {
       hints.push({
-        tool: 'get_dead_exports',
+        tool: 'get_dead_code',
         why: 'Check if old file has orphaned exports after the move',
       });
     }

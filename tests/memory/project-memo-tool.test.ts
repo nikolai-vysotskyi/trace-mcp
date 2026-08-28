@@ -1,5 +1,7 @@
 /**
- * Integration test for the regenerate_project_memo / get_project_memo MCP
+ * Integration test for the regenerate_project_memo MCP tool and the memo
+ * read path, which since 2.0 is get_wake_up { scope: 'project' } — the
+ * dedicated get_project_memo alias was retired (TRA-240). MCP
  * tools. Captures the registered handlers from a fake McpServer and exercises
  * them directly with a stubbed aiProvider.
  */
@@ -103,7 +105,7 @@ Tests on every PR.
 
 Refresh-token rollout.`;
 
-describe('regenerate_project_memo / get_project_memo', () => {
+describe("regenerate_project_memo / get_wake_up { scope: 'project' }", () => {
   let store: DecisionStore;
   let dbPath: string;
   const projectRoot = '/projects/memo-tool-test';
@@ -222,13 +224,13 @@ describe('regenerate_project_memo / get_project_memo', () => {
     });
   });
 
-  describe('get_project_memo', () => {
+  describe("get_wake_up { scope: 'project' }", () => {
     it('returns memo=null when no memo exists', async () => {
       const { server, tools } = buildFakeServer();
       const ctx = buildCtx(store, projectRoot, null, 1);
       registerMemoryTools(server as never, ctx);
-      const tool = tools.get('get_project_memo')!;
-      const res = await tool.handler({});
+      const tool = tools.get('get_wake_up')!;
+      const res = await tool.handler({ scope: 'project' });
       const body = parseToolJson(res);
       expect(body.memo).toBeNull();
     });
@@ -244,8 +246,8 @@ describe('regenerate_project_memo / get_project_memo', () => {
       const { server, tools } = buildFakeServer();
       const ctx = buildCtx(store, projectRoot, null, 1);
       registerMemoryTools(server as never, ctx);
-      const tool = tools.get('get_project_memo')!;
-      const res = await tool.handler({});
+      const tool = tools.get('get_wake_up')!;
+      const res = await tool.handler({ scope: 'project' });
       const body = parseToolJson(res);
       const memo = body.memo as { memo_md: string; version: number };
       expect(memo.memo_md).toBe('hello world');
@@ -265,8 +267,8 @@ describe('regenerate_project_memo / get_project_memo', () => {
       const { server, tools } = buildFakeServer();
       const ctx = buildCtx(store, projectRoot, null, 1);
       registerMemoryTools(server as never, ctx);
-      const tool = tools.get('get_project_memo')!;
-      const res = await tool.handler({ include_history: true });
+      const tool = tools.get('get_wake_up')!;
+      const res = await tool.handler({ scope: 'project', include_history: true });
       const body = parseToolJson(res);
       const history = body.history as Array<{ version: number }>;
       expect(history).toHaveLength(3);

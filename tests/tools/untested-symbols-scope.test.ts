@@ -1,7 +1,7 @@
 /**
  * TRA-203 — `get_untested_symbols`'s `scope: "exports_only"` must dispatch
- * to the exact same `getUntestedExports()` call `get_untested_exports`
- * uses, and `get_untested_exports` (the permanent alias) must stay
+ * to the exact same `getUntestedExports()` call the retired
+ * `get_untested_exports` alias used (TRA-240), and must stay
  * byte-for-byte unchanged. `get_tests_for` is out of scope for this change
  * entirely (different file, untouched) — not exercised here.
  */
@@ -73,12 +73,17 @@ describe('get_untested_symbols { scope: "exports_only" } (TRA-203)', () => {
     tools = getRegisteredTools(server);
   });
 
-  it('get_untested_symbols{scope: "exports_only"} matches get_untested_exports', async () => {
-    const viaUntestedSymbols = parseText(
+  it('get_untested_symbols{scope: "exports_only"} emits the retired alias response shape', async () => {
+    const result = parseText(
       await tools.get_untested_symbols.handler({ scope: 'exports_only' }, {}),
-    );
-    const viaUntestedExports = parseText(await tools.get_untested_exports.handler({}, {}));
-    expect(viaUntestedSymbols).toEqual(viaUntestedExports);
+    ) as Record<string, unknown>;
+    expect(result).toHaveProperty('untested');
+    expect(result).toHaveProperty('total_exports');
+    expect(result).toHaveProperty('total_untested');
+  });
+
+  it('the retired get_untested_exports alias is no longer registered (TRA-240)', () => {
+    expect(tools.get_untested_exports).toBeUndefined();
   });
 
   it('regression: get_untested_symbols default scope (all_symbols) shape is unchanged', async () => {
@@ -93,15 +98,5 @@ describe('get_untested_symbols { scope: "exports_only" } (TRA-203)', () => {
     if (untested.length > 0) {
       expect(untested[0]).toHaveProperty('level');
     }
-  });
-
-  it('regression: get_untested_exports output shape is unchanged', async () => {
-    const result = parseText(await tools.get_untested_exports.handler({}, {})) as Record<
-      string,
-      unknown
-    >;
-    expect(result).toHaveProperty('untested');
-    expect(result).toHaveProperty('total_exports');
-    expect(result).toHaveProperty('total_untested');
   });
 });
