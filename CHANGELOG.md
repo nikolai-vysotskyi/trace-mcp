@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [2.0.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.0...v2.0.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **app:** freeze Project and Actions columns in the workspace table (TRA-265) ([#429](https://github.com/nikolai-vysotskyi/trace-mcp/issues/429)) ([3cde321](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3cde321fd84d0d1087cc7b5512f0d0a44c5e6d3f))
+* **daemon:** bound post-update forced reindex attempts (TRA-274) ([#439](https://github.com/nikolai-vysotskyi/trace-mcp/issues/439)) ([a9669a4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a9669a43a5165d5b72bf8bf49059a89d6e09e8c3))
+* **docs:** our own surfaces said 85 framework integrations, the registry has 87 (TRA-272) ([#440](https://github.com/nikolai-vysotskyi/trace-mcp/issues/440)) ([30d4de7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/30d4de7a74bcf73de0adbe5fbfcfe4870b48cee8))
+* **docs:** reconcile the README language count and guard every occurrence (TRA-272) ([#437](https://github.com/nikolai-vysotskyi/trace-mcp/issues/437)) ([cbd2aa5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cbd2aa59d2a47e3257af02504c49cad88f5ef5a1))
+
+
+### Tests
+
+* **docs:** count MCP tools recursively, not with a top-level glob (TRA-268) ([#433](https://github.com/nikolai-vysotskyi/trace-mcp/issues/433)) ([38751d0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/38751d0e82dd3f8e0db895bef928c8a8d52e53a6))
+
+
+### CI/CD
+
+* authenticate release-please with RELEASE_PLEASE_TOKEN (TRA-171) ([#436](https://github.com/nikolai-vysotskyi/trace-mcp/issues/436)) ([7b0fd3b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7b0fd3b469d6e74c2bd731844fe71ffce6a47508))
+
 ## [2.0.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.51.1...v2.0.0) (2026-08-28)
 
 
