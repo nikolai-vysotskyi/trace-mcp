@@ -48,6 +48,15 @@
 .lx-btn:disabled {
   opacity: 0.4;
 }
+/* A disabled button whose LABEL is the status readout ("Indexing…", "Daemon
+   unreachable") is not an inert control — dimming it to 0.4 put the only
+   progress text on the Project Overview toolbar at 2.3:1, measured. `is-status`
+   keeps it unpressable and keeps the sentence readable. The hairline is an
+   inset box-shadow on --separator, so it stays a hairline at full opacity. */
+.lx-btn.is-status:disabled {
+  opacity: 1;
+  color: var(--label-secondary);
+}
 
 /* sizes ------------------------------------------------------------------- */
 .lx-btn.sz-small {
@@ -483,6 +492,36 @@ input[type='checkbox']:disabled {
 input[type='checkbox']:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ============================================================================
+   HIT TARGETS for the 20px tier (TRA-293)
+
+   `small` buttons and segmented-control segments are painted 20px tall on
+   purpose — that is the macOS small-control size. The HIT TARGET still has to
+   be 24px, so an overflowing pseudo-element grows the clickable box without
+   moving a single painted pixel. Measured before this on the running Project
+   Overview: five controls reported 20px against a 24px floor.
+   ============================================================================ */
+.lx-btn.sz-small,
+.lx-seg .lx-seg-item {
+  position: relative;
+}
+.lx-btn.sz-small::after {
+  /* All four sides: a small ICON button is painted 20x20, so it is under the
+     floor on both axes. Text buttons are already wider than 24px; the extra
+     2px each side is slack inside the surrounding gap, not an overlap. */
+  content: '';
+  position: absolute;
+  inset: -2px;
+}
+.lx-seg .lx-seg-item::after {
+  /* Vertical only. A segment already clears 24px wide (min-width), and the
+     2px gap between segments is not wide enough to share. -2px vertical
+     exactly fills the 24px track over its 2px padding. */
+  content: '';
+  position: absolute;
+  inset: -2px 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

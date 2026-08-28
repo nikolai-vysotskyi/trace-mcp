@@ -14,9 +14,24 @@
    control in one click. <ConfirmPopover> is the paired destructive-action
    confirmation; it deliberately KEEPS a click-eating scrim (see comment there). */
 
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { FloatingLayer } from '../FloatingLayer';
 import { Icon } from '../icons';
+
+/** Anchors a Menu under the button held in `ref`, or at an explicit point.
+    Lives here rather than next to one surface because every surface with an
+    overflow or row menu needs the same three lines. */
+export function useMenuAnchor() {
+  const ref = useRef<HTMLButtonElement | null>(null);
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+  const open = (): void => {
+    const r = ref.current?.getBoundingClientRect();
+    setAt(r ? { x: r.right, y: r.bottom + 4 } : { x: 0, y: 52 });
+  };
+  /** For menus opened from a row button rather than a fixed toolbar anchor. */
+  const openAt = (point: { x: number; y: number }): void => setAt(point);
+  return { ref, at, open, openAt, close: () => setAt(null) };
+}
 
 export interface MenuProps {
   x: number;

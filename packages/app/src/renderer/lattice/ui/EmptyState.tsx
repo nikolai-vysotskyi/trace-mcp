@@ -19,6 +19,12 @@ export interface EmptyStateProps {
   subtitle?: ReactNode;
   /** Call-to-action (e.g. <Button variant="primary"/>). */
   action?: ReactNode;
+  /**
+   * Inline variant for an empty section INSIDE a card, rather than an empty
+   * pane. The hero proportions (46px glyph, 17px title, 40px padding) build a
+   * ~186px block around one sentence, which dwarfs the section it sits in.
+   */
+  compact?: boolean;
   className?: string;
   /** Plain content (used when none of the structured props are given). */
   children?: ReactNode;
@@ -26,15 +32,18 @@ export interface EmptyStateProps {
 
 export function EmptyState({
   icon,
-  iconSize = 40,
+  iconSize,
   glyph,
   title,
   subtitle,
   action,
+  compact = false,
   className,
   children,
 }: EmptyStateProps): ReactNode {
-  const cls = 'ws-center-empty' + (className ? ' ' + className : '');
+  iconSize ??= compact ? 20 : 40;
+  const cls =
+    'ws-center-empty' + (compact ? ' compact' : '') + (className ? ' ' + className : '');
   if (children != null && !title && !subtitle && !icon && !glyph && !action) {
     return <div className={cls}>{children}</div>;
   }
