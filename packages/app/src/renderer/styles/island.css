@@ -652,6 +652,11 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   cursor: default; transition: background .12s, border-color .12s, color .12s; white-space: nowrap; flex: none;
 }
 .ws-chipbtn:hover, .ws-textbtn:hover { background: var(--row-hover); }
+/* A disabled control must look disabled — otherwise "Reindex project" invites
+   a click it will not honour while indexing. */
+.ws-chipbtn:disabled, .ws-textbtn:disabled, .ws-primary:disabled, .ws-mini:disabled {
+  opacity: 0.4; pointer-events: none;
+}
 .ws-chipbtn.icon { width: 30px; padding: 0; justify-content: center; font-size: 15px; }
 .ws-chipbtn.toggle.is-on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
 .ws-textbtn { border-color: transparent; color: var(--text-2); padding: 0 8px; }

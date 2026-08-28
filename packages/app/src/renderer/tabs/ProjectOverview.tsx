@@ -68,8 +68,7 @@ function buildIssueUrl(gap: CoverageGap | UnknownPackage): string {
 /** Status is never signalled by colour alone — every tone carries a glyph too. */
 function coverageTone(pct: number): { tone: Tone; icon: string } {
   if (pct >= 100) return { tone: 'green', icon: 'check' };
-  if (pct >= 80) return { tone: 'gold', icon: 'radio' };
-  return { tone: 'red', icon: 'bug_report' };
+  return { tone: pct >= 80 ? 'gold' : 'red', icon: 'bolt' };
 }
 
 const PRIORITY_TONE: Record<string, Tone> = {
@@ -456,8 +455,9 @@ export function ProjectOverview({
 
         {/* ── Sections ─────────────────────────────────────────────────── */}
         <div className="grid gap-5 pt-5 pb-4 lg:grid-cols-2 items-start">
-          {/* Index */}
-          {stats && (
+          {/* Index — the daemon answers 200 with a partial body for a project it
+              has never indexed, so presence of `stats` is not enough. */}
+          {stats?.files != null && (
             <Section title="Index">
               <Card>
                 <Row label="Status" value={statusLabel} />
@@ -477,34 +477,35 @@ export function ProjectOverview({
               title="Coverage"
               accessory={
                 <Badge tone={coverageTone(coverage.coverage.coverage_pct).tone} className="sz-11">
-                  <Icon name={coverageTone(coverage.coverage.coverage_pct).icon} size={11} />
+                  <Icon name={coverageTone(coverage.coverage.coverage_pct).icon} size={12} />
                   <span className="tabular-nums">{coverage.coverage.coverage_pct}%</span>
                 </Badge>
               }
             >
               <Card>
                 <div className="px-3.5 py-3" style={{ borderBottom: '0.5px solid var(--sep)' }}>
+                  <div className="text-[13px] mb-2" style={{ color: 'var(--text-1)' }}>
+                    <span className="tabular-nums">{coverage.coverage.covered}</span> of{' '}
+                    <span className="tabular-nums">{coverage.coverage.total_significant}</span>{' '}
+                    significant dependencies covered
+                  </div>
                   <div
                     role="progressbar"
                     aria-label="Dependency coverage"
                     aria-valuenow={coverage.coverage.coverage_pct}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    className="h-[2px] overflow-hidden"
-                    style={{ background: 'var(--row-hover)', borderRadius: 1 }}
+                    className="h-1 overflow-hidden"
+                    style={{ background: 'var(--row-hover)', borderRadius: 2 }}
                   >
                     <div
                       className="h-full transition-[width] duration-500"
                       style={{
                         width: `${coverage.coverage.coverage_pct}%`,
+                        borderRadius: 2,
                         background: `var(--status-${coverageTone(coverage.coverage.coverage_pct).tone}-hue)`,
                       }}
                     />
-                  </div>
-                  <div className="text-[12px] mt-2" style={{ color: 'var(--text-1)' }}>
-                    <span className="tabular-nums">{coverage.coverage.covered}</span> of{' '}
-                    <span className="tabular-nums">{coverage.coverage.total_significant}</span>{' '}
-                    significant dependencies covered
                   </div>
                 </div>
 
@@ -565,7 +566,7 @@ export function ProjectOverview({
               accessory={
                 smells && (
                   <Badge tone={smells.total === 0 ? 'green' : smells.total > 20 ? 'red' : 'gold'} className="sz-11">
-                    <Icon name={smells.total === 0 ? 'check' : 'bug_report'} size={11} />
+                    <Icon name={smells.total === 0 ? 'check' : 'bolt'} size={12} />
                     <span className="tabular-nums">
                       {smells.total} finding{smells.total === 1 ? '' : 's'}
                     </span>
@@ -617,9 +618,6 @@ export function ProjectOverview({
                       className="relative flex items-start gap-2 px-3.5 py-2 w-full text-left hover:bg-[var(--row-hover)]"
                       style={{ cursor: 'default' }}
                     >
-                      <Badge tone={PRIORITY_TONE[f.priority] ?? 'neutral'} className="sz-11 mt-[1px]">
-                        {f.priority}
-                      </Badge>
                       <span className="min-w-0 flex-1" style={{ display: 'block' }}>
                         <span
                           className="text-[12px] truncate"
@@ -639,6 +637,9 @@ export function ProjectOverview({
                           {f.tag ? ` · ${f.tag}` : ''}
                         </span>
                       </span>
+                      <Badge tone={PRIORITY_TONE[f.priority] ?? 'neutral'} className="sz-11 mt-[1px] shrink-0">
+                        {f.priority}
+                      </Badge>
                       {!isLast && <Separator />}
                     </button>
                   );
@@ -776,7 +777,11 @@ function GapRow({
   return (
     <div className="relative flex items-center justify-between gap-2 px-3.5 py-2">
       <div className="flex items-center gap-2 min-w-0">
-        <Badge tone={PRIORITY_TONE[priority] ?? 'neutral'} className="sz-11">{priority}</Badge>
+        <span className="shrink-0" style={{ width: 64 }}>
+          <Badge tone={PRIORITY_TONE[priority] ?? 'neutral'} className="sz-11">
+            {priority}
+          </Badge>
+        </span>
         <span className="text-[13px] truncate" style={{ color: 'var(--text-1)' }}>
           {name}
         </span>
