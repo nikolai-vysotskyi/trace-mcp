@@ -7,9 +7,10 @@
  *  - per-row Open / Re-index / Remove actions (Remove has two-step confirm)
  *  - dims Re-index/Remove when `canMutate === false` or `inDaemon === false`
  *
- * Data flows in via props; sorting is performed locally using
- * `compareViewModels` from `./types.ts`. The component does not call
- * `useWorkspaceProjects` — the parent shell owns that state.
+ * Data flows in via props already sorted — the parent shell owns sort state
+ * and applies it once so every view shows the same order. `sortKey`/`sortDir`
+ * are consumed only to render the header indicator. The component does not
+ * call `useWorkspaceProjects`.
  */
 import { type MouseEvent, useEffect, useRef, useState } from 'react';
 import { StatusDot } from '../lattice/ui';
@@ -19,7 +20,6 @@ import {
   type SortDir,
   type SortKey,
   type TechDebtGrade,
-  compareViewModels,
   statusLabel,
   statusToDot,
 } from './types';
@@ -357,7 +357,6 @@ export function WorkspaceTableView({
   onRemove,
   canMutate,
 }: WorkspaceTableViewProps) {
-  const sorted = [...projects].sort((a, b) => compareViewModels(a, b, sortKey, sortDir));
   const thProps = { current: sortKey, dir: sortDir, onSort };
 
   return (
@@ -410,7 +409,7 @@ export function WorkspaceTableView({
           </tr>
         </thead>
         <tbody>
-          {sorted.map((p) => (
+          {projects.map((p) => (
             <Row
               key={p.root}
               project={p}
