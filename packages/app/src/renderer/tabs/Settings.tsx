@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OllamaPanel } from '../components/OllamaPanel';
-import { StatusDot } from '../lattice/ui';
+import { PopUpButton, StatusDot } from '../lattice/ui';
 import { useDaemon } from '../hooks/useDaemon';
+import { type Appearance, APPEARANCE_OPTIONS } from '../theme.js';
 import {
   CONFIG_SCHEMA,
   computeDiff,
@@ -1670,6 +1671,43 @@ function BottomBar({
   );
 }
 
+/* Appearance — an app preference, not a daemon setting, so it is its own group
+   above the schema-driven list rather than a section inside it. It moved here
+   from the sidebar footer, which was carrying two 28px rows under a 38px update
+   banner (TRA-306). It renders in the daemon-down and loading states too: the
+   theme is stored in localStorage and has nothing to do with the daemon, so
+   losing the connection must not take the appearance switcher with it. */
+function AppearanceCard({
+  appearance,
+  onChange,
+}: {
+  appearance: Appearance;
+  onChange: (next: Appearance) => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 12px',
+        background: 'var(--bg-grouped)',
+        borderRadius: 10,
+        boxShadow: 'var(--shadow-grouped)',
+        marginBottom: 12,
+      }}
+    >
+      <span style={{ flex: 1, fontSize: 13, color: 'var(--text-primary)' }}>Appearance</span>
+      <PopUpButton
+        options={APPEARANCE_OPTIONS}
+        value={appearance}
+        onChange={onChange}
+        aria-label="Appearance"
+      />
+    </div>
+  );
+}
+
 /* ═══ Main ═══════════════════════════════════════════════════════════ */
 
 type Screen =
@@ -1678,7 +1716,17 @@ type Screen =
   | { type: 'picker'; sectionKey: string; picker: PickerInfo }
   | { type: 'projects' };
 
-export function Settings() {
+export function Settings({
+  appearance,
+  onAppearanceChange,
+}: {
+  /* App-level preference, not a daemon config field: it lives in localStorage
+     and is owned by useTheme() in App.tsx, which is what applies [data-theme].
+     It is threaded in rather than read from a second useTheme() so both copies
+     cannot disagree about what the user picked (TRA-306). */
+  appearance: Appearance;
+  onAppearanceChange: (next: Appearance) => void;
+}) {
   const { settings, loading, connected, restarting, restartDaemon, updateSettings } = useDaemon();
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -1767,45 +1815,51 @@ export function Settings() {
   /* Not connected */
   if (!connected && !loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-2">
-        <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-          Daemon not reachable
+      <>
+        <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
+        <div className="flex flex-col items-center justify-center flex-1 gap-2">
+          <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+            Daemon not reachable
+          </div>
+          <button
+            type="button"
+            onClick={() => restartDaemon()}
+            disabled={restarting}
+            className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"
+            style={{
+              background: 'var(--fill-control)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              color: 'var(--accent)',
+              border: '0.5px solid var(--border)',
+              boxShadow: 'var(--shadow-control)',
+              cursor: restarting ? 'default' : 'pointer',
+              opacity: restarting ? 0.6 : 1,
+            }}
+          >
+            {restarting ? 'Starting…' : 'Restart Daemon'}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => restartDaemon()}
-          disabled={restarting}
-          className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"
-          style={{
-            background: 'var(--fill-control)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            color: 'var(--accent)',
-            border: '0.5px solid var(--border)',
-            boxShadow: 'var(--shadow-control)',
-            cursor: restarting ? 'default' : 'pointer',
-            opacity: restarting ? 0.6 : 1,
-          }}
-        >
-          {restarting ? 'Starting…' : 'Restart Daemon'}
-        </button>
-      </div>
+      </>
     );
   }
 
   if (loading || !settings) {
     return (
-      <p
-        style={{
-          fontSize: 13,
-          textAlign: 'center',
-          padding: 32,
-          color: 'var(--text-tertiary)',
-          margin: 0,
-        }}
-      >
-        Loading…
-      </p>
+      <>
+        <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
+        <p
+          style={{
+            fontSize: 13,
+            textAlign: 'center',
+            padding: 32,
+            color: 'var(--text-tertiary)',
+            margin: 0,
+          }}
+        >
+          Loading…
+        </p>
+      </>
     );
   }
 
@@ -1985,6 +2039,10 @@ export function Settings() {
           </button>
         )}
       </div>
+
+      {(!q || 'appearance'.includes(q) || 'theme'.includes(q)) && (
+        <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
+      )}
 
       {/* Section list */}
       <SectionList

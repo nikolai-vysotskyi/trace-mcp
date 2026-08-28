@@ -136,8 +136,12 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  /* 6px + 8px puts the status dot on the sidebar rows' 14px glyph column. */
-  padding: 6px 8px 8px;
+  /* Same box as a sidebar row: 28px tall, 8px horizontal padding, so the
+     status dot lands on the rows' 14px glyph column and the sidebar's bottom
+     stack is three aligned 28px strips instead of 6/8 asymmetric ad-hoc
+     padding (TRA-306). */
+  height: 28px;
+  padding: 0 8px;
   margin: 0 6px;
   font-size: 11px;
   color: var(--text-secondary);

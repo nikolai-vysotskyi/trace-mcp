@@ -28,7 +28,7 @@ import { MemoryExplorer } from './tabs/MemoryExplorer';
 import { Notebook } from './tabs/Notebook';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
-import { type Appearance, APPEARANCE_OPTIONS, useTheme } from './theme.js';
+import { type Appearance, useTheme } from './theme.js';
 import { Workspace } from './workspace/Workspace';
 
 // ── URL params determine window type ──────────────────────────
@@ -354,25 +354,22 @@ function ProjectFileExplorer({
 }
 
 // ── Sidebar footer ───────────────────────────────────────────
-// Two rows pinned below the scroll region, in the SAME row system as the nav
-// above them (.ws-sb-row: 28px, 16px leading glyph at x=14, 13px label at x=38)
-// — the footer used to run its own 24px capsule with no glyph, so the last row
-// in the sidebar sat 26px to the left of every label above it.
+// ONE row pinned below the scroll region, in the SAME row system as the nav
+// above it (.ws-sb-row: 28px, 16px leading glyph at x=14, 13px label at x=38).
 //
-// Settings is a navigation destination and stays a real row. Appearance is a
-// control, so its row is static and carries a pop-up button: Auto / Light /
-// Dark, the three states macOS offers. In project windows, Settings opens the
-// menu window via IPC instead of in-place navigation.
+// TRA-305 put the footer on that row system, which was right, but it also
+// parked Appearance in a second static row — 70.5px of footer under a 38px
+// update banner, and the bottom of the sidebar read as heavy (TRA-306).
+// Appearance is a preference, not a navigation destination, and no macOS app
+// pins an appearance switcher to its sidebar: it moved to the Settings screen,
+// where Auto / Light / Dark are still all three one click away. In project
+// windows, Settings opens the menu window via IPC instead of navigating.
 function SidebarFooter({
   active,
   onOpenSettingsInPlace,
-  appearance,
-  onAppearanceChange,
 }: {
   active: boolean;
   onOpenSettingsInPlace?: () => void;
-  appearance: Appearance;
-  onAppearanceChange: (next: Appearance) => void;
 }) {
   const handleSettings = () => {
     if (onOpenSettingsInPlace) {
@@ -391,20 +388,6 @@ function SidebarFooter({
         aria-current={active ? 'page' : undefined}
         onClick={handleSettings}
       />
-      {/* Not a button: the row is a label plus a control, so it must not look
-          or behave clickable. `.is-static` drops the hover fill. */}
-      <div className="ws-sb-row is-static">
-        <span className="ws-sb-ico" aria-hidden="true">
-          <Icon name="contrast" size={16} />
-        </span>
-        <span className="ws-sb-label">Appearance</span>
-        <PopUpButton
-          options={APPEARANCE_OPTIONS}
-          value={appearance}
-          onChange={onAppearanceChange}
-          aria-label="Appearance"
-        />
-      </div>
     </div>
   );
 }
@@ -606,12 +589,22 @@ function UpdateBanner() {
 }
 
 // ── Menu content ──────────────────────────────────────────────
-function MenuContent({ tab }: { tab: GlobalTab }) {
+function MenuContent({
+  tab,
+  appearance,
+  onAppearanceChange,
+}: {
+  tab: GlobalTab;
+  appearance: Appearance;
+  onAppearanceChange: (next: Appearance) => void;
+}) {
   return (
     <>
       {tab === 'workspace' && <Workspace />}
       {tab === 'clients' && <Clients />}
-      {tab === 'settings' && <Settings />}
+      {tab === 'settings' && (
+        <Settings appearance={appearance} onAppearanceChange={onAppearanceChange} />
+      )}
     </>
   );
 }
@@ -811,8 +804,12 @@ export function App() {
   const needsFlexLayout = isProject && (projectTab === 'graph' || projectTab === 'ask');
   /* Surfaces that draw their own toolbar own the whole pane: a 16px inset turns
      a flush 52px toolbar into a floating white band with the sunken background
-     showing down both sides (TRA-293). */
-  const ownsToolbar = isProject && projectTab === 'overview';
+     showing down both sides (TRA-293). The Workspace dashboard has drawn its
+     own 52px toolbar and its own 16px gutters since TRA-292, so the pane's
+     `p-4` was doubling every inset on it — the KPI row started at x=32 and the
+     first card at y=76 (TRA-306). */
+  const ownsToolbar =
+    (isProject && projectTab === 'overview') || (!isProject && globalTab === 'workspace');
   const isGraphGpu = isGraph; // alias — the Graph tab *is* the GPU graph now
 
   return (
@@ -878,8 +875,6 @@ export function App() {
             <SidebarFooter
               active={!isProject && globalTab === 'settings'}
               onOpenSettingsInPlace={isProject ? undefined : () => setGlobalTab('settings')}
-              appearance={appearance}
-              onAppearanceChange={setAppearance}
             />
           </aside>
         )}
@@ -940,7 +935,11 @@ export function App() {
               </ErrorBoundary>
             ) : (
               <ErrorBoundary key={`menu:${globalTab}`} label={`${globalTab} tab`}>
-                <MenuContent tab={globalTab} />
+                <MenuContent
+                  tab={globalTab}
+                  appearance={appearance}
+                  onAppearanceChange={setAppearance}
+                />
               </ErrorBoundary>
             )}
           </div>
