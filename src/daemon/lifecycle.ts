@@ -300,7 +300,8 @@ export function getLaunchdLastExit(): LaunchdLastExit | null {
   if (!isMac) return null;
   let out: string;
   try {
-    out = execSync(`launchctl print ${getLaunchdDomain()}/${PLIST_LABEL}`, {
+    // execFileSync, not a shell string — no interpolation into a command line.
+    out = execFileSync('launchctl', ['print', `${getLaunchdDomain()}/${PLIST_LABEL}`], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });

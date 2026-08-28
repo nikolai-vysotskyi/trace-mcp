@@ -66,7 +66,10 @@ describe('vitals log', () => {
   it('emits immediately and on every interval tick, and stops on demand', () => {
     vi.useFakeTimers();
     vi.mocked(logger.info).mockClear();
-    const stop = startVitalsLog({ getCounts: () => ({ loaded: 1, indexing: 0 }), intervalMs: 1000 });
+    const stop = startVitalsLog({
+      getCounts: () => ({ loaded: 1, indexing: 0 }),
+      intervalMs: 1000,
+    });
     expect(logger.info).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(2500);
     expect(logger.info).toHaveBeenCalledTimes(3);
