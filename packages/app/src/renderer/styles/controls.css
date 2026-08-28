@@ -8,114 +8,12 @@
      hit area  >= 24x24 for every focusable element, even when the painted
                visual is smaller (checkbox: 16px visual in a 24px box).
 
-   Classes are prefixed `lx-` and live at the document root — deliberately NOT
-   scoped under `.ws-stage`, because the app renders controls on BOTH the island
-   surface (.ws-stage, island.css tokens) and the plain app surface (app.css
-   tokens). The token shim below is what makes one rule work on both.
    ============================================================================ */
 
-/* ── PROVISIONAL TOKEN SHIM — delete when TRA-289 lands ────────────────────
-   TRA-289 introduces styles/tokens.css with exactly these semantic names. Until
-   it merges, the primitives would have nothing to reference, so the values are
-   declared here. When tokens.css lands: delete this block (down to END SHIM)
-   and nothing else in this file changes.
-   -------------------------------------------------------------------------- */
-:root {
-  --accent: #007aff;
-  --accent-pressed: #0062d1;
-  --surface: #ffffff;
-  --label: #1d1d1f;
-  --label-secondary: #48484a;
-  --label-tertiary: #6c6c70;
-  --on-accent: #ffffff;
-  --separator: rgba(0, 0, 0, 0.14);
-  --fill-tertiary: rgba(118, 118, 128, 0.12);
-  --fill-quaternary: rgba(118, 118, 128, 0.08);
-  --fill-pressed: rgba(118, 118, 128, 0.2);
-
-  --status-green: #2f9e6e;
-  --status-orange: #c9781f;
-  --status-red: #d4321c;
-  --status-blue: #3574f0;
-  --status-purple: #8a5cf0;
-
-  /* Badge label colours — the saturated hue, darkened until the text clears
-     4.5:1 over its own 18% tint on --surface. Verified by
-     lattice/ui/__tests__/primitives.test.ts, which fails if either drifts. */
-  --badge-neutral-fg: #4a4a4f;
-  --badge-accent-fg: #0a52ab;
-  --badge-green-fg: #17624a;
-  --badge-orange-fg: #7c4310;
-  --badge-red-fg: #9e1f0c;
-  --badge-blue-fg: #1e4794;
-  --badge-purple-fg: #533690;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --accent: #0a84ff;
-    --accent-pressed: #409cff;
-    --surface: #1e1f22;
-    --label: #f5f5f7;
-    --label-secondary: #c7c7cc;
-    --label-tertiary: #98989d;
-    --separator: rgba(255, 255, 255, 0.16);
-    --fill-tertiary: rgba(118, 118, 128, 0.28);
-    --fill-quaternary: rgba(118, 118, 128, 0.2);
-    --fill-pressed: rgba(118, 118, 128, 0.4);
-
-    --status-green: #43b07f;
-    --status-orange: #e8a33d;
-    --status-red: #ef6a52;
-    --status-blue: #6f9bf6;
-    --status-purple: #b08cf0;
-
-    --badge-neutral-fg: #c7c7cc;
-    --badge-accent-fg: #79baff;
-    --badge-green-fg: #6fd4a4;
-    --badge-orange-fg: #f0bb6b;
-    --badge-red-fg: #ff9683;
-    --badge-blue-fg: #9dbcfa;
-    --badge-purple-fg: #c8adf7;
-  }
-}
-
-:root[data-theme='dark'] {
-  --accent: #0a84ff;
-  --accent-pressed: #409cff;
-  --surface: #1e1f22;
-  --label: #f5f5f7;
-  --label-secondary: #c7c7cc;
-  --label-tertiary: #98989d;
-  --separator: rgba(255, 255, 255, 0.16);
-  --fill-tertiary: rgba(118, 118, 128, 0.28);
-  --fill-quaternary: rgba(118, 118, 128, 0.2);
-  --fill-pressed: rgba(118, 118, 128, 0.4);
-
-  --status-green: #43b07f;
-  --status-orange: #e8a33d;
-  --status-red: #ef6a52;
-  --status-blue: #6f9bf6;
-  --status-purple: #b08cf0;
-
-  --badge-neutral-fg: #c7c7cc;
-  --badge-accent-fg: #79baff;
-  --badge-green-fg: #6fd4a4;
-  --badge-orange-fg: #f0bb6b;
-  --badge-red-fg: #ff9683;
-  --badge-blue-fg: #9dbcfa;
-  --badge-purple-fg: #c8adf7;
-}
-
-/* On the island surface the fills sit on --island, not on the app background —
-   re-point --surface so the badge tints composite over the right backing. */
-.ws-stage[data-mode='light'] {
-  --surface: #ffffff;
-}
-.ws-stage[data-mode='dark'] {
-  --surface: #18191b;
-}
-/* ── END SHIM ─────────────────────────────────────────────────────────────── */
+/* Colour, radius and motion come from styles/tokens.css (TRA-289) — this file
+   declares geometry only. Classes are prefixed `lx-` and live at the document
+   root, deliberately NOT scoped under `.ws-stage`, because the app renders
+   controls on both the island surface and the plain app surface. */
 
 /* ============================================================================
    BUTTON — .lx-btn
@@ -168,8 +66,8 @@
 /* variants ---------------------------------------------------------------- */
 .lx-btn.v-prominent {
   /* Flat accent capsule. macOS 26 dropped the gradient + bezel entirely. */
-  background: var(--accent);
-  color: var(--on-accent, #fff);
+  background: var(--accent-fill);
+  color: var(--on-accent);
   font-weight: 590;
 }
 .lx-btn.v-prominent:hover:not(:disabled) {
@@ -370,7 +268,9 @@
 .lx-chip-group > .lx-chip-group-label {
   font-size: 11px;
   font-weight: 500;
-  color: var(--label-tertiary);
+  /* Reading text ("Status", "Grade"), so --label-secondary: --label-tertiary
+     measured 1.87:1 here and is decoration only. */
+  color: var(--label-secondary);
   cursor: default;
   white-space: nowrap;
 }
@@ -415,9 +315,9 @@
   font-weight: 590;
 }
 .lx-chip.single.is-on {
-  background: var(--accent);
+  background: var(--accent-fill);
   box-shadow: none;
-  color: var(--on-accent, #fff);
+  color: var(--on-accent);
 }
 .lx-chip:disabled {
   opacity: 0.4;
@@ -500,8 +400,8 @@ input[type='checkbox'] {
     box-shadow 100ms ease;
 }
 input[type='checkbox']:checked {
-  background: var(--accent) padding-box;
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 80%, black);
+  background: var(--accent-fill) padding-box;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-fill) 80%, black);
   /* White checkmark, drawn as a background image so it clips with padding-box. */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4 6.4 11.3 12.5 5.2' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
@@ -509,8 +409,8 @@ input[type='checkbox']:checked {
   background-size: 16px 16px;
 }
 input[type='checkbox']:indeterminate {
-  background: var(--accent) padding-box;
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 80%, black);
+  background: var(--accent-fill) padding-box;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent-fill) 80%, black);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8h8' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
