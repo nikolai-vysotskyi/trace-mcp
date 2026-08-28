@@ -16,6 +16,14 @@ export interface PipelineProgress {
   startedAt: number; // epoch ms, 0 if idle
   completedAt: number; // epoch ms, 0 if not done
   error?: string;
+  /**
+   * What the run covered: 'full' = the whole project tree was walked,
+   * 'incremental' = only the files a watcher/hook/register_edit call handed
+   * in. Without this, `phase: 'completed'` after a 3-file watcher batch reads
+   * as "the project is fully indexed" (TRA-184 / TRA-231). Not persisted —
+   * it describes the live run, and is absent after a daemon restart.
+   */
+  scope?: 'full' | 'incremental';
 }
 
 export interface PipelineProgressSnapshot extends PipelineProgress {
