@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { atomicWriteJson } from '../utils/atomic-write.js';
+import { readIfExists } from '../utils/safe-fs.js';
 import { withPs1Bom } from './ps1-bom.js';
 import type { InitStepResult } from './types.js';
 import {
@@ -278,8 +279,9 @@ function ensureDir(dir: string): void {
 }
 
 function readSettings(filePath: string): Record<string, unknown> {
-  if (!fs.existsSync(filePath)) return {};
-  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+  const raw = readIfExists(filePath);
+  if (raw === null) return {};
+  return JSON.parse(raw);
 }
 
 function writeSettings(filePath: string, settings: Record<string, unknown>): void {

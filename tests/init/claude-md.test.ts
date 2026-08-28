@@ -5,6 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('node:fs');
 const mockFs = vi.mocked(fs);
 
+/**
+ * `upsertTraceMcpBlock` (src/init/md-block.ts) reads via `readIfExists`
+ * (src/utils/safe-fs.ts), which no longer checks `existsSync` first — it
+ * calls `readFileSync` directly and treats an ENOENT throw as "missing"
+ * (TRA-256: avoids the existsSync-then-readFileSync TOCTOU race). Mirror
+ * real `fs.readFileSync` semantics here so `existsSync` and `readFileSync`
+ * can't be set to contradictory states.
+ */
+function throwEnoent(): never {
+  const err = new Error('ENOENT: no such file or directory') as NodeJS.ErrnoException;
+  err.code = 'ENOENT';
+  throw err;
+}
+
 let updateClaudeMd: typeof import('../../src/init/claude-md.js').updateClaudeMd;
 
 beforeEach(async () => {
@@ -12,7 +26,7 @@ beforeEach(async () => {
   vi.resetAllMocks();
   mockFs.existsSync.mockReturnValue(false);
   mockFs.writeFileSync.mockImplementation(() => {});
-  mockFs.readFileSync.mockReturnValue('');
+  mockFs.readFileSync.mockImplementation(throwEnoent);
   mockFs.mkdirSync.mockImplementation(() => undefined as unknown as string);
 
   const mod = await import('../../src/init/claude-md.js');

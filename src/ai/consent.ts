@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
 import { atomicWriteJson } from '../utils/atomic-write.js';
+import { readIfExists } from '../utils/safe-fs.js';
 
 export const CONSENT_PATH = path.join(TRACE_MCP_HOME, 'consent.json');
 
@@ -66,8 +67,8 @@ function emptyFile(): ConsentFile {
 
 export function loadConsentFile(filePath: string = CONSENT_PATH): ConsentFile {
   try {
-    if (!fs.existsSync(filePath)) return emptyFile();
-    const raw = fs.readFileSync(filePath, 'utf-8');
+    const raw = readIfExists(filePath);
+    if (raw === null) return emptyFile();
     const parsed = JSON.parse(raw) as Partial<ConsentFile>;
     if (parsed?.version === 1 && parsed.providers) return parsed as ConsentFile;
     return emptyFile();

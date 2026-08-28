@@ -11,6 +11,7 @@ import path from 'node:path';
 import fg from 'fast-glob';
 import type { Store } from '../../db/store.js';
 import { maybeYield } from '../../utils/event-loop.js';
+import { readIfExists } from '../../utils/safe-fs.js';
 import {
   type AstCodemodFileResult,
   astLangForFile,
@@ -107,12 +108,13 @@ export function applyRename(
 
   // 4. Compute edits file by file
   for (const { filePath } of allFiles) {
-    if (!fs.existsSync(filePath)) {
+    const fileContent = readIfExists(filePath);
+    if (fileContent === null) {
       result.warnings.push(`File not found on disk: ${filePath}`);
       continue;
     }
 
-    const lines = readLines(filePath);
+    const lines = fileContent.split('\n');
     let fileModified = false;
 
     for (let i = 0; i < lines.length; i++) {
@@ -251,12 +253,13 @@ export function removeDeadCode(
   }
 
   const filePath = path.resolve(projectRoot, symbolFile.path);
-  if (!fs.existsSync(filePath)) {
+  const fileContent = readIfExists(filePath);
+  if (fileContent === null) {
     result.error = `File not found on disk: ${filePath}`;
     return result;
   }
 
-  const lines = readLines(filePath);
+  const lines = fileContent.split('\n');
   const startLine = symbol.line_start - 1; // 0-indexed
   const endLine = symbol.line_end; // line_end is inclusive, but slice end is exclusive
 
@@ -375,18 +378,18 @@ export function extractFunction(
   };
 
   const absPath = path.resolve(projectRoot, filePath);
-  if (!fs.existsSync(absPath)) {
+  const source = readIfExists(absPath);
+  if (source === null) {
     result.error = `File not found: ${filePath}`;
     return result;
   }
 
-  const lines = readLines(absPath);
+  const lines = source.split('\n');
   if (startLine < 1 || endLine > lines.length || startLine > endLine) {
     result.error = `Invalid line range ${startLine}-${endLine} (file has ${lines.length} lines)`;
     return result;
   }
 
-  const source = fs.readFileSync(absPath, 'utf-8');
   const plan = planExtractFunction(filePath, source, startLine, endLine, functionName);
   if (isExtractError(plan)) {
     result.error = plan.error;
@@ -585,11 +588,11 @@ export async function applyCodemod(
     await maybeYield(scanned, 64);
     scanned++;
     const absPath = path.resolve(projectRoot, relPath);
-    if (!fs.existsSync(absPath)) continue;
-
     let content: string;
     try {
-      content = fs.readFileSync(absPath, 'utf-8');
+      const raw = readIfExists(absPath);
+      if (raw === null) continue;
+      content = raw;
     } catch {
       result.warnings.push(`Could not read: ${relPath}`);
       continue;

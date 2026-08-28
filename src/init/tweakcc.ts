@@ -11,6 +11,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -254,7 +255,7 @@ export function installTweakccPrompts(opts: { dryRun?: boolean }): InitStepResul
   for (const pf of PROMPT_FILES) {
     const filePath = path.join(promptsDir, pf.filename);
     const content = generateMarkdown(pf);
-    const existed = fs.existsSync(filePath);
+    const existed = readIfExists(filePath) !== null;
     fs.writeFileSync(filePath, content, 'utf-8');
     written++;
     results.push({

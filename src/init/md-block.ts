@@ -10,6 +10,7 @@
  * treatment regardless of which filename the block lands in.
  */
 import fs from 'node:fs';
+import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 
 export const START_MARKER = '<!-- trace-mcp:start -->';
@@ -62,23 +63,24 @@ export function upsertTraceMcpBlock(
   filePath: string,
   opts: { dryRun?: boolean } = {},
 ): InitStepResult {
+  const existing = readIfExists(filePath);
+
   if (opts.dryRun) {
-    if (!fs.existsSync(filePath)) {
+    if (existing === null) {
       return { target: filePath, action: 'skipped', detail: `Would create ${basename(filePath)}` };
     }
-    const content = fs.readFileSync(filePath, 'utf-8');
-    if (content.includes(START_MARKER)) {
+    if (existing.includes(START_MARKER)) {
       return { target: filePath, action: 'skipped', detail: 'Would update trace-mcp block' };
     }
     return { target: filePath, action: 'skipped', detail: 'Would append trace-mcp block' };
   }
 
-  if (!fs.existsSync(filePath)) {
+  if (existing === null) {
     fs.writeFileSync(filePath, `${TRACE_MCP_ROUTING_BLOCK}\n`);
     return { target: filePath, action: 'created' };
   }
 
-  let content = fs.readFileSync(filePath, 'utf-8');
+  let content = existing;
   const originalContent = content;
 
   content = removeCompetingBlocks(content);

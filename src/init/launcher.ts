@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { withPs1Bom } from './ps1-bom.js';
+import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
 
@@ -157,9 +158,9 @@ export function writeLauncherConfig(cfg: LauncherConfig): void {
  */
 export function readLauncherConfig(): Partial<LauncherConfig> {
   const p = getLauncherConfigPath();
-  if (!fs.existsSync(p)) return {};
+  const content = readIfExists(p);
+  if (content === null) return {};
   const result: Partial<LauncherConfig> = {};
-  const content = fs.readFileSync(p, 'utf-8');
   for (const raw of content.split('\n')) {
     const line = raw.trimStart();
     if (!line || line.startsWith('#')) continue;

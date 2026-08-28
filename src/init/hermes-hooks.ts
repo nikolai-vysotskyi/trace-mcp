@@ -19,6 +19,7 @@ import os from 'node:os';
 import path from 'node:path';
 import YAML from 'yaml';
 import { atomicWriteJson } from '../utils/atomic-write.js';
+import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 
 const HERMES_GUARD_VERSION = '0.1.1';
@@ -171,7 +172,8 @@ function wireIntoConfigYaml(opts: HermesHooksOptions): InitStepResult {
   const script = guardScriptPath();
   const desired: HookEntry = { matcher: 'terminal', command: script, timeout: 5 };
 
-  if (!fs.existsSync(cfgPath)) {
+  const raw = readIfExists(cfgPath);
+  if (raw === null) {
     // Hermes hasn't run setup here — no config to edit. Initializing config.yaml
     // ourselves would conflict with Hermes's own setup wizard, so leave it.
     return {
@@ -181,7 +183,6 @@ function wireIntoConfigYaml(opts: HermesHooksOptions): InitStepResult {
     };
   }
 
-  const raw = fs.readFileSync(cfgPath, 'utf-8');
   const doc = YAML.parseDocument(raw);
   if (doc.errors.length > 0) {
     return {

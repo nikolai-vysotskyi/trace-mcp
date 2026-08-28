@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { readIfExists } from '../utils/safe-fs.js';
 
 const HOME = os.homedir();
 
@@ -230,11 +231,11 @@ function scanMcpServerConfigs(projectRoot?: string): Conflict[] {
   const configs = getMcpConfigPaths(projectRoot);
 
   for (const { clientName, configPath } of configs) {
-    if (!fs.existsSync(configPath)) continue;
-
     let parsed: Record<string, unknown>;
     try {
-      parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      const raw = readIfExists(configPath);
+      if (raw === null) continue;
+      parsed = JSON.parse(raw);
     } catch {
       continue; // malformed JSON — not our problem here
     }
@@ -386,11 +387,11 @@ function scanHooksInSettings(): Conflict[] {
   }
 
   for (const settingsPath of settingsFiles) {
-    if (!fs.existsSync(settingsPath)) continue;
-
     let settings: Record<string, unknown>;
     try {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+      const raw = readIfExists(settingsPath);
+      if (raw === null) continue;
+      settings = JSON.parse(raw);
     } catch {
       continue;
     }
@@ -525,11 +526,11 @@ function scanClaudeMdFiles(projectRoot?: string): Conflict[] {
   }
 
   for (const filePath of files) {
-    if (!fs.existsSync(filePath)) continue;
-
     let content: string;
     try {
-      content = fs.readFileSync(filePath, 'utf-8');
+      const raw = readIfExists(filePath);
+      if (raw === null) continue;
+      content = raw;
     } catch {
       continue;
     }
@@ -673,11 +674,11 @@ function scanIdeRuleFiles(projectRoot?: string): Conflict[] {
   }
 
   for (const { path: filePath, type } of ruleFiles) {
-    if (!fs.existsSync(filePath)) continue;
-
     let content: string;
     try {
-      content = fs.readFileSync(filePath, 'utf-8');
+      const raw = readIfExists(filePath);
+      if (raw === null) continue;
+      content = raw;
     } catch {
       continue;
     }
@@ -856,11 +857,11 @@ function scanGitHooks(projectRoot: string): Conflict[] {
 
   for (const hookFile of hookFiles) {
     const hookPath = path.join(hooksDir, hookFile);
-    if (!fs.existsSync(hookPath)) continue;
-
     let content: string;
     try {
-      content = fs.readFileSync(hookPath, 'utf-8');
+      const raw = readIfExists(hookPath);
+      if (raw === null) continue;
+      content = raw;
     } catch {
       continue;
     }

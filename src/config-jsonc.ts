@@ -9,6 +9,7 @@ import { applyEdits, type ModificationOptions, modify, parse } from 'jsonc-parse
 import { DEFAULT_CONFIG_JSONC, ensureGlobalDirs, GLOBAL_CONFIG_PATH } from './global.js';
 import { logger } from './logger.js';
 import { atomicWriteString } from './utils/atomic-write.js';
+import { readIfExists } from './utils/safe-fs.js';
 
 // Shared formatting options — match the 2-space indent used in DEFAULT_CONFIG_JSONC
 const FORMAT_OPTS: ModificationOptions = {
@@ -26,8 +27,7 @@ const FORMAT_OPTS: ModificationOptions = {
 /** Read global config as raw JSONC text. Returns DEFAULT_CONFIG_JSONC if file missing. */
 export function readGlobalConfigText(): string {
   ensureGlobalDirs();
-  if (!fs.existsSync(GLOBAL_CONFIG_PATH)) return DEFAULT_CONFIG_JSONC;
-  return fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8');
+  return readIfExists(GLOBAL_CONFIG_PATH) ?? DEFAULT_CONFIG_JSONC;
 }
 
 /**
