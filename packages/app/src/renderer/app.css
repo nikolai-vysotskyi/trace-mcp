@@ -136,8 +136,9 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px 8px;
-  margin: 0 2px;
+  /* 6px + 8px puts the status dot on the sidebar rows' 14px glyph column. */
+  padding: 6px 8px 8px;
+  margin: 0 6px;
   font-size: 11px;
   color: var(--text-secondary);
   letter-spacing: -0.005em;
@@ -218,7 +219,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 4px 4px 2px;
+  margin: 4px 6px 6px;
   padding: 10px;
   background: var(--bg-tertiary);
   border: 0.5px solid var(--border);
@@ -266,72 +267,6 @@ body {
   color: var(--success);
 }
 
-/* ── Sidebar footer: settings button + icon-only theme toggle ───── */
-.sidebar-footer {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 4px;
-  margin-bottom: 2px;
-}
-.sidebar-footer .nav-button {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  text-align: left;
-  padding: 0 10px;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.005em;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-  -webkit-app-region: no-drag;
-}
-.sidebar-footer .nav-button:hover {
-  background: var(--bg-active);
-  color: var(--text-primary);
-}
-.sidebar-footer .nav-button.active {
-  background: var(--bg-active);
-  color: var(--text-primary);
-}
-
-/* Square icon button — used for the theme toggle. */
-.icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition:
-    background 120ms ease,
-    color 120ms ease,
-    transform 120ms ease;
-  -webkit-app-region: no-drag;
-}
-.icon-button:hover {
-  background: var(--bg-active);
-  color: var(--text-primary);
-}
-.icon-button:active {
-  transform: scale(0.92);
-}
-.icon-button svg {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
+/* The sidebar footer lives in styles/sidebar.css now, with the row system it
+   belongs to (TRA-305). `.sidebar-footer` / `.nav-button` / `.icon-button` were
+   already dead: the footer renders Lattice `.lx-btn` primitives, not these. */
