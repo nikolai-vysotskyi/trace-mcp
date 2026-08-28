@@ -91,6 +91,7 @@ import {
 } from './init/hooks.js';
 import { attachFileLogging, logger } from './logger.js';
 import { ensureInitialized, warmUpGrammars } from './parser/tree-sitter.js';
+import { checkBindHost, isLoopbackHost } from './daemon/bind-host.js';
 import { PluginRegistry } from './plugin-api/registry.js';
 import { detectGitWorktree, findProjectRoot, hasRootMarkers } from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
@@ -463,7 +464,11 @@ program
   )
   .option('-p, --port <port>', 'Port to listen on', '3741')
   .option('--host <host>', 'Host to bind to', '127.0.0.1')
-  .action(async (opts: { port: string; host: string }) => {
+  .option(
+    '--allow-remote',
+    'Permit a non-loopback --host. The daemon is unauthenticated — only use behind your own auth.',
+  )
+  .action(async (opts: { port: string; host: string; allowRemote?: boolean }) => {
     // A single unhandled rejection must not take down the daemon serving every
     // registered project — log and stay alive.
     installProcessSafetyNet('serve-http');
@@ -785,6 +790,22 @@ program
 
     const port = parseInt(opts.port, 10);
     const host = opts.host;
+
+    // TRA-301: the daemon has no authentication, so loopback IS the trust
+    // boundary. Widening it must be deliberate.
+    const bindRefusal = checkBindHost(host, opts.allowRemote === true);
+    if (bindRefusal) {
+      logger.error({ host, port }, bindRefusal);
+      process.stderr.write(`${bindRefusal}\n`);
+      process.exit(1);
+    }
+    if (!isLoopbackHost(host)) {
+      logger.warn(
+        { host, port },
+        'Daemon bound to a non-loopback host with --allow-remote. There is NO authentication ' +
+          'on /mcp or /api: any reachable client can index and read arbitrary directories.',
+      );
+    }
 
     // Simple per-IP rate limiter (token bucket). Localhost is exempt because
     // the Electron app and local tooling legitimately make bursts of requests

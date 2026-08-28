@@ -333,6 +333,7 @@ trace-mcp runs entirely on your machine. Your source code is never the product.
 - **Semantic search is offline by default** — bundled ONNX embeddings, no API keys, no outbound calls. Switch to Ollama (local) or OpenAI (opt-in) via config.
 - **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below — nothing else is phoned home.
 - **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
+- **The daemon trusts loopback and nothing else.** `serve-http` is unauthenticated by design: a caller on `127.0.0.1` is already you. A non-loopback `--host` is therefore refused unless you pass `--allow-remote` and front the port with your own auth — see [Configuration](docs/configuration.md#http-daemon--one-warm-index-shared-across-many-projects).
 - **To wipe everything**, delete `~/.trace-mcp/`. That is the entire footprint.
 
 ### Usage telemetry
