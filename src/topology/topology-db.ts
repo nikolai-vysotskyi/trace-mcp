@@ -19,7 +19,7 @@ import { ContractOperations } from './topology-contracts.js';
 import { EndpointOperations } from './topology-endpoints.js';
 import { EventOperations } from './topology-events.js';
 import { CrossServiceEdgeOperations } from './topology-edges.js';
-import { SubprojectOperations } from './topology-subprojects.js';
+import { SubprojectOperations, pruneDangerousSubprojects } from './topology-subprojects.js';
 import { ClientCallOperations } from './topology-client-calls.js';
 import { SnapshotOperations } from './topology-snapshots.js';
 
@@ -399,6 +399,19 @@ export class TopologyStore {
         logger.info(
           'Migration: rebuilt client_calls with correct FK references (subprojects instead of federated_repos)',
         );
+      }
+    });
+
+    // Migration (TRA-232): drop subprojects registered under a dangerous root.
+    // `upsertSubproject` now refuses these, but registries created before the
+    // guard hold hundreds of them (a Claude session started in /tmp made
+    // discoverAndRegisterSubprojects walk /private/tmp and register every
+    // scratch folder). Runs after fix_client_calls_fk_v1 so the FK detach
+    // below targets the rebuilt table.
+    this.runOnce('prune_dangerous_subprojects_v1', () => {
+      const pruned = pruneDangerousSubprojects(this.db);
+      if (pruned.subprojects > 0) {
+        logger.info(pruned, 'Migration: pruned subprojects registered under dangerous roots');
       }
     });
   }
