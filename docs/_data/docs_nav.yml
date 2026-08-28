@@ -1,0 +1,27 @@
+# Footer "See also" nav, rendered by _layouts/default.html.
+# Keep in sync with docs/sitemap.xml — tests/docs/internal-links.test.ts fails
+# if a sitemap page is missing here.
+- title: Tools reference
+  url: /tools-reference.html
+- title: Comparisons
+  url: /comparisons.html
+- title: Supported frameworks
+  url: /supported-frameworks.html
+- title: Architecture
+  url: /architecture.html
+- title: Configuration
+  url: /configuration.html
+- title: Quality gates
+  url: /quality-gates.html
+- title: Decision memory
+  url: /decision-memory.html
+- title: Analytics
+  url: /analytics.html
+- title: TOON savings
+  url: /toon-savings.html
+- title: Telemetry
+  url: /telemetry.html
+- title: tweakcc routing
+  url: /tweakcc.html
+- title: Development
+  url: /development.html
