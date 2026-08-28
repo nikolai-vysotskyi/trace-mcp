@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [2.0.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.2...v2.0.3) (2026-08-28)
+
+
+### Bug Fixes
+
+* **ci:** restore RELEASE_PLEASE_TOKEN, dropped by the [#438](https://github.com/nikolai-vysotskyi/trace-mcp/issues/438) squash-merge (TRA-171) ([#448](https://github.com/nikolai-vysotskyi/trace-mcp/issues/448)) ([40b8e15](https://github.com/nikolai-vysotskyi/trace-mcp/commit/40b8e15e113510f0104d9e45c279a7ff962922b1))
+* **daemon:** ignore dangerous project hints instead of failing MCP startup (TRA-286) ([#449](https://github.com/nikolai-vysotskyi/trace-mcp/issues/449)) ([da0bd12](https://github.com/nikolai-vysotskyi/trace-mcp/commit/da0bd12cfb5b79b3d6003b051f158ed571a2b3d8))
+
+
+### Performance
+
+* **app:** add a fixed workload fixture for the three unmeasured desktop metrics (TRA-258) ([#446](https://github.com/nikolai-vysotskyi/trace-mcp/issues/446)) ([fd378da](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fd378da6a2fa2782413a2ade1531289516b52338))
+* **daemon:** cap eager project loading at startup (TRA-278) ([#445](https://github.com/nikolai-vysotskyi/trace-mcp/issues/445)) ([8989741](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8989741882709c68b356a1d399f468a1d7661cdc))
+
+
+### Chores
+
+* **telemetry:** make active installs the adoption metric of record ([#438](https://github.com/nikolai-vysotskyi/trace-mcp/issues/438)) ([618df41](https://github.com/nikolai-vysotskyi/trace-mcp/commit/618df414286a5470446d089daf888b0c22e05630))
+
 ## [2.0.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.1...v2.0.2) (2026-08-28)
 
 
