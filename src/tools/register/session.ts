@@ -702,7 +702,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
 
   server.tool(
     'get_session_resume',
-    'Cross-session context carryover: shows what was explored in recent past sessions (files touched, tools used, dead-end searches). Call at session start to orient yourself without re-reading files. Much cheaper than re-exploring the codebase. Read-only. For decision-aware wake-up use get_wake_up instead. Returns JSON: { sessions: [{ files, tools, deadEnds }], active_decisions }.',
+    "Deprecated alias for `get_wake_up` with `scope: 'sessions'` — use that instead. Returns JSON: { sessions, active_decisions }.",
     {
       max_sessions: z
         .number()

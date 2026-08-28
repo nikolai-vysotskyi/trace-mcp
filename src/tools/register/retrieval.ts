@@ -104,19 +104,8 @@ function findFilePath(ctx: ServerContext, fileId: number): string | null {
   return row?.path ?? null;
 }
 
-const SEARCH_WITH_MODE_DESCRIPTION = [
-  'P03 — named search-mode dispatcher.',
-  '',
-  'Pick a `mode` to route the query to a specific retriever:',
-  '- `lexical`        BM25/FTS5 over symbol names — best when you know the symbol shape.',
-  '- `semantic`       Vector-NN over embedded summaries — best for conceptual queries (requires AI provider + `embed_repo`).',
-  '- `hybrid`         Reciprocal-rank fusion of lexical + semantic. Degrades to lexical when no AI provider.',
-  "- `summary`        Lexical hits augmented with each symbol's stored summary text — cheap context.",
-  '- `feeling_lucky`  Auto-router: symbol-shape (camelCase/PascalCase/snake_case/FQN) → lexical, everything else → hybrid.',
-  '',
-  'The existing `search` tool is unchanged; this is an additive surface.',
-  'Returns JSON: { mode, items: [{ symbol_id, name, file, line, score, snippet? }], total }.',
-].join('\n');
+const SEARCH_WITH_MODE_DESCRIPTION =
+  'Deprecated alias for `search` with `retriever` — use `search` instead (same mode names). Returns JSON: { mode, items, total }.';
 
 export function registerRetrievalTools(server: McpServer, ctx: ServerContext): void {
   const { j } = ctx;
