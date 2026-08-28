@@ -14,6 +14,7 @@
 
 import { execSync, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { constants as osConstants } from 'node:os';
 import path from 'node:path';
 import {
   DAEMON_DISABLED_PATH,
@@ -255,6 +256,86 @@ function ensurePlistInstalled(port: number): { ok: boolean; error?: string; rege
     return { ok: false, error: (err as Error).message, regenerated: false };
   }
   return { ok: true, regenerated: true };
+}
+
+// ── Post-mortem: what launchd recorded about the last exit (TRA-267) ─
+// When the daemon dies without running a JS handler (OS kill, native crash),
+// daemon.log holds no clue. launchd does: it keeps the previous run's exit
+// code and, on newer macOS, a termination reason. Surfacing that in
+// `daemon status` is the difference between "it vanished" and "SIGKILL".
+
+export interface LaunchdLastExit {
+  /** Numeric value launchd reported for the last exit, when it reported one. */
+  exitCode?: number;
+  /** Free-form reason string when launchd printed one (newer macOS). */
+  reason?: string;
+  /** Number of times launchd has started the job, when reported. */
+  runs?: number;
+}
+
+/**
+ * Parse the relevant lines out of `launchctl print <domain>/<label>`.
+ * Exported for tests — the output format differs across macOS releases, so
+ * everything here is best-effort and absent fields are simply omitted.
+ */
+export function parseLaunchdLastExit(printOutput: string): LaunchdLastExit {
+  const out: LaunchdLastExit = {};
+  // "last exit code = 9" (older releases say "last exit status").
+  const code = printOutput.match(/last exit (?:code|status)\s*=\s*(-?\d+)/);
+  if (code) out.exitCode = parseInt(code[1], 10);
+  // "last exit reason = <dictionary> ..." / "... = Killed: 9"
+  const reason = printOutput.match(/last exit reason\s*=\s*(.+)/);
+  if (reason) out.reason = reason[1].trim();
+  const runs = printOutput.match(/^\s*runs\s*=\s*(\d+)/m);
+  if (runs) out.runs = parseInt(runs[1], 10);
+  return out;
+}
+
+/**
+ * Read launchd's record of the daemon's last exit. macOS only; returns null
+ * on other platforms, when the job isn't loaded, or when launchd reported
+ * nothing useful.
+ */
+export function getLaunchdLastExit(): LaunchdLastExit | null {
+  if (!isMac) return null;
+  let out: string;
+  try {
+    // execFileSync, not a shell string — no interpolation into a command line.
+    out = execFileSync('launchctl', ['print', `${getLaunchdDomain()}/${PLIST_LABEL}`], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return null;
+  }
+  const parsed = parseLaunchdLastExit(out);
+  if (parsed.exitCode === undefined && parsed.reason === undefined) return null;
+  return parsed;
+}
+
+/**
+ * Human-readable lines describing launchd's last-exit record, for
+ * `trace-mcp daemon status`. Returns [] when there's nothing to say.
+ *
+ * launchd reports a signalled death and a plain non-zero exit with the same
+ * field, so a small-numbered code gets a "possibly SIGx" hint rather than a
+ * claim. A SIGKILL here is the fingerprint of an OS memory kill.
+ */
+export function formatLaunchdLastExit(info: LaunchdLastExit | null): string[] {
+  if (!info) return [];
+  const lines: string[] = [];
+  if (info.exitCode !== undefined) {
+    const sig = osConstants.signals as Record<string, number>;
+    const name = Object.keys(sig).find((k) => sig[k] === info.exitCode);
+    const hint =
+      info.exitCode !== 0 && name
+        ? ` (possibly ${name} — launchd reports a signalled death and a plain exit code alike)`
+        : '';
+    lines.push(`  Last exit (launchd): code ${info.exitCode}${hint}`);
+  }
+  if (info.reason) lines.push(`  Last exit reason: ${info.reason}`);
+  if (info.runs !== undefined) lines.push(`  launchd start count: ${info.runs}`);
+  return lines;
 }
 
 /** Rotate daemon.log once it exceeds this size (bytes). */

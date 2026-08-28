@@ -67,6 +67,7 @@ import { ProjectManager } from './daemon/project-manager.js';
 import type { ManagedProject } from './daemon/project-manager.js';
 import { createDaemonProjectRelay } from './daemon/project-relay.js';
 import { handleReindexFile } from './daemon/reindex-file-handler.js';
+import { startVitalsLog } from './daemon/vitals-log.js';
 import { StdioSession } from './daemon/router/session.js';
 import { initializeDatabase } from './db/schema.js';
 import { Store } from './db/store.js';
@@ -2833,6 +2834,19 @@ program
           teardownProjectBookkeeping(root);
           broadcastEvent({ type: 'project_status', project: root, status: 'unloaded' });
         }
+      },
+    });
+    // Vitals breadcrumb (TRA-267): an OS-level kill or native crash runs no JS
+    // handler, so the safety net logs nothing and daemon.log's last line is an
+    // ordinary indexing message. A periodic memory/project line makes the
+    // trajectory before such a gap readable after the fact.
+    startVitalsLog({
+      getCounts: () => {
+        const loaded = projectManager.listProjects();
+        return {
+          loaded: loaded.length,
+          indexing: loaded.filter((p) => p.status === 'indexing' || p.status === 'starting').length,
+        };
       },
     });
     // Track activity: wrap the client/session/SSE mutation points in-place via
