@@ -52,6 +52,25 @@ describe('docs footer nav covers every indexed page', () => {
     );
   });
 
+  /**
+   * All 13 <lastmod> values were hand-maintained and all 13 had gone stale —
+   * tools-reference.html by 4.5 months — so every docs fix was published to
+   * Google under an April date. `pnpm docs:sitemap` refreshes them from git.
+   */
+  it('every lastmod is at least the source page last commit date', async () => {
+    const { sourceFor, gitDate } = await import('../../scripts/gen-sitemap.mjs');
+    const xml = readFileSync(join(DOCS, 'sitemap.xml'), 'utf-8');
+    const stale = [...xml.matchAll(/<loc>https:\/\/trace-mcp\.com([^<]*)<\/loc>\s*<lastmod>([^<]*)<\/lastmod>/g)]
+      .map(([, path, lastmod]) => ({ path, lastmod, git: gitDate(sourceFor(path)) }))
+      .filter((e) => e.lastmod < e.git);
+    expect(
+      stale,
+      `sitemap lastmod older than the page's last commit — run \`pnpm docs:sitemap\`: ${stale
+        .map((e) => `${e.path} (${e.lastmod} < ${e.git})`)
+        .join(', ')}`,
+    ).toEqual([]);
+  });
+
   it('the layout renders the nav from the data file, not a hardcoded list', () => {
     const layout = readFileSync(join(DOCS, '_layouts', 'default.html'), 'utf-8');
     expect(layout).toMatch(/site\.data\.docs_nav/);
