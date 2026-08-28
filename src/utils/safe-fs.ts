@@ -24,9 +24,16 @@ function isEnoent(err: unknown): boolean {
  * reading where the file could disappear out from under the check.
  *
  * Non-ENOENT errors (permission denied, EISDIR, etc.) are rethrown.
+ *
+ * Trust note: this helper does no path validation on purpose — it is a
+ * mechanical replacement for an inline `readFileSync`, so `path` carries
+ * exactly the trust its caller already had. Every call site in this repo
+ * passes a path derived from the project root or `~/.trace-mcp` that this
+ * local CLI was pointed at, never a value from an untrusted request.
  */
 export function readIfExists(path: string): string | null {
   try {
+    // codeql[js/path-injection]: see trust note above
     return fs.readFileSync(path, 'utf-8');
   } catch (err) {
     if (isEnoent(err)) return null;

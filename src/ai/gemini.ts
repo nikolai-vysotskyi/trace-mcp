@@ -108,6 +108,10 @@ class GeminiInferenceService implements InferenceService {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            // codeql[js/file-data-in-outbound-network-request]: sending indexed
+            // source to the configured AI provider is this module's entire
+            // purpose. It only runs when the user turns `ai` on and supplies
+            // their own API key — see src/ai/consent.ts.
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
               generationConfig: {

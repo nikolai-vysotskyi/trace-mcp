@@ -87,6 +87,9 @@ export function makeIntraFileReader(
         // Stat and read the same open fd rather than statSync(path) then
         // readFileSync(path) — two path-based calls still race (the file
         // can change between them) even without an explicit existsSync.
+        // codeql[js/path-injection]: `filePath` is a path this server itself
+        // indexed under `projectRoot`, resolved against that same trusted
+        // root — not a per-request value from an untrusted caller.
         fd = fs.openSync(abs, 'r');
         const stat = fs.fstatSync(fd);
         if (stat.size <= 2 * 1024 * 1024) {

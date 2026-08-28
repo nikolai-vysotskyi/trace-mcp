@@ -66,6 +66,10 @@ class AnthropicInferenceService implements InferenceService {
             'x-api-key': this.apiKey,
             'anthropic-version': '2023-06-01',
           },
+          // codeql[js/file-data-in-outbound-network-request]: sending indexed
+          // source to the configured AI provider is this module's entire
+          // purpose. It only runs when the user turns `ai` on and supplies
+          // their own API key — see src/ai/consent.ts.
           body: JSON.stringify({
             model: this.model,
             max_tokens: options?.maxTokens ?? 4096,
