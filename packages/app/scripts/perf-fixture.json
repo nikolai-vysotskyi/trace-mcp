@@ -1,0 +1,18 @@
+{
+  "_comment": "Fixed workload fixture for the desktop perf harness (TRA-258). The fixture project is this repo itself at a pinned commit, checked out into a throwaway git worktree — self-indexing is the project's own dogfooding path and needs no extra test data. Changing `commit` or `queries` makes numbers incomparable with earlier runs[] entries: bump `revision` and say so in docs/perf/README.md.",
+  "revision": 1,
+  "commit": "fc47c10f44eb539cbb01b0bb2e4ff633c59b7151",
+  "queries": [
+    "index",
+    "search",
+    "graph",
+    "plugin",
+    "config",
+    "server",
+    "symbol",
+    "edge",
+    "cache",
+    "resolve"
+  ],
+  "views": ["Overview", "Activity", "Graph"]
+}

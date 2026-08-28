@@ -15,23 +15,82 @@ entry per measurement pass, never rewrite an old one. This file is the human sum
 | `artifact_mb.mac_asar` | 1.6 | ×1.5 growth | ok |
 | `artifact_mb.mac_app_unpacked` | 264.8 | ×1.5 growth | ok (Electron framework is ~263 MB of it) |
 
-Not yet measured: `ui_p95_ms`, `heap_after_workload_mb`, `heap_growth_mb_per_hour`.
-All three need a fixed indexed-project fixture so the workload scenario is identical
-across runs — that's the next run's job.
+`ui_p95_ms`, `heap_after_workload_mb` and `heap_growth_mb_per_hour` are still unfilled in
+`baseline.json`. The harness that produces them landed with TRA-258 and has been run
+end to end, but a publishable pass needs a daemon on 127.0.0.1:3741 that speaks this
+checkout's API — the renderer's `BASE` is hardcoded, so the workload cannot be pointed
+anywhere else. On a machine where another trace-mcp version owns that port, the fixture
+never gets served and the run aborts with `the daemon on 3741 never served <fixture>`.
+Take the first clean pass on a machine with no competing daemon.
 
 ## How to take a measurement
 
 ```bash
+pnpm run build                          # repo root — the workload indexes the fixture with this CLI
 pnpm -C packages/app run build          # required — the harness measures the prod bundle
 pnpm -C packages/app run pack           # optional — needed for artifact_mb
 PERF_COMMIT=$(git rev-parse --short HEAD) \
-  pnpm -C packages/app run perf -- --samples 3 --idle-seconds 300
+  pnpm -C packages/app run perf -- --samples 3 --idle-seconds 300 \
+                                     --workload --workload-minutes 30 --opens 20
 ```
+
+Drop `--workload` for a startup-only pass (~6 min). With it the run takes ~40 min and
+adds `ui_p95_ms`, `heap_after_workload_mb` and `heap_growth_mb_per_hour`.
 
 The harness ([`packages/app/scripts/perf-measure.mjs`](../../packages/app/scripts/perf-measure.mjs))
 launches the built app against a throwaway `--user-data-dir`, drives it over CDP, and
 prints a ready-to-paste `runs[]` entry. `cold_start_ms` is process spawn → `#root` has
 painted real content; `window_interactive_ms` is the renderer's own share of that.
+
+## The fixed workload
+
+The three workload metrics are only comparable if the scenario is byte-identical
+between runs, so the harness does not improvise one. It checks this repo out into a
+detached git worktree at the commit pinned in
+[`packages/app/scripts/perf-fixture.json`](../../packages/app/scripts/perf-fixture.json),
+indexes it with this checkout's own `dist/cli.js`, registers it with the daemon, drives
+it, and unregisters it again at the end. The worktree lives at
+`~/.trace-mcp/perf-fixture/<commit12>` — deliberately outside any checkout, because the
+daemon reroutes a registration for a path under an already-registered project to that
+parent, which would silently point the workload at the wrong repo. Remove it with
+`git worktree remove ~/.trace-mcp/perf-fixture/<commit12>` when you want a cold fixture.
+
+**The action script — do not change it without bumping `revision` in the pin file.**
+
+1. **open project** — navigate the window to `?view=project&root=<fixture>`; done when the
+   Overview pane has painted its `Files indexed` / `Symbols` rows.
+2. **switch to Graph**, then wait until a probe query returns at least one match — the
+   GPU graph has to have loaded its nodes before searching means anything.
+3. Repeat until the duration is up, one **cycle** per iteration:
+   - **10 searches** — the graph typeahead, the 10 queries in `queries` in pin order.
+   - **3 view switches** — the `views` list (`Overview → Activity → Graph`); the cycle
+     ends back on Graph so the next cycle's searches have an input to type into.
+   - one post-GC heap sample (`HeapProfiler.collectGarbage` + `Runtime.getHeapUsage`).
+
+`--opens N` runs N extra open-project navigations up front, purely for that action's
+latency; they cannot be part of the cycle loop because each reload resets the heap and
+would hide exactly the leak the loop is looking for. The first open is a discarded
+warm-up (it also pays for the daemon loading the fixture index).
+
+How each number is derived:
+
+- **`ui_p95_ms`** — the worst of the three per-action p95s, not the p95 of all actions
+  pooled: there are ~100x more searches than opens, so a pooled percentile would just be
+  the search p95 and a slow project-open would never surface. Per-action medians and p95s
+  are in `workload.actions` in the JSON.
+- An action's duration is measured in the renderer's own `performance` clock, from the
+  click/keystroke until the DOM stops mutating for 120 ms (capped at 5 s) — not until
+  the first paint. Switching to the Graph tab paints an empty canvas within a few
+  milliseconds and then does the real work; first-paint timing reports single-digit
+  milliseconds for every action and would never catch a regression.
+- **`heap_after_workload_mb`** — the post-GC heap after the first complete cycle.
+- **`heap_growth_mb_per_hour`** — least-squares slope of the post-GC heap series over the
+  whole run. Over 50 is an issue on its own, whatever the delta to the previous run.
+
+The workload window is launched with `--disable-background-timer-throttling`,
+`--disable-backgrounding-occluded-windows` and `--disable-renderer-backgrounding`; an
+occluded renderer has its timers throttled, which stalls the driver rather than merely
+slowing it. Startup samples deliberately do not get those flags.
 
 Every number is a median of 3 samples. A single sample is never a regression.
 Compare against the median of the last 5 runs: >+10% is a warning to note, >+25%
