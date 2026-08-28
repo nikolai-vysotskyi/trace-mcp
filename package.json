@@ -22,6 +22,7 @@
     "format:check": "biome format",
     "biome:ci": "biome ci",
     "serve": "tsx src/cli.ts serve",
+    "count:tools": "node scripts/count-advertised-tools.mjs",
     "replay:check": "tsx scripts/replay-eval.ts",
     "replay:update-baseline": "tsx scripts/replay-eval.ts --update-baseline",
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs && node scripts/postinstall-control-plane.mjs",

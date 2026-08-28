@@ -1,3 +1,8 @@
+---
+# Front matter only so Jekyll renders the {{ site.data.counts.* }} tags below
+# (TRA-263). Stripped from the served file.
+layout: null
+---
 # trace-mcp — Full documentation
 
 > Concatenated full text of all trace-mcp docs pages, for AI systems that ingest one file instead of following links. See /llms.txt for the linked index.
@@ -6,7 +11,7 @@
 
 # Tools reference
 
-trace-mcp exposes 164 MCP tools and 9 resources.
+trace-mcp exposes {{ site.data.counts.tools }} MCP tools and 9 resources.
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
 
@@ -283,7 +288,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 | Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
 | Service/subproject scoping | ✅ decisions per service | ❌ | ✅ wings per project | ❌ | ❌ | ✅ per branch | ✅ per workspace |
 | Published retrieval benchmark | ❌ | ❌ | ✅ LongMemEval / LoCoMo / MemBench | ❌ | ✅ LoCoMo / LongMemEval / BEAM | ❌ | ❌ |
-| Code intelligence included | ✅ 164 tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Code intelligence included | ✅ {{ site.data.counts.tools }} tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Works as standalone memory | ❌ code-focused | ✅ git-native, code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
 | Written in | TypeScript | — | Python | TypeScript | TS + Python | Go / Rust | Python |
 
@@ -320,7 +325,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | 80 | 40+ (via LSP) | 23 + Jupyter | 158 | 19 | 32 | 28 |
 | Framework integrations | 85 | ❌ | ❌ (Python entry points only) | ❌ | ❌ | ❌ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✅ | ❌ | ❌ | ✅ cross-service HTTP | ✅ polyglot dep graph | ❌ | ✅ PHP↔TS API drift |
-| MCP tools | 164 | ~55 | ~28 | 14 | 21 | 90 | 224 |
+| MCP tools | {{ site.data.counts.tools }} | ~55 | ~28 | 14 | 21 | 90 | 224 |
 | Session memory | ✅ | ✅ (manual notes) | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✅ | ❌ | ✅ multi-repo daemon | ✅ cross-service | ✅ cross-project search | ❌ | ❌ |
@@ -934,7 +939,7 @@ The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported
 Every MCP session is still attached to exactly one project (see [stdio vs HTTP](#stdio-vs-http--choosing-your-setup)) — but two tools let an agent reach across to any OTHER project already registered with trace-mcp, without opening a second MCP connection:
 
 - **`list_projects`** — lists every project in `~/.trace-mcp/registry.json` (root, name, type, last-indexed timestamp), plus known subprojects when topology is enabled for the current session.
-- **`call_project_tool { project, tool, args }`** — runs any of the ~164 normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
+- **`call_project_tool { project, tool, args }`** — runs any of the {{ site.data.counts.tools }} normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
 
 This is read-only relay wiring — it never starts indexing or a file watcher for the target project. In the HTTP daemon, a target project already warm in memory is served directly; a cold one is opened on demand via the same read-mostly path used for on-demand subprojects. Under `stdio` (no daemon), the target project's existing index database is opened directly; a project that has never been indexed cannot be relayed to.
 
@@ -1356,7 +1361,7 @@ src/
 │   ├── benchmark.ts        #   Synthetic benchmark (5 scenarios)
 │   ├── tech-detector.ts    #   Manifest parser + coverage assessment
 │   └── known-packages.ts   #   Catalog of ~200 known packages
-├── tools/                  # 164 MCP tool implementations
+├── tools/                  # {{ site.data.counts.tools }} MCP tool implementations
 ├── scoring/                # PageRank, BM25, hybrid scoring, structured assembly
 ├── plugin-api/             # Plugin registry, loader, executor, test harness
 ├── init/                   # Setup & detection (Claude Code, Claw Code, Cursor, Windsurf, Continue)

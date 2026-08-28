@@ -1,0 +1,13 @@
+# Single source of truth for the tool-surface numbers quoted across the docs
+# site (TRA-263). Never hardcode these in a page — use {{ site.data.counts.* }}
+# so the pages cannot disagree with each other again (138 / 164 / 165 / ~170
+# were live on prod simultaneously, two of them on the same page).
+#
+# `tools` is the advertised surface a client sees in `tools/list`. Registration
+# is gated on config and detected frameworks, so there is no static list to
+# count — re-measure with `pnpm run count:tools`, do not edit it from a diff.
+#
+# Preset sizes deliberately live NOT here: tests/docs/preset-claims.test.ts
+# (TRA-259) checks those against the real tool filter, which is exact where a
+# hand-maintained number would only be a copy.
+tools: 165
