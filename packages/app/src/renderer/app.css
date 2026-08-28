@@ -124,6 +124,51 @@ body {
   border-radius: 4px;
 }
 
+/* ── Glass (navigation + controls only, never content) ──────────── */
+/* One glass layer per region. Content scrolls UNDER it; the boundary is a
+   scroll-edge hairline that fades in, not a permanent border. */
+.ws-glass {
+  background: color-mix(in srgb, var(--bg-primary) 62%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .ws-glass {
+    background: var(--bg-primary);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* ── Loading skeletons ──────────────────────────────────────────── */
+/* Blocks at the exact geometry of the value they stand in for, so nothing
+   moves when the data lands. Never a centred spinner. */
+.ws-skel {
+  display: inline-block;
+  background: var(--bg-inset);
+  animation: ws-skel-pulse 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes ws-skel-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Global, not per-component — every animation in the app honours it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* ── macOS prominent button (filled, bezeled) ───────────────────── */
 /* Used by UpdateBanner. Sized for the narrow sidebar (~24px tall). */
 .btn-prominent {
