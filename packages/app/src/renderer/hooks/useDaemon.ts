@@ -133,6 +133,13 @@ type SSEEvent =
 
 const BASE = 'http://127.0.0.1:3741';
 
+/**
+ * Cap on daemon reads. A *hung* daemon (accepting the socket but never
+ * answering) would otherwise leave `loading` true indefinitely, hiding the
+ * DisconnectedBanner — the one control that can restart it (TRA-264).
+ */
+export const DAEMON_FETCH_TIMEOUT_MS = 8000;
+
 // ── Hook ───────────────────────────────────────────────────────────────
 
 export function useDaemon() {
@@ -146,7 +153,7 @@ export function useDaemon() {
   // Fetch project list
   const fetchProjects = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE}/api/projects`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const res = await fetch(`${BASE}/api/projects`, { signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const json = await res.json();
       const data: ProjectInfo[] = json.projects ?? json;
@@ -162,7 +169,7 @@ export function useDaemon() {
   // Fetch client list
   const fetchClients = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE}/api/clients`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const res = await fetch(`${BASE}/api/clients`, { signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const json = await res.json();
       const data: ClientInfo[] = json.clients ?? json;
@@ -175,7 +182,7 @@ export function useDaemon() {
   // Fetch settings + daemon info
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE}/api/settings`); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const res = await fetch(`${BASE}/api/settings`, { signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
       if (!res.ok) throw new Error(res.statusText);
       const data = await res.json();
       setSettings(data);

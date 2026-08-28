@@ -317,7 +317,7 @@ export function WorkspaceHeader({
           <Chip
             label={<><Icon name="lock" size={11} /> Security</>}
             active={filter.hasSecurityFindings === true}
-            accent="#ff3b30"
+            accent="var(--destructive)"
             onClick={() =>
               onFilterChange({
                 ...filter,

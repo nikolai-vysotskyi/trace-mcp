@@ -99,7 +99,7 @@ function CompactRow({
             {project.root}
           </div>
           {project.error ? (
-            <div className="text-[10px] truncate" style={{ color: '#ff3b30' }} title={project.error}>
+            <div className="text-[10px] truncate" style={{ color: 'var(--destructive)' }} title={project.error}>
               {project.error}
             </div>
           ) : (
@@ -173,7 +173,7 @@ function CompactRow({
                   setConfirm(false);
                 }}
                 className="text-[11px] px-1.5 py-0.5 rounded font-medium"
-                style={{ background: '#ff3b30', color: '#fff' }}
+                style={{ background: 'var(--destructive)', color: '#fff' }}
               >
                 Remove
               </button>

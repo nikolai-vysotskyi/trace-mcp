@@ -143,9 +143,9 @@ export function BulkActionsBar({ projects, onReindex, onRemove, onClear }: BulkA
             onClick={() => setConfirmRemove(true)}
             className={baseBtn}
             style={{
-              background: '#ff3b3018',
-              color: '#ff3b30',
-              border: '0.5px solid #ff3b3040',
+              background: 'color-mix(in srgb, var(--destructive) 9%, transparent)',
+              color: 'var(--destructive)',
+              border: '0.5px solid color-mix(in srgb, var(--destructive) 25%, transparent)',
             }}
           >
             Remove
@@ -209,7 +209,7 @@ export function BulkActionsBar({ projects, onReindex, onRemove, onClear }: BulkA
             disabled={busy}
             onClick={() => void handleRemove()}
             className={baseBtn}
-            style={{ background: '#ff3b30', color: '#fff' }}
+            style={{ background: 'var(--destructive)', color: '#fff' }}
           >
             Confirm
           </button>
