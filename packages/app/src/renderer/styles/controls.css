@@ -176,7 +176,12 @@
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
-  color: var(--label-secondary);
+  /* --label, not --label-secondary: that token only clears 4.5:1 over an
+     UNTINTED surface, and this sits on the recessed --fill-tertiary track —
+     measured 4.45:1 in light on the workspace toolbar (TRA-292). macOS also
+     draws unselected segment labels at full strength; the thumb, not the
+     label colour, is what carries selection. */
+  color: var(--label);
   cursor: default;
   transition:
     background 120ms ease,

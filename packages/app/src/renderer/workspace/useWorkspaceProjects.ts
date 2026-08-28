@@ -62,6 +62,8 @@ export interface UseWorkspaceProjectsResult {
   metricsLoading: boolean;
   refreshing: boolean;
   error: string | null;
+  /** Why `error` happened — drives the wording and the offered action. */
+  errorKind: MetricsErrorKind | null;
   connected: boolean;
   restarting: boolean;
   addProject(root: string): Promise<void>;
@@ -73,9 +75,26 @@ export interface UseWorkspaceProjectsResult {
   restartDaemon(): Promise<void>;
 }
 
+/**
+ * Why metrics are missing. "Not reachable" is the wrong diagnosis for a daemon
+ * that is alive but spending eight seconds indexing eighty projects, and the
+ * copy the user reads has to say which of the two happened.
+ */
+export type MetricsErrorKind = 'timeout' | 'offline' | 'server';
+
 interface MetricsSetters {
   setMetrics: (m: ProjectHealthMetrics[]) => void;
   setError: (e: string | null) => void;
+  setErrorKind?: (k: MetricsErrorKind | null) => void;
+}
+
+/** Classify a fetch rejection. A timeout means slow, not gone. */
+export function classifyMetricsError(err: unknown): MetricsErrorKind {
+  const e = err as { name?: string; message?: string } | null;
+  const raw = `${e?.name ?? ''} ${e?.message ?? ''}`;
+  if (/timeout|timed? ?out|abort/i.test(raw)) return 'timeout';
+  if (/failed to fetch|networkerror|load failed|refused/i.test(raw)) return 'offline';
+  return 'server';
 }
 
 /**
@@ -84,11 +103,16 @@ interface MetricsSetters {
  * socket died" and mean nothing to the person reading the banner.
  */
 export function describeMetricsError(err: unknown): string {
-  const raw = (err as Error)?.message ?? '';
-  if (/failed to fetch|networkerror|load failed|aborted|timed? ?out/i.test(raw)) {
-    return "Couldn't load project metrics — daemon not responding.";
+  switch (classifyMetricsError(err)) {
+    case 'timeout':
+      return 'The daemon is taking too long to answer — it may still be indexing.';
+    case 'offline':
+      return "Couldn't load project metrics — daemon not responding.";
+    default: {
+      const raw = (err as Error)?.message ?? '';
+      return raw ? `Couldn't load project metrics — ${raw}` : "Couldn't load project metrics.";
+    }
   }
-  return raw ? `Couldn't load project metrics — ${raw}` : "Couldn't load project metrics.";
 }
 
 /**
@@ -102,14 +126,17 @@ export async function fetchMetricsOnce(setters: MetricsSetters): Promise<boolean
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       setters.setError(`Couldn't load project metrics — ${body.error ?? `HTTP ${res.status}`}`);
+      setters.setErrorKind?.('server');
       return false;
     }
     const data = (await res.json()) as { projects: ProjectHealthMetrics[] };
     setters.setMetrics(data.projects ?? []);
     setters.setError(null);
+    setters.setErrorKind?.(null);
     return true;
   } catch (err) {
     setters.setError(describeMetricsError(err));
+    setters.setErrorKind?.(classifyMetricsError(err));
     return false;
   }
 }
@@ -121,6 +148,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   const [metricsLoaded, setMetricsLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<MetricsErrorKind | null>(null);
 
   const prevStatusRef = useRef<Map<string, string>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,7 +158,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   // flag — otherwise the KPI strip would swap `—` placeholders for hard zeros
   // and present a failed fetch as real data (TRA-264).
   const fetchMetrics = useCallback(async () => {
-    const ok = await fetchMetricsOnce({ setMetrics, setError });
+    const ok = await fetchMetricsOnce({ setMetrics, setError, setErrorKind });
     if (ok) setMetricsLoaded(true);
   }, []);
 
@@ -213,6 +241,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
     metricsLoading: !metricsLoaded,
     refreshing,
     error,
+    errorKind,
     connected: daemon.connected,
     restarting: daemon.restarting,
     addProject: daemon.addProject,

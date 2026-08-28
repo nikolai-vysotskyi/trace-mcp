@@ -25,6 +25,7 @@ vi.mock('../useWorkspaceProjects', () => ({
     metricsLoading: false,
     refreshing: false,
     error: null,
+    errorKind: null,
     connected: true,
     restarting: false,
     addProject: async () => {},

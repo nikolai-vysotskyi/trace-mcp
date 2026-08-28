@@ -17,7 +17,7 @@
    onto the new ones, so existing call sites keep working. They are deprecated;
    don't add new ones. */
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 import { Icon } from '../icons';
 
 export type ButtonSize = 'small' | 'regular' | 'large';
@@ -34,6 +34,8 @@ const LEGACY: Record<LegacyButtonVariant, ButtonVariant> = {
 };
 
 interface BaseButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** React 19 passes `ref` through as a plain prop; declared so TS knows. */
+  ref?: Ref<HTMLButtonElement>;
   size?: ButtonSize;
   /** Leading icon name (see icons.tsx GLYPHS). */
   icon?: string;

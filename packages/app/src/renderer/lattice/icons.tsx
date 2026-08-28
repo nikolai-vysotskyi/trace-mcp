@@ -184,6 +184,7 @@ const GLYPHS: Record<string, string> = {
 
   // File-type glyphs (used by fileKind for non-language files)
   lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  warning: '<path d="M12 4L2.5 20h19z"/><path d="M12 10v4M12 17.2h0"/>',
   archive:
     '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/>',
   font: '<path d="M5 19l5-13h1.6l5 13M7.6 14h6.8"/>',

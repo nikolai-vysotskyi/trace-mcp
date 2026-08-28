@@ -23,14 +23,14 @@ export function InlineProgress({ progress, hint }: InlineProgressProps) {
     <div className="mt-0.5">
       <div
         className="flex items-baseline gap-1 text-[10px]"
-        style={{ color: 'var(--text-tertiary)' }}
+        style={{ color: 'var(--label-secondary)' }}
       >
         <span className="truncate">{label}</span>
         <span className="tabular-nums">{percent}%</span>
       </div>
       <div
         className="mt-0.5 h-[3px] w-full overflow-hidden rounded-full"
-        style={{ background: 'var(--fill-control)' }}
+        style={{ background: 'var(--fill-quaternary)' }}
       >
         <div
           style={{
