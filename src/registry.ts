@@ -5,7 +5,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { ensureGlobalDirs, getDbPath, projectName, REGISTRY_PATH } from './global.js';
+import {
+  ensureGlobalDirs,
+  getDbPath,
+  getProjectRemoteIdentity,
+  projectName,
+  REGISTRY_PATH,
+} from './global.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
 
 export interface RegistryEntry {
@@ -40,6 +46,17 @@ export interface RegistryEntry {
    * for that path since it only runs on explicit `doctor --fix`/`prune --apply`).
    */
   missingRootSince?: string;
+  /**
+   * Normalized git remote identity (`host/org/repo`) resolved at
+   * registration time, e.g. `github.com/nikolai-vysotskyi/trace-mcp` — see
+   * `getProjectRemoteIdentity` in global.ts. Absent for non-git projects or
+   * a git repo with no remote configured. Cached here (rather than
+   * re-reading `.git/config` on every lookup) so a later registration of
+   * *another* checkout of the same repo can find this entry even if this
+   * entry's own `root` directory has since been deleted (e.g. a cleaned-up
+   * Multica ephemeral checkout) — see `findRegisteredEntryByRemote` (TRA-38).
+   */
+  remoteIdentity?: string;
 }
 
 interface Registry {
@@ -104,12 +121,27 @@ export function registerProject(
     return reg.projects[absRoot];
   }
 
+  // TRA-38: a fresh checkout of a repo that's already registered somewhere
+  // else (e.g. Multica's `repo checkout` landing the same repo under a new
+  // per-run ephemeral directory every time) should reuse that project's
+  // existing index instead of building a brand-new one from scratch. Detect
+  // this by normalized git remote identity, not by path. Repos with no
+  // resolvable remote (non-git projects, or a repo with no `origin`
+  // configured) fall through to the exact same path-based `dbPath` this
+  // function has always computed — zero behavior change for them.
+  const remoteIdentity = getProjectRemoteIdentity(absRoot);
+  const sibling = remoteIdentity ? findRegisteredEntryByRemote(remoteIdentity, absRoot) : null;
+
   const entry: RegistryEntry = {
     name: projectName(absRoot),
     root: absRoot,
-    dbPath: getDbPath(absRoot),
-    lastIndexed: null,
+    dbPath: sibling?.dbPath ?? getDbPath(absRoot),
+    // Inherit the sibling's lastIndexed so tooling doesn't present a project
+    // whose DB already has data as "never indexed" just because this
+    // particular root is a new registry row.
+    lastIndexed: sibling?.lastIndexed ?? null,
     addedAt: new Date().toISOString(),
+    ...(remoteIdentity && { remoteIdentity }),
     ...(opts?.type && { type: opts.type }),
     ...(opts?.children && { children: opts.children }),
   };
@@ -117,6 +149,34 @@ export function registerProject(
   reg.projects[absRoot] = entry;
   saveRegistry(reg);
   return entry;
+}
+
+/**
+ * Find an already-registered project (other than `excludeRoot`) whose git
+ * remote identity matches `remoteIdentity`. Used by `registerProject` to
+ * detect "this is another checkout of a repo we already know about" so the
+ * new registration can reuse the existing entry's `dbPath` instead of
+ * spawning a duplicate index (TRA-38).
+ *
+ * Falls back to computing `remoteIdentity` on the fly for entries registered
+ * before this field existed (`entry.remoteIdentity` absent) — a live re-read
+ * of that entry's `.git/config`, which is a no-op (returns null, no match)
+ * if the entry's root no longer exists on disk. No persisted index is
+ * needed: registries are small (tens to low hundreds of entries) and this
+ * only runs once per *new* registration, mirroring the existing live-scan
+ * style of `findOverlappingProjects` / `findOverlapForNewRoot` in this file.
+ */
+export function findRegisteredEntryByRemote(
+  remoteIdentity: string,
+  excludeRoot?: string,
+): RegistryEntry | null {
+  const absExclude = excludeRoot ? path.resolve(excludeRoot) : null;
+  for (const entry of listProjects()) {
+    if (absExclude && entry.root === absExclude) continue;
+    const entryIdentity = entry.remoteIdentity ?? getProjectRemoteIdentity(entry.root);
+    if (entryIdentity === remoteIdentity) return entry;
+  }
+  return null;
 }
 
 /** Find a multi-root project that contains this child root. */

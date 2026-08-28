@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { saveProjectConfig } from './config.js';
 import { initializeDatabase } from './db/schema.js';
-import { ensureGlobalDirs, getDbPath } from './global.js';
+import { ensureGlobalDirs } from './global.js';
 import { generateConfig } from './init/config-generator.js';
 import type { DetectionResult } from './init/types.js';
 import { detectProject } from './init/detector.js';
@@ -125,9 +125,18 @@ export function setupProject(
     exclude: config.exclude,
   });
 
-  // 3. Ensure global dirs & DB path
+  // 3. Ensure global dirs, then register in the global registry. Registering
+  // here (rather than after DB init, as before TRA-38) resolves the actual
+  // dbPath first: when this root's git remote matches an already-registered
+  // *different* root, registerProject() reuses that project's existing
+  // dbPath instead of handing back a fresh path-based one. Doing this before
+  // initializeDatabase means a duplicate checkout of an already-known repo
+  // (e.g. Multica's per-run ephemeral clones) initializes the shared DB in
+  // place, rather than creating-then-abandoning an empty DB file at a
+  // path-based location nothing ends up using.
   ensureGlobalDirs();
-  const dbPath = getDbPath(absRoot);
+  const entry = registerProject(absRoot);
+  const dbPath = entry.dbPath;
 
   // 4. Migrate old local DB if requested. We treat an EMPTY (0-byte) local
   // .trace-mcp/index.db as cruft from a previous run, not as a real migration
@@ -155,12 +164,10 @@ export function setupProject(
     }
   }
 
-  // 5. Initialize database
+  // 5. Initialize database (at the dbPath resolved by registerProject above —
+  // either freshly computed or reused from a same-remote sibling entry)
   const db = initializeDatabase(dbPath);
   db.close();
-
-  // 6. Register in global registry
-  const entry = registerProject(absRoot);
 
   return {
     entry,

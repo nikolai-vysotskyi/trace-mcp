@@ -148,28 +148,45 @@ function inspectProjectDb(dbPath: string): { files: number | null } {
 }
 
 interface RegistryHashIndex {
-  /** Map from projectHash → { root, exists }. */
-  byHash: Map<string, { root: string; exists: boolean }>;
+  /**
+   * Map from projectHash → every live anchor (root + exists) that resolves
+   * to it. A hash can have more than one anchor once TRA-38 dbPath sharing
+   * is in play — two checkouts of the same git remote deliberately share
+   * one index DB, so that DB's hash is "live" as long as ANY of its
+   * anchors' roots still exist, not just the one this map happened to see
+   * first.
+   */
+  byHash: Map<string, { root: string; exists: boolean }[]>;
+}
+
+function addHashAnchor(
+  byHash: Map<string, { root: string; exists: boolean }[]>,
+  hash: string,
+  root: string,
+): void {
+  const anchor = { root, exists: fs.existsSync(root) };
+  const anchors = byHash.get(hash);
+  if (anchors) anchors.push(anchor);
+  else byHash.set(hash, [anchor]);
 }
 
 function buildRegistryIndex(): RegistryHashIndex {
-  const byHash = new Map<string, { root: string; exists: boolean }>();
+  const byHash = new Map<string, { root: string; exists: boolean }[]>();
   for (const entry of listProjects()) {
     const absRoot = path.resolve(entry.root);
-    byHash.set(projectHash(absRoot), {
-      root: absRoot,
-      exists: fs.existsSync(absRoot),
-    });
+    addHashAnchor(byHash, projectHash(absRoot), absRoot);
+    // Entry-level `dbPath` hash — names in registry can drift from a fresh
+    // path-based recompute (most notably: TRA-38 dbPath sharing, where a
+    // second checkout's *own* path hashes to something no file on disk ever
+    // used), but the DB the registry actually points at is canonical.
+    const dbHash = extractHash(path.basename(entry.dbPath));
+    if (dbHash) addHashAnchor(byHash, dbHash, absRoot);
     // Multi-root: children also count as live anchors.
     if (entry.children) {
       for (const child of entry.children) {
-        const abs = path.resolve(child);
-        byHash.set(projectHash(abs), { root: abs, exists: fs.existsSync(abs) });
+        addHashAnchor(byHash, projectHash(path.resolve(child)), path.resolve(child));
       }
     }
-    // Don't forget the entry-level `dbPath` hash — names in registry can drift,
-    // but the DB the registry points at is canonical. We index by the basename
-    // pattern instead of `name-hash`.
   }
   return { byHash };
 }
@@ -207,14 +224,18 @@ export function scanIndexDir(options: PruneOptions = {}): DbCandidate[] {
 
     let category: PruneCategory;
     let registeredRoot: string | null = null;
-    const registered = hash ? registry.byHash.get(hash) : undefined;
-    if (registered) registeredRoot = registered.root;
+    const anchors = hash ? registry.byHash.get(hash) : undefined;
+    // TRA-38: a hash can have multiple anchors (dbPath shared across
+    // checkouts of the same git remote) — prefer an existing one for
+    // display, but any one of them is enough to keep this DB "live".
+    const liveAnchor = anchors?.find((a) => a.exists);
+    if (anchors && anchors.length > 0) registeredRoot = (liveAnchor ?? anchors[0]).root;
 
     if (session) {
       category = mtimeMs < ttlCutoff ? 'session_expired' : 'session_active';
-    } else if (!registered) {
+    } else if (!anchors || anchors.length === 0) {
       category = 'orphan_unregistered';
-    } else if (!registered.exists) {
+    } else if (!liveAnchor) {
       category = 'orphan_missing_root';
     } else {
       // Live project — check stray_small heuristic for very small + old DBs.

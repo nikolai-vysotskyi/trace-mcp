@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DECISIONS_DB_PATH, projectHash, projectName, TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
+import { getProject, listProjects } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
 
 /** Result of a project artifact cleanup pass. */
@@ -174,11 +175,32 @@ export function removeProjectArtifacts(
     decisions: { decisions: 0, chunks: 0, clusters: 0, memos: 0 },
   };
 
-  const name = projectName(absRoot);
-  const hash = projectHash(absRoot);
-  const indexDbBase = path.join(INDEX_DIR, `${name}-${hash}.db`);
+  // TRA-38: use the registry's own recorded dbPath, not a fresh
+  // name+hash recomputation. Since two checkouts of the same git remote can
+  // now share one dbPath (see registerProject in registry.ts), `absRoot`'s
+  // actual DB may live at a path derived from a *different* root's hash —
+  // recomputing from absRoot would silently miss it (and miss the
+  // session/task-cache files, which are themselves named off this same
+  // dbPath — see local-backend.ts's `sharedDbPath.replace(/\.db$/, ...)`).
+  const registryEntry = getProject(absRoot);
+  const indexDbBase =
+    registryEntry?.dbPath ??
+    path.join(INDEX_DIR, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
+  const dbBasenameMatch = path.basename(indexDbBase).match(/^(.+)-([0-9a-f]{12})\.db$/i);
+  const name = dbBasenameMatch ? dbBasenameMatch[1] : projectName(absRoot);
+  const hash = dbBasenameMatch ? dbBasenameMatch[2] : projectHash(absRoot);
 
-  if (options.keepDbFiles) {
+  // This dbPath may still be in use by another registered project (a TRA-38
+  // sibling checkout of the same remote). Deleting it out from under that
+  // sibling would silently force it into a full reindex the next time it's
+  // opened, so never delete the index DB itself while another registered
+  // entry still points at it — its own topology/decision rows and
+  // session/task-cache files are still cleaned up below regardless.
+  const sharedWithSibling = listProjects().some(
+    (e) => path.resolve(e.root) !== absRoot && e.dbPath === indexDbBase,
+  );
+
+  if (options.keepDbFiles || sharedWithSibling) {
     // Inventory what we'd have deleted so callers can report it.
     for (const suffix of SQLITE_SIDECARS) {
       const full = indexDbBase + suffix;
@@ -187,9 +209,14 @@ export function removeProjectArtifacts(
   } else {
     // 1. Index DB + WAL/SHM/journal sidecars
     deleteDbWithSidecars(indexDbBase, result);
+  }
 
+  if (!options.keepDbFiles) {
     // 2. Session DBs: `<name>-<hash>-session-*.db` (+ sidecars)
     // 3. Daemon task cache DBs: `daemon-task-cache-*-<hash>.db` (+ sidecars)
+    // Always cleaned up regardless of index-DB sharing — these are
+    // per-connection caches, cheap to lose and rebuilt on next use, unlike
+    // the index DB itself.
     const sessionPrefix = `${name}-${hash}-session-`;
     const taskCacheSuffix = `-${hash}.db`;
     const taskCachePrefix = 'daemon-task-cache-';
