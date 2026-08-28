@@ -76,6 +76,7 @@ jobs:
     outputs:
       app: ${{ steps.filter.outputs.app }}
       core: ${{ steps.filter.outputs.core }}
+      platform: ${{ steps.filter.outputs.platform }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: filter
@@ -85,6 +86,16 @@ jobs:
             app:
               - 'packages/app/**'
               - '.github/workflows/ci.yml'
+            # Path/OS-sensitive code. TRA-236: the dangerous-root guard shipped
+            # a Windows-shaped hole because cross-platform-test only ran on
+            # release PRs — nothing exercised these files on Windows until the
+            # release was already cut.
+            platform:
+              - 'src/dangerous-root.ts'
+              - 'src/project-setup.ts'
+              - 'src/topology/**'
+              - 'tests/project-setup/dangerous-root.test.ts'
+              - 'tests/topology/**'
             core:
               - 'src/**'
               - 'scripts/**'
@@ -528,14 +539,16 @@ jobs:
   #   2. nightly schedule (04:00 UTC) — catch OS regressions overnight.
   #   3. workflow_dispatch            — manual ad-hoc verification.
   #   4. PR labeled "cross-platform"  — opt-in per PR when needed.
+  #   5. PR touching path/OS-sensitive code — see the `platform` filter above.
   #
   # Ubuntu coverage already happens in the `test` job above; this matrix is
   # mac+windows only. Each runner does its own install+build+test (the
   # ubuntu build artifact has native bindings that won't load on mac/win).
   # ───────────────────────────────────────────────────────────────────────────
   cross-platform-test:
-    needs: biome
+    needs: [biome, changes]
     if: >-
+      needs.changes.outputs.platform == 'true' ||
       startsWith(github.head_ref, 'release-please--') ||
       startsWith(github.ref, 'refs/heads/release-please--') ||
       github.event_name == 'schedule' ||
