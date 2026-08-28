@@ -343,11 +343,15 @@ export function getDbPath(projectRoot: string): string {
  * resolve `.js → .ts` imports of sibling modules).
  */
 function resolveGitMetadataDir(root: string): string | null {
-  // Trust note: `root` is the project root this process was pointed at (CLI
-  // argument or cwd of a local developer tool), not a per-request value from
-  // an untrusted caller — the same trust boundary already documented for
-  // `cwd: rootPath` in tools/quality/changed-symbols.ts. Every read below is
-  // inside `<root>/.git`, and every failure is handled by returning null.
+  // Trust note (CodeQL js/path-injection): `root` is a project root — CLI
+  // argument, cwd, or the `X-Trace-Project` hint on the daemon's loopback
+  // `/mcp` endpoint. CodeQL traces that last one and calls it user-provided,
+  // which is literally true, but it is the daemon's *own* project-selection
+  // input: anyone who can reach the daemon can already ask it to index and
+  // serve that whole tree, so reading `<root>/.git/config` grants nothing
+  // extra. Reads below never leave `<root>/.git`, and every failure returns
+  // null. Whether that loopback endpoint should be authenticated at all is a
+  // separate, pre-existing question — see TRA-301.
   const gitEntry = path.join(root, '.git');
   let stat: fs.Stats;
   try {
