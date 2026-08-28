@@ -114,6 +114,13 @@ jobs:
               - '.github/**'
               - '.npmrc'
               - '.semgrepignore'
+              # Same unsatisfiable-gate problem as `.github/**` above, for the
+              # two other trees a PR can touch on its own: an app-only or
+              # docs-only PR left `impact-report` "skipped" forever and needed
+              # an admin override to merge (TRA-257). Cheaper to pay one build
+              # than to hand-merge past branch protection.
+              - 'packages/app/**'
+              - 'docs/**'
 
   # ───────────────────────────────────────────────────────────────────────────
   # Biome — runs in parallel with build (it doesn't need dist/).

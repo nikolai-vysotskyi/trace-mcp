@@ -25,9 +25,6 @@ importers:
       '@cosmos.gl/graph':
         specifier: 3.4.1
         version: 3.4.1
-      menubar:
-        specifier: ^9.5.3
-        version: 9.5.3(electron@41.10.6)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.18)(react@19.2.8)
@@ -1599,9 +1596,6 @@ packages:
     engines: {node: '>=14.0.0'}
     hasBin: true
 
-  electron-positioner@4.1.0:
-    resolution: {integrity: sha512-726DfbI9ZNoCg+Fcu6XLuTKTnzf+6nFqv7h+K/V6Ug7IbaPMI7s9S8URnGtWFCy5N5PL4HSzRFF2mXuinftDdg==}
-
   electron-publish@26.15.3:
     resolution: {integrity: sha512-g/2bn8YTavY4cuS5F+jOS7zmZbXXBV8KZ8yHKfJjFPoKtzBqrpCdNPxBd3tqdBwP7BVd0lGzf7Bk2s0KesWZ4Q==}
 
@@ -2139,11 +2133,6 @@ packages:
 
   mdn-data@2.27.1:
     resolution: {integrity: sha512-9Yubnt3e8A0OKwxYSXyhLymGW4sCufcLG6VdiDdUGVkPhpqLxlvP5vl1983gQjJl3tqbrM731mjaZaP68AgosQ==}
-
-  menubar@9.5.3:
-    resolution: {integrity: sha512-IicKQsb1bX7RvLMreUVRYdU3Z+tcWSZ2VYSNGvAn1hCFr8x/QWaEYAsXMqSCVWH84jwSaN6xWvRbtnBVBudvZw==}
-    peerDependencies:
-      electron: '>=9.0.0'
 
   micromark-core-commonmark@2.0.3:
     resolution: {integrity: sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==}
@@ -4331,8 +4320,6 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
-  electron-positioner@4.1.0: {}
-
   electron-publish@26.15.3:
     dependencies:
       '@types/fs-extra': 9.0.13
@@ -5012,11 +4999,6 @@ snapshots:
       '@types/mdast': 4.0.4
 
   mdn-data@2.27.1: {}
-
-  menubar@9.5.3(electron@41.10.6):
-    dependencies:
-      electron: 41.10.6
-      electron-positioner: 4.1.0
 
   micromark-core-commonmark@2.0.3:
     dependencies:
