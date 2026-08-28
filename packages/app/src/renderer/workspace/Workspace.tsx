@@ -170,7 +170,13 @@ export function Workspace() {
   const daemonDown = disconnected && data.projects.length === 0;
   const showEmpty = !data.loading && !disconnected && data.projects.length === 0;
   const selectedProjects = visible.filter((p) => selection.selected.has(p.root));
-  const banner = disconnected && !daemonDown
+  // One diagnosis at a time. When DaemonDownPane has taken over the pane it
+  // already says what happened and offers the fix; letting the metrics banner
+  // through as well put "taking too long — it may still be indexing" directly
+  // above "The daemon isn't running", which are different diagnoses.
+  const banner = daemonDown
+    ? null
+    : disconnected
     ? {
         message: 'Live updates are off — the daemon stopped answering. These numbers are the last indexed snapshot.',
         action: 'restart' as const,
@@ -202,7 +208,10 @@ export function Workspace() {
     <div className="flex flex-col h-full overflow-hidden relative">
       <WorkspaceHeader
         kpis={kpis}
-        metricsLoading={data.metricsLoading}
+        metricsLoading={data.metricsLoading && data.error === null}
+        listLoading={data.loading}
+        metricsFailed={data.metricsLoading && data.error !== null}
+        listFailed={daemonDown}
         filter={filter}
         onFilterChange={setFilter}
         view={view}

@@ -17,7 +17,10 @@ const ZERO_KPIS: WorkspaceKpis = {
 
 let strip: HTMLElement;
 
-function renderHeader(metricsLoading: boolean) {
+function renderHeader(
+  metricsLoading: boolean,
+  extra: Partial<{ listLoading: boolean; metricsFailed: boolean; listFailed: boolean }> = {},
+) {
   const { container } = render(
     <WorkspaceHeader
       kpis={ZERO_KPIS}
@@ -28,6 +31,7 @@ function renderHeader(metricsLoading: boolean) {
       onViewChange={() => {}}
       onRefresh={() => {}}
       refreshing={false}
+      {...extra}
     />,
   );
   strip = container;
@@ -75,6 +79,34 @@ describe('WorkspaceHeader KPI strip', () => {
     expect(
       kpiTile('Needs attention').querySelector('[data-kpi-value]')!.getAttribute('style'),
     ).toContain('var(--status-orange)');
+  });
+
+  it('skeletons the daemon-derived tiles too while the project list is loading', () => {
+    // Without listLoading these two render a confident `0` for a count that
+    // nobody knows yet — the same "can't tell unknown from none" bug the
+    // metric tiles had.
+    renderHeader(true, { listLoading: true });
+    for (const label of ['Projects', 'Indexing']) {
+      expect(kpiValue(label)).not.toMatch(/\d/);
+      expect(kpiTile(label).querySelector('.ws-skel')).not.toBeNull();
+    }
+  });
+
+  it('resolves a failed metrics fetch to "unknown", not an endless skeleton', () => {
+    renderHeader(true, { metricsFailed: true });
+    for (const label of ['Files', 'Symbols', 'Healthy', 'Needs attention']) {
+      // A skeleton promises data that is still coming; this fetch already
+      // finished and failed, so it must settle on an em dash instead.
+      expect(kpiTile(label).querySelector('.ws-skel')).toBeNull();
+      expect(kpiValue(label)).toBe('—');
+      expect(kpiTile(label).textContent).toContain("Couldn't be measured");
+    }
+  });
+
+  it('never turns a dead daemon into a negative delta', () => {
+    renderHeader(false, { listFailed: true });
+    expect(kpiValue('Projects')).toBe('—');
+    expect(kpiTile('Projects').textContent).not.toMatch(/[↑↓]/);
   });
 
   it('gives every tile a comparison, never a bare number', () => {

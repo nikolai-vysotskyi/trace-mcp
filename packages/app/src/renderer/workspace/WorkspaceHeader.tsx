@@ -38,6 +38,23 @@ export interface WorkspaceHeaderProps {
   kpis: WorkspaceKpis;
   /** Metric-backed KPI tiles show skeletons instead of `0` while true. */
   metricsLoading?: boolean;
+  /**
+   * The daemon's project LIST hasn't landed yet. Projects and Indexing are
+   * derived from that list rather than from metrics, so without this they
+   * render a confident `0` for a number nobody knows yet.
+   */
+  listLoading?: boolean;
+  /**
+   * The metrics request finished and failed. Distinct from `metricsLoading`:
+   * a skeleton says "still coming", and this says "not coming".
+   */
+  metricsFailed?: boolean;
+  /**
+   * The project list itself is unavailable (daemon down). Without this the
+   * list-derived tiles read `0` and the baseline turns a dead connection into
+   * "↓ −12 vs today", i.e. reports a lost connection as lost projects.
+   */
+  listFailed?: boolean;
   filter: WorkspaceFilter;
   onFilterChange: (next: WorkspaceFilter) => void;
   view: ViewMode;
@@ -115,6 +132,9 @@ function useMenuAnchor() {
 export function WorkspaceHeader({
   kpis,
   metricsLoading = false,
+  listLoading = false,
+  metricsFailed = false,
+  listFailed = false,
   filter,
   onFilterChange,
   view,
@@ -169,6 +189,8 @@ export function WorkspaceHeader({
         <KpiTile
           label="Projects"
           value={kpis.totalProjects}
+          pending={listLoading}
+          unavailable={listFailed}
           delta={delta((k) => k.totalProjects)}
           deltaCaption={deltaCaption}
           footnote="tracking from today"
@@ -180,6 +202,7 @@ export function WorkspaceHeader({
           value={kpis.totalFiles}
           compact
           pending={metricsLoading}
+          unavailable={metricsFailed}
           delta={delta((k) => k.totalFiles)}
           deltaCaption={deltaCaption}
           footnote={
@@ -193,6 +216,7 @@ export function WorkspaceHeader({
           value={kpis.totalSymbols}
           compact
           pending={metricsLoading}
+          unavailable={metricsFailed}
           delta={delta((k) => k.totalSymbols)}
           deltaCaption={deltaCaption}
           footnote={
@@ -206,6 +230,7 @@ export function WorkspaceHeader({
           value={kpis.healthy}
           tone="ok"
           pending={metricsLoading}
+          unavailable={metricsFailed}
           footnote={share(kpis.healthy, kpis.totalProjects)}
           active={filter.preset === 'healthy'}
           onClick={() => togglePreset('healthy')}
@@ -215,6 +240,7 @@ export function WorkspaceHeader({
           value={kpis.needsAttention}
           tone="warn"
           pending={metricsLoading}
+          unavailable={metricsFailed}
           footnote={share(kpis.needsAttention, kpis.totalProjects)}
           active={filter.preset === 'needs_attention'}
           onClick={() => togglePreset('needs_attention')}
@@ -223,6 +249,8 @@ export function WorkspaceHeader({
           label="Indexing"
           value={kpis.indexing}
           tone="busy"
+          pending={listLoading}
+          unavailable={listFailed}
           footnote={
             kpis.indexing === 0 ? 'nothing running' : share(kpis.indexing, kpis.totalProjects)
           }

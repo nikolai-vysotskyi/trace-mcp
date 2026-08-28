@@ -410,7 +410,11 @@ export function WorkspaceTableView({
       }}
     >
       <table className="w-full border-collapse text-[13px]">
-        <thead className="sticky top-0 z-10" style={{ background: 'var(--fill-quaternary)' }}>
+        {/* STICKY_HEADER_BG, not a bare --fill-quaternary: that token is
+            translucent, so rows scrolling under a sticky header showed
+            straight through the column labels. Same reason the pinned cells
+            below stack their tint over --surface. */}
+        <thead className="sticky top-0 z-10" style={{ background: STICKY_HEADER_BG }}>
           <tr style={{ borderBottom: '0.5px solid var(--separator)' }}>
             <th
               className="px-1 w-8"

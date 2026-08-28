@@ -29,6 +29,12 @@ export interface KpiTileProps {
   onClick?: () => void;
   /** The number isn't known yet — render skeletons at the final geometry. */
   pending?: boolean;
+  /**
+   * The fetch finished and failed, so the number is not coming. A skeleton
+   * here would pulse forever and promise data that will never land; render an
+   * em dash at the same geometry instead, which reads as "unknown".
+   */
+  unavailable?: boolean;
 }
 
 const TONE_ICON: Record<KpiTone, string> = {
@@ -84,9 +90,10 @@ export function KpiTile({
   active = false,
   onClick,
   pending = false,
+  unavailable = false,
 }: KpiTileProps) {
   const interactive = onClick !== undefined;
-  const valueColor = tone ? TONE_COLOR[tone] : 'var(--label)';
+  const valueColor = unavailable ? 'var(--label-secondary)' : tone ? TONE_COLOR[tone] : 'var(--label)';
 
   return (
     <button
@@ -101,20 +108,30 @@ export function KpiTile({
         flex: '1 1 132px',
         padding: 16,
         borderRadius: 12,
-        background: active ? 'var(--fill-tertiary)' : 'var(--surface)',
+        // A card is content: it stays opaque --surface in BOTH states. Tinting
+        // the active tile pushed --label-secondary to 4.45:1 on its footnote —
+        // that token only clears 4.5 over an untinted surface. Selection is the
+        // accent border + aria-pressed, which as a UI boundary needs only 3:1.
+        background: 'var(--surface)',
         border: `0.5px solid ${active ? 'var(--accent)' : 'var(--separator)'}`,
         cursor: interactive ? 'pointer' : 'default',
       }}
     >
+      {/* Active is signalled by the accent BORDER + aria-pressed, not by an
+          accent label: --accent on the active tile's --fill-tertiary tint
+          measures 3.28:1, and --badge-accent-fg only reaches 4.29:1. Promoting
+          the label to --label instead is 10.02:1 and reads as selected. */}
       <span
         className="inline-flex items-center gap-1 text-[11px] leading-[13px] font-medium"
-        style={{ color: active ? 'var(--accent)' : 'var(--label-secondary)' }}
+        style={{ color: active ? 'var(--label)' : 'var(--label-secondary)' }}
       >
         {tone ? <Icon name={TONE_ICON[tone]} size={11} /> : null}
         {label}
       </span>
 
-      {pending ? (
+      {/* `unavailable` outranks `pending`: a fetch that finished and failed is
+          not still loading, so the skeleton must not win when both are set. */}
+      {pending && !unavailable ? (
         <Skeleton width={72} height={26} radius={6} style={{ margin: '3px 0' }} />
       ) : (
         <span
@@ -128,15 +145,29 @@ export function KpiTile({
             color: valueColor,
           }}
         >
-          {compact ? formatCompact(value) : value.toLocaleString()}
+          {unavailable ? (
+            <span aria-label="Not available">—</span>
+          ) : compact ? (
+            formatCompact(value)
+          ) : (
+            value.toLocaleString()
+          )}
         </span>
       )}
 
-      {pending ? (
+      {/* `unavailable` outranks `pending`: a fetch that finished and failed is
+          not still loading, so the skeleton must not win when both are set. */}
+      {pending && !unavailable ? (
         <Skeleton width={92} height={11} />
       ) : (
         <span className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
-          {delta !== null ? <DeltaChip delta={delta} caption={deltaCaption} /> : footnote}
+          {unavailable ? (
+            "Couldn't be measured"
+          ) : delta !== null ? (
+            <DeltaChip delta={delta} caption={deltaCaption} />
+          ) : (
+            footnote
+          )}
         </span>
       )}
     </button>

@@ -11,6 +11,8 @@ export interface FloatingLayerProps {
   align?: 'start' | 'end';
   className: string;
   style?: React.CSSProperties;
+  /** ARIA role for the layer itself, e.g. "menu" for a context menu. */
+  role?: string;
   children: React.ReactNode;
   /** Root-element ref (React 19 ref-as-prop). Menu needs it to hit-test
       document-level mousedown against the floating layer for outside-press
@@ -32,6 +34,7 @@ export function FloatingLayer({
   align = 'start',
   className,
   style,
+  role,
   children,
   ref: forwardedRef,
 }: FloatingLayerProps): React.JSX.Element {
@@ -89,7 +92,7 @@ export function FloatingLayer({
   }, [x, y, align]);
 
   return (
-    <div ref={ref} className={className} style={{ ...style, left: pos.left, top: pos.top }}>
+    <div ref={ref} role={role} className={className} style={{ ...style, left: pos.left, top: pos.top }}>
       {children}
     </div>
   );

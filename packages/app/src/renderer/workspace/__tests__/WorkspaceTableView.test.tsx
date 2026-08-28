@@ -104,6 +104,15 @@ describe('WorkspaceTableView row content', () => {
     }
   });
 
+  // The sticky header is painted with a translucent fill token. Without an
+  // opaque backing, rows scrolling underneath showed through the column
+  // labels — reproduced at 1,000 rows before this was stacked over --surface.
+  it('backs the sticky header with an opaque colour, not a bare tint', () => {
+    const container = renderTable();
+    const bg = container.querySelector('thead')!.getAttribute('style') ?? '';
+    expect(bg).toContain('var(--surface)');
+  });
+
   it('spells the grade badge out for assistive tech', () => {
     const container = renderTable();
     expect(within(container).getByLabelText('Tech debt grade B')).toBeTruthy();
