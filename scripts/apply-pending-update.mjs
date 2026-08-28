@@ -12,7 +12,10 @@
  *   5. Launch the new app via `open -a` and clear the pending markers.
  *
  * All errors are swallowed silently — a failed apply leaves the previous
- * installation untouched, and the next postinstall run will retry.
+ * installation untouched, and the next postinstall run will retry. A hard
+ * kill inside the swap itself (reboot, power loss) is not an error we can
+ * catch, so both this script and the postinstall call
+ * `recoverInterruptedSwap()` first to put the backup back.
  *
  * Usage: node apply-pending-update.mjs <parent-pid>
  *
@@ -26,7 +29,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { APP_NAME, locateInstalledApp } from './locate-app.mjs';
+import { APP_NAME, locateInstalledApp, recoverInterruptedSwap } from './locate-app.mjs';
 
 // Resolved by main() via locateInstalledApp(). Pending-zip and version markers
 // must live next to the actual `.app` (atomic `fs.renameSync` requires the
@@ -241,6 +244,12 @@ async function main() {
     log('abort: not darwin');
     return;
   }
+  // Settle a previously interrupted swap before resolving: restore the backup
+  // if a crash left no live bundle, drop it if it is just a leftover.
+  for (const { action, path: target } of recoverInterruptedSwap()) {
+    log(`recover: ${action} ${target}`);
+  }
+
   const located = locateInstalledApp();
   if (!located) {
     log('abort: locateInstalledApp returned null (no bundle resolved)');

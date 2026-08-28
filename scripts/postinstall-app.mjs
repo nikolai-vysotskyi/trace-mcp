@@ -30,7 +30,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { getAppDistRepo } from './app-dist-repo.mjs';
-import { APP_NAME, locateInstalledApp } from './locate-app.mjs';
+import { APP_NAME, locateInstalledApp, recoverInterruptedSwap } from './locate-app.mjs';
 
 // Resolved at top-level after the platform/no-update gates run. `null` means
 // no install was found — the script then exits 0 like the old hardcoded
@@ -88,6 +88,15 @@ function stopRunningDaemon() {
 stopRunningDaemon();
 
 if (process.platform !== 'darwin') process.exit(0);
+
+// Settle any swap that a reboot or kill interrupted before we try to resolve
+// the bundle — otherwise a half-swapped install resolves to nothing and this
+// script exits below, leaving the user permanently without an app. This is
+// the recovery path that actually fires in practice: the daemon's self-update
+// re-runs the postinstall even when the .app cannot be launched at all.
+for (const { action, path: target } of recoverInterruptedSwap()) {
+  console.log(`  trace-mcp: ${action} ${target} (interrupted update)`);
+}
 
 const located = locateInstalledApp();
 if (!located) process.exit(0);
