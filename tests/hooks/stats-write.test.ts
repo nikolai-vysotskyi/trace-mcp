@@ -7,9 +7,26 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 const HOOK = path.resolve('hooks/trace-mcp-reindex.sh');
 
 interface RunResult {
-  status: number;
+  /** null when the child was killed rather than exiting (e.g. timeout). */
+  status: number | null;
   stdout: string;
   stderr: string;
+  signal: string | null;
+  message: string;
+}
+
+/**
+ * Assert the hook exited cleanly, reporting *why* it did not when it fails.
+ * A bare `expect(res.status).toBe(0)` collapses "script exited 1", "script was
+ * killed on timeout" and "spawn failed" into the same uninformative
+ * `expected 1 to be +0` — which is exactly what made the macOS flake in
+ * TRA-238 undiagnosable from CI logs alone.
+ */
+function expectCleanExit(res: RunResult): void {
+  expect(
+    res.status,
+    `hook did not exit 0\n  status: ${String(res.status)}\n  signal: ${String(res.signal)}\n  message: ${res.message}\n  stdout: ${JSON.stringify(res.stdout)}\n  stderr: ${JSON.stringify(res.stderr)}`,
+  ).toBe(0);
 }
 
 function runHook(opts: {
@@ -36,15 +53,29 @@ function runHook(opts: {
         HOME: opts.traceHome,
       },
       encoding: 'utf-8',
-      timeout: 10_000,
+      // Generous: the hook is a shell script that spawns ~10 subprocesses, and
+      // a shared macOS CI runner under a parallel vitest load is far slower
+      // than a developer machine. This bounds a hang, it does not assert
+      // latency — the test is about the script's exit semantics.
+      timeout: 60_000,
     });
-    return { status: 0, stdout, stderr: '' };
+    return { status: 0, stdout, stderr: '', signal: null, message: '' };
   } catch (e) {
-    const err = e as { status?: number; stdout?: Buffer; stderr?: Buffer };
+    const err = e as {
+      status?: number | null;
+      signal?: string | null;
+      message?: string;
+      stdout?: Buffer;
+      stderr?: Buffer;
+    };
     return {
-      status: err.status ?? 1,
+      // Deliberately NOT `?? 1`: a killed child has a null status, and
+      // flattening that to 1 disguises a timeout as a script failure.
+      status: err.status ?? null,
       stdout: err.stdout?.toString() ?? '',
       stderr: err.stderr?.toString() ?? '',
+      signal: err.signal ?? null,
+      message: err.message ?? '',
     };
   }
 }
@@ -116,7 +147,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
       tool_input: { file_path: filePath },
     });
     const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin });
-    expect(res.status).toBe(0);
+    expectCleanExit(res);
 
     const statsFile = path.join(traceHome, 'hook-stats.jsonl');
     expect(fs.existsSync(statsFile)).toBe(true);
@@ -141,7 +172,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
       tool_input: { file_path: filePath },
     });
     const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin });
-    expect(res.status).toBe(0);
+    expectCleanExit(res);
 
     const statsFile = path.join(traceHome, 'hook-stats.jsonl');
     const parsed = JSON.parse(
@@ -161,7 +192,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
       tool_input: { file_path: filePath },
     });
     const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin, sanitizePath: true });
-    expect(res.status).toBe(0);
+    expectCleanExit(res);
 
     const statsFile = path.join(traceHome, 'hook-stats.jsonl');
     const parsed = JSON.parse(
@@ -180,7 +211,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
       tool_input: { file_path: filePath },
     });
     const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin });
-    expect(res.status).toBe(0);
+    expectCleanExit(res);
 
     const statsFile = path.join(traceHome, 'hook-stats.jsonl');
     const parsed = JSON.parse(
@@ -201,7 +232,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
     });
     try {
       const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin });
-      expect(res.status).toBe(0);
+      expectCleanExit(res);
     } finally {
       fs.chmodSync(traceHome, 0o755);
     }
