@@ -1,0 +1,20 @@
+# Single source of truth for the tool-surface numbers quoted across the docs
+# site (TRA-263). Never hardcode these in a page — use {{ site.data.counts.* }}
+# so the pages cannot disagree with each other again (138 / 164 / 165 / ~170
+# were live on prod simultaneously, two of them on the same page).
+#
+# `tools` is every tool registered under src/tools/register, minus the ones
+# gated behind `if (has('vue', ...))` — no repo is ever served all of those.
+# tests/docs/tool-surface.ts computes it, tests/docs/readme-claims.test.ts
+# enforces it, and the failure message prints the number to write here.
+#
+# TRA-268: this is deliberately NOT a live `tools/list` count. That varies with
+# the repo's detected frameworks and the user's own config — measured 150 / 165
+# / 172 across three environments — so it cannot be a number in a doc.
+# `pnpm run count:tools` still reports the live surface of your local install;
+# it answers a different question and is not the source for this file.
+#
+# Preset sizes deliberately live NOT here: tests/docs/preset-claims.test.ts
+# (TRA-259) checks those against the real tool filter, which is exact where a
+# hand-maintained number would only be a copy.
+tools: 169

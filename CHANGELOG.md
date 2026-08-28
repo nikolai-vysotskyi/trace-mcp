@@ -6,6 +6,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [2.0.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.1...v2.0.2) (2026-08-28)
+
+
+### Bug Fixes
+
+* **ci:** use RELEASE_PLEASE_TOKEN so release PR checks fire automatically (TRA-171) ([64dc725](https://github.com/nikolai-vysotskyi/trace-mcp/commit/64dc7255fbab92c7a381c4b918968f0c4e922beb))
+* **docs:** refresh stale sitemap lastmod and run the guard in CI (TRA-282) ([#444](https://github.com/nikolai-vysotskyi/trace-mcp/issues/444)) ([8c42271](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8c42271222e36e2310e5dc09891c074a04d06f28))
+* **update:** recover an app bundle swap interrupted by a reboot (TRA-280) ([#442](https://github.com/nikolai-vysotskyi/trace-mcp/issues/442)) ([16c3a7f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/16c3a7f7a49a196f7bb77bba12a5dd5800ea45d5))
+
+## [2.0.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.0...v2.0.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **app:** freeze Project and Actions columns in the workspace table (TRA-265) ([#429](https://github.com/nikolai-vysotskyi/trace-mcp/issues/429)) ([3cde321](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3cde321fd84d0d1087cc7b5512f0d0a44c5e6d3f))
+* **daemon:** bound post-update forced reindex attempts (TRA-274) ([#439](https://github.com/nikolai-vysotskyi/trace-mcp/issues/439)) ([a9669a4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a9669a43a5165d5b72bf8bf49059a89d6e09e8c3))
+* **docs:** our own surfaces said 85 framework integrations, the registry has 87 (TRA-272) ([#440](https://github.com/nikolai-vysotskyi/trace-mcp/issues/440)) ([30d4de7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/30d4de7a74bcf73de0adbe5fbfcfe4870b48cee8))
+* **docs:** reconcile the README language count and guard every occurrence (TRA-272) ([#437](https://github.com/nikolai-vysotskyi/trace-mcp/issues/437)) ([cbd2aa5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cbd2aa59d2a47e3257af02504c49cad88f5ef5a1))
+
+
+### Tests
+
+* **docs:** count MCP tools recursively, not with a top-level glob (TRA-268) ([#433](https://github.com/nikolai-vysotskyi/trace-mcp/issues/433)) ([38751d0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/38751d0e82dd3f8e0db895bef928c8a8d52e53a6))
+
+
+### CI/CD
+
+* authenticate release-please with RELEASE_PLEASE_TOKEN (TRA-171) ([#436](https://github.com/nikolai-vysotskyi/trace-mcp/issues/436)) ([7b0fd3b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7b0fd3b469d6e74c2bd731844fe71ffce6a47508))
+
+## [2.0.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.51.1...v2.0.0) (2026-08-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* seven MCP tools are removed. Each was a deprecated alias for a superset tool that already covered it:
+
+### Features
+
+* retire the 7 deprecated consolidation aliases, cut the search schema (TRA-240) ([#415](https://github.com/nikolai-vysotskyi/trace-mcp/issues/415)) ([9459d4c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9459d4ce5cb305c2f89b5b7cee2cb7f4798fc1da))
+
+
+### Bug Fixes
+
+* **app:** don't render a failed metrics fetch as real zeros (TRA-264) ([#428](https://github.com/nikolai-vysotskyi/trace-mcp/issues/428)) ([7216174](https://github.com/nikolai-vysotskyi/trace-mcp/commit/721617451282b34845f8a0193a6f6de22a210dc9))
+* **app:** make Compact denser, sort it like Table, keep the leading / in paths ([#430](https://github.com/nikolai-vysotskyi/trace-mcp/issues/430)) ([b577b9a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b577b9a69d539742373fb2ac4d8d36ed6bd986ec))
+* **app:** make the guard onboarding dialog dismissable and quiet on first launch ([#423](https://github.com/nikolai-vysotskyi/trace-mcp/issues/423)) ([9fb47f9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9fb47f9de9f86e7948a091ff0117c0b6c8361cfe))
+* **daemon:** honour the tool preset on the daemon-backed path (TRA-250) ([#422](https://github.com/nikolai-vysotskyi/trace-mcp/issues/422)) ([bf7e3d7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bf7e3d7f5eae75af43e2a4b8479983c568d3c53b))
+* **daemon:** record why a silent exit happened (TRA-267) ([#432](https://github.com/nikolai-vysotskyi/trace-mcp/issues/432)) ([0c7b944](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0c7b94445601093b6ff92e0c3bfcccfc6e4a2774))
+* **docs:** emit og:image on every docs page ([#418](https://github.com/nikolai-vysotskyi/trace-mcp/issues/418)) ([c000b28](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c000b28d924263f67aefea39fc3c4df3ff702e51))
+* **docs:** link every doc page from the shared footer nav ([#419](https://github.com/nikolai-vysotskyi/trace-mcp/issues/419)) ([717e463](https://github.com/nikolai-vysotskyi/trace-mcp/commit/717e463ce600ff5c272da777f571794bd3b5b129))
+* **docs:** refresh sitemap lastmod from git, link docs from README and homepage body ([#426](https://github.com/nikolai-vysotskyi/trace-mcp/issues/426)) ([20df40b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/20df40bd3bfd5ac704131bb47d904f7cae735667))
+
+
+### Performance
+
+* **app:** stop shipping node_modules in the artifact, add a perf baseline harness (TRA-257) ([#425](https://github.com/nikolai-vysotskyi/trace-mcp/issues/425)) ([fc47c10](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fc47c10f44eb539cbb01b0bb2e4ff633c59b7151))
+
+
+### Documentation
+
+* **comparisons:** deep-dive pass on the two largest peers + measured tool-surface cost ([#416](https://github.com/nikolai-vysotskyi/trace-mcp/issues/416)) ([4355601](https://github.com/nikolai-vysotskyi/trace-mcp/commit/435560154a679640a17222516fce2464855038fe))
+* fix stale language/framework/tool counts in CLAUDE.md and skills (TRA-243) ([#420](https://github.com/nikolai-vysotskyi/trace-mcp/issues/420)) ([4de6258](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4de62586faccd6092fb944a4f9291907369509e5))
+* fix the MCP registry manifest and preset sizes, guard both (TRA-259) ([#427](https://github.com/nikolai-vysotskyi/trace-mcp/issues/427)) ([3467d3f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3467d3f68766297a1f30f52ecc3cf929ff59f5f4))
+* single source of truth for the MCP tool count (TRA-263) ([#431](https://github.com/nikolai-vysotskyi/trace-mcp/issues/431)) ([a9939d3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a9939d3dead96f5d05fc072eea0f599e8b52e71f))
+
+
+### Tests
+
+* **cli:** cover openInBrowser's platform branches and error-swallow (TRA-247) ([#417](https://github.com/nikolai-vysotskyi/trace-mcp/issues/417)) ([fcdf086](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fcdf086f0bafea290f9ede397d7347692cb6ef4e))
+
+
+### CI/CD
+
+* **security:** scope CodeQL/Semgrep to shipped code and make Semgrep a real gate ([#424](https://github.com/nikolai-vysotskyi/trace-mcp/issues/424)) ([df8e241](https://github.com/nikolai-vysotskyi/trace-mcp/commit/df8e241faeeaa34900d657a3082af4f6b73aea60))
+
 ## [1.51.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.51.0...v1.51.1) (2026-08-28)
 
 

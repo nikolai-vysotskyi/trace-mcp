@@ -56,6 +56,43 @@ describe('Claude Code plugin manifests', () => {
   });
 });
 
+/**
+ * The MCP registry manifest is published to registry.modelcontextprotocol.io
+ * and was frozen at 1.5.4 while package.json was on 1.51.1 — release-please
+ * never bumped it because it wasn't in `extra-files`. It is now; this guards
+ * the wiring.
+ */
+describe('MCP registry manifest (server.json)', () => {
+  const pkg = readJson('package.json');
+  const server = readJson('server.json');
+
+  it('manifest version matches package.json version', () => {
+    expect(server.version).toBe(pkg.version);
+  });
+
+  it('npm package entry version matches package.json version', () => {
+    const packages = server.packages as Array<{ identifier: string; version: string }>;
+    const entry = packages.find((p) => p.identifier === 'trace-mcp');
+    expect(entry).toBeDefined();
+    expect(entry?.version).toBe(pkg.version);
+  });
+
+  it('manifest name matches the mcpName declared in package.json', () => {
+    expect(server.name).toBe(pkg.mcpName);
+  });
+
+  it('release-please is configured to bump both version fields', () => {
+    const config = readJson('release-please-config.json') as {
+      packages: Record<string, { 'extra-files': Array<{ path: string; jsonpath: string }> }>;
+    };
+    const paths = config.packages['.']['extra-files']
+      .filter((f) => f.path === 'server.json')
+      .map((f) => f.jsonpath);
+    expect(paths).toContain('$.version');
+    expect(paths).toContain('$.packages[0].version');
+  });
+});
+
 describe('Codex CLI plugin manifests', () => {
   const pkg = readJson('package.json');
   const plugin = readJson('.codex-plugin', 'plugin.json');

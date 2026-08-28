@@ -1,3 +1,8 @@
+---
+# Empty front matter only so Jekyll renders the {{ site.data.counts.* }} tags
+# below (TRA-263). No layout — the page keeps its own hand-written head/OG tags.
+layout: null
+---
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -70,7 +75,7 @@
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
     "alternateName": "trace-mcp — Recomputation → Reuse for AI Systems",
-    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 99% less redundant processing. Framework-aware dependency graph via MCP, 80 languages, 85 integrations.",
+    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 99% less redundant processing. Framework-aware dependency graph via MCP, 80 languages, 87 integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
     "applicationCategory": "DeveloperApplication",
@@ -103,8 +108,8 @@
       "40–50% fewer tokens on average across real agent workflows",
       "Up to 2× effective capacity at the same context budget",
       "Up to 99% less redundant processing in structured tasks (code navigation, dependency traversal)",
-      "Framework-aware dependency graph (85 integrations, 80 languages)",
-      "164 MCP tools for navigation, impact analysis, refactoring",
+      "Framework-aware dependency graph (87 integrations, 80 languages)",
+      "{{ site.data.counts.tools }} MCP tools for navigation, impact analysis, refactoring",
       "Local-first: SQLite + bundled ONNX embeddings, zero API keys",
       "Native Model Context Protocol integration"
     ]
@@ -122,7 +127,7 @@
         "name": "What is the best MCP server for giving Claude Code codebase context?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes ~164 MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 85 framework integrations, and typically cuts token usage 40–50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
+          "text": "trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes {{ site.data.counts.tools }} MCP tools — outline, symbol lookup, call graph, impact analysis, dead code detection — so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 87 framework integrations, and typically cuts token usage 40–50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with 'npm install -g trace-mcp', and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf."
         }
       },
       {
@@ -170,7 +175,7 @@
         "name": "What about my framework? Is it supported?",
         "acceptedAnswer": {
           "@type": "Answer",
-          "text": "80 languages and 85 framework integrations ship out of the box. For unsupported frameworks, the plugin API is open — write a custom plugin in TypeScript, register it via ~/.trace-mcp/plugins/. Most plugins are ~200–500 lines."
+          "text": "80 languages and 87 framework integrations ship out of the box. For unsupported frameworks, the plugin API is open — write a custom plugin in TypeScript, register it via ~/.trace-mcp/plugins/. Most plugins are ~200–500 lines."
         }
       },
       {
@@ -2084,7 +2089,7 @@
         </div>
         <div class="stat">
           <div class="stat-label">MCP Tools</div>
-          <div class="stat-value" data-count="138">0</div>
+          <div class="stat-value" data-count="{{ site.data.counts.tools }}">0</div>
           <div class="stat-trend">read-only or audited</div>
         </div>
         <div class="stat">
@@ -2180,7 +2185,7 @@
         <div class="def-text">
           <h3>This is how agents stop <span class="em">recomputing and start reusing.</span></h3>
           <p><strong>Computed once</strong> &mdash; every symbol, every edge, across 80 languages in one directed graph. The agent queries it instead of rediscovering it each turn.</p>
-          <p><strong>Framework-aware</strong> &mdash; routes to controllers, Inertia to Vue, Eloquent to migrations. 85 integrations capture edges the agent would otherwise reconstruct from raw files.</p>
+          <p><strong>Framework-aware</strong> &mdash; routes to controllers, Inertia to Vue, Eloquent to migrations. 87 integrations capture edges the agent would otherwise reconstruct from raw files.</p>
           <p><strong>Compiler-grade where it matters</strong> &mdash; optional LSP enrichment with <code>tsserver</code>, <code>pyright</code>, <code>gopls</code> for call resolution that survives across calls.</p>
           <p><strong>Reused, not rebuilt</strong> &mdash; 300ms file-watcher debounce and content-hashed incremental reindex keep the graph fresh without redoing finished work.</p>
         </div>
@@ -2248,14 +2253,14 @@
           <p>Tree-sitter parses symbols, plugins resolve framework edges, optional LSP enriches with compiler-grade call data. Stored locally in SQLite + FTS5.</p>
           <div class="tags">
             <span class="tag">tree-sitter</span>
-            <span class="tag">138 mcp tools</span>
+            <span class="tag">{{ site.data.counts.tools }} mcp tools</span>
             <span class="tag">local sqlite</span>
           </div>
         </div>
         <div class="pipe-step">
           <div class="pipe-num">03</div>
           <h3>Expose to your agents</h3>
-          <p>164 MCP tools become available in Claude Code, Cursor, Windsurf, VS Code &mdash; or any custom agent that speaks MCP over stdio or HTTP.</p>
+          <p>{{ site.data.counts.tools }} MCP tools become available in Claude Code, Cursor, Windsurf, VS Code &mdash; or any custom agent that speaks MCP over stdio or HTTP.</p>
           <div class="tags">
             <span class="tag">mcp</span>
             <span class="tag">stdio + http</span>
@@ -2267,6 +2272,7 @@
       <p style="margin-top: 48px; font-family: var(--font-body); font-size: 19px; color: var(--text-display); max-width: 640px;">
         Recomputation becomes <span style="font-weight: 700;">reuse.</span>
       </p>
+      <p class="tool-more">How the indexer, graph and plugin system fit together: <a href="/architecture.html">Architecture &rarr;</a> &middot; every language and framework it understands: <a href="/supported-frameworks.html">Supported stack &rarr;</a></p>
     </div>
   </section>
 
@@ -2277,7 +2283,7 @@
         <div class="section-meta-tag"><span class="label">005 / Core Capabilities</span></div>
         <div>
           <h2 class="section-title">The five calls that <span class="em">replace 90% of recomputation.</span></h2>
-          <p class="section-lede">Five tools from a surface of 138 &mdash; the ones agents reach for first. Each one collapses what would otherwise be a chain of Reads, Greps, and Globs into a single graph query. Token cost drops; the answer gets sharper.</p>
+          <p class="section-lede">Five tools from a surface of {{ site.data.counts.tools }} &mdash; the ones agents reach for first. Each one collapses what would otherwise be a chain of Reads, Greps, and Globs into a single graph query. Token cost drops; the answer gets sharper.</p>
         </div>
       </div>
 
@@ -2339,7 +2345,7 @@
           <span class="compare-sub">/ Agent-native trace-mcp</span>
           <h3>A precomputed graph the agent reuses</h3>
           <ul>
-            <li>164 tools that return answers, not files to read</li>
+            <li>{{ site.data.counts.tools }} tools that return answers, not files to read</li>
             <li>One incremental index, queried per task &mdash; not rebuilt per turn</li>
             <li>Single graph across every symbol, edge, and framework</li>
             <li>Native MCP protocol, zero adapter code</li>
@@ -2348,6 +2354,7 @@
       </div>
 
       <p class="compare-coda">Agents need <span class="em">reuse, not more search.</span></p>
+      <p class="tool-more">Side-by-side tables against every comparable tool: <a href="/comparisons.html">Comparisons &rarr;</a></p>
     </div>
   </section>
 
@@ -2364,7 +2371,7 @@
       <div class="diff-block reveal">
         <ul class="diff-list">
           <li><span class="num">/ 01</span><span><strong>Computed once, queried many times</strong> &mdash; a graph, not a text index that gets re-ranked every turn.</span></li>
-          <li><span class="num">/ 02</span><span><strong>Framework-aware edges</strong> across 85 integrations &mdash; routes, ORMs, views, DI captured up front, not rediscovered from raw files.</span></li>
+          <li><span class="num">/ 02</span><span><strong>Framework-aware edges</strong> across 87 integrations &mdash; routes, ORMs, views, DI captured up front, not rediscovered from raw files.</span></li>
           <li><span class="num">/ 03</span><span><strong>Tools that return answers</strong>, not snippets to read &mdash; <code>get_change_impact</code>, <code>get_call_graph</code>, <code>find_usages</code> over a precomputed structure.</span></li>
           <li><span class="num">/ 04</span><span><strong>Reuse survives the session</strong> &mdash; incremental reindex, decision memory, agent-behavior rules keep cost from rebounding.</span></li>
         </ul>
@@ -2478,7 +2485,7 @@
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">011 / Ecosystem</span></div>
         <div>
-          <h2 class="section-title">85 integrations. <span class="em">80 languages.</span></h2>
+          <h2 class="section-title">87 integrations. <span class="em">80 languages.</span></h2>
           <p class="section-lede">Each integration adds framework-specific edges &mdash; routes, components, migrations, queries &mdash; not just syntax parsing. Plugin API is open: write your own for a niche framework in under a day.</p>
         </div>
       </div>
@@ -2603,6 +2610,8 @@
 <span class="ok">[OK]</span> 1 call &rarr; 23 affected symbols, 4 tests, 1 decision</div>
         </div>
       </div>
+
+      <p class="tool-more">Stdio vs HTTP, semantic search, <code>.traceignore</code> and every other option: <a href="/configuration.html">Configuration &rarr;</a></p>
     </div>
   </section>
 
@@ -2622,7 +2631,7 @@
             <h3>What is the best MCP server for giving Claude Code codebase context?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes ~164 MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 85 framework integrations, and typically cuts token usage 40&ndash;50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
+          <div class="answer">trace-mcp is built specifically for this: it indexes a codebase once into a local dependency graph (SQLite + FTS5, tree-sitter parsing across 80 languages) and exposes {{ site.data.counts.tools }} MCP tools &mdash; outline, symbol lookup, call graph, impact analysis, dead code detection &mdash; so Claude Code queries precomputed structure instead of re-reading files every turn. It runs entirely locally with no API keys, works with 87 framework integrations, and typically cuts token usage 40&ndash;50% versus raw file reads while producing more consistent answers as the codebase grows. It's open source (MIT), installs with <code>npm install -g trace-mcp</code>, and works over stdio or HTTP with any MCP-compatible client, including Claude Code, Cursor, and Windsurf.</div>
         </details>
         <details class="faq">
           <summary>
@@ -2664,7 +2673,7 @@
             <h3>What about my framework? Is it supported?</h3>
             <span class="toggle">+</span>
           </summary>
-          <div class="answer">80 languages and 85 framework integrations ship out of the box. For unsupported frameworks, the plugin API is open &mdash; write a custom plugin in TypeScript, register it via <code>~/.trace-mcp/plugins/</code>. Most plugins are ~200&ndash;500 lines.</div>
+          <div class="answer">80 languages and 87 framework integrations ship out of the box. For unsupported frameworks, the plugin API is open &mdash; write a custom plugin in TypeScript, register it via <code>~/.trace-mcp/plugins/</code>. Most plugins are ~200&ndash;500 lines.</div>
         </details>
         <details class="faq">
           <summary>

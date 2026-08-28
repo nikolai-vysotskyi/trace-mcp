@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.nikolai-vysotskyi/trace-mcp",
-  "description": "Framework-aware code intelligence: 81 languages, 58 framework integrations, 138 tools, up to 99% token reduction",
+  "description": "Framework-aware code intelligence: 80 languages, 87 framework integrations, 169 tools, up to 99% token reduction",
   "repository": {
     "url": "https://github.com/nikolai-vysotskyi/trace-mcp",
     "source": "github"
   },
-  "version": "1.5.4",
+  "version": "2.0.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "trace-mcp",
-      "version": "1.5.4",
+      "version": "2.0.2",
       "transport": {
         "type": "stdio"
       }

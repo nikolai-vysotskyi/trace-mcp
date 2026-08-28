@@ -5,6 +5,8 @@ import { getDaemonHealth } from '../daemon/client.js';
 import {
   enableDaemon,
   ensureDaemon,
+  formatLaunchdLastExit,
+  getLaunchdLastExit,
   isDaemonDisabled,
   restartDaemon,
   stopDaemon,
@@ -141,6 +143,9 @@ daemonCommand
         const loaded = isPlistLoaded();
         console.log(`  launchd plist: ${loaded ? 'loaded' : 'not loaded'}`);
         console.log(`  Plist path: ${LAUNCHD_PLIST_PATH}`);
+        // Post-mortem (TRA-267): the daemon can vanish without writing anything
+        // to daemon.log. launchd still knows how the last run ended.
+        for (const line of formatLaunchdLastExit(getLaunchdLastExit())) console.log(line);
       }
       if (disabled) {
         console.log(`  Auto-spawn: disabled (opt-out file: ${DAEMON_DISABLED_PATH})`);
@@ -156,6 +161,8 @@ daemonCommand
     }
 
     console.log(`Daemon is running on port ${port}.`);
+    // A KeepAlive restart hides the previous death — show how it ended.
+    for (const line of formatLaunchdLastExit(getLaunchdLastExit())) console.log(line);
     if (health.version) console.log(`  Version: ${health.version}`);
     if (health.pid != null) console.log(`  PID: ${health.pid}`);
     if (health.uptime != null) {

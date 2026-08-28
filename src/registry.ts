@@ -25,6 +25,14 @@ export interface RegistryEntry {
    */
   pendingReindexForVersion?: string;
   /**
+   * How many times a daemon has *started* the forced rebuild for
+   * {@link pendingReindexForVersion} without finishing it. Bounded by
+   * {@link MAX_PENDING_REINDEX_ATTEMPTS} so a daemon that keeps getting
+   * restarted mid-rebuild eventually gives up instead of force-rebuilding
+   * every project on every boot forever (TRA-274).
+   */
+  pendingReindexAttempts?: number;
+  /**
    * ISO timestamp of the first time this root was observed missing. Set by
    * {@link sweepMissingRoots}, cleared the moment the root reappears (e.g. an
    * unmounted drive). Lets the automatic startup sweep wait out a grace period
@@ -520,6 +528,7 @@ export function markAllProjectsPendingReindex(version: string): number {
   for (const entry of Object.values(reg.projects)) {
     if (entry.pendingReindexForVersion !== version) {
       entry.pendingReindexForVersion = version;
+      delete entry.pendingReindexAttempts;
       count++;
     }
   }
@@ -527,13 +536,41 @@ export function markAllProjectsPendingReindex(version: string): number {
   return count;
 }
 
+/**
+ * Give up on the forced post-update rebuild after this many daemon starts that
+ * began it but never finished. Beyond the cap the project falls back to the
+ * cheap incremental index; a genuinely stale schema is still repaired by the
+ * FK-auto-recovery retry in ProjectManager.addProject.
+ */
+export const MAX_PENDING_REINDEX_ATTEMPTS = 3;
+
+/**
+ * Record that a daemon is starting the forced rebuild for this project and
+ * return the new attempt count. Persisted BEFORE the rebuild runs so a daemon
+ * killed mid-rebuild still burns an attempt — that is what makes the storm
+ * terminate (TRA-274).
+ */
+export function recordPendingReindexAttempt(root: string): number {
+  const absRoot = path.resolve(root);
+  const reg = loadRegistry();
+  const entry = reg.projects[absRoot];
+  if (!entry) return 0;
+  entry.pendingReindexAttempts = (entry.pendingReindexAttempts ?? 0) + 1;
+  saveRegistry(reg);
+  return entry.pendingReindexAttempts;
+}
+
 /** Clear the pending-reindex flag for one project after a successful reindex. */
 export function clearPendingReindex(root: string): void {
   const absRoot = path.resolve(root);
   const reg = loadRegistry();
   const entry = reg.projects[absRoot];
-  if (entry && entry.pendingReindexForVersion !== undefined) {
+  if (
+    entry &&
+    (entry.pendingReindexForVersion !== undefined || entry.pendingReindexAttempts !== undefined)
+  ) {
     delete entry.pendingReindexForVersion;
+    delete entry.pendingReindexAttempts;
     saveRegistry(reg);
   }
 }

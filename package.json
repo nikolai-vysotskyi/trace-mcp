@@ -1,6 +1,6 @@
 {
   "name": "trace-mcp",
-  "version": "1.51.1",
+  "version": "2.0.2",
   "mcpName": "io.github.nikolai-vysotskyi/trace-mcp",
   "description": "Framework-aware code intelligence MCP server — 60 framework integrations, 81 languages, up to 99% token reduction",
   "type": "module",
@@ -22,11 +22,13 @@
     "format:check": "biome format",
     "biome:ci": "biome ci",
     "serve": "tsx src/cli.ts serve",
+    "count:tools": "node scripts/count-advertised-tools.mjs",
     "replay:check": "tsx scripts/replay-eval.ts",
     "replay:update-baseline": "tsx scripts/replay-eval.ts --update-baseline",
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs && node scripts/postinstall-control-plane.mjs",
     "prepublishOnly": "pnpm run build",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "docs:sitemap": "node scripts/gen-sitemap.mjs"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"

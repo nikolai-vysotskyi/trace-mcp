@@ -33,7 +33,7 @@
 
 > AI systems don't scale because they recompute instead of reuse. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it already discovered. Token bills grow. Latency grows. Reasoning quality drops. The model isn't the bottleneck — the recomputation leak is.
 >
-> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 85 framework integrations across 80 languages, 164 tools.
+> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 87 framework integrations across 80 languages, 169 tools.
 >
 > **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP for code and knowledge — no second tool to plug in.
 
@@ -76,7 +76,7 @@ We started with code intelligence — the hardest, noisiest context most agents 
 
 **Four things no other tool does:**
 
-1. **Framework-aware edges** — trace-mcp understands that `Inertia::render('Users/Show')` connects PHP to Vue, that `@Injectable()` creates a DI dependency, that `$user->posts()` means a `posts` table from migrations. 85 framework integrations.
+1. **Framework-aware edges** — trace-mcp understands that `Inertia::render('Users/Show')` connects PHP to Vue, that `@Injectable()` creates a DI dependency, that `$user->posts()` means a `posts` table from migrations. 87 framework integrations.
 
 2. **Code-linked decision memory** — when you record "chose PostgreSQL for JSONB support", it's linked to `src/db/connection.ts::Pool#class`. When someone runs `get_change_impact` on that symbol, they see the decision. MemPalace stores decisions as text; trace-mcp ties them to the dependency graph.
 
@@ -143,12 +143,12 @@ The app talks to the same `trace-mcp` daemon (`http://127.0.0.1:3741`) that MCP 
 
 ## How trace-mcp compares
 
-trace-mcp combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Most adjacent projects solve one of these — trace-mcp unifies all three and is the only one with **framework-aware cross-language edges** (85 integrations) and **code-linked decision memory**.
+trace-mcp combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Most adjacent projects solve one of these — trace-mcp unifies all three and is the only one with **framework-aware cross-language edges** (87 framework integrations) and **code-linked decision memory**.
 
 - **vs. token-efficient exploration** (Repomix, jCodeMunch, cymbal) — trace-mcp adds framework edges, refactoring, security, and subprojects on top of symbol lookup.
 - **vs. session-memory tools** (MemPalace, claude-mem, ConPort) — trace-mcp links decisions to specific symbols/files, so they surface automatically in impact analysis.
 - **vs. RAG / doc-gen** (DeepContext, smart-coding-mcp) — trace-mcp answers "show me the execution path, deps, and tests," not "find code similar to this query."
-- **vs. code-graph MCP servers** (Serena, Roam-Code) — trace-mcp has the broadest language coverage (81) and is the only one with cross-language framework edges.
+- **vs. code-graph MCP servers** (Serena, Roam-Code) — trace-mcp has the broadest language coverage (80 languages) and is the only one with cross-language framework edges.
 
 > Full side-by-side tables with GitHub stars, languages, and per-capability coverage: [docs/comparisons.md](docs/comparisons.md).
 
@@ -249,7 +249,7 @@ benchmark_project  # runs against the current project
 
 ### Supported stack
 
-**Languages (81):** PHP, TypeScript, JavaScript, Python, Go, Java, Kotlin, Ruby, Rust, C, C++, C#, Swift, Objective-C, Objective-C++, Dart, Scala, Groovy, Elixir, Erlang, Haskell, Gleam, Bash, Lua, Perl, GDScript, R, Julia, Nix, SQL, PL/SQL, HCL/Terraform, Protocol Buffers, GraphQL, Prisma, Vue SFC, HTML, CSS/SCSS/SASS/LESS, XML/XUL/XSD, YAML, JSON, TOML, Assembly, Fortran, AutoHotkey, Verse, AL, Blade, EJS, Zig, OCaml, Clojure, F#, Elm, CUDA, COBOL, Verilog/SystemVerilog, GLSL, Meson, Vim Script, Common Lisp, Emacs Lisp, Dockerfile, Makefile, CMake, INI, Svelte, Markdown, MATLAB, Lean 4, FORM, Magma, Wolfram/Mathematica, Ada, Apex, D, Nim, Pascal, PowerShell, Solidity, Tcl
+**Languages:** PHP, TypeScript, JavaScript, Python, Go, Java, Kotlin, Ruby, Rust, C, C++, C#, Swift, Objective-C, Objective-C++, Dart, Scala, Groovy, Elixir, Erlang, Haskell, Gleam, Bash, Lua, Perl, GDScript, R, Julia, Nix, SQL, PL/SQL, HCL/Terraform, Protocol Buffers, GraphQL, Prisma, Vue SFC, HTML, CSS/SCSS/SASS/LESS, XML/XUL/XSD, YAML, JSON, TOML, Assembly, Fortran, AutoHotkey, Verse, AL, Blade, EJS, Zig, OCaml, Clojure, F#, Elm, CUDA, COBOL, Verilog/SystemVerilog, GLSL, Meson, Vim Script, Common Lisp, Emacs Lisp, Dockerfile, Makefile, CMake, INI, Svelte, Astro, Markdown, MATLAB, Lean 4, FORM, Magma, Wolfram/Mathematica, Ada, Apex, D, Nim, Pascal, PowerShell, Solidity, Tcl
 
 **Frameworks:** Laravel (+ Livewire, Nova, Filament, Pennant), Django (+ DRF), FastAPI, Flask, Express, NestJS, Fastify, Hono, Next.js, Nuxt, Rails, Spring, tRPC
 
@@ -501,7 +501,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
          MCP server (stdio or HTTP/SSE)
-         164 tools · 9 resources
+         169 tools · 9 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
@@ -514,17 +514,22 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 
 ## Documentation
 
+Full docs live at **[trace-mcp.com](https://trace-mcp.com/)** (same content as `docs/` in this repo).
+
 | Document | Description |
 |---|---|
-| [Supported frameworks](docs/supported-frameworks.md) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
-| [Tools reference](docs/tools-reference.md) | All 164 MCP tools with descriptions and usage examples |
-| [Configuration](docs/configuration.md) | Config options, AI setup, environment variables, security settings |
-| [Architecture](docs/architecture.md) | How indexing works, plugin system, project structure, tech stack |
-| [Decision memory](docs/decision-memory.md) | Decision knowledge graph, session mining, cross-session search, wake-up context |
-| [Analytics](docs/analytics.md) | Session analytics, token savings tracking, optimization reports, benchmarks |
-| [System prompt routing](docs/tweakcc.md) | Optional tweakcc integration for maximum tool routing enforcement |
-| [Comparisons](docs/comparisons.md) | Full side-by-side tables vs. other code intelligence / memory / RAG tools |
-| [Development](docs/development.md) | Building, testing, contributing, adding new plugins |
+| [Supported frameworks](https://trace-mcp.com/supported-frameworks.html) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
+| [Tools reference](https://trace-mcp.com/tools-reference.html) | All 169 MCP tools with descriptions and usage examples |
+| [Configuration](https://trace-mcp.com/configuration.html) | Config options, AI setup, environment variables, security settings |
+| [Architecture](https://trace-mcp.com/architecture.html) | How indexing works, plugin system, project structure, tech stack |
+| [Decision memory](https://trace-mcp.com/decision-memory.html) | Decision knowledge graph, session mining, cross-session search, wake-up context |
+| [Analytics](https://trace-mcp.com/analytics.html) | Session analytics, token savings tracking, optimization reports, benchmarks |
+| [Quality gates](https://trace-mcp.com/quality-gates.html) | Complexity, security and coverage thresholds, and how `quality_gates.rules` overrides the CLI defaults |
+| [TOON savings](https://trace-mcp.com/toon-savings.html) | Measured token savings of the TOON output format on real tool calls |
+| [Telemetry](https://trace-mcp.com/telemetry.html) | OpenTelemetry-compatible spans for every AI provider call and MCP tool call |
+| [System prompt routing](https://trace-mcp.com/tweakcc.html) | Optional tweakcc integration for maximum tool routing enforcement |
+| [Comparisons](https://trace-mcp.com/comparisons.html) | Full side-by-side tables vs. other code intelligence / memory / RAG tools |
+| [Development](https://trace-mcp.com/development.html) | Building, testing, contributing, adding new plugins |
 
 ---
 

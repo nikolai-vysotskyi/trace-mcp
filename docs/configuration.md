@@ -443,7 +443,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"standard"` | Tool preset: `standard` (~50 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (~16 tools), `review`, `architecture`, or `full` (all ~170 tools, opt-in) |
+| `tools.preset` | `"standard"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `standard` (59 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (24 tools), `review` (26 tools), `architecture` (34 tools), or `full` (every registered tool, opt-in) |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -582,7 +582,7 @@ The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported
 Every MCP session is still attached to exactly one project (see [stdio vs HTTP](#stdio-vs-http--choosing-your-setup)) — but two tools let an agent reach across to any OTHER project already registered with trace-mcp, without opening a second MCP connection:
 
 - **`list_projects`** — lists every project in `~/.trace-mcp/registry.json` (root, name, type, last-indexed timestamp), plus known subprojects when topology is enabled for the current session.
-- **`call_project_tool { project, tool, args }`** — runs any of the ~170 normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
+- **`call_project_tool { project, tool, args }`** — runs any of the {{ site.data.counts.tools }} normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
 
 This is read-only relay wiring — it never starts indexing or a file watcher for the target project. In the HTTP daemon, a target project already warm in memory is served directly; a cold one is opened on demand via the same read-mostly path used for on-demand subprojects. Under `stdio` (no daemon), the target project's existing index database is opened directly; a project that has never been indexed cannot be relayed to.
 

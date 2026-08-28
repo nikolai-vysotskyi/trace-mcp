@@ -1,3 +1,8 @@
+---
+# Front matter only so Jekyll renders the {{ site.data.counts.* }} tags below
+# (TRA-263). Stripped from the served file.
+layout: null
+---
 # trace-mcp — Full documentation
 
 > Concatenated full text of all trace-mcp docs pages, for AI systems that ingest one file instead of following links. See /llms.txt for the linked index.
@@ -6,7 +11,7 @@
 
 # Tools reference
 
-trace-mcp exposes 164 MCP tools and 9 resources.
+trace-mcp exposes {{ site.data.counts.tools }} MCP tools and 9 resources.
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
 
@@ -253,7 +258,7 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Tree-sitter AST parsing | ✅ 80 languages | ✅ compress only (~20) | ❌ no code parsing | ✅ 23 langs + Jupyter | ✅ 70+ languages | ✅ 158 languages | ✅ 22 languages |
 | Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output (98% reduction) | ✅ | ✅ core focus (~95% reduction) | ✅ | ✅ outline/show/context |
 | Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ incremental knowledge graph | ✅ import graph | ✅ knowledge graph | ✅ refs/importers |
-| Framework-aware edges | ✅ 85 integrations | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
+| Framework-aware edges | ✅ 87 integrations | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
 | Impact analysis | ✅ reverse dep traversal + decorator filter | ❌ | ❌ | ✅ blast-radius + Leiden communities | ✅ blast radius + decorator filter | ✅ detect_changes | ✅ impact command |
 | Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ✅ graph-based | ✅ AST-based, bidirectional | ✅ trace_call_path | ✅ refs/importers |
 | Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ | ❌ |
@@ -283,7 +288,7 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 | Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
 | Service/subproject scoping | ✅ decisions per service | ❌ | ✅ wings per project | ❌ | ❌ | ✅ per branch | ✅ per workspace |
 | Published retrieval benchmark | ❌ | ❌ | ✅ LongMemEval / LoCoMo / MemBench | ❌ | ✅ LoCoMo / LongMemEval / BEAM | ❌ | ❌ |
-| Code intelligence included | ✅ 164 tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Code intelligence included | ✅ {{ site.data.counts.tools }} tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Works as standalone memory | ❌ code-focused | ✅ git-native, code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
 | Written in | TypeScript | — | Python | TypeScript | TS + Python | Go / Rust | Python |
 
@@ -320,7 +325,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | 80 | 40+ (via LSP) | 23 + Jupyter | 158 | 19 | 32 | 28 |
 | Framework integrations | 85 | ❌ | ❌ (Python entry points only) | ❌ | ❌ | ❌ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✅ | ❌ | ❌ | ✅ cross-service HTTP | ✅ polyglot dep graph | ❌ | ✅ PHP↔TS API drift |
-| MCP tools | 164 | ~55 | ~28 | 14 | 21 | 90 | 224 |
+| MCP tools | {{ site.data.counts.tools }} | ~55 | ~28 | 14 | 21 | 90 | 224 |
 | Session memory | ✅ | ✅ (manual notes) | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✅ | ❌ | ✅ multi-repo daemon | ✅ cross-service | ✅ cross-project search | ❌ | ❌ |
@@ -795,7 +800,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"standard"` | Tool preset: `standard` (~50 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (~16 tools), `review`, `architecture`, or `full` (all ~164 tools, opt-in) |
+| `tools.preset` | `"standard"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `standard` (59 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (24 tools), `review` (26 tools), `architecture` (34 tools), or `full` (every registered tool, opt-in) |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -934,7 +939,7 @@ The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported
 Every MCP session is still attached to exactly one project (see [stdio vs HTTP](#stdio-vs-http--choosing-your-setup)) — but two tools let an agent reach across to any OTHER project already registered with trace-mcp, without opening a second MCP connection:
 
 - **`list_projects`** — lists every project in `~/.trace-mcp/registry.json` (root, name, type, last-indexed timestamp), plus known subprojects when topology is enabled for the current session.
-- **`call_project_tool { project, tool, args }`** — runs any of the ~164 normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
+- **`call_project_tool { project, tool, args }`** — runs any of the {{ site.data.counts.tools }} normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
 
 This is read-only relay wiring — it never starts indexing or a file watcher for the target project. In the HTTP daemon, a target project already warm in memory is served directly; a cold one is opened on demand via the same read-mostly path used for on-demand subprojects. Under `stdio` (no daemon), the target project's existing index database is opened directly; a project that has never been indexed cannot be relayed to.
 
@@ -1356,7 +1361,7 @@ src/
 │   ├── benchmark.ts        #   Synthetic benchmark (5 scenarios)
 │   ├── tech-detector.ts    #   Manifest parser + coverage assessment
 │   └── known-packages.ts   #   Catalog of ~200 known packages
-├── tools/                  # 164 MCP tool implementations
+├── tools/                  # {{ site.data.counts.tools }} MCP tool implementations
 ├── scoring/                # PageRank, BM25, hybrid scoring, structured assembly
 ├── plugin-api/             # Plugin registry, loader, executor, test harness
 ├── init/                   # Setup & detection (Claude Code, Claw Code, Cursor, Windsurf, Continue)
@@ -2494,7 +2499,7 @@ these after any large refactor round — don't treat them as permanent.
 ## max_cyclomatic_complexity: 130 (warning)
 
 The generic default of 30 fires on nearly every language/framework plugin in
-this repo — dispatch tables for 80 languages and 85 frameworks are
+this repo — dispatch tables for 80 languages and 87 frameworks are
 inherently branchy. After decomposing every class that was a genuine
 god-object (`DecisionStore` 262→96, `TopologyStore` 125→49,
 `IndexingPipeline` 137→115, plus tool-gate/api-routes/memory-tools splits),

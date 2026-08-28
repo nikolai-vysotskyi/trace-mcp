@@ -7,11 +7,12 @@
  *  - per-row Open / Re-index / Remove actions (Remove has two-step confirm)
  *  - dims Re-index/Remove when `canMutate === false` or `inDaemon === false`
  *
- * Data flows in via props; sorting is performed locally using
- * `compareViewModels` from `./types.ts`. The component does not call
- * `useWorkspaceProjects` — the parent shell owns that state.
+ * Data flows in via props already sorted — the parent shell owns sort state
+ * and applies it once so every view shows the same order. `sortKey`/`sortDir`
+ * are consumed only to render the header indicator. The component does not
+ * call `useWorkspaceProjects`.
  */
-import { type MouseEvent, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, type MouseEvent, useEffect, useRef, useState } from 'react';
 import { StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
 import {
@@ -19,7 +20,6 @@ import {
   type SortDir,
   type SortKey,
   type TechDebtGrade,
-  compareViewModels,
   statusLabel,
   statusToDot,
 } from './types';
@@ -44,8 +44,36 @@ const GRADE_COLOR: Record<TechDebtGrade, string> = {
   B: '#30d158',
   C: '#ffcc00',
   D: '#ff9f0a',
-  F: '#ff3b30',
+  F: 'var(--destructive)',
 };
+
+// ── Frozen columns ────────────────────────────────────────────────────────
+//
+// The table is wider than the 732 px viewport of the default 960×700 window,
+// so it scrolls horizontally. Pin the identity columns (checkbox + Project) to
+// the left and Actions to the right, otherwise scrolling right hides which row
+// you are looking at and scrolling left hides Security/Actions entirely.
+
+/** Width of the select-checkbox column; the Project column is offset by it. */
+const SELECT_COL_W = 32;
+
+/**
+ * The surface tokens are translucent (vibrancy), so a pinned cell painted with
+ * `--bg-secondary` alone would let the scrolling rows show through. Stack it
+ * over `--bg-primary` the way a normal row is stacked over the page.
+ */
+const overPage = (tint: string) => `linear-gradient(${tint}, ${tint}), var(--bg-primary)`;
+const STICKY_HEADER_BG = overPage('var(--bg-secondary)');
+
+/** Sticky cells need their own background — rows slide underneath them. */
+function stickyCell(side: 'left' | 'right', offset: number, bg: string, seam = true): CSSProperties {
+  return {
+    position: 'sticky',
+    [side]: offset,
+    background: bg,
+    boxShadow: seam ? (side === 'left' ? '1px 0 0 var(--border)' : '-1px 0 0 var(--border)') : undefined,
+  };
+}
 
 // ── Sortable header cell ──────────────────────────────────────────────────
 
@@ -57,14 +85,15 @@ interface ThProps {
   dir: SortDir;
   onSort: (key: SortKey) => void;
   align?: 'left' | 'right' | 'center';
+  sticky?: CSSProperties;
 }
 
-function Th({ label, tooltip, sortKey, current, dir, onSort, align = 'left' }: ThProps) {
+function Th({ label, tooltip, sortKey, current, dir, onSort, align = 'left', sticky }: ThProps) {
   const isActive = current === sortKey;
   return (
     <th
       className={`px-3 py-2 text-${align} text-[11px] font-semibold cursor-pointer select-none whitespace-nowrap`}
-      style={{ color: isActive ? 'var(--accent)' : 'var(--text-secondary)' }}
+      style={{ color: isActive ? 'var(--accent)' : 'var(--text-secondary)', zIndex: 1, ...sticky }}
       title={tooltip}
       onClick={() => onSort(sortKey)}
     >
@@ -146,7 +175,7 @@ function ActionCell({
             setConfirm(false);
           }}
           className="text-[11px] px-1.5 py-0.5 rounded font-medium"
-          style={{ background: '#ff3b30', color: '#fff' }}
+          style={{ background: 'var(--destructive)', color: '#fff' }}
         >
           Remove
         </button>
@@ -216,20 +245,24 @@ function Row({
   const stop = (e: MouseEvent) => e.stopPropagation();
   const tdNum = 'px-3 py-2 tabular-nums text-right';
   const dotTone = statusToDot(project.displayStatus);
+  // Hover is state rather than a direct style write so the pinned cells, which
+  // carry their own opaque background, can follow the row highlight.
+  const [hovered, setHovered] = useState(false);
+  const bg = hovered ? overPage('var(--bg-secondary)') : 'var(--bg-primary)';
 
   return (
     <tr
       className="cursor-pointer transition-colors"
-      style={{ borderBottom: '0.5px solid var(--border)' }}
+      style={{ borderBottom: '0.5px solid var(--border)', background: hovered ? bg : undefined }}
       onClick={() => onOpen(project.root)}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLTableRowElement).style.background = 'var(--bg-secondary)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLTableRowElement).style.background = '';
-      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <td className="px-2 py-2" onClick={stop}>
+      <td
+        className="px-2 py-2"
+        style={{ ...stickyCell('left', 0, bg, false), width: SELECT_COL_W }}
+        onClick={stop}
+      >
         <input
           type="checkbox"
           checked={selected}
@@ -238,7 +271,10 @@ function Row({
         />
       </td>
 
-      <td className="px-3 py-2 font-medium max-w-[200px]" style={{ color: 'var(--text-primary)' }}>
+      <td
+        className="px-3 py-2 font-medium max-w-[200px]"
+        style={{ color: 'var(--text-primary)', ...stickyCell('left', SELECT_COL_W, bg) }}
+      >
         <div className="truncate" title={project.name}>
           {project.name}
         </div>
@@ -253,7 +289,7 @@ function Row({
           <span style={{ color: 'var(--text-secondary)' }}>{statusLabel(project.displayStatus)}</span>
         </div>
         {project.error && (
-          <div className="text-[10px] mt-0.5 truncate" style={{ color: '#ff3b30' }} title={project.error}>
+          <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--destructive)' }} title={project.error}>
             {project.error}
           </div>
         )}
@@ -321,7 +357,7 @@ function Row({
         ) : (
           <span
             style={{
-              color: project.securityFindings > 0 ? '#ff3b30' : 'var(--text-tertiary)',
+              color: project.securityFindings > 0 ? 'var(--destructive)' : 'var(--text-tertiary)',
               fontWeight: project.securityFindings > 0 ? 600 : undefined,
             }}
           >
@@ -329,7 +365,7 @@ function Row({
           </span>
         )}
       </td>
-      <td className="px-3 py-2">
+      <td className="px-3 py-2" style={stickyCell('right', 0, bg)}>
         <ActionCell
           project={project}
           canMutate={canMutate}
@@ -357,7 +393,6 @@ export function WorkspaceTableView({
   onRemove,
   canMutate,
 }: WorkspaceTableViewProps) {
-  const sorted = [...projects].sort((a, b) => compareViewModels(a, b, sortKey, sortDir));
   const thProps = { current: sortKey, dir: sortDir, onSort };
 
   return (
@@ -365,10 +400,18 @@ export function WorkspaceTableView({
       <table className="w-full border-collapse text-xs">
         <thead className="sticky top-0 z-10" style={{ background: 'var(--bg-secondary)' }}>
           <tr style={{ borderBottom: '0.5px solid var(--border)' }}>
-            <th className="px-2 py-2 w-8" style={{ background: 'var(--bg-secondary)' }}>
+            <th
+              className="px-2 py-2 w-8"
+              style={{ ...stickyCell('left', 0, STICKY_HEADER_BG, false), zIndex: 1 }}
+            >
               <SelectAllCheckbox total={projects.length} selectedCount={selected.size} onChange={onSelectAll} />
             </th>
-            <Th label="Project" sortKey="name" {...thProps} />
+            <Th
+              label="Project"
+              sortKey="name"
+              sticky={stickyCell('left', SELECT_COL_W, STICKY_HEADER_BG)}
+              {...thProps}
+            />
             <Th label="Status" sortKey="status" {...thProps} />
             <Th label="Last Indexed" sortKey="lastIndexed" {...thProps} />
             <Th label="Files" sortKey="totalFiles" align="right" {...thProps} />
@@ -403,14 +446,18 @@ export function WorkspaceTableView({
             />
             <th
               className="px-3 py-2 text-left text-[11px] font-semibold"
-              style={{ color: 'var(--text-secondary)' }}
+              style={{
+                color: 'var(--text-secondary)',
+                zIndex: 1,
+                ...stickyCell('right', 0, STICKY_HEADER_BG),
+              }}
             >
               Actions
             </th>
           </tr>
         </thead>
         <tbody>
-          {sorted.map((p) => (
+          {projects.map((p) => (
             <Row
               key={p.root}
               project={p}

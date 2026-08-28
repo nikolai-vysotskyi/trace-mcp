@@ -36,6 +36,8 @@ import {
   findOverlappingProjects,
   getProject,
   listProjects,
+  MAX_PENDING_REINDEX_ATTEMPTS,
+  recordPendingReindexAttempt,
   unregisterProject,
   updateLastIndexed,
 } from '../registry.js';
@@ -432,13 +434,32 @@ export class ProjectManager {
     // "trace-mcp version bump" from "reindex storm in post-update migrations",
     // which used to block the event loop long enough that the desktop app's
     // /health watchdog shot the daemon with `daemon restart`. See updater.ts.
+    // TRA-274: the flag used to be cleared only on SUCCESS. On a machine where
+    // many concurrent CLI sessions share one launchd daemon, the mass rebuild
+    // starves /health, a session restarts the daemon, and no project ever
+    // finishes — so every boot force-rebuilt every project again, forever.
+    // Burn an attempt BEFORE the rebuild starts and give up past the cap.
     const registryEntry = getProject(projectRoot);
-    const needsForcedReindex = registryEntry?.pendingReindexForVersion !== undefined;
+    let needsForcedReindex = registryEntry?.pendingReindexForVersion !== undefined;
     if (needsForcedReindex) {
-      logger.info(
-        { projectRoot, forVersion: registryEntry?.pendingReindexForVersion },
-        'Lazy post-update reindex: forcing full index rebuild for this project',
-      );
+      const attempt = recordPendingReindexAttempt(projectRoot);
+      if (attempt > MAX_PENDING_REINDEX_ATTEMPTS) {
+        needsForcedReindex = false;
+        logger.warn(
+          { projectRoot, forVersion: registryEntry?.pendingReindexForVersion, attempt },
+          'Lazy post-update reindex: giving up after repeated unfinished attempts — falling back to incremental index',
+        );
+        try {
+          clearPendingReindex(projectRoot);
+        } catch {
+          /* non-fatal — worst case we retry the cap check next boot */
+        }
+      } else {
+        logger.info(
+          { projectRoot, forVersion: registryEntry?.pendingReindexForVersion, attempt },
+          'Lazy post-update reindex: forcing full index rebuild for this project',
+        );
+      }
     }
     managed.initialIndexPromise = this.indexAllLimit!(() => pipeline.indexAll(needsForcedReindex))
       .then(async () => {
