@@ -5,6 +5,7 @@ import type { TraceMcpConfig } from '../../config.js';
 import { logger } from '../../logger.js';
 import { checkVersionDrift, versionDriftMessage } from '../../init/version-stamp.js';
 import { stripRedundantSchemaKeyword } from '../../server/schema-shim.js';
+import { createToolFilter } from '../../server/tool-filter.js';
 import { disarmStdoutGuard } from '../../server/transport-hardening.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
 import { PollingDaemonWatcher } from './daemon-watcher.js';
@@ -343,6 +344,10 @@ export class StdioSession {
       // session on its first request instead of surfacing "Session expired".
       // Null at bootstrap — the initial backend captures it via send() instead.
       initializeFrame: this.cachedInitialize ?? undefined,
+      // The preset is a property of *this* client session, not of the daemon
+      // (which serves every tool to everyone) — so it has to be applied here
+      // on the way out, or it never reaches a daemon-backed client (TRA-250).
+      toolFilter: createToolFilter(this.opts.config),
     });
   }
 

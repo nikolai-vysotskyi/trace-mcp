@@ -1,0 +1,254 @@
+/**
+ * Regression guard for TRA-250: the tool preset must survive the daemon proxy.
+ *
+ * The registration-time gate (tool-gate.ts) was already correct and already
+ * guarded by tool-schema-budget.test.ts — and the shipped default path
+ * (daemon-backed) still advertised all 172 tools regardless of preset, because
+ * the daemon registers every tool once and serves many sessions. So this suite
+ * asserts on the surface that actually reaches a client: the `tools/list`
+ * response after it has passed through ProxyBackend, plus the callability of a
+ * tool the preset filtered out.
+ */
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { TraceMcpConfig } from '../../../config.js';
+import { createToolFilter, UNGATED_META_TOOLS } from '../../../server/tool-filter.js';
+import { TOOL_PRESETS } from '../../../tools/project/presets.js';
+import { ProxyBackend, type ProxyTransport } from '../proxy-backend.js';
+
+/** Every tool name the daemon would advertise — presets are subsets of this. */
+function allDaemonToolNames(): string[] {
+  const registerDir = fileURLToPath(new URL('../../../tools/register', import.meta.url));
+  const names = new Set<string>();
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') walk(full);
+        continue;
+      }
+      if (!entry.name.endsWith('.ts')) continue;
+      for (const m of readFileSync(full, 'utf8').matchAll(
+        /(?:server\.tool|_originalTool)\(\s*['"]([a-zA-Z0-9_]+)['"]/g,
+      )) {
+        names.add(m[1]);
+      }
+    }
+  };
+  walk(registerDir);
+  return [...names];
+}
+
+/** Stands in for the daemon: answers tools/list with its full tool surface. */
+class FakeDaemonTransport implements ProxyTransport {
+  onmessage?: (msg: JSONRPCMessage) => void;
+  onerror?: (err: Error) => void;
+  readonly forwarded: JSONRPCMessage[] = [];
+
+  constructor(private readonly toolNames: string[]) {}
+
+  async start(): Promise<void> {}
+  async close(): Promise<void> {}
+
+  async send(msg: JSONRPCMessage): Promise<void> {
+    this.forwarded.push(msg);
+    const m = msg as Record<string, unknown>;
+    if (m.method === 'tools/list') {
+      this.onmessage?.({
+        jsonrpc: '2.0',
+        id: m.id,
+        result: {
+          tools: this.toolNames.map((name) => ({
+            name,
+            description: `stub description for ${name}`,
+            inputSchema: { type: 'object', properties: {} },
+          })),
+        },
+      } as unknown as JSONRPCMessage);
+    } else if (m.method === 'tools/call') {
+      this.onmessage?.({
+        jsonrpc: '2.0',
+        id: m.id,
+        result: { content: [{ type: 'text', text: 'daemon executed the tool' }] },
+      } as unknown as JSONRPCMessage);
+    }
+  }
+}
+
+const DAEMON_TOOLS = allDaemonToolNames();
+
+const backends: ProxyBackend[] = [];
+afterEach(async () => {
+  for (const b of backends.splice(0)) await b.stop();
+  delete process.env.TRACE_MCP_PRESET;
+});
+
+async function startProxy(
+  config: TraceMcpConfig,
+): Promise<{ backend: ProxyBackend; transport: FakeDaemonTransport; toClient: JSONRPCMessage[] }> {
+  const transport = new FakeDaemonTransport(DAEMON_TOOLS);
+  const toClient: JSONRPCMessage[] = [];
+  const backend = new ProxyBackend({
+    daemonUrl: 'http://127.0.0.1:0',
+    projectRoot: '/nonexistent/fake-project',
+    clientId: 'tra-250-test',
+    toolFilter: createToolFilter(config),
+    transportFactory: () => transport,
+  });
+  backend.onmessage = (m) => toClient.push(m);
+  backends.push(backend);
+  await backend.start();
+  return { backend, transport, toClient };
+}
+
+async function proxiedToolNames(config: TraceMcpConfig): Promise<string[]> {
+  const { backend, toClient } = await startProxy(config);
+  await backend.send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} } as JSONRPCMessage);
+  const reply = toClient.at(-1) as { result?: { tools?: Array<{ name: string }> } };
+  return (reply.result?.tools ?? []).map((t) => t.name);
+}
+
+describe('daemon proxy honours the session tool preset (TRA-250)', () => {
+  it('the fake daemon advertises the full surface these presets are subsets of', () => {
+    expect(DAEMON_TOOLS.length).toBeGreaterThan(150);
+  });
+
+  for (const preset of ['minimal', 'standard', 'review', 'architecture'] as const) {
+    it(`filters the proxied tools/list down to the "${preset}" preset`, async () => {
+      const names = await proxiedToolNames({ tools: { preset } } as TraceMcpConfig);
+      const expected = new Set([...(TOOL_PRESETS[preset] as string[]), ...UNGATED_META_TOOLS]);
+      const unexpected = names.filter((n) => !expected.has(n));
+      expect(
+        unexpected,
+        `Tools leaked past the "${preset}" preset: ${unexpected.join(', ')}`,
+      ).toEqual([]);
+      expect(names.length).toBeLessThan(DAEMON_TOOLS.length);
+    });
+  }
+
+  it('passes the full surface through untouched for the "full" preset', async () => {
+    const names = await proxiedToolNames({ tools: { preset: 'full' } } as TraceMcpConfig);
+    expect(names.length).toBe(DAEMON_TOOLS.length);
+  });
+
+  it('applies the shipped default (standard) when no preset is configured', async () => {
+    const names = await proxiedToolNames({} as TraceMcpConfig);
+    const expected = new Set([...(TOOL_PRESETS.standard as string[]), ...UNGATED_META_TOOLS]);
+    expect(names.filter((n) => !expected.has(n))).toEqual([]);
+    // The whole point of the issue: the default must not be the full surface.
+    expect(names.length).toBeLessThan(DAEMON_TOOLS.length / 2);
+  });
+
+  it('lets TRACE_MCP_PRESET override the config on the proxied path', async () => {
+    process.env.TRACE_MCP_PRESET = 'minimal';
+    const names = await proxiedToolNames({ tools: { preset: 'full' } } as TraceMcpConfig);
+    const expected = new Set([...(TOOL_PRESETS.minimal as string[]), ...UNGATED_META_TOOLS]);
+    expect(names.filter((n) => !expected.has(n))).toEqual([]);
+  });
+
+  it('honours tools.exclude and tools.include over the preset', async () => {
+    const names = await proxiedToolNames({
+      tools: { preset: 'minimal', include: ['get_pagerank'], exclude: ['search_text'] },
+    } as TraceMcpConfig);
+    expect(names).toContain('get_pagerank');
+    expect(names).not.toContain('search_text');
+  });
+
+  it('keeps a filtered-out tool genuinely uncallable, not merely hidden', async () => {
+    const { backend, transport, toClient } = await startProxy({
+      tools: { preset: 'standard' },
+    } as TraceMcpConfig);
+    await backend.send({
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'get_pagerank', arguments: {} },
+    } as unknown as JSONRPCMessage);
+
+    const reply = toClient.at(-1) as { id?: unknown; error?: { code: number; message: string } };
+    expect(reply.id).toBe(7);
+    expect(reply.error?.code).toBe(-32601);
+    expect(reply.error?.message).toContain('get_pagerank');
+    // Never reached the daemon — hiding a tool while still executing it would
+    // leave the token win without the behavioural guarantee.
+    expect(
+      transport.forwarded.some((m) => (m as { method?: string }).method === 'tools/call'),
+    ).toBe(false);
+  });
+
+  it('still forwards a permitted tools/call to the daemon', async () => {
+    const { backend, transport, toClient } = await startProxy({
+      tools: { preset: 'standard' },
+    } as TraceMcpConfig);
+    await backend.send({
+      jsonrpc: '2.0',
+      id: 8,
+      method: 'tools/call',
+      params: { name: 'search', arguments: { query: 'x' } },
+    } as unknown as JSONRPCMessage);
+    expect(
+      transport.forwarded.some((m) => (m as { method?: string }).method === 'tools/call'),
+    ).toBe(true);
+    expect((toClient.at(-1) as { error?: unknown }).error).toBeUndefined();
+  });
+});
+
+describe('proxied tools/list token budget (TRA-250)', () => {
+  // Serialized-char ceilings on the *proxied* surface, measured against the
+  // real presets. The registration-time budget in tool-schema-budget.test.ts
+  // was green throughout the regression this suite exists to catch, because it
+  // never looked at what a daemon-backed client actually receives.
+  //
+  // Real measurement (2026-08-28, v1.51.0 daemon + `dist/cli.js serve`):
+  // minimal 32,914 chars / ~9.1k tokens, standard 68,818 / ~19.1k,
+  // full 187,790 / ~52.2k. This suite's stub descriptions are far smaller, so
+  // it asserts on tool *counts* — the ratio that produced those numbers —
+  // rather than re-deriving char totals from fake prose.
+  const PRESET_MAX_TOOLS: Record<string, number> = { minimal: 30, standard: 60 };
+
+  for (const [preset, max] of Object.entries(PRESET_MAX_TOOLS)) {
+    it(`keeps the proxied "${preset}" surface at or under ${max} tools`, async () => {
+      const names = await proxiedToolNames({ tools: { preset } } as TraceMcpConfig);
+      expect(
+        names.length,
+        `The proxied "${preset}" surface grew to ${names.length} tools. Every tool here is ` +
+          'paid in tools/list schema tokens by every session on the default daemon path (TRA-250).',
+      ).toBeLessThanOrEqual(max);
+    });
+  }
+});
+
+describe('StdioSession wires the filter into every proxy backend (TRA-250)', () => {
+  // The original regression was not a broken filter — it was the absence of
+  // one on the shipped path. A ProxyBackend constructed without `toolFilter`
+  // forwards the daemon's full surface, and every test above would still pass.
+  // Source-level assertion because buildProxyBackend is private and the real
+  // path needs a live daemon.
+  it('passes toolFilter when constructing ProxyBackend', () => {
+    const src = readFileSync(fileURLToPath(new URL('../session.ts', import.meta.url)), 'utf8');
+    const ctor = src.slice(src.indexOf('new ProxyBackend('));
+    expect(ctor.slice(0, ctor.indexOf('});')), 'session.ts must pass toolFilter').toContain(
+      'toolFilter:',
+    );
+  });
+});
+
+describe('ungated meta-tool list stays in sync with session.ts (TRA-250)', () => {
+  it('matches the tools registered through _originalTool', () => {
+    const src = readFileSync(
+      fileURLToPath(new URL('../../../tools/register/session.ts', import.meta.url)),
+      'utf8',
+    );
+    const registered = new Set(
+      [...src.matchAll(/_originalTool\(\s*['"]([a-zA-Z0-9_]+)['"]/g)].map((m) => m[1]),
+    );
+    expect(
+      [...registered].sort(),
+      'Tools registered outside the preset gate must be listed in UNGATED_META_TOOLS, ' +
+        'or the daemon-backed surface will differ from the local one for the same preset.',
+    ).toEqual([...UNGATED_META_TOOLS].sort());
+  });
+});
