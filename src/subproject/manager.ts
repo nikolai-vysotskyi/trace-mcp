@@ -13,6 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { isDangerousProjectRoot } from '../dangerous-root.js';
 import { getDbPath } from '../global.js';
 import { logger } from '../logger.js';
 import {
@@ -106,6 +107,23 @@ export interface SubprojectGraphResult {
 // Re-export so existing callers importing from manager.ts still work
 export type { SubprojectSearchItem, SubprojectSearchResult } from './subproject-search.js';
 
+/**
+ * Bail before the expensive `detectServices` filesystem walk when a root is a
+ * system/home/filesystem-root path. `upsertSubproject` refuses these rows too
+ * (that's the authoritative guard), but reaching it means having already walked
+ * something like all of /private/tmp first — which is exactly how TRA-232's 298
+ * phantom subprojects got registered.
+ */
+function assertSafeRoot(absRoot: string, kind: 'repo' | 'project'): void {
+  const reason = isDangerousProjectRoot(absRoot);
+  if (reason) {
+    throw new Error(
+      `Refusing to use "${absRoot}" as a subproject ${kind} root: ${reason}. ` +
+        'Point it at a specific source directory, not a system or root path.',
+    );
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // CONTRACT RESOLUTION HELPERS
 // Pure functions extracted out of SubprojectManager#registerContracts (the
@@ -194,6 +212,8 @@ export class SubprojectManager {
     if (!fs.existsSync(absRoot)) {
       throw new Error(`Repository path does not exist: ${absRoot}`);
     }
+    assertSafeRoot(absRoot, 'repo');
+    assertSafeRoot(absProjectRoot, 'project');
 
     const repoName = opts?.name ?? path.basename(absRoot);
     const dbPath = getDbPath(absRoot);
@@ -257,6 +277,7 @@ export class SubprojectManager {
     if (!fs.existsSync(absProjectRoot)) {
       throw new Error(`Project path does not exist: ${absProjectRoot}`);
     }
+    assertSafeRoot(absProjectRoot, 'project');
 
     const detected = detectServices([absProjectRoot]);
     const results: SubprojectAddResult[] = [];
