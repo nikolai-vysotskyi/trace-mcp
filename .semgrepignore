@@ -1,0 +1,23 @@
+# Semgrep scope for trace-mcp (TRA-255). The scan is a merge gate, so
+# anything left in scope has to be actionable on a PR.
+
+# Test code and fixtures: not attack surface, and fixtures are deliberately
+# malformed source for the indexer to chew on.
+tests/
+**/__tests__/
+**/*.test.ts
+**/*.spec.ts
+
+# Build/release tooling, not shipped to users.
+scripts/
+
+# Jekyll site for trace-mcp.com. `var-in-href` fires on every
+# `href="{{ ... | relative_url }}"` — that is how Jekyll templates work,
+# and there is no runtime here to inject into.
+docs/
+
+# Generated / vendored.
+dist/
+node_modules/
+packages/app/dist/
+packages/app/release/
