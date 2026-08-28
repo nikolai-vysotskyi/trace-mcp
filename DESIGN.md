@@ -1,0 +1,507 @@
+# Design system
+
+This is what the trace-mcp desktop app actually is, not what it aspires to be. Every
+value here is read out of merged code and is cited to the file it lives in. If this
+document and the code disagree, the code wins and this document is a bug.
+
+The target is macOS 26 (Tahoe). The bar is not "consistent with the rest of the app" —
+it is that a stranger opening trace-mcp assumes Apple shipped it.
+
+**Read this before adding a screen.** It is meant to be read once, in order, and then
+used as a checklist. Exact token values live in
+`packages/app/src/renderer/styles/tokens.css`, which is the reference dump; this
+document explains what each one is *for*.
+
+---
+
+## 1. The two-layer material model
+
+There are exactly two layers, and mixing them is the single most common way to make
+this app look wrong.
+
+| Layer | What it is | Material |
+|---|---|---|
+| **Navigation / chrome** | sidebar, toolbars, floating control strips, menus, popovers | translucent — real vibrancy on macOS, `.glass` elsewhere |
+| **Content** | everything in the content pane: cards, tables, rows, lists | **opaque** `--surface`, hairline border, no shadow |
+
+Rules that fall out of this:
+
+- **Glass belongs to navigation and controls only. Content is opaque.** A card is
+  content. A KPI tile is content. A table is content. None of them get a backdrop
+  filter. (`KpiTile.tsx`: "Cards are content, not chrome: opaque surface, 12px radius,
+  hairline border, no shadow and no glass.")
+- **Never glass on glass.** One translucent layer at a time. The one glass element
+  inside the content pane is the floating bulk-actions strip, and it is floating
+  *over* content, not part of it (`workspace/BulkActionsBar.tsx`).
+- Cards get a hairline (`0.5px solid var(--separator)`), not a shadow. Shadows are for
+  things that genuinely float: menus and popovers (`--shadow-panel`, `--menu-shadow`).
+
+### How the glass is produced
+
+On macOS the material is **native**, not CSS. `packages/app/src/main/tray.ts` creates
+the window with:
+
+```ts
+opts.titleBarStyle = 'hiddenInset';
+opts.trafficLightPosition = { x: 14, y: 18 };   // centres the 12px lights on the 44px strip
+opts.vibrancy = 'sidebar';
+opts.visualEffectState = 'followWindow';
+opts.backgroundColor = '#00000000';
+opts.transparent = false;
+```
+
+That is a real `NSVisualEffectView` behind the whole window. The renderer's job is to
+keep the sidebar region *transparent* so the material shows through, and to paint
+everything else opaque (`styles/sidebar.css`). `.ws-stage` is transparent on macOS for
+the same reason; non-mac stages paint themselves.
+
+`.glass` in `tokens.css` — `color-mix(--surface 62%, transparent)` +
+`blur(28px) saturate(180%)` — is the **fallback for non-macOS and for elements that are
+not the window's vibrant region** (toolbars, the bulk-actions strip).
+
+We deliberately **did not adopt `electron-liquid-glass`.** The native
+`BrowserWindow` vibrancy path gives us the material, follows the system appearance on
+its own, desaturates when the window loses key (`visualEffectState: 'followWindow'`),
+and honours Reduce Transparency for free — with no extra native dependency, no
+feature detection, and no code path that no-ops below macOS 26.
+
+---
+
+## 2. Tokens
+
+`packages/app/src/renderer/styles/tokens.css` is the single source of truth for colour,
+type, geometry and motion. Every component reads from it.
+
+**A raw hex, a `text-gray-*` class, or an off-grid size anywhere under
+`packages/app/src/renderer/**` is a build failure.** See §9.
+
+The palette is defined for light and dark. Dark is duplicated across three selectors
+(`@media (prefers-color-scheme: dark)`, `:root[data-theme="dark"]`,
+`.ws-stage[data-mode="dark"]`) on purpose — a media query cannot be merged into a
+selector list, and a stage has to be able to disagree with the root appearance.
+
+### Text
+
+| Token | Use it for | Never use it for |
+|---|---|---|
+| `--label` | body text, headings, control labels — the default | — |
+| `--label-secondary` | secondary text that a user still **reads**: captions, counts, footnotes, group headers, timestamps | — |
+| `--label-tertiary` | **decoration only** — disabled glyphs, separators, chart gridlines, placeholder text | any text a user is meant to read |
+
+`--label-tertiary` measures **1.88:1** in light and **2.53:1** in dark on `--surface`.
+It is not a text colour. This was the most-repeated bug in the app before the revision
+and it is the rule most worth memorising.
+
+`--label-secondary` is `.55` alpha, **not Apple's `.50`** — at `.50` it measures 3.98:1
+and fails AA for the body text it actually carries.
+
+### Accent and fills
+
+| Token | Use it for |
+|---|---|
+| `--accent` | accent-coloured **text** and hairlines |
+| `--accent-fill` | the **background** of a filled accent control |
+| `--on-accent` | the label on top of `--accent-fill` |
+| `--danger-fill` | the background of a destructive filled control |
+| `--status-red` | destructive/error **text** |
+
+The split between `--accent` and `--accent-fill` exists because the two directions have
+different constraints. In dark, `--accent` has to stay light enough to read *as text*
+on `--surface`, which leaves white on it at 3.65:1 — so filled controls use the darker
+`--accent-fill` instead. Same story one hue over for `--status-red` / `--danger-fill`.
+**Do not use `--accent` as a background, and do not use `--accent-fill` as a text
+colour.**
+
+Light accent is `#0069d9`, not Apple's `#007aff`: system blue measures 4.02:1 on
+`--surface` and fails AA both as accent text and under a white label.
+
+### Surfaces and fills
+
+- `--surface` — content: cards, tables, the island, the opaque sidebar off-macOS.
+- `--surface-sunken` — the frame the content sits on (content pane background).
+- `--surface-raised` — floating overlays: menus, popovers.
+- `--fill-quaternary` / `--fill-tertiary` / `--fill-secondary` / `--fill-pressed` —
+  the interaction fill ramp: hover → selected/recessed track → stronger → pressed.
+- `--separator` — every hairline, at `0.5px`.
+
+### Status and badges
+
+`--status-green|orange|red|blue|purple` are tuned to read **as text** on both surfaces.
+The `--badge-*-fg` tokens are separate: each is that hue walked toward black (light) or
+white (dark) until the label clears 4.5:1 over the **18% tint of that same hue**, which
+is what `.lx-badge` paints. Badge foreground and status text are not interchangeable.
+
+**Status is never carried by colour alone.** A tone always arrives with a glyph and a
+written label (`KpiTile.tsx`, the workspace KPI strip).
+
+### Measured contrast
+
+Run `node packages/app/scripts/design-tokens.mjs` for the current table. As of this
+writing every required pair clears AA with margin — the tightest are `--accent` and
+`--status-blue` in dark at **4.57:1**, `--label-secondary` in light at **4.76:1** on
+`--surface` and **4.66:1** on `--surface-sunken`, and `--on-accent` on `--accent-fill`
+at **4.77:1** in dark.
+
+---
+
+## 3. Type
+
+Eight sizes. That is the whole scale. There is nothing at 9, 12.5, 13.5, 14, 16 or 18px.
+
+| Token | Size / leading | For |
+|---|---|---|
+| `--text-large-title` | 26 / 32 | the one hero line on an empty pane |
+| `--text-title-1` | 22 / 26 | page title |
+| `--text-title-2` | 17 / 22 | empty-state title, section hero |
+| `--text-title-3` | 15 / 20 | subsection heading |
+| `--text-body` | 13 / 16 | **the default** — rows, labels, controls, table body |
+| `--text-callout` | 12 / 15 | dense secondary text |
+| `--text-caption` | 11 / 13 | captions, table headers, badges, counts |
+| `--text-caption-2` | 10 / 13 | group headers only |
+
+Weights: `400` regular, `500` medium, `600` semibold. (`590` appears in a few controls
+as the macOS "emphasised" weight for a selected segment or a prominent button label.)
+
+Use the utility classes — `.t-body`, `.t-caption`, `.t-title-2`, … — instead of a
+one-off `font-size`. They set family, size, leading and tracking together.
+
+**The rules that killed the old drift:**
+
+1. **Nothing below 11px carries reading text.** 10px exists for group headers and
+   nothing else. Project Overview had 61 of 100 text nodes at 9–10px before the
+   rewrite; that is the failure this rule prevents.
+2. **At most three sizes on a screen**, four if it has both a hero and a dense table.
+   The same surface had seven.
+3. **No ALL CAPS outside a 10px group header.** Badges, chips and column headers are
+   sentence case (`.lx-badge` carries an explicit `ponytail:` comment saying so).
+4. Numbers that a user compares get `font-variant-numeric: tabular-nums`.
+
+---
+
+## 4. Geometry
+
+### The 4pt grid
+
+Spacing tokens are `--space-2/4/6/8/12/16/20/24/32/40/48`. Nothing at 13, 17 or 25.
+
+### Control heights: 20 / 24 / 28. Nothing else.
+
+`packages/app/src/renderer/styles/controls.css` declares one geometry for every control
+in the app.
+
+| Size | Height | Use |
+|---|---|---|
+| `small` | 20px | dense toolbars, inline controls |
+| `regular` | 24px | **the default** |
+| `large` | 28px | the single prominent action on a surface |
+
+### Hit targets: ≥ 24×24, always
+
+Every focusable element gets a 24×24 hit box even when the painted control is smaller.
+The two techniques in use, both worth copying:
+
+- **Checkbox**: 16px painted visual inside a 24×24 box, grown by a `4px solid
+  transparent` border with `background-clip: padding-box`. Radius `9px` = 5px inner + 4px
+  border, so it stays concentric.
+- **20px tier**: an overflowing `::after` (`inset: -2px`) grows the clickable box
+  without moving a single painted pixel. Small buttons get all four sides; segmented
+  items get vertical only, because they already clear 24px wide and the 2px inter-segment
+  gap is not wide enough to share.
+
+### Radii — concentric, from the scale
+
+| Token | Value | For |
+|---|---|---|
+| `--radius-window` / `--radius-panel` / `--radius-card` | 12px | window, panels, cards, islands |
+| `--radius-popover` | 10px | menus, popovers |
+| `--radius-input` | 8px | text inputs, tabs |
+| `--radius-row` | 6px | rows, selection pills, square icon buttons |
+| `--radius-capsule` | 999px | every pill-shaped control |
+
+Controls are **capsules**, not rounded rectangles. The one square control is the
+icon-only button: 24×24 at 6px radius with a 16px glyph. There are no 4/5/9px control
+radii.
+
+When one rounded box sits inside another, the inner radius is the outer minus the
+inset, so the curves stay concentric. The sidebar's 8px bottom footer inset reads as
+concentric with the 12px window corner.
+
+### Motion
+
+`--dur-micro` 120ms (hover, fill changes) · `--dur-standard` 200ms · `--dur-large` 320ms.
+Easing: `--ease-out`, `--ease-spring`. Never animate a layout property — the old search
+field animated `left` over 0.42s and it is gone.
+
+---
+
+## 5. Components
+
+Import from `packages/app/src/renderer/lattice/ui`. **Do not hand-roll a control that
+already exists here** — that is how the app ended up with four different pill rows.
+
+| Primitive | Variants / notes |
+|---|---|
+| `Button` | sizes `small`/`regular`/`large`; variants `prominent` / `bordered` / `plain` / `icon`. Icon-only requires **both** `aria-label` and `title` at the type level. |
+| `SegmentedControl` | a real recessed track (`--fill-tertiary`, 2px inset) with a capsule thumb on `--surface` + hairline. The thumb carries selection, **not** an accent fill and **not** the label colour. |
+| `SearchField` | capsule, 24px, leading magnifier, `Esc` clears. Placeholder starts and stays at the leading edge. |
+| `Chip` / `ChipGroup` | 24px. Multi-select "on" is a neutral filled state; accent fill is reserved for single-select, where exactly one chip is on. Groups carry a visible label. |
+| `Checkbox` | 16px visual in a 24×24 box. The CSS applies to every `input[type=checkbox]` in the renderer. |
+| `PopUpButton` | 24px bordered capsule. The native `<select>` menu is kept — that *is* the platform menu; only the chrome is ours. |
+| `Badge` / `GradeBadge` | capsule, 11px/500, sentence case, tinted fill with the saturated hue as the label. 18px tall so it fits inside a 24px row. Never white-on-a-light-fill. |
+| `StatusDot` | tone dot. Pairs with a written label — never the only signal. |
+| `IslandHeader` / `MiniButton` | the canonical 38px island header row. |
+| `EmptyState` | full and `compact`. |
+| `Menu` / `MenuItem` / `MenuSection` / `MenuSeparator` / `ConfirmPopover` / `useMenuAnchor` | one anchor implementation shared by every surface. |
+
+### Prominent buttons are flat
+
+macOS 26 dropped the gradient and the bezel. `.lx-btn.v-prominent` is a flat
+`--accent-fill` capsule. If you find a triple `box-shadow` bezel, delete it.
+
+### `.lx-btn.is-status:disabled`
+
+A disabled button whose **label is the status readout** ("Indexing…", "Daemon
+unreachable") is not an inert control. Dimming it to `opacity: 0.4` put the only
+progress text on Project Overview at 2.3:1. `is-status` keeps it unpressable and keeps
+the sentence readable (4.76:1 on surface). Use it whenever the label is information.
+
+### The row system — `.ws-sb-row`
+
+A **row** is the sidebar's unit of content: 28px tall, 6px radius, inset 6px from the
+sidebar edges, `8px` internal padding, 8px gap, a 16px icon slot, a 13px label that
+truncates, and an optional trailing count in tabular figures. Label text starts at
+x=38 in every row.
+
+**Anything that lives in the sidebar is a row.** Nav items are rows. Settings is a row.
+A row that *carries* a control instead of being one (Appearance) is
+`.ws-sb-row.is-static` — same box, no hover, must not read as clickable. The footer
+was the last strip running its own geometry, and putting it on the row system is what
+made the sidebar read as one thing.
+
+Selection follows the macOS active/inactive pair: `--fill-tertiary` when the sidebar
+does not own focus, `--accent-fill` + `--on-accent` when it does
+(`.ws-sidebar:focus-within`).
+
+### States are part of the component, not an afterthought
+
+Every data surface owes four states, and each has a house form:
+
+- **Loading** — skeleton blocks *at the final geometry*, so nothing shifts when data
+  lands. Never a centred spinner, never the word "Loading…". (`.ws-skel`,
+  `.ws-sb-skeleton`, `workspace/components/Skeleton.tsx`.)
+- **Empty** — real anatomy: glyph → title line → one sentence → one action. 32px glyph
+  / 17px-600 / 13px for a pane; `EmptyState compact` for a section inside a card (120px
+  tall, 20px glyph, 13px title). An empty section is not a hero.
+- **Error** — the chrome stays put; the sentence and its Retry action sit together.
+  Each section tracks its own load state. A failed fetch must not pulse a skeleton
+  forever promising data that is never coming — settle on an em dash and
+  "Couldn't be measured".
+- **Unknown ≠ empty ≠ zero.** "The daemon has not answered yet" and "this project was
+  never indexed" are different sentences. "0 of 0 dependencies covered" is an empty
+  state, not a full green meter.
+
+---
+
+## 6. Layout skeleton
+
+```
+┌─ window: hiddenInset, 12px radius, min 640×420 ───────────────────┐
+│ ┌ sidebar (transparent → vibrancy) ┬ content pane (opaque) ─────┐ │
+│ │ 44px traffic-light strip [drag]  │ 44px header [drag]         │ │
+│ ├──────────────────────────────────┼────────────────────────────┤ │
+│ │ scroll: 6px inset, 28px rows     │ 52px toolbar (glass)       │ │
+│ │                                  ├────────────────────────────┤ │
+│ │                                  │ content, opaque, ≤720px    │ │
+│ ├──────────────────────────────────┤                            │ │
+│ │ footer: hairline, 6/6/8 inset    │                            │ │
+│ └──────────────────────────────────┴────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+- **Sidebar** — 220px default, 180–320px drag range, flush to the window edge: no
+  radius, no shadow. The hairline separator and the material *are* the edge. Width and
+  collapsed state persist and sync across windows (`renderer/sidebar-prefs.ts`).
+- **Traffic lights are native.** `trafficLightPosition: {x: 14, y: 18}` centres the 12px
+  lights on the 44px strip the sidebar reserves. When the sidebar is collapsed the
+  content header takes a `78px` left pad so the lights land on it instead.
+  **Never draw traffic lights in CSS** — the hand-drawn `.ws-lights` circles are gone
+  and must not come back.
+- **Drag regions**: exactly two — the sidebar's top 44px and the content pane's 44px
+  header. `<main>` is not a drag region. Every interactive child inside a drag region
+  needs `-webkit-app-region: no-drag`.
+- **Toolbar** — 52px, `.glass`, with a scroll-edge hairline that fades in as content
+  scrolls under it. **One prominent action per region.** Secondary actions go into a
+  labelled pop-up or an overflow menu; thirteen controls in one wrapping row is the
+  thing this replaced.
+- **Content measure** — capped and centred (720px on Project Overview). Long text and
+  grouped lists do not run to a 1640px window edge.
+- **A surface that draws its own toolbar owns the whole pane.** Do not wrap it in a
+  16px inset — that turns a flush toolbar into a floating band with the sunken
+  background showing down both sides.
+- **Scroll edges get a hairline.** A pinned footer or a sticky header that content
+  slides under is a scroll edge; a sticky header must have an **opaque** backing, or
+  rows show through the column labels.
+
+---
+
+## 7. Accessibility
+
+Not a pass at the end. These are floors.
+
+- **Contrast**: 4.5:1 for anything a user reads, in **both** appearances, verified by
+  `scripts/design-tokens.mjs` in CI. `--label-tertiary` is decoration only (§2).
+- **Focus ring**: one ring, house-wide. `--focus-ring` on `:focus-visible` globally;
+  primitives use `outline: 2px solid var(--accent); outline-offset: 2px`. Keyboard
+  only — `*:focus { outline: none }`. Every focusable element must show it.
+- **Hit targets**: ≥24×24 for anything focusable (§4).
+- **Icon-only controls carry a label and a tooltip.** The `Button` type enforces both
+  for the `icon` variant.
+- **Never colour alone.** Tones arrive with a glyph and a word. `GradeBadge` spells the
+  grade out for assistive tech.
+- **`prefers-reduced-motion: reduce`** — global kill switch in `tokens.css` collapses
+  all animation and transition to 0.01ms. Prefer `animation`/`transition` over
+  JS-driven motion so it is covered for free.
+- **`prefers-reduced-transparency: reduce`** — `.glass` becomes opaque `--surface`; the
+  macOS sidebar re-paints opaque. macOS turns the `NSVisualEffectView` opaque itself, so
+  the native path is covered without us.
+- **`prefers-contrast: more`** — separators strengthen, `--label-secondary` goes to
+  `.70`/`.75`, `--surface-sunken` goes to pure white/black, the focus ring thickens to
+  4px, and selected rows gain an accent outline.
+- **Keyboard**: a table is one tab stop with arrow-key navigation and Enter to open,
+  not N tab stops. `⌘⌥S` toggles the sidebar; `⌘1…⌘9` select a section; the resize
+  handle is tabbable with ←/→/Home/End.
+- **Right-click parity**: a context menu offers the same actions as the visible row
+  buttons.
+- **No hover-only affordances.** Row actions must have a permanent, reachable form —
+  an always-visible overflow button opening a `Menu`. A trailing affordance may be
+  revealed on hover only if the same action exists elsewhere and it appears on
+  `:focus-visible`.
+
+---
+
+## 8. The "never" list
+
+1. Never a raw hex, `rgb()`, or a Tailwind grey (`text-gray-*`, `bg-slate-*`) in the
+   renderer. Use a token. **CI fails on new ones.**
+2. Never `--label-tertiary` for text a user reads.
+3. Never `--accent` as a background, never `--accent-fill` as a text colour.
+4. Never glass on content. Never glass on glass.
+5. Never a shadow on a card. Hairline instead.
+6. Never a control height outside 20/24/28.
+7. Never a focusable box under 24×24.
+8. Never a control radius outside the scale — capsule for pills, 6px for square icon
+   buttons, 50% for dots.
+9. Never text below 11px that a user reads. Never 10px outside a group header.
+10. Never ALL CAPS outside a 10px group header.
+11. Never more than one prominent action per region.
+12. Never a centred spinner or the word "Loading…" where a skeleton belongs.
+13. Never colour as the only carrier of status.
+14. Never an icon-only control without an `aria-label` **and** a `title`.
+15. Never an action that exists only on hover.
+16. Never draw traffic lights, or any other piece of window chrome, in CSS.
+17. Never animate a layout property (`left`, `top`, `width`, `height`). Transform and
+    opacity only.
+18. Never make `<main>` a drag region.
+19. Never report "unknown" as "zero", or a lost connection as lost data.
+20. Never hand-roll a control that exists in `lattice/ui`.
+
+---
+
+## 9. Enforcement
+
+`packages/app/scripts/design-tokens.mjs`, asserted by vitest and run in CI:
+
+- **`contrastTable()` / `contrastFailures()`** — WCAG contrast for every text token
+  against `--surface` and `--surface-sunken` in both appearances, plus `--on-accent` on
+  `--accent-fill`. Any pair under 4.5:1 fails the build.
+- **`tokenGuard()`** — scans the renderer for raw hex and Tailwind greys. It is
+  **baselined** in `scripts/token-guard.baseline.json`: pre-existing violations are
+  recorded per file and only an **increase** fails. Every surface migration lowers a
+  number; nobody may raise one. If your change drops a file below its baseline, the
+  script tells you to lower it — do.
+
+`lattice/ui/__tests__/primitives.test.tsx` asserts the height set, the ≥24px boxes, the
+radius set, and ≥4.5:1 contrast for all seven badge tones in both appearances.
+
+Run it locally:
+
+```bash
+node packages/app/scripts/design-tokens.mjs                    # contrast table + guard
+node packages/app/scripts/design-tokens.mjs --update-baseline  # only ever to LOWER counts
+```
+
+The renderer also ships a gallery: `?view=gallery[&theme=dark]` renders every primitive
+variant × size × state.
+
+---
+
+## 10. Review checklist for a new screen
+
+Run this before opening the PR. Look at the **running renderer**, in both appearances —
+code correctness and visual correctness are different claims.
+
+- [ ] Every colour is a token; `design-tokens.mjs` is clean and no baseline count went up.
+- [ ] Three sizes on the screen, four at the outside. Nothing under 11px carries reading text.
+- [ ] Every control comes from `lattice/ui`. Heights are 20/24/28.
+- [ ] Every focusable box measures ≥24×24 (check with `elementFromPoint` 1px inside each edge).
+- [ ] Content is opaque. Glass is only on navigation, toolbars, and floating strips.
+- [ ] One prominent action in the region. Everything else is bordered, plain, or in an overflow menu.
+- [ ] All four states exist and were looked at: loading (skeletons at final geometry), empty (glyph/title/sentence/action), error (chrome intact, Retry adjacent), and populated.
+- [ ] Unknown, empty, and zero read as three different things.
+- [ ] Every icon-only control has `aria-label` + `title`. Every tone has a glyph and a word.
+- [ ] Tab through it: visible focus ring everywhere, tables are one tab stop, no keyboard trap.
+- [ ] No action reachable only on hover; right-click offers what the row buttons offer.
+- [ ] Screenshots in light **and** dark, plus Reduce Transparency and Increase Contrast wherever material is involved.
+
+---
+
+## 11. Decision log
+
+One line each, with the reason. These are settled — do not re-litigate them without
+new evidence.
+
+| Decision | Why |
+|---|---|
+| Native `BrowserWindow` vibrancy, **not** `electron-liquid-glass` | Gets the real material, follows system appearance, desaturates off-key, and honours Reduce Transparency for free — no extra native dep, no no-op path below macOS 26. |
+| `titleBarStyle: 'hiddenInset'` with native traffic lights | The platform draws them correctly at every size and appearance; the CSS circles never did. |
+| Accent `#0069d9`, not Apple's `#007aff` (light) | System blue measures 4.02:1 on `--surface` and fails AA both as text and under a white label. |
+| `--label-secondary` at `.55`, not Apple's `.50` | At `.50` it measures 3.98:1 and fails AA for the body text it carries. |
+| `--accent` and `--accent-fill` split (same for `--status-red`/`--danger-fill`) | A hue readable *as text* on `--surface` and a hue readable *under a white label* are different colours in dark. |
+| `--label-tertiary` declared decoration-only, and `--text-tertiary` aliased to `--label-secondary` | The legacy alias carried real reading text at 2.21:1. Decoration-only callers ask for the token by name. |
+| One token layer; legacy names kept as aliases for one migration step | Lets surfaces migrate one at a time instead of a big-bang rename; each surface deletes the aliases it stops using. |
+| Baselined token guard (counts, not per-line suppressions) | Counts only ever move down; a line-level baseline churns on every reflow. |
+| Control heights fixed at 20/24/28 | Matches the macOS small/regular/large tiers; any fourth height is drift. |
+| Capsule radius for controls; 6px square only for icon-only buttons | macOS 26 control shape. Removes the eight-distinct-radii problem measured on Project Overview. |
+| 20px controls keep the painted macOS small size, hit target grown by pseudo-element | The painted size is *correct*; only the hit box was wrong. Growing the box moves no pixel. |
+| Prominent buttons are a flat accent capsule | macOS 26 dropped the gradient + bezel entirely. |
+| Segmented selection is the thumb, and unselected labels stay at `--label` | macOS draws unselected segments at full strength; `--label-secondary` on the recessed track measured 4.45:1. |
+| Badge tint at 18% with a per-tone `--badge-*-fg` label | White-on-a-light-fill was 1.6:1. The tone's own hue, darkened until it clears AA over its own tint, is legible in both appearances. |
+| Badges/chips/headers are sentence case | ALL CAPS is reserved for the 10px group header and nowhere else. |
+| Cards are opaque with a hairline, no shadow, no glass | Cards are content. The active KPI tile painted on accent measured 3.28:1 and pushed its footnote to 4.45:1. |
+| `.lx-btn.is-status:disabled` keeps full opacity | A disabled button whose label is the status readout is information, not an inert control; dimming put it at 2.3:1. |
+| Skeletons at final geometry instead of spinners or "Loading…" | Nothing shifts when the data lands, and the loading state shows the shape of what is coming. |
+| A failed fetch settles on an em dash + "Couldn't be measured" | A skeleton that pulses forever promises data that is never coming. |
+| `listPending` separates "daemon hasn't answered" from "never indexed" | `status ?? 'unknown'` blamed the project for the daemon's silence. |
+| Sidebar footer is `.ws-sb-row`, not its own geometry | One row system for the whole sidebar; the footer's labels started 26px left of every other label. |
+| Appearance is Auto / Light / Dark, with Auto clearing the key | The old `toggle` only ever wrote `light` or `dark`, so one click pinned the app forever and the system listener stopped mattering. |
+| Paths truncate at the **head**, keeping the tail | The tail is the part that distinguishes siblings; tail-truncation hid the only useful segment. |
+| Sidebar file paths use a `dir`/`name` flex split, not `direction: rtl` | The rtl hack mangled any path containing `.` or `_` runs (`.idea/workspace.xml` → `idea/workspace.xml.`). |
+| Whitespace separates sidebar groups, not rules | Fewer lines, clearer grouping; matches the platform sidebar. |
+| Rows are windowed past 100 items | A thousand projects costs what a hundred does. |
+| Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
+| Tokens and primitives land before any surface | A surface migrated against a moving token layer gets migrated twice. |
+
+---
+
+## 12. Migration status
+
+The token layer, the control primitives, the window chrome, the sidebar and its
+footer, the workspace dashboard, and Project Overview are on this system.
+
+Activity, Memory, MCP Clients, Settings, the onboarding dialog, Graph Explorer and
+Insights are still being migrated. Until they are, `styles/island.css` keeps a set of
+**legacy aliases** (`--text-1/2/3`, `--frame`, `--island`, `--row-hover`, `--sep`, …)
+that map onto the tokens above, plus per-domain styles that this document's "never"
+list already forbids — glass stat cards, ALL-CAPS labels, raw hex. **Those are being
+deleted, not copied.** If you are writing a new screen, use the tokens in §2 directly;
+if you are touching an old one, migrate it whole and delete the aliases it stops using.

@@ -531,6 +531,7 @@ Full docs live at **[trace-mcp.com](https://trace-mcp.com/)** (same content as `
 | [System prompt routing](https://trace-mcp.com/tweakcc.html) | Optional tweakcc integration for maximum tool routing enforcement |
 | [Comparisons](https://trace-mcp.com/comparisons.html) | Full side-by-side tables vs. other code intelligence / memory / RAG tools |
 | [Development](https://trace-mcp.com/development.html) | Building, testing, contributing, adding new plugins |
+| [Design system](DESIGN.md) | The desktop app's macOS 26 design system — tokens, type, geometry, materials, primitives, accessibility floors |
 
 ---
 

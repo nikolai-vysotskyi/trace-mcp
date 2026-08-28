@@ -121,6 +121,11 @@ jobs:
               # than to hand-merge past branch protection.
               - 'packages/app/**'
               - 'docs/**'
+              # And once more for the root markdown (README, CONTRIBUTING,
+              # DESIGN, SECURITY…): a PR that touches only those hit the exact
+              # same unsatisfiable gate (TRA-307). Root `*.md` is the last tree
+              # a PR can plausibly touch on its own.
+              - '*.md'
 
   # ───────────────────────────────────────────────────────────────────────────
   # Biome — runs in parallel with build (it doesn't need dist/).
