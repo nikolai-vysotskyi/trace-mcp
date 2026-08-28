@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [1.51.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.51.0...v1.51.1) (2026-08-28)
+
+
+### Bug Fixes
+
+* **guard:** add Windows system directories to the dangerous-root guard (TRA-236) ([#411](https://github.com/nikolai-vysotskyi/trace-mcp/issues/411)) ([33b5f1c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/33b5f1c06c09dd813a8dbe5c41d63d79e88a25f2))
+* **hooks:** cut clock spawns in reindex hook, make stats-write flake diagnosable ([#412](https://github.com/nikolai-vysotskyi/trace-mcp/issues/412)) ([74ce12b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/74ce12bfa0a4fbbf794aedcc19ee7fb537818fac))
+
+
+### Performance
+
+* **tools:** stop paying full prose for deprecated consolidation aliases, guard schema size (TRA-239) ([#414](https://github.com/nikolai-vysotskyi/trace-mcp/issues/414)) ([1dcb962](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1dcb96266403589c388ad5d89a9f7ad705c41add))
+
 ## [1.51.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v1.50.0...v1.51.0) (2026-08-28)
 
 
