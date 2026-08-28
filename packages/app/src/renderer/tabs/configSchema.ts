@@ -40,7 +40,6 @@ export interface FieldDef {
 export interface SectionDef {
   key: string;
   label: string;
-  icon: string;
   description?: string;
   fields: FieldDef[];
 }
@@ -176,10 +175,12 @@ export function countModifiedFields(section: SectionDef, data: Record<string, un
       } else if (JSON.stringify(value) !== JSON.stringify(def)) {
         count++;
       }
-    } else if (def !== undefined && def !== null && def !== '' && def !== false) {
-      // Default exists but value is empty = also modified (cleared)
-      count++;
     }
+    /* An absent key is NOT "cleared" — the daemon applies the default when the
+       key is missing, so undefined IS the default and counting it as modified
+       marked almost every section. That was survivable while the signal was an
+       unexplained 7px dot; the row now says the word "Modified", and the word
+       has to be true (TRA-295). */
   }
   return count;
 }
@@ -248,7 +249,6 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   {
     key: '_root',
     label: 'General',
-    icon: '⚡',
     description: 'Auto-update and top-level settings',
     fields: [
       { key: 'auto_update', label: 'Auto-update', type: 'boolean', defaultValue: true },
@@ -272,8 +272,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'ai',
-    label: 'AI / Embeddings',
-    icon: '🧠',
+    label: 'AI and embeddings',
     description: 'AI provider for semantic search, summaries, and intent classification',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false },
@@ -365,7 +364,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'api_key',
-        label: 'API Key',
+        label: 'API key',
         type: 'string',
         placeholder: 'sk-...',
         sensitive: true,
@@ -375,7 +374,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       // ── Connection: Anthropic ──
       {
         key: 'api_key',
-        label: 'API Key',
+        label: 'API key',
         type: 'string',
         placeholder: 'sk-ant-...',
         sensitive: true,
@@ -386,7 +385,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       // ── Connection: Gemini (Google Generative Language API — consumer endpoint) ──
       {
         key: 'api_key',
-        label: 'API Key',
+        label: 'API key',
         type: 'string',
         placeholder: 'AIza...',
         sensitive: true,
@@ -397,7 +396,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       // ── Connection: Vertex AI (Google Cloud) ──
       {
         key: 'api_key',
-        label: 'Access Token',
+        label: 'Access token',
         type: 'string',
         placeholder: 'ya29....',
         sensitive: true,
@@ -407,7 +406,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'vertex_project',
-        label: 'GCP Project',
+        label: 'GCP project',
         type: 'string',
         placeholder: 'my-gcp-project',
         showIf: 'provider=vertex',
@@ -416,7 +415,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'vertex_location',
-        label: 'GCP Location',
+        label: 'GCP location',
         type: 'string',
         placeholder: 'us-central1',
         defaultValue: 'us-central1',
@@ -435,7 +434,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'api_key',
-        label: 'API Key',
+        label: 'API key',
         type: 'string',
         placeholder: 'pa-...',
         sensitive: true,
@@ -454,7 +453,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'api_key',
-        label: 'API Key',
+        label: 'API key',
         type: 'string',
         placeholder: 'sk-...',
         sensitive: true,
@@ -472,7 +471,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'api_key',
-        label: 'API Key',
+        label: 'API key',
         type: 'string',
         placeholder: 'gsk_...',
         sensitive: true,
@@ -490,7 +489,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'api_key',
-        label: 'API Key',
+        label: 'API key',
         type: 'string',
         placeholder: 'sk-...',
         sensitive: true,
@@ -508,7 +507,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'api_key',
-        label: 'API Key',
+        label: 'API key',
         type: 'string',
         placeholder: 'sk-...',
         sensitive: true,
@@ -527,7 +526,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'api_key',
-        label: 'API Key',
+        label: 'API key',
         type: 'string',
         placeholder: 'xai-...',
         sensitive: true,
@@ -939,7 +938,6 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   {
     key: 'security',
     label: 'Security',
-    icon: '🔒',
     description: 'Secret detection and file limits',
     fields: [
       {
@@ -968,8 +966,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'predictive',
-    label: 'Predictive Analysis',
-    icon: '📊',
+    label: 'Predictive analysis',
     description: 'Bug prediction, tech debt scoring, change risk',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true },
@@ -1012,8 +1009,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'intent',
-    label: 'Intent / Domains',
-    icon: '🏷️',
+    label: 'Intent and domains',
     description: 'Domain classification and auto-tagging',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false },
@@ -1051,8 +1047,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'runtime',
-    label: 'Runtime Tracing (OTLP)',
-    icon: '📡',
+    label: 'Runtime tracing (OTLP)',
     description: 'OpenTelemetry span ingestion and trace analysis',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false },
@@ -1136,8 +1131,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'topology',
-    label: 'Cross-repo Topology',
-    icon: '🔗',
+    label: 'Cross-repo topology',
     description: 'Subprojects and cross-service dependency tracking',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true },
@@ -1173,8 +1167,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'lsp',
-    label: 'LSP Enrichment',
-    icon: '🔬',
+    label: 'LSP enrichment',
     description: 'Compiler-grade call graph resolution via Language Server Protocol',
     fields: [
       {
@@ -1237,8 +1230,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'quality_gates',
-    label: 'Quality Gates',
-    icon: '✅',
+    label: 'Quality gates',
     description: 'Automated quality checks on commits and PRs',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true },
@@ -1261,8 +1253,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'tools',
-    label: 'Tool Exposure',
-    icon: '🔧',
+    label: 'Tool exposure',
     description: 'Control which MCP tools are exposed and how',
     fields: [
       {
@@ -1307,8 +1298,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'ignore',
-    label: 'Ignore Rules',
-    icon: '🚫',
+    label: 'Ignore rules',
     description: 'Extra directories and patterns to skip during indexing',
     fields: [
       {
@@ -1323,7 +1313,6 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   {
     key: 'frameworks',
     label: 'Frameworks',
-    icon: '⚙️',
     description: 'Framework-specific settings (Laravel, etc.)',
     fields: [
       {
@@ -1337,7 +1326,6 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   {
     key: 'logging',
     label: 'Logging',
-    icon: '📝',
     description: 'File logging and rotation',
     fields: [
       { key: 'file', label: 'Enable file logging', type: 'boolean', defaultValue: false },
@@ -1369,8 +1357,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'watch',
-    label: 'File Watcher',
-    icon: '👁️',
+    label: 'File watcher',
     description: 'Auto-reindex on file changes',
     fields: [
       { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true },

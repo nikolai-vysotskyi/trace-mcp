@@ -2,8 +2,6 @@
   "src/renderer/components/ErrorBoundary.tsx": 1,
   "src/renderer/components/FilterBar.tsx": 2,
   "src/renderer/components/GuardBadge.tsx": 7,
-  "src/renderer/components/GuardOnboarding.tsx": 1,
-  "src/renderer/components/OllamaPanel.tsx": 1,
   "src/renderer/components/ProjectDetail.tsx": 1,
   "src/renderer/components/ProjectRow.tsx": 2,
   "src/renderer/components/ProjectStatsModal.tsx": 7,
@@ -12,10 +10,8 @@
   "src/renderer/styles/island.css": 83,
   "src/renderer/tabs/AIActivity.tsx": 6,
   "src/renderer/tabs/AskTab.tsx": 5,
-  "src/renderer/tabs/Clients.tsx": 7,
   "src/renderer/tabs/GraphExplorerGPU.tsx": 51,
   "src/renderer/tabs/MemoryExplorer.tsx": 37,
   "src/renderer/tabs/Notebook.tsx": 1,
-  "src/renderer/tabs/Settings.tsx": 7,
   "src/renderer/tabs/ToolActivity.tsx": 33
 }
