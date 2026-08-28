@@ -41,6 +41,10 @@ pnpm test
 
 npm/yarn are not officially supported for contributor workflows — please use pnpm to ensure the lockfile and script set stay consistent.
 
+### Changing the desktop app's UI
+
+Read **[DESIGN.md](DESIGN.md)** first. It is the design system the app is actually built on — tokens, type scale, 4pt geometry, the glass-on-navigation-only material model, the `lattice/ui` primitives, and the accessibility floors — plus a review checklist to run against a new screen. Colour and contrast are enforced in CI by `packages/app/scripts/design-tokens.mjs`: a new raw hex or Tailwind grey in the renderer, or any text token under 4.5:1, fails the build.
+
 ## License
 
 All contributions are licensed under the [MIT License](LICENSE).
