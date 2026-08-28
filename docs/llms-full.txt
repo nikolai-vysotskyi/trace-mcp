@@ -795,7 +795,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"standard"` | Tool preset: `standard` (~50 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (~16 tools), `review`, `architecture`, or `full` (all ~164 tools, opt-in) |
+| `tools.preset` | `"standard"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `standard` (59 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (24 tools), `review` (26 tools), `architecture` (34 tools), or `full` (every registered tool, opt-in) |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
