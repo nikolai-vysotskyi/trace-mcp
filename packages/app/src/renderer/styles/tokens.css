@@ -238,6 +238,91 @@
   --shadow-panel: 0 8px 24px rgb(0 0 0 / 0.16), 0 0 0 0.5px rgb(0 0 0 / 0.08);
 }
 
+/* ============================================================================
+   DATA-VISUALISATION PALETTE (TRA-296)
+
+   Four categorical slots plus "Other" — the ceiling the Graph Explorer legend
+   can label without becoming a wall of swatches. Assigned in fixed order by
+   rank; slot 5+ folds into --viz-other. Never cycled, never generated.
+
+   Both sets clear the `dataviz` six-check validator at --pairs all against
+   their own canvas (light #fafafa, dark #0f1115): lightness band, chroma
+   floor, CVD separation, normal-vision floor, contrast. Light carries the
+   documented sub-3:1 relief WARN on --viz-2/--viz-4, which the always-present
+   legend labels discharge. Re-run before changing a value:
+     node <dataviz>/scripts/validate_palette.js "<hexes>" --mode light \
+       --surface "#fafafa" --pairs all
+   Light is the published Okabe-Ito CVD-safe set; dark is its counterpart,
+   re-stepped into the dark lightness band (0.48–0.67 OKLCH L).
+   ============================================================================ */
+:root {
+  --viz-canvas: #fafafa;
+  --viz-1: #0072b2;
+  --viz-2: #e69f00;
+  --viz-3: #009e73;
+  --viz-4: #cc79a7;
+  --viz-other: #8e8e93;
+  /* Graph overlays float ABOVE the canvas — the one place glass is legitimate
+     on this surface. Content (the canvas itself) stays opaque. */
+  --viz-glass: color-mix(in srgb, var(--surface) 80%, transparent);
+  --viz-glass-line: rgb(0 0 0 / 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --viz-canvas: #0f1115;
+    --viz-1: #4992d9;
+    --viz-2: #b2860a;
+    --viz-3: #369e64;
+    --viz-4: #c16ca6;
+    --viz-other: #8e8e93;
+    --viz-glass: color-mix(in srgb, var(--surface) 72%, transparent);
+    --viz-glass-line: rgb(255 255 255 / 0.08);
+  }
+}
+
+:root[data-theme="dark"],
+.ws-stage[data-mode="dark"] {
+  --viz-canvas: #0f1115;
+  --viz-1: #4992d9;
+  --viz-2: #b2860a;
+  --viz-3: #369e64;
+  --viz-4: #c16ca6;
+  --viz-other: #8e8e93;
+  --viz-glass: color-mix(in srgb, var(--surface) 72%, transparent);
+  --viz-glass-line: rgb(255 255 255 / 0.08);
+}
+
+.ws-stage[data-mode="light"] {
+  --viz-canvas: #fafafa;
+  --viz-1: #0072b2;
+  --viz-2: #e69f00;
+  --viz-3: #009e73;
+  --viz-4: #cc79a7;
+  --viz-other: #8e8e93;
+  --viz-glass: color-mix(in srgb, var(--surface) 80%, transparent);
+  --viz-glass-line: rgb(0 0 0 / 0.06);
+}
+
+/* Glass on the graph canvas — same material contract as .glass, its own tint
+   so the overlay picks up the canvas rather than the app surface. */
+.viz-glass {
+  background: var(--viz-glass);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow:
+    inset 0 0 0 0.5px var(--viz-glass-line),
+    var(--shadow-panel);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .viz-glass {
+    background: var(--surface);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 /* ---- Type utilities ------------------------------------------------------
    Use these instead of a one-off font-size. */
 .t-large-title { font: var(--weight-semibold) var(--text-large-title) / var(--leading-large-title) var(--font-ui); letter-spacing: -0.01em; }
