@@ -24,22 +24,26 @@ import { Gallery } from '../Gallery';
 // jsdom rewrites import.meta.url to an http: URL, so resolve off the vitest
 // root (packages/app) instead.
 const CSS = readFileSync(resolve(process.cwd(), 'src/renderer/styles/controls.css'), 'utf8');
+// The palette lives in tokens.css (TRA-289); controls.css declares geometry only.
+const TOKENS = readFileSync(resolve(process.cwd(), 'src/renderer/styles/tokens.css'), 'utf8');
 
 /** Crude but sufficient rule splitter — controls.css has no nested at-rules
     other than @media, whose bodies split into rules the same way. */
-const FLAT = CSS.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@media[^{]*\{/g, '');
+const flatten = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/@media[^{]*\{/g, '');
 
-function rules(): Array<{ selector: string; body: string }> {
+function parse(src: string): Array<{ selector: string; body: string }> {
   const out: Array<{ selector: string; body: string }> = [];
   const re = /([^{}]+)\{([^{}]*)\}/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(FLAT)) !== null) {
+  while ((m = re.exec(flatten(src))) !== null) {
     const selector = m[1].trim();
     if (selector === '' || selector.startsWith('@')) continue;
     out.push({ selector, body: m[2] });
   }
   return out;
 }
+
+const rules = () => parse(CSS);
 
 function decl(body: string, prop: string): string | undefined {
   const m = new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([^;]+)`, 'i').exec(body);
@@ -80,9 +84,13 @@ function contrast(a: RGB, b: RGB): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/** Pull `--name` out of a `:root`-ish block whose selector matches `scope`. */
+/** Pull `--name` out of the first tokens.css block whose selector list carries
+    `scope`. Selector lists are real there — the dark palette is declared once
+    for `:root[data-theme="dark"]` and `.ws-stage[data-mode="dark"]` together. */
 function token(name: string, scope: string): string {
-  const block = rules().find((r) => r.selector === scope);
+  const block = parse(TOKENS).find((r) =>
+    r.selector.split(',').some((s) => s.trim().replace(/'/g, '"') === scope),
+  );
   if (!block) throw new Error(`no block for selector ${scope}`);
   const v = decl(block.body, `--${name}`);
   if (!v) throw new Error(`no --${name} in ${scope}`);
@@ -91,18 +99,18 @@ function token(name: string, scope: string): string {
 
 const APPEARANCES = [
   { name: 'light', scope: ':root' },
-  { name: 'dark', scope: ":root[data-theme='dark']" },
+  { name: 'dark', scope: ':root[data-theme="dark"]' },
 ] as const;
 
 const TONES = ['neutral', 'accent', 'green', 'orange', 'red', 'blue', 'purple'] as const;
 
 /** The fill each tone paints: the 18% tint of its hue, except neutral, which
-    uses --fill-tertiary (a grey at 12%/28% of rgb(118,118,128)). */
+    uses --fill-tertiary (black at 8% / white at 11%, per tokens.css). */
 function badgeFill(tone: string, scope: string): RGB {
   const surface = hex(token('surface', scope));
   if (tone === 'neutral') {
-    const alpha = scope === ':root' ? 0.12 : 0.28;
-    return over([118, 118, 128], surface, alpha);
+    const light = scope === ':root';
+    return over(light ? [0, 0, 0] : [255, 255, 255], surface, light ? 0.08 : 0.11);
   }
   const hue = hex(token(tone === 'accent' ? 'accent' : `status-${tone}`, scope));
   return over(hue, surface, 0.18);

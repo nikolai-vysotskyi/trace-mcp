@@ -136,8 +136,8 @@
   font-weight: 500;
 }
 .ws-sidebar:focus-within .ws-sb-row.is-selected {
-  background: var(--accent);
-  color: #fff;
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-ico,
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-count {
@@ -153,7 +153,7 @@
   width: 18px;
   height: 18px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-row);
   background: transparent;
   color: var(--label-secondary, var(--text-2));
   opacity: 0;
