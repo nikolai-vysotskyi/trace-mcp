@@ -807,9 +807,11 @@ export function App() {
      showing down both sides (TRA-293). The Workspace dashboard has drawn its
      own 52px toolbar and its own 16px gutters since TRA-292, so the pane's
      `p-4` was doubling every inset on it — the KPI row started at x=32 and the
-     first card at y=76 (TRA-306). */
-  const ownsToolbar =
-    (isProject && projectTab === 'overview') || (!isProject && globalTab === 'workspace');
+     first card at y=76 (TRA-306). MCP clients and Settings drew their own
+     toolbars in TRA-295 and joined them. */
+  const ownsToolbar = isProject
+    ? projectTab === 'overview'
+    : globalTab === 'workspace' || globalTab === 'clients' || globalTab === 'settings';
   const isGraphGpu = isGraph; // alias — the Graph tab *is* the GPU graph now
 
   return (

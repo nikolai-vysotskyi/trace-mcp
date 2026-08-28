@@ -486,14 +486,27 @@ input[type='checkbox']:disabled {
 
 /* ============================================================================
    FOCUS RING — one ring for every primitive.
+
+   The house ring from tokens.css (`--focus-ring`), not a hard `2px solid
+   accent` outline. On an accent-filled button the hard outline drew blue on
+   blue with a dark gap between them (TRA-295); the soft ring reads as a halo
+   on every variant and matches what the rest of the app already uses via the
+   `*:focus-visible` rule in app.css.
    ============================================================================ */
 .lx-btn:focus-visible,
 .lx-seg .lx-seg-item:focus-visible,
 .lx-chip:focus-visible,
 .lx-popup select:focus-visible,
 input[type='checkbox']:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+/* Variants that already carry an inset hairline keep it under the ring. */
+.lx-btn.v-bordered:focus-visible,
+.lx-chip.is-on:focus-visible {
+  box-shadow:
+    inset 0 0 0 0.5px var(--separator),
+    var(--focus-ring);
 }
 
 /* ============================================================================

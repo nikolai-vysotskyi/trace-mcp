@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, ConfirmPopover, EmptyState, StatusDot } from '../lattice/ui';
 
 /** Rendered at the bottom of the AI settings section when provider=ollama.
  *
  *  Shape: daemon status row + two lists (running now / installed). The lists
  *  auto-refresh every 2.5s but pause while a mutation is in-flight so the
  *  optimistic state doesn't get clobbered by a stale poll response.
+ *
+ *  Migrated onto the macOS 26 layer with the rest of Settings (TRA-295): the
+ *  local 11px/6px-radius `Btn` is the Lattice Button, separators are 0.5px
+ *  hairlines, section captions match the surface's 11px sentence-case form
+ *  instead of 10px ALL CAPS, and deleting a model asks in a popover rather
+ *  than a blocking `window.confirm`.
  */
 
 type Status = { running: boolean; version?: string; baseUrl: string; error?: string };
@@ -39,6 +46,9 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
   const [running, setRunning] = useState<OllamaRunningModel[]>([]);
   const [busy, setBusy] = useState<string | null>(null); // key identifying which op is in-flight
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ name: string; x: number; y: number } | null>(
+    null,
+  );
   const pollBusy = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -85,127 +95,92 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
   const onStart = () =>
     withBusy('daemon:start', async () => {
       const r = await api!.start(baseUrl);
-      if (!r.ok) setNotice(`Start failed: ${r.error ?? 'unknown'}`);
+      if (!r.ok) setNotice(`Couldn't start Ollama: ${r.error ?? 'unknown error'}`);
     });
   const onStop = () =>
     withBusy('daemon:stop', async () => {
       const r = await api!.stop(baseUrl);
-      if (!r.ok) setNotice(`Stop failed: ${r.error ?? 'unknown'}`);
+      if (!r.ok) setNotice(`Couldn't stop Ollama: ${r.error ?? 'unknown error'}`);
     });
   const onUnload = (name: string) =>
     withBusy(`unload:${name}`, async () => {
       const r = await api!.unload(name, baseUrl);
-      if (!r.ok) setNotice(`Unload failed: ${r.error ?? 'unknown'}`);
+      if (!r.ok) setNotice(`Couldn't unload ${name}: ${r.error ?? 'unknown error'}`);
     });
-  const onDelete = (name: string) => {
-    if (!confirm(`Delete model "${name}"? This removes it from disk.`)) return;
-    return withBusy(`delete:${name}`, async () => {
+  const onDelete = (name: string) =>
+    withBusy(`delete:${name}`, async () => {
       const r = await api!.delete(name, baseUrl);
-      if (!r.ok) setNotice(`Delete failed: ${r.error ?? 'unknown'}`);
+      if (!r.ok) setNotice(`Couldn't delete ${name}: ${r.error ?? 'unknown error'}`);
     });
-  };
 
   if (!api) {
     return (
-      <div style={{ marginTop: 20, fontSize: 12, color: 'var(--text-tertiary)' }}>
+      <p className="text-[13px] leading-4 px-1" style={{ color: 'var(--label-secondary)' }}>
         Ollama control is only available inside the trace-mcp app.
-      </div>
+      </p>
     );
   }
 
-  const dot = status?.running ? 'var(--success)' : 'var(--destructive)';
-
   return (
-    <div style={{ marginTop: 20 }}>
-      <div
-        className="text-[10px] font-semibold uppercase tracking-wider"
-        style={{ color: 'var(--text-tertiary)', marginBottom: 8 }}
-      >
-        Ollama
-      </div>
-
-      {/* Status + daemon controls */}
-      <div
-        style={{
-          background: 'var(--bg-grouped)',
-          borderRadius: 10,
-          boxShadow: 'var(--shadow-grouped)',
-          padding: '10px 12px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}
-      >
-        <span style={{ width: 8, height: 8, borderRadius: 4, background: dot, flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
-            {status?.running ? `Running · ${status.version ?? 'unknown version'}` : 'Not running'}
+    <div className="flex flex-col gap-4">
+      <Section title="Ollama">
+        <Card>
+          <div className="flex items-center gap-2.5 px-3" style={{ minHeight: 44 }}>
+            <StatusDot
+              tone={status?.running ? 'green' : 'neutral'}
+              title={status?.running ? 'Running' : 'Not running'}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
+                {status?.running ? `Running · ${status.version ?? 'unknown version'}` : 'Not running'}
+              </div>
+              <div
+                className="text-[11px] leading-[13px] truncate"
+                style={{ color: 'var(--label-secondary)' }}
+              >
+                {status?.baseUrl ?? baseUrl ?? 'http://localhost:11434'}
+                {!status?.running && status?.error ? ` · ${status.error}` : ''}
+              </div>
+            </div>
+            {status?.running ? (
+              <Button size="small" disabled={busy === 'daemon:stop'} onClick={onStop}>
+                {busy === 'daemon:stop' ? 'Stopping…' : 'Stop'}
+              </Button>
+            ) : (
+              <Button size="small" disabled={busy === 'daemon:start'} onClick={onStart}>
+                {busy === 'daemon:start' ? 'Starting…' : 'Start'}
+              </Button>
+            )}
           </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: 'var(--text-tertiary)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {status?.baseUrl ?? baseUrl ?? 'http://localhost:11434'}
-            {!status?.running && status?.error ? ` · ${status.error}` : ''}
-          </div>
-        </div>
-        {status?.running ? (
-          <Btn onClick={onStop} busy={busy === 'daemon:stop'} variant="destructive">
-            Stop
-          </Btn>
-        ) : (
-          <Btn onClick={onStart} busy={busy === 'daemon:start'} variant="primary">
-            Start
-          </Btn>
-        )}
-      </div>
+        </Card>
+      </Section>
 
       {notice && (
-        <div
-          style={{
-            marginTop: 8,
-            padding: '6px 10px',
-            borderRadius: 6,
-            fontSize: 11,
-            background: 'var(--fill-control)',
-            color: 'var(--destructive)',
-          }}
+        <p
+          className="text-[13px] leading-4 px-1"
+          style={{ color: 'var(--status-red)' }}
+          role="alert"
         >
           {notice}
-        </div>
+        </p>
       )}
 
-      {/* Running models */}
       {status?.running && (
         <>
-          <div
-            className="text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: 'var(--text-tertiary)', marginTop: 16, marginBottom: 8 }}
-          >
-            Loaded in memory ({running.length})
-          </div>
-          {running.length === 0 ? (
-            <div
-              style={{
-                fontSize: 12,
-                color: 'var(--text-tertiary)',
-                padding: '8px 12px',
-                background: 'var(--bg-grouped)',
-                borderRadius: 10,
-              }}
-            >
-              No models currently loaded.
-            </div>
-          ) : (
-            <ModelList>
-              {running.map((m, i) => (
-                <Row key={m.name} last={i === running.length - 1}>
-                  <RowInfo
+          <Section title="Loaded in memory" count={running.length}>
+            <Card>
+              {running.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon="database"
+                  title="Nothing loaded"
+                  subtitle="A model appears here while it is held in memory."
+                />
+              ) : (
+                running.map((m, i) => (
+                  <Row
+                    key={m.name}
+                    last={i === running.length - 1}
                     title={m.name}
                     subtitle={[
                       `${fmtBytes(m.size_vram)} VRAM`,
@@ -214,39 +189,35 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
                     ]
                       .filter(Boolean)
                       .join(' · ')}
+                    action={
+                      <Button
+                        size="small"
+                        disabled={busy === `unload:${m.name}`}
+                        onClick={() => onUnload(m.name)}
+                      >
+                        {busy === `unload:${m.name}` ? 'Unloading…' : 'Unload'}
+                      </Button>
+                    }
                   />
-                  <Btn onClick={() => onUnload(m.name)} busy={busy === `unload:${m.name}`}>
-                    Unload
-                  </Btn>
-                </Row>
-              ))}
-            </ModelList>
-          )}
+                ))
+              )}
+            </Card>
+          </Section>
 
-          {/* Installed models */}
-          <div
-            className="text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: 'var(--text-tertiary)', marginTop: 16, marginBottom: 8 }}
-          >
-            Installed on disk ({installed.length})
-          </div>
-          {installed.length === 0 ? (
-            <div
-              style={{
-                fontSize: 12,
-                color: 'var(--text-tertiary)',
-                padding: '8px 12px',
-                background: 'var(--bg-grouped)',
-                borderRadius: 10,
-              }}
-            >
-              No models installed. Run <code>ollama pull &lt;name&gt;</code> in a terminal.
-            </div>
-          ) : (
-            <ModelList>
-              {installed.map((m, i) => (
-                <Row key={m.name} last={i === installed.length - 1}>
-                  <RowInfo
+          <Section title="Installed on disk" count={installed.length}>
+            <Card>
+              {installed.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon="database"
+                  title="No models installed"
+                  subtitle="Run ollama pull <name> in a terminal to add one."
+                />
+              ) : (
+                installed.map((m, i) => (
+                  <Row
+                    key={m.name}
+                    last={i === installed.length - 1}
                     title={m.name}
                     subtitle={[
                       fmtBytes(m.size),
@@ -255,126 +226,119 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
                     ]
                       .filter(Boolean)
                       .join(' · ')}
+                    action={
+                      <Button
+                        size="small"
+                        disabled={busy === `delete:${m.name}`}
+                        onClick={(e) => {
+                          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          setConfirmDelete({ name: m.name, x: r.right, y: r.bottom + 4 });
+                        }}
+                      >
+                        {busy === `delete:${m.name}` ? 'Deleting…' : 'Delete'}
+                      </Button>
+                    }
                   />
-                  <Btn
-                    onClick={() => onDelete(m.name)}
-                    busy={busy === `delete:${m.name}`}
-                    variant="destructive"
-                  >
-                    Delete
-                  </Btn>
-                </Row>
-              ))}
-            </ModelList>
-          )}
+                ))
+              )}
+            </Card>
+          </Section>
         </>
       )}
-    </div>
-  );
-}
 
-// ── Small presentational primitives, local to this file ──
-
-function ModelList({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        background: 'var(--bg-grouped)',
-        borderRadius: 10,
-        boxShadow: 'var(--shadow-grouped)',
-        overflow: 'hidden',
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Row({ children, last }: { children: React.ReactNode; last: boolean }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '8px 12px',
-        minHeight: 36,
-        borderBottom: last ? 'none' : '1px solid var(--border-row)',
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function RowInfo({ title, subtitle }: { title: string; subtitle?: string }) {
-  return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div
-        style={{
-          fontSize: 13,
-          color: 'var(--text-primary)',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        {title}
-      </div>
-      {subtitle && (
-        <div
-          style={{
-            fontSize: 11,
-            color: 'var(--text-tertiary)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+      {/* A blocking window.confirm() is not a macOS affordance for a row
+          action. The popover names the object it destroys, per ux-writing. */}
+      {confirmDelete && (
+        <ConfirmPopover
+          x={confirmDelete.x}
+          y={confirmDelete.y}
+          align="end"
+          danger
+          title={`Delete ${confirmDelete.name}?`}
+          body="The model is removed from disk. Pulling it again re-downloads it."
+          confirmLabel="Delete model"
+          onConfirm={() => {
+            const { name } = confirmDelete;
+            setConfirmDelete(null);
+            onDelete(name);
           }}
-        >
-          {subtitle}
-        </div>
+          onCancel={() => setConfirmDelete(null)}
+        />
       )}
     </div>
   );
 }
 
-function Btn({
+// ── Local presentation, matching the Settings surface it renders inside ──
+
+function Section({
+  title,
+  count,
   children,
-  onClick,
-  busy,
-  variant,
 }: {
+  title: string;
+  count?: number;
   children: React.ReactNode;
-  onClick: () => void;
-  busy?: boolean;
-  variant?: 'primary' | 'destructive';
 }) {
-  const color =
-    variant === 'destructive'
-      ? 'var(--destructive)'
-      : variant === 'primary'
-        ? '#fff'
-        : 'var(--text-primary)';
-  const bg = variant === 'primary' ? 'var(--accent)' : 'var(--fill-control)';
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
+    <section className="flex flex-col gap-2">
+      <h3
+        className="flex items-baseline gap-1.5 px-1 min-h-6 text-[11px] leading-[13px] font-semibold"
+        style={{ color: 'var(--label-secondary)' }}
+      >
+        {title}
+        {count !== undefined && count > 0 && <span className="tabular-nums">{count}</span>}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="overflow-hidden"
       style={{
-        fontSize: 11,
-        fontWeight: 500,
-        padding: '4px 10px',
-        borderRadius: 6,
-        background: bg,
-        color,
-        border: '0.5px solid var(--border)',
-        cursor: busy ? 'default' : 'pointer',
-        opacity: busy ? 0.5 : 1,
-        flexShrink: 0,
+        background: 'var(--surface)',
+        borderRadius: 12,
+        border: '0.5px solid var(--separator)',
       }}
     >
-      {busy ? '…' : children}
-    </button>
+      {children}
+    </div>
+  );
+}
+
+function Row({
+  title,
+  subtitle,
+  action,
+  last,
+}: {
+  title: string;
+  subtitle?: string;
+  action: React.ReactNode;
+  last: boolean;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2.5 px-3"
+      style={{ minHeight: 44, borderBottom: last ? 'none' : '0.5px solid var(--separator)' }}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] leading-4 truncate" style={{ color: 'var(--label)' }}>
+          {title}
+        </div>
+        {subtitle && (
+          <div
+            className="text-[11px] leading-[13px] truncate"
+            style={{ color: 'var(--label-secondary)' }}
+          >
+            {subtitle}
+          </div>
+        )}
+      </div>
+      {action}
+    </div>
   );
 }

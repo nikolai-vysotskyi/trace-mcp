@@ -274,3 +274,116 @@ body {
 /* The sidebar footer lives in styles/sidebar.css now, with the row system it
    belongs to (TRA-305). `.sidebar-footer` / `.nav-button` / `.icon-button` were
    already dead: the footer renders Lattice `.lx-btn` primitives, not these. */
+
+/* ── Sheet (TRA-295) ─────────────────────────────────────────────── */
+/* A macOS sheet, not a centred web modal: it is attached to the window's top
+   edge (square top corners, 12px bottom corners), slides out of that edge, and
+   is the ONE floating layer that gets a shadow. Content behind it is dimmed. */
+.lx-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.32);
+  animation: lx-scrim-in var(--dur-standard) var(--ease-out);
+}
+@keyframes lx-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.lx-sheet {
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 32px));
+  padding: 20px;
+  background: var(--surface);
+  border: 0.5px solid var(--separator);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+  animation: lx-sheet-in var(--dur-large) var(--ease-spring);
+}
+@keyframes lx-sheet-in {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.lx-sheet-title {
+  margin: 0 0 8px;
+  font: var(--weight-semibold) var(--text-title-2) / var(--leading-title-2) var(--font-ui);
+  color: var(--label);
+}
+.lx-sheet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lx-sheet-text {
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--label-secondary);
+}
+.lx-sheet-note {
+  margin: -4px 0 0;
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  color: var(--label-secondary);
+}
+.lx-sheet-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--status-red);
+}
+.lx-sheet-text code,
+.lx-sheet-note code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* The command field. `user-select: text` is not a nicety: body sets
+   `user-select: none` app-wide, so without this the one thing the sheet asks
+   the user to run cannot be selected, let alone copied. */
+.lx-sheet-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--separator);
+  border-radius: var(--radius-input);
+}
+.lx-sheet-command code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+  color: var(--label);
+  white-space: nowrap;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.lx-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
