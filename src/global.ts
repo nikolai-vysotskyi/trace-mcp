@@ -277,9 +277,11 @@ export function ensureGlobalDirs(): void {
     }
   }
 
-  // Seed default config on first run so users see all available parameters
-  if (!fs.existsSync(GLOBAL_CONFIG_PATH)) {
-    fs.writeFileSync(GLOBAL_CONFIG_PATH, DEFAULT_CONFIG_JSONC);
+  // Seed default config on first run so users see all available parameters.
+  // 'wx' = O_CREAT|O_EXCL: atomically create-only, no separate existsSync
+  // check that could race with another process creating the file first.
+  try {
+    fs.writeFileSync(GLOBAL_CONFIG_PATH, DEFAULT_CONFIG_JSONC, { flag: 'wx' });
     if (process.platform !== 'win32') {
       try {
         fs.chmodSync(GLOBAL_CONFIG_PATH, 0o600);
@@ -287,6 +289,8 @@ export function ensureGlobalDirs(): void {
         /* best-effort */
       }
     }
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
   }
 }
 
@@ -306,8 +310,168 @@ export function getSnapshotPath(projectRoot: string): string {
   return path.join(TRACE_MCP_HOME, 'sessions', `${projectHash(absRoot)}-snapshot.json`);
 }
 
-/** Compute global DB path for a project root. */
+/**
+ * Compute the default (path-based) global DB path for a project root.
+ *
+ * This is deliberately NOT identity-aware (see `getProjectRemoteIdentity`
+ * below) — it stays a pure function of the absolute path so it keeps
+ * producing the exact same value it always has for every project already
+ * registered before TRA-38. Identity-based DB *reuse* (recognizing that two
+ * different absolute paths are checkouts of the same git remote, e.g. two
+ * Multica ephemeral checkouts of the same repo) is resolved one layer up, in
+ * `registerProject` (registry.ts): a brand-new root whose remote matches an
+ * already-registered different root inherits *that* entry's `dbPath` instead
+ * of one computed here. Every read path in this codebase already prefers the
+ * registry's stored `dbPath` over recomputing it (see the repeated
+ * `resolveDbPath()` helper across `src/cli/*.ts`), so this function only ever
+ * actually runs for a root that isn't registered yet — i.e. exactly the
+ * "first checkout of this repo, or a non-git / remote-less project" case.
+ */
 export function getDbPath(projectRoot: string): string {
   const absRoot = path.resolve(projectRoot);
   return path.join(INDEX_DIR, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
+}
+
+/**
+ * Resolve the `.git` metadata directory for `root`, following worktree
+ * indirection (a `.git` *file* containing `gitdir: <path>`, pointing at
+ * `<main-repo>/.git/worktrees/<name>`) the same way `detectGitWorktree` in
+ * project-root.ts does. Duplicated here rather than imported — this module
+ * must stay free of sibling `.ts` imports (see the comment on
+ * `ensureGlobalDirs` above: `tests/cli/env-overrides.test.ts` runs
+ * `global.ts` directly under `node --experimental-strip-types`, which can't
+ * resolve `.js → .ts` imports of sibling modules).
+ */
+function resolveGitMetadataDir(root: string): string | null {
+  const gitEntry = path.join(root, '.git');
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(gitEntry);
+  } catch {
+    return null;
+  }
+  if (stat.isDirectory()) return gitEntry;
+  if (!stat.isFile()) return null;
+
+  let content: string;
+  try {
+    content = fs.readFileSync(gitEntry, 'utf8').trim();
+  } catch {
+    return null;
+  }
+  const match = content.match(/^gitdir:\s*(.+)$/);
+  if (!match) return null;
+  const worktreeAdminDir = path.resolve(root, match[1].trim());
+  try {
+    const raw = fs.readFileSync(path.join(worktreeAdminDir, 'commondir'), 'utf8').trim();
+    return path.resolve(worktreeAdminDir, raw);
+  } catch {
+    // Fallback: admin dir is .git/worktrees/<name>, so ../../ is .git
+    return path.resolve(worktreeAdminDir, '../..');
+  }
+}
+
+/**
+ * Read the `origin` remote URL out of a `.git/config` file, falling back to
+ * the first `[remote "..."]` section found when there is no `origin`. A
+ * small hand-rolled INI reader (not a library, not a `git` subprocess) to
+ * keep this module dependency-free and avoid a `git` binary requirement —
+ * same rationale as `detectGitWorktree` reading `.git` files directly.
+ */
+function readGitRemoteUrl(gitDir: string): string | null {
+  let configText: string;
+  try {
+    configText = fs.readFileSync(path.join(gitDir, 'config'), 'utf8');
+  } catch {
+    return null;
+  }
+
+  let currentRemote: string | null = null;
+  let originUrl: string | null = null;
+  let firstUrl: string | null = null;
+
+  for (const line of configText.split(/\r?\n/)) {
+    const section = line.match(/^\s*\[remote\s+"([^"]+)"\]\s*$/);
+    if (section) {
+      currentRemote = section[1];
+      continue;
+    }
+    if (/^\s*\[/.test(line)) {
+      currentRemote = null; // left the remote section
+      continue;
+    }
+    if (!currentRemote) continue;
+    const urlMatch = line.match(/^\s*url\s*=\s*(.+?)\s*$/);
+    if (!urlMatch) continue;
+    if (currentRemote === 'origin') originUrl = urlMatch[1];
+    if (firstUrl === null) firstUrl = urlMatch[1];
+  }
+
+  return originUrl ?? firstUrl;
+}
+
+/**
+ * Normalize a git remote URL to a canonical `host/org/repo` form so the same
+ * repository is recognized regardless of protocol (`https://`, `ssh://`,
+ * scp-like `git@host:org/repo`) or a trailing `.git`. Returns null for
+ * anything that doesn't look like a `host` + `path` remote (e.g. a local
+ * filesystem path used as a remote) — callers fall back to path-based
+ * identity in that case, same as a repo with no remote at all.
+ */
+export function normalizeGitRemote(rawUrl: string): string | null {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  let host: string;
+  let rawPath: string;
+
+  if (!trimmed.includes('://')) {
+    // scp-like syntax: [user@]host:path
+    const scpMatch = trimmed.match(/^(?:[^@/\s]+@)?([^:/\s]+):(.+)$/);
+    if (!scpMatch) return null;
+    host = scpMatch[1];
+    rawPath = scpMatch[2];
+  } else {
+    try {
+      const parsed = new URL(trimmed);
+      if (!parsed.hostname) return null;
+      host = parsed.hostname;
+      rawPath = parsed.pathname;
+    } catch {
+      return null;
+    }
+  }
+
+  // Guard against misreading a local path (e.g. `C:\repo`) as an scp-like
+  // `host:path` remote — a real git host looks like a DNS name.
+  if (!/^[A-Za-z0-9.-]+$/.test(host) || host.length < 2) return null;
+
+  const cleanedPath = rawPath
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '')
+    .replace(/\.git$/i, '');
+  if (!cleanedPath) return null;
+
+  return `${host.toLowerCase()}/${cleanedPath}`;
+}
+
+/**
+ * Stable identity of the repo at `projectRoot`, derived from its `origin`
+ * (or first configured) git remote and normalized so the same repo is
+ * recognized across clones/checkouts regardless of which absolute path it
+ * lives at (TRA-38) — e.g. Multica's `repo checkout` landing the same repo
+ * under a fresh per-run ephemeral directory every time.
+ *
+ * Returns null for a non-git directory or a git repo with no remote
+ * configured; callers fall back to path-based identity in that case, which
+ * is exactly today's (pre-TRA-38) behavior — so a project with no
+ * resolvable remote is completely unaffected by this function existing.
+ */
+export function getProjectRemoteIdentity(projectRoot: string): string | null {
+  const absRoot = path.resolve(projectRoot);
+  const gitDir = resolveGitMetadataDir(absRoot);
+  if (!gitDir) return null;
+  const url = readGitRemoteUrl(gitDir);
+  if (!url) return null;
+  return normalizeGitRemote(url);
 }
