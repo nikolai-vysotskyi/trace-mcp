@@ -236,7 +236,17 @@ export class ProjectManager {
     }
     const config = configResult.value;
 
-    const dbPath = getDbPath(indexRoot);
+    // TRA-38: prefer the registry's already-resolved dbPath (set moments ago
+    // by setupProject(), which may have reused a same-git-remote sibling's
+    // existing DB instead of a fresh one) over recomputing it from scratch.
+    // Worktrees are deliberately excluded — they already share one dbPath
+    // via `indexRoot` (the main worktree root), a separate, pre-existing
+    // mechanism this must not disturb. Read-mostly subprojects (persist
+    // false, never registered) simply find nothing and fall through to the
+    // same getDbPath() call this line has always made.
+    const dbPath = worktreeInfo
+      ? getDbPath(indexRoot)
+      : (getProject(indexRoot)?.dbPath ?? getDbPath(indexRoot));
     ensureGlobalDirs();
 
     const db = initializeDatabase(dbPath, {

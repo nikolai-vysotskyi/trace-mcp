@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { atomicWriteJson } from '../utils/atomic-write.js';
+import { readIfExists } from '../utils/safe-fs.js';
 import { NEGATION_PATTERN, type Conflict } from './conflict-detector.js';
 
 type FixAction = 'removed' | 'disabled' | 'cleaned' | 'skipped';
@@ -86,17 +87,16 @@ function fixMcpServer(conflict: Conflict, opts: { dryRun?: boolean }): FixResult
     };
   }
 
-  if (!fs.existsSync(configPath)) {
-    return {
-      conflictId: conflict.id,
-      action: 'skipped',
-      detail: 'Config file no longer exists',
-      target: configPath,
-    };
-  }
-
   try {
-    const raw = fs.readFileSync(configPath, 'utf-8');
+    const raw = readIfExists(configPath);
+    if (raw === null) {
+      return {
+        conflictId: conflict.id,
+        action: 'skipped',
+        detail: 'Config file no longer exists',
+        target: configPath,
+      };
+    }
     const result = commentOutJsonKey(raw, serverName);
 
     if (!result) {
@@ -200,17 +200,17 @@ function fixHookInSettings(conflict: Conflict, opts: { dryRun?: boolean }): FixR
     };
   }
 
-  if (!fs.existsSync(settingsPath)) {
-    return {
-      conflictId: conflict.id,
-      action: 'skipped',
-      detail: 'Settings file no longer exists',
-      target: settingsPath,
-    };
-  }
-
   try {
-    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    const raw = readIfExists(settingsPath);
+    if (raw === null) {
+      return {
+        conflictId: conflict.id,
+        action: 'skipped',
+        detail: 'Settings file no longer exists',
+        target: settingsPath,
+      };
+    }
+    const settings = JSON.parse(raw);
     const hooks = settings.hooks as Record<string, unknown[]> | undefined;
     if (!hooks) {
       return {
@@ -339,17 +339,16 @@ function fixClaudeMdBlock(conflict: Conflict, opts: { dryRun?: boolean }): FixRe
     };
   }
 
-  if (!fs.existsSync(filePath)) {
-    return {
-      conflictId: conflict.id,
-      action: 'skipped',
-      detail: 'File no longer exists',
-      target: filePath,
-    };
-  }
-
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = readIfExists(filePath);
+    if (content === null) {
+      return {
+        conflictId: conflict.id,
+        action: 'skipped',
+        detail: 'File no longer exists',
+        target: filePath,
+      };
+    }
 
     // Strategy 1: Remove marker-delimited blocks: <!-- tool:start --> ... <!-- tool:end -->
     const tools = [
@@ -492,10 +491,10 @@ function isEntirelyAboutCompetitor(content: string, competitor: string): boolean
 function removeFromMemoryIndex(deletedFilePath: string): void {
   const memoryDir = path.dirname(deletedFilePath);
   const indexPath = path.join(memoryDir, 'MEMORY.md');
-  if (!fs.existsSync(indexPath)) return;
 
   try {
-    const content = fs.readFileSync(indexPath, 'utf-8');
+    const content = readIfExists(indexPath);
+    if (content === null) return;
     const fileName = path.basename(deletedFilePath);
     const escaped = fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Remove lines that reference this file (e.g. "- [Title](filename.md) — description")

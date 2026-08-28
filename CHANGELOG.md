@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [2.1.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.3...v2.1.0) (2026-08-28)
+
+
+### Features
+
+* **app:** native vibrancy sidebar + hiddenInset window chrome (TRA-291) ([#453](https://github.com/nikolai-vysotskyi/trace-mcp/issues/453)) ([f914b2e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f914b2e6855e1e785f31db023184d188a8e2cb8a))
+* **app:** rewrite the Lattice control primitives on a 20/24/28 capsule scale (TRA-290) ([#456](https://github.com/nikolai-vysotskyi/trace-mcp/issues/456)) ([1b51c52](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1b51c528b4e2a50b22b4569aa3799c595de26558))
+* **app:** single macOS 26 token layer, type scale and 4pt geometry ([#458](https://github.com/nikolai-vysotskyi/trace-mcp/issues/458)) ([7cb93e3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7cb93e380ef38cfd96c52bfccf89cb6cdfcb6093))
+
+
+### Bug Fixes
+
+* **ci:** give the three full-index jobs real timeout headroom (TRA-298) ([#460](https://github.com/nikolai-vysotskyi/trace-mcp/issues/460)) ([f007258](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f0072587d2ffaf5f2c6d3c3bed0e79e0a1df1f3f))
+* **daemon:** require --allow-remote for a non-loopback bind (TRA-301) ([#459](https://github.com/nikolai-vysotskyi/trace-mcp/issues/459)) ([42f4f6b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/42f4f6b040910aa103aca3aad7c869dc73663fe5))
+* **registry:** stable git-remote identity so repeat checkouts reuse one index (TRA-38) ([#450](https://github.com/nikolai-vysotskyi/trace-mcp/issues/450)) ([6148369](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6148369267bfb6b466df6c4f307c6a053fff656d))
+* **security:** replace existsSync-then-read/write TOCTOU with safe helpers (TRA-256) ([#452](https://github.com/nikolai-vysotskyi/trace-mcp/issues/452)) ([0ef5fc2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0ef5fc298879ade96d5e538a7cd4d4a17d59847c))
+
 ## [2.0.3](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.2...v2.0.3) (2026-08-28)
 
 

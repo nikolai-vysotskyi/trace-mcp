@@ -23,6 +23,7 @@ import {
   LAUNCHD_PLIST_PATH,
   TRACE_MCP_HOME,
 } from '../global.js';
+import { readIfExists } from '../utils/safe-fs.js';
 import { logger } from '../logger.js';
 import { atomicWriteString } from '../utils/atomic-write.js';
 import { getDaemonHealth, isDaemonRunning } from './client.js';
@@ -561,10 +562,11 @@ export function verifyPidFileOwnership(content: string): {
 
 function readDaemonPid(): number | null {
   const pidFile = getPidFilePath();
-  if (!fs.existsSync(pidFile)) return null;
   let content: string;
   try {
-    content = fs.readFileSync(pidFile, 'utf-8');
+    const raw = readIfExists(pidFile);
+    if (raw === null) return null;
+    content = raw;
   } catch {
     return null;
   }

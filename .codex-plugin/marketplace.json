@@ -9,7 +9,7 @@
       "name": "trace-mcp",
       "source": "./.codex-plugin",
       "description": "Framework-aware code intelligence: semantic search, refactoring, change-impact, security scanning, and decision memory across 60+ frameworks and 81 languages.",
-      "version": "2.0.3",
+      "version": "2.1.0",
       "author": {
         "name": "Nikolai Vysotskyi"
       }

@@ -24,6 +24,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { TRACE_MCP_HOME } from '../shared/paths.js';
+import { readIfExists } from '../utils/safe-fs.js';
 
 export const CORPORA_DIR = path.join(TRACE_MCP_HOME, 'corpora');
 
@@ -160,9 +161,9 @@ export class CorpusStore {
   /** Load a manifest by name. Returns null when missing. */
   load(name: string): CorpusManifest | null {
     const manifestPath = corpusManifestPath(this.rootDir, name);
-    if (!fs.existsSync(manifestPath)) return null;
     try {
-      const raw = fs.readFileSync(manifestPath, 'utf-8');
+      const raw = readIfExists(manifestPath);
+      if (raw === null) return null;
       const parsed = JSON.parse(raw) as CorpusManifest;
       // Sanity check the round-trip.
       if (parsed.name !== name) return null;
@@ -175,9 +176,8 @@ export class CorpusStore {
   /** Read the packed body for a corpus. Returns null when missing. */
   loadPackedBody(name: string): string | null {
     const packPath = corpusPackPath(this.rootDir, name);
-    if (!fs.existsSync(packPath)) return null;
     try {
-      return fs.readFileSync(packPath, 'utf-8');
+      return readIfExists(packPath);
     } catch {
       return null;
     }
