@@ -24,6 +24,7 @@ import path from 'node:path';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from '../global.js';
 import { logger } from '../logger.js';
 import { atomicWriteString } from '../utils/atomic-write.js';
+import { readIfExists } from '../utils/safe-fs.js';
 import type { DecisionType } from './decision-types.js';
 
 export const WEIGHTS_PATH = path.join(TRACE_MCP_HOME, 'confidence_weights.json');
@@ -263,8 +264,8 @@ export function scoreWithWeights(signals: ConfidenceSignals, weights: LearnedWei
  */
 export function loadWeights(filePath: string = WEIGHTS_PATH): LearnedWeights {
   try {
-    if (!fs.existsSync(filePath)) return DEFAULT_WEIGHTS;
-    const raw = fs.readFileSync(filePath, 'utf-8');
+    const raw = readIfExists(filePath);
+    if (raw === null) return DEFAULT_WEIGHTS;
     const parsed = JSON.parse(raw);
     if (parsed?.version !== 1) return DEFAULT_WEIGHTS;
     // Shallow shape check — every numeric slot must be present and finite.

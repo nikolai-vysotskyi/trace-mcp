@@ -81,16 +81,32 @@ export function makeIntraFileReader(
     if (cache.has(filePath)) return cache.get(filePath) ?? null;
     let content: string | null = null;
     if (projectRoot) {
-      const abs = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+      const root = path.resolve(projectRoot);
+      const abs = path.resolve(root, filePath);
+      // Enforce the containment this function's docstring already promises.
+      // Without it an absolute `filePath` silently escapes `projectRoot`.
+      const contained = abs === root || abs.startsWith(root + path.sep);
+      let fd: number | undefined;
       try {
-        if (fs.existsSync(abs)) {
-          const stat = fs.statSync(abs);
-          if (stat.size <= 2 * 1024 * 1024) {
-            content = fs.readFileSync(abs, 'utf-8');
-          }
+        if (!contained) throw new Error('outside project root');
+        // Stat and read the same open fd rather than statSync(path) then
+        // readFileSync(path) — two path-based calls still race (the file
+        // can change between them) even without an explicit existsSync.
+        fd = fs.openSync(abs, 'r');
+        const stat = fs.fstatSync(fd);
+        if (stat.size <= 2 * 1024 * 1024) {
+          content = fs.readFileSync(fd, 'utf-8');
         }
       } catch {
-        /* unreadable file — fall back to "no intra-file evidence" */
+        /* missing or unreadable file — fall back to "no intra-file evidence" */
+      } finally {
+        if (fd !== undefined) {
+          try {
+            fs.closeSync(fd);
+          } catch {
+            /* already closed or unclosable — nothing more we can do */
+          }
+        }
       }
     }
     cache.set(filePath, content);

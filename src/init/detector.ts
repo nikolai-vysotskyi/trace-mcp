@@ -9,6 +9,7 @@ import path from 'node:path';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { buildProjectContext } from '../indexer/project-context.js';
 import { PluginRegistry } from '../plugin-api/registry.js';
+import { readIfExists } from '../utils/safe-fs.js';
 import Database from 'better-sqlite3';
 import type {
   DetectionResult,
@@ -64,9 +65,10 @@ export function detectProject(dir: string): DetectionResult {
   const existingConfig = detectExistingConfig(projectRoot);
   const existingDb = detectExistingDb(projectRoot);
   const claudeMdPath = path.join(projectRoot, 'CLAUDE.md');
-  const hasClaudeMd = fs.existsSync(claudeMdPath);
+  const claudeMdContent = readIfExists(claudeMdPath);
+  const hasClaudeMd = claudeMdContent !== null;
   const claudeMdHasTraceMcpBlock =
-    hasClaudeMd && fs.readFileSync(claudeMdPath, 'utf-8').includes('<!-- trace-mcp:start -->');
+    claudeMdContent !== null && claudeMdContent.includes('<!-- trace-mcp:start -->');
 
   const { hasGuardHook, guardHookVersion } = detectGuardHook();
 
@@ -131,9 +133,10 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
   const clients: DetectedMcpClient[] = [];
 
   const checkConfig = (name: DetectedMcpClient['name'], configPath: string) => {
-    if (!fs.existsSync(configPath)) return;
     try {
-      const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      const raw = readIfExists(configPath);
+      if (raw === null) return;
+      const content = JSON.parse(raw);
       const hasTraceMcp = !!content?.mcpServers?.['trace-mcp'];
       clients.push({ name, configPath, hasTraceMcp });
     } catch {
@@ -222,9 +225,9 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
   // Codex: global ~/.codex/config.toml, project .codex/config.toml
   {
     const checkToml = (name: DetectedMcpClient['name'], tomlPath: string) => {
-      if (!fs.existsSync(tomlPath)) return;
       try {
-        const content = fs.readFileSync(tomlPath, 'utf-8');
+        const content = readIfExists(tomlPath);
+        if (content === null) return;
         const hasTraceMcp = /\[mcp_servers\s*\.\s*["']?trace-mcp["']?\s*\]/.test(content);
         clients.push({ name, configPath: tomlPath, hasTraceMcp });
       } catch {
@@ -243,9 +246,9 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
   // (note the literal dot in the key name — flat key, not nested under `amp`).
   {
     const checkAmp = (configPath: string) => {
-      if (!fs.existsSync(configPath)) return;
       try {
-        const content = fs.readFileSync(configPath, 'utf-8');
+        const content = readIfExists(configPath);
+        if (content === null) return;
         const parsed = parseJsonc(content) as Record<string, unknown> | null;
         const servers = parsed?.['amp.mcpServers'] as Record<string, unknown> | undefined;
         const hasTraceMcp = !!servers?.['trace-mcp'];
@@ -319,15 +322,15 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
   {
     const hermesHome = process.env.HERMES_HOME ?? path.join(HOME, '.hermes');
     const yamlPath = path.join(hermesHome, 'config.yaml');
-    if (fs.existsSync(yamlPath)) {
-      try {
-        const content = fs.readFileSync(yamlPath, 'utf-8');
+    try {
+      const content = readIfExists(yamlPath);
+      if (content !== null) {
         // Match: `mcp_servers:` (top level) then indented `trace-mcp:` entry
         const hasTraceMcp = /^mcp_servers\s*:\s*$[\s\S]*?^\s+trace-mcp\s*:/m.test(content);
         clients.push({ name: 'hermes', configPath: yamlPath, hasTraceMcp });
-      } catch {
-        clients.push({ name: 'hermes', configPath: yamlPath, hasTraceMcp: false });
       }
+    } catch {
+      clients.push({ name: 'hermes', configPath: yamlPath, hasTraceMcp: false });
     }
   }
 
@@ -403,9 +406,10 @@ function detectExistingConfig(root: string): { path: string } | null {
   }
   // Check package.json "trace-mcp" field (cosmiconfig searches here too)
   const pkgPath = path.join(root, 'package.json');
-  if (fs.existsSync(pkgPath)) {
+  const pkgRaw = readIfExists(pkgPath);
+  if (pkgRaw !== null) {
     try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      const pkg = JSON.parse(pkgRaw);
       if (pkg['trace-mcp']) return { path: pkgPath };
     } catch {
       /* ignore malformed package.json */
@@ -446,14 +450,9 @@ export function detectGuardHook(): { hasGuardHook: boolean; guardHookVersion: st
   const ext = process.platform === 'win32' ? '.cmd' : '.sh';
   const hookPath = path.join(HOME, '.claude', 'hooks', `trace-mcp-guard${ext}`);
   const clawHookPath = path.join(HOME, '.claw', 'hooks', `trace-mcp-guard${ext}`);
-  const existingPath = fs.existsSync(hookPath)
-    ? hookPath
-    : fs.existsSync(clawHookPath)
-      ? clawHookPath
-      : null;
-  if (!existingPath) return { hasGuardHook: false, guardHookVersion: null };
+  const content = readIfExists(hookPath) ?? readIfExists(clawHookPath);
+  if (content === null) return { hasGuardHook: false, guardHookVersion: null };
 
-  const content = fs.readFileSync(existingPath, 'utf-8');
   // Match both bash (# comment) and cmd (REM comment) version markers
   const match = content.match(/^(?:#|REM) trace-mcp-guard v(.+)$/m);
   return {
