@@ -237,7 +237,10 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--frame);
+  /* Transparent, NOT --frame: on macOS the native NSVisualEffectView behind
+     the window is the sidebar's material (TRA-291), and anything painted here
+     covers it. Non-mac stages paint themselves opaque (rule below). */
+  background: transparent;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -249,7 +252,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--frame);
+  background: transparent;
   overflow: hidden;
 }
 
@@ -267,11 +270,9 @@
   -webkit-app-region: drag;
 }
 .ws-topbar > * { -webkit-app-region: no-drag; }
-.ws-lights { display: flex; align-items: center; gap: 8px; padding-right: 6px; }
-.ws-light { width: 12px; height: 12px; border-radius: 50%; display: block; }
-.ws-light.c { background: #ff5f57; }
-.ws-light.m { background: #febc2e; }
-.ws-light.z { background: #28c840; }
+/* NOTE: the hand-drawn `.ws-lights` / `.ws-light` circles that used to live
+   here are gone (TRA-291) — the window is `titleBarStyle: 'hiddenInset'` and
+   renders the REAL traffic lights. Never re-draw them in CSS. */
 
 .ws-ptabs { display: flex; align-items: center; gap: 3px; flex: 1; min-width: 0; overflow: hidden; }
 .ws-ptab {
