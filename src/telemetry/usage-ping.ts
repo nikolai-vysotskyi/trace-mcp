@@ -112,7 +112,6 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
   try {
     saveState({ installId: state.installId, lastPingDate: today });
   } catch (err) {
-    console.error('DEBUG saveState failed', err);
     logger.debug({ err }, 'telemetry.usage_ping_state_save_failed');
   }
 }
