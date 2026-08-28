@@ -1,6 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { EMPTY_FILTER_VALUE, FilterBar, type FilterValue, matchesFilter } from '../components/FilterBar';
-import { SegmentedControl } from '../lattice/ui';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react';
+import { matchesFilter } from '../components/FilterBar';
+import { Icon } from '../lattice/icons';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmPopover,
+  EmptyState,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  SearchField,
+  Section,
+  SectionError,
+  SegmentedControl,
+  SkeletonRows,
+  StatusDot,
+  Toolbar,
+  ToolbarDivider,
+  useMenuAnchor,
+  type Tone,
+} from '../lattice/ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -104,119 +131,183 @@ function parseTags(raw: string | null): string[] {
   }
 }
 
-function typeBadgeColors(type: string): { bg: string; text: string } {
-  const map: Record<string, { bg: string; text: string }> = {
-    architecture_decision: { bg: 'rgba(99,102,241,0.15)', text: '#818cf8' },
-    tech_choice: { bg: 'rgba(59,130,246,0.15)', text: '#60a5fa' },
-    bug_root_cause: { bg: 'rgba(239,68,68,0.15)', text: '#f87171' },
-    preference: { bg: 'rgba(16,185,129,0.15)', text: '#34d399' },
-    tradeoff: { bg: 'rgba(234,179,8,0.15)', text: '#fbbf24' },
-    discovery: { bg: 'rgba(236,72,153,0.15)', text: '#f472b6' },
-    convention: { bg: 'rgba(107,114,128,0.15)', text: '#9ca3af' },
-  };
-  return map[type] ?? { bg: 'rgba(107,114,128,0.15)', text: '#9ca3af' };
+/* Decision categories. A tone is one channel; `label` is the other, so the
+   colour never has to be read on its own. Tones come from the shared status
+   palette — the old map was seven hand-picked hex pairs at 9px/700 ALL CAPS. */
+const TYPE_META: Record<string, { label: string; tone: Tone }> = {
+  architecture_decision: { label: 'Architecture', tone: 'purple' },
+  tech_choice: { label: 'Tech choice', tone: 'blue' },
+  bug_root_cause: { label: 'Bug root cause', tone: 'red' },
+  preference: { label: 'Preference', tone: 'green' },
+  tradeoff: { label: 'Trade-off', tone: 'orange' },
+  discovery: { label: 'Discovery', tone: 'accent' },
+  convention: { label: 'Convention', tone: 'neutral' },
+};
+
+function typeMeta(type: string): { label: string; tone: Tone } {
+  return TYPE_META[type] ?? { label: type.replace(/_/g, ' '), tone: 'neutral' };
 }
 
+/** Tone → the CSS variable it paints with, for the one place that needs the
+    raw colour (a 6px meter segment, where a Badge does not fit). */
+const TONE_VAR: Record<Tone, string> = {
+  /* A meter segment is decoration, not text, so the neutral series takes the
+     tertiary grey. At --label-secondary it out-weighed the purple/blue/red
+     series beside it and read as a disabled bar (TRA-294). */
+  neutral: 'var(--label-tertiary)',
+  accent: 'var(--accent)',
+  green: 'var(--status-green)',
+  orange: 'var(--status-orange)',
+  red: 'var(--status-red)',
+  blue: 'var(--status-blue)',
+  purple: 'var(--status-purple)',
+};
+
+/** ↑↓ walks a list of rows. Roving DOM focus rather than a selection index:
+    the focus ring, the Enter handler and the scroll-into-view are already
+    correct on a focused row, so there is no second notion of "current" to keep
+    in sync. Anything the arrows land on is a row — the per-row ••• is a real
+    <button>, so it stays out of the walk and on the Tab path. */
+function rovingArrowKeys(e: KeyboardEvent<HTMLDivElement>) {
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  const rows = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="button"][tabindex="0"]')];
+  if (rows.length === 0) return;
+  e.preventDefault();
+  const at = rows.indexOf(document.activeElement as HTMLElement);
+  const next =
+    at === -1
+      ? 0
+      : e.key === 'ArrowDown'
+        ? Math.min(at + 1, rows.length - 1)
+        : Math.max(at - 1, 0);
+  rows[next]?.focus();
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  manual: 'Added by hand',
+  mined: 'Mined from a session',
+  auto: 'Recorded automatically',
+};
+
 function TypeBadge({ type }: { type: string }) {
-  const { bg, text } = typeBadgeColors(type);
-  const label = type.replace(/_/g, ' ');
-  return (
-    <span
-      className="text-[9px] px-1.5 py-0.5 rounded font-medium uppercase shrink-0"
-      style={{ background: bg, color: text, letterSpacing: '0.03em' }}
-    >
-      {label}
-    </span>
-  );
+  const { label, tone } = typeMeta(type);
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
 function SourceBadge({ source }: { source: string }) {
-  const colors: Record<string, string> = {
-    manual: '#34d399',
-    mined: '#60a5fa',
-    auto: '#fbbf24',
-  };
   return (
-    <span
-      className="text-[9px] px-1.5 py-0.5 rounded font-medium uppercase shrink-0"
-      style={{
-        background: 'rgba(255,255,255,0.06)',
-        color: colors[source] ?? '#9ca3af',
-        border: `0.5px solid ${colors[source] ?? '#9ca3af'}40`,
-      }}
-    >
-      {source}
-    </span>
+    <Badge tone="neutral" title={SOURCE_LABEL[source] ?? source}>
+      {SOURCE_LABEL[source] ?? source}
+    </Badge>
+  );
+}
+
+/** The one toolbar + one scroll container each Memory sub-view is built on.
+    The sub-tab switcher rides on the toolbar's leading edge rather than in a
+    row of its own — the old surface stacked the tab pills, a stat card, a lone
+    accent button and a filter card before any content appeared (TRA-294). */
+function ViewShell({
+  subTab,
+  status,
+  actions,
+  children,
+}: {
+  subTab?: ReactNode;
+  status?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const [scrolled, setScrolled] = useState(false);
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      <Toolbar scrolled={scrolled}>
+        {subTab}
+        {status != null && (
+          <>
+            <ToolbarDivider />
+            <span
+              className="shrink-0 text-[11px] leading-[13px] tabular-nums"
+              style={{ color: 'var(--label-secondary)' }}
+            >
+              {status}
+            </span>
+          </>
+        )}
+        <span className="flex-1" />
+        {actions}
+      </Toolbar>
+      <div
+        className="flex-1 min-h-0 overflow-y-auto"
+        onScroll={(e) => setScrolled((e.target as HTMLElement).scrollTop > 0)}
+      >
+        <div className="flex flex-col gap-4 px-4 py-4">{children}</div>
+      </div>
+    </div>
   );
 }
 
 // ── Sub-views ─────────────────────────────────────────────────────────────────
 
-function StatsPanel({ stats }: { stats: DecisionStats }) {
-  const typeEntries = Object.entries(stats.by_type).sort((a, b) => b[1] - a[1]);
-  return (
-    <div
-      className="px-3 py-2.5 space-y-2"
-      style={{
-        background: 'var(--bg-grouped)',
-        borderRadius: 10,
-        boxShadow: 'var(--shadow-grouped)',
-      }}
-    >
-      {/* Totals row */}
-      <div className="flex items-center gap-4">
-        <div className="flex flex-col items-center">
-          <span
-            className="text-[20px] font-semibold tabular-nums leading-none"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            {stats.total}
-          </span>
-          <span className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-            total
-          </span>
-        </div>
-        <div className="flex flex-col items-center">
-          <span
-            className="text-[20px] font-semibold tabular-nums leading-none"
-            style={{ color: 'var(--green, #22c55e)' }}
-          >
-            {stats.active}
-          </span>
-          <span className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-            active
-          </span>
-        </div>
-        <div className="flex flex-col items-center">
-          <span
-            className="text-[20px] font-semibold tabular-nums leading-none"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            {stats.total - stats.active}
-          </span>
-          <span className="text-[10px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
-            expired
-          </span>
-        </div>
-      </div>
+/** The decision mix, as one row of the surface rather than a 70px card that
+    was 96% whitespace around three numbers with 2.21:1 labels. The counts live
+    in the toolbar now; this is only the per-type breakdown, and each segment is
+    named in the legend under it. */
+function TypeMix({
+  stats,
+  activeType,
+  onTypeClick,
+}: {
+  stats: DecisionStats;
+  activeType: string;
+  onTypeClick: (type: string) => void;
+}) {
+  const entries = Object.entries(stats.by_type)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) return null;
+  const total = entries.reduce((sum, [, n]) => sum + n, 0) || 1;
 
-      {/* Type breakdown */}
-      {typeEntries.length > 0 && (
-        <div className="flex flex-wrap gap-1 pt-1" style={{ borderTop: '0.5px solid var(--border-row)' }}>
-          {typeEntries.map(([type, count]) => {
-            const { bg, text } = typeBadgeColors(type);
-            return (
-              <span
-                key={type}
-                className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                style={{ background: bg, color: text }}
-              >
-                {type.replace(/_/g, ' ')} · {count}
-              </span>
-            );
-          })}
-        </div>
-      )}
+  return (
+    <div className="flex flex-col gap-2">
+      <div
+        className="flex overflow-hidden"
+        style={{ gap: 1, height: 6, borderRadius: 3, background: 'var(--fill-quaternary)' }}
+      >
+        {entries.map(([type, n]) => (
+          <div
+            key={type}
+            title={`${typeMeta(type).label}: ${n}`}
+            style={{
+              width: `${(n / total) * 100}%`,
+              minWidth: 2,
+              borderRadius: 2,
+              background: TONE_VAR[typeMeta(type).tone],
+              opacity: activeType === '' || activeType === type ? 1 : 0.3,
+              transition: 'opacity var(--dur-micro) var(--ease-out)',
+            }}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {entries.map(([type, n]) => {
+          const meta = typeMeta(type);
+          const active = activeType === type;
+          return (
+            <button
+              key={type}
+              type="button"
+              className={`lx-chip single${active ? ' is-on' : ''}`}
+              aria-pressed={active}
+              onClick={() => onTypeClick(type)}
+              title={`Show only ${meta.label.toLowerCase()} decisions`}
+            >
+              <StatusDot tone={meta.tone} size={6} />
+              {meta.label}
+              <span className="tabular-nums">{n}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -278,12 +369,15 @@ function DecisionForm({
   };
 
   const inputStyle: React.CSSProperties = {
-    background: 'var(--bg-inset)',
-    border: '0.5px solid var(--border-row)',
-    borderRadius: 6,
-    color: 'var(--text-primary)',
-    fontSize: 12,
-    padding: '4px 8px',
+    background: 'var(--fill-quaternary)',
+    boxShadow: 'inset 0 0 0 0.5px var(--separator)',
+    border: 0,
+    borderRadius: 'var(--radius-input)',
+    color: 'var(--label)',
+    fontSize: 13,
+    lineHeight: '16px',
+    fontFamily: 'inherit',
+    padding: '5px 8px',
     width: '100%',
     outline: 'none',
   };
@@ -291,13 +385,17 @@ function DecisionForm({
   return (
     <form
       onSubmit={(e) => { void handleSubmit(e); }}
-      className="space-y-2 px-3 py-3"
-      style={{ background: 'var(--bg-grouped)', borderRadius: 10 }}
+      className="flex flex-col gap-3 px-3 py-3"
+      style={{
+        background: 'var(--surface)',
+        borderRadius: 12,
+        border: '0.5px solid var(--separator)',
+      }}
       // Prevent click-through to parent toggles
       onClick={(e) => e.stopPropagation()}
     >
       <div className="space-y-1.5">
-        <label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+        <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
           Title *
         </label>
         <input
@@ -311,7 +409,7 @@ function DecisionForm({
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+        <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
           Content *
         </label>
         <textarea
@@ -326,7 +424,7 @@ function DecisionForm({
 
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
-          <label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+          <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
             Type
           </label>
           <select
@@ -344,7 +442,7 @@ function DecisionForm({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+          <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
             Tags (comma-separated)
           </label>
           <input
@@ -360,7 +458,7 @@ function DecisionForm({
 
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
-          <label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+          <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
             File path (optional)
           </label>
           <input
@@ -374,7 +472,7 @@ function DecisionForm({
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+          <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
             Symbol ID (optional)
           </label>
           <input
@@ -389,39 +487,24 @@ function DecisionForm({
       </div>
 
       {error && (
-        <div className="text-[11px]" style={{ color: '#f87171' }}>
+        <div
+          role="alert"
+          className="flex items-center gap-1.5 text-[13px] leading-4"
+          style={{ color: 'var(--status-red)' }}
+        >
+          <Icon name="warning" size={14} />
           {error}
         </div>
       )}
 
-      <div className="flex gap-2 pt-1">
-        <button
-          type="submit"
-          disabled={pending}
-          className="text-[12px] font-medium px-3 py-1 rounded"
-          style={{
-            background: 'var(--accent)',
-            color: '#fff',
-            cursor: pending ? 'not-allowed' : 'pointer',
-            opacity: pending ? 0.6 : 1,
-          }}
-        >
-          {pending ? 'Saving…' : submitLabel}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={pending}
-          className="text-[12px] px-3 py-1 rounded"
-          style={{
-            background: 'var(--bg-inset)',
-            color: 'var(--text-secondary)',
-            border: '0.5px solid var(--border-row)',
-            cursor: 'pointer',
-          }}
-        >
+      {/* macOS puts the confirming action last, on the trailing edge. */}
+      <div className="flex justify-end gap-2 pt-1">
+        <Button type="button" onClick={onCancel} disabled={pending}>
           Cancel
-        </button>
+        </Button>
+        <Button type="submit" variant="prominent" disabled={pending}>
+          {pending ? 'Saving…' : submitLabel}
+        </Button>
       </div>
 
       {/* Suppress unused variable warning — root used in parent for POST URL */}
@@ -450,8 +533,12 @@ function DecisionCard({
   const tags = parseTags(decision.tags);
   const isActive = decision.valid_until === null;
   const [editing, setEditing] = useState(false);
-  const [confirmInvalidate, setConfirmInvalidate] = useState(false);
   const [actionPending, setActionPending] = useState(false);
+  /* Invalidate is destructive and used rarely, so it lives behind the row's
+     ••• menu with a named confirmation — not as a red bordered button sitting
+     in every row, one stray click from expiring a decision (TRA-294). */
+  const rowMenu = useMenuAnchor();
+  const confirm = useMenuAnchor();
 
   const handleEdit = async (values: DecisionFormValues) => {
     const res = await fetch(`${BASE}/api/projects/decisions/${decision.id}`, {
@@ -500,12 +587,12 @@ function DecisionCard({
       onInvalidated(decision.id);
     } finally {
       setActionPending(false);
-      setConfirmInvalidate(false);
+      confirm.close();
     }
   };
 
   return (
-    <div style={{ opacity: isActive ? 1 : 0.5 }}>
+    <div>
       {/* Edit form replaces the entire card when active */}
       {editing ? (
         <DecisionForm
@@ -523,166 +610,154 @@ function DecisionCard({
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <button
-          type="button"
-          onClick={onToggle}
-          className="w-full text-left"
-          style={{ cursor: 'pointer' }}
-        >
-          {/* Collapsed header */}
-          <div className="px-3 py-2.5 flex items-start gap-2">
-            {/* Active indicator dot */}
-            <div
-              className="mt-1 shrink-0 w-1.5 h-1.5 rounded-full"
-              style={{ background: isActive ? 'var(--green, #22c55e)' : 'var(--text-tertiary)' }}
-              title={isActive ? 'Active' : 'Expired'}
-            />
+        <>
+          {/* A div with role=button, not a <button>: this row contains its own
+              buttons, and a nested <button> is invalid HTML that Chromium
+              reparents out of the row, desyncing React's refs. */}
+          <div
+            role="button"
+            tabIndex={0}
+            aria-expanded={expanded}
+            onClick={onToggle}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              onToggle();
+            }}
+            className="w-full text-left px-3 py-2.5 flex items-start gap-2"
+            style={{ cursor: 'pointer' }}
+          >
+            {/* Expired is said in a badge as well as shown by the dot — the
+                old card carried it as a 50% opacity wash and nothing else. */}
+            <span className="mt-1 shrink-0">
+              <StatusDot
+                tone={isActive ? 'green' : 'neutral'}
+                size={6}
+                title={isActive ? 'Active' : 'Expired'}
+              />
+            </span>
 
-            <div className="flex-1 min-w-0 space-y-1">
-              {/* Title + badges row */}
+            <div className="flex-1 min-w-0 flex flex-col gap-1">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span
-                  className="text-[13px] font-medium leading-tight"
-                  style={{ color: 'var(--text-primary)' }}
+                  className="text-[13px] leading-4 font-medium"
+                  style={{ color: 'var(--label)' }}
                 >
                   {decision.title}
                 </span>
                 <TypeBadge type={decision.type} />
                 <SourceBadge source={decision.source} />
+                {!isActive && <Badge tone="neutral">Expired</Badge>}
               </div>
 
-              {/* Meta row */}
-              <div className="flex items-center gap-2 flex-wrap">
+              <div
+                className="flex items-center gap-2 flex-wrap text-[11px] leading-[13px]"
+                style={{ color: 'var(--label-secondary)' }}
+              >
                 {decision.file_path && (
                   <span
-                    className="text-[10px] truncate max-w-[180px]"
-                    style={{ color: 'var(--text-tertiary)', fontFamily: 'SF Mono, Menlo, monospace' }}
+                    className="truncate max-w-[220px]"
+                    style={{ fontFamily: 'var(--font-mono)' }}
                     title={decision.file_path}
                   >
                     {decision.file_path}
                   </span>
                 )}
-                <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                  {formatDate(decision.created_at)}
-                </span>
+                <span className="tabular-nums">{formatDate(decision.created_at)}</span>
               </div>
             </div>
 
-            {/* Action buttons — visible in header, stop toggle propagation */}
-            {isActive && (
-              <div
-                className="flex items-center gap-1 shrink-0"
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  onClick={() => { setEditing(true); }}
-                  className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                  style={{
-                    background: 'var(--bg-inset)',
-                    color: 'var(--text-secondary)',
-                    border: '0.5px solid var(--border-row)',
-                    cursor: 'pointer',
-                  }}
-                  title="Edit decision"
-                >
-                  Edit
-                </button>
-                {confirmInvalidate ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => { void handleInvalidate(); }}
-                      disabled={actionPending}
-                      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                      style={{
-                        background: 'rgba(239,68,68,0.15)',
-                        color: '#f87171',
-                        cursor: actionPending ? 'not-allowed' : 'pointer',
-                        opacity: actionPending ? 0.6 : 1,
-                      }}
-                    >
-                      {actionPending ? '…' : 'Confirm'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmInvalidate(false)}
-                      className="text-[10px] px-1.5 py-0.5 rounded"
-                      style={{
-                        background: 'var(--bg-inset)',
-                        color: 'var(--text-tertiary)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      ✕
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmInvalidate(true)}
-                    className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                    style={{
-                      background: 'rgba(239,68,68,0.08)',
-                      color: '#f87171',
-                      border: '0.5px solid rgba(239,68,68,0.2)',
-                      cursor: 'pointer',
-                    }}
-                    title="Invalidate decision"
-                  >
-                    Invalidate
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Chevron */}
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="shrink-0 mt-1 transition-transform"
-              style={{
-                color: 'var(--text-tertiary)',
-                transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-              }}
+            <div
+              className="flex items-center gap-1 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              role="presentation"
             >
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
+              <Button
+                ref={rowMenu.ref}
+                variant="icon"
+                icon="more_horiz"
+                onClick={() => (rowMenu.at ? rowMenu.close() : rowMenu.open())}
+                aria-haspopup="menu"
+                aria-expanded={rowMenu.at !== null}
+                aria-label={`Actions for ${decision.title}`}
+                title="Actions"
+              />
+            </div>
+
+            <span className="shrink-0 mt-0.5 flex" style={{ color: 'var(--label-secondary)' }}>
+              <Icon name={expanded ? 'expand_more' : 'chevron_right'} size={16} />
+            </span>
           </div>
+
+          {rowMenu.at && (
+            <Menu x={rowMenu.at.x} y={rowMenu.at.y} align="end" onClose={rowMenu.close}>
+              <MenuItem
+                icon="edit"
+                onClick={() => {
+                  rowMenu.close();
+                  setEditing(true);
+                }}
+              >
+                Edit decision…
+              </MenuItem>
+              {isActive && (
+                <>
+                  <MenuSeparator />
+                  <MenuItem
+                    danger
+                    icon="archive"
+                    disabled={actionPending}
+                    onClick={() => {
+                      const at = rowMenu.at;
+                      rowMenu.close();
+                      if (at) confirm.openAt(at);
+                    }}
+                  >
+                    Invalidate decision…
+                  </MenuItem>
+                </>
+              )}
+            </Menu>
+          )}
+
+          {confirm.at && (
+            <ConfirmPopover
+              x={confirm.at.x}
+              y={confirm.at.y}
+              align="end"
+              danger
+              title={`Invalidate ${decision.title}?`}
+              body="It stops being read back to assistants from now on. The record itself is kept, with today as its end date."
+              confirmLabel={actionPending ? 'Invalidating…' : 'Invalidate'}
+              onConfirm={() => void handleInvalidate()}
+              onCancel={confirm.close}
+            />
+          )}
 
           {/* Expanded body */}
           {expanded && (
             <div
-              className="px-3 pb-3 space-y-2"
-              style={{ borderTop: '0.5px solid var(--border-row)' }}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
+              className="px-3 pb-3 flex flex-col gap-2"
+              style={{ borderTop: '0.5px solid var(--separator)' }}
             >
-              {/* Content */}
               <div
-                className="text-[12px] leading-relaxed whitespace-pre-wrap mt-2"
-                style={{ color: 'var(--text-secondary)' }}
+                className="text-[13px] leading-[18px] whitespace-pre-wrap mt-2"
+                style={{ color: 'var(--label)' }}
               >
                 {decision.content}
               </div>
 
-              {/* Details grid */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1" style={{ borderTop: '0.5px solid var(--border-row)' }}>
+              <div
+                className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 text-[11px] leading-[13px]"
+                style={{ borderTop: '0.5px solid var(--separator)' }}
+              >
                 {decision.symbol_id && (
                   <>
-                    <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                      Symbol
-                    </span>
+                    <span style={{ color: 'var(--label-secondary)' }}>Symbol</span>
                     <span
-                      className="text-[10px] truncate"
-                      style={{ color: 'var(--text-secondary)', fontFamily: 'SF Mono, Menlo, monospace' }}
+                      className="truncate"
+                      style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
                       title={decision.symbol_id}
                     >
                       {decision.symbol_id}
@@ -691,84 +766,85 @@ function DecisionCard({
                 )}
                 {decision.file_path && (
                   <>
-                    <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                      File
-                    </span>
+                    <span style={{ color: 'var(--label-secondary)' }}>File</span>
                     <span
-                      className="text-[10px] truncate"
-                      style={{ color: 'var(--text-secondary)', fontFamily: 'SF Mono, Menlo, monospace' }}
+                      className="truncate"
+                      style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
                       title={decision.file_path}
                     >
                       {decision.file_path}
                     </span>
                   </>
                 )}
-                <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                  Valid from
-                </span>
-                <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                <span style={{ color: 'var(--label-secondary)' }}>Valid from</span>
+                <span className="tabular-nums" style={{ color: 'var(--label)' }}>
                   {formatDate(decision.valid_from)}
                 </span>
                 {decision.valid_until && (
                   <>
-                    <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                      Expired
-                    </span>
-                    <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                    <span style={{ color: 'var(--label-secondary)' }}>Expired</span>
+                    <span className="tabular-nums" style={{ color: 'var(--label)' }}>
                       {formatDate(decision.valid_until)}
                     </span>
                   </>
                 )}
                 {decision.confidence < 1 && (
                   <>
-                    <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                      Confidence
-                    </span>
-                    <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                    <span style={{ color: 'var(--label-secondary)' }}>Confidence</span>
+                    <span className="tabular-nums" style={{ color: 'var(--label)' }}>
                       {Math.round(decision.confidence * 100)}%
                     </span>
                   </>
                 )}
               </div>
 
-              {/* Tags */}
               {tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 pt-1">
                   {tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="text-[10px] px-1.5 py-0.5 rounded"
-                      style={{
-                        background: 'var(--bg-inset)',
-                        color: 'var(--text-secondary)',
-                        border: '0.5px solid var(--border-row)',
-                      }}
-                    >
+                    <Badge key={tag} tone="neutral">
                       {tag}
-                    </span>
+                    </Badge>
                   ))}
                 </div>
               )}
             </div>
           )}
-        </button>
+        </>
       )}
     </div>
   );
 }
 
-function DecisionsView({ root }: { root: string }) {
+function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
   const [stats, setStats] = useState<DecisionStats | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  // Filter state — match feeds the FTS `q` parameter, exclude is applied
-  // client-side over the returned rows. Depth is intentionally disabled for
-  // this view: decisions are a flat list with no hierarchical depth concept.
-  const [filter, setFilter] = useState<FilterValue>(EMPTY_FILTER_VALUE);
+  /* A swallowed fetch failure used to fall through to "No decisions yet",
+     inviting you to re-add decisions you already have. Failure is its own
+     state (TRA-294). */
+  const [failed, setFailed] = useState(false);
+  /* One search field feeds the FTS `q` parameter; one optional exclude field
+     hides rows client-side. Both take plain text or /regex/i. This replaces the
+     shared FilterBar, whose MATCH / EXCLUDE labels were 10.5px/700 ALL-CAPS
+     jargon bolted to two inputs inside a bordered card (TRA-294). FilterBar
+     itself stays — the Graph surface still uses it. */
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [exclude, setExclude] = useState('');
+  const [showExclude, setShowExclude] = useState(false);
   const [activeType, setActiveType] = useState('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const overflow = useMenuAnchor();
+
+  /* FilterBar used to own the debounce; typing straight into a fetch would
+     issue one request per keystroke. */
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(query), 200);
+    return () => clearTimeout(id);
+  }, [query]);
 
   const fetchDecisions = useCallback(
     async (search: string, type: string) => {
@@ -781,13 +857,13 @@ function DecisionsView({ root }: { root: string }) {
         if (search && !search.startsWith('/')) params.set('q', search);
         if (type) params.set('type', type);
         const res = await fetch(`${BASE}/api/projects/decisions?${params}`);
-        if (res.ok) {
-          const data = (await res.json()) as { decisions: DecisionRow[]; total: number };
-          setDecisions(data.decisions);
-          setTotal(data.total);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { decisions: DecisionRow[]; total: number };
+        setDecisions(data.decisions);
+        setTotal(data.total);
+        setFailed(false);
       } catch {
-        /* optional */
+        setFailed(true);
       }
       setLoading(false);
     },
@@ -809,27 +885,25 @@ function DecisionsView({ root }: { root: string }) {
     fetchStats();
   }, [fetchStats]);
 
-  // Refetch whenever match or active type changes. FilterBar already
-  // debounces so we can react synchronously here.
   useEffect(() => {
-    void fetchDecisions(filter.match, activeType);
-  }, [fetchDecisions, filter.match, activeType]);
+    void fetchDecisions(debouncedQuery, activeType);
+  }, [fetchDecisions, debouncedQuery, activeType]);
 
-  // Client-side filter pass: applies `match` (when regex), and `exclude`
+  // Client-side filter pass: applies `query` (when regex), and `exclude`
   // against title + content + type + file_path so the user can quickly
   // narrow noisy result sets without a server round-trip.
   const visibleDecisions = useMemo(() => {
-    if (!filter.match && !filter.exclude) return decisions;
+    if (!debouncedQuery && !exclude) return decisions;
     return decisions.filter((d) => {
       const haystack = `${d.title}\n${d.content}\n${d.type}\n${d.file_path ?? ''}`;
       // For regex matches the server returned everything (we couldn't push
       // the regex down) so we still need the include check here. For plain
       // text the server already filtered, so matchesFilter is a no-op pass.
-      if (filter.match && !matchesFilter(haystack, filter.match)) return false;
-      if (filter.exclude && matchesFilter(haystack, filter.exclude)) return false;
+      if (debouncedQuery && !matchesFilter(haystack, debouncedQuery)) return false;
+      if (exclude && matchesFilter(haystack, exclude)) return false;
       return true;
     });
-  }, [decisions, filter.match, filter.exclude]);
+  }, [decisions, debouncedQuery, exclude]);
 
   const handleTypeFilter = (type: string) => {
     const next = activeType === type ? '' : type;
@@ -857,7 +931,7 @@ function DecisionsView({ root }: { root: string }) {
     }
     setShowAddForm(false);
     // Refetch to get accurate totals and server-generated id
-    await fetchDecisions(filter.match, activeType);
+    await fetchDecisions(debouncedQuery, activeType);
     await fetchStats();
   };
 
@@ -874,145 +948,224 @@ function DecisionsView({ root }: { root: string }) {
     void fetchStats();
   };
 
-  return (
-    <div className="space-y-3">
-      {/* Stats panel */}
-      {stats && <StatsPanel stats={stats} />}
+  const hasFilters = debouncedQuery !== '' || exclude !== '' || activeType !== '';
 
-      {/* Add decision button / form */}
-      {showAddForm ? (
-        <DecisionForm
-          root={root}
-          submitLabel="Add decision"
-          onSubmit={handleAdd}
-          onCancel={() => setShowAddForm(false)}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setShowAddForm(true)}
-          className="text-[12px] font-medium px-3 py-1.5 rounded-md"
-          style={{
-            background: 'var(--accent)',
-            color: '#fff',
-            cursor: 'pointer',
-          }}
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* ── Toolbar ───────────────────────────────────────────────────
+          ONE row. It replaces four stacked ones: the tab pills, a 70px stat
+          card holding three numbers, a 40px accent "+ Add decision" button
+          alone on its own line, and a bordered MATCH / EXCLUDE card. */}
+      <Toolbar scrolled={scrolled}>
+        {subTab}
+        <ToolbarDivider />
+        <span
+          className="flex items-center gap-1 shrink-0 text-[11px] leading-[13px] tabular-nums"
+          style={{ color: 'var(--label-secondary)' }}
         >
-          + Add decision
-        </button>
+          <span style={{ color: 'var(--label)' }}>
+            {stats == null
+              ? '—'
+              : `${stats.total.toLocaleString()} decision${stats.total === 1 ? '' : 's'}`}
+          </span>
+          {stats != null && stats.total > stats.active && (
+            <span>· {(stats.total - stats.active).toLocaleString()} expired</span>
+          )}
+        </span>
+
+        <span className="flex-1" />
+
+        {showExclude || exclude !== '' ? (
+          <SearchField
+            value={exclude}
+            onChange={setExclude}
+            placeholder="Exclude"
+            aria-label="Exclude decisions containing"
+            className="shrink-0"
+          />
+        ) : null}
+
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder="Search decisions"
+          aria-label="Search decisions"
+        />
+
+        <Button
+          variant="prominent"
+          icon="add"
+          onClick={() => setShowAddForm(true)}
+          disabled={showAddForm}
+        >
+          Add decision
+        </Button>
+
+        <Button
+          ref={overflow.ref}
+          variant="icon"
+          icon="more_horiz"
+          onClick={() => (overflow.at ? overflow.close() : overflow.open())}
+          aria-haspopup="menu"
+          aria-expanded={overflow.at !== null}
+          aria-label="More actions"
+          title="More actions"
+        />
+      </Toolbar>
+
+      {overflow.at && (
+        <Menu x={overflow.at.x} y={overflow.at.y} align="end" onClose={overflow.close}>
+          <MenuItem
+            showCheckSlot
+            checked={showExclude || exclude !== ''}
+            onClick={() => {
+              if (showExclude || exclude !== '') {
+                setExclude('');
+                setShowExclude(false);
+              } else {
+                setShowExclude(true);
+              }
+            }}
+          >
+            Exclude field
+          </MenuItem>
+          {hasFilters && (
+            <>
+              <MenuSeparator />
+              <MenuItem
+                icon="close"
+                onClick={() => {
+                  setQuery('');
+                  setExclude('');
+                  setActiveType('');
+                  overflow.close();
+                }}
+              >
+                Clear search and filters
+              </MenuItem>
+            </>
+          )}
+        </Menu>
       )}
 
-      {/* Filter bar — match feeds FTS, exclude is client-side */}
       <div
-        className="px-3 py-2"
-        style={{
-          background: 'var(--bg-grouped)',
-          border: '0.5px solid var(--border-row)',
-          borderRadius: 8,
-          boxShadow: 'var(--shadow-grouped)',
-        }}
+        className="flex-1 min-h-0 overflow-y-auto"
+        onScroll={(e) => setScrolled((e.target as HTMLElement).scrollTop > 0)}
       >
-        <FilterBar
-          value={filter}
-          onChange={setFilter}
-          depthEnabled={false}
-          storageKey="filter:decisions"
-          placeholder={{
-            match: 'Search decisions…',
-            exclude: 'hide rows containing…',
-          }}
-        />
-      </div>
-
-      {/* Type filter chips */}
-      <div className="flex flex-wrap gap-1">
-        {DECISION_TYPES.map((t) => {
-          const active = activeType === t;
-          const { bg, text } = typeBadgeColors(t);
-          return (
-            <button
-              type="button"
-              key={t}
-              onClick={() => handleTypeFilter(t)}
-              className="text-[10px] px-2 py-0.5 rounded font-medium uppercase transition-all"
-              style={{
-                background: active ? bg : 'var(--bg-inset)',
-                color: active ? text : 'var(--text-tertiary)',
-                border: active ? `0.5px solid ${text}40` : '0.5px solid transparent',
-                cursor: 'pointer',
-              }}
-            >
-              {t.replace(/_/g, ' ')}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Results */}
-      <div>
-        <div className="flex items-baseline justify-between mb-1.5 px-3">
-          <span className="text-[11px]" style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}>
-            Decisions
-          </span>
-          {!loading && (
-            <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-              {total} found
-            </span>
-          )}
-        </div>
-
-        <div
-          style={{
-            background: 'var(--bg-grouped)',
-            borderRadius: 10,
-            boxShadow: 'var(--shadow-grouped)',
-            overflow: 'hidden',
-          }}
-        >
-          {loading && (
-            <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
-              Loading…
-            </div>
+        <div className="flex flex-col gap-4 px-4 py-4">
+          {showAddForm && (
+            <DecisionForm
+              root={root}
+              submitLabel="Add decision"
+              onSubmit={handleAdd}
+              onCancel={() => setShowAddForm(false)}
+            />
           )}
 
-          {!loading && visibleDecisions.length === 0 && (
-            <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
-              {filter.match || filter.exclude || activeType
-                ? 'No matching decisions.'
-                : 'No decisions stored yet.'}
-            </div>
+          {/* The mix doubles as the type filter: colour is the meter, the
+              chip next to it is the name and the count. */}
+          {stats != null && stats.total > 0 && (
+            <TypeMix stats={stats} activeType={activeType} onTypeClick={handleTypeFilter} />
           )}
 
-          {!loading &&
-            visibleDecisions.map((d, i) => {
-              const isLast = i === visibleDecisions.length - 1;
-              return (
-                <div
-                  key={d.id}
-                  style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)' }}
+          <Section
+            title="Decisions"
+            trailing={
+              loading || failed ? undefined : (
+                <span
+                  className="text-[11px] leading-[13px] tabular-nums"
+                  style={{ color: 'var(--label-secondary)' }}
                 >
-                  <DecisionCard
-                    decision={d}
-                    root={root}
-                    expanded={expandedId === d.id}
-                    onToggle={() => setExpandedId(expandedId === d.id ? null : d.id)}
-                    onUpdated={handleUpdated}
-                    onInvalidated={handleInvalidated}
-                  />
-                </div>
-              );
-            })}
+                  {visibleDecisions.length === total
+                    ? `${total.toLocaleString()} found`
+                    : `${visibleDecisions.length.toLocaleString()} of ${total.toLocaleString()}`}
+                </span>
+              )
+            }
+          >
+            <Card>
+              {loading && <SkeletonRows rows={4} />}
 
-          {!loading && total > visibleDecisions.length && (
-            <div
-              className="px-3 py-1.5 text-[10px] text-center"
-              style={{ color: 'var(--text-tertiary)', borderTop: '0.5px solid var(--border-row)' }}
-            >
-              {filter.exclude
-                ? `Showing ${visibleDecisions.length} of ${total} (${decisions.length - visibleDecisions.length} hidden by exclude)`
-                : `Showing ${visibleDecisions.length} of ${total} — refine your search to narrow results`}
-            </div>
-          )}
+              {!loading && failed && (
+                <SectionError
+                  what="the decisions for this project"
+                  onRetry={() => fetchDecisions(debouncedQuery, activeType)}
+                />
+              )}
+
+              {!loading && !failed && visibleDecisions.length === 0 && (
+                hasFilters ? (
+                  <EmptyState
+                    compact
+                    icon="search"
+                    title="No matching decisions"
+                    subtitle="Nothing stored for this project matches the current search and filters."
+                    action={
+                      <Button
+                        icon="close"
+                        onClick={() => {
+                          setQuery('');
+                          setExclude('');
+                          setActiveType('');
+                        }}
+                      >
+                        Clear search and filters
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <EmptyState
+                    compact
+                    icon="neurology"
+                    title="No decisions yet"
+                    subtitle="A decision is a note about why this codebase is the way it is — a trade-off, a convention, the root cause of a bug. Assistants read them back before they change your code."
+                    action={
+                      <Button variant="prominent" icon="add" onClick={() => setShowAddForm(true)}>
+                        Add the first decision
+                      </Button>
+                    }
+                  />
+                )
+              )}
+
+              {!loading && visibleDecisions.length > 0 && (
+                <div onKeyDown={rovingArrowKeys}>
+                  {visibleDecisions.map((d, i) => {
+                    const isLast = i === visibleDecisions.length - 1;
+                    return (
+                      <div
+                        key={d.id}
+                        style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--separator)' }}
+                      >
+                        <DecisionCard
+                          decision={d}
+                          root={root}
+                          expanded={expandedId === d.id}
+                          onToggle={() => setExpandedId(expandedId === d.id ? null : d.id)}
+                          onUpdated={handleUpdated}
+                          onInvalidated={handleInvalidated}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {!loading && visibleDecisions.length > 0 && total > visibleDecisions.length && (
+                <div
+                  className="px-3 py-2 text-[11px] leading-[13px] text-center"
+                  style={{
+                    color: 'var(--label-secondary)',
+                    borderTop: '0.5px solid var(--separator)',
+                  }}
+                >
+                  {exclude
+                    ? `${(decisions.length - visibleDecisions.length).toLocaleString()} more hidden by the exclude filter`
+                    : 'Narrow the search to see the rest'}
+                </div>
+              )}
+            </Card>
+          </Section>
         </div>
       </div>
     </div>
@@ -1068,28 +1221,36 @@ function CorpusQueryModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
+      className="fixed inset-0 z-50 flex items-start justify-center"
+      style={{ background: 'rgb(0 0 0 / 0.35)', paddingTop: '10vh' }}
       onClick={onClose}
+      role="presentation"
     >
+      {/* A sheet, not a centred web modal: 12px radius, panel shadow, Esc and
+          a backdrop press both dismiss. */}
       <div
-        className="w-full max-w-lg mx-4 rounded-xl shadow-2xl space-y-3 p-4"
-        style={{ background: 'var(--bg-primary)', maxHeight: '80vh', overflowY: 'auto' }}
+        className="w-full max-w-lg mx-4 flex flex-col gap-3 p-4"
+        style={{
+          background: 'var(--surface-raised)',
+          border: '0.5px solid var(--separator)',
+          borderRadius: 'var(--radius-panel)',
+          boxShadow: 'var(--shadow-panel)',
+          maxHeight: '70vh',
+          overflowY: 'auto',
+        }}
+        role="dialog"
+        aria-label={`Query corpus ${corpusName}`}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') onClose();
+        }}
       >
-        <div className="flex items-center justify-between">
-          <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Query corpus:{' '}
-            <span style={{ fontFamily: 'SF Mono, Menlo, monospace' }}>{corpusName}</span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[17px] leading-[22px] font-semibold" style={{ color: 'var(--label)' }}>
+            Query{' '}
+            <span style={{ fontFamily: 'var(--font-mono)' }}>{corpusName}</span>
           </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[13px] px-2 py-0.5 rounded"
-            style={{ color: 'var(--text-tertiary)', cursor: 'pointer' }}
-          >
-            ✕
-          </button>
+          <Button variant="icon" icon="close" onClick={onClose} aria-label="Close" title="Close" />
         </div>
 
         <form onSubmit={(e) => { void handleQuery(e); }} className="flex gap-2">
@@ -1099,66 +1260,63 @@ function CorpusQueryModal({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="What do you want to know from this corpus?"
             autoFocus
-            className="flex-1 text-[12px] outline-none px-2.5"
+            aria-label="Corpus query"
+            className="flex-1 outline-none px-2.5 text-[13px]"
             style={{
-              background: 'var(--bg-grouped)',
-              border: '0.5px solid var(--border-row)',
-              borderRadius: 6,
-              height: 30,
-              color: 'var(--text-primary)',
+              background: 'var(--fill-quaternary)',
+              boxShadow: 'inset 0 0 0 0.5px var(--separator)',
+              border: 0,
+              borderRadius: 'var(--radius-input)',
+              height: 28,
+              color: 'var(--label)',
+              fontFamily: 'inherit',
             }}
             disabled={pending}
           />
-          <button
+          <Button
             type="submit"
+            size="large"
+            variant="prominent"
             disabled={pending || !query.trim()}
-            className="text-[12px] font-medium px-3 py-1 rounded"
-            style={{
-              background: 'var(--accent)',
-              color: '#fff',
-              cursor: pending || !query.trim() ? 'not-allowed' : 'pointer',
-              opacity: pending || !query.trim() ? 0.6 : 1,
-            }}
           >
-            {pending ? '…' : 'Search'}
-          </button>
+            {pending ? 'Searching…' : 'Search'}
+          </Button>
         </form>
 
         {error && (
-          <div className="text-[11px]" style={{ color: '#f87171' }}>
+          <div
+            role="alert"
+            className="flex items-center gap-1.5 text-[13px] leading-4"
+            style={{ color: 'var(--status-red)' }}
+          >
+            <Icon name="warning" size={14} />
             {error}
           </div>
         )}
 
         {result && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                ~{result.tokens_used} tokens
-              </span>
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="text-[10px] px-2 py-0.5 rounded font-medium"
-                style={{
-                  background: 'var(--bg-inset)',
-                  color: copied ? '#34d399' : 'var(--text-secondary)',
-                  border: '0.5px solid var(--border-row)',
-                  cursor: 'pointer',
-                }}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <span
+                className="text-[11px] leading-[13px] tabular-nums"
+                style={{ color: 'var(--label-secondary)' }}
               >
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
+                ~{result.tokens_used.toLocaleString()} tokens
+              </span>
+              <Button size="small" icon={copied ? 'check' : 'content_copy'} onClick={handleCopy}>
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
             </div>
             <pre
-              className="text-[11px] leading-relaxed whitespace-pre-wrap overflow-auto"
+              className="text-[12px] leading-[16px] whitespace-pre-wrap overflow-auto"
               style={{
-                background: 'var(--bg-inset)',
-                borderRadius: 6,
+                background: 'var(--fill-quaternary)',
+                borderRadius: 'var(--radius-input)',
                 padding: '8px 10px',
-                color: 'var(--text-secondary)',
+                color: 'var(--label)',
                 maxHeight: 320,
-                border: '0.5px solid var(--border-row)',
+                boxShadow: 'inset 0 0 0 0.5px var(--separator)',
+                fontFamily: 'var(--font-mono)',
               }}
             >
               {result.excerpt}
@@ -1170,7 +1328,7 @@ function CorpusQueryModal({
   );
 }
 
-function CorporaView({ root }: { root: string }) {
+function CorporaView({ root, subTab }: { root: string; subTab?: ReactNode }) {
   const [corpora, setCorpora] = useState<CorpusItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [queryCorpus, setQueryCorpus] = useState<string | null>(null);
@@ -1214,7 +1372,14 @@ function CorporaView({ root }: { root: string }) {
   };
 
   return (
-    <div className="space-y-3">
+    <ViewShell
+      subTab={subTab}
+      status={
+        loading
+          ? 'Loading…'
+          : `${corpora.length.toLocaleString()} corpus${corpora.length === 1 ? '' : 'es'}`
+      }
+    >
       {queryCorpus && (
         <CorpusQueryModal
           corpusName={queryCorpus}
@@ -1223,170 +1388,140 @@ function CorporaView({ root }: { root: string }) {
         />
       )}
 
-      <div className="flex items-baseline justify-between mb-1.5 px-3">
-        <span className="text-[11px]" style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}>
-          Corpora
-        </span>
-        {!loading && (
-          <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-            {corpora.length}
-          </span>
-        )}
-      </div>
+      <Section title="Corpora">
+        <Card>
+          {loading && <SkeletonRows rows={3} />}
 
-      <div
-        style={{
-          background: 'var(--bg-grouped)',
-          borderRadius: 10,
-          boxShadow: 'var(--shadow-grouped)',
-          overflow: 'hidden',
-        }}
-      >
-        {loading && (
-          <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
-            Loading…
-          </div>
-        )}
+          {!loading && corpora.length === 0 && (
+            <EmptyState
+              compact
+              icon="database"
+              title="No corpora yet"
+              subtitle="A corpus is a saved slice of this codebase an assistant can pull in one call. Build one with the build_corpus tool."
+            />
+          )}
 
-        {!loading && corpora.length === 0 && (
-          <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
-            No corpora for this project.
-          </div>
-        )}
-
-        {!loading &&
-          corpora.map((c, i) => {
-            const isLast = i === corpora.length - 1;
-            const isDeleting = deletePending === c.name;
-            const isConfirming = confirmDelete === c.name;
-            return (
-              <div
-                key={c.name}
-                className="px-3 py-2.5"
-                style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)' }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="text-[13px] font-medium"
-                        style={{ color: 'var(--text-primary)', fontFamily: 'SF Mono, Menlo, monospace' }}
-                      >
-                        {c.name}
-                      </span>
-                      <span
-                        className="text-[10px] px-1.5 py-0.5 rounded font-medium uppercase"
-                        style={{ background: 'var(--bg-inset)', color: 'var(--text-secondary)' }}
-                      >
-                        {c.scope}
-                      </span>
-                    </div>
-
-                    {c.description && (
-                      <div className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                        {c.description}
-                      </div>
-                    )}
-
-                    {(c.featureQuery || c.modulePath) && (
-                      <div
-                        className="text-[10px] truncate"
-                        style={{ color: 'var(--text-tertiary)', fontFamily: 'SF Mono, Menlo, monospace' }}
-                        title={c.featureQuery ?? c.modulePath}
-                      >
-                        {c.featureQuery ?? c.modulePath}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-                        {c.symbolCount} symbols · {c.fileCount} files
-                      </span>
-                      <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-                        ~{(c.tokenBudget / 1000).toFixed(0)}K budget
-                      </span>
-                      {c.sizeKB !== null && (
-                        <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-                          {c.sizeKB} KB
+          {!loading &&
+            corpora.map((c, i) => {
+              const isLast = i === corpora.length - 1;
+              return (
+                <div
+                  key={c.name}
+                  className="px-3 py-2.5"
+                  style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--separator)' }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0 flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className="text-[13px] leading-4 font-medium"
+                          style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
+                        >
+                          {c.name}
                         </span>
+                        <Badge tone="neutral">{c.scope}</Badge>
+                      </div>
+
+                      {c.description && (
+                        <div
+                          className="text-[13px] leading-4"
+                          style={{ color: 'var(--label-secondary)' }}
+                        >
+                          {c.description}
+                        </div>
                       )}
-                      <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                        {formatDate(c.createdAt)}
-                      </span>
-                    </div>
-                  </div>
 
-                  {/* Action buttons */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setQueryCorpus(c.name)}
-                      className="text-[11px] font-medium px-2 py-1 rounded"
-                      style={{
-                        background: 'var(--accent)',
-                        color: '#fff',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Query
-                    </button>
+                      {(c.featureQuery || c.modulePath) && (
+                        <div
+                          className="text-[11px] leading-[13px] truncate"
+                          style={{
+                            color: 'var(--label-secondary)',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                          title={c.featureQuery ?? c.modulePath}
+                        >
+                          {c.featureQuery ?? c.modulePath}
+                        </div>
+                      )}
 
-                    {isConfirming ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => { void handleDelete(c.name); }}
-                          disabled={isDeleting}
-                          className="text-[11px] font-medium px-2 py-1 rounded"
-                          style={{
-                            background: 'rgba(239,68,68,0.15)',
-                            color: '#f87171',
-                            cursor: isDeleting ? 'not-allowed' : 'pointer',
-                            opacity: isDeleting ? 0.6 : 1,
-                          }}
-                        >
-                          {isDeleting ? '…' : 'Confirm'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDelete(null)}
-                          className="text-[11px] px-1.5 py-1 rounded"
-                          style={{
-                            background: 'var(--bg-inset)',
-                            color: 'var(--text-tertiary)',
-                            border: '0.5px solid var(--border-row)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(c.name)}
-                        className="text-[11px] font-medium px-2 py-1 rounded"
-                        style={{
-                          background: 'var(--bg-inset)',
-                          color: 'var(--text-secondary)',
-                          border: '0.5px solid var(--border-row)',
-                          cursor: 'pointer',
-                        }}
+                      <div
+                        className="flex items-center gap-3 flex-wrap text-[11px] leading-[13px] tabular-nums"
+                        style={{ color: 'var(--label-secondary)' }}
                       >
-                        Delete
-                      </button>
-                    )}
+                        <span>
+                          {c.symbolCount.toLocaleString()} symbols · {c.fileCount.toLocaleString()}{' '}
+                          files
+                        </span>
+                        <span>~{(c.tokenBudget / 1000).toFixed(0)}K token budget</span>
+                        {c.sizeKB !== null && <span>{c.sizeKB} KB</span>}
+                        <span>{formatDate(c.createdAt)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button variant="prominent" onClick={() => setQueryCorpus(c.name)}>
+                        Query
+                      </Button>
+                      <CorpusDeleteButton
+                        name={c.name}
+                        pending={deletePending === c.name}
+                        onDelete={() => void handleDelete(c.name)}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-      </div>
-    </div>
+              );
+            })}
+        </Card>
+      </Section>
+    </ViewShell>
   );
 }
 
-function SessionsView({ root }: { root: string }) {
+/** Delete, behind a named confirmation popover. The old row put "Delete" and
+    an inline "Confirm ✕" pair straight in the row at 11px. */
+function CorpusDeleteButton({
+  name,
+  pending,
+  onDelete,
+}: {
+  name: string;
+  pending: boolean;
+  onDelete: () => void;
+}) {
+  const confirm = useMenuAnchor();
+  return (
+    <>
+      <Button
+        ref={confirm.ref}
+        variant="icon"
+        icon="trash"
+        disabled={pending}
+        onClick={() => (confirm.at ? confirm.close() : confirm.open())}
+        aria-label={`Delete corpus ${name}`}
+        title={`Delete corpus ${name}`}
+      />
+      {confirm.at && (
+        <ConfirmPopover
+          x={confirm.at.x}
+          y={confirm.at.y}
+          align="end"
+          danger
+          title={`Delete corpus ${name}?`}
+          body="The saved slice is removed. The code it points at is untouched, and you can rebuild it."
+          confirmLabel={pending ? 'Deleting…' : 'Delete corpus'}
+          onConfirm={() => {
+            onDelete();
+            confirm.close();
+          }}
+          onCancel={confirm.close}
+        />
+      )}
+    </>
+  );
+}
+
+function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
   const [sessions, setSessions] = useState<MinedSession[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -1404,84 +1539,64 @@ function SessionsView({ root }: { root: string }) {
   }, [root]);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline justify-between mb-1.5 px-3">
-        <span
-          className="text-[11px]"
-          style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}
-        >
-          Mined sessions
-        </span>
-        {!loading && (
-          <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-            {sessions.length}
-          </span>
-        )}
-      </div>
+    <ViewShell
+      subTab={subTab}
+      status={
+        loading
+          ? 'Loading…'
+          : `${sessions.length.toLocaleString()} session${sessions.length === 1 ? '' : 's'}`
+      }
+    >
+      <Section title="Mined sessions">
+        <Card>
+          {loading && <SkeletonRows rows={4} />}
 
-      <div
-        style={{
-          background: 'var(--bg-grouped)',
-          borderRadius: 10,
-          boxShadow: 'var(--shadow-grouped)',
-          overflow: 'hidden',
-        }}
-      >
-        {loading && (
-          <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
-            Loading…
-          </div>
-        )}
+          {!loading && sessions.length === 0 && (
+            <EmptyState
+              compact
+              icon="history"
+              title="No sessions mined yet"
+              subtitle="Mining reads past assistant transcripts for decisions worth keeping. Run the mine_sessions tool to fill this list."
+            />
+          )}
 
-        {!loading && sessions.length === 0 && (
-          <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
-            No mined sessions yet.
-          </div>
-        )}
-
-        {!loading &&
-          sessions.map((s, i) => {
-            const isLast = i === sessions.length - 1;
-            return (
-              <div
-                key={s.session_path}
-                className="px-3 py-2.5"
-                style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)' }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0 space-y-0.5">
-                    <div
-                      className="text-[11px] truncate"
-                      style={{
-                        color: 'var(--text-primary)',
-                        fontFamily: 'SF Mono, Menlo, monospace',
-                      }}
-                      title={s.session_path}
-                    >
-                      {shortPath(s.session_path)}
+          {!loading &&
+            sessions.map((s, i) => {
+              const isLast = i === sessions.length - 1;
+              return (
+                <div
+                  key={s.session_path}
+                  className="px-3 py-2.5"
+                  style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--separator)' }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                      <div
+                        className="text-[13px] leading-4 truncate"
+                        style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
+                        title={s.session_path}
+                      >
+                        {shortPath(s.session_path)}
+                      </div>
+                      <div
+                        className="text-[11px] leading-[13px] tabular-nums"
+                        style={{ color: 'var(--label-secondary)' }}
+                      >
+                        {formatDate(s.mined_at)}
+                      </div>
                     </div>
-                    <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-                      {formatDate(s.mined_at)}
-                    </div>
+                    {/* A count is the signal, so it is a number and a noun —
+                        not a green-vs-grey colour swap on the same string. */}
+                    <Badge tone={s.decisions_found > 0 ? 'green' : 'neutral'}>
+                      {s.decisions_found} decision{s.decisions_found === 1 ? '' : 's'}
+                    </Badge>
                   </div>
-                  <span
-                    className="shrink-0 text-[11px] tabular-nums font-medium"
-                    style={{
-                      color:
-                        s.decisions_found > 0
-                          ? 'var(--green, #22c55e)'
-                          : 'var(--text-tertiary)',
-                    }}
-                    title={`${s.decisions_found} decision${s.decisions_found === 1 ? '' : 's'} found`}
-                  >
-                    {s.decisions_found} found
-                  </span>
                 </div>
-              </div>
-            );
-          })}
-      </div>
-    </div>
+              );
+            })}
+        </Card>
+      </Section>
+    </ViewShell>
   );
 }
 
@@ -1524,167 +1639,113 @@ function ReviewCard({
     }
   };
 
+  const confidenceTone: Tone =
+    confidencePct >= 75 ? 'green' : confidencePct >= 50 ? 'orange' : 'red';
+
   return (
-    <div className="px-3 py-2.5 space-y-2">
-      {/* Header: title + type/source badges */}
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span
-              className="text-[13px] font-medium leading-tight"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              {decision.title}
-            </span>
-            <TypeBadge type={decision.type} />
-            <SourceBadge source={decision.source} />
-            <span
-              className="text-[9px] px-1.5 py-0.5 rounded font-medium uppercase shrink-0"
-              style={{
-                background: 'rgba(234,179,8,0.15)',
-                color: '#fbbf24',
-                letterSpacing: '0.03em',
-              }}
-            >
-              pending review
-            </span>
-          </div>
-        </div>
+    <div className="px-3 py-2.5 flex flex-col gap-2">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-[13px] leading-4 font-medium" style={{ color: 'var(--label)' }}>
+          {decision.title}
+        </span>
+        <TypeBadge type={decision.type} />
+        <SourceBadge source={decision.source} />
+        <Badge tone="orange" icon="schedule">
+          Awaiting review
+        </Badge>
       </div>
 
-      {/* Content excerpt */}
       <div
-        className="text-[12px] leading-relaxed whitespace-pre-wrap"
-        style={{ color: 'var(--text-secondary)' }}
+        className="text-[13px] leading-[18px] whitespace-pre-wrap"
+        style={{ color: 'var(--label-secondary)' }}
       >
         {decision.content}
       </div>
 
-      {/* Confidence bar + numeric */}
+      {/* Confidence: a meter AND the number, so the tone is never the only
+          thing carrying "how sure was the miner". */}
       <div className="flex items-center gap-2">
-        <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-          confidence
+        <span
+          className="text-[11px] leading-[13px] shrink-0"
+          style={{ color: 'var(--label-secondary)' }}
+        >
+          Confidence
         </span>
         <div
-          className="flex-1 h-1.5 rounded overflow-hidden"
-          style={{ background: 'var(--bg-inset)', maxWidth: 200 }}
+          className="flex-1 overflow-hidden"
+          style={{ height: 6, borderRadius: 3, background: 'var(--fill-quaternary)', maxWidth: 200 }}
         >
           <div
             style={{
               width: `${confidencePct}%`,
               height: '100%',
-              background:
-                confidencePct >= 75
-                  ? 'var(--green, #22c55e)'
-                  : confidencePct >= 50
-                  ? '#fbbf24'
-                  : '#f87171',
+              borderRadius: 3,
+              background: TONE_VAR[confidenceTone],
             }}
           />
         </div>
         <span
-          className="text-[10px] tabular-nums"
-          style={{ color: 'var(--text-secondary)' }}
+          className="text-[11px] leading-[13px] tabular-nums"
+          style={{ color: 'var(--label)' }}
         >
           {confidencePct}%
         </span>
       </div>
 
-      {/* Meta row: session, file, branch */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div
+        className="flex items-center gap-3 flex-wrap text-[11px] leading-[13px]"
+        style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-mono)' }}
+      >
         {decision.session_id && (
-          <a
-            href={`#session:${decision.session_id}`}
-            className="text-[10px] truncate max-w-[180px] hover:underline"
-            style={{
-              color: 'var(--accent, #818cf8)',
-              fontFamily: 'SF Mono, Menlo, monospace',
-            }}
-            title={`Session ${decision.session_id}`}
-          >
+          <span className="truncate max-w-[180px]" title={`Session ${decision.session_id}`}>
             {decision.session_id.slice(0, 14)}…
-          </a>
+          </span>
         )}
         {decision.file_path && (
-          <span
-            className="text-[10px] truncate max-w-[200px]"
-            style={{
-              color: 'var(--text-tertiary)',
-              fontFamily: 'SF Mono, Menlo, monospace',
-            }}
-            title={decision.file_path}
-          >
+          <span className="truncate max-w-[220px]" title={decision.file_path}>
             {decision.file_path}
           </span>
         )}
         {decision.git_branch && (
-          <span
-            className="text-[10px] px-1.5 py-0.5 rounded"
-            style={{
-              background: 'var(--bg-inset)',
-              color: 'var(--text-secondary)',
-              border: '0.5px solid var(--border-row)',
-              fontFamily: 'SF Mono, Menlo, monospace',
-            }}
-            title={`Captured on branch ${decision.git_branch}`}
-          >
+          <Badge tone="neutral" title={`Captured on branch ${decision.git_branch}`}>
             {decision.git_branch}
-          </span>
+          </Badge>
         )}
       </div>
 
-      {/* Tags */}
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {tags.map((tag) => (
-            <span
-              key={tag}
-              className="text-[10px] px-1.5 py-0.5 rounded"
-              style={{
-                background: 'var(--bg-inset)',
-                color: 'var(--text-secondary)',
-                border: '0.5px solid var(--border-row)',
-              }}
-            >
+            <Badge key={tag} tone="neutral">
               {tag}
-            </span>
+            </Badge>
           ))}
         </div>
       )}
 
-      {/* Action buttons */}
-      <div className="flex gap-2 pt-1">
-        <button
-          type="button"
-          onClick={() => { void handle('approve')(); }}
+      <div className="flex items-center gap-2 pt-1">
+        <Button
+          variant="prominent"
+          icon="check"
           disabled={pending !== null}
-          className="text-[12px] font-medium px-3 py-1.5 rounded"
-          style={{
-            background: 'var(--green, #22c55e)',
-            color: '#fff',
-            cursor: pending ? 'not-allowed' : 'pointer',
-            opacity: pending ? 0.6 : 1,
-          }}
+          onClick={() => { void handle('approve')(); }}
         >
           {pending === 'approve' ? 'Approving…' : 'Approve'}
-        </button>
-        <button
-          type="button"
-          onClick={() => { void handle('reject')(); }}
+        </Button>
+        <Button
+          icon="close"
           disabled={pending !== null}
-          className="text-[12px] font-medium px-3 py-1.5 rounded"
-          style={{
-            background: 'rgba(239,68,68,0.15)',
-            color: '#f87171',
-            border: '0.5px solid rgba(239,68,68,0.4)',
-            cursor: pending ? 'not-allowed' : 'pointer',
-            opacity: pending ? 0.6 : 1,
-          }}
+          onClick={() => { void handle('reject')(); }}
         >
           {pending === 'reject' ? 'Rejecting…' : 'Reject'}
-        </button>
+        </Button>
         {error && (
-          <span className="text-[11px] self-center" style={{ color: '#f87171' }}>
+          <span
+            role="alert"
+            className="text-[11px] leading-[13px] flex items-center gap-1"
+            style={{ color: 'var(--status-red)' }}
+          >
+            <Icon name="warning" size={12} />
             {error}
           </span>
         )}
@@ -1700,9 +1761,11 @@ interface ToastState {
 
 function ReviewView({
   root,
+  subTab,
   onPendingCountChange,
 }: {
   root: string;
+  subTab?: ReactNode;
   onPendingCountChange?: (count: number) => void;
 }) {
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
@@ -1776,76 +1839,64 @@ function ReviewView({
   };
 
   return (
-    <div className="space-y-3">
-      {/* Toast */}
+    <ViewShell
+      subTab={subTab}
+      status={
+        loading
+          ? 'Loading…'
+          : `${decisions.length.toLocaleString()} awaiting review`
+      }
+    >
       {toast && (
         <div
-          className="px-3 py-2 text-[12px] rounded-md"
+          role="status"
+          className="flex items-center gap-2 px-3 py-2 text-[13px] leading-4"
           style={{
+            borderRadius: 10,
             background:
               toast.kind === 'error'
-                ? 'rgba(239,68,68,0.15)'
-                : 'rgba(34,197,94,0.15)',
-            color: toast.kind === 'error' ? '#f87171' : '#22c55e',
-            border: `0.5px solid ${toast.kind === 'error' ? '#f8717140' : '#22c55e40'}`,
+                ? 'color-mix(in oklab, var(--status-red) 12%, transparent)'
+                : 'color-mix(in oklab, var(--status-green) 12%, transparent)',
+            color: toast.kind === 'error' ? 'var(--status-red)' : 'var(--status-green)',
           }}
         >
+          <Icon name={toast.kind === 'error' ? 'warning' : 'check'} size={14} />
           {toast.message}
         </div>
       )}
 
-      <div className="flex items-baseline justify-between mb-1.5 px-3">
-        <span
-          className="text-[11px]"
-          style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}
-        >
-          Review queue
-        </span>
-        {!loading && (
-          <span className="text-[11px] tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-            {decisions.length}
-          </span>
-        )}
-      </div>
+      <Section title="Review queue">
+        <Card>
+          {loading && <SkeletonRows rows={3} />}
 
-      <div
-        style={{
-          background: 'var(--bg-grouped)',
-          borderRadius: 10,
-          boxShadow: 'var(--shadow-grouped)',
-          overflow: 'hidden',
-        }}
-      >
-        {loading && (
-          <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
-            Loading…
-          </div>
-        )}
+          {!loading && decisions.length === 0 && (
+            <EmptyState
+              compact
+              icon="done_all"
+              title="Nothing to review"
+              subtitle="Decisions mined from past sessions land here first, so you can approve or reject them before assistants read them back."
+            />
+          )}
 
-        {!loading && decisions.length === 0 && (
-          <div className="px-3 py-4 text-[12px] text-center" style={{ color: 'var(--text-tertiary)' }}>
-            Nothing to review — the queue is empty.
-          </div>
-        )}
-
-        {!loading &&
-          decisions.map((d, i) => {
-            const isLast = i === decisions.length - 1;
-            return (
-              <div
-                key={d.id}
-                style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--border-row)' }}
-              >
-                <ReviewCard
-                  decision={d}
-                  onApprove={(id) => handleAction(id, 'approved')}
-                  onReject={(id) => handleAction(id, 'rejected')}
-                />
-              </div>
-            );
-          })}
-      </div>
-    </div>
+          {!loading &&
+            decisions.map((d, i) => {
+              const isLast = i === decisions.length - 1;
+              return (
+                <div
+                  key={d.id}
+                  style={{ borderBottom: isLast ? 'none' : '0.5px solid var(--separator)' }}
+                >
+                  <ReviewCard
+                    decision={d}
+                    onApprove={(id) => handleAction(id, 'approved')}
+                    onReject={(id) => handleAction(id, 'rejected')}
+                  />
+                </div>
+              );
+            })}
+        </Card>
+      </Section>
+    </ViewShell>
   );
 }
 
@@ -1883,25 +1934,24 @@ export function MemoryExplorer({ root }: { root: string }) {
     { key: 'sessions', label: 'Sessions' },
   ];
 
-  return (
-    <div className="space-y-4 pb-4">
-      {/* Tab bar */}
-      <div className="flex">
-        <SegmentedControl
-          options={tabs.map((t) => ({ value: t.key, label: t.label }))}
-          value={activeTab}
-          onChange={setActiveTab}
-          aria-label="Memory section"
-        />
-      </div>
+  const switcher = (
+    <SegmentedControl
+      className="shrink-0"
+      options={tabs.map((t) => ({ value: t.key, label: t.label }))}
+      value={activeTab}
+      onChange={setActiveTab}
+      aria-label="Memory section"
+    />
+  );
 
-      {/* Content */}
-      {activeTab === 'decisions' && <DecisionsView root={root} />}
+  return (
+    <>
+      {activeTab === 'decisions' && <DecisionsView root={root} subTab={switcher} />}
       {activeTab === 'review' && (
-        <ReviewView root={root} onPendingCountChange={setPendingCount} />
+        <ReviewView root={root} subTab={switcher} onPendingCountChange={setPendingCount} />
       )}
-      {activeTab === 'corpora' && <CorporaView root={root} />}
-      {activeTab === 'sessions' && <SessionsView root={root} />}
-    </div>
+      {activeTab === 'corpora' && <CorporaView root={root} subTab={switcher} />}
+      {activeTab === 'sessions' && <SessionsView root={root} subTab={switcher} />}
+    </>
   );
 }

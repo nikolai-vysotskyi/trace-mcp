@@ -605,196 +605,23 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   --glass-line: rgba(0, 0, 0, 0.06);
 }
 
-/* shared toolbars */
-.ws-view-bar {
-  flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; row-gap: 8px;
-  padding: 11px 16px; border-bottom: 0.5px solid var(--sep); min-height: 42px;
-}
-.ws-view-subbar {
-  flex: none; display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; row-gap: 8px;
-  padding: 10px 16px; border-bottom: 0.5px solid var(--sep);
-}
-.ws-view-subbar.flush { border-bottom: 0; padding: 0; }
-.ws-view-bar .grow, .ws-view-subbar .grow { flex: 1; }
-.ws-tdiv { width: 0.5px; align-self: stretch; margin: 4px 2px; background: var(--sep); flex: none; }
-
-/* Segmented control, chip/text buttons and the small search field moved to
+/* Segmented control, chip/text buttons and the small search field live in
    controls.css (.lx-seg / .lx-btn / .lx-search) — capsules on the 20/24/28
-   height scale (TRA-290). */
+   height scale (TRA-290). The unified search field is SearchField.tsx. */
 
 .lx-btn kbd {
   font-family: inherit; font-size: 11px; padding: 1px 4px; border-radius: var(--radius-row);
   background: var(--row-hover); color: var(--text-2);
 }
 
-/* The unified search field is SearchField.tsx + .lx-search in controls.css.
-   The old `.ws-sbar` centred-placeholder-that-slides-left treatment is gone:
-   it animated `left` (a layout property) over 0.42s and matched nothing on
-   the platform (TRA-290). */
-
-/* inline-label filter field */
-.ws-ff {
-  flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; gap: 8px;
-  height: 32px; padding: 0 12px; border-radius: var(--radius-popover); border: 0.5px solid var(--sep);
-  background: var(--row-hover); color: var(--text-3); transition: border-color .12s, background .12s;
-}
-.ws-ff:focus-within { border-color: var(--accent); background: var(--island); }
-.ws-ff .ff-lab {
-  flex: none; font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase;
-  color: var(--text-3); padding-right: 9px; border-right: 0.5px solid var(--sep);
-}
-.ws-ff input { flex: 1; min-width: 0; border: 0; background: none; outline: 0; color: var(--text-1); font-family: inherit; font-size: 13px; }
-
-/* depth control group */
-.ws-depth { display: inline-flex; align-items: center; gap: 8px; flex: none; }
-.ws-depth .lab { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
-.ws-stepper { display: inline-flex; align-items: center; border: 0.5px solid var(--sep); border-radius: var(--radius-popover); overflow: hidden; }
-.ws-stepper button { width: 28px; height: 30px; border: 0; background: transparent; color: var(--text-2); cursor: default; display: flex; align-items: center; justify-content: center; }
-.ws-stepper button:hover { background: var(--row-hover); color: var(--text-1); }
-.ws-stepper span { min-width: 26px; text-align: center; font-size: 13px; color: var(--text-1); font-variant-numeric: tabular-nums; }
-
-/* live + zoom */
-.ws-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-1); font-weight: 500; }
-.ws-live .dot { width: 7px; height: 7px; border-radius: 50%; background: #2f9e6e; box-shadow: 0 0 0 3px color-mix(in srgb, #2f9e6e 22%, transparent); animation: ws-pulse 2.4s ease-in-out infinite; }
-@keyframes ws-pulse { 0%, 100% { box-shadow: 0 0 0 2px color-mix(in srgb, #2f9e6e 26%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, #2f9e6e 8%, transparent); } }
-
-/* The prominent button is .lx-btn.v-prominent in controls.css (TRA-290). */
-
-/* ---- ACTIVITY --------------------------------------------------------- */
-.ws-av-cards {
-  flex: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 12px;
-  padding: 16px; border-bottom: 0.5px solid var(--sep);
-}
-.ws-statcard { min-width: 0; }
-.ws-statcard {
-  display: flex; flex-direction: column; gap: 8px; padding: 13px 15px; border-radius: var(--radius-card);
-  border: 0.5px solid var(--glass-line); background: var(--glass);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4); backdrop-filter: blur(12px) saturate(1.4);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 4px 14px rgba(0, 0, 0, 0.10);
-}
-.ws-statcard .sc-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; row-gap: 6px; }
-.ws-statcard .sc-lab { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); }
-.ws-statcard .sc-val { font-size: 30px; font-weight: 700; line-height: 1; color: var(--text-1); font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 6px; }
-.ws-statcard .sc-val.warn { color: #e0735c; }
-.ws-statcard .sc-unit { font-size: 12px; font-weight: 500; color: var(--text-3); letter-spacing: 0; }
-.ws-statcard .sc-sub { font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-statcard .sc-spark { display: flex; align-items: flex-end; gap: 3px; height: 22px; }
-.ws-statcard .sc-spark span { flex: 1; background: color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 2px 2px 0 0; min-height: 3px; }
-.ws-statcard .sc-spark span:last-child { background: var(--accent); }
-.ws-statcard .sc-meter { height: 6px; border-radius: var(--radius-row); background: var(--row-hover); overflow: hidden; }
-.ws-statcard .sc-meter span { display: block; height: 100%; border-radius: var(--radius-row); background: var(--accent); }
-.ws-statcard .sc-meter span.warn { background: #e0735c; }
-.ws-statcard .sc-pills { display: flex; gap: 8px; }
-.ws-statcard .sc-pills span { font-size: 12px; padding: 3px 9px; border-radius: var(--radius-capsule); background: var(--row-hover); color: var(--text-3); }
-.ws-statcard .sc-pills .ok { color: #43b07f; background: color-mix(in srgb, #2f9e6e 14%, transparent); }
-.ws-statcard .sc-pills b { font-weight: 700; margin-right: 3px; }
-
-.ws-av-head {
-  flex: none; display: grid; grid-template-columns: 10px minmax(130px, 1fr) minmax(0, 1.6fr) 100px 122px 60px; align-items: center; gap: 14px;
-  padding: 9px 18px; border-bottom: 0.5px solid var(--sep);
-  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3);
-}
-.ws-av-head .r { text-align: right; }
-.ws-av-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-av-list { padding: 2px 0; }
-.ws-av-row {
-  display: grid; grid-template-columns: 10px minmax(130px, 1fr) minmax(0, 1.6fr) 100px 122px 60px; align-items: center; gap: 14px;
-  padding: 9px 18px; font-size: 13px; border-bottom: 0.5px solid var(--sep);
-}
-.ws-av-row:hover { background: var(--row-hover); }
-.ws-av-row.err { background: color-mix(in srgb, #e0563a 7%, transparent); }
-.ws-av-row .st { width: 8px; height: 8px; border-radius: 50%; }
-.ws-av-row .st.ok { background: #2f9e6e; }
-.ws-av-row .st.bad { background: #e0563a; box-shadow: 0 0 0 3px color-mix(in srgb, #e0563a 18%, transparent); }
-.ws-av-row .tool { font-family: var(--font-mono); font-size: 12px; color: var(--text-1); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
-.ws-av-row .params { color: var(--text-2); font-family: var(--font-mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-av-row .sess { font-size: 11px; color: var(--text-2); padding: 2px 9px; border-radius: var(--radius-capsule); background: var(--row-hover); justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-av-row .durcell { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
-.ws-av-row .durcell .bar { width: 64px; height: 5px; border-radius: 3px; background: var(--row-hover); overflow: hidden; }
-.ws-av-row .durcell .bar span { display: block; height: 100%; border-radius: 3px; }
-.ws-av-row .durcell .bar span.fast { background: #2f9e6e; }
-.ws-av-row .durcell .bar span.mid { background: #c9962f; }
-.ws-av-row .durcell .bar span.slow { background: #e0563a; }
-.ws-av-row .dur { font-variant-numeric: tabular-nums; font-size: 12px; font-weight: 600; min-width: 46px; text-align: right; }
-.ws-av-row .dur.fast { color: #43b07f; }
-.ws-av-row .dur.mid { color: #cda23f; }
-.ws-av-row .dur.slow { color: #e0735c; }
-.ws-av-row .time { font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; text-align: right; }
-
-/* ---- MEMORY ----------------------------------------------------------- */
-.ws-mv-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; overflow-x: hidden; }
-.ws-mv-top { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
-.ws-mv-top .ws-statcard.wide { flex: 1 1 200px; }
-.ws-mv-top .ws-statcard.grow2 { flex: 3 1 320px; min-width: 0; }
-
-.ws-mv-dist { display: flex; height: 12px; border-radius: var(--radius-row); overflow: hidden; gap: 2px; }
-.ws-mv-dist .seg { height: 100%; border-radius: 3px; opacity: 0.95; }
-.ws-mv-dist .seg.blue { background: #5b8df5; } .ws-mv-dist .seg.red { background: #e0735c; }
-.ws-mv-dist .seg.pink { background: #d96cb0; } .ws-mv-dist .seg.gray { background: var(--text-3); }
-.ws-mv-dist .seg.gold { background: #cda23f; } .ws-mv-dist .seg.green { background: #43b07f; }
-.ws-mv-cats { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
-.mv-cat {
-  display: inline-flex; align-items: center; gap: 7px; border: 0.5px solid var(--sep); cursor: default; white-space: nowrap;
-  font-family: inherit; font-size: 12px; font-weight: 550; color: var(--text-2);
-  padding: 4px 11px 4px 8px; border-radius: var(--radius-capsule); background: transparent; transition: background .12s, border-color .12s, color .12s;
-}
-.mv-cat:hover { background: var(--row-hover); color: var(--text-1); }
-.mv-cat .swatch { width: 8px; height: 8px; border-radius: 50%; }
-.mv-cat.blue .swatch { background: #5b8df5; } .mv-cat.red .swatch { background: #e0735c; }
-.mv-cat.pink .swatch { background: #d96cb0; } .mv-cat.gray .swatch { background: var(--text-3); }
-.mv-cat.gold .swatch { background: #cda23f; } .mv-cat.green .swatch { background: #43b07f; }
-.mv-cat b { font-weight: 700; color: var(--text-1); }
-.mv-cat.is-active { background: var(--accent-fill); border-color: transparent; color: var(--on-accent); }
-.mv-cat.is-active b { color: #fff; } .mv-cat.is-active .swatch { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
-
-.mv-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.05em; padding: 2px 7px; border-radius: var(--radius-row); white-space: nowrap; }
-.mv-badge.outline { background: transparent; border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); color: var(--accent); }
-.mv-badge.blue { background: color-mix(in srgb, #3574f0 16%, transparent); color: #6f9bf6; }
-.mv-badge.red { background: color-mix(in srgb, #e0563a 16%, transparent); color: #e0735c; }
-.mv-badge.pink { background: color-mix(in srgb, #d6469b 16%, transparent); color: #d96cb0; }
-.mv-badge.gray { background: var(--row-hover); color: var(--text-2); }
-.mv-badge.gold { background: color-mix(in srgb, #c9962f 18%, transparent); color: #cda23f; }
-.mv-badge.green { background: color-mix(in srgb, #2f9e6e 16%, transparent); color: #43b07f; }
-
-.ws-mv-listhead { display: flex; align-items: baseline; justify-content: space-between; }
-.ws-mv-listhead span { font-size: 13px; font-weight: 600; color: var(--text-1); }
-.ws-mv-listhead .found { font-size: 12px; font-weight: 400; color: var(--text-3); }
-.ws-mv-list { display: flex; flex-direction: column; gap: 8px; }
-.ws-mv-row {
-  display: flex; align-items: stretch; gap: 12px; padding: 13px 14px 13px 0;
-  border: 0.5px solid var(--sep); border-radius: var(--radius-card); background: var(--island);
-  transition: border-color .12s, transform .08s;
-}
-.ws-mv-row:hover { border-color: color-mix(in srgb, var(--text-3) 40%, transparent); }
-.ws-mv-row .accent { width: 3px; border-radius: 3px; flex: none; margin: 2px 0; }
-.ws-mv-row.blue .accent { background: #5b8df5; } .ws-mv-row.red .accent { background: #e0735c; }
-.ws-mv-row.pink .accent { background: #d96cb0; } .ws-mv-row.gray .accent { background: var(--text-3); }
-.ws-mv-row.gold .accent { background: #cda23f; } .ws-mv-row.green .accent { background: #43b07f; }
-.ws-mv-row .body { flex: 1; min-width: 0; }
-.ws-mv-row .line1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
-.ws-mv-row .line1 .t { font-size: 13px; color: var(--text-1); font-weight: 500; }
-.ws-mv-row .date { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-3); margin-top: 6px; }
-.ws-mv-row .acts { display: flex; align-items: center; gap: 8px; flex: none; }
-.ws-mv-row .acts button { border: 0.5px solid var(--sep); background: transparent; cursor: default; font-family: inherit; font-size: 12px; padding: 5px 11px; border-radius: var(--radius-row); }
-.ws-mv-row .acts .edit { color: var(--text-1); }
-.ws-mv-row .acts .edit:hover { background: var(--row-hover); }
-.ws-mv-row .acts .inval { color: #e0563a; border-color: color-mix(in srgb, #e0563a 35%, transparent); }
-.ws-mv-row .acts .inval:hover { background: color-mix(in srgb, #e0563a 12%, transparent); }
-.ws-mv-row .acts .chev { color: var(--text-3); display: flex; }
-
-/* ---- container-query responsiveness (responds to PANE width) ---------- */
-@container (max-width: 660px) {
-  .ws-av-head, .ws-av-row { grid-template-columns: 10px minmax(120px, 1fr) minmax(0, 1.4fr) 92px 60px 56px; gap: 12px; }
-  .ws-av-row .durcell .bar { display: none; }
-}
-@container (max-width: 520px) {
-  .ws-av-head, .ws-av-row { grid-template-columns: 10px minmax(110px, 1fr) minmax(0, 1.5fr) 56px; gap: 12px; }
-  .ws-av-row .sess, .ws-av-head .sess-h, .ws-av-row .time, .ws-av-head .time-h { display: none; }
-  .ws-view-bar .ws-textbtn, .ws-view-bar .ws-tdiv { display: none; }
-}
-@container (max-width: 400px) {
-  .ws-av-cards { grid-template-columns: 1fr 1fr; }
-}
+/* TRA-294 deleted ~190 lines of unreferenced rules from the ported design
+   bundle here: .ws-view-bar/.ws-view-subbar/.ws-tdiv, .ws-ff/.ff-lab,
+   .ws-depth/.ws-stepper, .ws-live, and the whole .ws-av-* / .ws-mv-* /
+   .ws-statcard Activity + Memory kit. No TSX ever referenced them — they were
+   a second, divergent design for two surfaces that render from inline styles,
+   and they carried 60+ of this file's raw hex values, glass on cards, 30px/700
+   stat values and colour-only status dots. Activity and Memory now build from
+   lattice/ui (Toolbar/Card/Section/Badge/Chip/EmptyState). */
 
 /* ============================================================================
    MENU & POPOVER — Liquid Glass · macOS 26  (floating overlays)
@@ -861,11 +688,42 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   font-size: 12px;
 }
 .ws-ctx-item:hover:not(:disabled) .ws-ctx-sc { color: rgba(255, 255, 255, 0.85); }
-/* Section header inside a menu (grouped menu). */
+/* Leading check column for a toggle item (role=menuitemcheckbox). Reserved on
+   EVERY item of a menu that has one, so labels stay on one left edge whether
+   or not their row is checked — macOS never reflows a menu on toggle.
+   Menu.tsx shipped `checked`/`showCheckSlot` with no rule behind them; the
+   slot rendered as a zero-width span and the checkmark landed on the label
+   (TRA-294). */
+.ws-ctx-item .ws-ctx-check {
+  width: 14px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+.ws-ctx-item:hover:not(:disabled) .ws-ctx-check { color: var(--on-accent); }
+/* Destructive item. Red LABEL on the flat menu, white on the accent hover —
+   never a red fill, which reads as "selected" rather than "dangerous". */
+.ws-ctx-item.danger { color: var(--status-red); }
+.ws-ctx-item.danger .ws-ctx-ico { color: var(--status-red); }
+.ws-ctx-item.danger:hover:not(:disabled) {
+  background: var(--danger-fill);
+  color: var(--on-accent);
+}
+.ws-ctx-item.danger:hover:not(:disabled) .ws-ctx-ico { color: var(--on-accent); }
+/* Group divider — a hairline with 5px of air, inset to the menu's padding. */
+.ws-ctx-sep {
+  height: 0.5px;
+  margin: 5px 8px;
+  background: var(--sep);
+}
+/* Section header inside a menu (grouped menu). 10px/500 caps is the one legal
+   ALL-CAPS case in the house style; 700 + 0.06em was a shout. */
 .ws-ctx-section {
   padding: 8px 9px 3px;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-3);
