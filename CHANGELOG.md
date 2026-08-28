@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [2.0.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.1...v2.0.2) (2026-08-28)
+
+
+### Bug Fixes
+
+* **ci:** use RELEASE_PLEASE_TOKEN so release PR checks fire automatically (TRA-171) ([64dc725](https://github.com/nikolai-vysotskyi/trace-mcp/commit/64dc7255fbab92c7a381c4b918968f0c4e922beb))
+* **docs:** refresh stale sitemap lastmod and run the guard in CI (TRA-282) ([#444](https://github.com/nikolai-vysotskyi/trace-mcp/issues/444)) ([8c42271](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8c42271222e36e2310e5dc09891c074a04d06f28))
+* **update:** recover an app bundle swap interrupted by a reboot (TRA-280) ([#442](https://github.com/nikolai-vysotskyi/trace-mcp/issues/442)) ([16c3a7f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/16c3a7f7a49a196f7bb77bba12a5dd5800ea45d5))
+
 ## [2.0.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.0...v2.0.1) (2026-08-28)
 
 
