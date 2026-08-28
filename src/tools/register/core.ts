@@ -76,7 +76,17 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         if (blocked) return blocked;
       }
       logger.info({ path: indexPath, force, postprocess }, 'Reindex requested');
-      const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+      // Pass `progress` so this run updates the same ProgressState that
+      // `get_index_health` reports. Without it, `progress.indexing` kept
+      // showing whatever the last watcher batch did — "completed 276/276"
+      // right after a 2069-file forced reindex (TRA-231).
+      const pipeline = new IndexingPipeline(
+        store,
+        registry,
+        config,
+        projectRoot,
+        progress ?? undefined,
+      );
 
       try {
         const result = await withLock(
@@ -470,7 +480,17 @@ export function registerCoreTools(server: McpServer, ctx: ServerContext): void {
         };
       }
 
-      const pipeline = new IndexingPipeline(store, registry, config, projectRoot);
+      // Pass `progress` so this run updates the same ProgressState that
+      // `get_index_health` reports. Without it, `progress.indexing` kept
+      // showing whatever the last watcher batch did — "completed 276/276"
+      // right after a 2069-file forced reindex (TRA-231).
+      const pipeline = new IndexingPipeline(
+        store,
+        registry,
+        config,
+        projectRoot,
+        progress ?? undefined,
+      );
       let result: Awaited<ReturnType<typeof pipeline.indexFiles>>;
       try {
         // Share the reindex lock so a single-file edit cannot race with a
