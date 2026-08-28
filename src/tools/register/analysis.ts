@@ -171,7 +171,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_dead_exports',
-    'Find exported symbols whose `export` keyword has no external consumer. Flags dead EXPORT KEYWORDS, not necessarily dead symbols — `recommendation` is `"remove_export_keyword"` if still used in-file, `"delete_symbol"` if not. For strict dead-symbol detection (no incoming references anywhere) use `get_dead_code` instead. Paginated (`limit`, default 100, max 500; `truncated`/`total_dead` when more exist). Read-only. Returns JSON: { dead_exports: [{ symbol_id, name, kind, file, line, signals, recommendation }], total_dead, total_exports, truncated? }. Supports `output_format: "toon"`.',
+    'Deprecated alias for `get_dead_code` with `mode: exports_only` — use that instead. Returns JSON: { dead_exports, total_dead, total_exports, truncated? }. Supports `output_format: "toon"`.',
     {
       file_pattern: z
         .string()
@@ -217,7 +217,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_untested_exports',
-    'Find exported public symbols with no matching test file — test coverage gaps. For deeper analysis including non-exported symbols use get_untested_symbols instead. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file }], total }. Set `output_format: "toon"` for lossless TOON encoding — cheaper LLM tokens on tabular payloads.',
+    'Deprecated alias for `get_untested_symbols` with `scope: exports` — use that instead. Returns JSON: { untested, total }. Supports `output_format: "toon"`.',
     {
       file_pattern: z
         .string()
@@ -766,7 +766,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'pin_symbol',
-    'Boost (or demote) a specific symbol in PageRank-driven ranking by setting a multiplicative weight. Pinned symbols also boost their containing file via the same weight. Use to surface canonical examples or architectural keystones. Capped at 50 active pins per project. Prefer `pin` for new integrations. Returns JSON: { ok, pin? }.',
+    'Deprecated alias for `pin` (symbol scope) — use `pin` instead. Returns JSON: { ok, pin? }.',
     {
       symbol_id: z.string().min(1).max(512).describe('Symbol FQN to pin'),
       weight: pinWeightSchema,
@@ -793,7 +793,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'pin_file',
-    'Boost (or demote) a specific file in PageRank-driven ranking by setting a multiplicative weight on its PageRank score. Use to surface canonical examples, architectural keystones, or files central to a work-in-progress feature. Capped at 50 active pins per project. Prefer `pin` for new integrations. Returns JSON: { ok, pin? }.',
+    'Deprecated alias for `pin` (file scope) — use `pin` instead. Returns JSON: { ok, pin? }.',
     {
       file_path: z.string().min(1).max(512).describe('File path to pin (project-relative)'),
       weight: pinWeightSchema,

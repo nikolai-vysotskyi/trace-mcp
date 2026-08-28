@@ -113,11 +113,12 @@ function captureAllTools(ctxOverrides: Record<string, unknown> = {}): CapturedTo
   return captured;
 }
 
-// Baseline measured 2026-08-27 (TRA-186): 184 tools, ~67.6k description
-// chars after the first trim pass (down from ~74k). Ceiling leaves modest
-// headroom for legitimate new tools/params without allowing bloat to creep
-// back toward the pre-fix baseline.
-const TOTAL_DESCRIPTION_CHAR_BUDGET = 72_000;
+// Re-measured 2026-08-28 (TRA-239): 56.3k description chars across the
+// always-on tools, after retiring the prose on the deprecated consolidation
+// aliases (TRA-193 kept the old tools registered, so their full descriptions
+// were still being paid). The old 72k ceiling had drifted to ~28% headroom,
+// enough slack to hide a real regression — tightened to track the real number.
+const TOTAL_DESCRIPTION_CHAR_BUDGET = 60_000;
 // No single tool description should need more prose than this to be usable
 // — if a tool grows past it, the fix is almost always "move detail into the
 // per-param describe() or the response docs", not a longer top-level string.
@@ -169,6 +170,39 @@ describe('MCP tool-schema token budget guardrail (TRA-186)', () => {
       `Tool description(s) exceed ${PER_TOOL_DESCRIPTION_CHAR_CEILING} chars:\n${offenders.join('\n')}\n` +
         'Move detail into per-param describe() text or the docs site instead of the top-level description.',
     ).toBe(0);
+  });
+
+  // Measured 2026-08-28 (TRA-239): 90,579 serialized schema chars across the
+  // always-on tools. The description and param-prose budgets above only watch text we write; they are blind to structural schema growth.
+  // TRA-193's consolidations added params to the surviving tool while keeping
+  // the old tool registered as a deprecated alias, so the always-on tax grew
+  // where nothing was measuring it (`search` alone reached ~4.2k schema chars).
+  // The gated groups already get a full-serialized check (TRA-211) — this gives
+  // the always-on set, by far the largest group, the same treatment.
+  const TOTAL_SCHEMA_CHAR_BUDGET = 96_000;
+  // No single tool's serialized schema should need more than this. `search` is
+  // the current worst case; anything approaching it wants params moved into a
+  // sibling tool, not a bigger ceiling. `search` is at 4,034 after absorbing
+  // search_with_mode's modes — it is the one to cut next, not to grandfather.
+  const PER_TOOL_SCHEMA_CHAR_CEILING = 4_200;
+
+  it('keeps total serialized inputSchema size under budget', () => {
+    const total = tools.reduce((sum, t) => sum + fullSchemaCharSize(t.schemaShape), 0);
+    expect(
+      total,
+      `Total serialized inputSchema chars (${total}) exceeds the budget (${TOTAL_SCHEMA_CHAR_BUDGET}). ` +
+        'Every MCP client without deferred tool loading pays this on every session. Consolidating tools ' +
+        'only helps if the old tool is actually retired — adding params while keeping the alias makes this ' +
+        'number grow (TRA-239).',
+    ).toBeLessThanOrEqual(TOTAL_SCHEMA_CHAR_BUDGET);
+  });
+
+  it('flags any single tool whose serialized schema has ballooned', () => {
+    const offenders = tools
+      .map((t) => ({ name: t.name, size: fullSchemaCharSize(t.schemaShape) }))
+      .filter((t) => t.size > PER_TOOL_SCHEMA_CHAR_CEILING)
+      .map((t) => `  - ${t.name}: ${t.size} chars`);
+    expect(offenders.length, `Tool schema(s) past the ceiling:\n${offenders.join('\n')}`).toBe(0);
   });
 
   it('keeps total param describe() text under budget', () => {
