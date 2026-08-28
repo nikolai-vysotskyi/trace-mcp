@@ -167,20 +167,12 @@
   background: var(--fill-tertiary, rgba(120, 120, 128, 0.24));
 }
 
-/* A row that CARRIES a control instead of being one (Appearance). Same box as
-   every other row; it just must not read as clickable. */
-.ws-sb-row.is-static {
-  cursor: default;
-}
-.ws-sb-row.is-static:hover {
-  background: transparent;
-}
-
 /* ---- Sidebar footer ----------------------------------------------------- */
 /* Pinned below .ws-sidebar-scroll, so the rows above slide under it — that is
    a scroll edge, and a scroll edge gets the hairline. Same 6px inset as the
    scroll region, so footer rows land on the same pill geometry as nav rows.
-   The 8px bottom inset reads as concentric with the 12px window corner. */
+   The 8px bottom inset reads as concentric with the 12px window corner.
+   One row only: 6 + 28 + 8 = 42.5px with the hairline (TRA-306). */
 .ws-sb-footer {
   flex: none;
   padding: 6px 6px 8px;

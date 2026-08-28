@@ -163,7 +163,7 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
           type="button"
           disabled={adding}
           onClick={() => void handlePickFolder()}
-          className="h-6 pl-2.5 pr-2 text-[11px] font-medium transition-opacity disabled:opacity-40"
+          className="h-6 px-2 text-[11px] font-medium transition-opacity disabled:opacity-40"
           style={{
             // --accent-fill, not --accent: a white label on --accent measures
             // 3.65:1 in dark. Split radii, so this cannot be a Button capsule.
