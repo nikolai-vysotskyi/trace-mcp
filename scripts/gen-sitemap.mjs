@@ -33,10 +33,21 @@ export function gitDate(file) {
   return out;
 }
 
+/** A shallow clone dates every file to the one fetched commit — gitDate is meaningless there. */
+export function isShallow() {
+  return (
+    execFileSync('git', ['rev-parse', '--is-shallow-repository'], {
+      cwd: join(DOCS, '..'),
+      encoding: 'utf-8',
+    }).trim() === 'true'
+  );
+}
+
 export function rewrite(xml) {
   return xml.replace(
     /<loc>https:\/\/trace-mcp\.com([^<]*)<\/loc>(\s*)<lastmod>[^<]*<\/lastmod>/g,
-    (_m, path, gap) => `<loc>https://trace-mcp.com${path}</loc>${gap}<lastmod>${gitDate(sourceFor(path))}</lastmod>`,
+    (_m, path, gap) =>
+      `<loc>https://trace-mcp.com${path}</loc>${gap}<lastmod>${gitDate(sourceFor(path))}</lastmod>`,
   );
 }
 

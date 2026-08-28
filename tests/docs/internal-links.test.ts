@@ -58,9 +58,16 @@ describe('docs footer nav covers every indexed page', () => {
    * Google under an April date. `pnpm docs:sitemap` refreshes them from git.
    */
   it('every lastmod is at least the source page last commit date', async () => {
-    const { sourceFor, gitDate } = await import('../../scripts/gen-sitemap.mjs');
+    const { sourceFor, gitDate, isShallow } = await import('../../scripts/gen-sitemap.mjs');
+    // ponytail: a shallow clone dates every file to the single fetched commit,
+    // so the CI `test` job (fetch-depth 1) would flag untouched pages. The guard
+    // runs on any full clone — local `pnpm test` before a docs PR. Give the job
+    // fetch-depth: 0 if it ever needs to catch this in CI too.
+    if (isShallow()) return;
     const xml = readFileSync(join(DOCS, 'sitemap.xml'), 'utf-8');
-    const stale = [...xml.matchAll(/<loc>https:\/\/trace-mcp\.com([^<]*)<\/loc>\s*<lastmod>([^<]*)<\/lastmod>/g)]
+    const stale = [
+      ...xml.matchAll(/<loc>https:\/\/trace-mcp\.com([^<]*)<\/loc>\s*<lastmod>([^<]*)<\/lastmod>/g),
+    ]
       .map(([, path, lastmod]) => ({ path, lastmod, git: gitDate(sourceFor(path)) }))
       .filter((e) => e.lastmod < e.git);
     expect(
