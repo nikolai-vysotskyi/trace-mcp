@@ -6,6 +6,9 @@
  * so the "170+ tools = ~50k tokens before the agent does anything" problem
  * doesn't silently regrow.
  */
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { MetaContext, ServerContext } from '../../../server/types.js';
@@ -17,6 +20,7 @@ import { registerGitTools } from '../git.js';
 import { registerKnowledgeTools } from '../knowledge.js';
 import { registerMemoryTools } from '../memory.js';
 import { registerNavigationTools } from '../navigation.js';
+import { registerProjectsTools } from '../projects.js';
 import { registerQualityTools } from '../quality.js';
 import { registerRefactoringTools } from '../refactoring.js';
 import { registerRetrievalTools } from '../retrieval.js';
@@ -87,15 +91,16 @@ function metaCtx(overrides: Record<string, unknown> = {}): MetaContext {
   return meta as unknown as MetaContext;
 }
 
-function captureAllTools(): CapturedTool[] {
+function captureAllTools(ctxOverrides: Record<string, unknown> = {}): CapturedTool[] {
   const { server, captured } = makeCapturingServer();
-  const ctx = baseCtx();
-  const mctx = metaCtx();
+  const ctx = baseCtx(ctxOverrides);
+  const mctx = metaCtx(ctxOverrides);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const s = server as any;
   registerCoreTools(s, ctx);
   registerNavigationTools(s, ctx);
   registerAdvancedTools(s, ctx);
+  registerProjectsTools(s, ctx);
   registerFrameworkTools(s, ctx);
   registerAnalysisTools(s, ctx);
   registerQualityTools(s, ctx);
@@ -173,5 +178,209 @@ describe('MCP tool-schema token budget guardrail (TRA-186)', () => {
       `Total param describe() chars (${total}) exceeds the budget (${TOTAL_PARAM_DESCRIPTION_CHAR_BUDGET}). ` +
         'Trim per-param descriptions before raising this budget — see TRA-186.',
     ).toBeLessThanOrEqual(TOTAL_PARAM_DESCRIPTION_CHAR_BUDGET);
+  });
+});
+
+// The 15 tools registered behind `config.topology.enabled && ctx.topoStore` in
+// advanced.ts. Opt-in, but any user who turns topology on pays their full schema
+// cost every session — so they get the same budget treatment as the always-on
+// tools (TRA-211).
+const TOPOLOGY_TOOL_NAMES = [
+  'get_service_map',
+  'get_cross_service_impact',
+  'get_api_contract',
+  'get_service_deps',
+  'get_contract_drift',
+  'get_federation_impact',
+  'get_subproject_graph',
+  'get_subproject_impact',
+  'subproject_add_repo',
+  'subproject_sync',
+  'detect_topic_tunnels',
+  'get_subproject_clients',
+  'get_contract_versions',
+  'discover_claude_sessions',
+  'visualize_subproject_topology',
+] as const;
+
+// Measured 2026-08-27 (TRA-211): 5,587 description + 5,701 schema = 11,288
+// combined chars across the 15 topology tools. Same headroom rationale as
+// TOTAL_DESCRIPTION_CHAR_BUDGET.
+const TOPOLOGY_COMBINED_CHAR_BUDGET = 13_000;
+
+const TOPOLOGY_CTX: Record<string, unknown> = {
+  config: { topology: { enabled: true, repos: [] } },
+  topoStore: {},
+};
+
+// Full serialized JSON Schema size, not just the prose we write — that's the
+// number the topology group was originally measured against.
+function fullSchemaCharSize(schemaShape: Record<string, z.ZodTypeAny>): number {
+  return JSON.stringify(z.toJSONSchema(z.object(schemaShape))).length;
+}
+
+describe('MCP tool-schema token budget guardrail — topology-gated tools (TRA-211)', () => {
+  const tools = captureAllTools(TOPOLOGY_CTX);
+  const topologyTools = tools.filter((t) =>
+    (TOPOLOGY_TOOL_NAMES as readonly string[]).includes(t.name),
+  );
+
+  it('registers all topology-gated tools when config.topology.enabled is true', () => {
+    const names = new Set(tools.map((t) => t.name));
+    const missing = TOPOLOGY_TOOL_NAMES.filter((n) => !names.has(n));
+    expect(missing, `Missing topology tools: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('keeps combined topology-tool description+schema size under budget', () => {
+    const total = topologyTools.reduce(
+      (sum, t) => sum + t.description.length + fullSchemaCharSize(t.schemaShape),
+      0,
+    );
+    expect(
+      total,
+      `Topology-tool combined chars (${total}) exceed the budget (${TOPOLOGY_COMBINED_CHAR_BUDGET}). ` +
+        'These tools are opt-in but paid in full by any user who enables topology — see TRA-211.',
+    ).toBeLessThanOrEqual(TOPOLOGY_COMBINED_CHAR_BUDGET);
+  });
+
+  it('flags any single topology tool description past the shared per-tool ceiling', () => {
+    const offenders = topologyTools
+      .filter((t) => t.description.length > PER_TOOL_DESCRIPTION_CHAR_CEILING)
+      .map((t) => `  - ${t.name}: ${t.description.length} chars`);
+    expect(offenders.length, offenders.join('\n')).toBe(0);
+  });
+});
+
+// Regex over `server.tool('name'` call sites. Deliberately dumb rather than an
+// AST walk — the codebase registers tools with one consistent call shape, and
+// the same shallow-is-enough reasoning as sumParamDescriptions applies.
+function scanRegisteredToolNamesFromSource(): Set<string> {
+  const registerDir = fileURLToPath(new URL('..', import.meta.url));
+  const names = new Set<string>();
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__') walk(full);
+        continue;
+      }
+      if (!entry.name.endsWith('.ts')) continue;
+      for (const m of readFileSync(full, 'utf8').matchAll(
+        /server\.tool\(\s*['"]([a-zA-Z0-9_]+)['"]/g,
+      )) {
+        names.add(m[1]);
+      }
+    }
+  };
+  walk(registerDir);
+  return names;
+}
+
+// Framework tools in framework.ts are gated on `ctx.has('vue', 'nestjs', ...)`,
+// which the default stub answers `false` to — so they were invisible to the
+// budget for the same reason the topology block was. A blanket-true `has()`
+// activates every framework branch at once (TRA-211).
+const FRAMEWORK_CTX: Record<string, unknown> = { has: () => true };
+
+// Measured 2026-08-28 (TRA-211). Headroom rationale as above.
+const FRAMEWORK_COMBINED_CHAR_BUDGET = 22_000;
+
+describe('MCP tool-schema token budget guardrail — framework-gated tools (TRA-211)', () => {
+  const alwaysOn = new Set(captureAllTools().map((t) => t.name));
+  // Derived, not hardcoded: whatever only appears once has() answers true.
+  const frameworkOnly = captureAllTools(FRAMEWORK_CTX).filter((t) => !alwaysOn.has(t.name));
+
+  it('activates the framework-gated registration branches', () => {
+    expect(frameworkOnly.length).toBeGreaterThan(10);
+  });
+
+  it('keeps combined framework-tool description+schema size under budget', () => {
+    const total = frameworkOnly.reduce(
+      (sum, t) => sum + t.description.length + fullSchemaCharSize(t.schemaShape),
+      0,
+    );
+    expect(
+      total,
+      `Framework-tool combined chars (${total}) exceed the budget (${FRAMEWORK_COMBINED_CHAR_BUDGET}). ` +
+        'Paid in full by any user whose project matches one of these frameworks — see TRA-211.',
+    ).toBeLessThanOrEqual(FRAMEWORK_COMBINED_CHAR_BUDGET);
+  });
+
+  it('flags any single framework tool description past the shared per-tool ceiling', () => {
+    const offenders = frameworkOnly
+      .filter((t) => t.description.length > PER_TOOL_DESCRIPTION_CHAR_CEILING)
+      .map((t) => `  - ${t.name}: ${t.description.length} chars`);
+    expect(offenders.length, offenders.join('\n')).toBe(0);
+  });
+});
+
+// 4 OTLP-backed tools in advanced.ts behind `config.runtime.enabled` — same
+// opt-in-but-fully-paid shape as the topology block (TRA-211).
+// RuntimeIntelligence is constructed eagerly at registration time, so this stub
+// has to be complete enough for its constructor (store.db + retention/mapping).
+const RUNTIME_CTX: Record<string, unknown> = {
+  config: {
+    runtime: {
+      enabled: true,
+      retention: { prune_interval: 0 },
+      mapping: { fqn_attributes: [], route_patterns: [] },
+    },
+  },
+  store: { db: { prepare: () => ({ run: () => undefined, all: () => [], get: () => undefined }) } },
+};
+
+// Measured 2026-08-28 (TRA-211). Headroom rationale as above.
+const RUNTIME_COMBINED_CHAR_BUDGET = 4_000;
+
+describe('MCP tool-schema token budget guardrail — runtime-gated tools (TRA-211)', () => {
+  const alwaysOn = new Set(captureAllTools().map((t) => t.name));
+  const runtimeOnly = captureAllTools(RUNTIME_CTX).filter((t) => !alwaysOn.has(t.name));
+
+  it('activates the runtime-gated registration branch', () => {
+    expect(runtimeOnly.map((t) => t.name).sort()).toEqual([
+      'get_endpoint_analytics',
+      'get_runtime_call_graph',
+      'get_runtime_deps',
+      'get_runtime_profile',
+    ]);
+  });
+
+  it('keeps combined runtime-tool description+schema size under budget', () => {
+    const total = runtimeOnly.reduce(
+      (sum, t) => sum + t.description.length + fullSchemaCharSize(t.schemaShape),
+      0,
+    );
+    expect(
+      total,
+      `Runtime-tool combined chars (${total}) exceed the budget (${RUNTIME_COMBINED_CHAR_BUDGET}) — see TRA-211.`,
+    ).toBeLessThanOrEqual(RUNTIME_COMBINED_CHAR_BUDGET);
+  });
+
+  it('flags any single runtime tool description past the shared per-tool ceiling', () => {
+    const offenders = runtimeOnly
+      .filter((t) => t.description.length > PER_TOOL_DESCRIPTION_CHAR_CEILING)
+      .map((t) => `  - ${t.name}: ${t.description.length} chars`);
+    expect(offenders.length, offenders.join('\n')).toBe(0);
+  });
+});
+
+describe('MCP tool-schema budget coverage reconciliation (TRA-211)', () => {
+  it('every tool registered in source is reachable by some captured-tools pass', () => {
+    const sourceNames = scanRegisteredToolNamesFromSource();
+    expect(sourceNames.size).toBeGreaterThan(100);
+
+    const reachable = new Set([
+      ...captureAllTools().map((t) => t.name),
+      ...captureAllTools(TOPOLOGY_CTX).map((t) => t.name),
+      ...captureAllTools(FRAMEWORK_CTX).map((t) => t.name),
+      ...captureAllTools(RUNTIME_CTX).map((t) => t.name),
+    ]);
+    const unreachable = [...sourceNames].filter((n) => !reachable.has(n)).sort();
+    expect(
+      unreachable,
+      `Tool(s) registered in source but captured by no budget-test context pass: ${unreachable.join(', ')}. ` +
+        'If this is a new conditionally-registered tool, add a context-override pass for its gating flag ' +
+        '(see the topology pass above) — do not add it to an allowlist, that recreates the TRA-211 blind spot.',
+    ).toEqual([]);
   });
 });
