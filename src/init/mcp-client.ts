@@ -10,6 +10,7 @@ import path from 'node:path';
 import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
 import YAML from 'yaml';
 import { atomicWriteJson } from '../utils/atomic-write.js';
+import { readIfExists } from '../utils/safe-fs.js';
 import { getLauncherPath } from './launcher.js';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 
@@ -414,9 +415,10 @@ function writeJsonEntry(configPath: string, entry: McpServerEntry): 'created' | 
 
   let config: Record<string, unknown> = {};
   let isNew = true;
-  if (fs.existsSync(configPath)) {
+  const raw = readIfExists(configPath);
+  if (raw !== null) {
     try {
-      config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      config = JSON.parse(raw);
       isNew = false;
     } catch {
       /* malformed — overwrite */
@@ -468,9 +470,10 @@ function writeHermesYamlEntry(configPath: string, entry: HermesYamlEntry): 'crea
 
   let doc: YAML.Document;
   let isNew = true;
-  if (fs.existsSync(configPath)) {
+  const raw = readIfExists(configPath);
+  if (raw !== null) {
     isNew = false;
-    doc = YAML.parseDocument(fs.readFileSync(configPath, 'utf-8'));
+    doc = YAML.parseDocument(raw);
     if (doc.errors.length > 0) {
       // Can't trust an unparseable doc — start fresh to avoid destroying user data.
       throw new Error(`Hermes config.yaml has parse errors: ${doc.errors[0].message}`);
@@ -621,8 +624,8 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
   const block = `${section.join('\n')}\n`;
 
   let isNew = true;
-  if (fs.existsSync(configPath)) {
-    const existing = fs.readFileSync(configPath, 'utf-8');
+  const existing = readIfExists(configPath);
+  if (existing !== null) {
     isNew = false;
     fs.writeFileSync(configPath, `${existing.trimEnd()}\n${block}`);
   } else {

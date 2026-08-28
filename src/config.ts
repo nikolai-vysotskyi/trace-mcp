@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { configError, err, ok, type TraceMcpResult } from './errors.js';
 import { GLOBAL_CONFIG_PATH, stripJsonComments } from './global.js';
 import { logger } from './logger.js';
+import { readIfExists } from './utils/safe-fs.js';
 
 const SecurityConfigSchema = z
   .object({
@@ -1104,9 +1105,10 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
 
 /** Load global config from ~/.trace-mcp/.config.json */
 export function loadGlobalConfigRaw(): Record<string, unknown> {
-  if (!fs.existsSync(GLOBAL_CONFIG_PATH)) return {};
   try {
-    return JSON.parse(stripJsonComments(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')));
+    const raw = readIfExists(GLOBAL_CONFIG_PATH);
+    if (raw === null) return {};
+    return JSON.parse(stripJsonComments(raw));
   } catch {
     return {};
   }
