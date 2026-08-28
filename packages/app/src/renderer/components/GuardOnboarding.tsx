@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Button } from '../lattice/ui';
 
 type Step = 'detect' | 'cli-missing' | 'cli-stale' | 'install-prompt' | 'installing' | 'installed' | 'skipped';
 
@@ -20,6 +21,11 @@ interface OnboardingState {
  *           → install-prompt → installing → installed
  *                                         → skipped (user opted out)
  *
+ * Nothing renders until detection resolves — the dialog is the first thing a
+ * new user ever sees, so it must not flash an empty "Detecting…" panel over a
+ * still-loading Workspace. When Claude Code isn't installed there is nothing
+ * to offer, so we acknowledge and close without ever showing a dialog.
+ *
  * Persistence: writes ~/.claude/.trace-mcp-onboarded once the user reaches
  * a terminal state. Renderer-side via electronAPI? — actually we keep it
  * in localStorage because it's a UI hint, not a security boundary.
@@ -32,6 +38,21 @@ interface GuardOnboardingProps {
 
 export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
   const [state, setState] = useState<OnboardingState>({ step: 'detect' });
+  const titleId = useId();
+
+  // Ref so the detect effect can close without re-running when App re-renders
+  // and hands us a fresh `onClose` identity.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const dismissAndPersist = useCallback(() => {
+    try {
+      localStorage.setItem(ONBOARDING_KEY, '1');
+    } catch {
+      /* private mode? — no-op */
+    }
+    onCloseRef.current();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,8 +86,9 @@ export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
         return;
       }
       if (!installStatus?.claudeDetected) {
-        // Claude Code not installed; nothing to do for now.
-        setState({ step: 'skipped' });
+        // Claude Code not installed — there is nothing to offer, so don't
+        // interrupt first launch with a dialog just to say "skipped".
+        dismissAndPersist();
         return;
       }
       setState({
@@ -78,7 +100,22 @@ export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [dismissAndPersist]);
+
+  // Dismissable while a dialog is actually on screen and idle — not during
+  // detection (nothing is shown yet) and not mid-install (work in flight).
+  const dismissable = state.step !== 'detect' && state.step !== 'installing';
+
+  // Escape dismisses, same as the primary action. A modal you can't get out of
+  // with the keyboard is a trap on the very first screen of the app.
+  useEffect(() => {
+    if (!dismissable) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') dismissAndPersist();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [dismissable, dismissAndPersist]);
 
   const install = async () => {
     setState((s) => ({ ...s, step: 'installing' }));
@@ -90,33 +127,31 @@ export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
     setState((s) => ({ ...s, step: 'installed', scriptPath: result.scriptPath }));
   };
 
-  const dismissAndPersist = () => {
-    try {
-      localStorage.setItem(ONBOARDING_KEY, '1');
-    } catch {
-      /* private mode? — no-op */
-    }
-    onClose();
-  };
+  if (state.step === 'detect') return null;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.4)' }}
+      onClick={dismissable ? dismissAndPersist : undefined}
     >
+      {/* stopPropagation below keeps clicks inside the panel from reaching the
+          backdrop handler; Escape is handled globally above. */}
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="rounded-lg shadow-2xl p-6 max-w-md w-full"
         style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>
+        <h2
+          id={titleId}
+          className="text-base font-semibold mb-3"
+          style={{ color: 'var(--text-primary)' }}
+        >
           Set up trace-mcp guard
         </h2>
-
-        {state.step === 'detect' && (
-          <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Detecting installation…
-          </div>
-        )}
 
         {state.step === 'cli-missing' && (
           <div>
@@ -225,27 +260,15 @@ function ActionRow({ onPrimary, primaryLabel, onSecondary, secondaryLabel }: Act
   return (
     <div className="flex gap-2 justify-end">
       {onSecondary && secondaryLabel && (
-        <button
-          type="button"
-          onClick={onSecondary}
-          className="px-3 py-1.5 rounded-md text-sm font-medium"
-          style={{
-            background: 'transparent',
-            color: 'var(--text-secondary)',
-            border: '1px solid var(--border)',
-          }}
-        >
+        <Button variant="chip" onClick={onSecondary}>
           {secondaryLabel}
-        </button>
+        </Button>
       )}
-      <button
-        type="button"
-        onClick={onPrimary}
-        className="px-3 py-1.5 rounded-md text-sm font-medium"
-        style={{ background: 'var(--accent)', color: 'var(--bg-primary)' }}
-      >
+      {/* autoFocus: the dialog must own the keyboard on mount, otherwise Tab
+          and Enter act on the Workspace behind it. */}
+      <Button autoFocus variant="primary" onClick={onPrimary}>
         {primaryLabel}
-      </button>
+      </Button>
     </div>
   );
 }
