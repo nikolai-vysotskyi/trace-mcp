@@ -1,9 +1,9 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
 import { createToolFilter } from '../../src/server/tool-filter.js';
+import { allToolNames } from './tool-surface.js';
 
 /**
  * TRA-259: the documented preset sizes were never checked against the filter.
@@ -15,28 +15,6 @@ import { createToolFilter } from '../../src/server/tool-filter.js';
  */
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..');
-
-/** Every tool name registered anywhere under src/tools/register (incl. subdirs). */
-function allToolNames(): string[] {
-  const names = new Set<string>();
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name !== '__tests__') walk(full);
-        continue;
-      }
-      if (!entry.name.endsWith('.ts')) continue;
-      for (const m of readFileSync(full, 'utf8').matchAll(
-        /(?:server\.tool|_originalTool)\(\s*['"]([a-zA-Z0-9_]+)['"]/g,
-      )) {
-        names.add(m[1]);
-      }
-    }
-  };
-  walk(fileURLToPath(new URL('../../src/tools/register', import.meta.url)));
-  return [...names];
-}
 
 function servedCount(preset: string): number {
   const filter = createToolFilter({ tools: { preset } } as unknown as TraceMcpConfig);
