@@ -161,15 +161,19 @@ describe('README numeric claims', () => {
     }
   });
 
-  it('languages count in README matches registered language plugins (±2)', () => {
-    const claim = findClaim(/languages?/, readme, 'languages count');
-    expect(claim, 'no "X languages" claim found in README').not.toBeNull();
-    if (!claim) return;
-    if (!within(langPlugins, claim.count, 2)) {
-      throw new Error(
-        `README claims ${claim.count} languages; registry has ${langPlugins}. ` +
-          `Update README.md line: "${claim.rawLine}"`,
-      );
+  it('every languages count in README matches registered language plugins (±2)', () => {
+    // TRA-272: first-match-only let README say "80 languages" on line 36 and
+    // "language coverage (81)" further down for months. Scan every occurrence,
+    // the way the docs-site block already does.
+    const claims = findAllClaims(/languages?/, readme);
+    expect(claims.length, 'no "X languages" claim found in README').toBeGreaterThan(0);
+    for (const claim of claims) {
+      if (!within(langPlugins, claim.count, 2)) {
+        throw new Error(
+          `README claims ${claim.count} languages; registry has ${langPlugins}. ` +
+            `Update README.md line: "${claim.rawLine}"`,
+        );
+      }
     }
   });
 
