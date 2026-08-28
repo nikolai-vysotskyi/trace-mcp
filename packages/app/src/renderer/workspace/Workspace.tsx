@@ -6,17 +6,24 @@
  * survive across sessions.
  *
  * Renders:
- *   WorkspaceHeader (KPI strip · search · filter chips · view toggle · refresh · Add)
- *   ─ active view (Table | Compact) ─
+ *   WorkspaceHeader (KPI cards · toolbar)
+ *   ─ inline banner (recoverable metric failures) ─
+ *   ─ active view (Table | Compact), or the skeleton / empty / error pane ─
  *   BulkActionsBar (floating, only when selection > 0)
+ *
+ * Every state keeps the chrome: a failed request never collapses the screen to
+ * two centred lines. The KPI strip and the toolbar stay where they were, and
+ * the pane below explains what happened next to the one action that fixes it.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button, EmptyState } from '../lattice/ui';
 import { addRecentProject, removeRecentProject } from '../recent-projects';
 import { AddProjectControl } from './AddProjectControl';
 import { BulkActionsBar } from './BulkActionsBar';
 import { WorkspaceCompactView } from './WorkspaceCompactView';
 import { WorkspaceHeader } from './WorkspaceHeader';
-import { WorkspaceTableView } from './WorkspaceTableView';
+import { ROW_H, WorkspaceTableView } from './WorkspaceTableView';
+import { SkeletonTableRows } from './components/Skeleton';
 import {
   EMPTY_FILTER,
   type SortDir,
@@ -67,33 +74,22 @@ function openProjectWindow(root: string): void {
   });
 }
 
-// ── Disconnected banner ──────────────────────────────────────────────────
+// ── Panes ────────────────────────────────────────────────────────────────
 
-function DisconnectedBanner({ restarting, onRestart }: { restarting: boolean; onRestart: () => void }) {
+/** The pane shown when the daemon is not answering at all. */
+function DaemonDownPane({ restarting, onRestart }: { restarting: boolean; onRestart: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-2">
-      <div className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-        Daemon not reachable
-      </div>
-      <button
-        type="button"
-        onClick={onRestart}
-        disabled={restarting}
-        className="text-[11px] px-4 py-1.5 rounded-lg font-medium transition-all"
-        style={{
-          background: 'var(--fill-control)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          color: 'var(--accent)',
-          border: '0.5px solid var(--border)',
-          boxShadow: 'var(--shadow-control)',
-          cursor: restarting ? 'default' : 'pointer',
-          opacity: restarting ? 0.6 : 1,
-        }}
-      >
-        {restarting ? 'Starting…' : 'Restart Daemon'}
-      </button>
-    </div>
+    <EmptyState
+      icon="cable"
+      iconSize={32}
+      title="The daemon isn't running"
+      subtitle="trace-mcp indexes your projects in a local background service. Start it to see them again — nothing was lost."
+      action={
+        <Button variant="prominent" size="large" onClick={onRestart} disabled={restarting}>
+          {restarting ? 'Starting…' : 'Start daemon'}
+        </Button>
+      }
+    />
   );
 }
 
@@ -107,6 +103,7 @@ export function Workspace() {
   const [filter, setFilter] = useState<WorkspaceFilter>(() => loadFilter());
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     try {
@@ -163,107 +160,139 @@ export function Workspace() {
     [sortKey],
   );
 
-  // ── Render ───────────────────────────────────────────────────────────
-  if (!data.connected && !data.loading) {
-    return <DisconnectedBanner restarting={data.restarting} onRestart={() => void data.restartDaemon()} />;
-  }
+  const handleScroll = useCallback((top: number) => setScrolled(top > 0), []);
 
-  const showEmpty = !data.loading && data.projects.length === 0;
+  // ── Render ───────────────────────────────────────────────────────────
+  // The live feed being down does not mean there is nothing to show: the
+  // metrics cache usually still has every project. Only take over the pane
+  // when we genuinely have nothing to render.
+  const disconnected = !data.connected && !data.loading;
+  const daemonDown = disconnected && data.projects.length === 0;
+  const showEmpty = !data.loading && !disconnected && data.projects.length === 0;
   const selectedProjects = visible.filter((p) => selection.selected.has(p.root));
+  // One diagnosis at a time. When DaemonDownPane has taken over the pane it
+  // already says what happened and offers the fix; letting the metrics banner
+  // through as well put "taking too long — it may still be indexing" directly
+  // above "The daemon isn't running", which are different diagnoses.
+  const banner = daemonDown
+    ? null
+    : disconnected
+    ? {
+        message: 'Live updates are off — the daemon stopped answering. These numbers are the last indexed snapshot.',
+        action: 'restart' as const,
+      }
+    : data.error
+      ? {
+          // A busy daemon is not a broken one — say which, and offer the
+          // action that matches. Retrying a timeout is right; restarting isn't.
+          message: data.error,
+          action: 'retry' as const,
+        }
+      : null;
+
+  const viewProps = {
+    projects: visible,
+    selected: selection.selected,
+    canMutate: data.connected,
+    onSelectChange: selection.set,
+    onOpen: openProjectWindow,
+    onReindex: (r: string) => void data.reindexProject(r),
+    onRemove: (r: string) => {
+      removeRecentProject(r);
+      void data.removeProject(r);
+    },
+    onScroll: handleScroll,
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden relative">
       <WorkspaceHeader
         kpis={kpis}
-        metricsLoading={data.metricsLoading}
+        metricsLoading={data.metricsLoading && data.error === null}
+        listLoading={data.loading}
+        metricsFailed={data.metricsLoading && data.error !== null}
+        listFailed={daemonDown}
         filter={filter}
         onFilterChange={setFilter}
         view={view}
         onViewChange={setView}
         onRefresh={() => void data.refresh()}
         refreshing={data.refreshing}
+        scrolled={scrolled}
         rightExtra={<AddProjectControl onAdd={(root) => data.addProject(root)} />}
       />
 
-      {data.error && (
+      {banner && (
         <div
-          className="mx-3 mb-2 px-3 py-1.5 rounded-md text-[11px] flex items-center gap-2"
+          role="status"
+          className="mx-4 mt-3 px-3 py-2 rounded-lg text-[13px] flex items-center gap-2"
           style={{
-            background: 'color-mix(in srgb, var(--destructive) 9%, transparent)',
-            color: 'var(--destructive)',
-            border: '0.5px solid color-mix(in srgb, var(--destructive) 25%, transparent)',
+            background: 'color-mix(in srgb, var(--status-orange) 9%, transparent)',
+            color: 'var(--label)',
+            border: '0.5px solid color-mix(in srgb, var(--status-orange) 30%, transparent)',
           }}
         >
-          <span className="flex-1">{data.error}</span>
-          <button
-            type="button"
-            onClick={() => void data.refresh()}
-            disabled={data.refreshing}
-            className="px-1.5 py-0.5 rounded font-medium hover:bg-[var(--bg-active)] disabled:opacity-50"
-          >
-            {data.refreshing ? 'Retrying…' : 'Retry'}
-          </button>
+          <span>{banner.message}</span>
+          {/* The action belongs next to the sentence that needs it, not 1400px
+              away at the far right of the window. */}
+          {banner.action === 'restart' ? (
+            <Button
+              size="small"
+              onClick={() => void data.restartDaemon()}
+              disabled={data.restarting}
+            >
+              {data.restarting ? 'Starting…' : 'Start daemon'}
+            </Button>
+          ) : (
+            <Button size="small" onClick={() => void data.refresh()} disabled={data.refreshing}>
+              {data.refreshing ? 'Retrying…' : 'Try again'}
+            </Button>
+          )}
         </div>
       )}
 
-      {data.loading ? (
-        <div className="flex items-center justify-center flex-1">
-          <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-            Loading…
-          </span>
-        </div>
-      ) : showEmpty ? (
-        <div className="flex-1 overflow-auto">
-          <AddProjectControl variant="empty-state" onAdd={(root) => data.addProject(root)} />
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center flex-1 gap-1">
-          <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-            No projects match the current filter.
-          </span>
-          <button
-            type="button"
-            onClick={() => setFilter(EMPTY_FILTER)}
-            className="text-[11px] px-2 py-0.5 rounded font-medium hover:bg-[var(--bg-active)]"
-            style={{ color: 'var(--accent)' }}
+      <div className="flex-1 min-h-0 flex flex-col px-4 pb-4 pt-3">
+        {daemonDown ? (
+          <DaemonDownPane restarting={data.restarting} onRestart={() => void data.restartDaemon()} />
+        ) : data.loading ? (
+          // Skeletons at the final row geometry — nothing moves when data lands.
+          <div
+            className="flex-1 overflow-hidden"
+            style={{ borderRadius: 12, border: '0.5px solid var(--separator)', background: 'var(--surface)' }}
           >
-            Clear filters
-          </button>
-        </div>
-      ) : view === 'compact' ? (
-        <WorkspaceCompactView
-          projects={visible}
-          selected={selection.selected}
-          canMutate={data.connected}
-          onSelectChange={selection.set}
-          onOpen={openProjectWindow}
-          onReindex={(r) => void data.reindexProject(r)}
-          onRemove={(r) => {
-            removeRecentProject(r);
-            void data.removeProject(r);
-          }}
-        />
-      ) : (
-        <WorkspaceTableView
-          projects={visible}
-          sortKey={sortKey}
-          sortDir={sortDir}
-          onSort={handleSort}
-          selected={selection.selected}
-          canMutate={data.connected}
-          onSelectChange={selection.set}
-          onSelectAll={(next) => {
-            if (next) selection.selectAll(visible);
-            else selection.clear();
-          }}
-          onOpen={openProjectWindow}
-          onReindex={(r) => void data.reindexProject(r)}
-          onRemove={(r) => {
-            removeRecentProject(r);
-            void data.removeProject(r);
-          }}
-        />
-      )}
+            <SkeletonTableRows rows={12} rowHeight={ROW_H} />
+          </div>
+        ) : showEmpty ? (
+          <div className="flex-1 overflow-auto">
+            <AddProjectControl variant="empty-state" onAdd={(root) => data.addProject(root)} />
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon="search"
+            iconSize={32}
+            title="No projects match this filter"
+            subtitle="Clear the filter to see all of your projects again."
+            action={
+              <Button variant="prominent" size="large" onClick={() => setFilter(EMPTY_FILTER)}>
+                Clear filters
+              </Button>
+            }
+          />
+        ) : view === 'compact' ? (
+          <WorkspaceCompactView {...viewProps} />
+        ) : (
+          <WorkspaceTableView
+            {...viewProps}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onSort={handleSort}
+            onSelectAll={(next) => {
+              if (next) selection.selectAll(visible);
+              else selection.clear();
+            }}
+          />
+        )}
+      </div>
 
       <BulkActionsBar
         projects={selectedProjects}

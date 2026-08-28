@@ -1,14 +1,17 @@
 /**
  * WorkspaceCompactView — vertical list of compact project rows.
  *
- * Port of the legacy ProjectRow visual idiom (status dot · truncated path ·
- * action buttons) extended with a select checkbox and inline metric badges
- * + progress. Same selection / mutation contract as WorkspaceTableView.
+ * Same content treatment as the table: one 12px-radius pane, 13px body text,
+ * head-truncated paths, 24×24 hit targets, labelled actions, a right-click
+ * menu with the same actions, and ↑ / ↓ + ⏎ list navigation. Selection and
+ * mutation contracts match WorkspaceTableView.
  */
-import { type MouseEvent, useState } from 'react';
+import { type MouseEvent, type UIEvent, useRef, useState } from 'react';
 import { Checkbox, StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
 import { ProjectMetricsBadges } from './components/ProjectMetricsBadges';
+import { ProjectPath } from './components/ProjectPath';
+import { ProjectContextMenu, ProjectRowActions } from './components/ProjectRowActions';
 import { type ProjectViewModel, statusLabel, statusToDot } from './types';
 
 export interface WorkspaceCompactViewProps {
@@ -20,12 +23,14 @@ export interface WorkspaceCompactViewProps {
   onRemove: (root: string) => void;
   /** false = daemon disconnected; Re-index/Remove are dimmed. */
   canMutate: boolean;
+  /** Reports the pane's scroll offset so the toolbar can fade in its hairline. */
+  onScroll?: (scrollTop: number) => void;
 }
 
-/** U+200E LEFT-TO-RIGHT MARK — see the path element below. */
-const LRM = '\u200e';
+/** Matches the table so switching views does not change row rhythm. */
+export const COMPACT_ROW_H = 46;
 
-function shortPath(root: string): string {
+function basename(root: string): string {
   const trimmed = root.replace(/\/+$/, '');
   const idx = trimmed.lastIndexOf('/');
   return idx >= 0 ? trimmed.slice(idx + 1) : trimmed;
@@ -34,167 +39,101 @@ function shortPath(root: string): string {
 interface RowProps {
   project: ProjectViewModel;
   selected: boolean;
+  cursored: boolean;
   canMutate: boolean;
+  confirming: boolean;
+  onRequestRemove: (root: string) => void;
+  onCancelRemove: () => void;
   onSelectChange: (root: string, next: boolean) => void;
   onOpen: (root: string) => void;
   onReindex: (root: string) => void;
   onRemove: (root: string) => void;
+  onContextMenu: (e: MouseEvent, project: ProjectViewModel) => void;
 }
 
 function CompactRow({
   project,
   selected,
+  cursored,
   canMutate,
+  confirming,
+  onRequestRemove,
+  onCancelRemove,
   onSelectChange,
   onOpen,
   onReindex,
   onRemove,
+  onContextMenu,
 }: RowProps) {
-  const [confirm, setConfirm] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const dotTone = statusToDot(project.displayStatus);
   const stop = (e: MouseEvent) => e.stopPropagation();
-  const mutationAllowed = canMutate && project.inDaemon;
-  const isIndexing = project.displayStatus === 'indexing' || project.displayStatus === 'computing';
-  const iconBtn =
-    'w-7 h-7 inline-flex items-center justify-center rounded-md transition-colors hover:bg-[var(--bg-active)] disabled:opacity-30';
+  const highlighted = hovered || cursored || selected;
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      className="px-2 py-1 rounded-md cursor-pointer transition-all hover:brightness-110"
-      style={{ background: 'var(--bg-secondary)' }}
-      onClick={() => onOpen(project.root)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onOpen(project.root);
-        }
+      role="row"
+      aria-selected={selected}
+      className="flex items-center gap-2 px-3 cursor-pointer transition-colors"
+      style={{
+        minHeight: COMPACT_ROW_H,
+        borderBottom: '0.5px solid var(--separator)',
+        background: highlighted ? 'var(--fill-tertiary)' : undefined,
+        outline: cursored ? '2px solid var(--accent)' : undefined,
+        outlineOffset: -2,
       }}
+      onClick={() => onOpen(project.root)}
+      onContextMenu={(e) => onContextMenu(e, project)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <div className="flex items-center gap-2">
-        <span onClick={stop}>
-          <Checkbox
-            checked={selected}
-            onChange={(next) => onSelectChange(project.root, next)}
-            aria-label={`Select ${shortPath(project.root)}`}
-          />
-        </span>
-        <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
-        <div className="flex-1 min-w-0">
-          {/* Name and status share one line — the dot already carries the tone,
-              so the word costs no extra row height. */}
-          <div className="flex items-baseline gap-2">
-            <div
-              className="text-xs font-medium truncate"
-              style={{ color: 'var(--text-primary)' }}
-              title={project.name}
-            >
-              {project.name || shortPath(project.root)}
-            </div>
-            <div
-              className="text-[10px] shrink-0"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
-              {statusLabel(project.displayStatus)}
-            </div>
-          </div>
+      <span onClick={stop} className="inline-flex items-center shrink-0">
+        <Checkbox
+          checked={selected}
+          onChange={(next) => onSelectChange(project.root, next)}
+          aria-label={`Select ${project.name || basename(project.root)}`}
+        />
+      </span>
+      <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
+      <div className="flex-1 min-w-0">
+        {/* Name and status share one line — the dot already carries the tone,
+            so the word costs no extra row height. */}
+        <div className="flex items-baseline gap-2">
           <div
-            className="text-[10px] truncate"
-            style={{
-              color: 'var(--text-tertiary)',
-              // `rtl` puts the ellipsis on the left (keep the interesting tail).
-              // The LRM prefix stops the leading "/" — a bidi-neutral character
-              // at the paragraph edge — from being reordered to the far end.
-              direction: 'rtl',
-              textAlign: 'left',
-            }}
-            title={project.root}
+            className="text-[13px] font-medium truncate"
+            style={{ color: 'var(--label)' }}
+            title={project.name}
           >
-            {LRM + project.root}
+            {project.name || basename(project.root)}
           </div>
-          {project.error && (
-            <div
-              className="text-[10px] truncate"
-              style={{ color: 'var(--destructive)' }}
-              title={project.error}
-            >
-              {project.error}
-            </div>
-          )}
-          <InlineProgress
-            progress={project.progress}
-            hint={project.liveStatus !== project.displayStatus ? project.liveStatus : undefined}
-          />
+          <div className="text-[11px] shrink-0" style={{ color: 'var(--label-secondary)' }}>
+            {statusLabel(project.displayStatus)}
+          </div>
         </div>
+        <ProjectPath root={project.root} className="text-[11px] text-[var(--label-secondary)]" />
+        {project.error && (
+          <div className="text-[11px] truncate" style={{ color: 'var(--status-red)' }} title={project.error}>
+            {project.error}
+          </div>
+        )}
+        <InlineProgress
+          progress={project.progress}
+          hint={project.liveStatus !== project.displayStatus ? project.liveStatus : undefined}
+        />
+      </div>
 
-        <div className="flex items-center gap-2" onClick={stop}>
-          <ProjectMetricsBadges project={project} dense />
-          {!confirm ? (
-            <>
-              <button
-                type="button"
-                onClick={() => onOpen(project.root)}
-                className={iconBtn}
-                style={{ color: 'var(--accent)' }}
-                title="Open project"
-              >
-                →
-              </button>
-              <button
-                type="button"
-                disabled={!mutationAllowed || isIndexing}
-                onClick={() => onReindex(project.root)}
-                className={iconBtn}
-                style={{ color: 'var(--text-secondary)' }}
-                title="Re-index"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1.5 2.5v4h4" />
-                  <path d="M2.3 10a6 6 0 1 0 .9-5.6L1.5 6.5" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                disabled={!mutationAllowed}
-                onClick={() => setConfirm(true)}
-                className={iconBtn}
-                style={{ color: 'var(--text-tertiary)' }}
-                title="Remove"
-              >
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 4l8 8M12 4l-8 8" />
-                </svg>
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => setConfirm(false)}
-                className="text-[11px] px-1.5 py-0.5 rounded font-medium"
-                style={{
-                  background: 'var(--fill-control)',
-                  color: 'var(--text-secondary)',
-                  border: '0.5px solid var(--border)',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onRemove(project.root);
-                  setConfirm(false);
-                }}
-                className="text-[11px] px-1.5 py-0.5 rounded font-medium"
-                style={{ background: 'var(--destructive)', color: '#fff' }}
-              >
-                Remove
-              </button>
-            </>
-          )}
-        </div>
+      <div className="flex items-center gap-2" onClick={stop}>
+        <ProjectMetricsBadges project={project} dense />
+        <ProjectRowActions
+          project={project}
+          canMutate={canMutate}
+          confirming={confirming}
+          onRequestRemove={onRequestRemove}
+          onCancelRemove={onCancelRemove}
+          onOpen={onOpen}
+          onReindex={onReindex}
+          onRemove={onRemove}
+        />
       </div>
     </div>
   );
@@ -208,23 +147,91 @@ export function WorkspaceCompactView({
   onOpen,
   onReindex,
   onRemove,
+  onScroll,
 }: WorkspaceCompactViewProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [cursor, setCursor] = useState(-1);
+  const [confirmRoot, setConfirmRoot] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; project: ProjectViewModel } | null>(null);
+
+  const moveCursor = (delta: number) => {
+    const next = Math.min(projects.length - 1, Math.max(0, (cursor < 0 ? -1 : cursor) + delta));
+    setCursor(next);
+    const el = scrollRef.current;
+    if (!el) return;
+    const top = next * COMPACT_ROW_H;
+    if (top < el.scrollTop) el.scrollTop = top;
+    else if (top + COMPACT_ROW_H > el.scrollTop + el.clientHeight)
+      el.scrollTop = top + COMPACT_ROW_H - el.clientHeight;
+  };
+
+  const handleScroll = (e: UIEvent<HTMLDivElement>) => onScroll?.(e.currentTarget.scrollTop);
+
   return (
-    <div className="flex-1 overflow-auto px-2 py-1">
-      <div className="flex flex-col gap-1">
-        {projects.map((p) => (
-          <CompactRow
-            key={p.root}
-            project={p}
-            selected={selected.has(p.root)}
-            canMutate={canMutate}
-            onSelectChange={onSelectChange}
-            onOpen={onOpen}
-            onReindex={onReindex}
-            onRemove={onRemove}
-          />
-        ))}
-      </div>
+    <div
+      ref={scrollRef}
+      tabIndex={0}
+      role="grid"
+      aria-label="Projects"
+      className="flex-1 overflow-auto"
+      style={{
+        borderRadius: 12,
+        border: '0.5px solid var(--separator)',
+        background: 'var(--surface)',
+      }}
+      onScroll={handleScroll}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          moveCursor(1);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          moveCursor(-1);
+        } else if (e.key === 'Enter' && cursor >= 0 && cursor < projects.length) {
+          e.preventDefault();
+          onOpen(projects[cursor].root);
+        } else if (e.key === 'Escape') {
+          setCursor(-1);
+          setConfirmRoot(null);
+        }
+      }}
+    >
+      {projects.map((p, i) => (
+        <CompactRow
+          key={p.root}
+          project={p}
+          selected={selected.has(p.root)}
+          cursored={i === cursor}
+          canMutate={canMutate}
+          confirming={confirmRoot === p.root}
+          onRequestRemove={setConfirmRoot}
+          onCancelRemove={() => setConfirmRoot(null)}
+          onSelectChange={onSelectChange}
+          onOpen={onOpen}
+          onReindex={onReindex}
+          onRemove={(root) => {
+            setConfirmRoot(null);
+            onRemove(root);
+          }}
+          onContextMenu={(e, project) => {
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, project });
+          }}
+        />
+      ))}
+
+      {menu && (
+        <ProjectContextMenu
+          project={menu.project}
+          canMutate={canMutate}
+          x={menu.x}
+          y={menu.y}
+          onOpen={onOpen}
+          onReindex={onReindex}
+          onRequestRemove={setConfirmRoot}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   );
 }

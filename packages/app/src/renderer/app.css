@@ -71,6 +71,25 @@ body {
   border-radius: inherit;
 }
 
+/* ── Loading skeletons ──────────────────────────────────────────── */
+/* Blocks at the exact geometry of the value they stand in for, so nothing
+   moves when the data lands. Never a centred spinner. The pulse is animation
+   only, so the global prefers-reduced-motion rule in tokens.css stills it. */
+.ws-skel {
+  display: inline-block;
+  background: var(--fill-quaternary);
+  animation: ws-skel-pulse 1.6s var(--ease-out) infinite;
+}
+@keyframes ws-skel-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* ── Prominent button (UpdateBanner) ─────────────────────────────── */
 /* macOS 26 prominent buttons are a FLAT accent capsule — the gradient + triple
    box-shadow bezel that used to live here is gone (TRA-290). Full-width and

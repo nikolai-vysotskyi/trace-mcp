@@ -81,6 +81,7 @@ export function Menu({ x, y, align = 'start', onClose, className, children }: Me
   return (
     <FloatingLayer
       ref={layerRef}
+      role="menu"
       className={'ws-ctx-menu' + (className ? ' ' + className : '')}
       x={x}
       y={y}
@@ -117,8 +118,17 @@ export function MenuItem({
   ...rest
 }: MenuItemProps): ReactNode {
   const cls = ['ws-ctx-item', danger ? 'danger' : '', className ?? ''].filter(Boolean).join(' ');
+  // A toggle item is a menuitemcheckbox and must publish its state; a plain one
+  // is a menuitem. Without these the menu was a bag of unlabelled buttons.
+  const role = showCheckSlot ? 'menuitemcheckbox' : 'menuitem';
   return (
-    <button type={type} className={cls} {...rest}>
+    <button
+      type={type}
+      role={role}
+      aria-checked={showCheckSlot ? checked === true : undefined}
+      className={cls}
+      {...rest}
+    >
       {showCheckSlot ? (
         <span className="ws-ctx-check">{checked ? <Icon name="check" size={14} /> : null}</span>
       ) : null}
@@ -136,11 +146,15 @@ export function MenuItem({
 }
 
 export function MenuSection({ children }: { children: ReactNode }): ReactNode {
-  return <div className="ws-ctx-section">{children}</div>;
+  return (
+    <div role="presentation" className="ws-ctx-section">
+      {children}
+    </div>
+  );
 }
 
 export function MenuSeparator(): ReactNode {
-  return <div className="ws-ctx-sep" />;
+  return <div role="separator" className="ws-ctx-sep" />;
 }
 
 export interface ConfirmPopoverProps {

@@ -4,7 +4,7 @@
  * real data.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { describeMetricsError, fetchMetricsOnce } from '../useWorkspaceProjects';
+import { classifyMetricsError, describeMetricsError, fetchMetricsOnce } from '../useWorkspaceProjects';
 
 const setters = () => ({ setMetrics: vi.fn(), setError: vi.fn() });
 
@@ -39,14 +39,25 @@ describe('fetchMetricsOnce', () => {
 
 describe('describeMetricsError', () => {
   it('replaces raw transport messages with an actionable one', () => {
-    for (const raw of ['Failed to fetch', 'Load failed', 'The operation was aborted', 'timed out']) {
+    for (const raw of ['Failed to fetch', 'Load failed', 'Connection refused']) {
       expect(describeMetricsError(new Error(raw))).toBe(
         "Couldn't load project metrics — daemon not responding.",
       );
     }
   });
 
+  // TRA-292: a daemon alive on /health but eight seconds deep in indexing
+  // eighty projects is slow, not unreachable. Saying "not reachable" sends the
+  // user to restart a service that is working.
+  it('calls a timeout slow, not unreachable', () => {
+    for (const err of [new Error('The operation was aborted'), new Error('signal timed out')]) {
+      expect(describeMetricsError(err)).toMatch(/still be indexing/);
+    }
+    expect(classifyMetricsError({ name: 'TimeoutError', message: '' })).toBe('timeout');
+  });
+
   it('keeps a meaningful server message', () => {
     expect(describeMetricsError(new Error('cache rebuild failed'))).toContain('cache rebuild failed');
+    expect(classifyMetricsError(new Error('cache rebuild failed'))).toBe('server');
   });
 });
