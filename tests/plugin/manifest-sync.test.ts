@@ -116,14 +116,26 @@ describe('install-surface token claims stay honest', () => {
     '.claude-plugin/marketplace.json',
     '.codex-plugin/plugin.json',
     '.codex-plugin/marketplace.json',
+    // TRA-393 follow-up: the same defect class was live on two docs surfaces —
+    // tools-reference sold benchmark_project's synthetic ceiling as "92%+ on
+    // typical projects", and skills/README claimed "up to 99% on exploration
+    // tasks". README.md and docs/index.html are deliberately NOT here: they
+    // carry the full framing that makes the peak number honest.
+    'docs/tools-reference.md',
+    'skills/README.md',
   ];
 
   for (const path of surfaces) {
     it(`${path} does not claim 9x% fewer tokens`, () => {
       const text = readFileSync(join(REPO_ROOT, ...path.split('/')), 'utf8');
       // Both orders — "99% fewer tokens" and "token usage by 99%" — and decimals.
+      // "token" alone is too narrow: "92%+ reduction on typical projects" never
+      // says the word, and that was the live defect on docs/tools-reference.md.
       const pct = String.raw`9\d(?:\.\d+)?\s*%`;
-      const claim = text.match(new RegExp(`${pct}[^"]{0,40}?token|token[^"]{0,40}?${pct}`, 'i'));
+      const noun = 'tokens?|reduction|savings|fewer|less';
+      const claim = text.match(
+        new RegExp(`${pct}\\+?[^"]{0,40}?(?:${noun})|(?:${noun})[^"]{0,40}?${pct}`, 'i'),
+      );
       expect(
         claim?.[0],
         `${path} advertises a peak token number as if it were the average. ` +
