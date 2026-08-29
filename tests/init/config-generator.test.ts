@@ -22,11 +22,16 @@ function makeDetection(overrides: Partial<DetectionResult> = {}): DetectionResul
 describe('generateConfig', () => {
   it('generates a comprehensive fallback config when no frameworks or languages detected', () => {
     const config = generateConfig(makeDetection());
-    // Fallback now uses the comprehensive schema defaults so a non-framework or
-    // monorepo-container root still picks up framework dirs of nested subprojects.
-    expect(config.include!.some((p) => p.includes('src/'))).toBe(true);
-    expect(config.include!.some((p) => p.includes('routes/'))).toBe(true);
-    expect(config.include!.some((p) => p.includes('pages/'))).toBe(true);
+    // Fallback uses the schema defaults, which are global extension globs
+    // (TRA-400) — no directory anchoring, so a non-framework or
+    // monorepo-container root picks up nested subprojects wherever they live.
+    expect(config.include!.every((p) => p.startsWith('**/'))).toBe(true);
+    for (const ext of ['ts', 'py', 'go', 'php', 'vhd', 'tf', 'sql', 'css']) {
+      expect(
+        config.include!.some((p) => p.includes(`,${ext},`) || p.includes(`{${ext},`)),
+        `default include does not reach .${ext}`,
+      ).toBe(true);
+    }
     // And excludes the universal junk (vendor was previously missing).
     expect(config.exclude!.some((p) => p.includes('vendor'))).toBe(true);
     expect(config.exclude!.some((p) => p.includes('node_modules'))).toBe(true);
