@@ -11,8 +11,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   type AppUpdateState,
   computeUpdateOutcome,
+  findStaleRoots,
+  type GlobalInstall,
   isStuckOnVersion,
   readAppUpdateState,
+  scanGlobalInstalls,
   shouldAttemptRepair,
   writeAppUpdateState,
 } from '../update-state';
@@ -99,5 +102,90 @@ describe('state persistence', () => {
     expect(readAppUpdateState(path.join(dir, 'nope.json'))).toEqual({});
     fs.writeFileSync(file, '{not json');
     expect(readAppUpdateState(file)).toEqual({});
+  });
+});
+
+describe('scanGlobalInstalls', () => {
+  let tmp: string;
+
+  const makeRoot = (name: string, version?: string): string => {
+    const root = path.join(tmp, name);
+    if (version === undefined) {
+      fs.mkdirSync(root, { recursive: true });
+      return root;
+    }
+    const pkgDir = path.join(root, 'trace-mcp');
+    fs.mkdirSync(pkgDir, { recursive: true });
+    fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ version }));
+    return root;
+  };
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-global-roots-'));
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('reports the version in every root that has trace-mcp', () => {
+    const a = makeRoot('nvm', '3.1.1');
+    const b = makeRoot('hermes', '3.0.0');
+    expect(scanGlobalInstalls([a, b])).toEqual([
+      { root: a, version: '3.1.1' },
+      { root: b, version: '3.0.0' },
+    ]);
+  });
+
+  it('skips absent roots, roots without trace-mcp, and null entries', () => {
+    const withPkg = makeRoot('nvm', '3.1.1');
+    const empty = makeRoot('empty');
+    expect(scanGlobalInstalls([withPkg, empty, path.join(tmp, 'nope'), null, undefined])).toEqual([
+      { root: withPkg, version: '3.1.1' },
+    ]);
+  });
+
+  it('counts a symlinked duplicate of the same install once', () => {
+    const real = makeRoot('nvm', '3.1.1');
+    const link = path.join(tmp, 'linked');
+    fs.mkdirSync(link);
+    fs.symlinkSync(path.join(real, 'trace-mcp'), path.join(link, 'trace-mcp'), 'dir');
+    expect(scanGlobalInstalls([real, link])).toEqual([{ root: real, version: '3.1.1' }]);
+  });
+
+  it('skips a package whose package.json is unreadable or has no version', () => {
+    const broken = makeRoot('broken', '3.1.1');
+    fs.writeFileSync(path.join(broken, 'trace-mcp', 'package.json'), '{ not json');
+    const versionless = makeRoot('versionless', '3.1.1');
+    fs.writeFileSync(path.join(versionless, 'trace-mcp', 'package.json'), '{}');
+    expect(scanGlobalInstalls([broken, versionless])).toEqual([]);
+  });
+});
+
+describe('findStaleRoots', () => {
+  const install = (root: string, version: string): GlobalInstall => ({ root, version });
+
+  it('reports nothing for a single-root machine', () => {
+    expect(findStaleRoots([install('/a', '3.1.1')], cmpSemver)).toEqual([]);
+    expect(findStaleRoots([], cmpSemver)).toEqual([]);
+  });
+
+  it('reports nothing when every root agrees', () => {
+    expect(findStaleRoots([install('/a', '3.1.1'), install('/b', '3.1.1')], cmpSemver)).toEqual([]);
+  });
+
+  it('reports every root behind the newest — the TRA-364 three-root case', () => {
+    const stale = findStaleRoots(
+      [install('/herd', '3.1.1'), install('/nvm', '3.1.1'), install('/hermes', '3.0.0')],
+      cmpSemver,
+    );
+    expect(stale).toEqual([install('/hermes', '3.0.0')]);
+  });
+
+  it('measures against the newest root, not the first one seen', () => {
+    const stale = findStaleRoots(
+      [install('/old', '3.0.0'), install('/new', '3.1.1'), install('/older', '2.9.0')],
+      cmpSemver,
+    );
+    expect(stale.map((s) => s.root)).toEqual(['/old', '/older']);
   });
 });

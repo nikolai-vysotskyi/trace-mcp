@@ -110,6 +110,70 @@ export function computeUpdateOutcome(
   return 'already-current';
 }
 
+/** A global npm root that currently holds a `trace-mcp` install. */
+export interface GlobalInstall {
+  /** The `.../lib/node_modules` directory. */
+  root: string;
+  /** Version read from `<root>/trace-mcp/package.json`. */
+  version: string;
+}
+
+/**
+ * Read the trace-mcp version out of each candidate global npm root.
+ *
+ * A developer machine routinely has several: nvm, a bundled runtime (Herd,
+ * Hermes), Homebrew node, a system node. `npm install -g` only ever writes
+ * into the root owned by the npm binary that ran it, so every other root
+ * freezes at whatever version it last received — silently, because the
+ * install that did happen reports success.
+ *
+ * Roots are deduplicated by the realpath of the package directory, so a
+ * symlink farm (`npm link`, a shared prefix behind two PATH entries) counts
+ * once. Unreadable or absent roots are skipped, not reported.
+ */
+export function scanGlobalInstalls(roots: readonly (string | null | undefined)[]): GlobalInstall[] {
+  const seen = new Set<string>();
+  const found: GlobalInstall[] = [];
+  for (const root of roots) {
+    if (!root) continue;
+    let pkgDir: string;
+    try {
+      pkgDir = fs.realpathSync(path.join(root, 'trace-mcp'));
+    } catch {
+      continue; // Root absent, or no trace-mcp in it.
+    }
+    if (seen.has(pkgDir)) continue;
+    seen.add(pkgDir);
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf-8')) as {
+        version?: unknown;
+      };
+      const version = String(pkg.version ?? '').replace(/^v/, '');
+      if (version) found.push({ root, version });
+    } catch {
+      /* half-extracted or unreadable package — not a version we can report on */
+    }
+  }
+  return found;
+}
+
+/**
+ * Roots left behind the newest install on this machine.
+ *
+ * We report rather than repair: writing into a global root the user never
+ * pointed us at is a meaningful escalation of what an update click may do.
+ * But an unfixable state must at least not look healthy — a consumer wired
+ * to a stale root runs old code while every other signal says "up to date".
+ */
+export function findStaleRoots(
+  installs: readonly GlobalInstall[],
+  cmpSemver: (a: string, b: string) => number,
+): GlobalInstall[] {
+  if (installs.length < 2) return [];
+  const newest = installs.reduce((a, b) => (cmpSemver(b.version, a.version) > 0 ? b : a));
+  return installs.filter((i) => cmpSemver(i.version, newest.version) < 0);
+}
+
 /**
  * Should we try to stage the bundle swap ourselves?
  *
