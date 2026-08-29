@@ -233,9 +233,19 @@
   background: var(--fill-tertiary);
   color: var(--label-tertiary);
   transition: background 120ms ease;
+  /* Spend the field's slack before the toolbar breaks to a second row (TRA-347).
+     A wrapping flex line is laid out from each item's *hypothetical* size, so
+     `flex-basis: auto` advertises this field's full content width and wraps the
+     row ~180px earlier than it has to — Memory's toolbar went to two rows at the
+     default 960px window. Basing it on its own `min-width` and capping growth at
+     its content width renders identically wherever there is room, and gives the
+     row 42px of give first. */
+  flex: 1 1 140px;
+  max-width: max-content;
 }
 .lx-search.grow {
-  flex: 1 1 auto;
+  flex: 1 1 140px;
+  max-width: none;
 }
 .lx-search:hover {
   background: var(--fill-quaternary);
