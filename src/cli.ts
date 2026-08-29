@@ -100,6 +100,7 @@ import {
   listProjects,
   pruneStaleProjects,
   resolveRegisteredAncestor,
+  sweepEphemeralDbs,
   updateLastIndexed,
 } from './registry.js';
 import { isKnownSubproject, resolveDeepestKnownRoot } from './subproject/resolve.js';
@@ -3088,6 +3089,12 @@ program
         // `prune` will always classify as live, so the registry grew one row —
         // and one permanently-reindexed project — per run, forever. Age since
         // registration is the signal; see ProjectManager.sweepEphemeralProjects.
+        //
+        // TRA-396: those rows only exist on registries written before one-shot
+        // workdirs stopped being persisted at all. Their *DBs* still need
+        // collecting, and so do the ones current runs leave behind — neither
+        // has a registry row to hang a sweep off, so sweepEphemeralDbs works
+        // straight off the index directory and mtime.
         const ephemeralSweep = async () => {
           try {
             const removed = await projectManager.sweepEphemeralProjects();
@@ -3099,6 +3106,17 @@ program
             }
           } catch (err) {
             logger.warn({ err }, 'sweepEphemeralProjects failed (non-fatal)');
+          }
+          try {
+            const removedDbs = sweepEphemeralDbs();
+            if (removedDbs.length > 0) {
+              logger.info(
+                { removedDbs },
+                `Deleted ${removedDbs.length} abandoned one-shot workdir index DB(s)`,
+              );
+            }
+          } catch (err) {
+            logger.warn({ err }, 'sweepEphemeralDbs failed (non-fatal)');
           }
         };
         await ephemeralSweep();

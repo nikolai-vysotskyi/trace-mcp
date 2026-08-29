@@ -2,14 +2,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ensureGlobalDirs, REGISTRY_PATH } from '../src/global.js';
+import { announceDbHolder } from '../src/db-holders.js';
+import { EPHEMERAL_INDEX_DIR, ensureGlobalDirs, REGISTRY_PATH } from '../src/global.js';
 import {
   findEphemeralProjects,
   findOverlapForNewRoot,
   findOverlappingProjects,
   findUnregisteredNestedRepos,
+  getProject,
+  listProjects,
   registerProject,
   resolveRegisteredAncestor,
+  sweepEphemeralDbs,
 } from '../src/registry.js';
 
 let savedRegistry: string | null = null;
@@ -44,6 +48,23 @@ function makeEphemeralWorkdir(): string {
   return dir;
 }
 
+/**
+ * Write a registry row for an ephemeral workdir the way versions before
+ * TRA-396 did. `registerProject` no longer persists these at all, but field
+ * registries are full of them and `findEphemeralProjects` is what drains them.
+ */
+function registerLegacyEphemeral(root: string, ageHours: number): void {
+  const reg = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
+  reg.projects[root] = {
+    name: path.basename(root),
+    root,
+    dbPath: path.join(os.tmpdir(), `${path.basename(root)}.db`),
+    lastIndexed: null,
+    addedAt: new Date(Date.now() - ageHours * 60 * 60 * 1000).toISOString(),
+  };
+  fs.writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2));
+}
+
 function setAddedAt(root: string, iso: string): void {
   const reg = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
   reg.projects[root].addedAt = iso;
@@ -57,8 +78,7 @@ describe('registry cache invalidation', () => {
   // reproduces that collision deterministically on every platform.
   it('does not serve a stale registry when a rewrite reuses the same mtime', () => {
     const workdir = makeEphemeralWorkdir();
-    registerProject(workdir);
-    setAddedAt(workdir, new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString());
+    registerLegacyEphemeral(workdir, 48);
     const sameTick = Math.floor(Date.now() / 1000) - 3600; // whole seconds: exact on every fs
     fs.utimesSync(REGISTRY_PATH, sameTick, sameTick);
     expect(findEphemeralProjects()).toHaveLength(1); // populates the cache
@@ -267,15 +287,14 @@ describe('findEphemeralProjects', () => {
 
   it('ignores a freshly-added ephemeral workdir (younger than minAgeHours)', () => {
     const workdir = makeEphemeralWorkdir();
-    registerProject(workdir);
+    registerLegacyEphemeral(workdir, 0);
 
     expect(findEphemeralProjects()).toEqual([]);
   });
 
   it('flags an ephemeral workdir older than the default 24h threshold', () => {
     const workdir = makeEphemeralWorkdir();
-    registerProject(workdir);
-    setAddedAt(workdir, new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString());
+    registerLegacyEphemeral(workdir, 48);
 
     const found = findEphemeralProjects();
     expect(found).toHaveLength(1);
@@ -285,10 +304,126 @@ describe('findEphemeralProjects', () => {
 
   it('respects a custom minAgeHours threshold', () => {
     const workdir = makeEphemeralWorkdir();
-    registerProject(workdir);
-    setAddedAt(workdir, new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString());
+    registerLegacyEphemeral(workdir, 2);
 
     expect(findEphemeralProjects(24)).toEqual([]);
     expect(findEphemeralProjects(1)).toHaveLength(1);
+  });
+});
+
+// TRA-396: the checkout directory is never deleted by the runtime, so every
+// presence-based signal reads an abandoned workdir as live. Not persisting it
+// in the first place is what keeps it out of the daemon's reindex rotation —
+// 77 of these on one machine pinned the daemon and timed out the app's
+// metrics call.
+describe('ephemeral workdirs are never persisted', () => {
+  function registryProjects(): Record<string, unknown> {
+    return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8')).projects;
+  }
+
+  it('keeps a one-shot workdir out of registry.json', () => {
+    const workdir = makeEphemeralWorkdir();
+    registerProject(workdir);
+
+    expect(registryProjects()).toEqual({});
+    expect(listProjects()).toEqual([]);
+  });
+
+  it('still resolves the workdir for the run that registered it', () => {
+    const workdir = makeEphemeralWorkdir();
+    const entry = registerProject(workdir);
+
+    expect(getProject(workdir)?.root).toBe(workdir);
+    expect(resolveRegisteredAncestor(path.join(workdir, 'packages', 'app'))?.root).toBe(workdir);
+    // Its DB lives in the ephemeral index dir so it stays collectable by age.
+    expect(entry.dbPath.startsWith(EPHEMERAL_INDEX_DIR + path.sep)).toBe(true);
+  });
+
+  it('leaves the registry empty after a saturating burst of agent runs', () => {
+    const workdirs = Array.from({ length: 80 }, () => makeEphemeralWorkdir());
+    for (const w of workdirs) registerProject(w);
+
+    // The daemon's cold start and its background rotation both read this map;
+    // an empty one is what keeps a foreground metrics call off the queue.
+    expect(Object.keys(registryProjects())).toHaveLength(0);
+    expect(listProjects()).toEqual([]);
+  });
+
+  it('still persists a workdir-shaped root registered as an explicit multi-root', () => {
+    const workdir = makeEphemeralWorkdir();
+    const child = path.join(workdir, 'pkg');
+    fs.mkdirSync(child, { recursive: true });
+    registerProject(workdir, { type: 'multi-root', children: [child] });
+
+    expect(Object.keys(registryProjects())).toEqual([workdir]);
+  });
+
+  it('does not report a non-persisted workdir as an eviction candidate', () => {
+    const workdir = makeEphemeralWorkdir();
+    registerProject(workdir);
+
+    expect(findEphemeralProjects(0)).toEqual([]);
+  });
+});
+
+// The case #487 missed: the checkout directory still exists, so nothing that
+// keys on presence will ever reclaim its index. Age off the DB itself does.
+describe('sweepEphemeralDbs', () => {
+  function makeEphemeralDb(name: string, ageHours: number): string {
+    fs.mkdirSync(EPHEMERAL_INDEX_DIR, { recursive: true });
+    const db = path.join(EPHEMERAL_INDEX_DIR, `${name}.db`);
+    fs.writeFileSync(db, 'x');
+    const t = Date.now() / 1000 - ageHours * 3600;
+    fs.utimesSync(db, t, t);
+    return db;
+  }
+
+  afterEach(() => {
+    fs.rmSync(EPHEMERAL_INDEX_DIR, { recursive: true, force: true });
+  });
+
+  it('deletes an abandoned DB whose checkout directory still exists', () => {
+    const workdir = makeEphemeralWorkdir();
+    expect(fs.existsSync(workdir)).toBe(true); // the runtime never cleans it up
+    const db = makeEphemeralDb(`abandoned-${path.basename(path.dirname(workdir))}`, 48);
+
+    expect(sweepEphemeralDbs(24)).toEqual([db]);
+    expect(fs.existsSync(db)).toBe(false);
+  });
+
+  it('keeps a DB still inside the age window', () => {
+    const db = makeEphemeralDb('recent', 2);
+
+    expect(sweepEphemeralDbs(24)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('keeps an old DB a live holder still has open', () => {
+    const db = makeEphemeralDb('busy', 48);
+    announceDbHolder(db, '/some/running/workdir');
+
+    expect(sweepEphemeralDbs(24)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('treats a fresh WAL sidecar as activity on an otherwise old DB', () => {
+    const db = makeEphemeralDb('walwrites', 48);
+    fs.writeFileSync(`${db}-wal`, 'x');
+
+    expect(sweepEphemeralDbs(24)).toEqual([]);
+    expect(fs.existsSync(db)).toBe(true);
+  });
+
+  it('deletes sidecars alongside the base DB', () => {
+    const db = makeEphemeralDb('sidecars', 48);
+    for (const suffix of ['-wal', '-shm']) {
+      fs.writeFileSync(db + suffix, 'x');
+      const t = Date.now() / 1000 - 48 * 3600;
+      fs.utimesSync(db + suffix, t, t);
+    }
+
+    expect(sweepEphemeralDbs(24)).toEqual([db]);
+    expect(fs.existsSync(`${db}-wal`)).toBe(false);
+    expect(fs.existsSync(`${db}-shm`)).toBe(false);
   });
 });

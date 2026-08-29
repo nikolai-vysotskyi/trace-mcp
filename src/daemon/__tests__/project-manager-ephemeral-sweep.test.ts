@@ -6,6 +6,11 @@
  * because this very daemon keeps reindexing them. `sweepEphemeralProjects`
  * uses age since registration instead.
  *
+ * TRA-396: `registerProject` no longer persists such roots at all, so this
+ * sweep now only drains rows written by earlier versions — which is what the
+ * tests below construct directly. New checkouts are covered by
+ * `tests/registry.test.ts`.
+ *
  * Mocks IndexingPipeline + FileWatcher + createServer like
  * project-manager-last-indexed.test.ts so only the sweep wiring is under test.
  */
@@ -66,6 +71,31 @@ async function backdate(root: string, hours: number): Promise<void> {
   writeFileSync(REGISTRY_PATH, JSON.stringify(reg));
 }
 
+/**
+ * Write a one-shot workdir row straight into registry.json, `addedAt` already
+ * backdated. Since TRA-396 `registerProject` refuses to persist these, so this
+ * is the only way to reproduce what the sweep exists to drain: registries
+ * written by an earlier version.
+ */
+async function writeLegacyEphemeralRow(root: string, ageHours: number): Promise<void> {
+  const { ensureGlobalDirs, getDbPath, REGISTRY_PATH } = await import('../../global.js');
+  ensureGlobalDirs();
+  let reg: { version: number; projects: Record<string, unknown> };
+  try {
+    reg = JSON.parse(readFileSync(REGISTRY_PATH, 'utf-8'));
+  } catch {
+    reg = { version: 1, projects: {} };
+  }
+  reg.projects[root] = {
+    name: root.split('/').pop(),
+    root,
+    dbPath: getDbPath(root),
+    lastIndexed: null,
+    addedAt: new Date(Date.now() - ageHours * 60 * 60 * 1000).toISOString(),
+  };
+  writeFileSync(REGISTRY_PATH, JSON.stringify(reg));
+}
+
 beforeEach(() => {
   tmpHome = mkdtempSync(join(tmpdir(), 'trace-mcp-ephemeral-sweep-'));
   vi.stubEnv('TRACE_MCP_DATA_DIR', tmpHome);
@@ -90,11 +120,10 @@ afterEach(async () => {
 describe('ProjectManager.sweepEphemeralProjects (TRA-335)', () => {
   it('deregisters a one-shot workdir past the TTL even though its root still exists', async () => {
     const { ProjectManager } = await import('../project-manager.js');
-    const { listProjects, registerProject } = await import('../../registry.js');
+    const { listProjects } = await import('../../registry.js');
 
     const stale = makeEphemeralWorkdir('run-old');
-    registerProject(stale);
-    await backdate(stale, 96);
+    await writeLegacyEphemeralRow(stale, 96);
 
     const pm = new ProjectManager();
     pmRef = pm;
@@ -108,8 +137,7 @@ describe('ProjectManager.sweepEphemeralProjects (TRA-335)', () => {
     const { listProjects, registerProject } = await import('../../registry.js');
 
     const fresh = makeEphemeralWorkdir('run-new');
-    registerProject(fresh);
-    await backdate(fresh, 2);
+    await writeLegacyEphemeralRow(fresh, 2);
 
     const normal = join(tmpHome, 'real-project');
     mkdirSync(normal, { recursive: true });
@@ -129,11 +157,10 @@ describe('ProjectManager.sweepEphemeralProjects (TRA-335)', () => {
 
   it('skips a workdir that a run is still holding open', async () => {
     const { ProjectManager } = await import('../project-manager.js');
-    const { listProjects, registerProject } = await import('../../registry.js');
+    const { listProjects } = await import('../../registry.js');
 
     const busy = makeEphemeralWorkdir('run-busy');
-    registerProject(busy);
-    await backdate(busy, 96);
+    await writeLegacyEphemeralRow(busy, 96);
 
     const pm = new ProjectManager();
     pmRef = pm;
