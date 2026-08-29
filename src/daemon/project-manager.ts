@@ -1047,31 +1047,57 @@ export class ProjectManager {
    * arrives (existing `addProject()` cold-start path — 503 + Retry-After
    * while it warms, see cli.ts serve-http Phase 5.1).
    *
+   * `maxLoaded > 0` additionally enforces a hard ceiling on how many projects
+   * stay resident: anything above it is evicted least-recently-accessed first,
+   * regardless of `idleMs`. Without this, `daemon_eager_load_projects` was a
+   * startup budget only — lazy loads walked straight past it (TRA-422: an
+   * eager-8 daemon sat at 11 loaded projects three minutes after boot, and at
+   * a measured ~100 MB resident per loaded project that is ~300 MB nobody
+   * capped). Same exemptions as the TTL path apply, so a busy or indexing
+   * project is never evicted just to satisfy the ceiling.
+   *
    * Returns the roots that were unloaded (mainly for tests/telemetry).
    */
-  async unloadIdleProjects(idleMs: number): Promise<string[]> {
-    if (idleMs <= 0) return [];
+  async unloadIdleProjects(idleMs: number, maxLoaded = 0): Promise<string[]> {
+    if (idleMs <= 0 && maxLoaded <= 0) return [];
     const now = Date.now();
-    const candidates: string[] = [];
+    const evictable: ManagedProject[] = [];
     for (const managed of this.projects.values()) {
       if (managed.status === 'starting' || managed.status === 'indexing') continue;
-      if (now - managed.lastAccessedAt < idleMs) continue;
       if ((this.resourcePool?.getRefCount(managed.root) ?? 0) > 0) continue;
-      candidates.push(managed.root);
+      evictable.push(managed);
+    }
+    const candidates = new Set<string>();
+    if (idleMs > 0) {
+      for (const managed of evictable) {
+        if (now - managed.lastAccessedAt >= idleMs) candidates.add(managed.root);
+      }
+    }
+    if (maxLoaded > 0 && this.projects.size > maxLoaded) {
+      const overBy = this.projects.size - maxLoaded;
+      const lruFirst = [...evictable].sort((a, b) => a.lastAccessedAt - b.lastAccessedAt);
+      for (const managed of lruFirst) {
+        if (candidates.size >= overBy) break;
+        candidates.add(managed.root);
+      }
     }
     for (const root of candidates) {
-      logger.info({ projectRoot: root, idleMs }, 'Unloading idle project (stays registered)');
+      logger.info(
+        { projectRoot: root, idleMs, maxLoaded },
+        'Unloading idle project (stays registered)',
+      );
       await this.stopProject(root);
     }
-    return candidates;
+    return [...candidates];
   }
 
   /**
    * Start the periodic idle-unload sweep. `intervalMs` defaults to 5 minutes
    * per the design; `idleMs` is `project_idle_unload_minutes * 60_000` (0
-   * disables — no timer is armed). Idempotent: calling twice replaces the
-   * previous timer. The interval is unref'd so it never keeps the daemon
-   * process alive on its own.
+   * disables the TTL rule). `opts.maxLoaded` is the LRU ceiling
+   * (`daemon_eager_load_projects`, 0 = unlimited). No timer is armed when both
+   * are off. Idempotent: calling twice replaces the previous timer. The
+   * interval is unref'd so it never keeps the daemon process alive on its own.
    *
    * `onUnloaded` fires after each sweep tick that unloaded at least one
    * project — cli.ts uses it to tear down its per-project bookkeeping
@@ -1080,13 +1106,14 @@ export class ProjectManager {
    */
   startIdleUnloadSweep(
     idleMs: number,
-    opts?: { intervalMs?: number; onUnloaded?: (roots: string[]) => void },
+    opts?: { intervalMs?: number; maxLoaded?: number; onUnloaded?: (roots: string[]) => void },
   ): void {
     this.stopIdleUnloadSweep();
-    if (idleMs <= 0) return;
+    const maxLoaded = opts?.maxLoaded ?? 0;
+    if (idleMs <= 0 && maxLoaded <= 0) return;
     this.idleUnloadTimer = setInterval(
       () => {
-        this.unloadIdleProjects(idleMs)
+        this.unloadIdleProjects(idleMs, maxLoaded)
           .then((roots) => {
             if (roots.length > 0) opts?.onUnloaded?.(roots);
           })
