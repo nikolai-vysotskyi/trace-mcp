@@ -60,10 +60,61 @@ the same reason; non-mac stages paint themselves.
 not the window's vibrant region** (toolbars, the bulk-actions strip).
 
 We deliberately **did not adopt `electron-liquid-glass`.** The native
-`BrowserWindow` vibrancy path gives us the material, follows the system appearance on
-its own, desaturates when the window loses key (`visualEffectState: 'followWindow'`),
-and honours Reduce Transparency for free — with no extra native dependency, no
-feature detection, and no code path that no-ops below macOS 26.
+`BrowserWindow` vibrancy path gives us the material, desaturates when the window loses
+key (`visualEffectState: 'followWindow'`), and honours Reduce Transparency for free —
+with no extra native dependency, no feature detection, and no code path that no-ops
+below macOS 26.
+
+### A native material samples the desktop, so one background proves nothing
+
+This is the thing to internalise before touching the sidebar's material (TRA-369).
+
+`NSVisualEffectView` blends **whatever is composited behind the window** — the
+wallpaper, or another app's window. So the sidebar's tone is not a property of our CSS;
+it is a function of our CSS *and the user's desktop*. Two screenshots of the same build
+in the same appearance can look completely different, and both are real.
+
+Two rules follow, and neither is optional:
+
+1. **Never validate the material against a single background.** The matrix is: light
+   appearance × {dark wallpaper, light wallpaper, a dark window behind, a light window
+   behind} × {window active, window inactive}, then the same set in dark. And it has to
+   be shot in the **Electron window** — there is no `NSVisualEffectView` on the Vite dev
+   server, so none of this is visible in a browser.
+2. **The material never gets to decide how dark the sidebar goes in light appearance.**
+   `--sidebar-scrim` is a stated floor: white at `.70` above the material, so whatever
+   the material renders, the sidebar lands at least 70% of the way from it to white and
+   can never go below `#b2b2b2`. The remaining `.30` still carries the material, so the
+   sidebar keeps picking up the desktop's tint — it just cannot be dragged to grey by a
+   dark desktop and read as dirt beside the white content pane.
+
+   Dark appearance gets **no** floor (`--sidebar-scrim: transparent`). There the
+   material can only take the sidebar toward black, which is where it belongs, and glass
+   is the entire point. Light is the appearance to be careful with; dark is the easy one.
+
+Under `prefers-reduced-transparency: reduce` the sidebar paints `--surface` itself
+rather than letting macOS make the effect view opaque: the system's opaque fill follows
+the *system* appearance, so left alone it disagrees with our content pane whenever the
+app's Appearance choice and the system's differ (`sidebar.css`, accessibility section —
+that rule has to out-specify the `[data-platform="mac"]` one above it).
+
+### The native layer has to be told the app's appearance
+
+The Appearance control writes `[data-theme]` on `<html>`. CSS reads that;
+`NSVisualEffectView` cannot, and neither can the window's `backgroundColor` — both read
+`nativeTheme`. So the renderer mirrors the choice to the main process
+(`set-appearance` IPC → `packages/app/src/main/appearance.ts`), which sets
+`nativeTheme.themeSource`. Without it, Light on a dark system draws a dark vibrancy
+sidebar next to a light content pane.
+
+The choice lives in the renderer's `localStorage`, which main cannot read, so it is also
+mirrored to a one-line file in `userData` and restored **before the first window** —
+`backgroundColor` is read from `nativeTheme` at construction and cannot be fixed
+afterwards.
+
+macOS only. On Windows `nativeTheme.shouldUseDarkColors` also picks the tray icon, which
+has to match the taskbar — the system — not the app's own choice, and once `themeSource`
+overrides it there is no way to read the system value back.
 
 ---
 

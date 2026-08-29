@@ -2,6 +2,13 @@ import path from 'node:path';
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from 'electron';
 import { TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y } from '../shared/chrome-metrics.js';
 import { DaemonClient } from './api-client';
+import {
+  type Appearance,
+  parseAppearance,
+  readAppearance,
+  themeSourceFor,
+  writeAppearance,
+} from './appearance';
 import { ensureDaemon, restartDaemon } from './daemon-lifecycle';
 
 const isMac = process.platform === 'darwin';
@@ -275,15 +282,6 @@ ipcMain.handle('open-clients', () => {
 // IPC: get current platform (renderer needs this to decide whether to show custom tabs)
 ipcMain.handle('get-platform', () => process.platform);
 
-/* The sidebar is transparent so the native NSVisualEffectView shows through,
-   and that view follows `nativeTheme`, not the renderer's [data-theme]. Without
-   this, picking Dark in Settings on a Light Mac left light-mode vibrancy behind
-   dark-mode text: the whole sidebar rendered as an empty pale pane. The
-   renderer's appearance choice has to reach the native layer too. */
-ipcMain.on('set-appearance', (_event, appearance: 'auto' | 'light' | 'dark') => {
-  nativeTheme.themeSource = appearance === 'auto' ? 'system' : appearance;
-});
-
 function hideDockIfNoWindows(): void {
   if (isMac && !menuWindow && projectWindows.size === 0) {
     app.dock?.hide();
@@ -401,6 +399,33 @@ ipcMain.handle('close-current-tab', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win) win.close();
   return { ok: true };
+});
+
+/* ---- Appearance → the native layer (TRA-369) ------------------------------
+   macOS only. On Windows `nativeTheme.shouldUseDarkColors` also picks the tray
+   icon, which has to match the TASKBAR — i.e. the system — not the app's own
+   Appearance choice, and there is no way to read the system value back once
+   themeSource overrides it. macOS is where this matters anyway: it is the only
+   platform with an NSVisualEffectView to keep in sync, and its tray icon is a
+   Template image the system tints on its own. */
+
+/** Call once from whenReady, BEFORE the first window: `backgroundColor` is read
+ *  from `nativeTheme` at construction time. */
+export function restoreAppearance(): void {
+  if (!isMac) return;
+  nativeTheme.themeSource = themeSourceFor(readAppearance(app.getPath('userData')));
+}
+
+function applyAppearance(next: Appearance): void {
+  if (!isMac) return;
+  nativeTheme.themeSource = themeSourceFor(next);
+  writeAppearance(app.getPath('userData'), next);
+}
+
+// IPC: the renderer's Appearance choice. Fire-and-forget — the renderer has
+// already applied [data-theme] itself and does not wait on the native side.
+ipcMain.on('set-appearance', (_event, value: unknown) => {
+  applyAppearance(parseAppearance(value));
 });
 
 // IPC: sync sidebar width across all tabbed windows
