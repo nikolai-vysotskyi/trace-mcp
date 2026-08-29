@@ -54,6 +54,10 @@ export const COMPACT_CORE_PARAMS: Record<string, string[]> = {
   apply_move: ['symbol_id', 'source_file', 'target_file', 'new_path', 'dry_run'],
   change_signature: ['symbol_id', 'changes', 'dry_run'],
   plan_refactoring: ['type', 'symbol_id', 'target_file', 'changes'],
+  // Ungated meta-tool — invisible to the coverage guard until TRA-402 taught
+  // the capture harness about `_originalTool`. `task` is the only param that
+  // isn't a tuning knob.
+  plan_turn: ['task'],
   extract_function: ['file_path', 'start_line', 'end_line', 'function_name', 'dry_run'],
   apply_codemod: ['pattern', 'replacement', 'file_pattern', 'dry_run'],
   remove_dead_code: ['symbol_id', 'dry_run'],

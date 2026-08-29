@@ -12,7 +12,7 @@ trace-mcp ships 81 language plugins. They are not equally deep, and this
 page says how deep each one is. Every language in the list gets symbol
 extraction; call graphs and type edges are a much smaller set.
 
-- **indexed with the default config:** 24 (the rest need an `include` entry — see below)
+- **indexed with the default config:** 78 (the rest need an `include` entry — see below)
 - **tree-sitter parser:** 29 · **regex parser:** 46 · **custom parser:** 6
 - **import edges:** 66
 - **call edges (`get_call_graph`, call-aware `find_usages`):** 3
@@ -30,14 +30,21 @@ extraction; call graphs and type edges are a much smaller set.
 | Types | Type-annotation or inheritance edges are resolved. |
 | Tests | At least one test exercises this plugin directly. |
 
-**Default config vs. plugin count.** The default `include` list targets a
-mainstream extension set under the common source roots. 57
-of the 81 plugins are not reached by it, so those languages index
-nothing until you say so explicitly:
+**Default config vs. plugin count.** The default `include` is one global glob
+over every extension the plugins below claim, so 78 of
+the 81 plugins run wherever their files live in the repo — no
+directory anchoring. The remaining 3
+are pure data formats, left out because lockfiles, fixtures and `.svg` would
+swamp the index for little symbol value. Ask for them explicitly if you want
+them:
 
 ```json
-{ "include": ["src/**/*.{ts,tsx}", "**/*.vhd", "**/*.lua"] }
+{ "include": ["schemas/**/*.json", "k8s/**/*.xml"] }
 ```
+
+Note that `include` in a project config **replaces** the built-in list rather
+than adding to it, so copy the default glob alongside your addition if you
+still want the rest of the repo indexed.
 
 A regex plugin still gives you working `search`, `get_outline` and symbol
 navigation — that covers most "find it and read it" work. What it does not give
@@ -49,84 +56,84 @@ unless you enable LSP enrichment (`lsp.enabled: true`) or ingest a SCIP index.
 
 | Language | Extensions | Parser | Default | Imports | Calls | Types | Tests |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ada | .adb .ads .ada | regex (multi-pass) | — | yes | — | — | yes |
-| al | .al | regex | — | — | — | — | yes |
-| apex | .cls .trigger .apex | regex (multi-pass) | — | yes | — | — | yes |
-| assembly | .asm .s .S | regex | — | — | — | — | yes |
-| astro | .astro | tree-sitter | — | — | — | — | yes |
-| autohotkey | .ahk .ah2 | regex | — | — | — | — | yes |
-| bash | .sh .bash .zsh | tree-sitter | — | — | — | — | yes |
+| ada | .adb .ads .ada | regex (multi-pass) | yes | yes | — | — | yes |
+| al | .al | regex | yes | — | — | — | yes |
+| apex | .cls .trigger .apex | regex (multi-pass) | yes | yes | — | — | yes |
+| assembly | .asm .s .S | regex | yes | — | — | — | yes |
+| astro | .astro | tree-sitter | yes | — | — | — | yes |
+| autohotkey | .ahk .ah2 | regex | yes | — | — | — | yes |
+| bash | .sh .bash .zsh | tree-sitter | yes | — | — | — | yes |
 | blade | .blade.php | regex | yes | yes | — | — | yes |
 | c | .c .h | tree-sitter | yes | yes | — | — | yes |
-| clojure | .clj .cljs .cljc .edn | regex | — | yes | — | — | — |
-| cmake | .cmake CMakeLists.txt | regex | — | yes | — | — | — |
-| cobol | .cob .cbl .cpy .cobol | regex (multi-pass) | — | yes | — | — | yes |
-| common-lisp | .lisp .lsp .cl .asd | regex (multi-pass) | — | yes | — | — | yes |
+| clojure | .clj .cljs .cljc .edn | regex | yes | yes | — | — | — |
+| cmake | .cmake CMakeLists.txt | regex | yes | yes | — | — | — |
+| cobol | .cob .cbl .cpy .cobol | regex (multi-pass) | yes | yes | — | — | yes |
+| common-lisp | .lisp .lsp .cl .asd | regex (multi-pass) | yes | yes | — | — | yes |
 | cpp | .cpp .cxx .cc .hpp | tree-sitter | yes | yes | — | — | yes |
 | csharp | .cs | tree-sitter | yes | yes | — | — | yes |
-| css | .css .scss .sass .less | tree-sitter | — | yes | — | — | yes |
-| cuda | .cu .cuh | regex | — | yes | — | — | — |
-| d | .d .di | regex (multi-pass) | — | yes | — | — | yes |
+| css | .css .scss .sass .less | tree-sitter | yes | yes | — | — | yes |
+| cuda | .cu .cuh | regex | yes | yes | — | — | — |
+| d | .d .di | regex (multi-pass) | yes | yes | — | — | yes |
 | dart | .dart | tree-sitter | yes | yes | — | — | yes |
-| dockerfile | Dockerfile .dockerfile | regex | — | yes | — | — | yes |
-| ejs | .ejs | regex | — | yes | — | — | yes |
-| elisp | .el .elc | tree-sitter | — | — | — | — | — |
+| dockerfile | Dockerfile .dockerfile | regex | yes | yes | — | — | yes |
+| ejs | .ejs | regex | yes | yes | — | — | yes |
+| elisp | .el .elc | tree-sitter | yes | — | — | — | — |
 | elixir | .ex .exs | tree-sitter | yes | yes | — | — | yes |
-| elm | .elm | tree-sitter | — | — | — | — | — |
-| erlang | .erl .hrl | regex | — | yes | — | — | yes |
+| elm | .elm | tree-sitter | yes | — | — | — | — |
+| erlang | .erl .hrl | regex | yes | yes | — | — | yes |
 | form | .frm .prc .h | regex | yes | yes | — | — | — |
-| fortran | .f .f90 .f95 .f03 | regex | — | yes | — | — | yes |
-| fsharp | .fs .fsi .fsx | regex (multi-pass) | — | yes | — | — | — |
-| gdscript | .gd | regex | — | yes | — | — | yes |
-| gleam | .gleam | regex | — | yes | — | — | yes |
-| glsl | .glsl .vert .frag .geom | regex | — | yes | — | — | — |
+| fortran | .f .f90 .f95 .f03 | regex | yes | yes | — | — | yes |
+| fsharp | .fs .fsi .fsx | regex (multi-pass) | yes | yes | — | — | — |
+| gdscript | .gd | regex | yes | yes | — | — | yes |
+| gleam | .gleam | regex | yes | yes | — | — | yes |
+| glsl | .glsl .vert .frag .geom | regex | yes | yes | — | — | — |
 | go | .go | tree-sitter | yes | yes | — | — | yes |
-| graphql | .graphql .gql | custom | — | — | — | — | yes |
-| groovy | .groovy .gradle .gvy | regex | — | yes | — | — | yes |
-| haskell | .hs .lhs | regex | — | yes | — | — | yes |
-| hcl | .tf .hcl .tfvars | custom | — | yes | — | — | yes |
-| html | .html .htm | tree-sitter | — | yes | — | — | yes |
+| graphql | .graphql .gql | custom | yes | — | — | — | yes |
+| groovy | .groovy .gradle .gvy | regex | yes | yes | — | — | yes |
+| haskell | .hs .lhs | regex | yes | yes | — | — | yes |
+| hcl | .tf .hcl .tfvars | custom | yes | yes | — | — | yes |
+| html | .html .htm | tree-sitter | yes | yes | — | — | yes |
 | ini | .ini .cfg .conf .properties | regex | — | — | — | — | — |
 | java | .java | tree-sitter | yes | yes | — | — | yes |
 | json | .json .jsonc .json5 | tree-sitter | — | yes | — | — | yes |
-| julia | .jl | regex | — | yes | — | — | yes |
+| julia | .jl | regex | yes | yes | — | — | yes |
 | kotlin | .kt .kts | tree-sitter | yes | yes | — | — | yes |
-| lean | .lean | regex | — | yes | — | — | — |
-| lua | .lua .luau | tree-sitter | — | yes | — | — | yes |
+| lean | .lean | regex | yes | yes | — | — | — |
+| lua | .lua .luau | tree-sitter | yes | yes | — | — | yes |
 | magma | .m .mag .magma | regex | yes | yes | — | — | — |
-| makefile | Makefile makefile .mk GNUmakefile | regex | — | yes | — | — | — |
+| makefile | Makefile makefile .mk GNUmakefile | regex | yes | yes | — | — | — |
 | markdown | .md .mdx .markdown .qmd | custom | yes | — | — | — | yes |
 | matlab | .m .mlx .mat | regex (multi-pass) | yes | yes | — | — | yes |
-| meson | meson.build meson_options.txt | regex | — | — | — | — | — |
-| nim | .nim .nims .nimble | regex | — | yes | — | — | yes |
-| nix | .nix | regex | — | yes | — | — | yes |
+| meson | meson.build meson_options.txt | regex | yes | — | — | — | — |
+| nim | .nim .nims .nimble | regex | yes | yes | — | — | yes |
+| nix | .nix | regex | yes | yes | — | — | yes |
 | objc | .m .mm | tree-sitter | yes | yes | — | — | yes |
-| ocaml | .ml .mli | tree-sitter | — | yes | — | — | yes |
-| pascal | .pas .dpr .dpk .lpr | regex (multi-pass) | — | yes | — | — | yes |
-| perl | .pl .pm .t | regex | — | yes | — | — | yes |
+| ocaml | .ml .mli | tree-sitter | yes | yes | — | — | yes |
+| pascal | .pas .dpr .dpk .lpr | regex (multi-pass) | yes | yes | — | — | yes |
+| perl | .pl .pm .t | regex | yes | yes | — | — | yes |
 | php | .php | tree-sitter | yes | yes | yes | — | yes |
-| plsql | .pls .plb .pck .pkb | regex (multi-pass) | — | yes | — | — | yes |
-| powershell | .ps1 .psm1 .psd1 | regex (multi-pass) | — | yes | — | — | yes |
-| prisma | .prisma | custom | — | — | — | — | yes |
-| protobuf | .proto | regex | — | yes | — | — | yes |
+| plsql | .pls .plb .pck .pkb | regex (multi-pass) | yes | yes | — | — | yes |
+| powershell | .ps1 .psm1 .psd1 | regex (multi-pass) | yes | yes | — | — | yes |
+| prisma | .prisma | custom | yes | — | — | — | yes |
+| protobuf | .proto | regex | yes | yes | — | — | yes |
 | python | .py .pyi | tree-sitter | yes | yes | yes | yes | yes |
-| r | .r .R .Rmd | regex | — | yes | — | — | yes |
+| r | .r .R .Rmd | regex | yes | yes | — | — | yes |
 | ruby | .rb .rake | tree-sitter | yes | yes | — | — | yes |
 | rust | .rs | tree-sitter | yes | yes | — | — | yes |
 | scala | .scala .sc | tree-sitter | yes | yes | — | — | yes |
-| solidity | .sol | tree-sitter | — | yes | — | — | yes |
-| sql | .sql | regex | — | — | — | — | yes |
+| solidity | .sol | tree-sitter | yes | yes | — | — | yes |
+| sql | .sql | regex | yes | — | — | — | yes |
 | svelte | .svelte | regex | yes | yes | — | — | — |
 | swift | .swift | tree-sitter | yes | yes | — | — | yes |
-| tcl | .tcl .tk .itcl .itk | regex (multi-pass) | — | yes | — | — | yes |
-| toml | .toml | tree-sitter | — | yes | — | — | yes |
-| typescript | .ts .tsx .js .jsx | tree-sitter | yes | yes | yes | yes | yes |
-| verilog | .v .sv .svh .vh | regex | — | yes | — | — | yes |
-| verse | .verse | regex | — | — | — | — | yes |
-| vhdl | .vhd .vhdl .vho .vhs | regex | — | yes | — | — | yes |
-| vimscript | .vim .vimrc | regex | — | yes | — | — | — |
+| tcl | .tcl .tk .itcl .itk | regex (multi-pass) | yes | yes | — | — | yes |
+| toml | .toml | tree-sitter | yes | yes | — | — | yes |
+| typescript | .ts .tsx .mts .cts | tree-sitter | yes | yes | yes | yes | yes |
+| verilog | .v .sv .svh .vh | regex | yes | yes | — | — | yes |
+| verse | .verse | regex | yes | — | — | — | yes |
+| vhdl | .vhd .vhdl .vho .vhs | regex | yes | yes | — | — | yes |
+| vimscript | .vim .vimrc | regex | yes | yes | — | — | — |
 | vue | .vue | tree-sitter | yes | — | — | — | yes |
 | wolfram | .wl .wls .m .nb | regex | yes | yes | — | — | — |
 | xml | .xml .xul .xsl .xslt | custom | — | yes | — | — | yes |
-| yaml | .yaml .yml | custom | — | yes | — | — | yes |
-| zig | .zig .zon | tree-sitter | — | yes | — | — | yes |
+| yaml | .yaml .yml | custom | yes | yes | — | — | yes |
+| zig | .zig .zon | tree-sitter | yes | yes | — | — | yes |

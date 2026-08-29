@@ -438,6 +438,27 @@ Every data surface owes four states, and each has a house form:
   never indexed" are different sentences. "0 of 0 dependencies covered" is an empty
   state, not a full green meter.
 
+### One condition gets one sentence, and stale beats empty
+
+Two rules for a surface whose data source can be slow, and both were broken at once in
+TRA-397 — a busy daemon produced three different banners in sequence and then replaced
+every number with an em dash.
+
+**A timeout threshold is not a diagnosis.** "The request is taking a while", "the feed
+dropped" and "the request failed" are one condition — the service is busy — seen at three
+moments. Reduce them to one state with one line before they reach the screen, and hold it
+steady: degradation waits out a grace period (`DEGRADED_GRACE_MS`) so a feed that blinks
+does not blink a banner with it, while recovery publishes immediately. Escalating copy
+makes a working app look broken. Keep apart only what the user would act on differently —
+"busy" and "not running" are two states because one is a wait and the other is a button.
+
+**Values that were true a minute ago outrank no values at all.** A refresh that fails must
+leave the last good ones on screen, cache them across launches, and say once — above them,
+where they are read before the numbers are — that they are the last indexed ones. Em dashes
+and "Couldn't be measured" are for a number nobody has ever had, not for one that is a few
+minutes old. The corollary: that line has to match the screen. Saying "these are the last
+indexed numbers" over a row of em dashes is the same lie in the other direction.
+
 ---
 
 ## 6. Layout skeleton
@@ -549,6 +570,37 @@ Two things to know before touching the offset:
 `packages/app/src/main/__tests__/chrome-metrics.test.ts` and the top-band block in
 `src/renderer/styles/__tests__/tokens.test.ts` fail if the constant, the token, the
 stylesheets and `tray.ts` ever drift apart again.
+
+### The second top band: the native tab bar is macOS's, not ours
+
+Opening a project opens a native macOS **tab**, so the normal state of this app is a
+tabbed window — not an edge case. AppKit then draws a tab bar, and because the window is
+`titleBarStyle: 'hiddenInset'` (full-size content view) it draws it **over** the web
+contents: `innerHeight` stays equal to `outerHeight`, nothing reflows, and the tab bar
+simply covers the top 36px of whatever the renderer painted. That is the whole of the
+band above, so the surface toolbar and the sidebar toggle went from "misaligned" to
+"gone" (TRA-399).
+
+The rule that follows: **a band we do not draw still has to be reserved.** The tab bar is
+AppKit's, we cannot restyle it and we cannot ask whether it is up — so:
+
+- `MAC_TAB_BAR_H` (36px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
+  number, exactly like `TOP_BAND_H`. The stage reserves it with `padding-top` while
+  `data-tabbar="on"`, and the app's own band starts below it. Never draw into it.
+- **The traffic lights belong to whichever band holds the top line**, not to a constant.
+  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 36px tab bar
+  (centre 18). `trafficLightYFor(tabBarVisible)` is the only place that chooses.
+- **`trafficLightPosition` is applied once, at window creation, and AppKit re-lays the
+  title bar out under it.** So every event that can change the tab count re-applies it —
+  `show`, `focus`, `closed`, `did-finish-load` — synchronously and again a frame later,
+  because the tab bar comes and goes asynchronously. Without that, closing back to one tab
+  left the lights 6px high until a window resize forced a layout pass, which is the "nudge
+  the window and it fixes itself" users report.
+- The 78px that clears the lights in `.ws-sidebar-titlebar` goes away with them: while the
+  tab bar holds the lights, reserving their width leaves the toggle floating in a gap.
+
+`src/main/__tests__/tab-chrome.test.ts` drives the real window events and fails if any of
+those stops firing.
 
 ### Where a global action lives
 

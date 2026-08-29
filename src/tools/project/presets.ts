@@ -6,15 +6,24 @@
  */
 
 export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
+  // The default surface (TRA-402). Membership is ALWAYS_LOAD_TOOLS — the
+  // first-five-minutes set below — plus the decision-memory quartet. Those two
+  // lists used to disagree: `minimal` omitted get_task_context, get_call_graph
+  // and get_context_bundle while ALWAYS_LOAD_TOOLS declared them essential, so
+  // the smallest preset was missing tools the server was asking clients to keep
+  // eagerly loaded. Anything outside this set is one `load_tools` call away.
   minimal: [
     'search',
     'search_text',
     'get_outline',
     'get_symbol',
     'find_usages',
+    'get_call_graph',
     'get_change_impact',
     'get_project_map',
     'get_feature_context',
+    'get_task_context',
+    'get_context_bundle',
     'suggest_queries',
     'get_index_health',
     // register_edit/batch are core infra (every edit-and-reindex loop and

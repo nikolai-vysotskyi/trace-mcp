@@ -120,4 +120,15 @@ export interface MetaContext extends ServerContext {
   registeredToolNames: string[];
   toolHandlers: Map<string, (params: Record<string, unknown>) => Promise<ToolResponse>>;
   presetName: string;
+  /**
+   * Tools outside the active preset, registered-but-disabled and reachable via
+   * `load_tools` (TRA-402). Empty on a `full` session.
+   */
+  deferredTools: Map<
+    string,
+    {
+      registered: { enabled: boolean; description?: string; inputSchema?: unknown };
+      handler: (params: Record<string, unknown>) => Promise<ToolResponse>;
+    }
+  >;
 }

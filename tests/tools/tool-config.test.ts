@@ -3,10 +3,10 @@ import { TraceMcpConfigSchema } from '../../src/config.js';
 import { resolvePreset, TOOL_PRESETS } from '../../src/tools/project/presets.js';
 
 describe('Tool config schema', () => {
-  it('defaults tools.preset to "standard", not "full" (TRA-5: trim default surface)', () => {
+  it('defaults tools.preset to "minimal", not "full" (TRA-402: deferred surface)', () => {
     const result = TraceMcpConfigSchema.safeParse({ tools: {} });
     expect(result.success).toBe(true);
-    expect(result.data?.tools?.preset).toBe('standard');
+    expect(result.data?.tools?.preset).toBe('minimal');
   });
 
   it('the default preset registers well under half of the full tool surface', () => {

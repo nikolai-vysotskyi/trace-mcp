@@ -199,6 +199,16 @@ async function runSample({ idleSeconds }) {
       cold_start_ms: interactiveAt - t0,
       // Renderer-side share: first renderer bytes → interactive.
       window_interactive_ms: round(interactiveAt - timeOrigin, 0),
+      // Read off the renderer's own clock after the fact, so — unlike the two
+      // above — it carries none of this harness's polling and CDP round-trip
+      // latency. On a loaded machine those two inflate by hundreds of ms while
+      // this one does not, which is what makes it the comparable number.
+      renderer_fcp_ms: round(
+        await cdp.evaluate(
+          `performance.getEntriesByType('paint').find(e => e.name === 'first-contentful-paint')?.startTime ?? null`,
+        ) ?? NaN,
+        0,
+      ),
     };
 
     if (idleSeconds > 0) {
@@ -639,6 +649,7 @@ const entry = {
   metrics: {
     cold_start_ms: median(samples.map((s) => s.cold_start_ms)),
     window_interactive_ms: median(samples.map((s) => s.window_interactive_ms)),
+    renderer_fcp_ms: median(samples.map((s) => s.renderer_fcp_ms)),
     ui_p95_ms: workload.ui_p95_ms,
     heap_idle_mb: last.heap_idle_mb ?? null,
     heap_after_workload_mb: workload.heap_after_workload_mb,

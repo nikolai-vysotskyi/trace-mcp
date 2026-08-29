@@ -138,6 +138,31 @@ function openProjectWindow(root: string): void {
 
 // ── Panes ────────────────────────────────────────────────────────────────
 
+/**
+ * The one line for "the daemon is busy" (TRA-397).
+ *
+ * Two halves, each decided by something the reader can see for themselves.
+ * The first says what the daemon is doing: with the feed up we know, and with
+ * it down we say "busy" rather than guessing at indexing. The second describes
+ * the numbers next to it, so it has to follow whether there are any — telling
+ * someone they are looking at the last indexed numbers over a row of em dashes
+ * is the same lie the old copy told, in the other direction.
+ */
+export function busyMessage(o: {
+  connected: boolean;
+  indexing: number;
+  total: number;
+  haveNumbers: boolean;
+}): string {
+  const lead =
+    o.connected && o.indexing > 0
+      ? `Indexing ${o.indexing} of ${o.total} projects`
+      : 'The daemon is busy';
+  return o.haveNumbers
+    ? `${lead}. These are the last indexed numbers.`
+    : `${lead}. The numbers arrive when it's done.`;
+}
+
 /** The pane shown when the daemon is not answering at all. */
 function DaemonDownPane({ restarting, onRestart }: { restarting: boolean; onRestart: () => void }) {
   return (
@@ -248,32 +273,32 @@ export function Workspace() {
   const effectiveView: ViewMode = narrow ? 'compact' : view;
 
   // ── Render ───────────────────────────────────────────────────────────
-  // The live feed being down does not mean there is nothing to show: the
-  // metrics cache usually still has every project. Only take over the pane
-  // when we genuinely have nothing to render.
-  const disconnected = !data.connected && !data.loading;
-  const daemonDown = disconnected && data.projects.length === 0;
-  const showEmpty = !data.loading && !disconnected && data.projects.length === 0;
+  // Two states, not four. `unreachable` takes the pane and offers the process
+  // to start; `stale` keeps every number where it is and says once that they
+  // are a snapshot. A slow daemon is never allowed to reach the first branch.
+  const daemonDown = data.daemonState === 'unreachable';
+  const showEmpty = !data.loading && !daemonDown && data.projects.length === 0;
   const selectedProjects = visible.filter((p) => selection.selected.has(p.root));
   // One diagnosis at a time. When DaemonDownPane has taken over the pane it
-  // already says what happened and offers the fix; letting the metrics banner
-  // through as well put "taking too long — it may still be indexing" directly
-  // above "The daemon isn't running", which are different diagnoses.
+  // already says what happened and offers the fix, so the banner stays out of
+  // the way — two sentences about the same daemon is what this looked like
+  // before (TRA-397).
   const banner = daemonDown
     ? null
-    : disconnected
-    ? {
-        message: 'Live updates are off — the daemon stopped answering. These numbers are the last indexed snapshot.',
-        action: 'restart' as const,
-      }
-    : data.error
-      ? {
-          // A busy daemon is not a broken one — say which, and offer the
-          // action that matches. Retrying a timeout is right; restarting isn't.
-          message: data.error,
-          action: 'retry' as const,
-        }
-      : null;
+    : // A mutation that failed said something specific and actionable; that
+      // outranks "the numbers are a moment old".
+      data.error
+      ? { message: data.error }
+      : data.daemonState === 'stale'
+        ? {
+            message: busyMessage({
+              connected: data.connected,
+              indexing: kpis.indexing,
+              total: kpis.totalProjects,
+              haveNumbers: !data.metricsLoading,
+            }),
+          }
+        : null;
 
   const viewProps = {
     projects: visible,
@@ -293,9 +318,12 @@ export function Workspace() {
     <div ref={paneRef} className="flex flex-col h-full overflow-hidden relative">
       <WorkspaceHeader
         kpis={kpis}
-        metricsLoading={data.metricsLoading && data.error === null}
+        metricsLoading={data.metricsLoading && data.errorKind === null}
         listLoading={data.loading}
-        metricsFailed={data.metricsLoading && data.error !== null}
+        // Em dashes are for a number nobody has, not for a number that is a
+        // few minutes old: `metricsLoading` is already false whenever a
+        // snapshot was restored, so this only fires on a cold, failed start.
+        metricsFailed={data.metricsLoading && data.errorKind !== null}
         listFailed={daemonDown}
         filter={filter}
         onFilterChange={setFilter}
@@ -307,36 +335,31 @@ export function Workspace() {
         dense={dense}
         hideViewToggle={narrow}
         rightExtra={<AddProjectControl onAdd={(root) => data.addProject(root)} />}
-      />
-
-      {banner && (
-        <div
-          role="status"
-          className="mx-4 mt-3 px-3 py-2 rounded-lg text-[13px] flex items-center gap-2"
-          style={{
-            background: 'color-mix(in srgb, var(--status-orange) 9%, transparent)',
-            color: 'var(--label)',
-            border: '0.5px solid color-mix(in srgb, var(--status-orange) 30%, transparent)',
-          }}
-        >
-          <span>{banner.message}</span>
-          {/* The action belongs next to the sentence that needs it, not 1400px
-              away at the far right of the window. */}
-          {banner.action === 'restart' ? (
-            <Button
-              size="small"
-              onClick={() => void data.restartDaemon()}
-              disabled={data.restarting}
+        // Above the tiles, not below them: the line that says these numbers
+        // are a snapshot has to be read before the numbers are.
+        banner={
+          banner && (
+            <div
+              role="status"
+              className="mx-4 mt-3 px-3 py-2 rounded-lg text-[13px] flex items-center gap-2"
+              style={{
+                background: 'color-mix(in srgb, var(--status-orange) 9%, transparent)',
+                color: 'var(--label)',
+                border: '0.5px solid color-mix(in srgb, var(--status-orange) 30%, transparent)',
+              }}
             >
-              {data.restarting ? 'Starting…' : 'Start daemon'}
-            </Button>
-          ) : (
-            <Button size="small" onClick={() => void data.refresh()} disabled={data.refreshing}>
-              {data.refreshing ? 'Retrying…' : 'Try again'}
-            </Button>
-          )}
-        </div>
-      )}
+              <span>{banner.message}</span>
+              {/* The action belongs next to the sentence that needs it, not
+                  1400px away at the far right of the window. Restarting the
+                  daemon is not offered here — a busy daemon does not need
+                  restarting, and one that is actually down has its own pane. */}
+              <Button size="small" onClick={() => void data.refresh()} disabled={data.refreshing}>
+                {data.refreshing ? 'Retrying…' : 'Try again'}
+              </Button>
+            </div>
+          )
+        }
+      />
 
       <div className="flex-1 min-h-0 flex flex-col px-4 pb-4 pt-3">
         {daemonDown ? (

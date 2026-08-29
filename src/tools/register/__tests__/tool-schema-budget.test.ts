@@ -1,11 +1,3 @@
-/**
- * Regression guard for MCP tool-schema token tax (TRA-186): every tool
- * description the server advertises is paid in full by any MCP client
- * without deferred/lazy tool loading, on every session. Caps total
- * description size and flags any single tool ballooning past a sane budget,
- * so the "170+ tools = ~50k tokens before the agent does anything" problem
- * doesn't silently regrow.
- */
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,112 +5,19 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { COMPACT_CORE_PARAMS } from '../../../server/compact-params.js';
 import { applySchemaTransforms } from '../../../server/tool-gate-helpers.js';
-import type { MetaContext, ServerContext } from '../../../server/types.js';
-import { registerAdvancedTools } from '../advanced.js';
-import { registerAnalysisTools } from '../analysis.js';
-import { registerCoreTools } from '../core.js';
-import { registerFrameworkTools } from '../framework.js';
-import { registerGitTools } from '../git.js';
-import { registerKnowledgeTools } from '../knowledge.js';
-import { registerMemoryTools } from '../memory.js';
-import { registerNavigationTools } from '../navigation.js';
-import { registerProjectsTools } from '../projects.js';
-import { registerQualityTools } from '../quality.js';
-import { registerRefactoringTools } from '../refactoring.js';
-import { registerSessionTools } from '../session.js';
-
-interface CapturedTool {
-  name: string;
-  description: string;
-  schemaShape: Record<string, z.ZodTypeAny>;
-}
-
-function makeCapturingServer(): { server: unknown; captured: CapturedTool[] } {
-  const captured: CapturedTool[] = [];
-  const server = {
-    tool: (
-      name: string,
-      description: string,
-      schemaShape: Record<string, z.ZodTypeAny>,
-      _handler: unknown,
-    ) => {
-      captured.push({ name, description, schemaShape });
-    },
-    resource: () => undefined,
-    prompt: () => undefined,
-  };
-  return { server, captured };
-}
-
-function baseCtx(overrides: Record<string, unknown> = {}): ServerContext {
-  const stub = {
-    projectRoot: '/nonexistent/fake-project',
-    config: {},
-    registry: { getAllFrameworkPlugins: () => [] },
-    embeddingService: null,
-    vectorStore: null,
-    reranker: null,
-    rankingLedger: null,
-    decisionStore: {},
-    telemetrySink: null,
-    topoStore: null,
-    progress: null,
-    aiProvider: null,
-    journal: null,
-    savings: {
-      getSessionStats: () => ({ total_calls: 0, total_raw_tokens: 0 }),
-      getLatencyPerTool: () => ({}) as Record<string, unknown>,
-    },
-    has: () => false,
-    guardPath: () => null,
-    j: (v: unknown) => JSON.stringify(v),
-    jh: (_tool: string, v: unknown) => JSON.stringify(v),
-    markExplored: () => undefined,
-    onPipelineEvent: () => undefined,
-    ...overrides,
-  };
-  return stub as unknown as ServerContext;
-}
-
-function metaCtx(overrides: Record<string, unknown> = {}): MetaContext {
-  const base = baseCtx(overrides) as unknown as Record<string, unknown>;
-  const meta = {
-    ...base,
-    _originalTool: () => undefined,
-    registeredToolNames: [] as string[],
-    toolHandlers: new Map<string, unknown>(),
-    presetName: 'schema-budget-test',
-  };
-  return meta as unknown as MetaContext;
-}
-
-function captureAllTools(ctxOverrides: Record<string, unknown> = {}): CapturedTool[] {
-  const { server, captured } = makeCapturingServer();
-  const ctx = baseCtx(ctxOverrides);
-  const mctx = metaCtx(ctxOverrides);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const s = server as any;
-  registerCoreTools(s, ctx);
-  registerNavigationTools(s, ctx);
-  registerAdvancedTools(s, ctx);
-  registerProjectsTools(s, ctx);
-  registerFrameworkTools(s, ctx);
-  registerAnalysisTools(s, ctx);
-  registerQualityTools(s, ctx);
-  registerGitTools(s, ctx);
-  registerMemoryTools(s, ctx);
-  registerRefactoringTools(s, ctx);
-  registerKnowledgeTools(s, ctx);
-  registerSessionTools(s, mctx);
-  return captured;
-}
+import { captureAllTools } from './_capture-tools.js';
 
 // Re-measured 2026-08-28 (TRA-240): 55.0k description chars across the
 // always-on tools, after actually removing the seven deprecated consolidation
 // aliases rather than only trimming their prose. TRA-239 got this to 56.3k by
 // cutting the alias descriptions to one-line pointers; deleting the
 // registrations outright took the rest.
-const TOTAL_DESCRIPTION_CHAR_BUDGET = 58_000;
+// Raised to 60,000 on 2026-08-29 (TRA-402): 58,441 chars. The jump is not new
+// prose — the capture harness's `_originalTool` stub used to swallow the nine
+// ungated meta-tools (get_preset_info, batch, plan_turn, the analytics four,
+// ...), so their descriptions were never counted by any budget here. They are
+// now, along with `load_tools` (~600 chars of description).
+const TOTAL_DESCRIPTION_CHAR_BUDGET = 60_000;
 // No single tool description should need more prose than this to be usable
 // — if a tool grows past it, the fix is almost always "move detail into the
 // per-param describe() or the response docs", not a longer top-level string.
