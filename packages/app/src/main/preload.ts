@@ -1,5 +1,15 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+/* Window chrome the renderer has to lay out around, answered synchronously
+   because it gates first paint. `titleBarStyle: 'hiddenInset'` is set for
+   darwin in main/tray.ts, so the same condition decides it here. Absent in a
+   plain browser — which is the point: `navigator.userAgent` says "Mac" there
+   too, and keying the traffic-light reservation off it drew a 44px strip in
+   `vite dev` that the real window never has. */
+contextBridge.exposeInMainWorld('electronChrome', {
+  insetTitleBar: process.platform === 'darwin',
+});
+
 contextBridge.exposeInMainWorld('electronAPI', {
   selectFolder: (): Promise<string | null> => ipcRenderer.invoke('select-folder'),
   openInEditor: (filePath: string): Promise<void> => ipcRenderer.invoke('open-in-editor', filePath),
@@ -46,6 +56,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => {
       ipcRenderer.removeListener('tabbar-changed', handler);
     };
+  },
+  /** Mirror the renderer's appearance choice onto `nativeTheme`, so the
+      sidebar's native vibrancy matches the theme the DOM is painting. */
+  setAppearance: (appearance: 'auto' | 'light' | 'dark'): void => {
+    ipcRenderer.send('set-appearance', appearance);
   },
   syncSidebarWidth: (width: number): void => {
     ipcRenderer.send('sync-sidebar-width', width);
