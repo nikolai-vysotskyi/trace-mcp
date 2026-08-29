@@ -34,6 +34,7 @@ import { isDangerousProjectRoot, setupProject } from '../project-setup.js';
 import {
   clearPendingReindex,
   descendantExcludeGlobs,
+  findEphemeralProjects,
   findOverlappingProjects,
   getProject,
   listProjects,
@@ -971,6 +972,43 @@ export class ProjectManager {
       'Project removed from daemon',
     );
     return artifacts;
+  }
+
+  /**
+   * Deregister one-shot agent-run checkouts whose run finished more than
+   * `ttlHours` ago, and reclaim their index DBs (TRA-335).
+   *
+   * `prune` can never reclaim these on its own: it reads "root directory still
+   * exists" as liveness, and the runtimes that create these workdirs don't
+   * delete them when a run ends. `lastIndexed` is no signal either — this
+   * daemon keeps reindexing them forever, so they look permanently fresh. Age
+   * since registration is the only honest clock for a directory whose whole
+   * purpose was one run, which is what `findEphemeralProjects` measures.
+   *
+   * Same liveness guards as `unloadIdleProjects` for the loaded ones (never
+   * touch a project mid-index or with connected clients), and `removeProject`
+   * keeps the index DB whenever a sibling checkout still points at it or holds
+   * it open. Unloaded candidates are removed directly — `stopProject` no-ops.
+   *
+   * ponytail: recognizing an ephemeral root is a path heuristic, so this only
+   * covers the workdir shapes `findEphemeralProjects` knows. A per-project
+   * last-*queried* timestamp would generalize to CI/worktrees/sandboxes; add
+   * it when one of those actually shows up, not before.
+   */
+  async sweepEphemeralProjects(ttlHours = 72): Promise<string[]> {
+    const removed: string[] = [];
+    for (const candidate of findEphemeralProjects(ttlHours)) {
+      const managed = this.projects.get(candidate.root);
+      if (managed && (managed.status === 'starting' || managed.status === 'indexing')) continue;
+      if ((this.resourcePool?.getRefCount(candidate.root) ?? 0) > 0) continue;
+      logger.info(
+        { projectRoot: candidate.root, ageHours: Math.round(candidate.ageHours) },
+        'Deregistering stale one-shot workdir project',
+      );
+      await this.removeProject(candidate.root);
+      removed.push(candidate.root);
+    }
+    return removed;
   }
 
   /** Get a managed project by root path. */
