@@ -71,6 +71,9 @@ export function setLocale(next: Locale): void {
   }
   void i18next.changeLanguage(next);
   applyLocale(next);
+  // The native menu and the tray are drawn by the main process, which cannot
+  // read localStorage — same mirror `setAppearance` uses for the theme.
+  window.electronAPI?.setLocale?.(next);
 }
 
 /** Current language plus the setter, and a re-render when either window changes it. */

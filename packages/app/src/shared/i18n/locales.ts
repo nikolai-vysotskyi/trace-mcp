@@ -23,8 +23,8 @@ export type Locale = 'en' | 'ru';
 export const DEFAULT_LOCALE: Locale = 'en';
 
 export const LOCALES: readonly LocaleInfo[] = [
-  { code: 'en', label: 'English', short: 'EN' },
-  { code: 'ru', label: 'Русский', short: 'RU' },
+  { code: 'en', label: 'English', short: 'EN' }, // i18n-exempt — see LocaleInfo.label
+  { code: 'ru', label: 'Русский', short: 'RU' }, // i18n-exempt
 ];
 
 /** Same shape as THEME_KEY: one localStorage key, absent means "not chosen". */
