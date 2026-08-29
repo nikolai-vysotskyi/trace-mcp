@@ -6,9 +6,11 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
+import { writeTmpFileSync } from '../../utils/safe-fs.js';
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -347,10 +349,12 @@ export function visualizeSubprojectTopology(
 
   const layout = opts?.layout ?? 'force';
   const html = generateSubprojectHtml(nodes, edges, layout);
-  const outputPath =
-    opts?.output ?? path.join(process.env.TMPDIR ?? '/tmp', 'trace-mcp-subproject-topology.html');
+  const outputPath = opts?.output ?? path.join(os.tmpdir(), 'trace-mcp-subproject-topology.html');
 
-  fs.writeFileSync(outputPath, html, 'utf-8');
+  // Caller-supplied path stays as-is; the shared-tmp default must not follow a
+  // symlink another user planted under our predictable name.
+  if (opts?.output) fs.writeFileSync(outputPath, html, 'utf-8');
+  else writeTmpFileSync(outputPath, html);
 
   return ok({
     outputPath,
