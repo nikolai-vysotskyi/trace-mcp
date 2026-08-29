@@ -37,6 +37,7 @@ declare global {
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
       onTabBarChanged: (callback: (visible: boolean) => void) => () => void;
       setAppearance: (appearance: 'auto' | 'light' | 'dark') => void;
+      setLocale: (locale: string) => void;
       syncSidebarWidth: (width: number) => void;
       onSidebarWidthChanged: (callback: (width: number) => void) => () => void;
       checkForUpdate: () => Promise<{

@@ -234,6 +234,36 @@ A missing or invalid attestation means the package was **not** built by the offi
 
 ---
 
+## Telemetry Credentials — Public by Design
+
+The anonymous active-install ping (`src/telemetry/usage-ping.ts`) uses GA4's
+Measurement Protocol. Its two credentials — a measurement id and an
+`api_secret` — are **inlined into the published bundle at build time**
+(`tsup.config.ts`, `define` block) and are therefore readable as plaintext by
+anyone who runs `npm install trace-mcp`. This is intended, not a leak.
+
+* **A GA4 `api_secret` is write-only.** It can send events to the property; it
+  cannot read reports, users, or any other data. Baking one into a distributed
+  client is the documented way GA4 Measurement Protocol works for client-side
+  apps.
+* **They are stored as GitHub Actions secrets for convenience, not
+  confidentiality.** The `npm` environment keeps them out of git history and
+  makes rotation a one-place edit. It does not — and is not meant to — keep
+  them out of users' hands.
+* **Rotating them is not a mitigation.** The next release republishes the new
+  value. Report an actual problem with the property (spam, quota abuse)
+  instead; the fix for that is a server-side proxy, not a rotation.
+* **The counts are unauthenticated.** Anyone holding the extracted credentials
+  can post arbitrary `client_id`s, so active-install numbers are a
+  lower-confidence signal that can be inflated by a third party. Treat them as
+  directional, not as an auditable metric.
+
+Source maps (`dist/*.map`) are published alongside the bundle so that stack
+traces from user installs are readable. They contain the same credentials as
+the bundle, which — given the above — adds no exposure.
+
+---
+
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability, please report it responsibly:
@@ -267,3 +297,4 @@ If you discover a security vulnerability, please report it responsibly:
 | Auto-update Gatekeeper check | `spctl -a -t exec` on staged bundle | No |
 | Auto-update opt-out | Disabled when set | Yes (`TRACE_MCP_NO_AUTO_UPDATE=1`) |
 | npm provenance attestation | Sigstore/OIDC on every release | No |
+| GA4 telemetry credentials | Public by design, ship in `dist/`, write-only | Yes (`TRACE_MCP_TELEMETRY=off`) |
