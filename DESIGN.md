@@ -355,6 +355,36 @@ Every data surface owes four states, and each has a house form:
 - **Scroll edges get a hairline.** A pinned footer or a sticky header that content
   slides under is a scroll edge; a sticky header must have an **opaque** backing, or
   rows show through the column labels.
+- **The sidebar footer is ONE row, and it opens the app menu.** It is not where
+  global actions accumulate — that is what it kept becoming, a row per action plus a
+  permanent update strip, 70.5px of chrome under a column meant for navigation
+  (TRA-305 → TRA-306 → TRA-363). The row is the product: its name, a chevron, and a
+  pop-up. See "Where a global action lives" below.
+
+### Where a global action lives
+
+An action that belongs to the app rather than to the surface in front of you —
+Settings, Check for updates, What's new, Get help — has exactly two homes, and
+**one definition**: `packages/app/src/shared/global-actions.ts`.
+
+- The **native application menu** (`main/menu.ts`) builds its items from that list.
+  On macOS the menu bar is these actions' native home and the place a Mac user
+  looks first.
+- The **app menu** in the sidebar footer renders the same list. Off macOS there is
+  no menu bar in the window, and on macOS it is still the discoverable path for
+  someone who has never opened the menu bar.
+
+Neither surface types a label or a key of its own: they read `label`, `accelerator`
+/ `shortcut` and `url` from the shared entry. Adding a global action means adding
+one object there — it appears in both places, named the same, on the same key.
+
+Two things deliberately stay out of that list. **Appearance** is a preference with
+three states, not a command, and lives in the app menu and in Settings only — a
+list with one member cannot drift. **Documentation** is native-menu-only for the
+same reason.
+
+The footer never grows a second row for any of this. If a new global action needs a
+home, it is a menu item.
 
 ### The window minimum is a size that has to work
 
@@ -588,7 +618,13 @@ new evidence.
 | `listPending` separates "daemon hasn't answered" from "never indexed" | `status ?? 'unknown'` blamed the project for the daemon's silence. |
 | Sidebar footer is `.ws-sb-row`, not its own geometry | One row system for the whole sidebar; the footer's labels started 26px left of every other label. |
 | Appearance is Auto / Light / Dark, with Auto clearing the key | The old `toggle` only ever wrote `light` or `dark`, so one click pinned the app forever and the system listener stopped mattering. |
-| Appearance lives in Settings, not the sidebar footer | A preference is not a navigation destination, and a second footer row cost 28px at the bottom of every window. It renders in Settings' daemon-down and loading states too — the theme is localStorage, not daemon config. |
+| Appearance lives in Settings, not the sidebar footer | A preference is not a navigation destination, and a second footer row cost 28px at the bottom of every window. It renders in Settings' daemon-down and loading states too — the theme is localStorage, not daemon config. (TRA-363 added it back as a checked group *inside* the app menu — a menu item costs no sidebar height, which is what the objection was about.) |
+| The sidebar footer is one row, and that row opens a menu | Every global action was costing 28px of a column meant for navigation: Settings, then Appearance, then a permanent "● Up to date · v3.1.1 ⟳" strip — 70.5px measured, of which the update row's entire message was "nothing is wrong". One row is 42.5px and the next global action costs a menu item instead of a row (TRA-363). |
+| A global action is defined once, in `src/shared/global-actions.ts` | The native menu and the app menu both offer Settings / What's new / Get help / Check for updates. Two hand-maintained lists drift — a relabelled item, a moved key, an action added to one and forgotten in the other. Neither surface types a label; both read the entry. |
+| "Up to date" belongs in the app menu's header, not in a sidebar row | It is the answer to a question you only ask when you go looking, and it belongs next to the action that re-asks it. A permanent strip pays 28px in every window, forever, to report the absence of news. The states you can *act* on — update available, restart pending, bundle stuck — still get a card in the sidebar. |
+| A menu anchors on the app, because there is no account to anchor on | The pattern this came from is an account menu, held together by an identity at the top. We have no users. The product is the identity: the trigger carries the name, the header carries the version and whether it is current. |
+| In a menu, focus IS the highlight — and the only one | Arrowing moves real DOM focus, so `:focus` has to paint the same accent fill `:hover` does. The house `*:focus-visible` ring on top of that fill drew a blue halo round an already-blue row, which reads as a button on a surface; macOS draws the fill and nothing else. |
+| A row that opens a menu takes the inactive-selection fill, keyed off `aria-expanded` | Accent fill means "this is the surface you are looking at". A menu is not a surface, and the footer row navigates nowhere — on `.is-selected` it lit up accent-blue the moment its own menu took focus. |
 | A surface that draws its own toolbar owns its whole pane | Wrapping it in the pane's `p-4` doubles every inset the surface already declares — the workspace KPI row started at x=32 with its first card at y=76. |
 | Paths truncate at the **head**, keeping the tail | The tail is the part that distinguishes siblings; tail-truncation hid the only useful segment. |
 | Sidebar file paths use a `dir`/`name` flex split, not `direction: rtl` | The rtl hack mangled any path containing `.` or `_` runs (`.idea/workspace.xml` → `idea/workspace.xml.`). |

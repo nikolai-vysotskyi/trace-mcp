@@ -177,6 +177,27 @@
   background: var(--fill-tertiary);
 }
 
+/* A row that OPENS a menu, not one that navigates (the app menu, TRA-363).
+   While its menu is up it takes the inactive-selection fill, never the accent
+   one: accent means "this is the surface you are looking at", and a menu is not
+   a surface. Keyed off aria-expanded so the state has exactly one source. */
+.ws-sb-row[aria-expanded='true'] {
+  background: var(--fill-tertiary);
+}
+
+/* Pop-up affordance on a row that opens a menu. Unlike .ws-sb-trailing this is
+   always visible — it is not an action revealed on hover, it is the row saying
+   what kind of control it is. */
+.ws-sb-row .ws-sb-chevron {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--label-secondary);
+}
+
 /* ---- Sidebar footer ----------------------------------------------------- */
 /* Pinned below .ws-sidebar-scroll, so the rows above slide under it — that is
    a scroll edge, and a scroll edge gets the hairline. Same 6px inset as the

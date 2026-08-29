@@ -61,6 +61,12 @@ export function Menu({ x, y, align = 'start', onClose, className, children }: Me
      Note these listeners attach AFTER the event that opened the menu has
      already passed document capture, so the opening click/contextmenu can
      never instantly dismiss it. */
+  /* Whatever had focus when the menu opened — normally the trigger button,
+     since a click focuses it. A menu that closes and drops focus on <body>
+     strands the keyboard: Tab restarts at the top of the document. */
+  const returnFocusRef = useRef<Element | null>(null);
+  if (returnFocusRef.current === null) returnFocusRef.current = document.activeElement;
+
   useEffect(() => {
     const onPress = (e: MouseEvent): void => {
       const layer = layerRef.current;
@@ -69,13 +75,48 @@ export function Menu({ x, y, align = 'start', onClose, className, children }: Me
       if (layer && e.target instanceof Node && layer.contains(e.target)) return;
       onCloseRef.current();
     };
+    /* Every enabled item, in DOM order. Read per keypress rather than cached:
+       a menu's items can be conditional (an item that only exists while an
+       update is pending), and a stale list arrows onto a node that is gone. */
+    const items = (): HTMLElement[] =>
+      Array.from(
+        layerRef.current?.querySelectorAll<HTMLElement>(
+          '[role^="menuitem"]:not([disabled]):not([aria-disabled="true"])',
+        ) ?? [],
+      );
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return;
-      // Consume Escape: the menu is the topmost layer, an enclosing surface
-      // (panel / dialog) must not ALSO close from the same keypress.
+      if (e.key === 'Escape') {
+        // Consume Escape: the menu is the topmost layer, an enclosing surface
+        // (panel / dialog) must not ALSO close from the same keypress.
+        e.preventDefault();
+        e.stopPropagation();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Home' && e.key !== 'End') {
+        return;
+      }
+      /* Roving focus, macOS-style: nothing is highlighted until the first
+         arrow, and then the list wraps. Focus IS the highlight here — the real
+         one, so Enter and Space activate through the native button. */
+      const list = items();
+      if (list.length === 0) return;
       e.preventDefault();
       e.stopPropagation();
-      onCloseRef.current();
+      const from = list.indexOf(document.activeElement as HTMLElement);
+      const next =
+        e.key === 'Home'
+          ? 0
+          : e.key === 'End'
+            ? list.length - 1
+            : e.key === 'ArrowDown'
+              ? from < 0
+                ? 0
+                : (from + 1) % list.length
+              : from < 0
+                ? list.length - 1
+                : (from - 1 + list.length) % list.length;
+      list[next].focus();
     };
     // App/window switch (Cmd-Tab, native dialog opening) — never leave a
     // zombie menu floating over a window the user has left.
@@ -90,6 +131,15 @@ export function Menu({ x, y, align = 'start', onClose, className, children }: Me
       document.removeEventListener('contextmenu', onPress, true);
       document.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('blur', onWindowBlur);
+      // Only take focus back if the menu still has it: an outside press has
+      // already given it to whatever was clicked, and stealing it back would
+      // undo that click.
+      const back = returnFocusRef.current;
+      const active = document.activeElement;
+      const inMenu = active instanceof Node && layerRef.current?.contains(active);
+      if ((inMenu || active === document.body) && back instanceof HTMLElement && back.isConnected) {
+        back.focus();
+      }
     };
   }, []);
 
