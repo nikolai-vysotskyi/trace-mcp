@@ -14,6 +14,7 @@ import type { TraceMcpConfig } from '../config.js';
 import { loadConfig, loadGlobalConfigRaw } from '../config.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
+import { announceDbHolder, releaseDbHoldersForRoot } from '../db-holders.js';
 import { ensureGlobalDirs, getDbPath, TOPOLOGY_DB_PATH } from '../global.js';
 import { ExtractPool } from '../indexer/extract-pool.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
@@ -60,6 +61,8 @@ const AI_COALESCE_WAIT_MS = 5_000;
 export interface ManagedProject {
   root: string;
   config: TraceMcpConfig;
+  /** On-disk index DB this project opened. Also keys its holder marker (TRA-304). */
+  dbPath: string;
   db: Database.Database;
   store: Store;
   registry: PluginRegistry;
@@ -249,6 +252,17 @@ export class ProjectManager {
       : (getProject(indexRoot)?.dbPath ?? getDbPath(indexRoot));
     ensureGlobalDirs();
 
+    // TRA-304: this process is about to hold `dbPath` open for the project's
+    // whole lifetime — that, not registration, is what makes a sibling
+    // checkout's reuse of the same DB concurrent rather than sequential. Cheap
+    // and idempotent, so it also covers read-mostly subprojects that never
+    // touched the registry.
+    try {
+      announceDbHolder(dbPath, projectRoot);
+    } catch (err) {
+      logger.warn({ err, projectRoot, dbPath }, 'failed to announce index-DB holder (non-fatal)');
+    }
+
     const db = initializeDatabase(dbPath, {
       cacheMb: config.index_cache_mb,
       mmapMb: config.index_mmap_mb,
@@ -403,6 +417,7 @@ export class ProjectManager {
     const managed: ManagedProject = {
       root: projectRoot,
       config,
+      dbPath,
       db,
       store,
       registry,
@@ -879,6 +894,9 @@ export class ProjectManager {
       );
     }
     managed.db.close();
+    // TRA-304: we no longer hold this DB, so a sibling checkout of the same
+    // git remote is free to share it again on its next registration.
+    releaseDbHoldersForRoot(root);
     this.projects.delete(root);
     clearProjectReindexCache(root);
     // Evict per-project caches living inside the shared worker pool

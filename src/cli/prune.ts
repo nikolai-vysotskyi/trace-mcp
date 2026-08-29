@@ -23,6 +23,7 @@ import Database from 'better-sqlite3';
 import { Command } from 'commander';
 import { ensureGlobalDirs, projectHash, projectName } from '../global.js';
 import { logger } from '../logger.js';
+import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
 import { listProjects, pruneStaleProjects } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
 
@@ -231,8 +232,16 @@ export function scanIndexDir(options: PruneOptions = {}): DbCandidate[] {
     const liveAnchor = anchors?.find((a) => a.exists);
     if (anchors && anchors.length > 0) registeredRoot = (liveAnchor ?? anchors[0]).root;
 
+    // TRA-304: a live holder marker means a process has this DB open right
+    // now. That outranks every "looks orphaned" heuristic below — the root it
+    // belongs to may never have made it into the registry, and an unreadable
+    // holder dir counts as held, because guessing wrong here deletes data.
+    const held = !session && hasLiveHolderOrUnknown(full);
+
     if (session) {
       category = mtimeMs < ttlCutoff ? 'session_expired' : 'session_active';
+    } else if (held) {
+      category = 'live';
     } else if (!anchors || anchors.length === 0) {
       category = 'orphan_unregistered';
     } else if (!liveAnchor) {
@@ -270,6 +279,8 @@ export function scanIndexDir(options: PruneOptions = {}): DbCandidate[] {
 function unlinkDb(basePath: string): { deleted: string[]; bytes: number } {
   const deleted: string[] = [];
   let bytes = 0;
+  // Nothing holds a DB that no longer exists (TRA-304).
+  removeHoldersDir(basePath);
   for (const suffix of SQLITE_SIDECARS) {
     const full = basePath + suffix;
     try {
