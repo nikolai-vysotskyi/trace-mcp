@@ -121,7 +121,9 @@ describe('install-surface token claims stay honest', () => {
   for (const path of surfaces) {
     it(`${path} does not claim 9x% fewer tokens`, () => {
       const text = readFileSync(join(REPO_ROOT, ...path.split('/')), 'utf8');
-      const claim = text.match(/9\d\s*%[^"]{0,40}?token/i);
+      // Both orders — "99% fewer tokens" and "token usage by 99%" — and decimals.
+      const pct = String.raw`9\d(?:\.\d+)?\s*%`;
+      const claim = text.match(new RegExp(`${pct}[^"]{0,40}?token|token[^"]{0,40}?${pct}`, 'i'));
       expect(
         claim?.[0],
         `${path} advertises a peak token number as if it were the average. ` +
