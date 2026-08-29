@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [2.3.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.2.0...v2.3.0) (2026-08-29)
+
+
+### Features
+
+* **app:** migrate Notebook to the macOS 26 layer (TRA-310) ([#473](https://github.com/nikolai-vysotskyi/trace-mcp/issues/473)) ([04a5b28](https://github.com/nikolai-vysotskyi/trace-mcp/commit/04a5b28c5e9f51e1848333daeeb5d7bdc3edb466))
+
+
+### Bug Fixes
+
+* **app:** keep the Ask toolbar in the no-provider setup state (TRA-312) ([#475](https://github.com/nikolai-vysotskyi/trace-mcp/issues/475)) ([e1f9a5e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e1f9a5eeb056fec95d4b2a2983dab189bca2d4ed))
+* **app:** make the workspace survive the 640x420 minimum window ([#480](https://github.com/nikolai-vysotskyi/trace-mcp/issues/480)) ([5e64c51](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5e64c51df333782e47abcb71cdb08e7fa1168421))
+* **registry:** scope index-DB sharing to sequential use (TRA-304) ([#477](https://github.com/nikolai-vysotskyi/trace-mcp/issues/477)) ([663cdc6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/663cdc6de73184c8b213623526f1e5dc7b0d408b))
+* **registry:** stop the mtime cache serving a stale registry (TRA-326) ([#479](https://github.com/nikolai-vysotskyi/trace-mcp/issues/479)) ([c6cce05](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c6cce05147157832eb16fd6c280dac995b519f6e))
+
+
+### Documentation
+
+* **design:** title design PRs with a real Conventional Commits type ([#474](https://github.com/nikolai-vysotskyi/trace-mcp/issues/474)) ([3237a8f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3237a8f326ca9cefac5a3348c57400f6cb655da6))
+* require the repo git identity for agent commits so license/cla resolves ([#478](https://github.com/nikolai-vysotskyi/trace-mcp/issues/478)) ([a2fc45c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a2fc45cce1a849de4bacd1534e06cdd4f73d4d35))
+
+
+### Chores
+
+* **ci:** record why each dependabot ignore exists (TRA-328) ([#481](https://github.com/nikolai-vysotskyi/trace-mcp/issues/481)) ([cc9600a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cc9600a1f098a4cb17f877b1af7320b1601d81cb))
+
 ## [2.2.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.1.0...v2.2.0) (2026-08-29)
 
 
