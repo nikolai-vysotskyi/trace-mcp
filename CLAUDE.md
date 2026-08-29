@@ -260,3 +260,15 @@ These workflows define which trace-mcp tools MUST be used at each stage. Follow 
 1. `audit_config` {} — check for stale references in CLAUDE.md/settings
 2. `self_audit` {} — dead exports, untested code, hotspots
 3. `get_tech_debt` {} — per-module tech debt grades
+
+## External listings and distribution
+
+`ops/distribution.md` is the ledger of every directory and registry that lists
+trace-mcp: what each one currently shows, how it can be changed, what it costs,
+and what previous runs already ruled out. **Read it before touching any listing,
+directory submission, or registry, and update it in the same change.** It exists
+because that work is invisible from the code — without it each run re-discovers
+the same closed doors and sometimes decides the opposite of the last one.
+
+Numbers quoted to the outside world come from `docs/_data/counts.yml`. Never
+hand-type a tool/language/framework count into a listing, a form, or `server.json`.
