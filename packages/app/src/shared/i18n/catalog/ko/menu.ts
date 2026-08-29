@@ -1,0 +1,22 @@
+export const menu = {
+  file: '파일',
+  newWindow: '새 창',
+  openProject: '프로젝트 열기…',
+  quickOpen: '빠른 열기…',
+  closeTab: '탭 닫기',
+  closeWindow: '창 닫기',
+  edit: '편집',
+  find: '찾기',
+  view: '보기',
+  toggleSidebar: '사이드바 전환',
+  reload: '새로고침',
+  window: '윈도우',
+  help: '도움말',
+  documentation: '문서',
+  selectProjectRoot: '프로젝트 루트 선택',
+
+  settings: '설정…',
+  viewChangelog: '변경 사항 보기',
+  getHelp: '도움말 보기',
+  checkForUpdate: '업데이트 확인…',
+} as const;

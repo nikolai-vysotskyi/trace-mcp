@@ -50,14 +50,18 @@ export const guard = {
   'bypass.resumes': 'Se reanuda {{when}}',
   'bypass.resumeNow': 'Reanudar ahora',
   'bypass.pause_one': 'Pausar {{count}} minuto',
+  'bypass.pause_many': 'Pausar {{count}} de minutos',
   'bypass.pause_other': 'Pausar {{count}} minutos',
 
   'until.underMinute': 'en menos de un minuto',
   'until.minutes_one': 'en {{count}} minuto',
+  'until.minutes_many': 'en {{count}} de minutos',
   'until.minutes_other': 'en {{count}} minutos',
   'until.hours_one': 'en {{count}} hora',
+  'until.hours_many': 'en {{count}} de horas',
   'until.hours_other': 'en {{count}} horas',
   'until.days_one': 'en {{count}} día',
+  'until.days_many': 'en {{count}} de días',
   'until.days_other': 'en {{count}} días',
 
   'ollama.title': 'Ollama',
