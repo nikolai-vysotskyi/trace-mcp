@@ -321,11 +321,11 @@ Every data surface owes four states, and each has a house form:
 ```
 ┌─ window: hiddenInset, 12px radius, min 640×420 ───────────────────┐
 │ ┌ sidebar (transparent → vibrancy) ┬ content pane (opaque) ─────┐ │
-│ │ --top-band-h strip [drag]        │ --top-band-h header [drag] │ │
+│ │ --top-band-h strip [drag]:       │ --top-band-h band [drag]:  │ │
+│ │   lights, then sidebar toggle    │   the surface's toolbar    │ │
 │ ├──────────────────────────────────┼────────────────────────────┤ │
-│ │ scroll: 6px inset, 28px rows     │ 52px toolbar (glass)       │ │
-│ │                                  ├────────────────────────────┤ │
-│ │                                  │ content, opaque, ≤720px    │ │
+│ │ scroll: 6px inset, 28px rows     │ content, opaque, ≤720px    │ │
+│ │                                  │                            │ │
 │ ├──────────────────────────────────┤                            │ │
 │ │ footer: hairline, 6/6/8 inset    │                            │ │
 │ └──────────────────────────────────┴────────────────────────────┘ │
@@ -345,13 +345,42 @@ Every data surface owes four states, and each has a house form:
 - **Traffic lights are native.** When the sidebar is collapsed the content header takes a
   `78px` left pad so the lights land on it instead. **Never draw traffic lights in CSS** —
   the hand-drawn `.ws-lights` circles are gone and must not come back.
-- **Drag regions**: exactly two — the sidebar's top 44px and the content pane's 44px
-  header. `<main>` is not a drag region. Every interactive child inside a drag region
+- **Whether to reserve that strip is the main process's answer, not the user agent's.**
+  Preload exposes `window.electronChrome.insetTitleBar`; the renderer keys the strip and
+  `[data-platform]` off it. `navigator.userAgent` says "Mac" in a browser on macOS too,
+  so the old gate drew a 44px reservation in `vite dev` for lights that were not there —
+  which is why a screenshot from `localhost:5173` is not evidence about this app's
+  layout (§9).
+- **Drag regions**: exactly two — the sidebar's top band (lights + toggle) and the
+  content pane's band. `<main>` is not a drag region. Every interactive child inside a drag region
   needs `-webkit-app-region: no-drag`.
-- **Toolbar** — 52px, `.glass`, with a scroll-edge hairline that fades in as content
-  scrolls under it. **One prominent action per region.** Secondary actions go into a
-  labelled pop-up or an overflow menu; thirteen controls in one wrapping row is the
-  thing this replaced.
+- **The sidebar toggle lives over the sidebar, past the traffic lights** — a 78px left
+  pad on `.ws-sidebar-titlebar` clears the three 12px lights (x=14 to ~x=66). That is
+  where Finder and Mail put it, and it hands the content band's full width to the
+  surface: carrying the toggle there cost 46px of row and wrapped Memory's toolbar onto
+  a second line at the default 960px window. It falls back into the band when the
+  sidebar is collapsed, or when the window has no inset title bar to draw a strip for.
+- **One top band, and it is never empty.** The 44px row across the top of the content
+  pane is the window's only piece of top chrome, and the surface on screen renders its
+  control row *into* it — `<Toolbar>` (`lattice/ui`)
+  portals into `.ws-content-head-slot` whenever the app shell is around it, and draws
+  its own 52px glass row only when standing alone (a unit test, a Storybook-style
+  harness). **A surface never stacks a control row underneath the band.** Two bands
+  where one would do is the defect this rule exists for: on Graph the strip held
+  nothing but the toggle while Files / Symbols / Filter / Search / Fit / Live floated
+  as a pill ~74px below it, and on Insights and Notebook the surface's own 52px
+  toolbar started at y=60 under 44px of nothing.
+- **When the surface has nothing to put up there, the band is simply empty and content
+  starts immediately below it** — at y=44, the same line the sidebar's first row starts
+  on. No unexplained gap between the two columns. Measured after TRA-354: every surface
+  reports its control row at y=0 inside a 44px band, against a sidebar first row at
+  y=44.
+- **Toolbar contents** — **one prominent action per region.** Secondary actions go into
+  a labelled pop-up or an overflow menu; thirteen controls in one wrapping row is the
+  thing this replaced. The surface title in the band is 15/20/600 — a window title, not
+  a page heading; 22px Title 1 belongs on content, not on chrome.
+- **A scroll-edge hairline** fades in under the band as content scrolls, never a
+  permanent border.
 - **Content measure** — capped and centred (720px on Project Overview). Long text and
   grouped lists do not run to a 1640px window edge.
 - **A surface that draws its own toolbar owns the whole pane.** Do not wrap it in a
@@ -474,11 +503,15 @@ you undo them:
   wrapped to 357px and pushed the toolbar's bottom edge 33px past a 420px window;
   since nothing on this surface scrolls, search, Filter, + Add and the whole project
   list became unreachable rather than merely off-screen.
-- **A toolbar wraps; it never clips.** Give it `min-height: 52px` and `flex-wrap`,
-  not `height: 52px`. A fixed non-wrapping row inside `overflow-x: hidden` ran 51px
-  past a 420px pane and put + Add's chevron and the overflow menu outside the window.
-  This lives in the shared `Toolbar` primitive (`lattice/ui/Surface.tsx`), so every
-  surface built on it inherits the behaviour — do not re-declare a height on top.
+- **A toolbar wraps; it never clips.** `<Toolbar>` is `flex-wrap` with `min-height:
+  52px`, never `height`, and the band it renders into is `min-height: 44px` — a wrapped
+  second line grows both instead of spilling. A fixed non-wrapping row inside
+  `overflow-x: hidden` ran 51px past a 420px pane and put + Add's chevron and the
+  overflow menu outside the window; measured again at 640×420 after TRA-354,
+  non-wrapping rows put Graph's Fit / Live / ⋯ and the last segment of Insights' report
+  picker out of reach the same way. This lives in the shared `Toolbar` primitive
+  (`lattice/ui/Surface.tsx`), so every surface built on it inherits the behaviour — do
+  not re-declare a height on top.
 - **A control that can shrink declares a length `flex-basis`, not `auto`.** A wrapping
   flex line is laid out from each item's *hypothetical* size, so `flex-basis: auto`
   advertises a control's full content width and breaks the row before it has spent
@@ -625,6 +658,42 @@ node packages/app/scripts/design-tokens.mjs --update-baseline  # only ever to LO
 The renderer also ships a gallery: `?view=gallery[&theme=dark]` renders every primitive
 variant × size × state.
 
+### Judge it in the Electron window. A browser screenshot is not evidence.
+
+`vite dev` in Chrome is a different window from the one we ship: no `hiddenInset` frame,
+no traffic lights, no `NSVisualEffectView` behind the sidebar. Until TRA-354 the renderer
+even reserved the 44px traffic-light strip in the browser, because the gate read
+`navigator.userAgent` — so the one thing under review, the top of the window, was the one
+thing the browser got wrong. Screenshots from `localhost:5173` do not settle a layout,
+spacing or material question.
+
+```bash
+node packages/app/scripts/electron-cdp.mjs launch     # build first: pnpm --filter … build
+node packages/app/scripts/electron-cdp.mjs shot before/graph-light.png \
+  --url='file://…/dist/renderer/index.html?view=project&root=…' --click=Graph --light
+```
+
+`launch` runs the app with `--remote-debugging-port=9222` under its own `--user-data-dir`
+(so it does not lose Electron's single-instance lock to an installed trace-mcp.app) and
+sets `TRACE_MCP_DEV_ALWAYS_ON_TOP=1`. That last part is not cosmetic: Chromium stops
+compositing a fully occluded window, and a CDP screenshot of one hangs or hands back the
+frame it painted minutes ago — a stale-pixel "after" shot that looks like a fix. Any CDP
+client can attach to `http://127.0.0.1:9222` once it is up, including `chrome-devtools`
+MCP via `--browser-url`.
+
+The one thing a CDP capture cannot show is the native frame: the traffic lights are drawn
+by macOS outside the web contents, so they are absent from the PNG even though the strip
+they sit in is real. Measure the reservation, do not look for the lights. The second thing
+it cannot show is the sidebar: it is transparent over a native `NSVisualEffectView`, which
+a renderer-side capture reads as a hole. Shoot with `--reduce-transparency` when the
+sidebar has to be legible — that is a real product state, and CSS paints it opaque.
+
+Not to be confused with `scripts/capture-screenshots.mjs` (TRA-366), which regenerates the
+fixed set of images `docs/` and trace-mcp.com ship, from a seeded sandbox, and can check
+whether the committed ones are stale. Use that one for anything committed to the repo; use
+`electron-cdp.mjs` when you need to point a debugger at the app you are running right now
+and shoot a surface it has no manifest entry for.
+
 ### Title a design PR `feat:` / `fix:` / `refactor:` — never `design:`
 
 `design` is not a Conventional Commits type, and `.github/workflows/pr-title-lint.yml`
@@ -658,7 +727,8 @@ code correctness and visual correctness are different claims.
 - [ ] Every icon-only control has `aria-label` + `title`. Every tone has a glyph and a word.
 - [ ] Tab through it: visible focus ring everywhere, tables are one tab stop, no keyboard trap.
 - [ ] No action reachable only on hover; right-click offers what the row buttons offer.
-- [ ] Screenshots in light **and** dark, plus Reduce Transparency and Increase Contrast wherever material is involved.
+- [ ] The surface's control row is IN the top band, not stacked under it, and content starts on the sidebar's first-row line (§6).
+- [ ] Screenshots in light **and** dark, plus Reduce Transparency and Increase Contrast wherever material is involved — **taken from the Electron window** (§9), never from `vite dev` in a browser.
 - [ ] Resized to **640×420**, the window minimum: no control has a bounding box outside
       the viewport without a scrollable ancestor, and the surface's own content is
       reachable. Walk it — `getBoundingClientRect()` over every focusable, not a glance.
@@ -681,6 +751,9 @@ new evidence.
 | A shortcut hint on a selected row is full `--on-accent`, not a mix of it | `color-mix(--on-accent 72%, transparent)` on `--accent-fill` measured 3.22:1. Dimming a label to signal "secondary" only works over a surface with headroom; on a filled accent row there is none. |
 | One token layer; the legacy aliases are **gone** (TRA-315) | Aliases let surfaces migrate one at a time; once every surface had landed they were inlined to the token they resolved to and deleted. `var(--text-secondary)` and friends no longer exist — there is exactly one name per colour. |
 | Baselined token guard (counts, not per-line suppressions) | Counts only ever move down; a line-level baseline churns on every reflow. |
+| One top band; `<Toolbar>` portals into it (TRA-354) | The alternative was migrating every surface's header by hand and hoping the next one remembers. Routing the shared primitive means a surface gets the rule by using the component it already uses, and a surface rendered outside the shell still draws a sane row. |
+| Window chrome facts come from preload, never `navigator.userAgent` (TRA-354) | The UA says "Mac" in a browser on macOS, so the traffic-light reservation rendered in `vite dev` for lights that were not there — and every design review taken against localhost was measuring the wrong window. |
+| The renderer's appearance choice is pushed to `nativeTheme` (TRA-354) | The sidebar is transparent over a native vibrancy view that follows `nativeTheme`, not `[data-theme]`. Picking Dark on a Light Mac left light material behind dark text: the sidebar rendered as an empty pale pane. |
 | Control heights fixed at 20/24/28 | Matches the macOS small/regular/large tiers; any fourth height is drift. |
 | Capsule radius for controls; 6px square only for icon-only buttons | macOS 26 control shape. Removes the eight-distinct-radii problem measured on Project Overview. |
 | 20px controls keep the painted macOS small size, hit target grown by pseudo-element | The painted size is *correct*; only the hit box was wrong. Growing the box moves no pixel. |

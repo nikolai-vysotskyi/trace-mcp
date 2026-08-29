@@ -13,12 +13,24 @@
      <SectionError>     "couldn't measure this" + the one action that helps
 */
 
+import { createContext, useContext } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '../icons';
 import { Skeleton } from '../../workspace/components/Skeleton';
 import { Button } from './Button';
 
-/** 52px glass toolbar. ONE per surface — a second control row is a bug.
+/* The window's single top band (DESIGN.md §6). App.tsx publishes the element
+   that sits to the right of the sidebar toggle; a surface's Toolbar renders
+   into it rather than drawing a second row underneath. Null outside the app
+   shell — in a unit test, or anywhere the band does not exist — and then the
+   toolbar falls back to drawing itself in place. */
+const HeaderSlotContext = createContext<HTMLElement | null>(null);
+export const HeaderSlotProvider = HeaderSlotContext.Provider;
+
+/** The surface's one control row. ONE per surface — a second is a bug.
+    Inside the app shell it IS the window's top band, sharing the line with the
+    sidebar toggle (TRA-354); standalone it is a 52px glass row of its own.
     `scrolled` fades in the hairline instead of a permanent hard border.
 
     `min-height` and `flex-wrap`, never a fixed `height` (TRA-347). The pane is
@@ -30,7 +42,9 @@ import { Button } from './Button';
     with zero visible pixels and no scrollable ancestor to bring them back;
     Activity's was 506px, losing "Pause the live feed" and its overflow menu.
     The workspace toolbar had already been given this treatment on its own
-    (TRA-292) — the rule just never reached the shared primitive. */
+    (TRA-292) — the rule just never reached the shared primitive. The same
+    measurement on the band caught Graph's Fit / Live / ⋯ and the last segment
+    of Insights' report picker; a wrapped line grows the band instead. */
 export function Toolbar({
   scrolled = false,
   className,
@@ -40,12 +54,13 @@ export function Toolbar({
   className?: string;
   children: ReactNode;
 }) {
-  return (
+  const slot = useContext(HeaderSlotContext);
+  const row = (
     <div
       role="toolbar"
-      className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 shrink-0 glass relative${className ? ` ${className}` : ''}`}
+      className={`flex flex-wrap items-center gap-x-2 gap-y-1 py-2 shrink-0 relative${slot ? ' flex-1 min-w-0 self-stretch' : ' px-4 glass'}${className ? ` ${className}` : ''}`}
       style={{
-        minHeight: 52,
+        minHeight: slot ? undefined : 52,
         borderBottom: '0.5px solid transparent',
         borderBottomColor: scrolled ? 'var(--separator)' : 'transparent',
         transition: 'border-bottom-color var(--dur-standard) var(--ease-out)',
@@ -54,6 +69,7 @@ export function Toolbar({
       {children}
     </div>
   );
+  return slot ? createPortal(row, slot) : row;
 }
 
 /** Vertical rule between toolbar clusters. 16px, hairline, decoration. */

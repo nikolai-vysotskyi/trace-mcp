@@ -6,7 +6,7 @@ import { QuickOpen, type QuickOpenItem } from './components/QuickOpen';
 import { SidebarRow } from './components/SidebarRow';
 import { WindowTabBar } from './components/WindowTabBar';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
-import { Menu, MenuItem, MenuSeparator, PopUpButton } from './lattice/ui';
+import { HeaderSlotProvider, Menu, MenuItem, MenuSeparator, PopUpButton } from './lattice/ui';
 import { formatAgo, type UpdateCheck, useUpdateCheck } from './update-check.js';
 import {
   clampSidebarWidth,
@@ -68,10 +68,16 @@ const PROJECT_TABS: { id: ProjectTab; label: string; icon: string }[] = [
   { id: 'insights', label: 'Insights', icon: 'monitoring' },
 ];
 
-/** macOS-only chrome (inset traffic lights, native vibrancy). Synchronous —
- *  `getPlatform()` is an async IPC round-trip and this gates first paint. */
-function isMacPlatform(): boolean {
-  return /Mac/i.test(navigator.userAgent);
+/** Does this window have inset traffic lights to leave room for?
+ *
+ *  The main process decides that (`titleBarStyle: 'hiddenInset'` in
+ *  main/tray.ts) and preload reports it synchronously, because the answer gates
+ *  first paint. It must NOT be inferred from `navigator.userAgent`: that says
+ *  "Mac" in a browser on macOS too, so `vite dev` used to reserve a 44px strip
+ *  for traffic lights that were never there — every design review run against
+ *  localhost was measuring a window the app does not have. */
+function hasInsetTitleBar(): boolean {
+  return window.electronChrome?.insetTitleBar === true;
 }
 
 function getUrlParams() {
@@ -576,6 +582,10 @@ export function App() {
   const [_isFullscreen, setIsFullscreen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickFiles, setQuickFiles] = useState<string[]>([]);
+  /* The element surfaces portal their toolbar into. Callback ref rather than
+     useRef: the provider has to re-render once the node exists, or the first
+     surface mounts with nowhere to render. */
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const dragging = useRef(false);
   const graphRef = useRef<GraphExplorerGPUHandle | null>(null);
   const [graphGpuSettings, setGraphGpuSettings] = useState<GraphGPUSettings>(
@@ -845,11 +855,28 @@ export function App() {
     : globalTab === 'workspace' || globalTab === 'clients' || globalTab === 'settings';
   const isGraphGpu = isGraph; // alias — the Graph tab *is* the GPU graph now
 
+  /* One control, two possible homes: the sidebar's title strip while the
+     sidebar is open, the content band when it is collapsed (or when the window
+     has no inset title bar to draw a strip for). */
+  const sidebarToggle = (
+    <button
+      type="button"
+      className="ws-chrome-toggle"
+      onClick={toggleSidebar}
+      aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+      aria-expanded={!sidebarCollapsed}
+      title={`${sidebarCollapsed ? 'Show' : 'Hide'} sidebar (⌘⌥S)`}
+    >
+      <Icon name="dock_to_right" size={16} />
+    </button>
+  );
+  const toggleLivesInSidebar = !sidebarCollapsed && hasInsetTitleBar();
+
   return (
     <div
       className="ws-stage flex flex-col h-screen"
       data-mode={theme}
-      data-platform={isMacPlatform() ? 'mac' : 'other'}
+      data-platform={hasInsetTitleBar() ? 'mac' : 'other'}
     >
       {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
       {quickOpen && <QuickOpen items={quickOpenItems()} onClose={() => setQuickOpen(false)} />}
@@ -864,9 +891,18 @@ export function App() {
             style={{ width: sidebarWidth } as React.CSSProperties}
           >
             {/* 44px strip the traffic lights live in — and the only draggable
-                part of the sidebar. macOS only: elsewhere there are no inset
-                lights to make room for. */}
-            {isMacPlatform() && <div className="ws-sidebar-titlebar" />}
+                part of the sidebar. Only where the window actually has inset
+                lights: in a browser there are none, so the strip would be an
+                empty band the real app never shows.
+
+                The sidebar toggle sits here, past the lights, the way Finder
+                and Mail place it: it belongs to the sidebar, not to the
+                surface. It also keeps the content band's full width for the
+                surface's own controls — carrying the toggle there cost 46px and
+                wrapped Memory's toolbar onto a second line at 960px. */}
+            {toggleLivesInSidebar && (
+              <div className="ws-sidebar-titlebar">{sidebarToggle}</div>
+            )}
 
             <nav className="ws-sidebar-scroll" aria-label="Sections">
               {isProject ? (
@@ -944,18 +980,16 @@ export function App() {
 
         {/* Main content */}
         <main className="ws-content">
+          {/* The window's one top band: whatever the surface on screen puts on
+              that line, rendered into `.ws-content-head-slot` via <Toolbar>, so
+              a surface never stacks a control row under an otherwise-empty
+              strip (DESIGN.md §6). The sidebar toggle only lands here when
+              there is no sidebar strip to hold it. */}
           <div className="ws-content-head">
-            <button
-              type="button"
-              className="ws-chrome-toggle"
-              onClick={toggleSidebar}
-              aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-              aria-expanded={!sidebarCollapsed}
-              title={`${sidebarCollapsed ? 'Show' : 'Hide'} sidebar (⌘⌥S)`}
-            >
-              <Icon name="dock_to_right" size={16} />
-            </button>
+            {!toggleLivesInSidebar && sidebarToggle}
+            <div className="ws-content-head-slot" ref={setHeaderSlot} />
           </div>
+          <HeaderSlotProvider value={headerSlot}>
           <div
             className={`ws-content-body ${isGraphGpu ? 'p-2' : needsFlexLayout ? 'p-1 pt-2' : ownsToolbar ? '' : 'p-4 overflow-y-auto'}`}
           >
@@ -981,6 +1015,7 @@ export function App() {
               </ErrorBoundary>
             )}
           </div>
+          </HeaderSlotProvider>
         </main>
       </div>
     </div>

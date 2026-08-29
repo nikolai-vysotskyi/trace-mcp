@@ -25,6 +25,7 @@ import {
   MenuSeparator,
   SearchField,
   SegmentedControl,
+  Toolbar,
   useMenuAnchor,
 } from '../lattice/ui';
 import { KpiTile } from './components/KpiTile';
@@ -187,18 +188,7 @@ export function WorkspaceHeader({
           357px block of cards pushed the toolbar past the bottom of a 420px
           window and nothing could scroll it back (TRA-325). */}
       {/* Ceiling is search + 4 actions. Everything else is in the two menus. */}
-      <div
-        className="flex items-center gap-2 px-4 shrink-0 glass flex-wrap"
-        style={{
-          minHeight: 52,
-          paddingBlock: 8,
-          // Scroll-edge effect: the hairline fades in only once content is
-          // sliding under the toolbar. No permanent hard border.
-          borderBottom: '0.5px solid transparent',
-          borderBottomColor: scrolled ? 'var(--separator)' : 'transparent',
-          transition: 'border-bottom-color var(--dur-standard) var(--ease-out)',
-        }}
-      >
+      <Toolbar scrolled={scrolled}>
         <SearchField
           value={queryDraft}
           onChange={setQueryDraft}
@@ -243,7 +233,7 @@ export function WorkspaceHeader({
             title="More actions"
           />
         </span>
-      </div>
+      </Toolbar>
 
       {/* ── KPI grid ───────────────────────────────────────────────── */}
       <div className="flex items-stretch gap-4 px-4 pt-4 pb-3 flex-wrap">

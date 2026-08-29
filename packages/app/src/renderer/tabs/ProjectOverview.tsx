@@ -430,9 +430,14 @@ export function ProjectOverview({
       {/* ── Toolbar ──────────────────────────────────────────────────── */}
       <Toolbar scrolled={scrolled} className="gap-3">
         <StatusDot tone={statusTone} pulse={status === 'indexing'} />
-        <div className="min-w-0 flex-1">
+        {/* One line, not a stacked name-over-path: a two-line title made the
+            window's 44px band 52px tall, so the content pane started 8px below
+            the sidebar's first row for no reason a reader could see (TRA-354).
+            The path stays visible — it is what tells four projects called
+            "workdir" apart — as a secondary run alongside the name. */}
+        <div className="min-w-0 flex-1 flex items-baseline gap-2">
           <h2
-            className="text-[17px] leading-[22px] font-semibold truncate"
+            className="text-[15px] leading-5 font-semibold shrink-0 max-w-[60%] truncate"
             style={{ color: 'var(--label)', letterSpacing: '-0.01em' }}
             title={projectName}
           >
