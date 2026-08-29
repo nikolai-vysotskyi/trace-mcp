@@ -10,6 +10,12 @@
  * pipeline state (indexing / embedding / computing / pending → ready /
  * error), schedule a debounced re-fetch of metrics. Plus a 5-minute polling
  * fallback that matches the server-side cache TTL.
+ *
+ * Degraded behaviour (TRA-397): the last successful metrics response is kept
+ * in localStorage, so a launch against a daemon that is busy indexing opens on
+ * the last known numbers instead of on em dashes. A slow daemon and a
+ * disconnected feed collapse into one {@link DaemonState}: the app is showing a
+ * snapshot, and it says so once rather than escalating through three sentences.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DAEMON_FETCH_TIMEOUT_MS, useDaemon } from '../hooks/useDaemon';
@@ -23,6 +29,37 @@ const BASE = 'http://127.0.0.1:3741';
 
 export const AUTO_REFRESH_INTERVAL_MS = 300_000; // 5 min — matches backend cache TTL.
 export const STATUS_TRANSITION_DEBOUNCE_MS = 1000;
+
+/**
+ * How long a degraded reading has to hold before the banner appears. The event
+ * feed drops and re-opens in well under a second while the daemon is loaded,
+ * and a banner that blinks in and out of a screen reads as broken rather than
+ * busy. Recovery is published immediately — only degradation waits.
+ */
+export const DEGRADED_GRACE_MS = 1500;
+
+/** Last successful `/api/dashboard/projects` response, kept across launches. */
+const LS_METRICS_KEY = 'trace-mcp.workspace.metrics';
+
+export function loadMetricsSnapshot(): ProjectHealthMetrics[] {
+  try {
+    const raw = localStorage.getItem(LS_METRICS_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return Array.isArray(parsed) ? (parsed as ProjectHealthMetrics[]) : [];
+  } catch {
+    // Corrupted JSON, or a sandboxed renderer with no storage — start cold.
+    return [];
+  }
+}
+
+export function saveMetricsSnapshot(metrics: ProjectHealthMetrics[]): void {
+  try {
+    localStorage.setItem(LS_METRICS_KEY, JSON.stringify(metrics));
+  } catch {
+    // Quota or sandbox. A missing snapshot costs one screen of em dashes, so
+    // there is nothing worth reporting to the user here.
+  }
+}
 
 // ── Exported pure helpers (testable without React) ────────────────────────
 
@@ -61,9 +98,16 @@ export interface UseWorkspaceProjectsResult {
    */
   metricsLoading: boolean;
   refreshing: boolean;
+  /**
+   * A mutation that failed and has something to say — a reindex or a remove.
+   * A metrics fetch never lands here: "the numbers are a moment old" is a
+   * state, not an error, and it is reported through {@link daemonState}.
+   */
   error: string | null;
-  /** Why `error` happened — drives the wording and the offered action. */
+  /** Why the last metrics fetch failed, if it did. */
   errorKind: MetricsErrorKind | null;
+  /** One reading of how much the daemon is answering. */
+  daemonState: DaemonState;
   connected: boolean;
   restarting: boolean;
   addProject(root: string): Promise<void>;
@@ -82,10 +126,45 @@ export interface UseWorkspaceProjectsResult {
  */
 export type MetricsErrorKind = 'timeout' | 'offline' | 'server';
 
+/**
+ * How much of the daemon is answering, as one value.
+ *
+ * The three failures a user could hit here — a metrics read that timed out, a
+ * metrics read refused, an event feed that dropped — are one condition seen at
+ * three thresholds, not three things to act on differently. Escalating through
+ * a sentence each made a busy daemon look like a broken app (TRA-397), so they
+ * collapse to `stale`: what is on screen is the last indexed snapshot, and it
+ * stays on screen.
+ *
+ * `unreachable` is kept apart because it is genuinely different and genuinely
+ * actionable — the daemon never answered at all, so there is a process to
+ * start rather than a wait to sit through.
+ */
+export type DaemonState = 'ok' | 'stale' | 'unreachable';
+
+/**
+ * Pure state reduction — no timers, no React. `loading` wins: the first
+ * moment of a launch is the skeleton's, and a daemon that has not answered
+ * *yet* is not a daemon that is failing to.
+ */
+export function deriveDaemonState(o: {
+  /** The daemon's own first read is still in flight. */
+  loading: boolean;
+  /** The event feed is open. */
+  connected: boolean;
+  /** Projects the daemon itself has named this session. */
+  liveProjects: number;
+  metricsErrorKind: MetricsErrorKind | null;
+}): DaemonState {
+  if (o.loading) return 'ok';
+  // No feed and nothing the daemon ever told us: it isn't running.
+  if (!o.connected) return o.liveProjects > 0 ? 'stale' : 'unreachable';
+  return o.metricsErrorKind === null ? 'ok' : 'stale';
+}
+
 interface MetricsSetters {
   setMetrics: (m: ProjectHealthMetrics[]) => void;
-  setError: (e: string | null) => void;
-  setErrorKind?: (k: MetricsErrorKind | null) => void;
+  setErrorKind: (k: MetricsErrorKind | null) => void;
 }
 
 /** Classify a fetch rejection. A timeout means slow, not gone. */
@@ -98,45 +177,27 @@ export function classifyMetricsError(err: unknown): MetricsErrorKind {
 }
 
 /**
- * Turn a raw fetch rejection into something a user can act on. `Failed to
- * fetch` / `The operation was aborted` are the browser's own words for "the
- * socket died" and mean nothing to the person reading the banner.
- */
-export function describeMetricsError(err: unknown): string {
-  switch (classifyMetricsError(err)) {
-    case 'timeout':
-      return 'The daemon is taking too long to answer — it may still be indexing.';
-    case 'offline':
-      return "Couldn't load project metrics — daemon not responding.";
-    default: {
-      const raw = (err as Error)?.message ?? '';
-      return raw ? `Couldn't load project metrics — ${raw}` : "Couldn't load project metrics.";
-    }
-  }
-}
-
-/**
  * Fetch the dashboard cache once. Exported so tests can drive it directly.
  * Returns true only when metrics actually landed — the caller uses that to
  * decide whether the KPI strip may stop rendering `—` placeholders.
+ *
+ * A failure publishes a *kind*, never a sentence: the copy the user reads is
+ * one line owned by the surface, not three lines assembled here from whichever
+ * transport error arrived first.
  */
 export async function fetchMetricsOnce(setters: MetricsSetters): Promise<boolean> {
   try {
     const res = await fetch(`${BASE}/api/dashboard/projects`, { signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS) }); // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      setters.setError(`Couldn't load project metrics — ${body.error ?? `HTTP ${res.status}`}`);
-      setters.setErrorKind?.('server');
+      setters.setErrorKind('server');
       return false;
     }
     const data = (await res.json()) as { projects: ProjectHealthMetrics[] };
     setters.setMetrics(data.projects ?? []);
-    setters.setError(null);
-    setters.setErrorKind?.(null);
+    setters.setErrorKind(null);
     return true;
   } catch (err) {
-    setters.setError(describeMetricsError(err));
-    setters.setErrorKind?.(classifyMetricsError(err));
+    setters.setErrorKind(classifyMetricsError(err));
     return false;
   }
 }
@@ -144,8 +205,11 @@ export async function fetchMetricsOnce(setters: MetricsSetters): Promise<boolean
 export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   const daemon = useDaemon();
 
-  const [metrics, setMetrics] = useState<ProjectHealthMetrics[]>([]);
-  const [metricsLoaded, setMetricsLoaded] = useState(false);
+  // Open on the last snapshot rather than on nothing: a launch against a
+  // daemon that is mid-index used to spend its first eight seconds showing
+  // em dashes for numbers that were sitting on disk the whole time.
+  const [metrics, setMetrics] = useState<ProjectHealthMetrics[]>(loadMetricsSnapshot);
+  const [metricsLoaded, setMetricsLoaded] = useState(() => metrics.length > 0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorKind, setErrorKind] = useState<MetricsErrorKind | null>(null);
@@ -156,9 +220,16 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
 
   // Single-flight metrics fetch. Only a *successful* fetch clears the loading
   // flag — otherwise the KPI strip would swap `—` placeholders for hard zeros
-  // and present a failed fetch as real data (TRA-264).
+  // and present a failed fetch as real data (TRA-264). A failure also leaves
+  // `metrics` alone, so whatever is on screen stays on screen.
   const fetchMetrics = useCallback(async () => {
-    const ok = await fetchMetricsOnce({ setMetrics, setError, setErrorKind });
+    const ok = await fetchMetricsOnce({
+      setMetrics: (m) => {
+        setMetrics(m);
+        saveMetricsSnapshot(m);
+      },
+      setErrorKind,
+    });
     if (ok) setMetricsLoaded(true);
   }, []);
 
@@ -235,6 +306,26 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   // We're loading when neither source has produced anything yet.
   const loading = daemon.loading && !metricsLoaded && projects.length === 0;
 
+  // One reading, held steady. Degradation waits out DEGRADED_GRACE_MS so a
+  // feed that blinks doesn't blink a banner with it; recovery is immediate,
+  // because there is no reason to keep telling someone their data is old
+  // once it isn't.
+  const observedState = deriveDaemonState({
+    loading: daemon.loading,
+    connected: daemon.connected,
+    liveProjects: daemon.projects.length,
+    metricsErrorKind: errorKind,
+  });
+  const [daemonState, setDaemonState] = useState<DaemonState>('ok');
+  useEffect(() => {
+    if (observedState === 'ok') {
+      setDaemonState('ok');
+      return;
+    }
+    const t = setTimeout(() => setDaemonState(observedState), DEGRADED_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [observedState]);
+
   return {
     projects,
     loading,
@@ -242,6 +333,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
     refreshing,
     error,
     errorKind,
+    daemonState,
     connected: daemon.connected,
     restarting: daemon.restarting,
     addProject: daemon.addProject,
