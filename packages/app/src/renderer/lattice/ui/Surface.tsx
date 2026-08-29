@@ -19,7 +19,18 @@ import { Skeleton } from '../../workspace/components/Skeleton';
 import { Button } from './Button';
 
 /** 52px glass toolbar. ONE per surface — a second control row is a bug.
-    `scrolled` fades in the hairline instead of a permanent hard border. */
+    `scrolled` fades in the hairline instead of a permanent hard border.
+
+    `min-height` and `flex-wrap`, never a fixed `height` (TRA-347). The pane is
+    420px wide at the 640px window minimum, and a non-wrapping fixed-height row
+    inside the pane's `overflow-x: hidden` does not shrink, does not scroll and
+    does not clip — it just runs off the edge. Measured at 640x420 before this:
+    Memory's row was 703px of content in 420px, which put its search field, its
+    prominent "Add decision" and its overflow menu wholly outside the window
+    with zero visible pixels and no scrollable ancestor to bring them back;
+    Activity's was 506px, losing "Pause the live feed" and its overflow menu.
+    The workspace toolbar had already been given this treatment on its own
+    (TRA-292) — the rule just never reached the shared primitive. */
 export function Toolbar({
   scrolled = false,
   className,
@@ -32,9 +43,9 @@ export function Toolbar({
   return (
     <div
       role="toolbar"
-      className={`flex items-center gap-2 px-4 shrink-0 glass relative${className ? ` ${className}` : ''}`}
+      className={`flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 shrink-0 glass relative${className ? ` ${className}` : ''}`}
       style={{
-        height: 52,
+        minHeight: 52,
         borderBottom: '0.5px solid transparent',
         borderBottomColor: scrolled ? 'var(--separator)' : 'transparent',
         transition: 'border-bottom-color var(--dur-standard) var(--ease-out)',
