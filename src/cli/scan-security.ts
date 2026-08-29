@@ -30,6 +30,10 @@ export const scanSecurityCommand = new Command('scan-security')
   .option('--scope <path>', 'Directory to scan (default: whole project)')
   .option('--rules <rules>', 'Comma-separated rule list, or "all" (default: all)', 'all')
   .option('--severity-threshold <level>', 'Minimum severity to report: critical|high|medium|low')
+  .option(
+    '--include-low-confidence',
+    'Report weakly-grounded ("low" confidence) findings too (default: suppressed)',
+  )
   .option('--format <fmt>', 'Output format: json | sarif (default: json)', 'json')
   .option(
     '--fail-on <level>',
@@ -41,6 +45,7 @@ export const scanSecurityCommand = new Command('scan-security')
       scope?: string;
       rules: string;
       severityThreshold?: string;
+      includeLowConfidence?: boolean;
       format: string;
       failOn: string;
     }) => {
@@ -68,6 +73,7 @@ export const scanSecurityCommand = new Command('scan-security')
         scope: opts.scope,
         rules,
         severityThreshold: opts.severityThreshold as Severity | undefined,
+        includeLowConfidence: opts.includeLowConfidence,
       });
 
       db.close();
