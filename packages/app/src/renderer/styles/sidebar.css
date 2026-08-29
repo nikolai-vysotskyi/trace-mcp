@@ -196,6 +196,19 @@
 .ws-sb-row[aria-expanded='true'] {
   background: var(--fill-tertiary);
 }
+/* …and while it is up, the fill is the ONLY thing the row draws. Open it from
+   the keyboard and the trigger keeps DOM focus, so the house `*:focus-visible`
+   ring — a 3px accent halo over a 1px inset accent border — painted a solid
+   blue rectangle around the row for as long as the menu stayed open. On a
+   full-width row that reads as a focused text field, not as a menu trigger
+   holding its state (TRA-376). macOS draws neither: an open pop-up button
+   shows that it is open and lets the menu itself carry focus.
+
+   Scoped to the open state on purpose. Tab to this row with the menu closed
+   and the ring is still there — that is the case a focus ring is for. */
+.ws-sb-row[aria-expanded='true']:focus-visible {
+  box-shadow: none;
+}
 
 /* Pop-up affordance on a row that opens a menu. Unlike .ws-sb-trailing this is
    always visible — it is not an action revealed on hover, it is the row saying

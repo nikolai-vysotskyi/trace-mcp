@@ -38,6 +38,12 @@ const GLYPHS: Record<string, string> = {
   folder_open:
     '<path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2H3z"/><path d="M3 10h18l-2 8a2 2 0 0 1-2 1H5a2 2 0 0 1-2-2z"/>',
   description: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
+  /* A rolled sheet — curl at the top left, curl at the bottom. This is the
+     glyph Nikolai supplied for "View changelog" (TRA-376); `description`, the
+     plain page, was a second substitution for it. A changelog is a running
+     record you scroll through, which is what separates the two. */
+  scroll:
+    '<path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/>',
   data_object:
     '<path d="M9 5a3 3 0 0 0-3 3v2a2 2 0 0 1-2 2 2 2 0 0 1 2 2v2a3 3 0 0 0 3 3M15 5a3 3 0 0 1 3 3v2a2 2 0 0 0 2 2 2 2 0 0 0-2 2v2a3 3 0 0 1-3 3"/>',
   function: '<path d="M19 5h-3a3 3 0 0 0-3 3v8a3 3 0 0 1-3 3H7M8 12h8"/>',

@@ -53,7 +53,7 @@ describe('icon set', () => {
     expect(names).not.toContain('forum');
     // The replacements the reference asked for, present and spelled as used.
     expect(names).toContain('help');
-    expect(names).toContain('description');
+    expect(names).toContain('scroll');
   });
 
   /* A global action's `icon` is a string looked up at render time, so a name
