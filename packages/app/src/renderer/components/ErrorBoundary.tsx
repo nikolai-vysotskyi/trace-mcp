@@ -38,21 +38,21 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div
         className="flex flex-col h-full overflow-auto p-4 gap-3"
-        style={{ color: 'var(--text-primary)' }}
+        style={{ color: 'var(--label)' }}
       >
-        <div className="text-sm font-semibold" style={{ color: '#ff3b30' }}>
+        <div className="text-sm font-semibold" style={{ color: 'var(--status-red)' }}>
           {this.props.label ? `${this.props.label} crashed` : 'Something went wrong'}
         </div>
-        <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+        <div className="text-xs" style={{ color: 'var(--label-secondary)' }}>
           {error.message || String(error)}
         </div>
         <pre
           className="text-[10px] whitespace-pre-wrap rounded-md p-2 overflow-auto"
           style={{
-            background: 'var(--bg-secondary)',
-            color: 'var(--text-tertiary)',
+            background: 'var(--fill-quaternary)',
+            color: 'var(--label-secondary)',
             maxHeight: 240,
-            border: '0.5px solid var(--border)',
+            border: '0.5px solid var(--separator)',
           }}
         >
           {error.stack ?? ''}
@@ -64,9 +64,9 @@ export class ErrorBoundary extends Component<Props, State> {
             onClick={this.reset}
             className="text-[11px] px-3 py-1 rounded-md font-medium"
             style={{
-              background: 'var(--fill-control)',
+              background: 'var(--fill-quaternary)',
               color: 'var(--accent)',
-              border: '0.5px solid var(--border)',
+              border: '0.5px solid var(--separator)',
               cursor: 'pointer',
             }}
           >
