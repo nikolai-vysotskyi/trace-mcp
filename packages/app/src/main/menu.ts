@@ -26,12 +26,12 @@ import {
   shell,
   type MenuItemConstructorOptions,
 } from 'electron';
+import { type GlobalActionId, globalAction } from '../shared/global-actions.js';
 import { showMenuWindow } from './tray';
 
 const isMac = process.platform === 'darwin';
 
-const HELP_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp#readme';
-const ISSUES_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp/issues/new';
+const DOCS_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp#readme';
 
 export interface WindowSection {
   id: string;
@@ -67,6 +67,17 @@ function closeWindowGroup(): void {
   }
 }
 
+/** One item of the shared global-action list (TRA-363). The sidebar's app menu
+    renders the SAME entry, so the label and the key are read here, never typed
+    here — that is the whole point of `src/shared/global-actions.ts`. */
+function actionItem(id: GlobalActionId): MenuItemConstructorOptions {
+  const action = globalAction(id);
+  const url = action.url;
+  return url
+    ? { label: action.label, click: () => void shell.openExternal(url) }
+    : { label: action.label, accelerator: action.accelerator, click: () => send(action.id) };
+}
+
 function sectionItems(): MenuItemConstructorOptions[] {
   const focused = BrowserWindow.getFocusedWindow();
   const sections = focused ? (sectionsByWebContents.get(focused.webContents.id) ?? []) : [];
@@ -84,9 +95,9 @@ export function buildAppMenu(): Menu {
     label: app.name,
     submenu: [
       { role: 'about' },
-      { label: 'Check for updates…', click: () => send('check-for-update') },
+      actionItem('check-for-update'),
       { type: 'separator' },
-      { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('settings') },
+      actionItem('settings'),
       { type: 'separator' },
       ...(isMac
         ? ([
@@ -120,7 +131,7 @@ export function buildAppMenu(): Menu {
         ? []
         : ([
             { type: 'separator' },
-            { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('settings') },
+            actionItem('settings'),
             { type: 'separator' },
             { role: 'quit' },
           ] as MenuItemConstructorOptions[])),
@@ -191,14 +202,18 @@ export function buildAppMenu(): Menu {
   const helpMenu: MenuItemConstructorOptions = {
     label: 'Help',
     submenu: [
-      { label: 'trace-mcp help', click: () => void shell.openExternal(HELP_URL) },
-      { label: 'Report an issue', click: () => void shell.openExternal(ISSUES_URL) },
+      // "Documentation", not the old "trace-mcp help": next to the shared
+      // "Get help" item, two things called help and pointing at different
+      // pages is a coin toss.
+      { label: 'Documentation', click: () => void shell.openExternal(DOCS_URL) },
+      actionItem('get-help'),
+      actionItem('whats-new'),
       // On macOS these live in the app menu; elsewhere Help is where they go.
       ...(isMac
         ? []
         : ([
             { type: 'separator' },
-            { label: 'Check for updates…', click: () => send('check-for-update') },
+            actionItem('check-for-update'),
             { role: 'about' },
           ] as MenuItemConstructorOptions[])),
     ],

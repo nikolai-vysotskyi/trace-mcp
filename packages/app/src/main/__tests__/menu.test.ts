@@ -49,6 +49,7 @@ vi.mock('electron', () => ({
 
 vi.mock('../tray', () => ({ showMenuWindow: vi.fn() }));
 
+import { GLOBAL_ACTIONS } from '../../shared/global-actions.js';
 import { buildAppMenu, forgetWindowSections, setWindowSections } from '../menu';
 
 function menu(label: string): Item[] {
@@ -96,6 +97,24 @@ describe('application menu', () => {
     expect(keys.get('Close tab')).toBe('CmdOrCtrl+W');
     expect(keys.get('Close window')).toBe('CmdOrCtrl+Shift+W');
     expect(keys.get('Reload')).toBe('CmdOrCtrl+R');
+  });
+
+  /* TRA-363: the sidebar's app menu offers the same four actions. Both lists
+     are built from src/shared/global-actions.ts, and this is the half of that
+     promise the main process can check — that every shared action is actually
+     ON the native menu, under its own label. The renderer's half lives in
+     renderer/components/__tests__/AppMenu.test.tsx. */
+  it('carries every shared global action, by the shared label', () => {
+    const labels = template.flatMap((top) => (top.submenu ?? []).map((i) => i.label));
+    for (const action of GLOBAL_ACTIONS) {
+      expect(labels).toContain(action.label);
+    }
+  });
+
+  it('sends the shared list’s URL actions to the browser, not to a window', () => {
+    click(menu('Help'), 'Get help');
+    click(menu('Help'), "What's new");
+    expect(sent).toEqual([]); // neither is an app-command
   });
 
   it('keeps Edit on plain roles so text fields keep working', () => {

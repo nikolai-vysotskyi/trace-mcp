@@ -131,91 +131,15 @@ body {
   background: color-mix(in oklab, var(--status-green) 88%, black);
 }
 
-/* ── Update banner: idle row vs notification card ───────────────── */
-/* Idle: minimal sub-caption with status dot. No card, no border — */
-/* must not compete with sidebar content when nothing is happening. */
-.update-idle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  /* Same box as a sidebar row: 28px tall, 8px horizontal padding, so the
-     status dot lands on the rows' 14px glyph column and the sidebar's bottom
-     stack is three aligned 28px strips instead of 6/8 asymmetric ad-hoc
-     padding (TRA-306). */
-  height: 28px;
-  padding: 0 8px;
-  margin: 0 6px;
-  font-size: 11px;
-  color: var(--label-secondary);
-  letter-spacing: -0.005em;
-}
-.update-idle .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--status-green);
-  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--status-green) 60%, black 40%);
-  flex-shrink: 0;
-}
-.update-idle.error .dot {
-  background: var(--status-orange);
-  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--status-orange) 60%, black 40%);
-}
-.update-idle .label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-}
-
-/* Inline refresh icon — sits on the right of the status row / card title. */
-.update-refresh {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin-left: auto;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-row);
-  color: var(--label-secondary);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-}
-.update-refresh:hover {
-  background: var(--fill-tertiary);
-  color: var(--label);
-}
-.update-refresh:active {
-  background: var(--fill-quaternary);
-}
-.update-refresh:disabled {
-  cursor: default;
-  opacity: 0.7;
-}
-.update-refresh.spinning svg {
-  animation: update-refresh-spin 800ms linear infinite;
-}
+/* ── Update card ─────────────────────────────────────────────────── */
+/* The idle "● Up to date · v3.1.1 ⟳" row and its inline refresh button are
+   gone (TRA-363): a permanent 28px strip whose only message was "nothing is
+   wrong" is the most expensive way to say it. The state moved into the app
+   menu's header, where "Check for updates" sits beside it. What is left here
+   is the card — and a card only appears when there is something to do. */
 @media (prefers-reduced-motion: reduce) {
-  .update-refresh.spinning svg {
-    animation: none;
-  }
   .update-card {
     animation: none;
-  }
-}
-@keyframes update-refresh-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
   }
 }
 

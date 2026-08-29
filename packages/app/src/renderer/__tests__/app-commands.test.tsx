@@ -132,10 +132,17 @@ describe('application-menu commands', () => {
     expect(document.querySelector('.ws-sidebar')).not.toBeNull();
   });
 
+  /* The footer is a menu trigger now, not a Settings row (TRA-363). Settings
+     itself needs a live daemon to render, which this harness has no business
+     supplying — what is testable is that the menu window handles the command
+     in place (no IPC hand-off) and leaves no nav row selected, because
+     Settings stopped being a sidebar destination. */
   it('settings opens the Settings surface in the menu window', async () => {
     await renderApp('/?view=menu&tab=workspace');
+    expect(document.querySelector('.ws-sb-row.is-selected')?.textContent).toContain('Workspace');
     await act(async () => dispatch('settings'));
-    expect(document.querySelector('.ws-sb-footer .is-selected')).not.toBeNull();
+    expect(document.querySelector('.ws-sb-row.is-selected')).toBeNull();
+    expect(window.electronAPI?.openSettings).not.toHaveBeenCalled();
   });
 
   it('settings hands off to the menu window from a project window', async () => {
