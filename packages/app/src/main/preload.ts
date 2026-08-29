@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     error?: string;
     /** True when the user already attempted this transition via npm-only and nothing on disk has moved since. */
     stuck?: boolean;
+    /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
+    staleRoots?: { root: string; version: string }[];
   }> => ipcRenderer.invoke('check-for-update'),
   checkPendingUpdate: (): Promise<{ pending: boolean; version?: string }> =>
     ipcRenderer.invoke('check-pending-update'),
@@ -75,6 +77,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     /** "bundle-pending" — restart will swap the .app; "npm-only" — CLI moved but bundle is stuck; "already-current" — nothing to do. */
     outcome?: 'bundle-pending' | 'npm-only' | 'already-current';
     version?: string;
+    /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
+    staleRoots?: { root: string; version: string }[];
   }> => ipcRenderer.invoke('apply-update'),
   restartApp: (): Promise<void> => ipcRenderer.invoke('restart-app'),
   openSettings: (section?: string): Promise<{ ok: boolean }> =>

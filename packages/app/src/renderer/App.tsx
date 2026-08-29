@@ -495,7 +495,32 @@ type UpdateState = {
   lastChecked?: number;
   error?: string;
   stuck?: boolean;
+  staleRoots?: { root: string; version: string }[];
 };
+
+/**
+ * `npm install -g` only ever writes into the global root its own npm owns. On a
+ * machine with several (nvm + Herd + a bundled runtime) the rest keep an old
+ * version, and every other signal here still reads "Up to date" — so a client
+ * wired to a stale root runs old code with nothing saying so (TRA-364). We
+ * cannot safely write into a root the user never pointed us at, so we say it
+ * out loud instead: the status row goes to the warning treatment and its
+ * tooltip names each stale root and the command that fixes it.
+ */
+function describeStaleRoots(staleRoots: { root: string; version: string }[]): {
+  label: string;
+  title: string;
+} {
+  const label =
+    staleRoots.length === 1
+      ? `Another npm install is on v${staleRoots[0].version}`
+      : `${staleRoots.length} other npm installs are out of date`;
+  const lines = staleRoots.map((r) => `v${r.version} — ${r.root}/trace-mcp`);
+  return {
+    label,
+    title: `${label}. This app updated the root it resolves to; these were not touched:\n${lines.join('\n')}\n\nFix each with its own npm: <root>/../../bin/npm install -g trace-mcp@latest`,
+  };
+}
 
 function formatAgo(ts?: number, now: number = Date.now()): string {
   if (!ts) return 'never';
@@ -703,9 +728,12 @@ export function UpdateBanner() {
 
   // Idle: minimal status row. No card chrome — stays out of the way.
   const isError = !!state.error;
+  // A stale sibling root is not an error, but it must not read as healthy
+  // either — it borrows the same warning treatment when nothing worse is up.
+  const stale = !isError && state.staleRoots?.length ? describeStaleRoots(state.staleRoots) : null;
   return (
     <div
-      className={`update-idle${isError ? ' error' : ''}`}
+      className={`update-idle${isError || stale ? ' error' : ''}`}
       // The only place the app reports update health. It changes without the
       // user asking, so assistive tech has to hear it (TRA-297).
       role="status"
@@ -713,8 +741,8 @@ export function UpdateBanner() {
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <span className="dot" aria-hidden="true" />
-      <span className="label" title={isError ? state.error : undefined}>
-        {isError ? state.error : `Up to date · v${state.current ?? '—'}`}
+      <span className="label" title={isError ? state.error : (stale?.title ?? undefined)}>
+        {isError ? state.error : (stale?.label ?? `Up to date · v${state.current ?? '—'}`)}
       </span>
       {refreshButton}
     </div>
