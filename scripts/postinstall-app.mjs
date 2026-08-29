@@ -262,10 +262,20 @@ async function main() {
   // Guard against shell-hostile asset names even though we use execFileSync.
   if (!/^[A-Za-z0-9._-]+\.zip$/.test(asset.name)) return;
 
+  // Compare with the leading `v` stripped from both sides. The marker has two
+  // writers that disagree on format: this script writes `release.tag_name`
+  // ("v3.2.0") while apply-pending-update.mjs writes the normalized pending
+  // version ("3.2.0"). A raw comparison therefore never matches after a
+  // GUI-applied update, so every later `npm install -g trace-mcp` re-downloads
+  // the full ~110 MB zip and re-stages the version already installed — and
+  // because the apply path rewrites the marker in the same stripped form, the
+  // loop never settles: the app shows a permanent "restart to install" banner
+  // for the build it is already running.
+  const stripV = (v) => v.replace(/^v/, '');
   const markerPath = path.join(INSTALL_DIR, '.trace-mcp-version');
   if (fs.existsSync(markerPath)) {
     const installed = fs.readFileSync(markerPath, 'utf-8').trim();
-    if (installed === release.tag_name) return;
+    if (stripV(installed) === stripV(release.tag_name)) return;
   }
 
   // Require a sibling checksum asset — no checksum, no update.
