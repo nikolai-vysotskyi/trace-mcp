@@ -26,6 +26,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { projectHash } from '../global.js';
+import { writeTmpFileSync } from '../utils/safe-fs.js';
 
 /** Flush cadence while at least one MCP session is active. */
 const FLUSH_INTERVAL_ACTIVE_MS = 5_000;
@@ -113,9 +114,9 @@ export function startHeartbeat(
   const flush = () => {
     state.last_heartbeat_at = new Date().toISOString();
     try {
-      fs.writeFileSync(file, JSON.stringify(state), { flag: 'w' });
+      writeTmpFileSync(file, JSON.stringify(state));
       // Touch legacy sentinel for old hook installations.
-      fs.writeFileSync(legacy, String(Date.now()), { flag: 'w' });
+      writeTmpFileSync(legacy, String(Date.now()));
     } catch {
       /* best-effort */
     }

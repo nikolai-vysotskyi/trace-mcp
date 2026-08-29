@@ -57,3 +57,51 @@ export function writeIfChanged(path: string, content: string): boolean {
   fs.writeFileSync(path, content, 'utf-8');
   return true;
 }
+
+/**
+ * `os.tmpdir()` is world-writable and shared between users, and the sentinel /
+ * marker / report paths we put there are predictable by design — hooks and the
+ * CLI locate them by project hash. On a single-user dev box that is harmless;
+ * on a shared or multi-user machine another user can pre-create our name as a
+ * symlink and have us truncate whatever it points at. These two helpers close
+ * that specific hole without changing any path (CodeQL js/insecure-temporary-file).
+ *
+ * ponytail: O_NOFOLLOW only — no lock, no unpredictable suffix. The names are a
+ * contract with already-installed hooks, so they must stay stable; refusing to
+ * follow a symlink is the whole fix.
+ */
+const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0; // undefined on Windows
+
+/**
+ * Write `content` to a fixed path under a shared temp directory, refusing to
+ * follow a symlink planted there by another user, and creating the file
+ * owner-only. Throws like `fs.writeFileSync` — callers decide what a failure
+ * means (all current ones treat temp writes as best-effort).
+ */
+export function writeTmpFileSync(path: string, content: string): void {
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | O_NOFOLLOW;
+  const fd = fs.openSync(path, flags, 0o600);
+  try {
+    fs.writeFileSync(fd, content, 'utf-8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * Create a marker directory under a shared temp directory, owner-only, and
+ * report whether it is safe to use — i.e. it really is a directory (not a
+ * symlink) that we own. Returns false instead of throwing: every caller's
+ * fallback is to skip the markers entirely.
+ */
+export function ensureTmpDirSync(path: string): boolean {
+  try {
+    fs.mkdirSync(path, { recursive: true, mode: 0o700 });
+    const st = fs.lstatSync(path);
+    if (!st.isDirectory()) return false;
+    const uid = process.getuid?.(); // undefined on Windows
+    return uid === undefined || st.uid === uid;
+  } catch {
+    return false;
+  }
+}

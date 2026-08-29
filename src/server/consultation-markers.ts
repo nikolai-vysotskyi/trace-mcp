@@ -10,10 +10,10 @@
  */
 
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { projectHash } from '../global.js';
+import { ensureTmpDirSync, writeTmpFileSync } from '../utils/safe-fs.js';
 
 function fileHash(filePath: string): string {
   return crypto.createHash('sha256').update(filePath).digest('hex');
@@ -37,10 +37,10 @@ function markConsulted(projectRoot: string, relPath: string): void {
     const markerPath = path.join(dir, fileHash(relPath));
     if (_writtenMarkers.has(markerPath)) return; // already marked this process
     if (!_ensuredDirs.has(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+      if (!ensureTmpDirSync(dir)) return; // squatted or unwritable — skip markers
       _ensuredDirs.add(dir);
     }
-    fs.writeFileSync(markerPath, '', { flag: 'w' });
+    writeTmpFileSync(markerPath, '');
     // ponytail: bound the dedup set — clearing only costs one repeat write.
     if (_writtenMarkers.size >= 50_000) _writtenMarkers.clear();
     _writtenMarkers.add(markerPath);

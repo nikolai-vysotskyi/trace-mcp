@@ -12,7 +12,7 @@
  *   trace-mcp visualize subproject --layout radial
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,9 +29,12 @@ import { TopologyStore } from '../topology/topology-db.js';
 export function openInBrowser(filePath: string): void {
   const platform = process.platform;
   try {
-    if (platform === 'darwin') execSync(`open "${filePath}"`);
-    else if (platform === 'win32') execSync(`start "" "${filePath}"`);
-    else execSync(`xdg-open "${filePath}"`);
+    // execFileSync, not execSync: the path comes from --output and can contain
+    // quotes or $(...) that a shell would happily interpret. No shell, no
+    // quoting rules to get wrong. `start` is a cmd builtin, hence the wrapper.
+    if (platform === 'darwin') execFileSync('open', [filePath]);
+    else if (platform === 'win32') execFileSync('cmd', ['/c', 'start', '', filePath]);
+    else execFileSync('xdg-open', [filePath]);
   } catch {
     // ignore — user can open manually
   }
