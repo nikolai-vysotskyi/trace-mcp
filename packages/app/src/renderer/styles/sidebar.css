@@ -43,10 +43,12 @@
   background: transparent;
 }
 
-/* 44px strip that the traffic lights sit in. Drag region — this and the
-   content pane's header are the ONLY draggable areas. */
+/* The strip the traffic lights sit in. Drag region — this and the content
+   pane's header are the ONLY draggable areas. Height comes from --top-band-h,
+   the same number `trafficLightPosition` is derived from (TRA-370): a literal
+   here is what put the lights 3px below the toggle. */
 .ws-sidebar-titlebar {
-  height: 44px;
+  height: var(--top-band-h);
   flex: none;
   display: flex;
   align-items: center;
@@ -348,11 +350,10 @@
   background: var(--surface-sunken, var(--surface));
 }
 
-/* Minimal 44px header: balances the sidebar title strip, carries the sidebar
-   toggle and owns the content pane's drag region. The full toolbar spec is a
-   separate issue — this is chrome, not a toolbar. */
+/* The content pane's half of the top band: same --top-band-h as the sidebar
+   strip, so the toggle it carries sits on the traffic-light centre line. */
 .ws-content-head {
-  height: 44px;
+  height: var(--top-band-h);
   flex: none;
   display: flex;
   align-items: center;
