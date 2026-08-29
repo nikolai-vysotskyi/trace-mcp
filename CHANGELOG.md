@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [2.2.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.1.0...v2.2.0) (2026-08-29)
+
+
+### Features
+
+* **app:** application menu, keyboard shortcuts and the text-selection fix (TRA-297) ([#471](https://github.com/nikolai-vysotskyi/trace-mcp/issues/471)) ([c2320d3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c2320d38aa42cdac9cfa033ac78a2ec66503367a))
+* **app:** put the sidebar footer on the row system, add Light/Dark/Auto (TRA-305) ([#464](https://github.com/nikolai-vysotskyi/trace-mcp/issues/464)) ([266f53f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/266f53f1e4ed1edbf2f3aacc9de89ae9f32389ed))
+* **app:** rebuild Ask on the macOS 26 layer (TRA-312) ([#472](https://github.com/nikolai-vysotskyi/trace-mcp/issues/472)) ([7ab309d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7ab309d3981ccd7cb82401976e6096ea9674ecfd))
+* **app:** rebuild Graph Explorer chrome and Insights on the macOS 26 layer (TRA-296) ([#468](https://github.com/nikolai-vysotskyi/trace-mcp/issues/468)) ([7df5742](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7df57427348e69d90a677cb6731e481d50f80e38))
+* **app:** rebuild MCP clients, Settings and the onboarding sheet (TRA-295) ([#469](https://github.com/nikolai-vysotskyi/trace-mcp/issues/469)) ([407d4e1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/407d4e123420d093eaae464e2e8dfede267adb96))
+* **app:** rebuild Project Overview on the macOS 26 layer (TRA-293) ([#463](https://github.com/nikolai-vysotskyi/trace-mcp/issues/463)) ([b995779](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b995779a93973abd9cf39847f2cb7f6501d27802))
+* **app:** rebuild the workspace dashboard and project table on the macOS 26 layer (TRA-292) ([#461](https://github.com/nikolai-vysotskyi/trace-mcp/issues/461)) ([9b4bc0b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9b4bc0bdb1a024195aa7623e22fae4e9b7a901bd))
+
+
+### Bug Fixes
+
+* **app:** density pass — sidebar footer height, doubled pane inset, off-grid control padding (TRA-306) ([#467](https://github.com/nikolai-vysotskyi/trace-mcp/issues/467)) ([b1b5fbc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b1b5fbc71ae1170dde9b2c4a3cae1823a2578e9e))
+* **app:** distinguish a project the daemon forgot from one never indexed ([#465](https://github.com/nikolai-vysotskyi/trace-mcp/issues/465)) ([ab59ed6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ab59ed657740a6dee45e0a4afe51a12a06d68114))
+
+
+### Documentation
+
+* write DESIGN.md, the design system this revision converged on (TRA-307) ([#466](https://github.com/nikolai-vysotskyi/trace-mcp/issues/466)) ([3ccfacf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ccfacfc87128ce789235ecff7dc175f6996891d))
+
 ## [2.1.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.0.3...v2.1.0) (2026-08-28)
 
 
