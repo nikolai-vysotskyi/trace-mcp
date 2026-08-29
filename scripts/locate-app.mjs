@@ -52,6 +52,61 @@ export const BUNDLE_ID = 'com.trace-mcp.app';
 export const LOCATION_MARKER_FILENAME = 'app-location.json';
 
 /**
+ * Path segments that never appear in an *installed* bundle's location but
+ * always appear in a build output tree. `release/mac-arm64/trace-mcp.app` is
+ * what electron-builder emits, and such a bundle is packaged — `Info.plist`
+ * carries the right bundle id, so plist validation alone accepts it.
+ *
+ * Keep in sync with `packages/app/src/main/install-path.ts`; the two copies
+ * exist because Electron main is compiled with `rootDir: src/main` and cannot
+ * import this file. `install-path.test.ts` fails if they diverge.
+ */
+const IMPLAUSIBLE_SEGMENTS = new Set([
+  'node_modules',
+  'release',
+  'dist',
+  'out',
+  'build',
+  'target',
+  'packages',
+  'src',
+  'workdir',
+  'DerivedData',
+  '.git',
+]);
+
+/**
+ * True when `appPath` could plausibly be an *installed* app rather than a
+ * local build. A bundle produced by `electron-builder` inside a checkout
+ * validates as a real bundle in every other respect, so once it got recorded
+ * in the location marker every later `npm install -g` "updated" a throwaway
+ * directory and the user's real install froze forever (TRA-357).
+ *
+ * Two signals, both cheap: a build-tree segment anywhere in the parent path,
+ * or a `.git` directory in any near ancestor (a repository checkout).
+ *
+ * @param {string} appPath
+ * @returns {boolean}
+ */
+export function isPlausibleInstallPath(appPath) {
+  if (!appPath || !path.isAbsolute(appPath)) return false;
+  const parent = path.dirname(appPath);
+  for (const segment of parent.split(path.sep)) {
+    if (IMPLAUSIBLE_SEGMENTS.has(segment)) return false;
+  }
+  let dir = parent;
+  for (let i = 0; i < 6 && dir && dir !== path.dirname(dir); i++) {
+    try {
+      if (fs.existsSync(path.join(dir, '.git'))) return false;
+    } catch {
+      /* unreadable ancestor — treat as plausible, validation continues */
+    }
+    dir = path.dirname(dir);
+  }
+  return true;
+}
+
+/**
  * @typedef {Object} LocateResult
  * @property {string} appPath - Absolute path to the validated `.app` bundle.
  * @property {'marker'|'mdfind'|'fallback'} source - Which step of the chain resolved it.
@@ -200,6 +255,8 @@ function escapeRegExp(value) {
  * @param {{ version?: string, homeDir?: string, bundleId?: string }} [meta]
  */
 export function writeAppLocationMarker(appPath, meta = {}) {
+  // Never record a build output as the install location — see TRA-357.
+  if (!isPlausibleInstallPath(appPath)) return;
   try {
     const home = meta.homeDir ?? os.homedir();
     const markerDir = path.join(home, '.trace-mcp');
@@ -235,6 +292,9 @@ function resolveFromMarker(markerPath, bundleId, plistBuddyBin) {
   }
   const candidate = typeof parsed?.appPath === 'string' ? parsed.appPath : null;
   if (!candidate) return null;
+  // A marker written for a locally built bundle must not win over the real
+  // install; fall through to mdfind / the conventional directories instead.
+  if (!isPlausibleInstallPath(candidate)) return null;
   if (!isValidAppBundle(candidate, bundleId, plistBuddyBin)) return null;
   return candidate;
 }
@@ -255,6 +315,8 @@ function resolveFromMdfind(mdfindBin, bundleId, plistBuddyBin) {
     .map((line) => line.trim())
     .filter(Boolean);
   for (const candidate of candidates) {
+    // Spotlight indexes build outputs too — same filter as the marker path.
+    if (!isPlausibleInstallPath(candidate)) continue;
     if (isValidAppBundle(candidate, bundleId, plistBuddyBin)) return candidate;
   }
   return null;
