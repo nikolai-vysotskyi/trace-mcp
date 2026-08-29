@@ -2,7 +2,12 @@
  * Schema describing all ~/.trace-mcp/.config.json sections.
  * Drives the Settings UI — each section is a collapsible group,
  * each field renders the appropriate control.
+ *
+ * `label` and `description` hold catalogue KEYS, not prose (TRA-383). They are
+ * resolved with `t()` at render time, never here: this module is evaluated once
+ * at import, and a string captured then never sees a language switch.
  */
+import { t } from '../i18n';
 
 export type FieldType =
   | 'boolean'
@@ -52,25 +57,25 @@ export function validateField(field: FieldDef, value: unknown): string | null {
 
   switch (field.type) {
     case 'boolean':
-      if (typeof value !== 'boolean') return 'Must be true or false';
+      if (typeof value !== 'boolean') return t('settings:validate.boolean');
       break;
     case 'number': {
-      if (typeof value !== 'number' || !Number.isFinite(value)) return 'Must be a number';
-      if (field.min != null && value < field.min) return `Min: ${field.min}`;
-      if (field.max != null && value > field.max) return `Max: ${field.max}`;
+      if (typeof value !== 'number' || !Number.isFinite(value)) return t('settings:validate.number');
+      if (field.min != null && value < field.min) return t('settings:validate.min', { min: field.min });
+      if (field.max != null && value > field.max) return t('settings:validate.max', { max: field.max });
       break;
     }
     case 'string': {
-      if (typeof value !== 'string') return 'Must be a string';
+      if (typeof value !== 'string') return t('settings:validate.string');
       if (field.pattern) {
         // ReDoS guard: cap input length before regexing. These fields hold
         // short config values (paths, URLs, ids); nothing legitimate needs
         // more than this, and it bounds worst-case backtracking cost
         // regardless of how the field's pattern is authored.
         const MAX_PATTERN_INPUT_LENGTH = 500;
-        if (value.length > MAX_PATTERN_INPUT_LENGTH) return `Too long (max ${MAX_PATTERN_INPUT_LENGTH} chars)`;
+        if (value.length > MAX_PATTERN_INPUT_LENGTH) return t('settings:validate.tooLong', { max: MAX_PATTERN_INPUT_LENGTH });
         try {
-          if (!new RegExp(field.pattern).test(value)) return `Must match: ${field.pattern}`; // nosemgrep: ajinabraham.njsscan.dos.regex_injection.regex_injection_dos -- field.pattern is authored in this file's static schema, not user input; the length cap above bounds worst-case cost on the user-controlled value being tested.
+          if (!new RegExp(field.pattern).test(value)) return t('settings:validate.pattern', { pattern: field.pattern }); // nosemgrep: ajinabraham.njsscan.dos.regex_injection.regex_injection_dos -- field.pattern is authored in this file's static schema, not user input; the length cap above bounds worst-case cost on the user-controlled value being tested.
         } catch {
           /* invalid pattern, skip */
         }
@@ -79,18 +84,18 @@ export function validateField(field: FieldDef, value: unknown): string | null {
     }
     case 'select':
       if (field.options && !field.options.includes(value as string)) {
-        return `Must be one of: ${field.options.join(', ')}`;
+        return t('settings:validate.oneOf', { options: field.options.join(', ') });
       }
       break;
     case 'multiselect':
     case 'array':
-      if (!Array.isArray(value)) return 'Must be a list';
+      if (!Array.isArray(value)) return t('settings:validate.list');
       break;
     case 'model-select':
-      if (typeof value !== 'string') return 'Must be a string';
+      if (typeof value !== 'string') return t('settings:validate.string');
       break;
     case 'json':
-      if (typeof value === 'string') return 'Must be valid JSON (not a string)';
+      if (typeof value === 'string') return t('settings:validate.json');
       break;
   }
   return null;
@@ -232,8 +237,11 @@ export function computeDiff(
 
       if (JSON.stringify(fromVal) !== JSON.stringify(toVal)) {
         entries.push({
-          section: section.label,
-          field: field.nested ? `${field.nested}.${field.label}` : field.label,
+          /* Resolved here, not stored: DiffEntry renders as-is and the schema
+             carries catalogue keys. computeDiff runs on every render, so this
+             follows a language switch. */
+          section: t(section.label),
+          field: field.nested ? `${field.nested}.${t(field.label)}` : t(field.label),
           from: fromVal,
           to: toVal,
         });
@@ -248,13 +256,18 @@ export function computeDiff(
 export const CONFIG_SCHEMA: SectionDef[] = [
   {
     key: '_root',
-    label: 'General',
-    description: 'Auto-update and top-level settings',
+    label: 'settings:schema._root.label',
+    description: 'settings:schema._root.description',
     fields: [
-      { key: 'auto_update', label: 'Auto-update', type: 'boolean', defaultValue: true },
+      {
+        key: 'auto_update',
+        label: 'settings:schema._root.auto_update.label',
+        type: 'boolean',
+        defaultValue: true,
+      },
       {
         key: 'auto_update_check_interval_hours',
-        label: 'Update check interval (hours)',
+        label: 'settings:schema._root.interval.label',
         type: 'number',
         placeholder: '24',
         min: 1,
@@ -263,7 +276,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'logLevel',
-        label: 'Daemon log level',
+        label: 'settings:schema._root.logLevel.label',
         type: 'select',
         options: ['debug', 'info', 'warn', 'error'],
         defaultValue: 'info',
@@ -272,13 +285,13 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'ai',
-    label: 'AI and embeddings',
-    description: 'AI provider for semantic search, summaries, and intent classification',
+    label: 'settings:schema.ai.label',
+    description: 'settings:schema.ai.description',
     fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false },
+      { key: 'enabled', label: 'settings:schema.f.enabled', type: 'boolean', defaultValue: false },
       {
         key: 'provider',
-        label: 'Provider',
+        label: 'settings:schema.ai.provider.label',
         type: 'select',
         options: [
           'onnx',
@@ -297,8 +310,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         ],
         defaultValue: 'onnx',
         showIf: 'enabled',
-        description:
-          'onnx = local zero-config. ollama/lmstudio = local with model choice. gemini = Google Generative Language API (consumer, AIza key). vertex = Google Vertex AI (GCP, OAuth bearer token + project/location). voyage = Voyage AI embeddings only. Others = cloud APIs.',
+        description: 'settings:schema.ai.provider.description',
       },
 
       // ── Per-capability enable flags ──
@@ -306,603 +318,589 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       // Disabled capabilities short-circuit to no-op services; no other code changes required.
       {
         key: 'embedding',
-        label: 'Use embeddings',
+        label: 'settings:schema.ai.embedding.label',
         type: 'boolean',
         nested: 'features',
         defaultValue: true,
         showIf: 'enabled',
-        description:
-          'Generate vector embeddings for semantic search and reranking. Turn off to disable semantic search while keeping inference.',
+        description: 'settings:schema.ai.embedding.description',
       },
       {
         key: 'inference',
-        label: 'Use inference',
+        label: 'settings:schema.ai.inference.label',
         type: 'boolean',
         nested: 'features',
         defaultValue: true,
         showIf: 'enabled',
-        description:
-          'Call the LLM for summarization, intent classification, and Ask. Turn off to skip all LLM calls while keeping embeddings.',
+        description: 'settings:schema.ai.inference.description',
       },
       {
         key: 'fast_inference',
-        label: 'Use fast inference',
+        label: 'settings:schema.ai.fast_inference.label',
         type: 'boolean',
         nested: 'features',
         defaultValue: true,
         showIf: 'enabled',
-        description:
-          'Use the fast model for low-latency tasks. When off, fast-path callers receive empty responses — leave on unless debugging.',
+        description: 'settings:schema.ai.fast_inference.description',
       },
 
       // ── Connection: Ollama ──
       {
         key: 'base_url',
-        label: 'Base URL',
+        label: 'settings:schema.f.baseUrl',
         type: 'string',
         placeholder: 'http://localhost:11434',
         showIf: 'provider=ollama',
-        description: 'Ollama server endpoint. Change if running on a different host or port.',
+        description: 'settings:schema.ai.ollama.base_url.description',
       },
       // ── Connection: LM Studio ──
       {
         key: 'base_url',
-        label: 'Base URL',
+        label: 'settings:schema.f.baseUrl',
         type: 'string',
         placeholder: 'http://localhost:1234/v1',
         showIf: 'provider=lmstudio',
-        description: 'LM Studio local server endpoint.',
+        description: 'settings:schema.ai.lmstudio.base_url.description',
       },
       // ── Connection: OpenAI ──
       {
         key: 'base_url',
-        label: 'Base URL',
+        label: 'settings:schema.f.baseUrl',
         type: 'string',
         placeholder: 'https://api.openai.com',
         showIf: 'provider=openai',
-        description: 'OpenAI API endpoint. Change for Azure OpenAI or compatible providers.',
+        description: 'settings:schema.ai.openai.base_url.description',
       },
       {
         key: 'api_key',
-        label: 'API key',
+        label: 'settings:schema.f.apiKey',
         type: 'string',
         placeholder: 'sk-...',
         sensitive: true,
         showIf: 'provider=openai',
-        description: 'Required. Or set OPENAI_API_KEY env var.',
+        description: 'settings:schema.ai.openai.api_key.description',
       },
       // ── Connection: Anthropic ──
       {
         key: 'api_key',
-        label: 'API key',
+        label: 'settings:schema.f.apiKey',
         type: 'string',
         placeholder: 'sk-ant-...',
         sensitive: true,
         showIf: 'provider=anthropic',
-        description:
-          'Anthropic API key from console.anthropic.com. Or set ANTHROPIC_API_KEY env var.',
+        description: 'settings:schema.ai.anthropic.api_key.description',
       },
       // ── Connection: Gemini (Google Generative Language API — consumer endpoint) ──
       {
         key: 'api_key',
-        label: 'API key',
+        label: 'settings:schema.f.apiKey',
         type: 'string',
         placeholder: 'AIza...',
         sensitive: true,
         showIf: 'provider=gemini',
-        description:
-          'Google Generative Language API key from ai.google.dev (starts with AIza). Or set GEMINI_API_KEY env var. For GCP/Vertex use the "vertex" provider instead.',
+        description: 'settings:schema.ai.gemini.api_key.description',
       },
       // ── Connection: Vertex AI (Google Cloud) ──
       {
         key: 'api_key',
-        label: 'Access token',
+        label: 'settings:schema.ai.vertex.api_key.label',
         type: 'string',
         placeholder: 'ya29....',
         sensitive: true,
         showIf: 'provider=vertex',
-        description:
-          'OAuth2 bearer token (short-lived, ~1h). Generate via: gcloud auth print-access-token. Or set GOOGLE_ACCESS_TOKEN env var.',
+        description: 'settings:schema.ai.vertex.api_key.description',
       },
       {
         key: 'vertex_project',
-        label: 'GCP project',
+        label: 'settings:schema.ai.vertex.project.label',
         type: 'string',
         placeholder: 'my-gcp-project',
         showIf: 'provider=vertex',
-        description:
-          'Google Cloud project ID hosting Vertex AI. Or set GOOGLE_CLOUD_PROJECT env var.',
+        description: 'settings:schema.ai.vertex.project.description',
       },
       {
         key: 'vertex_location',
-        label: 'GCP location',
+        label: 'settings:schema.ai.vertex.location.label',
         type: 'string',
         placeholder: 'us-central1',
         defaultValue: 'us-central1',
         showIf: 'provider=vertex',
-        description:
-          'Vertex AI region (e.g. us-central1, europe-west4, asia-northeast1). Or set GOOGLE_CLOUD_LOCATION env var.',
+        description: 'settings:schema.ai.vertex.location.description',
       },
       // ── Connection: Voyage ──
       {
         key: 'base_url',
-        label: 'Base URL',
+        label: 'settings:schema.f.baseUrl',
         type: 'string',
         placeholder: 'https://api.voyageai.com/v1',
         showIf: 'provider=voyage',
-        description: 'Voyage AI endpoint. Usually the default.',
+        description: 'settings:schema.ai.voyage.base_url.description',
       },
       {
         key: 'api_key',
-        label: 'API key',
+        label: 'settings:schema.f.apiKey',
         type: 'string',
         placeholder: 'pa-...',
         sensitive: true,
         showIf: 'provider=voyage',
-        description:
-          'Voyage API key from dash.voyageai.com. Or set VOYAGE_API_KEY env var. Embeddings only — no inference.',
+        description: 'settings:schema.ai.voyage.api_key.description',
       },
       // ── Connection: Mistral ──
       {
         key: 'base_url',
-        label: 'Base URL',
+        label: 'settings:schema.f.baseUrl',
         type: 'string',
         placeholder: 'https://api.mistral.ai/v1',
         showIf: 'provider=mistral',
-        description: 'Mistral API endpoint.',
+        description: 'settings:schema.ai.mistral.base_url.description',
       },
       {
         key: 'api_key',
-        label: 'API key',
+        label: 'settings:schema.f.apiKey',
         type: 'string',
         placeholder: 'sk-...',
         sensitive: true,
         showIf: 'provider=mistral',
-        description: 'Mistral API key from console.mistral.ai. Or set MISTRAL_API_KEY env var.',
+        description: 'settings:schema.ai.mistral.api_key.description',
       },
       // ── Connection: Groq ──
       {
         key: 'base_url',
-        label: 'Base URL',
+        label: 'settings:schema.f.baseUrl',
         type: 'string',
         placeholder: 'https://api.groq.com/openai/v1',
         showIf: 'provider=groq',
-        description: 'Groq API endpoint.',
+        description: 'settings:schema.ai.groq.base_url.description',
       },
       {
         key: 'api_key',
-        label: 'API key',
+        label: 'settings:schema.f.apiKey',
         type: 'string',
         placeholder: 'gsk_...',
         sensitive: true,
         showIf: 'provider=groq',
-        description: 'Groq API key from console.groq.com. Or set GROQ_API_KEY env var.',
+        description: 'settings:schema.ai.groq.api_key.description',
       },
       // ── Connection: Together ──
       {
         key: 'base_url',
-        label: 'Base URL',
+        label: 'settings:schema.f.baseUrl',
         type: 'string',
         placeholder: 'https://api.together.xyz/v1',
         showIf: 'provider=together',
-        description: 'Together AI API endpoint.',
+        description: 'settings:schema.ai.together.base_url.description',
       },
       {
         key: 'api_key',
-        label: 'API key',
+        label: 'settings:schema.f.apiKey',
         type: 'string',
         placeholder: 'sk-...',
         sensitive: true,
         showIf: 'provider=together',
-        description: 'Together API key from api.together.ai. Or set TOGETHER_API_KEY env var.',
+        description: 'settings:schema.ai.together.api_key.description',
       },
       // ── Connection: DeepSeek ──
       {
         key: 'base_url',
-        label: 'Base URL',
+        label: 'settings:schema.f.baseUrl',
         type: 'string',
         placeholder: 'https://api.deepseek.com/v1',
         showIf: 'provider=deepseek',
-        description: 'DeepSeek API endpoint.',
+        description: 'settings:schema.ai.deepseek.base_url.description',
       },
       {
         key: 'api_key',
-        label: 'API key',
+        label: 'settings:schema.f.apiKey',
         type: 'string',
         placeholder: 'sk-...',
         sensitive: true,
         showIf: 'provider=deepseek',
-        description:
-          'DeepSeek API key from platform.deepseek.com. Or set DEEPSEEK_API_KEY env var.',
+        description: 'settings:schema.ai.deepseek.api_key.description',
       },
       // ── Connection: xAI ──
       {
         key: 'base_url',
-        label: 'Base URL',
+        label: 'settings:schema.f.baseUrl',
         type: 'string',
         placeholder: 'https://api.x.ai/v1',
         showIf: 'provider=xai',
-        description: 'xAI (Grok) API endpoint.',
+        description: 'settings:schema.ai.xai.base_url.description',
       },
       {
         key: 'api_key',
-        label: 'API key',
+        label: 'settings:schema.f.apiKey',
         type: 'string',
         placeholder: 'xai-...',
         sensitive: true,
         showIf: 'provider=xai',
-        description: 'xAI API key from console.x.ai. Or set XAI_API_KEY env var.',
+        description: 'settings:schema.ai.xai.api_key.description',
       },
 
       // ── Model fields: Ollama ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'llama3.2',
         showIf: 'provider=ollama',
-        description: 'LLM for summarization and intent classification.',
+        description: 'settings:schema.ai.ollama.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'llama3.2',
         showIf: 'provider=ollama',
-        description: 'Smaller/faster LLM for low-latency tasks. Falls back to inference model.',
+        description: 'settings:schema.ai.ollama.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
         placeholder: 'nomic-embed-text',
         showIf: 'provider=ollama',
-        description: 'Embedding model for semantic search. Must match embedding_dimensions.',
+        description: 'settings:schema.ai.ollama.embedding_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'reranker_model',
-        label: 'Reranker model',
+        label: 'settings:schema.f.rerankerModel',
         type: 'model-select',
         placeholder: 'bge-reranker-v2-m3',
         showIf: 'provider=ollama',
-        description: 'Cross-encoder for re-ranking search results.',
+        description: 'settings:schema.ai.ollama.reranker_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: LM Studio ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'qwen2.5-coder-7b-instruct',
         showIf: 'provider=lmstudio',
-        description: 'LLM loaded in LM Studio.',
+        description: 'settings:schema.ai.lmstudio.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'qwen2.5-coder-7b-instruct',
         showIf: 'provider=lmstudio',
-        description: 'Fast LLM for low-latency tasks.',
+        description: 'settings:schema.ai.lmstudio.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
         placeholder: 'nomic-embed-text-v1.5',
         showIf: 'provider=lmstudio',
-        description: 'Embedding model loaded in LM Studio.',
+        description: 'settings:schema.ai.lmstudio.embedding_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: OpenAI ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'gpt-4o-mini',
         showIf: 'provider=openai',
-        description: 'LLM for summarization and intent classification.',
+        description: 'settings:schema.ai.openai.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'gpt-4o-mini',
         showIf: 'provider=openai',
-        description: 'Faster/cheaper LLM. Falls back to inference model.',
+        description: 'settings:schema.ai.openai.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
         placeholder: 'text-embedding-3-small',
         showIf: 'provider=openai',
-        description: 'text-embedding-3-small (cheap) or text-embedding-3-large (accurate).',
+        description: 'settings:schema.ai.openai.embedding_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: Anthropic (inference only — no embeddings API) ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'claude-sonnet-4-6',
         showIf: 'provider=anthropic',
-        description: 'Claude model for summarization and reasoning.',
+        description: 'settings:schema.ai.anthropic.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'claude-haiku-4-5-20251001',
         showIf: 'provider=anthropic',
-        description: 'Fastest Claude model for low-latency tasks.',
+        description: 'settings:schema.ai.anthropic.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: Gemini ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'gemini-2.5-flash',
         showIf: 'provider=gemini',
-        description: 'Gemini model for summarization.',
+        description: 'settings:schema.ai.gemini.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'gemini-2.5-flash',
         showIf: 'provider=gemini',
-        description: 'Fast Gemini model for low-latency tasks.',
+        description: 'settings:schema.ai.gemini.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
         placeholder: 'text-embedding-004',
         showIf: 'provider=gemini',
-        description: 'Gemini embedding model. text-embedding-004 (768d) is recommended.',
+        description: 'settings:schema.ai.gemini.embedding_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: Vertex AI ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'string',
         placeholder: 'gemini-2.5-flash',
         showIf: 'provider=vertex',
-        description:
-          'Vertex-hosted model for summarization (e.g. gemini-2.5-flash, gemini-2.5-pro).',
+        description: 'settings:schema.ai.vertex.inference_model.description',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'string',
         placeholder: 'gemini-2.5-flash',
         showIf: 'provider=vertex',
-        description: 'Fast Vertex model for low-latency tasks.',
+        description: 'settings:schema.ai.vertex.fast_model.description',
       },
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'string',
         placeholder: 'text-embedding-005',
         showIf: 'provider=vertex',
-        description:
-          'Vertex embedding model (e.g. text-embedding-005 768d, gemini-embedding-001 3072d).',
+        description: 'settings:schema.ai.vertex.embedding_model.description',
       },
       // ── Model fields: Voyage ──
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'string',
         placeholder: 'voyage-code-3',
         showIf: 'provider=voyage',
-        description: 'Voyage embedding model. voyage-code-3 (1024d) is tuned for source code.',
+        description: 'settings:schema.ai.voyage.embedding_model.description',
       },
       // ── Model fields: Mistral ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'mistral-small-latest',
         showIf: 'provider=mistral',
-        description: 'Mistral LLM for summarization.',
+        description: 'settings:schema.ai.mistral.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'mistral-small-latest',
         showIf: 'provider=mistral',
-        description: 'Fast Mistral model.',
+        description: 'settings:schema.ai.mistral.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
         placeholder: 'mistral-embed',
         showIf: 'provider=mistral',
-        description: 'Mistral embedding model (1024d).',
+        description: 'settings:schema.ai.mistral.embedding_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: Groq ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'llama-3.3-70b-versatile',
         showIf: 'provider=groq',
-        description: 'Groq-hosted LLM. Ultra-fast inference.',
+        description: 'settings:schema.ai.groq.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'llama-3.1-8b-instant',
         showIf: 'provider=groq',
-        description: 'Fastest Groq model for low-latency tasks.',
+        description: 'settings:schema.ai.groq.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
         placeholder: 'nomic-embed-text-v1.5',
         showIf: 'provider=groq',
-        description: 'Groq embedding model.',
+        description: 'settings:schema.ai.groq.embedding_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: Together ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
         showIf: 'provider=together',
-        description: 'Together-hosted LLM.',
+        description: 'settings:schema.ai.together.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'meta-llama/Llama-3.1-8B-Instruct-Turbo',
         showIf: 'provider=together',
-        description: 'Fast Together model.',
+        description: 'settings:schema.ai.together.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
         placeholder: 'togethercomputer/m2-bert-80M-8k-retrieval',
         showIf: 'provider=together',
-        description: 'Together embedding model.',
+        description: 'settings:schema.ai.together.embedding_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: DeepSeek ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'deepseek-chat',
         showIf: 'provider=deepseek',
-        description: 'DeepSeek V3 for summarization and reasoning.',
+        description: 'settings:schema.ai.deepseek.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'deepseek-chat',
         showIf: 'provider=deepseek',
-        description: 'DeepSeek fast model.',
+        description: 'settings:schema.ai.deepseek.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: xAI ──
       {
         key: 'inference_model',
-        label: 'Inference model',
+        label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
         placeholder: 'grok-4',
         showIf: 'provider=xai',
-        description: 'Grok model for summarization.',
+        description: 'settings:schema.ai.xai.inference_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       {
         key: 'fast_model',
-        label: 'Fast model',
+        label: 'settings:schema.f.fastModel',
         type: 'model-select',
         placeholder: 'grok-4',
         showIf: 'provider=xai',
-        description: 'Fast Grok model.',
+        description: 'settings:schema.ai.xai.fast_model.description',
         modelProvider: 'provider',
         modelBaseUrlField: 'base_url',
       },
       // ── Model fields: ONNX ──
       {
         key: 'embedding_model',
-        label: 'Embedding model',
+        label: 'settings:schema.f.embeddingModel',
         type: 'string',
         placeholder: 'Xenova/all-MiniLM-L6-v2',
         showIf: 'provider=onnx',
-        description: 'ONNX model for local embeddings. Default works out of the box.',
+        description: 'settings:schema.ai.onnx.embedding_model.description',
       },
 
       // ── Common fields ──
       {
         key: 'embedding_dimensions',
-        label: 'Embedding dimensions',
+        label: 'settings:schema.ai.dimensions.label',
         type: 'number',
         placeholder: '384',
         min: 1,
         showIf: 'enabled',
-        description:
-          'Vector size. Must match the model (384 for MiniLM, 768 for nomic/Gemini/Vertex text-embedding-005, 1024 for Mistral/voyage-code-3, 1536 for OpenAI, 3072 for gemini-embedding-001).',
+        description: 'settings:schema.ai.dimensions.description',
       },
       {
         key: 'summarize_on_index',
-        label: 'Summarize on index',
+        label: 'settings:schema.ai.summarize.label',
         type: 'boolean',
         defaultValue: false,
         showIf: 'enabled',
-        description:
-          'Generate natural-language summaries during indexing. Requires a provider with inference model.',
+        description: 'settings:schema.ai.summarize.description',
       },
       {
         key: 'summarize_batch_size',
-        label: 'Summarize batch size',
+        label: 'settings:schema.ai.summarize_batch.label',
         type: 'number',
         placeholder: '20',
         min: 1,
         defaultValue: 20,
         showIf: 'summarize_on_index',
-        description: 'Symbols to summarize in parallel per batch.',
+        description: 'settings:schema.ai.summarize_batch.description',
       },
       {
         key: 'summarize_kinds',
-        label: 'Summarize kinds',
+        label: 'settings:schema.ai.summarize_kinds.label',
         type: 'multiselect',
         options: [
           'class',
@@ -920,35 +918,35 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         ],
         defaultValue: ['class', 'function', 'method', 'interface', 'trait', 'enum', 'type'],
         showIf: 'summarize_on_index',
-        description: 'Which symbol kinds to generate summaries for.',
+        description: 'settings:schema.ai.summarize_kinds.description',
       },
       {
         key: 'concurrency',
-        label: 'Concurrency',
+        label: 'settings:schema.ai.concurrency.label',
         type: 'number',
         placeholder: '1',
         min: 1,
         max: 32,
         defaultValue: 1,
         showIf: 'enabled',
-        description: 'Parallel AI requests. For Ollama, match OLLAMA_NUM_PARALLEL.',
+        description: 'settings:schema.ai.concurrency.description',
       },
     ],
   },
   {
     key: 'security',
-    label: 'Security',
-    description: 'Secret detection and file limits',
+    label: 'settings:schema.security.label',
+    description: 'settings:schema.security.description',
     fields: [
       {
         key: 'secret_patterns',
-        label: 'Secret patterns',
+        label: 'settings:schema.security.secret_patterns.label',
         type: 'array',
         placeholder: 'regex patterns',
       },
       {
         key: 'max_file_size_bytes',
-        label: 'Max file size (bytes)',
+        label: 'settings:schema.security.max_file_size.label',
         type: 'number',
         placeholder: '1048576',
         min: 1024,
@@ -956,7 +954,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'max_files',
-        label: 'Max files per project',
+        label: 'settings:schema.security.max_files.label',
         type: 'number',
         placeholder: '10000',
         min: 1,
@@ -966,13 +964,13 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'predictive',
-    label: 'Predictive analysis',
-    description: 'Bug prediction, tech debt scoring, change risk',
+    label: 'settings:schema.predictive.label',
+    description: 'settings:schema.predictive.description',
     fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true },
+      { key: 'enabled', label: 'settings:schema.f.enabled', type: 'boolean', defaultValue: true },
       {
         key: 'cache_ttl_minutes',
-        label: 'Cache TTL (minutes)',
+        label: 'settings:schema.predictive.cache_ttl.label',
         type: 'number',
         placeholder: '60',
         min: 1,
@@ -981,7 +979,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'git_since_days',
-        label: 'Git history (days)',
+        label: 'settings:schema.predictive.git_since.label',
         type: 'number',
         placeholder: '180',
         min: 1,
@@ -990,7 +988,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'module_depth',
-        label: 'Module depth',
+        label: 'settings:schema.predictive.module_depth.label',
         type: 'number',
         placeholder: '2',
         min: 1,
@@ -1000,29 +998,29 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'weights',
-        label: 'Weights',
+        label: 'settings:schema.predictive.weights.label',
         type: 'json',
-        description: 'Bug/debt/risk scoring weights',
+        description: 'settings:schema.predictive.weights.description',
         showIf: 'enabled',
       },
     ],
   },
   {
     key: 'intent',
-    label: 'Intent and domains',
-    description: 'Domain classification and auto-tagging',
+    label: 'settings:schema.intent.label',
+    description: 'settings:schema.intent.description',
     fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false },
+      { key: 'enabled', label: 'settings:schema.f.enabled', type: 'boolean', defaultValue: false },
       {
         key: 'auto_classify_on_index',
-        label: 'Auto-classify on index',
+        label: 'settings:schema.intent.auto_classify.label',
         type: 'boolean',
         defaultValue: true,
         showIf: 'enabled',
       },
       {
         key: 'classify_batch_size',
-        label: 'Batch size',
+        label: 'settings:schema.f.batchSize',
         type: 'number',
         placeholder: '100',
         min: 1,
@@ -1031,29 +1029,29 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'domain_hints',
-        label: 'Domain hints',
+        label: 'settings:schema.intent.domain_hints.label',
         type: 'json',
-        description: '{ "domain": ["path/**"] }',
+        description: 'settings:schema.intent.domain_hints.description',
         showIf: 'enabled',
       },
       {
         key: 'custom_domains',
-        label: 'Custom domains',
+        label: 'settings:schema.intent.custom_domains.label',
         type: 'json',
-        description: '[{ name, path_patterns }]',
+        description: 'settings:schema.intent.custom_domains.description',
         showIf: 'enabled',
       },
     ],
   },
   {
     key: 'runtime',
-    label: 'Runtime tracing (OTLP)',
-    description: 'OpenTelemetry span ingestion and trace analysis',
+    label: 'settings:schema.runtime.label',
+    description: 'settings:schema.runtime.description',
     fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: false },
+      { key: 'enabled', label: 'settings:schema.f.enabled', type: 'boolean', defaultValue: false },
       {
         key: 'port',
-        label: 'OTLP port',
+        label: 'settings:schema.runtime.port.label',
         type: 'number',
         placeholder: '4318',
         nested: 'otlp',
@@ -1064,7 +1062,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'host',
-        label: 'OTLP host',
+        label: 'settings:schema.runtime.host.label',
         type: 'string',
         placeholder: '127.0.0.1',
         nested: 'otlp',
@@ -1073,7 +1071,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'max_body_bytes',
-        label: 'Max body bytes',
+        label: 'settings:schema.runtime.max_body.label',
         type: 'number',
         placeholder: '4194304',
         nested: 'otlp',
@@ -1083,7 +1081,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'max_span_age_days',
-        label: 'Max span age (days)',
+        label: 'settings:schema.runtime.max_span_age.label',
         type: 'number',
         placeholder: '7',
         nested: 'retention',
@@ -1093,7 +1091,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'max_aggregate_age_days',
-        label: 'Max aggregate age (days)',
+        label: 'settings:schema.runtime.max_aggregate_age.label',
         type: 'number',
         placeholder: '90',
         nested: 'retention',
@@ -1103,7 +1101,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'prune_interval',
-        label: 'Prune interval',
+        label: 'settings:schema.runtime.prune_interval.label',
         type: 'number',
         placeholder: '100',
         nested: 'retention',
@@ -1113,7 +1111,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'fqn_attributes',
-        label: 'FQN attributes',
+        label: 'settings:schema.runtime.fqn_attributes.label',
         type: 'array',
         placeholder: 'code.function, code.namespace, ...',
         nested: 'mapping',
@@ -1121,7 +1119,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'route_patterns',
-        label: 'Route patterns',
+        label: 'settings:schema.runtime.route_patterns.label',
         type: 'array',
         placeholder: 'regex patterns',
         nested: 'mapping',
@@ -1131,34 +1129,34 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'topology',
-    label: 'Cross-repo topology',
-    description: 'Subprojects and cross-service dependency tracking',
+    label: 'settings:schema.topology.label',
+    description: 'settings:schema.topology.description',
     fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true },
+      { key: 'enabled', label: 'settings:schema.f.enabled', type: 'boolean', defaultValue: true },
       {
         key: 'auto_detect',
-        label: 'Auto-detect repos',
+        label: 'settings:schema.topology.auto_detect.label',
         type: 'boolean',
         defaultValue: true,
         showIf: 'enabled',
       },
       {
         key: 'auto_discover',
-        label: 'Auto-discover subprojects',
+        label: 'settings:schema.topology.auto_discover.label',
         type: 'boolean',
         defaultValue: true,
         showIf: 'enabled',
       },
       {
         key: 'repos',
-        label: 'Extra repo paths',
+        label: 'settings:schema.topology.repos.label',
         type: 'array',
         placeholder: '/path/to/repo',
         showIf: 'enabled',
       },
       {
         key: 'contract_globs',
-        label: 'Contract globs',
+        label: 'settings:schema.topology.contract_globs.label',
         type: 'array',
         placeholder: '**/*.proto, **/*.graphql',
         showIf: 'enabled',
@@ -1167,76 +1165,75 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'lsp',
-    label: 'LSP enrichment',
-    description: 'Compiler-grade call graph resolution via Language Server Protocol',
+    label: 'settings:schema.lsp.label',
+    description: 'settings:schema.lsp.description',
     fields: [
       {
         key: 'enabled',
-        label: 'Enabled',
+        label: 'settings:schema.f.enabled',
         type: 'boolean',
         defaultValue: false,
-        description: 'Enable LSP enrichment pass after indexing',
+        description: 'settings:schema.lsp.enabled.description',
       },
       {
         key: 'auto_detect',
-        label: 'Auto-detect servers',
+        label: 'settings:schema.f.autoDetect',
         type: 'boolean',
         defaultValue: true,
         showIf: 'enabled',
-        description: 'Auto-detect available LSP servers (tsserver, pyright, gopls, rust-analyzer)',
+        description: 'settings:schema.lsp.auto_detect.description',
       },
       {
         key: 'max_concurrent_servers',
-        label: 'Max concurrent servers',
+        label: 'settings:schema.lsp.max_servers.label',
         type: 'number',
         placeholder: '2',
         min: 1,
         max: 4,
         defaultValue: 2,
         showIf: 'enabled',
-        description: 'Limit parallel LSP server processes',
+        description: 'settings:schema.lsp.max_servers.description',
       },
       {
         key: 'enrichment_timeout_ms',
-        label: 'Enrichment timeout (ms)',
+        label: 'settings:schema.lsp.timeout.label',
         type: 'number',
         placeholder: '120000',
         min: 5000,
         max: 600000,
         defaultValue: 120000,
         showIf: 'enabled',
-        description: 'Overall timeout for the LSP enrichment pass',
+        description: 'settings:schema.lsp.timeout.description',
       },
       {
         key: 'batch_size',
-        label: 'Batch size',
+        label: 'settings:schema.f.batchSize',
         type: 'number',
         placeholder: '100',
         min: 10,
         max: 1000,
         defaultValue: 100,
         showIf: 'enabled',
-        description: 'Symbols processed per batch',
+        description: 'settings:schema.lsp.batch_size.description',
       },
       {
         key: 'servers',
-        label: 'Server overrides',
+        label: 'settings:schema.lsp.servers.label',
         type: 'json',
         showIf: 'enabled',
-        description:
-          '{ "typescript": { "command": "npx", "args": ["typescript-language-server", "--stdio"], "timeout_ms": 30000 } }',
+        description: 'settings:schema.lsp.servers.description',
       },
     ],
   },
   {
     key: 'quality_gates',
-    label: 'Quality gates',
-    description: 'Automated quality checks on commits and PRs',
+    label: 'settings:schema.quality_gates.label',
+    description: 'settings:schema.quality_gates.description',
     fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true },
+      { key: 'enabled', label: 'settings:schema.f.enabled', type: 'boolean', defaultValue: true },
       {
         key: 'fail_on',
-        label: 'Fail on',
+        label: 'settings:schema.quality_gates.fail_on.label',
         type: 'select',
         options: ['error', 'warning', 'none'],
         defaultValue: 'error',
@@ -1244,94 +1241,118 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'rules',
-        label: 'Rules',
+        label: 'settings:schema.quality_gates.rules.label',
         type: 'json',
-        description: 'Rule thresholds and severities',
+        description: 'settings:schema.quality_gates.rules.description',
         showIf: 'enabled',
       },
     ],
   },
   {
     key: 'tools',
-    label: 'Tool exposure',
-    description: 'Control which MCP tools are exposed and how',
+    label: 'settings:schema.tools.label',
+    description: 'settings:schema.tools.description',
     fields: [
       {
         key: 'preset',
-        label: 'Preset',
+        label: 'settings:schema.tools.preset.label',
         type: 'select',
         options: ['full', 'minimal'],
         defaultValue: 'full',
       },
-      { key: 'include', label: 'Include tools', type: 'array', placeholder: 'tool_name' },
-      { key: 'exclude', label: 'Exclude tools', type: 'array', placeholder: 'tool_name' },
+      {
+        key: 'include',
+        label: 'settings:schema.tools.include.label',
+        type: 'array',
+        placeholder: 'tool_name',
+      },
+      {
+        key: 'exclude',
+        label: 'settings:schema.tools.exclude.label',
+        type: 'array',
+        placeholder: 'tool_name',
+      },
       {
         key: 'description_verbosity',
-        label: 'Description verbosity',
+        label: 'settings:schema.tools.description_verbosity.label',
         type: 'select',
         options: ['full', 'minimal', 'none'],
         defaultValue: 'full',
       },
       {
         key: 'instructions_verbosity',
-        label: 'Instructions verbosity',
+        label: 'settings:schema.tools.instructions_verbosity.label',
         type: 'select',
         options: ['full', 'minimal', 'none'],
         defaultValue: 'full',
       },
-      { key: 'meta_fields', label: 'Meta fields', type: 'boolean', defaultValue: true },
+      {
+        key: 'meta_fields',
+        label: 'settings:schema.tools.meta_fields.label',
+        type: 'boolean',
+        defaultValue: true,
+      },
       {
         key: 'compact_schemas',
-        label: 'Compact schemas',
+        label: 'settings:schema.tools.compact_schemas.label',
         type: 'boolean',
         defaultValue: false,
-        description:
-          'Strip advanced parameters from tool schemas to reduce token overhead (~42%)',
+        description: 'settings:schema.tools.compact_schemas.description',
       },
       {
         key: 'descriptions',
-        label: 'Custom descriptions',
+        label: 'settings:schema.tools.descriptions.label',
         type: 'json',
-        description: '{ "tool_name": "description" }',
+        description: 'settings:schema.tools.descriptions.description',
       },
     ],
   },
   {
     key: 'ignore',
-    label: 'Ignore rules',
-    description: 'Extra directories and patterns to skip during indexing',
+    label: 'settings:schema.ignore.label',
+    description: 'settings:schema.ignore.description',
     fields: [
       {
         key: 'directories',
-        label: 'Directories',
+        label: 'settings:schema.ignore.directories.label',
         type: 'array',
         placeholder: 'node_modules, .git, ...',
       },
-      { key: 'patterns', label: 'Patterns', type: 'array', placeholder: '*.min.js, dist/**, ...' },
+      {
+        key: 'patterns',
+        label: 'settings:schema.ignore.patterns.label',
+        type: 'array',
+        placeholder: '*.min.js, dist/**, ...',
+      },
     ],
   },
   {
     key: 'frameworks',
-    label: 'Frameworks',
-    description: 'Framework-specific settings (Laravel, etc.)',
+    label: 'settings:schema.frameworks.label',
+    description: 'settings:schema.frameworks.description',
     fields: [
       {
         key: 'frameworks',
-        label: 'Configuration',
+        label: 'settings:schema.frameworks.config.label',
         type: 'json',
-        description: 'Framework overrides',
+        description: 'settings:schema.frameworks.config.description',
       },
     ],
   },
   {
     key: 'logging',
-    label: 'Logging',
-    description: 'File logging and rotation',
+    label: 'settings:schema.logging.label',
+    description: 'settings:schema.logging.description',
     fields: [
-      { key: 'file', label: 'Enable file logging', type: 'boolean', defaultValue: false },
+      {
+        key: 'file',
+        label: 'settings:schema.logging.file.label',
+        type: 'boolean',
+        defaultValue: false,
+      },
       {
         key: 'path',
-        label: 'Log file path',
+        label: 'settings:schema.logging.path.label',
         type: 'string',
         placeholder: '~/.trace-mcp/run.log',
         defaultValue: '~/.trace-mcp/run.log',
@@ -1339,14 +1360,14 @@ export const CONFIG_SCHEMA: SectionDef[] = [
       },
       {
         key: 'level',
-        label: 'Log level',
+        label: 'settings:schema.logging.level.label',
         type: 'select',
         options: ['trace', 'debug', 'info', 'warn', 'error', 'fatal'],
         defaultValue: 'info',
       },
       {
         key: 'max_size_mb',
-        label: 'Max log size (MB)',
+        label: 'settings:schema.logging.max_size.label',
         type: 'number',
         placeholder: '10',
         min: 1,
@@ -1357,13 +1378,13 @@ export const CONFIG_SCHEMA: SectionDef[] = [
   },
   {
     key: 'watch',
-    label: 'File watcher',
-    description: 'Auto-reindex on file changes',
+    label: 'settings:schema.watch.label',
+    description: 'settings:schema.watch.description',
     fields: [
-      { key: 'enabled', label: 'Enabled', type: 'boolean', defaultValue: true },
+      { key: 'enabled', label: 'settings:schema.f.enabled', type: 'boolean', defaultValue: true },
       {
         key: 'debounceMs',
-        label: 'Debounce (ms)',
+        label: 'settings:schema.watch.debounce.label',
         type: 'number',
         placeholder: '2000',
         min: 100,

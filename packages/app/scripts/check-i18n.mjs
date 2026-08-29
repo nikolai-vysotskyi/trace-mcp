@@ -22,9 +22,14 @@ const ROOT = resolve(import.meta.dirname, '..');
 
 /** Extracted surfaces. Grow this as slices land; never shrink it. */
 const CHECKED = [
-  'src/shared/i18n',
+  'src/renderer/components/GuardOnboarding.tsx',
+  'src/renderer/components/GuardSection.tsx',
+  'src/renderer/components/OllamaPanel.tsx',
   'src/renderer/i18n',
+  'src/renderer/tabs/Settings.tsx',
+  'src/renderer/tabs/configSchema.ts',
   'src/renderer/update-check.ts',
+  'src/shared/i18n',
 ];
 
 const PROSE_ATTRS = /\b(?:title|label|placeholder|aria-label)=(["'])([^"'{}]+)\1/g;

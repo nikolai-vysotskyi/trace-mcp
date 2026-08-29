@@ -28,7 +28,9 @@
  *     because it belonged to no group and groups are what the list renders.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { OllamaPanel } from '../components/OllamaPanel';
+import { t } from '../i18n';
 import { Icon } from '../lattice/icons';
 import {
   Badge,
@@ -62,11 +64,13 @@ import {
 /* ═══ Helpers ═════════════════════════════════════════════════════════ */
 
 function formatUptime(s: number) {
-  if (s < 60) return `${Math.floor(s)}s`;
+  if (s < 60) return t('settings:uptime.seconds', { value: Math.floor(s) });
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
+  if (m < 60) return t('settings:uptime.minutes', { value: m });
   const h = Math.floor(m / 60);
-  return m % 60 > 0 ? `${h}h ${m % 60}m` : `${h}h`;
+  return m % 60 > 0
+    ? t('settings:uptime.hoursMinutes', { hours: h, minutes: m % 60 })
+    : t('settings:uptime.hours', { value: h });
 }
 
 function gv(d: Record<string, unknown>, f: FieldDef): unknown {
@@ -77,7 +81,7 @@ function gv(d: Record<string, unknown>, f: FieldDef): unknown {
   return d[f.key];
 }
 
-function sv(d: Record<string, unknown>, f: FieldDef, v: unknown): Record<string, unknown> {
+function sv(d: Record<string, unknown>, f: FieldDef, v: unknown): Record<string, unknown> { // i18n-exempt: a type signature, not prose
   const c = { ...d };
   if (f.nested) {
     const p =
@@ -92,7 +96,7 @@ function sv(d: Record<string, unknown>, f: FieldDef, v: unknown): Record<string,
   return c;
 }
 
-function sd(cfg: Record<string, unknown>, sec: SectionDef): Record<string, unknown> {
+function sd(cfg: Record<string, unknown>, sec: SectionDef): Record<string, unknown> { // i18n-exempt: a type signature, not prose
   if (sec.key === '_root') {
     const r: Record<string, unknown> = {};
     for (const f of sec.fields) if (f.key in cfg) r[f.key] = cfg[f.key];
@@ -112,13 +116,14 @@ function fmt(v: unknown): string {
 /* Groups carry titles — macOS System Settings has no unlabelled group, and
    seven of them in a row read as one undifferentiated list. `lsp` is in
    Infrastructure: a section that belongs to no group never renders at all. */
+/* `title` is a catalogue key, resolved where the group renders. */
 const SECTION_GROUPS: { title: string; keys: string[] }[] = [
-  { title: 'General', keys: ['_root'] },
-  { title: 'Intelligence', keys: ['ai', 'predictive', 'intent'] },
-  { title: 'Quality and security', keys: ['security', 'quality_gates', 'ignore'] },
-  { title: 'Infrastructure', keys: ['runtime', 'topology', 'lsp'] },
-  { title: 'Development', keys: ['tools', 'frameworks'] },
-  { title: 'Monitoring', keys: ['logging', 'watch'] },
+  { title: 'settings:group.general', keys: ['_root'] },
+  { title: 'settings:group.intelligence', keys: ['ai', 'predictive', 'intent'] },
+  { title: 'settings:group.quality', keys: ['security', 'quality_gates', 'ignore'] },
+  { title: 'settings:group.infrastructure', keys: ['runtime', 'topology', 'lsp'] },
+  { title: 'settings:group.development', keys: ['tools', 'frameworks'] },
+  { title: 'settings:group.monitoring', keys: ['logging', 'watch'] },
 ];
 
 /* ═══ Layout primitives ═══════════════════════════════════════════════
@@ -250,13 +255,17 @@ function FieldControl({
 
   switch (field.type) {
     case 'boolean':
-      return <Toggle on={!!value} onChange={(v) => onChange(v)} label={field.label} />;
+      return <Toggle on={!!value} onChange={(v) => onChange(v)} label={t(field.label)} />;
     case 'select':
       return (
         <button
           type="button"
           onClick={onOpenPicker}
-          aria-label={`${field.label}: ${(value as string) || 'not set'}`}
+          aria-label={
+            (value as string)
+              ? t('settings:field.aria', { label: t(field.label), value: value as string })
+              : t('settings:field.ariaUnset', { label: t(field.label) })
+          }
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -270,7 +279,7 @@ function FieldControl({
             color: 'var(--label-secondary)',
           }}
         >
-          {(value as string) || 'Not set'}
+          {(value as string) || t('settings:notSet')}
           <ChevronRight />
         </button>
       );
@@ -281,7 +290,7 @@ function FieldControl({
             type="number"
             value={value != null ? String(value) : ''}
             placeholder={field.placeholder}
-            aria-label={field.label}
+            aria-label={t(field.label)}
             min={field.min}
             max={field.max}
             onChange={(e) => {
@@ -300,7 +309,7 @@ function FieldControl({
             type={field.sensitive ? 'password' : 'text'}
             value={(value as string) ?? ''}
             placeholder={field.placeholder}
-            aria-label={field.label}
+            aria-label={t(field.label)}
             onChange={(e) => onChange(e.target.value || undefined)}
             style={{ ...inputBase, ...errS, width: '100%', textAlign: 'right' }}
           />
@@ -322,13 +331,13 @@ function FieldControl({
       return (
         <ArrayCtrl
           value={value as string[] | undefined}
-          label={field.label}
+          label={t(field.label)}
           placeholder={field.placeholder}
           onChange={onChange}
         />
       );
     case 'json':
-      return <JsonCtrl value={value} label={field.label} onChange={onChange} />;
+      return <JsonCtrl value={value} label={t(field.label)} onChange={onChange} />;
     default:
       return null;
   }
@@ -417,7 +426,7 @@ function JsonCtrl({
           style={{ color: 'var(--status-red)' }}
           role="alert"
         >
-          Invalid JSON
+          {t('settings:invalidJson')}
         </div>
       )}
     </div>
@@ -507,7 +516,12 @@ async function fetchOpenAICompatModels(
   if (key) headers.Authorization = `Bearer ${key}`;
   const res = await fetch(endpoint, { signal, headers });
   if (!res.ok)
-    throw new Error(`${label}: ${res.status}${res.status === 401 ? ' (check API key)' : ''}`);
+    throw new Error(
+      t(res.status === 401 ? 'settings:models.authError' : 'settings:models.httpError', {
+        provider: label,
+        status: res.status,
+      }),
+    );
   const data = (await res.json()) as { data?: { id: string }[] };
   const list: ModelOption[] = (data.data ?? []).map((m) => ({ name: m.id }));
   list.sort((a, b) => a.name.localeCompare(b.name));
@@ -549,7 +563,8 @@ function useProviderModels(
       if (provider === 'ollama') {
         const url = (baseUrl || defaults?.baseUrl || 'http://localhost:11434').replace(/\/+$/, '');
         const res = await fetch(`${url}/api/tags`, { signal: ctrl.signal });
-        if (!res.ok) throw new Error(`Ollama: ${res.status}`);
+        if (!res.ok)
+          throw new Error(t('settings:models.httpError', { provider: 'Ollama', status: res.status }));
         const data = (await res.json()) as {
           models?: { name?: string; model?: string; size?: number }[];
         };
@@ -571,7 +586,12 @@ function useProviderModels(
           { signal: ctrl.signal },
         );
         if (!res.ok)
-          throw new Error(`Gemini: ${res.status}${res.status === 400 ? ' (check API key)' : ''}`);
+          throw new Error(
+            t(res.status === 400 ? 'settings:models.authError' : 'settings:models.httpError', {
+              provider: 'Gemini',
+              status: res.status,
+            }),
+          );
         const data = (await res.json()) as { models?: { name?: string }[] };
         const list: ModelOption[] = (data.models ?? []).map((m) => ({
           name: (m.name ?? '').replace(/^models\//, ''),
@@ -593,7 +613,7 @@ function useProviderModels(
     } catch (e) {
       const err = e as Error;
       if (err.name !== 'AbortError' && !ctrl.signal.aborted)
-        setError(err.message ?? 'Failed to fetch models');
+        setError(err.message ?? t('settings:models.failed'));
     } finally {
       // Aborted means either a newer fetch superseded this one or the component
       // unmounted — either way this run owns no state any more. Without the
@@ -666,7 +686,11 @@ function ModelSelectCtrl({
         onClick={() => setOpen(!open)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={`${field.label}: ${current || 'not set'}`}
+        aria-label={
+          current
+            ? t('settings:field.aria', { label: t(field.label), value: current })
+            : t('settings:field.ariaUnset', { label: t(field.label) })
+        }
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -681,7 +705,9 @@ function ModelSelectCtrl({
           color: 'var(--label-secondary)',
         }}
       >
-        <span className="truncate">{current || field.placeholder || 'Select model…'}</span>
+        <span className="truncate">
+          {current || field.placeholder || t('settings:models.select')}
+        </span>
         <span style={{ display: 'flex', color: 'var(--label-tertiary)', flexShrink: 0 }}>
           <Icon name={open ? 'expand_less' : 'expand_more'} size={14} />
         </span>
@@ -689,7 +715,7 @@ function ModelSelectCtrl({
       {open && (
         <div
           role="listbox"
-          aria-label={field.label}
+          aria-label={t(field.label)}
           style={{
             position: 'absolute',
             top: '100%',
@@ -713,8 +739,8 @@ function ModelSelectCtrl({
               autoFocus
               value={filter}
               onChange={setFilter}
-              placeholder="Filter models"
-              aria-label="Filter models"
+              placeholder={t('settings:models.filter')}
+              aria-label={t('settings:models.filter')}
             />
           </div>
           <div style={{ flex: 1, overflowY: 'auto', maxHeight: 200 }}>
@@ -724,7 +750,7 @@ function ModelSelectCtrl({
                 style={{ padding: 12, color: 'var(--label-secondary)' }}
                 role="status"
               >
-                Loading models…
+                {t('settings:models.loading')}
               </div>
             )}
             {error && (
@@ -737,7 +763,7 @@ function ModelSelectCtrl({
                   {error}
                 </div>
                 <Button size="small" onClick={refresh}>
-                  Retry
+                  {t('settings:models.retry')}
                 </Button>
               </div>
             )}
@@ -746,7 +772,7 @@ function ModelSelectCtrl({
                 className="text-[13px] leading-4 text-center"
                 style={{ padding: 12, color: 'var(--label-secondary)' }}
               >
-                {models.length === 0 ? 'No models found' : 'No matches'}
+                {models.length === 0 ? t('settings:models.none') : t('settings:models.noMatches')}
               </div>
             )}
             {!loading && !error && current && (
@@ -764,7 +790,7 @@ function ModelSelectCtrl({
                   color: 'var(--label-secondary)',
                 }}
               >
-                Clear selection
+                {t('settings:models.clear')}
               </button>
             )}
             {filtered.map((m) => (
@@ -807,8 +833,8 @@ function ModelSelectCtrl({
           <div style={{ padding: 8, borderTop: '0.5px solid var(--separator)' }}>
             <input
               type="text"
-              placeholder="Or type a model name…"
-              aria-label="Type a model name"
+              placeholder={t('settings:models.type')}
+              aria-label={t('settings:models.typeAria')}
               defaultValue=""
               onKeyDown={(e) => {
                 if (e.key !== 'Enter') return;
@@ -871,17 +897,15 @@ function SectionList({
         }}
       >
         <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label)' }}>
-          {section.label}
+          {t(section.label)}
         </span>
         {errors > 0 ? (
-          <Badge tone="red">
-            {errors} {errors === 1 ? 'issue' : 'issues'}
-          </Badge>
+          <Badge tone="red">{t('settings:issues', { count: errors })}</Badge>
         ) : modified > 0 ? (
           /* The blue dot this replaces was a colour with no legend anywhere in
              the app. The word says what the colour meant. */
           <span className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
-            Modified
+            {t('settings:modified')}
           </span>
         ) : null}
         <ChevronRight />
@@ -894,7 +918,7 @@ function SectionList({
     sections: g.keys.map((k) => sectionMap.get(k)).filter((s): s is SectionDef => s !== undefined),
   })).filter((g) => g.sections.length > 0);
 
-  const showProjects = !search || 'per-project overrides'.includes(search);
+  const showProjects = !search || t('settings:projects.title').toLowerCase().includes(search);
 
   if (visibleGroups.length === 0 && !showProjects) {
     return (
@@ -902,7 +926,7 @@ function SectionList({
         className="text-[13px] leading-4 text-center"
         style={{ padding: 24, color: 'var(--label-secondary)', margin: 0 }}
       >
-        No settings match “{search}”.
+        {t('settings:noMatches', { query: search })}
       </p>
     );
   }
@@ -910,13 +934,13 @@ function SectionList({
   return (
     <>
       {visibleGroups.map((group) => (
-        <Section key={group.title} title={group.title}>
+        <Section key={group.title} title={t(group.title)}>
           <Card>{group.sections.map((s, i) => renderRow(s, i === group.sections.length - 1))}</Card>
         </Section>
       ))}
 
       {showProjects && (
-        <Section title="Advanced">
+        <Section title={t('settings:group.advanced')}>
           <Card>
             <button
               type="button"
@@ -935,7 +959,7 @@ function SectionList({
               }}
             >
               <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label)' }}>
-                Per-project overrides
+                {t('settings:projects.title')}
               </span>
               {projectOverrides > 0 && (
                 <span
@@ -983,7 +1007,7 @@ function SectionDetail({
           className="text-[13px] leading-4 px-1 -mb-2"
           style={{ color: 'var(--label-secondary)', margin: 0 }}
         >
-          {section.description}
+          {t(section.description)}
         </p>
       )}
 
@@ -1019,7 +1043,7 @@ function SectionDetail({
                       "features.Use embeddings" reads as a typo, and the section
                       the row lives in already scopes it. */}
                   <div className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
-                    {field.label}
+                    {t(field.label)}
                   </div>
                   {/* Help is a caption, not a hover: the `?` glyph it replaces
                       was a 14px non-focusable span, so keyboard users never
@@ -1029,14 +1053,14 @@ function SectionDetail({
                       className="text-[11px] leading-[13px] mt-0.5"
                       style={{ color: 'var(--label-secondary)' }}
                     >
-                      {field.description}
+                      {t(field.description)}
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {showReset && (
                     <Button size="small" variant="plain" onClick={() => changeFn(field.defaultValue)}>
-                      Reset
+                      {t('settings:reset')}
                     </Button>
                   )}
                   {!isBlock && (
@@ -1074,7 +1098,7 @@ function SectionDetail({
           {/* Bordered, not plain: centred plain text with no chrome reads as a
               caption, and this one throws away the section's settings. */}
           <Button onClick={() => onUpdate(section.key, getSectionDefaults(section))}>
-            Reset this section to defaults
+            {t('settings:resetSection')}
           </Button>
         </div>
       )}
@@ -1125,7 +1149,7 @@ function PickerScreen({ picker, onBack }: { picker: PickerInfo; onBack: () => vo
         style={row(false)}
       >
         <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label-secondary)' }}>
-          Not set
+          {t('settings:notSet')}
         </span>
         {(picker.value == null || picker.value === '') && check}
       </button>
@@ -1182,7 +1206,7 @@ function ProjectsScreen({
         className="text-[13px] leading-4 px-1 -mb-2"
         style={{ color: 'var(--label-secondary)', margin: 0 }}
       >
-        Override global settings for specific projects. Values merge on top of the global config.
+        {t('settings:projects.intro')}
       </p>
 
       {paths.length > 0 && (
@@ -1211,7 +1235,7 @@ function ProjectsScreen({
                     setEditError(false);
                   }}
                 >
-                  {editKey === p ? 'Done' : 'Edit'}
+                  {editKey === p ? t('settings:projects.done') : t('settings:projects.edit')}
                 </Button>
                 <Button
                   size="small"
@@ -1223,14 +1247,14 @@ function ProjectsScreen({
                     if (editKey === p) setEditKey(null);
                   }}
                 >
-                  Remove
+                  {t('settings:projects.remove')}
                 </Button>
               </div>
               {editKey === p && (
                 <div className="mt-2">
                   <textarea
                     value={editJson}
-                    aria-label={`Overrides for ${p}`}
+                    aria-label={t('settings:projects.overridesAria', { path: p })}
                     rows={4}
                     onChange={(e) => {
                       setEditJson(e.target.value);
@@ -1254,7 +1278,7 @@ function ProjectsScreen({
                       style={{ color: 'var(--status-red)' }}
                       role="alert"
                     >
-                      Invalid JSON
+                      {t('settings:invalidJson')}
                     </div>
                   )}
                   <div className="mt-2">
@@ -1272,7 +1296,7 @@ function ProjectsScreen({
                         }
                       }}
                     >
-                      Apply
+                      {t('settings:projects.apply')}
                     </Button>
                   </div>
                 </div>
@@ -1287,13 +1311,13 @@ function ProjectsScreen({
           type="text"
           value={newPath}
           placeholder="/path/to/project"
-          aria-label="Project path"
+          aria-label={t('settings:projects.pathAria')}
           onChange={(e) => setNewPath(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
           style={{ ...inputBase, flex: 1 }}
         />
         <Button disabled={!newPath.trim()} onClick={add}>
-          Add
+          {t('settings:projects.add')}
         </Button>
       </div>
     </>
@@ -1305,11 +1329,11 @@ function ProjectsScreen({
 function DiffPanel({ entries, onClose }: { entries: DiffEntry[]; onClose: () => void }) {
   if (!entries.length) return null;
   return (
-    <Section title="Pending changes">
+    <Section title={t('settings:diff.title')}>
       <Card>
         <div className="flex items-center justify-end px-3 py-1.5" style={{ borderBottom: '0.5px solid var(--separator)' }}>
           <Button size="small" variant="plain" onClick={onClose}>
-            Hide
+            {t('settings:diff.hide')}
           </Button>
         </div>
         <div style={{ maxHeight: 160, overflowY: 'auto' }}>
@@ -1368,12 +1392,12 @@ function BottomBar({
 }) {
   if (!dirty) return null;
   const msg = hasErrors
-    ? 'Fix the issues above before saving'
+    ? t('settings:bar.hasErrors')
     : saveStatus === 'saved'
-      ? 'Saved'
+      ? t('settings:bar.saved')
       : saveStatus === 'error'
-        ? "Couldn't save — the daemon rejected the change"
-        : `${diffCount} unsaved change${diffCount !== 1 ? 's' : ''}`;
+        ? t('settings:bar.saveFailed')
+        : t('settings:bar.unsaved', { count: diffCount });
   return (
     /* Scoped to this pane. The old bar was `position: fixed` across the whole
        window, so it ran under the sidebar as well. */
@@ -1396,12 +1420,12 @@ function BottomBar({
       </span>
       {diffCount > 0 && !hasErrors && (
         <Button variant="plain" active={showDiff} onClick={onToggleDiff}>
-          {showDiff ? 'Hide changes' : 'Review changes'}
+          {showDiff ? t('settings:bar.hideChanges') : t('settings:bar.reviewChanges')}
         </Button>
       )}
-      <Button onClick={onDiscard}>Discard</Button>
+      <Button onClick={onDiscard}>{t('settings:bar.discard')}</Button>
       <Button variant="prominent" disabled={saving || hasErrors} onClick={onSave}>
-        {saving ? 'Saving…' : 'Save'}
+        {saving ? t('settings:bar.saving') : t('settings:bar.save')}
       </Button>
     </div>
   );
@@ -1421,11 +1445,11 @@ function AppearanceCard({
   onChange: (next: Appearance) => void;
 }) {
   return (
-    <Section title="Appearance">
+    <Section title={t('settings:appearance.title')}>
       <Card>
         <div className="flex items-center gap-2" style={{ minHeight: 36, padding: '0 12px' }}>
           <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label)' }}>
-            Theme
+            {t('settings:appearance.theme')}
           </span>
           <PopUpButton
             options={APPEARANCE_OPTIONS}
@@ -1435,7 +1459,7 @@ function AppearanceCard({
             // name that disagrees with the label a sighted user reads out loud
             // is a voice-control dead end (WCAG 2.5.3). "Appearance" is the
             // GROUP heading above, and stays that.
-            aria-label="Theme"
+            aria-label={t('settings:appearance.theme')}
           />
         </div>
       </Card>
@@ -1462,6 +1486,10 @@ export function Settings({
   appearance: Appearance;
   onAppearanceChange: (next: Appearance) => void;
 }) {
+  /* One subscription for the whole pane: every string below resolves through
+     the module-level `t`, and this is what re-renders the subtree — and with it
+     every child — when the language changes. */
+  useTranslation('settings');
   const { settings, loading, connected, restarting, restartDaemon, updateSettings } = useDaemon();
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -1538,14 +1566,19 @@ export function Settings({
   const diffs = useMemo(() => (dirty ? computeDiff(server, config) : []), [dirty, server, config]);
 
   const q = search.toLowerCase().trim();
+  /* Matched against the RENDERED wording, not the catalogue key: a Russian
+     user searches in Russian. `f.key` stays in the match because it is the
+     config field name they may have read in the JSON. */
   const matchSection = (s: SectionDef) => {
     if (!q) return true;
-    if (s.label.toLowerCase().includes(q) || s.description?.toLowerCase().includes(q)) return true;
+    const label = t(s.label).toLowerCase();
+    const desc = s.description ? t(s.description).toLowerCase() : '';
+    if (label.includes(q) || desc.includes(q)) return true;
     return s.fields.some(
       (f) =>
-        f.label.toLowerCase().includes(q) ||
+        t(f.label).toLowerCase().includes(q) ||
         f.key.toLowerCase().includes(q) ||
-        f.description?.toLowerCase().includes(q),
+        (f.description ? t(f.description).toLowerCase().includes(q) : false),
     );
   };
 
@@ -1559,7 +1592,7 @@ export function Settings({
             className="text-[15px] leading-5 font-semibold"
             style={{ color: 'var(--label)', letterSpacing: '-0.01em' }}
           >
-            Settings
+            {t('settings:title')}
           </h2>
         </Toolbar>
         <div className="flex-1 overflow-auto flex flex-col">
@@ -1577,20 +1610,22 @@ export function Settings({
               style={{ color: 'var(--label-secondary)' }}
               role="status"
             >
-              Loading settings…
+              {t('settings:empty.loading')}
             </span>
           ) : (
             <EmptyState
               icon="settings"
-              title={connected ? "Couldn't read the settings" : 'Daemon not reachable'}
-              subtitle={
-                connected
-                  ? "The daemon is running but didn't return its configuration. Restarting it usually clears this."
-                  : "Settings live in the daemon's config file, so they can't be read until it is running."
-              }
+              title={t(
+                connected ? 'settings:empty.unreadableTitle' : 'settings:empty.unreachableTitle',
+              )}
+              subtitle={t(
+                connected ? 'settings:empty.unreadableBody' : 'settings:empty.unreachableBody',
+              )}
               action={
                 <Button variant="prominent" disabled={restarting} onClick={() => restartDaemon()}>
-                  {restarting ? 'Starting…' : connected ? 'Restart daemon' : 'Start daemon'}
+                  {restarting
+                    ? t('settings:empty.starting')
+                    : t(connected ? 'settings:empty.restart' : 'settings:empty.start')}
                 </Button>
               }
             />
@@ -1612,12 +1647,12 @@ export function Settings({
 
   const title =
     screen.type === 'list'
-      ? 'Settings'
+      ? t('settings:title')
       : screen.type === 'projects'
-        ? 'Per-project overrides'
+        ? t('settings:projects.title')
         : screen.type === 'picker'
-          ? screen.picker.field.label
-          : (activeSection?.label ?? 'Settings');
+          ? t(screen.picker.field.label)
+          : t(activeSection?.label ?? 'settings:title');
 
   const back =
     screen.type === 'list'
@@ -1627,6 +1662,9 @@ export function Settings({
         : () => setScreen({ type: 'list' });
 
   const copyDaemonDetails = () => {
+    /* Deliberately English in every language: this string exists to be pasted
+       into a bug report, and a diagnostic that arrives translated is one the
+       maintainer has to translate back. */
     const text = `trace-mcp daemon · PID ${daemon.pid} · port ${daemon.port} · up ${formatUptime(daemon.uptime)} · config ${settings.path}`;
     void navigator.clipboard?.writeText(text);
   };
@@ -1640,8 +1678,8 @@ export function Settings({
             variant="icon"
             icon="chevron_left"
             onClick={back}
-            aria-label="Back"
-            title="Back"
+            aria-label={t('settings:back')}
+            title={t('settings:back')}
           />
         )}
         <h2
@@ -1654,8 +1692,8 @@ export function Settings({
           <SearchField
             value={search}
             onChange={setSearch}
-            placeholder="Search settings"
-            aria-label="Search settings"
+            placeholder={t('settings:search')}
+            aria-label={t('settings:search')}
           />
         )}
         <Button
@@ -1665,8 +1703,8 @@ export function Settings({
           onClick={() => (overflow.at ? overflow.close() : overflow.open())}
           aria-haspopup="menu"
           aria-expanded={overflow.at !== null}
-          aria-label="More actions"
-          title="More actions"
+          aria-label={t('settings:moreActions')}
+          title={t('settings:moreActions')}
         />
       </Toolbar>
 
@@ -1679,7 +1717,7 @@ export function Settings({
               overflow.close();
             }}
           >
-            Copy daemon details
+            {t('settings:copyDaemon')}
           </MenuItem>
           <MenuSeparator />
           {/* The raw-config escape hatch. It used to be the most prominent
@@ -1691,7 +1729,7 @@ export function Settings({
               overflow.close();
             }}
           >
-            Edit config file…
+            {t('settings:editConfigFile')}
           </MenuItem>
         </Menu>
       )}
@@ -1708,23 +1746,30 @@ export function Settings({
                   and lives behind "Copy daemon details" in the overflow menu. */}
               <Card>
                 <div className="flex items-center gap-2.5 px-3" style={{ minHeight: 44 }}>
-                  <StatusDot tone="green" pulse title="Running" />
+                  <StatusDot tone="green" pulse title={t('settings:daemon.state')} />
                   <div className="flex-1 min-w-0">
                     <div className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
-                      Daemon
+                      {t('settings:daemon.title')}
                     </div>
+                    {/* One key, not a sentence assembled from spans: word order
+                        moves between languages, so the numbers cannot be
+                        positioned by the JSX. `tabular-nums` covers the line. */}
                     <div
-                      className="text-[11px] leading-[13px] truncate"
+                      className="text-[11px] leading-[13px] truncate tabular-nums"
                       style={{ color: 'var(--label-secondary)' }}
                     >
-                      Running · port <span className="tabular-nums">{daemon.port}</span> · up{' '}
-                      <span className="tabular-nums">{formatUptime(daemon.uptime)}</span>
+                      {t('settings:daemon.summary', {
+                        port: daemon.port,
+                        uptime: formatUptime(daemon.uptime),
+                      })}
                     </div>
                   </div>
                 </div>
               </Card>
 
-              {(!q || 'appearance'.includes(q) || 'theme'.includes(q)) && (
+              {(!q ||
+                t('settings:appearance.title').toLowerCase().includes(q) ||
+                t('settings:appearance.theme').toLowerCase().includes(q)) && (
                 <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
               )}
 
@@ -1807,19 +1852,17 @@ function ActivityLink() {
       <div className="flex items-center gap-3 px-3" style={{ minHeight: 44 }}>
         <div className="flex-1 min-w-0">
           <div className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
-            AI activity
+            {t('settings:activity.title')}
           </div>
           <div
             className="text-[11px] leading-[13px] mt-0.5"
             style={{ color: armed ? 'var(--status-green)' : 'var(--label-secondary)' }}
           >
-            {armed
-              ? 'The next project window you open will land on Activity → AI calls.'
-              : 'Recent embed, LLM and rerank requests live in a project window, under Activity.'}
+            {t(armed ? 'settings:activity.armed' : 'settings:activity.idle')}
           </div>
         </div>
         <Button disabled={armed} onClick={onClick}>
-          {armed ? 'Ready' : 'Open there next'}
+          {t(armed ? 'settings:activity.ready' : 'settings:activity.open')}
         </Button>
       </div>
     </Card>
