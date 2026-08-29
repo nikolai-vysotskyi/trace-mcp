@@ -1,9 +1,9 @@
 {
   "$comment": "Written by scripts/capture-screenshots.mjs. `--check` compares it against HEAD.",
-  "generatedAt": "2026-08-29T09:04:38.935Z",
+  "generatedAt": "2026-08-29T09:23:42.532Z",
   "appVersion": "3.1.1",
-  "commit": "d4f6e27d40f461dc2bc8a2f9db9b33c69363042f",
-  "uiCommit": "d4f6e27d40f461dc2bc8a2f9db9b33c69363042f",
+  "commit": "0c56a6cb7ad29ec8e8ea956630ee55d02a7291ea",
+  "uiCommit": "2a94e45237ebfe5eb5c6aed8979db695e39abdc5",
   "uiPaths": ["packages/app/src/renderer", "packages/app/src/main"],
   "images": [
     {
@@ -13,7 +13,7 @@
       "theme": "light",
       "width": 1920,
       "height": 1200,
-      "bytes": 40200,
+      "bytes": 39378,
       "alt": "trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics"
     },
     {
@@ -23,7 +23,7 @@
       "theme": "light",
       "width": 1920,
       "height": 1200,
-      "bytes": 75256,
+      "bytes": 76444,
       "alt": "trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage"
     },
     {
@@ -33,7 +33,7 @@
       "theme": "light",
       "width": 1920,
       "height": 1200,
-      "bytes": 131888,
+      "bytes": 132300,
       "alt": "trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance"
     },
     {
@@ -43,7 +43,7 @@
       "theme": "dark",
       "width": 1920,
       "height": 1200,
-      "bytes": 122774,
+      "bytes": 126160,
       "alt": "trace-mcp app — GPU graph explorer visualizing symbol connections, dark appearance"
     }
   ]
