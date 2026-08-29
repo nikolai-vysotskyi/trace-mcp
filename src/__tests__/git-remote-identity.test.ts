@@ -18,6 +18,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * inherited lastIndexed) instead of building a new index — while a project
  * with no resolvable git remote (non-git, or no `origin` configured) keeps
  * behaving exactly as before this feature existed.
+ *
+ * TRA-304 narrowed the reuse to *sequential* checkouts: a checkout only
+ * inherits a sibling's dbPath while no live holder marker claims it. These
+ * tests therefore end the first run (`endRun`) before registering the second,
+ * which is what actually happens between two Multica runs. The concurrent case
+ * — first run still holding the DB — is covered in `db-holders.test.ts`.
  */
 
 function mkdirp(dir: string): void {
@@ -55,6 +61,7 @@ describe('git remote identity (TRA-38)', () => {
   let tmpProjects: string;
   let globalMod: typeof import('../global.js');
   let registry: typeof import('../registry.js');
+  let holders: typeof import('../db-holders.js');
 
   beforeEach(async () => {
     tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-identity-home-'));
@@ -63,6 +70,7 @@ describe('git remote identity (TRA-38)', () => {
     vi.resetModules();
     globalMod = await import('../global.js');
     registry = await import('../registry.js');
+    holders = await import('../db-holders.js');
   });
 
   afterEach(() => {
@@ -71,6 +79,14 @@ describe('git remote identity (TRA-38)', () => {
     fs.rmSync(tmpHome, { recursive: true, force: true });
     fs.rmSync(tmpProjects, { recursive: true, force: true });
   });
+
+  /**
+   * The first checkout's process is gone — drop its holder marker so the next
+   * registration sees a DB nobody is using (TRA-304's sequential case).
+   */
+  function endRun(dbPath: string, root: string): void {
+    holders.releaseDbHolder(dbPath, root);
+  }
 
   describe('normalizeGitRemote', () => {
     it('normalizes https, ssh, and scp-like URLs to the same canonical form', () => {
@@ -133,6 +149,7 @@ describe('git remote identity (TRA-38)', () => {
       makeGitRepo(second, remote);
 
       const firstEntry = registry.registerProject(first);
+      endRun(firstEntry.dbPath, first);
       registry.updateLastIndexed(first);
       const firstIndexed = registry.getProject(first)!.lastIndexed;
       expect(firstIndexed).not.toBeNull();
@@ -155,6 +172,7 @@ describe('git remote identity (TRA-38)', () => {
       const first = path.join(tmpProjects, 'legacy-checkout');
       makeGitRepo(first, remote);
       const firstEntry = registry.registerProject(first);
+      endRun(firstEntry.dbPath, first);
 
       // Simulate an entry that was written by a pre-TRA-38 build: no
       // `remoteIdentity` field cached on disk, only derivable live from its
@@ -219,6 +237,7 @@ describe('git remote identity (TRA-38)', () => {
 
       const firstResult = setupProject(first);
       expect(fs.existsSync(firstResult.dbPath)).toBe(true);
+      endRun(firstResult.dbPath, first);
 
       const secondResult = setupProject(second);
       expect(secondResult.dbPath).toBe(firstResult.dbPath);

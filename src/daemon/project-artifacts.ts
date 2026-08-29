@@ -17,6 +17,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
 import { DECISIONS_DB_PATH, projectHash, projectName, TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
 import { getProject, listProjects } from '../registry.js';
@@ -199,8 +200,12 @@ export function removeProjectArtifacts(
   const sharedWithSibling = listProjects().some(
     (e) => path.resolve(e.root) !== absRoot && e.dbPath === indexDbBase,
   );
+  // TRA-304: a live holder marker from another root means some process has
+  // this DB open right now, even if that root left no registry entry. Same
+  // rule, same reason — an unreadable holder dir counts as "in use".
+  const heldByOther = hasLiveHolderOrUnknown(indexDbBase, absRoot);
 
-  if (options.keepDbFiles || sharedWithSibling) {
+  if (options.keepDbFiles || sharedWithSibling || heldByOther) {
     // Inventory what we'd have deleted so callers can report it.
     for (const suffix of SQLITE_SIDECARS) {
       const full = indexDbBase + suffix;
@@ -209,6 +214,8 @@ export function removeProjectArtifacts(
   } else {
     // 1. Index DB + WAL/SHM/journal sidecars
     deleteDbWithSidecars(indexDbBase, result);
+    // Nothing holds a DB that no longer exists.
+    removeHoldersDir(indexDbBase);
   }
 
   if (!options.keepDbFiles) {
