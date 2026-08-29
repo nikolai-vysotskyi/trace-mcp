@@ -627,19 +627,26 @@ Opening a project opens a native macOS **tab**, so the normal state of this app 
 tabbed window — not an edge case. AppKit then draws a tab bar, and because the window is
 `titleBarStyle: 'hiddenInset'` (full-size content view) it draws it **over** the web
 contents: `innerHeight` stays equal to `outerHeight`, nothing reflows, and the tab bar
-simply covers the top 36px of whatever the renderer painted. That is the whole of the
+simply covers the top 28px of whatever the renderer painted. That is most of the
 band above, so the surface toolbar and the sidebar toggle went from "misaligned" to
 "gone" (TRA-399).
 
 The rule that follows: **a band we do not draw still has to be reserved.** The tab bar is
 AppKit's, we cannot restyle it and we cannot ask whether it is up — so:
 
-- `MAC_TAB_BAR_H` (36px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
+- `MAC_TAB_BAR_H` (28px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
   number, exactly like `TOP_BAND_H`. The stage reserves it with `padding-top` while
   `data-tabbar="on"`, and the app's own band starts below it. Never draw into it.
+- **Measure a band we do not draw with a marker, never by eye.** Paint the renderer a
+  colour macOS chrome never uses, photograph the window, and read the first row where
+  that colour survives — that row is the band's bottom edge and nothing else can be
+  mistaken for it. Asking "where does the sidebar's material resume?" instead is how
+  this constant shipped as 36 for a release (TRA-432): 36 is where our own reserved
+  band ended, and an over-reserved band looks exactly like a taller bar.
 - **The traffic lights belong to whichever band holds the top line**, not to a constant.
-  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 36px tab bar
-  (centre 18). `trafficLightYFor(tabBarVisible)` is the only place that chooses.
+  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 28px tab bar
+  (centre 14, the tab pill's own centre line). `trafficLightYFor(tabBarVisible)` is the
+  only place that chooses.
 - **`trafficLightPosition` is applied once, at window creation, and AppKit re-lays the
   title bar out under it.** So every event that can change the tab count re-applies it —
   `show`, `focus`, `closed`, `did-finish-load` — synchronously and again a frame later,
