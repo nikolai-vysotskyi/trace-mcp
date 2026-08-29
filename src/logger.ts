@@ -9,6 +9,18 @@ export const logger = pino(
   {
     name: 'trace-mcp',
     level,
+    // An Error's own properties are non-enumerable, so pino's default JSON
+    // stringify renders `logger.error({ error: e }, ...)` as `"error":{}` —
+    // name, message and stack all vanish. pino only applies its built-in
+    // error serializer to the `err` key, and 80 call sites in this repo use
+    // `error`. Field evidence (TRA-420): a day of daemon.log held 137
+    // "Watcher error", 47 "Embedding batch failed" and 12 "File change
+    // handler failed" entries, every one of them with an empty error object
+    // and therefore undiagnosable. Serialize both key names.
+    serializers: {
+      err: pino.stdSerializers.err,
+      error: pino.stdSerializers.err,
+    },
   },
   process.stderr,
 );
