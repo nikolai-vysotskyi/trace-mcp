@@ -263,6 +263,14 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Stuck: the CLI updated but the bundle could not be replaced. Warm border so
+   it reads as "needs attention", not as the routine update card (TRA-357). */
+.update-card.stuck {
+  border-color: var(--status-orange);
+}
+.update-card.stuck .title {
+  color: var(--status-orange);
+}
 .update-card .ready-icon {
   display: inline-flex;
   align-items: center;

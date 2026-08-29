@@ -148,6 +148,7 @@ ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: strin
 });
 
 import { restartDaemon } from './daemon-lifecycle';
+import { isPlausibleInstallPath } from './install-path';
 import {
   deleteModel as ollamaDelete,
   listInstalled as ollamaListInstalled,
@@ -161,6 +162,7 @@ import {
   computeUpdateOutcome,
   isStuckOnVersion,
   readAppUpdateState,
+  shouldAttemptRepair,
   type UpdateOutcome,
   writeAppUpdateState,
 } from './update-state';
@@ -772,6 +774,28 @@ function buildSpawnEnv(npmBin: string): NodeJS.ProcessEnv {
   };
 }
 
+/**
+ * Global roots, in the order we trust them.
+ *
+ * `npm root -g` answers from npm's *config* (`prefix`, `.npmrc`, `NPM_CONFIG_*`),
+ * which on a machine with several Node managers can point at a tree the binary
+ * we invoke never writes to — one user had three different global roots, and
+ * `readInstalledVersion` was reading a version from a root the install never
+ * touched (TRA-357). So we also derive the root structurally from the invoked
+ * binary (`bin/npm` → `../lib/node_modules`) and log any disagreement.
+ */
+async function resolveNpmRoots(): Promise<{ configRoot: string | null; binRoot: string | null }> {
+  const npmBin = await resolveNpmBin();
+  const configRoot = await resolveNpmRoot();
+  const binRoot = npmBin
+    ? path.resolve(path.dirname(npmBin), '..', 'lib', 'node_modules')
+    : null;
+  if (configRoot && binRoot && path.resolve(configRoot) !== binRoot) {
+    appendUpdateLog({ event: 'npm-root:mismatch', npmBin, configRoot, binRoot });
+  }
+  return { configRoot, binRoot };
+}
+
 async function resolveNpmRoot(): Promise<string | null> {
   const npmBin = await resolveNpmBin();
   if (!npmBin) return null;
@@ -872,10 +896,14 @@ const APP_LOCATION_MARKER = path.join(
  */
 function deriveBundlePath(): string | null {
   if (process.platform !== 'darwin') return null;
+  // `isPackaged` only rejects `dev:electron`. An electron-builder output under
+  // `release/mac-arm64/` IS packaged, so a locally built bundle passed this
+  // gate and got recorded as the install location (TRA-357) — the plausibility
+  // filter below is what actually rejects it.
   if (!app.isPackaged) return null;
   let dir = path.dirname(process.execPath);
   for (let i = 0; i < 10 && dir && dir !== '/'; i++) {
-    if (dir.endsWith('.app')) return dir;
+    if (dir.endsWith('.app')) return isPlausibleInstallPath(dir) ? dir : null;
     dir = path.dirname(dir);
   }
   return null;
@@ -908,7 +936,16 @@ function writeAppLocationMarker(bundlePath: string): void {
   }
 }
 
-function readInstalledVersion(npmRoot: string | null): string | undefined {
+function readAppLocationMarker(): string | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(APP_LOCATION_MARKER, 'utf-8'));
+    return typeof parsed?.appPath === 'string' ? parsed.appPath : null;
+  } catch {
+    return null;
+  }
+}
+
+function readVersionFromRoot(npmRoot: string | null): string | undefined {
   if (!npmRoot) return undefined;
   try {
     const pkg = JSON.parse(
@@ -919,6 +956,150 @@ function readInstalledVersion(npmRoot: string | null): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The version that actually landed on disk. Reads the config-reported root
+ * first (that is where `npm install -g` writes), falling back to the root
+ * derived from the invoked binary; disagreements are logged rather than
+ * silently picked, because they mean the user's PATH may resolve to a
+ * different trace-mcp than the one we just installed.
+ */
+function readInstalledVersion(roots: {
+  configRoot: string | null;
+  binRoot: string | null;
+}): string | undefined {
+  const fromConfig = readVersionFromRoot(roots.configRoot);
+  const fromBin = readVersionFromRoot(roots.binRoot);
+  if (fromConfig && fromBin && fromConfig !== fromBin) {
+    appendUpdateLog({
+      event: 'npm-root:version-mismatch',
+      configRoot: roots.configRoot,
+      configVersion: fromConfig,
+      binRoot: roots.binRoot,
+      binVersion: fromBin,
+    });
+  }
+  return fromConfig ?? fromBin;
+}
+
+/**
+ * Self-heal a bundle that the npm update could not replace.
+ *
+ * The only code path that downloads and stages the `.app` zip is the npm
+ * package's own postinstall. When it runs during `npm install -g` it can fail
+ * to find the real install (a poisoned location marker, an unwritable install
+ * dir) and exits silently — the user's evidence for TRA-357 was five
+ * consecutive `npm-only` outcomes across three major versions with
+ * `pending:false` every time, and nothing ever retried.
+ *
+ * So we retry, deliberately: discard a marker that points at a build tree,
+ * re-record the running bundle, check the install directory is writable, then
+ * run the postinstall again out-of-band. Returns true when a swap-ready zip is
+ * staged afterwards.
+ */
+let repairInFlight: Promise<boolean> | null = null;
+
+async function repairStaleBundle(reason: string, roots?: {
+  configRoot: string | null;
+  binRoot: string | null;
+}): Promise<boolean> {
+  if (repairInFlight) return repairInFlight;
+  repairInFlight = (async () => {
+    try {
+      if (process.platform !== 'darwin' || !app.isPackaged) return false;
+      if (hasPendingUpdate()) return true;
+
+      const resolved = roots ?? (await resolveNpmRoots());
+      const installed = readInstalledVersion(resolved);
+      const running = app.getVersion().replace(/^v/, '');
+      if (!shouldAttemptRepair(installed, running, false, cmpSemver)) return false;
+
+      // A marker pointing into a build tree makes the postinstall stage its
+      // zip next to a throwaway bundle. Drop it and re-record the truth: the
+      // bundle this process is running from.
+      const marker = readAppLocationMarker();
+      if (marker && !isPlausibleInstallPath(marker)) {
+        try {
+          fs.unlinkSync(APP_LOCATION_MARKER);
+          appendUpdateLog({ event: 'app-location:discarded', appPath: marker });
+        } catch {
+          /* best-effort */
+        }
+      }
+      if (BUNDLE_PATH) writeAppLocationMarker(BUNDLE_PATH);
+
+      let writable = true;
+      try {
+        fs.accessSync(INSTALL_DIR, fs.constants.W_OK);
+      } catch {
+        writable = false;
+      }
+      if (!writable) {
+        appendUpdateLog({ event: 'repair-bundle:not-writable', reason, installDir: INSTALL_DIR });
+        return false;
+      }
+
+      const postinstall = resolved.configRoot
+        ? path.join(resolved.configRoot, 'trace-mcp', 'scripts', 'postinstall-app.mjs')
+        : null;
+      const fallback = resolved.binRoot
+        ? path.join(resolved.binRoot, 'trace-mcp', 'scripts', 'postinstall-app.mjs')
+        : null;
+      const script = [postinstall, fallback].find((p) => p && fs.existsSync(p)) ?? null;
+      if (!script) {
+        appendUpdateLog({ event: 'repair-bundle:no-postinstall', reason, roots: resolved });
+        return false;
+      }
+
+      appendUpdateLog({ event: 'repair-bundle:start', reason, script, installed, running });
+      await new Promise<void>((resolve) => {
+        // ELECTRON_RUN_AS_NODE turns our own binary into a plain Node runtime,
+        // so the helper runs without depending on a `node` being on PATH.
+        execFile(
+          process.execPath,
+          [script],
+          {
+            encoding: 'utf-8',
+            timeout: 600_000,
+            maxBuffer: 8 * 1024 * 1024,
+            env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+          },
+          (err, stdout, stderr) => {
+            appendUpdateLog({
+              event: 'repair-bundle:postinstall-done',
+              errMessage: err?.message ?? null,
+              stdout: (stdout ?? '').slice(-2000),
+              stderr: (stderr ?? '').slice(-2000),
+            });
+            resolve();
+          },
+        );
+      });
+
+      const staged = hasPendingUpdate();
+      appendUpdateLog({ event: 'repair-bundle:result', reason, staged });
+      if (staged) {
+        // The half-update is over — stop suppressing the banner.
+        const state = readAppUpdateState();
+        if (state.lastNpmOnlyAttempt) {
+          delete state.lastNpmOnlyAttempt;
+          writeAppUpdateState(state);
+        }
+      }
+      return staged;
+    } catch (err) {
+      appendUpdateLog({
+        event: 'repair-bundle:error',
+        reason,
+        error: (err as Error)?.message ?? String(err),
+      });
+      return false;
+    } finally {
+      repairInFlight = null;
+    }
+  })();
+  return repairInFlight;
 }
 
 ipcMain.handle('apply-update', async () => {
@@ -936,7 +1117,8 @@ ipcMain.handle('apply-update', async () => {
   // unusual characters.
   const npmArgs = ['install', '-g', 'trace-mcp@latest', '--force'];
 
-  const npmRoot = await resolveNpmRoot();
+  const npmRoots = await resolveNpmRoots();
+  const npmRoot = npmRoots.configRoot;
   if (npmRoot) cleanStaleScratchDirs(npmRoot);
 
   const spawnEnv = buildSpawnEnv(npmBin);
@@ -1022,14 +1204,22 @@ ipcMain.handle('apply-update', async () => {
       error: `${summary}\n\nFull log: ${UPDATE_LOG}`,
     };
   }
-  const installedVersion = readInstalledVersion(npmRoot);
+  const installedVersion = readInstalledVersion(npmRoots);
   const running = app.getVersion().replace(/^v/, '');
-  const outcome: UpdateOutcome = computeUpdateOutcome(
+  let outcome: UpdateOutcome = computeUpdateOutcome(
     installedVersion,
     running,
     hasPendingUpdate(),
     cmpSemver,
   );
+
+  // The CLI moved but the bundle did not. Before telling the user that, try to
+  // stage the bundle swap ourselves — the npm-side postinstall may have missed
+  // the real install location entirely (TRA-357).
+  if (outcome === 'npm-only' && (await repairStaleBundle('apply-update', npmRoots))) {
+    outcome = 'bundle-pending';
+  }
+
   const pending = outcome === 'bundle-pending';
 
   if (outcome === 'npm-only' && installedVersion) {
@@ -1038,12 +1228,22 @@ ipcMain.handle('apply-update', async () => {
     // check-for-update stops re-asking until the registry advances past
     // this target or the user manually reinstalls the .app.
     const state = readAppUpdateState();
+    const previous = state.lastNpmOnlyAttempt;
+    const repeat = previous?.bundle === running ? (previous.attempts ?? 1) + 1 : 1;
     state.lastNpmOnlyAttempt = {
       bundle: running,
       target: installedVersion,
       at: Date.now(),
+      attempts: repeat,
     };
     writeAppUpdateState(state);
+    appendUpdateLog({
+      event: 'apply-update:npm-only-unresolved',
+      bundle: running,
+      target: installedVersion,
+      attempts: repeat,
+      installDir: INSTALL_DIR,
+    });
   }
 
   appendUpdateLog({
@@ -1147,6 +1347,11 @@ app.whenReady().then(() => {
   // instead of guessing `~/Applications`. Cheap (~150 byte JSON write) and
   // best-effort — failures are logged to update.log but never surface.
   if (BUNDLE_PATH) writeAppLocationMarker(BUNDLE_PATH);
+  // Users already trapped by TRA-357 cannot see it — the sidebar told them
+  // they were up to date while the bundle sat months behind the CLI. Nothing
+  // they can click fixes that, so recovery has to happen without being asked.
+  // No-ops (one cheap version comparison) unless the bundle is actually stale.
+  void repairStaleBundle('startup');
   // macOS: set custom dock icon so it's ready when the window shows.
   if (process.platform === 'darwin' && fs.existsSync(dockIconPath)) {
     app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
