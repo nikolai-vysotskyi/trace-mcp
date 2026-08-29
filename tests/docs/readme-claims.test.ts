@@ -430,9 +430,18 @@ describe('docs site numeric claims (TRA-174)', () => {
     // token claim. No such heading — the section is "Token reduction — what we
     // measured", so the link silently landed at the top of the README. An
     // evidence pointer that resolves to nothing is worse than no pointer.
+    // Shell comments inside fenced blocks ("# Via CLI") also start with '#' and
+    // would otherwise widen the accepted anchor set with non-headings.
+    let inFence = false;
     const headings = readFileSync(README_PATH, 'utf-8')
       .split('\n')
-      .filter((line) => line.startsWith('#'))
+      .filter((line) => {
+        if (line.startsWith('```')) {
+          inFence = !inFence;
+          return false;
+        }
+        return !inFence && line.startsWith('#');
+      })
       .map((line) =>
         line
           .replace(/^#+\s*/, '')
