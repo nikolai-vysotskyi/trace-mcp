@@ -22,7 +22,7 @@ import { Icon } from '../lattice/icons';
 import { Menu, MenuChoiceRow, MenuItem, MenuSeparator, useMenuAnchor } from '../lattice/ui';
 import { GLOBAL_ACTIONS, type GlobalAction } from '../../shared/global-actions.js';
 import { appearanceOptions, type Appearance } from '../theme.js';
-import { t } from '../i18n/index.js';
+import { localeOptions, t, useLocale } from '../i18n/index.js';
 import { describeStaleRoots, formatAgo, type UpdateState } from '../update-check.js';
 import { SidebarRow } from './SidebarRow';
 
@@ -84,6 +84,11 @@ export function AppMenu({
   // Unnamespaced: the shared action list carries fully-qualified keys, because
   // the native menu resolves the same ones in the main process.
   const { t } = useTranslation();
+  /* Not a prop, unlike `appearance`: the language has no second owner. `theme`
+     is passed down because App.tsx also mirrors it to the main process for the
+     sidebar's NSVisualEffectView; `setLocale` already does its own mirroring
+     and its own cross-window sync, so a prop would only be plumbing. */
+  const { locale, setLocale } = useLocale();
   const open = menu.at !== null;
   const summary = updateSummary(update, checking);
 
@@ -194,6 +199,17 @@ export function AppMenu({
             options={appearanceOptions()}
             value={appearance}
             onChange={onAppearanceChange}
+          />
+          {/* Same group as Theme, no separator between them: both are app
+              preferences you may want to try, as opposed to the commands below.
+              Two languages fit a pill; the segments carry the two-letter form
+              because a language name is a word, and the full name — written in
+              its own language — is the accessible name and the tooltip. */}
+          <MenuChoiceRow
+            label={t('shell:language')}
+            options={localeOptions()}
+            value={locale}
+            onChange={setLocale}
           />
           <MenuSeparator />
           {links.map(item)}

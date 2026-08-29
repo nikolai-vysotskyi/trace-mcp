@@ -233,9 +233,14 @@ export function MenuItem({
 
 export interface MenuChoice<T extends string> {
   value: T;
-  /** The segments are icon-only, so this is the accessible name AND the tooltip. */
+  /** The accessible name AND the tooltip. For an icon segment it is the only name;
+      for a word segment it is the long form the short text abbreviates. */
   label: string;
-  icon: string;
+  /** An icon segment. Omit it and give `text` when no glyph names the value. */
+  icon?: string;
+  /** A word segment: the short visible form ("EN"). Language names are words,
+      not glyphs, so the Language row uses this (TRA-388). */
+  text?: string;
 }
 
 export interface MenuChoiceRowProps<T extends string> {
@@ -310,8 +315,9 @@ export function MenuChoiceRow<T extends string>({
       {/* No `sz-small`: at 20px the track left 1px above and below a 14px glyph
           while the segments ran 30px wide, which is the squeeze Nikolai saw —
           crushed vertically, loose horizontally (TRA-376). The default 24px
-          track carries square 20px segments; island.css sets their geometry. */}
-      <div className="lx-seg ws-ctx-seg">
+          track carries square 20px segments; island.css sets their geometry.
+          `is-text` swaps that square for a padded word segment. */}
+      <div className={'lx-seg ws-ctx-seg' + (options[0]?.icon ? '' : ' is-text')}>
         {options.map((option) => {
           const checked = option.value === value;
           return (
@@ -327,7 +333,7 @@ export function MenuChoiceRow<T extends string>({
               className={'lx-seg-item' + (checked ? ' is-active' : '')}
               onClick={() => onChange(option.value)}
             >
-              <Icon name={option.icon} size={12} />
+              {option.icon ? <Icon name={option.icon} size={12} /> : option.text}
             </button>
           );
         })}

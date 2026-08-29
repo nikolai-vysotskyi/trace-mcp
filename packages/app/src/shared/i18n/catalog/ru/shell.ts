@@ -23,6 +23,7 @@ export const shell = {
   resizeSidebar: 'Изменить ширину боковой панели',
   appMenu: 'Меню приложения',
   theme: 'Оформление',
+  language: 'Язык',
   themeAuto: 'Авто',
   themeLight: 'Светлое',
   themeDark: 'Тёмное',
