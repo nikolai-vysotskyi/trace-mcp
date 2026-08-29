@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { t } from '../i18n';
 
 interface Props {
   /** Human label for the region that failed, e.g. "Activity tab". */
@@ -41,7 +42,12 @@ export class ErrorBoundary extends Component<Props, State> {
         style={{ color: 'var(--label)' }}
       >
         <div className="text-sm font-semibold" style={{ color: 'var(--status-red)' }}>
-          {this.props.label ? `${this.props.label} crashed` : 'Something went wrong'}
+          {/* A class component, so the module-level `t` rather than the hook:
+              a language switch while an error card is on screen is not a case
+              worth a wrapper for. */}
+          {this.props.label
+            ? t('shell:crashed', { label: this.props.label })
+            : t('shell:somethingWentWrong')}
         </div>
         <div className="text-xs" style={{ color: 'var(--label-secondary)' }}>
           {error.message || String(error)}
@@ -70,7 +76,7 @@ export class ErrorBoundary extends Component<Props, State> {
               cursor: 'pointer',
             }}
           >
-            Try again
+            {t('shell:tryAgain')}
           </button>
         </div>
       </div>

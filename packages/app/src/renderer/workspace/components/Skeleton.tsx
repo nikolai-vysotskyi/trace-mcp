@@ -6,6 +6,7 @@
  * where the real value will sit, so nothing moves on arrival.
  */
 import type { CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface SkeletonProps {
   width: number | string;
@@ -30,8 +31,9 @@ export function Skeleton({ width, height, radius = 4, className, style }: Skelet
  * the table does not reflow when the first response lands.
  */
 export function SkeletonTableRows({ rows, rowHeight }: { rows: number; rowHeight: number }) {
+  const { t } = useTranslation('workspace');
   return (
-    <div role="status" aria-label="Loading projects">
+    <div role="status" aria-label={t('loadingProjects')}>
       {Array.from({ length: rows }, (_, i) => (
         <div
           key={i}

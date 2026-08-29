@@ -14,9 +14,12 @@ import { menu } from './menu.js';
 import { notebook } from './notebook.js';
 import { overview } from './overview.js';
 import { settings } from './settings.js';
+import { shell } from './shell.js';
 import { stats } from './stats.js';
 import { tray } from './tray.js';
+import { ui } from './ui.js';
 import { update } from './update.js';
+import { workspace } from './workspace.js';
 
 export const en = {
   activity,
@@ -31,9 +34,12 @@ export const en = {
   notebook,
   overview,
   settings,
+  shell,
   stats,
   tray,
+  ui,
   update,
+  workspace,
 };
 
 

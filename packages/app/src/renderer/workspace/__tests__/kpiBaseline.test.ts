@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BASELINE_MAX_AGE_MS, describeAge, rollBaseline } from '../kpiBaseline';
+import { BASELINE_MAX_AGE_MS, rollBaseline } from '../kpiBaseline';
+import { relativeTime } from '../../i18n/format';
 import type { WorkspaceKpis } from '../types';
 
 const kpis = (totalProjects: number): WorkspaceKpis => ({
@@ -44,10 +45,12 @@ describe('rollBaseline', () => {
   });
 });
 
-describe('describeAge', () => {
+/* The baseline's age is the caption on a delta chip; it comes from Intl now
+   rather than from a hand-rolled helper with its own thresholds (TRA-387). */
+describe('the age of a baseline', () => {
   it('reads as a date a person would say out loud', () => {
-    expect(describeAge(at(NOW - 60_000), NOW)).toBe('today');
-    expect(describeAge(at(NOW - BASELINE_MAX_AGE_MS), NOW)).toBe('yesterday');
-    expect(describeAge(at(NOW - 3 * BASELINE_MAX_AGE_MS), NOW)).toBe('3 days ago');
+    expect(relativeTime(NOW - 60_000, NOW)).toBe('1 minute ago');
+    expect(relativeTime(NOW - BASELINE_MAX_AGE_MS, NOW)).toBe('1 day ago');
+    expect(relativeTime(NOW - 3 * BASELINE_MAX_AGE_MS, NOW)).toBe('3 days ago');
   });
 });

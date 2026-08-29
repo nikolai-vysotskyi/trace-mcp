@@ -16,6 +16,8 @@
 import { createContext, useContext } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+import { formatNumber } from '../../i18n/format';
 import { Icon } from '../icons';
 import { Skeleton } from '../../workspace/components/Skeleton';
 import { Button } from './Button';
@@ -104,7 +106,7 @@ export function Section({
           {title}
           {count !== undefined && count > 0 && (
             <span className="tabular-nums" style={{ color: 'var(--label-secondary)' }}>
-              {count.toLocaleString()}
+              {formatNumber(count)}
             </span>
           )}
         </h3>
@@ -173,8 +175,9 @@ export function ListRow({
 
 /** Rows at the real 32px geometry so nothing moves when the data lands. */
 export function SkeletonRows({ rows }: { rows: number }) {
+  const { t } = useTranslation('ui');
   return (
-    <div role="status" aria-label="Loading">
+    <div role="status" aria-label={t('loading')}>
       {Array.from({ length: rows }, (_, i) => (
         <div
           key={i}
@@ -194,14 +197,15 @@ export function SkeletonRows({ rows }: { rows: number }) {
 
 /** Inline "we couldn't measure this" panel with the one action that helps. */
 export function SectionError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  const { t } = useTranslation('ui');
   return (
     <div className="flex items-center gap-2 px-3 py-2.5">
       <Icon name="warning" size={14} />
       <span className="text-[13px] leading-4 flex-1" style={{ color: 'var(--label-secondary)' }}>
-        Couldn&apos;t load {what}. The daemon may still be indexing.
+        {t('sectionError', { what })}
       </span>
       <Button size="small" onClick={onRetry}>
-        Retry
+        {t('retry')}
       </Button>
     </div>
   );

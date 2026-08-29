@@ -1,0 +1,67 @@
+/* Само окно: боковая панель и её разделы, недавние проекты, список файлов,
+   быстрый переход, полоса вкладок и экран после сбоя.
+
+   «trace-mcp» — имя продукта и остаётся латиницей. */
+
+export const shell = {
+  navWorkspace: 'Рабочая область',
+  navClients: 'MCP-клиенты',
+  navOverview: 'Обзор',
+  navAsk: 'Вопрос',
+  navGraph: 'Граф',
+  navActivity: 'Активность',
+  navMemory: 'Память',
+  navNotebook: 'Блокнот',
+  navInsights: 'Аналитика',
+
+  sidebar: 'Боковая панель',
+  sections: 'Разделы',
+  showSidebar: 'Показать боковую панель',
+  hideSidebar: 'Скрыть боковую панель',
+  showSidebarTitle: 'Показать боковую панель (⌘⌥S)',
+  hideSidebarTitle: 'Скрыть боковую панель (⌘⌥S)',
+  resizeSidebar: 'Изменить ширину боковой панели',
+  appMenu: 'Меню приложения',
+  theme: 'Оформление',
+  themeAuto: 'Авто',
+  themeLight: 'Светлое',
+  themeDark: 'Тёмное',
+  app: 'Приложение',
+
+  recent: 'Недавние',
+  noProjectsOpened: 'Вы ещё не открывали проекты.',
+  openAProject: 'Открыть проект…',
+  openProject: 'Открыть проект',
+  copyPath: 'Скопировать путь',
+  removeFromRecent: 'Убрать из недавних',
+  removeFromRecentTitle: 'Убрать из недавних (⌫)',
+
+  files: 'Файлы',
+  projectFiles: 'Файлы проекта',
+  sortFilesBy: 'Сортировка файлов',
+  sortMostSymbols: 'Больше символов',
+  sortMostConnected: 'Больше связей',
+  sortDeadCode: 'Мёртвый код',
+  sortRecentlyChanged: 'Недавно изменённые',
+  loadingFiles: 'Загрузка файлов',
+  noFilesMatchScope: 'В этой области нет проиндексированных файлов.',
+  fileTitle: '{{path}} — символов: {{symbols}}, связей: {{edges}}',
+  revealInGraph: 'Показать в графе',
+  openInEditor: 'Открыть в редакторе',
+
+  quickOpen: 'Быстрый переход',
+  quickOpenPlaceholder: 'Раздел, проект или файл',
+  quickOpenResults: 'Результаты',
+  quickOpenNoMatches: 'Ничего не найдено',
+  quickOpenGroupGoTo: 'Перейти',
+  quickOpenGroupRecent: 'Недавние проекты',
+  quickOpenGroupFiles: 'Файлы',
+
+  menuWindow: 'Меню',
+  closeTab: 'Закрыть {{title}}',
+
+  tabLabel: 'вкладка «{{tab}}»',
+  crashed: 'Сбой: {{label}}',
+  somethingWentWrong: 'Что-то пошло не так',
+  tryAgain: 'Повторить',
+} as const;

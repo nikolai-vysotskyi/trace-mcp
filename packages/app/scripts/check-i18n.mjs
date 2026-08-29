@@ -22,33 +22,17 @@ import { join, relative, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
-/** Extracted surfaces. Grow this as slices land; never shrink it. */
-const CHECKED = [
-  'src/main/menu.ts',
-  'src/main/tray.ts',
-  'src/renderer/i18n',
-  'src/renderer/components/GuardOnboarding.tsx',
-  'src/renderer/components/GuardSection.tsx',
-  'src/renderer/components/OllamaPanel.tsx',
-  'src/renderer/components/ProjectStatsModal.tsx',
-  'src/renderer/tabs/AIActivity.tsx',
-  'src/renderer/tabs/Activity.tsx',
-  'src/renderer/tabs/AskTab.tsx',
-  'src/renderer/tabs/Clients.tsx',
-  'src/renderer/tabs/GraphExplorerGPU.tsx',
-  'src/renderer/tabs/Insights.tsx',
-  'src/renderer/tabs/MemoryExplorer.tsx',
-  'src/renderer/tabs/Notebook.tsx',
-  'src/renderer/tabs/ProjectOverview.tsx',
-  'src/renderer/tabs/Settings.tsx',
-  'src/renderer/tabs/ToolActivity.tsx',
-  'src/renderer/tabs/configSchema.ts',
-  'src/renderer/tabs/graph-error.ts',
-  'src/renderer/tabs/insights-runtime.ts',
-  'src/renderer/tabs/notebook-runtime.ts',
-  'src/renderer/update-check.ts',
-  'src/shared/global-actions.ts',
-  'src/shared/i18n',
+/* Extracted surfaces. This was a file-by-file allowlist while extraction was
+   in flight; with the last slice landed (TRA-387) it is the three source trees,
+   which is the only form that also covers a file nobody has written yet. */
+const CHECKED = ['src/main', 'src/renderer', 'src/shared'];
+
+/** The documented exceptions, and why each one is not a product surface. */
+const EXCLUDED = [
+  // A developer surface — the primitive gallery is never shipped to a user.
+  'src/renderer/lattice/ui/Gallery.tsx',
+  // Generated colour data; every "string" in it is a hex pair.
+  'src/renderer/lattice/fileIcons.generated.ts',
 ];
 
 const PROSE_ATTRS = /\b(?:title|label|placeholder|aria-label)=(["'])([^"'{}]+)\1/g;
@@ -78,7 +62,7 @@ function isProse(text) {
      chain of comparisons reads as "text between two angle brackets" to a regex.
      A sentence never opens on a separator, and never carries `||`, `&&`, `=>`
      or a semicolon. (TRA-385 — the first slice wide enough to hit all three.) */
-  if (/^[;,)\]}|&:<>=+*/-]/.test(t)) return false;
+  if (/^[;,()\]}|&:<>=+*/-]/.test(t)) return false;
   if (/\|\||&&|=>|;/.test(t)) return false;
   return true;
 }
@@ -98,11 +82,15 @@ function files(path) {
   return out;
 }
 
+const excluded = new Set(EXCLUDED.map((p) => join(ROOT, p)));
+
 const findings = [];
+let scanned = 0;
 for (const path of CHECKED) {
   for (const file of files(path)) {
     // The catalogue is where the strings are supposed to be.
-    if (file.includes('/catalog/')) continue;
+    if (file.includes('/catalog/') || excluded.has(file)) continue;
+    scanned++;
     const lines = readFileSync(file, 'utf8').split('\n');
     /* A block comment's CONTINUATION lines start with prose, not with `*`, and
        the ones explaining JSX quote tags — "renders a <button>s, and a <button>
@@ -142,4 +130,6 @@ if (findings.length) {
   process.exit(1);
 }
 
-console.log(`check-i18n: ${CHECKED.length} extracted paths clean`);
+console.log(
+  `check-i18n: ${scanned} files clean across ${CHECKED.join(', ')} (${EXCLUDED.length} documented exceptions)`,
+);

@@ -13,6 +13,7 @@
    renderer — same reason sidebar-prefs.ts and recent-projects.ts do. */
 
 import { useCallback, useEffect, useState } from 'react';
+import { t } from './i18n';
 
 export const THEME_KEY = 'trace-mcp-theme';
 
@@ -23,16 +24,21 @@ export type Appearance = 'auto' | Theme;
 
 /* One list, two surfaces: Settings renders the labels, the app menu's row
    renders the icons (its segments are icon-only). Same anti-drift rule as
-   src/shared/global-actions.ts — the values and their names are written once. */
-export const APPEARANCE_OPTIONS: ReadonlyArray<{
+   src/shared/global-actions.ts — the values and their names are written once.
+
+   A function rather than a frozen array: the labels come from the catalogue,
+   and a const would pin them to whichever language loaded first (TRA-387). */
+export function appearanceOptions(): ReadonlyArray<{
   value: Appearance;
   label: string;
   icon: string;
-}> = [
-  { value: 'auto', label: 'Auto', icon: 'contrast' },
-  { value: 'light', label: 'Light', icon: 'light_mode' },
-  { value: 'dark', label: 'Dark', icon: 'dark_mode' },
-];
+}> {
+  return [
+    { value: 'auto', label: t('shell:themeAuto'), icon: 'contrast' },
+    { value: 'light', label: t('shell:themeLight'), icon: 'light_mode' },
+    { value: 'dark', label: t('shell:themeDark'), icon: 'dark_mode' },
+  ];
+}
 
 export function readStoredAppearance(): Appearance {
   try {

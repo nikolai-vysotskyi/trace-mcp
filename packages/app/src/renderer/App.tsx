@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AppMenu } from './components/AppMenu';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { QuickOpen, type QuickOpenItem } from './components/QuickOpen';
 import { SidebarRow } from './components/SidebarRow';
 import { WindowTabBar } from './components/WindowTabBar';
+import { t } from './i18n';
+import { formatNumber } from './i18n/format';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
 import { HeaderSlotProvider, Menu, MenuItem, MenuSeparator, PopUpButton } from './lattice/ui';
 import { formatAgo, type UpdateCheck, useUpdateCheck } from './update-check.js';
@@ -42,9 +45,11 @@ import { Workspace } from './workspace/Workspace';
 type GlobalTab = 'workspace' | 'clients' | 'settings';
 // Settings lives in the sidebar footer (always-visible bottom row), not the top
 // nav. Keep it in the type union so existing routing/state code keeps working.
-const GLOBAL_TABS: { id: GlobalTab; label: string; icon: string }[] = [
-  { id: 'workspace', label: 'Workspace', icon: 'grid_view' },
-  { id: 'clients', label: 'MCP Clients', icon: 'cable' },
+// Built per render, not frozen at module scope: switching the language has to
+// relabel the sidebar, quick open AND the native menu these are published to.
+const globalTabs = (): { id: GlobalTab; label: string; icon: string }[] => [
+  { id: 'workspace', label: t('shell:navWorkspace'), icon: 'grid_view' },
+  { id: 'clients', label: t('shell:navClients'), icon: 'cable' },
 ];
 
 /**
@@ -58,19 +63,19 @@ function normalizeGlobalTab(value: string | null | undefined): GlobalTab {
 }
 
 type ProjectTab = 'overview' | 'ask' | 'graph' | 'activity' | 'memory' | 'notebook' | 'insights';
-const PROJECT_TABS: { id: ProjectTab; label: string; icon: string }[] = [
-  { id: 'overview', label: 'Overview', icon: 'grid_view' },
+const projectTabs = (): { id: ProjectTab; label: string; icon: string }[] => [
+  { id: 'overview', label: t('shell:navOverview'), icon: 'grid_view' },
   /* Not a speech bubble (DESIGN.md §5): Ask queries the indexed graph and hands
      back an answer — a search phrased in words, not a conversation with a
      person. `manage_search` was the first choice and lost on the render: its
      two answer lines sit 3 units apart on the 24 grid, which is 2.2px at the
      18px sidebar size, and they smudge into the magnifier's handle. */
-  { id: 'ask', label: 'Ask', icon: 'search' },
-  { id: 'graph', label: 'Graph', icon: 'hub' },
-  { id: 'activity', label: 'Activity', icon: 'timeline' },
-  { id: 'memory', label: 'Memory', icon: 'neurology' },
-  { id: 'notebook', label: 'Notebook', icon: 'add_note' },
-  { id: 'insights', label: 'Insights', icon: 'monitoring' },
+  { id: 'ask', label: t('shell:navAsk'), icon: 'search' },
+  { id: 'graph', label: t('shell:navGraph'), icon: 'hub' },
+  { id: 'activity', label: t('shell:navActivity'), icon: 'timeline' },
+  { id: 'memory', label: t('shell:navMemory'), icon: 'neurology' },
+  { id: 'notebook', label: t('shell:navNotebook'), icon: 'add_note' },
+  { id: 'insights', label: t('shell:navInsights'), icon: 'monitoring' },
 ];
 
 /** Does this window have inset traffic lights to leave room for?
@@ -108,6 +113,7 @@ import {
 export { removeRecentProject };
 
 function RecentProjects() {
+  const { t } = useTranslation('shell');
   const [recent, setRecent] = useState<string[]>(getRecentProjects);
   // Right-click target — the same actions the row's click and ⌫ already offer,
   // reachable the way a Mac user reaches for them (TRA-297).
@@ -136,9 +142,9 @@ function RecentProjects() {
     return (
       <div className="ws-sb-empty">
         <Icon name="folder" size={20} className="gi" />
-        <span>No projects opened yet.</span>
+        <span>{t('noProjectsOpened')}</span>
         <button type="button" className="act" onClick={pickProject}>
-          Open a project…
+          {t('openAProject')}
         </button>
       </div>
     );
@@ -160,7 +166,7 @@ function RecentProjects() {
               openProject(ctx.root);
             }}
           >
-            Open project
+            {t('openProject')}
           </MenuItem>
           <MenuItem
             icon="content_copy"
@@ -169,7 +175,7 @@ function RecentProjects() {
               void navigator.clipboard?.writeText(ctx.root);
             }}
           >
-            Copy path
+            {t('copyPath')}
           </MenuItem>
           <MenuSeparator />
           <MenuItem
@@ -181,7 +187,7 @@ function RecentProjects() {
               forget(ctx.root);
             }}
           >
-            Remove from recent
+            {t('removeFromRecent')}
           </MenuItem>
         </Menu>
       )}
@@ -207,7 +213,7 @@ function RecentProjects() {
             <span
               className="ws-sb-trailing"
               aria-hidden="true"
-              title="Remove from recent (⌫)"
+              title={t('removeFromRecentTitle')}
               onClick={(e) => {
                 e.stopPropagation();
                 forget(root);
@@ -226,11 +232,11 @@ function RecentProjects() {
 
 type FileSort = 'symbols' | 'edges' | 'isolated' | 'recent';
 
-const FILE_SORT_OPTIONS: { id: FileSort; label: string }[] = [
-  { id: 'symbols', label: 'Most Symbols' },
-  { id: 'edges', label: 'Most Connected' },
-  { id: 'isolated', label: 'Dead Code' },
-  { id: 'recent', label: 'Recently Changed' },
+const fileSortOptions = (): { id: FileSort; label: string }[] => [
+  { id: 'symbols', label: t('shell:sortMostSymbols') },
+  { id: 'edges', label: t('shell:sortMostConnected') },
+  { id: 'isolated', label: t('shell:sortDeadCode') },
+  { id: 'recent', label: t('shell:sortRecentlyChanged') },
 ];
 
 interface FileEntry {
@@ -248,6 +254,7 @@ function ProjectFileExplorer({
   scope?: string;
   onFileClick: (filePath: string) => void;
 }) {
+  const { t } = useTranslation('shell');
   const [sort, setSort] = useState<FileSort>('symbols');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -320,7 +327,7 @@ function ProjectFileExplorer({
               onFileClick(ctx.path);
             }}
           >
-            Reveal in graph
+            {t('revealInGraph')}
           </MenuItem>
           <MenuItem
             icon="edit"
@@ -329,7 +336,7 @@ function ProjectFileExplorer({
               void window.electronAPI?.openInEditor(ctx.path);
             }}
           >
-            Open in editor
+            {t('openInEditor')}
           </MenuItem>
           <MenuSeparator />
           <MenuItem
@@ -339,24 +346,24 @@ function ProjectFileExplorer({
               void navigator.clipboard?.writeText(ctx.path);
             }}
           >
-            Copy path
+            {t('copyPath')}
           </MenuItem>
         </Menu>
       )}
-      <div className="ws-sb-group">Files</div>
+      <div className="ws-sb-group">{t('files')}</div>
       {/* Sort — the shared pop-up button primitive (TRA-290). */}
       <PopUpButton
         block
         className="ws-sb-popup"
-        options={FILE_SORT_OPTIONS.map((o) => ({ value: o.id, label: o.label }))}
+        options={fileSortOptions().map((o) => ({ value: o.id, label: o.label }))}
         value={sort}
         onChange={(v) => setSort(v as FileSort)}
-        aria-label="Sort files by"
+        aria-label={t('sortFilesBy')}
       />
 
       {loading ? (
         // Skeletons at the final 28px geometry — nothing shifts on load.
-        <div aria-busy="true" aria-label="Loading files">
+        <div aria-busy="true" aria-label={t('loadingFiles')}>
           {Array.from({ length: 6 }, (_, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length placeholder list, no identity
             <div key={i} className="ws-sb-skeleton" />
@@ -365,10 +372,10 @@ function ProjectFileExplorer({
       ) : files.length === 0 ? (
         <div className="ws-sb-empty">
           <Icon name="description" size={20} className="gi" />
-          <span>No indexed files match this scope.</span>
+          <span>{t('noFilesMatchScope')}</span>
         </div>
       ) : (
-        <div role="tree" aria-label="Project files" ref={listRef}>
+        <div role="tree" aria-label={t('projectFiles')} ref={listRef}>
           {files.map((f, i) => {
             const display = shortPath(f.path);
             const { dir, name } = splitPath(display);
@@ -386,7 +393,11 @@ function ProjectFileExplorer({
                   </span>
                 }
                 count={sort === 'edges' ? f.edges : f.symbols}
-                title={`${display} — ${f.symbols} symbols, ${f.edges} edges`}
+                title={t('fileTitle', {
+                  path: display,
+                  symbols: formatNumber(f.symbols),
+                  edges: formatNumber(f.edges),
+                })}
                 onClick={() => {
                   setSelected(f.path);
                   onFileClick(f.path);
@@ -417,6 +428,7 @@ const RELEASES_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp/releases/la
 // whole job was to say nothing was wrong; it says that in the app menu's
 // header now, next to Check for updates (TRA-363).
 export function UpdateCard({ update }: { update: UpdateCheck }) {
+  const { t } = useTranslation('update');
   const { state, pendingVersion, updating } = update;
 
   // Pending swap takes precedence — the user's next click should restart, not redownload.
@@ -435,11 +447,11 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
               />
             </svg>
           </span>
-          v{pendingVersion} ready
+          {t('cardReadyTitle', { version: pendingVersion })}
         </div>
-        <div className="subtitle">Restart to install · v{state.current}</div>
+        <div className="subtitle">{t('cardReadySubtitle', { current: state.current })}</div>
         <button type="button" className="btn-prominent success" onClick={update.restart}>
-          Restart to install
+          {t('cardRestart')}
         </button>
       </div>
     );
@@ -458,17 +470,14 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
         aria-live="polite"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <div className="title">v{state.latest} needs a manual install</div>
-        <div className="subtitle">
-          The command line tool updated, but the app itself is still v{state.current} — it could not
-          replace its own bundle. Download the release and drag it into Applications.
-        </div>
+        <div className="title">{t('cardStuckTitle', { version: state.latest })}</div>
+        <div className="subtitle">{t('cardStuckSubtitle', { current: state.current })}</div>
         <button
           type="button"
           className="btn-prominent"
           onClick={() => void window.electronAPI?.openExternal?.(RELEASES_URL)}
         >
-          Download v{state.latest}
+          {t('cardDownload', { version: state.latest })}
         </button>
       </div>
     );
@@ -484,9 +493,12 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
       role="status"
       aria-live="polite"
     >
-      <div className="title">v{state.latest} available</div>
+      <div className="title">{t('cardAvailableTitle', { version: state.latest })}</div>
       <div className="subtitle">
-        Currently v{state.current} · checked {formatAgo(state.lastChecked)}
+        {t('cardAvailableSubtitle', {
+          current: state.current,
+          when: formatAgo(state.lastChecked),
+        })}
       </div>
       {state.error && (
         <div className="subtitle error" title={state.error}>
@@ -494,7 +506,7 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
         </div>
       )}
       <button type="button" className="btn-prominent" onClick={update.apply} disabled={updating}>
-        {updating ? 'Updating…' : 'Update'}
+        {updating ? t('cardUpdating') : t('cardUpdate')}
       </button>
     </div>
   );
@@ -572,6 +584,7 @@ function ProjectContent({
 
 // ── Main App ──────────────────────────────────────────────────
 export function App() {
+  const { t } = useTranslation('shell');
   const { view, tab, root } = getUrlParams();
   const isProject = view === 'project' && root !== null;
   const { theme, appearance, setAppearance } = useTheme();
@@ -692,7 +705,13 @@ export function App() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const sectionList = isProject ? PROJECT_TABS : GLOBAL_TABS;
+  const sections = isProject ? projectTabs() : globalTabs();
+  /* Identity-stable across renders while the language holds still: the memoised
+     callbacks below take it as a dependency, and a fresh array each render
+     would re-publish the window's section list to the main process forever. */
+  const sectionKey = sections.map((s) => `${s.id}:${s.label}`).join('|');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const sectionList = useMemo(() => sections, [sectionKey]);
 
   /** ⌘1…⌘9 and quick-open both land here: n is 1-based, matching the menu. */
   const selectSection = useCallback(
@@ -805,7 +824,7 @@ export function App() {
       id: `section:${section.id}`,
       label: section.label,
       detail: `⌘${i + 1}`,
-      group: 'Go to',
+      group: t('quickOpenGroupGoTo'),
       icon: section.icon,
       run: () => selectSection(i + 1),
     }));
@@ -814,7 +833,7 @@ export function App() {
         id: `project:${projectRoot}`,
         label: projectRoot.split(/[/\\]/).filter(Boolean).pop() ?? projectRoot,
         detail: projectRoot,
-        group: 'Recent projects',
+        group: t('quickOpenGroupRecent'),
         icon: 'folder',
         run: () => {
           addRecentProject(projectRoot);
@@ -831,13 +850,13 @@ export function App() {
         id: `file:${filePath}`,
         label: name,
         detail: dir,
-        group: 'Files',
+        group: t('quickOpenGroupFiles'),
         icon: 'description',
         run: () => openFileInGraph(filePath),
       });
     }
     return items;
-  }, [sectionList, selectSection, quickFiles, root, openFileInGraph]);
+  }, [sectionList, selectSection, quickFiles, root, openFileInGraph, t]);
 
   // Track fullscreen state
   useEffect(() => {
@@ -876,9 +895,9 @@ export function App() {
       type="button"
       className="ws-chrome-toggle"
       onClick={toggleSidebar}
-      aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+      aria-label={sidebarCollapsed ? t('showSidebar') : t('hideSidebar')}
       aria-expanded={!sidebarCollapsed}
-      title={`${sidebarCollapsed ? 'Show' : 'Hide'} sidebar (⌘⌥S)`}
+      title={sidebarCollapsed ? t('showSidebarTitle') : t('hideSidebarTitle')}
     >
       <Icon name="dock_to_right" size={16} />
     </button>
@@ -901,7 +920,7 @@ export function App() {
         {!sidebarCollapsed && (
           <aside
             className="ws-sidebar"
-            aria-label="Sidebar"
+            aria-label={t('sidebar')}
             style={{ width: sidebarWidth } as React.CSSProperties}
           >
             {/* 44px strip the traffic lights live in — and the only draggable
@@ -918,17 +937,17 @@ export function App() {
               <div className="ws-sidebar-titlebar">{sidebarToggle}</div>
             )}
 
-            <nav className="ws-sidebar-scroll" aria-label="Sections">
+            <nav className="ws-sidebar-scroll" aria-label={t('sections')}>
               {isProject ? (
                 <>
-                  {PROJECT_TABS.map((t) => (
+                  {(sectionList as { id: ProjectTab; label: string; icon: string }[]).map((s) => (
                     <SidebarRow
-                      key={t.id}
-                      icon={t.icon}
-                      label={t.label}
-                      selected={projectTab === t.id}
-                      aria-current={projectTab === t.id ? 'page' : undefined}
-                      onClick={() => setProjectTab(t.id)}
+                      key={s.id}
+                      icon={s.icon}
+                      label={s.label}
+                      selected={projectTab === s.id}
+                      aria-current={projectTab === s.id ? 'page' : undefined}
+                      onClick={() => setProjectTab(s.id)}
                     />
                   ))}
                   <ProjectFileExplorer
@@ -939,17 +958,17 @@ export function App() {
                 </>
               ) : (
                 <>
-                  {GLOBAL_TABS.map((t) => (
+                  {(sectionList as { id: GlobalTab; label: string; icon: string }[]).map((s) => (
                     <SidebarRow
-                      key={t.id}
-                      icon={t.icon}
-                      label={t.label}
-                      selected={globalTab === t.id}
-                      aria-current={globalTab === t.id ? 'page' : undefined}
-                      onClick={() => setGlobalTab(t.id)}
+                      key={s.id}
+                      icon={s.icon}
+                      label={s.label}
+                      selected={globalTab === s.id}
+                      aria-current={globalTab === s.id ? 'page' : undefined}
+                      onClick={() => setGlobalTab(s.id)}
                     />
                   ))}
-                  <div className="ws-sb-group">Recent</div>
+                  <div className="ws-sb-group">{t('recent')}</div>
                   <RecentProjects />
                 </>
               )}
@@ -974,7 +993,7 @@ export function App() {
             className="ws-sb-resize"
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize sidebar"
+            aria-label={t('resizeSidebar')}
             aria-valuenow={sidebarWidth}
             aria-valuemin={SIDEBAR_MIN}
             aria-valuemax={SIDEBAR_MAX}
@@ -1008,7 +1027,12 @@ export function App() {
             className={`ws-content-body ${isGraphGpu ? 'p-2' : needsFlexLayout ? 'p-1 pt-2' : ownsToolbar ? '' : 'p-4 overflow-y-auto'}`}
           >
             {isProject ? (
-              <ErrorBoundary key={`project:${projectTab}`} label={`${projectTab} tab`}>
+              <ErrorBoundary
+                key={`project:${projectTab}`}
+                label={t('tabLabel', {
+                  tab: sectionList.find((s) => s.id === projectTab)?.label ?? projectTab,
+                })}
+              >
                 <ProjectContent
                   root={root!}
                   tab={projectTab}
@@ -1020,7 +1044,12 @@ export function App() {
                 />
               </ErrorBoundary>
             ) : (
-              <ErrorBoundary key={`menu:${globalTab}`} label={`${globalTab} tab`}>
+              <ErrorBoundary
+                key={`menu:${globalTab}`}
+                label={t('tabLabel', {
+                  tab: sectionList.find((s) => s.id === globalTab)?.label ?? globalTab,
+                })}
+              >
                 <MenuContent
                   tab={globalTab}
                   appearance={appearance}

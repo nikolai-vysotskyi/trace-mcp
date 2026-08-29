@@ -7,7 +7,7 @@
  * must clear the stored key rather than store a third value. */
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { APPEARANCE_OPTIONS, THEME_KEY, useTheme } from '../theme.js';
+import { appearanceOptions, THEME_KEY, useTheme } from '../theme.js';
 
 /** matchMedia is not implemented in jsdom — stand in a controllable one. */
 let systemDark = false;
@@ -46,7 +46,7 @@ function setSystem(dark: boolean) {
 
 describe('useTheme', () => {
   it('offers exactly Auto / Light / Dark', () => {
-    expect(APPEARANCE_OPTIONS.map((o) => o.value)).toEqual(['auto', 'light', 'dark']);
+    expect(appearanceOptions().map((o) => o.value)).toEqual(['auto', 'light', 'dark']);
   });
 
   it('starts on Auto and follows the system', () => {

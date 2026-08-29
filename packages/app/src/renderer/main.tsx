@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './app.css';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { t } from './i18n';
 import { Gallery } from './lattice/ui/Gallery';
 
 // `?view=gallery` renders the control-primitive reference surface instead of
@@ -19,6 +20,6 @@ if (isGallery && (forcedTheme === 'light' || forcedTheme === 'dark')) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary label="App">{isGallery ? <Gallery /> : <App />}</ErrorBoundary>
+    <ErrorBoundary label={t('shell:app')}>{isGallery ? <Gallery /> : <App />}</ErrorBoundary>
   </StrictMode>,
 );

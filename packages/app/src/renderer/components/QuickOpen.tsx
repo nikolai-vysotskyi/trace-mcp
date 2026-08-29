@@ -9,6 +9,7 @@
    makes "wtv" find "WorkspaceTableView" without a fuzzy-search dependency. */
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../lattice/icons';
 
 export interface QuickOpenItem {
@@ -53,6 +54,7 @@ export function QuickOpen({
   items: QuickOpenItem[];
   onClose: () => void;
 }): ReactNode {
+  const { t } = useTranslation('shell');
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
@@ -111,7 +113,7 @@ export function QuickOpen({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Quick open"
+        aria-label={t('quickOpen')}
         className="lx-qo"
         onClick={(e) => e.stopPropagation()}
       >
@@ -131,8 +133,8 @@ export function QuickOpen({
             aria-haspopup="listbox"
             aria-autocomplete="list"
             value={query}
-            placeholder="Go to section, project or file"
-            aria-label="Quick open"
+            placeholder={t('quickOpenPlaceholder')}
+            aria-label={t('quickOpen')}
             aria-controls={listId}
             aria-activedescendant={matches[index] ? `${listId}-${index}` : undefined}
             onChange={(e) => {
@@ -142,9 +144,15 @@ export function QuickOpen({
             onKeyDown={onKeyDown}
           />
         </div>
-        <div className="lx-qo-list" id={listId} role="listbox" aria-label="Results" ref={listRef}>
+        <div
+          className="lx-qo-list"
+          id={listId}
+          role="listbox"
+          aria-label={t('quickOpenResults')}
+          ref={listRef}
+        >
           {matches.length === 0 ? (
-            <div className="lx-qo-empty">No matches</div>
+            <div className="lx-qo-empty">{t('quickOpenNoMatches')}</div>
           ) : (
             groups.map((g) => (
               <div key={g.group} role="group" aria-label={g.group}>

@@ -10,6 +10,7 @@
    no gain. */
 
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../icons';
 
 export type Tone = 'neutral' | 'accent' | 'green' | 'orange' | 'red' | 'blue' | 'purple';
@@ -61,12 +62,10 @@ export interface GradeBadgeProps {
 /** Tech-debt grade. The letter alone means nothing to a screen reader, so the
     accessible name spells it out. */
 export function GradeBadge({ grade }: GradeBadgeProps): ReactNode {
+  const { t } = useTranslation('ui');
+  const spelled = t('gradeBadge', { grade });
   return (
-    <Badge
-      tone={GRADE_TONE[grade] ?? 'neutral'}
-      title={`Tech debt grade ${grade}`}
-      aria-label={`Tech debt grade ${grade}`}
-    >
+    <Badge tone={GRADE_TONE[grade] ?? 'neutral'} title={spelled} aria-label={spelled}>
       {grade}
     </Badge>
   );

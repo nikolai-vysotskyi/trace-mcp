@@ -9,6 +9,7 @@
  * (large CTA centred in the tab).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../lattice/icons';
 import { Button } from '../lattice/ui';
 
@@ -37,6 +38,7 @@ function extractDroppedPath(items: DataTransferItemList | undefined, files: File
 }
 
 export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectControlProps) {
+  const { t } = useTranslation('workspace');
   const [showPathInput, setShowPathInput] = useState(false);
   const [path, setPath] = useState('');
   const [adding, setAdding] = useState(false);
@@ -115,10 +117,10 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
           <span
             style={{ fontSize: 17, lineHeight: '22px', fontWeight: 600, color: 'var(--label)' }}
           >
-            No projects yet
+            {t('emptyTitle')}
           </span>
           <span className="text-[13px] text-center" style={{ color: 'var(--label-secondary)' }}>
-            Add a folder to index it, or drop one anywhere in this window.
+            {t('emptySubtitle')}
           </span>
           <div className="flex items-center gap-2 mt-2">
             <Button
@@ -127,10 +129,10 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
               disabled={adding}
               onClick={() => void handlePickFolder()}
             >
-              Add project
+              {t('addProject')}
             </Button>
             <Button size="large" disabled={adding} onClick={() => setShowPathInput((v) => !v)}>
-              Enter path…
+              {t('enterPath')}
             </Button>
           </div>
           {showPathInput && (
@@ -175,14 +177,14 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
             color: 'var(--on-accent)',
             borderRadius: '999px 0 0 999px',
           }}
-          title="Choose a folder to index"
+          title={t('chooseFolder')}
         >
-          + Add
+          {t('addShort')}
         </button>
         <button
           type="button"
           disabled={adding}
-          aria-label="Add a project by path"
+          aria-label={t('addByPath')}
           aria-expanded={showPathInput}
           onClick={() => setShowPathInput((v) => !v)}
           className="h-6 w-6 inline-flex items-center justify-center transition-opacity disabled:opacity-40"
@@ -194,7 +196,7 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
             // on --accent-fill only --on-accent is a verified pair.
             boxShadow: 'inset 1px 0 0 color-mix(in oklab, var(--on-accent) 25%, transparent)',
           }}
-          title="Enter path manually"
+          title={t('enterPathManually')}
         >
           {/* An icon, not the text character ⌄ — a font glyph cannot hold a
               1.5px stroke next to the real icons on this row. */}
@@ -237,6 +239,7 @@ interface PathInputProps {
 }
 
 function PathInput({ value, disabled, onChange, onSubmit, onCancel }: PathInputProps) {
+  const { t } = useTranslation('workspace');
   return (
     <div className="flex gap-1">
       <input
@@ -261,16 +264,17 @@ function PathInput({ value, disabled, onChange, onSubmit, onCancel }: PathInputP
       />
       {/* "Add" names the outcome; "OK" names nothing. */}
       <Button variant="prominent" size="small" disabled={disabled} onClick={onSubmit}>
-        Add
+        {t('add')}
       </Button>
       <Button variant="plain" size="small" disabled={disabled} onClick={onCancel}>
-        Cancel
+        {t('cancel')}
       </Button>
     </div>
   );
 }
 
 function DragOverlay({ visible }: { visible: boolean }) {
+  const { t } = useTranslation('workspace');
   if (!visible) return null;
   return (
     <div
@@ -289,7 +293,7 @@ function DragOverlay({ visible }: { visible: boolean }) {
           boxShadow: 'var(--shadow-panel)',
         }}
       >
-        Drop folder to add as project
+        {t('dropFolder')}
       </div>
     </div>
   );

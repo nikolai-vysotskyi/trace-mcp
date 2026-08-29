@@ -4,6 +4,8 @@
  * Clear. Renders null when nothing selected.
  */
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatNumber } from '../i18n/format';
 import { Button } from '../lattice/ui';
 import type { ProjectViewModel } from './types';
 
@@ -69,6 +71,7 @@ function rowToCsv(p: ProjectViewModel): string {
 }
 
 export function BulkActionsBar({ projects, onReindex, onRemove, onClear }: BulkActionsBarProps) {
+  const { t } = useTranslation('workspace');
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -118,13 +121,13 @@ export function BulkActionsBar({ projects, onReindex, onRemove, onClear }: BulkA
       }}
     >
       <span className="text-[11px] font-medium tabular-nums" style={{ color: 'var(--label)' }}>
-        {projects.length} selected
+        {t('bulkSelected', { count: projects.length, n: formatNumber(projects.length) })}
       </span>
       <span style={{ width: 1, height: 14, background: 'var(--separator)' }} aria-hidden />
       {!confirmRemove ? (
         <>
           <Button size="small" disabled={busy} onClick={() => void handleReindex()}>
-            Re-index
+            {t('reindex')}
           </Button>
           <Button
             size="small"
@@ -132,25 +135,28 @@ export function BulkActionsBar({ projects, onReindex, onRemove, onClear }: BulkA
             onClick={() => setConfirmRemove(true)}
             style={{ color: 'var(--status-red)' }}
           >
-            Remove
+            {t('bulkRemove')}
           </Button>
           <Button size="small" disabled={busy} onClick={handleExportJson}>
-            Export JSON
+            {t('bulkExportJson')}
           </Button>
           <Button size="small" disabled={busy} onClick={handleExportCsv}>
-            Export CSV
+            {t('bulkExportCsv')}
           </Button>
           <Button variant="plain" size="small" disabled={busy} onClick={onClear}>
-            Clear
+            {t('bulkClear')}
           </Button>
         </>
       ) : (
         <>
           <span className="text-[11px]" style={{ color: 'var(--label-secondary)' }}>
-            Remove {projects.length} project{projects.length === 1 ? '' : 's'}?
+            {t('bulkConfirmRemove', {
+              count: projects.length,
+              n: formatNumber(projects.length),
+            })}
           </span>
           <Button size="small" disabled={busy} onClick={() => setConfirmRemove(false)}>
-            Cancel
+            {t('cancel')}
           </Button>
           {/* --danger-fill, not --status-red: white on the latter is 3.41:1 dark. */}
           <Button
@@ -160,7 +166,10 @@ export function BulkActionsBar({ projects, onReindex, onRemove, onClear }: BulkA
             onClick={() => void handleRemove()}
             style={{ background: 'var(--danger-fill)' }}
           >
-            Remove {projects.length} project{projects.length === 1 ? '' : 's'}
+            {t('bulkConfirmRemoveAction', {
+              count: projects.length,
+              n: formatNumber(projects.length),
+            })}
           </Button>
         </>
       )}

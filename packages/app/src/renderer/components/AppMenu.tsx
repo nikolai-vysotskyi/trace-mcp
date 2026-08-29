@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { Icon } from '../lattice/icons';
 import { Menu, MenuChoiceRow, MenuItem, MenuSeparator, useMenuAnchor } from '../lattice/ui';
 import { GLOBAL_ACTIONS, type GlobalAction } from '../../shared/global-actions.js';
-import { APPEARANCE_OPTIONS, type Appearance } from '../theme.js';
+import { appearanceOptions, type Appearance } from '../theme.js';
 import { t } from '../i18n/index.js';
 import { describeStaleRoots, formatAgo, type UpdateState } from '../update-check.js';
 import { SidebarRow } from './SidebarRow';
@@ -47,14 +47,16 @@ interface Summary {
 
 /** The header's second line: what we know about this version right now. */
 function updateSummary(update: UpdateState, checking: boolean): Summary {
-  if (checking) return { text: 'Checking…', tone: 'is-busy' };
+  if (checking) return { text: t('update:headerChecking'), tone: 'is-busy' };
   if (update.error) return { text: update.error, tone: 'is-warn', title: update.error };
-  if (update.available) return { text: `Version ${update.latest} available`, tone: 'is-info' };
+  if (update.available) {
+    return { text: t('update:headerAvailable', { version: update.latest }), tone: 'is-info' };
+  }
   /* `stuck` is available: false — the CLI moved and the bundle did not. Calling
      that "Up to date" is the failure TRA-357 fixed on the card, and this header
      is a second place it could be told. */
   if (update.stuck && update.latest) {
-    return { text: `Version ${update.latest} needs a manual install`, tone: 'is-warn' };
+    return { text: t('update:headerManualInstall', { version: update.latest }), tone: 'is-warn' };
   }
   /* Same shape of lie, different cause: this root is current, but the npm root
      the launcher shim points into is not, so every MCP client is on the old
@@ -64,7 +66,10 @@ function updateSummary(update: UpdateState, checking: boolean): Summary {
     const stale = describeStaleRoots(update.staleRoots);
     return { text: stale.label, tone: 'is-warn', title: stale.title, command: stale.command };
   }
-  return { text: `Up to date · checked ${formatAgo(update.lastChecked)}`, tone: 'is-ok' };
+  return {
+    text: t('update:headerUpToDate', { when: formatAgo(update.lastChecked) }),
+    tone: 'is-ok',
+  };
 }
 
 export function AppMenu({
@@ -139,9 +144,9 @@ export function AppMenu({
       <SidebarRow
         rowRef={menu.ref}
         icon="compass"
-        label="trace-mcp"
+        label="trace-mcp" // i18n-exempt — the product's name, Latin in every language
         onClick={toggle}
-        title="App menu"
+        title={t('shell:appMenu')}
         aria-haspopup="menu"
         aria-expanded={open}
         trailing={
@@ -155,7 +160,9 @@ export function AppMenu({
           {/* Not a menu item: it is what the menu is about. Version first —
               the trigger already carries the name. */}
           <div className="ws-ctx-header">
-            <div className="name">Version {update.current ?? '—'}</div>
+            <div className="name">
+              {t('update:headerVersion', { version: update.current ?? '—' })}
+            </div>
             <div className={`status ${summary.tone}`}>
               <span className="dot" aria-hidden="true" />
               <span className="text" title={summary.title}>
@@ -183,8 +190,8 @@ export function AppMenu({
               NOT close the menu: the whole point of an inline switcher is
               seeing the app change under it. */}
           <MenuChoiceRow
-            label="Theme"
-            options={APPEARANCE_OPTIONS}
+            label={t('shell:theme')}
+            options={appearanceOptions()}
             value={appearance}
             onChange={onAppearanceChange}
           />

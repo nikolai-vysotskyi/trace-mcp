@@ -7,6 +7,7 @@
  * mutation contracts match WorkspaceTableView.
  */
 import { type MouseEvent, type UIEvent, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Checkbox, StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
 import { ProjectMetricsBadges } from './components/ProjectMetricsBadges';
@@ -65,6 +66,7 @@ function CompactRow({
   onRemove,
   onContextMenu,
 }: RowProps) {
+  const { t } = useTranslation('workspace');
   const [hovered, setHovered] = useState(false);
   const dotTone = statusToDot(project.displayStatus);
   const stop = (e: MouseEvent) => e.stopPropagation();
@@ -91,7 +93,7 @@ function CompactRow({
         <Checkbox
           checked={selected}
           onChange={(next) => onSelectChange(project.root, next)}
-          aria-label={`Select ${project.name || basename(project.root)}`}
+          aria-label={t('selectProject', { name: project.name || basename(project.root) })}
         />
       </span>
       <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
@@ -149,6 +151,7 @@ export function WorkspaceCompactView({
   onRemove,
   onScroll,
 }: WorkspaceCompactViewProps) {
+  const { t } = useTranslation('workspace');
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [cursor, setCursor] = useState(-1);
   const [confirmRoot, setConfirmRoot] = useState<string | null>(null);
@@ -172,7 +175,7 @@ export function WorkspaceCompactView({
       ref={scrollRef}
       tabIndex={0}
       role="grid"
-      aria-label="Projects"
+      aria-label={t('projectsGrid')}
       className="flex-1 overflow-auto"
       style={{
         borderRadius: 12,
