@@ -1,0 +1,539 @@
+/* ============================================================================
+   Ask — macOS 26 surface (TRA-312)
+
+   Ask was the last project surface still on its pre-revision inline styles:
+   nine distinct font sizes (9–15px, most of the reading text at 9–10px), ten
+   radii, `--accent` used as a bubble background, `backdrop-filter` on content,
+   two ALL-CAPS group headers, a hover-only delete affordance and a centred
+   three-dot spinner where a skeleton belongs. Everything it draws now comes
+   from tokens.css and lattice/ui; this file only lays the surface out.
+
+   Layout, left to right:
+
+     .ask-rail        220px chat list — CONTENT, opaque, hairline trailing edge
+     .ask-main        toolbar (glass) + thread (720px measure) + composer
+     .ask-inspector   280px context panel, closed by default
+
+   The rail and the inspector are opaque because they are content panes inside
+   the window, not window chrome. The one glass element on this surface is the
+   52px `<Toolbar>`.
+   ============================================================================ */
+
+.ask {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-sunken);
+  container-type: inline-size;
+  color: var(--label);
+}
+
+
+/* ---- Sessions rail ------------------------------------------------------ */
+
+.ask-rail {
+  flex: none;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-right: 0.5px solid var(--separator);
+}
+.ask-rail-head {
+  flex: none;
+  padding: 8px 6px 4px;
+}
+/* Same 6px inset as the app sidebar's scroll region, so the chat rows land on
+   the same pill geometry as every other row in the app. */
+.ask-rail-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 6px 6px;
+}
+/* Rows slide under the footer — that is a scroll edge, and it gets a hairline. */
+.ask-rail-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 14px;
+  border-top: 0.5px solid var(--separator);
+  font-size: var(--text-caption);
+  line-height: var(--leading-caption);
+  color: var(--label-secondary);
+}
+.ask-rail-foot .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The rail owns focus in its own right, so its selected row takes the active
+   accent fill exactly like the app sidebar's does. */
+.ask-rail-list:focus-within .ws-sb-row.is-selected {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.ask-rail-list:focus-within .ws-sb-row.is-selected .ws-sb-count,
+.ask-rail-list:focus-within .ws-sb-row.is-selected .ws-sb-trailing {
+  color: var(--on-accent);
+}
+
+/* ---- Conversation ------------------------------------------------------- */
+
+.ask-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ask-toolbar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-semibold);
+  color: var(--label);
+}
+.ask-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+/* One measure for the thread, the composer and the empty state, so nothing
+   shifts sideways as the conversation starts. */
+.ask-measure {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+/* `margin-top: auto` sits a short conversation on the composer instead of
+   stranding two bubbles at the top of an empty pane. It still scrolls once the
+   thread outgrows the viewport. */
+.ask-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.ask-msg {
+  display: flex;
+}
+.ask-msg.is-user {
+  justify-content: flex-end;
+}
+.ask-bubble {
+  max-width: 88%;
+  padding: 8px 12px;
+  border-radius: var(--radius-card);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  user-select: text;
+  -webkit-user-select: text;
+}
+/* --accent-fill, not --accent: a hue readable AS text on --surface is not the
+   same hue as one readable UNDER a white label (DESIGN.md §2). */
+.ask-msg.is-user .ask-bubble {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  white-space: pre-wrap;
+}
+.ask-msg.is-assistant .ask-bubble {
+  background: var(--surface);
+  border: 0.5px solid var(--separator);
+  color: var(--label);
+}
+
+/* Streaming caret. */
+.ask-caret {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  margin-left: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  vertical-align: text-bottom;
+  animation: ask-caret-blink 1s steps(2, start) infinite;
+}
+@keyframes ask-caret-blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+/* Typing indicator — three dots inside an assistant bubble, next to the word
+   for what is happening. Not a centred spinner standing in for a skeleton. */
+.ask-typing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+  color: var(--label-secondary);
+}
+.ask-dots {
+  display: flex;
+  gap: 4px;
+}
+.ask-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: ask-dot 1.2s ease-in-out infinite;
+}
+.ask-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.ask-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes ask-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Error — the chrome stays put and the retry sits with the sentence. */
+.ask-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  border: 0.5px solid var(--separator);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--status-red);
+}
+.ask-error .msg {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- Empty state -------------------------------------------------------- */
+
+/* Hero, slash-command reference and starter questions centre as ONE group.
+   `.ws-center-empty` is `flex: 1` by default, which would push the hero to the
+   middle of the pane and strand the rest against the composer. */
+.ask-empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  padding-bottom: 16px;
+}
+.ask-empty > .ws-center-empty {
+  flex: none;
+  padding: 8px 24px 0;
+}
+.ask-slash-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-bottom: 0.5px solid var(--separator);
+}
+.ask-slash-row:last-child {
+  border-bottom: 0;
+}
+.ask-slash-row code {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-callout);
+  color: var(--accent);
+}
+.ask-slash-row span {
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--label-secondary);
+}
+.ask-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- Composer ----------------------------------------------------------- */
+
+.ask-composer {
+  flex: none;
+  padding-top: 8px;
+  padding-bottom: 16px;
+  border-top: 0.5px solid var(--separator);
+  background: var(--surface-sunken);
+}
+.ask-composer-inner {
+  position: relative;
+}
+.ask-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  background: var(--surface);
+  border: 0.5px solid var(--separator);
+  border-radius: var(--radius-card);
+}
+.ask-input:focus-within {
+  box-shadow: var(--focus-ring);
+}
+.ask-input textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 24px;
+  max-height: 140px;
+  padding: 4px 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  resize: none;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--label);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.ask-input textarea::placeholder {
+  color: var(--label-secondary);
+}
+
+/* Slash-command popover — a floating layer, so it is the one thing here that
+   gets a shadow. */
+.ask-slash-popover {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  z-index: 50;
+  margin-bottom: 6px;
+  overflow: hidden;
+  background: var(--surface-raised);
+  border: 0.5px solid var(--separator);
+  border-radius: var(--radius-popover);
+  box-shadow: var(--shadow-panel);
+}
+.ask-slash-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--label);
+  text-align: left;
+  cursor: default;
+}
+.ask-slash-item:hover,
+.ask-slash-item.is-active {
+  background: var(--fill-quaternary);
+}
+.ask-slash-item code {
+  flex: none;
+  min-width: 76px;
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+.ask-slash-item .desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--label-secondary);
+}
+
+/* ---- Context inspector -------------------------------------------------- */
+
+.ask-inspector {
+  flex: none;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface);
+  border-left: 0.5px solid var(--separator);
+}
+.ask-inspector-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 6px 16px;
+}
+/* A <Section> lays its children out with an 8px gap, which is the spacing
+   between the header and the group — not between rows inside it. */
+.ask-rows {
+  display: flex;
+  flex-direction: column;
+}
+/* A decision has no target to open, so its row must not offer a hover fill it
+   cannot act on. */
+.ws-sb-row.is-static:hover {
+  background: transparent;
+}
+
+/* ---- Markdown ----------------------------------------------------------- */
+/* Assistant answers are body text on --surface: three sizes total (13 body,
+   12 code/table, 11 table header) and no size below 11px. */
+
+.ask-md > :first-child {
+  margin-top: 0;
+}
+.ask-md > :last-child {
+  margin-bottom: 0;
+}
+.ask-md p {
+  margin: 8px 0;
+}
+.ask-md ul,
+.ask-md ol {
+  margin: 8px 0;
+  padding-left: 20px;
+  list-style: revert;
+}
+.ask-md li {
+  margin-bottom: 4px;
+}
+.ask-md h1,
+.ask-md h2,
+.ask-md h3 {
+  margin: 12px 0 4px;
+  font-weight: var(--weight-semibold);
+}
+.ask-md h1 {
+  font-size: var(--text-title-3);
+  line-height: var(--leading-title-3);
+}
+.ask-md h2,
+.ask-md h3 {
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+}
+.ask-md a {
+  color: var(--accent);
+}
+.ask-md strong {
+  font-weight: var(--weight-semibold);
+}
+.ask-md blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--separator);
+  color: var(--label-secondary);
+}
+.ask-md :not(pre) > code {
+  padding: 0 4px;
+  border-radius: var(--radius-row);
+  background: var(--fill-quaternary);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+.ask-table-wrap {
+  margin: 8px 0;
+  overflow-x: auto;
+}
+.ask-md table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+}
+.ask-md th {
+  padding: 4px 8px;
+  border-bottom: 0.5px solid var(--separator);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  color: var(--label-secondary);
+  text-align: left;
+}
+.ask-md td {
+  padding: 4px 8px;
+  border-bottom: 0.5px solid var(--separator);
+}
+
+/* Code block. The copy button is permanent — a copy action has no second home
+   to be revealed from, so it may not be hover-only. */
+.ask-code {
+  position: relative;
+  margin: 8px 0;
+}
+.ask-code pre {
+  margin: 0;
+  padding: 8px 40px 8px 12px;
+  overflow-x: auto;
+  background: var(--surface-sunken);
+  border: 0.5px solid var(--separator);
+  border-radius: var(--radius-input);
+}
+.ask-code code {
+  font-family: var(--font-mono);
+  font-size: var(--text-callout);
+  line-height: var(--leading-callout);
+}
+/* Opaque backing: the code scrolls horizontally UNDER this button, and a
+   transparent icon button over moving glyphs is unreadable. */
+.ask-code .ask-copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--surface-sunken);
+  box-shadow: 0 0 0 4px var(--surface-sunken);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ask-caret,
+  .ask-dots span {
+    animation: none;
+  }
+}
+
+/* ---- Column collapse ---------------------------------------------------- */
+/* The way NavigationSplitView does it. At the window minimum (640px) the app
+   sidebar already takes 220, and three more columns do not fit in what is
+   left — without this the conversation collapses to zero width and the
+   inspector paints over the toolbar. Trailing columns drop first.
+
+   These rules must stay LAST in the file: a container query carries no extra
+   specificity, so `.ask-inspector { display: flex }` above would win on order
+   alone. */
+@container (max-width: 720px) {
+  .ask-inspector,
+  .ask-inspector-toggle {
+    display: none;
+  }
+}
+@container (max-width: 480px) {
+  .ask-rail {
+    display: none;
+  }
+}
