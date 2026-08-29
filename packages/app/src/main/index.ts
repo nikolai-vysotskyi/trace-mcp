@@ -181,8 +181,10 @@ import {
   computeUpdateOutcome,
   findStaleRoots,
   type GlobalInstall,
+  isRestartPending,
   isStuckOnVersion,
   readAppUpdateState,
+  readBundleVersionOnDisk,
   readLauncherCliPath,
   scanGlobalInstalls,
   shouldAttemptRepair,
@@ -669,9 +671,13 @@ async function checkForUpdate() {
   // produce the same npm-only outcome. The marker self-clears when the
   // registry advances or the bundle is manually reinstalled.
   const appUpdateState = readAppUpdateState();
+  // What is on disk, not what is running: the postinstall can replace the
+  // bundle under a live process, and then the only thing left to do is restart
+  // — never the manual install the stuck card asks for (TRA-431).
+  const bundleOnDisk = bundleVersionOnDisk();
   const suppressIfStuck = (latest: string | undefined) => {
     if (!latest) return false;
-    return isStuckOnVersion(current, latest, appUpdateState, cmpSemver);
+    return isStuckOnVersion(current, latest, appUpdateState, cmpSemver, bundleOnDisk);
   };
 
   // Try npm registry first — unauthenticated, no practical rate limit.
@@ -1143,6 +1149,9 @@ async function repairStaleBundle(reason: string, roots?: {
       const resolved = roots ?? (await resolveNpmRoots());
       const installed = readInstalledVersion(resolved);
       const running = app.getVersion().replace(/^v/, '');
+      // Nothing to repair when the new bundle is already on disk waiting for a
+      // restart — re-running the postinstall would only re-check the release.
+      if (isRestartPending(bundleVersionOnDisk(), running, cmpSemver)) return true;
       if (!shouldAttemptRepair(installed, running, false, cmpSemver)) return false;
 
       // A marker pointing into a build tree makes the postinstall stage its
@@ -1193,7 +1202,8 @@ async function repairStaleBundle(reason: string, roots?: {
             encoding: 'utf-8',
             timeout: 600_000,
             maxBuffer: 8 * 1024 * 1024,
-            env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+            // Same certainty as the apply-update spawn: this process is the app.
+            env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', TRACE_MCP_APP_RUNNING: '1' },
           },
           (err, stdout, stderr) => {
             appendUpdateLog({
@@ -1270,7 +1280,10 @@ ipcMain.handle('apply-update', async () => {
   const npmRoot = npmRoots.configRoot;
   if (npmRoot) cleanStaleScratchDirs(npmRoot);
 
-  const spawnEnv = buildSpawnEnv(npmBin);
+  // We are the running app, and we are the process spawning this install — so
+  // the postinstall does not have to guess with pgrep whether a live bundle is
+  // in its way. It guessed wrong once and replaced one (TRA-431).
+  const spawnEnv = { ...buildSpawnEnv(npmBin), TRACE_MCP_APP_RUNNING: '1' };
   const runOnce = () =>
     new Promise<{ err?: Error; stderr: string; stdout: string; code?: number; signal?: string }>(
       (resolve) => {
@@ -1355,10 +1368,15 @@ ipcMain.handle('apply-update', async () => {
   }
   const installedVersion = readInstalledVersion(npmRoots);
   const running = app.getVersion().replace(/^v/, '');
+  // A bundle on disk already ahead of us is a pending swap too, just one that
+  // needs no zip — the postinstall replaced it while we ran. Reporting that as
+  // `npm-only` is what armed the stuck marker and the manual-install card for a
+  // version the user already had (TRA-431).
+  const restartPending = isRestartPending(bundleVersionOnDisk(), running, cmpSemver);
   let outcome: UpdateOutcome = computeUpdateOutcome(
     installedVersion,
     running,
-    hasPendingUpdate(),
+    hasPendingUpdate() || restartPending,
     cmpSemver,
   );
 
@@ -1439,6 +1457,16 @@ const APPLY_HELPER = app.isPackaged
   ? path.join(process.resourcesPath, 'scripts', 'apply-pending-update.mjs')
   : path.join(__dirname, '..', '..', '..', '..', 'scripts', 'apply-pending-update.mjs');
 
+/**
+ * The installed bundle's version, re-read every time — it changes while we run.
+ * Declared here because it depends on BUNDLE_PATH / INSTALL_DIR above; callers
+ * higher in the file only run after module evaluation.
+ */
+function bundleVersionOnDisk(): string | undefined {
+  if (UPDATE_CHANNEL !== 'zip-staged') return undefined;
+  return readBundleVersionOnDisk(BUNDLE_PATH, INSTALL_DIR);
+}
+
 function hasPendingUpdate(): boolean {
   if (UPDATE_CHANNEL !== 'zip-staged') return false;
   return hasPendingUpdateImpl({ pendingZip: PENDING_ZIP, pendingVersion: PENDING_VERSION });
@@ -1464,6 +1492,7 @@ ipcMain.handle('check-pending-update', () => {
   // whenever the on-disk package was ahead of the running process, but
   // relaunch cannot move the .app, so it produced an "Update to restart"
   // banner that did nothing and re-armed the update cycle on next start.
+  const current = app.getVersion().replace(/^v/, '');
   if (hasPendingUpdate()) {
     let version: string | undefined;
     try {
@@ -1473,11 +1502,17 @@ ipcMain.handle('check-pending-update', () => {
     // (e.g. postinstall ran while the app wasn't running) the marker files
     // stick around and produce a zombie "Restart to install" banner for a
     // version we are already on.
-    const current = app.getVersion().replace(/^v/, '');
     if (!version || cmpSemver(version, current) > 0) {
       return { pending: true, version };
     }
     clearPendingFiles();
+  }
+  // Nothing staged, but the bundle on disk may already be ahead of this
+  // process — the postinstall can swap it while the app runs. A restart is
+  // then all that is left, which is exactly what this card says (TRA-431).
+  const onDisk = bundleVersionOnDisk();
+  if (isRestartPending(onDisk, current, cmpSemver)) {
+    return { pending: true, version: onDisk };
   }
   return { pending: false };
 });

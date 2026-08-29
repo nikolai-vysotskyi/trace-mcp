@@ -21,6 +21,9 @@ export const update = {
   cardStuckSubtitle:
     'Утилита командной строки обновилась, а само приложение осталось на v{{current}} — оно не смогло заменить свои файлы. Скачайте релиз и перетащите его в «Программы».',
   cardDownload: 'Скачать v{{version}}',
+  cardStuckQuarantine:
+    'macOS назовёт скачанный файл повреждённым. Это не так — выполните это один раз после переноса в «Программы»:',
+  copyQuarantineCommand: 'Скопировать команду',
   cardAvailableTitle: 'Доступна v{{version}}',
   cardAvailableSubtitle: 'Сейчас v{{current}} · проверено {{when}}',
   cardUpdate: 'Обновить',

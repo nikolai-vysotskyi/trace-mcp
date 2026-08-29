@@ -134,7 +134,12 @@ trace-mcp ships with an optional Electron desktop app (`packages/app`) that give
 
 **Install:** grab the latest build from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest) —
 
-- **macOS** — `trace-mcp-<version>-arm64-mac.zip` (Apple Silicon) or `trace-mcp-<version>-mac.zip` (Intel). Unzip and drag `trace-mcp.app` into `/Applications`.
+- **macOS** — `trace-mcp-<version>-arm64-mac.zip` (Apple Silicon) or `trace-mcp-<version>-mac.zip` (Intel). Unzip and drag `trace-mcp.app` into `/Applications`. macOS builds are ad-hoc signed, not notarized, so the first launch of a browser-downloaded copy reports *"trace-mcp is damaged and can't be opened"*. It is not damaged — that is the download quarantine flag. Clear it once:
+
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/trace-mcp.app
+  ```
+
 - **Windows** — run `trace-mcp.Setup.<version>.exe`.
 
 The app talks to the same `trace-mcp` daemon (`http://127.0.0.1:3741`) that MCP clients use, so anything you index from the app is immediately available to Claude Code / Cursor / etc.

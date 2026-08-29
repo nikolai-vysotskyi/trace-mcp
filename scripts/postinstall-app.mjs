@@ -8,6 +8,8 @@
  *
  * Hardening:
  *  - TRACE_MCP_NO_AUTO_UPDATE=1 skips the update entirely.
+ *  - TRACE_MCP_APP_RUNNING=1, set by the app on the install it spawns itself,
+ *    forces the stage-a-zip path: a live bundle is never replaced in place.
  *  - SHA-256 of the downloaded zip is verified against a sibling
  *    `<asset>.sha256` release asset; if the checksum asset is absent or
  *    the digest does not match, the update is aborted and the installed
@@ -116,8 +118,18 @@ PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
 PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
 PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
 
-/** Returns true if the installed trace-mcp.app is currently running. */
+/**
+ * Returns true if the installed trace-mcp.app is currently running.
+ *
+ * `TRACE_MCP_APP_RUNNING=1` is not a hint but a fact: the Electron app sets it
+ * on the npm install it spawns itself, so on that path being alive is known
+ * rather than inferred. pgrep stays for `npm i -g trace-mcp` typed in a
+ * terminal, where nobody can tell us. It false-negatived once — while the app
+ * was the very process driving the install — and this script then renamed a
+ * live bundle aside and moved a new one into its place (TRA-431).
+ */
 function appIsRunning() {
+  if (process.env.TRACE_MCP_APP_RUNNING === '1') return true;
   try {
     // pgrep -f matches the full command line; the main binary path is unique enough.
     const out = execFileSync(PGREP_BIN, ['-f', `${APP_NAME}/Contents/MacOS/`], {
@@ -327,6 +339,12 @@ async function main() {
 
     // App is not running — safe to swap immediately. Extract to staging first
     // and only swap if Gatekeeper approves.
+    //
+    // Say which signal decided, on the destructive branch only: the TRA-431
+    // incident was a `pgrep` false negative that left no trace of itself, so
+    // the log could not tell "the app really was closed" from "we failed to
+    // notice it". Every future swap now records which of the two this was.
+    console.log('  trace-mcp: app not running (pgrep) — replacing the bundle in place');
     const stagingDir = path.join(tmpDir, 'staging');
     fs.mkdirSync(stagingDir, { recursive: true });
     execFileSync('/usr/bin/unzip', ['-q', '-o', zipPath, '-d', stagingDir], { stdio: 'pipe' });

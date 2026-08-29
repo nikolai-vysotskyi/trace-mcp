@@ -59,6 +59,15 @@ export function describeStaleRoots(staleRoots: { root: string; version: string }
   };
 }
 
+/**
+ * macOS builds are ad-hoc signed and not notarized, so a browser-downloaded
+ * copy carries `com.apple.quarantine` and Gatekeeper refuses it with "trace-mcp
+ * is damaged and can't be opened" — the dead end the manual-install card sent a
+ * user into (TRA-431). Until releases are notarized, the card ships the one
+ * command that clears the flag.
+ */
+export const QUARANTINE_COMMAND = 'xattr -dr com.apple.quarantine /Applications/trace-mcp.app';
+
 export function formatAgo(ts?: number, now: number = Date.now()): string {
   if (!ts) return t('common:never');
   return relativeTime(ts, now, 'short');
