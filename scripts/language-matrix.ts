@@ -184,14 +184,21 @@ extraction; call graphs and type edges are a much smaller set.
 | Types | Type-annotation or inheritance edges are resolved. |
 | Tests | At least one test exercises this plugin directly. |
 
-**Default config vs. plugin count.** The default \`include\` list targets a
-mainstream extension set under the common source roots. ${counts.total - counts.indexedByDefault}
-of the ${counts.total} plugins are not reached by it, so those languages index
-nothing until you say so explicitly:
+**Default config vs. plugin count.** The default \`include\` is one global glob
+over every extension the plugins below claim, so ${counts.indexedByDefault} of
+the ${counts.total} plugins run wherever their files live in the repo — no
+directory anchoring. The remaining ${counts.total - counts.indexedByDefault}
+are pure data formats, left out because lockfiles, fixtures and \`.svg\` would
+swamp the index for little symbol value. Ask for them explicitly if you want
+them:
 
 \`\`\`json
-{ "include": ["src/**/*.{ts,tsx}", "**/*.vhd", "**/*.lua"] }
+{ "include": ["schemas/**/*.json", "k8s/**/*.xml"] }
 \`\`\`
+
+Note that \`include\` in a project config **replaces** the built-in list rather
+than adding to it, so copy the default glob alongside your addition if you
+still want the rest of the repo indexed.
 
 A regex plugin still gives you working \`search\`, \`get_outline\` and symbol
 navigation — that covers most "find it and read it" work. What it does not give

@@ -149,12 +149,12 @@ You can add **more** directory names to skip via `.traceignore` or the `ignore.d
 Two different things can leave a folder out of the index — check which one applies:
 
 1. **The folder name collides with a built-in skip dir** (e.g. you have your own `vendor/` or `build/` with real source in it). There's currently no per-project way to un-skip a built-in name — rename the folder, or [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) if this collision is common enough to warrant a config override.
-2. **The folder just isn't a built-in skip dir, but nothing in `include` matches its files** (e.g. a `k8s/` folder of YAML manifests — no default `include` pattern covers `*.yaml`). Add an explicit pattern:
+2. **The folder just isn't a built-in skip dir, but nothing in `include` matches its files.** The default `include` covers every extension a registered language plugin claims, *except* the pure data formats — JSON, XML (`.xml`, `.svg`, `.csproj`, ...) and INI (`.ini`, `.conf`, `.properties`, ...) — which are left out because lockfiles and fixtures would swamp the index. Add an explicit pattern for those:
 
    ```jsonc
    // .trace-mcp/.config.json
    {
-     "include": ["k8s/**/*.{yaml,yml}"]
+     "include": ["schemas/**/*.json"]
    }
    ```
 

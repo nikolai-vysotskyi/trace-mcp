@@ -49,7 +49,10 @@ export class TypeScriptLanguagePlugin implements LanguagePlugin {
     priority: 5,
   };
 
-  supportedExtensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
+  // `.mts`/`.cts` are plain TypeScript (Node's explicit ESM/CJS variants) and
+  // are already treated as such by the LSP, codemod and import-rewriter tables —
+  // this plugin was the only place that dropped them, so they parsed nowhere.
+  supportedExtensions = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
   supportedVersions = ['12', '14', '16', '17', '18', '19', '20', '21', '22', '23', '24'];
 
   async extractSymbols(

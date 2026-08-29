@@ -1,12 +1,24 @@
 /**
+ * @vitest-environment jsdom
+ *
  * TRA-264 — a failed metrics fetch must not be reported as loaded, or the KPI
  * strip swaps its `—` placeholders for hard zeros and presents the failure as
  * real data.
+ *
+ * TRA-397 — and it must not throw the previous numbers away either. A slow
+ * daemon is one state, not three escalating ones.
  */
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { classifyMetricsError, describeMetricsError, fetchMetricsOnce } from '../useWorkspaceProjects';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  classifyMetricsError,
+  deriveDaemonState,
+  fetchMetricsOnce,
+  loadMetricsSnapshot,
+  saveMetricsSnapshot,
+} from '../useWorkspaceProjects';
+import type { ProjectHealthMetrics } from '../types';
 
-const setters = () => ({ setMetrics: vi.fn(), setError: vi.fn() });
+const setters = () => ({ setMetrics: vi.fn(), setErrorKind: vi.fn() });
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -19,7 +31,7 @@ describe('fetchMetricsOnce', () => {
     const s = setters();
     expect(await fetchMetricsOnce(s)).toBe(true);
     expect(s.setMetrics).toHaveBeenCalledWith([{ root: '/a' }]);
-    expect(s.setError).toHaveBeenCalledWith(null);
+    expect(s.setErrorKind).toHaveBeenCalledWith(null);
   });
 
   it('returns false on a network failure and never publishes metrics', async () => {
@@ -27,23 +39,14 @@ describe('fetchMetricsOnce', () => {
     const s = setters();
     expect(await fetchMetricsOnce(s)).toBe(false);
     expect(s.setMetrics).not.toHaveBeenCalled();
+    expect(s.setErrorKind).toHaveBeenCalledWith('offline');
   });
 
   it('returns false on a non-OK response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }));
     const s = setters();
     expect(await fetchMetricsOnce(s)).toBe(false);
-    expect(s.setError).toHaveBeenCalledWith(expect.stringContaining('HTTP 503'));
-  });
-});
-
-describe('describeMetricsError', () => {
-  it('replaces raw transport messages with an actionable one', () => {
-    for (const raw of ['Failed to fetch', 'Load failed', 'Connection refused']) {
-      expect(describeMetricsError(new Error(raw))).toBe(
-        "Couldn't load project metrics — daemon not responding.",
-      );
-    }
+    expect(s.setErrorKind).toHaveBeenCalledWith('server');
   });
 
   // TRA-292: a daemon alive on /health but eight seconds deep in indexing
@@ -51,13 +54,54 @@ describe('describeMetricsError', () => {
   // user to restart a service that is working.
   it('calls a timeout slow, not unreachable', () => {
     for (const err of [new Error('The operation was aborted'), new Error('signal timed out')]) {
-      expect(describeMetricsError(err)).toMatch(/still be indexing/);
+      expect(classifyMetricsError(err)).toBe('timeout');
     }
     expect(classifyMetricsError({ name: 'TimeoutError', message: '' })).toBe('timeout');
+    expect(classifyMetricsError(new Error('cache rebuild failed'))).toBe('server');
+  });
+});
+
+describe('deriveDaemonState', () => {
+  const base = { loading: false, connected: true, liveProjects: 3, metricsErrorKind: null };
+
+  it('is ok while the daemon has not answered yet', () => {
+    // Not "failing" — not asked yet. The skeleton owns this moment.
+    expect(deriveDaemonState({ ...base, loading: true, connected: false, liveProjects: 0 })).toBe(
+      'ok',
+    );
   });
 
-  it('keeps a meaningful server message', () => {
-    expect(describeMetricsError(new Error('cache rebuild failed'))).toContain('cache rebuild failed');
-    expect(classifyMetricsError(new Error('cache rebuild failed'))).toBe('server');
+  it('is ok when everything answers', () => {
+    expect(deriveDaemonState(base)).toBe('ok');
+  });
+
+  // The three banners the user cycled through were these three inputs.
+  it('reads every degraded input as the same one state', () => {
+    expect(deriveDaemonState({ ...base, metricsErrorKind: 'timeout' })).toBe('stale');
+    expect(deriveDaemonState({ ...base, metricsErrorKind: 'offline' })).toBe('stale');
+    expect(deriveDaemonState({ ...base, metricsErrorKind: 'server' })).toBe('stale');
+    expect(deriveDaemonState({ ...base, connected: false })).toBe('stale');
+  });
+
+  it('keeps a daemon that never answered at all distinct', () => {
+    expect(deriveDaemonState({ ...base, connected: false, liveProjects: 0 })).toBe('unreachable');
+  });
+});
+
+describe('metrics snapshot', () => {
+  const rows = [{ root: '/a', name: 'a', totalFiles: 12 }] as unknown as ProjectHealthMetrics[];
+
+  beforeEach(() => localStorage.clear());
+
+  it('round-trips the last successful response', () => {
+    saveMetricsSnapshot(rows);
+    expect(loadMetricsSnapshot()).toEqual(rows);
+  });
+
+  it('starts cold rather than throwing on a corrupted snapshot', () => {
+    localStorage.setItem('trace-mcp.workspace.metrics', '{not json');
+    expect(loadMetricsSnapshot()).toEqual([]);
+    localStorage.setItem('trace-mcp.workspace.metrics', '"a string"');
+    expect(loadMetricsSnapshot()).toEqual([]);
   });
 });

@@ -792,13 +792,50 @@ const VaultConfigSchema = z
   .prefault({});
 
 /**
- * Source-file extensions for the directory-rooted default include globs
- * (`src/`, `lib/`, `app/`, `test/`, `tests/`, `routes/`). Kept language-complete
- * across the mainstream set trace-mcp has first-class plugins for, so coverage
- * does not silently depend on which directory a language's code lives in.
+ * Language plugins whose files are NOT indexed by the shipped default
+ * `include`. These are pure data/config formats where the volume in a typical
+ * repo (lockfiles, fixtures, generated project files, `.svg`) dwarfs the value
+ * of the symbols extracted. The plugins themselves work fine — a project that
+ * wants them adds `**\/*.json` (etc.) to its own `include`.
+ */
+export const DATA_ONLY_LANGUAGES = ['json', 'xml', 'ini'] as const;
+
+/**
+ * Every file extension claimed by a registered language plugin, minus
+ * `DATA_ONLY_LANGUAGES`. Previously this was a hand-written list of 32
+ * extensions rooted at `src/ lib/ app/ test/ tests/ routes/ ...`, which reached
+ * 24 of the 81 registered plugins — a repo's VHDL, Terraform, SQL, CSS or shell
+ * indexed nothing at all under the shipped defaults (TRA-400).
+ *
+ * Kept as a literal rather than imported from `PluginRegistry` on purpose:
+ * loading config must not pull in every tree-sitter grammar. Drift is caught by
+ * `src/__tests__/default-include-coverage.test.ts`, which fails if a plugin
+ * claims an extension this string is missing.
  */
 const SOURCE_EXTS =
-  'ts,tsx,mts,cts,js,jsx,mjs,cjs,py,pyi,go,rs,java,kt,kts,rb,php,vue,svelte,scala,cs,swift,dart,ex,exs,c,h,cc,cpp,hpp,cxx,m,mm';
+  'ada,adb,ads,ah2,ahk,al,apex,asd,asdf,asm,astro,bash,blade.php,c,cbl,cc,cjs,cl,clj,cljc,' +
+  'cljs,cls,cmake,cob,cobol,comp,cpp,cpy,cs,css,cts,cu,cuh,cxx,d,dart,di,dockerfile,dpk,dpr,' +
+  'edn,' +
+  'ejs,el,elc,elm,erl,ex,exs,f,f03,f08,f90,f95,fnc,for,fpp,frag,frm,fs,fsi,fsx,gd,geom,' +
+  'gleam,glsl,go,gql,gradle,graphql,groovy,gvy,h,h++,hcl,hh,hpp,hrl,hs,htm,html,hxx,inc,ino,' +
+  'itcl,itk,java,jl,js,jsx,kt,kts,lean,less,lhs,lisp,lpr,lsp,lua,luau,m,mag,magma,markdown,' +
+  'mat,md,mdx,mjs,mk,ml,mli,mlx,mm,mt,mts,nb,nim,nimble,nims,nix,pas,pck,pde,php,pkb,pks,' +
+  'pl,plb,' +
+  'pls,plsql,pm,pp,prc,prisma,proto,ps1,psd1,psm1,py,pyi,qmd,r,R,rake,rb,Rmd,rs,s,S,sass,sc,' +
+  'scala,scss,sh,sol,sql,styl,stylus,sv,svelte,svh,swift,t,tcl,tesc,tese,tf,tfvars,tk,tm,' +
+  'toml,trg,trigger,ts,tsx,typ,v,verse,vert,vh,vhd,vhdl,vho,vhs,vim,vimrc,vue,wl,wls,yaml,' +
+  'yml,zig,zon,zsh';
+
+/** Extensionless filenames claimed by language plugins (CMake, Docker, Make, Meson). */
+const SOURCE_FILENAMES = [
+  'CMakeLists.txt',
+  'Dockerfile',
+  'GNUmakefile',
+  'Makefile',
+  'makefile',
+  'meson.build',
+  'meson_options.txt',
+];
 
 export const TraceMcpConfigSchema = z.object({
   root: z.string().default('.'),
@@ -807,45 +844,19 @@ export const TraceMcpConfigSchema = z.object({
       path: z.string().default('.trace-mcp/index.db'),
     })
     .prefault({}),
+  // Every pattern here is global (`**/`) on purpose. The previous defaults
+  // anchored most languages to `src/ lib/ app/ test/ tests/ routes/ ...`, which
+  // made coverage depend on repo layout and needed a per-framework glob for
+  // every convention that deviated (Laravel `resources/`, Nuxt `pages/`,
+  // `public/js/`, ...). One global extension glob subsumes all of them, and
+  // keeps the monorepo re-anchoring fallbacks in `file-collector.ts` from
+  // having to run at all for a default config. Noise is bounded by `exclude`.
   include: z.array(z.string()).default([
-    // Common source roots — language-complete so a FastAPI/Flask/Django app
-    // under `app/` (or a Go/Rust/Java service) is indexed the same as `src/`.
-    // Previously `app/**` omitted `py` (and go/rs/java/kt), so Python projects
-    // that keep all code under `app/` (the FastAPI convention) indexed nothing.
-    `src/**/*.{${SOURCE_EXTS}}`,
-    `lib/**/*.{${SOURCE_EXTS}}`,
-    `app/**/*.{${SOURCE_EXTS}}`,
-    `test/**/*.{${SOURCE_EXTS}}`,
-    `tests/**/*.{${SOURCE_EXTS}}`,
-    `routes/**/*.{${SOURCE_EXTS}}`,
-    // Python projects frequently place packages at arbitrary roots (a flat
-    // `main.py` + `routers/` + `models/`, or a top-level `<pkg>/` directory)
-    // rather than under src/app/lib. Index every `.py`/`.pyi` outside the
-    // excluded virtualenv/cache dirs so Python coverage does not depend on a
-    // particular layout. Mirrors the existing global markdown glob below.
-    '**/*.{py,pyi}',
-    // .NET solutions place projects at arbitrary root dirs (core/, data/,
-    // identity/, Source/ ...) rather than src/lib/app, so a directory-rooted
-    // glob misses most of the code (#242, piranha.core). Index every `.cs`
-    // outside the excluded build-output dirs, mirroring the Python glob above.
-    '**/*.cs',
-    'database/migrations/**/*.php',
-    'resources/js/**/*.{vue,ts,tsx,js,jsx}',
-    'resources/assets/**/*.{vue,ts,tsx,js,jsx}',
-    'resources/views/**/*.{blade.php,js}',
-    // Laravel release-based deployments (e.g., resources/release-v8/js/...)
-    'resources/release-*/**/*.{vue,ts,tsx,js,jsx}',
-    // Public assets that are hand-written (not compiled)
-    'public/js/**/*.js',
-    // Laravel auto-registered package providers (composer.json extra.laravel)
-    'composer.json',
-    'nova-components/*/composer.json',
-    'pages/**/*.{vue,ts,tsx,js,jsx}',
-    'components/**/*.{vue,ts,tsx,js,jsx}',
-    'composables/**/*.{ts,tsx,js,jsx}',
-    'server/**/*.{ts,tsx,js,jsx}',
-    // Markdown knowledge graph — Obsidian/Logseq/plain MD vaults
-    '**/*.{md,mdx,markdown}',
+    `**/*.{${SOURCE_EXTS}}`,
+    ...SOURCE_FILENAMES.map((name) => `**/${name}`),
+    // Laravel auto-registered package providers (composer.json extra.laravel).
+    // JSON is otherwise not indexed by default — see DATA_ONLY_LANGUAGES.
+    '**/composer.json',
   ]),
   exclude: z.array(z.string()).default([
     '**/vendor/**',
@@ -881,6 +892,15 @@ export const TraceMcpConfigSchema = z.object({
     '**/obj/**',
     '**/bin/Debug/**',
     '**/bin/Release/**',
+    // Vendored / generated trees the now-global include globs would otherwise
+    // reach (TRA-400). `target/` is scoped to Rust's build profiles so a Java
+    // or Maven `target/src` still indexes.
+    '**/target/debug/**',
+    '**/target/release/**',
+    '**/Pods/**',
+    '**/coverage/**',
+    '**/*.min.js',
+    '**/*.min.css',
   ]),
   // Directory symlinks are not followed during indexing by default — a symlink
   // cycling back to an ancestor (e.g. Ansible Molecule's `roles/<role> -> ../../../`

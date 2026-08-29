@@ -42,23 +42,29 @@
   --surface-sunken: #f5f5f7;
   --surface-raised: #ffffff;
 
-  /* The sidebar's lightness FLOOR (TRA-369). On macOS the sidebar is a native
-     NSVisualEffectView, and it samples whatever is behind the WINDOW — so
-     without a scrim above it the sidebar's tone is the user's wallpaper's
-     decision, not ours: over a dark desktop it goes grey and reads as dirt next
-     to the white content pane.
+  /* What the sidebar is allowed to drift to (TRA-369). On macOS the sidebar is a
+     native NSVisualEffectView and it samples whatever is behind the WINDOW, so
+     left alone its tone is the user's wallpaper's decision, not ours — and the
+     drift goes BOTH ways. Measured on the shipped build, sidebar swatch against
+     a #1e1e1e content pane: #222222 over a black desktop, #4f4f4f over a white
+     one. Same appearance, same build, 45 levels apart, and the light half had
+     the same problem in the other direction. In both appearances the sidebar
+     slides toward mid-grey — toward whatever is behind the window.
 
-     White at .70 is a floor with a value you can state without measuring
-     anything: whatever the material renders, the result is at least 70% of the
-     way from it to white, so the sidebar can never go below #b2b2b2 — and since
-     the light `sidebar` material is itself white-tinted, the real worst case
-     over a black desktop lands far above that. The remaining .30 still carries
-     the material, so this is a floor, not an opaque fill: the sidebar keeps
-     picking up the desktop's tint, it just cannot be dragged dark by it.
+     So the rule is not a floor, it is a leash: the sidebar is --surface, and the
+     material may only pull it a bounded distance away.
 
-     Dark appearance gets no floor. The material can only take it toward black,
-     which is where it belongs, and glass is the whole point there. */
-  --sidebar-scrim: rgb(255 255 255 / 0.7);
+     Light is `--surface` flat, alpha 1. That is not a retreat from glass, it is
+     the measured target: the render Nikolai approved samples #ffffff — our own
+     --surface, uniform top to bottom — against a #f5f5f7 content pane, and the
+     one he rejected samples #e4e3e4. Holding a white floor with a translucent
+     layer lands on the same pixel with more machinery and a residual drift we
+     would then have to bound anyway. Glass in light also has the least to give:
+     over a light desktop it is invisible, over a dark one it is the defect.
+
+     Dark keeps the glass and gets the ceiling, because there the material has
+     somewhere to go that still reads as a material. See the dark value. */
+  --sidebar-scrim: var(--surface);
 
   --fill-quaternary: rgb(0 0 0 / 0.045);
   --fill-tertiary: rgb(0 0 0 / 0.08);
@@ -140,6 +146,13 @@
      and styles/__tests__/tokens.test.ts fails if these two drift apart. */
   --top-band-h: 44px;
 
+  /* The band we do NOT draw (TRA-399). A macOS tabbed window grows an AppKit
+     tab bar, painted over the top of the web contents — the viewport never
+     shrinks, because the window is full-size content view. Reserve it or it
+     covers the whole top band above. Same owner, same guard:
+     src/shared/chrome-metrics.ts (MAC_TAB_BAR_H) and tokens.test.ts. */
+  --mac-tabbar-h: 36px;
+
   /* ---- Motion */
   --dur-micro: 120ms;
   --dur-standard: 200ms;
@@ -171,9 +184,13 @@
     --surface: #1e1e1e;
     --surface-sunken: #141414;
     --surface-raised: #2a2a2a;
-    /* No floor in dark: the material can only get darker than --surface, which
-       is what glass is for here. See the light value for why. */
-    --sidebar-scrim: transparent;
+    /* The ceiling, and the one place the glass survives (TRA-369). --surface at
+       .78 leaves .22 of the material coming through, which is enough to see the
+       desktop in the sidebar and not enough to drag it to mid-grey: it compresses
+       the measured #222222–#4f4f4f drift into roughly #202020–#282828, i.e. from
+       45 levels of swing down to under 10, all of it above the #141414 content
+       well. See the light value for the rule this is half of. */
+    --sidebar-scrim: color-mix(in srgb, var(--surface) 78%, transparent);
     --fill-quaternary: rgb(255 255 255 / 0.06);
     --fill-tertiary: rgb(255 255 255 / 0.11);
     --fill-secondary: rgb(255 255 255 / 0.16);
@@ -209,8 +226,8 @@
   --surface: #1e1e1e;
   --surface-sunken: #141414;
   --surface-raised: #2a2a2a;
-  /* No floor in dark — see the light value. */
-  --sidebar-scrim: transparent;
+  /* The ceiling — see the light value for the rule this is half of. */
+  --sidebar-scrim: color-mix(in srgb, var(--surface) 78%, transparent);
   --fill-quaternary: rgb(255 255 255 / 0.06);
   --fill-tertiary: rgb(255 255 255 / 0.11);
   --fill-secondary: rgb(255 255 255 / 0.16);
@@ -250,8 +267,8 @@
   --surface: #ffffff;
   --surface-sunken: #f5f5f7;
   --surface-raised: #ffffff;
-  /* The sidebar's lightness floor — see the :root value for the measurements. */
-  --sidebar-scrim: rgb(255 255 255 / 0.7);
+  /* Flat --surface in light — see the :root value for the measurements. */
+  --sidebar-scrim: var(--surface);
   --fill-quaternary: rgb(0 0 0 / 0.045);
   --fill-tertiary: rgb(0 0 0 / 0.08);
   --fill-secondary: rgb(0 0 0 / 0.12);
