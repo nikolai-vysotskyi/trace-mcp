@@ -163,7 +163,11 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
           type="button"
           disabled={adding}
           onClick={() => void handlePickFolder()}
-          className="h-6 px-2 text-[11px] font-medium transition-opacity disabled:opacity-40"
+          // 13px, not 11: this is a 24px control, and every other regular-tier
+          // control on this row (Filter, the search field) labels at 13px. The
+          // row's one prominent action was reading two steps quieter than the
+          // secondary button beside it.
+          className="h-6 px-2 text-[13px] font-medium transition-opacity disabled:opacity-40"
           style={{
             // --accent-fill, not --accent: a white label on --accent measures
             // 3.65:1 in dark. Split radii, so this cannot be a Button capsule.
@@ -181,16 +185,20 @@ export function AddProjectControl({ onAdd, variant = 'compact' }: AddProjectCont
           aria-label="Add a project by path"
           aria-expanded={showPathInput}
           onClick={() => setShowPathInput((v) => !v)}
-          className="h-6 w-6 inline-flex items-center justify-center text-[11px] transition-opacity disabled:opacity-40"
+          className="h-6 w-6 inline-flex items-center justify-center transition-opacity disabled:opacity-40"
           style={{
             background: 'var(--accent-fill)',
             color: 'var(--on-accent)',
             borderRadius: '0 999px 999px 0',
-            boxShadow: 'inset 1px 0 0 rgb(255 255 255 / 0.25)',
+            // The divider is the label colour at low alpha, not a raw white:
+            // on --accent-fill only --on-accent is a verified pair.
+            boxShadow: 'inset 1px 0 0 color-mix(in oklab, var(--on-accent) 25%, transparent)',
           }}
           title="Enter path manually"
         >
-          <span aria-hidden="true">⌄</span>
+          {/* An icon, not the text character ⌄ — a font glyph cannot hold a
+              1.5px stroke next to the real icons on this row. */}
+          <Icon name="expand_more" size={14} />
         </button>
         {showPathInput && (
           // A popover under the chevron — the toolbar row must not grow a

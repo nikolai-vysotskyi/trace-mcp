@@ -132,16 +132,20 @@
 /* Selected: accent fill when the sidebar owns focus, neutral fill when not —
    the standard macOS "active vs inactive selection" pair. */
 .ws-sb-row.is-selected {
-  background: var(--fill-tertiary, rgba(120, 120, 128, 0.24));
+  background: var(--fill-tertiary);
   font-weight: 500;
 }
 .ws-sidebar:focus-within .ws-sb-row.is-selected {
   background: var(--accent-fill);
   color: var(--on-accent);
 }
+/* Full --on-accent, not a dimmed white: on a filled accent row there is no
+   headroom to spend on dimming. White at .85 measured 4.22:1 light / 3.89:1
+   dark and failed AA for the count, which is a number the user reads; full
+   --on-accent is 5.22:1 / 4.77:1. Same decision as the shortcut hint. */
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-ico,
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-count {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--on-accent);
 }
 
 /* Trailing affordance revealed on hover (remove-from-recents). */
@@ -164,7 +168,7 @@
   opacity: 1;
 }
 .ws-sb-row .ws-sb-trailing:hover {
-  background: var(--fill-tertiary, rgba(120, 120, 128, 0.24));
+  background: var(--fill-tertiary);
 }
 
 /* ---- Sidebar footer ----------------------------------------------------- */

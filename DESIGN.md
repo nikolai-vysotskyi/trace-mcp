@@ -464,11 +464,19 @@ Not a pass at the end. These are floors.
 - **`contrastTable()` / `contrastFailures()`** — WCAG contrast for every text token
   against `--surface` and `--surface-sunken` in both appearances, plus `--on-accent` on
   `--accent-fill`. Any pair under 4.5:1 fails the build.
-- **`tokenGuard()`** — scans the renderer for raw hex and Tailwind greys. It is
-  **baselined** in `scripts/token-guard.baseline.json`: pre-existing violations are
-  recorded per file and only an **increase** fails. Every surface migration lowers a
-  number; nobody may raise one. If your change drops a file below its baseline, the
-  script tells you to lower it — do.
+- **`tokenGuard()`** — scans the renderer for raw hex, raw `rgb()`/`rgba()`, and Tailwind
+  greys. It is **baselined** in `scripts/token-guard.baseline.json`: pre-existing
+  violations are recorded per file and only an **increase** fails. Every surface migration
+  lowers a number; nobody may raise one. If your change drops a file below its baseline,
+  the script tells you to lower it — do.
+
+  `rgb()` was added in TRA-355. §8 rule 1 had named it since the revision, but the guard
+  only ever counted hex, so two thirds of the rule was enforced and one third was a
+  comment. The Workspace toolbar shipped an `inset 1px 0 0 rgb(255 255 255 / 0.25)`
+  divider with a green build, and the sidebar kept a `rgba(255, 255, 255, 0.85)` label on
+  `--accent-fill` that measured 4.22:1 light / 3.89:1 dark. When you want "this token at
+  some alpha", write `color-mix(in oklab, var(--token) N%, transparent)` — a numeric
+  channel is how a value escapes the contrast table.
 
 `lattice/ui/__tests__/primitives.test.tsx` asserts the height set, the ≥24px boxes, the
 radius set, and ≥4.5:1 contrast for all seven badge tones in both appearances.
@@ -587,6 +595,8 @@ new evidence.
 | A loading sentence goes in chrome that is **already** on screen, never a new layer over the content | Graph Explorer put "Building graph…" and a 45% scrim across the whole 1044×760 pane on every re-load, landing on top of the node labels underneath. The stats pill was already in the corner; it says it there, and the graph stays readable. Only a pane with nothing drawn in it yet gets an `EmptyState`. |
 | An error the user is meant to act on is never on a timer | Graph Explorer's red toast erased itself after 7s and left a blank pane with no account of what happened. An error persists until it is retried or resolved, and carries the glyph, the sentence and the Retry together. |
 | A primitive's verified contrast is verified against `--surface`, so re-check it on glass | `Badge tone="red"` clears AA over an opaque surface; over the graph overlay's `--viz-glass` its backdrop composites to 253, and the pair had to be re-measured on the running renderer (4.75:1) rather than assumed from the primitive's own test. |
+| A hand-rolled control still sits on the type and icon scale of the row it lives in | `+ Add` is a split capsule because `Button` has one radius, and that is fine — but it also inherited an 11px label and a `⌄` text character while every regular-tier control beside it labelled at 13px with real icons. The row's one prominent action was the quietest thing on it. Escaping a primitive's *shape* is not licence to escape its *scale*. |
+| A rule the enforcement cannot see is a comment | §8 rule 1 named `rgb()` from day one and `tokenGuard()` never counted it, so the ban held for hex and lapsed for `rgb()` — which is how a 3.89:1 label sat on the sidebar with a green build. When a rule goes into §8, check the script actually implements all of it. |
 | A row label never repeats its own control's verb | "Temporary pause" beside a "Pause for 10 minutes" button wrapped to two lines at the 640px minimum and added no meaning. The label names the subject ("Enforcement"), the control names the action. |
 
 ---
@@ -626,5 +636,21 @@ What still carries raw colour, and why:
 | `styles/island.css` | 36 | The file-tree / graph **domain palette** (`--folder-*`, `--db-*`, `--mod-text`, `--ignored-*`, glass tints). It has hand-picked light *and* dark branches, so it is a deliberate exception, not drift. |
 | `lattice/icons.tsx` | 1 | `AgentMark`'s brand purple — artwork, not chrome. |
 | `lattice/ui/Badge.tsx` | 2 | Two hex in a comment recording what the primitive replaced. |
+
+Counts in that table are what `tokenGuard()` reports, so `island.css` and
+`GraphExplorerGPU.tsx` roughly doubled in TRA-355 when the guard started counting `rgb()`
+as well as hex (§9). The files did not change; the guard's eyesight did.
+
+The same change made eight smaller sites visible, all of them **compositing values rather
+than palette** — a modal scrim (`app.css`, `ProjectStatsModal.tsx`, `MemoryExplorer.tsx`,
+`ToolActivity.tsx`), or the black at low alpha inside a shadow (`controls.css`,
+`Settings.tsx`). A scrim is not a colour a token names, so they are baselined where they
+are rather than tokenised for the sake of the count.
+
+Two were **not** compositing, and were fixed in the same pass:
+`workspace/AddProjectControl.tsx`'s split-button divider (raw white → `color-mix` over
+`--on-accent`) and `styles/sidebar.css` (a dimmed white on the selected row, plus two dead
+`var(--fill-tertiary, rgba(…))` fallbacks of the kind the decision log already calls a
+bug). Both files are now absent from the baseline entirely.
 
 Nothing else in the renderer paints a colour the contrast table cannot see.
