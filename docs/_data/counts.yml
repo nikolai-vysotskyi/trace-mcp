@@ -26,5 +26,5 @@ tools: 169
 #
 # README.md / CLAUDE.md / AGENTS.md / skills/ are not Jekyll-rendered, so they
 # keep prose numbers and stay on the ±tolerance guard.
-languages: 80
+languages: 81
 frameworks: 87
