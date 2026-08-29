@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from 'electron';
-import { TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y } from '../shared/chrome-metrics.js';
+import { TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y, trafficLightYFor } from '../shared/chrome-metrics.js';
 import { DaemonClient } from './api-client';
 import {
   type Appearance,
@@ -149,6 +149,15 @@ function setupWindowEvents(win: BrowserWindow): void {
   win.on('enter-full-screen', () => safeSend(win, 'fullscreen-changed', true));
   win.on('leave-full-screen', () => safeSend(win, 'fullscreen-changed', false));
 
+  /* Every event that can change how many tabs the group holds, or that gives a
+     renderer that missed the last broadcast a chance to catch up. 'closed' is
+     the one the bug was reported against; 'focus' also covers a tab dragged out
+     into its own window, which fires nothing else we can see. */
+  win.on('show', syncTabChromeSoon);
+  win.on('focus', syncTabChromeSoon);
+  win.on('closed', syncTabChromeSoon);
+  win.webContents.on('did-finish-load', syncTabChrome);
+
   // Auto-reload on renderer crash (GPU crash, OOM, etc.)
   win.webContents.on('render-process-gone', (_event, details) => {
     console.error(`[trace-mcp] renderer crashed in window: reason=${details.reason}`);
@@ -185,12 +194,62 @@ function ensureDockVisible(): void {
   }
 }
 
-/** Notify ALL windows whether the native tab bar is visible (macOS) */
-function broadcastTabBar(visible: boolean): void {
-  const allWindows = [menuWindow, ...projectWindows.values()];
-  for (const win of allWindows) {
+/* ---- The native tab bar (macOS), and the two things it breaks (TRA-399) ----
+
+   Every window we open carries the same `tabbingIdentifier`, so a second window
+   is a second TAB, and AppKit answers with a tab bar. Two consequences, both of
+   which have to be re-derived whenever the tab count crosses 1:
+
+   1. The tab bar is painted over the top of the web contents (the window is
+      full-size content view, so the viewport never shrinks). The renderer has
+      to reserve MAC_TAB_BAR_H or the tab bar covers its whole top band — the
+      Files/Symbols control, Filter, Search, Fit, Live, ··· and the sidebar
+      toggle, all of them, unreachable. `tabbar-changed` is that signal.
+
+   2. The traffic lights are ours to place, and the band they belong to changes:
+      44px while we own the top line, 36px (the tab bar) while AppKit does.
+      `trafficLightPosition` is applied once at window creation, and AppKit
+      re-lays the title bar out when the tab bar comes and goes — so the custom
+      offset has to be re-applied, or the lights keep an offset measured against
+      a band that is no longer there until something else forces a layout pass.
+      A window resize was the "fix" users found. */
+
+/** Is AppKit drawing a tab bar? True exactly when the group holds >1 tab. */
+function tabBarVisible(): boolean {
+  return isMac && BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed()).length > 1;
+}
+
+/**
+ * Re-derive both, for every window, from the tab count that holds right now.
+ * Idempotent and cheap, so it can be called from anything that might have
+ * changed the answer rather than only from the one path we thought of.
+ */
+function syncTabChrome(): void {
+  if (!isMac) return;
+  const visible = tabBarVisible();
+  const y = trafficLightYFor(visible);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    try {
+      win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y });
+    } catch {
+      /* window torn down between the guard and the call */
+    }
     safeSend(win, 'tabbar-changed', visible);
   }
+}
+
+/**
+ * The same, once the run loop has caught up. AppKit adds and removes the tab
+ * bar asynchronously around 'closed' and 'ready-to-show', so a position written
+ * synchronously can be measured against the title bar we are leaving rather
+ * than the one we are arriving at. Running it twice costs nothing and removes
+ * the race — never rely on the synchronous pass alone.
+ */
+function syncTabChromeSoon(): void {
+  if (!isMac) return;
+  syncTabChrome();
+  setTimeout(syncTabChrome, 120);
 }
 
 // ── Custom tab bar for Windows ─────────────────────────────────
@@ -360,10 +419,6 @@ function openProjectTab(root: string): void {
     ensureDockVisible();
     win.show();
     win.focus();
-    // First project tab opened → tab bar is now visible (macOS native tabs)
-    if (isMac) {
-      broadcastTabBar(true);
-    }
     broadcastTabList();
   });
 
@@ -378,10 +433,6 @@ function openProjectTab(root: string): void {
 
   win.on('closed', () => {
     projectWindows.delete(root);
-    // If no more project tabs, tab bar disappears (only menu window left)
-    if (isMac && projectWindows.size === 0) {
-      broadcastTabBar(false);
-    }
     hideDockIfNoWindows();
     broadcastTabList();
   });

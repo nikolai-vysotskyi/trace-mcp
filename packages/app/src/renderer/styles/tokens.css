@@ -146,6 +146,13 @@
      and styles/__tests__/tokens.test.ts fails if these two drift apart. */
   --top-band-h: 44px;
 
+  /* The band we do NOT draw (TRA-399). A macOS tabbed window grows an AppKit
+     tab bar, painted over the top of the web contents — the viewport never
+     shrinks, because the window is full-size content view. Reserve it or it
+     covers the whole top band above. Same owner, same guard:
+     src/shared/chrome-metrics.ts (MAC_TAB_BAR_H) and tokens.test.ts. */
+  --mac-tabbar-h: 36px;
+
   /* ---- Motion */
   --dur-micro: 120ms;
   --dur-standard: 200ms;

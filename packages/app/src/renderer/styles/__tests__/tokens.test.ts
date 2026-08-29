@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  MAC_TAB_BAR_H,
   TOP_BAND_H,
   TRAFFIC_LIGHT_D,
   TRAFFIC_LIGHT_Y,
@@ -197,6 +198,24 @@ describe('design tokens', () => {
         expect(body, `${selector} not found`).toBeDefined();
         expect(body).toMatch(/height:\s*var\(--top-band-h\)/);
       }
+    });
+
+    /* TRA-399. The macOS tab bar is a SECOND band on the same line, drawn by
+       AppKit over the top of the web contents — the viewport never shrinks, so
+       without a reservation the tab bar simply covers the band above and every
+       control on it. Same discipline as --top-band-h: one owner, one token. */
+    it('generates --mac-tabbar-h from src/shared/chrome-metrics.ts', () => {
+      expect(tokensCss).toMatch(new RegExp(`--mac-tabbar-h:\\s*${MAC_TAB_BAR_H}px`));
+    });
+
+    it('reserves the tab bar on macOS instead of drawing under it', () => {
+      const sidebarCss = readFileSync(
+        fileURLToPath(new URL('../sidebar.css', import.meta.url)),
+        'utf8',
+      );
+      expect(sidebarCss).toMatch(
+        /\[data-platform="mac"\]\[data-tabbar="on"\]\s*\{[^}]*padding-top:\s*var\(--mac-tabbar-h\)/,
+      );
     });
 
     it('leaves no stylesheet writing a band height by hand', () => {

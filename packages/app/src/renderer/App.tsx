@@ -585,6 +585,7 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [_isFullscreen, setIsFullscreen] = useState(false);
+  const [tabBarVisible, setTabBarVisible] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickFiles, setQuickFiles] = useState<string[]>([]);
   /* The element surfaces portal their toolbar into. Callback ref rather than
@@ -846,6 +847,13 @@ export function App() {
     }
   }, []);
 
+  /* Opening a project opens a native macOS tab, and AppKit then paints its tab
+     bar over the top of the web contents — the viewport does not shrink, so
+     everything we draw on the top line ends up underneath it (TRA-399). The
+     main process reports the tab bar's presence; the stage reserves its height.
+     Wired here rather than in the sidebar because the whole window shifts. */
+  useEffect(() => window.electronAPI?.onTabBarChanged?.(setTabBarVisible), []);
+
   const isGraph = isProject && projectTab === 'graph';
   const needsFlexLayout = isProject && (projectTab === 'graph' || projectTab === 'ask');
   /* Surfaces that draw their own toolbar own the whole pane: a 16px inset turns
@@ -882,6 +890,7 @@ export function App() {
       className="ws-stage flex flex-col h-screen"
       data-mode={theme}
       data-platform={hasInsetTitleBar() ? 'mac' : 'other'}
+      data-tabbar={tabBarVisible ? 'on' : undefined}
     >
       {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
       {quickOpen && <QuickOpen items={quickOpenItems()} onClose={() => setQuickOpen(false)} />}
