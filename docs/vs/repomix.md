@@ -64,7 +64,7 @@ updated: 2026-08-29
           "name": "Which one is cheaper in tokens?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "It depends on session length. A Repomix pack is a fixed, up-front cost paid once per prompt and re-paid whenever the pack is refreshed. trace-mcp pays an up-front cost for its advertised tool schemas (~50K tokens on the current default surface, which is a known open gap) and then per-query costs that are small and scoped. On a one-shot question about a small repo, Repomix usually wins. Across a multi-turn session on a repo too large to fit in context, trace-mcp wins."
+            "text": "It depends on session length. A Repomix pack is a fixed, up-front cost paid once per prompt and re-paid whenever the pack is refreshed. trace-mcp pays an up-front cost for its advertised tool schemas (~11.6K tokens on the shipped default surface as of August 29, 2026, down from ~50K) and then per-query costs that are small and scoped. On a one-shot question about a small repo, Repomix usually wins. Across a multi-turn session on a repo too large to fit in context, trace-mcp wins."
           }
         },
         {
@@ -128,7 +128,7 @@ Honest version, and it is a real list:
 
 ## The honest caveat on token cost
 
-trace-mcp's per-query cost is small, but its *advertised* cost is not: on the current shipped default path, `tools/list` is {{ site.data.counts.tools }} tools and roughly 50K tokens, paid by every client that does not support deferred tool loading. The presets that fix this (`minimal`, `standard`, `full`) work, but are bypassed on the default daemon-backed path — that is a bug we track publicly, not a design choice. Until it lands, a short session on a small repo can genuinely cost less through Repomix. We would rather say that here than have you discover it yourself.
+trace-mcp's per-query cost is small, but its *advertised* cost is not free: on the shipped default path, `tools/list` is 28 tools and roughly 11.6K tokens, paid by every client that does not support deferred tool loading. That is down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`; everything outside it is one `load_tools` call away. A short session on a small repo can still genuinely cost less through Repomix. We would rather say that here than have you discover it yourself.
 
 ## FAQ
 

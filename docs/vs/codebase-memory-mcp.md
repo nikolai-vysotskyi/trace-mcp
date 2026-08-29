@@ -56,7 +56,7 @@ updated: 2026-08-29
           "name": "Is codebase-memory-mcp cheaper in tokens?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "On advertised surface, yes, and by a wide margin. Its 15 tools cost roughly 7K tokens of schema, and its scout and analysis profiles trim that to 7 and 11 tools. trace-mcp advertises {{ site.data.counts.tools }} tools at roughly 50K tokens on the shipped default path. trace-mcp has an equivalent preset mechanism that is currently bypassed on that path — a tracked bug, and the single clearest place a competitor leads today."
+            "text": "On advertised surface, yes, and by a wide margin. Its 15 tools cost roughly 7K tokens of schema, and its scout and analysis profiles trim that to 7 and 11 tools. trace-mcp advertises 28 tools at roughly 11.6K tokens on the shipped default path — the `minimal` preset, re-measured August 29, 2026; the preset-bypass bug behind the ~50K figure this page used to quote is fixed and closed. A ~1.7× gap remains, and it is still the clearest place this peer leads."
           }
         },
         {
@@ -106,7 +106,7 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 | Code-linked decision memory | ✅ decisions bound to symbol IDs, staleness-verified | partial (`manage_adr` markdown documents) |
 | Runtime trace ingestion | ❌ | ✅ `ingest_traces` |
 | Graph visualization | ✅ desktop app | ✅ 3D web UI |
-| MCP tools advertised (default) | {{ site.data.counts.tools }} (~50K tok) | 15 (~7K tok); profiles: 11 / 7 |
+| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
 | Supply-chain posture | OpenSSF Scorecard, CodeQL, Semgrep | SLSA L3, VirusTotal, OpenSSF Scorecard |
 | Published benchmark | ❌ | ✅ preprint, not independently reproduced |
 | Written in | TypeScript | C |
@@ -115,7 +115,7 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 
 This is the peer where the honest list is longest, so here it is in full:
 
-- **Your advertised tool budget is tight.** 15 tools at roughly 7K tokens — or 7 with `--tool-profile=scout` — against trace-mcp's ~50K on the shipped default path. If you run several MCP servers in one client and every one of them is competing for the same context window, that difference is decisive. This is currently the clearest place any competitor beats us, we track it publicly, and we are not going to pretend otherwise on our own comparison page.
+- **Your advertised tool budget is tight.** 15 tools at roughly 7K tokens — or 7 with `--tool-profile=scout` — against trace-mcp's ~11.6K on the shipped default path (down from ~50K; the preset-bypass bug is fixed and the default is now `minimal`). If you run several MCP servers in one client and every one of them is competing for the same context window, a ~1.7× difference still matters. This is the clearest place any competitor beats us, and we are not going to pretend otherwise on our own comparison page.
 - **You need a language we do not parse.** 161 grammars against {{ site.data.counts.languages }}. If your repo has one in the gap, none of trace-mcp's depth helps you.
 - **You want evidence before adopting.** Its authors published a benchmark preprint (arXiv 2603.27277: 83% answer quality, ~10× fewer tokens, 2.1× fewer tool calls across 31 repositories). We have not reproduced it and it is not peer-reviewed — but trace-mcp has no comparable published number at all.
 - **Supply-chain requirements are strict.** SLSA Level 3 provenance plus VirusTotal-scanned reproducible release candidates is a stronger posture than ours, and in a regulated environment that can be the whole decision.
@@ -138,7 +138,7 @@ The closest pair in this space. Both parse with tree-sitter into a persistent kn
 Only if your repository contains a language in the gap. trace-mcp's coverage targets the real-world long tail rather than a count; the depth goes into per-framework semantics instead.
 
 **Is codebase-memory-mcp cheaper in tokens?**
-On advertised surface, yes, by a wide margin — ~7K against our ~50K on the shipped default path. Our preset mechanism exists and is bypassed there; it is a tracked bug and the single clearest place a competitor leads.
+On advertised surface, yes — ~7K against our ~11.6K on the shipped default path as of August 29, 2026. The preset-bypass bug that put us at ~50K is fixed and the default preset is now `minimal`; the remaining ~1.7× gap is real and is the clearest place a competitor leads.
 
 **Does it have a published benchmark?**
 A self-published preprint (arXiv 2603.27277), not independently reproduced and not peer-reviewed — but still more evidence than most peers, us included, have put on the table.

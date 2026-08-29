@@ -131,7 +131,7 @@ Two honest points.
 
 First, **we have not read Serena's source**. Serena is the largest peer we have never profiled beyond its README, and it is the current priority for our next competitor deep-dive. The table above is built from its public documentation. If you maintain Serena and something is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
 
-Second, **our default tool surface is expensive.** trace-mcp advertises {{ site.data.counts.tools }} tools, roughly 50K tokens, on the shipped default path; Serena's ~55 is materially cheaper to have sitting in a context window. Our preset mechanism (`minimal` / `standard` / `full`) exists and works, but is bypassed on the daemon-backed default — a tracked bug, not a design position.
+Second, **our default tool surface is expensive.** trace-mcp advertises 28 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is now in the same range as Serena's ~55 tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
 
 ## FAQ
 
