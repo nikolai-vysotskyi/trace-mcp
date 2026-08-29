@@ -190,13 +190,16 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
    * synchronous execFileSync would block the event loop and deadlock against
    * the child's own HTTP request.
    */
-  function runPostinstall(opts: { appRunning?: boolean } = {}): Promise<string> {
+  function runPostinstall(
+    opts: { appRunning?: boolean; appRunningEnv?: boolean } = {},
+  ): Promise<string> {
     const child = spawn(process.execPath, [SCRIPT_PATH], {
       env: {
         ...process.env,
         HOME: fx.home,
         TRACE_MCP_APP_DIST_REPO: DIST_REPO,
         TRACE_MCP_UPDATE_API_BASE: fx.baseUrl,
+        TRACE_MCP_APP_RUNNING: opts.appRunningEnv ? '1' : '',
         TRACE_MCP_PGREP_BIN: writePgrepStub(tmp, opts.appRunning ?? false),
         // Never bounce the developer's real launchd daemon from a test run.
         TRACE_MCP_LAUNCHCTL_BIN: '/usr/bin/true',
@@ -242,6 +245,27 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
       '3.1.1',
     );
     expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.partial'))).toBe(false);
+  });
+
+  /* TRA-431: the app clicked Update, pgrep answered "not running" while the app
+     was the very process driving the install, and this script renamed the live
+     bundle aside and moved 3.3.0 into its place. The in-app path no longer
+     depends on that guess — the app sets TRACE_MCP_APP_RUNNING itself — so the
+     pgrep stub here says "not running" deliberately: the env signal must win. */
+  it('stages instead of swapping when the app says it is running, even if pgrep disagrees', async () => {
+    installBundle('3.2.0');
+    publishRelease('3.3.0');
+
+    await runPostinstall({ appRunning: false, appRunningEnv: true });
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.2.0');
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.zip'))).toBe(true);
+    expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
+      '3.3.0',
+    );
+    // The version marker only moves on a real swap; a stale one is what made
+    // the repair rerun a silent no-op.
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-version'))).toBe(false);
   });
 
   it('leaves the install alone when the checksum does not match', async () => {

@@ -195,6 +195,40 @@ body {
 .update-card.stuck .title {
   color: var(--status-orange);
 }
+/* A command the user runs in Terminal. Selectable against the global
+   `user-select: none`, because copying it is the whole point. */
+.update-card-command {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  background: var(--fill-quaternary, var(--fill-tertiary));
+  border-radius: 5px;
+}
+.update-card-command code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  color: var(--label-secondary);
+  user-select: text;
+}
+.update-card-command button {
+  flex: none;
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--label-secondary);
+  cursor: pointer;
+}
+.update-card-command button:hover {
+  color: var(--label);
+  background: var(--fill-tertiary);
+}
 .update-card .ready-icon {
   display: inline-flex;
   align-items: center;
