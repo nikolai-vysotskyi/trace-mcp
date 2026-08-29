@@ -33,7 +33,7 @@
 
 > AI systems don't scale because they recompute instead of reuse. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it already discovered. Token bills grow. Latency grows. Reasoning quality drops. The model isn't the bottleneck — the recomputation leak is.
 >
-> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 87 framework integrations across 80 languages, 169 tools.
+> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 87 framework integrations across 81 languages, 169 tools.
 >
 > **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP for code and knowledge — no second tool to plug in.
 
@@ -148,7 +148,7 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 - **vs. token-efficient exploration** (Repomix, jCodeMunch, cymbal) — trace-mcp adds framework edges, refactoring, security, and subprojects on top of symbol lookup.
 - **vs. session-memory tools** (MemPalace, claude-mem, ConPort) — trace-mcp links decisions to specific symbols/files, so they surface automatically in impact analysis.
 - **vs. RAG / doc-gen** (DeepContext, smart-coding-mcp) — trace-mcp answers "show me the execution path, deps, and tests," not "find code similar to this query."
-- **vs. code-graph MCP servers** (Serena, Roam-Code) — trace-mcp has the broadest language coverage (80 languages) and is the only one with cross-language framework edges.
+- **vs. code-graph MCP servers** (Serena, Roam-Code) — trace-mcp has the broadest language coverage (81 languages) and is the only one with cross-language framework edges.
 
 > Full side-by-side tables with GitHub stars, languages, and per-capability coverage: [trace-mcp vs. other code intelligence MCP servers](https://trace-mcp.com/comparisons.html).
 
