@@ -150,7 +150,7 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 - **vs. RAG / doc-gen** (DeepContext, smart-coding-mcp) — trace-mcp answers "show me the execution path, deps, and tests," not "find code similar to this query."
 - **vs. code-graph MCP servers** (Serena, Roam-Code) — trace-mcp has the broadest language coverage (80 languages) and is the only one with cross-language framework edges.
 
-> Full side-by-side tables with GitHub stars, languages, and per-capability coverage: [docs/comparisons.md](docs/comparisons.md).
+> Full side-by-side tables with GitHub stars, languages, and per-capability coverage: [trace-mcp vs. other code intelligence MCP servers](https://trace-mcp.com/comparisons.html).
 
 ---
 
@@ -211,7 +211,7 @@ trace-mcp analytics savings   # real sessions: reads vs. what trace-mcp would ha
 trace-mcp analytics optimize  # recommendations based on your actual usage
 ```
 
-See [docs/analytics.md](docs/analytics.md) for details.
+See [Session analytics & token savings tracking](https://trace-mcp.com/analytics.html) for details.
 
 <details>
 <summary>Methodology</summary>
@@ -261,7 +261,7 @@ benchmark_project  # runs against the current project
 
 **Knowledge vaults:** Obsidian, Logseq, plain markdown — `[[wikilinks]]`, `![[embeds]]`, `[text](path.md)`, frontmatter (YAML), `#tags`, ATX headings. Each note becomes a `note:<basename>` symbol with sections nested inside; wikilinks resolve to `references` / `embeds` edges between notes. Mix vault and code in one project — point `root` at a directory that contains both and run a single `find_usages` across them.
 
-> Full details: [Supported frameworks](docs/supported-frameworks.md) · [All tools](docs/tools-reference.md)
+> Full details: [Supported frameworks](https://trace-mcp.com/supported-frameworks.html) · [All tools](https://trace-mcp.com/tools-reference.html)
 
 ---
 
@@ -320,7 +320,7 @@ Then in your MCP client:
 
 > Prefer a GUI? The [desktop app](#desktop-app) handles install, indexing, MCP-client wiring, and re-indexing without touching a terminal.
 
-**Going further:** [adding more projects / upgrading / manual setup](docs/configuration.md#cli) · [stdio vs HTTP setup (per-repo or team)](docs/configuration.md#stdio-vs-http--choosing-your-setup) · [semantic search (local ONNX)](docs/configuration.md#ai-configuration) · [indexing & file watcher](docs/configuration.md#how-config-works) · [`.traceignore`](docs/configuration.md#traceignore).
+**Going further:** [adding more projects / upgrading / manual setup](https://trace-mcp.com/configuration.html#cli) · [stdio vs HTTP setup (per-repo or team)](https://trace-mcp.com/configuration.html#stdio-vs-http--choosing-your-setup) · [semantic search (local ONNX)](https://trace-mcp.com/configuration.html#ai-configuration) · [indexing & file watcher](https://trace-mcp.com/configuration.html#how-config-works) · [`.traceignore`](https://trace-mcp.com/configuration.html#traceignore).
 
 ---
 
@@ -333,7 +333,7 @@ trace-mcp runs entirely on your machine. Your source code is never the product.
 - **Semantic search is offline by default** — bundled ONNX embeddings, no API keys, no outbound calls. Switch to Ollama (local) or OpenAI (opt-in) via config.
 - **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below — nothing else is phoned home.
 - **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
-- **The daemon trusts loopback and nothing else.** `serve-http` is unauthenticated by design: a caller on `127.0.0.1` is already you. A non-loopback `--host` is therefore refused unless you pass `--allow-remote` and front the port with your own auth — see [Configuration](docs/configuration.md#http-daemon--one-warm-index-shared-across-many-projects).
+- **The daemon trusts loopback and nothing else.** `serve-http` is unauthenticated by design: a caller on `127.0.0.1` is already you. A non-loopback `--host` is therefore refused unless you pass `--allow-remote` and front the port with your own auth — see [Configuration](https://trace-mcp.com/configuration.html#http-daemon--one-warm-index-shared-across-many-projects).
 - **To wipe everything**, delete `~/.trace-mcp/`. That is the entire footprint.
 
 ### Usage telemetry
@@ -360,11 +360,11 @@ The MCP server provides **instructions** and **tool descriptions** with routing 
 
 ### Level 2: CLAUDE.md (recommended)
 
-`trace-mcp init` adds a Code Navigation Policy block to `~/.claude/CLAUDE.md` (or your project's `CLAUDE.md`) that tells the agent which trace-mcp tool to prefer over Read/Grep/Glob for each kind of task. If you skipped init, see [System prompt routing](docs/tweakcc.md) for the full block and how to tune enforcement.
+`trace-mcp init` adds a Code Navigation Policy block to `~/.claude/CLAUDE.md` (or your project's `CLAUDE.md`) that tells the agent which trace-mcp tool to prefer over Read/Grep/Glob for each kind of task. If you skipped init, see [System prompt routing](https://trace-mcp.com/tweakcc.html) for the full block and how to tune enforcement.
 
 ### Level 3: Hook enforcement (Claude Code only)
 
-For hard enforcement, `trace-mcp init` installs a **PreToolUse guard hook** that blocks Read/Grep/Glob on source files and redirects the agent to trace-mcp tools (non-code files, Read-before-Edit, and safe Bash commands pass through). Manage manually with `trace-mcp setup-hooks --global` / `--uninstall`. Details: [System prompt routing](docs/tweakcc.md).
+For hard enforcement, `trace-mcp init` installs a **PreToolUse guard hook** that blocks Read/Grep/Glob on source files and redirects the agent to trace-mcp tools (non-code files, Read-before-Edit, and safe Bash commands pass through). Manage manually with `trace-mcp setup-hooks --global` / `--uninstall`. Details: [System prompt routing](https://trace-mcp.com/tweakcc.html).
 
 ### Level 4: Max tier — system prompt rewrites + agent behavior rules
 
@@ -373,7 +373,7 @@ Picking **Max** during `trace-mcp init` (the default) layers on two more amplifi
 - **tweakcc system-prompt rewrites** patch Claude Code's core tool descriptions so the model internalizes "use trace-mcp search" instead of "use Grep" from the start. Claude Code only.
 - **`agent_behavior: "strict"`** ships a compact set of discipline rules via MCP instructions — no flattery, disagree on wrong premises, never fabricate, goal-driven execution, 2-strike session hygiene, no drive-by refactors. Cross-client (Claude Code, Cursor, Codex, Windsurf) and auto-updates on `npm upgrade trace-mcp` without re-running `init`.
 
-This is the "make every teammate's agent behave like a senior engineer by default" setup. Tune or disable via `tools.agent_behavior` in `~/.trace-mcp/.config.json` — see [Tool exposure & agent behavior](docs/configuration.md#tool-exposure--agent-behavior).
+This is the "make every teammate's agent behave like a senior engineer by default" setup. Tune or disable via `tools.agent_behavior` in `~/.trace-mcp/.config.json` — see [Tool exposure & agent behavior](https://trace-mcp.com/configuration.html#tool-exposure--agent-behavior).
 
 ---
 
@@ -394,7 +394,7 @@ trace-mcp memory search "GraphQL migration"     # search past conversations
 trace-mcp memory timeline --file src/auth.ts    # decision history for a file
 ```
 
-> Full tool list, CLI, temporal validity, service scoping: [Decision memory](docs/decision-memory.md).
+> Full tool list, CLI, temporal validity, service scoping: [Decision memory](https://trace-mcp.com/decision-memory.html).
 
 ---
 
@@ -417,7 +417,7 @@ trace-mcp subproject impact --endpoint=/api/users
 
 External subprojects can be added manually with `trace-mcp subproject add --repo=... --project=...`. MCP tools: `get_subproject_graph`, `get_subproject_impact`, `get_subproject_clients`, `subproject_add_repo`, `subproject_sync`.
 
-> Full CLI, detection modes, MCP-tool reference, topology config: [Configuration — topology & subprojects](docs/configuration.md#topology--subprojects).
+> Full CLI, detection modes, MCP-tool reference, topology config: [Configuration — topology & subprojects](https://trace-mcp.com/configuration.html#topology--subprojects).
 
 ---
 
@@ -509,7 +509,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 
 **Plugin architecture** — language plugins (symbol extraction) and integration plugins (semantic edges) are loaded based on project detection, organized into categories: framework, ORM, view, API, validation, state, realtime, testing, tooling.
 
-> Details: [Architecture & plugin system](docs/architecture.md)
+> Details: [Architecture & plugin system — how indexing works](https://trace-mcp.com/architecture.html)
 
 ---
 
