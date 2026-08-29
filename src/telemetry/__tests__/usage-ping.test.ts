@@ -69,7 +69,12 @@ describe('sendUsagePing', () => {
 
   it('carries session_id and engagement_time_msec so GA4 counts the install as an active user', async () => {
     const { fetchImpl, calls } = makeFetchSpy();
-    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl, nowMs: 1_700_000_000_000 });
+    await sendUsagePing({
+      version: '1.2.3',
+      env: CONFIGURED_ENV,
+      fetchImpl,
+      nowMs: 1_700_000_000_000,
+    });
     const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
       .events[0]!.params;
     expect(params.session_id).toBe('1700000000');
