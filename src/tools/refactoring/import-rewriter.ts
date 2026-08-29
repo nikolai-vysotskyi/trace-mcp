@@ -69,7 +69,24 @@ export function computeNewImportSpecifier(
   }
 
   // Fall back to relative path computation
-  return computeRelativeSpecifier(importingFilePath, newTargetAbsPath);
+  return preserveSpecifierExtension(
+    oldSpecifier,
+    computeRelativeSpecifier(importingFilePath, newTargetAbsPath),
+  );
+}
+
+/**
+ * Carry the old specifier's explicit extension over to the new one.
+ *
+ * `computeRelativeSpecifier` strips extensions per the classic TS convention,
+ * but NodeNext/ESM importers write `./foo.js` and *require* that extension —
+ * dropping it turns a working import into a compile error.
+ */
+function preserveSpecifierExtension(oldSpecifier: string, newSpecifier: string): string {
+  const oldExt = path.extname(oldSpecifier);
+  if (!STRIP_EXTENSIONS.has(oldExt)) return newSpecifier;
+  if (path.extname(newSpecifier)) return newSpecifier;
+  return newSpecifier + oldExt;
 }
 
 /**
@@ -83,6 +100,10 @@ export function computeRelativeSpecifier(fromFile: string, toFile: string): stri
   // Strip extension if it's a TS/JS file
   rel = stripExtension(rel);
 
+  // Normalize separators first — on Windows path.relative yields 'utils\index',
+  // and every check below is written against forward slashes.
+  rel = rel.replace(/\\/g, '/');
+
   // Handle index files: ./utils/index → ./utils
   if (rel.endsWith('/index') || rel === 'index') {
     rel = rel === 'index' ? '.' : rel.slice(0, -6);
@@ -93,8 +114,7 @@ export function computeRelativeSpecifier(fromFile: string, toFile: string): stri
     rel = `./${rel}`;
   }
 
-  // Normalize separators to forward slashes
-  return rel.replace(/\\/g, '/');
+  return rel;
 }
 
 /**
@@ -106,6 +126,28 @@ function stripExtension(filePath: string): string {
     return filePath.slice(0, -ext.length);
   }
   return filePath;
+}
+
+/**
+ * TS source candidates for a specifier written with a JS extension.
+ *
+ * ESM/NodeNext requires the emitted extension in the specifier (`./foo.js`)
+ * while the file on disk is `./foo.ts`. Without this the manual resolution
+ * fallback misses the import entirely and the move leaves it dangling.
+ */
+const JS_TO_TS_EXTENSIONS: Record<string, string[]> = {
+  '.js': ['.ts', '.tsx'],
+  '.jsx': ['.tsx'],
+  '.mjs': ['.mts'],
+  '.cjs': ['.cts'],
+};
+
+function tsCandidatesForJsSpecifier(candidate: string): string[] {
+  const ext = path.extname(candidate);
+  const replacements = JS_TO_TS_EXTENSIONS[ext];
+  if (!replacements) return [];
+  const base = candidate.slice(0, -ext.length);
+  return replacements.map((r) => base + r);
 }
 
 /** Normalize path for comparison. */
@@ -210,8 +252,13 @@ export function findImportSpecifier(
         const fromDir = path.dirname(sourceFilePath);
         const candidate = path.resolve(fromDir, specifier);
         // Try with various extensions
-        for (const ext of ['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.js']) {
-          const full = candidate + ext;
+        for (const full of [
+          ...['', '.ts', '.tsx', '.js', '.jsx', '/index.ts', '/index.js'].map(
+            (ext) => candidate + ext,
+          ),
+          // NodeNext/ESM: the specifier says `.js` but the file on disk is `.ts`.
+          ...tsCandidatesForJsSpecifier(candidate),
+        ]) {
           if (fs.existsSync(full)) {
             resolvedPath = full;
             break;

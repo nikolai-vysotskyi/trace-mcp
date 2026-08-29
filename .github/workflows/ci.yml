@@ -93,7 +93,13 @@ jobs:
             # TRA-326: the registry/global/db-holder files do raw fs work
             # (mtime caching, holder files, pid liveness) whose semantics differ
             # on Windows — #477 broke master there while showing all-green here.
+            # TRA-375: same hole, third time. The import rewriter behind
+            # `apply_move` does path arithmetic on `path.relative` output, so
+            # its separator handling is Windows-shaped by construction — #527
+            # was all-green here and broke the release PR on Windows.
             platform:
+              - 'src/tools/refactoring/**'
+              - 'tests/refactoring/**'
               - 'src/dangerous-root.ts'
               - 'src/project-setup.ts'
               - 'src/topology/**'
@@ -557,6 +563,12 @@ jobs:
       - name: Test
         working-directory: packages/app
         run: pnpm run test
+
+      # Fails when a user-facing string reappears inline in a surface whose
+      # strings were already extracted (TRA-379).
+      - name: Check extracted strings
+        working-directory: packages/app
+        run: pnpm run check:i18n
 
       - name: Build (renderer + main)
         working-directory: packages/app

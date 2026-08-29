@@ -16,8 +16,9 @@
  * pattern established by R08 (Notebook) so the project-root vitest config can
  * test pure logic without pulling in React under pnpm --frozen-lockfile.
  */
-import { useCallback, useState } from 'react';
-import { Badge, Button, EmptyState, SegmentedControl, Toolbar } from '../lattice/ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Badge, Button, EmptyState, PopUpButton, SegmentedControl, Toolbar } from '../lattice/ui';
 import {
   INSIGHT_REPORTS,
   REPORT_BY_ID,
@@ -59,6 +60,27 @@ function initialReportStates(): Record<ReportId, ReportState> {
   return states;
 }
 
+/* The report picker is a segmented control while its segments fit, and a pop-up
+   button when they do not — the macOS answer to a picker that outgrows its row.
+
+   A segmented control cannot shrink: its segments are sized by their labels, so
+   it is a single flex item wider than the line it sits on. The toolbar's
+   `flex-wrap` (TRA-347) gives it its own row but cannot make it narrower, and
+   the band clips. Measured on the running renderer at the 640px window minimum
+   with the sidebar at its own maximum — both supported settings, `SIDEBAR_MAX`
+   is 320 and the resizer's End key goes straight there — the 371px picker ran
+   96.6px past the window's right edge and left "Risk hotspots" 14 of its 108px.
+   That report could not be selected at all.
+
+   The threshold is the control's own measured width, not a picked number, so
+   retitling a report moves it on its own. */
+export function pickerFits(availableW: number, intrinsicW: number): boolean {
+  // Before either has been measured, assume it fits: the segmented control is
+  // the richer control and the pop-up is the fallback, never the default.
+  if (availableW <= 0 || intrinsicW <= 0) return true;
+  return availableW >= intrinsicW;
+}
+
 /* Empty-state glyphs, one per report — a report pane with no data still needs
    geometry. Names come from lattice/icons.tsx. */
 const REPORT_ICON: Record<ReportId, string> = {
@@ -78,10 +100,10 @@ const SEVERITY_TONE: Record<string, 'red' | 'orange' | 'neutral'> = {
 
 /* What the report is DOING, in the user's terms — never the MCP tool id. The
    tool name is an internal identifier and has no business on screen. */
-const RUNNING_COPY: Record<ReportId, string> = {
-  claudemd_drift: 'Checking agent config against the index…',
-  pagerank: 'Ranking files by import centrality…',
-  risk_hotspots: 'Correlating complexity with git churn…',
+const RUNNING_KEY: Record<ReportId, string> = {
+  claudemd_drift: 'runningDrift',
+  pagerank: 'runningPagerank',
+  risk_hotspots: 'runningRisk',
 };
 
 // ── Component ────────────────────────────────────────────────────────
@@ -93,6 +115,7 @@ export function Insights({
   root: string;
   client?: InsightsClient;
 }) {
+  const { t } = useTranslation('insights');
   const [states, setStates] = useState<Record<ReportId, ReportState>>(() => initialReportStates());
   const [focused, setFocused] = useState<ReportId>(INSIGHT_REPORTS[0].id);
 
@@ -111,17 +134,59 @@ export function Insights({
       } catch (err) {
         setStates((prev) => ({
           ...prev,
-          [id]: { ...prev[id], status: 'error', error: (err as Error).message ?? 'Unknown error' },
+          [id]: {
+            ...prev[id],
+            status: 'error',
+            error: (err as Error).message ?? t('unknownError'),
+          },
         }));
       }
     },
-    [client, root],
+    [client, root, t],
   );
+
+  /* Measure the toolbar, not the picker's own slot. The slot is narrower when
+     it shares the line with the title and full-width once the picker wraps to
+     a line of its own — so a slot-based threshold is bistable: at the same
+     window and sidebar size, "segments, wrapped" and "pop-up, inline" are both
+     self-consistent, and which one you get depends on the order the user
+     resized in. The toolbar's width is the one number the picker cannot
+     influence, and it is also the real constraint: the segments are usable if
+     they fit a full line, since `flex-wrap` will give them one. */
+  const pickerRef = useRef<HTMLSpanElement>(null);
+  const intrinsicW = useRef(0);
+  const [availW, setAvailW] = useState(0);
+  const segmented = pickerFits(availW, intrinsicW.current);
+
+  useEffect(() => {
+    const bar = pickerRef.current?.closest('[role="toolbar"]');
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const w = Math.round(entries[0]?.contentRect.width ?? 0);
+      setAvailW((prev) => (prev === w ? prev : w));
+    });
+    ro.observe(bar);
+    return () => ro.disconnect();
+  }, []);
+
+  /* Record the segments' own width while they are on screen — after the swap
+     they are gone. Measure the control, not the slot: the segmented control is
+     `flex-shrink: 0`, so its box is its intrinsic width at any slot size, while
+     the slot's `scrollWidth` collapses to the slot's own width whenever there
+     is room to spare and would ratchet the threshold up until the segments
+     could never come back. */
+  useEffect(() => {
+    const seg = pickerRef.current?.querySelector('.lx-seg');
+    if (seg) {
+      const w = Math.round(seg.getBoundingClientRect().width);
+      if (w > 0) intrinsicW.current = w;
+    }
+  });
 
   const focusedDef = REPORT_BY_ID[focused];
   const focusedState = states[focused];
   const running = focusedState.status === 'running';
-  const runLabel = running ? 'Running…' : focusedState.status === 'ok' ? 'Refresh' : 'Run';
+  const runLabel = running ? t('running') : focusedState.status === 'ok' ? t('refresh') : t('run');
 
   return (
     <div
@@ -131,19 +196,29 @@ export function Insights({
       {/* Toolbar — title, report picker, the single primary action. */}
       <Toolbar className="gap-3">
         <h1 className="t-title-3" style={{ color: 'var(--label)', margin: 0, flexShrink: 0 }}>
-          Insights
+          {t('title')}
         </h1>
-        <SegmentedControl
-          aria-label="Report"
-          value={focused}
-          onChange={setFocused}
-          options={INSIGHT_REPORTS.map((r) => ({
-            value: r.id,
-            label: r.title,
-            title: r.description,
-          }))}
-        />
-        <span style={{ flex: 1 }} />
+        <span ref={pickerRef} style={{ display: 'flex', flex: '1 1 auto', minWidth: 0 }}>
+          {segmented ? (
+            <SegmentedControl
+              aria-label={t('reportPicker')}
+              value={focused}
+              onChange={setFocused}
+              options={INSIGHT_REPORTS.map((r) => ({
+                value: r.id,
+                label: t(r.titleKey),
+                title: t(r.descriptionKey),
+              }))}
+            />
+          ) : (
+            <PopUpButton
+              aria-label={t('reportPicker')}
+              value={focused}
+              onChange={setFocused}
+              options={INSIGHT_REPORTS.map((r) => ({ value: r.id, label: t(r.titleKey) }))}
+            />
+          )}
+        </span>
         {/* One Run on screen at a time: while the report has never been run,
             the empty state below carries it — repeating it here would put two
             accent-filled buttons on one screen for one command. */}
@@ -152,7 +227,7 @@ export function Insights({
             variant="prominent"
             onClick={() => runReport(focused)}
             disabled={running}
-            aria-label={`${runLabel} ${focusedDef.title}`}
+            aria-label={t('runAction', { action: runLabel, report: t(focusedDef.titleKey) })}
           >
             {runLabel}
           </Button>
@@ -165,10 +240,10 @@ export function Insights({
           {focusedState.status !== 'idle' && (
             <div style={{ marginBottom: 'var(--space-16)' }}>
               <div className="t-title-3" style={{ color: 'var(--label)' }}>
-                {focusedDef.title}
+                {t(focusedDef.titleKey)}
               </div>
               <div className="t-body" style={{ color: 'var(--label-secondary)' }}>
-                {focusedDef.description}
+                {t(focusedDef.descriptionKey)}
               </div>
             </div>
           )}
@@ -177,11 +252,11 @@ export function Insights({
             <EmptyState
               icon={REPORT_ICON[focused]}
               iconSize={32}
-              title={focusedDef.title}
-              subtitle={focusedDef.description}
+              title={t(focusedDef.titleKey)}
+              subtitle={t(focusedDef.descriptionKey)}
               action={
                 <Button variant="prominent" size="large" onClick={() => runReport(focused)}>
-                  Run
+                  {t('run')}
                 </Button>
               }
             />
@@ -224,7 +299,7 @@ export function Insights({
           whiteSpace: 'nowrap',
         }}
       >
-        {running ? RUNNING_COPY[focused] : ''}
+        {running ? t(RUNNING_KEY[focused]) : ''}
       </span>
     </div>
   );
@@ -233,14 +308,10 @@ export function Insights({
 // ── Rows view ────────────────────────────────────────────────────────
 
 function RowsView({ rows, icon }: { rows: InsightRows; icon: string }) {
+  const { t } = useTranslation('insights');
   if (rows.rows.length === 0) {
     return (
-      <EmptyState
-        icon={icon}
-        iconSize={32}
-        title="Nothing to report"
-        subtitle="This report came back empty — nothing in the project matches it right now."
-      />
+      <EmptyState icon={icon} iconSize={32} title={t('emptyTitle')} subtitle={t('emptyBody')} />
     );
   }
   return (

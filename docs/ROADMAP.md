@@ -45,6 +45,13 @@ day, opt-out via `TRACE_MCP_TELEMETRY=off`). Read it in the GA4 property
 `G-WSYYT2WZJV`. Refresh the line below monthly so future revisions see a
 trend instead of re-deriving one.
 
+Caveat when citing it: the ping's credentials ship in plaintext inside the
+published npm package (public by design — see SECURITY.md "Telemetry
+Credentials"), so the events are **unauthenticated and can be inflated by
+anyone**. Active installs is the best adoption signal we have, not an
+auditable one; read it as a trend, and treat a sudden step change as
+suspect until corroborated.
+
 **npm weekly downloads are not an adoption metric** and should not be cited
 as one. Measured 2026-08-28 (TRA-273): 9,013 downloads over 92 days, but
 every daily peak is a publish day — 226 on 08-10 (v1.47.0), 344 on 08-17

@@ -14,9 +14,15 @@
  * --frozen-lockfile on CI does not hoist `react` to the root node_modules.
  * Keeping the testable surface React-free avoids the import trap.
  *
- * Keep this file framework-agnostic — no React, no DOM types. Insights.tsx
- * re-exports the public API for backwards compatibility.
+ * Keep this file free of React COMPONENTS and DOM types. It does import the
+ * i18n runtime (TRA-384), which reaches react-i18next: the row text these
+ * flatteners build is read by a person and cannot stay English. The report
+ * catalogue holds catalogue KEYS rather than resolved strings, so the picker
+ * re-renders when the language changes rather than freezing whatever language
+ * was active at import.
  */
+
+import { t } from '../i18n';
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -30,8 +36,9 @@ export type ReportId = 'claudemd_drift' | 'pagerank' | 'risk_hotspots';
 
 export interface ReportDef {
   id: ReportId;
-  title: string;
-  description: string;
+  /** Catalogue keys, not words — see the note at the top of this file. */
+  titleKey: string;
+  descriptionKey: string;
   mcpTool: string;
   /**
    * Build the `arguments` object for the JSON-RPC `tools/call` envelope.
@@ -45,22 +52,22 @@ export interface ReportDef {
 export const INSIGHT_REPORTS: ReportDef[] = [
   {
     id: 'claudemd_drift',
-    title: 'CLAUDE.md drift',
-    description: 'Stale paths and dead symbol references in agent config files.',
+    titleKey: 'insights:reportDriftTitle',
+    descriptionKey: 'insights:reportDriftDescription',
     mcpTool: 'check_claudemd_drift',
     argTransform: () => ({}),
   },
   {
     id: 'pagerank',
-    title: 'Top central files',
-    description: 'Most architecturally central files by PageRank on the import graph.',
+    titleKey: 'insights:reportPagerankTitle',
+    descriptionKey: 'insights:reportPagerankDescription',
     mcpTool: 'get_pagerank',
     argTransform: () => ({ limit: 20 }),
   },
   {
     id: 'risk_hotspots',
-    title: 'Risk hotspots',
-    description: 'Files combining high complexity with high git churn.',
+    titleKey: 'insights:reportRiskTitle',
+    descriptionKey: 'insights:reportRiskDescription',
     mcpTool: 'get_risk_hotspots',
     argTransform: () => ({ limit: 20 }),
   },
@@ -109,6 +116,8 @@ interface JsonRpcCall {
  */
 export function buildRpcCall(reportId: ReportId, projectRoot: string, id: number = 2): JsonRpcCall {
   const def = REPORT_BY_ID[reportId];
+  // A programmer assertion, not a message: the picker cannot produce an id
+  // this map does not have, so this never reaches the error box.
   if (!def) throw new Error(`Unknown report id: ${reportId}`);
   return {
     jsonrpc: '2.0',
@@ -148,8 +157,11 @@ export function flattenDriftRows(payload: unknown): InsightRows {
   const rows = issues.map((it) => {
     const location = it.line ? `${shortFile(it.file ?? '?')}:${it.line}` : shortFile(it.file ?? '?');
     return {
-      primary: `${location} — ${it.issue ?? '(no description)'}`,
-      secondary: it.fix ? `Fix: ${it.fix}` : it.category,
+      primary: t('insights:rowIssue', {
+        location,
+        issue: it.issue ?? t('insights:noDescription'),
+      }),
+      secondary: it.fix ? t('insights:rowFix', { fix: it.fix }) : it.category,
       badge: it.severity,
     };
   });
@@ -166,7 +178,10 @@ export function flattenPagerankRows(payload: unknown): InsightRows {
       : [];
   const rows = (arr as Array<{ file?: string; score?: number }>).map((it) => ({
     primary: shortFile(it.file ?? '?'),
-    secondary: typeof it.score === 'number' ? `score ${it.score.toFixed(4)}` : undefined,
+    secondary:
+      typeof it.score === 'number'
+        ? t('insights:rowScore', { score: it.score.toFixed(4) })
+        : undefined,
     badge: typeof it.score === 'number' ? it.score.toFixed(3) : undefined,
   }));
   return { rows };
@@ -185,10 +200,14 @@ export function flattenRiskHotspotRows(payload: unknown): InsightRows {
   const hotspots = Array.isArray(p?.hotspots) ? p.hotspots : [];
   const rows = hotspots.map((it) => ({
     primary: shortFile(it.file ?? '?'),
-    secondary:
-      `complexity ${it.complexity ?? '?'} · ` +
-      `${it.commits ?? '?'} commits` +
-      (it.confidence_level ? ` · ${it.confidence_level}` : ''),
+    secondary: t(
+      it.confidence_level ? 'insights:rowHotspotConfidence' : 'insights:rowHotspot',
+      {
+        complexity: it.complexity ?? '?',
+        commits: it.commits ?? '?',
+        confidence: it.confidence_level,
+      },
+    ),
     badge: typeof it.score === 'number' ? it.score.toFixed(1) : undefined,
   }));
   return { rows };
@@ -234,9 +253,9 @@ export const defaultInsightsClient: InsightsClient = {
         },
       }),
     });
-    if (!initRes.ok) throw new Error(`init failed: HTTP ${initRes.status}`);
+    if (!initRes.ok) throw new Error(t('insights:errorInit', { status: initRes.status }));
     const sessionId = initRes.headers.get('mcp-session-id') ?? '';
-    if (!sessionId) throw new Error('init did not return a session ID');
+    if (!sessionId) throw new Error(t('insights:errorNoSession'));
     await initRes.text().catch(() => '');
     await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
@@ -258,17 +277,22 @@ export const defaultInsightsClient: InsightsClient = {
       body: JSON.stringify(buildRpcCall(reportId, root)),
     });
     if (!callRes.ok) {
-      throw new Error(`HTTP ${callRes.status}: ${await callRes.text().catch(() => '')}`);
+      throw new Error(
+        t('insights:errorHttp', {
+          status: callRes.status,
+          detail: await callRes.text().catch(() => ''),
+        }),
+      );
     }
     const ct = callRes.headers.get('content-type') ?? '';
     let payload: unknown;
     if (ct.includes('text/event-stream')) {
       const raw = await callRes.text();
       for (const line of raw.split('\n')) {
-        const t = line.trim();
-        if (!t.startsWith('data:')) continue;
+        const frame = line.trim();
+        if (!frame.startsWith('data:')) continue;
         try {
-          payload = JSON.parse(t.slice(5).trim());
+          payload = JSON.parse(frame.slice(5).trim());
           break;
         } catch {
           // skip non-JSON frames
@@ -281,7 +305,7 @@ export const defaultInsightsClient: InsightsClient = {
       error?: { message?: string };
       result?: { content?: Array<{ type: string; text?: string }> };
     };
-    if (rpc?.error) throw new Error(rpc.error.message ?? 'tool call failed');
+    if (rpc?.error) throw new Error(rpc.error.message ?? t('insights:errorToolFailed'));
     const first = rpc?.result?.content?.[0];
     let toolResult: unknown = rpc?.result ?? payload;
     if (first?.type === 'text' && typeof first.text === 'string') {

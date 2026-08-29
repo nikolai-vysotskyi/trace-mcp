@@ -25,6 +25,8 @@
  *     goes. The project leads, the id is a monospace caption.
  */
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { relativeTime } from '../i18n/format';
 import {
   Badge,
   Button,
@@ -55,19 +57,20 @@ type ClientName =
   | 'warp'
   | 'factory-droid';
 
+/* Product names: the same in every locale, so they stay inline. */
 const ALL_CLIENTS: { name: ClientName; label: string }[] = [
-  { name: 'claude-code', label: 'Claude Code' },
-  { name: 'claw-code', label: 'Claw Code' },
-  { name: 'claude-desktop', label: 'Claude Desktop' },
-  { name: 'cursor', label: 'Cursor' },
-  { name: 'windsurf', label: 'Windsurf' },
-  { name: 'continue', label: 'Continue' },
-  { name: 'junie', label: 'Junie' },
-  { name: 'jetbrains-ai', label: 'JetBrains AI Assistant' },
-  { name: 'codex', label: 'Codex' },
-  { name: 'amp', label: 'AMP' },
-  { name: 'warp', label: 'Warp' },
-  { name: 'factory-droid', label: 'Factory Droid' },
+  { name: 'claude-code', label: 'Claude Code' }, // i18n-exempt
+  { name: 'claw-code', label: 'Claw Code' }, // i18n-exempt
+  { name: 'claude-desktop', label: 'Claude Desktop' }, // i18n-exempt
+  { name: 'cursor', label: 'Cursor' }, // i18n-exempt
+  { name: 'windsurf', label: 'Windsurf' }, // i18n-exempt
+  { name: 'continue', label: 'Continue' }, // i18n-exempt
+  { name: 'junie', label: 'Junie' }, // i18n-exempt
+  { name: 'jetbrains-ai', label: 'JetBrains AI Assistant' }, // i18n-exempt
+  { name: 'codex', label: 'Codex' }, // i18n-exempt
+  { name: 'amp', label: 'AMP' }, // i18n-exempt
+  { name: 'warp', label: 'Warp' }, // i18n-exempt
+  { name: 'factory-droid', label: 'Factory Droid' }, // i18n-exempt
 ];
 
 // Clients that support enforcement levels (hooks & tweakcc are CC-specific)
@@ -76,6 +79,9 @@ const CLAUDE_CLIENTS = new Set<ClientName>(['claude-code', 'claw-code', 'claude-
 // Clients that require manual configuration (no programmatic write path)
 const MANUAL_CLIENTS = new Set<ClientName>(['jetbrains-ai', 'warp']);
 
+/* Not translated, on purpose: this is the literal path a user clicks inside
+   somebody else's app, and those menus ship in English. A translated path sends
+   them looking for a menu that is not there. */
 const MANUAL_HINTS: Partial<Record<ClientName, string>> = {
   'jetbrains-ai': 'Settings → Tools → AI Assistant → MCP → Add → Command: trace-mcp, Args: serve',
   warp: 'Settings → Agents → MCP servers → + Add → paste { mcpServers: { "trace-mcp": … } }',
@@ -99,10 +105,10 @@ interface RichClientStatus {
 // ── Enforcement levels ────────────────────────────────────────────
 type EnforcementLevel = 'base' | 'standard' | 'max';
 
-const LEVELS: { value: EnforcementLevel; label: string; hint: string }[] = [
-  { value: 'base', label: 'Base', hint: 'CLAUDE.md only — soft routing rules' },
-  { value: 'standard', label: 'Standard', hint: 'CLAUDE.md and hooks' },
-  { value: 'max', label: 'Max', hint: 'CLAUDE.md, hooks and tweakcc — recommended' },
+const LEVELS: { value: EnforcementLevel; labelKey: string; hintKey: string }[] = [
+  { value: 'base', labelKey: 'levelBase', hintKey: 'levelBaseHint' },
+  { value: 'standard', labelKey: 'levelStandard', hintKey: 'levelStandardHint' },
+  { value: 'max', labelKey: 'levelMax', hintKey: 'levelMaxHint' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -113,26 +119,16 @@ function clientStatus(client: ClientInfo): Tone {
   return 'neutral';
 }
 
-function timeAgo(iso: string): string {
-  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 5) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
-}
-
 const CLIENT_LABELS: Record<string, string> = Object.fromEntries(
   ALL_CLIENTS.map((c) => [c.name, c.label]),
 );
 
 /** The row's primary label: the project being worked on, then the client that
     is working on it. The session id is neither, so it is never the headline. */
-function sessionTitle(client: ClientInfo): string {
+function sessionTitle(client: ClientInfo, fallback: string): string {
   if (client.project) return client.project.split(/[/\\]/).filter(Boolean).pop() ?? client.project;
   if (client.name) return CLIENT_LABELS[client.name] ?? client.name;
-  return 'Unnamed session';
+  return fallback;
 }
 
 function shortPath(p: string): string {
@@ -204,8 +200,14 @@ function SkeletonRows({ rows, label }: { rows: number; label: string }) {
 
 // ── Row for a connected session ───────────────────────────────────
 function ConnectedClientRow({ client, last }: { client: ClientInfo; last: boolean }) {
+  const { t } = useTranslation('clients');
   const tone = clientStatus(client);
-  const state = tone === 'green' ? 'Active' : tone === 'orange' ? 'Idle' : 'Stale';
+  const state =
+    tone === 'green'
+      ? t('sessionActive')
+      : tone === 'orange'
+        ? t('sessionIdle')
+        : t('sessionStale');
 
   return (
     <div
@@ -219,7 +221,7 @@ function ConnectedClientRow({ client, last }: { client: ClientInfo; last: boolea
           style={{ color: 'var(--label)' }}
           title={client.project ?? undefined}
         >
-          {sessionTitle(client)}
+          {sessionTitle(client, t('unnamedSession'))}
         </div>
         <div
           className="text-[11px] leading-[13px] truncate"
@@ -234,7 +236,10 @@ function ConnectedClientRow({ client, last }: { client: ClientInfo; last: boolea
         className="text-[11px] leading-[13px] shrink-0"
         style={{ color: 'var(--label-secondary)' }}
       >
-        {state} · <span className="tabular-nums">{timeAgo(client.lastSeen)}</span>
+        {state} ·{' '}
+        <span className="tabular-nums">
+          {relativeTime(new Date(client.lastSeen).getTime(), Date.now(), 'short')}
+        </span>
       </span>
     </div>
   );
@@ -270,6 +275,7 @@ function SupportedClientRow({
   onConnect: () => void;
   onConnectWithLevel: (level: EnforcementLevel) => void;
 }) {
+  const { t } = useTranslation('clients');
   const isManual = MANUAL_CLIENTS.has(name) || status === 'unmanageable';
   const hasLevels = CLAUDE_CLIENTS.has(name);
   const levelMenu = useMenuAnchor();
@@ -322,15 +328,18 @@ function SupportedClientRow({
           style={{ color: 'var(--label-secondary)' }}
         >
           <StatusDot tone="green" />
-          Connected
+          {t('connected')}
         </span>
       ) : status === 'stale' ? (
         <>
-          <Badge tone="orange" title={staleReason ? `Drifted field: ${staleReason}` : undefined}>
-            Update available
+          <Badge
+            tone="orange"
+            title={staleReason ? t('driftedField', { field: staleReason }) : undefined}
+          >
+            {t('updateAvailable')}
           </Badge>
           <Button disabled={configuring} onClick={handleConnect}>
-            {configuring ? 'Updating…' : 'Update'}
+            {configuring ? t('updating') : t('update')}
           </Button>
         </>
       ) : isManual ? (
@@ -339,7 +348,7 @@ function SupportedClientRow({
           aria-expanded={showSteps}
           onClick={() => setShowSteps((v) => !v)}
         >
-          {showSteps ? 'Hide steps' : 'Set up manually…'}
+          {showSteps ? t('hideSteps') : t('setUpManually')}
         </Button>
       ) : (
         <Button
@@ -349,23 +358,23 @@ function SupportedClientRow({
           aria-expanded={hasLevels ? levelMenu.at !== null : undefined}
           onClick={handleConnect}
         >
-          {configuring ? 'Connecting…' : 'Connect'}
+          {configuring ? t('connecting') : t('connect')}
         </Button>
       )}
 
       {levelMenu.at && (
         <Menu x={levelMenu.at.x} y={levelMenu.at.y} align="end" onClose={levelMenu.close}>
-          <MenuSection>Enforcement level</MenuSection>
+          <MenuSection>{t('enforcementLevel')}</MenuSection>
           {LEVELS.map((l) => (
             <MenuItem
               key={l.value}
-              title={l.hint}
+              title={t(l.hintKey)}
               onClick={() => {
                 levelMenu.close();
                 onConnectWithLevel(l.value);
               }}
             >
-              {l.label}
+              {t(l.labelKey)}
             </MenuItem>
           ))}
         </Menu>
@@ -376,6 +385,7 @@ function SupportedClientRow({
 
 // ── Surface ───────────────────────────────────────────────────────
 export function Clients() {
+  const { t } = useTranslation('clients');
   const { clients, loading, connected, restarting, restartDaemon, fetchClients } = useDaemon();
   const [detected, setDetected] = useState<DetectedClient[]>([]);
   const [statuses, setStatuses] = useState<RichClientStatus[]>([]);
@@ -503,14 +513,14 @@ export function Clients() {
           className="flex-1 min-w-0 text-[15px] leading-5 font-semibold truncate"
           style={{ color: 'var(--label)', letterSpacing: '-0.01em' }}
         >
-          MCP clients
+          {t('title')}
         </h2>
         <Button
           variant="icon"
           icon="refresh"
           onClick={refreshAll}
-          aria-label="Refresh clients"
-          title="Refresh clients"
+          aria-label={t('refresh')}
+          title={t('refresh')}
         />
       </Toolbar>
 
@@ -523,21 +533,21 @@ export function Clients() {
           <div className="flex items-center justify-center h-full">
             <EmptyState
               icon="cable"
-              title="Daemon not reachable"
-              subtitle="trace-mcp clients connect through the local daemon. Start it to see and configure them."
+              title={t('daemonDownTitle')}
+              subtitle={t('daemonDownSubtitle')}
               action={
                 <Button variant="prominent" disabled={restarting} onClick={() => restartDaemon()}>
-                  {restarting ? 'Starting…' : 'Start daemon'}
+                  {restarting ? t('starting') : t('startDaemon')}
                 </Button>
               }
             />
           </div>
         ) : (
         <div className="flex flex-col gap-6 px-4 py-4 mx-auto w-full" style={{ maxWidth: 720 }}>
-          <Section title="Supported clients">
+          <Section title={t('supported')}>
             <Card>
               {detecting && !statuses.length && !detected.length ? (
-                <SkeletonRows rows={6} label="Detecting clients" />
+                <SkeletonRows rows={6} label={t('detecting')} />
               ) : (
                 sortedClients.map((c, i) => {
                   const s = resolveStatus(c.name);
@@ -560,16 +570,16 @@ export function Clients() {
             </Card>
           </Section>
 
-          <Section title="Active sessions" count={sessions.length}>
+          <Section title={t('sessions')} count={sessions.length}>
             <Card>
               {loading && sessions.length === 0 ? (
-                <SkeletonRows rows={2} label="Loading sessions" />
+                <SkeletonRows rows={2} label={t('loadingSessions')} />
               ) : sessions.length === 0 ? (
                 <EmptyState
                   compact
                   icon="hub"
-                  title="No active sessions"
-                  subtitle="A session appears here when a client connects to the daemon."
+                  title={t('noSessionsTitle')}
+                  subtitle={t('noSessionsSubtitle')}
                 />
               ) : (
                 sessions.map((c, i) => (

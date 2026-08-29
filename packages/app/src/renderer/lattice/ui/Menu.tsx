@@ -307,7 +307,11 @@ export function MenuChoiceRow<T extends string>({
       }}
     >
       <span className="ws-ctx-row-label">{label}</span>
-      <div className="lx-seg sz-small ws-ctx-seg">
+      {/* No `sz-small`: at 20px the track left 1px above and below a 14px glyph
+          while the segments ran 30px wide, which is the squeeze Nikolai saw —
+          crushed vertically, loose horizontally (TRA-376). The default 24px
+          track carries square 20px segments; island.css sets their geometry. */}
+      <div className="lx-seg ws-ctx-seg">
         {options.map((option) => {
           const checked = option.value === value;
           return (
@@ -323,7 +327,7 @@ export function MenuChoiceRow<T extends string>({
               className={'lx-seg-item' + (checked ? ' is-active' : '')}
               onClick={() => onChange(option.value)}
             >
-              <Icon name={option.icon} size={14} />
+              <Icon name={option.icon} size={12} />
             </button>
           );
         })}

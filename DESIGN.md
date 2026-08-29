@@ -348,7 +348,7 @@ because re-adding a banned body under a new key is the same regression wearing a
 
 | Rejected | Why | Use instead |
 |---|---|---|
-| `auto_awesome` (sparkles) | Decorates rather than names. It is the AI-marketing glyph; on a developer tool it reads as ornament and says nothing about what the item does. | The glyph for the destination — `description` for `View changelog`. |
+| `auto_awesome` (sparkles) | Decorates rather than names. It is the AI-marketing glyph; on a developer tool it reads as ornament and says nothing about what the item does. | The glyph for the destination — `scroll` for `View changelog`. |
 | `forum` (speech bubbles) | Promises a conversation with a person. Nothing in this app is one: `Get help` opens GitHub issues, `Ask` queries the indexed graph. | `help` (question mark in a circle) for help; `search` for Ask. |
 
 Judge the replacement at the size it renders, not on the 24-grid. `manage_search`
@@ -359,6 +359,13 @@ handle. A glyph that only reads at 24px is not a glyph this app has a use for.
 **When a reference is supplied, match it.** If it looks wrong for us, say so in the PR
 and argue it. A substitution nobody mentions costs a review round every time, and it
 is how this pair shipped in the first place.
+
+That happened twice on the same item. Sparkles were replaced with `description`, a
+plain page — the *category* the reference belonged to, not the glyph in it. The
+reference was a rolled sheet, which is now `scroll`, and a changelog is a running
+record you scroll through rather than a document you open. **Matching a reference
+means the glyph in it**, not the nearest thing already in the set: if the set has no
+match, draw one and say in the PR that you did.
 
 ### Prominent buttons are flat
 
@@ -390,6 +397,16 @@ every window; it belongs in the Settings screen, which is where macOS puts it.
 Selection follows the macOS active/inactive pair: `--fill-tertiary` when the sidebar
 does not own focus, `--accent-fill` + `--on-accent` when it does
 (`.ws-sidebar:focus-within`).
+
+**A row holding a menu open shows its open state, and nothing else.** The trigger
+keeps DOM focus while its menu is up, so the house `*:focus-visible` ring — a 3px
+accent halo over a **1px inset accent border** — sat on the row for as long as the
+menu stayed open whenever it had been opened from the keyboard. On a full-width row
+that inset border is a rectangle, and a blue rectangle around a row reads as a
+focused text field, not as a trigger holding its state. `--fill-tertiary` is the
+whole indicator; the open menu is the rest of it
+(`.ws-sb-row[aria-expanded='true']:focus-visible { box-shadow: none }`). The ring
+stays for the case it is actually for: the row focused with the menu closed.
 
 ### States are part of the component, not an afterthought
 
@@ -546,6 +563,13 @@ same reason.
 The footer never grows a second row for any of this. If a new global action needs a
 home, it is a menu item.
 
+**Grouping in the app menu is by what an item does, not by what is left over.**
+Settings alone, then the choices, then the actions — and inside the actions,
+everything that *leaves for a browser* is one group and everything that *acts on
+this app* is another. `Check for updates…` sat flush under `Get help` and read as a
+third GitHub page. `AppMenu` splits on `url`, which every entry already declares, so
+a new action lands in the right group without that file learning its name.
+
 ### A choice in a menu is one row, not a group of items
 
 A menu item is a **destination or a command**: you pick it, something happens, the
@@ -586,6 +610,45 @@ What the row has to get right, all of it enforced by
   unselected icon drops to `--label-secondary`.
 - **Picking a value does not close the menu.** The point of an inline switcher is
   watching the app change under it. A command still closes; a choice does not.
+- **The pill's proportions come from the reference, not from the nearest size
+  token.** Icon-only segments shipped on `sz-small`: a 20px track, 16px segments and
+  a 14px glyph, which left **1px** of air above and below the icon — while
+  `.lx-seg.sz-small`'s `padding: 0 8px` won the cascade and ran the segments 30px
+  wide. Squeezed on one axis, loose on the other. The shape to hold is *air inside
+  the segment, little outside the pill*: the default 24px track, 24×20 segments, a
+  12px glyph — 6px beside the icon, 4px above it, and 3px between pill and row.
+  A segment never goes under the 24px hit-target floor to look squarer.
+
+### Every string comes from the catalogue, and the length is not yours to assume
+
+The app ships in more than one language (TRA-379), so a literal typed into a
+component is a string that exists in English and nowhere else. User-facing text —
+labels, titles, `placeholder`, `aria-label`, empty states, errors — is authored in
+`packages/app/src/shared/i18n/catalog/en/<surface>.ts` and read with `t()`.
+`packages/app/scripts/check-i18n.mjs` fails the build when one reappears inline in a
+surface that was already extracted; how to add a string or a language is in
+`docs/development.md`.
+
+Three consequences for layout, all of them the usual way a translated UI breaks:
+
+- **Assume +30% width.** German and Russian run long against English. A control sized
+  to its English label — a segmented pill, a button with the label baked into a fixed
+  width — has to survive the longest translation or wrap, not clip. This is the
+  argument for icon-only segments where the values allow it.
+- **Never build a sentence out of pieces.** `{count} + " items"` has no correct
+  Russian form; `t('items', { count })` does, because i18next resolves the plural
+  through `Intl.PluralRules`. Same for anything glued from a noun and a verb.
+- **Dates, numbers and "2h ago" go through `renderer/i18n/format.ts`.** It wraps
+  `Intl`, which knows that a Russian relative time is "2 часа назад" but "5 часов
+  назад" and that a German date is `29.8.2026`. Note that `Intl`'s `narrow` style is
+  not offered: it gives English "2h ago" and Russian "-2 ч".
+
+**The Language control** follows "a choice in a menu is one row" above, and the option
+count decides the shape: a segmented pill while there are two to four languages, a
+pop-up button on the same row shape once there are more — language names are words,
+not glyphs, and the list is only going to grow. Language names are written in their
+own language ("Русский", not "Russian"): someone hunting for their language is
+looking for what they call it.
 
 ### The window minimum is a size that has to work
 
@@ -607,6 +670,21 @@ you undo them:
   picker out of reach the same way. This lives in the shared `Toolbar` primitive
   (`lattice/ui/Surface.tsx`), so every surface built on it inherits the behaviour — do
   not re-declare a height on top.
+- **A control that cannot shrink needs a narrow form, not just a wrapping row.**
+  `flex-wrap` gives an oversized control its own line; it cannot make that control
+  narrower. A segmented control is sized by its labels and is one flex item, so
+  once it is wider than the line it overflows no matter how the row wraps. Give it
+  a pop-up button below the width where its segments fit — that is what macOS does,
+  and `PopUpButton` already exists. Insights' report picker was 371px in a 262px
+  band at the 640px window minimum with the sidebar at `SIDEBAR_MAX`: it ran 96.6px
+  past the window and left "Risk hotspots" 14 of its 108px, so that report could not
+  be selected at all.
+- **Decide a collapse from a width the collapsing thing cannot change.** Measure the
+  toolbar, not the control's own slot. The slot is narrower beside a title and
+  full-width once the control wraps to a line of its own, so a slot-based threshold
+  is bistable — "segments, wrapped" and "pop-up, inline" are both self-consistent at
+  the same window size, and which one you get depends on which way the user last
+  resized.
 - **A control that can shrink declares a length `flex-basis`, not `auto`.** A wrapping
   flex line is laid out from each item's *hypothetical* size, so `flex-basis: auto`
   advertises a control's full content width and breaks the row before it has spent
@@ -789,6 +867,19 @@ whether the committed ones are stale. Use that one for anything committed to the
 `electron-cdp.mjs` when you need to point a debugger at the app you are running right now
 and shoot a surface it has no manifest entry for.
 
+### A published screenshot shows the window, or it is not a screenshot of the app
+
+Anything a reader sees as "trace-mcp" — README, trace-mcp.com, a release note, an issue
+that claims a fix landed — must contain the window chrome: traffic lights, rounded corners,
+the real sidebar material. A frame without them is a picture of a web page, and a reader
+who has never opened the app cannot tell the difference between that and a browser demo.
+Three separate rounds shipped one anyway (TRA-354, TRA-366, TRA-390), because the rule
+lived only in prose, so `capture-screenshots.mjs` now photographs the window itself
+(`screencapture -l<CGWindowID>`) and refuses to write a frame whose corners are opaque or
+whose buttons are missing. Shoot published images with that script. `electron-cdp.mjs`
+stays a review tool — its CDP shots are for measuring your own work in progress, never for
+publication.
+
 ### Title a design PR `feat:` / `fix:` / `refactor:` — never `design:`
 
 `design` is not a Conventional Commits type, and `.github/workflows/pr-title-lint.yml`
@@ -854,6 +945,8 @@ new evidence.
 | 20px controls keep the painted macOS small size, hit target grown by pseudo-element | The painted size is *correct*; only the hit box was wrong. Growing the box moves no pixel. |
 | Prominent buttons are a flat accent capsule | macOS 26 dropped the gradient + bezel entirely. |
 | Segmented selection is the thumb, and unselected labels stay at `--label` | macOS draws unselected segments at full strength; `--label-secondary` on the recessed track measured 4.45:1. |
+| An icon-only segment gets the 24px track, not `sz-small` (TRA-376) | At 20px the track leaves 1px above a 14px glyph, and `sz-small`'s `padding: 0 8px` wins the cascade over the menu's own `padding: 0` — squeezed vertically, loose horizontally. |
+| A menu trigger with its menu open draws no focus ring (TRA-376) | The house ring carries a 1px **inset** accent border. On a full-width row, held for as long as the menu is up, that is a blue rectangle that reads as a focused text field. |
 | Badge tint at 18% with a per-tone `--badge-*-fg` label | White-on-a-light-fill was 1.6:1. The tone's own hue, darkened until it clears AA over its own tint, is legible in both appearances. |
 | Badges/chips/headers are sentence case | ALL CAPS is reserved for the 10px group header and nowhere else. |
 | Cards are opaque with a hairline, no shadow, no glass | Cards are content. The active KPI tile painted on accent measured 3.28:1 and pushed its footnote to 4.45:1. |
@@ -889,6 +982,8 @@ new evidence.
 | The toolbar sits **above** the KPI strip, not below it | Chrome above content. With the strip first, 357px of tiles pushed the toolbar's bottom 33px past a 420px window and nothing on the surface could scroll it back. |
 | A toolbar has `min-height: 52px` and wraps, never a fixed `height` | A non-wrapping 52px row inside `overflow-x: hidden` ran 51px past a 420px pane and put + Add's chevron and the overflow menu outside the window. |
 | The wrap rule belongs to the shared `Toolbar`, not to each surface | Fixed on the Workspace header in TRA-292 and nowhere else, so four surfaces built on the primitive still clipped: at 640×420 Memory overflowed 333px with its search, its prominent "Add decision" and its overflow menu at zero visible pixels and no scrollable ancestor. |
+| An unshrinkable control gets a narrow form; wrapping alone does not save it | `flex-wrap` gives a segmented control its own line but cannot narrow it. Insights' 371px picker in a 262px band ran 96.6px past a 640px window and left "Risk hotspots" 14 of its 108px — unreachable. Below the width where the segments fit it is a `PopUpButton`. |
+| A collapse threshold reads a width the collapsing thing cannot change | Measured against its own slot, the Insights picker was bistable: the slot is narrower beside the title and full-width once the picker wraps, so both controls were self-consistent at one window size and the render depended on which way the user had resized. The toolbar's width is the honest input. |
 | A shrinkable control declares a length `flex-basis`, never `auto` | A wrapping flex line breaks on hypothetical sizes, so `flex-basis: auto` spends none of the control's slack first. `.lx-search` on `auto` wrapped Memory's toolbar at the default 960px window; on `1 1 140px` capped at `max-content` it renders identically and holds one row to a 740px pane. |
 | Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` reproduces the measured 357px; a guessed number drifts the first time a tile changes. |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
