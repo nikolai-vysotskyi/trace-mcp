@@ -46,8 +46,11 @@ describe('graph overlay layer', () => {
 
   it('paints no scrim and no centred word over the graph while loading', () => {
     expect(src).not.toMatch(/\{loading && \(/);
-    // The sentence lives in the stats pill, which is chrome that is already there.
-    expect(src).toMatch(/cosmos-gpu-stats[\s\S]{0,240}Building graph/);
+    /* The sentence lives in the stats pill, which is chrome that is already
+       there. It reads from the catalogue since TRA-385, so this matches the key
+       rather than the English — the rule is where the sentence goes, not which
+       words it uses. */
+    expect(src).toMatch(/cosmos-gpu-stats[\s\S]{0,240}tr\('building'\)/);
   });
 
   it('never auto-dismisses the error', () => {
