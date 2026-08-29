@@ -1,13 +1,13 @@
 /* Update state: the app menu header, the update card and the stale-root
-   warning. Wording is unchanged from update-check.ts / AppMenu.tsx — this
-   namespace moved the strings, it did not rewrite them. */
+   warning. */
 
 export const update = {
-  // `_one` / `_other` are i18next plural suffixes, resolved through
-  // Intl.PluralRules — which is why Russian can add `_few` and `_many` without
-  // English growing a branch it does not have.
-  staleRoots_one: 'Another npm install is on v{{version}}',
-  staleRoots_other: '{{count}} other npm installs are out of date',
+  /* Singular, not a plural key: the main process sends at most one stale root —
+     the one MCP clients actually launch from — so there is no count to inflect
+     (TRA-377). The line names the consequence rather than the filesystem fact,
+     and the title carries the install and the one command that ends it. */
+  staleRoots: 'MCP clients still run v{{version}}',
   staleRootsTitle:
-    '{{label}}. This app updated the root it resolves to; these were not touched:\n{{list}}\n\nFix each with its own npm: <root>/../../bin/npm install -g trace-mcp@latest',
+    'Your editors launch trace-mcp from {{pkgDir}}, which is on v{{version}}. That copy was installed by a different npm, so updating this app did not touch it — until it is updated, every MCP client keeps using the old server.\n\nUpdate it from a terminal:\n{{command}}',
+  copyStaleRootCommand: 'Copy update command',
 } as const;

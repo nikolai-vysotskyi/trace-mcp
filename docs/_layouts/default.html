@@ -3,52 +3,105 @@
   <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="dark light">
+    <meta name="theme-color" content="#000000">
 
     {% seo %}
 
-    <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
-    <style>
-      .site-brand { font-weight: 600; font-size: 1.25em; margin-bottom: 1.5em; }
-      .site-brand a { text-decoration: none; }
-      .docs-nav { color: #57606a; font-size: 0.9em; }
-      .page-updated { color: #57606a; font-size: 0.9em; margin-top: 2em; }
-    </style>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" media="(prefers-color-scheme: light)">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" media="(prefers-color-scheme: light)">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-dark-16x16.png" media="(prefers-color-scheme: dark)">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-dark-32x32.png" media="(prefers-color-scheme: dark)">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+    <script>
+      // Set theme and theme-color before first paint to avoid flash. Same
+      // localStorage key as the landing page, so a reader who picks Light on
+      // trace-mcp.com stays in Light when they open a doc page.
+      (() => {
+        try {
+          var stored = localStorage.getItem('trace-mcp-theme');
+          var prefersLight = window.matchMedia?.('(prefers-color-scheme: light)').matches;
+          var theme = stored === 'light' || stored === 'dark' ? stored : (prefersLight ? 'light' : 'dark');
+          document.documentElement.setAttribute('data-theme', theme);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#F5F5F5');
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+
+    {%- comment -%}
+      Hand-written Nothing stylesheet, not the GH Pages Primer default. Primer
+      shipped 76.5 KB with zero prefers-color-scheme rules, system fonts and
+      zebra-striped tables — none of which the site's design system allows.
+      Tokens mirror docs/index.html; the standard is docs/DESIGN-WEB.md.
+    {%- endcomment -%}
+    <link rel="preload" href="{{ '/fonts/space-grotesk-variable-latin.woff2' | relative_url }}" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="{{ '/assets/css/docs.css' | relative_url }}">
   </head>
   <body>
-    <div class="container-lg px-3 my-5 markdown-body">
-      <p class="site-brand"><a href="{{ '/' | relative_url }}">trace-mcp</a></p>
+    <a class="skip-link" href="#content">Skip to content</a>
 
-      {{ content }}
+    <header class="docs-header">
+      <div class="container">
+        <a class="nav-brand" href="{{ '/' | relative_url }}"><span class="bracket">[</span>trace-mcp<span class="bracket">]</span></a>
+        <button type="button" class="theme-toggle" role="switch" aria-label="Toggle color theme" data-theme-toggle>
+          <span class="theme-seg" data-mode="dark">
+            <span class="seg-dot"></span><span class="label-text">Dark</span>
+          </span>
+          <span class="theme-seg" data-mode="light">
+            <span class="seg-dot"></span><span class="label-text">Light</span>
+          </span>
+        </button>
+      </div>
+    </header>
 
-      {%- comment -%}
-        Every page that outranks us for these queries shows a reader-visible
-        date; ours only had one inside the TechArticle JSON-LD, which a reader
-        never sees. `updated:` is stamped from git by `pnpm docs:sitemap`, so it
-        cannot drift from <lastmod> the way the hand-maintained dates did.
-      {%- endcomment -%}
-      {%- if page.updated %}
-      <p class="page-updated">Last updated: {{ page.updated | date: "%B %-d, %Y" }}</p>
-      {%- endif %}
+    <main id="content">
+      <div class="container prose">
+        {{ content }}
 
-      <hr>
-      <p class="docs-nav">
-        See also:
         {%- comment -%}
-          Every doc page, not a hand-picked four. The old footer linked only
-          tools-reference / architecture / configuration, which left the other
-          eight pages on 1–2 inbound internal links each — comparisons.html,
-          the highest-intent page on the site, had exactly one. Driven off
-          site.data.docs_nav so adding a page means one data-file line.
+          Every page that outranks us for these queries shows a reader-visible
+          date; ours only had one inside the TechArticle JSON-LD, which a reader
+          never sees. `updated:` is stamped from git by `pnpm docs:sitemap`, so it
+          cannot drift from <lastmod> the way the hand-maintained dates did.
         {%- endcomment -%}
-        {%- for item in site.data.docs_nav -%}
-          {%- unless page.url == item.url -%}
-            <a href="{{ item.url | relative_url }}">{{ item.title }}</a> ·
-          {%- endunless -%}
-        {%- endfor -%}
-        <a href="{{ '/' | relative_url }}">Home</a>
-      </p>
-    </div>
+        {%- if page.updated %}
+        <p class="page-updated">Last updated: {{ page.updated | date: "%B %-d, %Y" }}</p>
+        {%- endif %}
+
+        <footer class="docs-footer">
+          <span class="label">See also</span>
+          {%- comment -%}
+            Rendered as a grid, not a `·`-separated strip. At 17 entries the
+            strip wrapped mid-label — "Cut Claude Code token / usage" and
+            "TOON / savings" broke across lines — so no link read as one
+            target. One cell per link fixes that without touching which links
+            exist, their labels, or their order: that structure is the SEO
+            agent's, this is only how it looks.
+          {%- endcomment -%}
+          <nav class="footer-links" aria-label="Documentation pages">
+          {%- comment -%}
+            Every doc page, not a hand-picked four. The old footer linked only
+            tools-reference / architecture / configuration, which left the other
+            eight pages on 1–2 inbound internal links each — comparisons.html,
+            the highest-intent page on the site, had exactly one. Driven off
+            site.data.docs_nav so adding a page means one data-file line.
+          {%- endcomment -%}
+          {%- for item in site.data.docs_nav -%}
+            {%- unless page.url == item.url -%}
+              <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
+            {%- endunless -%}
+          {%- endfor -%}
+          <a href="{{ '/' | relative_url }}">Home</a>
+          </nav>
+        </footer>
+      </div>
+    </main>
 
     <script>
       // ponytail: GH Pages default theme renders GFM tables with no header scope;
@@ -64,7 +117,43 @@
             firstCell.setAttribute('scope', 'row');
           }
         });
+        // Three-column tool tables are ~700px at their narrowest and used to
+        // force the whole page to scroll sideways on a 390px phone. Scroll the
+        // table instead, and make the scroller keyboard-reachable.
+        if (!table.parentElement.classList.contains('table-scroll')) {
+          var wrap = document.createElement('div');
+          wrap.className = 'table-scroll';
+          wrap.setAttribute('tabindex', '0');
+          wrap.setAttribute('role', 'region');
+          wrap.setAttribute('aria-label', 'Scrollable table');
+          table.parentNode.insertBefore(wrap, table);
+          wrap.appendChild(table);
+        }
       });
+
+      // Theme toggle — mirrors the landing page control and shares its key.
+      (function () {
+        var root = document.documentElement;
+        var toggle = document.querySelector('[data-theme-toggle]');
+        if (!toggle) return;
+        function apply(theme, persist) {
+          root.setAttribute('data-theme', theme);
+          toggle.setAttribute('data-active', theme);
+          toggle.setAttribute('aria-checked', theme === 'light' ? 'true' : 'false');
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', theme === 'dark' ? '#000000' : '#F5F5F5');
+          if (persist) { try { localStorage.setItem('trace-mcp-theme', theme); } catch (e) {} }
+        }
+        apply(root.getAttribute('data-theme') || 'dark', false);
+        toggle.addEventListener('click', function () {
+          apply(root.getAttribute('data-theme') === 'light' ? 'dark' : 'light', true);
+        });
+        var mq = window.matchMedia('(prefers-color-scheme: light)');
+        mq.addEventListener('change', function (e) {
+          try { if (localStorage.getItem('trace-mcp-theme')) return; } catch (err) {}
+          apply(e.matches ? 'light' : 'dark', false);
+        });
+      })();
     </script>
   </body>
 </html>

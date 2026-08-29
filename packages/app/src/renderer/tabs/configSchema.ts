@@ -414,7 +414,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'vertex_project',
         label: 'settings:schema.ai.vertex.project.label',
         type: 'string',
-        placeholder: 'my-gcp-project',
+        placeholder: 'my-gcp-project', // i18n-exempt
         showIf: 'provider=vertex',
         description: 'settings:schema.ai.vertex.project.description',
       },
@@ -422,7 +422,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'vertex_location',
         label: 'settings:schema.ai.vertex.location.label',
         type: 'string',
-        placeholder: 'us-central1',
+        placeholder: 'us-central1', // i18n-exempt
         defaultValue: 'us-central1',
         showIf: 'provider=vertex',
         description: 'settings:schema.ai.vertex.location.description',
@@ -561,7 +561,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'embedding_model',
         label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
-        placeholder: 'nomic-embed-text',
+        placeholder: 'nomic-embed-text', // i18n-exempt
         showIf: 'provider=ollama',
         description: 'settings:schema.ai.ollama.embedding_model.description',
         modelProvider: 'provider',
@@ -571,7 +571,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'reranker_model',
         label: 'settings:schema.f.rerankerModel',
         type: 'model-select',
-        placeholder: 'bge-reranker-v2-m3',
+        placeholder: 'bge-reranker-v2-m3', // i18n-exempt
         showIf: 'provider=ollama',
         description: 'settings:schema.ai.ollama.reranker_model.description',
         modelProvider: 'provider',
@@ -613,7 +613,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'inference_model',
         label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
-        placeholder: 'gpt-4o-mini',
+        placeholder: 'gpt-4o-mini', // i18n-exempt
         showIf: 'provider=openai',
         description: 'settings:schema.ai.openai.inference_model.description',
         modelProvider: 'provider',
@@ -623,7 +623,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'fast_model',
         label: 'settings:schema.f.fastModel',
         type: 'model-select',
-        placeholder: 'gpt-4o-mini',
+        placeholder: 'gpt-4o-mini', // i18n-exempt
         showIf: 'provider=openai',
         description: 'settings:schema.ai.openai.fast_model.description',
         modelProvider: 'provider',
@@ -633,7 +633,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'embedding_model',
         label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
-        placeholder: 'text-embedding-3-small',
+        placeholder: 'text-embedding-3-small', // i18n-exempt
         showIf: 'provider=openai',
         description: 'settings:schema.ai.openai.embedding_model.description',
         modelProvider: 'provider',
@@ -644,7 +644,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'inference_model',
         label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
-        placeholder: 'claude-sonnet-4-6',
+        placeholder: 'claude-sonnet-4-6', // i18n-exempt
         showIf: 'provider=anthropic',
         description: 'settings:schema.ai.anthropic.inference_model.description',
         modelProvider: 'provider',
@@ -654,7 +654,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'fast_model',
         label: 'settings:schema.f.fastModel',
         type: 'model-select',
-        placeholder: 'claude-haiku-4-5-20251001',
+        placeholder: 'claude-haiku-4-5-20251001', // i18n-exempt
         showIf: 'provider=anthropic',
         description: 'settings:schema.ai.anthropic.fast_model.description',
         modelProvider: 'provider',
@@ -685,7 +685,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'embedding_model',
         label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
-        placeholder: 'text-embedding-004',
+        placeholder: 'text-embedding-004', // i18n-exempt
         showIf: 'provider=gemini',
         description: 'settings:schema.ai.gemini.embedding_model.description',
         modelProvider: 'provider',
@@ -712,7 +712,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'embedding_model',
         label: 'settings:schema.f.embeddingModel',
         type: 'string',
-        placeholder: 'text-embedding-005',
+        placeholder: 'text-embedding-005', // i18n-exempt
         showIf: 'provider=vertex',
         description: 'settings:schema.ai.vertex.embedding_model.description',
       },
@@ -721,7 +721,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'embedding_model',
         label: 'settings:schema.f.embeddingModel',
         type: 'string',
-        placeholder: 'voyage-code-3',
+        placeholder: 'voyage-code-3', // i18n-exempt
         showIf: 'provider=voyage',
         description: 'settings:schema.ai.voyage.embedding_model.description',
       },
@@ -730,7 +730,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'inference_model',
         label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
-        placeholder: 'mistral-small-latest',
+        placeholder: 'mistral-small-latest', // i18n-exempt
         showIf: 'provider=mistral',
         description: 'settings:schema.ai.mistral.inference_model.description',
         modelProvider: 'provider',
@@ -740,7 +740,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'fast_model',
         label: 'settings:schema.f.fastModel',
         type: 'model-select',
-        placeholder: 'mistral-small-latest',
+        placeholder: 'mistral-small-latest', // i18n-exempt
         showIf: 'provider=mistral',
         description: 'settings:schema.ai.mistral.fast_model.description',
         modelProvider: 'provider',
@@ -750,7 +750,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'embedding_model',
         label: 'settings:schema.f.embeddingModel',
         type: 'model-select',
-        placeholder: 'mistral-embed',
+        placeholder: 'mistral-embed', // i18n-exempt
         showIf: 'provider=mistral',
         description: 'settings:schema.ai.mistral.embedding_model.description',
         modelProvider: 'provider',
@@ -823,7 +823,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'inference_model',
         label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
-        placeholder: 'deepseek-chat',
+        placeholder: 'deepseek-chat', // i18n-exempt
         showIf: 'provider=deepseek',
         description: 'settings:schema.ai.deepseek.inference_model.description',
         modelProvider: 'provider',
@@ -833,7 +833,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'fast_model',
         label: 'settings:schema.f.fastModel',
         type: 'model-select',
-        placeholder: 'deepseek-chat',
+        placeholder: 'deepseek-chat', // i18n-exempt
         showIf: 'provider=deepseek',
         description: 'settings:schema.ai.deepseek.fast_model.description',
         modelProvider: 'provider',
@@ -844,7 +844,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'inference_model',
         label: 'settings:schema.f.inferenceModel',
         type: 'model-select',
-        placeholder: 'grok-4',
+        placeholder: 'grok-4', // i18n-exempt
         showIf: 'provider=xai',
         description: 'settings:schema.ai.xai.inference_model.description',
         modelProvider: 'provider',
@@ -854,7 +854,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'fast_model',
         label: 'settings:schema.f.fastModel',
         type: 'model-select',
-        placeholder: 'grok-4',
+        placeholder: 'grok-4', // i18n-exempt
         showIf: 'provider=xai',
         description: 'settings:schema.ai.xai.fast_model.description',
         modelProvider: 'provider',
@@ -942,7 +942,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'secret_patterns',
         label: 'settings:schema.security.secret_patterns.label',
         type: 'array',
-        placeholder: 'regex patterns',
+        placeholder: 'regex patterns', // i18n-exempt
       },
       {
         key: 'max_file_size_bytes',
@@ -1113,7 +1113,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'fqn_attributes',
         label: 'settings:schema.runtime.fqn_attributes.label',
         type: 'array',
-        placeholder: 'code.function, code.namespace, ...',
+        placeholder: 'code.function, code.namespace, ...', // i18n-exempt
         nested: 'mapping',
         showIf: 'enabled',
       },
@@ -1121,7 +1121,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'route_patterns',
         label: 'settings:schema.runtime.route_patterns.label',
         type: 'array',
-        placeholder: 'regex patterns',
+        placeholder: 'regex patterns', // i18n-exempt
         nested: 'mapping',
         showIf: 'enabled',
       },
@@ -1316,7 +1316,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         key: 'directories',
         label: 'settings:schema.ignore.directories.label',
         type: 'array',
-        placeholder: 'node_modules, .git, ...',
+        placeholder: 'node_modules, .git, ...', // i18n-exempt
       },
       {
         key: 'patterns',

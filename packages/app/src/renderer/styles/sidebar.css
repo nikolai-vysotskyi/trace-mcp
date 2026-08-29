@@ -17,6 +17,16 @@
   background: var(--surface-sunken, var(--surface));
 }
 
+/* The native macOS tab bar is AppKit's band, not ours, and it is painted OVER
+   the top of the web contents — `innerHeight` never shrinks, so without this
+   the tab bar simply covers the app's own top band and every control on it
+   (TRA-399). Reserve its height so our band starts below it instead of under
+   it. Only on macOS, and only while a tab bar is actually up: the main process
+   sets data-tabbar from the live tab count. */
+.ws-stage[data-platform="mac"][data-tabbar="on"] {
+  padding-top: var(--mac-tabbar-h);
+}
+
 .ws-shell {
   display: flex;
   flex: 1;
@@ -39,10 +49,13 @@
   border-right: 0.5px solid var(--separator);
   -webkit-app-region: no-drag;
 }
-/* macOS: the NSVisualEffectView shows through. It samples what is behind the
-   WINDOW, so in light appearance --sidebar-scrim puts a floor under how dark a
-   dark desktop can drag it; in dark appearance the token is `transparent` and
-   the material is the whole material. See tokens.css and DESIGN.md §1 (TRA-369). */
+/* macOS: the NSVisualEffectView shows through, and it samples the DESKTOP
+   PICTURE — not the windows behind the app (TRA-404). So how far it may pull the
+   sidebar away from --surface is bounded, in
+   BOTH appearances: the drift goes light over a light desktop and dark over a
+   dark one, and either direction ends at mid-grey. --sidebar-scrim is that
+   bound: flat --surface in light, --surface at .78 in dark, where the glass
+   still has somewhere to go. See tokens.css and DESIGN.md §1 (TRA-369). */
 .ws-stage[data-platform="mac"] .ws-sidebar {
   background: var(--sidebar-scrim);
 }
@@ -195,6 +208,19 @@
    a surface. Keyed off aria-expanded so the state has exactly one source. */
 .ws-sb-row[aria-expanded='true'] {
   background: var(--fill-tertiary);
+}
+/* …and while it is up, the fill is the ONLY thing the row draws. Open it from
+   the keyboard and the trigger keeps DOM focus, so the house `*:focus-visible`
+   ring — a 3px accent halo over a 1px inset accent border — painted a solid
+   blue rectangle around the row for as long as the menu stayed open. On a
+   full-width row that reads as a focused text field, not as a menu trigger
+   holding its state (TRA-376). macOS draws neither: an open pop-up button
+   shows that it is open and lets the menu itself carry focus.
+
+   Scoped to the open state on purpose. Tab to this row with the menu closed
+   and the ring is still there — that is the case a focus ring is for. */
+.ws-sb-row[aria-expanded='true']:focus-visible {
+  box-shadow: none;
 }
 
 /* Pop-up affordance on a row that opens a menu. Unlike .ws-sb-trailing this is
@@ -393,6 +419,17 @@
 /* Collapsed sidebar on macOS: the traffic lights land on this header instead. */
 .ws-stage[data-platform="mac"] .ws-shell.is-collapsed .ws-content-head {
   padding-left: 78px;
+}
+
+/* …and the 78px that clears the traffic lights goes with them. With a tab bar
+   up the lights are in AppKit's band, not ours, so reserving their width here
+   would leave the sidebar toggle floating in a gap nothing occupies. 6px lines
+   its box up with the selection pills below it. */
+.ws-stage[data-platform="mac"][data-tabbar="on"] .ws-sidebar-titlebar {
+  padding-left: 6px;
+}
+.ws-stage[data-platform="mac"][data-tabbar="on"] .ws-shell.is-collapsed .ws-content-head {
+  padding-left: 12px;
 }
 .ws-content-body {
   flex: 1;

@@ -19,10 +19,23 @@ import {
 import { createToolFilter } from './tool-filter.js';
 import type { ToolResponse } from './types.js';
 
+/**
+ * A tool registered but held back from this session's surface (TRA-402).
+ * `enabled: false` keeps it out of `tools/list` and uncallable via
+ * `tools/call`; `load_tools` flips it on and installs `handler` into the live
+ * `toolHandlers` map so `batch` can reach it too.
+ */
+export interface DeferredTool {
+  registered: { enabled: boolean; description?: string; inputSchema?: unknown };
+  handler: (params: Record<string, unknown>) => Promise<ToolResponse>;
+}
+
 interface ToolGateResult {
   _originalTool: McpServer['tool'];
   registeredToolNames: string[];
   toolHandlers: Map<string, (params: Record<string, unknown>) => Promise<ToolResponse>>;
+  /** Tools outside the active preset, registered-but-disabled and loadable. */
+  deferredTools: Map<string, DeferredTool>;
 }
 
 /**
@@ -77,6 +90,7 @@ export function installToolGate(
     string,
     (params: Record<string, unknown>) => Promise<ToolResponse>
   >();
+  const deferredTools = new Map<string, DeferredTool>();
 
   /** Build the per-call context threaded into the wrapped callback. */
   const gatedCallbackContext = (name: string): GatedCallbackContext => ({
@@ -96,8 +110,12 @@ export function installToolGate(
 
   server.tool = ((...args: unknown[]) => {
     const name = args[0] as string;
-    if (!toolAllowed(name)) return undefined as never;
-    registeredToolNames.push(name);
+    // TRA-402: a tool outside the preset is still registered — just disabled,
+    // so it stays out of `tools/list` (no schema tokens) while `load_tools`
+    // can turn it on mid-session. `tools.exclude` is checked separately by
+    // `load_tools` so a hard exclusion can never be escalated back in.
+    const allowed = toolAllowed(name);
+    if (allowed) registeredToolNames.push(name);
 
     // Transform description + input schema (overrides, verbosity, compaction).
     applySchemaTransforms(args, schemaTransformConfig);
@@ -105,10 +123,12 @@ export function installToolGate(
     // Wrap callback for savings/journal/dedup/hints.
     const cbIdx = args.length - 1;
     const originalCb = args[cbIdx] as (...args: unknown[]) => unknown;
+    let deferredHandler: DeferredTool['handler'] | undefined;
     if (typeof originalCb === 'function') {
-      toolHandlers.set(name, async (params: Record<string, unknown>) => {
-        return (await originalCb(params)) as ToolResponse;
-      });
+      const handler = async (params: Record<string, unknown>) =>
+        (await originalCb(params)) as ToolResponse;
+      if (allowed) toolHandlers.set(name, handler);
+      else deferredHandler = handler;
       const schema = args[schemaIndexOf(args)];
       const supportsDetailLevel = !!(
         schema &&
@@ -127,6 +147,15 @@ export function installToolGate(
 
     const registered = (_originalTool as (...args: unknown[]) => unknown)(...args);
     stampAlwaysLoad(name, registered);
+    if (!allowed && registered && typeof registered === 'object') {
+      // Assign the flag rather than calling `.disable()`: the SDK's disable()
+      // routes through update(), which fires a tools/list_changed per call —
+      // ~140 notifications on a `minimal` session. One notification is emitted
+      // by load_tools instead, when the surface actually changes.
+      const entry = registered as { enabled: boolean; description?: string; inputSchema?: unknown };
+      entry.enabled = false;
+      if (deferredHandler) deferredTools.set(name, { registered: entry, handler: deferredHandler });
+    }
     return registered as ReturnType<typeof server.tool>;
   }) as typeof server.tool;
 
@@ -142,5 +171,5 @@ export function installToolGate(
     return registered;
   }) as typeof _originalTool;
 
-  return { _originalTool: annotatedOriginalTool, registeredToolNames, toolHandlers };
+  return { _originalTool: annotatedOriginalTool, registeredToolNames, toolHandlers, deferredTools };
 }

@@ -470,19 +470,19 @@ interface ModelOption {
 
 /** Default base URLs for all providers (used when base_url field is empty). */
 const PROVIDER_DEFAULTS: Record<string, { baseUrl: string; label: string }> = {
-  ollama: { baseUrl: 'http://localhost:11434', label: 'Ollama' },
-  lmstudio: { baseUrl: 'http://localhost:1234/v1', label: 'LM Studio' },
+  ollama: { baseUrl: 'http://localhost:11434', label: 'Ollama' }, // i18n-exempt
+  lmstudio: { baseUrl: 'http://localhost:1234/v1', label: 'LM Studio' }, // i18n-exempt
   openai: { baseUrl: 'https://api.openai.com', label: 'OpenAI' },
-  anthropic: { baseUrl: 'https://api.anthropic.com', label: 'Anthropic' },
+  anthropic: { baseUrl: 'https://api.anthropic.com', label: 'Anthropic' }, // i18n-exempt
   gemini: {
     baseUrl: 'https://generativelanguage.googleapis.com',
-    label: 'Gemini (Google Generative Language API)',
+    label: 'Gemini (Google Generative Language API)', // i18n-exempt
   },
-  vertex: { baseUrl: 'https://aiplatform.googleapis.com', label: 'Google Vertex AI' },
-  voyage: { baseUrl: 'https://api.voyageai.com/v1', label: 'Voyage AI' },
-  mistral: { baseUrl: 'https://api.mistral.ai/v1', label: 'Mistral' },
-  groq: { baseUrl: 'https://api.groq.com/openai/v1', label: 'Groq' },
-  together: { baseUrl: 'https://api.together.xyz/v1', label: 'Together' },
+  vertex: { baseUrl: 'https://aiplatform.googleapis.com', label: 'Google Vertex AI' }, // i18n-exempt
+  voyage: { baseUrl: 'https://api.voyageai.com/v1', label: 'Voyage AI' }, // i18n-exempt
+  mistral: { baseUrl: 'https://api.mistral.ai/v1', label: 'Mistral' }, // i18n-exempt
+  groq: { baseUrl: 'https://api.groq.com/openai/v1', label: 'Groq' }, // i18n-exempt
+  together: { baseUrl: 'https://api.together.xyz/v1', label: 'Together' }, // i18n-exempt
   deepseek: { baseUrl: 'https://api.deepseek.com/v1', label: 'DeepSeek' },
   xai: { baseUrl: 'https://api.x.ai/v1', label: 'xAI' },
 };

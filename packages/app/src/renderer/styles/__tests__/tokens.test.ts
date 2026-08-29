@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  MAC_TAB_BAR_H,
   TOP_BAND_H,
   TRAFFIC_LIGHT_D,
   TRAFFIC_LIGHT_Y,
@@ -82,15 +83,18 @@ describe('design tokens', () => {
   });
 
   /* TRA-369. On macOS the sidebar is a native NSVisualEffectView sampling what
-     is behind the WINDOW, so in light appearance its tone is the user's
-     wallpaper's decision unless something puts a floor under it. The floor is
-     --sidebar-scrim: white at alpha a can never render below a*255, whatever
-     the material does. Dark appearance deliberately has none — the material can
-     only take it toward black, which is where it belongs.
+     is behind the WINDOW, and the drift it produces goes BOTH ways — light over
+     a light desktop, dark over a dark one, mid-grey at either end. Measured on
+     the build before this: #222222 vs #4f4f4f in dark appearance from nothing
+     but the desktop, 45 levels apart. --sidebar-scrim is the bound, and there
+     has to be one in each appearance: a one-sided floor leaves the other half
+     exactly as wrong, which is the mistake this test exists to prevent.
 
-     The alpha is the whole guarantee, so it is asserted as a number: drop it and
-     a dark desktop drags the sidebar grey again, with a green build. */
-  it('floors the sidebar material in light and leaves the dark one glass', () => {
+     Every value must therefore be --surface at some alpha — never `transparent`
+     (unbounded) and never a colour of its own (a bound that stops tracking the
+     surface it is supposed to stay near). The alpha is the guarantee, so it is
+     asserted as a number. */
+  it('bounds the sidebar material against --surface in BOTH appearances', () => {
     const sidebarCss = readFileSync(
       fileURLToPath(new URL('../sidebar.css', import.meta.url)),
       'utf8',
@@ -103,13 +107,23 @@ describe('design tokens', () => {
     // One per appearance block: :root, the dark media query, [data-theme="dark"]
     // / [data-mode="dark"], and the light stage.
     expect(values).toHaveLength(4);
-    expect(values.filter((v) => v === 'transparent')).toHaveLength(2);
-    for (const value of values.filter((v) => v !== 'transparent')) {
-      const alpha = Number(/^rgb\(255 255 255 \/ ([0-9.]+)\)$/.exec(value)?.[1]);
-      expect(alpha).toBeGreaterThanOrEqual(0.7);
-      // #b2b2b2 on black — light enough to read as a light sidebar, not as dirt.
-      expect(Math.round(alpha * 255)).toBeGreaterThanOrEqual(178);
+    expect(values).not.toContain('transparent');
+
+    for (const value of values) {
+      // Either flat --surface, or --surface mixed toward transparent.
+      const mix = /^color-mix\(in srgb, var\(--surface\) ([0-9.]+)%, transparent\)$/.exec(value);
+      if (!mix) {
+        expect(value).toBe('var(--surface)');
+        continue;
+      }
+      // Below ~.7 the material wins again and the drift stops being bounded:
+      // .78 compresses 45 levels of measured swing to under 10.
+      expect(Number(mix[1])).toBeGreaterThanOrEqual(70);
     }
+
+    // Light is the appearance with no headroom for glass — it must be flat.
+    const light = values[0];
+    expect(light).toBe('var(--surface)');
   });
 
   /* Reduce Transparency turns the NSVisualEffectView opaque, but it paints the
@@ -184,6 +198,24 @@ describe('design tokens', () => {
         expect(body, `${selector} not found`).toBeDefined();
         expect(body).toMatch(/height:\s*var\(--top-band-h\)/);
       }
+    });
+
+    /* TRA-399. The macOS tab bar is a SECOND band on the same line, drawn by
+       AppKit over the top of the web contents — the viewport never shrinks, so
+       without a reservation the tab bar simply covers the band above and every
+       control on it. Same discipline as --top-band-h: one owner, one token. */
+    it('generates --mac-tabbar-h from src/shared/chrome-metrics.ts', () => {
+      expect(tokensCss).toMatch(new RegExp(`--mac-tabbar-h:\\s*${MAC_TAB_BAR_H}px`));
+    });
+
+    it('reserves the tab bar on macOS instead of drawing under it', () => {
+      const sidebarCss = readFileSync(
+        fileURLToPath(new URL('../sidebar.css', import.meta.url)),
+        'utf8',
+      );
+      expect(sidebarCss).toMatch(
+        /\[data-platform="mac"\]\[data-tabbar="on"\]\s*\{[^}]*padding-top:\s*var\(--mac-tabbar-h\)/,
+      );
     });
 
     it('leaves no stylesheet writing a band height by hand', () => {

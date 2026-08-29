@@ -135,6 +135,9 @@ packages/app/src/shared/i18n/
 packages/app/src/renderer/i18n/
   index.ts                # i18next init, setLocale, useLocale, t
   format.ts               # Intl wrappers: relativeTime, formatDate, formatNumber
+packages/app/src/main/
+  i18n.ts                 # the main process's own i18next instance, and its t
+  locale.ts               # the choice mirrored to userData, so main can read it
 ```
 
 **Why i18next.** Plurals. Russian needs four forms where English needs two, and the
@@ -173,6 +176,16 @@ pnpm --filter trace-mcp-app run test         # catalogue parity, plurals, Intl o
 `check-i18n.mjs` scans an allowlist, not the whole tree: string extraction lands
 surface by surface, and the `CHECKED` array at the top of the script is how a finished
 slice records that it is finished. Extract a surface → add its path there.
+
+**The main process** (the application menu, the tray, dialogs) has no React and
+cannot read the renderer's `localStorage`, so the language is mirrored to a one-line
+file in `userData` — exactly the arrangement `main/appearance.ts` uses for the theme.
+The renderer's `setLocale` sends `set-locale` over IPC, and `main/menu.ts` writes the
+file, switches its instance and rebuilds both surfaces: `Menu.setApplicationMenu`
+replaces the menu wholesale, there is no per-item relabel. Main-process code calls
+`t('menu:file')` from `main/i18n`. Standard macOS items stay on their Electron
+`role` — the OS supplies those labels already translated, and hand-translating one
+is how a menu ends up half in each language.
 
 ## Desktop app update channels
 
@@ -328,6 +341,7 @@ pnpm run build                       # the CLI bundle the demo daemon runs from
 pnpm --dir packages/app run build    # the renderer being photographed
 node scripts/capture-screenshots.mjs             # regenerate everything
 node scripts/capture-screenshots.mjs app-graph   # just one (marker left alone)
+node scripts/capture-screenshots.mjs --now       # …without waiting for an idle machine
 node scripts/capture-screenshots.mjs --check     # are the committed ones stale?
 ```
 
@@ -338,6 +352,34 @@ gets its own port and its own `TRACE_MCP_DATA_DIR`, the demo projects are
 `git archive` extracts of this repo at HEAD placed under `/tmp/trace-mcp-demo`,
 and Electron gets a throwaway Chromium profile. Nothing in the frame identifies
 a machine or a person.
+
+**The frame is a photograph of the window, not of the web contents.** macOS
+draws the traffic lights, the rounded corners and the sidebar's vibrancy
+outside the renderer, so `Page.captureScreenshot` — the obvious way to do this —
+returns something indistinguishable from a browser tab, and that is what got
+published once (TRA-390). Instead the script asks the main process for the
+window's CGWindowID over its Node inspector and hands it to
+`screencapture -o -l<id>`: the real window, no drop shadow, rounded corners
+returned as alpha. This makes the script macOS-only, and it steals focus for
+the length of the run — the window has to be key, or the buttons photograph
+grey.
+
+**So it waits until nobody is at the machine.** Owning the screen is not
+optional here and both ways out were measured and rejected:
+`webContents.capturePage()` on an unshown window returns square opaque corners
+and no buttons, and `showInactive()` plus `screencapture` returns the corners
+but grey buttons — both are frames `checkWindowChrome` refuses. What the run
+can do is not take the screen from somebody: it reads `HIDIdleTime` and defers
+(exit code 75, nothing written) unless the machine has been untouched for five
+minutes, and it activates the app once per run rather than once per shot. Pass
+`--now` when you are the one asking for it and are willing to lose the front
+for a couple of minutes.
+
+**Every frame is inspected before it becomes a file.** `checkWindowChrome`
+looks for the two things a capture of the web contents can never have —
+transparent rounded corners, and the three buttons in colour in the top-left
+strip — and throws with the reason when either is missing. A chrome-less
+capture fails the run instead of quietly replacing a good image.
 
 **Adding a screenshot is a data change.** Append an entry to
 `scripts/screenshots.manifest.json` — the surface to open, which controls to

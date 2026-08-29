@@ -75,6 +75,12 @@ export interface WorkspaceHeaderProps {
   hideViewToggle?: boolean;
   /** Slot rendered at the end of the toolbar row (typically AddProjectControl). */
   rightExtra?: ReactNode;
+  /**
+   * Slot between the toolbar and the KPI grid, for the line that qualifies the
+   * numbers below it — "these are the last indexed numbers". Below the grid it
+   * would be a footnote to figures the reader has already believed (TRA-397).
+   */
+  banner?: ReactNode;
 }
 
 const STATUS_CHIPS: Array<{ key: ProjectHealthStatus; label: string; title: string }> = [
@@ -142,6 +148,7 @@ export function WorkspaceHeader({
   dense = false,
   hideViewToggle = false,
   rightExtra,
+  banner,
 }: WorkspaceHeaderProps) {
   // Locally-debounced search so typing doesn't spam upstream re-renders.
   const [queryDraft, setQueryDraft] = useState(filter.query);
@@ -234,6 +241,8 @@ export function WorkspaceHeader({
           />
         </span>
       </Toolbar>
+
+      {banner}
 
       {/* ── KPI grid ───────────────────────────────────────────────── */}
       <div className="flex items-stretch gap-4 px-4 pt-4 pb-3 flex-wrap">

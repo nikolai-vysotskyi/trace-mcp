@@ -3,12 +3,24 @@
  * Regenerate every screenshot docs/ and trace-mcp.com ship, from a seeded
  * demo state, in one command:
  *
- *   node scripts/capture-screenshots.mjs          # capture
+ *   node scripts/capture-screenshots.mjs          # capture, once the machine is idle
+ *   node scripts/capture-screenshots.mjs --now    # capture even if somebody is using it
  *   node scripts/capture-screenshots.mjs --check  # are the committed ones stale?
  *
  * Why it drives the real Electron window and not a browser: the renderer is a
  * `file://` document that talks to the daemon on 127.0.0.1:3741 and depends on
  * `window.electronAPI`. Chrome renders it, but not as the app.
+ *
+ * Why the pixels come from `screencapture` and not from CDP: `Page.
+ * captureScreenshot` photographs the web contents, and the window chrome is not
+ * web contents. The traffic lights are AppKit buttons, the rounded corners and
+ * the sidebar's vibrancy are the window server's — a CDP shot of the real
+ * Electron window is indistinguishable from a browser tab, which is exactly
+ * what shipped once (TRA-390). So the window is captured by its CGWindowID,
+ * shadow-free, alpha-cornered, and every frame is inspected for the chrome it
+ * must contain before it is allowed to become a file (`checkWindowChrome`).
+ * That makes this a macOS-only script, which it already was in every way that
+ * mattered.
  *
  * Reproducibility — two runs a month apart must produce comparable images, so
  * nothing about the machine may leak into the frame:
@@ -21,10 +33,24 @@
  *   - appearance, sidebar width, viewport and scale come from the manifest, not
  *     from system settings.
  *
- * Reduce Transparency is emulated for every shot. It is a real product state,
- * and it is the one that renders the sidebar opaque — the macOS vibrancy behind
- * the window is native, so a renderer-side capture would otherwise show a
- * see-through hole where the sidebar is.
+ * A window capture composites the vibrancy view itself, without the desktop
+ * behind it, so the sidebar photographs as real glass and still contains
+ * nothing of the machine that took the shot. Reduce Transparency is therefore
+ * no longer emulated — that was a workaround for a renderer-side capture, which
+ * could only ever show a see-through hole where the sidebar is.
+ *
+ * This run owns the screen, and that is not fixable (TRA-403). Both ways of
+ * capturing without one were measured on this app, and both produce exactly the
+ * frame `checkWindowChrome` exists to refuse:
+ *   - `webContents.capturePage()` on a window that is never shown → square,
+ *     fully opaque corners and no traffic lights: a picture of a web page;
+ *   - `showInactive()` + `screencapture -l` → the corners come back, but AppKit
+ *     draws the buttons of a window whose app is not active in grey.
+ * Coloured buttons mean the app is frontmost, so a published screenshot costs
+ * one activation. What this script owes the person at the keyboard is therefore
+ * not "never activate" but "never do it while they are there": it waits for the
+ * machine to be idle (see `mayStartCapture`) unless told `--now`, and it
+ * activates once per run rather than once per shot.
  */
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -33,6 +59,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const MANIFEST_PATH = path.join(REPO_ROOT, 'scripts', 'screenshots.manifest.json');
@@ -49,6 +76,13 @@ const RENDERER_DAEMON_PORT = 3741;
  *  never contaminated by — the daemon the developer already has running. */
 const DEMO_DAEMON_PORT = 3799;
 const DEBUG_PORT = 9333;
+/** The main process's Node inspector. Only it can name the window: the
+ *  CGWindowID `screencapture -l` needs comes from `getMediaSourceId()`. */
+const MAIN_INSPECT_PORT = 9334;
+
+/** Where the window is parked while it is photographed. Off the top-left
+ *  corner so the whole frame — shadowless, but still full-size — is on screen. */
+const WINDOW_ORIGIN = { x: 40, y: 40 };
 
 // ── Freshness (pure — unit-tested in tests/scripts/capture-screenshots.test.ts) ──
 
@@ -94,10 +128,202 @@ export function readMarker(markerPath = MARKER_PATH) {
   }
 }
 
+// ── Idle gate (pure — unit-tested in tests/scripts/capture-screenshots.test.ts) ──
+
+/** How long the machine must have been untouched before a capture may start.
+ *  A run takes a couple of minutes and holds the front the whole time. */
+export const IDLE_REQUIRED_S = 300;
+/** Nothing else on this machine can tell a capture run that a person is here. */
+export const IDLE_EXIT_CODE = 75; // EX_TEMPFAIL — "not now, ask again later"
+
+/** Seconds since the last keyboard or mouse event, out of `ioreg -c IOHIDSystem`.
+ *  `HIDIdleTime` is in nanoseconds; absent on a machine with no HID at all. */
+export function parseIdleSeconds(ioregOutput) {
+  const match = /"HIDIdleTime"\s*=\s*(\d+)/.exec(ioregOutput ?? '');
+  return match ? Number(match[1]) / 1e9 : null;
+}
+
+/**
+ * May this run take over the screen? Only when nobody is at the keyboard —
+ * or when a human asked for it explicitly with `--now`.
+ *
+ * `idleSeconds` of `null` means the idle time could not be read. That is a
+ * "don't know", and a capture run that does not know whether someone is
+ * watching does not go ahead.
+ */
+export function mayStartCapture(idleSeconds, { force = false } = {}) {
+  if (force) return { ok: true, reason: null };
+  if (idleSeconds === null) {
+    return { ok: false, reason: 'cannot tell whether anyone is at the machine — pass --now' };
+  }
+  if (idleSeconds < IDLE_REQUIRED_S) {
+    return {
+      ok: false,
+      reason: `the machine was in use ${Math.round(idleSeconds)}s ago; a capture activates the app and would pull whoever is here out of what they are doing (needs ${IDLE_REQUIRED_S}s idle, or --now)`,
+    };
+  }
+  return { ok: true, reason: null };
+}
+
+// ── Window chrome (pure — unit-tested in tests/scripts/capture-screenshots.test.ts) ──
+
+/**
+ * The strip the macOS window buttons live in, in CSS px. Deliberately a region
+ * and not three coordinates: the exact offsets are `TRAFFIC_LIGHT_X/Y` in
+ * `packages/app/src/shared/chrome-metrics.ts` and are allowed to move without
+ * breaking this check.
+ */
+export const CHROME_STRIP = { width: 88, height: 44 };
+
+/** How each button reads once the window is key. Measured off a real capture:
+ *  close (236,103,101), minimise (242,202,68), zoom (44,170,47). A window that
+ *  is not frontmost draws all three grey, and grey matches nothing here — which
+ *  is the intent, an unfocused window is not the app at its best. */
+const TRAFFIC_LIGHTS = [
+  { name: 'close (red)', test: (r, g, b) => r > 170 && r - g > 70 && r - b > 70 },
+  { name: 'minimise (yellow)', test: (r, g, b) => r > 170 && g > 140 && r - b > 80 && g - b > 80 },
+  { name: 'zoom (green)', test: (r, g, b) => g > 120 && g - r > 60 && g - b > 60 },
+];
+
+/**
+ * Refuse a frame that is not a photograph of the macOS window.
+ *
+ * Three times now a capture of the web contents alone — from a browser tab or
+ * from CDP — has been published as "the app" (TRA-354, TRA-366, TRA-390). The
+ * two things such a frame can never have are what this looks for:
+ *
+ *   - transparent rounded corners, which only a window capture produces;
+ *   - the three traffic lights, in colour, in the top-left strip.
+ *
+ * `image` is `{ width, height, rgba }`; `scale` is device px per CSS px.
+ */
+export function checkWindowChrome(image, scale) {
+  const { width, height, rgba } = image;
+  const reasons = [];
+  const alphaAt = (x, y) => rgba[(y * width + x) * 4 + 3];
+
+  const inset = Math.max(1, Math.round(scale));
+  const corners = [
+    ['top-left', inset, inset],
+    ['top-right', width - 1 - inset, inset],
+    ['bottom-left', inset, height - 1 - inset],
+    ['bottom-right', width - 1 - inset, height - 1 - inset],
+  ].filter(([, x, y]) => alphaAt(x, y) !== 0);
+  if (corners.length > 0) {
+    reasons.push(
+      `no rounded window corners (${corners.map(([n]) => n).join(', ')} opaque) — this is a capture of the web contents, not of the window`,
+    );
+  }
+  if (alphaAt(width >> 1, height >> 1) !== 255) {
+    reasons.push('the middle of the frame is transparent — the window did not paint');
+  }
+
+  const stripW = Math.min(width, Math.round(CHROME_STRIP.width * scale));
+  const stripH = Math.min(height, Math.round(CHROME_STRIP.height * scale));
+  const found = TRAFFIC_LIGHTS.map(() => 0);
+  for (let y = 0; y < stripH; y++) {
+    for (let x = 0; x < stripW; x++) {
+      const o = (y * width + x) * 4;
+      if (rgba[o + 3] !== 255) continue;
+      for (let i = 0; i < TRAFFIC_LIGHTS.length; i++) {
+        if (TRAFFIC_LIGHTS[i].test(rgba[o], rgba[o + 1], rgba[o + 2])) found[i]++;
+      }
+    }
+  }
+  // A 12pt circle is ~113 CSS px²; a third of one is still unmistakably a light
+  // and leaves room for the gloss and the antialiased rim.
+  const floor = Math.round(40 * scale * scale);
+  const missing = TRAFFIC_LIGHTS.filter((_, i) => found[i] < floor).map((l) => l.name);
+  if (missing.length > 0) {
+    reasons.push(
+      `no traffic lights in the top-left ${CHROME_STRIP.width}×${CHROME_STRIP.height} strip (${missing.join(', ')}) — the window was not captured, or was not frontmost`,
+    );
+  }
+  return { ok: reasons.length === 0, reasons };
+}
+
+/**
+ * Just enough PNG to inspect what `screencapture` writes: 8-bit RGB/RGBA, no
+ * interlacing. Reading the pixels here rather than in the renderer keeps the
+ * guard independent of the thing it is guarding.
+ */
+export function decodePng(buf) {
+  if (buf.length < 8 || buf.readUInt32BE(0) !== 0x89504e47) throw new Error('not a PNG');
+  let width = 0;
+  let height = 0;
+  let channels = 0;
+  const idat = [];
+  for (let at = 8; at + 8 <= buf.length; ) {
+    const length = buf.readUInt32BE(at);
+    const type = buf.toString('ascii', at + 4, at + 8);
+    const body = buf.subarray(at + 8, at + 8 + length);
+    at += 12 + length;
+    if (type === 'IHDR') {
+      width = body.readUInt32BE(0);
+      height = body.readUInt32BE(4);
+      const [depth, colourType, , , interlace] = body.subarray(8, 13);
+      channels = { 2: 3, 6: 4 }[colourType] ?? 0;
+      if (depth !== 8 || channels === 0 || interlace !== 0) {
+        throw new Error(`unsupported PNG (depth ${depth}, colour type ${colourType})`);
+      }
+    } else if (type === 'IDAT') idat.push(body);
+    else if (type === 'IEND') break;
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const rgba = new Uint8Array(width * height * 4);
+  let prev = new Uint8Array(stride);
+  for (let y = 0, at = 0; y < height; y++) {
+    const filter = raw[at++];
+    const line = Uint8Array.prototype.slice.call(raw, at, at + stride);
+    at += stride;
+    for (let x = 0; x < stride; x++) {
+      const a = x >= channels ? line[x - channels] : 0;
+      const b = prev[x];
+      const c = x >= channels ? prev[x - channels] : 0;
+      if (filter === 1) line[x] = (line[x] + a) & 255;
+      else if (filter === 2) line[x] = (line[x] + b) & 255;
+      else if (filter === 3) line[x] = (line[x] + ((a + b) >> 1)) & 255;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a);
+        const pb = Math.abs(p - b);
+        const pc = Math.abs(p - c);
+        line[x] = (line[x] + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c)) & 255;
+      }
+    }
+    for (let x = 0; x < width; x++) {
+      const from = x * channels;
+      const to = (y * width + x) * 4;
+      rgba[to] = line[from];
+      rgba[to + 1] = line[from + 1];
+      rgba[to + 2] = line[from + 2];
+      rgba[to + 3] = channels === 4 ? line[from + 3] : 255;
+    }
+    prev = line;
+  }
+  return { width, height, rgba };
+}
+
 // ── Small helpers ──────────────────────────────────────────────────
 
 function git(args, cwd = REPO_ROOT) {
   return execFileSync('git', args, { cwd, encoding: 'utf-8' }).trim();
+}
+
+/** Seconds since the last human input on this machine, or null if unknowable. */
+function idleSeconds() {
+  try {
+    return parseIdleSeconds(
+      // `-r` roots the search at IOHIDSystem itself; without it the properties
+      // of the class are not printed at all and the idle time reads as unknown.
+      execFileSync('/usr/sbin/ioreg', ['-c', 'IOHIDSystem', '-r', '-d', '1', '-w', '0'], {
+        encoding: 'utf-8',
+      }),
+    );
+  } catch {
+    return null;
+  }
 }
 
 function log(msg) {
@@ -244,22 +470,22 @@ function writeSandboxHome(home) {
 
 // ── CDP ────────────────────────────────────────────────────────────
 
-/** Minimal CDP client — one page target, request/response over one socket. */
-async function attachToRenderer(port) {
+/** Minimal CDP client — one target, request/response over one socket. */
+async function attachTo(port, label, accept) {
   let targets = [];
   await waitFor(
-    'the Electron renderer to expose a debugging target',
+    `${label} to expose a debugging target`,
     async () => {
       try {
         targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
       } catch {
         return false;
       }
-      return targets.some((t) => t.type === 'page' && t.webSocketDebuggerUrl);
+      return targets.some(accept);
     },
     { timeoutMs: 60_000 },
   );
-  const target = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
+  const target = targets.find(accept);
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     ws.addEventListener('open', resolve, { once: true });
@@ -302,6 +528,78 @@ async function attachToRenderer(port) {
     });
 
   return { send, on, once, close: () => ws.close() };
+}
+
+const attachToRenderer = (port) =>
+  attachTo(port, 'the Electron renderer', (t) => t.type === 'page' && t.webSocketDebuggerUrl);
+
+const attachToMain = (port) =>
+  attachTo(port, "Electron's main process", (t) => Boolean(t.webSocketDebuggerUrl));
+
+/**
+ * Run a statement in the main process. `process.mainModule.require` is how an
+ * inspector session reaches Electron's own module — the harness needs three
+ * things the renderer cannot answer for: the window's size on screen, its
+ * frontmost-ness, and its CGWindowID.
+ */
+async function mainEval(main, body) {
+  const { result, exceptionDetails } = await main.send('Runtime.evaluate', {
+    expression: `(() => {
+      const { app, BrowserWindow, screen } = process.mainModule.require('electron');
+      const win = BrowserWindow.getAllWindows()[0];
+      ${body}
+    })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (exceptionDetails) {
+    throw new Error(
+      `main process: ${exceptionDetails.exception?.description ?? exceptionDetails.text}`,
+    );
+  }
+  return result?.value;
+}
+
+/** Put the window where the manifest wants it, and check the screen can hold it. */
+async function sizeWindow(main, viewport) {
+  const fits = await mainEval(
+    main,
+    `win.setPosition(${WINDOW_ORIGIN.x}, ${WINDOW_ORIGIN.y});
+     win.setContentSize(${viewport.width}, ${viewport.height});
+     win.show();
+     const area = screen.getPrimaryDisplay().workAreaSize;
+     const [w, h] = win.getContentSize();
+     return { fits: area.width >= w + ${WINDOW_ORIGIN.x} && area.height >= h + ${WINDOW_ORIGIN.y},
+              area, size: { width: w, height: h } };`,
+  );
+  if (!fits.fits) {
+    throw new Error(
+      `the ${fits.size.width}×${fits.size.height} window does not fit the ${fits.area.width}×${fits.area.height} work area — a clipped window is not a screenshot`,
+    );
+  }
+}
+
+/**
+ * Make the window key and frontmost, and name it. Both matter: a window that is
+ * not key draws its traffic lights grey, and Chromium stops compositing an
+ * occluded one — `screencapture` would then photograph a stale frame.
+ *
+ * Only when it is not already: the run takes the front once and keeps it, so
+ * the machine is grabbed a single time rather than once per shot (TRA-403).
+ */
+async function frontWindowId(main) {
+  const id = await mainEval(
+    main,
+    `if (!win.isFocused()) {
+       app.focus({ steal: true });
+       win.moveTop();
+       win.focus();
+     }
+     return win.getMediaSourceId();`,
+  );
+  const windowId = Number(String(id).split(':')[1]);
+  if (!Number.isInteger(windowId)) throw new Error(`Electron gave no window id (got ${id})`);
+  return windowId;
 }
 
 /**
@@ -374,22 +672,55 @@ function rendererUrl(shot, projectsByName) {
   return `${base}?${params}`;
 }
 
-async function captureShot(cdp, shot, ctx) {
-  const { manifest, projectsByName } = ctx;
+/**
+ * Photograph one window by its CGWindowID. `-o` drops the drop shadow (it would
+ * bake the desktop behind the window into the frame's edges); the rounded
+ * corners come back as alpha, which is what `checkWindowChrome` looks for.
+ */
+function captureWindow(windowId, outPath) {
+  fs.rmSync(outPath, { force: true });
+  execFileSync('/usr/sbin/screencapture', ['-x', '-o', '-t', 'png', `-l${windowId}`, outPath]);
+  if (!fs.existsSync(outPath)) {
+    throw new Error(
+      `screencapture wrote nothing for window ${windowId} — grant Screen Recording to the terminal running this`,
+    );
+  }
+  return fs.readFileSync(outPath);
+}
+
+/**
+ * PNG in, WebP out, at the manifest's scale. The renderer is the only encoder
+ * on hand that speaks WebP, so it does the resample too — and being a canvas
+ * op, the window's transparent corners survive it.
+ */
+async function toWebp(cdp, png, { width, height, quality }) {
+  const encoded = await evaluate(
+    cdp,
+    `(async () => {
+      const bin = atob(${JSON.stringify(png.toString('base64'))});
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+      const canvas = new OffscreenCanvas(${width}, ${height});
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, ${width}, ${height});
+      const blob = await canvas.convertToBlob({ type: 'image/webp', quality: ${quality / 100} });
+      const out = new Uint8Array(await blob.arrayBuffer());
+      let s = '';
+      for (let i = 0; i < out.length; i += 8192) s += String.fromCharCode(...out.subarray(i, i + 8192));
+      return btoa(s);
+    })()`,
+  );
+  if (typeof encoded !== 'string') throw new Error('the renderer returned no WebP data');
+  return Buffer.from(encoded, 'base64');
+}
+
+async function captureShot(cdp, main, shot, ctx) {
+  const { manifest, projectsByName, tmpDir } = ctx;
   const { viewport, deviceScaleFactor, format, quality } = manifest.capture;
 
-  await cdp.send('Emulation.setDeviceMetricsOverride', {
-    width: viewport.width,
-    height: viewport.height,
-    deviceScaleFactor,
-    mobile: false,
-  });
   await cdp.send('Emulation.setEmulatedMedia', {
     features: [
       { name: 'prefers-color-scheme', value: shot.theme },
-      // The window's vibrancy is native and invisible to a renderer capture;
-      // this is the product's own opaque-sidebar path.
-      { name: 'prefers-reduced-transparency', value: 'reduce' },
       { name: 'prefers-reduced-motion', value: 'reduce' },
     ],
   });
@@ -425,16 +756,28 @@ async function captureShot(cdp, shot, ctx) {
   await waitForContent(cdp);
   await sleep(shot.settleMs ?? 1500);
 
-  const { data } = await cdp.send('Page.captureScreenshot', {
-    format,
-    quality,
-    captureBeyondViewport: false,
-    fromSurface: true,
-  });
+  const windowId = await frontWindowId(main);
+  // The window server needs a beat to raise and re-key the window; capturing
+  // into that beat photographs grey traffic lights.
+  await sleep(600);
+  const raw = captureWindow(windowId, path.join(tmpDir, `${shot.name}.png`));
+  const png = decodePng(raw);
+
+  const scale = png.width / viewport.width;
+  if (png.height !== Math.round(viewport.height * scale) || scale < deviceScaleFactor) {
+    throw new Error(
+      `${shot.name}: captured ${png.width}×${png.height} for a ${viewport.width}×${viewport.height} window — wrong window, or a display below ${deviceScaleFactor}×`,
+    );
+  }
+  const verdict = checkWindowChrome(png, scale);
+  if (!verdict.ok) throw new Error(`${shot.name}: ${verdict.reasons.join('; ')}`);
+
+  const width = Math.round(viewport.width * deviceScaleFactor);
+  const height = Math.round(viewport.height * deviceScaleFactor);
+  const bytes = await toWebp(cdp, raw, { width, height, quality });
   const file = `${shot.name}.${format}`;
-  const bytes = Buffer.from(data, 'base64');
   fs.writeFileSync(path.join(IMAGES_DIR, file), bytes);
-  log(`${file} — ${Math.round(bytes.length / 1024)} KB`);
+  log(`${file} — ${Math.round(bytes.length / 1024)} KB, window chrome verified`);
   return {
     name: shot.name,
     file,
@@ -443,8 +786,8 @@ async function captureShot(cdp, shot, ctx) {
         ? `project · ${shot.clicks?.[0] ?? 'overview'}`
         : `menu · ${shot.tab}`,
     theme: shot.theme,
-    width: Math.round(viewport.width * deviceScaleFactor),
-    height: Math.round(viewport.height * deviceScaleFactor),
+    width,
+    height,
     bytes: bytes.length,
     alt: shot.alt,
   };
@@ -453,6 +796,11 @@ async function captureShot(cdp, shot, ctx) {
 // ── Orchestration ──────────────────────────────────────────────────
 
 async function capture(manifest, only) {
+  if (os.platform() !== 'darwin') {
+    throw new Error(
+      'the screenshots are photographs of a macOS window — traffic lights, rounded corners and vibrancy do not exist to capture anywhere else',
+    );
+  }
   const cliEntry = path.join(REPO_ROOT, 'dist', 'cli.js');
   // The real binary, not the `.bin/electron` shim: killing the shim leaves the
   // Electron process behind, holding the debugging port for the next run.
@@ -474,7 +822,7 @@ async function capture(manifest, only) {
   ]) {
     if (!fs.existsSync(p)) throw new Error(`missing ${what}`);
   }
-  for (const port of [DEMO_DAEMON_PORT, DEBUG_PORT]) {
+  for (const port of [DEMO_DAEMON_PORT, DEBUG_PORT, MAIN_INSPECT_PORT]) {
     if (!(await portIsFree(port))) {
       throw new Error(`port ${port} is busy — a previous capture may still be running`);
     }
@@ -489,6 +837,9 @@ async function capture(manifest, only) {
   const shim = writeSandboxHome(home);
   const env = { ...process.env, TRACE_MCP_DATA_DIR: home, TRACE_MCP_BIN: shim };
   delete env.ELECTRON_RUN_AS_NODE;
+  const tmpDir = path.join(sandbox, 'frames');
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  fs.mkdirSync(tmpDir, { recursive: true });
 
   log(`seeding demo projects in ${demoRoot}`);
   const projects = seedDemoProjects(manifest, demoRoot);
@@ -515,10 +866,23 @@ async function capture(manifest, only) {
   fs.rmSync(profile, { recursive: true, force: true });
   const electron = spawn(
     electronBin,
-    ['.', `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${profile}`],
-    { cwd: path.join(REPO_ROOT, 'packages/app'), env, stdio: 'ignore' },
+    [
+      '.',
+      `--remote-debugging-port=${DEBUG_PORT}`,
+      `--inspect=${MAIN_INSPECT_PORT}`,
+      `--user-data-dir=${profile}`,
+    ],
+    // Always-on-top for the same reason the flag exists: Chromium stops
+    // compositing an occluded window, and a window capture of one is a stale
+    // frame. Nothing else may cover the window while it is being photographed.
+    {
+      cwd: path.join(REPO_ROOT, 'packages/app'),
+      env: { ...env, TRACE_MCP_DEV_ALWAYS_ON_TOP: '1' },
+      stdio: 'ignore',
+    },
   );
   let cdp = null;
+  let main = null;
   try {
     await waitFor(
       'the daemon to answer /health',
@@ -529,6 +893,12 @@ async function capture(manifest, only) {
     await cdp.send('Page.enable');
     await cdp.send('Runtime.enable');
     await redirectDaemonTraffic(cdp);
+    main = await attachToMain(MAIN_INSPECT_PORT);
+    await main.send('Runtime.enable');
+    // The window is sized once, for real: the frame is a photograph of it, so
+    // an emulated viewport would only render the app at a size the window is
+    // not, and the capture would come back letterboxed.
+    await sizeWindow(main, manifest.capture.viewport);
 
     // One-time renderer state, written into the window the app opened for
     // itself: the onboarding sheet is dismissed, the recent list is populated,
@@ -546,10 +916,11 @@ async function capture(manifest, only) {
     const images = [];
     for (const shot of manifest.shots) {
       if (only.length > 0 && !only.includes(shot.name)) continue;
-      images.push(await captureShot(cdp, shot, { manifest, projectsByName }));
+      images.push(await captureShot(cdp, main, shot, { manifest, projectsByName, tmpDir }));
     }
     return images;
   } finally {
+    main?.close();
     cdp?.close();
     for (const child of [electron, daemon]) {
       try {
@@ -606,6 +977,14 @@ async function main() {
     const result = checkFreshness(readMarker(), currentState());
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     process.exit(result.fresh ? 0 : 1);
+  }
+
+  // The run activates the app to photograph it, so it waits for the machine to
+  // be free rather than taking it from somebody (TRA-403).
+  const gate = mayStartCapture(idleSeconds(), { force: argv.includes('--now') });
+  if (!gate.ok) {
+    log(`deferred — ${gate.reason}`);
+    process.exit(IDLE_EXIT_CODE);
   }
 
   const only = argv.filter((a) => !a.startsWith('-'));

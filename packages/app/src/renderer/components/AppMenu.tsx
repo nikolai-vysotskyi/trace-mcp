@@ -17,10 +17,12 @@
    Appearance is not in that list: it is a preference with three states, it also
    lives in Settings, and it exists on no other surface to drift against. */
 
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../lattice/icons';
 import { Menu, MenuChoiceRow, MenuItem, MenuSeparator, useMenuAnchor } from '../lattice/ui';
 import { GLOBAL_ACTIONS, type GlobalAction } from '../../shared/global-actions.js';
 import { APPEARANCE_OPTIONS, type Appearance } from '../theme.js';
+import { t } from '../i18n/index.js';
 import { describeStaleRoots, formatAgo, type UpdateState } from '../update-check.js';
 import { SidebarRow } from './SidebarRow';
 
@@ -39,6 +41,8 @@ interface Summary {
   tone: string;
   /** Long-form detail for the cases where one line cannot carry it. */
   title?: string;
+  /** A shell command the user must run themselves — offered as a copy item. */
+  command?: string;
 }
 
 /** The header's second line: what we know about this version right now. */
@@ -52,11 +56,13 @@ function updateSummary(update: UpdateState, checking: boolean): Summary {
   if (update.stuck && update.latest) {
     return { text: `Version ${update.latest} needs a manual install`, tone: 'is-warn' };
   }
-  /* Same shape of lie, different cause: this root is current, another npm root
-     on the machine is not (TRA-364). Not an error, but not healthy either. */
+  /* Same shape of lie, different cause: this root is current, but the npm root
+     the launcher shim points into is not, so every MCP client is on the old
+     server (TRA-364). The main process only sends roots that are actually in
+     use, so reaching here always means the user has something to fix. */
   if (update.staleRoots?.length) {
     const stale = describeStaleRoots(update.staleRoots);
-    return { text: stale.label, tone: 'is-warn', title: stale.title };
+    return { text: stale.label, tone: 'is-warn', title: stale.title, command: stale.command };
   }
   return { text: `Up to date · checked ${formatAgo(update.lastChecked)}`, tone: 'is-ok' };
 }
@@ -70,6 +76,9 @@ export function AppMenu({
   onSettings,
 }: AppMenuProps) {
   const menu = useMenuAnchor();
+  // Unnamespaced: the shared action list carries fully-qualified keys, because
+  // the native menu resolves the same ones in the main process.
+  const { t } = useTranslation();
   const open = menu.at !== null;
   const summary = updateSummary(update, checking);
 
@@ -107,15 +116,23 @@ export function AppMenu({
       disabled={action.id === 'check-for-update' && checking}
       onClick={runAction(action)}
     >
-      {action.label}
+      {t(action.labelKey)}
     </MenuItem>
   );
 
-  /* Settings sits alone above Appearance, the way it does in the app menu on
-     macOS; the rest follow the group. Split by id rather than by index so a
-     reordered shared list cannot silently move an item into the wrong group. */
+  /* Three groups, not two. Settings sits alone above Theme, the way it does in
+     the app menu on macOS. Below Theme the remaining actions split on what they
+     DO: `links` leave for a browser, `commands` act on this app — so
+     "Check for updates…" gets its own group rather than trailing the two GitHub
+     pages as if it were a third destination (TRA-376).
+
+     The split is on `url`, not on an id list: an action that opens a page is
+     already declared that way in global-actions.ts, so a new entry lands in the
+     right group without this file learning its name. */
   const settings = GLOBAL_ACTIONS.find((a) => a.id === 'settings');
   const rest = GLOBAL_ACTIONS.filter((a) => a.id !== 'settings');
+  const links = rest.filter((a) => a.url);
+  const commands = rest.filter((a) => !a.url);
 
   return (
     <div className="ws-sb-footer">
@@ -146,6 +163,19 @@ export function AppMenu({
               </span>
             </div>
           </div>
+          {/* The one case where the header states a problem the app cannot fix
+              for the user: give them the fix rather than a sentence about it. */}
+          {summary.command && (
+            <>
+              <MenuSeparator />
+              <MenuItem
+                icon="content_copy"
+                onClick={run(() => void navigator.clipboard?.writeText(summary.command as string))}
+              >
+                {t('update:copyStaleRootCommand')}
+              </MenuItem>
+            </>
+          )}
           <MenuSeparator />
           {settings && item(settings)}
           <MenuSeparator />
@@ -159,7 +189,9 @@ export function AppMenu({
             onChange={onAppearanceChange}
           />
           <MenuSeparator />
-          {rest.map(item)}
+          {links.map(item)}
+          {links.length > 0 && commands.length > 0 && <MenuSeparator />}
+          {commands.map(item)}
         </Menu>
       )}
     </div>

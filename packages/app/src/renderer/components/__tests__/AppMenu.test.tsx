@@ -12,6 +12,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GLOBAL_ACTIONS } from '../../../shared/global-actions.js';
+import { t } from '../../i18n';
 import type { UpdateState } from '../../update-check.js';
 import { AppMenu, type AppMenuProps } from '../AppMenu';
 
@@ -72,7 +73,7 @@ describe('sidebar app menu', () => {
     const { trigger } = renderMenu();
     const menu = openMenu(trigger);
     for (const action of GLOBAL_ACTIONS) {
-      const item = within(menu).getByRole('menuitem', { name: new RegExp(action.label) });
+      const item = within(menu).getByRole('menuitem', { name: new RegExp(t(action.labelKey)) });
       if (action.shortcut) expect(item.textContent).toContain(action.shortcut);
     }
   });
@@ -163,6 +164,21 @@ describe('sidebar app menu', () => {
 
     fireEvent.click(within(openMenu(trigger)).getByRole('menuitem', { name: /Check for updates/ }));
     expect(onCheckForUpdate).toHaveBeenCalled();
+  });
+
+  /* TRA-376. "Check for updates…" acts on the app; the two above it leave for
+     a browser. It sat flush under "Get help" as if it were a third GitHub page.
+     Pinned by position, not by count, so adding a fourth link cannot quietly
+     re-merge the groups. */
+  it('separates the action on the app from the links that leave it', () => {
+    const { trigger } = renderMenu();
+    const menu = openMenu(trigger);
+    const check = within(menu).getByRole('menuitem', { name: /Check for updates/ });
+    expect(check.previousElementSibling?.getAttribute('role')).toBe('separator');
+
+    const help = within(menu).getByRole('menuitem', { name: /Get help/ });
+    const changelog = within(menu).getByRole('menuitem', { name: /View changelog/ });
+    expect(help.previousElementSibling).toBe(changelog);
   });
 
   it('arrows through the items and wraps', () => {

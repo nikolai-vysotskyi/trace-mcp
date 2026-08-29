@@ -69,28 +69,59 @@ below macOS 26.
 
 This is the thing to internalise before touching the sidebar's material (TRA-369).
 
-`NSVisualEffectView` blends **whatever is composited behind the window** — the
-wallpaper, or another app's window. So the sidebar's tone is not a property of our CSS;
-it is a function of our CSS *and the user's desktop*. Two screenshots of the same build
-in the same appearance can look completely different, and both are real.
+`NSVisualEffectView` blends **the desktop picture** behind the window. So the sidebar's
+tone is not a property of our CSS; it is a function of our CSS *and the user's
+wallpaper*. Two screenshots of the same build in the same appearance can look completely
+different, and both are real.
+
+It is specifically the *wallpaper*, not "whatever is behind the window" (TRA-404). With
+an opaque white window filling the area directly behind it — verified in the same
+capture, the margin around the material window reads `#ffffff` — the sidebar does not
+move by a single level from its black-desktop value. Backing the window with another
+window is therefore not a way to test this without touching someone's desktop, and it is
+not a cell of the matrix either.
 
 Two rules follow, and neither is optional:
 
 1. **Never validate the material against a single background.** The matrix is: light
-   appearance × {dark wallpaper, light wallpaper, a dark window behind, a light window
-   behind} × {window active, window inactive}, then the same set in dark. And it has to
-   be shot in the **Electron window** — there is no `NSVisualEffectView` on the Vite dev
-   server, so none of this is visible in a browser.
-2. **The material never gets to decide how dark the sidebar goes in light appearance.**
-   `--sidebar-scrim` is a stated floor: white at `.70` above the material, so whatever
-   the material renders, the sidebar lands at least 70% of the way from it to white and
-   can never go below `#b2b2b2`. The remaining `.30` still carries the material, so the
-   sidebar keeps picking up the desktop's tint — it just cannot be dragged to grey by a
-   dark desktop and read as dirt beside the white content pane.
+   appearance × {black, deep blue, mid-grey, white wallpaper} × {window active, window
+   inactive}, then the same set in dark. And it has to be shot in the **Electron
+   window** — there is no `NSVisualEffectView` on the Vite dev server, so none of this is
+   visible in a browser. `screencapture -R <window rect>` is the capture: a CDP
+   screenshot only has the web contents and never the material, and `screencapture
+   -l<windowid>` hangs on this window.
+2. **The drift is bounded in BOTH appearances, and the bound is a relationship to the
+   content pane — not an absolute colour.** The pull goes light over a light desktop and
+   dark over a dark one, and either direction ends at mid-grey. Measured on the shipped
+   build, dark appearance, sidebar swatch against a `#141414` well: `#222222` over a
+   black desktop, `#4f4f4f` over a white one — 45 levels of swing from nothing but the
+   user's wallpaper. Light had the same problem mirrored. A one-sided floor fixes one
+   half and leaves the other exactly as wrong; that mistake has been made here once
+   already.
 
-   Dark appearance gets **no** floor (`--sidebar-scrim: transparent`). There the
-   material can only take the sidebar toward black, which is where it belongs, and glass
-   is the entire point. Light is the appearance to be careful with; dark is the easy one.
+   The rule: **the sidebar sits just above the content pane's `--surface-sunken` well in
+   lightness, by a bounded amount, in both appearances.** `--sidebar-scrim` is what
+   enforces it, and every value of it is `--surface` at some alpha — never `transparent`
+   (unbounded) and never a colour of its own (a bound that stops tracking the surface it
+   is meant to stay near).
+
+   - **Light: flat `--surface`, alpha 1.** No drift term at all. This is the measured
+     target, not a retreat from glass: the render Nikolai approved samples `#ffffff` —
+     our own `--surface`, uniform top to bottom — against a `#f5f5f7` well, and the one
+     he rejected samples `#e4e3e4`. Holding a white floor with a translucent layer lands
+     on the same pixel with more machinery and a residual drift to bound anyway, and
+     glass in light has the least to give: over a light desktop it is invisible, over a
+     dark one it is the defect.
+   - **Dark: `--surface` at `.78`.** The glass survives where it has somewhere to go —
+     `.22` of the material still comes through, enough to see the desktop in the sidebar
+     and not enough to drag it to mid-grey. Shot across the full matrix (TRA-404):
+     `#1e1e1e` over black to `#2b2b2b` over white, `+10` to `+23` above the `#141414`
+     well — 45 levels of swing compressed to 13, and light held `#ffffff` in all eight
+     cells.
+
+   The number to report for any change here is the **delta between the sidebar's rendered
+   pixels and the well's**, per cell of the matrix above, plus the spread across cells.
+   The spread is the bound; a single cell says nothing about it.
 
 Under `prefers-reduced-transparency: reduce` the sidebar paints `--surface` itself
 rather than letting macOS make the effect view opaque: the system's opaque fill follows
@@ -329,7 +360,7 @@ because re-adding a banned body under a new key is the same regression wearing a
 
 | Rejected | Why | Use instead |
 |---|---|---|
-| `auto_awesome` (sparkles) | Decorates rather than names. It is the AI-marketing glyph; on a developer tool it reads as ornament and says nothing about what the item does. | The glyph for the destination — `description` for `View changelog`. |
+| `auto_awesome` (sparkles) | Decorates rather than names. It is the AI-marketing glyph; on a developer tool it reads as ornament and says nothing about what the item does. | The glyph for the destination — `scroll` for `View changelog`. |
 | `forum` (speech bubbles) | Promises a conversation with a person. Nothing in this app is one: `Get help` opens GitHub issues, `Ask` queries the indexed graph. | `help` (question mark in a circle) for help; `search` for Ask. |
 
 Judge the replacement at the size it renders, not on the 24-grid. `manage_search`
@@ -340,6 +371,13 @@ handle. A glyph that only reads at 24px is not a glyph this app has a use for.
 **When a reference is supplied, match it.** If it looks wrong for us, say so in the PR
 and argue it. A substitution nobody mentions costs a review round every time, and it
 is how this pair shipped in the first place.
+
+That happened twice on the same item. Sparkles were replaced with `description`, a
+plain page — the *category* the reference belonged to, not the glyph in it. The
+reference was a rolled sheet, which is now `scroll`, and a changelog is a running
+record you scroll through rather than a document you open. **Matching a reference
+means the glyph in it**, not the nearest thing already in the set: if the set has no
+match, draw one and say in the PR that you did.
 
 ### Prominent buttons are flat
 
@@ -372,6 +410,16 @@ Selection follows the macOS active/inactive pair: `--fill-tertiary` when the sid
 does not own focus, `--accent-fill` + `--on-accent` when it does
 (`.ws-sidebar:focus-within`).
 
+**A row holding a menu open shows its open state, and nothing else.** The trigger
+keeps DOM focus while its menu is up, so the house `*:focus-visible` ring — a 3px
+accent halo over a **1px inset accent border** — sat on the row for as long as the
+menu stayed open whenever it had been opened from the keyboard. On a full-width row
+that inset border is a rectangle, and a blue rectangle around a row reads as a
+focused text field, not as a trigger holding its state. `--fill-tertiary` is the
+whole indicator; the open menu is the rest of it
+(`.ws-sb-row[aria-expanded='true']:focus-visible { box-shadow: none }`). The ring
+stays for the case it is actually for: the row focused with the menu closed.
+
 ### States are part of the component, not an afterthought
 
 Every data surface owes four states, and each has a house form:
@@ -389,6 +437,27 @@ Every data surface owes four states, and each has a house form:
 - **Unknown ≠ empty ≠ zero.** "The daemon has not answered yet" and "this project was
   never indexed" are different sentences. "0 of 0 dependencies covered" is an empty
   state, not a full green meter.
+
+### One condition gets one sentence, and stale beats empty
+
+Two rules for a surface whose data source can be slow, and both were broken at once in
+TRA-397 — a busy daemon produced three different banners in sequence and then replaced
+every number with an em dash.
+
+**A timeout threshold is not a diagnosis.** "The request is taking a while", "the feed
+dropped" and "the request failed" are one condition — the service is busy — seen at three
+moments. Reduce them to one state with one line before they reach the screen, and hold it
+steady: degradation waits out a grace period (`DEGRADED_GRACE_MS`) so a feed that blinks
+does not blink a banner with it, while recovery publishes immediately. Escalating copy
+makes a working app look broken. Keep apart only what the user would act on differently —
+"busy" and "not running" are two states because one is a wait and the other is a button.
+
+**Values that were true a minute ago outrank no values at all.** A refresh that fails must
+leave the last good ones on screen, cache them across launches, and say once — above them,
+where they are read before the numbers are — that they are the last indexed ones. Em dashes
+and "Couldn't be measured" are for a number nobody has ever had, not for one that is a few
+minutes old. The corollary: that line has to match the screen. Saying "these are the last
+indexed numbers" over a row of em dashes is the same lie in the other direction.
 
 ---
 
@@ -502,6 +571,37 @@ Two things to know before touching the offset:
 `src/renderer/styles/__tests__/tokens.test.ts` fail if the constant, the token, the
 stylesheets and `tray.ts` ever drift apart again.
 
+### The second top band: the native tab bar is macOS's, not ours
+
+Opening a project opens a native macOS **tab**, so the normal state of this app is a
+tabbed window — not an edge case. AppKit then draws a tab bar, and because the window is
+`titleBarStyle: 'hiddenInset'` (full-size content view) it draws it **over** the web
+contents: `innerHeight` stays equal to `outerHeight`, nothing reflows, and the tab bar
+simply covers the top 36px of whatever the renderer painted. That is the whole of the
+band above, so the surface toolbar and the sidebar toggle went from "misaligned" to
+"gone" (TRA-399).
+
+The rule that follows: **a band we do not draw still has to be reserved.** The tab bar is
+AppKit's, we cannot restyle it and we cannot ask whether it is up — so:
+
+- `MAC_TAB_BAR_H` (36px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
+  number, exactly like `TOP_BAND_H`. The stage reserves it with `padding-top` while
+  `data-tabbar="on"`, and the app's own band starts below it. Never draw into it.
+- **The traffic lights belong to whichever band holds the top line**, not to a constant.
+  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 36px tab bar
+  (centre 18). `trafficLightYFor(tabBarVisible)` is the only place that chooses.
+- **`trafficLightPosition` is applied once, at window creation, and AppKit re-lays the
+  title bar out under it.** So every event that can change the tab count re-applies it —
+  `show`, `focus`, `closed`, `did-finish-load` — synchronously and again a frame later,
+  because the tab bar comes and goes asynchronously. Without that, closing back to one tab
+  left the lights 6px high until a window resize forced a layout pass, which is the "nudge
+  the window and it fixes itself" users report.
+- The 78px that clears the lights in `.ws-sidebar-titlebar` goes away with them: while the
+  tab bar holds the lights, reserving their width leaves the toggle floating in a gap.
+
+`src/main/__tests__/tab-chrome.test.ts` drives the real window events and fails if any of
+those stops firing.
+
 ### Where a global action lives
 
 An action that belongs to the app rather than to the surface in front of you —
@@ -526,6 +626,13 @@ same reason.
 
 The footer never grows a second row for any of this. If a new global action needs a
 home, it is a menu item.
+
+**Grouping in the app menu is by what an item does, not by what is left over.**
+Settings alone, then the choices, then the actions — and inside the actions,
+everything that *leaves for a browser* is one group and everything that *acts on
+this app* is another. `Check for updates…` sat flush under `Get help` and read as a
+third GitHub page. `AppMenu` splits on `url`, which every entry already declares, so
+a new action lands in the right group without that file learning its name.
 
 ### A choice in a menu is one row, not a group of items
 
@@ -567,6 +674,14 @@ What the row has to get right, all of it enforced by
   unselected icon drops to `--label-secondary`.
 - **Picking a value does not close the menu.** The point of an inline switcher is
   watching the app change under it. A command still closes; a choice does not.
+- **The pill's proportions come from the reference, not from the nearest size
+  token.** Icon-only segments shipped on `sz-small`: a 20px track, 16px segments and
+  a 14px glyph, which left **1px** of air above and below the icon — while
+  `.lx-seg.sz-small`'s `padding: 0 8px` won the cascade and ran the segments 30px
+  wide. Squeezed on one axis, loose on the other. The shape to hold is *air inside
+  the segment, little outside the pill*: the default 24px track, 24×20 segments, a
+  12px glyph — 6px beside the icon, 4px above it, and 3px between pill and row.
+  A segment never goes under the 24px hit-target floor to look squarer.
 
 ### Every string comes from the catalogue, and the length is not yours to assume
 
@@ -797,11 +912,18 @@ node packages/app/scripts/electron-cdp.mjs shot before/graph-light.png \
 
 `launch` runs the app with `--remote-debugging-port=9222` under its own `--user-data-dir`
 (so it does not lose Electron's single-instance lock to an installed trace-mcp.app) and
-sets `TRACE_MCP_DEV_ALWAYS_ON_TOP=1`. That last part is not cosmetic: Chromium stops
-compositing a fully occluded window, and a CDP screenshot of one hangs or hands back the
-frame it painted minutes ago — a stale-pixel "after" shot that looks like a fix. Any CDP
-client can attach to `http://127.0.0.1:9222` once it is up, including `chrome-devtools`
+**never puts a window on screen**. The window is created, loads and paints; it is simply
+never mapped, and the process runs as a macOS accessory app, so it takes no Dock tile, no
+⌘-Tab entry and no activation. Everything here drives the app over CDP, which does not
+care whether the window is visible — and the person at the keyboard does (TRA-403). Any
+CDP client can attach to `http://127.0.0.1:9222` once it is up, including `chrome-devtools`
 MCP via `--browser-url`.
+
+`launch --visible` puts it on screen for the one case that needs eyes on the running app,
+and then also sets `TRACE_MCP_DEV_ALWAYS_ON_TOP=1`: Chromium stops compositing a fully
+*occluded* window, and a CDP screenshot of one hands back the frame it painted minutes ago
+— a stale-pixel "after" shot that looks like a fix. An unmapped window is not an occluded
+one; it keeps painting, and its screenshots are current (measured, not assumed).
 
 The one thing a CDP capture cannot show is the native frame: the traffic lights are drawn
 by macOS outside the web contents, so they are absent from the PNG even though the strip
@@ -815,6 +937,41 @@ fixed set of images `docs/` and trace-mcp.com ship, from a seeded sandbox, and c
 whether the committed ones are stale. Use that one for anything committed to the repo; use
 `electron-cdp.mjs` when you need to point a debugger at the app you are running right now
 and shoot a surface it has no manifest entry for.
+
+### A review run never takes the screen from the person using the machine
+
+Design work here runs on a Mac somebody is working on, and macOS follows an app activation
+to the Space that app's window is on — so a harness that shows a window yanks them out of
+their full-screen app, and hourly runs do it hourly (TRA-403). The rule for anything an
+agent launches:
+
+- **The app: never shown.** `electron-cdp.mjs launch` is hidden and accessory by default.
+  A visible window needs `--visible` and a reason stated where you use it.
+- **The browser: `--headless --isolated`.** Headless removes the window entirely and
+  screenshots still come out; `--isolated` gives Chrome a throwaway profile so it can
+  never adopt or disturb the one the user has open. Both belong in the MCP server's own
+  arguments, not in a per-call flag somebody will forget.
+- **Never call `app.focus()`, `win.focus()`, `win.show()`, `showInactive()` or
+  `shell.openExternal` from a harness path.** `tests/scripts/capture-screenshots.test.ts`
+  reads these files and fails when one appears: in `tray.ts` every show goes through
+  `presentWindow`, which returns early under `TRACE_MCP_WINDOW_MODE=hidden`; in
+  `electron-cdp.mjs` there are none at all.
+- **The one exception is the publication capture**, which cannot avoid activating the app
+  (a window whose app is not active draws grey traffic lights, and those are refused). It
+  pays for the exception by waiting for an idle machine — see docs/development.md.
+
+### A published screenshot shows the window, or it is not a screenshot of the app
+
+Anything a reader sees as "trace-mcp" — README, trace-mcp.com, a release note, an issue
+that claims a fix landed — must contain the window chrome: traffic lights, rounded corners,
+the real sidebar material. A frame without them is a picture of a web page, and a reader
+who has never opened the app cannot tell the difference between that and a browser demo.
+Three separate rounds shipped one anyway (TRA-354, TRA-366, TRA-390), because the rule
+lived only in prose, so `capture-screenshots.mjs` now photographs the window itself
+(`screencapture -l<CGWindowID>`) and refuses to write a frame whose corners are opaque or
+whose buttons are missing. Shoot published images with that script. `electron-cdp.mjs`
+stays a review tool — its CDP shots are for measuring your own work in progress, never for
+publication.
 
 ### Title a design PR `feat:` / `fix:` / `refactor:` — never `design:`
 
@@ -881,6 +1038,8 @@ new evidence.
 | 20px controls keep the painted macOS small size, hit target grown by pseudo-element | The painted size is *correct*; only the hit box was wrong. Growing the box moves no pixel. |
 | Prominent buttons are a flat accent capsule | macOS 26 dropped the gradient + bezel entirely. |
 | Segmented selection is the thumb, and unselected labels stay at `--label` | macOS draws unselected segments at full strength; `--label-secondary` on the recessed track measured 4.45:1. |
+| An icon-only segment gets the 24px track, not `sz-small` (TRA-376) | At 20px the track leaves 1px above a 14px glyph, and `sz-small`'s `padding: 0 8px` wins the cascade over the menu's own `padding: 0` — squeezed vertically, loose horizontally. |
+| A menu trigger with its menu open draws no focus ring (TRA-376) | The house ring carries a 1px **inset** accent border. On a full-width row, held for as long as the menu is up, that is a blue rectangle that reads as a focused text field. |
 | Badge tint at 18% with a per-tone `--badge-*-fg` label | White-on-a-light-fill was 1.6:1. The tone's own hue, darkened until it clears AA over its own tint, is legible in both appearances. |
 | Badges/chips/headers are sentence case | ALL CAPS is reserved for the 10px group header and nowhere else. |
 | Cards are opaque with a hairline, no shadow, no glass | Cards are content. The active KPI tile painted on accent measured 3.28:1 and pushed its footnote to 4.45:1. |

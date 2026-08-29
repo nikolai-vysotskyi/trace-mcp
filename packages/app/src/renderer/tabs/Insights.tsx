@@ -17,6 +17,7 @@
  * test pure logic without pulling in React under pnpm --frozen-lockfile.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Badge, Button, EmptyState, PopUpButton, SegmentedControl, Toolbar } from '../lattice/ui';
 import {
   INSIGHT_REPORTS,
@@ -99,10 +100,10 @@ const SEVERITY_TONE: Record<string, 'red' | 'orange' | 'neutral'> = {
 
 /* What the report is DOING, in the user's terms — never the MCP tool id. The
    tool name is an internal identifier and has no business on screen. */
-const RUNNING_COPY: Record<ReportId, string> = {
-  claudemd_drift: 'Checking agent config against the index…',
-  pagerank: 'Ranking files by import centrality…',
-  risk_hotspots: 'Correlating complexity with git churn…',
+const RUNNING_KEY: Record<ReportId, string> = {
+  claudemd_drift: 'runningDrift',
+  pagerank: 'runningPagerank',
+  risk_hotspots: 'runningRisk',
 };
 
 // ── Component ────────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ export function Insights({
   root: string;
   client?: InsightsClient;
 }) {
+  const { t } = useTranslation('insights');
   const [states, setStates] = useState<Record<ReportId, ReportState>>(() => initialReportStates());
   const [focused, setFocused] = useState<ReportId>(INSIGHT_REPORTS[0].id);
 
@@ -132,11 +134,15 @@ export function Insights({
       } catch (err) {
         setStates((prev) => ({
           ...prev,
-          [id]: { ...prev[id], status: 'error', error: (err as Error).message ?? 'Unknown error' },
+          [id]: {
+            ...prev[id],
+            status: 'error',
+            error: (err as Error).message ?? t('unknownError'),
+          },
         }));
       }
     },
-    [client, root],
+    [client, root, t],
   );
 
   /* Measure the toolbar, not the picker's own slot. The slot is narrower when
@@ -180,7 +186,7 @@ export function Insights({
   const focusedDef = REPORT_BY_ID[focused];
   const focusedState = states[focused];
   const running = focusedState.status === 'running';
-  const runLabel = running ? 'Running…' : focusedState.status === 'ok' ? 'Refresh' : 'Run';
+  const runLabel = running ? t('running') : focusedState.status === 'ok' ? t('refresh') : t('run');
 
   return (
     <div
@@ -190,26 +196,26 @@ export function Insights({
       {/* Toolbar — title, report picker, the single primary action. */}
       <Toolbar className="gap-3">
         <h1 className="t-title-3" style={{ color: 'var(--label)', margin: 0, flexShrink: 0 }}>
-          Insights
+          {t('title')}
         </h1>
         <span ref={pickerRef} style={{ display: 'flex', flex: '1 1 auto', minWidth: 0 }}>
           {segmented ? (
             <SegmentedControl
-              aria-label="Report"
+              aria-label={t('reportPicker')}
               value={focused}
               onChange={setFocused}
               options={INSIGHT_REPORTS.map((r) => ({
                 value: r.id,
-                label: r.title,
-                title: r.description,
+                label: t(r.titleKey),
+                title: t(r.descriptionKey),
               }))}
             />
           ) : (
             <PopUpButton
-              aria-label="Report"
+              aria-label={t('reportPicker')}
               value={focused}
               onChange={setFocused}
-              options={INSIGHT_REPORTS.map((r) => ({ value: r.id, label: r.title }))}
+              options={INSIGHT_REPORTS.map((r) => ({ value: r.id, label: t(r.titleKey) }))}
             />
           )}
         </span>
@@ -221,7 +227,7 @@ export function Insights({
             variant="prominent"
             onClick={() => runReport(focused)}
             disabled={running}
-            aria-label={`${runLabel} ${focusedDef.title}`}
+            aria-label={t('runAction', { action: runLabel, report: t(focusedDef.titleKey) })}
           >
             {runLabel}
           </Button>
@@ -234,10 +240,10 @@ export function Insights({
           {focusedState.status !== 'idle' && (
             <div style={{ marginBottom: 'var(--space-16)' }}>
               <div className="t-title-3" style={{ color: 'var(--label)' }}>
-                {focusedDef.title}
+                {t(focusedDef.titleKey)}
               </div>
               <div className="t-body" style={{ color: 'var(--label-secondary)' }}>
-                {focusedDef.description}
+                {t(focusedDef.descriptionKey)}
               </div>
             </div>
           )}
@@ -246,11 +252,11 @@ export function Insights({
             <EmptyState
               icon={REPORT_ICON[focused]}
               iconSize={32}
-              title={focusedDef.title}
-              subtitle={focusedDef.description}
+              title={t(focusedDef.titleKey)}
+              subtitle={t(focusedDef.descriptionKey)}
               action={
                 <Button variant="prominent" size="large" onClick={() => runReport(focused)}>
-                  Run
+                  {t('run')}
                 </Button>
               }
             />
@@ -293,7 +299,7 @@ export function Insights({
           whiteSpace: 'nowrap',
         }}
       >
-        {running ? RUNNING_COPY[focused] : ''}
+        {running ? t(RUNNING_KEY[focused]) : ''}
       </span>
     </div>
   );
@@ -302,14 +308,10 @@ export function Insights({
 // ── Rows view ────────────────────────────────────────────────────────
 
 function RowsView({ rows, icon }: { rows: InsightRows; icon: string }) {
+  const { t } = useTranslation('insights');
   if (rows.rows.length === 0) {
     return (
-      <EmptyState
-        icon={icon}
-        iconSize={32}
-        title="Nothing to report"
-        subtitle="This report came back empty — nothing in the project matches it right now."
-      />
+      <EmptyState icon={icon} iconSize={32} title={t('emptyTitle')} subtitle={t('emptyBody')} />
     );
   }
   return (

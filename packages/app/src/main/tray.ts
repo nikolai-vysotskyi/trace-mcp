@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from 'electron';
-import { TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y } from '../shared/chrome-metrics.js';
+import { TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y, trafficLightYFor } from '../shared/chrome-metrics.js';
 import { DaemonClient } from './api-client';
 import {
   type Appearance,
@@ -10,8 +10,24 @@ import {
   writeAppearance,
 } from './appearance';
 import { ensureDaemon, restartDaemon } from './daemon-lifecycle';
+import { t } from './i18n';
 
 const isMac = process.platform === 'darwin';
+
+/**
+ * Render the app without ever putting a window on screen (TRA-403).
+ *
+ * Agent harnesses drive this app on a machine somebody is using: macOS follows
+ * an app activation to the Space that app's window lives on, so a review run
+ * that shows a window drags the user out of their full-screen app. With
+ * `TRACE_MCP_WINDOW_MODE=hidden` the window is created, loads and paints, but is
+ * never mapped — no Dock icon, no activation, nothing on screen — and a CDP
+ * screenshot of it is a real, current frame (measured: `Page.captureScreenshot`
+ * on an unmapped window returns the same pixels as on a visible one).
+ *
+ * Set by `scripts/electron-cdp.mjs`. Never set in a shipped build.
+ */
+export const HIDDEN_WINDOWS = process.env.TRACE_MCP_WINDOW_MODE === 'hidden';
 
 // macOS: Template images (auto-tinted by the system)
 // Windows: separate light/dark icons (white for dark taskbar, black for light)
@@ -148,6 +164,15 @@ function setupWindowEvents(win: BrowserWindow): void {
   win.on('enter-full-screen', () => safeSend(win, 'fullscreen-changed', true));
   win.on('leave-full-screen', () => safeSend(win, 'fullscreen-changed', false));
 
+  /* Every event that can change how many tabs the group holds, or that gives a
+     renderer that missed the last broadcast a chance to catch up. 'closed' is
+     the one the bug was reported against; 'focus' also covers a tab dragged out
+     into its own window, which fires nothing else we can see. */
+  win.on('show', syncTabChromeSoon);
+  win.on('focus', syncTabChromeSoon);
+  win.on('closed', syncTabChromeSoon);
+  win.webContents.on('did-finish-load', syncTabChrome);
+
   // Auto-reload on renderer crash (GPU crash, OOM, etc.)
   win.webContents.on('render-process-gone', (_event, details) => {
     console.error(`[trace-mcp] renderer crashed in window: reason=${details.reason}`);
@@ -184,12 +209,70 @@ function ensureDockVisible(): void {
   }
 }
 
-/** Notify ALL windows whether the native tab bar is visible (macOS) */
-function broadcastTabBar(visible: boolean): void {
-  const allWindows = [menuWindow, ...projectWindows.values()];
-  for (const win of allWindows) {
+/** Put a loaded window on screen — the one place that shows and focuses one. */
+function presentWindow(win: BrowserWindow): void {
+  if (HIDDEN_WINDOWS) return;
+  ensureDockVisible();
+  win.show();
+  win.focus();
+}
+
+/* ---- The native tab bar (macOS), and the two things it breaks (TRA-399) ----
+
+   Every window we open carries the same `tabbingIdentifier`, so a second window
+   is a second TAB, and AppKit answers with a tab bar. Two consequences, both of
+   which have to be re-derived whenever the tab count crosses 1:
+
+   1. The tab bar is painted over the top of the web contents (the window is
+      full-size content view, so the viewport never shrinks). The renderer has
+      to reserve MAC_TAB_BAR_H or the tab bar covers its whole top band — the
+      Files/Symbols control, Filter, Search, Fit, Live, ··· and the sidebar
+      toggle, all of them, unreachable. `tabbar-changed` is that signal.
+
+   2. The traffic lights are ours to place, and the band they belong to changes:
+      44px while we own the top line, 36px (the tab bar) while AppKit does.
+      `trafficLightPosition` is applied once at window creation, and AppKit
+      re-lays the title bar out when the tab bar comes and goes — so the custom
+      offset has to be re-applied, or the lights keep an offset measured against
+      a band that is no longer there until something else forces a layout pass.
+      A window resize was the "fix" users found. */
+
+/** Is AppKit drawing a tab bar? True exactly when the group holds >1 tab. */
+function tabBarVisible(): boolean {
+  return isMac && BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed()).length > 1;
+}
+
+/**
+ * Re-derive both, for every window, from the tab count that holds right now.
+ * Idempotent and cheap, so it can be called from anything that might have
+ * changed the answer rather than only from the one path we thought of.
+ */
+function syncTabChrome(): void {
+  if (!isMac) return;
+  const visible = tabBarVisible();
+  const y = trafficLightYFor(visible);
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    try {
+      win.setWindowButtonPosition({ x: TRAFFIC_LIGHT_X, y });
+    } catch {
+      /* window torn down between the guard and the call */
+    }
     safeSend(win, 'tabbar-changed', visible);
   }
+}
+
+/**
+ * The same, once the run loop has caught up. AppKit adds and removes the tab
+ * bar asynchronously around 'closed' and 'ready-to-show', so a position written
+ * synchronously can be measured against the title bar we are leaving rather
+ * than the one we are arriving at. Running it twice costs nothing and removes
+ * the race — never rely on the synchronous pass alone.
+ */
+function syncTabChromeSoon(): void {
+  if (!isMac) return;
+  syncTabChrome();
+  setTimeout(syncTabChrome, 120);
 }
 
 // ── Custom tab bar for Windows ─────────────────────────────────
@@ -208,7 +291,7 @@ function getTabList(focusedWebContentsId?: number): TabInfo[] {
   if (menuWindow && !menuWindow.isDestroyed()) {
     tabs.push({
       id: 'menu',
-      title: 'Menu',
+      title: t('tray:menuWindow'),
       type: 'menu',
       active: menuWindow.webContents.id === focusedWebContentsId,
     });
@@ -249,12 +332,12 @@ function broadcastTabList(): void {
 ipcMain.handle('focus-tab', (_event, tabId: string) => {
   if (tabId === 'menu') {
     if (menuWindow && !menuWindow.isDestroyed()) {
-      menuWindow.focus();
+      presentWindow(menuWindow);
     }
   } else {
     const win = projectWindows.get(tabId);
     if (win && !win.isDestroyed()) {
-      win.focus();
+      presentWindow(win);
     }
   }
   broadcastTabList();
@@ -293,9 +376,7 @@ export function showMenuWindow(tab?: string): void {
     if (tab) {
       menuWindow.loadURL(getRendererUrl({ view: 'menu', tab }));
     }
-    ensureDockVisible();
-    menuWindow.show();
-    menuWindow.focus();
+    presentWindow(menuWindow);
     return;
   }
 
@@ -311,13 +392,11 @@ export function showMenuWindow(tab?: string): void {
   }
 
   menuWindow.webContents.on('did-finish-load', () => {
-    menuWindow?.setTitle('Menu');
+    menuWindow?.setTitle(t('tray:menuWindow'));
   });
 
   menuWindow.once('ready-to-show', () => {
-    ensureDockVisible();
-    menuWindow?.show();
-    menuWindow?.focus();
+    if (menuWindow) presentWindow(menuWindow);
     broadcastTabList();
   });
 
@@ -336,7 +415,7 @@ function openProjectTab(root: string): void {
   // If project already open, focus its tab
   const existing = projectWindows.get(root);
   if (existing && !existing.isDestroyed()) {
-    existing.focus();
+    if (!HIDDEN_WINDOWS) existing.focus();
     return;
   }
 
@@ -356,13 +435,7 @@ function openProjectTab(root: string): void {
   }
 
   win.once('ready-to-show', () => {
-    ensureDockVisible();
-    win.show();
-    win.focus();
-    // First project tab opened → tab bar is now visible (macOS native tabs)
-    if (isMac) {
-      broadcastTabBar(true);
-    }
+    presentWindow(win);
     broadcastTabList();
   });
 
@@ -377,10 +450,6 @@ function openProjectTab(root: string): void {
 
   win.on('closed', () => {
     projectWindows.delete(root);
-    // If no more project tabs, tab bar disappears (only menu window left)
-    if (isMac && projectWindows.size === 0) {
-      broadcastTabBar(false);
-    }
     hideDockIfNoWindows();
     broadcastTabList();
   });
@@ -482,18 +551,18 @@ function createDotIcon(hex: string, glow: boolean): Electron.NativeImage {
 }
 
 function buildContextMenu(): Menu {
-  const statusLabel = daemonReachable ? 'Daemon running' : 'Daemon stopped';
+  const statusLabel = daemonReachable ? t('tray:daemonRunning') : t('tray:daemonStopped');
   const dotIcon = createDotIcon(daemonReachable ? '#34c759' : '#8e8e93', daemonReachable);
 
   return Menu.buildFromTemplate([
     { label: statusLabel, enabled: false, icon: dotIcon },
     { type: 'separator' },
-    { label: 'Workspace', click: () => showWindow('workspace') },
-    { label: 'MCP Clients', click: () => showWindow('clients') },
-    { label: 'Settings', click: () => showWindow('settings') },
+    { label: t('tray:workspace'), click: () => showWindow('workspace') },
+    { label: t('tray:clients'), click: () => showWindow('clients') },
+    { label: t('tray:settings'), click: () => showWindow('settings') },
     { type: 'separator' },
     {
-      label: 'Quit trace-mcp',
+      label: t('tray:quit'),
       click: () => {
         cleanup();
         app.quit();
@@ -509,7 +578,18 @@ function setTrayIcon(reachable: boolean): void {
     img.setTemplateImage(true);
   }
   tray.setImage(img);
-  tray.setToolTip(reachable ? 'trace-mcp — running' : 'trace-mcp — daemon unreachable');
+  tray.setToolTip(reachable ? t('tray:tooltipRunning') : t('tray:tooltipStopped'));
+}
+
+/** Redraw everything the tray shows in words, after a language change. The IPC
+    that triggers it lives in menu.ts — this file is imported BY that one, and
+    importing back would close a cycle. No-op before `createTray`. */
+export function refreshTrayMenu(): void {
+  if (!tray || tray.isDestroyed()) return;
+  setTrayIcon(daemonReachable);
+  tray.setContextMenu(buildContextMenu());
+  if (menuWindow && !menuWindow.isDestroyed()) menuWindow.setTitle(t('tray:menuWindow'));
+  broadcastTabList();
 }
 
 function shouldAttemptRestart(failureTick: number): boolean {
@@ -620,7 +700,7 @@ async function checkHealth(): Promise<void> {
 if (isMac) {
   app.on('new-window-for-tab', () => {
     if (menuWindow && !menuWindow.isDestroyed()) {
-      menuWindow.focus();
+      presentWindow(menuWindow);
     } else {
       showMenuWindow();
     }

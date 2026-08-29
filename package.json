@@ -2,7 +2,7 @@
   "name": "trace-mcp",
   "version": "3.2.0",
   "mcpName": "io.github.nikolai-vysotskyi/trace-mcp",
-  "description": "Framework-aware code intelligence MCP server — 87 framework integrations, 80 languages, up to 99% token reduction",
+  "description": "Framework-aware code intelligence MCP server — 87 framework integrations, 81 languages, 40–50% fewer tokens on average",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,7 +28,8 @@
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs && node scripts/postinstall-control-plane.mjs",
     "prepublishOnly": "pnpm run build",
     "prepare": "simple-git-hooks",
-    "docs:sitemap": "node scripts/gen-sitemap.mjs"
+    "docs:sitemap": "node scripts/gen-sitemap.mjs",
+    "docs:language-matrix": "tsx scripts/language-matrix.ts"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
@@ -49,6 +50,13 @@
     "url": "https://github.com/nikolai-vysotskyi/trace-mcp"
   },
   "keywords": [
+    "mcp-server",
+    "claude-code",
+    "cursor",
+    "ai-agents",
+    "code-graph",
+    "dependency-graph",
+    "token-optimization",
     "mcp",
     "code-intelligence",
     "laravel",
