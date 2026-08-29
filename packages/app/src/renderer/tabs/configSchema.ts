@@ -1286,7 +1286,7 @@ export const CONFIG_SCHEMA: SectionDef[] = [
         type: 'boolean',
         defaultValue: false,
         description:
-          'Strip advanced parameters from tool schemas to reduce token overhead (~40-60%)',
+          'Strip advanced parameters from tool schemas to reduce token overhead (~42%)',
       },
       {
         key: 'descriptions',
