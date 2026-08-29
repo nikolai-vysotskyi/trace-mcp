@@ -47,6 +47,15 @@ let PENDING_CHECKSUM = '';
 // scripts/app-dist-repo.mjs. Overridable via env.
 const GITHUB_REPO = getAppDistRepo();
 
+// Test seams. All three default to production values and are only ever set by
+// tests/scripts/postinstall-app.test.ts, which needs to point the release
+// lookup at a local HTTP server, make "is the app running" deterministic (the
+// real pgrep answers differently depending on whether the developer happens to
+// have trace-mcp.app open), and avoid bouncing the developer's real daemon.
+const API_BASE = process.env.TRACE_MCP_UPDATE_API_BASE || 'https://api.github.com';
+const PGREP_BIN = process.env.TRACE_MCP_PGREP_BIN || '/usr/bin/pgrep';
+const LAUNCHCTL_BIN = process.env.TRACE_MCP_LAUNCHCTL_BIN || '/bin/launchctl';
+
 if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
 
 /**
@@ -64,7 +73,7 @@ if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
 function stopRunningDaemon() {
   try {
     if (process.platform === 'darwin') {
-      execFileSync('/bin/launchctl', ['stop', 'com.trace-mcp.server'], { stdio: 'ignore' });
+      execFileSync(LAUNCHCTL_BIN, ['stop', 'com.trace-mcp.server'], { stdio: 'ignore' });
       return;
     }
     const pidFile = path.join(os.homedir(), '.trace-mcp', 'daemon.pid');
@@ -111,7 +120,7 @@ PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
 function appIsRunning() {
   try {
     // pgrep -f matches the full command line; the main binary path is unique enough.
-    const out = execFileSync('/usr/bin/pgrep', ['-f', `${APP_NAME}/Contents/MacOS/`], {
+    const out = execFileSync(PGREP_BIN, ['-f', `${APP_NAME}/Contents/MacOS/`], {
       stdio: ['ignore', 'pipe', 'ignore'],
     });
     return out.toString().trim().length > 0;
@@ -243,7 +252,7 @@ async function main() {
     ? /^trace-mcp-.*-arm64-mac\.zip$/i
     : /^trace-mcp-(?!.*-arm64-).*-mac\.zip$/i;
 
-  const body = await httpGet(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+  const body = await httpGet(`${API_BASE}/repos/${GITHUB_REPO}/releases/latest`);
   const release = JSON.parse(body);
   if (!release.tag_name || !Array.isArray(release.assets)) return;
 
