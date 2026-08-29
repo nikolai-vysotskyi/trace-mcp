@@ -33,10 +33,8 @@ function bootstrapMinimalIndex(db: Database.Database): void {
       name, fqn, signature, summary, content='symbols', content_rowid='id'
     );
     CREATE TABLE embedding_meta (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      dim INTEGER NOT NULL,
-      provider TEXT,
-      model TEXT
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
     );
     CREATE TABLE symbol_embeddings (
       symbol_id INTEGER PRIMARY KEY,
@@ -47,8 +45,8 @@ function bootstrapMinimalIndex(db: Database.Database): void {
       VALUES (1, 1, 'foo', 'a.foo', 'foo()', null);
     INSERT INTO symbols_fts (rowid, name, fqn, signature, summary)
       SELECT id, name, fqn, signature, summary FROM symbols;
-    INSERT INTO embedding_meta (id, dim, provider, model)
-      VALUES (1, 4, 'test', 'test-model');
+    INSERT INTO embedding_meta (key, value) VALUES
+      ('dim', '4'), ('provider', 'test'), ('model', 'test-model');
   `);
 }
 

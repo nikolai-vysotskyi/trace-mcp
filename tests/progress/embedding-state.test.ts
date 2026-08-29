@@ -71,7 +71,7 @@ describe('verifyIndex — embedding_dim backfill', () => {
         embedding BLOB NOT NULL,
         FOREIGN KEY (symbol_id) REFERENCES symbols(id)
       );
-      CREATE TABLE embedding_meta (id INTEGER PRIMARY KEY, dim INTEGER);
+      CREATE TABLE embedding_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     `);
     // 384-dimensional Float32 → 1536 bytes per row
     const dim = 384;
@@ -94,10 +94,10 @@ describe('verifyIndex — embedding_dim backfill', () => {
     expect(check.detail).toMatch(/Inferred dim=384/);
 
     // And the meta row should now exist for next run
-    const meta = db.prepare('SELECT dim FROM embedding_meta WHERE id = 1').get() as
-      | { dim: number }
+    const meta = db.prepare("SELECT value FROM embedding_meta WHERE key = 'dim'").get() as
+      | { value: string }
       | undefined;
-    expect(meta?.dim).toBe(384);
+    expect(meta?.value).toBe('384');
   });
 
   test('keeps warn when row lengths are heterogeneous (cannot infer)', async () => {
@@ -110,7 +110,7 @@ describe('verifyIndex — embedding_dim backfill', () => {
         embedding BLOB NOT NULL,
         FOREIGN KEY (symbol_id) REFERENCES symbols(id)
       );
-      CREATE TABLE embedding_meta (id INTEGER PRIMARY KEY, dim INTEGER);
+      CREATE TABLE embedding_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     `);
     const insertSym = db.prepare('INSERT INTO symbols (name) VALUES (?)');
     const insertEmb = db.prepare(
