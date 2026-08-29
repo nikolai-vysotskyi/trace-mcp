@@ -36,6 +36,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import Database from 'better-sqlite3';
 import { DECISIONS_DB_PATH, REGISTRY_PATH, TOPOLOGY_DB_PATH } from '../global.js';
+import { sqliteUtcToIso } from '../utils/sqlite-time.js';
 import type { JournalEntryForStats, JournalStatsContext } from './journal-stats-routes.js';
 
 // ---------------------------------------------------------------------------
@@ -216,7 +217,7 @@ function computeIndex(db: Database.Database): IndexSection {
     symbols,
     edges,
     resolution_tiers,
-    last_indexed: lastRow?.t ?? null,
+    last_indexed: sqliteUtcToIso(lastRow?.t),
     dependency_coverage_pct,
   };
 }

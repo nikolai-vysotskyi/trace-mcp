@@ -130,6 +130,7 @@ import { scanCodeSmells } from './tools/quality/code-smells.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, runPostUpdateMigrations } from './updater.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
+import { sqliteUtcToIso } from './utils/sqlite-time.js';
 
 /**
  * Resolve DB path for a project:
@@ -1608,7 +1609,9 @@ program
             | { t: string | null }
             | undefined;
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ files, symbols, edges, lastIndexed: lastRow?.t ?? null }));
+          res.end(
+            JSON.stringify({ files, symbols, edges, lastIndexed: sqliteUtcToIso(lastRow?.t) }),
+          );
         } catch (e) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(
