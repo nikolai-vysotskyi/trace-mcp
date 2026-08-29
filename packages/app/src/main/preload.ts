@@ -83,6 +83,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
      nothing is connected lives in a project window. Without this verb its
      empty state had no action to offer (TRA-294). */
   openClients: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('open-clients'),
+  /* Application menu ↔ renderer (TRA-297). The menu owns the accelerator; the
+     renderer owns what the command means on the surface in front of the user.
+     `setWindowSections` reports this window's ⌘1…⌘9 destinations so the View
+     menu can name them instead of duplicating the list in the main process. */
+  setWindowSections: (sections: { id: string; label: string }[]): void => {
+    ipcRenderer.send('window-sections', sections);
+  },
+  onAppCommand: (callback: (command: string, arg?: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, command: string, arg?: unknown) =>
+      callback(command, arg);
+    ipcRenderer.on('app-command', handler);
+    return () => {
+      ipcRenderer.removeListener('app-command', handler);
+    };
+  },
   // Tab management (Windows custom tab bar)
   getPlatform: (): Promise<string> => ipcRenderer.invoke('get-platform'),
   focusTab: (tabId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('focus-tab', tabId),

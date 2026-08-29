@@ -56,9 +56,38 @@ body {
   background: transparent;
   margin: 0;
   padding: 0;
+  /* Chrome default. Content opts back in below — see "Text selection". */
   user-select: none;
   -webkit-app-region: no-drag;
   overflow: hidden;
+}
+
+/* ── Text selection (TRA-297) ────────────────────────────────────── */
+/* macOS chrome — sidebar, toolbars, menus, buttons — is not selectable; macOS
+   CONTENT always is. `user-select: none` on body was doing both, so nothing in
+   the app could be selected or copied: not a file path, not a session id, not
+   an error message, not a metric. Content opts back in here, and the controls
+   inside it opt out again, so drag-selecting a paragraph never picks up the
+   label of the button next to it. */
+.ws-content-body {
+  user-select: text;
+  -webkit-user-select: text;
+}
+.ws-content-body button,
+.ws-content-body a,
+.ws-content-body label,
+.ws-content-body summary,
+.ws-content-body [role='button'],
+.ws-content-body [role='tab'],
+.ws-content-body [role='menuitem'],
+.ws-content-body [role='menuitemcheckbox'],
+.ws-content-body [role='option'],
+.ws-content-body [role='columnheader'],
+.ws-content-body .ws-island-head,
+.ws-content-body .lx-seg,
+.ws-content-body canvas {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* House focus ring — visible on every focusable element, keyboard only. */
@@ -386,4 +415,139 @@ body {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 4px;
+}
+
+/* ── Quick open (TRA-297) ────────────────────────────────────────── */
+/* ⌘⇧O / ⌘P. A panel floating over content, pushed clear of the traffic
+   lights — not a full sheet, because it is a way to go somewhere, not a
+   decision to make. Escape cancels; ↑↓ + ⏎ pick. */
+.lx-qo-scrim {
+  align-items: flex-start;
+  padding-top: 72px;
+}
+.lx-qo {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 64px));
+  max-height: min(420px, calc(100vh - 140px));
+  overflow: hidden;
+  background: var(--surface);
+  border: 0.5px solid var(--separator);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-panel);
+  animation: lx-qo-in var(--dur-standard) var(--ease-spring);
+}
+@keyframes lx-qo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.lx-qo-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 12px;
+  border-bottom: 0.5px solid var(--separator);
+}
+.lx-qo-glyph {
+  display: flex;
+  color: var(--label-tertiary);
+}
+.lx-qo-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: var(--text-title-3);
+  line-height: var(--leading-title-3);
+  color: var(--label);
+}
+.lx-qo-field input::placeholder {
+  color: var(--label-tertiary);
+}
+/* The one exception to the house focus ring. This field is the panel — it takes
+   focus the moment the panel opens and never gives it up, so a ring around it
+   is a box drawn around the whole top row for no information. The panel's own
+   shadow and scrim already say where focus is. */
+.lx-qo-field input:focus-visible {
+  box-shadow: none;
+}
+
+.lx-qo-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0 6px;
+}
+.lx-qo-group {
+  padding: 8px 12px 2px;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-caption);
+  color: var(--label-tertiary);
+}
+.lx-qo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 12px);
+  height: 28px;
+  margin: 0 6px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-row);
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--label);
+  text-align: left;
+  cursor: default;
+}
+.lx-qo-item.is-active {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+.lx-qo-ico {
+  display: flex;
+  flex: 0 0 auto;
+  color: var(--label-secondary);
+}
+.lx-qo-item.is-active .lx-qo-ico {
+  color: var(--on-accent);
+}
+.lx-qo-label {
+  flex: 0 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.lx-qo-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--text-caption);
+  color: var(--label-tertiary);
+}
+.lx-qo-item.is-active .lx-qo-detail {
+  color: color-mix(in oklab, var(--on-accent) 72%, transparent);
+}
+.lx-qo-empty {
+  padding: 16px 12px;
+  font-size: var(--text-body);
+  color: var(--label-secondary);
+  text-align: center;
 }

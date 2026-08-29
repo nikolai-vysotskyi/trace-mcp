@@ -3,6 +3,7 @@ import { execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import { registerAppMenu } from './menu';
 import { createTray, showMenuWindow } from './tray';
 import {
   hasPendingUpdate as hasPendingUpdateImpl,
@@ -1150,6 +1151,9 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin' && fs.existsSync(dockIconPath)) {
     app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
   }
+  // The application menu carries every accelerator the app answers to —
+  // install it before the first window so ⌘, / ⌘R / ⌘1 work on first paint.
+  registerAppMenu();
   createTray();
   // Open the main window straight away — the tray remains for background control.
   // Users who close the window still have the tray; users who quit via ⌘Q shut down.

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
+import { QuickOpen, type QuickOpenItem } from './components/QuickOpen';
 import { WindowTabBar } from './components/WindowTabBar';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
-import { PopUpButton } from './lattice/ui';
+import { Menu, MenuItem, MenuSeparator, PopUpButton } from './lattice/ui';
 import {
   clampSidebarWidth,
   readSidebarCollapsed,
@@ -100,6 +101,7 @@ function SidebarRow({
   selected = false,
   onClick,
   onKeyDown,
+  onContextMenu,
   title,
   count,
   trailing,
@@ -112,6 +114,7 @@ function SidebarRow({
   selected?: boolean;
   onClick: () => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   title?: string;
   count?: React.ReactNode;
   trailing?: React.ReactNode;
@@ -124,6 +127,7 @@ function SidebarRow({
       className={`ws-sb-row${selected ? ' is-selected' : ''}`}
       onClick={onClick}
       onKeyDown={onKeyDown}
+      onContextMenu={onContextMenu}
       title={title}
       {...aria}
     >
@@ -139,6 +143,9 @@ function SidebarRow({
 
 function RecentProjects() {
   const [recent, setRecent] = useState<string[]>(getRecentProjects);
+  // Right-click target — the same actions the row's click and ⌫ already offer,
+  // reachable the way a Mac user reaches for them (TRA-297).
+  const [ctx, setCtx] = useState<{ x: number; y: number; root: string } | null>(null);
 
   // Re-read on focus (other tab might have opened a project)
   useEffect(() => {
@@ -171,8 +178,47 @@ function RecentProjects() {
     );
   }
 
+  const forget = (root: string) => {
+    removeRecentProject(root);
+    setRecent(getRecentProjects());
+  };
+
   return (
     <>
+      {ctx && (
+        <Menu x={ctx.x} y={ctx.y} onClose={() => setCtx(null)}>
+          <MenuItem
+            icon="folder_open"
+            onClick={() => {
+              setCtx(null);
+              openProject(ctx.root);
+            }}
+          >
+            Open project
+          </MenuItem>
+          <MenuItem
+            icon="content_copy"
+            onClick={() => {
+              setCtx(null);
+              void navigator.clipboard?.writeText(ctx.root);
+            }}
+          >
+            Copy path
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            danger
+            icon="close"
+            shortcut="⌫"
+            onClick={() => {
+              setCtx(null);
+              forget(ctx.root);
+            }}
+          >
+            Remove from recent
+          </MenuItem>
+        </Menu>
+      )}
       {recent.map((root) => (
         <SidebarRow
           key={root}
@@ -180,13 +226,16 @@ function RecentProjects() {
           label={root.split(/[/\\]/).filter(Boolean).pop() ?? root}
           title={root}
           onClick={() => openProject(root)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setCtx({ x: e.clientX, y: e.clientY, root });
+          }}
           // Keyboard route for the remove affordance — the row is itself a
           // button, so the ✕ can't be one too (nested interactive content).
           onKeyDown={(e) => {
             if (e.key !== 'Delete' && e.key !== 'Backspace') return;
             e.preventDefault();
-            removeRecentProject(root);
-            setRecent(getRecentProjects());
+            forget(root);
           }}
           trailing={
             <span
@@ -195,8 +244,7 @@ function RecentProjects() {
               title="Remove from recent (⌫)"
               onClick={(e) => {
                 e.stopPropagation();
-                removeRecentProject(root);
-                setRecent(getRecentProjects());
+                forget(root);
               }}
             >
               <Icon name="close" size={12} />
@@ -238,6 +286,7 @@ function ProjectFileExplorer({
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; path: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const LIMIT = 30;
 
@@ -295,6 +344,39 @@ function ProjectFileExplorer({
 
   return (
     <>
+      {ctx && (
+        <Menu x={ctx.x} y={ctx.y} onClose={() => setCtx(null)}>
+          <MenuItem
+            icon="hub"
+            onClick={() => {
+              setCtx(null);
+              setSelected(ctx.path);
+              onFileClick(ctx.path);
+            }}
+          >
+            Reveal in graph
+          </MenuItem>
+          <MenuItem
+            icon="edit"
+            onClick={() => {
+              setCtx(null);
+              void window.electronAPI?.openInEditor(ctx.path);
+            }}
+          >
+            Open in editor
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            icon="content_copy"
+            onClick={() => {
+              setCtx(null);
+              void navigator.clipboard?.writeText(ctx.path);
+            }}
+          >
+            Copy path
+          </MenuItem>
+        </Menu>
+      )}
       <div className="ws-sb-group">Files</div>
       {/* Sort — the shared pop-up button primitive (TRA-290). */}
       <PopUpButton
@@ -342,6 +424,11 @@ function ProjectFileExplorer({
                 onClick={() => {
                   setSelected(f.path);
                   onFileClick(f.path);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setSelected(f.path);
+                  setCtx({ x: e.clientX, y: e.clientY, path: f.path });
                 }}
                 onKeyDown={(e) => onRowKeyDown(e, i)}
               />
@@ -451,10 +538,16 @@ function UpdateBanner() {
     runCheck();
     const poll = setInterval(runCheck, 600_000);
     const tick = setInterval(() => setNow(Date.now()), 15_000);
+    // "Check for updates…" in the application menu (TRA-297). App.tsx receives
+    // the IPC command and re-broadcasts it here so the banner stays the single
+    // owner of update state.
+    const onMenuCheck = () => runCheck();
+    window.addEventListener('trace-mcp:check-update', onMenuCheck);
     return () => {
       cancelledRef.current = true;
       clearInterval(poll);
       clearInterval(tick);
+      window.removeEventListener('trace-mcp:check-update', onMenuCheck);
     };
   }, []);
 
@@ -577,6 +670,10 @@ function UpdateBanner() {
   return (
     <div
       className={`update-idle${isError ? ' error' : ''}`}
+      // The only place the app reports update health. It changes without the
+      // user asking, so assistive tech has to hear it (TRA-297).
+      role="status"
+      aria-live="polite"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       <span className="dot" aria-hidden="true" />
@@ -669,6 +766,8 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [_isFullscreen, setIsFullscreen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickFiles, setQuickFiles] = useState<string[]>([]);
   const dragging = useRef(false);
   const graphRef = useRef<GraphExplorerGPUHandle | null>(null);
   const [graphGpuSettings, setGraphGpuSettings] = useState<GraphGPUSettings>(
@@ -769,28 +868,152 @@ export function App() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // ⌘⌥S toggles the sidebar; ⌘1…⌘9 select the nth primary section.
+  const sectionList = isProject ? PROJECT_TABS : GLOBAL_TABS;
+
+  /** ⌘1…⌘9 and quick-open both land here: n is 1-based, matching the menu. */
+  const selectSection = useCallback(
+    (n: number) => {
+      const section = sectionList[n - 1];
+      if (!section) return;
+      if (isProject) setProjectTab(section.id as ProjectTab);
+      else setGlobalTab(section.id as GlobalTab);
+    },
+    [isProject, sectionList],
+  );
+
+  /* ⌘F. Every surface's search is the same Lattice SearchField, so "the search
+     field of the surface in front of me" is literally the first one in the
+     content pane — no per-surface registry to keep in sync. */
+  const focusSearch = useCallback(() => {
+    const field = document.querySelector<HTMLInputElement>(
+      '.ws-content-body .lx-search input, .ws-content-body input[type="search"]',
+    );
+    if (!field) return;
+    field.focus();
+    field.select();
+  }, []);
+
+  const pickProject = useCallback(async () => {
+    const api = window.electronAPI;
+    const picked = await api?.selectFolder?.();
+    if (!picked) return;
+    addRecentProject(picked);
+    api?.openProjectTab(picked);
+  }, []);
+
+  const openSettings = useCallback(() => {
+    if (isProject) window.electronAPI?.openSettings?.();
+    else setGlobalTab('settings');
+  }, [isProject]);
+
+  /* The application menu owns every accelerator now (main/menu.ts) and sends
+     one `app-command` per item to the focused window. Keeping a duplicate
+     window-level keydown for the same keys would double-fire the toggles, so
+     this is the single renderer-side handler — ⌘P below is the one exception,
+     because Electron allows a menu item only one accelerator. */
   useEffect(() => {
-    const sections: string[] = isProject
-      ? PROJECT_TABS.map((t) => t.id)
-      : GLOBAL_TABS.map((t) => t.id);
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.altKey && (e.key === 's' || e.key === 'S' || e.code === 'KeyS')) {
-        e.preventDefault();
-        toggleSidebar();
-        return;
+    const api = window.electronAPI;
+    api?.setWindowSections?.(sectionList.map((t) => ({ id: t.id, label: t.label })));
+  }, [sectionList]);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onAppCommand) return;
+    return api.onAppCommand((command, arg) => {
+      switch (command) {
+        case 'toggle-sidebar':
+          toggleSidebar();
+          break;
+        case 'select-section':
+          selectSection(Number(arg));
+          break;
+        case 'find':
+          focusSearch();
+          break;
+        case 'quick-open':
+          setQuickOpen(true);
+          break;
+        case 'settings':
+          openSettings();
+          break;
+        case 'open-project':
+          void pickProject();
+          break;
+        case 'check-for-update':
+          window.dispatchEvent(new CustomEvent('trace-mcp:check-update'));
+          break;
       }
-      if (e.altKey || e.shiftKey) return;
-      const n = Number(e.key);
-      if (!Number.isInteger(n) || n < 1 || n > 9 || n > sections.length) return;
+    });
+  }, [toggleSidebar, selectSection, focusSearch, openSettings, pickProject]);
+
+  // ⌘P — the second quick-open key. Not in the menu (one accelerator per item).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+      if (e.key !== 'p' && e.key !== 'P') return;
       e.preventDefault();
-      if (isProject) setProjectTab(sections[n - 1] as ProjectTab);
-      else setGlobalTab(sections[n - 1] as GlobalTab);
+      setQuickOpen(true);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isProject, toggleSidebar]);
+  }, []);
+
+  /* Quick-open's file list. Fetched when the panel opens rather than on mount:
+     it is a bigger page than the sidebar's 30 rows and nobody pays for it
+     until they ask. Failures leave sections and projects, which still work. */
+  useEffect(() => {
+    if (!quickOpen || !isProject || !root || quickFiles.length > 0) return;
+    let cancelled = false;
+    const params = new URLSearchParams({ project: root, sort: 'symbols', limit: '400' });
+    fetch(`${BASE}/api/projects/files?${params}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data: { files?: { path: string }[] }) => {
+        if (!cancelled) setQuickFiles((data.files ?? []).map((f) => f.path));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [quickOpen, isProject, root, quickFiles.length]);
+
+  const quickOpenItems = useCallback((): QuickOpenItem[] => {
+    const items: QuickOpenItem[] = sectionList.map((section, i) => ({
+      id: `section:${section.id}`,
+      label: section.label,
+      detail: `⌘${i + 1}`,
+      group: 'Go to',
+      icon: section.icon,
+      run: () => selectSection(i + 1),
+    }));
+    for (const projectRoot of getRecentProjects()) {
+      items.push({
+        id: `project:${projectRoot}`,
+        label: projectRoot.split(/[/\\]/).filter(Boolean).pop() ?? projectRoot,
+        detail: projectRoot,
+        group: 'Recent projects',
+        icon: 'folder',
+        run: () => {
+          addRecentProject(projectRoot);
+          window.electronAPI?.openProjectTab(projectRoot);
+        },
+      });
+    }
+    for (const filePath of quickFiles) {
+      const display = root && filePath.startsWith(root)
+        ? filePath.slice(root.length).replace(/^[/\\]/, '')
+        : filePath;
+      const { dir, name } = splitPath(display);
+      items.push({
+        id: `file:${filePath}`,
+        label: name,
+        detail: dir,
+        group: 'Files',
+        icon: 'description',
+        run: () => openFileInGraph(filePath),
+      });
+    }
+    return items;
+  }, [sectionList, selectSection, quickFiles, root, openFileInGraph]);
 
   // Track fullscreen state
   useEffect(() => {
@@ -821,6 +1044,7 @@ export function App() {
       data-platform={isMacPlatform() ? 'mac' : 'other'}
     >
       {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
+      {quickOpen && <QuickOpen items={quickOpenItems()} onClose={() => setQuickOpen(false)} />}
       {/* Windows custom tab bar (hidden on macOS — native tabs handle it) */}
       <WindowTabBar />
 
