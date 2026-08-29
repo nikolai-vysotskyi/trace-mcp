@@ -425,6 +425,40 @@ describe('docs site numeric claims (TRA-174)', () => {
     expect([...new Set(broken)], 'no matching key in docs/_data/counts.yml').toEqual([]);
   });
 
+  it('every README anchor linked from skills/ still exists (TRA-393)', () => {
+    // skills/README pointed at README.md#token-savings as the evidence for its
+    // token claim. No such heading — the section is "Token reduction — what we
+    // measured", so the link silently landed at the top of the README. An
+    // evidence pointer that resolves to nothing is worse than no pointer.
+    // Shell comments inside fenced blocks ("# Via CLI") also start with '#' and
+    // would otherwise widen the accepted anchor set with non-headings.
+    let inFence = false;
+    const headings = readFileSync(README_PATH, 'utf-8')
+      .split('\n')
+      .filter((line) => {
+        if (line.startsWith('```')) {
+          inFence = !inFence;
+          return false;
+        }
+        return !inFence && line.startsWith('#');
+      })
+      .map((line) =>
+        line
+          .replace(/^#+\s*/, '')
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, '')
+          .trim()
+          .replace(/\s/g, '-'),
+      );
+    const skillsReadme = readFileSync(join(REPO_ROOT, 'skills/README.md'), 'utf-8');
+    for (const [, anchor] of skillsReadme.matchAll(/trace-mcp#([\w-]+)/g)) {
+      expect(
+        headings,
+        `skills/README.md links to README.md#${anchor}, which is not a heading`,
+      ).toContain(anchor);
+    }
+  });
+
   it('llms.txt and tools-reference.md agree on the resource count', () => {
     const llms = readDoc('docs/llms.txt');
     const toolsRef = readDoc('docs/tools-reference.md');
