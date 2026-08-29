@@ -135,6 +135,9 @@ packages/app/src/shared/i18n/
 packages/app/src/renderer/i18n/
   index.ts                # i18next init, setLocale, useLocale, t
   format.ts               # Intl wrappers: relativeTime, formatDate, formatNumber
+packages/app/src/main/
+  i18n.ts                 # the main process's own i18next instance, and its t
+  locale.ts               # the choice mirrored to userData, so main can read it
 ```
 
 **Why i18next.** Plurals. Russian needs four forms where English needs two, and the
@@ -173,6 +176,16 @@ pnpm --filter trace-mcp-app run test         # catalogue parity, plurals, Intl o
 `check-i18n.mjs` scans an allowlist, not the whole tree: string extraction lands
 surface by surface, and the `CHECKED` array at the top of the script is how a finished
 slice records that it is finished. Extract a surface → add its path there.
+
+**The main process** (the application menu, the tray, dialogs) has no React and
+cannot read the renderer's `localStorage`, so the language is mirrored to a one-line
+file in `userData` — exactly the arrangement `main/appearance.ts` uses for the theme.
+The renderer's `setLocale` sends `set-locale` over IPC, and `main/menu.ts` writes the
+file, switches its instance and rebuilds both surfaces: `Menu.setApplicationMenu`
+replaces the menu wholesale, there is no per-item relabel. Main-process code calls
+`t('menu:file')` from `main/i18n`. Standard macOS items stay on their Electron
+`role` — the OS supplies those labels already translated, and hand-translating one
+is how a menu ends up half in each language.
 
 ## Desktop app update channels
 
