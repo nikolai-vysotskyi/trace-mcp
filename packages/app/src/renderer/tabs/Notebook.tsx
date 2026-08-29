@@ -5,11 +5,20 @@
  * the user can run; the JSON response is rendered inline. NOT a code-execution
  * sandbox — cells dispatch a fixed, allow-listed set of trace-mcp tools only.
  *
- * Visual style mirrors AskTab.tsx (sidebar header + flex content + accent
- * buttons + var(--*) theme tokens). Cells are local React state only; no
- * persistence in this slice — that's a follow-up.
+ * On the macOS 26 layer (TRA-310): one 52px Toolbar carrying the project this
+ * queries run against, content capped at 720px, and every control from
+ * lattice/ui. Cells are local React state only; no persistence in this slice.
  */
 import { useCallback, useState } from 'react';
+import { Icon } from '../lattice/icons';
+import {
+  Button,
+  Card,
+  PopUpButton,
+  Skeleton,
+  Toolbar,
+  ToolbarDivider,
+} from '../lattice/ui';
 import {
   NOTEBOOK_TOOLS,
   TOOL_BY_NAME,
@@ -22,6 +31,15 @@ import {
 // keep working unchanged.
 export { NOTEBOOK_TOOLS, defaultNotebookClient } from './notebook-runtime';
 export type { NotebookClient, ToolName } from './notebook-runtime';
+
+/** Content measure, same as Project Overview — a form is not a table. */
+const MEASURE = 720;
+
+/** Trailing-aligned label column, macOS form style. Wide enough that no label
+    in the tool catalog wraps to a second line and breaks its row's baseline. */
+const LABEL_COL = 88;
+
+const TOOL_OPTIONS = NOTEBOOK_TOOLS.map((t) => ({ value: t.name, label: t.label }));
 
 // ── Cell state ───────────────────────────────────────────────────────
 
@@ -44,6 +62,12 @@ function makeCell(): Cell {
   };
 }
 
+/** Head-truncated so the tail — the part that distinguishes siblings — stays. */
+function projectName(root: string): string {
+  const parts = root.split('/').filter(Boolean);
+  return parts[parts.length - 1] ?? root;
+}
+
 // ── Component ────────────────────────────────────────────────────────
 
 export function Notebook({
@@ -54,6 +78,7 @@ export function Notebook({
   client?: NotebookClient;
 }) {
   const [cells, setCells] = useState<Cell[]>(() => [makeCell()]);
+  const [scrolled, setScrolled] = useState(false);
 
   const addCell = useCallback(() => {
     setCells((prev) => [...prev, makeCell()]);
@@ -75,7 +100,12 @@ export function Notebook({
       // Validate required fields client-side so we don't ping the daemon for nothing.
       const missing = def.fields.find((f) => f.required && !cell.args[f.key]?.trim());
       if (missing) {
-        updateCell(id, { status: 'error', error: `Missing required field: ${missing.label}`, result: null });
+        updateCell(id, {
+          status: 'error',
+          // Says what to do next, not which form control failed validation.
+          error: `Enter a ${missing.label.toLowerCase()} to run this cell.`,
+          result: null,
+        });
         return;
       }
       updateCell(id, { status: 'running', error: undefined, result: null });
@@ -91,75 +121,62 @@ export function Notebook({
 
   return (
     <div
-      className="flex flex-col h-full"
-      style={{ WebkitAppRegion: 'no-drag', overflow: 'hidden' } as React.CSSProperties}
+      className="flex flex-col h-full overflow-hidden"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
-      {/* Local keyframe — inline `@keyframes` is the renderer's standard
-          pattern for one-off spinner animations (see WorkspaceHeader). */}
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      {/* Header */}
-      <div
-        style={{
-          padding: '10px 14px 8px',
-          borderBottom: '0.5px solid var(--border)',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Notebook</div>
-        <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>
-          Run ad-hoc trace-mcp queries. Read-only tools, no code execution.
-        </div>
-      </div>
-
-      {/* Cells */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 80px' }}>
-        {cells.map((cell, idx) => (
-          <CellView
-            key={cell.id}
-            index={idx + 1}
-            cell={cell}
-            onChange={(patch) => updateCell(cell.id, patch)}
-            onRun={() => runCell(cell.id)}
-            onRemove={cells.length === 1 ? undefined : () => removeCell(cell.id)}
-          />
-        ))}
-
-        <button
-          type="button"
-          onClick={addCell}
-          aria-label="Add cell"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            marginTop: 8,
-            padding: '7px 12px',
-            borderRadius: 8,
-            background: 'var(--fill-control)',
-            border: '0.5px dashed var(--border)',
-            boxShadow: 'var(--shadow-control)',
-            color: 'var(--text-secondary)',
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            aria-hidden="true"
+      {/* ── Toolbar ──────────────────────────────────────────────────────
+          The surface never said which project it queries. It does now. */}
+      <Toolbar scrolled={scrolled} className="gap-3">
+        <div className="min-w-0 flex-1">
+          <h2
+            className="text-[13px] leading-4 font-semibold truncate"
+            style={{ color: 'var(--label)' }}
           >
-            <line x1="6" y1="1" x2="6" y2="11" />
-            <line x1="1" y1="6" x2="11" y2="6" />
-          </svg>
-          Add cell
-        </button>
+            Notebook
+          </h2>
+          <p
+            className="text-[11px] leading-[13px] truncate"
+            style={{ color: 'var(--label-secondary)' }}
+            title={root}
+          >
+            {projectName(root)}
+          </p>
+        </div>
+        <ToolbarDivider />
+        <span
+          className="shrink-0 text-[11px] leading-[13px] tabular-nums"
+          style={{ color: 'var(--label-secondary)' }}
+        >
+          {cells.length === 1 ? '1 cell' : `${cells.length} cells`}
+        </span>
+      </Toolbar>
+
+      {/* ── Cells ────────────────────────────────────────────────────── */}
+      <div
+        className="flex-1 overflow-auto"
+        onScroll={(e) => setScrolled((e.target as HTMLElement).scrollTop > 0)}
+      >
+        <div
+          className="flex flex-col gap-3 px-4 py-4 mx-auto w-full"
+          style={{ maxWidth: MEASURE }}
+        >
+          {cells.map((cell, idx) => (
+            <CellView
+              key={cell.id}
+              index={idx + 1}
+              cell={cell}
+              onChange={(patch) => updateCell(cell.id, patch)}
+              onRun={() => runCell(cell.id)}
+              onRemove={cells.length === 1 ? undefined : () => removeCell(cell.id)}
+            />
+          ))}
+
+          <div className="flex">
+            <Button icon="add" onClick={addCell} aria-label="Add cell">
+              Add cell
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -184,136 +201,61 @@ function CellView({
   const running = cell.status === 'running';
 
   return (
-    <div
-      style={{
-        marginBottom: 10,
-        padding: '10px 12px',
-        borderRadius: 10,
-        background: 'var(--bg-grouped)',
-        border: '0.5px solid var(--border)',
-        boxShadow: 'var(--shadow-grouped)',
-      }}
-    >
-      {/* Cell header — index, tool picker, run, remove */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+    <Card>
+      {/* Cell header — index, tool picker, run, remove. Run is `bordered`:
+          one accent capsule per cell would put N prominent actions on one
+          surface, which is the rule this screen used to break hardest. */}
+      <div
+        className="flex items-center gap-2 px-3"
+        style={{ minHeight: 40, borderBottom: '0.5px solid var(--separator)' }}
+      >
         <span
-          style={{
-            fontSize: 9,
-            color: 'var(--text-tertiary)',
-            fontFamily: 'monospace',
-            minWidth: 24,
-          }}
+          className="shrink-0 text-[11px] leading-[13px] tabular-nums"
+          style={{ color: 'var(--label-secondary)', minWidth: 16 }}
         >
-          [{index}]
+          {index}
         </span>
-        <label htmlFor={`${cell.id}-tool`} style={{ position: 'absolute', left: -9999 }}>
-          Tool
-        </label>
-        <select
-          id={`${cell.id}-tool`}
-          aria-label="Tool"
+        <PopUpButton
+          options={TOOL_OPTIONS}
           value={cell.tool}
-          onChange={(e) => {
-            const next = e.target.value as ToolName;
+          aria-label="Tool"
+          onChange={(next) => {
             const nextDef = TOOL_BY_NAME[next];
             // Reset args when switching tool to avoid carrying stale keys.
             const args: Record<string, string> = {};
             for (const f of nextDef.fields) args[f.key] = '';
             onChange({ tool: next, args, status: 'idle', result: null, error: undefined });
           }}
-          style={{
-            fontSize: 11,
-            padding: '4px 8px',
-            borderRadius: 6,
-            background: 'var(--fill-control)',
-            color: 'var(--text-primary)',
-            border: '0.5px solid var(--border)',
-            outline: 'none',
-            fontFamily: 'monospace',
-          }}
-        >
-          {NOTEBOOK_TOOLS.map((t) => (
-            <option key={t.name} value={t.name}>
-              {t.label}
-            </option>
-          ))}
-        </select>
-        <span style={{ fontSize: 10, color: 'var(--text-tertiary)', flex: 1 }}>{def.description}</span>
-        <button
-          type="button"
-          onClick={onRun}
-          disabled={running}
-          style={{
-            padding: '5px 14px',
-            fontSize: 11,
-            fontWeight: 500,
-            borderRadius: 6,
-            background: running ? 'var(--fill-control)' : 'var(--accent)',
-            color: running ? 'var(--text-tertiary)' : '#fff',
-            border: 'none',
-            cursor: running ? 'default' : 'pointer',
-            boxShadow: 'var(--shadow-control)',
-            fontFamily: 'inherit',
-          }}
-        >
+        />
+        <span className="flex-1" />
+        <Button onClick={onRun} disabled={running} className={running ? 'is-status' : undefined}>
           {running ? 'Running…' : 'Run'}
-        </button>
+        </Button>
         {onRemove && (
-          <button
-            type="button"
+          <Button
+            variant="icon"
+            icon="close"
             onClick={onRemove}
+            aria-label={`Remove cell ${index}`}
             title="Remove cell"
-            aria-label="Remove cell"
-            style={{
-              width: 22,
-              height: 22,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: 5,
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-tertiary)',
-              cursor: 'pointer',
-            }}
-          >
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <line x1="2" y1="2" x2="8" y2="8" />
-              <line x1="8" y1="2" x2="2" y2="8" />
-            </svg>
-          </button>
+          />
         )}
       </div>
 
-      {/* Fields */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* Fields — the human label from the tool catalog, at reading size, in
+          the UI face. The old rows showed the raw arg key in 10px monospace. */}
+      <div className="flex flex-col gap-2 px-3 py-3">
         {def.fields.map((f) => (
-          <label
-            key={f.key}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}
-          >
+          <label key={f.key} className="flex items-center gap-3">
             <span
-              style={{
-                color: 'var(--text-secondary)',
-                minWidth: 90,
-                textAlign: 'right',
-                fontFamily: 'monospace',
-                fontSize: 10,
-              }}
+              className="shrink-0 text-[13px] leading-4 text-right"
+              style={{ color: 'var(--label-secondary)', width: LABEL_COL }}
             >
-              {f.key}
+              {f.label}
             </span>
             <input
               type="text"
+              className="lx-input mono"
               value={cell.args[f.key] ?? ''}
               placeholder={f.placeholder}
               onChange={(e) => onChange({ args: { ...cell.args, [f.key]: e.target.value } })}
@@ -323,48 +265,65 @@ function CellView({
                   onRun();
                 }
               }}
-              style={{
-                flex: 1,
-                padding: '5px 9px',
-                fontSize: 11,
-                borderRadius: 6,
-                background: 'var(--fill-control)',
-                color: 'var(--text-primary)',
-                border: '0.5px solid var(--border)',
-                outline: 'none',
-                fontFamily: 'monospace',
-              }}
             />
           </label>
         ))}
       </div>
 
-      {/* Result area */}
-      {cell.status === 'error' && (
-        <div
-          role="alert"
-          style={{
-            marginTop: 8,
-            padding: '6px 10px',
-            borderRadius: 6,
-            fontSize: 11,
-            color: 'var(--destructive)',
-            background: 'rgba(255,59,48,0.06)',
-            border: '0.5px solid rgba(255,59,48,0.15)',
-          }}
-        >
-          {cell.error}
-        </div>
-      )}
-      {cell.status === 'running' && (
-        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <Spinner />
-          <span style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>Calling trace-mcp…</span>
-        </div>
-      )}
-      {cell.status === 'ok' && cell.result !== null && (
-        <ResultView result={cell.result} />
-      )}
+      {/* Result area. The idle state is a plain caption, NOT a well: rendered
+          as a sunken box it read as a third, oversized text field. */}
+      <div className="px-3 pb-3">
+        {cell.status === 'idle' && (
+          <p
+            className="text-[11px] leading-[13px]"
+            style={{ color: 'var(--label-secondary)', paddingLeft: LABEL_COL + 12 }}
+          >
+            {def.description}
+          </p>
+        )}
+        {cell.status === 'running' && (
+          <ResultBox>
+            <div role="status" aria-label="Running" className="flex flex-col gap-2">
+              <Skeleton width="62%" height={11} />
+              <Skeleton width="86%" height={11} />
+              <Skeleton width="44%" height={11} />
+            </div>
+          </ResultBox>
+        )}
+        {cell.status === 'error' && (
+          /* The same well as every other cell state, so the four states share
+             one geometry. NOT a red-tinted bar: --status-red on a tint of
+             itself measured 4.31:1 in light and failed AA, while the token is
+             verified at 4.94:1 on --surface-sunken. The glyph, not the fill,
+             is what makes this read as an error. */
+          <ResultBox>
+            <div role="alert" className="flex items-center gap-2" style={{ color: 'var(--status-red)' }}>
+              <Icon name="warning" size={14} />
+              {cell.error}
+            </div>
+          </ResultBox>
+        )}
+        {cell.status === 'ok' && cell.result !== null && <ResultView result={cell.result} />}
+      </div>
+    </Card>
+  );
+}
+
+/** The result well. Sunken, hairline, 8px — the same box in every cell state. */
+function ResultBox({ children, muted = false }: { children: React.ReactNode; muted?: boolean }) {
+  return (
+    <div
+      className="flex flex-col justify-center text-[13px] leading-4"
+      style={{
+        minHeight: 40,
+        padding: '10px 12px',
+        borderRadius: 'var(--radius-input)',
+        background: 'var(--surface-sunken)',
+        boxShadow: 'inset 0 0 0 0.5px var(--separator)',
+        color: muted ? 'var(--label-secondary)' : 'var(--label)',
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -377,19 +336,17 @@ function ResultView({ result }: { result: unknown }) {
   const body = truncated ? `${text.slice(0, MAX)}\n… (truncated, ${text.length - MAX} more chars)` : text;
   return (
     <pre
+      className="text-[11px] leading-4 overflow-auto"
       style={{
-        marginTop: 8,
-        padding: '8px 10px',
-        background: 'var(--bg-code, rgba(0,0,0,0.06))',
-        borderRadius: 6,
-        fontSize: 10,
-        lineHeight: '1.5',
-        fontFamily: 'monospace',
-        color: 'var(--text-primary)',
-        border: '0.5px solid var(--border)',
-        overflowX: 'auto',
+        margin: 0,
+        minHeight: 40,
+        padding: '10px 12px',
+        borderRadius: 'var(--radius-input)',
+        background: 'var(--surface-sunken)',
+        boxShadow: 'inset 0 0 0 0.5px var(--separator)',
+        fontFamily: 'var(--font-mono)',
+        color: 'var(--label)',
         maxHeight: 360,
-        overflowY: 'auto',
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
       }}
@@ -398,21 +355,3 @@ function ResultView({ result }: { result: unknown }) {
     </pre>
   );
 }
-
-function Spinner() {
-  return (
-    <span
-      style={{
-        width: 10,
-        height: 10,
-        borderRadius: '50%',
-        border: '1.5px solid var(--border)',
-        borderTopColor: 'var(--accent)',
-        animation: 'spin 0.8s linear infinite',
-        display: 'inline-block',
-      }}
-      aria-hidden="true"
-    />
-  );
-}
-

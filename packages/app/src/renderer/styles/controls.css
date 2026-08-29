@@ -437,6 +437,54 @@ input[type='checkbox']:disabled {
 }
 
 /* ============================================================================
+   TEXT FIELD — .lx-input
+   The one control tier this file was missing. 24px like every other regular
+   control, but --radius-input (8px) rather than a capsule: the radius scale
+   makes text inputs the deliberate exception, because a capsule field puts its
+   first character on a curve.
+   `.mono` is for fields whose value is an identifier or a path — the house
+   --font-mono, never the raw `monospace` generic, which resolves to Courier.
+   ============================================================================ */
+.lx-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-input);
+  background: var(--fill-quaternary);
+  box-shadow: inset 0 0 0 0.5px var(--separator);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: 1;
+  color: var(--label);
+  outline: 0;
+  transition: background var(--dur-micro) var(--ease-out);
+}
+.lx-input.mono {
+  font-family: var(--font-mono);
+  /* SF Mono runs optically larger than SF Pro at the same px, so a mono value
+     field sits one step down to keep the row's x-height even. */
+  font-size: var(--text-caption);
+}
+.lx-input::placeholder {
+  color: var(--label-tertiary);
+}
+.lx-input:hover {
+  background: var(--fill-tertiary);
+}
+.lx-input:focus-visible {
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 0.5px var(--separator),
+    var(--focus-ring);
+}
+.lx-input:disabled {
+  opacity: 0.4;
+}
+
+/* ============================================================================
    POP-UP BUTTON — .lx-popup
    A macOS pop-up button: 24px bordered capsule, 13px label, chevron-up-down.
    The <select> keeps its native menu (that IS the platform menu) — only the
@@ -544,6 +592,7 @@ input[type='checkbox']:focus-visible {
   .lx-seg .lx-seg-item,
   .lx-search,
   .lx-chip,
+  .lx-input,
   .lx-popup select,
   input[type='checkbox'] {
     transition: none;

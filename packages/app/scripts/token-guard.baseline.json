@@ -8,6 +8,5 @@
   "src/renderer/lattice/icons.tsx": 1,
   "src/renderer/lattice/ui/Badge.tsx": 2,
   "src/renderer/styles/island.css": 36,
-  "src/renderer/tabs/GraphExplorerGPU.tsx": 51,
-  "src/renderer/tabs/Notebook.tsx": 1
+  "src/renderer/tabs/GraphExplorerGPU.tsx": 51
 }

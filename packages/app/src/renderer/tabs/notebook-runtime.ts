@@ -46,7 +46,10 @@ export const NOTEBOOK_TOOLS: ToolDef[] = [
     description: 'Search symbols by name across the project',
     fields: [
       { key: 'query', label: 'Query', placeholder: 'e.g. registerTool', required: true },
-      { key: 'kind', label: 'Kind (optional)', placeholder: 'function | class | method | …' },
+      // Optionality lives in the placeholder, not the label: "Kind (optional)"
+      // wrapped to two lines in the form's label column and broke the row's
+      // baseline. `required` is what the runtime actually reads.
+      { key: 'kind', label: 'Kind', placeholder: 'function | class | method — optional' },
     ],
   },
   {
