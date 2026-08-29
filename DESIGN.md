@@ -473,6 +473,13 @@ Not a pass at the end. These are floors.
 `lattice/ui/__tests__/primitives.test.tsx` asserts the height set, the ≥24px boxes, the
 radius set, and ≥4.5:1 contrast for all seven badge tones in both appearances.
 
+`styles/__tests__/tokens.test.ts` adds the **tertiary-as-text guard** (TRA-344): no rule
+under `renderer/**` may declare `color: var(--label-tertiary)` *and* a `font-size`. Sizing
+text is what distinguishes reading text from a glyph, so the pair is the machine-checkable
+form of §2's "decoration only". `::placeholder` is the one exempt selector. This closes the
+gap the contrast table cannot see — it measures the tokens, not which token a component
+reaches for, so quick open sat at 1.88:1 for six weeks with a green build.
+
 Run it locally:
 
 ```bash
@@ -535,7 +542,8 @@ new evidence.
 | Accent `#0069d9`, not Apple's `#007aff` (light) | System blue measures 4.02:1 on `--surface` and fails AA both as text and under a white label. |
 | `--label-secondary` at `.55`, not Apple's `.50` | At `.50` it measures 3.98:1 and fails AA for the body text it carries. |
 | `--accent` and `--accent-fill` split (same for `--status-red`/`--danger-fill`) | A hue readable *as text* on `--surface` and a hue readable *under a white label* are different colours in dark. |
-| `--label-tertiary` is decoration-only | It measures 1.88:1 light / 2.53:1 dark. The sites that read as "quietest text" carry real reading text and use `--label-secondary`; only genuine decoration asks for `--label-tertiary` by name. |
+| `--label-tertiary` is decoration-only, and CI now enforces it | It measures 1.88:1 light / 2.53:1 dark. The sites that read as "quietest text" carry real reading text and use `--label-secondary`; only genuine decoration asks for `--label-tertiary` by name. Written down was not enough — quick open shipped paths, ⌘-hints and group headers on it. A rule that sets `color: var(--label-tertiary)` alongside a `font-size` now fails the build (§9). |
+| A shortcut hint on a selected row is full `--on-accent`, not a mix of it | `color-mix(--on-accent 72%, transparent)` on `--accent-fill` measured 3.22:1. Dimming a label to signal "secondary" only works over a surface with headroom; on a filled accent row there is none. |
 | One token layer; the legacy aliases are **gone** (TRA-315) | Aliases let surfaces migrate one at a time; once every surface had landed they were inlined to the token they resolved to and deleted. `var(--text-secondary)` and friends no longer exist — there is exactly one name per colour. |
 | Baselined token guard (counts, not per-line suppressions) | Counts only ever move down; a line-level baseline churns on every reflow. |
 | Control heights fixed at 20/24/28 | Matches the macOS small/regular/large tiers; any fourth height is drift. |
