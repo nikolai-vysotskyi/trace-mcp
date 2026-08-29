@@ -26,12 +26,41 @@ export const TRAFFIC_LIGHT_D = 12;
    changes the button's frame, this is the constant that absorbs it. */
 const TRAFFIC_LIGHT_FRAME_INSET = 1;
 
+/** Offset that centres the lights in a band this tall. Never write it by hand. */
+const centreLightsIn = (bandH: number): number =>
+  (bandH - TRAFFIC_LIGHT_D) / 2 - TRAFFIC_LIGHT_FRAME_INSET;
+
 /** Offset that centres the lights in the band. Never write this number down. */
-export const TRAFFIC_LIGHT_Y = (TOP_BAND_H - TRAFFIC_LIGHT_D) / 2 - TRAFFIC_LIGHT_FRAME_INSET;
+export const TRAFFIC_LIGHT_Y = centreLightsIn(TOP_BAND_H);
+
+/* ---- The second band, the one we do not draw (TRA-399) --------------------
+   A macOS tabbed window grows an AppKit tab bar. The window is
+   `titleBarStyle: 'hiddenInset'`, i.e. full-size content view, so the web
+   contents does NOT shrink — `innerHeight` stays equal to `outerHeight` and the
+   tab bar is painted OVER the top of the renderer. Reserve its height or it
+   swallows whatever the app drew on that line, which is the entire surface
+   toolbar plus the sidebar toggle.
+
+   Measured on macOS 26.5 / Electron 41.10.6 by photographing the window
+   (`screencapture -l<CGWindowID>`) with two tabs open and reading the column
+   profile down the sidebar: the tab bar's plate runs from y=0 to y=36.0, and
+   the sidebar's own material resumes at 36.0. If a future macOS changes the
+   metric, this is the one constant that absorbs it. */
+
+/** Height of the AppKit tab bar on a tabbed window, in CSS px. */
+export const MAC_TAB_BAR_H = 36;
+
+/** Offset that centres the lights in the TAB BAR, which owns the top band then. */
+export const TRAFFIC_LIGHT_Y_TABBED = centreLightsIn(MAC_TAB_BAR_H);
+
+/** The offset that holds right now. The lights belong to whichever band is on
+    the window's top line — ours at 44px, AppKit's tab bar at 36px. */
+export const trafficLightYFor = (tabBarVisible: boolean): number =>
+  tabBarVisible ? TRAFFIC_LIGHT_Y_TABBED : TRAFFIC_LIGHT_Y;
 
 /** Distance from the window's leading edge to the first light. */
 export const TRAFFIC_LIGHT_X = 14;
 
-/** Where the lights' centre lands, given TRAFFIC_LIGHT_Y — the band's centre. */
-export const trafficLightCentreY = (): number =>
-  TRAFFIC_LIGHT_Y + TRAFFIC_LIGHT_FRAME_INSET + TRAFFIC_LIGHT_D / 2;
+/** Where the lights' centre lands, given an offset — that band's centre. */
+export const trafficLightCentreY = (y: number = TRAFFIC_LIGHT_Y): number =>
+  y + TRAFFIC_LIGHT_FRAME_INSET + TRAFFIC_LIGHT_D / 2;
