@@ -6,6 +6,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.2.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.1.1...v3.2.0) (2026-08-29)
+
+
+### Features
+
+* **app:** bring the Graph Explorer overlay layer onto the design system (TRA-349) ([#505](https://github.com/nikolai-vysotskyi/trace-mcp/issues/505)) ([6c635bd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6c635bd11fc87f1d379afaec9d50a43d917cca48))
+* **app:** collapse the sidebar footer into one row that opens an app menu (TRA-363) ([#516](https://github.com/nikolai-vysotskyi/trace-mcp/issues/516)) ([2a94e45](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2a94e45237ebfe5eb5c6aed8979db695e39abdc5))
+* **app:** one top band — the surface's toolbar shares the line with the sidebar toggle (TRA-354) ([#518](https://github.com/nikolai-vysotskyi/trace-mcp/issues/518)) ([e194fdb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e194fdb39f786d315d3b1b69a6e6698cb04db46f))
+* **app:** Theme is one menu row with an inline switcher (TRA-363) ([#522](https://github.com/nikolai-vysotskyi/trace-mcp/issues/522)) ([cdf6193](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cdf61937d72f40c10722e491f61d4ab302c73d7d))
+* **app:** update Windows through electron-updater instead of the macOS zip path (TRA-360) ([#513](https://github.com/nikolai-vysotskyi/trace-mcp/issues/513)) ([b8352f5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b8352f5b90babddc4d4ca7443e7131dcec7ba409))
+* **parser:** migrate to the web-tree-sitter 0.26 API (TRA-330) ([#498](https://github.com/nikolai-vysotskyi/trace-mcp/issues/498)) ([4e9b45c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4e9b45c8b0356374fea249510a9aa3fc77d2eedd))
+
+
+### Bug Fixes
+
+* **api:** return SQLite indexed_at as ISO-8601 UTC ([#520](https://github.com/nikolai-vysotskyi/trace-mcp/issues/520)) ([1f7ec66](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1f7ec66600f58c22fe4af5ea286c845f38060711))
+* **app:** a glyph names the action — drop sparkles and speech bubbles (TRA-363) ([#525](https://github.com/nikolai-vysotskyi/trace-mcp/issues/525)) ([b4331cf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b4331cfced37d6aac3873d97466bb78593d8d79a))
+* **app:** correct TRA-355's contrast claim and repoint its guard at a live element ([#508](https://github.com/nikolai-vysotskyi/trace-mcp/issues/508)) ([61da73e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61da73e17eba740e265d6effb37a58fd2d84f667))
+* **app:** follow the app's Appearance in the native layer, and floor the sidebar material in light (TRA-369) ([#524](https://github.com/nikolai-vysotskyi/trace-mcp/issues/524)) ([37e7eba](https://github.com/nikolai-vysotskyi/trace-mcp/commit/37e7eba021aa944725cff152a90e9f00e4ec773c))
+* **app:** put the traffic lights on the top band's centre line (TRA-370) ([#521](https://github.com/nikolai-vysotskyi/trace-mcp/issues/521)) ([8ead88c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8ead88c0f46ef51959ad3cba705b19d403ab146a))
+* **app:** report global npm roots the update never touched (TRA-364) ([#515](https://github.com/nikolai-vysotskyi/trace-mcp/issues/515)) ([0ae6e61](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0ae6e61fae33a53d681976ff8d2c327fb85d2cc7))
+* **app:** say the daemon is unreachable instead of "Failed to fetch" (TRA-356) ([#507](https://github.com/nikolai-vysotskyi/trace-mcp/issues/507)) ([564ad48](https://github.com/nikolai-vysotskyi/trace-mcp/commit/564ad48c38fd478cdfb63f6249e3b47001c4fdcb))
+* **app:** stop a locally built .app from hijacking updates, and never call a stuck bundle "up to date" (TRA-357) ([#510](https://github.com/nikolai-vysotskyi/trace-mcp/issues/510)) ([d4f6e27](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d4f6e27d40f461dc2bc8a2f9db9b33c69363042f))
+* **app:** stop the shared toolbar clipping its controls off-window ([#509](https://github.com/nikolai-vysotskyi/trace-mcp/issues/509)) ([e299f34](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e299f340837a2bb254baaaedf6364682ddd8b169))
+* **daemon:** build each MCP session from a freshly loaded config (TRA-373) ([#526](https://github.com/nikolai-vysotskyi/trace-mcp/issues/526)) ([3498657](https://github.com/nikolai-vysotskyi/trace-mcp/commit/34986577b3b40c7f8ce69a2cb1fa3080f172ce59))
+* **refactoring:** apply_move now rewrites ESM .js import specifiers (TRA-374) ([#527](https://github.com/nikolai-vysotskyi/trace-mcp/issues/527)) ([756d840](https://github.com/nikolai-vysotskyi/trace-mcp/commit/756d840d6c8152fe5d40103d7a4e85f6331ed040))
+* **refactoring:** normalize path separators before collapsing barrel imports ([#528](https://github.com/nikolai-vysotskyi/trace-mcp/issues/528)) ([bef1e22](https://github.com/nikolai-vysotskyi/trace-mcp/commit/bef1e2267e394cf31f915f0c0d9b9dc285759dba))
+* **tools:** make compact_schemas cover all 141 tools and stop hiding required params (TRA-346) ([#500](https://github.com/nikolai-vysotskyi/trace-mcp/issues/500)) ([70787a7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/70787a77dd3f982df8ed06fdfb0686d06092ab73))
+
+
+### Documentation
+
+* fix the framework/language counts on the install surfaces (TRA-361) ([#512](https://github.com/nikolai-vysotskyi/trace-mcp/issues/512)) ([639dc9d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/639dc9d0a46eb721f1dea1e763196cbdf37c3977))
+* re-measure the advertised tool surface and correct the comparison (TRA-372) ([#523](https://github.com/nikolai-vysotskyi/trace-mcp/issues/523)) ([d41ed16](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d41ed16fb6994e0e802e406dc840f16ab75654af))
+* **readme:** deep-link in-body doc references to trace-mcp.com pages ([#502](https://github.com/nikolai-vysotskyi/trace-mcp/issues/502)) ([221e941](https://github.com/nikolai-vysotskyi/trace-mcp/commit/221e941840622b24c1de7dadaa0cca2a122abf40))
+* regenerate every screenshot from one seeded state (TRA-366) ([#517](https://github.com/nikolai-vysotskyi/trace-mcp/issues/517)) ([2783acf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2783acfc231a20c4b96b742706d7d5f0100d7229))
+* **seo:** per-competitor /vs/ pages, visible dates, token-usage guide (TRA-351) ([#504](https://github.com/nikolai-vysotskyi/trace-mcp/issues/504)) ([4c2fb1b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4c2fb1b9aa84b9ec59a36b1a3558b89eaba24a36))
+
+
+### Tests
+
+* **update:** prove the .app bundle actually moves on npm install (TRA-359) ([#511](https://github.com/nikolai-vysotskyi/trace-mcp/issues/511)) ([ec4a1d5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ec4a1d53a943087629f036d8c1eeddb6c5908357))
+
+
+### CI/CD
+
+* publish server.json to the official MCP Registry on release ([#503](https://github.com/nikolai-vysotskyi/trace-mcp/issues/503)) ([88c1beb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/88c1beb1387b6841695f138724ed20281db02efa))
+* **release:** do not publish to npm before the app artifacts exist (TRA-362) ([#514](https://github.com/nikolai-vysotskyi/trace-mcp/issues/514)) ([b4066b3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b4066b369803a7b6077acfedfbb041ce9e2beed0))
+
 ## [3.1.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.1.0...v3.1.1) (2026-08-29)
 
 
