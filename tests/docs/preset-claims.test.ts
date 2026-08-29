@@ -64,16 +64,22 @@ describe('documented tool-preset sizes', () => {
  * 28, which made us look ~6x more expensive than we are on the page comparing
  * us to a ~55-tool competitor.
  *
- * A phrase matcher is the wrong shape here — the claim appears as "28 (~11.6K
- * tok)", "advertises 28 tools", "lists 28 on", "our 28 and ~11.6K", "28-tool
- * default", and the pages should stay free to word it naturally. So this pins
- * the pair instead: the pages say the `minimal` preset is 28 tools costing
- * ~11.6K tokens, and `~11.6K` is the unambiguous anchor for that claim. Move
- * the preset off 28 and this fails, naming every page that needs rewording.
+ * The claim is worded five ways across the pages, so this does not match the
+ * sentence around it. It reads the number out of the one place every page
+ * states it in a fixed shape — the comparison table's "advertised (default)"
+ * row — and checks it against what the filter actually serves. That is the cell
+ * that drifted, and prose elsewhere on the page saying 28 must not excuse it.
+ *
+ * A second, looser pass keeps the pages without that row honest: any page
+ * quoting the `~11.6K` wire cost has to name the served count somewhere.
  */
 const VS_DEFAULT_PRESET = 'minimal';
-const VS_CLAIMED_TOOLS = 28;
 const VS_TOKEN_ANCHOR = '11.6K';
+// The label is stable across the pages; the cell after it is free-form prose.
+const VS_DEFAULT_ROW = /^\|[^|\n]*advertised[^|\n]*\(default\)[^|\n]*\|([^|\n]*)\|/gim;
+// ponytail: bare-number coverage, so "28.1K stars" does not count as the claim.
+// Loose on purpose — the row check above is the one with teeth.
+const bareCount = (n: string) => new RegExp(String.raw`\b${n}\b(?![.,]\d)`);
 
 describe('head-to-head pages quote the real default surface', () => {
   const vsDir = join(REPO_ROOT, 'docs', 'vs');
@@ -83,23 +89,46 @@ describe('head-to-head pages quote the real default surface', () => {
     expect(pages.length).toBeGreaterThan(0);
   });
 
-  it(`every page quoting "~${VS_TOKEN_ANCHOR} tokens" still matches the \`${VS_DEFAULT_PRESET}\` preset`, () => {
+  it(`the "advertised (default)" row matches the \`${VS_DEFAULT_PRESET}\` preset`, () => {
+    const served = String(servedCount(VS_DEFAULT_PRESET));
+    const rows: string[] = [];
+    const stale: string[] = [];
+
+    for (const f of pages) {
+      const text = readFileSync(join(vsDir, f), 'utf8');
+      for (const m of text.matchAll(VS_DEFAULT_ROW)) {
+        rows.push(`docs/vs/${f}`);
+        const claimed = m[1].match(/\d+/)?.[0];
+        if (claimed !== served) stale.push(`docs/vs/${f} (says ${claimed ?? 'nothing'})`);
+      }
+    }
+
+    expect(
+      rows.length,
+      'no docs/vs page has an "advertised (default)" comparison row — did the tables get reshaped?',
+    ).toBeGreaterThan(0);
+    expect(
+      stale,
+      `the \`${VS_DEFAULT_PRESET}\` preset serves ${served} tools; re-measure the wire cost and reword`,
+    ).toEqual([]);
+  });
+
+  it(`every page quoting "~${VS_TOKEN_ANCHOR} tokens" names the served count`, () => {
+    const served = String(servedCount(VS_DEFAULT_PRESET));
     const quoting = pages.filter((f) =>
       readFileSync(join(vsDir, f), 'utf8').includes(VS_TOKEN_ANCHOR),
     );
     expect(
       quoting.length,
       `no docs/vs page quotes the default surface — did the anchor "${VS_TOKEN_ANCHOR}" get reworded?`,
-    ).toBeGreaterThan(0);
+    ).toBe(pages.length);
 
-    const actual = servedCount(VS_DEFAULT_PRESET);
-    if (actual !== VS_CLAIMED_TOOLS) {
-      throw new Error(
-        `preset "${VS_DEFAULT_PRESET}" now admits ${actual} tools, but these pages still sell the ` +
-          `default surface as ${VS_CLAIMED_TOOLS} tools / ~${VS_TOKEN_ANCHOR} tokens: ` +
-          `${quoting.map((f) => `docs/vs/${f}`).join(', ')}. ` +
-          'Re-measure the wire cost, reword the pages, and update the constants in this test.',
-      );
-    }
+    const silent = quoting.filter(
+      (f) => !bareCount(served).test(readFileSync(join(vsDir, f), 'utf8')),
+    );
+    expect(
+      silent,
+      `these pages sell the ~${VS_TOKEN_ANCHOR} default surface without ever saying it is ${served} tools`,
+    ).toEqual([]);
   });
 });
