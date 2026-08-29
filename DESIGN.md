@@ -370,6 +370,15 @@ you undo them:
 - **A toolbar wraps; it never clips.** Give it `min-height: 52px` and `flex-wrap`,
   not `height: 52px`. A fixed non-wrapping row inside `overflow-x: hidden` ran 51px
   past a 420px pane and put + Add's chevron and the overflow menu outside the window.
+  This lives in the shared `Toolbar` primitive (`lattice/ui/Surface.tsx`), so every
+  surface built on it inherits the behaviour — do not re-declare a height on top.
+- **A control that can shrink declares a length `flex-basis`, not `auto`.** A wrapping
+  flex line is laid out from each item's *hypothetical* size, so `flex-basis: auto`
+  advertises a control's full content width and breaks the row before it has spent
+  the slack it has. `.lx-search` is `flex: 1 1 140px` (its own `min-width`) capped at
+  `max-width: max-content`: identical rendered width wherever there is room, 42px of
+  give before the toolbar goes to two rows. With `auto` it wrapped Memory's toolbar
+  at the *default* 960px window, not just at the minimum.
 
 **Respond to the pane, not to the window.** The sidebar is resizable 180–320px and
 collapsible, so window width says almost nothing about the room a surface has. Watch
@@ -593,6 +602,8 @@ new evidence.
 | Optionality lives in a field's placeholder, not its label | "Kind (optional)" wrapped to two lines in the form's label column and broke the row baseline. `required` is what the code reads anyway. |
 | The toolbar sits **above** the KPI strip, not below it | Chrome above content. With the strip first, 357px of tiles pushed the toolbar's bottom 33px past a 420px window and nothing on the surface could scroll it back. |
 | A toolbar has `min-height: 52px` and wraps, never a fixed `height` | A non-wrapping 52px row inside `overflow-x: hidden` ran 51px past a 420px pane and put + Add's chevron and the overflow menu outside the window. |
+| The wrap rule belongs to the shared `Toolbar`, not to each surface | Fixed on the Workspace header in TRA-292 and nowhere else, so four surfaces built on the primitive still clipped: at 640×420 Memory overflowed 333px with its search, its prominent "Add decision" and its overflow menu at zero visible pixels and no scrollable ancestor. |
+| A shrinkable control declares a length `flex-basis`, never `auto` | A wrapping flex line breaks on hypothetical sizes, so `flex-basis: auto` spends none of the control's slack first. `.lx-search` on `auto` wrapped Memory's toolbar at the default 960px window; on `1 1 140px` capped at `max-content` it renders identically and holds one row to a 740px pane. |
 | Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` reproduces the measured 357px; a guessed number drifts the first time a tile changes. |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
 | A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
