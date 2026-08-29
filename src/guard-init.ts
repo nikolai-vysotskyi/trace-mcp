@@ -45,13 +45,16 @@ export function initializeGuard(projectRoot: string): boolean {
   // "already initialized" atomically. An unwritable root fails the same way
   // and is equally a no-op.
   try {
-    fs.mkdirSync(path.dirname(modeFile), { recursive: true });
-    fs.writeFileSync(modeFile, 'coach\n', { flag: 'wx' });
+    fs.mkdirSync(path.dirname(modeFile), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(modeFile, 'coach\n', { flag: 'wx', mode: 0o600 });
   } catch {
     return false;
   }
   try {
-    fs.writeFileSync(dateFile, `${Math.floor(Date.now() / 1000)}\n`, { flag: 'wx' });
+    fs.writeFileSync(dateFile, `${Math.floor(Date.now() / 1000)}\n`, {
+      flag: 'wx',
+      mode: 0o600,
+    });
   } catch {
     /* a leftover install-date keeps its original expiry — that is the safe direction */
   }
