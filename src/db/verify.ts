@@ -205,10 +205,14 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
   if (tableExists(db, 'symbol_embeddings') && tableExists(db, 'embedding_meta')) {
     let expectedDim: number | null = null;
     try {
-      const meta = db.prepare('SELECT dim FROM embedding_meta WHERE id = 1').get() as
-        | { dim: number }
+      // embedding_meta is a key/value table (see schema.ts) — the same shape
+      // BlobVectorStore.setMeta writes. Reading it as an (id, dim) row silently
+      // threw and made this check unreachable.
+      const meta = db.prepare("SELECT value FROM embedding_meta WHERE key = 'dim'").get() as
+        | { value: string }
         | undefined;
-      expectedDim = meta?.dim ?? null;
+      const parsed = meta ? Number(meta.value) : NaN;
+      expectedDim = Number.isInteger(parsed) && parsed > 0 ? parsed : null;
     } catch {
       expectedDim = null;
     }
@@ -227,9 +231,9 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
       if (lengths.length === 1 && lengths[0].len > 0 && lengths[0].len % 4 === 0) {
         const inferredDim = lengths[0].len / 4;
         try {
-          db.prepare('INSERT OR REPLACE INTO embedding_meta (id, dim) VALUES (1, ?)').run(
-            inferredDim,
-          );
+          db.prepare(
+            "INSERT OR REPLACE INTO embedding_meta (key, value) VALUES ('dim', ?)",
+          ).run(String(inferredDim));
           checks.push({
             name: 'embedding_dim',
             status: 'ok',
