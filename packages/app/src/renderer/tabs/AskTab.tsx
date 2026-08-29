@@ -520,7 +520,7 @@ export function AskTab({ root }: { root: string }) {
           <div className="ask-scroll">
             <div className="ask-measure ask-empty">
               <EmptyState
-                icon="forum"
+                icon="search"
                 title="Connect an AI provider"
                 subtitle="Ask answers questions about this project using a model you supply. Add one in Settings to turn it on."
                 action={
@@ -608,7 +608,7 @@ export function AskTab({ root }: { root: string }) {
           ) : messages.length === 0 && !streaming && !busy && !error ? (
             <div className="ask-measure ask-empty">
               <EmptyState
-                icon="forum"
+                icon="search"
                 title="Ask anything about this codebase"
                 subtitle="Answers are grounded in the indexed graph — the files, symbols and decisions this project already has."
               />
