@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
@@ -53,4 +53,53 @@ describe('documented tool-preset sizes', () => {
       expect(checked, `no preset claims found in ${path}`).toBeGreaterThan(0);
     });
   }
+});
+
+/**
+ * TRA-427: the four `docs/vs/*.md` head-to-head pages quote the shipped default
+ * surface at every reader-facing turn — table row, "when to pick theirs", FAQ,
+ * JSON-LD answer text — but none of them was in DOCS above, so the numbers were
+ * unguarded. They had already drifted once: `docs/vs/serena.md` quoted the
+ * `full` ceiling as the *default* row while its own prose two screens down said
+ * 28, which made us look ~6x more expensive than we are on the page comparing
+ * us to a ~55-tool competitor.
+ *
+ * A phrase matcher is the wrong shape here — the claim appears as "28 (~11.6K
+ * tok)", "advertises 28 tools", "lists 28 on", "our 28 and ~11.6K", "28-tool
+ * default", and the pages should stay free to word it naturally. So this pins
+ * the pair instead: the pages say the `minimal` preset is 28 tools costing
+ * ~11.6K tokens, and `~11.6K` is the unambiguous anchor for that claim. Move
+ * the preset off 28 and this fails, naming every page that needs rewording.
+ */
+const VS_DEFAULT_PRESET = 'minimal';
+const VS_CLAIMED_TOOLS = 28;
+const VS_TOKEN_ANCHOR = '11.6K';
+
+describe('head-to-head pages quote the real default surface', () => {
+  const vsDir = join(REPO_ROOT, 'docs', 'vs');
+  const pages = readdirSync(vsDir).filter((f) => f.endsWith('.md'));
+
+  it('docs/vs contains pages to check', () => {
+    expect(pages.length).toBeGreaterThan(0);
+  });
+
+  it(`every page quoting "~${VS_TOKEN_ANCHOR} tokens" still matches the \`${VS_DEFAULT_PRESET}\` preset`, () => {
+    const quoting = pages.filter((f) =>
+      readFileSync(join(vsDir, f), 'utf8').includes(VS_TOKEN_ANCHOR),
+    );
+    expect(
+      quoting.length,
+      `no docs/vs page quotes the default surface — did the anchor "${VS_TOKEN_ANCHOR}" get reworded?`,
+    ).toBeGreaterThan(0);
+
+    const actual = servedCount(VS_DEFAULT_PRESET);
+    if (actual !== VS_CLAIMED_TOOLS) {
+      throw new Error(
+        `preset "${VS_DEFAULT_PRESET}" now admits ${actual} tools, but these pages still sell the ` +
+          `default surface as ${VS_CLAIMED_TOOLS} tools / ~${VS_TOKEN_ANCHOR} tokens: ` +
+          `${quoting.map((f) => `docs/vs/${f}`).join(', ')}. ` +
+          'Re-measure the wire cost, reword the pages, and update the constants in this test.',
+      );
+    }
+  });
 });
