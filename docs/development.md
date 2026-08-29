@@ -55,6 +55,7 @@ pnpm run build
 | `pnpm run biome:ci` | Full Biome check (formatter + linter) — same as CI |
 | `pnpm run serve` | Start MCP server (dev) |
 | `node scripts/capture-screenshots.mjs` | Regenerate every docs/site screenshot from a seeded demo state |
+| `pnpm --filter trace-mcp-app run check:i18n` | Fail on a user-facing string left inline in an extracted surface |
 
 ## Code style — Biome
 
@@ -120,6 +121,58 @@ tests/
 ```
 
 ---
+
+## Desktop app strings and languages
+
+The app is translated (TRA-379). Every user-facing string lives in a catalogue, not in
+the component that renders it, and English is the source language.
+
+```
+packages/app/src/shared/i18n/
+  locales.ts              # which languages ship, their names, the localStorage key
+  catalog/en/<surface>.ts # the strings, one file per surface (= one i18next namespace)
+  catalog/ru/<surface>.ts # its translation, same keys
+packages/app/src/renderer/i18n/
+  index.ts                # i18next init, setLocale, useLocale, t
+  format.ts               # Intl wrappers: relativeTime, formatDate, formatNumber
+```
+
+**Why i18next.** Plurals. Russian needs four forms where English needs two, and the
+only correct way to choose one is `Intl.PluralRules` — which i18next drives, along
+with interpolation and a runtime language switch. We install the resolver and none of
+its optional backends or detectors, because the catalogues are compiled in: a desktop
+app should not wait on a fetch to paint its first label.
+
+**Adding a string.** Put it in `catalog/en/<surface>.ts` (create the file and add one
+line to `catalog/en/index.ts` if the surface is new — one file per surface is what
+keeps two extraction slices from editing the same catalogue), add the same key to
+every other language, then read it in the component:
+
+```tsx
+const { t } = useTranslation('settings');   // components: re-renders on a switch
+t('title');
+t('projectCount', { count });                // plurals: one key, never a ternary
+```
+
+Module-level helpers that are not components import `t` from `renderer/i18n` instead.
+Never concatenate a sentence, and never format a date or a number by hand — use
+`renderer/i18n/format.ts`.
+
+**Adding a language.** Add it to `LOCALES` in `shared/i18n/locales.ts`, copy
+`catalog/en/` to `catalog/<code>/` and translate it. `catalog-parity.test.ts` then
+fails until every key exists and every `{{placeholder}}` survived; nothing else needs
+wiring, and the Language control picks the new entry up from `LOCALES`.
+
+**The checks.**
+
+```bash
+pnpm --filter trace-mcp-app run check:i18n   # no inline strings in extracted surfaces
+pnpm --filter trace-mcp-app run test         # catalogue parity, plurals, Intl output
+```
+
+`check-i18n.mjs` scans an allowlist, not the whole tree: string extraction lands
+surface by surface, and the `CHECKED` array at the top of the script is how a finished
+slice records that it is finished. Extract a surface → add its path there.
 
 ## Desktop app update channels
 
