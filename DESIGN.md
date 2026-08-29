@@ -126,7 +126,11 @@ Light accent is `#0069d9`, not Apple's `#007aff`: system blue measures 4.02:1 on
 
 ### Status and badges
 
-`--status-green|orange|red|blue|purple` are tuned to read **as text** on both surfaces.
+`--status-green|orange|red|blue|purple` are tuned to read **as text** on both surfaces
+— on `--surface` and `--surface-sunken`, and **nowhere else**. A status token on a tint
+of its own hue is a different, unmeasured pair: `--status-red` on a 10% red fill measured
+**4.31:1** in light and failed AA. Put status text on a plain surface with a glyph, or
+use the `--badge-*-fg` pair, which is the one tinted combination that was verified.
 The `--badge-*-fg` tokens are separate: each is that hue walked toward black (light) or
 white (dark) until the label clears 4.5:1 over the **18% tint of that same hue**, which
 is what `.lx-badge` paints. Badge foreground and status text are not interchangeable.
@@ -223,9 +227,11 @@ The two techniques in use, both worth copying:
 | `--radius-row` | 6px | rows, selection pills, square icon buttons |
 | `--radius-capsule` | 999px | every pill-shaped control |
 
-Controls are **capsules**, not rounded rectangles. The one square control is the
-icon-only button: 24×24 at 6px radius with a 16px glyph. There are no 4/5/9px control
-radii.
+Controls are **capsules**, not rounded rectangles. There are exactly two exceptions,
+both in the scale and both asserted by `primitives.test.tsx`: the icon-only button
+(24×24 at `--radius-row` 6px with a 16px glyph) and the text field (`--radius-input`
+8px — a capsule field sets its first character on a curve). There are no 4/5/9px
+control radii.
 
 When one rounded box sits inside another, the inner radius is the outer minus the
 inset, so the curves stay concentric. The sidebar's 8px bottom footer inset reads as
@@ -252,6 +258,7 @@ already exists here** — that is how the app ended up with four different pill 
 | `Chip` / `ChipGroup` | 24px. Multi-select "on" is a neutral filled state; accent fill is reserved for single-select, where exactly one chip is on. Groups carry a visible label. |
 | `Checkbox` | 16px visual in a 24×24 box. The CSS applies to every `input[type=checkbox]` in the renderer. |
 | `PopUpButton` | 24px bordered capsule. The native `<select>` menu is kept — that *is* the platform menu; only the chrome is ours. |
+| `.lx-input` | Text field. 24px, `--radius-input` (8px), hairline, house focus ring. Add `.mono` for a value that is an identifier or a path: `--font-mono` at 11px, because SF Mono runs optically larger than SF Pro at the same size. A raw `font-family: monospace` resolves to Courier and is a bug. |
 | `Badge` / `GradeBadge` | capsule, 11px/500, sentence case, tinted fill with the saturated hue as the label. 18px tall so it fits inside a 24px row. Never white-on-a-light-fill. |
 | `StatusDot` | tone dot. Pairs with a written label — never the only signal. |
 | `IslandHeader` / `MiniButton` | the canonical 38px island header row. |
@@ -440,6 +447,21 @@ node packages/app/scripts/design-tokens.mjs --update-baseline  # only ever to LO
 The renderer also ships a gallery: `?view=gallery[&theme=dark]` renders every primitive
 variant × size × state.
 
+### Title a design PR `feat:` / `fix:` / `refactor:` — never `design:`
+
+`design` is not a Conventional Commits type, and `.github/workflows/pr-title-lint.yml`
+rejects it. That check is not pedantry: release-please classifies releases from the
+squash-merge subject, which GitHub takes from the PR title, so an unclassifiable title
+means the change ships and then sits unreleased (TRA-104). Pick by what the change
+*does* — a new or rebuilt surface is `feat(app):`, a contrast or spacing correction is
+`fix(app):`, a pure restructure is `refactor(app):`.
+
+Two related things that cost a run to rediscover: `gh pr merge` refuses on this repo
+because `master` requires signed commits and `gh` pre-checks the branch, while the REST
+endpoint (`gh api -X PUT repos/…/pulls/N/merge -f merge_method=squash`) succeeds —
+GitHub signs the squash commit itself. And `master` is `strict`, so rebase onto it
+before expecting a merge to go through.
+
 ---
 
 ## 10. Review checklist for a new screen
@@ -500,6 +522,9 @@ new evidence.
 | A surface with extra columns collapses them with a **container query**, trailing column first | At the 640px window minimum the app sidebar already takes 220. Ask's chat rail + inspector left the conversation at zero width and painted the inspector over its own toolbar. The rules must be last in the file — a container query adds no specificity. |
 | A side inspector starts **closed** and persists the user's choice | 280px of "this appears after you send a message" is not worth the width. The toolbar toggle is how it is discovered. |
 | A failed send puts the question back in the composer | Losing what you typed is a worse cost than the error itself, and it makes "Send again" a single click instead of a retype. |
+| A status colour is never put on a tint of its own hue | `--status-red` is verified on `--surface`; on a 10% red fill it measured 4.31:1. An error reads as an error from its glyph, not from a coloured slab. |
+| Notebook's per-cell Run is `bordered`, not `prominent` | One accent capsule per cell put N prominent actions on one surface. The rule is one per region, and a notebook has no single default action. |
+| Optionality lives in a field's placeholder, not its label | "Kind (optional)" wrapped to two lines in the form's label column and broke the row baseline. `required` is what the code reads anyway. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
 | Tokens and primitives land before any surface | A surface migrated against a moving token layer gets migrated twice. |
 
@@ -507,13 +532,16 @@ new evidence.
 
 ## 12. Migration status
 
-On this system: the token layer, the control primitives, the window chrome, the
-sidebar and its footer, the workspace dashboard, Project Overview, Activity, Memory,
-MCP Clients, Settings, the onboarding sheet, Graph Explorer, Insights, and **Ask**.
+**Every surface is on this system**: the token layer, the control primitives, the
+window chrome, the sidebar and its footer, the workspace dashboard, Project Overview,
+Activity, Memory, MCP Clients, Settings, the onboarding sheet, Graph Explorer,
+Insights, Ask, and **Notebook** — the last one, migrated in TRA-310.
 
-Still to migrate: **Notebook**. Until it is, `styles/island.css` keeps a set of
+What is left is cleanup, not migration. `styles/island.css` still keeps a set of
 **legacy aliases** (`--text-1/2/3`, `--frame`, `--island`, `--row-hover`, `--sep`, …)
-that map onto the tokens above, plus per-domain styles that this document's "never"
-list already forbids — glass stat cards, ALL-CAPS labels, raw hex. **Those are being
+that map onto the tokens above, plus per-domain styles this document's "never" list
+already forbids — glass stat cards, ALL-CAPS labels, raw hex. The token guard still
+records raw colour in `island.css` and `GraphExplorerGPU.tsx`. **Those are being
 deleted, not copied.** If you are writing a new screen, use the tokens in §2 directly;
-if you are touching an old one, migrate it whole and delete the aliases it stops using.
+if you touch a file that still carries aliases, delete the ones it stops using and
+lower its baseline count.

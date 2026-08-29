@@ -139,6 +139,7 @@ describe('controls.css geometry', () => {
       '.lx-chip': '24px',
       '.lx-popup': '24px',
       '.lx-popup select': '24px',
+      '.lx-input': '24px',
       "input[type='checkbox']": '24px',
     };
     for (const [sel, want] of Object.entries(defaults)) {
@@ -161,7 +162,11 @@ describe('controls.css geometry', () => {
       // 9px is only legal on the checkbox: 5px inner + 4px transparent border
       // is concentric with the 16px visual.
       if (r === '9px' && !selector.includes('checkbox')) offenders.push(`${selector} → ${r}`);
-      else if (!ALLOWED.has(r)) offenders.push(`${selector} → ${r}`);
+      // The text field is the one non-capsule control in the scale (DESIGN.md
+      // §4) — a capsule field puts its first character on a curve.
+      else if (r === 'var(--radius-input)' && !selector.includes('lx-input'))
+        offenders.push(`${selector} → ${r}`);
+      else if (r !== 'var(--radius-input)' && !ALLOWED.has(r)) offenders.push(`${selector} → ${r}`);
     }
     expect(offenders).toEqual([]);
   });
