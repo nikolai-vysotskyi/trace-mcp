@@ -12,6 +12,7 @@ import {
   projectName,
   REGISTRY_PATH,
 } from './global.js';
+import { announceDbHolder, hasLiveHolder, releaseDbHolder } from './db-holders.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
 import { readIfExists } from './utils/safe-fs.js';
 
@@ -111,6 +112,24 @@ function saveRegistry(reg: Registry): void {
   _registryCache = null; // force reload on next read (new mtime + fresh object)
 }
 
+/**
+ * Try to take a share of a sibling's index DB for `absRoot` (TRA-304).
+ *
+ * Announces our holder first, then scans; returns false — and gives the claim
+ * back — as soon as any other root turns out to be holding that DB. Any fs
+ * error is also a false: fail toward isolation, never toward silent sharing.
+ */
+function claimSharedDb(siblingDbPath: string, absRoot: string): boolean {
+  try {
+    announceDbHolder(siblingDbPath, absRoot);
+    if (!hasLiveHolder(siblingDbPath, absRoot)) return true;
+  } catch {
+    /* unreadable/unwritable holder dir — treat as "a sibling is live" */
+  }
+  releaseDbHolder(siblingDbPath, absRoot);
+  return false;
+}
+
 export function registerProject(
   root: string,
   opts?: { type?: 'single' | 'multi-root'; children?: string[] },
@@ -119,6 +138,14 @@ export function registerProject(
   const reg = loadRegistry();
 
   if (reg.projects[absRoot] && !opts) {
+    // Already registered: the dbPath decision was made on a previous run, but
+    // this process is about to open that DB, so re-announce the holder (TRA-304)
+    // — that is what stops a *sibling* checkout from sharing it while we're up.
+    try {
+      announceDbHolder(reg.projects[absRoot].dbPath, absRoot);
+    } catch {
+      /* best effort — an unannounced holder only costs isolation, not safety */
+    }
     return reg.projects[absRoot];
   }
 
@@ -132,15 +159,32 @@ export function registerProject(
   // function has always computed — zero behavior change for them.
   const remoteIdentity = getProjectRemoteIdentity(absRoot);
   const sibling = remoteIdentity ? findRegisteredEntryByRemote(remoteIdentity, absRoot) : null;
+  // TRA-304: that sharing is only safe when the checkouts are used
+  // *sequentially*. Announce ourselves under the sibling's DB first, then look
+  // for a holder from a different root — announce-then-scan makes a symmetric
+  // race (two checkouts registering at the same moment) resolve toward
+  // isolation, which is the safe direction to fail.
+  //
+  // Note the decision is sticky: `dbPath` is persisted here and never
+  // re-evaluated per query, so "a sibling was live when we registered" is a
+  // proxy for "concurrent", not a guarantee. It is a good proxy only because
+  // registration happens at run start; don't read it as airtight.
+  const shareWithSibling = sibling ? claimSharedDb(sibling.dbPath, absRoot) : false;
+  const dbPath = shareWithSibling ? sibling!.dbPath : getDbPath(absRoot);
+  try {
+    if (!shareWithSibling) announceDbHolder(dbPath, absRoot);
+  } catch {
+    /* our own DB, nobody else to confuse — proceed unannounced */
+  }
 
   const entry: RegistryEntry = {
     name: projectName(absRoot),
     root: absRoot,
-    dbPath: sibling?.dbPath ?? getDbPath(absRoot),
+    dbPath,
     // Inherit the sibling's lastIndexed so tooling doesn't present a project
     // whose DB already has data as "never indexed" just because this
     // particular root is a new registry row.
-    lastIndexed: sibling?.lastIndexed ?? null,
+    lastIndexed: shareWithSibling ? (sibling?.lastIndexed ?? null) : null,
     addedAt: new Date().toISOString(),
     ...(remoteIdentity && { remoteIdentity }),
     ...(opts?.type && { type: opts.type }),
