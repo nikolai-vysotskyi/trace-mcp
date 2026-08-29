@@ -20,17 +20,26 @@ updates:
       prefix-development: chore(deps-dev)
       include: scope
     ignore:
+      # @types/node tracks the minimum supported runtime (Node 20), not the
+      # latest: a major bump would type-check against APIs that do not exist
+      # on the runtime floor declared in `engines.node`.
       - dependency-name: "@types/node"
         update-types:
           - version-update:semver-major
+      # web-tree-sitter 0.24.7 -> 0.26.x changes the parser API and broke 589
+      # of 4546 tests across 82 test files (PR #89). Held until a dedicated
+      # migration updates the language plugins to the new API; until then a
+      # bump is a migration project, not a dependency bump.
       - dependency-name: "web-tree-sitter"
         update-types:
           - version-update:semver-minor
           - version-update:semver-major
-      # better-sqlite3 13.x's N-API prebuilds segfault on `new Database()`
-      # (reproduces with a bare `require('better-sqlite3')` script, no
-      # trace-mcp code involved — see TRA-51). Re-evaluate once upstream
-      # ships a fixed 13.x release.
+      # better-sqlite3 13.x declares `engines: node >=22`, but this project's
+      # support policy is `engines: node >=20` — merging would break installs
+      # on Node 20/21, same blocker as commander below. (The original reason
+      # for this entry was the TRA-51 N-API segfault on `new Database()`; that
+      # no longer reproduces on 13.0.3, so the Node floor is what holds it.)
+      # Revisit once the Node floor moves to 22.
       - dependency-name: "better-sqlite3"
         update-types:
           - version-update:semver-major
@@ -74,12 +83,21 @@ updates:
       prefix-development: chore(app-deps-dev)
       include: scope
     ignore:
+      # Vite 8 switches the default bundler to Rolldown, which fails on
+      # @cosmos.gl/graph's transitive `gl-bench` dep (stricter CJS default
+      # import handling) — PR #95. @vitejs/plugin-react v6 requires Vite 7+
+      # (PR #91), so the two move together or not at all.
       - dependency-name: "vite"
         update-types:
           - version-update:semver-major
       - dependency-name: "@vitejs/plugin-react"
         update-types:
           - version-update:semver-major
+      # Originally held because menubar@9.5.2 pinned `electron <35.0.0`.
+      # menubar was dropped in the TRA-257 artifact-slimming work and the app
+      # is on Electron 41, so that blocker is gone — the entry stands only as
+      # "an Electron major needs a manual packaging/signing smoke pass, not an
+      # auto-merge". Re-evaluate whether to lift it (TRA-329).
       - dependency-name: "electron"
         update-types:
           - version-update:semver-major
