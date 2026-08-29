@@ -10,6 +10,8 @@
 /* Control primitives (TRA-290) — capsules, 20/24/28 heights, ≥24px hit
    targets. Imported LAST so it wins over the legacy island rules it replaces. */
 @import "./styles/controls.css";
+/* Ask surface (TRA-312) — layout only; every value comes from tokens.css. */
+@import "./styles/ask.css";
 
 /* Legacy token names kept as ALIASES of tokens.css for one migration step.
    Each surface sub-issue deletes the aliases it no longer uses (TRA-284). */
