@@ -11,6 +11,8 @@
   url: /vs/serena.html
 - title: vs codebase-memory-mcp
   url: /vs/codebase-memory-mcp.html
+- title: vs codegraph
+  url: /vs/codegraph.html
 - title: Cut Claude Code token usage
   url: /reduce-claude-code-token-usage.html
 - title: Supported frameworks
