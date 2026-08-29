@@ -582,7 +582,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
 
   server.tool(
     'tune_weights',
-    'Self-tuning retrieval: read the persistent ranking ledger and learn per-repo signal-fusion weights, written to ~/.trace-mcp/tuning.jsonc. Requires telemetry.enabled in config. Read-only by default (dry_run=true unless explicitly disabled). Returns JSON: { applied, reason, weights?, before?, events_used? }.',
+    'Retrieval fusion ranking for `search`, not decision memory (that is `tune_decision_weights`): read the persistent ranking ledger and learn per-repo signal-fusion weights, written to ~/.trace-mcp/tuning.jsonc. Requires telemetry.enabled in config. Read-only by default (dry_run=true unless explicitly disabled). Returns JSON: { applied, reason, weights?, before?, events_used? }.',
     {
       dry_run: z
         .boolean()
