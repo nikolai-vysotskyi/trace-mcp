@@ -5,8 +5,10 @@
 // that does — and it has to keep offering all three states even when the
 // daemon is unreachable, because the theme lives in localStorage and has
 // nothing to do with the daemon.
-import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LOCALE_KEY } from '../../../shared/i18n/locales.js';
+import { setLocale } from '../../i18n';
 import { Settings } from '../Settings';
 
 beforeEach(() => {
@@ -28,7 +30,12 @@ beforeEach(() => {
   );
 });
 
-describe('Settings — Appearance', () => {
+afterEach(() => {
+  setLocale('en');
+  localStorage.removeItem(LOCALE_KEY);
+});
+
+describe('Settings — app preferences', () => {
   it('offers Auto / Light / Dark even with no daemon', () => {
     render(<Settings appearance="auto" onAppearanceChange={() => {}} />);
     const select = screen.getByLabelText('Theme') as HTMLSelectElement;
@@ -43,5 +50,26 @@ describe('Settings — Appearance', () => {
     select.value = 'dark';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     expect(onChange).toHaveBeenCalledWith('dark');
+  });
+
+  /* TRA-388. The same choice as the app menu's Language row, on the surface
+     people go to looking for settings — and with the room for the full names
+     rather than the row's two letters. Written in their own language: someone
+     hunting for Russian is looking for "Русский". */
+  it('offers Language beside Theme, in the languages own names', () => {
+    render(<Settings appearance="auto" onAppearanceChange={() => {}} />);
+    const select = screen.getByLabelText('Language') as HTMLSelectElement;
+    expect([...select.options].map((o) => o.text)).toEqual(['English', 'Русский']);
+    expect(select.value).toBe('en');
+  });
+
+  it('switches the surface at runtime and persists the choice', () => {
+    render(<Settings appearance="auto" onAppearanceChange={() => {}} />);
+    fireEvent.change(screen.getByLabelText('Language'), { target: { value: 'ru' } });
+
+    // No prop to report upwards to and no restart: the screen is already Russian.
+    expect(screen.getByLabelText('Язык')).toBeTruthy();
+    expect(screen.getByLabelText('Тема')).toBeTruthy();
+    expect(localStorage.getItem(LOCALE_KEY)).toBe('ru');
   });
 });
