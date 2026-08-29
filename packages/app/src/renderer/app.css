@@ -13,35 +13,6 @@
 /* Ask surface (TRA-312) — layout only; every value comes from tokens.css. */
 @import "./styles/ask.css";
 
-/* Legacy token names kept as ALIASES of tokens.css for one migration step.
-   Each surface sub-issue deletes the aliases it no longer uses (TRA-284). */
-:root {
-  --bg-primary: var(--surface-sunken);
-  --bg-secondary: var(--fill-quaternary);
-  --bg-tertiary: var(--fill-tertiary);
-  --bg-grouped: var(--surface);
-  --bg-inset: var(--fill-quaternary);
-  --text-primary: var(--label);
-  --text-secondary: var(--label-secondary);
-  /* Deliberately NOT --label-tertiary: this token carries real reading text
-     (empty states, result counts, KPI labels) and at .26 alpha it measured
-     2.21:1. Decoration-only callers ask for --label-tertiary directly. */
-  --text-tertiary: var(--label-secondary);
-  --border: var(--separator);
-  --border-row: var(--separator);
-  --bg-active: var(--fill-tertiary);
-  --bg-hover: var(--fill-quaternary);
-  --sidebar-border: var(--separator);
-  --accent-hover: color-mix(in oklab, var(--accent) 88%, black);
-  --destructive: var(--status-red);
-  --success: var(--status-green);
-  --warning: var(--status-orange);
-  --fill-toggle-off: var(--fill-tertiary);
-  --fill-control: var(--fill-quaternary);
-  --shadow-control: 0 0 0 0.5px var(--separator);
-  --shadow-grouped: 0 0 0 0.5px var(--separator);
-}
-
 /* Tell the UA to render native form controls in the chosen mode. */
 :root[data-theme="light"] {
   color-scheme: light;
@@ -54,7 +25,7 @@ body {
   font-family: var(--font-ui);
   font-size: var(--text-body);
   line-height: var(--leading-body);
-  color: var(--text-primary);
+  color: var(--label);
   background: transparent;
   margin: 0;
   padding: 0;
@@ -154,10 +125,10 @@ body {
   opacity: 0.4;
 }
 .btn-prominent.success {
-  background: var(--success);
+  background: var(--status-green);
 }
 .btn-prominent.success:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--success) 88%, black);
+  background: color-mix(in oklab, var(--status-green) 88%, black);
 }
 
 /* ── Update banner: idle row vs notification card ───────────────── */
@@ -175,20 +146,20 @@ body {
   padding: 0 8px;
   margin: 0 6px;
   font-size: 11px;
-  color: var(--text-secondary);
+  color: var(--label-secondary);
   letter-spacing: -0.005em;
 }
 .update-idle .dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--success);
-  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--success) 60%, black 40%);
+  background: var(--status-green);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--status-green) 60%, black 40%);
   flex-shrink: 0;
 }
 .update-idle.error .dot {
-  background: var(--warning);
-  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--warning) 60%, black 40%);
+  background: var(--status-orange);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--status-orange) 60%, black 40%);
 }
 .update-idle .label {
   white-space: nowrap;
@@ -210,7 +181,7 @@ body {
   background: transparent;
   border: 0;
   border-radius: var(--radius-row);
-  color: var(--text-tertiary);
+  color: var(--label-secondary);
   cursor: pointer;
   flex-shrink: 0;
   transition:
@@ -218,11 +189,11 @@ body {
     color 120ms ease;
 }
 .update-refresh:hover {
-  background: var(--bg-active);
-  color: var(--text-primary);
+  background: var(--fill-tertiary);
+  color: var(--label);
 }
 .update-refresh:active {
-  background: var(--bg-hover);
+  background: var(--fill-quaternary);
 }
 .update-refresh:disabled {
   cursor: default;
@@ -256,10 +227,9 @@ body {
   gap: 8px;
   margin: 4px 6px 6px;
   padding: 10px;
-  background: var(--bg-tertiary);
-  border: 0.5px solid var(--border);
+  background: var(--fill-tertiary);
+  border: 0.5px solid var(--separator);
   border-radius: 8px;
-  box-shadow: var(--shadow-control);
   animation: update-card-in 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes update-card-in {
@@ -279,16 +249,16 @@ body {
   font-size: 12px;
   font-weight: 590;
   letter-spacing: -0.01em;
-  color: var(--text-primary);
+  color: var(--label);
 }
 .update-card .subtitle {
   font-size: 10.5px;
-  color: var(--text-tertiary);
+  color: var(--label-secondary);
   line-height: 1.25;
   letter-spacing: -0.005em;
 }
 .update-card .subtitle.error {
-  color: var(--warning);
+  color: var(--status-orange);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -299,7 +269,7 @@ body {
   justify-content: center;
   width: 12px;
   height: 12px;
-  color: var(--success);
+  color: var(--status-green);
 }
 
 /* The sidebar footer lives in styles/sidebar.css now, with the row system it

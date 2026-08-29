@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { GuardOnboarding, isOnboardingDone } from '../GuardOnboarding';
 
@@ -68,6 +68,11 @@ it('dismisses on Escape and remembers the acknowledgement', async () => {
   const onClose = vi.fn();
   render(<GuardOnboarding onClose={onClose} />);
   await screen.findByRole('dialog');
+  // The Escape listener is registered by a passive effect, which React flushes
+  // in a task of its own — the dialog can be in the DOM a beat before the
+  // window is listening. Firing into that gap loses the event and the test
+  // fails on a slow runner but not locally. Flush, then press.
+  await act(async () => {});
 
   fireEvent.keyDown(window, { key: 'Escape' });
 

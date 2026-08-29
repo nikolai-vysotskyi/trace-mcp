@@ -17,21 +17,11 @@
   /* "Islands" look: content islands sit on a sunken frame (rails, top bar,
      status bar, the gaps between islands). Since TRA-289 both come from the
      shared palette — --surface for the island, --surface-sunken for the frame. */
-  /* Aliases of tokens.css (TRA-289). These names die as each surface migrates.
-     --text-3 maps to --label-secondary, not --label-tertiary: in this file it
-     carries reading text (stat labels, empty-state copy, timestamps) and
-     --label-tertiary measures 3.04:1 there. --label-tertiary is decoration only. */
-  --frame: var(--surface-sunken);
-  --frame-top: var(--surface-sunken);
-  --island: var(--surface);
-  --text-1: var(--label);
-  --text-2: var(--label-secondary);
-  --text-3: var(--label-secondary);
+  /* Below is this file's own DOMAIN palette (file-tree folders, graph node
+     hues, glass tints) — a deliberate exception to "every colour is a token".
+     These are per-appearance values with a hand-picked light branch, not
+     drift. Everything else comes from tokens.css. See DESIGN.md §12. */
   --accent-soft: color-mix(in oklab, var(--accent) 20%, transparent);
-  --sel-bg: var(--accent);
-  --sel-text: var(--accent-contrast);
-  --row-hover: var(--fill-quaternary);
-  --sep: var(--separator);
   --ignored-text: #b08a5a;
   --ignored-bg: #2a211a;
   /* Project-tree folder icon — two-tone (fill + border; IntelliJ Platform icon,
@@ -45,17 +35,11 @@
   --folder-excluded-stroke: #d98b3a;
   --mod-text: #6aa1ea;
   --add-text: #62b07a;
-  --tab-active-bg: var(--fill-tertiary);
-  --kbd-bg: var(--fill-quaternary);
   --green: #5fb865;
   --db-blue: #6f9bea;
   --db-purple: #b08cf0;
   --db-gold: #e3b341;
   --db-table: #7aaee0;
-  --menu-bg: var(--surface-raised);
-  --menu-ring: var(--separator);
-  --seg-thumb: var(--surface-raised);
-  --seg-thumb-text: var(--label);
   --seg-thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
   /* Floating-overlay surface — flat "Islands" menu (design-system
@@ -69,8 +53,6 @@
      demo value (#2e3034) per preference — over the live dark panels a lighter
      fill glows; the menu reads as raised via a crisp 0.5px top-edge + the ring
      shadow instead of via brightness. */
-  --menu-surface: var(--surface-raised);
-  --menu-border: var(--separator);
   /* Liquid Glass · macOS 26 — floating overlays (menus, popovers, pickers).
      Islands stay flat; the OVERLAYS adopt the design system's vibrancy material
      (components.css .mac-menu / .mac-popover), verbatim dark values. */
@@ -96,21 +78,11 @@
    ISLAND LIGHT
    ---------------------------------------------------------------------------- */
 .ws-stage[data-mode="light"] {
-  /* Aliases of tokens.css (TRA-289). These names die as each surface migrates.
-     --text-3 maps to --label-secondary, not --label-tertiary: in this file it
-     carries reading text (stat labels, empty-state copy, timestamps) and
-     --label-tertiary measures 3.04:1 there. --label-tertiary is decoration only. */
-  --frame: var(--surface-sunken);
-  --frame-top: var(--surface-sunken);
-  --island: var(--surface);
-  --text-1: var(--label);
-  --text-2: var(--label-secondary);
-  --text-3: var(--label-secondary);
+  /* Below is this file's own DOMAIN palette (file-tree folders, graph node
+     hues, glass tints) — a deliberate exception to "every colour is a token".
+     These are per-appearance values with a hand-picked light branch, not
+     drift. Everything else comes from tokens.css. See DESIGN.md §12. */
   --accent-soft: color-mix(in oklab, var(--accent) 20%, transparent);
-  --sel-bg: var(--accent);
-  --sel-text: var(--accent-contrast);
-  --row-hover: var(--fill-quaternary);
-  --sep: var(--separator);
   --ignored-text: #9a7b3c;
   --ignored-bg: #fff7e8;
   /* Project-tree folder icon — two-tone (fill + border; IntelliJ Platform icon,
@@ -124,25 +96,17 @@
   --folder-excluded-stroke: #c2772b;
   --mod-text: #3574f0;
   --add-text: #3a8a4f;
-  --tab-active-bg: var(--fill-tertiary);
-  --kbd-bg: var(--fill-quaternary);
   --green: #3a8a4f;
   --db-blue: #3574f0;
   --db-purple: #8a5cf0;
   --db-gold: #b8860b;
   --db-table: #2e7dd0;
-  --menu-bg: var(--surface-raised);
-  --menu-ring: var(--separator);
-  --seg-thumb: var(--surface-raised);
-  --seg-thumb-text: var(--label);
   --seg-thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
   --shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   /* Floating-overlay surface — flat white menu, 0.5px ring + soft drop. */
   --menu-shadow:
     0 0 0 0.5px rgba(0, 0, 0, 0.1),
     0 14px 40px rgba(0, 0, 0, 0.2);
-  --menu-surface: var(--surface-raised);
-  --menu-border: var(--separator);
   /* Liquid Glass · macOS 26 — floating overlays (light material). */
   --glass-fill: rgba(246, 246, 248, 0.78);
   --glass-border: rgba(255, 255, 255, 0.6);
@@ -165,22 +129,14 @@
   --tree-w: 300px;
   --db-w: 300px;
   --term-h: 200px;
-  --island-r: var(--radius-card);
   --gap: 6px;
   /* Liquid Glass radii (macOS 26 concentric scale) for floating overlays. */
-  --r-sm: var(--radius-row);
-  --r-lg: var(--radius-popover);
-  --r-xl: var(--radius-card);
-  color: var(--text-1);
+  color: var(--label);
 
   /* ---- Status palette (shared by Badge / StatusDot primitives) ----------
      Canonical accent hues for status, previously re-hardcoded in every domain
      stylesheet. `-hue` is the saturated base; `-fg` the readable text/dot fill.
      Theme-independent (these read cleanly on both island surfaces). */
-  --status-green-hue: var(--status-green);  --status-green-fg: var(--status-green);
-  --status-red-hue:   var(--status-red);    --status-red-fg:   var(--status-red);
-  --status-gold-hue:  var(--status-orange); --status-gold-fg:  var(--status-orange);
-  --status-blue-hue:  var(--status-blue);   --status-blue-fg:  var(--status-blue);
   --status-pink-hue:  #d6469b;  --status-pink-fg:  #d96cb0;
 }
 
@@ -193,21 +149,21 @@
 
 .ws-statusdot {
   display: inline-block; flex: none; border-radius: 50%;
-  background: var(--text-3);
+  background: var(--label-secondary);
 }
-.ws-statusdot.t-neutral { background: var(--text-3); }
+.ws-statusdot.t-neutral { background: var(--label-secondary); }
 .ws-statusdot.t-accent  { background: var(--accent); }
-.ws-statusdot.t-green   { background: var(--status-green-hue); }
-.ws-statusdot.t-red     { background: var(--status-red-hue); }
-.ws-statusdot.t-orange  { background: var(--status-gold-hue); }
-.ws-statusdot.t-blue    { background: var(--status-blue-hue); }
+.ws-statusdot.t-green   { background: var(--status-green); }
+.ws-statusdot.t-red     { background: var(--status-red); }
+.ws-statusdot.t-orange  { background: var(--status-orange); }
+.ws-statusdot.t-blue    { background: var(--status-blue); }
 .ws-statusdot.t-purple  { background: var(--status-pink-hue); }
 .ws-statusdot.pulse {
   box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
   animation: ws-pulse 2.4s ease-in-out infinite;
 }
-.ws-statusdot.pulse.t-green { color: var(--status-green-hue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-green-hue) 22%, transparent); }
-.ws-statusdot.pulse.t-red   { color: var(--status-red-hue);   box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-red-hue) 22%, transparent); }
+.ws-statusdot.pulse.t-green { color: var(--status-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-green) 22%, transparent); }
+.ws-statusdot.pulse.t-red   { color: var(--status-red);   box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-red) 22%, transparent); }
 
 /* ---- Stage: fills the window content area BELOW the custom WindowTabBar. ----
    Was position:absolute/inset:0, which painted OVER the WindowTabBar strip that
@@ -249,7 +205,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 8px 0 14px;
-  background: linear-gradient(180deg, var(--frame-top), var(--frame));
+  background: linear-gradient(180deg, var(--surface-sunken), var(--surface-sunken));
   -webkit-app-region: drag;
 }
 .ws-topbar > * { -webkit-app-region: no-drag; }
@@ -260,11 +216,11 @@
 .ws-ptabs { display: flex; align-items: center; gap: 3px; flex: 1; min-width: 0; overflow: hidden; }
 .ws-ptab {
   display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 7px 0 9px;
-  border-radius: var(--radius-input); font-size: 13px; color: var(--text-2); cursor: default;
+  border-radius: var(--radius-input); font-size: 13px; color: var(--label-secondary); cursor: default;
   max-width: 210px; transition: background .12s, color .12s;
 }
-.ws-ptab:hover { background: var(--row-hover); }
-.ws-ptab.is-active { background: var(--island); color: var(--text-1); box-shadow: var(--shadow); }
+.ws-ptab:hover { background: var(--fill-quaternary); }
+.ws-ptab.is-active { background: var(--surface); color: var(--label); box-shadow: var(--shadow); }
 .ws-ptab .ic {
   width: 18px; height: 18px; border-radius: var(--radius-row); flex: none;
   display: flex; align-items: center; justify-content: center;
@@ -273,17 +229,17 @@
 .ws-ptab .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-ptab .x {
   width: 17px; height: 17px; border-radius: var(--radius-row); flex: none;
-  display: flex; align-items: center; justify-content: center; color: var(--text-3);
+  display: flex; align-items: center; justify-content: center; color: var(--label-secondary);
   opacity: 0; transition: opacity .12s, background .12s;
 }
 .ws-ptab:hover .x, .ws-ptab.is-active .x { opacity: 0.8; }
-.ws-ptab .x:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-ptab .x:hover { background: var(--fill-quaternary); color: var(--label); }
 .ws-ptab-add {
   width: 28px; height: 28px; flex: none; border-radius: var(--radius-row);
-  display: flex; align-items: center; justify-content: center; color: var(--text-2);
+  display: flex; align-items: center; justify-content: center; color: var(--label-secondary);
   cursor: default; transition: background .12s, color .12s;
 }
-.ws-ptab-add:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-ptab-add:hover { background: var(--fill-quaternary); color: var(--label); }
 
 /* the agent avatar mark (Solar "black hole", see NOTICE) */
 .ws-ai-star { width: 18px; height: 18px; display: block; }
@@ -301,13 +257,13 @@
 .ws-rail .spring { flex: 1; }
 .ws-rail-btn {
   width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
-  border-radius: var(--radius-row); color: var(--text-2); cursor: default; position: relative;
+  border-radius: var(--radius-row); color: var(--label-secondary); cursor: default; position: relative;
   transition: background .12s, color .12s;
 }
-.ws-rail-btn:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-rail-btn:hover { background: var(--fill-quaternary); color: var(--label); }
 .ws-rail-btn.is-active { color: var(--accent); background: var(--accent-soft); }
 .ws-stage[data-mode="light"] .ws-rail-btn.is-active { color: var(--accent); }
-.ws-rail-div { width: 18px; height: 1px; background: var(--sep); margin: 5px auto; flex: none; }
+.ws-rail-div { width: 18px; height: 1px; background: var(--separator); margin: 5px auto; flex: none; }
 .ws-rail-btn:active { cursor: grabbing; }
 .ws-rail-btn.is-dragging { opacity: .4; }
 /* Update-count badge, bottom-right of the icon (VS Code activity-bar style). */
@@ -377,8 +333,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
    ============================================================================ */
 .ws-island {
   display: flex; flex-direction: column; min-height: 0;
-  background: var(--island);
-  border-radius: var(--island-r);
+  background: var(--surface);
+  border-radius: var(--radius-card);
   box-shadow: var(--shadow);
   /* Clip children to the rounded rect — otherwise the editor/chat/composer
      content paints a square rectangle over the island's bottom corners (the
@@ -399,13 +355,13 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-island-head {
   height: 38px; flex: none; display: flex; flex-wrap: nowrap; align-items: center; gap: 6px;
   padding: 0 6px 0 14px;
-  border-bottom: 0.5px solid var(--sep);
+  border-bottom: 0.5px solid var(--separator);
 }
 .ws-island-title {
   display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600;
-  color: var(--text-1); cursor: default; white-space: nowrap; min-width: 0; overflow: hidden;
+  color: var(--label); cursor: default; white-space: nowrap; min-width: 0; overflow: hidden;
 }
-.ws-island-title .chev { color: var(--text-2); display: flex; }
+.ws-island-title .chev { color: var(--label-secondary); display: flex; }
 .ws-island-actions { margin-left: auto; display: flex; align-items: center; gap: 1px; }
 /* Island header actions are .lx-btn.v-icon (controls.css) — 24×24, 6px,
    16px glyph (TRA-290). */
@@ -427,28 +383,28 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   white-space: nowrap; cursor: default; position: relative;
   min-width: 100%; box-sizing: border-box;
 }
-.ws-node:hover { background: var(--row-hover); }
+.ws-node:hover { background: var(--fill-quaternary); }
 .ws-node.is-selected { background: var(--accent); }
 .ws-node .twist {
   width: 18px; flex: none; display: flex; align-items: center; justify-content: center;
-  color: var(--text-2); transition: transform .12s;
+  color: var(--label-secondary); transition: transform .12s;
 }
 .ws-node .twist.open { transform: rotate(90deg); }
 .ws-node .twist.leaf { visibility: hidden; }
 /* The chevron is the expand/collapse affordance (rows only select) — signal it. */
 .ws-node .twist:not(.leaf) { cursor: pointer; }
-.ws-node .nm { white-space: nowrap; flex: 0 0 auto; color: var(--text-1); }
-.ws-node .tag { font-size: 12px; color: var(--text-2); margin-left: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
-.ws-node.is-selected .nm, .ws-node.is-selected .tag { color: var(--sel-text); }
+.ws-node .nm { white-space: nowrap; flex: 0 0 auto; color: var(--label); }
+.ws-node .tag { font-size: 12px; color: var(--label-secondary); margin-left: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; min-width: 0; }
+.ws-node.is-selected .nm, .ws-node.is-selected .tag { color: var(--accent-contrast); }
 .ws-node.is-selected .twist, .ws-node.is-selected .ws-fileico { color: rgba(255, 255, 255, 0.92); }
 .ws-node.ignored .nm { color: var(--ignored-text); }
 .ws-node.ignored:not(.is-selected) { background: var(--ignored-bg); }
 .ws-node.ignored:hover:not(.is-selected) { background: color-mix(in srgb, var(--ignored-text) 16%, transparent); }
 .ws-node.mod .nm { color: var(--mod-text); }
 .ws-node.add .nm { color: var(--add-text); }
-.ws-node.ignored.is-selected .nm { color: var(--sel-text); }
+.ws-node.ignored.is-selected .nm { color: var(--accent-contrast); }
 
-.ws-fileico { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--text-2); }
+.ws-fileico { width: 16px; height: 16px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--label-secondary); }
 .ws-fileico svg { width: 16px; height: 16px; display: block; }
 /* File-type icons (FileTypeGlyph; IntelliJ Platform set, see NOTICE). Colored
    16×16 SVGs; the span is sized inline (16 in the tree, 14/15 in git/commit
@@ -461,20 +417,20 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   position: fixed; top: -1000px; left: -1000px; pointer-events: none;
   display: inline-flex; align-items: center; gap: 7px;
   height: 30px; padding: 0 12px 0 10px; max-width: 280px;
-  font-size: 13px; font-weight: 500; color: var(--text-1); white-space: nowrap;
-  background: var(--island); border: 0.5px solid var(--sep);
+  font-size: 13px; font-weight: 500; color: var(--label); white-space: nowrap;
+  background: var(--surface); border: 0.5px solid var(--separator);
   border-radius: var(--radius-input); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
 }
 .ws-drag-chip .nm { overflow: hidden; text-overflow: ellipsis; }
-.ws-drag-chip .ws-fileico { color: var(--text-2); }
+.ws-drag-chip .ws-fileico { color: var(--label-secondary); }
 
 /* ============================================================================
    STATUS BAR — on the frame, flat
    ============================================================================ */
 .ws-status {
   height: 26px; flex: none; display: flex; align-items: center;
-  padding: 0 8px 0 12px; font-size: 12px; color: var(--text-2);
-  background: var(--frame);
+  padding: 0 8px 0 12px; font-size: 12px; color: var(--label-secondary);
+  background: var(--surface-sunken);
 }
 .ws-status .crumbs { display: flex; align-items: center; gap: 6px; }
 .ws-status .crumbs .sep { opacity: 0.55; display: flex; }
@@ -482,7 +438,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
   border-radius: var(--radius-row); cursor: default; white-space: nowrap; transition: background .12s;
 }
-.ws-status .si:hover { background: var(--row-hover); }
+.ws-status .si:hover { background: var(--fill-quaternary); }
 .ws-status .spring { flex: 1; }
 .ws-status .pill {
   display: inline-flex; align-items: center; height: 17px; padding: 0 9px; border-radius: var(--radius-popover);
@@ -498,11 +454,11 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-island-body::-webkit-scrollbar-corner { background: transparent; }
 .ws-island-body::-webkit-scrollbar-track { background: transparent; }
 .ws-island-body::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--text-2) 40%, transparent); border-radius: var(--radius-row);
+  background: color-mix(in srgb, var(--label-secondary) 40%, transparent); border-radius: var(--radius-row);
   border: 3px solid transparent; background-clip: content-box;
 }
 .ws-island-body::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--text-2) 60%, transparent); background-clip: content-box;
+  background: color-mix(in srgb, var(--label-secondary) 60%, transparent); background-clip: content-box;
 }
 
 /* ============================================================================
@@ -511,7 +467,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-island.editor.file { min-width: 0; }
 .ws-ed-head {
   height: 38px; flex: none; display: flex; align-items: stretch; gap: 6px;
-  padding: 0 6px 0 0; border-bottom: 0.5px solid var(--sep);
+  padding: 0 6px 0 0; border-bottom: 0.5px solid var(--separator);
 }
 .ws-ed-tabs { display: flex; align-items: stretch; gap: 0; flex: 1; min-width: 0; overflow-x: auto; }
 .ws-ed-tabs::-webkit-scrollbar { height: 0; }
@@ -521,29 +477,29 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
    affordance is revealed on hover. */
 .ws-ed-tab {
   display: flex; align-items: center; gap: 7px; height: 100%; padding: 0 8px 0 12px;
-  font-size: 13px; color: var(--text-2); cursor: default; white-space: nowrap;
-  border-right: 0.5px solid var(--sep); transition: color .12s, background .12s;
+  font-size: 13px; color: var(--label-secondary); cursor: default; white-space: nowrap;
+  border-right: 0.5px solid var(--separator); transition: color .12s, background .12s;
   flex: none; position: relative; max-width: 240px;
 }
 .ws-ed-tab:last-child { border-right-color: transparent; }
 /* First tab is flush to the editor's left edge (native window-tab look); round
    its leading corner to the island radius so the active fill anchors into the
    corner instead of leaving a strip of island colour beside it. */
-.ws-ed-tab:first-child { border-top-left-radius: var(--island-r); }
-.ws-ed-tab:hover { background: var(--row-hover); }
-.ws-ed-tab.is-active { color: var(--text-1); background: var(--tab-active-bg); }
+.ws-ed-tab:first-child { border-top-left-radius: var(--radius-card); }
+.ws-ed-tab:hover { background: var(--fill-quaternary); }
+.ws-ed-tab.is-active { color: var(--label); background: var(--fill-tertiary); }
 /* active leading glyph adopts the accent — file/view/diff icons only; brand
    source marks (Claude/Codex) and TS/JS badges keep their identity colors. */
 .ws-ed-tab.is-active .ws-fileico { color: var(--accent); }
 .ws-ed-tab .nm { overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-.ws-ed-tab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-2); flex: none; }
+.ws-ed-tab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--label-secondary); flex: none; }
 .ws-ed-tab .x {
   width: 17px; height: 17px; border-radius: var(--radius-row); flex: none;
-  display: flex; align-items: center; justify-content: center; color: var(--text-3);
+  display: flex; align-items: center; justify-content: center; color: var(--label-secondary);
   opacity: 0; transition: opacity .12s, background .12s;
 }
 .ws-ed-tab:hover .x, .ws-ed-tab.is-active .x { opacity: 0.85; }
-.ws-ed-tab .x:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-ed-tab .x:hover { background: var(--fill-quaternary); color: var(--label); }
 /* Drag-to-reorder: dim the lifted tab and paint an accent insertion line on the
    leading/trailing edge of the tab the cursor hovers (mirrors the rail). */
 .ws-ed-tab.is-dragging { opacity: .4; }
@@ -563,10 +519,10 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   flex: none; align-self: center; margin: 0 2px 0 4px;
   display: flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; border: none; background: transparent;
-  border-radius: 6px; color: var(--text-3); cursor: default;
+  border-radius: 6px; color: var(--label-secondary); cursor: default;
   transition: background .12s, color .12s;
 }
-.ws-ed-newtab:hover { background: var(--row-hover); color: var(--text-1); }
+.ws-ed-newtab:hover { background: var(--fill-quaternary); color: var(--label); }
 .ws-ed-actions { display: flex; align-items: center; gap: 6px; flex: none; }
 .ws-ed-body { flex: 1; min-height: 0; display: flex; }
 .ws-ed-body > * { flex: 1; min-width: 0; min-height: 0; }
@@ -577,8 +533,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 }
 .ws-center-empty .gi { width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; opacity: 0.9; }
 .ws-center-empty .gi .ws-ai-star { width: 40px; height: 40px; }
-.ws-center-empty .t { font-size: 17px; font-weight: 650; color: var(--text-1); }
-.ws-center-empty .s { font-size: 13px; color: var(--text-3); max-width: 380px; line-height: 1.5; }
+.ws-center-empty .t { font-size: 17px; font-weight: 650; color: var(--label); }
+.ws-center-empty .s { font-size: 13px; color: var(--label-secondary); max-width: 380px; line-height: 1.5; }
 .ws-center-empty .ws-primary { margin-top: 6px; }
 
 /* Compact variant (TRA-293) — an empty SECTION inside a card, not an empty
@@ -597,11 +553,11 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
    (which carries the prefers-reduced-transparency fallback). The --gv-* aliases
    that used to live here were declared and never read (TRA-296). */
 .ws-stage[data-mode="dark"] .ws-island.view {
-  --glass: color-mix(in srgb, var(--island) 72%, transparent);
+  --glass: color-mix(in srgb, var(--surface) 72%, transparent);
   --glass-line: rgba(255, 255, 255, 0.08);
 }
 .ws-stage[data-mode="light"] .ws-island.view {
-  --glass: color-mix(in srgb, var(--island) 80%, transparent);
+  --glass: color-mix(in srgb, var(--surface) 80%, transparent);
   --glass-line: rgba(0, 0, 0, 0.06);
 }
 
@@ -611,7 +567,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 
 .lx-btn kbd {
   font-family: inherit; font-size: 11px; padding: 1px 4px; border-radius: var(--radius-row);
-  background: var(--row-hover); color: var(--text-2);
+  background: var(--fill-quaternary); color: var(--label-secondary);
 }
 
 /* TRA-294 deleted ~190 lines of unreferenced rules from the ported design
@@ -641,8 +597,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   min-width: 220px;
   padding: 5px;
   border-radius: var(--radius-popover);
-  background: var(--menu-surface);
-  border: 0.5px solid var(--menu-border);
+  background: var(--surface-raised);
+  border: 0.5px solid var(--separator);
   box-shadow: var(--menu-shadow);
   transform-origin: top left;
   animation: ws-pop-in 0.12s cubic-bezier(0.16, 1, 0.3, 1);
@@ -658,9 +614,9 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   height: 30px;
   padding: 0 8px;
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--radius-row);
   background: transparent;
-  color: var(--text-1);
+  color: var(--label);
   font-family: inherit;
   font-size: 13px;
   text-align: left;
@@ -668,7 +624,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   cursor: default;
 }
 .ws-ctx-item:hover:not(:disabled) { background: var(--accent-fill); color: var(--on-accent); }
-.ws-ctx-item:disabled { color: var(--text-3); cursor: default; }
+.ws-ctx-item:disabled { color: var(--label-secondary); cursor: default; }
 /* Leading icon column — muted, white on accent hover (macOS idiom). */
 .ws-ctx-item .ws-ctx-ico {
   width: 16px;
@@ -677,14 +633,14 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-2);
+  color: var(--label-secondary);
 }
 .ws-ctx-item:hover:not(:disabled) .ws-ctx-ico { color: rgba(255, 255, 255, 0.85); }
 /* Trailing shortcut hint (⌘C etc.) — tertiary, dims to white on hover. */
 .ws-ctx-item .ws-ctx-sc {
   margin-left: auto;
   padding-left: 16px;
-  color: var(--text-3);
+  color: var(--label-secondary);
   font-size: 12px;
 }
 .ws-ctx-item:hover:not(:disabled) .ws-ctx-sc { color: rgba(255, 255, 255, 0.85); }
@@ -716,7 +672,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-ctx-sep {
   height: 0.5px;
   margin: 5px 8px;
-  background: var(--sep);
+  background: var(--separator);
 }
 /* Section header inside a menu (grouped menu). 10px/500 caps is the one legal
    ALL-CAPS case in the house style; 700 + 0.06em was a shout. */
@@ -726,7 +682,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--text-3);
+  color: var(--label-secondary);
   user-select: none;
 }
 .ws-ctx-section:first-child { padding-top: 4px; }
@@ -738,8 +694,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   width: 240px;
   padding: 14px;
   border-radius: var(--radius-popover);
-  background: var(--menu-surface);
-  border: 0.5px solid var(--menu-border);
+  background: var(--surface-raised);
+  border: 0.5px solid var(--separator);
   box-shadow: var(--menu-shadow);
   transform-origin: top left;
   animation: ws-pop-in 0.12s cubic-bezier(0.16, 1, 0.3, 1);
@@ -750,14 +706,14 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-popover-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text-1);
+  color: var(--label);
   letter-spacing: -0.01em;
 }
 .ws-popover-body {
   margin-top: 6px;
   font-size: 12px;
   line-height: 1.42;
-  color: var(--text-2);
+  color: var(--label-secondary);
 }
 .ws-popover-actions {
   margin-top: 12px;
@@ -768,17 +724,17 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-popover-btn {
   height: 24px;
   padding: 0 11px;
-  border: 0.5px solid var(--menu-ring);
-  border-radius: var(--r-sm);
-  background: var(--island);
-  color: var(--text-1);
+  border: 0.5px solid var(--separator);
+  border-radius: var(--radius-row);
+  background: var(--surface);
+  color: var(--label);
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
   cursor: default;
   transition: background 0.12s, filter 0.12s;
 }
-.ws-popover-btn:hover { background: var(--row-hover); }
+.ws-popover-btn:hover { background: var(--fill-quaternary); }
 .ws-popover-btn.prominent {
   border-color: transparent;
   background: var(--accent-fill);
@@ -805,7 +761,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 0.5px solid var(--sep);
+  border-top: 0.5px solid var(--separator);
 }
 .ws-stage .ws-foot-row {
   display: flex;
@@ -831,8 +787,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   align-items: center;
   padding: 2px;
   gap: 2px;
-  background: var(--row-hover);
-  border: 0.5px solid var(--sep);
+  background: var(--fill-quaternary);
+  border: 0.5px solid var(--separator);
   border-radius: var(--radius-input);
 }
 .ws-stage .ws-theme-seg .tseg {
@@ -844,16 +800,16 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   border: 0;
   background: transparent;
   border-radius: 6px;
-  color: var(--text-2);
+  color: var(--label-secondary);
   cursor: pointer;
   transition: color 0.12s;
 }
 .ws-stage .ws-theme-seg .tseg:hover {
-  color: var(--text-1);
+  color: var(--label);
 }
 .ws-stage .ws-theme-seg .tseg.is-active {
-  background: var(--seg-thumb);
-  color: var(--seg-thumb-text);
+  background: var(--surface-raised);
+  color: var(--label);
   box-shadow: var(--seg-thumb-shadow);
 }
 .ws-stage .ws-upgrade {
@@ -864,8 +820,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
-  color: var(--text-1);
-  background: var(--row-hover);
+  color: var(--label);
+  background: var(--fill-quaternary);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -874,13 +830,13 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   transition: background 0.12s;
 }
 .ws-stage .ws-upgrade:hover {
-  background: color-mix(in srgb, var(--text-1) 14%, transparent);
+  background: color-mix(in srgb, var(--label) 14%, transparent);
 }
 .ws-stage .ws-upgrade.is-soon,
 .ws-stage .ws-upgrade.is-soon:hover {
   opacity: 0.45;
   cursor: default;
-  background: var(--row-hover);
+  background: var(--fill-quaternary);
 }
 .ws-stage .ws-upgrade .ws-soon {
   margin-left: 5px;

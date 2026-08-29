@@ -13,8 +13,15 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Badge, type Tone } from '../lattice/ui';
 
 const BASE = 'http://127.0.0.1:3741';
+
+/** Link health reads as a tone *and* a glyph — colour alone is not a signal. */
+const LINK_HEALTH: Record<string, { tone: Tone; icon: string }> = {
+  ok: { tone: 'green', icon: 'check' },
+  missing: { tone: 'red', icon: 'warning' },
+};
 
 // ── Payload shape (must mirror src/api/project-stats-routes.ts) ───────────
 
@@ -157,7 +164,7 @@ interface BarDatum {
 function HBarChart({ data, max }: { data: BarDatum[]; max?: number }) {
   if (data.length === 0) {
     return (
-      <div className="text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="text-[11px]" style={{ color: 'var(--label-secondary)' }}>
         No data
       </div>
     );
@@ -172,7 +179,7 @@ function HBarChart({ data, max }: { data: BarDatum[]; max?: number }) {
             <span
               className="shrink-0 text-[11px] tabular-nums w-32 truncate"
               style={{
-                color: 'var(--text-primary)',
+                color: 'var(--label)',
                 fontFamily: 'SF Mono, Menlo, monospace',
               }}
             >
@@ -180,20 +187,20 @@ function HBarChart({ data, max }: { data: BarDatum[]; max?: number }) {
             </span>
             <div
               className="flex-1 relative h-3 rounded-sm overflow-hidden"
-              style={{ background: 'var(--bg-grouped)' }}
+              style={{ background: 'var(--surface)' }}
             >
               <div
                 className="absolute inset-y-0 left-0 rounded-sm"
                 style={{
                   width: `${pct}%`,
-                  background: 'var(--accent, #007aff)',
+                  background: 'var(--accent)',
                   opacity: 0.7,
                 }}
               />
             </div>
             <span
               className="shrink-0 text-[11px] tabular-nums w-12 text-right"
-              style={{ color: 'var(--text-tertiary)' }}
+              style={{ color: 'var(--label-secondary)' }}
             >
               {d.value.toLocaleString()}
             </span>
@@ -211,7 +218,7 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
     <div
       className="text-[10px] font-semibold mb-2"
       style={{
-        color: 'var(--text-tertiary)',
+        color: 'var(--label-secondary)',
         textTransform: 'uppercase',
         letterSpacing: '0.05em',
       }}
@@ -225,14 +232,14 @@ function StatTile({ label, value }: { label: string; value: string }) {
   return (
     <div
       className="px-3 py-2 rounded-md"
-      style={{ background: 'var(--bg-grouped)', minWidth: 110 }}
+      style={{ background: 'var(--surface)', minWidth: 110 }}
     >
-      <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="text-[10px]" style={{ color: 'var(--label-secondary)' }}>
         {label}
       </div>
       <div
         className="text-[15px] font-semibold tabular-nums mt-0.5"
-        style={{ color: 'var(--text-primary)' }}
+        style={{ color: 'var(--label)' }}
       >
         {value}
       </div>
@@ -244,7 +251,7 @@ function NoData({ reason }: { reason?: string }) {
   return (
     <div
       className="text-[12px] text-center px-3 py-6"
-      style={{ color: 'var(--text-tertiary)' }}
+      style={{ color: 'var(--label-secondary)' }}
     >
       {reason ?? 'No data available for this section.'}
     </div>
@@ -292,14 +299,14 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
         <SectionHeader>Per-tool latency (last 24h)</SectionHeader>
         <table
           className="w-full border-collapse text-[12px]"
-          style={{ color: 'var(--text-primary)' }}
+          style={{ color: 'var(--label)' }}
         >
           <thead>
-            <tr style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+            <tr style={{ borderBottom: '0.5px solid var(--separator)' }}>
               <th
                 className="text-left py-1.5 px-2 text-[10px] font-semibold"
                 style={{
-                  color: 'var(--text-tertiary)',
+                  color: 'var(--label-secondary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                 }}
@@ -309,7 +316,7 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
               <th
                 className="text-right py-1.5 px-2 text-[10px] font-semibold"
                 style={{
-                  color: 'var(--text-tertiary)',
+                  color: 'var(--label-secondary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                 }}
@@ -319,7 +326,7 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
               <th
                 className="text-right py-1.5 px-2 text-[10px] font-semibold"
                 style={{
-                  color: 'var(--text-tertiary)',
+                  color: 'var(--label-secondary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                 }}
@@ -329,7 +336,7 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
               <th
                 className="text-right py-1.5 px-2 text-[10px] font-semibold"
                 style={{
-                  color: 'var(--text-tertiary)',
+                  color: 'var(--label-secondary)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                 }}
@@ -340,12 +347,12 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
           </thead>
           <tbody>
             {data.per_tool.map((t) => (
-              <tr key={t.tool} style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+              <tr key={t.tool} style={{ borderBottom: '0.5px solid var(--separator)' }}>
                 <td
                   className="py-1.5 px-2"
                   style={{
                     fontFamily: 'SF Mono, Menlo, monospace',
-                    color: 'var(--text-primary)',
+                    color: 'var(--label)',
                   }}
                 >
                   {t.tool}
@@ -396,14 +403,14 @@ function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
         ) : (
           <table
             className="w-full border-collapse text-[12px]"
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: 'var(--label)' }}
           >
             <thead>
-              <tr style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+              <tr style={{ borderBottom: '0.5px solid var(--separator)' }}>
                 <th
                   className="text-left py-1.5 px-2 text-[10px] font-semibold"
                   style={{
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--label-secondary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -413,7 +420,7 @@ function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
                 <th
                   className="text-left py-1.5 px-2 text-[10px] font-semibold"
                   style={{
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--label-secondary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -423,7 +430,7 @@ function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
                 <th
                   className="text-right py-1.5 px-2 text-[10px] font-semibold"
                   style={{
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--label-secondary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -434,11 +441,11 @@ function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
             </thead>
             <tbody>
               {data.top_linked.map((d) => (
-                <tr key={d.id} style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+                <tr key={d.id} style={{ borderBottom: '0.5px solid var(--separator)' }}>
                   <td className="py-1.5 px-2 truncate max-w-[400px]" title={d.title}>
                     {d.title}
                   </td>
-                  <td className="py-1.5 px-2" style={{ color: 'var(--text-secondary)' }}>
+                  <td className="py-1.5 px-2" style={{ color: 'var(--label-secondary)' }}>
                     {d.type}
                   </td>
                   <td className="text-right py-1.5 px-2 tabular-nums">
@@ -477,7 +484,7 @@ function PerformancePanel({ data }: { data: PerformanceSection | null }) {
       {data.notes.length > 0 && (
         <div>
           <SectionHeader>Notes</SectionHeader>
-          <ul className="text-[11px] space-y-0.5 list-disc list-inside" style={{ color: 'var(--text-secondary)' }}>
+          <ul className="text-[11px] space-y-0.5 list-disc list-inside" style={{ color: 'var(--label-secondary)' }}>
             {data.notes.map((n) => (
               <li key={n}>{n}</li>
             ))}
@@ -494,13 +501,13 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
   return (
     <div className="flex flex-col gap-3">
       <StatTile label="Count" value={fmtNumber(data.count)} />
-      <table className="w-full border-collapse text-[12px]" style={{ color: 'var(--text-primary)' }}>
+      <table className="w-full border-collapse text-[12px]" style={{ color: 'var(--label)' }}>
         <thead>
-          <tr style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+          <tr style={{ borderBottom: '0.5px solid var(--separator)' }}>
             <th
               className="text-left py-1.5 px-2 text-[10px] font-semibold"
               style={{
-                color: 'var(--text-tertiary)',
+                color: 'var(--label-secondary)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
               }}
@@ -510,7 +517,7 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
             <th
               className="text-left py-1.5 px-2 text-[10px] font-semibold"
               style={{
-                color: 'var(--text-tertiary)',
+                color: 'var(--label-secondary)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
               }}
@@ -520,7 +527,7 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
             <th
               className="text-right py-1.5 px-2 text-[10px] font-semibold"
               style={{
-                color: 'var(--text-tertiary)',
+                color: 'var(--label-secondary)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
               }}
@@ -530,7 +537,7 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
             <th
               className="text-right py-1.5 px-2 text-[10px] font-semibold"
               style={{
-                color: 'var(--text-tertiary)',
+                color: 'var(--label-secondary)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
               }}
@@ -540,7 +547,7 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
             <th
               className="text-left py-1.5 px-2 text-[10px] font-semibold"
               style={{
-                color: 'var(--text-tertiary)',
+                color: 'var(--label-secondary)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
               }}
@@ -551,13 +558,13 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
         </thead>
         <tbody>
           {data.items.map((s) => (
-            <tr key={s.name} style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+            <tr key={s.name} style={{ borderBottom: '0.5px solid var(--separator)' }}>
               <td className="py-1.5 px-2">{s.name}</td>
               <td
                 className="py-1.5 px-2 truncate max-w-[300px]"
                 style={{
                   fontFamily: 'SF Mono, Menlo, monospace',
-                  color: 'var(--text-secondary)',
+                  color: 'var(--label-secondary)',
                 }}
                 title={s.repoRoot}
               >
@@ -566,25 +573,12 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
               <td className="text-right py-1.5 px-2 tabular-nums">{fmtNumber(s.serviceCount)}</td>
               <td className="text-right py-1.5 px-2 tabular-nums">{fmtNumber(s.endpointCount)}</td>
               <td className="py-1.5 px-2">
-                <span
-                  className="text-[10px] px-1.5 py-0.5 rounded font-medium uppercase"
-                  style={{
-                    background:
-                      s.link_health === 'ok'
-                        ? 'rgba(34,197,94,0.15)'
-                        : s.link_health === 'missing'
-                          ? 'rgba(239,68,68,0.15)'
-                          : 'rgba(107,114,128,0.15)',
-                    color:
-                      s.link_health === 'ok'
-                        ? 'var(--success, #22c55e)'
-                        : s.link_health === 'missing'
-                          ? 'var(--red, #ef4444)'
-                          : 'var(--text-tertiary)',
-                  }}
+                <Badge
+                  tone={LINK_HEALTH[s.link_health]?.tone ?? 'neutral'}
+                  icon={LINK_HEALTH[s.link_health]?.icon ?? 'link'}
                 >
                   {s.link_health}
-                </span>
+                </Badge>
               </td>
             </tr>
           ))}
@@ -609,14 +603,14 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
         ) : (
           <table
             className="w-full border-collapse text-[12px]"
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: 'var(--label)' }}
           >
             <thead>
-              <tr style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+              <tr style={{ borderBottom: '0.5px solid var(--separator)' }}>
                 <th
                   className="text-left py-1.5 px-2 text-[10px] font-semibold"
                   style={{
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--label-secondary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -626,7 +620,7 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
                 <th
                   className="text-left py-1.5 px-2 text-[10px] font-semibold"
                   style={{
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--label-secondary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -636,7 +630,7 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
                 <th
                   className="text-right py-1.5 px-2 text-[10px] font-semibold"
                   style={{
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--label-secondary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -649,7 +643,7 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
               {data.complexity_hotspots.map((h) => (
                 <tr
                   key={`${h.file}:${h.line}:${h.name}`}
-                  style={{ borderBottom: '0.5px solid var(--border-row)' }}
+                  style={{ borderBottom: '0.5px solid var(--separator)' }}
                 >
                   <td
                     className="py-1.5 px-2"
@@ -660,7 +654,7 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
                   <td
                     className="py-1.5 px-2 truncate max-w-[300px]"
                     style={{
-                      color: 'var(--text-secondary)',
+                      color: 'var(--label-secondary)',
                       fontFamily: 'SF Mono, Menlo, monospace',
                     }}
                     title={`${h.file}:${h.line}`}
@@ -672,10 +666,10 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
                     style={{
                       color:
                         h.cyclomatic >= 20
-                          ? 'var(--red, #ef4444)'
+                          ? 'var(--status-red)'
                           : h.cyclomatic >= 10
-                            ? 'var(--orange, #f97316)'
-                            : 'var(--text-primary)',
+                            ? 'var(--status-orange)'
+                            : 'var(--label)',
                     }}
                   >
                     {h.cyclomatic}
@@ -717,14 +711,14 @@ function ContentPanel({ data }: { data: ContentSection | null }) {
         ) : (
           <table
             className="w-full border-collapse text-[12px]"
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: 'var(--label)' }}
           >
             <thead>
-              <tr style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+              <tr style={{ borderBottom: '0.5px solid var(--separator)' }}>
                 <th
                   className="text-left py-1.5 px-2 text-[10px] font-semibold"
                   style={{
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--label-secondary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -734,7 +728,7 @@ function ContentPanel({ data }: { data: ContentSection | null }) {
                 <th
                   className="text-right py-1.5 px-2 text-[10px] font-semibold"
                   style={{
-                    color: 'var(--text-tertiary)',
+                    color: 'var(--label-secondary)',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em',
                   }}
@@ -745,7 +739,7 @@ function ContentPanel({ data }: { data: ContentSection | null }) {
             </thead>
             <tbody>
               {data.largest_files.map((f) => (
-                <tr key={f.path} style={{ borderBottom: '0.5px solid var(--border-row)' }}>
+                <tr key={f.path} style={{ borderBottom: '0.5px solid var(--separator)' }}>
                   <td
                     className="py-1.5 px-2 truncate max-w-[480px]"
                     style={{ fontFamily: 'SF Mono, Menlo, monospace' }}
@@ -843,7 +837,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
         style={{
           width: 'min(960px, 96vw)',
           height: 'min(720px, 92vh)',
-          background: 'var(--bg-primary)',
+          background: 'var(--surface-sunken)',
           borderRadius: 12,
           boxShadow: '0 25px 60px rgba(0,0,0,0.45)',
           overflow: 'hidden',
@@ -856,21 +850,21 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
         <div
           className="shrink-0 flex items-center justify-between gap-3 px-4 py-2.5"
           style={{
-            borderBottom: '0.5px solid var(--border-row)',
-            background: 'var(--bg-secondary)',
+            borderBottom: '0.5px solid var(--separator)',
+            background: 'var(--fill-quaternary)',
           }}
         >
           <div className="min-w-0">
             <div
               className="text-[13px] font-semibold truncate"
-              style={{ color: 'var(--text-primary)' }}
+              style={{ color: 'var(--label)' }}
             >
               Stats — {projectName}
             </div>
             <div
               className="text-[10px] truncate"
               style={{
-                color: 'var(--text-tertiary)',
+                color: 'var(--label-secondary)',
                 fontFamily: 'SF Mono, Menlo, monospace',
               }}
               title={root}
@@ -885,9 +879,9 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
               onClick={() => void handleRefresh()}
               className="text-[11px] px-2 py-1 rounded font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{
-                background: 'var(--fill-control)',
+                background: 'var(--fill-quaternary)',
                 color: 'var(--accent)',
-                border: '0.5px solid var(--border)',
+                border: '0.5px solid var(--separator)',
               }}
             >
               {refreshing ? 'Refreshing…' : 'Refresh'}
@@ -898,9 +892,9 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
               onClick={handleExport}
               className="text-[11px] px-2 py-1 rounded font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{
-                background: 'var(--fill-control)',
+                background: 'var(--fill-quaternary)',
                 color: 'var(--accent)',
-                border: '0.5px solid var(--border)',
+                border: '0.5px solid var(--separator)',
               }}
             >
               Export JSON
@@ -910,9 +904,9 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
               onClick={onClose}
               aria-label="Close"
               className="w-6 h-6 rounded-full flex items-center justify-center transition-colors"
-              style={{ color: 'var(--text-secondary)' }}
+              style={{ color: 'var(--label-secondary)' }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'var(--bg-inset)';
+                (e.currentTarget as HTMLElement).style.background = 'var(--fill-quaternary)';
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -937,8 +931,8 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
         <div
           className="shrink-0 flex items-center gap-1 px-3 py-1.5 overflow-x-auto"
           style={{
-            borderBottom: '0.5px solid var(--border-row)',
-            background: 'var(--bg-primary)',
+            borderBottom: '0.5px solid var(--separator)',
+            background: 'var(--surface-sunken)',
             scrollbarWidth: 'none',
           }}
         >
@@ -952,7 +946,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
                 className="text-[11px] px-2.5 py-1 rounded transition-all shrink-0"
                 style={{
                   background: active ? 'var(--accent)' : 'transparent',
-                  color: active ? '#fff' : 'var(--text-secondary)',
+                  color: active ? 'var(--on-accent)' : 'var(--label-secondary)',
                   fontWeight: active ? 600 : 400,
                   border: 'none',
                   cursor: 'pointer',
@@ -969,14 +963,14 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
           {loading ? (
             <div
               className="flex items-center justify-center h-full text-[12px]"
-              style={{ color: 'var(--text-tertiary)' }}
+              style={{ color: 'var(--label-secondary)' }}
             >
               Loading…
             </div>
           ) : error ? (
             <div
               className="flex flex-col items-center justify-center h-full gap-2 text-[12px]"
-              style={{ color: 'var(--red, #ef4444)' }}
+              style={{ color: 'var(--status-red)' }}
             >
               <span>{error}</span>
               <button
@@ -987,9 +981,9 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
                 }}
                 className="text-[11px] px-3 py-1 rounded font-medium"
                 style={{
-                  background: 'var(--fill-control)',
+                  background: 'var(--fill-quaternary)',
                   color: 'var(--accent)',
-                  border: '0.5px solid var(--border)',
+                  border: '0.5px solid var(--separator)',
                 }}
               >
                 Retry
@@ -1015,9 +1009,9 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
           <div
             className="shrink-0 px-4 py-1.5 text-[10px]"
             style={{
-              color: 'var(--text-tertiary)',
-              borderTop: '0.5px solid var(--border-row)',
-              background: 'var(--bg-secondary)',
+              color: 'var(--label-secondary)',
+              borderTop: '0.5px solid var(--separator)',
+              background: 'var(--fill-quaternary)',
             }}
           >
             Generated {new Date(payload.generated_at).toLocaleString()} · cached 30s · press Esc to close
