@@ -132,6 +132,15 @@ describe('Ask states', () => {
     screen.getByRole('button', { name: 'Open AI settings' });
   });
 
+  /* The setup CTA is the first thing a new install shows, so it is the one
+     state that must not fall back to the pre-migration "no chrome at all". */
+  it('keeps the toolbar in the no-provider state', async () => {
+    mockApi({ provider: null });
+    const { container } = await mount();
+    expect(container.querySelectorAll('[role="toolbar"]')).toHaveLength(1);
+    within(container.querySelector('[role="toolbar"]') as HTMLElement).getByText('Ask');
+  });
+
   it('shows the slash-command reference and starter questions on an empty chat', async () => {
     mockApi({ messages: [] });
     await mount();
