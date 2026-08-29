@@ -43,6 +43,40 @@ Community channels (Hacker News, Reddit) are not in this table because they are
 not listings — nothing there is maintained, only posted once. The drafted
 material lives in `ops/launch-hn.md`, and posting it is Nikolai's call.
 
+## macOS code signing and notarization
+
+**Signed and notarized from the first release after 2026-08-29** (TRA-436).
+Before that the app was ad-hoc signed (`Signature=adhoc`,
+`TeamIdentifier=not set`), so a browser download picked up
+`com.apple.quarantine` and Gatekeeper called it damaged — confirmed on
+Nikolai's machine. The macOS release now ships a **DMG per architecture** for
+humans plus the zip the staged-zip updater consumes, both built from a
+Developer ID Application-signed, notarized, stapled `.app`.
+
+Where it lives: `mac:` block in `packages/app/electron-builder.yml`,
+entitlements in `packages/app/build/entitlements.mac*.plist` (one comment per
+key saying why it is there — keep it that way, an unjustified entitlement list
+only grows), signing step in `.github/workflows/release.yml :: build-app-mac`.
+Five repository secrets feed it: `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`,
+`APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`. They are Nikolai's to rotate;
+no agent handles the certificate material. The workflow runs only on
+`push: master` / `workflow_dispatch`, so a fork PR can never reach them.
+
+`latest-mac.yml` is **still not published**, deliberately. Signing removes the
+reason macOS could not use Squirrel.Mac, but every copy installed before this
+release is unsigned, and the channel flip is a separate change
+(`packages/app/src/main/update-channel.ts`). It also has to solve the per-arch
+clobber first: our matrix builds arm64 and x64 in parallel jobs and
+electron-builder names both files `latest-mac.yml`.
+
+**Mac App Store is a closed door**, decided 2026-08-29. Not a backlog item:
+the App Store sandbox forbids what this app is for — it spawns `node`/`npm`
+and indexes arbitrary directories the user picks, which needs unsandboxed file
+access and process execution. Getting through review would mean shipping a
+different, less useful product. Developer ID + notarization gives the same
+Gatekeeper outcome with none of that. Don't reopen without a concrete reason
+this changed on Apple's side.
+
 ## Findings that should not be re-derived
 
 **The official registry was the root cause of everything else** (TRA-352,
