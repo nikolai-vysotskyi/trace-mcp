@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.1.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.1.0...v3.1.1) (2026-08-29)
+
+
+### Bug Fixes
+
+* **app:** abort the model-list fetch on unmount ([#493](https://github.com/nikolai-vysotskyi/trace-mcp/issues/493)) ([2164908](https://github.com/nikolai-vysotskyi/trace-mcp/commit/21649089921b96c81e6832d0d50e9d0c64a3bc3e))
+* **app:** make quick open readable — paths and ⌘-hints were 1.88:1 (TRA-344) ([#496](https://github.com/nikolai-vysotskyi/trace-mcp/issues/496)) ([0483234](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0483234efc88aa540788c8ff0d3931f6aeb70013))
+* **guard:** arm the coach grace period at registration, expire it in the hook (TRA-341) ([#492](https://github.com/nikolai-vysotskyi/trace-mcp/issues/492)) ([23bbf49](https://github.com/nikolai-vysotskyi/trace-mcp/commit/23bbf49c0939bc40e396e085c22b5ffb20425525))
+* **scan_security:** kill the false positives whose guard sits above the sink ([#497](https://github.com/nikolai-vysotskyi/trace-mcp/issues/497)) ([1e67b71](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1e67b71c209f8f2a461043668b6843a7ac21419a))
+* **tools:** actually strip param descriptions at minimal/none verbosity (TRA-345) ([#499](https://github.com/nikolai-vysotskyi/trace-mcp/issues/499)) ([aba9e20](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aba9e20a3d49706f5a096215893b32c4c79fea0c))
+
+
+### Documentation
+
+* move language and framework counts into counts.yml (TRA-275) ([#495](https://github.com/nikolai-vysotskyi/trace-mcp/issues/495)) ([37d1b47](https://github.com/nikolai-vysotskyi/trace-mcp/commit/37d1b47a813bd411d8aa1bd3150bae743119b618))
+
 ## [3.1.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.0.0...v3.1.0) (2026-08-29)
 
 
