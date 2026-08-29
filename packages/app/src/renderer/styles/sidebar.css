@@ -49,8 +49,9 @@
   border-right: 0.5px solid var(--separator);
   -webkit-app-region: no-drag;
 }
-/* macOS: the NSVisualEffectView shows through, and it samples what is behind the
-   WINDOW — so how far it may pull the sidebar away from --surface is bounded, in
+/* macOS: the NSVisualEffectView shows through, and it samples the DESKTOP
+   PICTURE — not the windows behind the app (TRA-404). So how far it may pull the
+   sidebar away from --surface is bounded, in
    BOTH appearances: the drift goes light over a light desktop and dark over a
    dark one, and either direction ends at mid-grey. --sidebar-scrim is that
    bound: flat --surface in light, --surface at .78 in dark, where the glass
