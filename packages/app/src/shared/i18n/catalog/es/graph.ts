@@ -62,6 +62,7 @@ export const graph = {
   graphIntact: 'Grafo intacto',
   fragmentedInto: 'Fragmentado en',
   pieces_one: '{{count}} pieza',
+  pieces_many: '{{count}} de piezas',
   pieces_other: '{{count}} piezas',
   orphanedFiles: 'Archivos huérfanos',
   edgesRemoved: 'Aristas eliminadas',

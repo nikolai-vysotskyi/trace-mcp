@@ -15,7 +15,7 @@ import type { Locale } from '../locales.js';
    the user's own disk.
 
    Measured cost of going from four languages to ten (TRA-450): the renderer's
-   main chunk went 850 KB → 1343 KB raw, 237 KB → 389 KB gzipped. That is parse
+   main chunk went 958 KB → 1343 KB raw, 274 KB → 389 KB gzipped. That is parse
    time off local disk, not a download, and it buys the property that switching
    language is instant and cannot fail. The escape hatch, if a later count makes
    this untenable, is a dynamic import per locale with `en` kept static as the

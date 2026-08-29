@@ -22,6 +22,7 @@ export const memory = {
   showOnlyType: 'Mostrar solo las decisiones de tipo {{type}}',
 
   decisionsCount_one: '{{count}} decisión',
+  decisionsCount_many: '{{count}} de decisiones',
   decisionsCount_other: '{{count}} decisiones',
   expiredCount: '· {{total}} caducadas',
   excludePlaceholder: 'Excluir',
@@ -82,6 +83,7 @@ export const memory = {
 
   corpora: 'Corpus',
   corporaCount_one: '{{count}} corpus',
+  corporaCount_many: '{{count}} de corpus',
   corporaCount_other: '{{count}} corpus',
   noCorporaTitle: 'Todavía no hay corpus',
   noCorporaSubtitle:
@@ -110,11 +112,13 @@ export const memory = {
 
   minedSessions: 'Sesiones analizadas',
   sessionsCount_one: '{{count}} sesión',
+  sessionsCount_many: '{{count}} de sesiones',
   sessionsCount_other: '{{count}} sesiones',
   noSessionsTitle: 'Todavía no se ha analizado ninguna sesión',
   noSessionsSubtitle:
     'El análisis lee transcripciones de asistentes anteriores en busca de decisiones que merezca la pena guardar. Ejecuta la herramienta mine_sessions para llenar esta lista.',
   sessionDecisions_one: '{{count}} decisión',
+  sessionDecisions_many: '{{count}} de decisiones',
   sessionDecisions_other: '{{count}} decisiones',
 
   reviewQueue: 'Cola de revisión',

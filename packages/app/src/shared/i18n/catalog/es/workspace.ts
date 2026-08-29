@@ -7,10 +7,12 @@ export const workspace = {
 
   busyIndexingStale_one:
     'Indexando {{indexing}} de {{total}} proyecto. Estas son las últimas cifras indexadas.',
+  busyIndexingStale_many: 'Indexando {{indexing}} de {{total}} de proyectos. Estas son las últimas cifras indexadas.',
   busyIndexingStale_other:
     'Indexando {{indexing}} de {{total}} proyectos. Estas son las últimas cifras indexadas.',
   busyIndexingFresh_one:
     'Indexando {{indexing}} de {{total}} proyecto. Las cifras llegarán al terminar.',
+  busyIndexingFresh_many: 'Indexando {{indexing}} de {{total}} de proyectos. Las cifras llegarán al terminar.',
   busyIndexingFresh_other:
     'Indexando {{indexing}} de {{total}} proyectos. Las cifras llegarán al terminar.',
   busyStale: 'El daemon está ocupado. Estas son las últimas cifras indexadas.',
@@ -59,6 +61,7 @@ export const workspace = {
   kpiNothingIndexedYet: 'todavía sin indexar',
   kpiNothingRunning: 'nada en marcha',
   kpiShare_one: '{{percent}} % de {{total}} proyecto',
+  kpiShare_many: '{{percent}} % de {{total}} de proyectos',
   kpiShare_other: '{{percent}} % de {{total}} proyectos',
   kpiDeltaCaption: 'frente a {{when}}',
   kpiNoChange: 'Sin cambios',
@@ -95,16 +98,21 @@ export const workspace = {
   cancel: 'Cancelar',
 
   badgeSecurity_one: '{{n}} hallazgo de seguridad crítico o alto',
+  badgeSecurity_many: '{{n}} de hallazgos de seguridad críticos o altos',
   badgeSecurity_other: '{{n}} hallazgos de seguridad críticos o altos',
   badgeSecurityAria_one: '{{n}} hallazgo de seguridad crítico o alto',
+  badgeSecurityAria_many: '{{n}} de hallazgos de seguridad críticos o altos',
   badgeSecurityAria_other: '{{n}} hallazgos de seguridad críticos o altos',
   badgeDeadExports_one: '{{n}} exportación muerta',
+  badgeDeadExports_many: '{{n}} de exportaciones muertas',
   badgeDeadExports_other: '{{n}} exportaciones muertas',
   badgeUntestedTitle_one: '{{n}} símbolo sin pruebas',
+  badgeUntestedTitle_many: '{{n}} de símbolos sin pruebas',
   badgeUntestedTitle_other: '{{n}} símbolos sin pruebas',
   badgeUntested: 'sin pruebas {{n}}',
 
   bulkSelected_one: '{{n}} seleccionado',
+  bulkSelected_many: '{{n}} seleccionados',
   bulkSelected_other: '{{n}} seleccionados',
   bulkRemove: 'Quitar',
   bulkReindexFailed: 'La reindexación falló en al menos un proyecto',
@@ -113,8 +121,10 @@ export const workspace = {
   bulkExportCsv: 'Exportar CSV',
   bulkClear: 'Limpiar',
   bulkConfirmRemove_one: '¿Quitar {{n}} proyecto?',
+  bulkConfirmRemove_many: '¿Quitar {{n}} de proyectos?',
   bulkConfirmRemove_other: '¿Quitar {{n}} proyectos?',
   bulkConfirmRemoveAction_one: 'Quitar {{n}} proyecto',
+  bulkConfirmRemoveAction_many: 'Quitar {{n}} de proyectos',
   bulkConfirmRemoveAction_other: 'Quitar {{n}} proyectos',
 
   emptyTitle: 'Todavía no hay proyectos',
