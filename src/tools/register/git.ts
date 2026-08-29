@@ -206,7 +206,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
 
   server.tool(
     'scan_security',
-    'Scan project files for OWASP Top-10 security vulnerabilities using pattern matching. Detects SQL injection (CWE-89), XSS (CWE-79), command injection (CWE-78), path traversal (CWE-22), hardcoded secrets (CWE-798), insecure crypto (CWE-327), open redirects (CWE-601), and SSRF (CWE-918). Skips test files. Use for pattern-based security audit. For data-flow-aware analysis use taint_analysis instead. Read-only. Returns JSON: { findings: [{ rule, severity, cwe, file, line, message }], total, summary }.',
+    'Scan project files for OWASP Top-10 security vulnerabilities using pattern matching. Detects SQL injection (CWE-89), XSS (CWE-79), command injection (CWE-78), path traversal (CWE-22), hardcoded secrets (CWE-798), insecure crypto (CWE-327), open redirects (CWE-601), and SSRF (CWE-918). Skips test files. Weakly-grounded ("low" confidence) findings are held back by default and counted in suppressed_low_confidence — pass include_low_confidence to see them. Use for pattern-based security audit. For data-flow-aware analysis use taint_analysis instead. Read-only. Returns JSON: { findings: [{ rule, severity, cwe, file, line, message }], total, summary, suppressed_low_confidence }.',
     {
       scope: optionalNonEmptyString(512).describe('Directory to scan (default: whole project)'),
       rules: z
@@ -229,6 +229,12 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         .enum(['critical', 'high', 'medium', 'low'])
         .optional()
         .describe('Minimum severity to report (default: low)'),
+      include_low_confidence: z
+        .boolean()
+        .optional()
+        .describe(
+          'Report findings whose confidence is "low" (default: false). These are weakly grounded and are the main source of scanner noise.',
+        ),
       output_format: z
         .enum(['json', 'sarif'])
         .optional()
@@ -236,7 +242,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
           '"json" (default, native finding shape) or "sarif" (2.1.0 log) for GitHub/GitLab/Azure code-scanning ingestion.',
         ),
     },
-    async ({ scope, rules, severity_threshold, output_format }) => {
+    async ({ scope, rules, severity_threshold, include_low_confidence, output_format }) => {
       if (scope) {
         const blocked = guardPath(scope);
         if (blocked) return blocked;
@@ -245,6 +251,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
         scope,
         rules: rules as RuleName[],
         severityThreshold: severity_threshold as Severity | undefined,
+        includeLowConfidence: include_low_confidence,
       });
       if (result.isErr()) {
         return {

@@ -1858,7 +1858,7 @@ canvas.addEventListener('mousemove', (e) => {
         + esc(n.type) + (n.language ? ' \u00b7 ' + esc(n.language) : '')
         + (n.framework_role ? ' \u00b7 ' + esc(n.framework_role) : '') + '<br>'
         + (dirKey ? '<span style="color:#76b7b2">' + esc(dirKey) + '</span> \u00b7 ' : '')
-        + 'Community ' + n.community + ' \u00b7 Importance ' + n.importance;
+        + 'Community ' + esc(n.community) + ' \u00b7 Importance ' + esc(n.importance);
     } else {
       tooltip.style.display = 'none';
     }
