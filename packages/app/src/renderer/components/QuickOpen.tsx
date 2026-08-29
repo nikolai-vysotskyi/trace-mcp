@@ -59,6 +59,21 @@ export function QuickOpen({
   const listId = useId();
   const matches = useMemo(() => filterItems(items, query).slice(0, 60), [items, query]);
 
+  /* Runs of consecutive same-group matches, carrying each item's index in
+     `matches` so the highlight and aria-activedescendant keep using the flat
+     numbering. A plain <div> between the listbox and its options drops the
+     group header from the accessibility tree entirely — role="group" with the
+     name on it is the shape that survives (TRA-344). */
+  const groups = useMemo(() => {
+    const out: { group: string; items: { item: QuickOpenItem; i: number }[] }[] = [];
+    matches.forEach((item, i) => {
+      const last = out[out.length - 1];
+      if (last && last.group === item.group) last.items.push({ item, i });
+      else out.push({ group: item.group, items: [{ item, i }] });
+    });
+    return out;
+  }, [matches]);
+
   // A shrinking result list must never leave the highlight past its end.
   const index = Math.min(active, Math.max(0, matches.length - 1));
 
@@ -90,8 +105,6 @@ export function QuickOpen({
     }
   };
 
-  let lastGroup = '';
-
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: the scrim is a dismissal affordance, not a control — Escape on the field is the keyboard path.
     <div className="lx-sheet-scrim lx-qo-scrim" onClick={onClose}>
@@ -107,9 +120,16 @@ export function QuickOpen({
             <Icon name="search" size={16} />
           </span>
           {/* biome-ignore lint/a11y/noAutofocus: a quick-open the user must click into is not a quick-open. */}
+          {/* combobox, not a bare textbox: aria-activedescendant is only
+              honoured on a combobox, so without the role arrowing through the
+              results announced nothing at all (TRA-344). */}
           <input
             autoFocus
             type="text"
+            role="combobox"
+            aria-expanded="true"
+            aria-haspopup="listbox"
+            aria-autocomplete="list"
             value={query}
             placeholder="Go to section, project or file"
             aria-label="Quick open"
@@ -126,13 +146,14 @@ export function QuickOpen({
           {matches.length === 0 ? (
             <div className="lx-qo-empty">No matches</div>
           ) : (
-            matches.map((item, i) => {
-              const header = item.group !== lastGroup ? item.group : null;
-              lastGroup = item.group;
-              return (
-                <div key={item.id}>
-                  {header && <div className="lx-qo-group">{header}</div>}
+            groups.map((g) => (
+              <div key={g.group} role="group" aria-label={g.group}>
+                <div className="lx-qo-group" aria-hidden="true">
+                  {g.group}
+                </div>
+                {g.items.map(({ item, i }) => (
                   <button
+                    key={item.id}
                     type="button"
                     id={`${listId}-${i}`}
                     role="option"
@@ -150,9 +171,9 @@ export function QuickOpen({
                     <span className="lx-qo-label">{item.label}</span>
                     {item.detail && <span className="lx-qo-detail">{item.detail}</span>}
                   </button>
-                </div>
-              );
-            })
+                ))}
+              </div>
+            ))
           )}
         </div>
       </div>

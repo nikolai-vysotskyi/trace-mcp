@@ -7,7 +7,12 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
-import { filterItems, matchesQuery, type QuickOpenItem } from '../components/QuickOpen';
+import {
+  filterItems,
+  matchesQuery,
+  QuickOpen,
+  type QuickOpenItem,
+} from '../components/QuickOpen';
 
 type Command = (command: string, arg?: unknown) => void;
 
@@ -178,5 +183,19 @@ describe('quick-open filtering', () => {
 
   it('an empty query keeps everything', () => {
     expect(filterItems(items, '   ')).toHaveLength(3);
+  });
+
+  /* TRA-344. aria-activedescendant is only honoured on a combobox, and a plain
+     <div> between a listbox and its options drops the group header out of the
+     accessibility tree — so arrowing the panel announced neither the active
+     result nor which group it was in. */
+  it('exposes the field as a combobox and the headers as named groups', () => {
+    render(<QuickOpen items={items} onClose={() => {}} />);
+    const field = screen.getByRole('combobox', { name: 'Quick open' });
+    expect(field.getAttribute('aria-expanded')).toBe('true');
+    expect(field.getAttribute('aria-activedescendant')).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Go to' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Files' })).toBeTruthy();
+    expect(screen.getAllByRole('option')).toHaveLength(3);
   });
 });
