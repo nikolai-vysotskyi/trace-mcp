@@ -38,6 +38,17 @@ export const GLOBAL_CONFIG_PATH = path.join(TRACE_MCP_HOME, '.config.json');
 /** Directory for per-project SQLite databases. */
 export const INDEX_DIR = path.join(TRACE_MCP_HOME, 'index');
 
+/**
+ * Index DBs for one-shot agent-run checkouts (TRA-396). Kept in their own
+ * subdirectory because those roots are never written to registry.json, so a
+ * registry-driven sweep can't reach their DBs and `prune` can only class them
+ * as `orphan_unregistered` — a category soft GC deliberately never deletes,
+ * since for a *normal* project it just means "not re-added yet". The
+ * directory is the marker that makes them safely collectable by age; see
+ * `sweepEphemeralDbs` in registry.ts.
+ */
+export const EPHEMERAL_INDEX_DIR = path.join(INDEX_DIR, 'ephemeral');
+
 /** Global project registry. */
 export const REGISTRY_PATH = path.join(TRACE_MCP_HOME, 'registry.json');
 
@@ -258,7 +269,7 @@ export const DEFAULT_CONFIG_JSONC = `{
 
 /** Ensure ~/.trace-mcp/ and ~/.trace-mcp/index/ exist. */
 export function ensureGlobalDirs(): void {
-  fs.mkdirSync(INDEX_DIR, { recursive: true });
+  fs.mkdirSync(EPHEMERAL_INDEX_DIR, { recursive: true }); // also creates INDEX_DIR
 
   // Restrict the data dir + index dir to 0700 so DB sidecars (WAL/SHM that
   // come and go with write activity) are protected by the parent ACL even
@@ -268,7 +279,7 @@ export function ensureGlobalDirs(): void {
   // global.ts under `node --experimental-strip-types` and can't resolve
   // `.js → .ts` imports of sibling modules.
   if (process.platform !== 'win32') {
-    for (const dir of [TRACE_MCP_HOME, INDEX_DIR]) {
+    for (const dir of [TRACE_MCP_HOME, INDEX_DIR, EPHEMERAL_INDEX_DIR]) {
       try {
         fs.chmodSync(dir, 0o700);
       } catch {
@@ -332,6 +343,17 @@ export function getSnapshotPath(projectRoot: string): string {
 export function getDbPath(projectRoot: string): string {
   const absRoot = path.resolve(projectRoot);
   return path.join(INDEX_DIR, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
+}
+
+/**
+ * Same as {@link getDbPath} but under {@link EPHEMERAL_INDEX_DIR}. Used for
+ * one-shot agent-run checkouts that couldn't share a canonical sibling's DB,
+ * so the leftover is collectable by age instead of sitting in the main index
+ * dir forever with no registry row to explain it (TRA-396).
+ */
+export function getEphemeralDbPath(projectRoot: string): string {
+  const absRoot = path.resolve(projectRoot);
+  return path.join(EPHEMERAL_INDEX_DIR, `${projectName(absRoot)}-${projectHash(absRoot)}.db`);
 }
 
 /**

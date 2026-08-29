@@ -7,12 +7,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   ensureGlobalDirs,
+  EPHEMERAL_INDEX_DIR,
   getDbPath,
+  getEphemeralDbPath,
   getProjectRemoteIdentity,
   projectName,
   REGISTRY_PATH,
 } from './global.js';
-import { announceDbHolder, hasLiveHolder, releaseDbHolder } from './db-holders.js';
+import {
+  announceDbHolder,
+  hasLiveHolder,
+  hasLiveHolderOrUnknown,
+  releaseDbHolder,
+  removeHoldersDir,
+} from './db-holders.js';
 import { initializeGuard } from './guard-init.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
 import { readIfExists } from './utils/safe-fs.js';
@@ -87,6 +95,26 @@ function emptyRegistry(): Registry {
 const MTIME_GRANULARITY_MS = 50;
 let _registryCache: { mtimeMs: number; size: number; reg: Registry } | null = null;
 
+/**
+ * Registrations for one-shot agent-run checkouts — process-local, never
+ * written to registry.json (TRA-396).
+ *
+ * A Multica task workdir is queried for the lifetime of exactly one run and
+ * then abandoned *in place*: the runtime does not delete it, so every
+ * presence-based signal reads it as a live project forever. Persisting it
+ * enrols a dead checkout in every daemon start and every background reindex
+ * rotation from then on. One reported machine accumulated 77 of them —
+ * mostly checkouts of the same repo — which pinned the daemon at ~120% CPU
+ * and starved the desktop app's metrics call into a timeout.
+ *
+ * Keeping the entry here means the run that created the checkout still
+ * resolves its own project normally, and nothing outlives the process that
+ * registered it. Age-based eviction (`findEphemeralProjects` /
+ * `ProjectManager.sweepEphemeralProjects`) still exists for rows written by
+ * versions before this one.
+ */
+const _ephemeralEntries = new Map<string, RegistryEntry>();
+
 /** Keys that would reach `Object.prototype` if used as a `projects` map key. */
 const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'] as const;
 
@@ -154,16 +182,23 @@ export function registerProject(
   const absRoot = path.resolve(root);
   const reg = loadRegistry();
 
-  if (reg.projects[absRoot] && !opts) {
+  // TRA-396: a one-shot agent-run checkout is scratch — index it for this
+  // process, but keep it out of registry.json. `opts` only ever comes from an
+  // explicit multi-root `add`/`init`, which is a deliberate act and stays
+  // persistent even for a workdir-shaped path.
+  const ephemeral = !opts && isEphemeralProjectRoot(absRoot);
+
+  const existing = ephemeral ? _ephemeralEntries.get(absRoot) : reg.projects[absRoot];
+  if (existing && !opts) {
     // Already registered: the dbPath decision was made on a previous run, but
     // this process is about to open that DB, so re-announce the holder (TRA-304)
     // — that is what stops a *sibling* checkout from sharing it while we're up.
     try {
-      announceDbHolder(reg.projects[absRoot].dbPath, absRoot);
+      announceDbHolder(existing.dbPath, absRoot);
     } catch {
       /* best effort — an unannounced holder only costs isolation, not safety */
     }
-    return reg.projects[absRoot];
+    return existing;
   }
 
   // TRA-38: a fresh checkout of a repo that's already registered somewhere
@@ -186,8 +221,17 @@ export function registerProject(
   // re-evaluated per query, so "a sibling was live when we registered" is a
   // proxy for "concurrent", not a guarantee. It is a good proxy only because
   // registration happens at run start; don't read it as airtight.
+  //
+  // For an ephemeral root this is also the "same remote means same project"
+  // path (TRA-396 item 2): `listProjects()` no longer returns other ephemeral
+  // checkouts, so the only match a workdir can find is the canonical project,
+  // and twenty checkouts of one repo resolve to one index instead of twenty.
   const shareWithSibling = sibling ? claimSharedDb(sibling.dbPath, absRoot) : false;
-  const dbPath = shareWithSibling ? sibling!.dbPath : getDbPath(absRoot);
+  const dbPath = shareWithSibling
+    ? sibling!.dbPath
+    : ephemeral
+      ? getEphemeralDbPath(absRoot)
+      : getDbPath(absRoot);
   try {
     if (!shareWithSibling) announceDbHolder(dbPath, absRoot);
   } catch {
@@ -208,8 +252,12 @@ export function registerProject(
     ...(opts?.children && { children: opts.children }),
   };
 
-  reg.projects[absRoot] = entry;
-  saveRegistry(reg);
+  if (ephemeral) {
+    _ephemeralEntries.set(absRoot, entry);
+  } else {
+    reg.projects[absRoot] = entry;
+    saveRegistry(reg);
+  }
   // TRA-341: registration is where a project becomes real, so it is where the
   // guard's coach grace period is armed. Only on this path — an already
   // registered project returns above and is past its onboarding window.
@@ -279,7 +327,9 @@ export function resolveRegisteredAncestor(requestedRoot: string): RegistryEntry 
 
   let dir = absRequested;
   while (true) {
-    const direct = reg.projects[dir];
+    // Ephemeral roots live only in this process (TRA-396) but must still route
+    // their own subdirectory requests, e.g. `<workdir>/packages/app`.
+    const direct = reg.projects[dir] ?? _ephemeralEntries.get(dir);
     if (direct) return direct;
     const viaMultiRoot = childToParent.get(dir);
     if (viaMultiRoot) return viaMultiRoot;
@@ -292,13 +342,17 @@ export function resolveRegisteredAncestor(requestedRoot: string): RegistryEntry 
 
 export function unregisterProject(root: string): void {
   const absRoot = path.resolve(root);
+  _ephemeralEntries.delete(absRoot);
   const reg = loadRegistry();
+  if (!(absRoot in reg.projects)) return; // ephemeral, or already gone — nothing to rewrite
   delete reg.projects[absRoot];
   saveRegistry(reg);
 }
 
 export function getProject(root: string): RegistryEntry | null {
   const absRoot = path.resolve(root);
+  const ephemeral = _ephemeralEntries.get(absRoot);
+  if (ephemeral) return ephemeral;
   const reg = loadRegistry();
   return reg.projects[absRoot] ?? null;
 }
@@ -492,6 +546,15 @@ export function findUnregisteredNestedRepos(maxDepth = 4): UnregisteredNestedRep
 const EPHEMERAL_WORKDIR_PATTERN =
   /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir$/i;
 
+/**
+ * True when `root` is a one-shot agent-run checkout (see
+ * {@link EPHEMERAL_WORKDIR_PATTERN}). Such roots are never persisted to
+ * registry.json — see the `_ephemeralEntries` note above.
+ */
+export function isEphemeralProjectRoot(root: string): boolean {
+  return EPHEMERAL_WORKDIR_PATTERN.test(path.resolve(root));
+}
+
 export interface EphemeralProjectCandidate {
   name: string;
   root: string;
@@ -505,6 +568,11 @@ export interface EphemeralProjectCandidate {
  * ever revisits these — the run that created them finished long ago — but
  * they stay registered forever, permanently reindexed alongside real
  * projects and holding onto their index DB on disk.
+ *
+ * Since TRA-396 `registerProject` no longer writes such roots at all, so this
+ * only ever finds rows left by an earlier version — which is exactly the
+ * backlog (77 on the reported machine) that has to drain before the daemon
+ * recovers. Keep it until those registries are realistically all swept.
  */
 export function findEphemeralProjects(minAgeHours = 24): EphemeralProjectCandidate[] {
   const now = Date.now();
@@ -594,6 +662,54 @@ export function sweepMissingRoots(graceDays = 7): MissingRootSweepResult {
 
   if (changed) saveRegistry(reg);
   return { removed, newlyMissing };
+}
+
+/**
+ * Delete index DBs under {@link EPHEMERAL_INDEX_DIR} whose run ended more than
+ * `maxAgeHours` ago, and return the base paths removed (TRA-396).
+ *
+ * This is the eviction path that does not depend on anyone deleting the
+ * checkout directory — the exact case the presence-based sweeps miss, since
+ * agent runtimes leave their workdirs on disk forever. mtime across the DB and
+ * its WAL/SHM sidecars is the clock (an active run keeps writing), and a live
+ * holder marker vetoes deletion, so this cannot pull a DB out from under a
+ * running agent.
+ */
+export function sweepEphemeralDbs(maxAgeHours = 24): string[] {
+  const cutoff = Date.now() - maxAgeHours * 60 * 60 * 1000;
+  const removed: string[] = [];
+  let files: string[];
+  try {
+    files = fs.readdirSync(EPHEMERAL_INDEX_DIR);
+  } catch {
+    return removed; // never created — no ephemeral checkout has run here
+  }
+
+  for (const file of files) {
+    if (!file.endsWith('.db')) continue;
+    const base = path.join(EPHEMERAL_INDEX_DIR, file);
+    let newestMtime = 0;
+    for (const suffix of MISSING_ROOT_SIDECARS) {
+      try {
+        newestMtime = Math.max(newestMtime, fs.statSync(base + suffix).mtimeMs);
+      } catch {
+        /* sidecar absent */
+      }
+    }
+    if (newestMtime === 0 || newestMtime >= cutoff) continue;
+    if (hasLiveHolderOrUnknown(base)) continue;
+
+    for (const suffix of MISSING_ROOT_SIDECARS) {
+      try {
+        fs.unlinkSync(base + suffix);
+      } catch {
+        /* absent sidecar or already gone — fine */
+      }
+    }
+    removeHoldersDir(base);
+    removed.push(base);
+  }
+  return removed;
 }
 
 export interface RegistryFileInspection {
