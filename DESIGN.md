@@ -912,11 +912,18 @@ node packages/app/scripts/electron-cdp.mjs shot before/graph-light.png \
 
 `launch` runs the app with `--remote-debugging-port=9222` under its own `--user-data-dir`
 (so it does not lose Electron's single-instance lock to an installed trace-mcp.app) and
-sets `TRACE_MCP_DEV_ALWAYS_ON_TOP=1`. That last part is not cosmetic: Chromium stops
-compositing a fully occluded window, and a CDP screenshot of one hangs or hands back the
-frame it painted minutes ago — a stale-pixel "after" shot that looks like a fix. Any CDP
-client can attach to `http://127.0.0.1:9222` once it is up, including `chrome-devtools`
+**never puts a window on screen**. The window is created, loads and paints; it is simply
+never mapped, and the process runs as a macOS accessory app, so it takes no Dock tile, no
+⌘-Tab entry and no activation. Everything here drives the app over CDP, which does not
+care whether the window is visible — and the person at the keyboard does (TRA-403). Any
+CDP client can attach to `http://127.0.0.1:9222` once it is up, including `chrome-devtools`
 MCP via `--browser-url`.
+
+`launch --visible` puts it on screen for the one case that needs eyes on the running app,
+and then also sets `TRACE_MCP_DEV_ALWAYS_ON_TOP=1`: Chromium stops compositing a fully
+*occluded* window, and a CDP screenshot of one hands back the frame it painted minutes ago
+— a stale-pixel "after" shot that looks like a fix. An unmapped window is not an occluded
+one; it keeps painting, and its screenshots are current (measured, not assumed).
 
 The one thing a CDP capture cannot show is the native frame: the traffic lights are drawn
 by macOS outside the web contents, so they are absent from the PNG even though the strip
@@ -930,6 +937,28 @@ fixed set of images `docs/` and trace-mcp.com ship, from a seeded sandbox, and c
 whether the committed ones are stale. Use that one for anything committed to the repo; use
 `electron-cdp.mjs` when you need to point a debugger at the app you are running right now
 and shoot a surface it has no manifest entry for.
+
+### A review run never takes the screen from the person using the machine
+
+Design work here runs on a Mac somebody is working on, and macOS follows an app activation
+to the Space that app's window is on — so a harness that shows a window yanks them out of
+their full-screen app, and hourly runs do it hourly (TRA-403). The rule for anything an
+agent launches:
+
+- **The app: never shown.** `electron-cdp.mjs launch` is hidden and accessory by default.
+  A visible window needs `--visible` and a reason stated where you use it.
+- **The browser: `--headless --isolated`.** Headless removes the window entirely and
+  screenshots still come out; `--isolated` gives Chrome a throwaway profile so it can
+  never adopt or disturb the one the user has open. Both belong in the MCP server's own
+  arguments, not in a per-call flag somebody will forget.
+- **Never call `app.focus()`, `win.focus()`, `win.show()`, `showInactive()` or
+  `shell.openExternal` from a harness path.** `tests/scripts/capture-screenshots.test.ts`
+  reads these files and fails when one appears: in `tray.ts` every show goes through
+  `presentWindow`, which returns early under `TRACE_MCP_WINDOW_MODE=hidden`; in
+  `electron-cdp.mjs` there are none at all.
+- **The one exception is the publication capture**, which cannot avoid activating the app
+  (a window whose app is not active draws grey traffic lights, and those are refused). It
+  pays for the exception by waiting for an idle machine — see docs/development.md.
 
 ### A published screenshot shows the window, or it is not a screenshot of the app
 

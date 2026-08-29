@@ -341,6 +341,7 @@ pnpm run build                       # the CLI bundle the demo daemon runs from
 pnpm --dir packages/app run build    # the renderer being photographed
 node scripts/capture-screenshots.mjs             # regenerate everything
 node scripts/capture-screenshots.mjs app-graph   # just one (marker left alone)
+node scripts/capture-screenshots.mjs --now       # …without waiting for an idle machine
 node scripts/capture-screenshots.mjs --check     # are the committed ones stale?
 ```
 
@@ -362,6 +363,17 @@ window's CGWindowID over its Node inspector and hands it to
 returned as alpha. This makes the script macOS-only, and it steals focus for
 the length of the run — the window has to be key, or the buttons photograph
 grey.
+
+**So it waits until nobody is at the machine.** Owning the screen is not
+optional here and both ways out were measured and rejected:
+`webContents.capturePage()` on an unshown window returns square opaque corners
+and no buttons, and `showInactive()` plus `screencapture` returns the corners
+but grey buttons — both are frames `checkWindowChrome` refuses. What the run
+can do is not take the screen from somebody: it reads `HIDIdleTime` and defers
+(exit code 75, nothing written) unless the machine has been untouched for five
+minutes, and it activates the app once per run rather than once per shot. Pass
+`--now` when you are the one asking for it and are willing to lose the front
+for a couple of minutes.
 
 **Every frame is inspected before it becomes a file.** `checkWindowChrome`
 looks for the two things a capture of the web contents can never have —

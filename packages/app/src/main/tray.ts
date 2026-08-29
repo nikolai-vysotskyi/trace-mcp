@@ -14,6 +14,21 @@ import { t } from './i18n';
 
 const isMac = process.platform === 'darwin';
 
+/**
+ * Render the app without ever putting a window on screen (TRA-403).
+ *
+ * Agent harnesses drive this app on a machine somebody is using: macOS follows
+ * an app activation to the Space that app's window lives on, so a review run
+ * that shows a window drags the user out of their full-screen app. With
+ * `TRACE_MCP_WINDOW_MODE=hidden` the window is created, loads and paints, but is
+ * never mapped — no Dock icon, no activation, nothing on screen — and a CDP
+ * screenshot of it is a real, current frame (measured: `Page.captureScreenshot`
+ * on an unmapped window returns the same pixels as on a visible one).
+ *
+ * Set by `scripts/electron-cdp.mjs`. Never set in a shipped build.
+ */
+export const HIDDEN_WINDOWS = process.env.TRACE_MCP_WINDOW_MODE === 'hidden';
+
 // macOS: Template images (auto-tinted by the system)
 // Windows: separate light/dark icons (white for dark taskbar, black for light)
 const ASSETS = path.join(__dirname, '..', '..', 'assets');
@@ -194,6 +209,14 @@ function ensureDockVisible(): void {
   }
 }
 
+/** Put a loaded window on screen — the one place that shows and focuses one. */
+function presentWindow(win: BrowserWindow): void {
+  if (HIDDEN_WINDOWS) return;
+  ensureDockVisible();
+  win.show();
+  win.focus();
+}
+
 /* ---- The native tab bar (macOS), and the two things it breaks (TRA-399) ----
 
    Every window we open carries the same `tabbingIdentifier`, so a second window
@@ -309,12 +332,12 @@ function broadcastTabList(): void {
 ipcMain.handle('focus-tab', (_event, tabId: string) => {
   if (tabId === 'menu') {
     if (menuWindow && !menuWindow.isDestroyed()) {
-      menuWindow.focus();
+      presentWindow(menuWindow);
     }
   } else {
     const win = projectWindows.get(tabId);
     if (win && !win.isDestroyed()) {
-      win.focus();
+      presentWindow(win);
     }
   }
   broadcastTabList();
@@ -353,9 +376,7 @@ export function showMenuWindow(tab?: string): void {
     if (tab) {
       menuWindow.loadURL(getRendererUrl({ view: 'menu', tab }));
     }
-    ensureDockVisible();
-    menuWindow.show();
-    menuWindow.focus();
+    presentWindow(menuWindow);
     return;
   }
 
@@ -375,9 +396,7 @@ export function showMenuWindow(tab?: string): void {
   });
 
   menuWindow.once('ready-to-show', () => {
-    ensureDockVisible();
-    menuWindow?.show();
-    menuWindow?.focus();
+    if (menuWindow) presentWindow(menuWindow);
     broadcastTabList();
   });
 
@@ -396,7 +415,7 @@ function openProjectTab(root: string): void {
   // If project already open, focus its tab
   const existing = projectWindows.get(root);
   if (existing && !existing.isDestroyed()) {
-    existing.focus();
+    if (!HIDDEN_WINDOWS) existing.focus();
     return;
   }
 
@@ -416,9 +435,7 @@ function openProjectTab(root: string): void {
   }
 
   win.once('ready-to-show', () => {
-    ensureDockVisible();
-    win.show();
-    win.focus();
+    presentWindow(win);
     broadcastTabList();
   });
 
@@ -683,7 +700,7 @@ async function checkHealth(): Promise<void> {
 if (isMac) {
   app.on('new-window-for-tab', () => {
     if (menuWindow && !menuWindow.isDestroyed()) {
-      menuWindow.focus();
+      presentWindow(menuWindow);
     } else {
       showMenuWindow();
     }

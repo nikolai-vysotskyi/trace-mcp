@@ -3,7 +3,8 @@
  * Regenerate every screenshot docs/ and trace-mcp.com ship, from a seeded
  * demo state, in one command:
  *
- *   node scripts/capture-screenshots.mjs          # capture
+ *   node scripts/capture-screenshots.mjs          # capture, once the machine is idle
+ *   node scripts/capture-screenshots.mjs --now    # capture even if somebody is using it
  *   node scripts/capture-screenshots.mjs --check  # are the committed ones stale?
  *
  * Why it drives the real Electron window and not a browser: the renderer is a
@@ -37,6 +38,19 @@
  * nothing of the machine that took the shot. Reduce Transparency is therefore
  * no longer emulated — that was a workaround for a renderer-side capture, which
  * could only ever show a see-through hole where the sidebar is.
+ *
+ * This run owns the screen, and that is not fixable (TRA-403). Both ways of
+ * capturing without one were measured on this app, and both produce exactly the
+ * frame `checkWindowChrome` exists to refuse:
+ *   - `webContents.capturePage()` on a window that is never shown → square,
+ *     fully opaque corners and no traffic lights: a picture of a web page;
+ *   - `showInactive()` + `screencapture -l` → the corners come back, but AppKit
+ *     draws the buttons of a window whose app is not active in grey.
+ * Coloured buttons mean the app is frontmost, so a published screenshot costs
+ * one activation. What this script owes the person at the keyboard is therefore
+ * not "never activate" but "never do it while they are there": it waits for the
+ * machine to be idle (see `mayStartCapture`) unless told `--now`, and it
+ * activates once per run rather than once per shot.
  */
 
 import { execFileSync, spawn } from 'node:child_process';
@@ -112,6 +126,43 @@ export function readMarker(markerPath = MARKER_PATH) {
   } catch {
     return null;
   }
+}
+
+// ── Idle gate (pure — unit-tested in tests/scripts/capture-screenshots.test.ts) ──
+
+/** How long the machine must have been untouched before a capture may start.
+ *  A run takes a couple of minutes and holds the front the whole time. */
+export const IDLE_REQUIRED_S = 300;
+/** Nothing else on this machine can tell a capture run that a person is here. */
+export const IDLE_EXIT_CODE = 75; // EX_TEMPFAIL — "not now, ask again later"
+
+/** Seconds since the last keyboard or mouse event, out of `ioreg -c IOHIDSystem`.
+ *  `HIDIdleTime` is in nanoseconds; absent on a machine with no HID at all. */
+export function parseIdleSeconds(ioregOutput) {
+  const match = /"HIDIdleTime"\s*=\s*(\d+)/.exec(ioregOutput ?? '');
+  return match ? Number(match[1]) / 1e9 : null;
+}
+
+/**
+ * May this run take over the screen? Only when nobody is at the keyboard —
+ * or when a human asked for it explicitly with `--now`.
+ *
+ * `idleSeconds` of `null` means the idle time could not be read. That is a
+ * "don't know", and a capture run that does not know whether someone is
+ * watching does not go ahead.
+ */
+export function mayStartCapture(idleSeconds, { force = false } = {}) {
+  if (force) return { ok: true, reason: null };
+  if (idleSeconds === null) {
+    return { ok: false, reason: 'cannot tell whether anyone is at the machine — pass --now' };
+  }
+  if (idleSeconds < IDLE_REQUIRED_S) {
+    return {
+      ok: false,
+      reason: `the machine was in use ${Math.round(idleSeconds)}s ago; a capture activates the app and would pull whoever is here out of what they are doing (needs ${IDLE_REQUIRED_S}s idle, or --now)`,
+    };
+  }
+  return { ok: true, reason: null };
 }
 
 // ── Window chrome (pure — unit-tested in tests/scripts/capture-screenshots.test.ts) ──
@@ -258,6 +309,21 @@ export function decodePng(buf) {
 
 function git(args, cwd = REPO_ROOT) {
   return execFileSync('git', args, { cwd, encoding: 'utf-8' }).trim();
+}
+
+/** Seconds since the last human input on this machine, or null if unknowable. */
+function idleSeconds() {
+  try {
+    return parseIdleSeconds(
+      // `-r` roots the search at IOHIDSystem itself; without it the properties
+      // of the class are not printed at all and the idle time reads as unknown.
+      execFileSync('/usr/sbin/ioreg', ['-c', 'IOHIDSystem', '-r', '-d', '1', '-w', '0'], {
+        encoding: 'utf-8',
+      }),
+    );
+  } catch {
+    return null;
+  }
 }
 
 function log(msg) {
@@ -517,14 +583,18 @@ async function sizeWindow(main, viewport) {
  * Make the window key and frontmost, and name it. Both matter: a window that is
  * not key draws its traffic lights grey, and Chromium stops compositing an
  * occluded one — `screencapture` would then photograph a stale frame.
+ *
+ * Only when it is not already: the run takes the front once and keeps it, so
+ * the machine is grabbed a single time rather than once per shot (TRA-403).
  */
 async function frontWindowId(main) {
   const id = await mainEval(
     main,
-    `app.focus({ steal: true });
-     win.show();
-     win.moveTop();
-     win.focus();
+    `if (!win.isFocused()) {
+       app.focus({ steal: true });
+       win.moveTop();
+       win.focus();
+     }
      return win.getMediaSourceId();`,
   );
   const windowId = Number(String(id).split(':')[1]);
@@ -907,6 +977,14 @@ async function main() {
     const result = checkFreshness(readMarker(), currentState());
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     process.exit(result.fresh ? 0 : 1);
+  }
+
+  // The run activates the app to photograph it, so it waits for the machine to
+  // be free rather than taking it from somebody (TRA-403).
+  const gate = mayStartCapture(idleSeconds(), { force: argv.includes('--now') });
+  if (!gate.ok) {
+    log(`deferred — ${gate.reason}`);
+    process.exit(IDLE_EXIT_CODE);
   }
 
   const only = argv.filter((a) => !a.startsWith('-'));

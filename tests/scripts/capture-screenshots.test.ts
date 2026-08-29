@@ -7,8 +7,11 @@ import {
   checkWindowChrome,
   CHROME_STRIP,
   decodePng,
+  IDLE_REQUIRED_S,
   IMAGES_DIR,
   MANIFEST_PATH,
+  mayStartCapture,
+  parseIdleSeconds,
   readMarker,
   REPO_ROOT,
 } from '../../scripts/capture-screenshots.mjs';
@@ -45,6 +48,109 @@ describe('checkFreshness', () => {
 
   it('is stale — not fresh-by-default — when no capture has ever run', () => {
     expect(checkFreshness(null, current).fresh).toBe(false);
+  });
+});
+
+describe('the idle gate', () => {
+  const IOREG = '    | | |   "HIDIdleTime" = 421000000000\n    | | |   "HIDBuild" = "x"';
+
+  it('reads the idle time out of ioreg, in seconds', () => {
+    expect(parseIdleSeconds(IOREG)).toBe(421);
+  });
+
+  it('has no idle time to report when ioreg says nothing about HID', () => {
+    expect(parseIdleSeconds('+-o Root  <class IORegistryEntry>')).toBeNull();
+    expect(parseIdleSeconds(undefined)).toBeNull();
+  });
+
+  it('lets a capture start on a machine nobody has touched', () => {
+    expect(mayStartCapture(IDLE_REQUIRED_S + 1)).toEqual({ ok: true, reason: null });
+  });
+
+  it('defers while somebody is using the machine', () => {
+    const verdict = mayStartCapture(12);
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reason).toContain('12s ago');
+  });
+
+  it('defers when it cannot tell — not knowing is not permission', () => {
+    expect(mayStartCapture(null).ok).toBe(false);
+  });
+
+  it('goes ahead anyway when a human asked for it', () => {
+    expect(mayStartCapture(0, { force: true }).ok).toBe(true);
+    expect(mayStartCapture(null, { force: true }).ok).toBe(true);
+  });
+});
+
+/* TRA-403: three agents drive this app and a browser on a machine somebody is
+   working on. macOS follows an app activation to that app's Space, so every
+   show/focus call in a harness path is a chance to yank the user out of their
+   full-screen app — and each of the ones below was one until it was removed. */
+describe('no harness path steals the screen', () => {
+  const SCREEN_API = /\.show\(\)|\.showInactive\(|\.focus\(|\.moveTop\(|shell\.openExternal/;
+
+  /** Source lines that call one, ignoring comments and doc blocks. */
+  function screenCalls(source: string) {
+    return source
+      .split('\n')
+      .map((text, index) => ({ line: index + 1, text: text.trim() }))
+      .filter(
+        ({ text }) => SCREEN_API.test(text) && !text.startsWith('*') && !text.startsWith('//'),
+      );
+  }
+
+  /** The line range of a function, from its header to the closing brace. */
+  function bodyOf(source: string, header: string) {
+    const lines = source.split('\n');
+    const start = lines.findIndex((l) => l.startsWith(header));
+    expect(start, `${header} — did it get renamed?`).toBeGreaterThan(-1);
+    const end = lines.findIndex((l, i) => i > start && l === '}');
+    return { start: start + 1, end: end + 1 };
+  }
+
+  it('the review harness shows nothing at all', () => {
+    const source = fs.readFileSync(
+      path.join(REPO_ROOT, 'packages/app/scripts/electron-cdp.mjs'),
+      'utf-8',
+    );
+    expect(screenCalls(source)).toEqual([]);
+  });
+
+  it('the publication capture takes the front in one place only', () => {
+    const file = path.join(REPO_ROOT, 'scripts/capture-screenshots.mjs');
+    const source = fs.readFileSync(file, 'utf-8');
+    // It cannot avoid taking it: AppKit draws the traffic lights of a window
+    // whose app is not active in grey, and `checkWindowChrome` refuses those.
+    const allowed = [
+      bodyOf(source, 'async function sizeWindow'),
+      bodyOf(source, 'async function frontWindowId'),
+    ];
+    for (const call of screenCalls(source)) {
+      expect(
+        allowed.some((r) => call.line >= r.start && call.line <= r.end),
+        `capture-screenshots.mjs:${call.line} — ${call.text}`,
+      ).toBe(true);
+    }
+  });
+
+  it('the app shows a window in one place, and that place can be told not to', () => {
+    const file = path.join(REPO_ROOT, 'packages/app/src/main/tray.ts');
+    const source = fs.readFileSync(file, 'utf-8');
+    const present = bodyOf(source, 'function presentWindow');
+    expect(source).toContain('if (HIDDEN_WINDOWS) return;');
+    // …and the Dock icon with it: `ensureDockVisible` is reached through
+    // `presentWindow` and nowhere else, so a hidden run takes no Dock tile.
+    expect(source.match(/ensureDockVisible\(\);/g)).toHaveLength(1);
+    const dock = bodyOf(source, 'function ensureDockVisible');
+    const allowed = [present, dock];
+    for (const call of screenCalls(source)) {
+      const sanctioned = allowed.some((r) => call.line >= r.start && call.line <= r.end);
+      expect(
+        sanctioned || call.text.includes('HIDDEN_WINDOWS'),
+        `tray.ts:${call.line} — ${call.text} escapes the hidden-window check`,
+      ).toBe(true);
+    }
   });
 });
 
