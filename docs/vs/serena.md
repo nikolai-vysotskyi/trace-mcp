@@ -107,7 +107,7 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 | SARIF / CI output | ✅ 2.1.0, schema-validated | ❌ |
 | Multi-repo subprojects | ✅ cross-repo API linking | ❌ |
 | Graph visualization | ✅ desktop app | ❌ |
-| MCP tools advertised (default) | {{ site.data.counts.tools }} | ~55 |
+| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | ~55 |
 | Written in | TypeScript | Python |
 
 ## When to pick Serena
@@ -153,6 +153,6 @@ Serena on a cold repo — no index build, though the language server still has t
 ## Next steps
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html)
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.

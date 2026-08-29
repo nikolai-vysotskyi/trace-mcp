@@ -14,6 +14,7 @@ layout: null
 - [trace-mcp vs Repomix](https://trace-mcp.com/vs/repomix.html): Head-to-head against Repomix — packing a repository into one prompt vs indexing it into a queryable graph, and when Repomix is the better pick.
 - [trace-mcp vs Serena](https://trace-mcp.com/vs/serena.html): Head-to-head against Serena — a live LSP proxy vs a precomputed framework-aware graph.
 - [trace-mcp vs codebase-memory-mcp](https://trace-mcp.com/vs/codebase-memory-mcp.html): Head-to-head against the closest peer — same knowledge-graph premise, opposite bets on language breadth vs framework depth.
+- [trace-mcp vs codegraph](https://trace-mcp.com/vs/codegraph.html): Head-to-head against the largest peer by stars — one advertised tool optimised for orientation vs a broad surface that continues past navigation.
 - [How to reduce Claude Code token usage](https://trace-mcp.com/reduce-claude-code-token-usage.html): Seven measured tactics for cutting agent token cost, including the ones that have nothing to do with trace-mcp.
 - [Configuration](https://trace-mcp.com/configuration.html): All config file options; trace-mcp works out of the box without one.
 - [Architecture](https://trace-mcp.com/architecture.html): The two-pass indexing pipeline and how the dependency graph is built and stored.

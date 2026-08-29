@@ -37,6 +37,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://trace-mcp.com/vs/codegraph.html</loc>
+    <lastmod>2026-08-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://trace-mcp.com/reduce-claude-code-token-usage.html</loc>
     <lastmod>2026-08-29</lastmod>
     <changefreq>monthly</changefreq>
