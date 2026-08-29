@@ -356,6 +356,42 @@ Every data surface owes four states, and each has a house form:
   slides under is a scroll edge; a sticky header must have an **opaque** backing, or
   rows show through the column labels.
 
+### The window minimum is a size that has to work
+
+`main/tray.ts` sets `minWidth: 640, minHeight: 420`. Every surface must be usable
+there, not merely render there. Two rules fall out, and the Workspace breaks both if
+you undo them:
+
+- **Chrome above content, always.** The toolbar is the top of the pane. Content —
+  including a KPI strip — goes *below* it. With the strip first, six 99px tiles
+  wrapped to 357px and pushed the toolbar's bottom edge 33px past a 420px window;
+  since nothing on this surface scrolls, search, Filter, + Add and the whole project
+  list became unreachable rather than merely off-screen.
+- **A toolbar wraps; it never clips.** Give it `min-height: 52px` and `flex-wrap`,
+  not `height: 52px`. A fixed non-wrapping row inside `overflow-x: hidden` ran 51px
+  past a 420px pane and put + Add's chevron and the overflow menu outside the window.
+
+**Respond to the pane, not to the window.** The sidebar is resizable 180–320px and
+collapsible, so window width says almost nothing about the room a surface has. Watch
+the pane with one `ResizeObserver` and derive from it. `Workspace.tsx` is the pattern:
+`TABLE_MIN_PANE_W` is *computed* from the table's own frozen columns plus a minimum
+scroll window, and `isDensePane()` compares the pane's height against
+`kpiStripHeight(paneW)` rather than against a guessed breakpoint — which is why it
+reproduces the measured 357px exactly instead of drifting from it.
+
+**What gives way, in order.** Never the identity of the screen; always the
+elaboration.
+
+1. **A comparison before a value.** A dense `KpiTile` drops the footnote/delta line
+   and lays out label ↔ value on one 36px line. The number never goes; the sentence
+   an em dash needs moves to the tile's `title`.
+2. **A table before a list.** Below `TABLE_MIN_PANE_W` the Workspace renders
+   `WorkspaceCompactView` instead of scrolling a 1025px table through a 15px slot.
+   The stored preference is **not** rewritten — widening the window brings the user's
+   own choice back.
+3. **A toggle whose alternatives are unusable is hidden, not disabled.** A disabled
+   segment is a control with nothing to choose; it returns with the width.
+
 ---
 
 ## 7. Accessibility
@@ -481,6 +517,9 @@ code correctness and visual correctness are different claims.
 - [ ] Tab through it: visible focus ring everywhere, tables are one tab stop, no keyboard trap.
 - [ ] No action reachable only on hover; right-click offers what the row buttons offer.
 - [ ] Screenshots in light **and** dark, plus Reduce Transparency and Increase Contrast wherever material is involved.
+- [ ] Resized to **640×420**, the window minimum: no control has a bounding box outside
+      the viewport without a scrollable ancestor, and the surface's own content is
+      reachable. Walk it — `getBoundingClientRect()` over every focusable, not a glance.
 
 ---
 
@@ -525,6 +564,11 @@ new evidence.
 | A status colour is never put on a tint of its own hue | `--status-red` is verified on `--surface`; on a 10% red fill it measured 4.31:1. An error reads as an error from its glyph, not from a coloured slab. |
 | Notebook's per-cell Run is `bordered`, not `prominent` | One accent capsule per cell put N prominent actions on one surface. The rule is one per region, and a notebook has no single default action. |
 | Optionality lives in a field's placeholder, not its label | "Kind (optional)" wrapped to two lines in the form's label column and broke the row baseline. `required` is what the code reads anyway. |
+| The toolbar sits **above** the KPI strip, not below it | Chrome above content. With the strip first, 357px of tiles pushed the toolbar's bottom 33px past a 420px window and nothing on the surface could scroll it back. |
+| A toolbar has `min-height: 52px` and wraps, never a fixed `height` | A non-wrapping 52px row inside `overflow-x: hidden` ran 51px past a 420px pane and put + Add's chevron and the overflow menu outside the window. |
+| Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` reproduces the measured 357px; a guessed number drifts the first time a tile changes. |
+| Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
+| A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
 | Tokens and primitives land before any surface | A surface migrated against a moving token layer gets migrated twice. |
 

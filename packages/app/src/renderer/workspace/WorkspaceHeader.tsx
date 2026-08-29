@@ -1,13 +1,17 @@
 /**
  * WorkspaceHeader — dashboard strip + toolbar of the unified Workspace tab.
  *
- * Layout:
+ * Layout, top to bottom — chrome first, then content (DESIGN.md §6):
+ *  Toolbar  — glass row, 52px on one line, holding search, one Filter pop-up,
+ *             the view toggle, the single prominent action (+ Add) and an
+ *             overflow menu. Everything else lives in that menu: the ceiling is
+ *             four actions plus search, not thirteen controls in a row. It
+ *             wraps rather than clipping — at a 420px pane the trailing group
+ *             used to run 51px past the window with nothing to scroll, which
+ *             put + Add's chevron and the overflow menu out of reach entirely.
  *  KPI grid — six content cards, each in card anatomy (label → value →
- *             comparison). Opaque, hairline, no shadow, no glass.
- *  Toolbar  — 52px glass row holding search, one Filter pop-up, the view
- *             toggle, the single prominent action (+ Add) and an overflow
- *             menu. Everything else lives in that menu: the ceiling is four
- *             actions plus search, not thirteen controls in a wrap-around row.
+ *             comparison). Opaque, hairline, no shadow, no glass. `dense`
+ *             collapses each to a 36px line when the pane cannot afford 99px.
  *
  * Receives all data + state via props; does not call useWorkspaceProjects.
  */
@@ -64,6 +68,10 @@ export interface WorkspaceHeaderProps {
   refreshing: boolean;
   /** True once the content pane is scrolled — fades in the scroll-edge hairline. */
   scrolled?: boolean;
+  /** Collapse the KPI tiles to one line each — see {@link KpiTileProps.dense}. */
+  dense?: boolean;
+  /** The pane is too narrow for the table, so Compact is the only view. */
+  hideViewToggle?: boolean;
   /** Slot rendered at the end of the toolbar row (typically AddProjectControl). */
   rightExtra?: ReactNode;
 }
@@ -130,6 +138,8 @@ export function WorkspaceHeader({
   onRefresh,
   refreshing,
   scrolled = false,
+  dense = false,
+  hideViewToggle = false,
   rightExtra,
 }: WorkspaceHeaderProps) {
   // Locally-debounced search so typing doesn't spam upstream re-renders.
@@ -172,87 +182,16 @@ export function WorkspaceHeader({
 
   return (
     <div className="flex flex-col shrink-0">
-      {/* ── KPI grid ───────────────────────────────────────────────── */}
-      <div className="flex items-stretch gap-4 px-4 pt-4 pb-3 flex-wrap">
-        <KpiTile
-          label="Projects"
-          value={kpis.totalProjects}
-          pending={listLoading}
-          unavailable={listFailed}
-          delta={delta((k) => k.totalProjects)}
-          deltaCaption={deltaCaption}
-          footnote="tracking from today"
-          active={isDefaultFilter(filter)}
-          onClick={() => onFilterChange(EMPTY_FILTER)}
-        />
-        <KpiTile
-          label="Files"
-          value={kpis.totalFiles}
-          compact
-          pending={metricsLoading}
-          unavailable={metricsFailed}
-          delta={delta((k) => k.totalFiles)}
-          deltaCaption={deltaCaption}
-          footnote={
-            kpis.totalProjects > 0
-              ? `${Math.round(kpis.totalFiles / kpis.totalProjects).toLocaleString()} per project`
-              : 'no projects yet'
-          }
-        />
-        <KpiTile
-          label="Symbols"
-          value={kpis.totalSymbols}
-          compact
-          pending={metricsLoading}
-          unavailable={metricsFailed}
-          delta={delta((k) => k.totalSymbols)}
-          deltaCaption={deltaCaption}
-          footnote={
-            kpis.totalFiles > 0
-              ? `${Math.round(kpis.totalSymbols / kpis.totalFiles).toLocaleString()} per file`
-              : 'nothing indexed yet'
-          }
-        />
-        <KpiTile
-          label="Healthy"
-          value={kpis.healthy}
-          tone="ok"
-          pending={metricsLoading}
-          unavailable={metricsFailed}
-          footnote={share(kpis.healthy, kpis.totalProjects)}
-          active={filter.preset === 'healthy'}
-          onClick={() => togglePreset('healthy')}
-        />
-        <KpiTile
-          label="Needs attention"
-          value={kpis.needsAttention}
-          tone="warn"
-          pending={metricsLoading}
-          unavailable={metricsFailed}
-          footnote={share(kpis.needsAttention, kpis.totalProjects)}
-          active={filter.preset === 'needs_attention'}
-          onClick={() => togglePreset('needs_attention')}
-        />
-        <KpiTile
-          label="Indexing"
-          value={kpis.indexing}
-          tone="busy"
-          pending={listLoading}
-          unavailable={listFailed}
-          footnote={
-            kpis.indexing === 0 ? 'nothing running' : share(kpis.indexing, kpis.totalProjects)
-          }
-          active={filter.preset === 'indexing'}
-          onClick={() => togglePreset('indexing')}
-        />
-      </div>
-
       {/* ── Toolbar ────────────────────────────────────────────────── */}
+      {/* Chrome sits above content (DESIGN.md §6). With the KPI strip first, a
+          357px block of cards pushed the toolbar past the bottom of a 420px
+          window and nothing could scroll it back (TRA-325). */}
       {/* Ceiling is search + 4 actions. Everything else is in the two menus. */}
       <div
-        className="flex items-center gap-2 px-4 shrink-0 glass"
+        className="flex items-center gap-2 px-4 shrink-0 glass flex-wrap"
         style={{
-          height: 52,
+          minHeight: 52,
+          paddingBlock: 8,
           // Scroll-edge effect: the hairline fades in only once content is
           // sliding under the toolbar. No permanent hard border.
           borderBottom: '0.5px solid transparent',
@@ -280,13 +219,18 @@ export function WorkspaceHeader({
         </Button>
 
         <span className="ml-auto flex items-center gap-2">
-          <SegmentedControl
-            aria-label="View mode"
-            size="small"
-            value={view === 'compact' ? 'compact' : 'table'}
-            onChange={(v) => onViewChange(v as ViewMode)}
-            options={VIEW_OPTIONS}
-          />
+          {/* Hidden, not disabled, while Table cannot fit: a toggle whose only
+              other option is unusable is a control with nothing to choose. The
+              stored preference is untouched and returns with the width. */}
+          {!hideViewToggle && (
+            <SegmentedControl
+              aria-label="View mode"
+              size="small"
+              value={view === 'compact' ? 'compact' : 'table'}
+              onChange={(v) => onViewChange(v as ViewMode)}
+              options={VIEW_OPTIONS}
+            />
+          )}
           {rightExtra}
           <Button
             ref={overflowMenu.ref}
@@ -299,6 +243,87 @@ export function WorkspaceHeader({
             title="More actions"
           />
         </span>
+      </div>
+
+      {/* ── KPI grid ───────────────────────────────────────────────── */}
+      <div className="flex items-stretch gap-4 px-4 pt-4 pb-3 flex-wrap">
+        <KpiTile
+          label="Projects"
+          value={kpis.totalProjects}
+          dense={dense}
+          pending={listLoading}
+          unavailable={listFailed}
+          delta={delta((k) => k.totalProjects)}
+          deltaCaption={deltaCaption}
+          footnote="tracking from today"
+          active={isDefaultFilter(filter)}
+          onClick={() => onFilterChange(EMPTY_FILTER)}
+        />
+        <KpiTile
+          label="Files"
+          value={kpis.totalFiles}
+          compact
+          dense={dense}
+          pending={metricsLoading}
+          unavailable={metricsFailed}
+          delta={delta((k) => k.totalFiles)}
+          deltaCaption={deltaCaption}
+          footnote={
+            kpis.totalProjects > 0
+              ? `${Math.round(kpis.totalFiles / kpis.totalProjects).toLocaleString()} per project`
+              : 'no projects yet'
+          }
+        />
+        <KpiTile
+          label="Symbols"
+          value={kpis.totalSymbols}
+          compact
+          dense={dense}
+          pending={metricsLoading}
+          unavailable={metricsFailed}
+          delta={delta((k) => k.totalSymbols)}
+          deltaCaption={deltaCaption}
+          footnote={
+            kpis.totalFiles > 0
+              ? `${Math.round(kpis.totalSymbols / kpis.totalFiles).toLocaleString()} per file`
+              : 'nothing indexed yet'
+          }
+        />
+        <KpiTile
+          label="Healthy"
+          value={kpis.healthy}
+          tone="ok"
+          dense={dense}
+          pending={metricsLoading}
+          unavailable={metricsFailed}
+          footnote={share(kpis.healthy, kpis.totalProjects)}
+          active={filter.preset === 'healthy'}
+          onClick={() => togglePreset('healthy')}
+        />
+        <KpiTile
+          label="Needs attention"
+          value={kpis.needsAttention}
+          tone="warn"
+          dense={dense}
+          pending={metricsLoading}
+          unavailable={metricsFailed}
+          footnote={share(kpis.needsAttention, kpis.totalProjects)}
+          active={filter.preset === 'needs_attention'}
+          onClick={() => togglePreset('needs_attention')}
+        />
+        <KpiTile
+          label="Indexing"
+          value={kpis.indexing}
+          tone="busy"
+          dense={dense}
+          pending={listLoading}
+          unavailable={listFailed}
+          footnote={
+            kpis.indexing === 0 ? 'nothing running' : share(kpis.indexing, kpis.totalProjects)
+          }
+          active={filter.preset === 'indexing'}
+          onClick={() => togglePreset('indexing')}
+        />
       </div>
 
       {filterMenu.at && (

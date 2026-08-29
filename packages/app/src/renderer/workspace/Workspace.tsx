@@ -14,8 +14,13 @@
  * Every state keeps the chrome: a failed request never collapses the screen to
  * two centred lines. The KPI strip and the toolbar stay where they were, and
  * the pane below explains what happened next to the one action that fixes it.
+ *
+ * The surface also has to survive the smallest window the app allows
+ * (640×420 — `main/tray.ts`). It watches its own pane rather than the window,
+ * because the sidebar is resizable: below `TABLE_MIN_PANE_W` the table gives
+ * way to Compact, and below `DENSE_PANE_H` the KPI tiles collapse to one line.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, EmptyState } from '../lattice/ui';
 import { addRecentProject, removeRecentProject } from '../recent-projects';
 import { AddProjectControl } from './AddProjectControl';
@@ -63,6 +68,63 @@ function loadFilter(): WorkspaceFilter {
     // Corrupted JSON — fall back to defaults
   }
   return EMPTY_FILTER;
+}
+
+// ── Responding to the pane, not to the window ─────────────────────────────
+//
+// The sidebar is user-resizable (180–320px) and collapsible, so window width
+// tells you very little about how much room this surface actually has. Both
+// thresholds are read off the pane itself.
+
+// Pane and strip geometry, all read off the rendered surface rather than guessed.
+const TILE_MIN_W = 132; // KpiTile's flex basis
+const TILE_GAP = 16; // gap-4
+const TILE_H = 99; // a full-height tile: 16 + 13 + 4 + 32 + 4 + 13 + 16 + hairlines
+const STRIP_PAD = 28; // pt-4 + pb-3
+const TOOLBAR_H = 52;
+const PANE_PAD = 32; // px-4, both sides
+const KPI_COUNT = 6;
+
+/** Table columns that are pinned and never scroll: checkbox, Project, Actions. */
+const FROZEN_COLS_W = 32 + 240 + 100;
+/** Narrower than this and the scroll window shows less than one whole column. */
+const MIN_SCROLL_WINDOW = 160;
+
+/**
+ * Below this pane width the table has nowhere to live. Its frozen columns never
+ * scroll, so what is left is the entire window onto 1025px of table. At a 420px
+ * pane that window is 15px wide and the pinned Actions cell paints over the
+ * Status dot, leaving status as half a coloured dot with no word.
+ */
+export const TABLE_MIN_PANE_W = PANE_PAD + FROZEN_COLS_W + MIN_SCROLL_WINDOW;
+
+/**
+ * How tall the full-height KPI strip would be in a pane this wide. The tiles
+ * flex-wrap, so width decides how many rows of 99px there are — at the app's
+ * 640px minimum window this returns 357, which is what the strip measured.
+ */
+export function kpiStripHeight(paneW: number): number {
+  const inner = Math.max(0, paneW - PANE_PAD);
+  const perRow = Math.max(1, Math.floor((inner + TILE_GAP) / (TILE_MIN_W + TILE_GAP)));
+  const rows = Math.ceil(KPI_COUNT / perRow);
+  return rows * TILE_H + (rows - 1) * TILE_GAP + STRIP_PAD;
+}
+
+/** A pane too narrow for the table. `0` means "not measured yet" — assume wide. */
+export function isNarrowPane(width: number): boolean {
+  return width > 0 && width < TABLE_MIN_PANE_W;
+}
+
+/**
+ * True when full-height tiles would leave less than two project rows. The strip
+ * is the only part of this surface that can give height back, and it has to,
+ * because nothing here scrolls: at 640×420 the strip was 357px of a 376px pane,
+ * which put the toolbar 33px past the window bottom and the list at 1px tall
+ * with no scroll container anywhere to recover either (TRA-325).
+ */
+export function isDensePane(width: number, height: number): boolean {
+  if (width <= 0 || height <= 0) return false;
+  return height - TOOLBAR_H - kpiStripHeight(width) < 2 * ROW_H;
 }
 
 // ── Open handler (cross-window IPC) ───────────────────────────────────────
@@ -162,6 +224,29 @@ export function Workspace() {
 
   const handleScroll = useCallback((top: number) => setScrolled(top > 0), []);
 
+  // ── Pane size ────────────────────────────────────────────────────────
+  const paneRef = useRef<HTMLDivElement>(null);
+  const [pane, setPane] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = paneRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (!box) return;
+      const w = Math.round(box.width);
+      const h = Math.round(box.height);
+      setPane((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const narrow = isNarrowPane(pane.w);
+  const dense = isDensePane(pane.w, pane.h);
+  // The stored preference is never rewritten: widening the window has to bring
+  // the user's own choice back, not whatever the narrow layout fell back to.
+  const effectiveView: ViewMode = narrow ? 'compact' : view;
+
   // ── Render ───────────────────────────────────────────────────────────
   // The live feed being down does not mean there is nothing to show: the
   // metrics cache usually still has every project. Only take over the pane
@@ -205,7 +290,7 @@ export function Workspace() {
   };
 
   return (
-    <div className="flex flex-col h-full overflow-hidden relative">
+    <div ref={paneRef} className="flex flex-col h-full overflow-hidden relative">
       <WorkspaceHeader
         kpis={kpis}
         metricsLoading={data.metricsLoading && data.error === null}
@@ -219,6 +304,8 @@ export function Workspace() {
         onRefresh={() => void data.refresh()}
         refreshing={data.refreshing}
         scrolled={scrolled}
+        dense={dense}
+        hideViewToggle={narrow}
         rightExtra={<AddProjectControl onAdd={(root) => data.addProject(root)} />}
       />
 
@@ -278,7 +365,7 @@ export function Workspace() {
               </Button>
             }
           />
-        ) : view === 'compact' ? (
+        ) : effectiveView === 'compact' ? (
           <WorkspaceCompactView {...viewProps} />
         ) : (
           <WorkspaceTableView
