@@ -24,10 +24,8 @@ function bootstrapMinimalIndex(db: Database.Database): void {
     CREATE TABLE edge_types (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
     CREATE VIRTUAL TABLE symbols_fts USING fts5(name, fqn, signature, summary, content='symbols', content_rowid='id');
     CREATE TABLE embedding_meta (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      dim INTEGER NOT NULL,
-      provider TEXT,
-      model TEXT
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
     );
     CREATE TABLE symbol_embeddings (
       symbol_id INTEGER PRIMARY KEY,
@@ -38,8 +36,8 @@ function bootstrapMinimalIndex(db: Database.Database): void {
       VALUES (1, 1, 'foo', 'a.foo', 'foo()', null);
     INSERT INTO symbols_fts (rowid, name, fqn, signature, summary)
       SELECT id, name, fqn, signature, summary FROM symbols;
-    INSERT INTO embedding_meta (id, dim, provider, model)
-      VALUES (1, 4, 'test', 'test-model');
+    INSERT INTO embedding_meta (key, value) VALUES
+      ('dim', '4'), ('provider', 'test'), ('model', 'test-model');
   `);
 }
 
@@ -197,5 +195,66 @@ describe('repairIndex', () => {
     const after = db.prepare('PRAGMA table_info(symbols_fts)').all() as { name: string }[];
     expect(after.map((c) => c.name)).toEqual(before.map((c) => c.name));
     expect(after.map((c) => c.name)).toEqual(['name', 'fqn', 'signature', 'summary']);
+  });
+});
+
+// Regression guard for embedding_meta schema drift: verify.ts read and wrote
+// embedding_meta as an (id, dim) row while the shipped schema is a (key, value)
+// KV table. Every fixture above hand-rolled the fictional shape, so the suite
+// stayed green while verify_index warned on every real project carrying
+// embeddings and suggested the destructive `drop-vec` repair. These cases build
+// the table from the REAL schema instead of a fixture.
+describe('verifyIndex against the shipped schema', () => {
+  it('reports embedding_dim ok for a KV embedding_meta written by BlobVectorStore', async () => {
+    const { initializeDatabase } = await import('../../src/db/schema.js');
+    const db = initializeDatabase(':memory:');
+
+    const dim = 4;
+    db.prepare('INSERT INTO files (path, indexed_at) VALUES (?, 0)').run('a.ts');
+    const sym = db
+      .prepare(
+        "INSERT INTO symbols (symbol_id, file_id, kind, name, fqn, byte_start, byte_end)\n         VALUES (?, 1, 'function', ?, ?, 0, 1)",
+      )
+      .run('a.ts::foo', 'foo', 'a.foo');
+    db.prepare('INSERT INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)').run(
+      Number(sym.lastInsertRowid),
+      Buffer.alloc(dim * 4),
+    );
+    // Exactly what BlobVectorStore.setMeta writes.
+    db.prepare("INSERT OR REPLACE INTO embedding_meta (key, value) VALUES ('dim', ?)").run(
+      String(dim),
+    );
+
+    const check = verifyIndex(db).checks.find((c) => c.name === 'embedding_dim')!;
+    expect(check.status).toBe('ok');
+    expect(check.suggested_repair).toBeUndefined();
+    db.close();
+  });
+
+  it('backfills dim as a KV row when embedding_meta is empty', async () => {
+    const { initializeDatabase } = await import('../../src/db/schema.js');
+    const db = initializeDatabase(':memory:');
+
+    const dim = 8;
+    db.prepare('INSERT INTO files (path, indexed_at) VALUES (?, 0)').run('a.ts');
+    const insertSym = db.prepare(
+      "INSERT INTO symbols (symbol_id, file_id, kind, name, fqn, byte_start, byte_end)\n         VALUES (?, 1, 'function', ?, ?, 0, 1)",
+    );
+    const insertEmb = db.prepare(
+      'INSERT INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)',
+    );
+    for (let i = 0; i < 3; i++) {
+      const r = insertSym.run(`a.ts::sym_${i}`, `sym_${i}`, `a.sym_${i}`);
+      insertEmb.run(Number(r.lastInsertRowid), Buffer.alloc(dim * 4));
+    }
+
+    const check = verifyIndex(db).checks.find((c) => c.name === 'embedding_dim')!;
+    expect(check.status).toBe('ok');
+    expect(check.detail).toMatch(/Inferred dim=8/);
+    const meta = db.prepare("SELECT value FROM embedding_meta WHERE key = 'dim'").get() as
+      | { value: string }
+      | undefined;
+    expect(meta?.value).toBe('8');
+    db.close();
   });
 });
