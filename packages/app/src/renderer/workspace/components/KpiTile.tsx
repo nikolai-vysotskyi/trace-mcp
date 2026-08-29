@@ -25,6 +25,14 @@ export interface KpiTileProps {
   /** Comparison shown when there is no delta, e.g. "36% of 116 projects". */
   footnote?: string;
   tone?: KpiTone;
+  /**
+   * The pane is too short or too narrow to spend 99px per tile. Collapses the
+   * card to one 36px line — label at the leading edge, value at the trailing
+   * edge — and drops the comparison. Six full tiles are 357px tall, which at
+   * the app's 420px minimum window height leaves the toolbar and the whole
+   * project list below the window edge with nothing to scroll (TRA-325).
+   */
+  dense?: boolean;
   active?: boolean;
   onClick?: () => void;
   /** The number isn't known yet — render skeletons at the final geometry. */
@@ -87,6 +95,7 @@ export function KpiTile({
   deltaCaption,
   footnote,
   tone,
+  dense = false,
   active = false,
   onClick,
   pending = false,
@@ -101,12 +110,20 @@ export function KpiTile({
       disabled={!interactive}
       aria-pressed={interactive ? active : undefined}
       data-kpi={label}
+      data-dense={dense ? '' : undefined}
+      // Dense drops the comparison line, so the one sentence that explains an
+      // em dash has to survive somewhere the user can still reach it.
+      title={dense && unavailable ? "Couldn't be measured" : undefined}
       onClick={onClick}
-      className="flex flex-col items-start gap-1 text-left transition-colors"
+      className={
+        dense
+          ? 'flex flex-row items-baseline justify-between gap-2 text-left transition-colors'
+          : 'flex flex-col items-start gap-1 text-left transition-colors'
+      }
       style={{
         minWidth: 132,
         flex: '1 1 132px',
-        padding: 16,
+        padding: dense ? '8px 12px' : 16,
         borderRadius: 12,
         // A card is content: it stays opaque --surface in BOTH states. Tinting
         // the active tile pushed --label-secondary to 4.45:1 on its footnote —
@@ -132,14 +149,18 @@ export function KpiTile({
       {/* `unavailable` outranks `pending`: a fetch that finished and failed is
           not still loading, so the skeleton must not win when both are set. */}
       {pending && !unavailable ? (
-        <Skeleton width={72} height={26} radius={6} style={{ margin: '3px 0' }} />
+        dense ? (
+          <Skeleton width={48} height={15} radius={4} />
+        ) : (
+          <Skeleton width={72} height={26} radius={6} style={{ margin: '3px 0' }} />
+        )
       ) : (
         <span
           data-kpi-value=""
           className="tabular-nums"
           style={{
-            fontSize: 28,
-            lineHeight: '32px',
+            fontSize: dense ? 15 : 28,
+            lineHeight: dense ? '20px' : '32px',
             fontWeight: 600,
             letterSpacing: '-0.01em',
             color: valueColor,
@@ -155,9 +176,12 @@ export function KpiTile({
         </span>
       )}
 
-      {/* `unavailable` outranks `pending`: a fetch that finished and failed is
-          not still loading, so the skeleton must not win when both are set. */}
-      {pending && !unavailable ? (
+      {/* The comparison line is the first thing to go when the pane is short:
+          it is the tallest part of the tile and the only part a user can
+          reconstruct by widening the window. The value never goes. */}
+      {dense ? null : pending && !unavailable ? (
+        // `unavailable` outranks `pending`: a fetch that finished and failed is
+        // not still loading, so the skeleton must not win when both are set.
         <Skeleton width={92} height={11} />
       ) : (
         <span className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
