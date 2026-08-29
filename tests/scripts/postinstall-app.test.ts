@@ -317,6 +317,22 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
     expect(stdout).not.toContain('updated to');
   });
 
+  /* TRA-443: the marker file only records what the last swap intended. Replace
+     the bundle out-of-band — drag an older .app in, restore one from a backup —
+     and the marker runs ahead of what is installed. Gating on it alone made
+     this script exit 0 silently on every later install while the app, which
+     reads Info.plist, kept offering an update that could never land. */
+  it('updates a bundle whose version marker runs ahead of the real bundle', async () => {
+    installBundle('3.1.1');
+    publishRelease('3.3.0');
+    fs.writeFileSync(path.join(fx.installDir, '.trace-mcp-version'), 'v3.3.0');
+
+    const stdout = await runPostinstall();
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.3.0');
+    expect(stdout).toContain('updated to v3.3.0');
+  });
+
   it('does not stage a phantom pending update for the running version', async () => {
     installBundle('3.1.1');
     publishRelease('3.1.1');
