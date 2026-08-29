@@ -391,7 +391,7 @@ Repomix answers "put my repository into a prompt"; trace-mcp answers "let the ag
 
 Pick Repomix for one-shot questions, repositories you do not own, small repos that fit in context, and workflows with no MCP client. Pick trace-mcp when the repo does not fit in context, the session runs many turns, the question is structural ("what breaks if I change this"), framework edges matter, or the agent needs to change code and not only read it.
 
-Honest caveat: a Repomix pack is a fixed cost re-paid on every refresh, while trace-mcp pays an up-front schema cost (~50K tokens on the shipped default surface, a tracked bug) and then small scoped per-query costs. On a short session against a small repo, Repomix can genuinely cost less.
+Honest caveat: a Repomix pack is a fixed cost re-paid on every refresh, while trace-mcp pays an up-front schema cost (~11.6K tokens on the shipped default surface as of August 29, 2026, down from ~50K) and then small scoped per-query costs. On a short session against a small repo, Repomix can genuinely cost less.
 
 Full page: https://trace-mcp.com/vs/repomix.html
 
@@ -413,7 +413,7 @@ Full page: https://trace-mcp.com/vs/serena.html
 
 DeusData's codebase-memory-mcp is the closest peer: same premise of a persistent tree-sitter knowledge graph served over MCP, with impact analysis (`detect_changes`), call-path tracing (`trace_call_path`), cross-service HTTP linking, IaC as graph nodes, MinHash near-clone and Louvain community detection, and a 3D web UI. It is written in C, covers 161 languages, and advertises 15 tools (~7K tokens) with `scout` (7) and `analysis` (11) profiles.
 
-Where it leads: advertised tool cost (~7K vs trace-mcp's ~50K on the shipped default path — the clearest place any competitor beats us), raw language count, a published benchmark preprint (arXiv 2603.27277: 83% answer quality, ~10× fewer tokens, 2.1× fewer tool calls across 31 repos, not independently reproduced by us), SLSA Level 3 supply-chain provenance, and `ingest_traces` for runtime-observed call edges.
+Where it leads: advertised tool cost (~7K vs trace-mcp's ~11.6K on the shipped default path as of August 29, 2026 — the clearest place any competitor beats us), raw language count, a published benchmark preprint (arXiv 2603.27277: 83% answer quality, ~10× fewer tokens, 2.1× fewer tool calls across 31 repos, not independently reproduced by us), SLSA Level 3 supply-chain provenance, and `ingest_traces` for runtime-observed call edges.
 
 Where trace-mcp leads: {{ site.data.counts.frameworks }} framework integrations producing edges a language-agnostic parser cannot; a refactoring engine (rename, move, signature change, AST codemod, verified dead-code removal) against a read-only analyser; OWASP Top-10 and taint scanning with SARIF 2.1.0 output; configurable quality gates in CI; and decision memory bound to symbol IDs and staleness-verified rather than flat ADR markdown.
 

@@ -2070,13 +2070,13 @@ layout: null
       <div class="stats-panel">
         <div class="stat">
           <div class="stat-label">Languages</div>
-          <div class="stat-value" data-count="79">0</div>
+          <div class="stat-value" data-count="{{ site.data.counts.languages }}">0</div>
           <div class="stat-trend">tree-sitter + lsp</div>
         </div>
         <div class="stat">
           <div class="stat-label">Integrations</div>
-          <div class="stat-value" data-count="58">0</div>
-          <div class="stat-trend">15 fw / 7 orm / 13 ui / 23 other</div>
+          <div class="stat-value" data-count="{{ site.data.counts.frameworks }}">0</div>
+          <div class="stat-trend">frameworks, ORMs, UI &amp; more</div>
         </div>
         <div class="stat">
           <div class="stat-label">MCP Tools</div>
@@ -2231,7 +2231,7 @@ layout: null
         <div class="pipe-step">
           <div class="pipe-num">01</div>
           <h3>Connect your repository</h3>
-          <p>Run <code>trace-mcp add</code> in your repo. Frameworks are detected automatically &mdash; Laravel, Django, Next.js, NestJS, Rails, 58 in total.</p>
+          <p>Run <code>trace-mcp add</code> in your repo. Frameworks are detected automatically &mdash; Laravel, Django, Next.js, NestJS, Rails, {{ site.data.counts.frameworks }} in total.</p>
           <div class="tags">
             <span class="tag">cli</span>
             <span class="tag">auto-detect</span>
