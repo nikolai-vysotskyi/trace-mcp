@@ -22,6 +22,7 @@ import { Icon } from '../lattice/icons';
 import { Menu, MenuChoiceRow, MenuItem, MenuSeparator, useMenuAnchor } from '../lattice/ui';
 import { GLOBAL_ACTIONS, type GlobalAction } from '../../shared/global-actions.js';
 import { APPEARANCE_OPTIONS, type Appearance } from '../theme.js';
+import { t } from '../i18n/index.js';
 import { describeStaleRoots, formatAgo, type UpdateState } from '../update-check.js';
 import { SidebarRow } from './SidebarRow';
 
@@ -40,6 +41,8 @@ interface Summary {
   tone: string;
   /** Long-form detail for the cases where one line cannot carry it. */
   title?: string;
+  /** A shell command the user must run themselves — offered as a copy item. */
+  command?: string;
 }
 
 /** The header's second line: what we know about this version right now. */
@@ -53,11 +56,13 @@ function updateSummary(update: UpdateState, checking: boolean): Summary {
   if (update.stuck && update.latest) {
     return { text: `Version ${update.latest} needs a manual install`, tone: 'is-warn' };
   }
-  /* Same shape of lie, different cause: this root is current, another npm root
-     on the machine is not (TRA-364). Not an error, but not healthy either. */
+  /* Same shape of lie, different cause: this root is current, but the npm root
+     the launcher shim points into is not, so every MCP client is on the old
+     server (TRA-364). The main process only sends roots that are actually in
+     use, so reaching here always means the user has something to fix. */
   if (update.staleRoots?.length) {
     const stale = describeStaleRoots(update.staleRoots);
-    return { text: stale.label, tone: 'is-warn', title: stale.title };
+    return { text: stale.label, tone: 'is-warn', title: stale.title, command: stale.command };
   }
   return { text: `Up to date · checked ${formatAgo(update.lastChecked)}`, tone: 'is-ok' };
 }
@@ -158,6 +163,19 @@ export function AppMenu({
               </span>
             </div>
           </div>
+          {/* The one case where the header states a problem the app cannot fix
+              for the user: give them the fix rather than a sentence about it. */}
+          {summary.command && (
+            <>
+              <MenuSeparator />
+              <MenuItem
+                icon="content_copy"
+                onClick={run(() => void navigator.clipboard?.writeText(summary.command as string))}
+              >
+                {t('update:copyStaleRootCommand')}
+              </MenuItem>
+            </>
+          )}
           <MenuSeparator />
           {settings && item(settings)}
           <MenuSeparator />

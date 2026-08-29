@@ -30,24 +30,33 @@ export type UpdateState = {
  * `npm install -g` only ever writes into the global root its own npm owns. On a
  * machine with several (nvm + Herd + a bundled runtime) the rest keep an old
  * version, and every other signal here still reads "Up to date" — so a client
- * wired to a stale root runs old code with nothing saying so (TRA-364). We
- * cannot safely write into a root the user never pointed us at, so we say it
- * out loud instead: the app menu's status line goes to the warning treatment
- * and its tooltip names each stale root and the command that fixes it.
+ * wired to a stale root runs old code with nothing saying so (TRA-364).
+ *
+ * The main process now only sends the stale root the launcher shim points into,
+ * because that is the only one the user pays for (TRA-377). That sharper
+ * condition is what makes a line worth writing: it can name the consequence
+ * ("your editors are on the old server") instead of a filesystem fact, and it
+ * can name the one command that ends it.
  */
 export function describeStaleRoots(staleRoots: { root: string; version: string }[]): {
   label: string;
   title: string;
+  /** The exact command that updates that install — offered as a copyable item. */
+  command: string;
 } {
-  /* One key with a count, not a ternary over two sentences: the singular/plural
-     split English needs is not the split Russian needs, and `count` is what
-     lets each catalogue draw its own line (TRA-379). */
-  const label = t('update:staleRoots', {
-    count: staleRoots.length,
-    version: staleRoots[0]?.version,
-  });
-  const lines = staleRoots.map((r) => `v${r.version} — ${r.root}/trace-mcp`);
-  return { label, title: t('update:staleRootsTitle', { label, list: lines.join('\n') }) };
+  /* No plural key any more: the payload is one root by construction, so there
+     is no count for a catalogue to draw a line under (TRA-379 wrote the plural
+     forms against the old, wider signal). */
+  const stale = staleRoots[0];
+  const pkgDir = `${stale.root}/trace-mcp`;
+  // Its own npm, not whichever one is first on PATH: `npm install -g` writes
+  // into the root its own binary owns, so any other npm would miss this one.
+  const command = `${stale.root}/../../bin/npm install -g trace-mcp@latest`;
+  return {
+    label: t('update:staleRoots', { version: stale.version }),
+    title: t('update:staleRootsTitle', { pkgDir, version: stale.version, command }),
+    command,
+  };
 }
 
 export function formatAgo(ts?: number, now: number = Date.now()): string {

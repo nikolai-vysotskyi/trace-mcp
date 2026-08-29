@@ -174,6 +174,73 @@ export function findStaleRoots(
   return installs.filter((i) => cmpSemver(i.version, newest.version) < 0);
 }
 
+export const LAUNCHER_ENV_PATH = path.join(
+  process.env.TRACE_MCP_HOME?.trim() || path.join(os.homedir(), '.trace-mcp'),
+  'launcher.env',
+);
+
+/**
+ * The CLI path the launcher shim hands to MCP clients, or null if `trace-mcp
+ * init` has never run.
+ *
+ * `trace-mcp init` writes `TRACE_MCP_CLI` into launcher.env, and every client
+ * registration points at the shim rather than at a version-specific bin — so
+ * this file, not `$PATH`, is the honest answer to "which install is actually
+ * being run". A GUI-launched Electron inherits PATH from launchd, not from the
+ * user's shell, so PATH could not answer it here even if we asked.
+ */
+export function readLauncherCliPath(launcherEnv: string = LAUNCHER_ENV_PATH): string | null {
+  try {
+    // Same whitelist-and-unquote rules as src/init/launcher.ts readLauncherConfig().
+    for (const line of fs.readFileSync(launcherEnv, 'utf-8').split(/\r?\n/)) {
+      const eq = line.indexOf('=');
+      if (eq <= 0 || line.trimStart().startsWith('#')) continue;
+      if (line.slice(0, eq).trim() !== 'TRACE_MCP_CLI') continue;
+      let value = line.slice(eq + 1).trim();
+      if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+        value = value.slice(1, -1);
+      }
+      return value || null;
+    }
+  } catch {
+    /* never initialised, or unreadable — we simply do not know */
+  }
+  return null;
+}
+
+/**
+ * The one stale root worth telling the user about: the one MCP clients run.
+ *
+ * A second global root sitting on an old version is normally inert — nothing
+ * resolves to it, so nothing runs the old code. Reporting it (TRA-364) warned
+ * about a fact rather than a consequence, and the user had no way to tell which
+ * of the two it was (TRA-377). It only costs the user something when the
+ * launcher shim points into it, and then it costs them a lot: every editor gets
+ * the old server while the app says it is current. So we report exactly that
+ * case and stay quiet otherwise.
+ */
+export function staleRootInUse(
+  staleRoots: readonly GlobalInstall[],
+  cliPath: string | null,
+): GlobalInstall | null {
+  if (!cliPath) return null;
+  let cli: string;
+  try {
+    cli = fs.realpathSync(cliPath);
+  } catch {
+    return null;
+  }
+  for (const stale of staleRoots) {
+    try {
+      const pkgDir = fs.realpathSync(path.join(stale.root, 'trace-mcp'));
+      if (cli === pkgDir || cli.startsWith(pkgDir + path.sep)) return stale;
+    } catch {
+      /* root vanished since the scan */
+    }
+  }
+  return null;
+}
+
 /**
  * Should we try to stage the bundle swap ourselves?
  *

@@ -107,8 +107,12 @@ describe('update states', () => {
   /* TRA-364, re-homed by TRA-363: the stale-root warning used to live on the
      sidebar status row. That row is gone, so the same signal has to reach the
      menu header — otherwise a machine with an out-of-date sibling npm root
-     reads as fully current again, which is the bug TRA-364 fixed. */
-  it('reports another npm root left behind, with the roots in the tooltip', async () => {
+     reads as fully current again, which is the bug TRA-364 fixed.
+
+     TRA-377 narrowed what `staleRoots` means: the main process now sends only
+     the root MCP clients actually launch from, so this line always describes a
+     consequence the user has, and always comes with the command that ends it. */
+  it('names the consequence and the fix when clients run a stale root', async () => {
     mockApi({
       available: false,
       current: '3.1.1',
@@ -119,11 +123,39 @@ describe('update states', () => {
     render(<Menu />);
     fireEvent.click(screen.getByRole('button', { name: /trace-mcp/ }));
     const status = document.querySelector('.ws-ctx-header .status');
-    await waitFor(() => expect(status?.textContent).toContain('Another npm install is on v2.9.0'));
+    await waitFor(() => expect(status?.textContent).toContain('MCP clients still run v2.9.0'));
     expect(status?.className).toContain('is-warn');
-    expect(status?.querySelector('.text')?.getAttribute('title')).toContain(
-      '/opt/homebrew/lib/node_modules/trace-mcp',
+    const title = status?.querySelector('.text')?.getAttribute('title') ?? '';
+    expect(title).toContain('/opt/homebrew/lib/node_modules/trace-mcp');
+    expect(title).toContain('npm install -g trace-mcp@latest');
+  });
+
+  it('offers the exact command to copy, and only in that state', async () => {
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    mockApi({
+      available: false,
+      current: '3.1.1',
+      latest: '3.1.1',
+      staleRoots: [{ root: '/opt/homebrew/lib/node_modules', version: '2.9.0' }],
+    });
+    const { unmount } = render(<Menu />);
+    fireEvent.click(screen.getByRole('button', { name: /trace-mcp/ }));
+    fireEvent.click(await screen.findByText('Copy update command'));
+    expect(writeText).toHaveBeenCalledWith(
+      '/opt/homebrew/lib/node_modules/../../bin/npm install -g trace-mcp@latest',
     );
+    unmount();
+
+    // A machine whose clients run the current root gets no warning and no item.
+    mockApi({ available: false, current: '3.1.1', latest: '3.1.1', lastChecked: Date.now() });
+    render(<Menu />);
+    fireEvent.click(screen.getByRole('button', { name: /trace-mcp/ }));
+    await waitFor(() =>
+      expect(document.querySelector('.ws-ctx-header .status')?.className).toContain('is-ok'),
+    );
+    expect(screen.queryByText('Copy update command')).toBeNull();
   });
 
   it('a genuinely current bundle says so in the menu, and nowhere else', async () => {
