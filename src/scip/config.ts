@@ -3,7 +3,7 @@
  * Mirrors src/lsp/config.ts but for offline SCIP indexers.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TraceMcpConfig } from '../config.js';
@@ -75,7 +75,7 @@ export function fileLanguageToScipLanguage(fileLanguage: string | null): string 
 /** Check whether a command exists on PATH. */
 function isCommandAvailable(command: string): boolean {
   try {
-    execSync(`which ${command}`, { stdio: 'pipe', timeout: 5_000 });
+    execFileSync('which', [command], { stdio: 'pipe', timeout: 5_000 });
     return true;
   } catch {
     return false;

@@ -2,7 +2,7 @@
  * LSP server auto-detection and configuration resolution.
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { TraceMcpConfig } from '../config.js';
@@ -101,7 +101,7 @@ export function fileLanguageToLspLanguage(fileLanguage: string | null): string |
 /** Check if a command is available on PATH */
 function isCommandAvailable(command: string): boolean {
   try {
-    execSync(`which ${command}`, { stdio: 'pipe', timeout: 5_000 });
+    execFileSync('which', [command], { stdio: 'pipe', timeout: 5_000 });
     return true;
   } catch {
     return false;

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.1.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.0.0...v3.1.0) (2026-08-29)
+
+
+### Features
+
+* **app:** give the guard a UI on Project Overview (TRA-334) ([#490](https://github.com/nikolai-vysotskyi/trace-mcp/issues/490)) ([fdb4498](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fdb4498f8b0ab2d4f74736fca420ea461e4fde0e))
+
+
+### Bug Fixes
+
+* **security:** drop shells and symlink-following from local spawn/temp paths (TRA-337) ([#489](https://github.com/nikolai-vysotskyi/trace-mcp/issues/489)) ([eeb01d3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eeb01d3b0bc4daebb71f4f1999019cd9ae13f579))
+
 ## [3.0.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.3.0...v3.0.0) (2026-08-29)
 
 
