@@ -21,6 +21,7 @@ import { Icon } from '../lattice/icons';
 import { Menu, MenuChoiceRow, MenuItem, MenuSeparator, useMenuAnchor } from '../lattice/ui';
 import { GLOBAL_ACTIONS, type GlobalAction } from '../../shared/global-actions.js';
 import { APPEARANCE_OPTIONS, type Appearance } from '../theme.js';
+import { t } from '../i18n/index.js';
 import { describeStaleRoots, formatAgo, type UpdateState } from '../update-check.js';
 import { SidebarRow } from './SidebarRow';
 
@@ -159,7 +160,7 @@ export function AppMenu({
                 icon="content_copy"
                 onClick={run(() => void navigator.clipboard?.writeText(summary.command as string))}
               >
-                Copy update command
+                {t('update:copyStaleRootCommand')}
               </MenuItem>
             </>
           )}

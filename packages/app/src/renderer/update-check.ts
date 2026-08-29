@@ -13,6 +13,8 @@
    an update available, and an update downloaded but pending a restart. */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { t } from './i18n/index.js';
+import { relativeTime } from './i18n/format.js';
 
 export type UpdateState = {
   available: boolean;
@@ -42,25 +44,24 @@ export function describeStaleRoots(staleRoots: { root: string; version: string }
   /** The exact command that updates that install — offered as a copyable item. */
   command: string;
 } {
+  /* No plural key any more: the payload is one root by construction, so there
+     is no count for a catalogue to draw a line under (TRA-379 wrote the plural
+     forms against the old, wider signal). */
   const stale = staleRoots[0];
   const pkgDir = `${stale.root}/trace-mcp`;
   // Its own npm, not whichever one is first on PATH: `npm install -g` writes
   // into the root its own binary owns, so any other npm would miss this one.
   const command = `${stale.root}/../../bin/npm install -g trace-mcp@latest`;
   return {
-    label: `MCP clients still run v${stale.version}`,
-    title: `Your editors launch trace-mcp from ${pkgDir}, which is on v${stale.version}. That copy was installed by a different npm, so updating this app did not touch it — until it is updated, every MCP client keeps using the old server.\n\nUpdate it from a terminal:\n${command}`,
+    label: t('update:staleRoots', { version: stale.version }),
+    title: t('update:staleRootsTitle', { pkgDir, version: stale.version, command }),
     command,
   };
 }
 
 export function formatAgo(ts?: number, now: number = Date.now()): string {
-  if (!ts) return 'never';
-  const s = Math.max(0, Math.floor((now - ts) / 1000));
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
+  if (!ts) return t('common:never');
+  return relativeTime(ts, now, 'short');
 }
 
 export interface UpdateCheck {
