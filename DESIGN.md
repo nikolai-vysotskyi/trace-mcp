@@ -83,13 +83,30 @@ not a cell of the matrix either.
 
 Two rules follow, and neither is optional:
 
-1. **Never validate the material against a single background.** The matrix is: light
-   appearance × {black, deep blue, mid-grey, white wallpaper} × {window active, window
-   inactive}, then the same set in dark. And it has to be shot in the **Electron
-   window** — there is no `NSVisualEffectView` on the Vite dev server, so none of this is
-   visible in a browser. `screencapture -R <window rect>` is the capture: a CDP
-   screenshot only has the web contents and never the material, and `screencapture
-   -l<windowid>` hangs on this window.
+1. **Never validate the material against a single background — and never get the second
+   background by changing someone's desktop picture.** Setting the wallpaper per cell and
+   restoring it at the end is how this was first measured, and it is banned: the restore
+   is the step that does not run when the process is killed or the task ends, and it left
+   Nikolai on a black desktop twice. The same goes for the system appearance, the display
+   resolution and the user's window layout. If a *specific* backdrop is genuinely
+   unavoidable, put it on a disposable machine or a second user account.
+
+   Vary the backdrop the free way instead: the material samples the region of the picture
+   behind the **window**, so moving the window across the wallpaper the machine already
+   has gives genuinely different backdrops at no cost — and that wallpaper is also the
+   honest case, since a real user has a real wallpaper we do not control.
+
+   It has to be shot in the **Electron window** — there is no `NSVisualEffectView` on the
+   Vite dev server, so none of this is visible in a browser. `screencapture -R <window
+   rect>` is the capture: a CDP screenshot only has the web contents and never the
+   material, and `screencapture -l<windowid>` hangs on this window. Because the display is
+   shared with whoever is using the Mac, a run must not take focus (`showInactive()`,
+   never `show()`/`focus()`) and must not switch Spaces — join every Space as a floating
+   panel instead. Both material states are still reachable without ever becoming key:
+   `visualEffectState: 'active'` renders the key appearance on a window that is not, so
+   put one of each side by side rather than focusing anything. And verify every frame —
+   paint a marker colour no real UI has and discard any capture that comes back without
+   it, or a capture of the human's window will be read as data.
 2. **The drift is bounded in BOTH appearances, and the bound is a relationship to the
    content pane — not an absolute colour.** The pull goes light over a light desktop and
    dark over a dark one, and either direction ends at mid-grey. Measured on the shipped
@@ -117,7 +134,11 @@ Two rules follow, and neither is optional:
      and not enough to drag it to mid-grey. Shot across the full matrix (TRA-404):
      `#1e1e1e` over black to `#2b2b2b` over white, `+10` to `+23` above the `#141414`
      well — 45 levels of swing compressed to 13, and light held `#ffffff` in all eight
-     cells.
+     cells. Re-measured on a real in-use desktop with nothing swapped — four regions of
+     the machine's own wallpaper × active/inactive — dark sits at `+11` to `+14` above
+     the well, 3 levels of spread inside that envelope, and light holds `#ffffff` in all
+     eight cells (a flat `+9` to the `#f5f5f7` well, which is the token's own gap and not
+     drift).
 
    The number to report for any change here is the **delta between the sidebar's rendered
    pixels and the well's**, per cell of the matrix above, plus the spread across cells.
