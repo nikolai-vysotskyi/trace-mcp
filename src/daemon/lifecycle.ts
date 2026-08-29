@@ -590,7 +590,7 @@ function stopDaemonByPid(): void {
   if (pid === null) return;
   try {
     if (isWin) {
-      execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'pipe' });
+      execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'pipe' });
     } else {
       process.kill(pid, 'SIGTERM');
     }
