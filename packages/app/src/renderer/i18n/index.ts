@@ -16,9 +16,27 @@ import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { useCallback, useEffect, useState } from 'react';
 import { CATALOGS, NAMESPACES } from '../../shared/i18n/catalog/index.js';
-import { DEFAULT_LOCALE, LOCALE_KEY, isLocale, pickLocale, type Locale } from '../../shared/i18n/locales.js';
+import {
+  DEFAULT_LOCALE,
+  LOCALES,
+  LOCALE_KEY,
+  isLocale,
+  pickLocale,
+  type Locale,
+} from '../../shared/i18n/locales.js';
 
 export { LOCALES, type Locale } from '../../shared/i18n/locales.js';
+
+/* One list, two surfaces: the app menu's row renders `text`, Settings renders
+   `label`. Same anti-drift rule as theme.ts's appearanceOptions().
+
+   Nothing here goes through `t` — a language list is the one place where
+   translating the entries is wrong, so this is not a function for the reason
+   appearanceOptions() is one (see LocaleInfo.label). It is a function so both
+   surfaces get the same shape without either of them knowing LocaleInfo. */
+export function localeOptions(): ReadonlyArray<{ value: Locale; label: string; text: string }> {
+  return LOCALES.map((l) => ({ value: l.code, label: l.label, text: l.short }));
+}
 
 /** The stored choice, or the best match for the system's languages. */
 export function initialLocale(): Locale {

@@ -29,7 +29,8 @@ export const settings = {
   'uptime.hours': '{{value}} ч',
   'uptime.hoursMinutes': '{{hours}} ч {{minutes}} мин',
 
-  'appearance.title': 'Оформление',
+  'app.title': 'Приложение',
+  'app.language': 'Язык',
   'appearance.theme': 'Тема',
 
   'empty.loading': 'Загрузка настроек…',

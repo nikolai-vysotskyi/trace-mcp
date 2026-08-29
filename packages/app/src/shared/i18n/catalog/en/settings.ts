@@ -38,8 +38,9 @@ export const settings = {
   'uptime.hours': '{{value}}h',
   'uptime.hoursMinutes': '{{hours}}h {{minutes}}m',
 
-  /* ── Appearance (an app preference, not a daemon setting) ──────────── */
-  'appearance.title': 'Appearance',
+  /* ── App preferences (not daemon settings) ─────────────────────────── */
+  'app.title': 'App',
+  'app.language': 'Language',
   'appearance.theme': 'Theme',
 
   /* ── Daemon-down and loading states ────────────────────────────────── */
