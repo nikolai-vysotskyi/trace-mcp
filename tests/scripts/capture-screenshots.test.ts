@@ -152,6 +152,15 @@ describe('no harness path steals the screen', () => {
       ).toBe(true);
     }
   });
+
+  it('answers to both names an agent run is announced under', () => {
+    // `TRACE_MCP_WINDOW_MODE=hidden` is what this repo's dev script sets;
+    // `TRACE_MCP_AGENT_RUN=1` is what an agent launching the app another way
+    // sets. A run that announces itself and still gets a window is the bug.
+    const source = fs.readFileSync(path.join(REPO_ROOT, 'packages/app/src/main/tray.ts'), 'utf-8');
+    expect(source).toContain("process.env.TRACE_MCP_WINDOW_MODE === 'hidden'");
+    expect(source).toContain("process.env.TRACE_MCP_AGENT_RUN === '1'");
+  });
 });
 
 /* A frame the size and shape of what `screencapture -l` returns: a window with
