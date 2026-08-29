@@ -19,7 +19,13 @@ let strip: HTMLElement;
 
 function renderHeader(
   metricsLoading: boolean,
-  extra: Partial<{ listLoading: boolean; metricsFailed: boolean; listFailed: boolean }> = {},
+  extra: Partial<{
+    listLoading: boolean;
+    metricsFailed: boolean;
+    listFailed: boolean;
+    dense: boolean;
+    hideViewToggle: boolean;
+  }> = {},
 ) {
   const { container } = render(
     <WorkspaceHeader
@@ -117,6 +123,64 @@ describe('WorkspaceHeader KPI strip', () => {
       expect(lines).toHaveLength(3);
       expect(lines[2]).not.toBe('');
     }
+  });
+});
+
+describe('WorkspaceHeader at a pane that cannot afford the full layout', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('puts the toolbar above the KPI strip so chrome is never pushed off-window', () => {
+    // Six full tiles are 357px. With them first, a 420px window — the app's own
+    // minimum (main/tray.ts) — left the toolbar and the whole list below the
+    // bottom edge with no scroll container to reach them (TRA-325).
+    renderHeader(false);
+    const root = strip.firstElementChild!;
+    const toolbar = strip.querySelector('input[aria-label="Search projects"]')!.closest('.glass')!;
+    const kpiStrip = kpiTile('Projects').parentElement!;
+    const order = [...root.children];
+    expect(order.indexOf(toolbar)).toBeLessThan(order.indexOf(kpiStrip));
+  });
+
+  it('lets the toolbar wrap instead of clipping its trailing controls', () => {
+    renderHeader(false);
+    const toolbar = strip.querySelector('input[aria-label="Search projects"]')!.closest('.glass')!;
+    // A fixed 52px non-wrapping row ran 51px past a 420px pane, putting the
+    // + Add chevron and the overflow menu outside the window entirely.
+    expect(toolbar.className).toContain('flex-wrap');
+    expect(toolbar.getAttribute('style')).toContain('min-height: 52px');
+    // A floor, not a fixed height — a wrapped second line has to grow the row.
+    expect((toolbar as HTMLElement).style.height).toBe('');
+  });
+
+  it('collapses each KPI tile to label + value when dense', () => {
+    renderHeader(false, { dense: true });
+    for (const label of ['Projects', 'Files', 'Healthy', 'Indexing']) {
+      const tile = kpiTile(label);
+      expect(tile).toHaveProperty('dataset.dense', '');
+      // Two children, not three: the comparison line is what buys the height.
+      expect(tile.children).toHaveLength(2);
+      expect(kpiValue(label)).not.toBe('');
+    }
+  });
+
+  it('keeps "couldn\'t be measured" reachable when dense drops the caption', () => {
+    renderHeader(true, { dense: true, metricsFailed: true });
+    const tile = kpiTile('Files');
+    expect(kpiValue('Files')).toBe('—');
+    expect(tile.getAttribute('title')).toBe("Couldn't be measured");
+  });
+
+  it('hides the view toggle when Compact is the only view that fits', () => {
+    renderHeader(false, { hideViewToggle: true });
+    expect(strip.querySelector('[aria-label="View mode"]')).toBeNull();
+    // The rest of the toolbar stays: the surface still searches and filters.
+    expect(strip.querySelector('input[aria-label="Search projects"]')).not.toBeNull();
+    expect(strip.querySelector('[aria-label="More actions"]')).not.toBeNull();
+  });
+
+  it('shows the view toggle at a normal pane', () => {
+    renderHeader(false);
+    expect(strip.querySelector('[aria-label="View mode"]')).not.toBeNull();
   });
 });
 
