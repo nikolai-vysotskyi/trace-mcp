@@ -11,6 +11,7 @@
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { t } from '../../i18n';
 import { CONFIG_SCHEMA, countModifiedFields, type SectionDef } from '../configSchema';
 import { Settings } from '../Settings';
 
@@ -60,7 +61,9 @@ it('gives every group a title', () => {
 it('renders every schema section, including LSP enrichment', () => {
   render(<Settings />);
   for (const section of CONFIG_SCHEMA) {
-    const literal = section.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // The schema carries catalogue keys since TRA-383; the rendered row is
+    // still the English label, which is what this asserts.
+    const literal = t(section.label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     expect(screen.getByRole('button', { name: new RegExp(`^${literal}`) })).toBeTruthy();
   }
   expect(screen.getByRole('button', { name: /^LSP enrichment/ })).toBeTruthy();

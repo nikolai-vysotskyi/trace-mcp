@@ -22,6 +22,9 @@
    happened. */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { t } from '../i18n';
+import { formatDate } from '../i18n/format';
 import {
   Badge,
   Button,
@@ -48,49 +51,47 @@ interface GuardState {
 
 type Load = 'loading' | 'ready' | 'failed';
 
-/** Health is a tone AND a glyph AND a word — never the tone alone. */
+/** Health is a tone AND a glyph AND a word — never the tone alone.
+    `label` is a catalogue key, resolved where the badge renders. */
 const HEALTH: Record<GuardHealth, { tone: Tone; icon: string; label: string }> = {
-  ok: { tone: 'green', icon: 'check', label: 'Active' },
-  stalled: { tone: 'orange', icon: 'schedule', label: 'Stalled' },
-  down: { tone: 'red', icon: 'warning', label: 'Not running' },
-  unknown: { tone: 'neutral', icon: 'remove', label: 'Unknown' },
+  ok: { tone: 'green', icon: 'check', label: 'guard:health.ok' },
+  stalled: { tone: 'orange', icon: 'schedule', label: 'guard:health.stalled' },
+  down: { tone: 'red', icon: 'warning', label: 'guard:health.down' },
+  unknown: { tone: 'neutral', icon: 'remove', label: 'guard:health.unknown' },
 };
 
 const MODE_OPTIONS: ReadonlyArray<{ value: GuardMode; label: string; title: string }> = [
-  {
-    value: 'strict',
-    label: 'Strict',
-    title: 'Block Read, Grep and Glob when a trace-mcp tool answers the question',
-  },
-  { value: 'coach', label: 'Coach', title: 'Never block — suggest the trace-mcp tool instead' },
-  { value: 'off', label: 'Off', title: 'Leave Claude Code alone in this project' },
+  { value: 'strict', label: 'guard:mode.strict', title: 'guard:mode.strictHelp' },
+  { value: 'coach', label: 'guard:mode.coach', title: 'guard:mode.coachHelp' },
+  { value: 'off', label: 'guard:mode.off', title: 'guard:mode.offHelp' },
 ];
 
 const POLL_MS = 15_000;
 const BYPASS_MINUTES = 10;
 
-/** "in 9 minutes" / "in 6 days". Future-tense sibling of `relativeTime`. */
+/** "in 9 minutes" / "in 6 days". Future-tense sibling of `relativeTime`, which
+    is past-only by design — hence its own counted keys rather than a call into
+    renderer/i18n/format.ts. */
 export function untilLabel(epochSec: number, now: number): string {
   const s = Math.max(0, Math.round(epochSec - now / 1000)); // now is ms, epochSec is s
-  if (s < 60) return 'in under a minute';
+  if (s < 60) return t('guard:until.underMinute');
   const m = Math.round(s / 60);
-  if (m < 60) return `in ${m} minute${m === 1 ? '' : 's'}`;
+  if (m < 60) return t('guard:until.minutes', { count: m });
   const h = Math.round(m / 60);
-  if (h < 24) return `in ${h} hour${h === 1 ? '' : 's'}`;
-  const d = Math.round(h / 24);
-  return `in ${d} day${d === 1 ? '' : 's'}`;
+  if (h < 24) return t('guard:until.hours', { count: h });
+  return t('guard:until.days', { count: Math.round(h / 24) });
 }
 
 /** "in 6 days · Sep 4" — when it happens, and which day that is. */
 export function promotionLabel(epochSec: number, now: number): string {
-  const abs = new Date(epochSec * 1000).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
+  const abs = formatDate(epochSec * 1000, { month: 'short', day: 'numeric' });
   return `${untilLabel(epochSec, now)} · ${abs}`;
 }
 
 export function GuardSection({ root }: { root: string }) {
+  /* Subscribes the section to language changes; the strings themselves resolve
+     through the module-level `t`, which module-scope helpers share. */
+  useTranslation('guard');
   const [state, setState] = useState<GuardState | null>(null);
   const [load, setLoad] = useState<Load>('loading');
   const [busy, setBusy] = useState(false);
@@ -163,31 +164,36 @@ export function GuardSection({ root }: { root: string }) {
   const health = HEALTH[state?.health ?? 'unknown'];
 
   return (
-    <Section title="Guard">
+    <Section title={t('guard:title')}>
       <Card>
         {load === 'loading' && !state ? (
           <SkeletonRows rows={3} />
         ) : load === 'failed' && !state ? (
-          <SectionError what="the guard status" onRetry={refresh} />
+          <SectionError what={t('guard:statusErrorWhat')} onRetry={refresh} />
         ) : state ? (
           <>
             <ListRow
-              label="Status"
+              label={t('guard:row.status')}
               value={
                 <Badge tone={health.tone} icon={health.icon}>
-                  {health.label}
+                  {t(health.label)}
                 </Badge>
               }
             />
             <ListRow
-              label="Mode"
+              label={t('guard:row.mode')}
               value={
                 /* Regular (24px), not small: measured on the running renderer
                    a small segment is a 16px paint in a 20px hit box, and the
                    32px row has the height for the 24px tier. */
                 <SegmentedControl
-                  aria-label="Guard mode"
-                  options={MODE_OPTIONS.map((o) => ({ ...o, disabled: busy }))}
+                  aria-label={t('guard:mode.aria')}
+                  options={MODE_OPTIONS.map((o) => ({
+                    ...o,
+                    label: t(o.label),
+                    title: t(o.title),
+                    disabled: busy,
+                  }))}
                   value={state.mode}
                   onChange={(m) => setMode(m)}
                 />
@@ -195,27 +201,27 @@ export function GuardSection({ root }: { root: string }) {
             />
             {state.mode === 'coach' && state.coachExpiresAt ? (
               <ListRow
-                label="Switches to strict"
+                label={t('guard:row.promotion')}
                 value={promotionLabel(state.coachExpiresAt, now)}
               />
             ) : null}
             {state.autoPromoted ? (
               /* State, not an event: it belongs next to the mode it changed,
                  not in a toast that is gone before it is read. */
-              <ListRow label="Switched to strict" value="Coach period ended" />
+              <ListRow label={t('guard:row.promoted')} value={t('guard:row.promotedValue')} />
             ) : null}
             <ListRow
               last
               /* "Enforcement", not "Temporary pause": the row already carries a
                  Pause button, and label + button both saying "pause" wrapped to
                  two lines at the 640px window minimum for no added meaning. */
-              label="Enforcement"
+              label={t('guard:row.enforcement')}
               value={
                 bypassActive ? (
                   <span className="inline-flex items-center gap-2">
-                    <span>Resumes {untilLabel(bypassUntil, now)}</span>
+                    <span>{t('guard:bypass.resumes', { when: untilLabel(bypassUntil, now) })}</span>
                     <Button icon="play_arrow" disabled={busy} onClick={() => setBypass(0)}>
-                      Resume now
+                      {t('guard:bypass.resumeNow')}
                     </Button>
                   </span>
                 ) : (
@@ -224,7 +230,7 @@ export function GuardSection({ root }: { root: string }) {
                     disabled={busy || state.mode === 'off'}
                     onClick={() => setBypass(BYPASS_MINUTES)}
                   >
-                    Pause for {BYPASS_MINUTES} minutes
+                    {t('guard:bypass.pause', { count: BYPASS_MINUTES })}
                   </Button>
                 )
               }

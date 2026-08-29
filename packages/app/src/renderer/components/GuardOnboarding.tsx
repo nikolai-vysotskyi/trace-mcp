@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
+import { t } from '../i18n';
 import { Icon } from '../lattice/icons';
 import { Button } from '../lattice/ui';
 
@@ -44,6 +46,9 @@ interface GuardOnboardingProps {
 }
 
 export function GuardOnboarding({ onClose }: GuardOnboardingProps) {
+  /* Subscribes the sheet to language changes; `content` below is a plain
+     function, so it reads the same module-level `t`. */
+  useTranslation('guard');
   const [state, setState] = useState<OnboardingState>({ step: 'detect' });
   const titleId = useId();
   const bodyId = useId();
@@ -203,49 +208,50 @@ function content(
   skip: () => void,
 ): { title: string; body: React.ReactNode } {
   switch (state.step) {
+    /* The three bodies below use <Trans> rather than two `t()` calls around a
+       <code>: the command sits mid-sentence, and word order moves between
+       languages. */
     case 'cli-missing':
       return {
-        title: 'Install the trace-mcp CLI',
+        title: t('guard:onboarding.cliMissing.title'),
         body: (
           <>
             <p className="lx-sheet-text">
-              The app talks to your projects through the <code>trace-mcp</code> command, and it
-              isn't on your PATH yet. Run this in a terminal, then reopen the app.
+              <Trans i18nKey="guard:onboarding.cliMissing.body" components={{ code: <code /> }} />
             </p>
             <CommandField command="npm install -g trace-mcp" />
-            <ActionRow onPrimary={dismiss} primaryLabel="Done" />
+            <ActionRow onPrimary={dismiss} primaryLabel={t('guard:onboarding.done')} />
           </>
         ),
       };
     case 'cli-stale':
       return {
-        title: 'Update the trace-mcp CLI',
+        title: t('guard:onboarding.cliStale.title'),
         body: (
           <>
             <p className="lx-sheet-text">
-              You have <code>{state.cliVersion}</code>; this app needs{' '}
-              <code>{state.requiredVersion}</code> or newer. Run this in a terminal, then reopen
-              the app.
+              <Trans
+                i18nKey="guard:onboarding.cliStale.body"
+                components={{ code: <code /> }}
+                values={{ current: state.cliVersion, required: state.requiredVersion }}
+              />
             </p>
             <CommandField command="npm install -g trace-mcp@latest" />
-            <ActionRow onPrimary={dismiss} primaryLabel="Done" />
+            <ActionRow onPrimary={dismiss} primaryLabel={t('guard:onboarding.done')} />
           </>
         ),
       };
     case 'install-prompt':
       return {
-        title: 'Set up the trace-mcp guard',
+        title: t('guard:onboarding.installPrompt.title'),
         body: (
           <>
-            <p className="lx-sheet-text">
-              The guard routes Claude Code's Read, Grep, Glob and Bash calls through trace-mcp
-              instead of raw file reads, which saves roughly 30–50% of the tokens in a session.
-              New projects start in Coach mode — hints only, never blocking — and move to Strict
-              after seven days.
-            </p>
+            <p className="lx-sheet-text">{t('guard:onboarding.installPrompt.body')}</p>
             <p className="lx-sheet-note">
-              <code>~/.claude/settings.json</code> is backed up to <code>settings.json.bak</code>{' '}
-              before anything is written.
+              <Trans
+                i18nKey="guard:onboarding.installPrompt.note"
+                components={{ code: <code /> }}
+              />
             </p>
             {state.error && (
               <p className="lx-sheet-error" role="alert">
@@ -255,44 +261,45 @@ function content(
             )}
             <ActionRow
               onPrimary={install}
-              primaryLabel="Install guard"
+              primaryLabel={t('guard:onboarding.install')}
               onSecondary={skip}
-              secondaryLabel="Not now"
+              secondaryLabel={t('guard:onboarding.notNow')}
             />
           </>
         ),
       };
     case 'installing':
       return {
-        title: 'Installing the guard',
+        title: t('guard:onboarding.installing.title'),
         body: (
           <p className="lx-sheet-text" role="status">
-            Writing the hook into Claude Code's settings…
+            {t('guard:onboarding.installing.body')}
           </p>
         ),
       };
     case 'installed':
       return {
-        title: 'Guard installed',
+        title: t('guard:onboarding.installed.title'),
         body: (
           <>
-            <p className="lx-sheet-text">
-              Restart Claude Code so it picks up the new hook configuration.
-            </p>
-            {state.scriptPath && <CommandField command={state.scriptPath} label="Hook script" />}
-            <ActionRow onPrimary={dismiss} primaryLabel="Done" />
+            <p className="lx-sheet-text">{t('guard:onboarding.installed.body')}</p>
+            {state.scriptPath && (
+              <CommandField
+                command={state.scriptPath}
+                label={t('guard:onboarding.installed.script')}
+              />
+            )}
+            <ActionRow onPrimary={dismiss} primaryLabel={t('guard:onboarding.done')} />
           </>
         ),
       };
     case 'skipped':
       return {
-        title: 'Guard not installed',
+        title: t('guard:onboarding.skipped.title'),
         body: (
           <>
-            <p className="lx-sheet-text">
-              You can install it later from Settings, under AI / embeddings.
-            </p>
-            <ActionRow onPrimary={dismiss} primaryLabel="Close" />
+            <p className="lx-sheet-text">{t('guard:onboarding.skipped.body')}</p>
+            <ActionRow onPrimary={dismiss} primaryLabel={t('guard:onboarding.close')} />
           </>
         ),
       };
@@ -317,6 +324,12 @@ function CommandField({ command, label }: { command: string; label?: string }) {
     }
   };
 
+  const copyName = copied
+    ? t('guard:onboarding.copied')
+    : label
+      ? t('guard:onboarding.copyLabelled', { label })
+      : t('guard:onboarding.copyCommand');
+
   return (
     <div className="lx-sheet-command">
       <code>{command}</code>
@@ -325,8 +338,8 @@ function CommandField({ command, label }: { command: string; label?: string }) {
         size="small"
         icon={copied ? 'check' : 'content_copy'}
         onClick={copy}
-        aria-label={copied ? 'Copied' : `Copy ${label ?? 'command'}`}
-        title={copied ? 'Copied' : `Copy ${label ?? 'command'}`}
+        aria-label={copyName}
+        title={copyName}
       />
     </div>
   );
