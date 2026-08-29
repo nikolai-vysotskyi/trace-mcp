@@ -4,7 +4,7 @@
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { LOCALE_KEY } from '../../../shared/i18n/locales.js';
-import { currentLocale, initialLocale, setLocale, t } from '../index.js';
+import { currentLocale, i18next, initialLocale, setLocale, t } from '../index.js';
 import { formatDate, formatNumber, relativeTime } from '../format.js';
 import { describeStaleRoots, formatAgo } from '../../update-check.js';
 
@@ -36,21 +36,35 @@ describe('locale selection', () => {
 
 describe('plurals', () => {
   /* The whole reason for a library rather than a lookup table: 1 / 3 / 7 land
-     on three different Russian forms and on only two English ones. */
-  const forms = (count: number): string =>
-    t('update:staleRoots', { count, version: '2.9.0' });
+     on three different Russian forms and on only two English ones.
+
+     The fixture is test-owned rather than a product key. It used to be
+     `update:staleRoots`, which stopped being plural when TRA-377 narrowed that
+     warning to the single root MCP clients run — and no shipped string should
+     have to stay plural just to keep this property covered. */
+  i18next.addResourceBundle('en', 'test', {
+    files_one: '{{count}} file',
+    files_other: '{{count}} files',
+  });
+  i18next.addResourceBundle('ru', 'test', {
+    files_one: '{{count}} файл',
+    files_few: '{{count}} файла',
+    files_many: '{{count}} файлов',
+    files_other: '{{count}} файла',
+  });
+  const forms = (count: number): string => t('test:files', { count });
 
   it('uses English one/other', () => {
-    expect(forms(1)).toBe('Another npm install is on v2.9.0');
-    expect(forms(3)).toBe('3 other npm installs are out of date');
-    expect(forms(7)).toBe('7 other npm installs are out of date');
+    expect(forms(1)).toBe('1 file');
+    expect(forms(3)).toBe('3 files');
+    expect(forms(7)).toBe('7 files');
   });
 
   it('uses Russian one/few/many', () => {
     setLocale('ru');
-    expect(forms(1)).toBe('Ещё одна установка npm использует v2.9.0');
-    expect(forms(3)).toBe('Ещё 3 установки npm устарели');
-    expect(forms(7)).toBe('Ещё 7 установок npm устарели');
+    expect(forms(1)).toBe('1 файл');
+    expect(forms(3)).toBe('3 файла');
+    expect(forms(7)).toBe('7 файлов');
   });
 });
 
@@ -90,13 +104,17 @@ describe('update-check strings', () => {
     expect(formatAgo(NOW - 7_200_000, NOW)).toBe('2 ч назад');
   });
 
-  it('keeps the stale-root tooltip pointing at every root', () => {
-    const { label, title } = describeStaleRoots([
-      { root: '/a/lib/node_modules', version: '2.9.0' },
-      { root: '/b/lib/node_modules', version: '3.0.0' },
-    ]);
-    expect(label).toBe('2 other npm installs are out of date');
-    expect(title).toContain('v2.9.0 — /a/lib/node_modules/trace-mcp');
-    expect(title).toContain('v3.0.0 — /b/lib/node_modules/trace-mcp');
+  it('translates the stale-root warning, install and command included', () => {
+    const root = '/a/lib/node_modules';
+    const en = describeStaleRoots([{ root, version: '2.9.0' }]);
+    expect(en.label).toBe('MCP clients still run v2.9.0');
+    expect(en.title).toContain(`${root}/trace-mcp`);
+    expect(en.title).toContain(en.command);
+
+    setLocale('ru');
+    const ru = describeStaleRoots([{ root, version: '2.9.0' }]);
+    expect(ru.label).toBe('MCP-клиенты работают на v2.9.0');
+    expect(ru.title).toContain(`${root}/trace-mcp`);
+    expect(ru.title).toContain(ru.command);
   });
 });
