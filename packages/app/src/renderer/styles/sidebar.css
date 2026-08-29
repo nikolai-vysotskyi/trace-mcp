@@ -39,10 +39,12 @@
   border-right: 0.5px solid var(--separator);
   -webkit-app-region: no-drag;
 }
-/* macOS: the NSVisualEffectView shows through. It samples what is behind the
-   WINDOW, so in light appearance --sidebar-scrim puts a floor under how dark a
-   dark desktop can drag it; in dark appearance the token is `transparent` and
-   the material is the whole material. See tokens.css and DESIGN.md §1 (TRA-369). */
+/* macOS: the NSVisualEffectView shows through, and it samples what is behind the
+   WINDOW — so how far it may pull the sidebar away from --surface is bounded, in
+   BOTH appearances: the drift goes light over a light desktop and dark over a
+   dark one, and either direction ends at mid-grey. --sidebar-scrim is that
+   bound: flat --surface in light, --surface at .78 in dark, where the glass
+   still has somewhere to go. See tokens.css and DESIGN.md §1 (TRA-369). */
 .ws-stage[data-platform="mac"] .ws-sidebar {
   background: var(--sidebar-scrim);
 }
