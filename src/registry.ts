@@ -86,6 +86,9 @@ function emptyRegistry(): Registry {
 const MTIME_GRANULARITY_MS = 50;
 let _registryCache: { mtimeMs: number; size: number; reg: Registry } | null = null;
 
+/** Keys that would reach `Object.prototype` if used as a `projects` map key. */
+const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'] as const;
+
 function loadRegistry(): Registry {
   // Stat and read through one descriptor: the metadata we key the cache on then
   // describes exactly the bytes we parsed, even if the file is replaced midway.
@@ -103,6 +106,11 @@ function loadRegistry(): Registry {
     }
     const raw = JSON.parse(fs.readFileSync(fd, 'utf-8'));
     if (raw.version === 1 && raw.projects) {
+      // Registry keys are always `path.resolve()` output, so a bare `__proto__`
+      // can never be written by us — but the file is hand-editable and the
+      // daemon holds this map for its whole life, so drop the dangerous keys
+      // on read rather than trusting the writer (CodeQL js/prototype-polluting-assignment).
+      for (const key of DANGEROUS_KEYS) delete raw.projects[key];
       _registryCache = { mtimeMs, size, reg: raw as Registry };
       return structuredClone(raw as Registry);
     }

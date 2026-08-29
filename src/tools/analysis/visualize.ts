@@ -6,6 +6,7 @@
  * Memory: streams HTML template, no large intermediate buffers.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 import picomatch from 'picomatch';
@@ -14,6 +15,7 @@ import { type FileRow, Store } from '../../db/store.js';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
 import { logger } from '../../logger.js';
 import type { TopologyStore } from '../../topology/topology-db.js';
+import { writeTmpFileSync } from '../../utils/safe-fs.js';
 import { computeBottlenecksForVizGraph } from './bottlenecks.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -2074,9 +2076,12 @@ export function visualizeGraph(
   const html = generateHtml(nodes, edges, communities, layout, {
     highlightDepth: opts.highlightDepth,
   });
-  const outputPath = opts.output ?? path.join(process.env.TMPDIR ?? '/tmp', 'trace-mcp-graph.html');
+  const outputPath = opts.output ?? path.join(os.tmpdir(), 'trace-mcp-graph.html');
 
-  fs.writeFileSync(outputPath, html, 'utf-8');
+  // Never through a symlink: the default lands on a predictable name in the
+  // shared temp dir. Applied to caller-supplied paths too — nobody points
+  // --output at a symlink on purpose, and one branch is one branch too many.
+  writeTmpFileSync(outputPath, html);
 
   return ok({
     outputPath,

@@ -9,9 +9,9 @@
  */
 
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { ensureTmpDirSync, writeTmpFileSync } from '../utils/safe-fs.js';
 
 interface ExploredTracker {
   /** Mark a file as explored via trace-mcp. Guard hook will allow Read on it. */
@@ -22,18 +22,17 @@ export function createExploredTracker(projectRoot: string): ExploredTracker {
   const hash = crypto.createHash('sha256').update(projectRoot).digest('hex').slice(0, 12);
   const markerDir = path.join(os.tmpdir(), `trace-mcp-explored-${hash}`);
 
-  try {
-    fs.mkdirSync(markerDir, { recursive: true });
-  } catch {
-    // If we can't create the dir, markExplored becomes a no-op
-  }
+  // If we can't create the dir — or someone else owns that name — markExplored
+  // becomes a no-op.
+  const dirUsable = ensureTmpDirSync(markerDir);
 
   return {
     markExplored(filePath: string): void {
+      if (!dirUsable) return;
       const absPath = path.isAbsolute(filePath) ? filePath : path.resolve(projectRoot, filePath);
       const fileHash = crypto.createHash('sha256').update(absPath).digest('hex');
       try {
-        fs.writeFileSync(path.join(markerDir, fileHash), absPath);
+        writeTmpFileSync(path.join(markerDir, fileHash), absPath);
       } catch {
         // Non-critical — guard hook falls back to deny/allow toggle
       }

@@ -34,6 +34,21 @@ describe('registry health (#168)', () => {
     return dir;
   }
 
+  // TRA-337 (CodeQL js/prototype-polluting-assignment): registry.json is
+  // hand-editable and the daemon holds the parsed `projects` map for its whole
+  // life, so a `__proto__` key in the file must never reach Object.prototype.
+  it('drops prototype-polluting keys when loading registry.json', () => {
+    fs.mkdirSync(path.dirname(REGISTRY_PATH), { recursive: true });
+    fs.writeFileSync(
+      REGISTRY_PATH,
+      '{"version":1,"projects":{"__proto__":{"polluted":true},"constructor":{"polluted":true}}}',
+      'utf-8',
+    );
+
+    expect(registry.listProjects()).toEqual([]);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+
   describe('inspectRegistry', () => {
     it('reports a missing registry as empty (not corrupt)', () => {
       const r = registry.inspectRegistry();
