@@ -11,6 +11,7 @@
  * pure refactor. The functions take explicit context objects instead of
  * closing over `installToolGate`'s locals.
  */
+import { z } from 'zod';
 import type { TraceMcpConfig } from '../config.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
@@ -102,18 +103,35 @@ function applyDescriptionOverrides(args: unknown[], cfg: SchemaTransformConfig):
   }
 }
 
+/**
+ * Return a copy of `field` with its `describe()` text gone from the emitted
+ * JSON Schema. Zod v4 keeps descriptions in `z.globalRegistry`, keyed by the
+ * schema instance — deleting `_def.description` only clears the convenience
+ * accessor, so the old strip left every param description on the wire while
+ * looking like it worked. Cloning first keeps module-level schema constants
+ * shared across tools (and across daemon sessions with different verbosity)
+ * unmodified. Walks the `innerType` chain so `.describe().optional()` and
+ * `.describe().default(x)` are handled; nested object/array params don't carry
+ * their own describe() in this codebase, same shallow-is-enough reasoning as
+ * the schema-budget guard.
+ */
+function withoutDescription(field: unknown): unknown {
+  const def = (field as { _zod?: { def?: Record<string, unknown> } })?._zod?.def;
+  if (!def) return field;
+  const nextDef = { ...def };
+  if (nextDef.innerType) nextDef.innerType = withoutDescription(nextDef.innerType);
+  const clone = z.core.clone(field as z.ZodType, nextDef as never);
+  z.globalRegistry.remove(clone);
+  return clone;
+}
+
 /** Drop per-parameter `description` metadata for minimal/none verbosity. */
 function stripParamDescriptions(args: unknown[]): void {
   const schema = args[schemaIndexOf(args)];
   if (!schema || typeof schema !== 'object') return;
-  for (const val of Object.values(schema as Record<string, unknown>)) {
-    if (val && typeof val === 'object' && '_def' in val) {
-      const def = (val as { _def: Record<string, unknown> })._def;
-      // biome-ignore lint/performance/noDelete: Zod attaches `description` as a getter-only property; assigning undefined throws.
-      delete def.description;
-      // biome-ignore lint/performance/noDelete: same as above — Zod description is getter-only.
-      delete (val as Record<string, unknown>).description;
-    }
+  const shape = schema as Record<string, unknown>;
+  for (const [key, val] of Object.entries(shape)) {
+    if (val && typeof val === 'object') shape[key] = withoutDescription(val);
   }
 }
 
