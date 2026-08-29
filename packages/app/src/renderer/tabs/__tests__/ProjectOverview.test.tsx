@@ -8,13 +8,9 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ProjectOverview,
-  coverageTone,
-  formatIndexedAt,
-  relativeTime,
-  shortPath,
-} from '../ProjectOverview';
+import { ProjectOverview, coverageTone, formatIndexedAt, shortPath } from '../ProjectOverview';
+import { setLocale } from '../../i18n';
+import { relativeTime } from '../../i18n/format';
 
 const ROOT = '/Users/someone/code/demo-app';
 
@@ -73,9 +69,13 @@ describe('formatting helpers', () => {
     expect(shortPath('/opt/src/thing')).toBe('/opt/src/thing');
   });
 
+  /* The surface's own hand-rolled helper is gone; the shared Intl one produces
+     the same English and the same singular/plural split, which is what this
+     asserted all along. Its only behaviour change is the sub-minute case: Intl
+     says "30 seconds ago" where the old helper rounded to "just now". */
   it('describes recency in words, singular and plural', () => {
     const now = Date.UTC(2026, 7, 28, 12, 0, 0);
-    expect(relativeTime(now - 30_000, now)).toBe('just now');
+    expect(relativeTime(now - 30_000, now)).toBe('30 seconds ago');
     expect(relativeTime(now - 60_000, now)).toBe('1 minute ago');
     expect(relativeTime(now - 7_200_000, now)).toBe('2 hours ago');
     expect(relativeTime(now - 172_800_000, now)).toBe('2 days ago');
@@ -240,5 +240,26 @@ describe('ProjectOverview surface', () => {
     /* The toolbar does not disappear when one section fails. */
     expect(screen.getByRole('button', { name: 'Reindex' })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Retry' }).length).toBeGreaterThan(0);
+  });
+});
+
+/* TRA-384. A key that is in the catalogue but not wired into the component
+   still renders — it renders the key. Nothing above catches that, because the
+   English catalogue and the English literal it replaced read identically. This
+   is the check that does: one surface, rendered in the other language.
+   (The Russian here is the shipped translation being asserted, not authored
+   content — see catalog/ru/overview.ts.) */
+describe('the surface reads from the catalogue, not from literals', () => {
+  afterEach(() => setLocale('en'));
+
+  it('renders in Russian when Russian is the active language', async () => {
+    setLocale('ru');
+    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByRole('button', { name: 'Переиндексировать' })).toBeTruthy();
+    expect(screen.getByText('Индекс')).toBeTruthy();
+    expect(screen.getByText('Файлов проиндексировано')).toBeTruthy();
+    expect(screen.queryByText('Reindex')).toBeNull();
   });
 });

@@ -20,9 +20,12 @@
  *     (2.21:1), and row actions that only existed on hover.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { GuardSection } from '../components/GuardSection';
 import { ProjectStatsModal } from '../components/ProjectStatsModal';
 import { useDaemon } from '../hooks/useDaemon';
+import { t } from '../i18n';
+import { formatDate, formatNumber, relativeTime } from '../i18n/format';
 import { Icon } from '../lattice/icons';
 import {
   Badge,
@@ -120,20 +123,33 @@ const GITHUB_REPO = 'nikolai-vysotskyi/trace-mcp';
     overview, not a results table. */
 const FINDING_LIMIT = 25;
 
-const SMELL_CATEGORIES: { value: SmellFinding['category']; label: string }[] = [
-  { value: 'debug_artifact', label: 'Debug' },
-  { value: 'todo_comment', label: 'TODOs' },
-  { value: 'hardcoded_value', label: 'Hardcoded' },
-  { value: 'empty_function', label: 'Stubs' },
+/* Catalogue keys rather than words: the picker and the empty state name the
+   same four categories, and a language switch has to move both. */
+const SMELL_CATEGORIES: { value: SmellFinding['category']; labelKey: string }[] = [
+  { value: 'debug_artifact', labelKey: 'smellDebug' },
+  { value: 'todo_comment', labelKey: 'smellTodo' },
+  { value: 'hardcoded_value', labelKey: 'smellHardcoded' },
+  { value: 'empty_function', labelKey: 'smellStubs' },
 ];
 
 /** Sentence-case names for the empty states — "No empty_function findings" was
     leaking the API's own enum into the UI. */
-const SMELL_NOUN: Record<SmellFinding['category'], string> = {
-  debug_artifact: 'debug artifacts',
-  todo_comment: 'TODO comments',
-  hardcoded_value: 'hardcoded values',
-  empty_function: 'empty functions',
+const SMELL_NOUN_KEY: Record<SmellFinding['category'], string> = {
+  debug_artifact: 'nounDebug',
+  todo_comment: 'nounTodo',
+  hardcoded_value: 'nounHardcoded',
+  empty_function: 'nounStubs',
+};
+
+/* The API's own severity words, said in the reader's language. Anything the
+   catalogue does not know falls through to the raw value rather than a key. */
+const BADGE_KEY: Record<string, string> = {
+  high: 'priorityHigh',
+  medium: 'priorityMedium',
+  low: 'priorityLow',
+  likely: 'needsLikely',
+  maybe: 'needsMaybe',
+  no: 'needsNo',
 };
 
 const PRIORITY_TONE: Record<string, Tone> = {
@@ -151,30 +167,19 @@ export function shortPath(root: string): string {
     .replace(/^[A-Z]:\\Users\\[^\\]+/, '~');
 }
 
-export function relativeTime(then: number, now: number): string {
-  const s = Math.max(0, Math.round((now - then) / 1000));
-  if (s < 60) return 'just now';
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m} minute${m === 1 ? '' : 's'} ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
-  const d = Math.round(h / 24);
-  return `${d} day${d === 1 ? '' : 's'} ago`;
-}
-
 /** "2 hours ago · Aug 28, 5:01 PM" — the relative form answers "is this
     stale?", the absolute one answers "which run was that?". The old value was
     a bare `8/28/2026, 5:01:49 PM`, which answers neither at a glance. */
 export function formatIndexedAt(iso: string, now: number = Date.now()): string {
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return 'Unknown';
-  const abs = new Date(t).toLocaleString(undefined, {
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return t('overview:unknown');
+  const abs = formatDate(ts, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
-  return `${relativeTime(t, now)} · ${abs}`;
+  return `${relativeTime(ts, now)} · ${abs}`;
 }
 
 export function coverageTone(pct: number): Tone {
@@ -221,6 +226,7 @@ export function ProjectOverview({
   root: string;
   onNavigateToService?: (serviceName: string) => void;
 }) {
+  const { t } = useTranslation('overview');
   const { projects, loading: daemonLoading, connected, reindexProject, addProject } = useDaemon();
   const project = projects.find((p) => p.root === root);
   const status = project?.status ?? 'unknown';
@@ -390,17 +396,17 @@ export function ProjectOverview({
 
   const statusLabel = listPending
     ? connected
-      ? 'Checking…'
-      : 'Daemon unreachable'
+      ? t('statusChecking')
+      : t('statusDaemonUnreachable')
     : untracked
-      ? 'Not tracked'
+      ? t('statusNotTracked')
       : status === 'indexing'
-        ? 'Indexing'
+        ? t('statusIndexing')
         : status === 'ready'
-          ? 'Ready'
+          ? t('statusReady')
           : status === 'error'
-            ? 'Error'
-            : 'Not indexed';
+            ? t('statusError')
+            : t('statusNotIndexed');
 
   const likelyUnknown = useMemo(
     () => coverage?.unknown.filter((u) => u.needs_plugin === 'likely') ?? [],
@@ -424,6 +430,10 @@ export function ProjectOverview({
   const showGroupHeaders = groups.keys.length > 1 || Boolean(groups.keys[0]);
 
   const visibleFindings = smells?.findings.slice(0, FINDING_LIMIT) ?? [];
+  /* The API's word when the catalogue has one, the API's word when it does
+     not — a badge is never allowed to render a raw key. */
+  const badgeLabel = (value: string): string =>
+    BADGE_KEY[value] ? t(BADGE_KEY[value]) : value;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -458,7 +468,7 @@ export function ProjectOverview({
              always renders, so the daemon-down wording lives here rather than in
              the Status row, which is itself missing when the fetch failed. */
           <Button className="is-status" disabled>
-            {connected ? 'Checking…' : 'Daemon unreachable'}
+            {connected ? t('statusChecking') : t('statusDaemonUnreachable')}
           </Button>
         ) : project ? (
           /* While indexing the action is unavailable, and a DISABLED prominent
@@ -467,16 +477,16 @@ export function ProjectOverview({
              label — not the button — is what reports the phase. */
           status === 'indexing' ? (
             <Button className="is-status" icon="refresh" disabled>
-              Indexing…
+              {t('actionIndexing')}
             </Button>
           ) : (
             <Button variant="prominent" icon="refresh" onClick={() => reindexProject(root)}>
-              Reindex
+              {t('actionReindex')}
             </Button>
           )
         ) : (
           <Button variant="prominent" icon="add" onClick={() => addProject(root)}>
-            {untracked ? 'Re-add project' : 'Index project'}
+            {untracked ? t('actionReAdd') : t('actionIndex')}
           </Button>
         )}
 
@@ -487,8 +497,8 @@ export function ProjectOverview({
           onClick={() => (overflowMenu.at ? overflowMenu.close() : overflowMenu.open())}
           aria-haspopup="menu"
           aria-expanded={overflowMenu.at !== null}
-          aria-label="More actions"
-          title="More actions"
+          aria-label={t('moreActions')}
+          title={t('moreActions')}
         />
 
         {/* Indexing progress rides the toolbar's bottom edge — a 2px accent
@@ -503,7 +513,7 @@ export function ProjectOverview({
               aria-valuenow={progress.percent}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label="Indexing progress"
+              aria-label={t('indexingProgress')}
               style={{
                 height: '100%',
                 width: `${progress.percent}%`,
@@ -524,7 +534,7 @@ export function ProjectOverview({
               overflowMenu.close();
             }}
           >
-            View stats
+            {t('menuViewStats')}
           </MenuItem>
           <MenuItem
             icon="add"
@@ -534,7 +544,7 @@ export function ProjectOverview({
               handleAddService();
             }}
           >
-            Add service…
+            {t('menuAddService')}
           </MenuItem>
           <MenuSeparator />
           <MenuItem
@@ -544,7 +554,7 @@ export function ProjectOverview({
               overflowMenu.close();
             }}
           >
-            Open in editor
+            {t('menuOpenInEditor')}
           </MenuItem>
         </Menu>
       )}
@@ -570,16 +580,16 @@ export function ProjectOverview({
           )}
 
           {/* ── Index ──────────────────────────────────────────────── */}
-          <Section title="Index">
+          <Section title={t('sectionIndex')}>
             <Card>
               {statsLoad === 'loading' && !stats ? (
                 <SkeletonRows rows={5} />
               ) : statsLoad === 'failed' && !stats ? (
-                <SectionError what="the index summary" onRetry={fetchStats} />
+                <SectionError what={t('errorIndexSummary')} onRetry={fetchStats} />
               ) : stats ? (
                 <>
                   <ListRow
-                    label="Status"
+                    label={t('rowStatus')}
                     value={
                       <span className="inline-flex items-center gap-1.5">
                         <StatusDot tone={statusTone} />
@@ -587,12 +597,12 @@ export function ProjectOverview({
                       </span>
                     }
                   />
-                  <ListRow label="Files indexed" value={stats.files.toLocaleString()} />
-                  <ListRow label="Symbols" value={stats.symbols.toLocaleString()} />
-                  <ListRow label="Edges" value={stats.edges.toLocaleString()} />
+                  <ListRow label={t('rowFiles')} value={formatNumber(stats.files)} />
+                  <ListRow label={t('rowSymbols')} value={formatNumber(stats.symbols)} />
+                  <ListRow label={t('rowEdges')} value={formatNumber(stats.edges)} />
                   <ListRow
-                    label="Last indexed"
-                    value={stats.lastIndexed ? formatIndexedAt(stats.lastIndexed) : 'Never'}
+                    label={t('rowLastIndexed')}
+                    value={stats.lastIndexed ? formatIndexedAt(stats.lastIndexed) : t('never')}
                     last
                   />
                 </>
@@ -600,11 +610,11 @@ export function ProjectOverview({
                 <EmptyState
                   compact
                   icon="database"
-                  title="Not indexed yet"
-                  subtitle="Index this project to explore its symbols, edges and history."
+                  title={t('emptyIndexTitle')}
+                  subtitle={t('emptyIndexBody')}
                   action={
                     <Button variant="prominent" icon="add" onClick={() => addProject(root)}>
-                      Index project
+                      {t('actionIndex')}
                     </Button>
                   }
                 />
@@ -620,7 +630,7 @@ export function ProjectOverview({
 
           {/* ── Coverage ───────────────────────────────────────────── */}
           <Section
-            title="Coverage"
+            title={t('sectionCoverage')}
             trailing={
               coverage && coverage.coverage.total_significant > 0 ? (
                 <span
@@ -639,15 +649,15 @@ export function ProjectOverview({
                   <Skeleton width={140} height={11} />
                 </div>
               ) : coverageLoad === 'failed' && !coverage ? (
-                <SectionError what="dependency coverage" onRetry={fetchCoverage} />
+                <SectionError what={t('errorCoverage')} onRetry={fetchCoverage} />
               ) : coverage && coverage.coverage.total_significant === 0 ? (
                 /* Nothing to cover is not 100% covered. A full green meter over
                    "0 of 0 dependencies covered" claims a result nobody measured. */
                 <EmptyState
                   compact
                   icon="cable"
-                  title="No dependencies detected"
-                  subtitle="Coverage appears once this project has a dependency manifest in the index."
+                  title={t('emptyCoverageTitle')}
+                  subtitle={t('emptyCoverageBody')}
                 />
               ) : coverage ? (
                 <>
@@ -666,7 +676,7 @@ export function ProjectOverview({
                         aria-valuenow={coverage.coverage.coverage_pct}
                         aria-valuemin={0}
                         aria-valuemax={100}
-                        aria-label="Dependency coverage"
+                        aria-label={t('coverageMeter')}
                         style={{
                           height: '100%',
                           borderRadius: 3,
@@ -684,8 +694,10 @@ export function ProjectOverview({
                     >
                       <Icon name={hasGaps ? 'warning' : 'check'} size={13} />
                       <span className="tabular-nums">
-                        {coverage.coverage.covered} of {coverage.coverage.total_significant}{' '}
-                        dependencies covered
+                        {t('coverageCovered', {
+                          covered: formatNumber(coverage.coverage.covered),
+                          total: formatNumber(coverage.coverage.total_significant),
+                        })}
                       </span>
                     </div>
                   </div>
@@ -695,7 +707,7 @@ export function ProjectOverview({
                       key={gap.name}
                       name={gap.name}
                       tone={PRIORITY_TONE[gap.priority] ?? 'neutral'}
-                      badge={gap.priority}
+                      badge={badgeLabel(gap.priority)}
                       last={i === coverage.gaps.length - 1 && likelyUnknown.length === 0}
                       onRequest={() => openInBrowser(buildIssueUrl(gap))}
                     />
@@ -706,7 +718,7 @@ export function ProjectOverview({
                       name={pkg.name}
                       meta={pkg.ecosystem}
                       tone={PRIORITY_TONE[pkg.needs_plugin] ?? 'neutral'}
-                      badge={pkg.needs_plugin}
+                      badge={badgeLabel(pkg.needs_plugin)}
                       last={i === likelyUnknown.length - 1}
                       onRequest={() => openInBrowser(buildIssueUrl(pkg))}
                     />
@@ -716,8 +728,8 @@ export function ProjectOverview({
                 <EmptyState
                   compact
                   icon="cable"
-                  title="No dependencies found"
-                  subtitle="Coverage appears once the project has a dependency manifest indexed."
+                  title={t('emptyCoverageFoundTitle')}
+                  subtitle={t('emptyCoverageFoundBody')}
                 />
               )}
             </Card>
@@ -725,34 +737,34 @@ export function ProjectOverview({
 
           {/* ── Quality ────────────────────────────────────────────── */}
           <Section
-            title="Quality"
+            title={t('sectionQuality')}
             trailing={
               smells ? (
                 <Badge tone={smells.total === 0 ? 'green' : smells.total > 20 ? 'red' : 'orange'}>
-                  {smells.total.toLocaleString()} finding{smells.total === 1 ? '' : 's'}
+                  {t('findings', { count: smells.total, n: formatNumber(smells.total) })}
                 </Badge>
               ) : undefined
             }
           >
             <div className="px-1">
               <SegmentedControl
-                options={SMELL_CATEGORIES}
+                options={SMELL_CATEGORIES.map((c) => ({ value: c.value, label: t(c.labelKey) }))}
                 value={smellsCategory}
                 onChange={(v) => setSmellsCategory(v as SmellFinding['category'])}
-                aria-label="Finding category"
+                aria-label={t('smellCategoryLabel')}
               />
             </div>
             <Card>
               {smellsLoad === 'loading' && !smells ? (
                 <SkeletonRows rows={4} />
               ) : smellsLoad === 'failed' && !smells ? (
-                <SectionError what="the quality scan" onRetry={() => fetchSmells(smellsCategory)} />
+                <SectionError what={t('errorQuality')} onRetry={() => fetchSmells(smellsCategory)} />
               ) : visibleFindings.length === 0 ? (
                 <EmptyState
                   compact
                   icon="check"
-                  title={`No ${SMELL_NOUN[smellsCategory]}`}
-                  subtitle={`Nothing to clean up in this category across ${(smells?.files_scanned ?? 0).toLocaleString()} scanned files.`}
+                  title={t('emptySmellTitle', { noun: t(SMELL_NOUN_KEY[smellsCategory]) })}
+                  subtitle={t('emptySmellBody', { n: formatNumber(smells?.files_scanned ?? 0) })}
                 />
               ) : (
                 <>
@@ -772,9 +784,11 @@ export function ProjectOverview({
                             : '0.5px solid var(--separator)',
                         cursor: 'default',
                       }}
-                      title={`Open ${f.file}:${f.line} in your editor`}
+                      title={t('openInEditorTitle', { file: f.file, line: f.line })}
                     >
-                      <Badge tone={PRIORITY_TONE[f.priority] ?? 'neutral'}>{f.priority}</Badge>
+                      <Badge tone={PRIORITY_TONE[f.priority] ?? 'neutral'}>
+                        {badgeLabel(f.priority)}
+                      </Badge>
                       <span className="min-w-0 flex-1">
                         <span
                           className="block text-[13px] leading-4 truncate"
@@ -797,7 +811,9 @@ export function ProjectOverview({
                       className="px-3 py-2 text-[11px] leading-[13px]"
                       style={{ color: 'var(--label-secondary)' }}
                     >
-                      {(smells.findings.length - FINDING_LIMIT).toLocaleString()} more not shown
+                      {t('moreNotShown', {
+                        n: formatNumber(smells.findings.length - FINDING_LIMIT),
+                      })}
                     </div>
                   )}
                 </>
@@ -807,11 +823,11 @@ export function ProjectOverview({
 
           {/* ── Services ───────────────────────────────────────────── */}
           <Section
-            title="Services"
+            title={t('sectionServices')}
             count={svcList.length}
             trailing={
               <Button size="small" icon="add" disabled={addingService} onClick={handleAddService}>
-                Add
+                {t('servicesAdd')}
               </Button>
             }
           >
@@ -821,18 +837,18 @@ export function ProjectOverview({
               </Card>
             ) : servicesLoad === 'failed' && svcList.length === 0 ? (
               <Card>
-                <SectionError what="the service list" onRetry={fetchServices} />
+                <SectionError what={t('errorServices')} onRetry={fetchServices} />
               </Card>
             ) : svcList.length === 0 ? (
               <Card>
                 <EmptyState
                   compact
                   icon="db_server"
-                  title="No services detected"
-                  subtitle="Services are found when the project is indexed, or you can point at a repository yourself."
+                  title={t('emptyServicesTitle')}
+                  subtitle={t('emptyServicesBody')}
                   action={
                     <Button icon="add" disabled={addingService} onClick={handleAddService}>
-                      Add service…
+                      {t('menuAddService')}
                     </Button>
                   }
                 />
@@ -848,7 +864,7 @@ export function ProjectOverview({
                           className="text-[11px] leading-[13px] font-medium px-1"
                           style={{ color: 'var(--label-secondary)' }}
                         >
-                          {groupKey || 'No group'}
+                          {groupKey || t('noGroup')}
                         </div>
                       )}
                       <Card>
@@ -897,8 +913,8 @@ export function ProjectOverview({
                                         setEditingGroup(null);
                                       }
                                     }}
-                                    placeholder="Group name"
-                                    aria-label={`Group for ${svc.name}`}
+                                    placeholder={t('groupPlaceholder')}
+                                    aria-label={t('groupFor', { name: svc.name })}
                                     list={`group-options-${svc.id}`}
                                     className="w-full text-[13px] outline-none"
                                     style={{
@@ -933,7 +949,10 @@ export function ProjectOverview({
                                       {shortPath(svc.repoRoot)}
                                     </span>
                                     {svc.endpointCount > 0 &&
-                                      ` · ${svc.endpointCount.toLocaleString()} endpoint${svc.endpointCount === 1 ? '' : 's'}`}
+                                      ` · ${t('endpoints', {
+                                        count: svc.endpointCount,
+                                        n: formatNumber(svc.endpointCount),
+                                      })}`}
                                   </span>
                                 </>
                               )}
@@ -944,8 +963,8 @@ export function ProjectOverview({
                             <Button
                               variant="icon"
                               icon="more_horiz"
-                              aria-label={`Actions for ${svc.name}`}
-                              title={`Actions for ${svc.name}`}
+                              aria-label={t('actionsFor', { name: svc.name })}
+                              title={t('actionsFor', { name: svc.name })}
                               aria-haspopup="menu"
                               ref={rowMenuFor?.id === svc.id ? rowMenu.ref : undefined}
                               onClick={(e) => {
@@ -984,7 +1003,7 @@ export function ProjectOverview({
                 rowMenu.close();
               }}
             >
-              Open in graph
+              {t('menuOpenInGraph')}
             </MenuItem>
           )}
           <MenuItem
@@ -995,7 +1014,7 @@ export function ProjectOverview({
               rowMenu.close();
             }}
           >
-            Set group…
+            {t('menuSetGroup')}
           </MenuItem>
           <MenuSeparator />
           <MenuItem
@@ -1006,7 +1025,7 @@ export function ProjectOverview({
               rowMenu.close();
             }}
           >
-            Remove service…
+            {t('menuRemoveService')}
           </MenuItem>
         </Menu>
       )}
@@ -1017,9 +1036,9 @@ export function ProjectOverview({
           y={confirmRemove.y}
           align="end"
           danger
-          title={`Remove ${confirmRemove.service.name}?`}
-          body="The service stops being tracked here. Nothing on disk changes."
-          confirmLabel="Remove service"
+          title={t('removeTitle', { name: confirmRemove.service.name })}
+          body={t('removeBody')}
+          confirmLabel={t('removeConfirm')}
           onConfirm={() => {
             handleRemoveService(confirmRemove.service.name);
             setConfirmRemove(null);
@@ -1054,6 +1073,7 @@ function CoverageRow({
   last: boolean;
   onRequest: () => void;
 }) {
+  const { t } = useTranslation('overview');
   return (
     <div
       className="flex items-center justify-between gap-2 px-3"
@@ -1073,8 +1093,8 @@ function CoverageRow({
           </span>
         )}
       </span>
-      <Button size="small" onClick={onRequest} title={`Open a plugin request for ${name}`}>
-        Request
+      <Button size="small" onClick={onRequest} title={t('coverageRequestTitle', { name })}>
+        {t('coverageRequest')}
       </Button>
     </div>
   );
