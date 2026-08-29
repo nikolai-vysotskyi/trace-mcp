@@ -107,6 +107,29 @@ export function isPlausibleInstallPath(appPath) {
 }
 
 /**
+ * The version the bundle itself claims, read from `Contents/Info.plist`.
+ *
+ * This is the only honest answer to "what is installed". The sibling
+ * `.trace-mcp-version` file records what the last swap *intended*, and the two
+ * part company whenever a bundle is replaced out-of-band — a hand-dragged
+ * older `.app`, a restore from a backup. Callers that gate on the marker alone
+ * then see "already up to date" forever (TRA-443).
+ *
+ * @param {string} appPath
+ * @returns {string | undefined} Version without a leading `v`, or undefined
+ *   when the plist cannot be read.
+ */
+export function readBundleVersion(appPath) {
+  try {
+    const raw = fs.readFileSync(path.join(appPath, 'Contents', 'Info.plist'), 'utf-8');
+    const m = raw.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/);
+    return m?.[1]?.trim().replace(/^v/, '') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * @typedef {Object} LocateResult
  * @property {string} appPath - Absolute path to the validated `.app` bundle.
  * @property {'marker'|'mdfind'|'fallback'} source - Which step of the chain resolved it.
