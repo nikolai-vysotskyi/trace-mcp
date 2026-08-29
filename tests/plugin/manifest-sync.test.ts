@@ -116,6 +116,13 @@ describe('install-surface token claims stay honest', () => {
     '.claude-plugin/marketplace.json',
     '.codex-plugin/plugin.json',
     '.codex-plugin/marketplace.json',
+    // TRA-393 follow-up: the same defect class was live on two docs surfaces —
+    // tools-reference sold benchmark_project's synthetic ceiling as "92%+ on
+    // typical projects", and skills/README claimed "up to 99% on exploration
+    // tasks". README.md and docs/index.html are deliberately NOT here: they
+    // carry the full framing that makes the peak number honest.
+    'docs/tools-reference.md',
+    'skills/README.md',
   ];
 
   for (const path of surfaces) {
