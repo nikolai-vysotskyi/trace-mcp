@@ -91,12 +91,12 @@ Pick codegraph if the job is *orient an agent in a repository it has never seen*
 
 | Capability | trace-mcp | codegraph |
 |---|:---:|:---:|
-| **GitHub stars** | 100 | ~68.6K |
+| **GitHub stars** | 102 | ~68.6K |
 | License | MIT | MIT |
-| Languages | {{ site.data.counts.languages }} (tree-sitter) | 20 (tree-sitter, Rust kernel + WASM fallback) |
+| Languages | {{ site.data.counts.languages }} (tree-sitter) | 34 (tree-sitter, Rust kernel + WASM fallback) |
 | Framework integrations | ✅ {{ site.data.counts.frameworks }} | ✅ 17 (route → handler) |
-| Framework edges beyond routing | ✅ controller → template, model → table, component → component | ❌ route → handler only |
-| Cross-language edges | ✅ | ❌ |
+| Framework edges beyond routing | ✅ controller → template, model → table, component → component | partial — route → handler, plus React Native `component`/`property` nodes |
+| Cross-language edges | ✅ | ✅ Swift ↔ ObjC, RN bridge / TurboModules / Expo / Fabric |
 | MCP tools defined | {{ site.data.counts.tools }} | 8 |
 | MCP tools advertised by default | 28 (~11.6K tok) | **1** (`codegraph_explore`) |
 | Rest of the surface reachable | ✅ `load_tools`, one call | ✅ `CODEGRAPH_MCP_TOOLS` env allowlist, restart |
@@ -114,7 +114,7 @@ Pick codegraph if the job is *orient an agent in a repository it has never seen*
 | Published A/B token benchmark | ❌ per-repo `get_real_savings` instead | ✅ 7 repos, methodology disclosed |
 | Written in | TypeScript | TypeScript + Rust kernel |
 
-Verified by reading codegraph's source at commit `6a056ec` (v1.6.0) on August 29, 2026, not from its README alone. Where the two disagree, the source won.
+Verified on August 29, 2026 against codegraph's source and README at commit `6a056ec` — the `main` head, shipped after the `v1.6.0` tag. Tool-surface claims come from the source; language, framework and bridging counts come from the README's own tables, which the source directory layout corroborates.
 
 ## When to pick codegraph
 
@@ -122,13 +122,13 @@ Verified by reading codegraph's source at commit `6a056ec` (v1.6.0) on August 29
 - **You want the cheapest possible advertised surface.** One tool. Nothing else is listed to the model at all. Our 28-tool default is real money next to that, paid on every session by every client that does not defer tool loading.
 - **You want a published benchmark you can argue with.** codegraph reports 88% fewer tool calls, 62% fewer tokens, 44% lower cost and 53% faster across seven repositories, and it discloses the model, the queries, four runs per arm, and a correction to an earlier version of its own harness that had let the control arm reach CodeGraph through the shell. It is self-run, not independently reproduced — but it is the most transparent self-benchmark in this field, and it is more than we publish.
 - **Indexing speed on very large trees matters.** A native Rust extraction kernel with per-language tree-sitter grammars, a WASM fallback for unbuilt platforms, and cgroup-aware resource scaling for small VPS boxes is a different engineering investment than a TypeScript-only parser, and their reported numbers on the Swift compiler and the Linux kernel reflect it.
-- **Popularity.** codegraph is roughly 686× larger by stars, with the community answers and integrations that follow from that.
+- **Popularity.** codegraph is roughly 670× larger by stars, with the community answers and integrations that follow from that.
 
 ## When to pick trace-mcp
 
 - **The job goes past navigation.** Rename across a repo, move a symbol with its imports, an AST codemod, a taint scan with type-aware pruning, quality gates, SARIF for CI, dead-code removal. codegraph has none of these, by design and by its own README's scope.
-- **The edges you care about are framework edges beyond routing.** codegraph links URL patterns to their handlers across 17 frameworks, and does it well. It does not model controller → template, model → table, or component → component. trace-mcp's {{ site.data.counts.frameworks }} integrations do, and traverses them.
-- **Your stack is polyglot.** {{ site.data.counts.languages }} grammars against 20.
+- **The edges you care about are framework edges beyond routing.** codegraph links URL patterns to their handlers across 17 frameworks, and does it well; its React Native work also emits `component` and `property` nodes. It does not model controller → template or model → table. trace-mcp's {{ site.data.counts.frameworks }} integrations do, and traverses them.
+- **Your stack is polyglot.** {{ site.data.counts.languages }} grammars against 34.
 - **You want memory that outlives the session and is tied to code.** trace-mcp's decisions link to symbol IDs, are verified as non-stale before recall, and surface inside `get_change_impact`. codegraph has no session memory at all.
 - **You want the other tools without an env var and a restart.** codegraph's seven unlisted tools are fully implemented and re-enablable through `CODEGRAPH_MCP_TOOLS`; that is a config change, not something the agent can decide mid-task. trace-mcp's deferred surface is one `load_tools` call away inside the session.
 
