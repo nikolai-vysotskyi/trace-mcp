@@ -48,12 +48,13 @@ export const GLOBAL_ACTIONS: readonly GlobalAction[] = [
   },
   /* "View changelog", not "What's new": the item opens the releases page, and
      someone checking whether a specific fix shipped searches for the word
-     "changelog". The glyph names the destination — a document, not sparkles. */
+     "changelog". The glyph is the rolled sheet from the reference Nikolai gave
+     — not sparkles, and not the plain page that replaced them (TRA-376). */
   {
     id: 'view-changelog',
     label: 'View changelog',
     url: 'https://github.com/nikolai-vysotskyi/trace-mcp/releases',
-    icon: 'description',
+    icon: 'scroll',
   },
   /* A question mark, not a speech bubble: this opens GitHub issues, and a
      speech bubble would promise a person on the other end. */
