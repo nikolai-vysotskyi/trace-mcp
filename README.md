@@ -522,6 +522,7 @@ Full docs live at **[trace-mcp.com](https://trace-mcp.com/)** (same content as `
 |---|---|
 | [Supported frameworks](https://trace-mcp.com/supported-frameworks.html) | Complete list of languages, frameworks, ORMs, UI libraries, and what each extracts |
 | [Tools reference](https://trace-mcp.com/tools-reference.html) | All 169 MCP tools with descriptions and usage examples |
+| [Migrating from 1.x](https://trace-mcp.com/tools-reference.html) | The seven tools retired in 2.0 (`get_dead_exports`, `get_session_resume`, …) and the call that replaces each |
 | [Configuration](https://trace-mcp.com/configuration.html) | Config options, AI setup, environment variables, security settings |
 | [Architecture](https://trace-mcp.com/architecture.html) | How indexing works, plugin system, project structure, tech stack |
 | [Decision memory](https://trace-mcp.com/decision-memory.html) | Decision knowledge graph, session mining, cross-session search, wake-up context |
