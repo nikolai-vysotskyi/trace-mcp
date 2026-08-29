@@ -267,6 +267,20 @@ jobs:
         working-directory: packages/app
         run: pnpm exec electron-builder --win --x64 --publish never
 
+      # electron-updater is the Windows update mechanism (TRA-360) and it is
+      # driven entirely by latest.yml. A build that ships the installer without
+      # it is silently un-updatable — every existing install would keep polling
+      # a 404 forever — so treat a missing latest.yml as a failed release, not
+      # as a warning.
+      - name: Assert latest.yml was generated
+        shell: bash
+        run: |
+          if [ ! -f packages/app/release/latest.yml ]; then
+            echo "::error::packages/app/release/latest.yml missing — electron-updater metadata was not generated; check the win.publish block in packages/app/electron-builder.yml"
+            exit 1
+          fi
+          cat packages/app/release/latest.yml
+
       - name: Generate SHA-256 checksums
         shell: bash
         run: node scripts/generate-shasums.mjs packages/app/release .exe .zip
@@ -293,4 +307,5 @@ jobs:
           gh release upload "${{ needs.release-please.outputs.tag_name }}" \
             "${FILES[@]}" \
             "${SUMS[@]}" \
+            packages/app/release/latest.yml \
             --clobber

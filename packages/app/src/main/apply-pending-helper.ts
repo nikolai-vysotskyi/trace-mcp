@@ -4,6 +4,7 @@
 
 import { spawn } from 'child_process';
 import fs from 'fs';
+import type { UpdateChannel } from './update-channel';
 
 export interface PendingUpdatePaths {
   pendingZip: string;
@@ -28,8 +29,17 @@ export function hasPendingUpdate(paths: PendingUpdatePaths): boolean {
  * then relaunches the new app. Returns true if the helper was spawned —
  * callers must not fall through to a plain relaunch/quit in that case, since
  * the helper now owns finishing the exit.
+ *
+ * `channel` is the hard interlock against the Windows electron-updater path:
+ * only `zip-staged` may swap a bundle this way, so the two mechanisms can
+ * never both fire on one platform.
  */
-export function trySpawnApplyHelper(paths: ApplyHelperPaths, pid: number): boolean {
+export function trySpawnApplyHelper(
+  paths: ApplyHelperPaths,
+  pid: number,
+  channel: UpdateChannel,
+): boolean {
+  if (channel !== 'zip-staged') return false;
   if (!hasPendingUpdate(paths) || !fs.existsSync(paths.applyHelper)) return false;
   try {
     const child = spawn(process.execPath, [paths.applyHelper, String(pid)], {
