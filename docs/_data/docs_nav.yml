@@ -5,6 +5,14 @@
   url: /tools-reference.html
 - title: Comparisons
   url: /comparisons.html
+- title: vs Repomix
+  url: /vs/repomix.html
+- title: vs Serena
+  url: /vs/serena.html
+- title: vs codebase-memory-mcp
+  url: /vs/codebase-memory-mcp.html
+- title: Cut Claude Code token usage
+  url: /reduce-claude-code-token-usage.html
 - title: Supported frameworks
   url: /supported-frameworks.html
 - title: Architecture
