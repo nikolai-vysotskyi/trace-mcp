@@ -110,6 +110,15 @@ Order: sticky header (brand + theme toggle) → `h1` → prose → `Last updated
   head is a Space Mono 10px caps label, not a bold band. Every table is
   wrapped in a focusable `.table-scroll` region by the layout script, so a
   wide tool table scrolls itself instead of the page.
+- Capability marks in a comparison table are **`✓` and `✗` text, never `✅`
+  and `❌`**. The emoji pair is a filled multi-colour icon and a second and
+  third accent colour — 305 of them on `comparisons.html` alone painted the
+  page green and red, which is the one thing red is reserved for. Yes and no
+  separate on **opacity**: `✓` at `--text-display`, `✗` at `--text-disabled`.
+  The layout script wraps each mark in `.mark-yes` / `.mark-no` with
+  `role="img"` and an `aria-label`, so a screen reader reads "Yes" / "No"
+  rather than "check mark" — the emoji's one advantage, kept. Markdown source
+  stays the bare glyph so the table is still scannable in a diff.
 - Code: `--surface` fill, `--border` outline, 4px radius inline / 8px block.
   Syntax highlighting differentiates by **weight and opacity**, not hue.
 - The `See also` footer is a **grid, one cell per link**
@@ -187,7 +196,8 @@ WebP conversion.
 - Zebra-striped tables.
 - Skeleton loaders — use `[LOADING...]`.
 - Toast popups — use inline `[SAVED]` / `[ERROR: …]`.
-- Filled or multi-colour icons, emoji as UI.
+- Filled or multi-colour icons, emoji as UI — including `✅` / `❌` / `⚠️`
+  as capability marks in a table.
 - A second accent colour. Red is the only one.
 - `border-radius` over 16px on a card.
 - Spring or bounce easing. Only `cubic-bezier(0.25, 0.1, 0.25, 1)`.
@@ -222,6 +232,8 @@ appearance without a screenshot or a measurement is not a finding.
 **Type & spacing**
 - [ ] Within the 2 families / 3 sizes / 2 weights budget.
 - [ ] Service labels are Space Mono caps; nothing else is.
+- [ ] No emoji in any rendered page — `grep -c '✅\|❌\|⚠️' docs/*.md
+      docs/vs/*.md` returns 0 for every file.
 - [ ] Exactly one h1; section breaks are 80px, not ad hoc.
 - [ ] Exactly one deliberate pattern break on the page.
 

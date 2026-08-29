@@ -1,7 +1,7 @@
 ---
 title: "Code Graph MCP Server Comparison: trace-mcp vs Repomix, Serena & 20+ alternatives"
 description: "Compare trace-mcp against Repomix, Serena, Kage, codebase-memory-mcp and 20+ MCP code-graph tools — capabilities, language support, GitHub stars. Last verified August 2026."
-updated: 2026-08-29
+updated: 2026-08-30
 ---
 
 # How trace-mcp compares
@@ -53,17 +53,17 @@ Tools that help AI agents read code with fewer tokens — AST parsing, outlines,
 | Capability | trace-mcp | Repomix | Context Mode | code-review-graph | jCodeMunch | codebase-memory-mcp | cymbal |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **GitHub stars** | 100 | 28.1K | 20.2K | ~19K | 2.6K | 41.1K | 165 |
-| Tree-sitter AST parsing | ✅ {{ site.data.counts.languages }} languages | ✅ compress only (~20) | ❌ no code parsing | ✅ 23 langs + Jupyter | ✅ 70+ languages | ✅ 161 languages | ✅ 22 languages |
-| Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files | ✅ sandboxed output (98% reduction) | ✅ | ✅ core focus (~95% reduction) | ✅ | ✅ outline/show/context |
-| Cross-file dependency graph | ✅ directed edge graph | ❌ | ❌ | ✅ incremental knowledge graph | ✅ import graph | ✅ knowledge graph | ✅ refs/importers |
-| Framework-aware edges | ✅ {{ site.data.counts.frameworks }} integrations | ❌ | ❌ | ❌ | ✅ 21 frameworks (route/middleware) | partial (REST routes) | ❌ |
-| Impact analysis | ✅ reverse dep traversal + decorator filter | ❌ | ❌ | ✅ blast-radius + Leiden communities | ✅ blast radius + decorator filter | ✅ detect_changes | ✅ impact command |
-| Call graph | ✅ bidirectional, graph-based | ❌ | ❌ | ✅ graph-based | ✅ AST-based, bidirectional | ✅ trace_call_path | ✅ refs/importers |
-| Refactoring tools | ✅ rename, extract, dead code, codemod | ❌ | ❌ | ❌ | ❌ (dead code detect only) | ❌ | ❌ |
-| Security scanning | ✅ OWASP Top-10, taint | ✅ Secretlint | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Multi-repo subprojects | ✅ cross-repo API linking | ✅ remote repos | ❌ | ✅ multi-repo daemon | ✅ GitHub repos | ✅ cross-service HTTP linking | ❌ |
-| IaC as graph nodes | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ K8s/Kustomize/HCL/Docker | ❌ |
-| Session memory | ✅ built-in | ❌ | ✅ SQLite FTS5 journal | ❌ | ✅ index persistence | ✅ persistent graph | ❌ |
+| Tree-sitter AST parsing | ✓ {{ site.data.counts.languages }} languages | ✓ compress only (~20) | ✗ no code parsing | ✓ 23 langs + Jupyter | ✓ 70+ languages | ✓ 161 languages | ✓ 22 languages |
+| Token-efficient symbol lookup | ✓ outlines, symbols, bundles | ✗ packs entire files | ✓ sandboxed output (98% reduction) | ✓ | ✓ core focus (~95% reduction) | ✓ | ✓ outline/show/context |
+| Cross-file dependency graph | ✓ directed edge graph | ✗ | ✗ | ✓ incremental knowledge graph | ✓ import graph | ✓ knowledge graph | ✓ refs/importers |
+| Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | ✗ | ✗ | ✗ | ✓ 21 frameworks (route/middleware) | partial (REST routes) | ✗ |
+| Impact analysis | ✓ reverse dep traversal + decorator filter | ✗ | ✗ | ✓ blast-radius + Leiden communities | ✓ blast radius + decorator filter | ✓ detect_changes | ✓ impact command |
+| Call graph | ✓ bidirectional, graph-based | ✗ | ✗ | ✓ graph-based | ✓ AST-based, bidirectional | ✓ trace_call_path | ✓ refs/importers |
+| Refactoring tools | ✓ rename, extract, dead code, codemod | ✗ | ✗ | ✗ | ✗ (dead code detect only) | ✗ | ✗ |
+| Security scanning | ✓ OWASP Top-10, taint | ✓ Secretlint | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Multi-repo subprojects | ✓ cross-repo API linking | ✓ remote repos | ✗ | ✓ multi-repo daemon | ✓ GitHub repos | ✓ cross-service HTTP linking | ✗ |
+| IaC as graph nodes | ✗ | ✗ | ✗ | ✗ | ✗ | ✓ K8s/Kustomize/HCL/Docker | ✗ |
+| Session memory | ✓ built-in | ✗ | ✓ SQLite FTS5 journal | ✗ | ✓ index persistence | ✓ persistent graph | ✗ |
 | Written in | TypeScript | TypeScript | TypeScript | Python | Python | C | Go |
 
 _New entrants since April 2026 (local code-graph / packing lane, worth tracking): **Repomix** ships an official MCP server (`--mcp`) + tree-sitter `--compress` (~70% reduction); **tokensave** (601 stars, 40+ tools, 30+ langs, pre-indexed semantic KG); **codegraph** (colbymchenry — function-level dep graph, tree-sitter→SQLite, auto-sync; went viral this cycle, now 68.6K stars; its August 2026 re-measurement claims 62% fewer tokens / 88% fewer tool calls / 44% lower cost across seven repos, with model, queries, run count and a correction to its own earlier harness disclosed — self-run, not third-party reproduced, and the most transparent self-benchmark in this field; see [vs codegraph](/vs/codegraph.html)); **Headroom** (67.6K stars — not a code-graph tool, a generic reversible compression layer for tool outputs/JSON/logs/RAG chunks, deployable as library/proxy/MCP server; its `CodeCompressor` is AST-aware for 7 languages but purely for shrinking output bytes, with no graph, no symbol index, no cross-file edges — complements rather than competes with token-efficient *symbol* lookup); **repo-context-mcp** (nduc99911, 103 stars, TypeScript — three tools: `repo_map` directory tree + entrypoint detection, `search_code` substring grep, `pack_context` token-budgeted markdown pack; no AST parsing, no symbol index, no dependency graph — a lighter-weight cousin of Repomix, not a code-graph competitor). `cymbal` could not be re-verified in June 2026 — possibly renamed or inactive. `Context Mode` **is** active and was re-verified on August 29, 2026 (20.2K stars, last push August 28) — the June "could not verify" note was wrong and is retracted here._
@@ -77,17 +77,17 @@ Tools that persist context across AI agent sessions — activity logs, knowledge
 | Capability | trace-mcp | Kage | MemPalace | claude-mem | mem0 / OpenMemory | engram | ConPort |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **GitHub stars** | 100 | new (2026) | ~56.7K | 91.8K | ~53K | 2.7K | 761 |
-| Cross-session context carryover | ✅ `get_wake_up { scope: "resume" }` + decisions | ✅ git-committed packets | ✅ wings/rooms | ✅ core focus | ✅ multi-level (User/Session/Agent) | ✅ branch-scoped handoffs | ✅ |
-| Cross-session content search | ✅ `search_sessions` FTS5 | partial (JSON packets) | ✅ vector+keyword+temporal (+optional rerank), 96.6% R@5 LongMemEval | ✅ SQLite + Chroma hybrid | ✅ hierarchical, ≤7K tok/retrieval (94.4 LongMemEval) | ✅ local ONNX embeddings | ✅ vector semantic |
-| Decision knowledge graph | ✅ temporal, code-linked | ✅ temporal, code-linked | ✅ temporal + "Closets" storage | ❌ | ✅ temporal + state-key supersession | ❌ | ✅ project-level |
-| Code-graph-aware memory | ✅ decisions → symbols & files | ✅ **+ citation verification (staleness check)** | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only | ❌ text-only |
-| Auto-extraction from sessions | ✅ pattern-based (0 LLM calls); hybrid LLM opt-in | ❌ agent-written | ❌ verbatim, zero extraction | ✅ AI-compressed + citations | ✅ single-pass hierarchical LLM | ❌ | ❌ |
-| Wake-up context | ✅ ~300 tok (code-linked decisions) | — | ✅ ~170 tok (AAAK) | ✅ progressive disclosure (~10×) + Endless Mode | ❌ | ❌ | ❌ |
-| Decision enrichment in tools | ✅ impact/plan_turn/resume | ❌ | ❌ standalone | ❌ | ❌ | ❌ | ❌ |
-| Service/subproject scoping | ✅ decisions per service | ❌ | ✅ wings per project | ❌ | ❌ | ✅ per branch | ✅ per workspace |
-| Published retrieval benchmark | ❌ | ❌ | ✅ LongMemEval / LoCoMo / MemBench | ❌ | ✅ LoCoMo / LongMemEval / BEAM | ❌ | ❌ |
-| Code intelligence included | ✅ {{ site.data.counts.tools }} tools, 180+ edge types | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Works as standalone memory | ❌ code-focused | ✅ git-native, code-focused | ✅ general-purpose | ❌ Claude-specific | ✅ agent-agnostic | ✅ agent-agnostic | ✅ project-scoped |
+| Cross-session context carryover | ✓ `get_wake_up { scope: "resume" }` + decisions | ✓ git-committed packets | ✓ wings/rooms | ✓ core focus | ✓ multi-level (User/Session/Agent) | ✓ branch-scoped handoffs | ✓ |
+| Cross-session content search | ✓ `search_sessions` FTS5 | partial (JSON packets) | ✓ vector+keyword+temporal (+optional rerank), 96.6% R@5 LongMemEval | ✓ SQLite + Chroma hybrid | ✓ hierarchical, ≤7K tok/retrieval (94.4 LongMemEval) | ✓ local ONNX embeddings | ✓ vector semantic |
+| Decision knowledge graph | ✓ temporal, code-linked | ✓ temporal, code-linked | ✓ temporal + "Closets" storage | ✗ | ✓ temporal + state-key supersession | ✗ | ✓ project-level |
+| Code-graph-aware memory | ✓ decisions → symbols & files | ✓ **+ citation verification (staleness check)** | ✗ text-only | ✗ text-only | ✗ text-only | ✗ text-only | ✗ text-only |
+| Auto-extraction from sessions | ✓ pattern-based (0 LLM calls); hybrid LLM opt-in | ✗ agent-written | ✗ verbatim, zero extraction | ✓ AI-compressed + citations | ✓ single-pass hierarchical LLM | ✗ | ✗ |
+| Wake-up context | ✓ ~300 tok (code-linked decisions) | — | ✓ ~170 tok (AAAK) | ✓ progressive disclosure (~10×) + Endless Mode | ✗ | ✗ | ✗ |
+| Decision enrichment in tools | ✓ impact/plan_turn/resume | ✗ | ✗ standalone | ✗ | ✗ | ✗ | ✗ |
+| Service/subproject scoping | ✓ decisions per service | ✗ | ✓ wings per project | ✗ | ✗ | ✓ per branch | ✓ per workspace |
+| Published retrieval benchmark | ✗ | ✗ | ✓ LongMemEval / LoCoMo / MemBench | ✗ | ✓ LoCoMo / LongMemEval / BEAM | ✗ | ✗ |
+| Code intelligence included | ✓ {{ site.data.counts.tools }} tools, 180+ edge types | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Works as standalone memory | ✗ code-focused | ✓ git-native, code-focused | ✓ general-purpose | ✗ Claude-specific | ✓ agent-agnostic | ✓ agent-agnostic | ✓ project-scoped |
 | Written in | TypeScript | — | Python | TypeScript | TS + Python | Go / Rust | Python |
 
 > **Key difference:** MemPalace stores "decided to use PostgreSQL" as text in ChromaDB. trace-mcp stores the same decision **linked to `src/db/connection.ts::Pool#class`** — and when you run `get_change_impact` on that symbol, the decision shows up in `linked_decisions`. General-purpose memory tools remember *what you said*. trace-mcp remembers *what you said* AND *which code it's about*.
@@ -101,14 +101,14 @@ Tools that generate docs from code or provide embedding-based code search for AI
 | Capability | trace-mcp | Repomix | DeepContext | smart-coding-mcp | mcp-local-rag¹ | knowledge-rag¹ |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | **GitHub stars** | 100 | ~26.7K | ~300 | ~200 | ~200 | ~60 |
-| Real-time code understanding | ✅ live graph, always current | ❌ snapshot at pack time | ❌ manual reindex | partial (opt-in watcher) | ❌ | partial (file watcher) |
-| Auto-generated project docs | ✅ `generate_docs` from graph | ❌ raw file dump | ❌ | ❌ | ❌ | ❌ |
-| Semantic code search | ✅ `search` + `query_by_intent` | ❌ no search | ✅ Jina embeddings | ✅ nomic embeddings | ✅ vector search | ✅ hybrid + reranking |
-| Framework-aware context | ✅ routes, models, components | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Task-focused context | ✅ `get_task_context` — code subgraph | ❌ packs everything | ❌ | ❌ | ❌ | ❌ |
-| No doc maintenance needed | ✅ derived from code | ✅ repacks on demand | ❌ manual reindex | partial (auto on startup) | ❌ manual ingest | partial (auto-reindex) |
-| Works offline, no API keys | ✅ graph + FTS5 + bundled ONNX embeddings | ✅ | ❌ requires cloud API | ❌ requires local embeddings | ❌ requires local embeddings | ❌ requires local embeddings |
-| Incremental updates | ✅ file watcher, content hash | ❌ full repack | ✅ SHA-256 hashing | ✅ file hash + opt-in watcher | ❌ | ✅ mtime + dedup |
+| Real-time code understanding | ✓ live graph, always current | ✗ snapshot at pack time | ✗ manual reindex | partial (opt-in watcher) | ✗ | partial (file watcher) |
+| Auto-generated project docs | ✓ `generate_docs` from graph | ✗ raw file dump | ✗ | ✗ | ✗ | ✗ |
+| Semantic code search | ✓ `search` + `query_by_intent` | ✗ no search | ✓ Jina embeddings | ✓ nomic embeddings | ✓ vector search | ✓ hybrid + reranking |
+| Framework-aware context | ✓ routes, models, components | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Task-focused context | ✓ `get_task_context` — code subgraph | ✗ packs everything | ✗ | ✗ | ✗ | ✗ |
+| No doc maintenance needed | ✓ derived from code | ✓ repacks on demand | ✗ manual reindex | partial (auto on startup) | ✗ manual ingest | partial (auto-reindex) |
+| Works offline, no API keys | ✓ graph + FTS5 + bundled ONNX embeddings | ✓ | ✗ requires cloud API | ✗ requires local embeddings | ✗ requires local embeddings | ✗ requires local embeddings |
+| Incremental updates | ✓ file watcher, content hash | ✗ full repack | ✓ SHA-256 hashing | ✓ file hash + opt-in watcher | ✗ | ✓ mtime + dedup |
 | Written in | TypeScript | TypeScript | TypeScript | JavaScript | TypeScript | Python |
 
 _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown) — not code-specific. Included for comparison as they occupy adjacent mindshare._
@@ -121,23 +121,23 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **GitHub stars** | 100 | ~28.6K | ~19K | 41.1K | ~900 | ~100 | ~500 |
 | Languages | {{ site.data.counts.languages }} | 40+ (via LSP) | 23 + Jupyter | 161 | 19 | 32 | 28 |
-| Framework integrations | {{ site.data.counts.frameworks }} | ❌ | ❌ (Python entry points only) | ❌ | ❌ | ❌ | ~15 (ORM N+1 / API drift only) |
-| Cross-language edges | ✅ | ❌ | ❌ | ✅ cross-service HTTP | ✅ polyglot dep graph | ❌ | ✅ PHP↔TS API drift |
+| Framework integrations | {{ site.data.counts.frameworks }} | ✗ | ✗ (Python entry points only) | ✗ | ✗ | ✗ | ~15 (ORM N+1 / API drift only) |
+| Cross-language edges | ✓ | ✗ | ✗ | ✓ cross-service HTTP | ✓ polyglot dep graph | ✗ | ✓ PHP↔TS API drift |
 | MCP tools advertised (default) | 28 `minimal` (~9.8K tok, default); 54 `standard` (~19K); {{ site.data.counts.tools }} `full` (~50K) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok) | 21 | 90 | 224 |
-| Session memory | ✅ | ✅ (manual notes) | ❌ | ✅ | ❌ | ❌ | ❌ |
-| CI/PR reports | ✅ | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
-| Multi-repo subprojects | ✅ | ❌ | ✅ multi-repo daemon | ✅ cross-service | ✅ cross-project search | ❌ | ❌ |
-| Control-flow / data-flow | ✅ CFG w/ basic blocks + loop back-edges + dataflow | ❌ | ❌ | ❌ | ❌ | ✅ CFG w/ basic blocks + loop edges; type-aware taint | ❌ |
-| Security scanning | ✅ OWASP/taint, type-aware pruning | ❌ | ❌ | ❌ | ❌ | ✅ 147 rules (taint/OWASP/CWE) + SBOM + OSV/supply-chain | ❌ |
-| IaC as graph nodes | ✅ K8s/Kustomize/HCL/Docker, cross-file resolved to real nodes | ❌ | ❌ | ✅ K8s/Kustomize/HCL/Docker | ❌ | ❌ | ❌ |
-| Compiler-grade precision | ✅ opt-in LSP + offline SCIP ingestion (`scip_resolved` tier) | ✅ live LSP (rename/refs/diagnostics) | ❌ | ❌ | ❌ | ❌ | ❌ |
-| SARIF / CI-scanning output | ✅ 2.1.0, OASIS-schema-validated | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
-| Graph visualization | ✅ desktop app (cosmos.gl) | ❌ | ❌ | ✅ 3D web UI | ✅ interactive HTML | ✅ SPA frontend | ❌ |
-| Knowledge graph queries | ✅ `graph_query` | ❌ | ❌ | ✅ Cypher-like | ❌ | ✅ SPARQL / RDF | ❌ |
-| Refactoring tools | ✅ rename/move/signature/codemod/extract¹ | ✅ rename/move/inline/safe-delete | ❌ | ❌ | ❌ | ❌ | ❌ |
-| Antipatterns / clone detection | ✅ 11 antipatterns + 4 code smells (debug artifacts across 10 langs) + AST Type-2 subtree hashing + name/signature duplication | ❌ | ❌ | ✅ MinHash near-clone + Louvain communities | ❌ | ❌ | ✅ 23 patterns + AST Type-2 subtree hashing |
-| Architecture governance | ✅ | ❌ | ✅ Leiden communities | ✅ Louvain communities | ❌ | ❌ | ✅ change-safety gates |
-| Token savings tracking | ✅ | ❌ | ✅ (6.8×–49×) | ✅ | ✅ (~61% claimed) | ❌ | ✅ (~92% claimed) |
+| Session memory | ✓ | ✓ (manual notes) | ✗ | ✓ | ✗ | ✗ | ✗ |
+| CI/PR reports | ✓ | ✗ | ✓ blast-radius GitHub Action | ✗ | ✗ | ✗ | ✓ SARIF 2.1.0 + GH/GL/Azure |
+| Multi-repo subprojects | ✓ | ✗ | ✓ multi-repo daemon | ✓ cross-service | ✓ cross-project search | ✗ | ✗ |
+| Control-flow / data-flow | ✓ CFG w/ basic blocks + loop back-edges + dataflow | ✗ | ✗ | ✗ | ✗ | ✓ CFG w/ basic blocks + loop edges; type-aware taint | ✗ |
+| Security scanning | ✓ OWASP/taint, type-aware pruning | ✗ | ✗ | ✗ | ✗ | ✓ 147 rules (taint/OWASP/CWE) + SBOM + OSV/supply-chain | ✗ |
+| IaC as graph nodes | ✓ K8s/Kustomize/HCL/Docker, cross-file resolved to real nodes | ✗ | ✗ | ✓ K8s/Kustomize/HCL/Docker | ✗ | ✗ | ✗ |
+| Compiler-grade precision | ✓ opt-in LSP + offline SCIP ingestion (`scip_resolved` tier) | ✓ live LSP (rename/refs/diagnostics) | ✗ | ✗ | ✗ | ✗ | ✗ |
+| SARIF / CI-scanning output | ✓ 2.1.0, OASIS-schema-validated | ✗ | ✓ blast-radius GitHub Action | ✗ | ✗ | ✗ | ✓ SARIF 2.1.0 + GH/GL/Azure |
+| Graph visualization | ✓ desktop app (cosmos.gl) | ✗ | ✗ | ✓ 3D web UI | ✓ interactive HTML | ✓ SPA frontend | ✗ |
+| Knowledge graph queries | ✓ `graph_query` | ✗ | ✗ | ✓ Cypher-like | ✗ | ✓ SPARQL / RDF | ✗ |
+| Refactoring tools | ✓ rename/move/signature/codemod/extract¹ | ✓ rename/move/inline/safe-delete | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Antipatterns / clone detection | ✓ 11 antipatterns + 4 code smells (debug artifacts across 10 langs) + AST Type-2 subtree hashing + name/signature duplication | ✗ | ✗ | ✓ MinHash near-clone + Louvain communities | ✗ | ✗ | ✓ 23 patterns + AST Type-2 subtree hashing |
+| Architecture governance | ✓ | ✗ | ✓ Leiden communities | ✓ Louvain communities | ✗ | ✗ | ✓ change-safety gates |
+| Token savings tracking | ✓ | ✗ | ✓ (6.8×–49×) | ✓ | ✓ (~61% claimed) | ✗ | ✓ (~92% claimed) |
 | Written in | TypeScript | Python | Python | C | TypeScript | Rust | Python |
 
 _¹ `apply_codemod` now rewrites on `@ast-grep/napi` (true AST pattern matching, metavariable substitution, no false matches in strings/comments) with automatic regex fallback for non-AST languages; the native binding loads lazily and degrades to regex instead of crashing if missing. `extract_function` is re-enabled with AST free-variable analysis — it detects genuine multi-return-value slices and rejects them with a structured error rather than silently dropping a binding, and lowers `confidence` on shadowed-variable cases instead of misreporting them as clean (see "where competitors lead" below for what deep validation found)._

@@ -32,7 +32,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { getAppDistRepo } from './app-dist-repo.mjs';
-import { APP_NAME, locateInstalledApp, recoverInterruptedSwap } from './locate-app.mjs';
+import {
+  APP_NAME,
+  locateInstalledApp,
+  readBundleVersion,
+  recoverInterruptedSwap,
+} from './locate-app.mjs';
 
 // Resolved at top-level after the platform/no-update gates run. `null` means
 // no install was found — the script then exits 0 like the old hardcoded
@@ -233,6 +238,17 @@ function parseSha256Manifest(text, assetName) {
   return null;
 }
 
+// Fallback for a bundle whose Info.plist we cannot read (binary plist, damaged
+// bundle). Both swap sites write this file, in disagreeing formats — the
+// caller strips the leading `v`.
+function readMarkerVersion(markerPath) {
+  try {
+    return fs.readFileSync(markerPath, 'utf-8').trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function gatekeeperOk(appPath) {
   try {
     execFileSync('/usr/sbin/spctl', ['-a', '-t', 'exec', appPath], { stdio: 'pipe' });
@@ -283,12 +299,19 @@ async function main() {
   // because the apply path rewrites the marker in the same stripped form, the
   // loop never settles: the app shows a permanent "restart to install" banner
   // for the build it is already running.
+  //
+  // The bundle's own Info.plist wins over the marker file whenever it can be
+  // read: the marker says what the last swap intended, the plist says what is
+  // actually installed. They diverge whenever a bundle is replaced
+  // out-of-band — a hand-dragged older `.app`, a restore from backup — and a
+  // marker running ahead of the bundle made this script return 0 silently on
+  // every later install, forever. The app meanwhile reads the plist, keeps
+  // offering the update, and every attempt lands `npm-only`: the exact
+  // TRA-357 shape, with no way out but a manual reinstall (TRA-443).
   const stripV = (v) => v.replace(/^v/, '');
   const markerPath = path.join(INSTALL_DIR, '.trace-mcp-version');
-  if (fs.existsSync(markerPath)) {
-    const installed = fs.readFileSync(markerPath, 'utf-8').trim();
-    if (stripV(installed) === stripV(release.tag_name)) return;
-  }
+  const installed = readBundleVersion(APP_PATH) ?? readMarkerVersion(markerPath);
+  if (installed && stripV(installed) === stripV(release.tag_name)) return;
 
   // Require a sibling checksum asset — no checksum, no update.
   const checksumAsset =
