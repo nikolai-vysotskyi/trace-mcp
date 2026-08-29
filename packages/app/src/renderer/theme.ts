@@ -55,10 +55,10 @@ export function useTheme(): {
   const [appearance, setStored] = useState<Appearance>(() => readStoredAppearance());
   const [system, setSystem] = useState<Theme>(() => systemTheme());
 
-  // Apply / remove the data-theme attribute on every change, and tell the main
-  // process — the sidebar's vibrancy is a native view that follows nativeTheme,
-  // not [data-theme], so a choice that stops at the DOM leaves light-mode
-  // material behind dark-mode text.
+  // Apply / remove the data-theme attribute on every change, and mirror the
+  // choice to the main process: the sidebar's material is an NSVisualEffectView
+  // and reads `nativeTheme`, which no CSS attribute can reach — a choice that
+  // stops at the DOM leaves light-mode material behind dark-mode text (TRA-369).
   useEffect(() => {
     const html = document.documentElement;
     if (appearance === 'auto') html.removeAttribute('data-theme');

@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import { registerAppMenu } from './menu';
-import { createTray, showMenuWindow } from './tray';
+import { createTray, restoreAppearance, showMenuWindow } from './tray';
 import {
   hasPendingUpdate as hasPendingUpdateImpl,
   trySpawnApplyHelper as trySpawnApplyHelperImpl,
@@ -1509,6 +1509,10 @@ app.whenReady().then(() => {
   // The application menu carries every accelerator the app answers to —
   // install it before the first window so ⌘, / ⌘R / ⌘1 work on first paint.
   registerAppMenu();
+  // Before the first window: its NSVisualEffectView and its backgroundColor are
+  // both read from nativeTheme at construction, so the app's Appearance choice
+  // has to reach the native layer first or the window opens in the wrong one.
+  restoreAppearance();
   createTray();
   // Open the main window straight away — the tray remains for background control.
   // Users who close the window still have the tray; users who quit via ⌘Q shut down.
