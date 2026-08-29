@@ -385,6 +385,52 @@ Priority for next deep-dive: **codebase-memory-mcp** (largest peer by stars — 
 
 ---
 
+# trace-mcp vs Repomix
+
+Repomix answers "put my repository into a prompt"; trace-mcp answers "let the agent look things up in my repository". Repomix is a packer — it concatenates files into one artifact, optionally stripping function bodies with tree-sitter (`--compress`, ~70% fewer bytes across ~20 languages), and ships an official MCP server via `--mcp`, including packing remote repos. trace-mcp is an index: tree-sitter parsing across {{ site.data.counts.languages }} languages into SQLite + FTS5, a cross-file dependency graph, {{ site.data.counts.frameworks }} framework integrations, refactoring tools, and incremental updates on file change.
+
+Pick Repomix for one-shot questions, repositories you do not own, small repos that fit in context, and workflows with no MCP client. Pick trace-mcp when the repo does not fit in context, the session runs many turns, the question is structural ("what breaks if I change this"), framework edges matter, or the agent needs to change code and not only read it.
+
+Honest caveat: a Repomix pack is a fixed cost re-paid on every refresh, while trace-mcp pays an up-front schema cost (~50K tokens on the shipped default surface, a tracked bug) and then small scoped per-query costs. On a short session against a small repo, Repomix can genuinely cost less.
+
+Full page: https://trace-mcp.com/vs/repomix.html
+
+---
+
+# trace-mcp vs Serena
+
+Serena is a live LSP proxy: it forwards questions to a real language server, so references and renames are compiler-grade across 40+ languages, and it ships ~55 MCP tools plus a live debugger. trace-mcp is a precomputed graph with LSP and offline SCIP ingestion as an *optional* precision upgrade rather than a hard dependency.
+
+Pick Serena when you work in one language with a first-class language server, want zero index state, or need runtime inspection. Pick trace-mcp for polyglot or unusual stacks, framework edges no language server models (route → handler, controller → template, model → table), graph impact analysis rather than plain references, and everything past navigation — security scanning with type-aware taint pruning, SARIF 2.1.0, quality gates, AST codemods, and code-linked decision memory that is verified non-stale at recall time.
+
+Honest caveats: trace-mcp's AST resolution is less precise than live LSP by default, we have not yet read Serena's source (it is the priority for our next competitor deep-dive), and Serena's ~55-tool surface is materially cheaper than our {{ site.data.counts.tools }}.
+
+Full page: https://trace-mcp.com/vs/serena.html
+
+---
+
+# trace-mcp vs codebase-memory-mcp
+
+DeusData's codebase-memory-mcp is the closest peer: same premise of a persistent tree-sitter knowledge graph served over MCP, with impact analysis (`detect_changes`), call-path tracing (`trace_call_path`), cross-service HTTP linking, IaC as graph nodes, MinHash near-clone and Louvain community detection, and a 3D web UI. It is written in C, covers 161 languages, and advertises 15 tools (~7K tokens) with `scout` (7) and `analysis` (11) profiles.
+
+Where it leads: advertised tool cost (~7K vs trace-mcp's ~50K on the shipped default path — the clearest place any competitor beats us), raw language count, a published benchmark preprint (arXiv 2603.27277: 83% answer quality, ~10× fewer tokens, 2.1× fewer tool calls across 31 repos, not independently reproduced by us), SLSA Level 3 supply-chain provenance, and `ingest_traces` for runtime-observed call edges.
+
+Where trace-mcp leads: {{ site.data.counts.frameworks }} framework integrations producing edges a language-agnostic parser cannot; a refactoring engine (rename, move, signature change, AST codemod, verified dead-code removal) against a read-only analyser; OWASP Top-10 and taint scanning with SARIF 2.1.0 output; configurable quality gates in CI; and decision memory bound to symbol IDs and staleness-verified rather than flat ADR markdown.
+
+Full page: https://trace-mcp.com/vs/codebase-memory-mcp.html
+
+---
+
+# How to reduce Claude Code token usage
+
+Seven tactics, ordered by measured impact. (1) Stop paying for exploration twice — name the file when you know it, ask for structure before content. (2) Read symbols, not files: outline → one symbol → edit, instead of 500 lines to change five. (3) Audit your MCP tool surface, including ours: every connected server injects its schemas at session start whether or not you call it — trace-mcp's default `tools/list` is {{ site.data.counts.tools }} tools and roughly 50K tokens, and its `minimal` (24 tools) / `standard` (59 tools) / `full` ({{ site.data.counts.tools }} tools) presets currently apply only with `TRACE_MCP_NO_DAEMON=1`. (4) Pick the output format per tool: measured with cl100k_base, TOON beat JSON by +31.4% on `query_decisions` and +28.8% on `get_outline`, and lost by −17.5% on `find_usages` and −25.5% on `search_text`. (5) Prefer one structural query over many reads. (6) Compact, don't clear — clearing forces re-derivation that costs more than the transcript. (7) Index once, query many times; packing pays its full cost on every refresh.
+
+The homepage's "~40–50% fewer tokens" is our own aggregate figure from our own usage, not a third-party benchmark, and it varies with repository size and session shape. The per-tool format numbers above are reproducible from `scripts/bench-toon.ts`.
+
+Full page: https://trace-mcp.com/reduce-claude-code-token-usage.html
+
+---
+
 # Configuration
 
 Configuration is optional — trace-mcp works out of the box for standard projects.
