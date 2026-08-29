@@ -69,18 +69,27 @@ below macOS 26.
 
 This is the thing to internalise before touching the sidebar's material (TRA-369).
 
-`NSVisualEffectView` blends **whatever is composited behind the window** — the
-wallpaper, or another app's window. So the sidebar's tone is not a property of our CSS;
-it is a function of our CSS *and the user's desktop*. Two screenshots of the same build
-in the same appearance can look completely different, and both are real.
+`NSVisualEffectView` blends **the desktop picture** behind the window. So the sidebar's
+tone is not a property of our CSS; it is a function of our CSS *and the user's
+wallpaper*. Two screenshots of the same build in the same appearance can look completely
+different, and both are real.
+
+It is specifically the *wallpaper*, not "whatever is behind the window" (TRA-404). With
+an opaque white window filling the area directly behind it — verified in the same
+capture, the margin around the material window reads `#ffffff` — the sidebar does not
+move by a single level from its black-desktop value. Backing the window with another
+window is therefore not a way to test this without touching someone's desktop, and it is
+not a cell of the matrix either.
 
 Two rules follow, and neither is optional:
 
 1. **Never validate the material against a single background.** The matrix is: light
-   appearance × {dark wallpaper, light wallpaper, a dark window behind, a light window
-   behind} × {window active, window inactive}, then the same set in dark. And it has to
-   be shot in the **Electron window** — there is no `NSVisualEffectView` on the Vite dev
-   server, so none of this is visible in a browser.
+   appearance × {black, deep blue, mid-grey, white wallpaper} × {window active, window
+   inactive}, then the same set in dark. And it has to be shot in the **Electron
+   window** — there is no `NSVisualEffectView` on the Vite dev server, so none of this is
+   visible in a browser. `screencapture -R <window rect>` is the capture: a CDP
+   screenshot only has the web contents and never the material, and `screencapture
+   -l<windowid>` hangs on this window.
 2. **The drift is bounded in BOTH appearances, and the bound is a relationship to the
    content pane — not an absolute colour.** The pull goes light over a light desktop and
    dark over a dark one, and either direction ends at mid-grey. Measured on the shipped
@@ -105,7 +114,10 @@ Two rules follow, and neither is optional:
      dark one it is the defect.
    - **Dark: `--surface` at `.78`.** The glass survives where it has somewhere to go —
      `.22` of the material still comes through, enough to see the desktop in the sidebar
-     and not enough to drag it to mid-grey.
+     and not enough to drag it to mid-grey. Shot across the full matrix (TRA-404):
+     `#1e1e1e` over black to `#2b2b2b` over white, `+10` to `+23` above the `#141414`
+     well — 45 levels of swing compressed to 13, and light held `#ffffff` in all eight
+     cells.
 
    The number to report for any change here is the **delta between the sidebar's rendered
    pixels and the well's**, per cell of the matrix above, plus the spread across cells.
@@ -900,11 +912,18 @@ node packages/app/scripts/electron-cdp.mjs shot before/graph-light.png \
 
 `launch` runs the app with `--remote-debugging-port=9222` under its own `--user-data-dir`
 (so it does not lose Electron's single-instance lock to an installed trace-mcp.app) and
-sets `TRACE_MCP_DEV_ALWAYS_ON_TOP=1`. That last part is not cosmetic: Chromium stops
-compositing a fully occluded window, and a CDP screenshot of one hangs or hands back the
-frame it painted minutes ago — a stale-pixel "after" shot that looks like a fix. Any CDP
-client can attach to `http://127.0.0.1:9222` once it is up, including `chrome-devtools`
+**never puts a window on screen**. The window is created, loads and paints; it is simply
+never mapped, and the process runs as a macOS accessory app, so it takes no Dock tile, no
+⌘-Tab entry and no activation. Everything here drives the app over CDP, which does not
+care whether the window is visible — and the person at the keyboard does (TRA-403). Any
+CDP client can attach to `http://127.0.0.1:9222` once it is up, including `chrome-devtools`
 MCP via `--browser-url`.
+
+`launch --visible` puts it on screen for the one case that needs eyes on the running app,
+and then also sets `TRACE_MCP_DEV_ALWAYS_ON_TOP=1`: Chromium stops compositing a fully
+*occluded* window, and a CDP screenshot of one hands back the frame it painted minutes ago
+— a stale-pixel "after" shot that looks like a fix. An unmapped window is not an occluded
+one; it keeps painting, and its screenshots are current (measured, not assumed).
 
 The one thing a CDP capture cannot show is the native frame: the traffic lights are drawn
 by macOS outside the web contents, so they are absent from the PNG even though the strip
@@ -918,6 +937,28 @@ fixed set of images `docs/` and trace-mcp.com ship, from a seeded sandbox, and c
 whether the committed ones are stale. Use that one for anything committed to the repo; use
 `electron-cdp.mjs` when you need to point a debugger at the app you are running right now
 and shoot a surface it has no manifest entry for.
+
+### A review run never takes the screen from the person using the machine
+
+Design work here runs on a Mac somebody is working on, and macOS follows an app activation
+to the Space that app's window is on — so a harness that shows a window yanks them out of
+their full-screen app, and hourly runs do it hourly (TRA-403). The rule for anything an
+agent launches:
+
+- **The app: never shown.** `electron-cdp.mjs launch` is hidden and accessory by default.
+  A visible window needs `--visible` and a reason stated where you use it.
+- **The browser: `--headless --isolated`.** Headless removes the window entirely and
+  screenshots still come out; `--isolated` gives Chrome a throwaway profile so it can
+  never adopt or disturb the one the user has open. Both belong in the MCP server's own
+  arguments, not in a per-call flag somebody will forget.
+- **Never call `app.focus()`, `win.focus()`, `win.show()`, `showInactive()` or
+  `shell.openExternal` from a harness path.** `tests/scripts/capture-screenshots.test.ts`
+  reads these files and fails when one appears: in `tray.ts` every show goes through
+  `presentWindow`, which returns early under `TRACE_MCP_WINDOW_MODE=hidden`; in
+  `electron-cdp.mjs` there are none at all.
+- **The one exception is the publication capture**, which cannot avoid activating the app
+  (a window whose app is not active draws grey traffic lights, and those are refused). It
+  pays for the exception by waiting for an idle machine — see docs/development.md.
 
 ### A published screenshot shows the window, or it is not a screenshot of the app
 
