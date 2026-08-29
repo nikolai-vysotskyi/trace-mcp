@@ -14,7 +14,7 @@
 /* island.css leaves `.ws-stage` transparent for the macOS vibrancy view;
    everywhere else the stage must paint itself. */
 .ws-stage:not([data-platform="mac"]) {
-  background: var(--surface-sunken, var(--island));
+  background: var(--surface-sunken, var(--surface));
 }
 
 .ws-shell {
@@ -35,8 +35,8 @@
   min-height: 0;
   /* Opaque by default — only macOS has an NSVisualEffectView behind the
      window to show through. */
-  background: var(--surface, var(--island));
-  border-right: 0.5px solid var(--separator, var(--sep));
+  background: var(--surface, var(--surface));
+  border-right: 0.5px solid var(--separator, var(--separator));
   -webkit-app-region: no-drag;
 }
 .ws-stage[data-platform="mac"] .ws-sidebar {
@@ -70,7 +70,7 @@
   letter-spacing: 0.01em;
   /* --label-secondary, not --label-tertiary: a group header is text a user
      reads, and tertiary is decoration-only (2.21:1 today). */
-  color: var(--label-secondary, var(--text-2));
+  color: var(--label-secondary, var(--label-secondary));
 }
 .ws-sb-group:first-child {
   padding-top: 4px;
@@ -88,7 +88,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--label, var(--text-1));
+  color: var(--label, var(--label));
   font-family: inherit;
   font-size: 13px;
   font-weight: 400;
@@ -99,7 +99,7 @@
   -webkit-app-region: no-drag;
 }
 .ws-sb-row:hover {
-  background: var(--fill-quaternary, var(--row-hover));
+  background: var(--fill-quaternary, var(--fill-quaternary));
 }
 .ws-sb-row .ws-sb-ico {
   flex: none;
@@ -108,7 +108,7 @@
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: var(--label-secondary, var(--text-2));
+  color: var(--label-secondary, var(--label-secondary));
 }
 .ws-sb-row .ws-sb-ico svg {
   width: 16px;
@@ -126,7 +126,7 @@
   flex: none;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: var(--label-secondary, var(--text-2));
+  color: var(--label-secondary, var(--label-secondary));
 }
 
 /* Selected: accent fill when the sidebar owns focus, neutral fill when not —
@@ -155,7 +155,7 @@
   border: 0;
   border-radius: var(--radius-row);
   background: transparent;
-  color: var(--label-secondary, var(--text-2));
+  color: var(--label-secondary, var(--label-secondary));
   opacity: 0;
   transition: opacity 120ms ease, background 120ms ease;
 }
@@ -176,7 +176,7 @@
 .ws-sb-footer {
   flex: none;
   padding: 6px 6px 8px;
-  border-top: 0.5px solid var(--separator, var(--sep));
+  border-top: 0.5px solid var(--separator, var(--separator));
   -webkit-app-region: no-drag;
 }
 
@@ -197,7 +197,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--label-secondary, var(--text-2));
+  color: var(--label-secondary, var(--label-secondary));
 }
 .ws-sb-path .name {
   flex: 0 1 auto;
@@ -216,12 +216,12 @@
   padding: 12px 8px;
   font-size: 13px;
   line-height: 17px;
-  color: var(--label-secondary, var(--text-2));
+  color: var(--label-secondary, var(--label-secondary));
 }
 .ws-sb-empty .gi {
   width: 20px;
   height: 20px;
-  color: var(--label-secondary, var(--text-2));
+  color: var(--label-secondary, var(--label-secondary));
 }
 .ws-sb-empty .act {
   border: 0;
@@ -241,7 +241,7 @@
   height: 28px;
   margin: 0 0 2px;
   border-radius: 6px;
-  background: var(--fill-quaternary, var(--row-hover));
+  background: var(--fill-quaternary, var(--fill-quaternary));
   animation: ws-sb-shimmer 1.4s ease-in-out infinite;
 }
 .ws-sb-skeleton:nth-child(2n) {
@@ -292,7 +292,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--surface-sunken, var(--island));
+  background: var(--surface-sunken, var(--surface));
 }
 
 /* Minimal 44px header: balances the sidebar title strip, carries the sidebar
@@ -331,13 +331,13 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--label-secondary, var(--text-2));
+  color: var(--label-secondary, var(--label-secondary));
   cursor: default;
   transition: background 120ms ease, color 120ms ease;
 }
 .ws-chrome-toggle:hover {
-  background: var(--fill-quaternary, var(--row-hover));
-  color: var(--label, var(--text-1));
+  background: var(--fill-quaternary, var(--fill-quaternary));
+  color: var(--label, var(--label));
 }
 
 /* ---- Accessibility ------------------------------------------------------ */
@@ -346,12 +346,12 @@
 @media (prefers-reduced-transparency: reduce) {
   /* Must out-specify `.ws-stage[data-platform="mac"] .ws-sidebar` above. */
   .ws-stage[data-platform="mac"] .ws-sidebar {
-    background: var(--surface, var(--island));
+    background: var(--surface, var(--surface));
   }
 }
 @media (prefers-contrast: more) {
   .ws-stage .ws-sidebar {
-    border-right-color: var(--label-secondary, var(--text-2));
+    border-right-color: var(--label-secondary, var(--label-secondary));
   }
   .ws-sb-row.is-selected {
     outline: 1px solid var(--accent);

@@ -535,8 +535,8 @@ new evidence.
 | Accent `#0069d9`, not Apple's `#007aff` (light) | System blue measures 4.02:1 on `--surface` and fails AA both as text and under a white label. |
 | `--label-secondary` at `.55`, not Apple's `.50` | At `.50` it measures 3.98:1 and fails AA for the body text it carries. |
 | `--accent` and `--accent-fill` split (same for `--status-red`/`--danger-fill`) | A hue readable *as text* on `--surface` and a hue readable *under a white label* are different colours in dark. |
-| `--label-tertiary` declared decoration-only, and `--text-tertiary` aliased to `--label-secondary` | The legacy alias carried real reading text at 2.21:1. Decoration-only callers ask for the token by name. |
-| One token layer; legacy names kept as aliases for one migration step | Lets surfaces migrate one at a time instead of a big-bang rename; each surface deletes the aliases it stops using. |
+| `--label-tertiary` is decoration-only | It measures 1.88:1 light / 2.53:1 dark. The sites that read as "quietest text" carry real reading text and use `--label-secondary`; only genuine decoration asks for `--label-tertiary` by name. |
+| One token layer; the legacy aliases are **gone** (TRA-315) | Aliases let surfaces migrate one at a time; once every surface had landed they were inlined to the token they resolved to and deleted. `var(--text-secondary)` and friends no longer exist — there is exactly one name per colour. |
 | Baselined token guard (counts, not per-line suppressions) | Counts only ever move down; a line-level baseline churns on every reflow. |
 | Control heights fixed at 20/24/28 | Matches the macOS small/regular/large tiers; any fourth height is drift. |
 | Capsule radius for controls; 6px square only for icon-only buttons | macOS 26 control shape. Removes the eight-distinct-radii problem measured on Project Overview. |
@@ -571,6 +571,8 @@ new evidence.
 | A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
 | Tokens and primitives land before any surface | A surface migrated against a moving token layer gets migrated twice. |
+| A `var(--x, #hex)` fallback is a bug, not a safety net | `--red` and `--orange` were never defined, so four call sites quietly painted Tailwind `#ef4444` (3.76:1) and `#f97316` (2.8:1) on light. A fallback hides exactly the case the token guard exists to catch. |
+| A component nothing renders gets deleted, not migrated | `ProjectRow`, `ProjectDetail` and `GuardBadge` lost their host in the workspace rebuild and carried 10 of the guard's raw hex for three weeks. Rung one is always "does this need to exist". |
 
 ---
 
@@ -581,11 +583,20 @@ window chrome, the sidebar and its footer, the workspace dashboard, Project Over
 Activity, Memory, MCP Clients, Settings, the onboarding sheet, Graph Explorer,
 Insights, Ask, and **Notebook** — the last one, migrated in TRA-310.
 
-What is left is cleanup, not migration. `styles/island.css` still keeps a set of
-**legacy aliases** (`--text-1/2/3`, `--frame`, `--island`, `--row-hover`, `--sep`, …)
-that map onto the tokens above, plus per-domain styles this document's "never" list
-already forbids — glass stat cards, ALL-CAPS labels, raw hex. The token guard still
-records raw colour in `island.css` and `GraphExplorerGPU.tsx`. **Those are being
-deleted, not copied.** If you are writing a new screen, use the tokens in §2 directly;
-if you touch a file that still carries aliases, delete the ones it stops using and
-lower its baseline count.
+**The legacy alias layer is gone** (TRA-315). `app.css` no longer declares
+`--text-primary/secondary/tertiary`, `--bg-*`, `--border*`, `--success`, `--warning`
+or `--fill-control`, and `island.css` no longer declares `--text-1/2/3`, `--island`,
+`--frame`, `--sep`, `--row-hover` or the `--status-*-hue` pass-throughs. Every one of
+them was inlined to the token it already resolved to, so nothing moved on screen and
+there is now exactly one name per value. Use the tokens in §2 directly.
+
+What still carries raw colour, and why:
+
+| File | Count | Status |
+|---|---|---|
+| `tabs/GraphExplorerGPU.tsx` | 51 | Mostly shader/canvas data, not chrome. Legitimate; the panel and legend colours in it are not, and are still owed a pass. |
+| `styles/island.css` | 36 | The file-tree / graph **domain palette** (`--folder-*`, `--db-*`, `--mod-text`, `--ignored-*`, glass tints). It has hand-picked light *and* dark branches, so it is a deliberate exception, not drift. |
+| `lattice/icons.tsx` | 1 | `AgentMark`'s brand purple — artwork, not chrome. |
+| `lattice/ui/Badge.tsx` | 2 | Two hex in a comment recording what the primitive replaced. |
+
+Nothing else in the renderer paints a colour the contrast table cannot see.

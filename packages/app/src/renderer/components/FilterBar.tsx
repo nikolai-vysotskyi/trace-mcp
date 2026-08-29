@@ -26,6 +26,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { Badge } from '../lattice/ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -157,20 +158,15 @@ interface ModeBadgeProps {
 function ModeBadge({ pattern }: ModeBadgeProps) {
   if (!isRegexLiteral(pattern)) return null;
   const valid = tryCompileRegex(pattern) !== null;
-  const color = valid ? '#60a5fa' : '#f87171';
-  const bg = valid ? 'rgba(96,165,250,0.15)' : 'rgba(248,113,113,0.15)';
   return (
-    <span
-      className="text-[9px] px-1 py-0.5 rounded font-medium uppercase shrink-0 leading-none"
-      style={{
-        background: bg,
-        color,
-        letterSpacing: '0.04em',
-      }}
+    <Badge
+      tone={valid ? 'accent' : 'red'}
+      icon={valid ? 'code' : 'warning'}
+      className="shrink-0"
       title={valid ? 'Regex mode' : 'Invalid regex (substring fallback)'}
     >
       regex
-    </span>
+    </Badge>
   );
 }
 
@@ -258,10 +254,10 @@ export function FilterBar({
 
   // ── Styling tokens ───────────────────────────────────────────────────
   const inputStyle: React.CSSProperties = {
-    background: 'var(--bg-inset)',
-    border: '0.5px solid var(--border-row)',
+    background: 'var(--fill-quaternary)',
+    border: '0.5px solid var(--separator)',
     borderRadius: 6,
-    color: 'var(--text-primary)',
+    color: 'var(--label)',
     fontSize: 12,
     padding: '4px 8px',
     outline: 'none',
@@ -269,7 +265,7 @@ export function FilterBar({
   };
 
   const labelStyle: React.CSSProperties = {
-    color: 'var(--text-tertiary)',
+    color: 'var(--label-secondary)',
     fontSize: 10,
     letterSpacing: '0.03em',
     textTransform: 'uppercase',
@@ -321,8 +317,8 @@ export function FilterBar({
           <div
             className="flex items-center"
             style={{
-              background: 'var(--bg-inset)',
-              border: '0.5px solid var(--border-row)',
+              background: 'var(--fill-quaternary)',
+              border: '0.5px solid var(--separator)',
               borderRadius: 6,
               height: 26,
             }}
@@ -340,7 +336,7 @@ export function FilterBar({
               }}
               className="px-1.5 text-[12px] leading-none"
               style={{
-                color: 'var(--text-secondary)',
+                color: 'var(--label-secondary)',
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
@@ -354,7 +350,7 @@ export function FilterBar({
             <span
               className="px-1.5 text-[12px] tabular-nums select-none"
               style={{
-                color: 'var(--text-primary)',
+                color: 'var(--label)',
                 minWidth: 18,
                 textAlign: 'center',
               }}
@@ -369,7 +365,7 @@ export function FilterBar({
               }
               className="px-1.5 text-[12px] leading-none"
               style={{
-                color: 'var(--text-secondary)',
+                color: 'var(--label-secondary)',
                 background: 'transparent',
                 border: 'none',
                 cursor: 'pointer',
@@ -388,8 +384,8 @@ export function FilterBar({
               className="text-[10px] px-1.5 py-0.5 rounded"
               style={{
                 background: 'transparent',
-                color: 'var(--text-tertiary)',
-                border: '0.5px solid var(--border-row)',
+                color: 'var(--label-secondary)',
+                border: '0.5px solid var(--separator)',
                 cursor: 'pointer',
               }}
               title="Reset to unlimited"

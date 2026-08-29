@@ -1,10 +1,4 @@
 {
-  "src/renderer/components/ErrorBoundary.tsx": 1,
-  "src/renderer/components/FilterBar.tsx": 2,
-  "src/renderer/components/GuardBadge.tsx": 7,
-  "src/renderer/components/ProjectDetail.tsx": 1,
-  "src/renderer/components/ProjectRow.tsx": 2,
-  "src/renderer/components/ProjectStatsModal.tsx": 7,
   "src/renderer/lattice/icons.tsx": 1,
   "src/renderer/lattice/ui/Badge.tsx": 2,
   "src/renderer/styles/island.css": 36,
