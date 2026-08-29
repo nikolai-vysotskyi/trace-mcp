@@ -73,12 +73,12 @@ importers:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
-      tree-sitter-wasms:
-        specifier: ^0.1.13
-        version: 0.1.13
+      tree-sitter-wasm:
+        specifier: 1.1.6
+        version: 1.1.6
       web-tree-sitter:
-        specifier: ^0.24.7
-        version: 0.24.7
+        specifier: ^0.26.13
+        version: 0.26.13
       xxhash-wasm:
         specifier: ^1.1.0
         version: 1.1.0
@@ -2600,8 +2600,8 @@ packages:
     resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
     hasBin: true
 
-  tree-sitter-wasms@0.1.13:
-    resolution: {integrity: sha512-wT+cR6DwaIz80/vho3AvSF0N4txuNx/5bcRKoXouOfClpxh/qqrF4URNLQXbbt8MaAxeksZcZd1j8gcGjc+QxQ==}
+  tree-sitter-wasm@1.1.6:
+    resolution: {integrity: sha512-jn/q9cOBIcTOA8QqtrPXNbibislSDuVChO4ws//aFy+DKjrUs9wzE4R6QXFx6yunEAYaxaVvpMW4+yX/ijQ7BQ==}
 
   ts-interface-checker@0.1.13:
     resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
@@ -2758,8 +2758,8 @@ packages:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
 
-  web-tree-sitter@0.24.7:
-    resolution: {integrity: sha512-CdC/TqVFbXqR+C51v38hv6wOPatKEUGxa39scAeFSm98wIhZxAYonhRQPSMmfZ2w7JDI0zQDdzdmgtNk06/krQ==}
+  web-tree-sitter@0.26.13:
+    resolution: {integrity: sha512-5bUZ7vbQ1kcondet96wzP974+JfCZDeQ7bTpacICm2nnvHpa5cO0ByRsoMcAhUP+743vpkb4m0BFlVSm+Ye9VA==}
 
   webidl-conversions@8.0.1:
     resolution: {integrity: sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==}
@@ -4969,7 +4969,7 @@ snapshots:
 
   tree-kill@1.2.2: {}
 
-  tree-sitter-wasms@0.1.13: {}
+  tree-sitter-wasm@1.1.6: {}
 
   ts-interface-checker@0.1.13: {}
 
@@ -5083,7 +5083,7 @@ snapshots:
     dependencies:
       xml-name-validator: 5.0.0
 
-  web-tree-sitter@0.24.7: {}
+  web-tree-sitter@0.26.13: {}
 
   webidl-conversions@8.0.1: {}
 

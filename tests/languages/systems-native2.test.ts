@@ -130,9 +130,7 @@ describe('ScalaLanguagePlugin', () => {
     expect(r.symbols.some((s) => s.name === 'MaxRetries' && s.kind === 'constant')).toBe(true);
   });
 
-  // TODO: tree-sitter-wasms ships an older Scala grammar that doesn't support Scala 3 enums.
-  // Re-enable once tree-sitter-wasms updates their bundled tree-sitter-scala WASM.
-  it.skip('extracts enum with cases', async () => {
+  it('extracts enum with cases', async () => {
     const r = await parseScala('enum Color {\n  case Red, Green, Blue\n}');
     expect(r.symbols.some((s) => s.name === 'Color' && s.kind === 'enum')).toBe(true);
     expect(r.symbols.some((s) => s.name === 'Red' && s.kind === 'enum_case')).toBe(true);

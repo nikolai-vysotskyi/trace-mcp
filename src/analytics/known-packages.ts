@@ -889,6 +889,7 @@ export const KNOWN_PACKAGES: Record<string, PackageMeta> = {
   'tree-sitter': { category: 'infra', priority: 'medium', plugin: 'tree-sitter' },
   'web-tree-sitter': { category: 'infra', priority: 'medium', plugin: 'tree-sitter' },
   'tree-sitter-wasms': { category: 'infra', priority: 'low', plugin: 'tree-sitter' },
+  'tree-sitter-wasm': { category: 'infra', priority: 'low', plugin: 'tree-sitter' },
   'tree-sitter-typescript': { category: 'infra', priority: 'low', plugin: 'tree-sitter' },
   'n8n-workflow': { category: 'infra', priority: 'high', plugin: 'n8n' },
 
