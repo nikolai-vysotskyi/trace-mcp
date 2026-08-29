@@ -10,7 +10,7 @@ layout: null
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
   <!-- ── Primary Meta ── -->
-  <title>trace-mcp — Make AI agents understand your codebase, not just read it</title>
+  <title>trace-mcp — precomputed code intelligence for AI coding agents</title>
   <meta name="description" content="A structured map of your codebase for AI agents. trace-mcp indexes your repo once so agents stop re-reading the same files every turn. ~40–50% fewer tokens on average, faster responses, more reliable at scale. Open source, local-first, MCP-native.">
   <meta name="keywords" content="ai execution layer, recomputation, context bloat, token reduction, ai agents, mcp, model context protocol, code intelligence, code graph, llm developer tools, agent observability, agent optimization, claude code, cursor, windsurf, dependency graph, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
@@ -52,7 +52,7 @@ layout: null
   <meta property="og:site_name" content="trace-mcp">
   <meta property="og:locale" content="en_US">
   <meta property="og:url" content="https://trace-mcp.com/">
-  <meta property="og:title" content="trace-mcp — Make AI agents understand your codebase, not just read it">
+  <meta property="og:title" content="trace-mcp — precomputed code intelligence for AI coding agents">
   <meta property="og:description" content="A structured map of your codebase for AI agents. Stop paying for the same re-reads every turn. ~40–50% fewer tokens, faster responses, more reliable at scale.">
   <meta property="og:image" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:secure_url" content="https://trace-mcp.com/og-image.png">
@@ -63,7 +63,7 @@ layout: null
 
   <!-- ── Twitter / X Card ── -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="trace-mcp — Make AI agents understand your codebase, not just read it">
+  <meta name="twitter:title" content="trace-mcp — precomputed code intelligence for AI coding agents">
   <meta name="twitter:description" content="A structured map of your codebase for AI agents. ~40–50% fewer tokens, faster responses, more reliable at scale. Open source, local-first.">
   <meta name="twitter:image" content="https://trace-mcp.com/og-image.png">
   <meta name="twitter:image:alt" content="trace-mcp graph explorer visualizing symbol connections across a codebase">
@@ -1989,7 +1989,7 @@ layout: null
       </div>
 
       <h1 class="hero-headline">
-        Make AI agents understand your codebase &mdash; <span class="em">not just read it.</span>
+        Your agent re-reads the same code every turn. <span class="em">trace-mcp indexes it once.</span>
       </h1>
 
       <p class="hero-desc">
@@ -2020,7 +2020,7 @@ layout: null
         <span class="dot"></span>
         <span>MIT licensed</span>
         <span class="dot"></span>
-        <span>Used in real LLM workflows</span>
+        <span>Works with Claude Code, Cursor, Windsurf</span>
         <span class="dot"></span>
         <span>Runs locally &middot; no data leaves your machine</span>
       </p>
@@ -2142,7 +2142,7 @@ layout: null
         <div class="section-meta-tag"><span class="label">001 / Problem</span></div>
         <div>
           <h2 class="section-title">AI agents recompute work <span class="em">they've already done.</span></h2>
-          <p class="section-lede">Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. Token bills grow. Latency grows. Reasoning quality drops. The model isn't the bottleneck &mdash; the recomputation leak is.</p>
+          <p class="section-lede">Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.</p>
         </div>
       </div>
 
@@ -2181,7 +2181,7 @@ layout: null
       </div>
 
       <div class="sol-block reveal">
-        <p class="sol-lede">Show the leak. Explain it. Close it. <span class="em">Keep it closed.</span></p>
+        <p class="sol-lede">Measure what the agent reads, explain why it reads it twice, remove the repeated work, <span class="em">and keep it from coming back.</span></p>
         <div class="sol-list">
           <div class="sol-item">
             <span class="sol-mark">01</span>
@@ -2217,7 +2217,7 @@ layout: null
 
       <div class="definition reveal">
         <div class="def-text">
-          <h3>This is how agents stop <span class="em">recomputing and start reusing.</span></h3>
+          <h3>What the agent queries <span class="em">instead of your files.</span></h3>
           <p><strong>Computed once</strong> &mdash; every symbol, every edge, across {{ site.data.counts.languages }} languages in one directed graph. The agent queries it instead of rediscovering it each turn.</p>
           <p><strong>Framework-aware</strong> &mdash; routes to controllers, Inertia to Vue, Eloquent to migrations. {{ site.data.counts.frameworks }} integrations capture edges the agent would otherwise reconstruct from raw files.</p>
           <p><strong>Compiler-grade where it matters</strong> &mdash; optional LSP enrichment with <code>tsserver</code>, <code>pyright</code>, <code>gopls</code> for call resolution that survives across calls.</p>
@@ -2265,8 +2265,8 @@ layout: null
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">004 / How It Works</span></div>
         <div>
-          <h2 class="section-title">Three steps. <span class="em">Setup in minutes.</span></h2>
-          <p class="section-lede">Connect. Index. Expose. After that, agents operate with full context &mdash; and the graph stays in sync automatically as you code.</p>
+          <h2 class="section-title">Three steps to <span class="em">a working index.</span></h2>
+          <p class="section-lede">Connect the repo, let it index, point your MCP client at it. The graph then stays in sync automatically as you code.</p>
         </div>
       </div>
 
@@ -2316,8 +2316,8 @@ layout: null
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">005 / Core Capabilities</span></div>
         <div>
-          <h2 class="section-title">The five calls that <span class="em">replace 90% of recomputation.</span></h2>
-          <p class="section-lede">Five tools from a surface of {{ site.data.counts.tools }} &mdash; the ones agents reach for first. Each one collapses what would otherwise be a chain of Reads, Greps, and Globs into a single graph query. Token cost drops; the answer gets sharper.</p>
+          <h2 class="section-title">The five calls agents <span class="em">reach for first.</span></h2>
+          <p class="section-lede">Five tools from a surface of {{ site.data.counts.tools }} &mdash; the ones agents reach for first. Each one collapses what would otherwise be a chain of Reads, Greps, and Globs into a single graph query.</p>
         </div>
       </div>
 
@@ -2387,7 +2387,7 @@ layout: null
         </div>
       </div>
 
-      <p class="compare-coda">Agents need <span class="em">reuse, not more search.</span></p>
+      <p class="compare-coda">The difference shows up <span class="em">on the second question, not the first.</span></p>
       <p class="tool-more">Side-by-side tables against every comparable tool: <a href="/comparisons.html">Comparisons &rarr;</a></p>
     </div>
   </section>
@@ -2398,7 +2398,7 @@ layout: null
       <div class="section-meta">
         <div class="section-meta-tag"><span class="label">007 / Differentiation</span></div>
         <div>
-          <h2 class="section-title">Reuse is the unlock, <span class="em">not more search.</span></h2>
+          <h2 class="section-title">Why a graph beats <span class="em">a better search index.</span></h2>
         </div>
       </div>
 
@@ -2410,8 +2410,7 @@ layout: null
           <li><span class="num">/ 04</span><span><strong>Reuse survives the session</strong> &mdash; incremental reindex, decision memory, agent-behavior rules keep cost from rebounding.</span></li>
         </ul>
         <p class="diff-quote">
-          This is <span class="neg">not code search.</span><br>
-          This is <span class="pos">recomputation &rarr; reuse</span> for AI systems.
+          A text index is re-ranked on every query. A graph is <span class="pos">computed once and traversed</span> &mdash; so the second question about a repo costs a fraction of the first.
         </p>
       </div>
     </div>
@@ -2520,7 +2519,7 @@ layout: null
         <div class="section-meta-tag"><span class="label">011 / Ecosystem</span></div>
         <div>
           <h2 class="section-title">{{ site.data.counts.frameworks }} integrations. <span class="em">{{ site.data.counts.languages }} languages.</span></h2>
-          <p class="section-lede">Each integration adds framework-specific edges &mdash; routes, components, migrations, queries &mdash; not just syntax parsing. Plugin API is open: write your own for a niche framework in under a day.</p>
+          <p class="section-lede">Each integration adds framework-specific edges &mdash; routes, components, migrations, queries &mdash; not just syntax parsing. The plugin API is open; most plugins are 200&ndash;500 lines of TypeScript.</p>
         </div>
       </div>
 
@@ -2729,7 +2728,7 @@ layout: null
         <span class="em">The execution layer for AI systems.</span>
       </h2>
       <p class="category-sub">
-        AI systems don't scale because they recompute instead of reuse. Every turn costs tokens, latency, and reasoning quality on work the agent has already done. trace-mcp turns recomputation into a precomputed, queryable structure &mdash; starting with code, where the noise is loudest, and extending to anywhere agents pay twice for the same answer.
+        AI systems pay repeatedly for work they have already done: every turn re-derives structure the agent held a few steps earlier. trace-mcp precomputes that structure once and serves it over MCP. Code is where the repetition is most expensive today, which is where we started.
       </p>
     </div>
   </section>
@@ -2740,11 +2739,11 @@ layout: null
     <div class="container cta-content">
       <span class="label cta-label">/ Open Source · Mit License · Zero Api Keys</span>
       <h2 class="cta-headline">
-        Stop burning tokens.<br>
-        <span class="em">Make AI work at scale.</span>
+        Index once,<br>
+        <span class="em">query for the rest of the session.</span>
       </h2>
       <p class="cta-sub">
-        ~40&ndash;50% lower token usage on average in production. Up to 94&ndash;99% in structured tasks. One install. Every project. Every AI agent that speaks MCP.
+        <a href="/reduce-claude-code-token-usage.html">~40&ndash;50% lower token usage on average</a>, and up to 94&ndash;99% on structured tasks. One install, and every MCP-capable agent in the project gets the same graph.
       </p>
       <div class="cta-buttons">
         <a href="#install" class="btn btn-primary">

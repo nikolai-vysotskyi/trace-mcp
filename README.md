@@ -31,11 +31,11 @@
   <sub>Based on early benchmarks across agent workflows with repeated context and dependency traversal.</sub>
 </p>
 
-> AI systems don't scale because they recompute instead of reuse. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it already discovered. Token bills grow. Latency grows. Reasoning quality drops. The model isn't the bottleneck — the recomputation leak is.
+> AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
 >
-> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. One tool call replaces ~42 minutes of agent exploration. 87 framework integrations across 81 languages, 169 tools.
+> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 169 tools.
 >
-> **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP for code and knowledge — no second tool to plug in.
+> **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP server covers both code and knowledge; there is no second tool to plug in.
 
 <p align="center">
   <img src="docs/images/app-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance" width="820" height="512" loading="lazy" />
@@ -45,18 +45,18 @@
 
 ---
 
-## Why this matters
+## The problem
 
-AI is bottlenecked not by models, but by **recomputation**. Agents treat the context window like a database — they re-read the same files, re-traverse the same dependencies, and re-inflate context every turn with structure they already computed five steps ago. Token bills, latency, and hallucinations all grow with project size instead of with task complexity.
+The binding constraint is **recomputation**, not model capability. Agents treat the context window like a database — they re-read the same files, re-traverse the same dependencies, and re-inflate context every turn with structure they already computed five steps ago. Token bills, latency, and hallucinations all grow with project size instead of with task complexity.
 
 trace-mcp closes the recomputation leak. The graph is built once, kept incrementally fresh, and served to every agent that asks — so the same work isn't paid for over and over.
 
 - **Lower cost** — fewer tokens per successful answer, on average and at peak
 - **Lower latency** — fewer sequential tool calls, fewer round-trips to the model
 - **Higher accuracy** — less noise in context means fewer hallucinations and stronger first-response correctness
-- **Production stability** — context that scales with project size, not against it
+- **Production stability** — context growth tracks task complexity rather than repository size
 
-We started with code intelligence — the hardest, noisiest context most agents handle today — and the same engine now indexes markdown knowledge vaults (Obsidian, Logseq, plain MD) as a peer domain. Wikilinks, tags, frontmatter, and embeds become graph edges and symbol metadata; `search`, `find_usages`, `get_change_impact`, and `apply_rename` work identically over both.
+We started with code intelligence, where the repetition is most expensive, and the same engine now indexes markdown knowledge vaults (Obsidian, Logseq, plain MD) as a peer domain. Wikilinks, tags, frontmatter, and embeds become graph edges and symbol metadata; `search`, `find_usages`, `get_change_impact`, and `apply_rename` work identically over both.
 
 ---
 
@@ -74,7 +74,7 @@ We started with code intelligence — the hardest, noisiest context most agents 
 | "What notes link to this concept?" | Backlinks across the vault, with section + alias context | `find_usages` on a `note:<basename>` symbol |
 | "What breaks if I rename this note?" | Every `[[wikilink]]` and `[text](path.md)` that references it | `get_change_impact` — wikilink-aware reverse graph |
 
-**Four things no other tool does:**
+**Four capabilities that are rare among adjacent tools:**
 
 1. **Framework-aware edges** — trace-mcp understands that `Inertia::render('Users/Show')` connects PHP to Vue, that `@Injectable()` creates a DI dependency, that `$user->posts()` means a `posts` table from migrations. 87 framework integrations.
 
@@ -82,7 +82,7 @@ We started with code intelligence — the hardest, noisiest context most agents 
 
 3. **Cross-session intelligence** — past sessions are mined for decisions and indexed for search. When you start a new session, `get_wake_up` gives you orientation in ~300 tokens; `plan_turn` shows relevant past decisions for your task; `get_wake_up { scope: "resume" }` carries over structural context from previous sessions.
 
-4. **Code and knowledge in one graph** — point trace-mcp at a markdown vault (Obsidian, Logseq, plain MD) and the same engine indexes it: each note becomes a `note:<basename>` symbol, headings become nested sections, `[[wikilinks]]` and `![[embeds]]` become graph edges, frontmatter and `#tags` ride on metadata. PageRank, Signal Fusion ranking, embeddings, and rename refactoring all apply unchanged. The agent does not learn a second tool — it learns one graph that happens to contain both your codebase and your second brain.
+4. **Code and knowledge in one graph** — point trace-mcp at a markdown vault (Obsidian, Logseq, plain MD) and the same engine indexes it: each note becomes a `note:<basename>` symbol, headings become nested sections, `[[wikilinks]]` and `![[embeds]]` become graph edges, frontmatter and `#tags` ride on metadata. PageRank, Signal Fusion ranking, embeddings, and rename refactoring all apply unchanged. The agent does not learn a second tool: it is the same graph, holding both the codebase and the notes.
 
 ---
 
@@ -154,7 +154,7 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 
 ---
 
-## Token reduction — measured, not marketed
+## Token reduction — what we measured
 
 AI agents burn tokens recomputing what they already discovered last turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp replaces that with **precision context**: only the symbols, edges, and signatures relevant to the query, served from a graph that was computed once.
 
@@ -190,11 +190,11 @@ Composite task              223,721 tokens      14,245 tokens       93.6%
 Total                       702,532 tokens      50,812 tokens       92.8%
 ```
 
-Across 11 structured task categories, recomputation drops by **up to ~99% per call** when the agent reuses the graph instead of re-reading files — peaks where the math gets dramatic. Read that as a *peak structured-task result on a well-supported TS/Vue codebase*, not a number you should expect on every project. In production, on mixed workloads, expect **~40–50% on average**. Less noise in context also means fewer hallucinations and better first-response accuracy — a quality benefit you don't see in token counts.
+Across 11 structured task categories, recomputation drops by **up to ~99% per call** when the agent reuses the graph instead of re-reading files. Read that as a *peak structured-task result on a well-supported TS/Vue codebase*, not a number you should expect on every project. In production, on mixed workloads, expect **~40–50% on average**. Less noise in context also means fewer hallucinations and better first-response accuracy — a quality benefit you don't see in token counts.
 
 **Savings scale with project size.** On a 650-file project, structured-task savings cluster around ~522K tokens per session. On a 5,000-file enterprise codebase, savings grow **non-linearly** — without trace-mcp, the agent reads more wrong files before finding the right one. With trace-mcp, graph traversal stays O(relevant edges), not O(total files).
 
-**Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten** — fewer tokens, lower latency, and one clean answer instead of ten partial ones.
+**Composite tasks deliver the biggest wins.** A single `get_task_context` call replaces a chain of ~10 sequential operations (search → get_symbol × 5 → Read × 3 → Grep × 2). That's **one round-trip instead of ten**, which is where most of the latency saving comes from.
 
 ### Run it yourself
 
@@ -326,7 +326,7 @@ Then in your MCP client:
 
 ## Local-first by design
 
-trace-mcp runs entirely on your machine. Your source code is never the product.
+trace-mcp runs entirely on your machine. Nothing about your source code is uploaded, and there is no account to create.
 
 - **Indexing happens locally.** The MCP server is a Node process you run yourself — stdio or `http://127.0.0.1:3741`.
 - **Index lives in `~/.trace-mcp/`**, never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
@@ -334,7 +334,7 @@ trace-mcp runs entirely on your machine. Your source code is never the product.
 - **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below — nothing else is phoned home.
 - **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
 - **The daemon trusts loopback and nothing else.** `serve-http` is unauthenticated by design: a caller on `127.0.0.1` is already you. A non-loopback `--host` is therefore refused unless you pass `--allow-remote` and front the port with your own auth — see [Configuration](https://trace-mcp.com/configuration.html#http-daemon--one-warm-index-shared-across-many-projects).
-- **To wipe everything**, delete `~/.trace-mcp/`. That is the entire footprint.
+- **To wipe everything**, delete `~/.trace-mcp/` — that directory is the whole footprint.
 
 ### Usage telemetry
 
@@ -374,7 +374,7 @@ Picking **Max** during `trace-mcp init` (the default) layers on two more amplifi
 - **tweakcc system-prompt rewrites** patch Claude Code's core tool descriptions so the model internalizes "use trace-mcp search" instead of "use Grep" from the start. Claude Code only.
 - **`agent_behavior: "strict"`** ships a compact set of discipline rules via MCP instructions — no flattery, disagree on wrong premises, never fabricate, goal-driven execution, 2-strike session hygiene, no drive-by refactors. Cross-client (Claude Code, Cursor, Codex, Windsurf) and auto-updates on `npm upgrade trace-mcp` without re-running `init`.
 
-This is the "make every teammate's agent behave like a senior engineer by default" setup. Tune or disable via `tools.agent_behavior` in `~/.trace-mcp/.config.json` — see [Tool exposure & agent behavior](https://trace-mcp.com/configuration.html#tool-exposure--agent-behavior).
+This is the setup for making the same discipline rules apply to every teammate's agent without asking anyone to configure it. Tune or disable via `tools.agent_behavior` in `~/.trace-mcp/.config.json` — see [Tool exposure & agent behavior](https://trace-mcp.com/configuration.html#tool-exposure--agent-behavior).
 
 ---
 
@@ -448,7 +448,7 @@ If you're shipping AI features in production — internal copilots, customer-fac
 
 **What you get:** a clear, before/after report on whether context optimization moves the metrics that matter for your stack — and a path to scale usage with confidence instead of throttling it on cost.
 
-We're not optimizing for cost reduction in isolation. We're optimizing for systems that work at scale: teams that move from unstable usage to reliable production and *then* grow their LLM footprint.
+The target is a system that stays predictable as usage grows, not a one-off cost cut: teams usually want to reach reliable production first and expand their LLM footprint after.
 
 **Get in touch:** open an issue at [github.com/nikolai-vysotskyi/trace-mcp/issues](https://github.com/nikolai-vysotskyi/trace-mcp/issues) tagged `pilot`, or reach out to [@nikolai-vysotskyi](https://github.com/nikolai-vysotskyi).
 
