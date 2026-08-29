@@ -5,7 +5,7 @@ layout: null
 ---
 # trace-mcp
 
-> trace-mcp is a framework-aware MCP server that serves precomputed code intelligence — a dependency graph, full-text search, impact analysis, and decision memory — to cut token usage for AI coding agents. It understands 87 frameworks across 80 languages and exposes {{ site.data.counts.tools }} MCP tools over stdio or HTTP.
+> trace-mcp is a framework-aware MCP server that serves precomputed code intelligence — a dependency graph, full-text search, impact analysis, and decision memory — to cut token usage for AI coding agents. It understands {{ site.data.counts.frameworks }} frameworks across {{ site.data.counts.languages }} languages and exposes {{ site.data.counts.tools }} MCP tools over stdio or HTTP.
 
 ## Docs
 
@@ -13,7 +13,7 @@ layout: null
 - [How trace-mcp compares](https://trace-mcp.com/comparisons.html): Feature-by-feature comparison against other code-graph and code-intelligence MCP servers.
 - [Configuration](https://trace-mcp.com/configuration.html): All config file options; trace-mcp works out of the box without one.
 - [Architecture](https://trace-mcp.com/architecture.html): The two-pass indexing pipeline and how the dependency graph is built and stored.
-- [Supported frameworks & languages](https://trace-mcp.com/supported-frameworks.html): The 80 supported languages and the frameworks each plugin understands.
+- [Supported frameworks & languages](https://trace-mcp.com/supported-frameworks.html): The {{ site.data.counts.languages }} supported languages and the frameworks each plugin understands.
 - [Session Analytics & Coverage Intelligence](https://trace-mcp.com/analytics.html): The built-in engine that parses agent session logs and tracks token savings and waste.
 - [TOON Token Savings — Measured](https://trace-mcp.com/toon-savings.html): Real-world token measurements for the TOON output format across trace-mcp tools.
 - [Decision memory](https://trace-mcp.com/decision-memory.html): The persistent decision knowledge graph linking architectural decisions and tradeoffs to code.

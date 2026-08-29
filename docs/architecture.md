@@ -218,7 +218,7 @@ src/
 │   └── service-detector.ts #   Subproject discovery (Docker Compose, flat/grouped workspace, monolith fallback)
 ├── indexer/
 │   ├── plugins/
-│   │   ├── language/       # 80 languages — PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, Rust,
+│   │   ├── language/       # {{ site.data.counts.languages }} languages — PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, Rust,
 │   │   │                   #   C/C++/C#, Swift, Dart, Scala, Zig, OCaml, Clojure, F#, Elm,
 │   │   │                   #   CUDA, COBOL, Verilog, GLSL, Svelte, MATLAB, Lean, Wolfram, …
 │   │   └── integration/    # 85 plugins organized by category:

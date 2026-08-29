@@ -10,7 +10,7 @@ description: "Full list of languages and frameworks trace-mcp understands out of
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "Supported frameworks & languages",
-  "description": "The 80 supported languages and the frameworks each plugin understands.",
+  "description": "The {{ site.data.counts.languages }} supported languages and the frameworks each plugin understands.",
   "url": "https://trace-mcp.com/supported-frameworks.html",
   "datePublished": "2026-04-05",
   "dateModified": "2026-04-05",
@@ -30,7 +30,7 @@ description: "Full list of languages and frameworks trace-mcp understands out of
   }
 }
 </script>
-## Languages (80)
+## Languages ({{ site.data.counts.languages }})
 
 ### Tree-sitter (full AST parsing)
 
