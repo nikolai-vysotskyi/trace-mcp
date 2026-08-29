@@ -60,6 +60,7 @@ import { validatePath } from '../utils/security.js';
 import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
 import { buildInstructions } from './instructions.js';
+import { installRetiredToolHints } from './retired-tools.js';
 import { resolvePresetName } from './tool-filter.js';
 import { installToolGate } from './tool-gate.js';
 import type { MetaContext, ProjectRelay, ServerContext, ToolHandlerMap } from './types.js';
@@ -696,6 +697,10 @@ export function createServer(
   registerMemoryTools(server, ctx);
   registerKnowledgeTools(server, ctx);
   registerSessionTools(server, metaCtx);
+
+  // Must run after the last registration: the SDK installs its `tools/call`
+  // handler lazily on the first `server.tool(...)` (TRA-412).
+  installRetiredToolHints(server);
 
   return { server, journal, dispose, toolHandlers };
 }
