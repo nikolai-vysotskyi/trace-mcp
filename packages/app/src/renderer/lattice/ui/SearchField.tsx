@@ -6,6 +6,7 @@
    layout property) over 0.42s and matched nothing on the platform. */
 
 import { useRef, type ReactNode, type RefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../icons';
 
 export interface SearchFieldProps {
@@ -24,13 +25,17 @@ export interface SearchFieldProps {
 export function SearchField({
   value,
   onChange,
-  placeholder = 'Search',
+  placeholder,
   grow = false,
   autoFocus = false,
   className,
   'aria-label': ariaLabel,
   inputRef: externalRef,
 }: SearchFieldProps): ReactNode {
+  const { t } = useTranslation('ui');
+  // Resolved here rather than as a default parameter: the fallback is a
+  // translation, and a default parameter would freeze the first language.
+  placeholder ??= t('search');
   const localRef = useRef<HTMLInputElement>(null);
   const inputRef = externalRef ?? localRef;
   const cls = ['lx-search', grow ? 'grow' : '', className ?? ''].filter(Boolean).join(' ');
@@ -62,8 +67,8 @@ export function SearchField({
         <button
           type="button"
           className="lx-btn v-icon sz-regular"
-          aria-label="Clear search"
-          title="Clear search"
+          aria-label={t('clearSearch')}
+          title={t('clearSearch')}
           onClick={() => {
             onChange('');
             inputRef.current?.focus();

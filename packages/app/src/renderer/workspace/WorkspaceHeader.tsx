@@ -16,6 +16,9 @@
  * Receives all data + state via props; does not call useWorkspaceProjects.
  */
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { t } from '../i18n';
+import { formatNumber, relativeTime } from '../i18n/format';
 import { Icon } from '../lattice/icons';
 import {
   Button,
@@ -38,7 +41,7 @@ import {
   type WorkspaceFilterPreset,
   type WorkspaceKpis,
 } from './types';
-import { type KpiBaseline, describeAge, loadBaseline, rollBaseline, saveBaseline } from './kpiBaseline';
+import { type KpiBaseline, loadBaseline, rollBaseline, saveBaseline } from './kpiBaseline';
 
 export interface WorkspaceHeaderProps {
   kpis: WorkspaceKpis;
@@ -83,15 +86,21 @@ export interface WorkspaceHeaderProps {
   banner?: ReactNode;
 }
 
-const STATUS_CHIPS: Array<{ key: ProjectHealthStatus; label: string; title: string }> = [
-  { key: 'ok', label: 'OK', title: 'Projects that indexed cleanly' },
-  { key: 'indexing', label: 'Indexing', title: 'Projects currently being indexed' },
-  { key: 'error', label: 'Error', title: 'Projects whose last index failed' },
+/* Built per render rather than at module scope: a language switch has to
+   relabel the filter menu and the view toggle without a reload. */
+const statusChips = (): Array<{ key: ProjectHealthStatus; label: string; title: string }> => [
+  { key: 'ok', label: t('workspace:statusOk'), title: t('workspace:filterStatusOkTitle') },
+  {
+    key: 'indexing',
+    label: t('workspace:statusIndexing'),
+    title: t('workspace:filterStatusIndexingTitle'),
+  },
+  { key: 'error', label: t('workspace:statusError'), title: t('workspace:filterStatusErrorTitle') },
 ];
 const GRADE_CHIPS: TechDebtGrade[] = ['A', 'B', 'C', 'D', 'F'];
-const VIEW_OPTIONS: Array<{ value: ViewMode; label: string }> = [
-  { value: 'table', label: 'Table' },
-  { value: 'compact', label: 'Compact' },
+const viewOptions = (): Array<{ value: ViewMode; label: string }> => [
+  { value: 'table', label: t('workspace:viewTable') },
+  { value: 'compact', label: t('workspace:viewCompact') },
 ];
 
 function isDefaultFilter(f: WorkspaceFilter): boolean {
@@ -126,8 +135,12 @@ function toggleInList<T>(list: T[] | null, value: T): T[] | null {
 
 /** `n` as a share of `total`, e.g. "36% of 116 projects". */
 function share(n: number, total: number): string {
-  if (total === 0) return 'no projects yet';
-  return `${Math.round((n / total) * 100)}% of ${total.toLocaleString()} projects`;
+  if (total === 0) return t('workspace:kpiNoProjectsYet');
+  return t('workspace:kpiShare', {
+    count: total,
+    percent: Math.round((n / total) * 100),
+    total: formatNumber(total),
+  });
 }
 
 // ── Header ────────────────────────────────────────────────────────────────
@@ -150,6 +163,7 @@ export function WorkspaceHeader({
   rightExtra,
   banner,
 }: WorkspaceHeaderProps) {
+  const { t } = useTranslation('workspace');
   // Locally-debounced search so typing doesn't spam upstream re-renders.
   const [queryDraft, setQueryDraft] = useState(filter.query);
   useEffect(() => {
@@ -174,8 +188,11 @@ export function WorkspaceHeader({
   }, [metricsLoading, kpis]);
 
   const deltaCaption = useMemo(
-    () => (baseline ? `vs ${describeAge(baseline.at, Date.now())}` : undefined),
-    [baseline],
+    () =>
+      baseline
+        ? t('kpiDeltaCaption', { when: relativeTime(Date.parse(baseline.at), Date.now()) })
+        : undefined,
+    [baseline, t],
   );
   const delta = (pick: (k: WorkspaceKpis) => number): number | null =>
     baseline ? pick(kpis) - pick(baseline.kpis) : null;
@@ -199,8 +216,8 @@ export function WorkspaceHeader({
         <SearchField
           value={queryDraft}
           onChange={setQueryDraft}
-          placeholder="Search projects"
-          aria-label="Search projects"
+          placeholder={t('searchProjects')}
+          aria-label={t('searchProjects')}
         />
 
         <Button
@@ -211,7 +228,7 @@ export function WorkspaceHeader({
           aria-haspopup="menu"
           aria-expanded={filterMenu.at !== null}
         >
-          Filter
+          {t('filter')}
           {filterCount > 0 && <span className="tabular-nums">· {filterCount}</span>}
         </Button>
 
@@ -221,11 +238,11 @@ export function WorkspaceHeader({
               stored preference is untouched and returns with the width. */}
           {!hideViewToggle && (
             <SegmentedControl
-              aria-label="View mode"
+              aria-label={t('viewMode')}
               size="small"
               value={view === 'compact' ? 'compact' : 'table'}
               onChange={(v) => onViewChange(v as ViewMode)}
-              options={VIEW_OPTIONS}
+              options={viewOptions()}
             />
           )}
           {rightExtra}
@@ -236,8 +253,8 @@ export function WorkspaceHeader({
             onClick={() => (overflowMenu.at ? overflowMenu.close() : overflowMenu.open())}
             aria-haspopup="menu"
             aria-expanded={overflowMenu.at !== null}
-            aria-label="More actions"
-            title="More actions"
+            aria-label={t('moreActions')}
+            title={t('moreActions')}
           />
         </span>
       </Toolbar>
@@ -247,19 +264,19 @@ export function WorkspaceHeader({
       {/* ── KPI grid ───────────────────────────────────────────────── */}
       <div className="flex items-stretch gap-4 px-4 pt-4 pb-3 flex-wrap">
         <KpiTile
-          label="Projects"
+          label={t('kpiProjects')}
           value={kpis.totalProjects}
           dense={dense}
           pending={listLoading}
           unavailable={listFailed}
           delta={delta((k) => k.totalProjects)}
           deltaCaption={deltaCaption}
-          footnote="tracking from today"
+          footnote={t('kpiTrackingFromToday')}
           active={isDefaultFilter(filter)}
           onClick={() => onFilterChange(EMPTY_FILTER)}
         />
         <KpiTile
-          label="Files"
+          label={t('kpiFiles')}
           value={kpis.totalFiles}
           compact
           dense={dense}
@@ -269,12 +286,14 @@ export function WorkspaceHeader({
           deltaCaption={deltaCaption}
           footnote={
             kpis.totalProjects > 0
-              ? `${Math.round(kpis.totalFiles / kpis.totalProjects).toLocaleString()} per project`
-              : 'no projects yet'
+              ? t('kpiPerProject', {
+                  n: formatNumber(Math.round(kpis.totalFiles / kpis.totalProjects)),
+                })
+              : t('kpiNoProjectsYet')
           }
         />
         <KpiTile
-          label="Symbols"
+          label={t('kpiSymbols')}
           value={kpis.totalSymbols}
           compact
           dense={dense}
@@ -284,12 +303,12 @@ export function WorkspaceHeader({
           deltaCaption={deltaCaption}
           footnote={
             kpis.totalFiles > 0
-              ? `${Math.round(kpis.totalSymbols / kpis.totalFiles).toLocaleString()} per file`
-              : 'nothing indexed yet'
+              ? t('kpiPerFile', { n: formatNumber(Math.round(kpis.totalSymbols / kpis.totalFiles)) })
+              : t('kpiNothingIndexedYet')
           }
         />
         <KpiTile
-          label="Healthy"
+          label={t('kpiHealthy')}
           value={kpis.healthy}
           tone="ok"
           dense={dense}
@@ -300,7 +319,7 @@ export function WorkspaceHeader({
           onClick={() => togglePreset('healthy')}
         />
         <KpiTile
-          label="Needs attention"
+          label={t('kpiNeedsAttention')}
           value={kpis.needsAttention}
           tone="warn"
           dense={dense}
@@ -311,14 +330,16 @@ export function WorkspaceHeader({
           onClick={() => togglePreset('needs_attention')}
         />
         <KpiTile
-          label="Indexing"
+          label={t('kpiIndexing')}
           value={kpis.indexing}
           tone="busy"
           dense={dense}
           pending={listLoading}
           unavailable={listFailed}
           footnote={
-            kpis.indexing === 0 ? 'nothing running' : share(kpis.indexing, kpis.totalProjects)
+            kpis.indexing === 0
+              ? t('kpiNothingRunning')
+              : share(kpis.indexing, kpis.totalProjects)
           }
           active={filter.preset === 'indexing'}
           onClick={() => togglePreset('indexing')}
@@ -327,8 +348,8 @@ export function WorkspaceHeader({
 
       {filterMenu.at && (
         <Menu x={filterMenu.at.x} y={filterMenu.at.y} align="end" onClose={filterMenu.close}>
-          <MenuSection>Status</MenuSection>
-          {STATUS_CHIPS.map((s) => (
+          <MenuSection>{t('filterStatus')}</MenuSection>
+          {statusChips().map((s) => (
             <MenuItem
               key={s.key}
               showCheckSlot
@@ -341,7 +362,7 @@ export function WorkspaceHeader({
             </MenuItem>
           ))}
           <MenuSeparator />
-          <MenuSection>Tech-debt grade</MenuSection>
+          <MenuSection>{t('filterGrade')}</MenuSection>
           {GRADE_CHIPS.map((g) => (
             <MenuItem
               key={g}
@@ -349,11 +370,11 @@ export function WorkspaceHeader({
               checked={filter.grades?.includes(g) ?? false}
               onClick={() => onFilterChange({ ...filter, grades: toggleInList(filter.grades, g) })}
             >
-              Grade {g}
+              {t('filterGradeItem', { grade: g })}
             </MenuItem>
           ))}
           <MenuSeparator />
-          <MenuSection>Findings</MenuSection>
+          <MenuSection>{t('filterFindings')}</MenuSection>
           <MenuItem
             showCheckSlot
             checked={filter.hasSecurityFindings === true}
@@ -365,7 +386,7 @@ export function WorkspaceHeader({
               })
             }
           >
-            Has security findings
+            {t('filterHasSecurityFindings')}
           </MenuItem>
           <MenuItem
             showCheckSlot
@@ -378,7 +399,7 @@ export function WorkspaceHeader({
               })
             }
           >
-            Has dead exports
+            {t('filterHasDeadExports')}
           </MenuItem>
           {!isDefaultFilter(filter) && (
             <>
@@ -390,7 +411,7 @@ export function WorkspaceHeader({
                   filterMenu.close();
                 }}
               >
-                Clear filters
+                {t('clearFilters')}
               </MenuItem>
             </>
           )}
@@ -408,7 +429,7 @@ export function WorkspaceHeader({
               overflowMenu.close();
             }}
           >
-            {refreshing ? 'Refreshing metrics…' : 'Refresh metrics'}
+            {refreshing ? t('refreshingMetrics') : t('refreshMetrics')}
           </MenuItem>
           <MenuItem
             icon="close"
@@ -418,7 +439,7 @@ export function WorkspaceHeader({
               overflowMenu.close();
             }}
           >
-            Clear filters
+            {t('clearFilters')}
           </MenuItem>
         </Menu>
       )}

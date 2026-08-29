@@ -11,6 +11,7 @@
  * the × button and the context menu drive the same one.
  */
 import type { MouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Menu, MenuItem, MenuSeparator } from '../../lattice/ui';
 import type { ProjectViewModel } from '../types';
 
@@ -48,6 +49,7 @@ export function ProjectRowActions({
   onReindex,
   onRemove,
 }: ProjectRowActionsProps) {
+  const { t } = useTranslation('workspace');
   const stop = (e: MouseEvent) => e.stopPropagation();
   const mutationAllowed = canMutate && project.inDaemon;
 
@@ -55,7 +57,7 @@ export function ProjectRowActions({
     return (
       <div className="flex items-center gap-1" onClick={stop}>
         <Button size="small" onClick={onCancelRemove}>
-          Cancel
+          {t('cancel')}
         </Button>
         {/* A destructive FILL, not --status-red: white on --status-red measures
             3.41:1 in dark. --danger-fill is the same hue tuned for a label. */}
@@ -66,7 +68,7 @@ export function ProjectRowActions({
           style={{ background: 'var(--danger-fill)' }}
           onClick={() => onRemove(project.root)}
         >
-          Remove project
+          {t('removeProject')}
         </Button>
       </div>
     );
@@ -82,24 +84,24 @@ export function ProjectRowActions({
         icon="arrow_right_alt"
         onClick={() => onOpen(project.root)}
         style={{ color: 'var(--accent)' }}
-        aria-label={`Open ${project.name}`}
-        title={`Open ${project.name}`}
+        aria-label={t('openProject', { name: project.name })}
+        title={t('openProject', { name: project.name })}
       />
       <Button
         variant="icon"
         icon="refresh"
         disabled={!canReindex(project, canMutate)}
         onClick={() => onReindex(project.root)}
-        aria-label={`Re-index ${project.name}`}
-        title={`Re-index ${project.name}`}
+        aria-label={t('reindexProject', { name: project.name })}
+        title={t('reindexProject', { name: project.name })}
       />
       <Button
         variant="icon"
         icon="close"
         disabled={!mutationAllowed}
         onClick={() => onRequestRemove(project.root)}
-        aria-label={`Remove ${project.name} from the workspace`}
-        title={`Remove ${project.name} from the workspace`}
+        aria-label={t('removeProjectFrom', { name: project.name })}
+        title={t('removeProjectFrom', { name: project.name })}
       />
     </div>
   );
@@ -126,6 +128,7 @@ export function ProjectContextMenu({
   onRequestRemove,
   onClose,
 }: ProjectContextMenuProps) {
+  const { t } = useTranslation('workspace');
   const run = (fn: () => void) => () => {
     fn();
     onClose();
@@ -133,20 +136,20 @@ export function ProjectContextMenu({
   return (
     <Menu x={x} y={y} onClose={onClose}>
       <MenuItem icon="arrow_right_alt" onClick={run(() => onOpen(project.root))}>
-        Open {project.name}
+        {t('openProject', { name: project.name })}
       </MenuItem>
       <MenuItem
         icon="refresh"
         disabled={!canReindex(project, canMutate)}
         onClick={run(() => onReindex(project.root))}
       >
-        Re-index
+        {t('reindex')}
       </MenuItem>
       <MenuItem
         icon="content_copy"
         onClick={run(() => void navigator.clipboard?.writeText(project.root))}
       >
-        Copy path
+        {t('copyPath')}
       </MenuItem>
       <MenuSeparator />
       <MenuItem
@@ -155,7 +158,7 @@ export function ProjectContextMenu({
         disabled={!(canMutate && project.inDaemon)}
         onClick={run(() => onRequestRemove(project.root))}
       >
-        Remove from workspace…
+        {t('removeFromWorkspace')}
       </MenuItem>
     </Menu>
   );

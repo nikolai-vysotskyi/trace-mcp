@@ -26,6 +26,8 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatNumber } from '../i18n/format';
 import { Badge } from '../lattice/ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -156,6 +158,7 @@ interface ModeBadgeProps {
  * shaped like `/.../`. Turns red when the regex fails to compile.
  */
 function ModeBadge({ pattern }: ModeBadgeProps) {
+  const { t } = useTranslation('ui');
   if (!isRegexLiteral(pattern)) return null;
   const valid = tryCompileRegex(pattern) !== null;
   return (
@@ -163,9 +166,9 @@ function ModeBadge({ pattern }: ModeBadgeProps) {
       tone={valid ? 'accent' : 'red'}
       icon={valid ? 'code' : 'warning'}
       className="shrink-0"
-      title={valid ? 'Regex mode' : 'Invalid regex (substring fallback)'}
+      title={valid ? t('regexMode') : t('regexInvalid')}
     >
-      regex
+      {t('regex')}
     </Badge>
   );
 }
@@ -180,6 +183,7 @@ export function FilterBar({
   storageKey,
   className,
 }: FilterBarProps) {
+  const { t } = useTranslation('ui');
   // Local mirror of the parent value — this is what the inputs are bound to,
   // so typing feels instant even though the debounced version is what flows
   // back upstream via onChange.
@@ -276,13 +280,13 @@ export function FilterBar({
     <div className={`flex items-center gap-2 ${className ?? ''}`}>
       {/* Match */}
       <div className="flex-1 min-w-0 flex items-center gap-1.5">
-        <span style={labelStyle} className="shrink-0">Match</span>
+        <span style={labelStyle} className="shrink-0">{t('filterMatch')}</span>
         <div className="relative flex-1 min-w-0 flex items-center gap-1.5">
           <input
             type="text"
             value={local.match}
             onChange={(e) => setMatch(e.target.value)}
-            placeholder={placeholder?.match ?? 'substring or /regex/i'}
+            placeholder={placeholder?.match ?? t('filterPattern')}
             style={inputStyle}
             spellCheck={false}
             autoCorrect="off"
@@ -294,13 +298,13 @@ export function FilterBar({
 
       {/* Exclude */}
       <div className="flex-1 min-w-0 flex items-center gap-1.5">
-        <span style={labelStyle} className="shrink-0">Exclude</span>
+        <span style={labelStyle} className="shrink-0">{t('filterExclude')}</span>
         <div className="relative flex-1 min-w-0 flex items-center gap-1.5">
           <input
             type="text"
             value={local.exclude}
             onChange={(e) => setExclude(e.target.value)}
-            placeholder={placeholder?.exclude ?? 'substring or /regex/i'}
+            placeholder={placeholder?.exclude ?? t('filterPattern')}
             style={inputStyle}
             spellCheck={false}
             autoCorrect="off"
@@ -313,7 +317,7 @@ export function FilterBar({
       {/* Depth */}
       {depthEnabled && (
         <div className="flex items-center gap-1.5 shrink-0">
-          <span style={labelStyle}>Depth</span>
+          <span style={labelStyle}>{t('filterDepth')}</span>
           <div
             className="flex items-center"
             style={{
@@ -342,8 +346,8 @@ export function FilterBar({
                 cursor: 'pointer',
                 height: '100%',
               }}
-              title="Decrease depth (or set to ∞)"
-              aria-label="Decrease depth"
+              title={t('decreaseDepthTitle')}
+              aria-label={t('decreaseDepth')}
             >
               −
             </button>
@@ -354,7 +358,11 @@ export function FilterBar({
                 minWidth: 18,
                 textAlign: 'center',
               }}
-              title={local.depth === null ? 'Unlimited depth' : `Depth limit: ${local.depth}`}
+              title={
+                local.depth === null
+                  ? t('unlimitedDepth')
+                  : t('depthLimit', { n: formatNumber(local.depth) })
+              }
             >
               {local.depth === null ? '∞' : local.depth}
             </span>
@@ -371,8 +379,8 @@ export function FilterBar({
                 cursor: 'pointer',
                 height: '100%',
               }}
-              title="Increase depth"
-              aria-label="Increase depth"
+              title={t('increaseDepth')}
+              aria-label={t('increaseDepth')}
             >
               +
             </button>
@@ -388,7 +396,7 @@ export function FilterBar({
                 border: '0.5px solid var(--separator)',
                 cursor: 'pointer',
               }}
-              title="Reset to unlimited"
+              title={t('resetToUnlimited')}
             >
               ∞
             </button>

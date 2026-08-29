@@ -47,7 +47,7 @@ import {
   useMenuAnchor,
 } from '../lattice/ui';
 import { useDaemon } from '../hooks/useDaemon';
-import { type Appearance, APPEARANCE_OPTIONS } from '../theme.js';
+import { type Appearance, appearanceOptions } from '../theme.js';
 import {
   CONFIG_SCHEMA,
   computeDiff,
@@ -1452,7 +1452,7 @@ function AppearanceCard({
             {t('settings:appearance.theme')}
           </span>
           <PopUpButton
-            options={APPEARANCE_OPTIONS}
+            options={appearanceOptions()}
             value={appearance}
             onChange={onChange}
             // "Theme", matching the visible label beside it — an accessible

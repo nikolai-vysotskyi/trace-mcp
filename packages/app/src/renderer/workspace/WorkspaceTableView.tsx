@@ -22,6 +22,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatDate, formatNumber } from '../i18n/format';
 import { Checkbox, GradeBadge, StatusDot } from '../lattice/ui';
 import { InlineProgress } from './components/InlineProgress';
 import { ProjectPath } from './components/ProjectPath';
@@ -143,12 +145,13 @@ function SelectAllCheckbox({
   selectedCount: number;
   onChange: (next: boolean) => void;
 }) {
+  const { t } = useTranslation('workspace');
   return (
     <Checkbox
       checked={total > 0 && selectedCount === total}
       indeterminate={selectedCount > 0 && selectedCount < total}
       onChange={onChange}
-      aria-label="Select all projects"
+      aria-label={t('selectAllProjects')}
     />
   );
 }
@@ -184,6 +187,7 @@ function Row({
   onRemove,
   onContextMenu,
 }: RowProps) {
+  const { t } = useTranslation('workspace');
   const stop = (e: MouseEvent) => e.stopPropagation();
   const tdNum = 'px-3 tabular-nums text-right';
   const dotTone = statusToDot(project.displayStatus);
@@ -217,7 +221,7 @@ function Row({
         <Checkbox
           checked={selected}
           onChange={(next) => onSelectChange(project.root, next)}
-          aria-label={`Select ${project.name}`}
+          aria-label={t('selectProject', { name: project.name })}
         />
       </td>
 
@@ -250,7 +254,7 @@ function Row({
 
       <td className="px-3 whitespace-nowrap" style={{ color: 'var(--label-secondary)' }}>
         {project.lastIndexed
-          ? new Date(project.lastIndexed).toLocaleString(undefined, {
+          ? formatDate(new Date(project.lastIndexed), {
               month: 'short',
               day: 'numeric',
               hour: '2-digit',
@@ -260,10 +264,10 @@ function Row({
       </td>
 
       <td className={tdNum} style={{ color: 'var(--label)' }}>
-        {project.totalFiles?.toLocaleString() ?? '—'}
+        {project.totalFiles === undefined ? '—' : formatNumber(project.totalFiles)}
       </td>
       <td className={tdNum} style={{ color: 'var(--label)' }}>
-        {project.totalSymbols?.toLocaleString() ?? '—'}
+        {project.totalSymbols === undefined ? '—' : formatNumber(project.totalSymbols)}
       </td>
       <td className={tdNum}>
         {project.deadExports === undefined ? (
@@ -275,7 +279,7 @@ function Row({
               fontWeight: project.deadExports > 0 ? 600 : undefined,
             }}
           >
-            {project.deadExports.toLocaleString()}
+            {formatNumber(project.deadExports)}
           </span>
         )}
       </td>
@@ -284,7 +288,7 @@ function Row({
           <span style={{ color: 'var(--label-secondary)' }}>—</span>
         ) : (
           <span style={{ color: project.untestedSymbols > 0 ? 'var(--label-secondary)' : 'var(--label-secondary)' }}>
-            {project.untestedSymbols.toLocaleString()}
+            {formatNumber(project.untestedSymbols)}
           </span>
         )}
       </td>
@@ -307,7 +311,7 @@ function Row({
               fontWeight: project.securityFindings > 0 ? 600 : undefined,
             }}
           >
-            {project.securityFindings.toLocaleString()}
+            {formatNumber(project.securityFindings)}
           </span>
         )}
       </td>
@@ -343,6 +347,7 @@ export function WorkspaceTableView({
   canMutate,
   onScroll,
 }: WorkspaceTableViewProps) {
+  const { t } = useTranslation('workspace');
   const thProps = { current: sortKey, dir: sortDir, onSort };
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -384,7 +389,7 @@ export function WorkspaceTableView({
       // list-navigation contract every Mac list follows.
       tabIndex={0}
       role="grid"
-      aria-label="Projects"
+      aria-label={t('projectsGrid')}
       aria-rowcount={projects.length}
       className="flex-1 overflow-auto"
       style={{
@@ -423,39 +428,39 @@ export function WorkspaceTableView({
               <SelectAllCheckbox total={projects.length} selectedCount={selected.size} onChange={onSelectAll} />
             </th>
             <Th
-              label="Project"
+              label={t('colProject')}
               sortKey="name"
               sticky={stickyCell('left', SELECT_COL_W, STICKY_HEADER_BG)}
               {...thProps}
             />
-            <Th label="Status" sortKey="status" {...thProps} />
-            <Th label="Last indexed" sortKey="lastIndexed" {...thProps} />
-            <Th label="Files" sortKey="totalFiles" align="right" {...thProps} />
-            <Th label="Symbols" sortKey="totalSymbols" align="right" {...thProps} />
+            <Th label={t('colStatus')} sortKey="status" {...thProps} />
+            <Th label={t('colLastIndexed')} sortKey="lastIndexed" {...thProps} />
+            <Th label={t('colFiles')} sortKey="totalFiles" align="right" {...thProps} />
+            <Th label={t('colSymbols')} sortKey="totalSymbols" align="right" {...thProps} />
             <Th
-              label="Dead exports"
-              tooltip="Exported symbols never imported anywhere in the project"
+              label={t('colDeadExports')}
+              tooltip={t('colDeadExportsTip')}
               sortKey="deadExports"
               align="right"
               {...thProps}
             />
             <Th
-              label="Untested"
-              tooltip="Functions, classes and methods not referenced by any test file"
+              label={t('colUntested')}
+              tooltip={t('colUntestedTip')}
               sortKey="untestedSymbols"
               align="right"
               {...thProps}
             />
             <Th
-              label="Grade"
-              tooltip="Tech-debt grade (A–F)"
+              label={t('colGrade')}
+              tooltip={t('colGradeTip')}
               sortKey="techDebtGrade"
               align="center"
               {...thProps}
             />
             <Th
-              label="Security"
-              tooltip="Critical + high OWASP findings"
+              label={t('colSecurity')}
+              tooltip={t('colSecurityTip')}
               sortKey="securityFindings"
               align="right"
               {...thProps}
@@ -469,7 +474,7 @@ export function WorkspaceTableView({
                 ...stickyCell('right', 0, STICKY_HEADER_BG),
               }}
             >
-              Actions
+              {t('colActions')}
             </th>
           </tr>
         </thead>
