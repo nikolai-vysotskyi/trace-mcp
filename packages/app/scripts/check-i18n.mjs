@@ -27,6 +27,12 @@ const CHECKED = [
   'src/main/menu.ts',
   'src/main/tray.ts',
   'src/renderer/i18n',
+  'src/renderer/tabs/AIActivity.tsx',
+  'src/renderer/tabs/Activity.tsx',
+  'src/renderer/tabs/Insights.tsx',
+  'src/renderer/tabs/ProjectOverview.tsx',
+  'src/renderer/tabs/ToolActivity.tsx',
+  'src/renderer/tabs/insights-runtime.ts',
   'src/renderer/update-check.ts',
   'src/shared/global-actions.ts',
   'src/shared/i18n',
@@ -38,9 +44,12 @@ const PROSE_ATTRS = /\b(?:title|label|placeholder|aria-label)=(["'])([^"'{}]+)\1
 const PROSE_PROPS = /\b(?:title|label|placeholder|toolTip):\s*(["'])([^"'{}]+)\1/g;
 /* A JSX text node: between `>` and `<`, with no braces (an expression is not a
    literal) and at least two letters in a row somewhere. The lookbehind keeps
-   `=>` out of it — `(a) => b < c` is a comparison, not a rendered string. */
-const JSX_TEXT = /(?<![=<])>(\s*[^<>{}\n]*[A-Za-z]{2}[^<>{}]*)</g;
+   `=>` out of it and the lookahead keeps `>=` out — `a >= 2 || b <= 3` is
+   arithmetic, not a rendered string. */
+const JSX_TEXT = /(?<![=<])>(?!=)(\s*[^<>{}\n]*[A-Za-z]{2}[^<>{}]*)</g;
 const COMMENT = /^\s*(\/\/|\/\*|\*)/;
+const BLOCK_OPEN = /\/\*/;
+const BLOCK_CLOSE = /\*\//;
 
 /** Punctuation, glyphs, single tokens: not prose, not worth a catalogue key. */
 function isProse(text) {
@@ -76,7 +85,19 @@ for (const path of CHECKED) {
     // The catalogue is where the strings are supposed to be.
     if (file.includes('/catalog/')) continue;
     const lines = readFileSync(file, 'utf8').split('\n');
+    /* A block comment's CONTINUATION lines start with prose, not with `*`, and
+       the ones explaining JSX quote tags — "renders a <button>s, and a <button>
+       nested inside" reads to the regex as a text node. Track the comment
+       across lines rather than pattern-matching each one. */
+    let inBlock = false;
     lines.forEach((line, i) => {
+      const wasInBlock = inBlock;
+      if (BLOCK_OPEN.test(line) && !BLOCK_CLOSE.test(line.slice(line.search(BLOCK_OPEN)))) {
+        inBlock = true;
+      } else if (inBlock && BLOCK_CLOSE.test(line)) {
+        inBlock = false;
+      }
+      if (wasInBlock) return;
       if (line.includes('i18n-exempt') || COMMENT.test(line)) return;
       for (const re of [PROSE_ATTRS, PROSE_PROPS, JSX_TEXT]) {
         re.lastIndex = 0;

@@ -9,6 +9,9 @@
  * 20px top margin inside a pane that is already full height.
  */
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { t } from '../i18n';
+import { formatDate, formatNumber, relativeTime } from '../i18n/format';
 import { Icon } from '../lattice/icons';
 import {
   Badge,
@@ -49,15 +52,21 @@ interface AIStats {
 
 /* Tones come from the shared status palette, so every series in this surface
    is contrast-checked once, in tokens.css, instead of six times in hex here. */
-const TYPE_META: Record<string, { label: string; tone: Tone }> = {
-  embed: { label: 'Embed', tone: 'purple' },
-  embed_batch: { label: 'Batch', tone: 'purple' },
-  generate: { label: 'Generate', tone: 'blue' },
-  generate_stream: { label: 'Stream', tone: 'accent' },
-  rerank: { label: 'Rerank', tone: 'orange' },
+const TYPE_META: Record<string, { labelKey: string; tone: Tone }> = {
+  embed: { labelKey: 'activity:typeEmbed', tone: 'purple' },
+  embed_batch: { labelKey: 'activity:typeBatch', tone: 'purple' },
+  generate: { labelKey: 'activity:typeGenerate', tone: 'blue' },
+  generate_stream: { labelKey: 'activity:typeStream', tone: 'accent' },
+  rerank: { labelKey: 'activity:typeRerank', tone: 'orange' },
 };
-const typeMeta = (t: string): { label: string; tone: Tone } =>
-  TYPE_META[t] ?? { label: t.replace(/_/g, ' '), tone: 'neutral' };
+/* A type the daemon grew since this list was written still gets a readable
+   label — its own id with the underscores taken out — rather than a blank. */
+const typeMeta = (type: string): { label: string; tone: Tone } => {
+  const known = TYPE_META[type];
+  return known
+    ? { label: t(known.labelKey), tone: known.tone }
+    : { label: type.replace(/_/g, ' '), tone: 'neutral' };
+};
 
 const TYPE_VAR: Record<Tone, string> = {
   /* A meter segment is decoration, not text, so the neutral series takes the
@@ -72,31 +81,26 @@ const TYPE_VAR: Record<Tone, string> = {
   purple: 'var(--status-purple)',
 };
 
-const fmtMs = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
+const fmtMs = (ms: number) =>
+  ms < 1000
+    ? t('activity:ms', { n: formatNumber(Math.round(ms)) })
+    : t('activity:seconds', {
+        n: formatNumber(ms / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+      });
 const fmtTime = (iso: string) => {
-  try {
-    return new Date(iso).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  } catch {
-    return '';
-  }
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return '';
+  return formatDate(ts, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
-const fmtAgo = (iso: string) => {
-  const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 5) return 'just now';
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  return `${Math.floor(s / 3600)}h ago`;
-};
+/* "2 hr. ago" through Intl. The hand-rolled version this replaces said "2h
+   ago", which Russian cannot say without a minus sign (see i18n/format.ts). */
+const fmtAgo = (iso: string) => relativeTime(new Date(iso).getTime(), Date.now(), 'short');
 
 /** ok / error / pending, said in a word as well as a tone. */
-const STATUS_META: Record<AIEntry['status'], { tone: Tone; label: string; icon?: string }> = {
-  ok: { tone: 'green', label: 'OK' },
-  error: { tone: 'red', label: 'Error', icon: 'warning' },
-  pending: { tone: 'orange', label: 'Running', icon: 'schedule' },
+const STATUS_META: Record<AIEntry['status'], { tone: Tone; labelKey: string; icon?: string }> = {
+  ok: { tone: 'green', labelKey: 'activity:statusOk' },
+  error: { tone: 'red', labelKey: 'activity:statusError', icon: 'warning' },
+  pending: { tone: 'orange', labelKey: 'activity:statusRunning', icon: 'schedule' },
 };
 
 /* ── Metric card — content anatomy: label → value → footnote. No glass. ── */
@@ -148,6 +152,7 @@ function TypeBar({
   filter: string | null;
   onFilter: (next: string | null) => void;
 }) {
+  const { t } = useTranslation('activity');
   const types = Object.entries(stats.by_type);
   const total = stats.total_requests || 1;
   return (
@@ -159,7 +164,7 @@ function TypeBar({
         {types.map(([type, s]) => (
           <div
             key={type}
-            title={`${typeMeta(type).label}: ${s.count}`}
+            title={t('typeCount', { label: typeMeta(type).label, n: formatNumber(s.count) })}
             style={{
               width: `${(s.count / total) * 100}%`,
               background: TYPE_VAR[typeMeta(type).tone],
@@ -179,7 +184,7 @@ function TypeBar({
           aria-pressed={filter === null}
           onClick={() => onFilter(null)}
         >
-          All {stats.total_requests.toLocaleString()}
+          {t('typeAll', { n: formatNumber(stats.total_requests) })}
         </button>
         {types.map(([type, s]) => {
           const meta = typeMeta(type);
@@ -191,11 +196,11 @@ function TypeBar({
               className={`lx-chip single${active ? ' is-on' : ''}`}
               aria-pressed={active}
               onClick={() => onFilter(active ? null : type)}
-              title={`Show only ${meta.label.toLowerCase()} requests`}
+              title={t('typeFilter', { label: meta.label })}
             >
               <StatusDot tone={meta.tone} size={6} />
               {meta.label}
-              <span className="tabular-nums">{s.count}</span>
+              <span className="tabular-nums">{formatNumber(s.count)}</span>
             </button>
           );
         })}
@@ -206,6 +211,7 @@ function TypeBar({
 
 /* ── Single request row ── */
 function RequestRow({ entry, isLast }: { entry: AIEntry; isLast: boolean }) {
+  const { t } = useTranslation('activity');
   const [showDetail, setShowDetail] = useState(false);
   const meta = typeMeta(entry.type);
   const status = STATUS_META[entry.status];
@@ -237,7 +243,7 @@ function RequestRow({ entry, isLast }: { entry: AIEntry; isLast: boolean }) {
         <StatusDot
           tone={status.tone}
           pulse={isPending}
-          title={status.label}
+          title={t(status.labelKey)}
           className="shrink-0"
         />
         <Badge tone={meta.tone}>{meta.label}</Badge>
@@ -252,7 +258,7 @@ function RequestRow({ entry, isLast }: { entry: AIEntry; isLast: boolean }) {
 
         {entry.status === 'error' && (
           <Badge tone="red" icon="warning">
-            Error
+            {t('statusError')}
           </Badge>
         )}
 
@@ -262,9 +268,9 @@ function RequestRow({ entry, isLast }: { entry: AIEntry; isLast: boolean }) {
             fontFamily: 'var(--font-mono)',
             color: slow ? 'var(--status-orange)' : 'var(--label-secondary)',
           }}
-          title={slow ? 'Over 5 seconds' : undefined}
+          title={slow ? t('overFiveSeconds') : undefined}
         >
-          {isPending ? 'running…' : fmtMs(entry.duration_ms)}
+          {isPending ? t('running') : fmtMs(entry.duration_ms)}
         </span>
 
         <span
@@ -288,29 +294,35 @@ function RequestRow({ entry, isLast }: { entry: AIEntry; isLast: boolean }) {
             color: 'var(--label)',
           }}
         >
-          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>Time</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+            {t('detailTime')}
+          </span>
           <span>{fmtTime(entry.timestamp)}</span>
-          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>URL</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+            {t('detailUrl')}
+          </span>
           <span className="truncate">{entry.url}</span>
           <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
-            Input
+            {t('detailInput')}
           </span>
           <span>
             {entry.type.startsWith('embed')
-              ? `${entry.input_size.toLocaleString()} items`
-              : `${entry.input_size.toLocaleString()} chars`}
+              ? t('items', { n: formatNumber(entry.input_size) })
+              : t('chars', { n: formatNumber(entry.input_size) })}
           </span>
           <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
-            Output
+            {t('detailOutput')}
           </span>
           <span>
             {entry.type.startsWith('embed')
-              ? `${entry.output_size.toLocaleString()} vectors`
-              : `${entry.output_size.toLocaleString()} chars`}
+              ? t('vectors', { n: formatNumber(entry.output_size) })
+              : t('chars', { n: formatNumber(entry.output_size) })}
           </span>
           {entry.error && (
             <>
-              <span style={{ color: 'var(--status-red)', fontFamily: 'var(--font-ui)' }}>Error</span>
+              <span style={{ color: 'var(--status-red)', fontFamily: 'var(--font-ui)' }}>
+                {t('detailError')}
+              </span>
               <span
                 style={{
                   color: 'var(--status-red)',
@@ -343,6 +355,7 @@ function readPersistedFilter(): string | null {
 }
 
 export function AIActivity({ subTab }: { subTab?: ReactNode }) {
+  const { t } = useTranslation('activity');
   const [entries, setEntries] = useState<AIEntry[]>([]);
   const [stats, setStats] = useState<AIStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -368,6 +381,8 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
       setStats(data.stats ?? null);
       setError(null);
     } catch (e) {
+      /* A flag, not a message: `error` only decides between the feed's
+         "Offline" state and the retry panel — its text is never rendered. */
       setError((e as Error)?.message ?? 'Failed to fetch');
     } finally {
       setLoading(false);
@@ -400,7 +415,7 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
       : 0;
 
   const feedTone: Tone = error ? 'red' : hasPending ? 'orange' : 'green';
-  const feedLabel = error ? 'Offline' : hasPending ? 'Running' : 'Idle';
+  const feedLabel = error ? t('feedOffline') : hasPending ? t('feedRunning') : t('feedIdle');
 
   return (
     <div className="flex flex-col h-full overflow-hidden" style={{ color: 'var(--label)' }}>
@@ -414,7 +429,7 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
           <StatusDot tone={feedTone} pulse={hasPending} />
           <span style={{ color: 'var(--label)' }}>{feedLabel}</span>
           <span className="tabular-nums">
-            · {entries.length.toLocaleString()} request{entries.length === 1 ? '' : 's'}
+            {`· ${t('requests', { count: entries.length, n: formatNumber(entries.length) })}`}
           </span>
         </span>
 
@@ -426,7 +441,7 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
             className="is-on shrink-0"
             icon="close"
             onClick={() => setFilter(null)}
-            title="Show every request type"
+            title={t('showEveryType')}
           >
             {typeMeta(filter).label}
           </Button>
@@ -435,8 +450,8 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
         <SearchField
           value={query}
           onChange={setQuery}
-          placeholder="Search requests"
-          aria-label="Search requests"
+          placeholder={t('searchRequests')}
+          aria-label={t('searchRequests')}
         />
       </Toolbar>
 
@@ -449,14 +464,17 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
             <>
               <div className="flex gap-3">
                 <MetricCard
-                  label="Requests"
-                  value={stats.total_requests.toLocaleString()}
-                  sub={`${Object.keys(stats.by_type).length} type${Object.keys(stats.by_type).length !== 1 ? 's' : ''}`}
+                  label={t('metricRequests')}
+                  value={formatNumber(stats.total_requests)}
+                  sub={t('metricTypes', {
+                    count: Object.keys(stats.by_type).length,
+                    n: formatNumber(Object.keys(stats.by_type).length),
+                  })}
                 />
                 <MetricCard
-                  label="Average latency"
+                  label={t('metricLatency')}
                   value={fmtMs(avgMs)}
-                  sub={`${fmtMs(stats.total_duration_ms)} total`}
+                  sub={t('metricTotal', { duration: fmtMs(stats.total_duration_ms) })}
                   color={
                     avgMs > 3000
                       ? 'var(--status-red)'
@@ -466,9 +484,13 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
                   }
                 />
                 <MetricCard
-                  label="Errors"
-                  value={stats.total_errors.toLocaleString()}
-                  sub={errorRate > 0 ? `${errorRate}% of requests` : 'None so far'}
+                  label={t('metricErrors')}
+                  value={formatNumber(stats.total_errors)}
+                  sub={
+                    errorRate > 0
+                      ? t('metricErrorRate', { pct: formatNumber(errorRate) })
+                      : t('metricNoErrors')
+                  }
                   color={stats.total_errors > 0 ? 'var(--status-red)' : undefined}
                 />
               </div>
@@ -478,17 +500,17 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
 
           <Card>
             {loading && entries.length === 0 && (
-              <EmptyState compact icon="schedule" title="Connecting to the daemon…" />
+              <EmptyState compact icon="schedule" title={t('connecting')} />
             )}
             {error && entries.length === 0 && !loading && (
-              <SectionError what="AI request history" onRetry={() => void fetchActivity()} />
+              <SectionError what={t('errorAiHistory')} onRetry={() => void fetchActivity()} />
             )}
             {!loading && !error && entries.length === 0 && (
               <EmptyState
                 compact
                 icon="neurology"
-                title="No AI requests yet"
-                subtitle="Embedding, generation and rerank calls show up here while a project indexes or a semantic search runs."
+                title={t('emptyRequestsTitle')}
+                subtitle={t('emptyRequestsBody')}
               />
             )}
             {filtered.map((e, i) => (
@@ -500,8 +522,11 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
                 <EmptyState
                   compact
                   icon="search"
-                  title="No matching requests"
-                  subtitle={`${entries.length.toLocaleString()} request${entries.length === 1 ? '' : 's'} are hidden by the current search and filter.`}
+                  title={t('emptyRequestsMatchTitle')}
+                  subtitle={t('emptyRequestsMatch', {
+                    count: entries.length,
+                    n: formatNumber(entries.length),
+                  })}
                   action={
                     <Button
                       icon="close"
@@ -510,7 +535,7 @@ export function AIActivity({ subTab }: { subTab?: ReactNode }) {
                         setQuery('');
                       }}
                     >
-                      Clear filters and search
+                      {t('clearFiltersAndSearch')}
                     </Button>
                   }
                 />

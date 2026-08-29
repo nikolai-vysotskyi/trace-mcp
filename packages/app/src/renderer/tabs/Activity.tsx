@@ -12,6 +12,7 @@
  * control rows and no toolbar.
  */
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ToolActivity } from './ToolActivity';
 import { AIActivity } from './AIActivity';
 import { SegmentedControl } from '../lattice/ui';
@@ -35,6 +36,7 @@ export function Activity({
   root: string;
   onOpenFileInGraph?: (filePath: string) => void;
 }) {
+  const { t } = useTranslation('activity');
   const [sub, setSub] = useState<SubTab>(readStored);
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, sub); } catch { /* ignore quota */ }
@@ -44,12 +46,12 @@ export function Activity({
     <SegmentedControl
       className="shrink-0"
       options={[
-        { value: 'tool', label: 'Tool calls' },
-        { value: 'ai', label: 'AI calls' },
+        { value: 'tool', label: t('sourceTool') },
+        { value: 'ai', label: t('sourceAi') },
       ]}
       value={sub}
       onChange={setSub}
-      aria-label="Activity source"
+      aria-label={t('sourceLabel')}
     />
   );
 

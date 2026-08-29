@@ -28,6 +28,9 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
+import { t } from '../i18n';
+import { formatDate, formatNumber, relativeTime } from '../i18n/format';
 import { Icon } from '../lattice/icons';
 import {
   Badge,
@@ -52,11 +55,11 @@ const STATS_INTERVAL_MS = 30_000;
 
 // Window picker options for stats. Default is 1 hour; user can switch and the
 // choice is persisted in localStorage under WINDOW_STORAGE_KEY.
-const WINDOW_OPTIONS: { label: string; value: number }[] = [
-  { label: '5m', value: 300_000 },
-  { label: '1h', value: 3_600_000 },
-  { label: '6h', value: 21_600_000 },
-  { label: '24h', value: 86_400_000 },
+const WINDOW_OPTIONS: { labelKey: string; value: number }[] = [
+  { labelKey: 'activity:window5m', value: 300_000 },
+  { labelKey: 'activity:window1h', value: 3_600_000 },
+  { labelKey: 'activity:window6h', value: 21_600_000 },
+  { labelKey: 'activity:window24h', value: 86_400_000 },
 ];
 const DEFAULT_WINDOW_MS = 3_600_000; // 1 hour
 const VALID_WINDOWS = new Set(WINDOW_OPTIONS.map((o) => o.value));
@@ -75,7 +78,7 @@ function loadWindowMs(): number {
 }
 
 function windowLabel(ms: number): string {
-  return WINDOW_OPTIONS.find((o) => o.value === ms)?.label ?? '1h';
+  return t(WINDOW_OPTIONS.find((o) => o.value === ms)?.labelKey ?? 'activity:window1h');
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -139,14 +142,6 @@ interface JournalStats {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
-
-function relativeTime(ts: number): string {
-  const delta = Math.max(0, Date.now() - ts);
-  if (delta < 5000) return 'just now';
-  if (delta < 60_000) return `${Math.floor(delta / 1000)}s ago`;
-  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m ago`;
-  return `${Math.floor(delta / 3_600_000)}h ago`;
-}
 
 function truncate(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max)}…`;
@@ -273,11 +268,7 @@ function tokenizeParams(
         onMouseLeave={(e) => {
           e.currentTarget.style.textDecoration = 'none';
         }}
-        title={
-          navigates
-            ? 'Click to open in Graph · ⌥-click to copy path'
-            : 'Click to copy path'
-        }
+        title={navigates ? t('activity:filePathNavigate') : t('activity:filePathCopy')}
         style={btnStyle}
       >
         {span.file}
@@ -304,10 +295,10 @@ function topTools(entries: JournalEntry[], n: number): string[] {
 }
 
 function formatLatencyBucket(bucket_ms: number): string {
-  if (bucket_ms === -1) return '5s+';
-  if (bucket_ms === 0) return '<10ms';
-  if (bucket_ms < 1000) return `${bucket_ms}ms`;
-  return `${bucket_ms / 1000}s`;
+  if (bucket_ms === -1) return t('activity:secondsOver');
+  if (bucket_ms === 0) return t('activity:msUnder10');
+  if (bucket_ms < 1000) return t('activity:msCompact', { n: formatNumber(bucket_ms) });
+  return t('activity:secondsCompact', { n: formatNumber(bucket_ms / 1000) });
 }
 
 // p95 from latency_buckets (approximate — uses bucket left-edges)
@@ -366,7 +357,7 @@ interface DeltaInfo {
  */
 function computeDelta(cur: number, prev: number): DeltaInfo {
   if (prev === 0) {
-    if (cur > 0) return { text: 'new', direction: 'up', isNew: true };
+    if (cur > 0) return { text: t('activity:deltaNew'), direction: 'up', isNew: true };
     return { text: '—', direction: 'flat', isNew: false };
   }
   if (cur === prev) return { text: '0%', direction: 'flat', isNew: false };
@@ -408,6 +399,7 @@ function DeltaBadge({
   prevLabel: string;
   unit: string;
 }) {
+  const { t } = useTranslation('activity');
   const delta = computeDelta(cur, prev);
   let color = 'var(--label-secondary)';
   if (higherIsBad && delta.direction !== 'flat') {
@@ -416,7 +408,12 @@ function DeltaBadge({
   /* The arrow is not decoration: it is the second channel that carries
      "better / worse" for anyone who cannot separate the red from the green. */
   const glyph = delta.direction === 'up' ? '↑' : delta.direction === 'down' ? '↓' : '';
-  const title = `vs previous ${windowLabel(windowMs)}: ${prevLabel} → ${curLabel}${unit ? ` ${unit}` : ''}`;
+  const title = t(unit ? 'deltaTitleUnit' : 'deltaTitle', {
+    window: windowLabel(windowMs),
+    prev: prevLabel,
+    cur: curLabel,
+    unit,
+  });
   /* "184 calls 0%" reads as a broken number. No change is not a delta — the
      comparison lives in the tooltip and the badge stays out of the way. */
   if (delta.direction === 'flat') return null;
@@ -467,6 +464,7 @@ function EntryRow({
   entryIdx?: number;
   onOpenFileInGraph?: (filePath: string) => void;
 }) {
+  const { t } = useTranslation('activity');
   const [, setTick] = useState(0);
   // Set when the user clicks a file-path in params_summary; cleared after 1.5s.
   // Lives per-row so multiple rows can show "Copied" independently.
@@ -488,7 +486,7 @@ function EntryRow({
   const rowBg = entry.is_error
     ? 'color-mix(in oklab, var(--status-red) 7%, transparent)'
     : 'transparent';
-  const absoluteTime = new Date(entry.ts).toLocaleTimeString([], {
+  const absoluteTime = formatDate(entry.ts, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -571,7 +569,7 @@ function EntryRow({
           className="shrink-0 text-[11px] leading-[13px] tabular-nums mt-1 w-14 text-right"
           style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-mono)' }}
         >
-          {relativeTime(entry.ts)}
+          {relativeTime(entry.ts, Date.now(), 'short')}
         </span>
 
         {/* Tool badge */}
@@ -584,7 +582,7 @@ function EntryRow({
         {entry.is_error && (
           <span className="shrink-0 mt-0.5">
             <Badge tone="red" icon="warning">
-              Error
+              {t('detailError')}
             </Badge>
           </span>
         )}
@@ -613,7 +611,7 @@ function EntryRow({
                 }}
                 title={recentlyCopied}
               >
-                Copied
+                {t('copied')}
               </span>
             )}
           </div>
@@ -622,17 +620,25 @@ function EntryRow({
             style={{ color: 'var(--label-secondary)' }}
           >
             <span>
-              {entry.result_count} result{entry.result_count === 1 ? '' : 's'}
+              {t('results', {
+                count: entry.result_count,
+                n: formatNumber(entry.result_count),
+              })}
             </span>
             {entry.latency_ms !== undefined && (
               <span>
                 {entry.latency_ms < 1000
-                  ? `${entry.latency_ms} ms`
-                  : `${(entry.latency_ms / 1000).toFixed(1)} s`}
+                  ? t('ms', { n: formatNumber(entry.latency_ms) })
+                  : t('seconds', {
+                      n: formatNumber(entry.latency_ms / 1000, {
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: 1,
+                      }),
+                    })}
               </span>
             )}
             {entry.result_tokens !== undefined && (
-              <span>~{entry.result_tokens.toLocaleString()} tokens</span>
+              <span>{t('tokensApprox', { n: formatNumber(entry.result_tokens) })}</span>
             )}
           </div>
         </div>
@@ -652,15 +658,19 @@ function EntryRow({
             color: 'var(--label)',
           }}
         >
-          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>Time</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+            {t('detailTime')}
+          </span>
           <span>{absoluteTime}</span>
 
           <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
-            Session
+            {t('detailSession')}
           </span>
           <span style={{ wordBreak: 'break-all' }}>{entry.session_id}</span>
 
-          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>Tool</span>
+          <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
+            {t('detailTool')}
+          </span>
           <span style={{ wordBreak: 'break-all' }}>{entry.tool}</span>
 
           <span
@@ -672,9 +682,9 @@ function EntryRow({
               gap: 6,
             }}
           >
-            Params
-            <Button size="small" onClick={handleCopyParams} title="Copy full params to clipboard">
-              Copy
+            {t('detailParams')}
+            <Button size="small" onClick={handleCopyParams} title={t('copyParams')}>
+              {t('copy')}
             </Button>
           </span>
           <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -682,33 +692,35 @@ function EntryRow({
           </span>
 
           <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
-            Results
+            {t('detailResults')}
           </span>
-          <span>{entry.result_count}</span>
+          <span>{formatNumber(entry.result_count)}</span>
 
           {entry.latency_ms !== undefined && (
             <>
               <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
-                Latency
+                {t('detailLatency')}
               </span>
-              <span>{entry.latency_ms} ms</span>
+              <span>{t('ms', { n: formatNumber(entry.latency_ms) })}</span>
             </>
           )}
 
           {entry.result_tokens !== undefined && (
             <>
               <span style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-ui)' }}>
-                Tokens
+                {t('detailTokens')}
               </span>
-              <span>{entry.result_tokens.toLocaleString()}</span>
+              <span>{formatNumber(entry.result_tokens)}</span>
             </>
           )}
 
           {entry.is_error && (
             <>
-              <span style={{ color: 'var(--status-red)', fontFamily: 'var(--font-ui)' }}>Error</span>
               <span style={{ color: 'var(--status-red)', fontFamily: 'var(--font-ui)' }}>
-                This call returned an error.
+                {t('detailError')}
+              </span>
+              <span style={{ color: 'var(--status-red)', fontFamily: 'var(--font-ui)' }}>
+                {t('detailErrorBody')}
               </span>
             </>
           )}
@@ -739,6 +751,7 @@ function StatsSummaryBar({
   windowMs: number;
   onWindowChange: (ms: number) => void;
 }) {
+  const { t } = useTranslation('activity');
   const errorPct = (stats.error_rate * 100).toFixed(1);
   const p95 = computeP95(stats.latency_buckets);
   const curP95Ms = p95Ms(stats.latency_buckets);
@@ -766,7 +779,7 @@ function StatsSummaryBar({
       role="button"
       tabIndex={0}
       aria-expanded={expanded}
-      aria-label="Statistics"
+      aria-label={t('statsLabel')}
       className="w-full flex items-center gap-3 px-4 py-1.5 text-left"
       style={{
         background: 'var(--surface)',
@@ -779,33 +792,33 @@ function StatsSummaryBar({
         className="text-[11px] leading-[13px] font-semibold"
         style={{ color: 'var(--label-secondary)' }}
       >
-        Stats
+        {t('stats')}
       </span>
       {/* Window picker — segmented control, click does not toggle the bar */}
       <div onClick={stopBubble} onKeyDown={stopBubble} className="shrink-0">
         <SegmentedControl
           size="small"
-          options={WINDOW_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+          options={WINDOW_OPTIONS.map((o) => ({ value: String(o.value), label: t(o.labelKey) }))}
           value={String(windowMs)}
           onChange={(v) => onWindowChange(Number(v))}
-          aria-label="Stats window"
+          aria-label={t('statsWindow')}
         />
       </div>
       <span
         className="flex items-center gap-1 text-[13px] leading-4"
         style={{ color: 'var(--label)' }}
       >
-        <span className="font-semibold tabular-nums">{stats.total_calls.toLocaleString()}</span>
-        <span style={{ color: 'var(--label-secondary)' }}>calls</span>
+        <span className="font-semibold tabular-nums">{formatNumber(stats.total_calls)}</span>
+        <span style={{ color: 'var(--label-secondary)' }}>{t('statCalls')}</span>
         {prevStats !== null && (
           <DeltaBadge
             cur={stats.total_calls}
             prev={prevStats.total_calls}
             higherIsBad={false}
             windowMs={windowMs}
-            curLabel={stats.total_calls.toLocaleString()}
-            prevLabel={prevStats.total_calls.toLocaleString()}
-            unit="calls"
+            curLabel={formatNumber(stats.total_calls)}
+            prevLabel={formatNumber(prevStats.total_calls)}
+            unit={t('statCalls')}
           />
         )}
       </span>
@@ -814,7 +827,7 @@ function StatsSummaryBar({
         style={{ color: errorColor }}
       >
         <span className="font-semibold tabular-nums">{errorPct}%</span>
-        <span style={{ color: 'var(--label-secondary)' }}>errors</span>
+        <span style={{ color: 'var(--label-secondary)' }}>{t('statErrors')}</span>
         {prevStats !== null && (
           <DeltaBadge
             cur={stats.error_rate}
@@ -832,7 +845,7 @@ function StatsSummaryBar({
         style={{ color: 'var(--label)' }}
       >
         <span className="font-semibold tabular-nums">{p95}</span>
-        <span style={{ color: 'var(--label-secondary)' }}>p95</span>
+        <span style={{ color: 'var(--label-secondary)' }}>{t('statP95')}</span>
         {prevStats !== null && (
           <DeltaBadge
             cur={curP95Ms}
@@ -877,24 +890,28 @@ function HotToolsChart({
   onToolClick: (tool: string) => void;
   toolFilter: Set<string>;
 }) {
+  const { t } = useTranslation('activity');
   if (tools.length === 0) return null;
   const maxCount = tools[0].count;
   return (
     <div>
-      <ChartTitle>Most-used tools</ChartTitle>
+      <ChartTitle>{t('chartHotTools')}</ChartTitle>
       <div className="flex flex-col gap-1">
-        {tools.map((t) => {
-          const pct = maxCount > 0 ? (t.count / maxCount) * 100 : 0;
-          const isActive = toolFilter.has(t.tool);
-          const hasErrors = t.error_count > 0;
+        {tools.map((tool) => {
+          const pct = maxCount > 0 ? (tool.count / maxCount) * 100 : 0;
+          const isActive = toolFilter.has(tool.tool);
+          const hasErrors = tool.error_count > 0;
           return (
             <button
-              key={t.tool}
+              key={tool.tool}
               type="button"
-              onClick={() => onToolClick(t.tool)}
+              onClick={() => onToolClick(tool.tool)}
               className="flex items-center gap-2 w-full text-left"
               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '1px 0' }}
-              title={`avg ${t.avg_latency_ms}ms · ${t.error_count} errors`}
+              title={t('hotToolTitle', {
+                ms: formatNumber(tool.avg_latency_ms),
+                errors: formatNumber(tool.error_count),
+              })}
             >
               <span
                 className="shrink-0 text-[11px] leading-[13px] tabular-nums w-36 truncate"
@@ -904,7 +921,7 @@ function HotToolsChart({
                   fontFamily: 'var(--font-mono)',
                 }}
               >
-                {t.tool}
+                {tool.tool}
               </span>
               <div
                 className="flex-1 relative h-2 overflow-hidden"
@@ -927,16 +944,16 @@ function HotToolsChart({
                 <span
                   className="shrink-0 text-[11px] leading-[13px] tabular-nums"
                   style={{ color: 'var(--status-red)' }}
-                  title={`${t.error_count} errors`}
+                  title={t('hotToolErrors', { n: formatNumber(tool.error_count) })}
                 >
-                  ⚠ {t.error_count}
+                  ⚠ {formatNumber(tool.error_count)}
                 </span>
               )}
               <span
                 className="shrink-0 text-[11px] leading-[13px] tabular-nums w-8 text-right"
                 style={{ color: 'var(--label-secondary)' }}
               >
-                {t.count}
+                {formatNumber(tool.count)}
               </span>
             </button>
           );
@@ -951,11 +968,12 @@ function HotToolsChart({
  * Renders nothing when the list is empty.
  */
 function HotFilesList({ files }: { files: HotFile[] }) {
+  const { t } = useTranslation('activity');
   if (files.length === 0) return null;
   const maxCount = files[0].count;
   return (
     <div>
-      <ChartTitle>Most-read files</ChartTitle>
+      <ChartTitle>{t('chartHotFiles')}</ChartTitle>
       <div className="flex flex-col gap-1">
         {files.map((f) => {
           const pct = maxCount > 0 ? (f.count / maxCount) * 100 : 0;
@@ -994,7 +1012,7 @@ function HotFilesList({ files }: { files: HotFile[] }) {
                 className="shrink-0 text-[11px] leading-[13px] tabular-nums w-8 text-right"
                 style={{ color: 'var(--label-secondary)' }}
               >
-                {f.count}
+                {formatNumber(f.count)}
               </span>
             </div>
           );
@@ -1008,10 +1026,11 @@ function HotFilesList({ files }: { files: HotFile[] }) {
  * Vertical bar latency histogram (pure CSS).
  */
 function LatencyHistogram({ buckets }: { buckets: LatencyBucket[] }) {
+  const { t } = useTranslation('activity');
   const maxCount = Math.max(...buckets.map((b) => b.count), 1);
   return (
     <div>
-      <ChartTitle>Latency</ChartTitle>
+      <ChartTitle>{t('chartLatency')}</ChartTitle>
       {/* One label per bar was 8px and unreadable at any width the panel gets.
           A histogram's x-axis only has to name its ends; the rest is the
           shape, and each bar keeps its own bucket in the tooltip. */}
@@ -1023,7 +1042,11 @@ function LatencyHistogram({ buckets }: { buckets: LatencyBucket[] }) {
             <div
               key={b.bucket_ms}
               className="flex-1 flex items-end h-full"
-              title={`${label}: ${b.count} call${b.count === 1 ? '' : 's'}`}
+              title={t('latencyBucketTitle', {
+                bucket: label,
+                count: b.count,
+                n: formatNumber(b.count),
+              })}
             >
               <div
                 className="w-full"
@@ -1066,12 +1089,13 @@ function ErrorGroupsList({
   toolFilter: Set<string>;
   errorsOnly: boolean;
 }) {
+  const { t } = useTranslation('activity');
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
   if (groups.length === 0) return null;
 
   return (
     <div>
-      <ChartTitle>Errors by tool</ChartTitle>
+      <ChartTitle>{t('chartErrorGroups')}</ChartTitle>
       <div className="flex flex-col gap-0.5">
         {groups.map((g) => {
           const isExpanded = expandedTool === g.tool;
@@ -1084,8 +1108,10 @@ function ErrorGroupsList({
                   className="lx-btn v-icon sz-small shrink-0"
                   onClick={() => setExpandedTool(isExpanded ? null : g.tool)}
                   aria-expanded={isExpanded}
-                  aria-label={`${isExpanded ? 'Hide' : 'Show'} a sample error for ${g.tool}`}
-                  title={isExpanded ? 'Hide sample' : 'Show sample'}
+                  aria-label={t(isExpanded ? 'errorSampleHide' : 'errorSampleShow', {
+                    tool: g.tool,
+                  })}
+                  title={t(isExpanded ? 'errorSampleHideShort' : 'errorSampleShowShort')}
                 >
                   <Icon name={isExpanded ? 'expand_more' : 'chevron_right'} size={14} />
                 </button>
@@ -1102,11 +1128,11 @@ function ErrorGroupsList({
                     fontFamily: 'var(--font-mono)',
                     padding: 0,
                   }}
-                  title={`Show only ${g.tool} errors`}
+                  title={t('errorGroupFilter', { tool: g.tool })}
                 >
                   {g.tool}
                 </button>
-                <Badge tone="red">{g.count}</Badge>
+                <Badge tone="red">{formatNumber(g.count)}</Badge>
               </div>
               {isExpanded && (
                 <div
@@ -1155,6 +1181,7 @@ function Sparkline({
   onSelectRange: (range: { start: number; end: number } | null) => void;
   activeRange: { start: number; end: number } | null;
 }) {
+  const { t } = useTranslation('activity');
   const maxCount = Math.max(...byMinute.map((m) => m.count), 1);
   const barsRef = useRef<HTMLDivElement>(null);
   // Drag anchor bar index (set on pointerdown) and the current hovered bar
@@ -1234,16 +1261,16 @@ function Sparkline({
   return (
     <div>
       <div className="flex items-center gap-1 mb-1.5">
-        <ChartTitle>Last {windowLabel(windowMs)}</ChartTitle>
+        <ChartTitle>{t('chartSparkline', { window: windowLabel(windowMs) })}</ChartTitle>
         {activeRange !== null && (
           <button
             type="button"
             onClick={() => onSelectRange(null)}
-            title="Clear time-range filter"
-            aria-label="Clear time-range filter"
+            title={t('clearTimeRange')}
+            aria-label={t('clearTimeRange')}
             className="lx-btn v-plain sz-small -mt-1.5"
           >
-            Clear
+            {t('clear')}
           </button>
         )}
       </div>
@@ -1261,12 +1288,16 @@ function Sparkline({
           const heightPct = (m.count / maxCount) * 100;
           const hasErrors = m.error_count > 0;
           const inRange = isActive(m.ts);
-          const minuteLabel = new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const minuteLabel = formatDate(m.ts, { hour: '2-digit', minute: '2-digit' });
           return (
             <div
               key={m.ts}
               className="flex-1 rounded-t-sm"
-              title={`${minuteLabel}: ${m.count} calls${hasErrors ? `, ${m.error_count} errors` : ''}`}
+              title={t(hasErrors ? 'sparklineTitleErrors' : 'sparklineTitle', {
+                time: minuteLabel,
+                calls: formatNumber(m.count),
+                errors: formatNumber(m.error_count),
+              })}
               style={{
                 height: `${heightPct}%`,
                 minHeight: m.count > 0 ? 2 : 0,
@@ -1320,6 +1351,7 @@ function StatsPanel({
   onSelectRange: (range: { start: number; end: number } | null) => void;
   timeRange: { start: number; end: number } | null;
 }) {
+  const { t } = useTranslation('activity');
   return (
     <div
       className="shrink-0 px-4 py-3 flex flex-col gap-4"
@@ -1365,7 +1397,7 @@ function StatsPanel({
               className="text-[11px] leading-[13px]"
               style={{ color: 'var(--label-secondary)' }}
             >
-              No errors in this window.
+              {t('noErrorsInWindow')}
             </div>
           )}
         </div>
@@ -1461,7 +1493,7 @@ function groupEntriesBySession(entries: JournalEntry[]): SessionGroup[] {
 }
 
 function formatGroupTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], {
+  return formatDate(ts, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -1478,6 +1510,7 @@ function SessionGroupHeader({
   collapsed: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation('activity');
   const shortId = `${group.session_id.slice(0, 8)}…`;
   const fromTime = formatGroupTime(group.earliest_ts);
   const toTime = formatGroupTime(group.latest_ts);
@@ -1504,7 +1537,10 @@ function SessionGroupHeader({
       </span>
       <span style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}>{shortId}</span>
       <span className="tabular-nums">
-        {group.entries.length} call{group.entries.length === 1 ? '' : 's'}
+        {t('calls', {
+          count: group.entries.length,
+          n: formatNumber(group.entries.length),
+        })}
       </span>
       <span className="tabular-nums">
         {fromTime} – {toTime}
@@ -1512,7 +1548,10 @@ function SessionGroupHeader({
       {group.error_count > 0 && (
         <span className="ml-auto">
           <Badge tone="red" icon="warning">
-            {group.error_count} error{group.error_count === 1 ? '' : 's'}
+            {t('groupErrors', {
+              count: group.error_count,
+              n: formatNumber(group.error_count),
+            })}
           </Badge>
         </span>
       )}
@@ -1522,16 +1561,17 @@ function SessionGroupHeader({
 
 // ── Keyboard help overlay ─────────────────────────────────────────────────
 
-const SHORTCUTS: { keys: string; desc: string }[] = [
-  { keys: '/', desc: 'Focus search' },
-  { keys: '↓ / j', desc: 'Next call' },
-  { keys: '↑ / k', desc: 'Previous call' },
-  { keys: '⏎', desc: 'Expand or collapse the selected call' },
-  { keys: 'Esc', desc: 'Clear the search, then the filters, then the selection' },
-  { keys: '?', desc: 'Show or hide this list' },
+const SHORTCUTS: { keys: string; descKey: string }[] = [
+  { keys: '/', descKey: 'shortcutSearch' },
+  { keys: '↓ / j', descKey: 'shortcutNext' },
+  { keys: '↑ / k', descKey: 'shortcutPrev' },
+  { keys: '⏎', descKey: 'shortcutExpand' },
+  { keys: 'Esc', descKey: 'shortcutEscape' },
+  { keys: '?', descKey: 'shortcutHelp' },
 ];
 
 function ShortcutsHelp({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation('activity');
   return (
     <div
       onClick={onClose}
@@ -1549,7 +1589,7 @@ function ShortcutsHelp({ onClose }: { onClose: () => void }) {
       <div
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="Keyboard shortcuts"
+        aria-label={t('shortcutsTitle')}
         style={{
           background: 'var(--surface-raised)',
           border: '0.5px solid var(--separator)',
@@ -1564,7 +1604,7 @@ function ShortcutsHelp({ onClose }: { onClose: () => void }) {
           className="text-[17px] leading-[22px] font-semibold mb-3"
           style={{ color: 'var(--label)' }}
         >
-          Keyboard shortcuts
+          {t('shortcutsTitle')}
         </div>
         <div
           style={{
@@ -1595,12 +1635,12 @@ function ShortcutsHelp({ onClose }: { onClose: () => void }) {
               >
                 {s.keys}
               </kbd>
-              <span style={{ color: 'var(--label-secondary)' }}>{s.desc}</span>
+              <span style={{ color: 'var(--label-secondary)' }}>{t(s.descKey)}</span>
             </div>
           ))}
         </div>
         <div className="text-[11px] leading-[13px] mt-4" style={{ color: 'var(--label-secondary)' }}>
-          Press Esc or ? to close.
+          {t('shortcutsClose')}
         </div>
       </div>
     </div>
@@ -1619,6 +1659,7 @@ export function ToolActivity({
   subTab?: ReactNode;
   onOpenFileInGraph?: (filePath: string) => void;
 }) {
+  const { t } = useTranslation('activity');
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   // Multi-select tool filter — empty set means "no tool restriction".
   const [toolFilter, setToolFilter] = useState<Set<string>>(() => loadToolFilter());
@@ -1899,7 +1940,7 @@ export function ToolActivity({
       es.onerror = () => {
         if (closed) return;
         setConnected(false);
-        setError('SSE connection lost — reconnecting…');
+        setError(t('sseLost'));
         es?.close();
         // Reconnect after 3s
         setTimeout(() => {
@@ -1914,7 +1955,7 @@ export function ToolActivity({
       es?.close();
       setConnected(false);
     };
-  }, [root]);
+  }, [root, t]);
 
   // ── Scroll tracking ──────────────────────────────────────────────────
 
@@ -2001,9 +2042,9 @@ export function ToolActivity({
   }, []);
 
   const handleClear = useCallback(() => {
-    if (!window.confirm('Clear local activity buffer?')) return;
+    if (!window.confirm(t('confirmClear'))) return;
     setEntries([]);
-  }, []);
+  }, [t]);
 
   const handleExport = useCallback(() => {
     // `filtered` is captured below; compute the same predicate here so the
@@ -2081,10 +2122,10 @@ export function ToolActivity({
 
   const feedTone = paused ? 'orange' : connected ? 'green' : 'neutral';
   const feedLabel = paused
-    ? `Paused (${pausedBufferRef.current.length})`
+    ? t('feedPaused', { n: formatNumber(pausedBufferRef.current.length) })
     : connected
-      ? 'Live'
-      : 'Offline';
+      ? t('feedLive')
+      : t('feedOffline');
 
   // Keep the selected index within bounds as the visible list shrinks/grows.
   // (e.g. a new filter trims the list below the previously-selected index.)
@@ -2216,7 +2257,7 @@ export function ToolActivity({
           <StatusDot tone={feedTone} pulse={feedTone === 'green'} />
           <span style={{ color: 'var(--label)' }}>{feedLabel}</span>
           <span className="tabular-nums">
-            · {entries.length.toLocaleString()} call{entries.length === 1 ? '' : 's'}
+            {`· ${t('calls', { count: entries.length, n: formatNumber(entries.length) })}`}
           </span>
         </span>
 
@@ -2230,17 +2271,20 @@ export function ToolActivity({
             className="is-on shrink-0"
             icon="close"
             onClick={clearFilters}
-            title="Clear all filters"
+            title={t('clearAllFilters')}
           >
-            {activeFilterCount} filter{activeFilterCount === 1 ? '' : 's'}
+            {t('filters', {
+              count: activeFilterCount,
+              n: formatNumber(activeFilterCount),
+            })}
           </Button>
         )}
 
         <SearchField
           value={query}
           onChange={setQuery}
-          placeholder="Search calls"
-          aria-label="Search calls"
+          placeholder={t('searchCalls')}
+          aria-label={t('searchCalls')}
           inputRef={searchInputRef}
         />
 
@@ -2249,8 +2293,8 @@ export function ToolActivity({
           icon={paused ? 'play_arrow' : 'pause'}
           onClick={handleTogglePause}
           aria-pressed={paused}
-          aria-label={paused ? 'Resume the live feed' : 'Pause the live feed'}
-          title={paused ? 'Resume the live feed' : 'Pause the live feed'}
+          aria-label={paused ? t('resume') : t('pause')}
+          title={paused ? t('resume') : t('pause')}
         />
 
         <Button
@@ -2260,8 +2304,8 @@ export function ToolActivity({
           onClick={() => (overflow.at ? overflow.close() : overflow.open())}
           aria-haspopup="menu"
           aria-expanded={overflow.at !== null}
-          aria-label="More actions"
-          title="More actions"
+          aria-label={t('moreActions')}
+          title={t('moreActions')}
         />
       </Toolbar>
 
@@ -2272,18 +2316,18 @@ export function ToolActivity({
             checked={errorsOnly}
             onClick={() => setErrorsOnly((v) => !v)}
           >
-            Errors only
+            {t('menuErrorsOnly')}
           </MenuItem>
           <MenuItem
             showCheckSlot
             checked={groupBySession}
             onClick={() => setGroupBySession((v) => !v)}
           >
-            Group by session
+            {t('menuGroupBySession')}
           </MenuItem>
           {top5.length > 0 && (
             <>
-              <MenuSection>Tools</MenuSection>
+              <MenuSection>{t('menuTools')}</MenuSection>
               {top5.map((tool) => (
                 <MenuItem
                   key={tool}
@@ -2306,7 +2350,7 @@ export function ToolActivity({
                   overflow.close();
                 }}
               >
-                Clear filters
+                {t('menuClearFilters')}
               </MenuItem>
             </>
           )}
@@ -2319,8 +2363,7 @@ export function ToolActivity({
               overflow.close();
             }}
           >
-            Export {filtered.length.toLocaleString()} call
-            {filtered.length === 1 ? '' : 's'} as JSONL
+            {t('menuExport', { count: filtered.length, n: formatNumber(filtered.length) })}
           </MenuItem>
           <MenuItem
             danger
@@ -2331,7 +2374,7 @@ export function ToolActivity({
               overflow.close();
             }}
           >
-            Clear the local feed
+            {t('menuClearFeed')}
           </MenuItem>
           <MenuSeparator />
           <MenuItem
@@ -2342,7 +2385,7 @@ export function ToolActivity({
               overflow.close();
             }}
           >
-            Keyboard shortcuts
+            {t('menuShortcuts')}
           </MenuItem>
         </Menu>
       )}
@@ -2401,23 +2444,27 @@ export function ToolActivity({
             <EmptyState
               icon="warning"
               iconSize={32}
-              title="Can't reach the indexer"
-              subtitle="The trace-mcp daemon didn't answer, so this project's earlier calls couldn't be loaded. Anything new still arrives live."
-              action={<Button icon="refresh" onClick={() => void fetchHistory()}>Try again</Button>}
+              title={t('emptyUnreachableTitle')}
+              subtitle={t('emptyUnreachableBody')}
+              action={
+                <Button icon="refresh" onClick={() => void fetchHistory()}>
+                  {t('tryAgain')}
+                </Button>
+              }
             />
           ) : activeFilterCount === 0 && query === '' ? (
             <EmptyState
               icon="monitoring"
               iconSize={32}
-              title="No tool calls yet"
-              subtitle="Every trace-mcp call an assistant makes against this project lands here, live. Connect a client to start the feed."
+              title={t('emptyCallsTitle')}
+              subtitle={t('emptyCallsBody')}
               action={
                 <Button
                   variant="prominent"
                   icon="plugins"
                   onClick={() => void window.electronAPI?.openClients?.()}
                 >
-                  Connect a client
+                  {t('connectClient')}
                 </Button>
               }
             />
@@ -2425,11 +2472,14 @@ export function ToolActivity({
             <EmptyState
               icon="search"
               iconSize={32}
-              title="No matching calls"
+              title={t('emptyMatchTitle')}
               subtitle={
                 activeFilterCount > 0
-                  ? `${filteredOutCount.toLocaleString()} call${filteredOutCount === 1 ? '' : 's'} are hidden by the current filters.`
-                  : 'Nothing in the feed matches that search.'
+                  ? t('emptyMatchFiltered', {
+                      count: filteredOutCount,
+                      n: formatNumber(filteredOutCount),
+                    })
+                  : t('emptyMatchSearch')
               }
               action={
                 <Button
@@ -2439,7 +2489,7 @@ export function ToolActivity({
                     setQuery('');
                   }}
                 >
-                  Clear filters and search
+                  {t('clearFiltersAndSearch')}
                 </Button>
               }
             />
