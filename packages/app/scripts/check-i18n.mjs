@@ -6,10 +6,12 @@
  * records that it is finished. Adding a path here without extracting it turns
  * the build red, which is the only enforcement that survives a busy week.
  *
- * What it catches: JSX text nodes and the four attributes that carry prose
- * (title, label, placeholder, aria-label). What it does not: a string handed to
- * a function, or one built by concatenation — those need a parser and review
- * catches them. A line ending in `// i18n-exempt` is skipped, for the handful
+ * What it catches: JSX text nodes, the four attributes that carry prose (title,
+ * label, placeholder, aria-label), and the same words as object properties —
+ * `label: 'File'` is how the main process builds a menu, and without that rule
+ * an allowlisted menu.ts would pass while reading every string inline. What it
+ * does not: a string handed to a function, or one built by concatenation —
+ * those need a parser and review catches them. A line ending in `// i18n-exempt` is skipped, for the handful
  * of literals that are genuinely not prose (a URL, a keyboard glyph).
  *
  * Run: pnpm --filter trace-mcp-app run check:i18n
@@ -22,12 +24,18 @@ const ROOT = resolve(import.meta.dirname, '..');
 
 /** Extracted surfaces. Grow this as slices land; never shrink it. */
 const CHECKED = [
-  'src/shared/i18n',
+  'src/main/menu.ts',
+  'src/main/tray.ts',
   'src/renderer/i18n',
   'src/renderer/update-check.ts',
+  'src/shared/global-actions.ts',
+  'src/shared/i18n',
 ];
 
 const PROSE_ATTRS = /\b(?:title|label|placeholder|aria-label)=(["'])([^"'{}]+)\1/g;
+/* The same words as an object property — a menu template, a dialog options bag,
+   a tray item. `toolTip` is Electron's spelling. */
+const PROSE_PROPS = /\b(?:title|label|placeholder|toolTip):\s*(["'])([^"'{}]+)\1/g;
 /* A JSX text node: between `>` and `<`, with no braces (an expression is not a
    literal) and at least two letters in a row somewhere. The lookbehind keeps
    `=>` out of it — `(a) => b < c` is a comparison, not a rendered string. */
@@ -39,6 +47,9 @@ function isProse(text) {
   const t = text.trim();
   if (t.length < 3) return false;
   if (!/[A-Za-z]{2}/.test(t)) return false;
+  // Code, not prose: the JSX-text rule cannot tell `a > 0 && b <` from a
+  // rendered string, and an operator in the middle settles it.
+  if (/&&|\|\||===|!==|=>/.test(t)) return false;
   // Identifiers and paths — `data-menu-row`, `src/renderer`, `useTheme`.
   if (!/\s/.test(t) && /[/_.:]|[a-z][A-Z]/.test(t)) return false;
   return true;
@@ -67,7 +78,7 @@ for (const path of CHECKED) {
     const lines = readFileSync(file, 'utf8').split('\n');
     lines.forEach((line, i) => {
       if (line.includes('i18n-exempt') || COMMENT.test(line)) return;
-      for (const re of [PROSE_ATTRS, JSX_TEXT]) {
+      for (const re of [PROSE_ATTRS, PROSE_PROPS, JSX_TEXT]) {
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(line))) {
