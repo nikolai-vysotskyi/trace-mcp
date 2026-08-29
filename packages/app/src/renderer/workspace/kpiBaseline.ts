@@ -71,11 +71,3 @@ export function saveBaseline(baseline: KpiBaseline): void {
     /* private mode / quota — deltas are a nicety, never block the dashboard */
   }
 }
-
-/** "today" · "yesterday" · "3 days ago" — the footnote next to a delta chip. */
-export function describeAge(atISO: string, nowMs: number): string {
-  const days = Math.floor((nowMs - Date.parse(atISO)) / BASELINE_MAX_AGE_MS);
-  if (!Number.isFinite(days) || days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  return `${days} days ago`;
-}

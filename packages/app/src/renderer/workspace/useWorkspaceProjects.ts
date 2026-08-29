@@ -19,6 +19,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DAEMON_FETCH_TIMEOUT_MS, useDaemon } from '../hooks/useDaemon';
+import { t } from '../i18n';
 import {
   type ProjectHealthMetrics,
   type ProjectViewModel,
@@ -281,7 +282,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
       const results = await Promise.allSettled(roots.map((r) => daemon.reindexProject(r)));
       const failed = results.find((r) => r.status === 'rejected');
       if (failed && failed.status === 'rejected') {
-        setError(String(failed.reason ?? 'Reindex failed for at least one project'));
+        setError(String(failed.reason ?? t('workspace:bulkReindexFailed')));
       }
     },
     [daemon.reindexProject],
@@ -292,7 +293,7 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
       const results = await Promise.allSettled(roots.map((r) => daemon.removeProject(r)));
       const failed = results.find((r) => r.status === 'rejected');
       if (failed && failed.status === 'rejected') {
-        setError(String(failed.reason ?? 'Remove failed for at least one project'));
+        setError(String(failed.reason ?? t('workspace:bulkRemoveFailed')));
       }
     },
     [daemon.removeProject],

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { formatNumber } from '../../i18n/format';
 import { Icon } from '../../lattice/icons';
 import { Badge, GradeBadge } from '../../lattice/ui';
 import type { ProjectViewModel } from '../types';
@@ -16,6 +18,7 @@ export interface ProjectMetricsBadgesProps {
  * Shared between WorkspaceCompactView and (future) WorkspaceCardsView.
  */
 export function ProjectMetricsBadges({ project, dense = false }: ProjectMetricsBadgesProps) {
+  const { t } = useTranslation('workspace');
   if (!project.hasMetrics) return null;
 
   const grade = project.techDebtGrade;
@@ -30,8 +33,8 @@ export function ProjectMetricsBadges({ project, dense = false }: ProjectMetricsB
       {sec > 0 && (
         <Badge
           tone="red"
-          title={`${sec} critical+high security finding${sec === 1 ? '' : 's'}`}
-          aria-label={`${sec} critical or high security finding${sec === 1 ? '' : 's'}`}
+          title={t('badgeSecurity', { count: sec, n: formatNumber(sec) })}
+          aria-label={t('badgeSecurityAria', { count: sec, n: formatNumber(sec) })}
         >
           <Icon name="lock" size={iconSize} /> {sec}
         </Badge>
@@ -39,15 +42,18 @@ export function ProjectMetricsBadges({ project, dense = false }: ProjectMetricsB
       {dead > 0 && (
         <Badge
           tone="orange"
-          title={`${dead} dead export${dead === 1 ? '' : 's'}`}
-          aria-label={`${dead} dead export${dead === 1 ? '' : 's'}`}
+          title={t('badgeDeadExports', { count: dead, n: formatNumber(dead) })}
+          aria-label={t('badgeDeadExports', { count: dead, n: formatNumber(dead) })}
         >
           <Icon name="bug_report" size={iconSize} /> {dead}
         </Badge>
       )}
       {!dense && untested > 0 && (
-        <Badge tone="neutral" title={`${untested} untested symbol${untested === 1 ? '' : 's'}`}>
-          untested {untested}
+        <Badge
+          tone="neutral"
+          title={t('badgeUntestedTitle', { count: untested, n: formatNumber(untested) })}
+        >
+          {t('badgeUntested', { n: formatNumber(untested) })}
         </Badge>
       )}
     </div>

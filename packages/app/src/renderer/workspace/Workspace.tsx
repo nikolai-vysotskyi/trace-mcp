@@ -21,6 +21,9 @@
  * way to Compact, and below `DENSE_PANE_H` the KPI tiles collapse to one line.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { t } from '../i18n';
+import { formatNumber } from '../i18n/format';
 import { Button, EmptyState } from '../lattice/ui';
 import { addRecentProject, removeRecentProject } from '../recent-projects';
 import { AddProjectControl } from './AddProjectControl';
@@ -154,26 +157,31 @@ export function busyMessage(o: {
   total: number;
   haveNumbers: boolean;
 }): string {
-  const lead =
-    o.connected && o.indexing > 0
-      ? `Indexing ${o.indexing} of ${o.total} projects`
-      : 'The daemon is busy';
-  return o.haveNumbers
-    ? `${lead}. These are the last indexed numbers.`
-    : `${lead}. The numbers arrive when it's done.`;
+  /* Four whole sentences in the catalogue rather than a lead and a tail glued
+     together here: the halves inflect together in the languages that inflect. */
+  if (o.connected && o.indexing > 0) {
+    const key = o.haveNumbers ? 'workspace:busyIndexingStale' : 'workspace:busyIndexingFresh';
+    return t(key, {
+      count: o.total,
+      indexing: formatNumber(o.indexing),
+      total: formatNumber(o.total),
+    });
+  }
+  return t(o.haveNumbers ? 'workspace:busyStale' : 'workspace:busyFresh');
 }
 
 /** The pane shown when the daemon is not answering at all. */
 function DaemonDownPane({ restarting, onRestart }: { restarting: boolean; onRestart: () => void }) {
+  const { t } = useTranslation('workspace');
   return (
     <EmptyState
       icon="cable"
       iconSize={32}
-      title="The daemon isn't running"
-      subtitle="trace-mcp indexes your projects in a local background service. Start it to see them again — nothing was lost."
+      title={t('daemonDownTitle')}
+      subtitle={t('daemonDownSubtitle')}
       action={
         <Button variant="prominent" size="large" onClick={onRestart} disabled={restarting}>
-          {restarting ? 'Starting…' : 'Start daemon'}
+          {restarting ? t('startingDaemon') : t('startDaemon')}
         </Button>
       }
     />
@@ -183,6 +191,7 @@ function DaemonDownPane({ restarting, onRestart }: { restarting: boolean; onRest
 // ── Main ──────────────────────────────────────────────────────────────────
 
 export function Workspace() {
+  const { t } = useTranslation('workspace');
   const data = useWorkspaceProjects();
 
   // ── UI state ─────────────────────────────────────────────────────────
@@ -354,7 +363,7 @@ export function Workspace() {
                   daemon is not offered here — a busy daemon does not need
                   restarting, and one that is actually down has its own pane. */}
               <Button size="small" onClick={() => void data.refresh()} disabled={data.refreshing}>
-                {data.refreshing ? 'Retrying…' : 'Try again'}
+                {data.refreshing ? t('retrying') : t('tryAgain')}
               </Button>
             </div>
           )
@@ -380,11 +389,11 @@ export function Workspace() {
           <EmptyState
             icon="search"
             iconSize={32}
-            title="No projects match this filter"
-            subtitle="Clear the filter to see all of your projects again."
+            title={t('noMatchTitle')}
+            subtitle={t('noMatchSubtitle')}
             action={
               <Button variant="prominent" size="large" onClick={() => setFilter(EMPTY_FILTER)}>
-                Clear filters
+                {t('clearFilters')}
               </Button>
             }
           />

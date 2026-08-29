@@ -8,6 +8,9 @@
  * always arrives with a glyph and a written label.
  */
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { t } from '../../i18n';
+import { formatNumber } from '../../i18n/format';
 import { Icon } from '../../lattice/icons';
 import { Skeleton } from './Skeleton';
 
@@ -67,7 +70,7 @@ function DeltaChip({ delta, caption }: { delta: number; caption?: string }): Rea
   if (delta === 0) {
     return (
       <span style={{ color: 'var(--label-secondary)' }}>
-        No change{caption ? ` ${caption}` : ''}
+        {caption ? t('workspace:kpiNoChangeVs', { caption }) : t('workspace:kpiNoChange')}
       </span>
     );
   }
@@ -101,6 +104,7 @@ export function KpiTile({
   pending = false,
   unavailable = false,
 }: KpiTileProps) {
+  const { t } = useTranslation('workspace');
   const interactive = onClick !== undefined;
   const valueColor = unavailable ? 'var(--label-secondary)' : tone ? TONE_COLOR[tone] : 'var(--label)';
 
@@ -113,7 +117,7 @@ export function KpiTile({
       data-dense={dense ? '' : undefined}
       // Dense drops the comparison line, so the one sentence that explains an
       // em dash has to survive somewhere the user can still reach it.
-      title={dense && unavailable ? "Couldn't be measured" : undefined}
+      title={dense && unavailable ? t('kpiUnavailable') : undefined}
       onClick={onClick}
       className={
         dense
@@ -167,11 +171,11 @@ export function KpiTile({
           }}
         >
           {unavailable ? (
-            <span aria-label="Not available">—</span>
+            <span aria-label={t('kpiNotAvailable')}>—</span>
           ) : compact ? (
             formatCompact(value)
           ) : (
-            value.toLocaleString()
+            formatNumber(value)
           )}
         </span>
       )}
@@ -186,7 +190,7 @@ export function KpiTile({
       ) : (
         <span className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
           {unavailable ? (
-            "Couldn't be measured"
+            t('kpiUnavailable')
           ) : delta !== null ? (
             <DeltaChip delta={delta} caption={deltaCaption} />
           ) : (
