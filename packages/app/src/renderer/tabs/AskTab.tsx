@@ -507,22 +507,31 @@ export function AskTab({ root }: { root: string }) {
     null;
 
   // ── No provider → setup CTA ─────────────────────────────────────
+  /* Keeps the surface's chrome: this is the first Ask a new install shows, and
+     a screen with no toolbar is the very thing TRA-312 set out to remove. No
+     rail and no inspector toggle — there is nothing to list or inspect yet. */
   if (providerReady && !ok) {
     return (
-      <div
-        className="ask"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
-        <EmptyState
-          icon="forum"
-          title="Connect an AI provider"
-          subtitle="Ask answers questions about this project using a model you supply. Add one in Settings to turn it on."
-          action={
-            <Button variant="prominent" size="large" onClick={openSettings}>
-              Open AI settings
-            </Button>
-          }
-        />
+      <div className="ask" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <section className="ask-main">
+          <Toolbar>
+            <span className="ask-toolbar-title">Ask</span>
+          </Toolbar>
+          <div className="ask-scroll">
+            <div className="ask-measure ask-empty">
+              <EmptyState
+                icon="forum"
+                title="Connect an AI provider"
+                subtitle="Ask answers questions about this project using a model you supply. Add one in Settings to turn it on."
+                action={
+                  <Button variant="prominent" size="large" onClick={openSettings}>
+                    Open AI settings
+                  </Button>
+                }
+              />
+            </div>
+          </div>
+        </section>
       </div>
     );
   }
