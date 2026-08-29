@@ -473,10 +473,21 @@ Not a pass at the end. These are floors.
   `rgb()` was added in TRA-355. §8 rule 1 had named it since the revision, but the guard
   only ever counted hex, so two thirds of the rule was enforced and one third was a
   comment. The Workspace toolbar shipped an `inset 1px 0 0 rgb(255 255 255 / 0.25)`
-  divider with a green build, and the sidebar kept a `rgba(255, 255, 255, 0.85)` label on
-  `--accent-fill` that measured 4.22:1 light / 3.89:1 dark. When you want "this token at
-  some alpha", write `color-mix(in oklab, var(--token) N%, transparent)` — a numeric
-  channel is how a value escapes the contrast table.
+  divider with a green build, and the sidebar kept a `rgba(255, 255, 255, 0.85)` glyph
+  colour on `--accent-fill` measuring 4.22:1 light / 3.89:1 dark. When you want "this
+  token at some alpha", write `color-mix(in oklab, var(--token) N%, transparent)` — a
+  numeric channel is how a value escapes the contrast table.
+
+  **Correction to TRA-355's own commit message**, kept here because the overstatement is
+  the more useful lesson: that change was described as fixing an AA failure "for the
+  count, a number the user reads". It was not. `.ws-sb-count` is styled in `sidebar.css`
+  and rendered by **no component in the app**, so the rule's only live target is
+  `.ws-sb-ico` — a glyph, whose floor is 3:1, which the dimmed white already cleared. The
+  edit was right (one token, consistent with the shortcut-hint decision, one fewer raw
+  `rgb()`); the severity was wrong, because the contrast was computed from the selector
+  and never checked against what the selector actually reaches. **Measure the element on
+  screen, not the rule in the file.** See TRA-358 for whether sidebar counts get built or
+  the dead CSS goes.
 
 `lattice/ui/__tests__/primitives.test.tsx` asserts the height set, the ≥24px boxes, the
 radius set, and ≥4.5:1 contrast for all seven badge tones in both appearances.
@@ -596,6 +607,8 @@ new evidence.
 | An error the user is meant to act on is never on a timer | Graph Explorer's red toast erased itself after 7s and left a blank pane with no account of what happened. An error persists until it is retried or resolved, and carries the glyph, the sentence and the Retry together. |
 | A primitive's verified contrast is verified against `--surface`, so re-check it on glass | `Badge tone="red"` clears AA over an opaque surface; over the graph overlay's `--viz-glass` its backdrop composites to 253, and the pair had to be re-measured on the running renderer (4.75:1) rather than assumed from the primitive's own test. |
 | A hand-rolled control still sits on the type and icon scale of the row it lives in | `+ Add` is a split capsule because `Button` has one radius, and that is fine — but it also inherited an 11px label and a `⌄` text character while every regular-tier control beside it labelled at 13px with real icons. The row's one prominent action was the quietest thing on it. Escaping a primitive's *shape* is not licence to escape its *scale*. |
+| A contrast number describes an element, never a selector | TRA-355 measured `rgba(255,255,255,.85)` on `--accent-fill` at 3.89:1 and called it an AA failure "for the count". The count is styled and rendered by nothing; the rule's only live target was a glyph, floor 3:1, already passing. Before quoting a ratio as a failure, confirm the thing it describes is on screen — `document.querySelectorAll` in the running app, not a reading of the stylesheet. |
+| Verify in the Electron window, not in Chrome | `navigator.userAgent` says "Mac" in Chrome on macOS too, so the renderer draws the 44px traffic-light reservation with no traffic lights in it — a band that does not exist in the real app. A screenshot off `vite dev` in a browser is a different product. (Nikolai, 2026-08-29; the rule itself lands with TRA-354.) |
 | A rule the enforcement cannot see is a comment | §8 rule 1 named `rgb()` from day one and `tokenGuard()` never counted it, so the ban held for hex and lapsed for `rgb()` — which is how a 3.89:1 label sat on the sidebar with a green build. When a rule goes into §8, check the script actually implements all of it. |
 | A row label never repeats its own control's verb | "Temporary pause" beside a "Pause for 10 minutes" button wrapped to two lines at the 640px minimum and added no meaning. The label names the subject ("Enforcement"), the control names the action. |
 
