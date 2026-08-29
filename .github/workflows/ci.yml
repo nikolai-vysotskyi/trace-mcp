@@ -164,6 +164,33 @@ jobs:
       - name: Biome check (formatter + linter, errors only)
         run: pnpm exec biome ci --diagnostic-level=error
 
+  no-ai-marks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # ponytail: two greps, no tooling.
+      # Invisible Unicode is checked on prose only. Source legitimately carries
+      # literal zero-width and BOM characters (the MCP output sanitizer, the BOM
+      # strippers, and a zero-width space that keeps a block comment from
+      # closing early), so scanning it would be pure noise.
+      - name: No invisible Unicode in prose
+        run: |
+          if git ls-files -z '*.md' '*.mdx' '*.txt' ':!.github/workflows/*' \
+            | xargs -0 -r grep -lIP '[\x{200B}-\x{200F}\x{2028}\x{2029}\x{202A}-\x{202E}\x{2060}-\x{2064}\x{FEFF}\x{00AD}]'; then
+            echo "::error::invisible Unicode in the files above - strip it"; exit 1
+          fi
+
+      - name: No AI provenance marks
+        run: |
+          if git ls-files -z ':!.github/workflows/ci.yml' \
+            | xargs -0 -r grep -lIi 'co-authored-by: claude\|generated with .*claude\|claude\.ai/code'; then
+            echo "::error::AI provenance marks in the files above - remove them"; exit 1
+          fi
+
   # ───────────────────────────────────────────────────────────────────────────
   # Build once on ubuntu, upload dist/ + node_modules/ as an artifact.
   # Downstream jobs (test shards, impact-report) skip install AND build.
