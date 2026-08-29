@@ -26,7 +26,10 @@ export type GlobalActionId = 'settings' | 'check-for-update' | 'view-changelog' 
 export interface GlobalAction {
   /** Also the `app-command` name the native menu sends to the focused window. */
   id: GlobalActionId;
-  label: string;
+  /** Catalogue key, not a string: this list is read by the native menu in the
+      main process and by the in-app menu in the renderer, and each has its own
+      i18next instance to resolve it with. */
+  labelKey: string;
   /** Electron accelerator for the application menu. */
   accelerator?: string;
   /** The same key drawn as a macOS glyph, for the in-app menu's hint column. */
@@ -41,7 +44,7 @@ export interface GlobalAction {
 export const GLOBAL_ACTIONS: readonly GlobalAction[] = [
   {
     id: 'settings',
-    label: 'Settings…',
+    labelKey: 'menu:settings',
     accelerator: 'CmdOrCtrl+,',
     shortcut: '⌘,',
     icon: 'settings',
@@ -52,7 +55,7 @@ export const GLOBAL_ACTIONS: readonly GlobalAction[] = [
      — not sparkles, and not the plain page that replaced them (TRA-376). */
   {
     id: 'view-changelog',
-    label: 'View changelog',
+    labelKey: 'menu:viewChangelog',
     url: 'https://github.com/nikolai-vysotskyi/trace-mcp/releases',
     icon: 'scroll',
   },
@@ -60,13 +63,13 @@ export const GLOBAL_ACTIONS: readonly GlobalAction[] = [
      speech bubble would promise a person on the other end. */
   {
     id: 'get-help',
-    label: 'Get help',
+    labelKey: 'menu:getHelp',
     url: 'https://github.com/nikolai-vysotskyi/trace-mcp/issues',
     icon: 'help',
   },
   {
     id: 'check-for-update',
-    label: 'Check for updates…',
+    labelKey: 'menu:checkForUpdate',
     icon: 'refresh',
   },
 ];
