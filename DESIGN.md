@@ -954,8 +954,9 @@ agent launches:
 - **Never call `app.focus()`, `win.focus()`, `win.show()`, `showInactive()` or
   `shell.openExternal` from a harness path.** `tests/scripts/capture-screenshots.test.ts`
   reads these files and fails when one appears: in `tray.ts` every show goes through
-  `presentWindow`, which returns early under `TRACE_MCP_WINDOW_MODE=hidden`; in
-  `electron-cdp.mjs` there are none at all.
+  `presentWindow`, which returns early under `TRACE_MCP_WINDOW_MODE=hidden` (or
+  `TRACE_MCP_AGENT_RUN=1`, the same request from an agent launching the app some other
+  way); in `electron-cdp.mjs` there are none at all.
 - **The one exception is the publication capture**, which cannot avoid activating the app
   (a window whose app is not active draws grey traffic lights, and those are refused). It
   pays for the exception by waiting for an idle machine — see docs/development.md.

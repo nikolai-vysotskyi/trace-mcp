@@ -25,9 +25,13 @@ const isMac = process.platform === 'darwin';
  * screenshot of it is a real, current frame (measured: `Page.captureScreenshot`
  * on an unmapped window returns the same pixels as on a visible one).
  *
- * Set by `scripts/electron-cdp.mjs`. Never set in a shipped build.
+ * Set by `scripts/electron-cdp.mjs`. `TRACE_MCP_AGENT_RUN=1` is the same
+ * request from the other direction — "nobody is looking at this run" — and is
+ * what an agent launching the app some other way sets. Never set in a shipped
+ * build; a human running `pnpm dev` has neither and sees today's behaviour.
  */
-export const HIDDEN_WINDOWS = process.env.TRACE_MCP_WINDOW_MODE === 'hidden';
+export const HIDDEN_WINDOWS =
+  process.env.TRACE_MCP_WINDOW_MODE === 'hidden' || process.env.TRACE_MCP_AGENT_RUN === '1';
 
 // macOS: Template images (auto-tinted by the system)
 // Windows: separate light/dark icons (white for dark taskbar, black for light)
