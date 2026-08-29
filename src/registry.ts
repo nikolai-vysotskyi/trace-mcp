@@ -87,19 +87,21 @@ const MTIME_GRANULARITY_MS = 50;
 let _registryCache: { mtimeMs: number; size: number; reg: Registry } | null = null;
 
 function loadRegistry(): Registry {
-  let mtimeMs: number;
-  let size: number;
+  // Stat and read through one descriptor: the metadata we key the cache on then
+  // describes exactly the bytes we parsed, even if the file is replaced midway.
+  let fd: number;
   try {
-    ({ mtimeMs, size } = fs.statSync(REGISTRY_PATH));
+    fd = fs.openSync(REGISTRY_PATH, 'r');
   } catch {
     return emptyRegistry(); // no registry file yet
   }
-  const settled = Date.now() - mtimeMs >= MTIME_GRANULARITY_MS;
-  if (settled && _registryCache?.mtimeMs === mtimeMs && _registryCache.size === size) {
-    return structuredClone(_registryCache.reg);
-  }
   try {
-    const raw = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
+    const { mtimeMs, size } = fs.fstatSync(fd);
+    const settled = Date.now() - mtimeMs >= MTIME_GRANULARITY_MS;
+    if (settled && _registryCache?.mtimeMs === mtimeMs && _registryCache.size === size) {
+      return structuredClone(_registryCache.reg);
+    }
+    const raw = JSON.parse(fs.readFileSync(fd, 'utf-8'));
     if (raw.version === 1 && raw.projects) {
       _registryCache = { mtimeMs, size, reg: raw as Registry };
       return structuredClone(raw as Registry);
@@ -107,6 +109,8 @@ function loadRegistry(): Registry {
     return emptyRegistry();
   } catch {
     return emptyRegistry();
+  } finally {
+    fs.closeSync(fd);
   }
 }
 
