@@ -13,8 +13,11 @@
  * run or maintain. TRACE_MCP_GA_MEASUREMENT_ID/TRACE_MCP_GA_API_SECRET
  * override at runtime; published builds fall back to credentials baked in
  * at build time via tsup's `define` (same mechanism as PKG_VERSION_INJECTED)
- * so installs report without per-user setup. See README "Usage telemetry"
- * for how to opt out (TRACE_MCP_TELEMETRY=off).
+ * so installs report without per-user setup. Those baked-in credentials are
+ * public by design — they ship as plaintext in the published bundle, and a
+ * GA4 api_secret is write-only. The counts they produce are therefore
+ * unauthenticated and inflatable; see SECURITY.md "Telemetry Credentials".
+ * See README "Usage telemetry" for how to opt out (TRACE_MCP_TELEMETRY=off).
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';

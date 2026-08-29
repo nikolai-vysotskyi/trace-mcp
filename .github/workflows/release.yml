@@ -108,6 +108,9 @@ jobs:
       CI: 'true'
       # Baked into the published build's anonymous active-install ping
       # (src/telemetry/usage-ping.ts) via tsup.config.ts's `define` block.
+      # Public by design: both values ship as plaintext in dist/ and a GA4
+      # api_secret is write-only. Stored as Actions secrets for convenience,
+      # not confidentiality — see SECURITY.md "Telemetry Credentials".
       # TRACE_MCP_TELEMETRY=off still disables it at runtime.
       TRACE_MCP_GA_MEASUREMENT_ID: ${{ secrets.TRACE_MCP_GA_MEASUREMENT_ID }}
       TRACE_MCP_GA_API_SECRET: ${{ secrets.TRACE_MCP_GA_API_SECRET }}
