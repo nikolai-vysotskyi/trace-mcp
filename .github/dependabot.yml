@@ -27,14 +27,6 @@ updates:
       - dependency-name: "@types/node"
         update-types:
           - version-update:semver-major
-      # web-tree-sitter 0.24.7 -> 0.26.x changes the parser API and broke 589
-      # of 4546 tests across 82 test files (PR #89). This is a migration
-      # project, not a dependency bump — tracked as TRA-330. Delete this entry
-      # as part of that migration.
-      - dependency-name: "web-tree-sitter"
-        update-types:
-          - version-update:semver-minor
-          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production

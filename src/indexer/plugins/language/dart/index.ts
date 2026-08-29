@@ -42,7 +42,11 @@ function extractSignature(node: TSNode): string {
 
 function getNodeName(node: TSNode): string | undefined {
   const id = node.childForFieldName('name');
-  return id?.text;
+  if (id) return id.text;
+  // Newer tree-sitter-dart drops the `name` field on some declarations
+  // (mixin_declaration among them) and leaves the identifier as a plain child.
+  return node.namedChildren.find((c) => c.type === 'identifier' || c.type === 'type_identifier')
+    ?.text;
 }
 
 /** Extract class modifiers (abstract, sealed, base, final, mixin) from surrounding context. */
@@ -297,8 +301,35 @@ export class DartLanguagePlugin implements LanguagePlugin {
     symbols: RawSymbol[],
     edges: RawEdge[],
   ): void {
+    // Newer tree-sitter-dart splits a top-level `const`/`final` declaration into
+    // sibling nodes — the keyword, the type, then a static_final_declaration_list.
+    // Remember the keyword so the list that follows gets the right symbol kind.
+    let pendingVarKeyword: 'const' | 'final' | undefined;
+
     for (const node of root.namedChildren) {
       switch (node.type) {
+        case 'const_builtin':
+          pendingVarKeyword = 'const';
+          break;
+        case 'final_builtin':
+          pendingVarKeyword = 'final';
+          break;
+        case 'static_final_declaration_list':
+          for (const decl of node.namedChildren) {
+            this.extractTopLevelVarOrConst(
+              decl,
+              filePath,
+              symbols,
+              pendingVarKeyword === 'const' ? 'constant' : 'variable',
+            );
+          }
+          pendingVarKeyword = undefined;
+          break;
+        case 'import_or_export':
+        case 'library_import':
+        case 'library_export':
+          this.walkTopLevel(node, filePath, symbols, edges);
+          break;
         case 'class_definition':
           this.extractClass(node, filePath, symbols);
           break;

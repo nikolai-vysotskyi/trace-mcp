@@ -1,7 +1,7 @@
 /**
  * Swift Language Plugin — tree-sitter-based symbol extraction.
  *
- * Uses the alex-pinkus/tree-sitter-swift grammar (via tree-sitter-wasms).
+ * Uses the alex-pinkus/tree-sitter-swift grammar (via tree-sitter-wasm).
  *
  * Key grammar quirks:
  * - Enums, structs, and extensions all use `class_declaration` with different
