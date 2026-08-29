@@ -13,6 +13,31 @@ name: trace-mcp CodeQL config
 queries:
   - uses: security-extended
 
+query-filters:
+  # js/path-injection: excluded (TRA-381). 211 of 337 dismissed alerts on this
+  # repo were this one rule — a 0% true-positive rate over 211 alerts — and the
+  # count was still growing: every PR touching a filesystem read re-raised the
+  # class and someone re-dismissed it by hand.
+  #
+  # The underlying trust-boundary question was settled in TRA-301 (option 4,
+  # PR #459, v2.1.0): the daemon's only path source is the project root it was
+  # pointed at, reached over a loopback-only bind (`src/daemon/bind-host.ts`),
+  # so "user-provided value" here means "the local user who started the daemon".
+  # That decision is a property of the bind, not of a sanitizer call, which is
+  # why a model pack declaring `validatePath`/`guardPath` would not have helped:
+  # sampled alerts (e.g. `src/indexer/monorepo.ts`, `src/utils/traceignore.ts`)
+  # taint `rootPath` straight into `readFileSync` with no sanitizer node on the
+  # path at all — `src/utils/safe-fs.ts` documents that it validates nothing on
+  # purpose.
+  #
+  # Cost of this exclusion, stated plainly: a genuinely untrusted path source
+  # would now be silenced. REVERT THIS BLOCK if any of these become true:
+  #   - the daemon gains a remote or shared (non-loopback) bind
+  #   - `/mcp` or `/api` gain authentication, making them a real trust boundary
+  #   - a path source appears that is not the registered project root
+  - exclude:
+      id: js/path-injection
+
 paths-ignore:
   # Test code is not attack surface: it runs on developer machines against
   # fixtures we author. Temp-file and path handling here is deliberate.
