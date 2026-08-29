@@ -456,6 +456,20 @@ main {
   padding-right: 0;
 }
 
+/* Capability marks. The comparison tables used ✅/❌ — emoji as UI, and a
+   green that is a second accent colour. The mark is now plain ✓/✗ text, and
+   yes/no separate on opacity, which is how this system encodes state.
+   `font-variant-emoji: text` keeps a platform from re-colouring them. */
+.prose .mark {
+  font-variant-emoji: text;
+}
+.prose .mark-yes {
+  color: var(--text-display);
+}
+.prose .mark-no {
+  color: var(--text-disabled);
+}
+
 .prose blockquote {
   padding-left: 20px;
   border-left: 1px solid var(--accent);

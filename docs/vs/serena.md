@@ -1,7 +1,7 @@
 ---
 title: "Serena MCP Alternative: trace-mcp vs Serena for agent code navigation"
 description: "Serena drives a live language server; trace-mcp precomputes a framework-aware code graph. Head-to-head on precision, startup cost, refactoring, security and memory — plus where Serena is clearly ahead."
-updated: 2026-08-29
+updated: 2026-08-30
 ---
 
 # Serena MCP alternative: trace-mcp vs Serena
@@ -91,22 +91,22 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 |---|:---:|:---:|
 | **GitHub stars** | 100 | ~28.5K |
 | Languages | {{ site.data.counts.languages }} (tree-sitter) | 40+ (via LSP) |
-| Requires a language server | ❌ optional enrichment | ✅ core premise |
+| Requires a language server | ✗ optional enrichment | ✓ core premise |
 | Reference precision by default | AST-resolved (tiered) | compiler-grade (LSP) |
-| Compiler-grade path | ✅ opt-in LSP + offline SCIP ingestion | ✅ live LSP |
-| Framework integrations | ✅ {{ site.data.counts.frameworks }} | ❌ |
-| Cross-language edges | ✅ | ❌ |
-| Persistent graph across restarts | ✅ SQLite + FTS5 | ❌ per-session |
-| Impact analysis | ✅ reverse dependency traversal + decorator filter | ❌ |
-| Call graph | ✅ bidirectional, graph-based | partial (LSP call hierarchy) |
-| Refactoring tools | ✅ rename, move, signature, AST codemod, extract | ✅ rename, move, inline, safe-delete |
-| Live debugger | ❌ deliberately out of lane | ✅ breakpoints, variable inspection |
-| Session memory | ✅ code-linked decision graph | ✅ manual notes |
-| Security scanning | ✅ OWASP Top-10, type-aware taint | ❌ |
-| Control-flow / data-flow | ✅ CFG with basic blocks and loop back-edges | ❌ |
-| SARIF / CI output | ✅ 2.1.0, schema-validated | ❌ |
-| Multi-repo subprojects | ✅ cross-repo API linking | ❌ |
-| Graph visualization | ✅ desktop app | ❌ |
+| Compiler-grade path | ✓ opt-in LSP + offline SCIP ingestion | ✓ live LSP |
+| Framework integrations | ✓ {{ site.data.counts.frameworks }} | ✗ |
+| Cross-language edges | ✓ | ✗ |
+| Persistent graph across restarts | ✓ SQLite + FTS5 | ✗ per-session |
+| Impact analysis | ✓ reverse dependency traversal + decorator filter | ✗ |
+| Call graph | ✓ bidirectional, graph-based | partial (LSP call hierarchy) |
+| Refactoring tools | ✓ rename, move, signature, AST codemod, extract | ✓ rename, move, inline, safe-delete |
+| Live debugger | ✗ deliberately out of lane | ✓ breakpoints, variable inspection |
+| Session memory | ✓ code-linked decision graph | ✓ manual notes |
+| Security scanning | ✓ OWASP Top-10, type-aware taint | ✗ |
+| Control-flow / data-flow | ✓ CFG with basic blocks and loop back-edges | ✗ |
+| SARIF / CI output | ✓ 2.1.0, schema-validated | ✗ |
+| Multi-repo subprojects | ✓ cross-repo API linking | ✗ |
+| Graph visualization | ✓ desktop app | ✗ |
 | MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | ~55 |
 | Written in | TypeScript | Python |
 
