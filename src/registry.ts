@@ -13,6 +13,7 @@ import {
   REGISTRY_PATH,
 } from './global.js';
 import { announceDbHolder, hasLiveHolder, releaseDbHolder } from './db-holders.js';
+import { initializeGuard } from './guard-init.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
 import { readIfExists } from './utils/safe-fs.js';
 
@@ -201,6 +202,10 @@ export function registerProject(
 
   reg.projects[absRoot] = entry;
   saveRegistry(reg);
+  // TRA-341: registration is where a project becomes real, so it is where the
+  // guard's coach grace period is armed. Only on this path — an already
+  // registered project returns above and is past its onboarding window.
+  initializeGuard(absRoot);
   return entry;
 }
 
