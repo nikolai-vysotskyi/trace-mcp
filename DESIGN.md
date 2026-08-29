@@ -412,6 +412,35 @@ unreachable") is not an inert control. Dimming it to `opacity: 0.4` put the only
 progress text on Project Overview at 2.3:1. `is-status` keeps it unpressable and keeps
 the sentence readable (4.76:1 on surface). Use it whenever the label is information.
 
+It applies on `v-prominent` too, and there it also has to keep `--on-accent`:
+`--label-secondary` is a label colour for an untinted surface, and on the accent fill
+it is dark-on-blue.
+
+### Work in progress has to move
+
+A control that is unpressable **because its own action is running** is the app's only
+report on that action, and a still frame of it is indistinguishable from a hung app.
+The sidebar's update card dimmed `Updating…` to `opacity: 0.4` — measured 1.37:1 light
+and 2.77:1 dark on the running window — and drew nothing else for the several minutes
+a download takes. Two things are required, not one: the label stays legible
+(`is-status`, 5.22:1 / 4.77:1 after), and something on screen moves.
+
+**Indeterminate when the work is indeterminate.** `apply-update` is a single opaque
+`execFile` of `npm install -g`; there is no byte count, so there is no percentage, and
+inventing one is worse than admitting it. A 4px capsule track with a travelling accent
+segment says "running" without claiming a position. Check what the source actually
+reports before designing around its absence.
+
+**Motion is not the message, so reduced motion still has to say it.** The global
+`prefers-reduced-motion` rule in `tokens.css` stills every animation, which parks a
+travelling segment off the end of its own track and leaves the state with no signal at
+all. Give the reduced-motion path its own resting form — the bar fills at 55% accent
+— rather than letting the global rule silently erase the state.
+
+**Loop with `linear`.** An eased loop decelerates into its turnaround, which is
+precisely where an indeterminate segment is least visible. This is the one place in
+the app where `linear` is correct (§4 *Motion*).
+
 ### The row system — `.ws-sb-row`
 
 A **row** is the sidebar's unit of content: 28px tall, 6px radius, inset 6px from the
@@ -889,7 +918,12 @@ Not a pass at the end. These are floors.
     opacity only.
 18. Never make `<main>` a drag region.
 19. Never report "unknown" as "zero", or a lost connection as lost data.
-20. Never hand-roll a control that exists in `lattice/ui`.
+20. Never hand-roll a control that exists in `lattice/ui`. This includes hand-rolling
+    a *container*: a tile is `Card`, not `--fill-tertiary` plus a radius you picked.
+21. Never a status-coloured button. The one default action is the accent capsule; the
+    status is carried by the title, its glyph and the card's border.
+22. Never show work in progress as a dimmed control and nothing else. Something moves,
+    and reduced motion gets its own resting form.
 
 ---
 
@@ -987,6 +1021,19 @@ fixed set of images `docs/` and trace-mcp.com ship, from a seeded sandbox, and c
 whether the committed ones are stale. Use that one for anything committed to the repo; use
 `electron-cdp.mjs` when you need to point a debugger at the app you are running right now
 and shoot a surface it has no manifest entry for.
+
+### A Tailwind class next to `${…}` is not a Tailwind class
+
+`` className={`text-[11px] leading-[13px]${err ? ' truncate' : ''}`} `` compiles, ships,
+and silently drops `leading-[13px]`: the scanner reads the source as text, and the
+utility that runs straight into the interpolation is not extracted. The line-height
+then falls through to whatever `body` sets, which is close enough to look deliberate.
+Build class lists as arrays — `{['text-[11px]', 'leading-[13px]', err && 'truncate']
+.filter(Boolean).join(' ')}` — so every utility is its own literal.
+
+The check that catches it is not a screenshot: `getComputedStyle` on the running
+element, or `grep` for the utility in `dist/renderer/assets/*.css` after a build. A
+class that does not appear there does not exist.
 
 ### A review run never takes the screen from the person using the machine
 
@@ -1158,6 +1205,7 @@ new evidence.
 | A contrast number describes an element, never a selector | TRA-355 measured `rgba(255,255,255,.85)` on `--accent-fill` at 3.89:1 and called it an AA failure "for the count". The count is styled and rendered by nothing; the rule's only live target was a glyph, floor 3:1, already passing. Before quoting a ratio as a failure, confirm the thing it describes is on screen — `document.querySelectorAll` in the running app, not a reading of the stylesheet. |
 | Verify in the Electron window, not in Chrome | `navigator.userAgent` says "Mac" in Chrome on macOS too, so the renderer draws the 44px traffic-light reservation with no traffic lights in it — a band that does not exist in the real app. A screenshot off `vite dev` in a browser is a different product. (Nikolai, 2026-08-29; the rule itself lands with TRA-354.) |
 | A rule the enforcement cannot see is a comment | §8 rule 1 named `rgb()` from day one and `tokenGuard()` never counted it, so the ban held for hex and lapsed for `rgb()` — which is how a 3.89:1 label sat on the sidebar with a green build. When a rule goes into §8, check the script actually implements all of it. |
+| The last tile still hand-rolling its material is the one nobody looks at | The sidebar's update card kept `--fill-tertiary` at an 8px radius and a private `.btn-prominent` through the whole TRA-290 migration, because it only appears when there is an update — so every review of the sidebar was a review of a sidebar without it. When a migration says "every surface", enumerate the surfaces that are conditionally rendered too. |
 | A row label never repeats its own control's verb | "Temporary pause" beside a "Pause for 10 minutes" button wrapped to two lines at the 640px minimum and added no meaning. The label names the subject ("Enforcement"), the control names the action. |
 
 ---

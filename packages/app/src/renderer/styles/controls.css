@@ -57,6 +57,13 @@
   opacity: 1;
   color: var(--label-secondary);
 }
+/* --label-secondary is a label colour for an UNTINTED surface; on the accent
+   fill it is dark-on-blue and fails contrast outright. A prominent button
+   running its own action ("Updating…" in the sidebar's update card) keeps
+   --on-accent (TRA-429). */
+.lx-btn.v-prominent.is-status:disabled {
+  color: var(--on-accent);
+}
 
 /* sizes ------------------------------------------------------------------- */
 .lx-btn.sz-small {

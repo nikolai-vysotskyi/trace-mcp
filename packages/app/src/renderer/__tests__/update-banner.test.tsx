@@ -24,11 +24,11 @@ type CheckResult = {
   staleRoots?: { root: string; version: string }[];
 };
 
-function mockApi(check: CheckResult, openExternal = vi.fn()) {
+function mockApi(check: CheckResult, openExternal = vi.fn(), applyUpdate = vi.fn()) {
   (window as unknown as { electronAPI: unknown }).electronAPI = {
     checkForUpdate: vi.fn().mockResolvedValue(check),
     checkPendingUpdate: vi.fn().mockResolvedValue({ pending: false }),
-    applyUpdate: vi.fn(),
+    applyUpdate,
     restartApp: vi.fn(),
     openExternal,
   };
@@ -189,5 +189,53 @@ describe('update states', () => {
     expect(document.querySelector('.ws-ctx-header .status')?.textContent).toContain('Up to date');
     // No card in the sidebar when there is nothing to do about it.
     expect(container.querySelector('.update-card')).toBeNull();
+  });
+});
+
+/* TRA-429: the visual layer. The card was the last tile in the window still
+   hand-rolling its own material and its own button class; `Updating…` was a
+   0.4-opacity capsule with nothing moving behind it, which is what a hung app
+   looks like. */
+describe('update card presentation', () => {
+  it('is built from the Lattice primitives, not a private button class', async () => {
+    mockApi({ available: true, current: '3.1.1', latest: '3.2.0', lastChecked: Date.now() });
+
+    const { container } = render(<Card />);
+
+    await screen.findByText(/v3\.2\.0 available/);
+    expect(container.querySelector('.btn-prominent')).toBeNull();
+    // The one action is the shared prominent capsule.
+    const button = screen.getByRole('button', { name: 'Update' });
+    expect(button.className).toContain('lx-btn');
+    expect(button.className).toContain('v-prominent');
+  });
+
+  it('keeps the updating capsule readable and shows indeterminate progress', async () => {
+    // A download that never settles — that IS the state under test.
+    mockApi({ available: true, current: '3.1.1', latest: '3.2.0' }, vi.fn(), () => new Promise(() => {}));
+
+    const { container } = render(<Card />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
+
+    const button = await screen.findByRole('button', { name: 'Updating…' });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    // `is-status` is what keeps the label at full opacity — a 0.4 capsule is
+    // the thing this state is not allowed to be any more.
+    expect(button.className).toContain('is-status');
+
+    // Something moves, and it does not claim a percentage it cannot know.
+    const bar = container.querySelector('[role="progressbar"]');
+    expect(bar).not.toBeNull();
+    expect(bar?.getAttribute('aria-valuenow')).toBeNull();
+  });
+
+  it('shows no progress bar until the update is actually running', async () => {
+    mockApi({ available: true, current: '3.1.1', latest: '3.2.0' });
+
+    const { container } = render(<Card />);
+
+    await screen.findByRole('button', { name: 'Update' });
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
   });
 });
