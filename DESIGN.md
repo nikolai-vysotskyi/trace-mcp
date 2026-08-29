@@ -678,7 +678,9 @@ What the row has to get right, all of it enforced by
 
 - **Geometry.** Same 30px box and 8px inset as `.ws-ctx-item`, so the label, the
   control and the neighbouring items share one centre line and the control's right
-  edge lands in the same column as an item's shortcut. Measured: 214.5px for both.
+  edge lands in the same column as an item's shortcut — 8px in from the item's right
+  edge, which is 214.5px in an English menu and moves with the menu in any language
+  that widens it (see "The Language control" below).
 - **Roles.** `role="group"` + `aria-label` on the row, `role="menuitemradio"` +
   `aria-checked` on each value. Not `radiogroup` / `radio` — a `radiogroup` is not
   a legal child of `role="menu"`, and `aria-pressed` (what the shared
@@ -747,8 +749,12 @@ Two things come back off the icon geometry, and both are the same rule seen twic
   Settings has the width, so there it is the full name.
 - **A word segment keeps its padding and its colour.** `0 8px` puts the segment at
   34px against the icon square's 24px — measured 73.9px for the two-language track,
-  right-aligned at the same 214.5px as the Theme pill and an item's shortcut, so the
-  rows share a column. And unselected stays at `--label` (13.11:1 light, 8.88:1 dark)
+  right-aligned with the Theme pill and an item's shortcut so the rows share a column.
+  *The column is 8px in from the item's right edge, not a fixed x*: the menu is sized
+  by its longest label, so it is 220px wide in English and 283.9px in Russian, and the
+  two tracks end at 214.5 and 278.4 respectively. Measure the inset, not the
+  coordinate — a number read off an English build looks like a regression in any other
+  language. And unselected stays at `--label` (13.11:1 light, 8.88:1 dark)
   rather than dropping to `--label-secondary`: the dimming exists because an
   unselected icon has only the 1.19:1 thumb to go on, and dimming a readable word
   would say "disabled" instead of "not chosen".
