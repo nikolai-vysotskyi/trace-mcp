@@ -50,6 +50,26 @@ function setAddedAt(root: string, iso: string): void {
   fs.writeFileSync(REGISTRY_PATH, JSON.stringify(reg, null, 2));
 }
 
+describe('registry cache invalidation', () => {
+  // TRA-326: loadRegistry caches by mtime. Windows' filesystem timestamp
+  // granularity (~15ms) is coarse enough that two writes land on the same
+  // mtime, which made a test see the previous test's registry. utimesSync
+  // reproduces that collision deterministically on every platform.
+  it('does not serve a stale registry when a rewrite reuses the same mtime', () => {
+    const workdir = makeEphemeralWorkdir();
+    registerProject(workdir);
+    setAddedAt(workdir, new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString());
+    const sameTick = Math.floor(Date.now() / 1000) - 3600; // whole seconds: exact on every fs
+    fs.utimesSync(REGISTRY_PATH, sameTick, sameTick);
+    expect(findEphemeralProjects()).toHaveLength(1); // populates the cache
+
+    fs.writeFileSync(REGISTRY_PATH, JSON.stringify({ version: 1, projects: {} }, null, 2));
+    fs.utimesSync(REGISTRY_PATH, sameTick, sameTick);
+
+    expect(findEphemeralProjects()).toEqual([]);
+  });
+});
+
 describe('resolveRegisteredAncestor', () => {
   it('returns null when no registered project covers the path', () => {
     const dir = makeTmpRepo();

@@ -90,12 +90,19 @@ jobs:
             # a Windows-shaped hole because cross-platform-test only ran on
             # release PRs — nothing exercised these files on Windows until the
             # release was already cut.
+            # TRA-326: the registry/global/db-holder files do raw fs work
+            # (mtime caching, holder files, pid liveness) whose semantics differ
+            # on Windows — #477 broke master there while showing all-green here.
             platform:
               - 'src/dangerous-root.ts'
               - 'src/project-setup.ts'
               - 'src/topology/**'
+              - 'src/registry.ts'
+              - 'src/global.ts'
+              - 'src/db-holders.ts'
               - 'tests/project-setup/dangerous-root.test.ts'
               - 'tests/topology/**'
+              - 'tests/registry.test.ts'
             core:
               - 'src/**'
               - 'scripts/**'
