@@ -129,8 +129,13 @@ describe('install-surface token claims stay honest', () => {
     it(`${path} does not claim 9x% fewer tokens`, () => {
       const text = readFileSync(join(REPO_ROOT, ...path.split('/')), 'utf8');
       // Both orders — "99% fewer tokens" and "token usage by 99%" — and decimals.
+      // "token" alone is too narrow: "92%+ reduction on typical projects" never
+      // says the word, and that was the live defect on docs/tools-reference.md.
       const pct = String.raw`9\d(?:\.\d+)?\s*%`;
-      const claim = text.match(new RegExp(`${pct}[^"]{0,40}?token|token[^"]{0,40}?${pct}`, 'i'));
+      const noun = 'tokens?|reduction|savings|fewer|less';
+      const claim = text.match(
+        new RegExp(`${pct}\\+?[^"]{0,40}?(?:${noun})|(?:${noun})[^"]{0,40}?${pct}`, 'i'),
+      );
       expect(
         claim?.[0],
         `${path} advertises a peak token number as if it were the average. ` +
