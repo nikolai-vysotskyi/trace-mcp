@@ -141,3 +141,55 @@ export function restartDaemon(): { ok: boolean; error?: string } {
 export function stopDaemon(): { ok: boolean; error?: string } {
   return runDaemonCommand('stop');
 }
+
+/**
+ * Is the daemon process provably alive right now, independent of /health?
+ *
+ * Mirrors src/daemon/lifecycle.ts: isDaemonProcessAlive(). Kept as a local
+ * ~10-line read for the same reason getLauncherDir() is duplicated above — the
+ * Electron main bundle compiles standalone and cannot import from src/.
+ *
+ * The daemon registers its own PID at startup (TRA-421), so an unanswered
+ * /health with this returning `true` means "busy", not "dead".
+ */
+export function isDaemonProcessAlive(): boolean {
+  try {
+    const raw = fs.readFileSync(path.join(getLauncherDir(), 'daemon.pid'), 'utf-8');
+    const pid = parseInt(raw.split(/\r?\n/)[0]?.trim() ?? '', 10);
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    process.kill(pid, 0); // signal 0 = liveness probe, delivers nothing
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * How long a live-but-unresponsive daemon is left alone before the watchdog
+ * treats it as wedged and restarts it anyway. A cold start over O(40)
+ * registered projects can starve the event loop well past the 5s /health
+ * timeout; restarting mid-startup just replays the same slow start.
+ */
+export const WEDGED_DAEMON_MS = 5 * 60_000;
+
+/**
+ * Health-watchdog restart policy (TRA-421).
+ *
+ * The observed failure was 626 daemon restarts in 13 hours: /health timed out
+ * while the daemon was busy, the watchdog read that as death, `daemon restart`
+ * killed a warming daemon, and the next one started the same slow warm-up. The
+ * existing `DAEMON_STARTUP_GRACE_MS` only delayed each iteration — it never
+ * broke the cycle, because after the grace window the daemon was still busy.
+ *
+ * The rule that does break it: never kill a process that is provably running.
+ * Restart only when the daemon is actually gone, or when it has been alive but
+ * mute for longer than any legitimate warm-up.
+ */
+export function shouldRestartUnreachableDaemon(state: {
+  processAlive: boolean;
+  unreachableForMs: number;
+  wedgedAfterMs?: number;
+}): boolean {
+  if (!state.processAlive) return true;
+  return state.unreachableForMs >= (state.wedgedAfterMs ?? WEDGED_DAEMON_MS);
+}

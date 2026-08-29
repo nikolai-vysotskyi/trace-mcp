@@ -34,7 +34,18 @@ const PLIST_LABEL = 'com.trace-mcp.server';
 // MUST match scripts/postinstall-control-plane.mjs::PLIST_VERSION — keep in sync.
 // v3: prefer the launcher shim as ProgramArguments so Node-version drift can't
 // pin the daemon to a stale dist/cli.js.
-const PLIST_VERSION = 3;
+// v4: ExitTimeOut — launchd's default 5s is shorter than a graceful shutdown
+// that closes every project DB, so launchd SIGKILLed the daemon mid-cleanup
+// (LastExitStatus=9) and the buffered "Daemon shutting down" line died with it.
+const PLIST_VERSION = 4;
+/**
+ * Seconds launchd waits after SIGTERM before escalating to SIGKILL. Graceful
+ * shutdown closes DBs, tears down watchers and flushes indexes for every
+ * registered project; on a machine with O(40) projects that does not fit in
+ * launchd's 5s default. Must exceed the daemon's own bounded hard-exit
+ * (src/server/bounded-shutdown.ts) so *we* decide when to give up, not launchd.
+ */
+const PLIST_EXIT_TIMEOUT_SEC = 30;
 const PLIST_MARKER = `trace-mcp plist v${PLIST_VERSION}`;
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
@@ -171,6 +182,8 @@ function generatePlist(binaryPath: string, port: number): string {
   <true/>
   <key>ThrottleInterval</key>
   <integer>5</integer>
+  <key>ExitTimeOut</key>
+  <integer>${PLIST_EXIT_TIMEOUT_SEC}</integer>
   <key>StandardOutPath</key>
   <string>${DAEMON_LOG_PATH}</string>
   <key>StandardErrorPath</key>
@@ -585,6 +598,93 @@ function readDaemonPid(): number | null {
   return null;
 }
 
+/**
+ * Append one pino-shaped NDJSON record straight to daemon.log (TRA-421).
+ *
+ * Attribution has to bypass `logger`, which writes to *this* process's stderr.
+ * For the daemon that stderr is daemon.log (launchd redirects it), but for a
+ * short-lived `trace-mcp daemon restart` — the process that actually kills the
+ * daemon — stderr goes to whoever spawned it, and the desktop app discards it.
+ * That is why 626 restarts in one day left no record of who asked for them.
+ * Best-effort: a failed append must never break a lifecycle command.
+ */
+function appendDaemonLog(msg: string, fields: Record<string, unknown>): void {
+  try {
+    const record = {
+      level: 30,
+      time: Date.now(),
+      pid: process.pid,
+      name: 'trace-mcp',
+      ...fields,
+      msg,
+    };
+    fs.appendFileSync(DAEMON_LOG_PATH, `${JSON.stringify(record)}\n`);
+  } catch {
+    /* log attribution is best-effort */
+  }
+}
+
+/**
+ * Who is asking for this stop/restart? `process.argv` of the *calling* CLI plus
+ * its parent PID is enough to tell a human `trace-mcp daemon restart` apart
+ * from the desktop app's health watchdog apart from a hook-spawned CLI.
+ */
+function logLifecycleRequest(action: 'stop' | 'restart'): void {
+  appendDaemonLog(`Daemon ${action} requested`, {
+    action,
+    requesterPid: process.pid,
+    requesterPpid: process.ppid,
+    // argv[0] is node and argv[1] the cli.js path — the subcommand is what matters.
+    requesterArgs: process.argv.slice(2, 6),
+    managedBy: process.env.TRACE_MCP_MANAGED_BY ?? 'cli',
+  });
+}
+
+/**
+ * Register the *running daemon's* own PID so `isDaemonProcessAlive()` works on
+ * every platform (TRA-421).
+ *
+ * Before this, daemon.pid was written only by `ensureDaemonGeneric` — the
+ * detached-spawn path used on Windows/Linux. On macOS the daemon runs under
+ * launchd, nobody wrote the file, and so the #237 "provably alive, don't kill a
+ * busy daemon" guard silently evaluated to `false` forever on the platform the
+ * restart war was actually observed on.
+ */
+export function writeOwnDaemonPidFile(): void {
+  try {
+    if (!fs.existsSync(TRACE_MCP_HOME)) fs.mkdirSync(TRACE_MCP_HOME, { recursive: true });
+    writePidFile(process.pid, captureProcessStartToken(process.pid));
+  } catch (err) {
+    logger.warn({ err: String(err) }, 'Could not write daemon.pid');
+  }
+}
+
+/** Remove daemon.pid on graceful shutdown. Best-effort; never throws. */
+export function clearOwnDaemonPidFile(): void {
+  try {
+    fs.unlinkSync(getPidFilePath());
+  } catch {
+    /* already gone */
+  }
+}
+
+/**
+ * Log what launchd recorded about the *previous* run, at daemon start (TRA-421).
+ *
+ * `getLaunchdLastExit()` existed (TRA-267) but was only surfaced by
+ * `daemon status`, which nobody runs during a crash loop. Emitting it on every
+ * boot means daemon.log itself says "the last run died to code 9 after 22s"
+ * instead of requiring `launchctl` archaeology after the fact.
+ */
+export function logPreviousExit(): void {
+  const info = getLaunchdLastExit();
+  if (!info) return;
+  logger.info(
+    { exitCode: info.exitCode, exitReason: info.reason, launchdRuns: info.runs },
+    'Previous daemon run exited (launchd post-mortem)',
+  );
+}
+
 function stopDaemonByPid(): void {
   const pid = readDaemonPid();
   if (pid === null) return;
@@ -711,6 +811,7 @@ export function stopDaemon(): void {
   // Record an explicit opt-out so the next stdio session doesn't silently
   // reinstall the daemon the user just removed (#202).
   disableDaemon('trace-mcp daemon stop');
+  logLifecycleRequest('stop');
   if (isMac) stopDaemonMac();
   else stopDaemonByPid();
 }
@@ -722,6 +823,7 @@ export function restartDaemon(opts?: { port?: number }): EnsureResult {
   const port = opts?.port ?? DEFAULT_DAEMON_PORT;
   // An explicit restart is a clear intent to run the daemon — clear any opt-out.
   enableDaemon();
+  logLifecycleRequest('restart');
   return isMac ? restartDaemonMac(port) : restartDaemonGeneric(port);
 }
 

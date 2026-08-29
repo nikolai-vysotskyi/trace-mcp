@@ -181,4 +181,31 @@ describe('postinstall-control-plane', () => {
     expect(lifecycleMatch?.[1]).toBeDefined();
     expect(scriptMatch?.[1]).toBe(lifecycleMatch?.[1]);
   });
+
+  /**
+   * TRA-421: launchd's default ExitTimeOut is 5s. Graceful shutdown closes a DB
+   * per registered project, overran that, and launchd SIGKILLed the daemon
+   * (LastExitStatus=9) — taking the buffered "Daemon shutting down" line with
+   * it, which is why 210 of 624 restarts left no trace at all. Both plist
+   * templates must set it, and to the same value.
+   */
+  it('both plist templates set a matching ExitTimeOut', () => {
+    const script = fs.readFileSync(SCRIPT_PATH, 'utf-8');
+    const lifecycle = fs.readFileSync(
+      path.join(REPO_ROOT, 'src', 'daemon', 'lifecycle.ts'),
+      'utf-8',
+    );
+    const pattern = /const PLIST_EXIT_TIMEOUT_SEC\s*=\s*(\d+)/;
+    const scriptTimeout = script.match(pattern)?.[1];
+    const lifecycleTimeout = lifecycle.match(pattern)?.[1];
+    expect(scriptTimeout).toBeDefined();
+    expect(scriptTimeout).toBe(lifecycleTimeout);
+    // Must exceed the daemon's own 5s bounded hard-exit so we decide when to
+    // give up, not launchd.
+    expect(Number(scriptTimeout)).toBeGreaterThan(5);
+    for (const src of [script, lifecycle]) {
+      expect(src).toContain('<key>ExitTimeOut</key>');
+      expect(src).toContain('<integer>${PLIST_EXIT_TIMEOUT_SEC}</integer>');
+    }
+  });
 });
