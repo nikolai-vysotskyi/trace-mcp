@@ -30,23 +30,30 @@ export function guardInstallDateFile(projectRoot: string): string {
 /**
  * Arm the coach grace period for a project on first encounter.
  *
- * Idempotent: no-ops when either file already exists, so calling it from more
- * than one entry point is safe. Best-effort — a read-only or otherwise
+ * Idempotent: no-ops when the mode file already exists, so calling it from
+ * more than one entry point is safe. Best-effort — a read-only or otherwise
  * unwritable project root must not fail registration, it just means the guard
  * defaults to strict there.
  *
- * Returns true iff this call wrote the files.
+ * Returns true iff this call armed the grace period.
  */
 export function initializeGuard(projectRoot: string): boolean {
   const modeFile = guardModeFile(projectRoot);
   const dateFile = guardInstallDateFile(projectRoot);
+  // Exclusive create rather than existsSync-then-write: the check-then-use
+  // shape is a TOCTOU race (CodeQL js/file-system-race), and EEXIST answers
+  // "already initialized" atomically. An unwritable root fails the same way
+  // and is equally a no-op.
   try {
-    if (fs.existsSync(modeFile) || fs.existsSync(dateFile)) return false;
     fs.mkdirSync(path.dirname(modeFile), { recursive: true });
-    fs.writeFileSync(modeFile, 'coach\n');
-    fs.writeFileSync(dateFile, `${Math.floor(Date.now() / 1000)}\n`);
-    return true;
+    fs.writeFileSync(modeFile, 'coach\n', { flag: 'wx' });
   } catch {
     return false;
   }
+  try {
+    fs.writeFileSync(dateFile, `${Math.floor(Date.now() / 1000)}\n`, { flag: 'wx' });
+  } catch {
+    /* a leftover install-date keeps its original expiry — that is the safe direction */
+  }
+  return true;
 }

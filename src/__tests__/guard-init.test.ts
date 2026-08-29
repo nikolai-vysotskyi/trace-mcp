@@ -36,8 +36,7 @@ describe('guard initialization at registration (TRA-341)', () => {
     return root;
   }
 
-  const readMode = (root: string) =>
-    fs.readFileSync(guardInit.guardModeFile(root), 'utf8').trim();
+  const readMode = (root: string) => fs.readFileSync(guardInit.guardModeFile(root), 'utf8').trim();
 
   it('arms coach for a freshly registered project', () => {
     const root = makeProject('fresh');
@@ -78,14 +77,17 @@ describe('guard initialization at registration (TRA-341)', () => {
 
   // chmod 0500 does not stop root, and means nothing on Windows.
   const cannotBlockWrites = process.platform === 'win32' || process.getuid?.() === 0;
-  it.skipIf(cannotBlockWrites)('never fails registration when the project root is not writable', () => {
-    const root = makeProject('read-only');
-    fs.chmodSync(root, 0o500);
-    try {
-      expect(() => registry.registerProject(root)).not.toThrow();
-      expect(fs.existsSync(guardInit.guardModeFile(root))).toBe(false);
-    } finally {
-      fs.chmodSync(root, 0o700);
-    }
-  });
+  it.skipIf(cannotBlockWrites)(
+    'never fails registration when the project root is not writable',
+    () => {
+      const root = makeProject('read-only');
+      fs.chmodSync(root, 0o500);
+      try {
+        expect(() => registry.registerProject(root)).not.toThrow();
+        expect(fs.existsSync(guardInit.guardModeFile(root))).toBe(false);
+      } finally {
+        fs.chmodSync(root, 0o700);
+      }
+    },
+  );
 });
