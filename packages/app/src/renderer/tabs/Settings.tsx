@@ -41,6 +41,7 @@ import {
   PopUpButton,
   SearchField,
   StatusDot,
+  Toolbar,
   useMenuAnchor,
 } from '../lattice/ui';
 import { useDaemon } from '../hooks/useDaemon';
@@ -1553,17 +1554,14 @@ export function Settings({
   if (!settings) {
     return (
       <div className="flex flex-col h-full min-h-0">
-        <div
-          className="flex items-center px-4 shrink-0 glass"
-          style={{ height: 52, borderBottom: '0.5px solid transparent' }}
-        >
+        <Toolbar>
           <h2
-            className="text-[17px] leading-[22px] font-semibold"
+            className="text-[15px] leading-5 font-semibold"
             style={{ color: 'var(--label)', letterSpacing: '-0.01em' }}
           >
             Settings
           </h2>
-        </div>
+        </Toolbar>
         <div className="flex-1 overflow-auto flex flex-col">
           <div className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 720 }}>
             <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
@@ -1636,15 +1634,7 @@ export function Settings({
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* ── Toolbar ──────────────────────────────────────────────────── */}
-      <div
-        className="flex items-center gap-3 px-4 shrink-0 glass"
-        style={{
-          height: 52,
-          borderBottom: '0.5px solid transparent',
-          borderBottomColor: scrolled ? 'var(--separator)' : 'transparent',
-          transition: 'border-bottom-color var(--dur-standard) var(--ease-out)',
-        }}
-      >
+      <Toolbar scrolled={scrolled} className="gap-3">
         {back && (
           <Button
             variant="icon"
@@ -1655,7 +1645,7 @@ export function Settings({
           />
         )}
         <h2
-          className="flex-1 min-w-0 text-[17px] leading-[22px] font-semibold truncate"
+          className="flex-1 min-w-0 text-[15px] leading-5 font-semibold truncate"
           style={{ color: 'var(--label)', letterSpacing: '-0.01em' }}
         >
           {title}
@@ -1678,7 +1668,7 @@ export function Settings({
           aria-label="More actions"
           title="More actions"
         />
-      </div>
+      </Toolbar>
 
       {overflow.at && (
         <Menu x={overflow.at.x} y={overflow.at.y} align="end" onClose={overflow.close}>

@@ -17,7 +17,7 @@
  * test pure logic without pulling in React under pnpm --frozen-lockfile.
  */
 import { useCallback, useState } from 'react';
-import { Badge, Button, EmptyState, SegmentedControl } from '../lattice/ui';
+import { Badge, Button, EmptyState, SegmentedControl, Toolbar } from '../lattice/ui';
 import {
   INSIGHT_REPORTS,
   REPORT_BY_ID,
@@ -129,18 +129,8 @@ export function Insights({
       style={{ WebkitAppRegion: 'no-drag', overflow: 'hidden' } as React.CSSProperties}
     >
       {/* Toolbar — title, report picker, the single primary action. */}
-      <div
-        style={{
-          flexShrink: 0,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-12)',
-          height: 52,
-          padding: '0 var(--space-16)',
-          borderBottom: '0.5px solid var(--separator)',
-        }}
-      >
-        <h1 className="t-title-2" style={{ color: 'var(--label)', margin: 0, flexShrink: 0 }}>
+      <Toolbar className="gap-3">
+        <h1 className="t-title-3" style={{ color: 'var(--label)', margin: 0, flexShrink: 0 }}>
           Insights
         </h1>
         <SegmentedControl
@@ -167,7 +157,7 @@ export function Insights({
             {runLabel}
           </Button>
         )}
-      </div>
+      </Toolbar>
 
       {/* Report pane — one scroll container. */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>

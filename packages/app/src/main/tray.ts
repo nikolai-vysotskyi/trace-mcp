@@ -117,6 +117,12 @@ function createWindowOptions(
     opts.backgroundColor = '#00000000';
     opts.transparent = false;
   }
+  /* Dev-only, set by `scripts/electron-cdp.mjs launch`. Chromium stops
+     compositing a fully occluded window, and a CDP screenshot of one returns
+     the last frame it painted — so a design review run behind another app
+     silently captures stale pixels. Keeping the harness window on top is what
+     makes the capture honest. Never set in a shipped build. */
+  if (process.env.TRACE_MCP_DEV_ALWAYS_ON_TOP === '1') opts.alwaysOnTop = true;
   return opts;
 }
 
@@ -268,6 +274,15 @@ ipcMain.handle('open-clients', () => {
 
 // IPC: get current platform (renderer needs this to decide whether to show custom tabs)
 ipcMain.handle('get-platform', () => process.platform);
+
+/* The sidebar is transparent so the native NSVisualEffectView shows through,
+   and that view follows `nativeTheme`, not the renderer's [data-theme]. Without
+   this, picking Dark in Settings on a Light Mac left light-mode vibrancy behind
+   dark-mode text: the whole sidebar rendered as an empty pale pane. The
+   renderer's appearance choice has to reach the native layer too. */
+ipcMain.on('set-appearance', (_event, appearance: 'auto' | 'light' | 'dark') => {
+  nativeTheme.themeSource = appearance === 'auto' ? 'system' : appearance;
+});
 
 function hideDockIfNoWindows(): void {
   if (isMac && !menuWindow && projectWindows.size === 0) {

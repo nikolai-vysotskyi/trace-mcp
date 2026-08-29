@@ -43,16 +43,22 @@
   background: transparent;
 }
 
-/* The strip the traffic lights sit in. Drag region — this and the content
-   pane's header are the ONLY draggable areas. Height comes from --top-band-h,
-   the same number `trafficLightPosition` is derived from (TRA-370): a literal
-   here is what put the lights 3px below the toggle. */
+/* The strip the traffic lights sit in, plus the sidebar toggle past them
+   (TRA-354). Drag region — this and the content pane's header are the ONLY
+   draggable areas, and every interactive child inside opts out. Height comes
+   from --top-band-h, the same number `trafficLightPosition` is derived from
+   (TRA-370): a literal here is what put the lights 3px below the toggle.
+   78px left pad clears the three 12px lights, which run from x=14 to ~x=66. */
 .ws-sidebar-titlebar {
   height: var(--top-band-h);
   flex: none;
   display: flex;
   align-items: center;
+  padding-left: 78px;
   -webkit-app-region: drag;
+}
+.ws-sidebar-titlebar > * {
+  -webkit-app-region: no-drag;
 }
 
 .ws-sidebar-scroll {
@@ -350,10 +356,17 @@
   background: var(--surface-sunken, var(--surface));
 }
 
-/* The content pane's half of the top band: same --top-band-h as the sidebar
-   strip, so the toggle it carries sits on the traffic-light centre line. */
+/* The window's ONE top band (TRA-354). Same --top-band-h as the sidebar strip,
+   so the sidebar's first row and the content's first row start on the same
+   line — and so the toggle, when the band carries it, sits on the traffic-light
+   centre line (TRA-370). It owns the content pane's drag region and hosts
+   whatever the surface on screen puts on that line — no surface stacks a second
+   control row beneath it.
+
+   `min-height` rather than `height`: a toolbar that has to wrap on a narrow
+   pane grows the band instead of overflowing it. */
 .ws-content-head {
-  height: var(--top-band-h);
+  min-height: var(--top-band-h);
   flex: none;
   display: flex;
   align-items: center;
@@ -363,6 +376,15 @@
 }
 .ws-content-head > * {
   -webkit-app-region: no-drag;
+}
+/* Where <Toolbar> portals to. Stretches so the toolbar's own scroll-edge
+   hairline lands on the band's bottom edge. */
+.ws-content-head-slot {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: stretch;
 }
 /* Collapsed sidebar on macOS: the traffic lights land on this header instead. */
 .ws-stage[data-platform="mac"] .ws-shell.is-collapsed .ws-content-head {

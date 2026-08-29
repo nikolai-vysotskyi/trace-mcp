@@ -2,6 +2,12 @@ export {};
 
 declare global {
   interface Window {
+    /** Window chrome facts from the main process. Undefined in a browser. */
+    electronChrome?: {
+      /** The window is `titleBarStyle: 'hiddenInset'` — leave room for the
+       *  real traffic lights. Never infer this from `navigator.userAgent`. */
+      insetTitleBar: boolean;
+    };
     electronAPI?: {
       selectFolder: () => Promise<string | null>;
       openInEditor: (filePath: string) => Promise<void>;
@@ -30,6 +36,7 @@ declare global {
       closeCurrentTab: () => Promise<{ ok: boolean }>;
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
       onTabBarChanged: (callback: (visible: boolean) => void) => () => void;
+      setAppearance: (appearance: 'auto' | 'light' | 'dark') => void;
       syncSidebarWidth: (width: number) => void;
       onSidebarWidthChanged: (callback: (width: number) => void) => () => void;
       checkForUpdate: () => Promise<{

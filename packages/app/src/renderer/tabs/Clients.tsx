@@ -33,6 +33,7 @@ import {
   MenuItem,
   MenuSection,
   StatusDot,
+  Toolbar,
   useMenuAnchor,
   type Tone,
 } from '../lattice/ui';
@@ -497,17 +498,9 @@ export function Clients() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* ── Toolbar ──────────────────────────────────────────────────── */}
-      <div
-        className="flex items-center gap-3 px-4 shrink-0 glass"
-        style={{
-          height: 52,
-          borderBottom: '0.5px solid transparent',
-          borderBottomColor: scrolled ? 'var(--separator)' : 'transparent',
-          transition: 'border-bottom-color var(--dur-standard) var(--ease-out)',
-        }}
-      >
+      <Toolbar scrolled={scrolled} className="gap-3">
         <h2
-          className="flex-1 min-w-0 text-[17px] leading-[22px] font-semibold truncate"
+          className="flex-1 min-w-0 text-[15px] leading-5 font-semibold truncate"
           style={{ color: 'var(--label)', letterSpacing: '-0.01em' }}
         >
           MCP clients
@@ -519,7 +512,7 @@ export function Clients() {
           aria-label="Refresh clients"
           title="Refresh clients"
         />
-      </div>
+      </Toolbar>
 
       {/* ── Content ──────────────────────────────────────────────────── */}
       <div

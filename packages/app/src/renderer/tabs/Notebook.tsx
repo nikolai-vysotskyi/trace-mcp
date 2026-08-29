@@ -127,9 +127,11 @@ export function Notebook({
       {/* ── Toolbar ──────────────────────────────────────────────────────
           The surface never said which project it queries. It does now. */}
       <Toolbar scrolled={scrolled} className="gap-3">
-        <div className="min-w-0 flex-1">
+        {/* One baseline row, not name-over-path: a two-line title is 29px tall
+            and pushes the shared band off the 44px line (DESIGN.md section 6). */}
+        <div className="min-w-0 flex-1 flex items-baseline gap-2">
           <h2
-            className="text-[13px] leading-4 font-semibold truncate"
+            className="text-[15px] leading-5 font-semibold shrink-0"
             style={{ color: 'var(--label)' }}
           >
             Notebook

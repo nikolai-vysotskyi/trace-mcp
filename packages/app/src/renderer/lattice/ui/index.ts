@@ -56,6 +56,7 @@ export type {
 
 export {
   Card,
+  HeaderSlotProvider,
   ListRow,
   Section,
   SectionError,

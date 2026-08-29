@@ -32,7 +32,10 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  (window as unknown as { electronAPI?: unknown }).electronAPI = undefined;
+});
 
 function setSystem(dark: boolean) {
   systemDark = dark;
@@ -80,6 +83,19 @@ describe('useTheme', () => {
 
     setSystem(true);
     expect(result.current.theme).toBe('dark');
+  });
+
+  /* TRA-354: the sidebar's vibrancy is a native view following nativeTheme, so
+     an appearance change that stops at [data-theme] left light-mode material
+     behind dark-mode text — the sidebar rendered as an empty pale pane. */
+  it('tells the main process about the appearance, not just the DOM', () => {
+    const setAppearance = vi.fn();
+    (window as unknown as { electronAPI: unknown }).electronAPI = { setAppearance };
+    const { result } = renderHook(() => useTheme());
+    expect(setAppearance).toHaveBeenLastCalledWith('auto');
+
+    act(() => result.current.setAppearance('dark'));
+    expect(setAppearance).toHaveBeenLastCalledWith('dark');
   });
 
   it('restores a stored choice on mount, and ignores junk', () => {
