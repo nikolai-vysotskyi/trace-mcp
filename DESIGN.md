@@ -69,18 +69,27 @@ below macOS 26.
 
 This is the thing to internalise before touching the sidebar's material (TRA-369).
 
-`NSVisualEffectView` blends **whatever is composited behind the window** — the
-wallpaper, or another app's window. So the sidebar's tone is not a property of our CSS;
-it is a function of our CSS *and the user's desktop*. Two screenshots of the same build
-in the same appearance can look completely different, and both are real.
+`NSVisualEffectView` blends **the desktop picture** behind the window. So the sidebar's
+tone is not a property of our CSS; it is a function of our CSS *and the user's
+wallpaper*. Two screenshots of the same build in the same appearance can look completely
+different, and both are real.
+
+It is specifically the *wallpaper*, not "whatever is behind the window" (TRA-404). With
+an opaque white window filling the area directly behind it — verified in the same
+capture, the margin around the material window reads `#ffffff` — the sidebar does not
+move by a single level from its black-desktop value. Backing the window with another
+window is therefore not a way to test this without touching someone's desktop, and it is
+not a cell of the matrix either.
 
 Two rules follow, and neither is optional:
 
 1. **Never validate the material against a single background.** The matrix is: light
-   appearance × {dark wallpaper, light wallpaper, a dark window behind, a light window
-   behind} × {window active, window inactive}, then the same set in dark. And it has to
-   be shot in the **Electron window** — there is no `NSVisualEffectView` on the Vite dev
-   server, so none of this is visible in a browser.
+   appearance × {black, deep blue, mid-grey, white wallpaper} × {window active, window
+   inactive}, then the same set in dark. And it has to be shot in the **Electron
+   window** — there is no `NSVisualEffectView` on the Vite dev server, so none of this is
+   visible in a browser. `screencapture -R <window rect>` is the capture: a CDP
+   screenshot only has the web contents and never the material, and `screencapture
+   -l<windowid>` hangs on this window.
 2. **The drift is bounded in BOTH appearances, and the bound is a relationship to the
    content pane — not an absolute colour.** The pull goes light over a light desktop and
    dark over a dark one, and either direction ends at mid-grey. Measured on the shipped
@@ -105,7 +114,10 @@ Two rules follow, and neither is optional:
      dark one it is the defect.
    - **Dark: `--surface` at `.78`.** The glass survives where it has somewhere to go —
      `.22` of the material still comes through, enough to see the desktop in the sidebar
-     and not enough to drag it to mid-grey.
+     and not enough to drag it to mid-grey. Shot across the full matrix (TRA-404):
+     `#1e1e1e` over black to `#2b2b2b` over white, `+10` to `+23` above the `#141414`
+     well — 45 levels of swing compressed to 13, and light held `#ffffff` in all eight
+     cells.
 
    The number to report for any change here is the **delta between the sidebar's rendered
    pixels and the well's**, per cell of the matrix above, plus the spread across cells.

@@ -43,9 +43,12 @@
   --surface-raised: #ffffff;
 
   /* What the sidebar is allowed to drift to (TRA-369). On macOS the sidebar is a
-     native NSVisualEffectView and it samples whatever is behind the WINDOW, so
-     left alone its tone is the user's wallpaper's decision, not ours — and the
-     drift goes BOTH ways. Measured on the shipped build, sidebar swatch against
+     native NSVisualEffectView and it samples the DESKTOP PICTURE — not the
+     windows behind the app: with a pure white window filling the area directly
+     behind it the sidebar does not move at all (measured on macOS 26 /
+     Electron 41, TRA-404). So left alone its tone is the user's wallpaper's
+     decision, not ours — and the drift goes BOTH ways. Measured on the shipped
+     build, sidebar swatch against
      a #1e1e1e content pane: #222222 over a black desktop, #4f4f4f over a white
      one. Same appearance, same build, 45 levels apart, and the light half had
      the same problem in the other direction. In both appearances the sidebar
@@ -179,10 +182,12 @@
     --surface-raised: #2a2a2a;
     /* The ceiling, and the one place the glass survives (TRA-369). --surface at
        .78 leaves .22 of the material coming through, which is enough to see the
-       desktop in the sidebar and not enough to drag it to mid-grey: it compresses
-       the measured #222222–#4f4f4f drift into roughly #202020–#282828, i.e. from
-       45 levels of swing down to under 10, all of it above the #141414 content
-       well. See the light value for the rule this is half of. */
+       desktop in the sidebar and not enough to drag it to mid-grey. Shot in the
+       Electron window across {black, deep blue, mid-grey, white} desktops x
+       {active, inactive} (TRA-404): #1e1e1e over black to #2b2b2b over white,
+       i.e. the measured 45 levels of swing compressed to 13, all of it above the
+       #141414 content well (+10 to +23). See the light value for the rule this
+       is half of. */
     --sidebar-scrim: color-mix(in srgb, var(--surface) 78%, transparent);
     --fill-quaternary: rgb(255 255 255 / 0.06);
     --fill-tertiary: rgb(255 255 255 / 0.11);
