@@ -462,12 +462,15 @@ body {
   overflow-y: auto;
   padding: 4px 0 6px;
 }
+/* Same treatment as the sidebar's `.ws-sb-group` — 11px/600 on
+   --label-secondary. These are the same words at the same size; painting one
+   of them tertiary gave the app two group-header systems (TRA-344). */
 .lx-qo-group {
   padding: 8px 12px 2px;
   font-size: var(--text-caption);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-caption);
-  color: var(--label-tertiary);
+  color: var(--label-secondary);
 }
 .lx-qo-item {
   display: flex;
@@ -505,6 +508,10 @@ body {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+/* The detail line is read, not decoration: it is the only thing separating two
+   `index.ts`, or two folders both called `workdir`. --label-tertiary put it at
+   1.88:1 light / 2.53:1 dark and left it there under Increase Contrast, which
+   lifts --label-secondary and not tertiary (TRA-344). */
 .lx-qo-detail {
   flex: 1 1 auto;
   min-width: 0;
@@ -512,10 +519,11 @@ body {
   white-space: nowrap;
   text-overflow: ellipsis;
   font-size: var(--text-caption);
-  color: var(--label-tertiary);
+  color: var(--label-secondary);
 }
+/* Full --on-accent, not a 72% mix: the mix measured 3.22:1 on --accent-fill. */
 .lx-qo-item.is-active .lx-qo-detail {
-  color: color-mix(in oklab, var(--on-accent) 72%, transparent);
+  color: var(--on-accent);
 }
 .lx-qo-empty {
   padding: 16px 12px;
