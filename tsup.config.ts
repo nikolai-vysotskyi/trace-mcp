@@ -21,7 +21,7 @@ const NATIVE_EXTERNALS = [
   'oxc-resolver',
   'web-tree-sitter',
   '@huggingface/transformers',
-  'tree-sitter-wasms',
+  'tree-sitter-wasm',
   // NAPI binding with platform-specific .node binaries — not bundle-able.
   // Used by the AST codemod engine (src/tools/refactoring/codemod-ast.ts).
   '@ast-grep/napi',

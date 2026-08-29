@@ -1,7 +1,7 @@
 /**
  * Lua Language Plugin — tree-sitter-based symbol extraction.
  *
- * Uses tree-sitter-lua (tree-sitter-wasms) for function/method extraction,
+ * Uses tree-sitter-lua (tree-sitter-wasm) for function/method extraction,
  * with regex fallback for patterns the grammar parses as ERROR nodes
  * (table field function assignments, local variable assignments, require calls).
  *
@@ -10,12 +10,12 @@
  * Imports: require() calls.
  */
 
-import { createRequire } from 'node:module';
 import { err, ok } from 'neverthrow';
-import Parser from 'web-tree-sitter';
+import { getWasmPath } from 'tree-sitter-wasm';
+import { Language, Parser } from 'web-tree-sitter';
 import type { TraceMcpResult } from '../../../../errors.js';
 import { parseError } from '../../../../errors.js';
-import type { TSNode } from '../../../../parser/tree-sitter.js';
+import type { TSNode, TSParser } from '../../../../parser/tree-sitter.js';
 import type {
   FileParseResult,
   LanguagePlugin,
@@ -25,7 +25,6 @@ import type {
   SymbolKind,
 } from '../../../../plugin-api/types.js';
 
-const _require = createRequire(import.meta.url);
 let _initPromise: Promise<void> | null = null;
 
 /**
@@ -36,12 +35,12 @@ let _initPromise: Promise<void> | null = null;
  * root nodes for valid code (e.g. `local function`). Loading the language
  * fresh each time is the only reliable workaround.
  */
-async function createLuaParser(): Promise<Parser> {
+async function createLuaParser(): Promise<TSParser> {
   if (!_initPromise) _initPromise = Parser.init();
   await _initPromise;
-  const wasmPath = _require.resolve('tree-sitter-wasms/out/tree-sitter-lua.wasm');
-  const lang = await Parser.Language.load(wasmPath);
-  const parser = new Parser();
+  const lang = await Language.load(getWasmPath('lua'));
+  // The narrowing holds because setLanguage() runs before the parser escapes.
+  const parser = new Parser() as TSParser;
   parser.setLanguage(lang);
   return parser;
 }
@@ -116,7 +115,7 @@ export class LuaLanguagePlugin implements LanguagePlugin {
   /**
    * Walk top-level tree-sitter nodes.
    *
-   * Actual grammar node types (tree-sitter-wasms lua):
+   * Actual grammar node types (tree-sitter-wasm lua):
    * - function_definition_statement: `function name(...)` or `function Mod.name(...)` / `function Mod:name(...)`
    * - local_function_definition_statement: `local function name(...)`
    * - local_variable_declaration: `local name` (without assignment — assignments parse as ERROR)

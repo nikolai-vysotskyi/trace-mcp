@@ -14,53 +14,70 @@
  * regression on this workload (~+30% extract time). Keeping pure WASM.
  */
 
-import { createRequire } from 'node:module';
-import Parser from 'web-tree-sitter';
+import { getWasmPath, type SupportedLanguage } from 'tree-sitter-wasm';
+import { Language, type Node, type ParseCallback, Parser, type Tree } from 'web-tree-sitter';
 
-let initPromise: Promise<void> | null = null;
-const languageCache = new Map<string, Parser.Language>();
-const parserCache = new Map<string, Parser>();
-
-const LANG_WASM_MAP: Record<string, string> = {
-  bash: 'tree-sitter-bash.wasm',
-  c: 'tree-sitter-c.wasm',
-  cpp: 'tree-sitter-cpp.wasm',
-  csharp: 'tree-sitter-c_sharp.wasm',
-  css: 'tree-sitter-css.wasm',
-  dart: 'tree-sitter-dart.wasm',
-  elisp: 'tree-sitter-elisp.wasm',
-  elixir: 'tree-sitter-elixir.wasm',
-  elm: 'tree-sitter-elm.wasm',
-  embedded_template: 'tree-sitter-embedded_template.wasm',
-  go: 'tree-sitter-go.wasm',
-  html: 'tree-sitter-html.wasm',
-  java: 'tree-sitter-java.wasm',
-  javascript: 'tree-sitter-javascript.wasm',
-  json: 'tree-sitter-json.wasm',
-  kotlin: 'tree-sitter-kotlin.wasm',
-  lua: 'tree-sitter-lua.wasm',
-  objc: 'tree-sitter-objc.wasm',
-  ocaml: 'tree-sitter-ocaml.wasm',
-  php: 'tree-sitter-php.wasm',
-  python: 'tree-sitter-python.wasm',
-  ql: 'tree-sitter-ql.wasm',
-  rescript: 'tree-sitter-rescript.wasm',
-  ruby: 'tree-sitter-ruby.wasm',
-  rust: 'tree-sitter-rust.wasm',
-  scala: 'tree-sitter-scala.wasm',
-  solidity: 'tree-sitter-solidity.wasm',
-  swift: 'tree-sitter-swift.wasm',
-  systemrdl: 'tree-sitter-systemrdl.wasm',
-  tlaplus: 'tree-sitter-tlaplus.wasm',
-  toml: 'tree-sitter-toml.wasm',
-  tsx: 'tree-sitter-tsx.wasm',
-  typescript: 'tree-sitter-typescript.wasm',
-  vue: 'tree-sitter-vue.wasm',
-  yaml: 'tree-sitter-yaml.wasm',
-  zig: 'tree-sitter-zig.wasm',
+/**
+ * A `Parser` whose `parse()` is narrowed to non-nullable.
+ *
+ * web-tree-sitter 0.25+ types `parse()` as `Tree | null`, and per its own docs
+ * null is returned only when (a) the parser has no language assigned, or (b) a
+ * `ParseOptions` progress callback returned true. `getParser` always assigns a
+ * language before handing the parser out, and the narrowed signature drops the
+ * `options` parameter so no caller can install a progress callback. Both null
+ * branches are therefore unreachable, and the ~80 plugin call sites stay free
+ * of dead null checks.
+ *
+ * ponytail: if a caller ever needs `ParseOptions`, it must use the raw
+ * `Parser` type and handle `null` itself rather than widening this alias.
+ */
+export type TSParser = Omit<Parser, 'parse'> & {
+  parse(input: string | ParseCallback, oldTree?: Tree | null): Tree;
 };
 
-const _require = createRequire(import.meta.url);
+let initPromise: Promise<void> | null = null;
+const languageCache = new Map<string, Language>();
+const parserCache = new Map<string, TSParser>();
+
+/**
+ * This codebase's language name → the tree-sitter grammar that parses it.
+ * Typed against tree-sitter-wasm, so a grammar that the package stops shipping
+ * fails the build instead of throwing on first parse.
+ */
+export const LANG_GRAMMARS: Record<string, SupportedLanguage> = {
+  bash: 'bash',
+  c: 'c',
+  cpp: 'cpp',
+  csharp: 'c_sharp',
+  css: 'css',
+  dart: 'dart',
+  elisp: 'elisp',
+  elixir: 'elixir',
+  elm: 'elm',
+  embedded_template: 'embedded_template',
+  go: 'go',
+  html: 'html',
+  java: 'java',
+  javascript: 'javascript',
+  json: 'json',
+  kotlin: 'kotlin',
+  lua: 'lua',
+  objc: 'objc',
+  ocaml: 'ocaml',
+  php: 'php',
+  python: 'python',
+  ruby: 'ruby',
+  rust: 'rust',
+  scala: 'scala',
+  solidity: 'solidity',
+  swift: 'swift',
+  toml: 'toml',
+  tsx: 'tsx',
+  typescript: 'typescript',
+  vue: 'vue',
+  yaml: 'yaml',
+  zig: 'zig',
+};
 
 // WHY exported: daemon boot warms Parser.init() eagerly so the first request
 // after listen() doesn't pay the WASM cold-start tax.
@@ -83,7 +100,7 @@ function ensureInit(): Promise<void> {
  */
 export async function warmUpGrammars(languages: readonly string[]): Promise<void> {
   await ensureInitialized();
-  const unique = Array.from(new Set(languages.filter((l) => l && LANG_WASM_MAP[l])));
+  const unique = Array.from(new Set(languages.filter((l) => l && LANG_GRAMMARS[l])));
   await Promise.all(
     unique.map((lang) =>
       getParser(lang).catch(() => {
@@ -93,25 +110,25 @@ export async function warmUpGrammars(languages: readonly string[]): Promise<void
   );
 }
 
-export async function getParser(language: string): Promise<Parser> {
+export async function getParser(language: string): Promise<TSParser> {
   await ensureInit();
 
   if (parserCache.has(language)) return parserCache.get(language)!;
 
-  const wasmFile = LANG_WASM_MAP[language];
-  if (!wasmFile) throw new Error(`Unsupported tree-sitter language: ${language}`);
+  const grammar = LANG_GRAMMARS[language];
+  if (!grammar) throw new Error(`Unsupported tree-sitter language: ${language}`);
 
   let lang = languageCache.get(language);
   if (!lang) {
-    const wasmPath = _require.resolve(`tree-sitter-wasms/out/${wasmFile}`);
-    lang = await Parser.Language.load(wasmPath);
+    lang = await Language.load(getWasmPath(grammar));
     languageCache.set(language, lang);
   }
 
-  const parser = new Parser();
+  // The narrowing holds because setLanguage() runs before the parser escapes.
+  const parser = new Parser() as TSParser;
   parser.setLanguage(lang);
   parserCache.set(language, parser);
   return parser;
 }
 
-export type TSNode = Parser.SyntaxNode;
+export type TSNode = Node;

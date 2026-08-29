@@ -18,6 +18,7 @@ const TREE_SITTER_PACKAGES = [
   'tree-sitter',
   'web-tree-sitter',
   'tree-sitter-wasms',
+  'tree-sitter-wasm',
   'tree-sitter-typescript',
   'tree-sitter-javascript',
   'tree-sitter-python',

@@ -331,46 +331,58 @@ export function extractConstantSymbols(
  *  - `use App\Models\User as Alias;`
  *  - `use App\Contracts\{Searchable, Filterable};`
  */
+/**
+ * Clause node types inside a `namespace_use_group`. tree-sitter-php used to
+ * emit `namespace_use_group_clause` there and now emits plain
+ * `namespace_use_clause`; accept both so the extractor survives either grammar.
+ */
+const USE_CLAUSE_TYPES = new Set(['namespace_use_clause', 'namespace_use_group_clause']);
+
+/**
+ * Pull the imported path and optional alias out of one `use` clause.
+ *
+ * Two grammar shapes are handled: the alias used to sit in a dedicated
+ * `namespace_aliasing_clause` child, and now arrives as a bare trailing `name`
+ * sibling of the imported path.
+ */
+function parseUseClause(clause: TSNode): { fqn: string; alias?: string } | null {
+  const aliasing = clause.namedChildren.find((c) => c.type === 'namespace_aliasing_clause');
+  const parts = clause.namedChildren.filter((c) => c !== aliasing);
+  const pathNode = parts[0];
+  if (!pathNode) return null;
+
+  const alias = aliasing
+    ? aliasing.namedChildren.find((c) => c.type === 'name')?.text
+    : parts[1]?.text;
+  return { fqn: pathNode.text, alias };
+}
+
 export function extractUseStatements(rootNode: TSNode): { fqn: string; alias?: string }[] {
   const results: { fqn: string; alias?: string }[] = [];
 
   for (const node of rootNode.namedChildren) {
     if (node.type === 'namespace_use_declaration') {
-      // Check for grouped use: use Prefix\{A, B};
+      // Grouped use: use Prefix\{A, B};
       const group = node.namedChildren.find((c) => c.type === 'namespace_use_group');
       if (group) {
         const prefixNode = node.namedChildren.find((c) => c.type === 'namespace_name');
         const prefix = prefixNode ? prefixNode.text : '';
 
         for (const clause of group.namedChildren) {
-          if (clause.type === 'namespace_use_group_clause') {
-            const nameNode = clause.namedChildren.find(
-              (c) => c.type === 'namespace_name' || c.type === 'name',
-            );
-            if (nameNode) {
-              const fqn = prefix ? `${prefix}\\${nameNode.text}` : nameNode.text;
-              const aliasNode = clause.namedChildren.find(
-                (c) => c.type === 'namespace_aliasing_clause',
-              );
-              const alias = aliasNode?.namedChildren.find((c) => c.type === 'name')?.text;
-              results.push({ fqn, alias });
-            }
-          }
+          if (!USE_CLAUSE_TYPES.has(clause.type)) continue;
+          const parsed = parseUseClause(clause);
+          if (!parsed) continue;
+          results.push({
+            fqn: prefix ? `${prefix}\\${parsed.fqn}` : parsed.fqn,
+            alias: parsed.alias,
+          });
         }
       } else {
         // Simple use: use Foo\Bar\Baz; or use Foo\Bar\Baz as Alias;
         for (const clause of node.namedChildren) {
-          if (clause.type === 'namespace_use_clause') {
-            const qn = clause.namedChildren.find((c) => c.type === 'qualified_name');
-            if (qn) {
-              const fqn = qn.text;
-              const aliasNode = clause.namedChildren.find(
-                (c) => c.type === 'namespace_aliasing_clause',
-              );
-              const alias = aliasNode?.namedChildren.find((c) => c.type === 'name')?.text;
-              results.push({ fqn, alias });
-            }
-          }
+          if (clause.type !== 'namespace_use_clause') continue;
+          const parsed = parseUseClause(clause);
+          if (parsed) results.push(parsed);
         }
       }
     }
