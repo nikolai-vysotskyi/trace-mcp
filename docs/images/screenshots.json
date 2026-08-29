@@ -1,0 +1,50 @@
+{
+  "$comment": "Written by scripts/capture-screenshots.mjs. `--check` compares it against HEAD.",
+  "generatedAt": "2026-08-29T09:23:42.532Z",
+  "appVersion": "3.1.1",
+  "commit": "0c56a6cb7ad29ec8e8ea956630ee55d02a7291ea",
+  "uiCommit": "2a94e45237ebfe5eb5c6aed8979db695e39abdc5",
+  "uiPaths": ["packages/app/src/renderer", "packages/app/src/main"],
+  "images": [
+    {
+      "name": "app-projects",
+      "file": "app-projects.webp",
+      "surface": "menu · workspace",
+      "theme": "light",
+      "width": 1920,
+      "height": 1200,
+      "bytes": 39378,
+      "alt": "trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics"
+    },
+    {
+      "name": "app-overview",
+      "file": "app-overview.webp",
+      "surface": "project · Overview",
+      "theme": "light",
+      "width": 1920,
+      "height": 1200,
+      "bytes": 76444,
+      "alt": "trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage"
+    },
+    {
+      "name": "app-graph",
+      "file": "app-graph.webp",
+      "surface": "project · Graph",
+      "theme": "light",
+      "width": 1920,
+      "height": 1200,
+      "bytes": 132300,
+      "alt": "trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance"
+    },
+    {
+      "name": "app-dark-graph",
+      "file": "app-dark-graph.webp",
+      "surface": "project · Graph",
+      "theme": "dark",
+      "width": 1920,
+      "height": 1200,
+      "bytes": 126160,
+      "alt": "trace-mcp app — GPU graph explorer visualizing symbol connections, dark appearance"
+    }
+  ]
+}
