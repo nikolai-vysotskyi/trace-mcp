@@ -700,6 +700,17 @@ program
       // only supports one transport at a time. All sessions share the same
       // underlying Store/Pipeline/Registry via the managed project.
       // TopologyStore and DecisionStore are shared via resource pool.
+      // `managed.config` was loaded once, when the daemon first added this
+      // project, and is never refreshed — so a session would be served a tool
+      // surface built from whatever the config said back then. Everything
+      // `tools.*` shapes (description_verbosity, instructions_verbosity,
+      // descriptions, compact_schemas, meta_fields, agent_behavior) is baked
+      // into createServer(), so the stale copy silently ignored the user's
+      // config (TRA-373). Re-read it per session; fall back to the cached copy
+      // if the file is unreadable or invalid.
+      const freshConfig = await loadConfig(projectRoot);
+      const sessionConfig = freshConfig.isOk() ? freshConfig.value : managed.config;
+
       const baseDeps = resourcePool.acquire(projectRoot, managed.config);
       const deps = {
         ...baseDeps,
@@ -723,7 +734,7 @@ program
       const handle = createServer(
         managed.store,
         managed.registry,
-        managed.config,
+        sessionConfig,
         managed.root,
         managed.progress,
         deps,
