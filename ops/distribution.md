@@ -31,7 +31,9 @@ Rules for keeping it honest:
 | [mcpservers.org](https://mcpservers.org/servers/nikolai-vysotskyi/trace-mcp) | Yes | Body correct; **header stale**: "53 framework integrations across 68 languages, 100+ tools" | Free form at `/submit` (no account, needs a contact email). Correction submitted 2026-08-29, review ≤12h — but it said "80 languages … up to 99% fewer tokens", and master has since moved to 81 languages and a 40–50% claim, so re-submit once it lands. Premium $39 — declined | 2026-08-29 |
 | [mcpmarket.com](https://mcpmarket.com/server/trace) | Yes, as **"Trace"** | Same stale "53 frameworks / 68 languages" copy | No self-serve edit. $29 paid listing, or email support@mcpmarket.com. Free queue re-submit answers "already listed" | 2026-08-29 |
 | [mcp.so](https://mcp.so) | **No** | — | **Free submission no longer exists** — `/submit` offers only "Pay and submit automatically", $39. They ingest the official registry, so expect a free pickup | 2026-08-29 |
-| [smithery.ai](https://smithery.ai) | **No** | — | Requires a Smithery account via GitHub OAuth — an agent must not authorize that on Nikolai's behalf. They also ingest the official registry | 2026-08-29 |
+| [smithery.ai](https://smithery.ai) | **No** | — | Two blockers, not one: the account needs GitHub OAuth (an agent must not authorize that on Nikolai's behalf), **and** a stdio server is published as an MCPB bundle — `smithery mcp publish ./server.mcpb -n <org>/<name>`, per `smithery.ai/docs/build/publish.md`. There is **no `smithery.yaml`** in their current docs; older writeups describing one are stale. They also ingest the official registry | 2026-08-29 |
+| [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) | **Yes** | Listed under `Developer Tools`, alphabetical, with the Glama badge and an accurate description | PR to README. Their CONTRIBUTING asks automated agents to append `🤖🤖🤖` to the PR title. Nothing to submit — only re-read the entry when the product's shape changes | 2026-08-29 |
+| [wong2/awesome-mcp-servers](https://github.com/wong2/awesome-mcp-servers) | **No** | — | **Not a separate door.** Its README refuses PRs outright and redirects to `mcpservers.org/submit` — the same form as the mcpservers.org row above. Treat the two as one channel | 2026-08-29 |
 
 ## Findings that should not be re-derived
 
@@ -53,6 +55,18 @@ free registry ingestion. Paid infrastructure is Nikolai's call, not an agent's;
 if the free pickup fails, come back with the measured cost of the miss rather
 than re-asking the open question.
 
+**GitHub code search is not evidence of absence.** TRA-393's first pass reported
+trace-mcp missing from punkpeye/awesome-mcp-servers on the strength of a code
+search that returned nothing. It has been listed all along, at README line 1350.
+Fetch the raw README and read it — the same mistake TRA-352 made with
+mcpmarket.com, made again three hours later by a different run.
+
+**A listing fix ships with the next release, not with the merge.** The 40–50%
+wording landed on master on 2026-08-29, but npm still served 3.2.0's "up to 99%
+token reduction" and the registry still had 3.1.1/3.2.0 with the old string,
+because both are populated by the release workflow. Do not report a directory as
+corrected until the release that carries the text is out.
+
 **TRA-263's "165 tools" is stale.** `docs/_data/counts.yml` says 169 and the
 README already agreed. TRA-346's "141 schema-carrying tools" answers a different
 question and is not a competing count.
@@ -66,3 +80,16 @@ Not blockers to route around — genuinely outside what an agent may do alone:
 - **Anything paid** — see above.
 - Everything else here was self-serve: the mcpservers.org form takes a repo URL
   and an email, and the registry publish needs no credential at all in CI.
+
+## Not checked yet
+
+Named so the next run picks one instead of re-auditing what is already in the
+table. None of these has been verified either way:
+
+- **Cline MCP Marketplace** — submission is a GitHub issue on `cline/mcp-marketplace`;
+  wants a 400×400 logo and an `llms-install.md` in the repo, which we do not have.
+- **Docker MCP Catalog** — PR adding `servers/trace-mcp/server.yaml` to
+  `docker/mcp-registry`; needs the server to build as a container image.
+- **Continue.dev Hub** — a `config.yaml` block published through their web UI.
+- **LobeHub** — searching "trace mcp" there surfaces an unrelated project of the
+  same name (`mnehmos/trace-mcp`), so a listing would also disambiguate.
