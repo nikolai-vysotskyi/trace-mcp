@@ -141,8 +141,14 @@
 }
 /* Full --on-accent, not a dimmed white: on a filled accent row there is no
    headroom to spend on dimming. White at .85 measured 4.22:1 light / 3.89:1
-   dark and failed AA for the count, which is a number the user reads; full
-   --on-accent is 5.22:1 / 4.77:1. Same decision as the shortcut hint. */
+   dark against --accent-fill; full --on-accent is 5.22:1 / 4.77:1. Same
+   decision as the shortcut hint.
+
+   Scope, measured rather than assumed (TRA-355 follow-up): the only element
+   this rule actually reaches is .ws-sb-ico. A glyph's floor is 3:1, which the
+   dimmed white already met — so this was a consistency fix, not the AA fix the
+   original commit message claimed. .ws-sb-count is styled here and rendered by
+   no component in the app; see TRA-358 for build-or-delete. */
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-ico,
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-count {
   color: var(--on-accent);
