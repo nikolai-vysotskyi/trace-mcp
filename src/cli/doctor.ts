@@ -584,8 +584,9 @@ function printRegistryReport(r: RegistryHealthReport): void {
     console.log(
       '  These look like one-shot Multica agent-run checkouts: the run that created them is ' +
         'long finished and nothing will ever query them again, but they still get permanently ' +
-        'reindexed. Unregister with `trace-mcp remove <path>`, then `trace-mcp prune --apply` ' +
-        'to reclaim their index DBs.',
+        'reindexed. A running daemon deregisters them by itself once they are 3 days old ' +
+        '(TRA-335); to reclaim them now, `trace-mcp doctor --fix`, or `trace-mcp remove <path>` ' +
+        'then `trace-mcp prune --apply`.',
     );
   }
   console.log('');

@@ -3068,6 +3068,29 @@ program
           logger.warn({ err }, 'sweepMissingRoots failed (non-fatal)');
         }
 
+        // Soft GC (TRA-335): the sweep above only reaches workdirs that were
+        // *deleted*. Agent runtimes that leave their one-shot checkout on disk
+        // (Multica, and CI/sandbox workflows shaped like it) leave an entry
+        // `prune` will always classify as live, so the registry grew one row —
+        // and one permanently-reindexed project — per run, forever. Age since
+        // registration is the signal; see ProjectManager.sweepEphemeralProjects.
+        const ephemeralSweep = async () => {
+          try {
+            const removed = await projectManager.sweepEphemeralProjects();
+            if (removed.length > 0) {
+              logger.info(
+                { removedRoots: removed },
+                `Deregistered ${removed.length} stale one-shot workdir project(s)`,
+              );
+            }
+          } catch (err) {
+            logger.warn({ err }, 'sweepEphemeralProjects failed (non-fatal)');
+          }
+        };
+        await ephemeralSweep();
+        const ephemeralTimer = setInterval(() => void ephemeralSweep(), 60 * 60_000);
+        ephemeralTimer.unref();
+
         // If cwd is a project not yet registered, add it too.
         const cwd = process.cwd();
         if (!projectManager.getProject(cwd)) {
