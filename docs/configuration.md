@@ -453,6 +453,8 @@ The `tools.*` section controls what the MCP server injects into every session �
 | `tools.meta_fields` | `true` | Meta fields in responses (`_hints`, `_budget_warning`, etc.). Set `false` or list to narrow |
 | `tools.compact_schemas` | `false` | Strip advanced/optional params from tool schemas. Cuts schema size ~42% (measured 2026-08-29) |
 
+Every `tools.*` option works from a project-local config file (`.trace-mcp/.config.json`) as well as the global one — none of them are global-only. The tool surface is built once per MCP session, so a change takes effect on the next session (restart the MCP client); the daemon does not need restarting.
+
 ### Agent behavior rules
 
 `tools.agent_behavior` appends generic discipline rules (anti-sycophancy, anti-fabrication, goal-driven execution, 2-strike session hygiene, no drive-by refactors) to the server instructions. These are client-agnostic — every MCP-compatible client (Claude Code, Cursor, Codex, Windsurf, …) receives them.
