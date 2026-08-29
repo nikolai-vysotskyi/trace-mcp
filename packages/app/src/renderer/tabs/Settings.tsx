@@ -30,7 +30,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { OllamaPanel } from '../components/OllamaPanel';
-import { t } from '../i18n';
+import { localeOptions, t, useLocale } from '../i18n';
 import { Icon } from '../lattice/icons';
 import {
   Badge,
@@ -1431,37 +1431,73 @@ function BottomBar({
   );
 }
 
-/* Appearance — an app preference, not a daemon setting, so it is its own group
-   above the schema-driven list rather than a section inside it. It moved here
-   from the sidebar footer, which was carrying two 28px rows under a 38px update
-   banner (TRA-306). It renders in the daemon-down and loading states too: the
-   theme is stored in localStorage and has nothing to do with the daemon, so
-   losing the connection must not take the appearance switcher with it. */
-function AppearanceCard({
+/* The app's own preferences — Theme and Language — as opposed to the daemon's
+   configuration in every group below. That is why it is its own group above the
+   schema-driven list rather than a section inside it, and why it is headed
+   "App" against the "Daemon" card directly above: the group used to be headed
+   "Appearance" over a single "Theme" row, which worked only while Theme was the
+   only thing in it. A heading that repeats its one row's label is weight
+   without information, and "General" is already the first schema group on this
+   same screen (TRA-388).
+
+   Theme moved here from the sidebar footer, which was carrying two 28px rows
+   under a 38px update banner (TRA-306). The card renders in the daemon-down and
+   loading states too: both preferences live in localStorage and have nothing to
+   do with the daemon, so losing the connection must not take them with it. */
+function PrefRow({
+  label,
+  last,
+  children,
+}: {
+  label: string;
+  last?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="flex items-center gap-2"
+      style={{ minHeight: 36, padding: '0 12px', borderBottom: rowBorder(last ?? false) }}
+    >
+      <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label)' }}>
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+function AppPrefsCard({
   appearance,
   onChange,
 }: {
   appearance: Appearance;
   onChange: (next: Appearance) => void;
 }) {
+  const { locale, setLocale } = useLocale();
   return (
-    <Section title={t('settings:appearance.title')}>
+    <Section title={t('settings:app.title')}>
       <Card>
-        <div className="flex items-center gap-2" style={{ minHeight: 36, padding: '0 12px' }}>
-          <span className="flex-1 text-[13px] leading-4" style={{ color: 'var(--label)' }}>
-            {t('settings:appearance.theme')}
-          </span>
+        {/* Each control's accessible name matches the visible label beside it —
+            a name that disagrees with the label a sighted user reads out loud is
+            a voice-control dead end (WCAG 2.5.3). "App" is the GROUP heading. */}
+        <PrefRow label={t('settings:appearance.theme')}>
           <PopUpButton
             options={appearanceOptions()}
             value={appearance}
             onChange={onChange}
-            // "Theme", matching the visible label beside it — an accessible
-            // name that disagrees with the label a sighted user reads out loud
-            // is a voice-control dead end (WCAG 2.5.3). "Appearance" is the
-            // GROUP heading above, and stays that.
             aria-label={t('settings:appearance.theme')}
           />
-        </div>
+        </PrefRow>
+        {/* Full names here, not the menu row's two letters — a pop-up button has
+            the width for them, and they are written in their own language. */}
+        <PrefRow label={t('settings:app.language')} last>
+          <PopUpButton
+            options={localeOptions()}
+            value={locale}
+            onChange={setLocale}
+            aria-label={t('settings:app.language')}
+          />
+        </PrefRow>
       </Card>
     </Section>
   );
@@ -1597,7 +1633,7 @@ export function Settings({
         </Toolbar>
         <div className="flex-1 overflow-auto flex flex-col">
           <div className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 720 }}>
-            <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
+            <AppPrefsCard appearance={appearance} onChange={onAppearanceChange} />
           </div>
           <div className="flex-1 flex items-center justify-center">
           {/* A finished fetch that produced nothing is not still loading. The
@@ -1767,10 +1803,15 @@ export function Settings({
                 </div>
               </Card>
 
+              {/* Searchable by the group's name, by either row's label, and by
+                  the language names themselves — someone looking for Russian
+                  types "Рус", not "language". */}
               {(!q ||
-                t('settings:appearance.title').toLowerCase().includes(q) ||
-                t('settings:appearance.theme').toLowerCase().includes(q)) && (
-                <AppearanceCard appearance={appearance} onChange={onAppearanceChange} />
+                t('settings:app.title').toLowerCase().includes(q) ||
+                t('settings:appearance.theme').toLowerCase().includes(q) ||
+                t('settings:app.language').toLowerCase().includes(q) ||
+                localeOptions().some((l) => l.label.toLowerCase().includes(q))) && (
+                <AppPrefsCard appearance={appearance} onChange={onAppearanceChange} />
               )}
 
               <SectionList
