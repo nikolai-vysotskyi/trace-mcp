@@ -2078,10 +2078,10 @@ export function visualizeGraph(
   });
   const outputPath = opts.output ?? path.join(os.tmpdir(), 'trace-mcp-graph.html');
 
-  // A caller-supplied path is the caller's business (they may well mean a
-  // symlink); the shared-tmp default is not — don't follow one planted there.
-  if (opts.output) fs.writeFileSync(outputPath, html, 'utf-8');
-  else writeTmpFileSync(outputPath, html);
+  // Never through a symlink: the default lands on a predictable name in the
+  // shared temp dir. Applied to caller-supplied paths too — nobody points
+  // --output at a symlink on purpose, and one branch is one branch too many.
+  writeTmpFileSync(outputPath, html);
 
   return ok({
     outputPath,

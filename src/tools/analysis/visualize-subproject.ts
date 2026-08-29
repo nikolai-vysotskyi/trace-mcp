@@ -5,7 +5,6 @@
  * Cross-service edges show API call relationships with call counts.
  */
 
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { err, ok, type TraceMcpResult, validationError } from '../../errors.js';
@@ -351,10 +350,8 @@ export function visualizeSubprojectTopology(
   const html = generateSubprojectHtml(nodes, edges, layout);
   const outputPath = opts?.output ?? path.join(os.tmpdir(), 'trace-mcp-subproject-topology.html');
 
-  // Caller-supplied path stays as-is; the shared-tmp default must not follow a
-  // symlink another user planted under our predictable name.
-  if (opts?.output) fs.writeFileSync(outputPath, html, 'utf-8');
-  else writeTmpFileSync(outputPath, html);
+  // Never through a symlink — same rule as visualizeGraph.
+  writeTmpFileSync(outputPath, html);
 
   return ok({
     outputPath,
