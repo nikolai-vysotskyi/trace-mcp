@@ -1,0 +1,67 @@
+name: Publish to MCP Registry
+
+# We are not in the official MCP Registry, and that is what makes the directory
+# listings wrong (TRA-352). PulseMCP is hand-maintaining a server.json for us
+# that still says "44+ tools" — its own submit page says the fix is to publish
+# to the official registry, and mcp.so / Smithery auto-discover from it too.
+# server.json is already release-please-versioned, so publishing is the only
+# missing step.
+#
+# GitHub OIDC needs no secret: the namespace io.github.nikolai-vysotskyi/*
+# matches this repo's owner, so the registry trusts the workflow's own token.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v3.1.1). Defaults to the latest release.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # OIDC authentication to the MCP Registry
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag != '' && inputs.tag || github.event.release.tag_name }}
+
+      # The registry rejects a server.json whose npm package it cannot find, and
+      # the release event fires while release.yml is still building and testing
+      # the npm publish. Wait for the version to land instead of failing the
+      # release on a race.
+      - name: Wait for the npm package to be published
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          for i in $(seq 1 60); do
+            if curl -fsS "https://registry.npmjs.org/trace-mcp/$VERSION" > /dev/null; then
+              echo "trace-mcp@$VERSION is on npm"
+              exit 0
+            fi
+            echo "waiting for trace-mcp@$VERSION on npm ($i/60)"
+            sleep 30
+          done
+          echo "trace-mcp@$VERSION never appeared on npm — is the publish job red?" >&2
+          exit 1
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Validate server.json
+        run: ./mcp-publisher validate
+
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server to MCP Registry
+        run: ./mcp-publisher publish
