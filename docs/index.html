@@ -2024,15 +2024,6 @@ layout: null
             <span class="trust-badge-bottom">Open source &middot; MIT</span>
           </span>
         </a>
-        <a class="trust-badge" href="https://www.npmjs.com/package/trace-mcp" target="_blank" rel="noopener" aria-label="npm downloads">
-          <span class="trust-badge-mark" aria-hidden="true">
-            <span data-npm-downloads>&hellip;</span>
-          </span>
-          <span class="trust-badge-text">
-            <span class="trust-badge-top">npm downloads</span>
-            <span class="trust-badge-bottom">last month</span>
-          </span>
-        </a>
         <a class="trust-badge" href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" rel="noopener" aria-label="GitHub stars">
           <span class="trust-badge-mark" aria-hidden="true">
             <span data-github-stars>&hellip;</span>
@@ -2892,7 +2883,9 @@ layout: null
     return String(n);
   }
 
-  // Trust strip: live npm downloads + github stars/watchers (cached 6h in localStorage)
+  // Trust strip: live github stars/watchers (cached 6h in localStorage).
+  // ponytail: npm downloads deliberately NOT shown — registry mirrors sweep the full
+  // version history on every publish, inflating the count ~30x (TRA-413).
   (function fetchTrustCounters() {
     const TTL = 6 * 60 * 60 * 1000;
     const setText = (sel, value) => {
@@ -2908,22 +2901,6 @@ layout: null
     const store = (key, v) => {
       try { localStorage.setItem(key, JSON.stringify({ v: v, ts: Date.now() })); } catch (e) {}
     };
-
-    // npm last-month downloads
-    const npmCached = cached('trace-mcp-npm-downloads');
-    if (npmCached !== null) setText('[data-npm-downloads]', npmCached);
-    fetch('https://api.npmjs.org/downloads/point/last-month/trace-mcp')
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => {
-        if (data && typeof data.downloads === 'number') {
-          const v = formatCount(data.downloads) || String(data.downloads);
-          setText('[data-npm-downloads]', v);
-          store('trace-mcp-npm-downloads', v);
-        }
-      })
-      .catch(() => {
-        if (npmCached === null) setText('[data-npm-downloads]', '—');
-      });
 
     // GitHub stars + watchers (subscribers_count)
     const ghCached = cached('trace-mcp-gh');
