@@ -117,6 +117,18 @@
             firstCell.setAttribute('scope', 'row');
           }
         });
+        // Capability marks are ✓/✗ text, not ✅/❌ emoji (DESIGN-WEB.md §4).
+        // Wrapping them here rather than in the Markdown keeps the source a
+        // scannable table for the SEO agent, gives the mark an accessible
+        // name — a screen reader reads "Yes"/"No", not "check mark" — and
+        // lets "no" sit back at --text-disabled.
+        table.querySelectorAll('td, th').forEach(function (cell) {
+          if (!/[✓✗]/.test(cell.textContent)) return;
+          cell.innerHTML = cell.innerHTML
+            .replace(/✓/g, '<span class="mark mark-yes" role="img" aria-label="Yes">✓</span>')
+            .replace(/✗/g, '<span class="mark mark-no" role="img" aria-label="No">✗</span>');
+        });
+
         // Three-column tool tables are ~700px at their narrowest and used to
         // force the whole page to scroll sideways on a 390px phone. Scroll the
         // table instead, and make the scroller keyboard-reachable.
