@@ -27,12 +27,20 @@ const CHECKED = [
   'src/main/menu.ts',
   'src/main/tray.ts',
   'src/renderer/i18n',
+  'src/renderer/components/ProjectStatsModal.tsx',
   'src/renderer/tabs/AIActivity.tsx',
   'src/renderer/tabs/Activity.tsx',
+  'src/renderer/tabs/AskTab.tsx',
+  'src/renderer/tabs/Clients.tsx',
+  'src/renderer/tabs/GraphExplorerGPU.tsx',
   'src/renderer/tabs/Insights.tsx',
+  'src/renderer/tabs/MemoryExplorer.tsx',
+  'src/renderer/tabs/Notebook.tsx',
   'src/renderer/tabs/ProjectOverview.tsx',
   'src/renderer/tabs/ToolActivity.tsx',
+  'src/renderer/tabs/graph-error.ts',
   'src/renderer/tabs/insights-runtime.ts',
+  'src/renderer/tabs/notebook-runtime.ts',
   'src/renderer/update-check.ts',
   'src/shared/global-actions.ts',
   'src/shared/i18n',
@@ -61,6 +69,12 @@ function isProse(text) {
   if (/&&|\|\||===|!==|=>/.test(t)) return false;
   // Identifiers and paths — `data-menu-row`, `src/renderer`, `useTheme`.
   if (!/\s/.test(t) && /[/_.:]|[a-z][A-Z]/.test(t)) return false;
+  /* Code the `>` … `<` window caught by accident: a generic type argument or a
+     chain of comparisons reads as "text between two angle brackets" to a regex.
+     A sentence never opens on a separator, and never carries `||`, `&&`, `=>`
+     or a semicolon. (TRA-385 — the first slice wide enough to hit all three.) */
+  if (/^[;,)\]}|&:<>=+*/-]/.test(t)) return false;
+  if (/\|\||&&|=>|;/.test(t)) return false;
   return true;
 }
 
