@@ -767,33 +767,27 @@ Three consequences for layout, all of them the usual way a translated UI breaks:
   not offered: it gives English "2h ago" and Russian "-2 ч".
 
 **The Language control** follows "a choice in a menu is one row" above, and the option
-count decides the shape: a segmented pill while there are two to four languages, a
-pop-up button on the same row shape once there are more — language names are words,
-not glyphs, and the list is only going to grow. Language names are written in their
-own language ("Русский", not "Russian"): someone hunting for their language is
-looking for what they call it.
+count decides the shape: a segmented pill for two to four values, a pop-up button on
+the same row shape once there are more. Language names are words, not glyphs, and the
+list only grows — so the pop-up is where this lands and stays.
 
-As shipped (TRA-388), with two languages, that is a pill — and the first **word**
-segments the row has carried, which is a mode of `MenuChoiceRow`, not a second
-control: a `MenuChoice` gives `text` instead of `icon` and the track takes `is-text`.
-Two things come back off the icon geometry, and both are the same rule seen twice —
-*a word is its own fallback, a glyph is not*:
+As shipped, that is `MenuPopUpRow` (#594): a native pop-up in the Theme row's shape,
+one up/down stop, and changing it still does not close the menu. The word-segment mode
+`MenuChoiceRow` briefly grew for a two-language pill is **deleted**, along with its
+CSS — a pill segment is a glyph again. The pill's measurements are gone with it; the
+numbers this section used to carry described that control and are not carried forward,
+because a measurement quoted for a control that no longer exists is worse than none.
 
-- **The visible text is the two-letter form, the full name is the accessible name.**
-  A segment has room for "EN", not for "Русский"; `aria-label` and `title` carry the
-  name in full, exactly as the icon segments carry theirs. The pop-up button in
-  Settings has the width, so there it is the full name.
-- **A word segment keeps its padding and its colour.** `0 8px` puts the segment at
-  34px against the icon square's 24px — measured 73.9px for the two-language track,
-  right-aligned with the Theme pill and an item's shortcut so the rows share a column.
-  *The column is 8px in from the item's right edge, not a fixed x*: the menu is sized
-  by its longest label, so it is 220px wide in English and 283.9px in Russian, and the
-  two tracks end at 214.5 and 278.4 respectively. Measure the inset, not the
-  coordinate — a number read off an English build looks like a regression in any other
-  language. And unselected stays at `--label` (13.11:1 light, 8.88:1 dark)
-  rather than dropping to `--label-secondary`: the dimming exists because an
-  unselected icon has only the 1.19:1 thumb to go on, and dimming a readable word
-  would say "disabled" instead of "not chosen".
+Two rules survive the change of shape:
+
+- **Both names, one line, own name first.** The picker prints `简体中文 — Chinese
+  (Simplified)`: the own name is what a reader of that language scans for, the English
+  name is the only handle everyone else has for telling four unfamiliar scripts apart.
+  English, whose two names are the same word, is not printed twice.
+- **Measure the inset, not the coordinate.** The menu is sized by its longest label, so
+  it is one width in English and another in Russian. A right-edge x read off an English
+  build looks like a regression in every other language; the invariant is the 8px inset
+  from the item's right edge, shared with the Theme row and an item's shortcut.
 
 **Both surfaces read `LOCALES`**, through `localeOptions()` in `renderer/i18n/`, the
 same way Theme's two surfaces read `appearanceOptions()`. And unlike Theme, Language
@@ -1167,7 +1161,7 @@ new evidence.
 | A choice in a menu is one row with the control inline, not a header plus one item per value | Appearance first shipped as an `APPEARANCE` caps header over three checked items: four rows for one three-state preference, in the menu built to stop the footer spending a row per thing. A header over a single control is weight without information. One row, name left, pill right, on the shared centre line — and the rule is written for every future choice, not solved for Theme (TRA-363). |
 | A choice row is `group` + `menuitemradio`, one keyboard stop, and does not close the menu | `radiogroup` is not a legal child of `role="menu"`, and the shared `SegmentedControl`'s `aria-pressed` says "toggled" rather than "chosen". The row is one Up/Down stop resolved to the checked segment, Left/Right move inside it, and picking a value leaves the menu open — an inline switcher exists so you can watch the app change under it. |
 | Icon-only segments dim when unselected; word segments do not | The selected thumb is 1.19:1 light / 1.63:1 dark against the track. On a word that is enough because the word stays readable (TRA-292); an icon has no fallback, so the only cue would be a sub-3:1 fill. Unselected icons drop to `--label-secondary` (4.5:1 on the track). |
-| A choice row's segments carry words when no glyph names the value, and keep their colour | Language is the case: "EN" is not a symbol anyone drew. `MenuChoiceRow` grew a `text` mode rather than a second control, and `is-text` gives the segment its `0 8px` back (34px, against the icon square's 24px) and leaves it at `--label` — 13.11:1 light, 8.88:1 dark. Dimming a word that stays perfectly readable reads as disabled, not as unchosen (TRA-388). |
+| A choice row's segments carry words when no glyph names the value, and keep their colour | Language is the case: "EN" is not a symbol anyone drew. `MenuChoiceRow` grew a `text` mode rather than a second control, and `is-text` gives the segment its `0 8px` back (34px, against the icon square's 24px) and leaves it at `--label` — 13.11:1 light, 8.88:1 dark. Dimming a word that stays perfectly readable reads as disabled, not as unchosen (TRA-388). **Superseded by #594**: at ten languages Language became a pop-up row, and the `text` mode and `is-text` were deleted. Kept here because the reasoning still applies the next time a row needs word segments — but do not go looking for the code. |
 | Language names are never translated, and the short form is only what is *visible* | Someone hunting for their language is looking for "Русский", not for whatever the current language calls it — so `LOCALES` is `i18n-exempt` by design. The menu row shows "RU" because a segment has no room for the word; the full name is its `aria-label` and `title`, and Settings' pop-up button, which has the width, shows the name itself. |
 | The app's own preferences are one group, headed "App" against the "Daemon" card above it | The group was headed "Appearance" while Theme was the only thing in it. Adding Language made that heading a lie, and "Language" over a row labelled "Language" would have been a header over a single control — the thing this file bans in menus for the same reason. "General" was already the first schema group on the same screen (TRA-388). |
 | A preference with no second owner is read where it is used, not passed down | `appearance` is a prop because App.tsx also mirrors it to the main process for the sidebar's vibrancy view. `setLocale` already persists, mirrors and syncs across windows itself, so `useLocale()` at the point of use is the whole wiring — a prop would have been plumbing with a second copy of the state at the end of it. |
