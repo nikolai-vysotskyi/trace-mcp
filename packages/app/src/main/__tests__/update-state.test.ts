@@ -13,8 +13,10 @@ import {
   computeUpdateOutcome,
   findStaleRoots,
   type GlobalInstall,
+  isRestartPending,
   isStuckOnVersion,
   readAppUpdateState,
+  readBundleVersionOnDisk,
   readLauncherCliPath,
   scanGlobalInstalls,
   shouldAttemptRepair,
@@ -76,6 +78,65 @@ describe('isStuckOnVersion', () => {
 
   it('clears once the bundle actually moved', () => {
     expect(isStuckOnVersion('3.1.1', '3.1.1', state, cmpSemver)).toBe(false);
+  });
+
+  /* TRA-431: the app swapped the bundle on disk out from under itself and then,
+     reading only `app.getVersion()`, called the result stuck — sending the user
+     to download and hand-install a version already sitting in ~/Applications.
+     The assertion the issue asks for: bundleOnDisk > running is never stuck. */
+  it('is never stuck when the bundle on disk is already ahead of the process', () => {
+    const swapped: AppUpdateState = {
+      lastNpmOnlyAttempt: { bundle: '3.2.0', target: '3.3.0', at: 1_787_988_925_616 },
+    };
+    expect(isStuckOnVersion('3.2.0', '3.3.0', swapped, cmpSemver)).toBe(true);
+    expect(isStuckOnVersion('3.2.0', '3.3.0', swapped, cmpSemver, '3.3.0')).toBe(false);
+  });
+});
+
+describe('isRestartPending', () => {
+  it('is true exactly when the on-disk bundle leads the running process', () => {
+    expect(isRestartPending('3.3.0', '3.2.0', cmpSemver)).toBe(true);
+    expect(isRestartPending('3.2.0', '3.2.0', cmpSemver)).toBe(false);
+    expect(isRestartPending('3.1.0', '3.2.0', cmpSemver)).toBe(false);
+    expect(isRestartPending(undefined, '3.2.0', cmpSemver)).toBe(false);
+  });
+});
+
+describe('readBundleVersionOnDisk', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-bundle-version-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  function writePlist(appPath: string, version: string): void {
+    fs.mkdirSync(path.join(appPath, 'Contents'), { recursive: true });
+    fs.writeFileSync(
+      path.join(appPath, 'Contents', 'Info.plist'),
+      `<plist version="1.0"><dict>
+  <key>CFBundleShortVersionString</key>
+  <string>${version}</string>
+</dict></plist>`,
+    );
+  }
+
+  it('reads the bundle plist — the version the .app on disk actually is', () => {
+    const appPath = path.join(dir, 'trace-mcp.app');
+    writePlist(appPath, '3.3.0');
+    expect(readBundleVersionOnDisk(appPath, dir)).toBe('3.3.0');
+  });
+
+  it('falls back to the marker both swap sites write', () => {
+    fs.writeFileSync(path.join(dir, '.trace-mcp-version'), 'v3.3.0\n');
+    expect(readBundleVersionOnDisk(path.join(dir, 'missing.app'), dir)).toBe('3.3.0');
+  });
+
+  it('returns undefined when neither exists', () => {
+    expect(readBundleVersionOnDisk(null, dir)).toBeUndefined();
   });
 });
 

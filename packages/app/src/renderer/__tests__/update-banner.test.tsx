@@ -91,6 +91,24 @@ describe('update states', () => {
     );
   });
 
+  /* TRA-431: following the card's instructions ended in Gatekeeper's "trace-mcp
+     is damaged and can't be opened" — our macOS builds are ad-hoc signed, and a
+     browser download carries the quarantine flag. An escape hatch that
+     dead-ends is not one, so the card carries the command that clears it. */
+  it('spells out the quarantine step the download otherwise dead-ends on', async () => {
+    const writeText = vi.fn();
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    mockApi({ available: false, current: '3.2.0', latest: '3.3.0', stuck: true });
+
+    render(<Card />);
+
+    expect(await screen.findByText(/xattr -dr com\.apple\.quarantine/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy command' }));
+    expect(writeText).toHaveBeenCalledWith(
+      'xattr -dr com.apple.quarantine /Applications/trace-mcp.app',
+    );
+  });
+
   it('does not call a stuck bundle current in the app menu either', async () => {
     mockApi({ available: false, current: '1.50.0', latest: '3.1.1', stuck: true });
 

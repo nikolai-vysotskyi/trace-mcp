@@ -275,11 +275,64 @@ export function isStuckOnVersion(
   latestNpm: string,
   state: AppUpdateState,
   cmpSemver: (a: string, b: string) => number,
+  bundleOnDisk?: string,
 ): boolean {
+  // A bundle on disk ahead of this process is never stuck: the swap already
+  // happened and a restart is the whole remaining task. Telling that user to
+  // download and install by hand — as the app did on 2026-08-29 (TRA-431) —
+  // sends them into Gatekeeper for an update they already have.
+  if (isRestartPending(bundleOnDisk, currentBundle, cmpSemver)) return false;
   const stuck = state.lastNpmOnlyAttempt;
   if (!stuck) return false;
   return (
     cmpSemver(currentBundle, stuck.bundle) === 0 &&
     cmpSemver(latestNpm, stuck.target) <= 0
   );
+}
+
+/**
+ * True when the `.app` on disk is newer than the process reading this.
+ *
+ * `app.getVersion()` is frozen at launch — it answers "which build is running",
+ * never "which build is installed". The npm postinstall can replace the bundle
+ * underneath a live process, and every updater decision that only ever consulted
+ * the running version then read that state as "the update failed" (TRA-431).
+ */
+export function isRestartPending(
+  bundleOnDisk: string | undefined,
+  runningVersion: string,
+  cmpSemver: (a: string, b: string) => number,
+): boolean {
+  if (!bundleOnDisk) return false;
+  return cmpSemver(bundleOnDisk, runningVersion) > 0;
+}
+
+/**
+ * The version of the `.app` bundle currently on disk, or undefined when we
+ * cannot tell.
+ *
+ * `Contents/Info.plist` is the bundle's own answer and covers a hand-installed
+ * copy too; `.trace-mcp-version`, written by both swap sites
+ * (`postinstall-app.mjs`, `apply-pending-update.mjs`), is the fallback for a
+ * plist we cannot parse.
+ */
+export function readBundleVersionOnDisk(
+  bundlePath: string | null,
+  installDir: string,
+): string | undefined {
+  const strip = (v: string): string | undefined => v.trim().replace(/^v/, '') || undefined;
+  if (bundlePath) {
+    try {
+      const plist = fs.readFileSync(path.join(bundlePath, 'Contents', 'Info.plist'), 'utf-8');
+      const m = plist.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/);
+      if (m) return strip(m[1]);
+    } catch {
+      /* unreadable or binary plist — the marker below is the fallback */
+    }
+  }
+  try {
+    return strip(fs.readFileSync(path.join(installDir, '.trace-mcp-version'), 'utf-8'));
+  } catch {
+    return undefined;
+  }
 }

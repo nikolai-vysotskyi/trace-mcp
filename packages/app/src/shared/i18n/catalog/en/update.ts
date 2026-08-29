@@ -27,6 +27,11 @@ export const update = {
   cardStuckSubtitle:
     'The command line tool updated, but the app itself is still v{{current}} — it could not replace its own bundle. Download the release and drag it into Applications.',
   cardDownload: 'Download v{{version}}',
+  /* Our macOS builds are ad-hoc signed, so Gatekeeper rejects a browser
+     download as "damaged". Say it before the user hits it (TRA-431). */
+  cardStuckQuarantine:
+    'macOS will call the download damaged. It is not — run this once after moving it into Applications:',
+  copyQuarantineCommand: 'Copy command',
   cardAvailableTitle: 'v{{version}} available',
   cardAvailableSubtitle: 'Currently v{{current}} · checked {{when}}',
   cardUpdate: 'Update',

@@ -10,7 +10,12 @@ import { t } from './i18n';
 import { formatNumber } from './i18n/format';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
 import { HeaderSlotProvider, Menu, MenuItem, MenuSeparator, PopUpButton } from './lattice/ui';
-import { formatAgo, type UpdateCheck, useUpdateCheck } from './update-check.js';
+import {
+  formatAgo,
+  QUARANTINE_COMMAND,
+  type UpdateCheck,
+  useUpdateCheck,
+} from './update-check.js';
 import {
   clampSidebarWidth,
   readSidebarCollapsed,
@@ -427,6 +432,24 @@ const RELEASES_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp/releases/la
 // itself. "Up to date" used to be a permanent 28px strip above the footer whose
 // whole job was to say nothing was wrong; it says that in the app menu's
 // header now, next to Check for updates (TRA-363).
+/** A command the user has to run themselves: selectable, and copyable in one
+    click — a command you cannot copy is a screenshot, not an instruction. */
+function CommandLine({ command, label }: { command: string; label: string }) {
+  return (
+    <div className="update-card-command">
+      <code>{command}</code>
+      <button
+        type="button"
+        onClick={() => void navigator.clipboard?.writeText(command)}
+        aria-label={label}
+        title={label}
+      >
+        <Icon name="content_copy" size={12} />
+      </button>
+    </div>
+  );
+}
+
 export function UpdateCard({ update }: { update: UpdateCheck }) {
   const { t } = useTranslation('update');
   const { state, pendingVersion, updating } = update;
@@ -479,6 +502,12 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
         >
           {t('cardDownload', { version: state.latest })}
         </button>
+        {/* The download alone dead-ends: our macOS builds are ad-hoc signed, so
+            Gatekeeper calls the file the browser just fetched "damaged". An
+            escape hatch that ends in an error dialog is not an escape hatch —
+            the card carries the command that clears it (TRA-431). */}
+        <div className="subtitle">{t('cardStuckQuarantine')}</div>
+        <CommandLine command={QUARANTINE_COMMAND} label={t('copyQuarantineCommand')} />
       </div>
     );
   }
