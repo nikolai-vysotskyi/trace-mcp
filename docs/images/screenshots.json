@@ -4,10 +4,7 @@
   "appVersion": "3.1.1",
   "commit": "d4f6e27d40f461dc2bc8a2f9db9b33c69363042f",
   "uiCommit": "d4f6e27d40f461dc2bc8a2f9db9b33c69363042f",
-  "uiPaths": [
-    "packages/app/src/renderer",
-    "packages/app/src/main"
-  ],
+  "uiPaths": ["packages/app/src/renderer", "packages/app/src/main"],
   "images": [
     {
       "name": "app-projects",

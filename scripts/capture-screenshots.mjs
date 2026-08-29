@@ -574,6 +574,17 @@ function writeMarker(images) {
     images,
   };
   fs.writeFileSync(MARKER_PATH, `${JSON.stringify(marker, null, 2)}\n`);
+  // The marker is committed, so `biome ci` formats it like any other JSON in
+  // the repo. Handing it to Biome here keeps a capture from failing CI on
+  // whitespace nobody wrote.
+  try {
+    execFileSync('pnpm', ['exec', 'biome', 'format', '--write', MARKER_PATH], {
+      cwd: REPO_ROOT,
+      stdio: 'ignore',
+    });
+  } catch {
+    log('biome not available — format docs/images/screenshots.json before committing');
+  }
   return marker;
 }
 
