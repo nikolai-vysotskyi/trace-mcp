@@ -81,6 +81,13 @@ describe('MCP registry manifest (server.json)', () => {
     expect(server.name).toBe(pkg.mcpName);
   });
 
+  it('description fits the registry schema limit (100 chars)', () => {
+    // TRA-393: the published schema caps ServerDetail.description at 100 —
+    // a longer string is rejected at publish time, not at build time, so the
+    // failure only shows up as a silently stale registry listing.
+    expect((server.description as string).length).toBeLessThanOrEqual(100);
+  });
+
   it('release-please is configured to bump both version fields', () => {
     const config = readJson('release-please-config.json') as {
       packages: Record<string, { 'extra-files': Array<{ path: string; jsonpath: string }> }>;
@@ -91,6 +98,39 @@ describe('MCP registry manifest (server.json)', () => {
     expect(paths).toContain('$.version');
     expect(paths).toContain('$.packages[0].version');
   });
+});
+
+/**
+ * TRA-393: the install surfaces (npm page, MCP registry, plugin marketplaces)
+ * are where people decide whether to try trace-mcp, and they were advertising
+ * "up to 99% token reduction" while README and the homepage say 40–50% on
+ * average and reserve 99% for *redundant processing* on structured calls.
+ * The strongest, least defensible version of the claim was on the surfaces
+ * with the least room to qualify it. Keep 99% attached to what it measures.
+ */
+describe('install-surface token claims stay honest', () => {
+  const surfaces = [
+    'package.json',
+    'server.json',
+    '.claude-plugin/plugin.json',
+    '.claude-plugin/marketplace.json',
+    '.codex-plugin/plugin.json',
+    '.codex-plugin/marketplace.json',
+  ];
+
+  for (const path of surfaces) {
+    it(`${path} does not claim 9x% fewer tokens`, () => {
+      const text = readFileSync(join(REPO_ROOT, ...path.split('/')), 'utf8');
+      // Both orders — "99% fewer tokens" and "token usage by 99%" — and decimals.
+      const pct = String.raw`9\d(?:\.\d+)?\s*%`;
+      const claim = text.match(new RegExp(`${pct}[^"]{0,40}?token|token[^"]{0,40}?${pct}`, 'i'));
+      expect(
+        claim?.[0],
+        `${path} advertises a peak token number as if it were the average. ` +
+          'The average is 40–50%; 99% is "less redundant processing" on structured calls.',
+      ).toBeUndefined();
+    });
+  }
 });
 
 describe('Codex CLI plugin manifests', () => {
