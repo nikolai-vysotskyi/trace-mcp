@@ -63,8 +63,37 @@ jobs:
           )
           gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${FOOTER}"
 
+  # Gate between the app builds and npm. release-please marks the GitHub
+  # Release `latest` the moment it cuts the tag, but the zips land 2-5 minutes
+  # later from the matrix jobs below. scripts/postinstall-app.mjs resolves the
+  # update from /releases/latest and returns silently when the arch zip or its
+  # .sha256 is not there yet — so every `npm install -g trace-mcp` inside that
+  # window updates the CLI and quietly leaves the old `.app` behind, with no
+  # error anywhere. `publish` therefore waits for this job: npm never
+  # advertises a version whose artifacts are not already downloadable.
+  #
+  # `always()` so the workflow_dispatch republish path still runs it — there
+  # the build jobs are skipped and the assets are already on the tag.
+  verify-release-assets:
+    needs: [release-please, build-app-mac, build-app-win]
+    if: always() && (needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Assert every updater artifact is on the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.publish_tag != '' && github.event.inputs.publish_tag || needs.release-please.outputs.tag_name }}
+        run: |
+          gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets' \
+            | node scripts/verify-release-assets.mjs "${TAG#v}"
+
   publish:
-    needs: release-please
+    needs: [release-please, verify-release-assets]
     if: needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != ''
     runs-on: ubuntu-latest
     timeout-minutes: 15
