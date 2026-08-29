@@ -106,6 +106,32 @@ describe('useTheme', () => {
     expect(renderHook(() => useTheme()).result.current.appearance).toBe('auto');
   });
 
+  /* TRA-369. [data-theme] is a CSS attribute and the sidebar's material is an
+     NSVisualEffectView — CSS cannot reach it. Unless the choice is mirrored to
+     the main process, Light on a dark system draws a dark sidebar next to a
+     light content pane. Auto has to be mirrored too, or a window pinned to Dark
+     stays dark after the user goes back to Auto. */
+  it('mirrors every appearance to the native layer', () => {
+    const setAppearance = vi.fn();
+    vi.stubGlobal('electronAPI', { setAppearance });
+
+    const { result } = renderHook(() => useTheme());
+    expect(setAppearance).toHaveBeenLastCalledWith('auto');
+
+    act(() => result.current.setAppearance('light'));
+    expect(setAppearance).toHaveBeenLastCalledWith('light');
+
+    act(() => result.current.setAppearance('auto'));
+    expect(setAppearance).toHaveBeenLastCalledWith('auto');
+  });
+
+  /* The bridge is optional (older preload, and the renderer also runs under the
+     dev server), so a missing setAppearance must not take the app down. */
+  it('survives a preload without the bridge', () => {
+    vi.stubGlobal('electronAPI', undefined);
+    expect(() => renderHook(() => useTheme())).not.toThrow();
+  });
+
   it('syncs from another window, including a clear back to Auto', () => {
     const { result } = renderHook(() => useTheme());
     act(() => {

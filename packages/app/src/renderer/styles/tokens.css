@@ -42,6 +42,24 @@
   --surface-sunken: #f5f5f7;
   --surface-raised: #ffffff;
 
+  /* The sidebar's lightness FLOOR (TRA-369). On macOS the sidebar is a native
+     NSVisualEffectView, and it samples whatever is behind the WINDOW — so
+     without a scrim above it the sidebar's tone is the user's wallpaper's
+     decision, not ours: over a dark desktop it goes grey and reads as dirt next
+     to the white content pane.
+
+     White at .70 is a floor with a value you can state without measuring
+     anything: whatever the material renders, the result is at least 70% of the
+     way from it to white, so the sidebar can never go below #b2b2b2 — and since
+     the light `sidebar` material is itself white-tinted, the real worst case
+     over a black desktop lands far above that. The remaining .30 still carries
+     the material, so this is a floor, not an opaque fill: the sidebar keeps
+     picking up the desktop's tint, it just cannot be dragged dark by it.
+
+     Dark appearance gets no floor. The material can only take it toward black,
+     which is where it belongs, and glass is the whole point there. */
+  --sidebar-scrim: rgb(255 255 255 / 0.7);
+
   --fill-quaternary: rgb(0 0 0 / 0.045);
   --fill-tertiary: rgb(0 0 0 / 0.08);
   --fill-secondary: rgb(0 0 0 / 0.12);
@@ -153,6 +171,9 @@
     --surface: #1e1e1e;
     --surface-sunken: #141414;
     --surface-raised: #2a2a2a;
+    /* No floor in dark: the material can only get darker than --surface, which
+       is what glass is for here. See the light value for why. */
+    --sidebar-scrim: transparent;
     --fill-quaternary: rgb(255 255 255 / 0.06);
     --fill-tertiary: rgb(255 255 255 / 0.11);
     --fill-secondary: rgb(255 255 255 / 0.16);
@@ -188,6 +209,8 @@
   --surface: #1e1e1e;
   --surface-sunken: #141414;
   --surface-raised: #2a2a2a;
+  /* No floor in dark — see the light value. */
+  --sidebar-scrim: transparent;
   --fill-quaternary: rgb(255 255 255 / 0.06);
   --fill-tertiary: rgb(255 255 255 / 0.11);
   --fill-secondary: rgb(255 255 255 / 0.16);
@@ -227,6 +250,8 @@
   --surface: #ffffff;
   --surface-sunken: #f5f5f7;
   --surface-raised: #ffffff;
+  /* The sidebar's lightness floor — see the :root value for the measurements. */
+  --sidebar-scrim: rgb(255 255 255 / 0.7);
   --fill-quaternary: rgb(0 0 0 / 0.045);
   --fill-tertiary: rgb(0 0 0 / 0.08);
   --fill-secondary: rgb(0 0 0 / 0.12);

@@ -81,6 +81,50 @@ describe('design tokens', () => {
     );
   });
 
+  /* TRA-369. On macOS the sidebar is a native NSVisualEffectView sampling what
+     is behind the WINDOW, so in light appearance its tone is the user's
+     wallpaper's decision unless something puts a floor under it. The floor is
+     --sidebar-scrim: white at alpha a can never render below a*255, whatever
+     the material does. Dark appearance deliberately has none — the material can
+     only take it toward black, which is where it belongs.
+
+     The alpha is the whole guarantee, so it is asserted as a number: drop it and
+     a dark desktop drags the sidebar grey again, with a green build. */
+  it('floors the sidebar material in light and leaves the dark one glass', () => {
+    const sidebarCss = readFileSync(
+      fileURLToPath(new URL('../sidebar.css', import.meta.url)),
+      'utf8',
+    );
+    expect(sidebarCss).toMatch(
+      /\[data-platform="mac"\][^{]*\.ws-sidebar\s*\{[^}]*background:\s*var\(--sidebar-scrim\)/,
+    );
+
+    const values = [...tokensCss.matchAll(/--sidebar-scrim:\s*([^;]+);/g)].map((m) => m[1].trim());
+    // One per appearance block: :root, the dark media query, [data-theme="dark"]
+    // / [data-mode="dark"], and the light stage.
+    expect(values).toHaveLength(4);
+    expect(values.filter((v) => v === 'transparent')).toHaveLength(2);
+    for (const value of values.filter((v) => v !== 'transparent')) {
+      const alpha = Number(/^rgb\(255 255 255 \/ ([0-9.]+)\)$/.exec(value)?.[1]);
+      expect(alpha).toBeGreaterThanOrEqual(0.7);
+      // #b2b2b2 on black — light enough to read as a light sidebar, not as dirt.
+      expect(Math.round(alpha * 255)).toBeGreaterThanOrEqual(178);
+    }
+  });
+
+  /* Reduce Transparency turns the NSVisualEffectView opaque, but it paints the
+     SYSTEM's grey — which follows the system appearance, not the app's. Without
+     this the sidebar disagrees with its own content pane whenever the two differ. */
+  it('paints the sidebar opaque itself under reduced transparency', () => {
+    const sidebarCss = readFileSync(
+      fileURLToPath(new URL('../sidebar.css', import.meta.url)),
+      'utf8',
+    );
+    expect(sidebarCss).toMatch(
+      /@media \(prefers-reduced-transparency: reduce\)\s*\{[^}]*\.ws-sidebar\s*\{[^}]*background:\s*var\(--surface\)/,
+    );
+  });
+
   /* TRA-344. --label-tertiary is decoration only (1.88:1 light / 2.53:1 dark,
      and `prefers-contrast: more` lifts --label-secondary but not it). A rule
      that paints text with it AND sizes that text is by definition styling
