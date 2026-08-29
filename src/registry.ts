@@ -118,11 +118,6 @@ const _ephemeralEntries = new Map<string, RegistryEntry>();
 /** Keys that would reach `Object.prototype` if used as a `projects` map key. */
 const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'] as const;
 
-/** True when `key` would reach `Object.prototype` through a `projects[key]` write. */
-function isDangerousRegistryKey(key: string): boolean {
-  return (DANGEROUS_KEYS as readonly string[]).includes(key);
-}
-
 function loadRegistry(): Registry {
   // Stat and read through one descriptor: the metadata we key the cache on then
   // describes exactly the bytes we parsed, even if the file is replaced midway.
@@ -257,19 +252,15 @@ export function registerProject(
     ...(opts?.children && { children: opts.children }),
   };
 
+  // TRA-396: process-local only — never written to registry.json.
   if (ephemeral) {
     _ephemeralEntries.set(absRoot, entry);
-  } else {
-    // `absRoot` is path.resolve() output, so a bare `__proto__` can't reach
-    // here — but this is the one write into the persisted map, and loadRegistry
-    // already drops these keys on the way in. Keep the barrier on both sides
-    // rather than only the read (CodeQL js/remote-property-injection).
-    if (isDangerousRegistryKey(absRoot)) {
-      throw new Error(`Refusing to register an unsafe project root: ${absRoot}`);
-    }
-    reg.projects[absRoot] = entry;
-    saveRegistry(reg);
+    initializeGuard(absRoot);
+    return entry;
   }
+
+  reg.projects[absRoot] = entry;
+  saveRegistry(reg);
   // TRA-341: registration is where a project becomes real, so it is where the
   // guard's coach grace period is armed. Only on this path — an already
   // registered project returns above and is past its onboarding window.
