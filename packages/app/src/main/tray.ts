@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from 'electron';
 import { TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y, trafficLightYFor } from '../shared/chrome-metrics.js';
+import { parseWindowMode, shouldRunAsAccessory } from '../shared/window-mode.js';
 import { DaemonClient } from './api-client';
 import {
   type Appearance,
@@ -32,6 +33,23 @@ const isMac = process.platform === 'darwin';
  */
 export const HIDDEN_WINDOWS =
   process.env.TRACE_MCP_WINDOW_MODE === 'hidden' || process.env.TRACE_MCP_AGENT_RUN === '1';
+
+/**
+ * Run as a background process with no Dock icon and no ⌘-Tab entry.
+ *
+ * Every unpackaged build defaults to this, not just the hidden-window capture
+ * runs: an agent that starts `electron .` by hand hits the same activation, and
+ * a rule that only holds when somebody remembers a flag is not a rule. A shipped
+ * build is unaffected — it is a real app and keeps its Dock icon. Pass
+ * `TRACE_MCP_WINDOW_MODE=visible` (or `electron-cdp.mjs --visible`) to opt a dev
+ * run back into being a normal foreground app.
+ *
+ * A hidden-window run is always accessory, packaged or not: a capture against
+ * the shipped artifact must not activate it either.
+ */
+export const ACCESSORY_APP =
+  HIDDEN_WINDOWS ||
+  shouldRunAsAccessory(parseWindowMode(process.env.TRACE_MCP_WINDOW_MODE), app.isPackaged);
 
 // macOS: Template images (auto-tinted by the system)
 // Windows: separate light/dark icons (white for dark taskbar, black for light)
