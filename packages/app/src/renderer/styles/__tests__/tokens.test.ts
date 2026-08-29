@@ -2,7 +2,13 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — plain .mjs helper, shared with the CLI check (TRA-289)
-import { contrast, contrastFailures, contrastTable, tokenGuard } from '../../../../scripts/design-tokens.mjs';
+import {
+  contrast,
+  contrastFailures,
+  contrastTable,
+  tokenGuard,
+  tokenGuardCounts,
+} from '../../../../scripts/design-tokens.mjs';
 
 const tokensCss = readFileSync(
   fileURLToPath(new URL('../tokens.css', import.meta.url)),
@@ -32,9 +38,35 @@ describe('design tokens', () => {
     expect(tokensCss).not.toContain('Inter');
   });
 
-  it('adds no raw hex or Tailwind grey beyond the recorded baseline', () => {
+  it('adds no raw hex, rgb() or Tailwind grey beyond the recorded baseline', () => {
     const { violations } = tokenGuard();
     expect(violations).toEqual([]);
+  });
+
+  /* TRA-355. DESIGN.md §8 rule 1 bans a raw `rgb()` by name, but the guard only
+     ever counted hex and Tailwind greys — so the Workspace toolbar shipped an
+     `inset 1px 0 0 rgb(255 255 255 / 0.25)` divider with a green build. These
+     two files were the renderer's only palette-carrying rgb() outside the three
+     exceptions recorded in DESIGN.md §12; if either reappears in the counts,
+     something painted a channel instead of asking for a token. */
+  it('counts a raw rgb() as a token violation, not just hex', () => {
+    const counts = tokenGuardCounts();
+    expect(counts['src/renderer/styles/sidebar.css']).toBeUndefined();
+    expect(counts['src/renderer/workspace/AddProjectControl.tsx']).toBeUndefined();
+  });
+
+  /* Dimming a label to signal "secondary" needs surface headroom, and a filled
+     accent row has none — the same call the decision log already made for the
+     shortcut hint. White at .85 on --accent-fill measured 4.22:1 light and
+     3.89:1 dark, and the count is a number the user reads. */
+  it('paints the selected sidebar row icon and count at full --on-accent', () => {
+    const sidebarCss = readFileSync(
+      fileURLToPath(new URL('../sidebar.css', import.meta.url)),
+      'utf8',
+    );
+    expect(sidebarCss).toMatch(
+      /\.ws-sidebar:focus-within[^{]*\.ws-sb-count\s*\{[^}]*color:\s*var\(--on-accent\)/,
+    );
   });
 
   /* TRA-344. --label-tertiary is decoration only (1.88:1 light / 2.53:1 dark,

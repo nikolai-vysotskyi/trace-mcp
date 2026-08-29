@@ -2,7 +2,7 @@
    Two independent checks, both usable from CI and from vitest:
 
      contrastTable()  — WCAG contrast of every text token in both appearances
-     tokenGuard()     — no NEW raw hex / text-gray-* / bg-slate-* in the renderer
+     tokenGuard()     — no NEW raw hex / rgb() / text-gray-* / bg-slate-* in the renderer
 
    tokenGuard is baselined (token-guard.baseline.json): the pre-existing
    violations are recorded per file, and only an INCREASE fails. Each surface
@@ -121,6 +121,11 @@ export function contrastFailures(rows = contrastTable()) {
 const SCAN_EXT = /\.(css|ts|tsx|js|jsx|html)$/;
 /* A hex colour anywhere outside tokens.css. */
 const RAW_HEX = /#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?\b/g;
+/* A literal rgb()/rgba(). DESIGN.md §8 rule 1 names it alongside hex, but the
+   guard only ever counted hex — so `rgb(255 255 255 / 0.25)` shipped to the
+   Workspace toolbar with a green build (TRA-355). `color-mix()` over a token is
+   the way to say "this token at some alpha"; a numeric channel is not. */
+const RAW_RGB = /\brgba?\(\s*[0-9]/g;
 /* Tailwind's own greys — the palette we are replacing. */
 const GREY_CLASS = /\b(?:text|bg|border|fill|stroke|ring|divide|from|to|via)-(?:gray|grey|slate|zinc|neutral|stone)-\d{2,3}\b/g;
 
@@ -142,7 +147,10 @@ export function tokenGuardCounts() {
     /* Tests assert ON colour values; they are not UI. */
     if (rel.includes('/__tests__/')) continue;
     const src = readFileSync(file, 'utf8');
-    const n = (src.match(RAW_HEX)?.length ?? 0) + (src.match(GREY_CLASS)?.length ?? 0);
+    const n =
+      (src.match(RAW_HEX)?.length ?? 0) +
+      (src.match(GREY_CLASS)?.length ?? 0) +
+      (src.match(RAW_RGB)?.length ?? 0);
     if (n > 0) counts[rel] = n;
   }
   return counts;
