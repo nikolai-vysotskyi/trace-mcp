@@ -27,6 +27,7 @@
  */
 
 import type { ProgressSnapshot, ProjectState } from '../hooks/useDaemon';
+import { t } from '../i18n';
 import type { Tone } from '../lattice/ui';
 
 // ── Canonical enums (mirror Dashboard.tsx / server schema) ──────────────────
@@ -446,15 +447,15 @@ export function statusToDot(status: ProjectHealthStatus): Tone {
 export function statusLabel(status: ProjectHealthStatus): string {
   switch (status) {
     case 'ok':
-      return 'OK';
+      return t('workspace:statusOk');
     case 'indexing':
-      return 'Indexing';
+      return t('workspace:statusIndexing');
     case 'computing':
-      return 'Computing';
+      return t('workspace:statusComputing');
     case 'error':
-      return 'Error';
+      return t('workspace:statusError');
     case 'not_loaded':
-      return 'Not loaded';
+      return t('workspace:statusNotLoaded');
   }
 }
 

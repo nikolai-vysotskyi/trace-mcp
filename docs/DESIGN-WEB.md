@@ -226,7 +226,11 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] Exactly one deliberate pattern break on the page.
 
 **Accessibility**
-- [ ] Visible focus ring on every link, button, and scroll region.
+- [ ] Visible focus ring on every link, button, and scroll region — read
+      `outlineColor` off a focused element, in both themes. It must be
+      `--text-display`. Chrome's default is `rgb(153, 200, 255)`; a blue ring
+      means no author rule matched, which is a second accent colour and a
+      finding.
 - [ ] Skip link present and reachable.
 - [ ] `prefers-reduced-motion` honoured.
 - [ ] Tables carry `scope`; images carry `alt`.
@@ -253,3 +257,18 @@ The landing page keeps its own inline copy of the tokens rather than importing
 single file that the SEO agent edits constantly; extracting a shared sheet
 would be a large refactor with a live merge-conflict cost. The tokens in
 Section 1 are the contract — change one, change both files in the same PR.
+
+The same duplication applies to the accessibility layer, and it is easier to
+forget than a token because nothing looks wrong until you press Tab. The
+landing page must carry its own copy of the skip link, the
+`:where(a, button, summary):focus-visible` ring, and the
+`prefers-reduced-motion` block. It shipped without all three while every doc
+page had them, so the busiest page on the site was the only one handing
+readers Chrome's blue ring and playing its count-up animation at people who
+asked the OS for less motion.
+
+The CSS `prefers-reduced-motion` block stops transitions and keyframes, not
+motion driven from JavaScript. The landing page animates a stat count-up over
+1400ms and staggers a segmented bar at 30ms per cell from `setTimeout`; both
+read a `reduceMotion` flag off `matchMedia`. Any new JS-driven motion has to
+read it too — the media query alone will not catch it.

@@ -7,6 +7,7 @@
  * Clicking a tab sends IPC to focus that window.
  */
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface TabInfo {
   id: string;
@@ -16,6 +17,7 @@ interface TabInfo {
 }
 
 export function WindowTabBar() {
+  const { t } = useTranslation('shell');
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [platform, setPlatform] = useState<string>('');
 
@@ -97,14 +99,14 @@ export function WindowTabBar() {
               transition: 'background 0.15s, color 0.15s',
             } as React.CSSProperties
           }
-          title={tab.id === 'menu' ? 'Menu' : tab.id}
+          title={tab.id === 'menu' ? t('menuWindow') : tab.id}
         >
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{tab.title}</span>
           {tab.type === 'project' && (
             <span
               role="button"
               tabIndex={0}
-              aria-label={`Close ${tab.title}`}
+              aria-label={t('closeTab', { title: tab.title })}
               onClick={(e) => handleCloseTab(e, tab.id)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
