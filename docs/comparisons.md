@@ -1,6 +1,7 @@
 ---
 title: "Code Graph MCP Server Comparison: trace-mcp vs Repomix, Serena & 20+ alternatives"
 description: "Compare trace-mcp against Repomix, Serena, Kage, codebase-memory-mcp and 20+ MCP code-graph tools — capabilities, language support, GitHub stars. Last verified August 2026."
+updated: 2026-08-28
 ---
 
 # How trace-mcp compares
@@ -32,7 +33,15 @@ description: "Compare trace-mcp against Repomix, Serena, Kage, codebase-memory-m
 </script>
 trace-mcp is not just a code intelligence server — it combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Other projects solve one of these; trace-mcp unifies all three.
 
-_Last updated: August 28, 2026 (deep-dive pass on the two largest peers + star/feature re-verification). Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues). This revision re-verifies star counts against the live GitHub API — several jumped by 3-4x since July (viral GitHub-trending spikes are common in this space and can reverse just as fast), so treat every count below as a snapshot, not a ranking. The two 60K+-star entrants flagged in a previous revision got their deep-dive: **Graphify** (110.6K stars, Python, deterministic AST-to-knowledge-graph skill/MCP server, no vector store) and **Headroom** (67.6K stars, Python, reversible tool-output/JSON/log compression layer — library, HTTP proxy, or MCP server). Neither closes a real gap for us: Graphify's edge provenance tagging (`EXTRACTED`/`INFERRED`/`AMBIGUOUS`) is a 3-tier scheme trace-mcp's existing 4-tier `resolution_tier` (`scip_resolved`/`lsp_resolved`/`ast_resolved`/`ast_inferred`/`text_matched`) already exceeds, and its Cypher/GraphML export is a feature trace-mcp already ships (`export_graph`). Headroom compresses arbitrary tool output generically (JSON/logs/RAG chunks) rather than understanding code structure — orthogonal to a code-graph server, not a lane worth chasing. See their rows/footnotes below. The "Honest assessment" section below was updated after six of seven identified gaps shipped and went through an adversarial deep-validation pass._
+## Head-to-head pages
+
+This page is the whole field. For the three peers people most often evaluate against trace-mcp, there is a dedicated page with a focused table, an honest "when to pick theirs" section, and an FAQ:
+
+- **[trace-mcp vs Repomix](/vs/repomix.html)** — packing a repository into one prompt vs indexing it into a queryable graph.
+- **[trace-mcp vs Serena](/vs/serena.html)** — a live LSP proxy vs a precomputed framework-aware graph.
+- **[trace-mcp vs codebase-memory-mcp](/vs/codebase-memory-mcp.html)** — the closest peer: same premise, opposite bets on breadth vs depth.
+
+_Last verification pass: August 28, 2026 — deep-dive on the two largest peers plus star/feature re-verification. Based on public documentation and GitHub repos. If you maintain one of these projects and see an inaccuracy, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues). This revision re-verifies star counts against the live GitHub API — several jumped by 3-4x since July (viral GitHub-trending spikes are common in this space and can reverse just as fast), so treat every count below as a snapshot, not a ranking. The two 60K+-star entrants flagged in a previous revision got their deep-dive: **Graphify** (110.6K stars, Python, deterministic AST-to-knowledge-graph skill/MCP server, no vector store) and **Headroom** (67.6K stars, Python, reversible tool-output/JSON/log compression layer — library, HTTP proxy, or MCP server). Neither closes a real gap for us: Graphify's edge provenance tagging (`EXTRACTED`/`INFERRED`/`AMBIGUOUS`) is a 3-tier scheme trace-mcp's existing 4-tier `resolution_tier` (`scip_resolved`/`lsp_resolved`/`ast_resolved`/`ast_inferred`/`text_matched`) already exceeds, and its Cypher/GraphML export is a feature trace-mcp already ships (`export_graph`). Headroom compresses arbitrary tool output generically (JSON/logs/RAG chunks) rather than understanding code structure — orthogonal to a code-graph server, not a lane worth chasing. See their rows/footnotes below. The "Honest assessment" section below was updated after six of seven identified gaps shipped and went through an adversarial deep-validation pass._
 
 ## vs. token-efficient code exploration
 

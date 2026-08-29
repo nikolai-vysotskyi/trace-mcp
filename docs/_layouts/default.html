@@ -12,6 +12,7 @@
       .site-brand { font-weight: 600; font-size: 1.25em; margin-bottom: 1.5em; }
       .site-brand a { text-decoration: none; }
       .docs-nav { color: #57606a; font-size: 0.9em; }
+      .page-updated { color: #57606a; font-size: 0.9em; margin-top: 2em; }
     </style>
   </head>
   <body>
@@ -19,6 +20,16 @@
       <p class="site-brand"><a href="{{ '/' | relative_url }}">trace-mcp</a></p>
 
       {{ content }}
+
+      {%- comment -%}
+        Every page that outranks us for these queries shows a reader-visible
+        date; ours only had one inside the TechArticle JSON-LD, which a reader
+        never sees. `updated:` is stamped from git by `pnpm docs:sitemap`, so it
+        cannot drift from <lastmod> the way the hand-maintained dates did.
+      {%- endcomment -%}
+      {%- if page.updated %}
+      <p class="page-updated">Last updated: {{ page.updated | date: "%B %-d, %Y" }}</p>
+      {%- endif %}
 
       <hr>
       <p class="docs-nav">

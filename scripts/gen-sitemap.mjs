@@ -29,8 +29,27 @@ export function gitDate(file) {
     cwd: join(DOCS, '..'),
     encoding: 'utf-8',
   }).trim();
-  if (!out) throw new Error(`no git history for docs/${file}`);
+  // A page added in the working tree has no commit yet — date it today rather
+  // than throwing, so `pnpm docs:sitemap` can be run before the first commit.
+  if (!out) return new Date().toISOString().slice(0, 10);
   return out;
+}
+
+/**
+ * Mirror the same date into the page's `updated:` front matter, which
+ * _layouts/default.html renders as a reader-visible "Last updated" line.
+ * Same source, one command, so the visible date can't drift from <lastmod>.
+ */
+export function stampUpdated(file, date) {
+  if (!file.endsWith('.md')) return;
+  const path = join(DOCS, file);
+  const raw = readFileSync(path, 'utf-8');
+  const fm = raw.match(/^---\n([\s\S]*?)\n---\n/);
+  if (!fm) throw new Error(`docs/${file} has no front matter to stamp`);
+  const body = /^updated:.*$/m.test(fm[1])
+    ? fm[1].replace(/^updated:.*$/m, `updated: ${date}`)
+    : `${fm[1]}\nupdated: ${date}`;
+  writeFileSync(path, `---\n${body}\n---\n${raw.slice(fm[0].length)}`);
 }
 
 /** A shallow clone dates every file to the one fetched commit — gitDate is meaningless there. */
@@ -51,7 +70,16 @@ export function rewrite(xml) {
   );
 }
 
+/** Every source page referenced by the sitemap. */
+export function sitemapSources(xml) {
+  return [...xml.matchAll(/<loc>https:\/\/trace-mcp\.com([^<]*)<\/loc>/g)].map((m) =>
+    sourceFor(m[1]),
+  );
+}
+
 if (process.argv[1] === import.meta.filename) {
-  writeFileSync(SITEMAP, rewrite(readFileSync(SITEMAP, 'utf-8')));
-  console.log('docs/sitemap.xml lastmod refreshed from git');
+  const xml = readFileSync(SITEMAP, 'utf-8');
+  writeFileSync(SITEMAP, rewrite(xml));
+  for (const source of sitemapSources(xml)) stampUpdated(source, gitDate(source));
+  console.log('docs/sitemap.xml lastmod + page `updated:` front matter refreshed from git');
 }

@@ -1,6 +1,7 @@
 ---
 title: "Session Analytics & Coverage Intelligence — token savings, wasteful patterns"
 description: "trace-mcp's built-in analytics engine parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage."
+updated: 2026-08-26
 ---
 
 # Session Analytics & Coverage Intelligence
