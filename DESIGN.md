@@ -848,6 +848,19 @@ whether the committed ones are stale. Use that one for anything committed to the
 `electron-cdp.mjs` when you need to point a debugger at the app you are running right now
 and shoot a surface it has no manifest entry for.
 
+### A published screenshot shows the window, or it is not a screenshot of the app
+
+Anything a reader sees as "trace-mcp" — README, trace-mcp.com, a release note, an issue
+that claims a fix landed — must contain the window chrome: traffic lights, rounded corners,
+the real sidebar material. A frame without them is a picture of a web page, and a reader
+who has never opened the app cannot tell the difference between that and a browser demo.
+Three separate rounds shipped one anyway (TRA-354, TRA-366, TRA-390), because the rule
+lived only in prose, so `capture-screenshots.mjs` now photographs the window itself
+(`screencapture -l<CGWindowID>`) and refuses to write a frame whose corners are opaque or
+whose buttons are missing. Shoot published images with that script. `electron-cdp.mjs`
+stays a review tool — its CDP shots are for measuring your own work in progress, never for
+publication.
+
 ### Title a design PR `feat:` / `fix:` / `refactor:` — never `design:`
 
 `design` is not a Conventional Commits type, and `.github/workflows/pr-title-lint.yml`

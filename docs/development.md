@@ -352,6 +352,23 @@ gets its own port and its own `TRACE_MCP_DATA_DIR`, the demo projects are
 and Electron gets a throwaway Chromium profile. Nothing in the frame identifies
 a machine or a person.
 
+**The frame is a photograph of the window, not of the web contents.** macOS
+draws the traffic lights, the rounded corners and the sidebar's vibrancy
+outside the renderer, so `Page.captureScreenshot` — the obvious way to do this —
+returns something indistinguishable from a browser tab, and that is what got
+published once (TRA-390). Instead the script asks the main process for the
+window's CGWindowID over its Node inspector and hands it to
+`screencapture -o -l<id>`: the real window, no drop shadow, rounded corners
+returned as alpha. This makes the script macOS-only, and it steals focus for
+the length of the run — the window has to be key, or the buttons photograph
+grey.
+
+**Every frame is inspected before it becomes a file.** `checkWindowChrome`
+looks for the two things a capture of the web contents can never have —
+transparent rounded corners, and the three buttons in colour in the top-left
+strip — and throws with the reason when either is missing. A chrome-less
+capture fails the run instead of quietly replacing a good image.
+
 **Adding a screenshot is a data change.** Append an entry to
 `scripts/screenshots.manifest.json` — the surface to open, which controls to
 click, the appearance, and the `alt` text — and re-run the script. The `alt` in

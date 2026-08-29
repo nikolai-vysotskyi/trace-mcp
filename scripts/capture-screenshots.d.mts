@@ -50,3 +50,26 @@ export function uiCommit(repo?: string): string;
 
 /** Parse the capture marker, or `null` when it is missing or unreadable. */
 export function readMarker(markerPath?: string): CaptureMarker | null;
+
+/** Top-left region, in CSS px, that must contain the macOS window buttons. */
+export const CHROME_STRIP: { width: number; height: number };
+
+/** 8-bit RGBA pixels of a decoded PNG. */
+export interface DecodedImage {
+  width: number;
+  height: number;
+  rgba: Uint8Array;
+}
+
+/** Decode an 8-bit, non-interlaced RGB/RGBA PNG. Throws on anything else. */
+export function decodePng(buf: Buffer | Uint8Array): DecodedImage;
+
+/**
+ * Whether a captured frame is a photograph of the macOS window — transparent
+ * rounded corners and three coloured traffic lights — and why not.
+ * `scale` is device px per CSS px.
+ */
+export function checkWindowChrome(
+  image: DecodedImage,
+  scale: number,
+): { ok: boolean; reasons: string[] };
