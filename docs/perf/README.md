@@ -3,17 +3,31 @@
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
-## Current numbers (1.51.1, `9459d4ce`, macOS 26.5 / arm64, median of 3)
+## Current numbers (3.2.0, `6ebbbd56`, macOS 26.5 / arm64, median of 3)
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
-| `cold_start_ms` | 349 | 3000 | ok |
-| `window_interactive_ms` | 121 | — | ok |
+| `renderer_fcp_ms` | 220 | — | ok — **the startup metric of record** |
+| `cold_start_ms` | 1005 | 3000 | ok, but load-sensitive (see below) |
+| `window_interactive_ms` | 612 | — | load-sensitive, do not trend it |
 | `heap_idle_mb` (5 min idle) | 9.5 | — | ok |
 | `main_cpu_idle_pct` | 0 | 2 | ok |
-| `renderer_bundle_kb` | 1461 | — | ok |
-| `artifact_mb.mac_asar` | 1.6 | ×1.5 growth | ok |
-| `artifact_mb.mac_app_unpacked` | 264.8 | ×1.5 growth | ok (Electron framework is ~263 MB of it) |
+| `renderer_bundle_kb` | 1700 | — | +16% vs 1461 — warning, noted not filed |
+| `artifact_mb.mac_asar` | 4.85 | ×1.5 growth | was 5.8, fixed this run (see below) |
+| `artifact_mb.mac_app_unpacked` | 268.1 | ×1.5 growth | ok (Electron framework is ~263 MB of it) |
+
+### Which startup number to trend
+
+`cold_start_ms` and `window_interactive_ms` are wall-clock across the harness's 20 ms
+poll loop and its CDP round-trips. On a busy machine that inflates them by hundreds of
+milliseconds while the app itself is unchanged — the 2026-08-29 run measured 349 → 1005 ms
+on a machine at load average 11–22 and none of it was the product. `renderer_fcp_ms` is
+read off the renderer's own clock after the fact and carries none of that, so **compare
+`renderer_fcp_ms` across runs**; treat the other two as a sanity check against the 3 s
+ceiling only.
+
+When a run has to happen on a loaded machine, an interleaved A/B — alternating one sample
+of each build, several rounds — cancels the drift that a back-to-back A-then-B run does not.
 
 `ui_p95_ms`, `heap_after_workload_mb` and `heap_growth_mb_per_hour` are still unfilled in
 `baseline.json`. The harness that produces them landed with TRA-258 and has been run
@@ -104,6 +118,23 @@ doesn't list it. That shipped 27.5 MB of `@luma.gl`, `@cosmos.gl`, `d3-*`, `micr
 and friends into every release — all of which Vite had already bundled into
 `dist/renderer`. The main process imports nothing but Node builtins and `electron`, so
 `!node_modules/**` is safe. The `menubar` dependency was unused and was dropped.
+
+**2026-08-29 — the redesign and i18n cost nothing at startup (negative result).**
+Interleaved A/B of `9459d4ce` (the 2026-08-28 baseline), `9cdccf9b` (pre-i18n) and
+`6ebbbd56` (HEAD), 7 rounds of one sample each: median FCP 288 / 300 / 284 ms. The whole
+macOS 26 redesign and the i18n runtime are invisible in renderer boot. The same rounds
+read on `window_interactive_ms` claimed +188%, which was the harness, not the app — that
+is why `renderer_fcp_ms` exists.
+
+**2026-08-29 — `app.asar` 1.6 MB → 5.8 MB → 4.85 MB.**
+TRA-257's blanket `!node_modules/**` had to become an explicit `node_modules/**` include
+so the main process keeps `electron-updater` on Windows. That re-admitted every production
+dependency, and the i18n work made `react-i18next` (1.0 MB) plus its `@babel/runtime` tree
+(1.1 MB) production dependencies even though Vite already bundles them into
+`dist/renderer` — 3.6× growth, past the ×1.5 ceiling. `react-i18next` moved to
+devDependencies. The remaining 4.85 MB is genuine main-process runtime. The rule is now a
+test: `packages/app/src/main/__tests__/packaged-deps.test.ts` fails if a package lands in
+`dependencies` without the main process importing it.
 
 **2026-08-28 — lazy-loading the graph view is not worth it (negative result).**
 `@cosmos.gl/graph` is 702 KB and loads eagerly: `GraphExplorerGPU` is a static import
