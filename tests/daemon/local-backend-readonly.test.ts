@@ -42,6 +42,7 @@ vi.mock('../../src/db/store.js', () => ({
 }));
 vi.mock('../../src/global.js', () => ({
   ensureGlobalDirs: vi.fn(),
+  TRACE_MCP_HOME: '/tmp/never-exists-trace-mcp-home',
   TOPOLOGY_DB_PATH: '/tmp/never-exists-topology.db',
   DECISIONS_DB_PATH: '/tmp/never-exists-decisions.db',
 }));

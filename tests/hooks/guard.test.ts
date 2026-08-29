@@ -353,6 +353,49 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
   });
 
+  // TRA-341: coach is a 7-day onboarding grace period armed at registration.
+  // The desktop app used to be the only thing that promoted it to strict on
+  // expiry, so the hook now expires it too.
+  it('coach mode: still coach while the grace period is unexpired', () => {
+    const file = path.join(projectDir, 'young.ts');
+    fs.writeFileSync(file, 'export {};');
+    const modeDir = path.join(projectDir, '.trace-mcp');
+    fs.mkdirSync(modeDir, { recursive: true });
+    fs.writeFileSync(path.join(modeDir, 'guard-mode'), 'coach\n');
+    const oneDayAgo = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
+    fs.writeFileSync(path.join(modeDir, 'install-date'), `${oneDayAgo}\n`);
+
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
+    expect(fs.readFileSync(path.join(modeDir, 'guard-mode'), 'utf8').trim()).toBe('coach');
+  });
+
+  it('coach mode: promotes to strict once the 7-day grace period expires', () => {
+    const file = path.join(projectDir, 'expired.ts');
+    fs.writeFileSync(file, 'export {};');
+    const modeDir = path.join(projectDir, '.trace-mcp');
+    fs.mkdirSync(modeDir, { recursive: true });
+    fs.writeFileSync(path.join(modeDir, 'guard-mode'), 'coach\n');
+    const eightDaysAgo = Math.floor(Date.now() / 1000) - 8 * 24 * 60 * 60;
+    fs.writeFileSync(path.join(modeDir, 'install-date'), `${eightDaysAgo}\n`);
+
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+    // Promotion is persisted and fires only once.
+    expect(fs.readFileSync(path.join(modeDir, 'guard-mode'), 'utf8').trim()).toBe('strict');
+    expect(fs.existsSync(path.join(modeDir, 'install-date'))).toBe(false);
+  });
+
+  it('coach mode: an expired grace period does not re-expire a manual coach switch', () => {
+    const file = path.join(projectDir, 'manual.ts');
+    fs.writeFileSync(file, 'export {};');
+    const modeDir = path.join(projectDir, '.trace-mcp');
+    fs.mkdirSync(modeDir, { recursive: true });
+    // Manual switch back to coach writes no install-date — nothing to expire.
+    fs.writeFileSync(path.join(modeDir, 'guard-mode'), 'coach\n');
+
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(true);
+    expect(fs.readFileSync(path.join(modeDir, 'guard-mode'), 'utf8').trim()).toBe('coach');
+  });
+
   it('coach mode: never blocks, always emits hint context', () => {
     const file = path.join(projectDir, 'coach.ts');
     fs.writeFileSync(file, 'export {};');
