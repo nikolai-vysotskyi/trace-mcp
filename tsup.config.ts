@@ -88,7 +88,7 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: true,
-  target: process.env.TSUP_TARGET || 'node20',
+  target: process.env.TSUP_TARGET || 'node22',
   splitting: false,
   // Force-bundle all dependencies into the output. Natives matched by the
   // plugin below are rewritten to `createRequire(...)` shims; everything else
