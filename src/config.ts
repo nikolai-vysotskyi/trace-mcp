@@ -250,7 +250,7 @@ const ToolsConfigSchema = z
         ),
       ])
       .default(true),
-    /** Strip advanced/optional parameters from tool schemas to reduce token overhead (~40-60% schema size reduction). Only core parameters are exposed; advanced options still work if passed. */
+    /** Strip advanced/optional parameters from tool schemas to reduce token overhead (~42% schema size reduction, measured 2026-08-29 across the always-on surface). Only core parameters are exposed; advanced options still work if passed. */
     compact_schemas: z.boolean().default(false),
     /** Wire format for tool responses.
      *  - 'json' (default): standard JSON, unchanged from prior versions.

@@ -11,6 +11,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { COMPACT_CORE_PARAMS } from '../../../server/compact-params.js';
+import { applySchemaTransforms } from '../../../server/tool-gate-helpers.js';
 import type { MetaContext, ServerContext } from '../../../server/types.js';
 import { registerAdvancedTools } from '../advanced.js';
 import { registerAnalysisTools } from '../analysis.js';
@@ -396,6 +398,103 @@ describe('MCP tool-schema token budget guardrail — runtime-gated tools (TRA-21
       .filter((t) => t.description.length > PER_TOOL_DESCRIPTION_CHAR_CEILING)
       .map((t) => `  - ${t.name}: ${t.description.length} chars`);
     expect(offenders.length, offenders.join('\n')).toBe(0);
+  });
+});
+
+/**
+ * TRA-346: `compact_schemas` is a no-op for any tool missing from
+ * COMPACT_CORE_PARAMS, and silently strips the wrong things for any entry
+ * naming params the tool no longer has. Both decayed unnoticed — coverage sat
+ * at 61/141 tools, 27 entries referenced renamed params, and 11 entries hid a
+ * mandatory param (`add_decision` lost `content`/`type`, so the tool could not
+ * be called at all with the setting on). These guards make each of those fail
+ * loudly instead of quietly costing tokens or breaking a tool.
+ */
+describe('compact_schemas coverage (TRA-346)', () => {
+  const alwaysOn = captureAllTools();
+  // Union of every registration context, so entries for framework-gated tools
+  // (get_request_flow, get_component_tree, ...) are validated too.
+  const allCaptured = [
+    ...alwaysOn,
+    ...captureAllTools(FRAMEWORK_CTX),
+    ...captureAllTools(TOPOLOGY_CTX),
+    ...captureAllTools(RUNTIME_CTX),
+  ];
+  const shapeOf = new Map(allCaptured.map((t) => [t.name, t.schemaShape]));
+
+  /** A param the caller must pass: not optional and carrying no default. */
+  const isMandatory = (field: z.ZodTypeAny): boolean => !field.safeParse(undefined).success;
+
+  it('covers every always-on tool with more than two params', () => {
+    const uncovered = alwaysOn
+      .filter((t) => Object.keys(t.schemaShape).length > 2 && !COMPACT_CORE_PARAMS[t.name])
+      .map((t) => t.name)
+      .sort();
+    expect(
+      uncovered,
+      `Tool(s) with no COMPACT_CORE_PARAMS entry: ${uncovered.join(', ')}. ` +
+        'compact_schemas strips nothing for them, which is how coverage decayed to 61/141 (TRA-346). ' +
+        'Add an entry listing the core params, or [] if nothing is worth exposing.',
+    ).toEqual([]);
+  });
+
+  it('never lists a param the tool does not declare', () => {
+    const stale: string[] = [];
+    for (const [tool, params] of Object.entries(COMPACT_CORE_PARAMS)) {
+      const shape = shapeOf.get(tool);
+      expect(shape, `COMPACT_CORE_PARAMS entry for unregistered tool "${tool}"`).toBeDefined();
+      for (const p of params) {
+        if (!(p in (shape as Record<string, unknown>))) stale.push(`${tool}.${p}`);
+      }
+    }
+    expect(
+      stale,
+      `Stale param name(s): ${stale.join(', ')}. A renamed param turns its entry into a filter that ` +
+        'keeps nothing — the tool loses every param under compact_schemas (TRA-346).',
+    ).toEqual([]);
+  });
+
+  it('never strips a mandatory param', () => {
+    const hidden: string[] = [];
+    for (const [tool, params] of Object.entries(COMPACT_CORE_PARAMS)) {
+      const shape = shapeOf.get(tool);
+      if (!shape) continue;
+      const kept = new Set(params);
+      for (const [name, field] of Object.entries(shape)) {
+        if (!kept.has(name) && isMandatory(field)) hidden.push(`${tool}.${name}`);
+      }
+    }
+    expect(
+      hidden,
+      `Mandatory param(s) hidden by compact_schemas: ${hidden.join(', ')}. ` +
+        'The handler still requires them, so the client cannot call the tool at all.',
+    ).toEqual([]);
+  });
+
+  // Measured 2026-08-29 (TRA-346): 86,407 → 50,421 always-on schema chars, a
+  // 41.6% cut, after extending coverage to all 141 tools and repairing the
+  // stale entries. Below the documented 40-60% band means coverage decayed
+  // again — the docs claim went stale exactly this way once.
+  it('delivers the documented 40-60% schema reduction', () => {
+    let before = 0;
+    let after = 0;
+    for (const t of alwaysOn) {
+      before += fullSchemaCharSize(t.schemaShape);
+      const args: unknown[] = [t.name, t.description, { ...t.schemaShape }, () => undefined];
+      applySchemaTransforms(args, {
+        descriptionVerbosity: 'full',
+        compactSchemas: true,
+        descriptionOverrides: {},
+        sharedParamOverrides: {},
+      });
+      after += fullSchemaCharSize(args[2] as Record<string, z.ZodTypeAny>);
+    }
+    const cut = (before - after) / before;
+    expect(
+      cut,
+      `compact_schemas cuts ${(cut * 100).toFixed(1)}% of always-on schema chars ` +
+        `(${before} → ${after}); docs/configuration.md and config.ts promise 40-60%.`,
+    ).toBeGreaterThanOrEqual(0.4);
   });
 });
 
