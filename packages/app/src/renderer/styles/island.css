@@ -691,11 +691,28 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   font-size: 13px;
   color: var(--label);
 }
-/* Icon-only segments: drop the text padding, keep the 24px hit floor that
-   controls.css already grows with a pseudo-element. */
+/* Icon-only segments, sized off the reference Nikolai gave (shadcnblocks
+   theme-switcher) rather than re-derived: a square segment inside the track,
+   with the icon a little over half its box, and the track's own inset small
+   next to it. The reference runs 36 / 28 / 16 — track, segment, icon — so the
+   segment is 78% of the track, the icon 57% of the segment, and every gap
+   around the icon is equal.
+
+   The first cut inverted that. `sz-small` made the track 20px, which left 1px
+   above and below a 14px glyph, while `padding: 0` here lost the cascade to
+   `.lx-seg.sz-small .lx-seg-item { padding: 0 8px }` (same specificity, later
+   file) and ran the segments 30px wide. Crushed vertically, loose horizontally
+   — 5px of air outside the pill and 1px inside it (TRA-376).
+
+   Now: the default 24px track, 24×20 segments, a 12px icon — 83% and 55%, so
+   6px of air beside the glyph and 4px above it, and 3px between the pill and
+   the row's 30px box. Dropping the padding is the whole change; the segment
+   then sits on `.lx-seg`'s own 24px min-width, which is also the hit-target
+   floor TRA-293 established (the ::after in controls.css grows the other axis).
+   A 20px square would read closer to the reference still, but only by taking
+   the segment under that floor or overlapping its neighbour's hit box. */
 .ws-ctx-row .ws-ctx-seg .lx-seg-item {
   padding: 0;
-  min-width: 26px;
 }
 /* …and give selection a second cue. Measured on the running renderer: the thumb
    is 1.19:1 against the track in light and 1.63:1 in dark — under 1.4.11's 3:1,

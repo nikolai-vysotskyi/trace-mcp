@@ -116,11 +116,19 @@ export function AppMenu({
     </MenuItem>
   );
 
-  /* Settings sits alone above Appearance, the way it does in the app menu on
-     macOS; the rest follow the group. Split by id rather than by index so a
-     reordered shared list cannot silently move an item into the wrong group. */
+  /* Three groups, not two. Settings sits alone above Theme, the way it does in
+     the app menu on macOS. Below Theme the remaining actions split on what they
+     DO: `links` leave for a browser, `commands` act on this app — so
+     "Check for updates…" gets its own group rather than trailing the two GitHub
+     pages as if it were a third destination (TRA-376).
+
+     The split is on `url`, not on an id list: an action that opens a page is
+     already declared that way in global-actions.ts, so a new entry lands in the
+     right group without this file learning its name. */
   const settings = GLOBAL_ACTIONS.find((a) => a.id === 'settings');
   const rest = GLOBAL_ACTIONS.filter((a) => a.id !== 'settings');
+  const links = rest.filter((a) => a.url);
+  const commands = rest.filter((a) => !a.url);
 
   return (
     <div className="ws-sb-footer">
@@ -177,7 +185,9 @@ export function AppMenu({
             onChange={onAppearanceChange}
           />
           <MenuSeparator />
-          {rest.map(item)}
+          {links.map(item)}
+          {links.length > 0 && commands.length > 0 && <MenuSeparator />}
+          {commands.map(item)}
         </Menu>
       )}
     </div>
