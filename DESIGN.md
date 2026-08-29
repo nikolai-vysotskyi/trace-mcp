@@ -568,6 +568,37 @@ What the row has to get right, all of it enforced by
 - **Picking a value does not close the menu.** The point of an inline switcher is
   watching the app change under it. A command still closes; a choice does not.
 
+### Every string comes from the catalogue, and the length is not yours to assume
+
+The app ships in more than one language (TRA-379), so a literal typed into a
+component is a string that exists in English and nowhere else. User-facing text —
+labels, titles, `placeholder`, `aria-label`, empty states, errors — is authored in
+`packages/app/src/shared/i18n/catalog/en/<surface>.ts` and read with `t()`.
+`packages/app/scripts/check-i18n.mjs` fails the build when one reappears inline in a
+surface that was already extracted; how to add a string or a language is in
+`docs/development.md`.
+
+Three consequences for layout, all of them the usual way a translated UI breaks:
+
+- **Assume +30% width.** German and Russian run long against English. A control sized
+  to its English label — a segmented pill, a button with the label baked into a fixed
+  width — has to survive the longest translation or wrap, not clip. This is the
+  argument for icon-only segments where the values allow it.
+- **Never build a sentence out of pieces.** `{count} + " items"` has no correct
+  Russian form; `t('items', { count })` does, because i18next resolves the plural
+  through `Intl.PluralRules`. Same for anything glued from a noun and a verb.
+- **Dates, numbers and "2h ago" go through `renderer/i18n/format.ts`.** It wraps
+  `Intl`, which knows that a Russian relative time is "2 часа назад" but "5 часов
+  назад" and that a German date is `29.8.2026`. Note that `Intl`'s `narrow` style is
+  not offered: it gives English "2h ago" and Russian "-2 ч".
+
+**The Language control** follows "a choice in a menu is one row" above, and the option
+count decides the shape: a segmented pill while there are two to four languages, a
+pop-up button on the same row shape once there are more — language names are words,
+not glyphs, and the list is only going to grow. Language names are written in their
+own language ("Русский", not "Russian"): someone hunting for their language is
+looking for what they call it.
+
 ### The window minimum is a size that has to work
 
 `main/tray.ts` sets `minWidth: 640, minHeight: 420`. Every surface must be usable
