@@ -53,6 +53,11 @@ export interface SecurityScanResult {
   files_scanned: number;
   findings: SecurityFinding[];
   summary: Record<Severity, number>;
+  /**
+   * Findings held back because their confidence was "low". Pass
+   * `includeLowConfidence: true` to get them in `findings` instead.
+   */
+  suppressed_low_confidence: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,21 +387,6 @@ const RULES: SecurityRule[] = [
 // ---------------------------------------------------------------------------
 
 /**
- * Extract identifier names referenced inside ${...} expressions of a template literal
- * (or a leading-backtick fragment) on `line`. Returns null if no interpolations found.
- * Only captures the head identifier — `${foo}` and `${foo.bar}` both yield "foo".
- */
-function extractInterpolatedIdents(line: string): string[] | null {
-  const idents: string[] = [];
-  const re = /\$\{\s*([A-Za-z_$][\w$]*)/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(line)) !== null) {
-    idents.push(m[1]);
-  }
-  return idents.length ? idents : null;
-}
-
-/**
  * Resolve an identifier in a file to a literal string by scanning upward
  * for a top-level `const X = '...'` / `let X = "..."` / `var X = \`...\``
  * binding. Only matches single-string RHS (no interpolation, no concat).
@@ -503,12 +493,39 @@ function classifyInterpolation(
   lines: string[],
   fromLine: number,
 ): 'constant' | 'non_constant' {
-  const idents = extractInterpolatedIdents(line);
-  if (!idents) return 'non_constant';
-  for (const id of idents) {
-    if (resolveStringBindingInFile(lines, id, fromLine) == null) return 'non_constant';
+  const exprs = extractInterpolatedExprs(line);
+  if (exprs.length === 0) return 'non_constant';
+  for (const expr of exprs) {
+    if (!isCompileTimeConstant(expr, lines, fromLine)) return 'non_constant';
   }
   return 'constant';
+}
+
+/** Module-location built-ins — fixed at build time, never attacker-controlled. */
+const BUILD_TIME_IDENT_RE = /^(?:__dirname|__filename|import\.meta\.(?:dirname|filename|url))$/;
+
+/**
+ * True when `expr` evaluates to a value fixed at build time: a string literal,
+ * `__dirname`/`__filename`, an identifier bound to a string literal, or a
+ * `path.join`/`path.resolve` over those.
+ */
+function isCompileTimeConstant(expr: string, lines: string[], fromLine: number): boolean {
+  const e = expr.trim();
+  if (STRING_LITERAL_RE.test(e)) return true;
+  if (BUILD_TIME_IDENT_RE.test(e)) return true;
+
+  const call = /^(?:path\.)?(?:join|resolve|normalize)\s*\((.*)\)$/s.exec(e);
+  if (call) {
+    const args = call[1].trim();
+    if (args === '') return true;
+    // Bail on nested calls — splitting their arguments needs a real parser.
+    if (/[A-Za-z_$][\w$.]*\s*\(/.test(args)) return false;
+    return args.split(',').every((a) => isCompileTimeConstant(a, lines, fromLine));
+  }
+
+  const head = /^([A-Za-z_$][\w$]*)$/.exec(e);
+  if (!head) return false;
+  return resolveStringBindingInFile(lines, head[1], fromLine) != null;
 }
 
 /**
@@ -561,7 +578,45 @@ function isWeakHashSecurityContext(
  * but we treat the outer backtick as a normal string scope, which is enough for
  * comment skipping. String contents are preserved verbatim so regex detectors
  * that target string literals (SQL, exec, fetch URLs) keep working.
+ *
+ * Regex literals are recognised and skipped whole. Without this a pattern such
+ * as /['"`]/ leaves the scanner stuck in "inside a string" state for the rest of
+ * the file, so every later comment survives stripping and can raise a finding.
  */
+
+/** Tokens after which a `/` starts a regex literal rather than a division. */
+const REGEX_PRECEDING_KEYWORD =
+  /(?:^|[^\w$.])(?:return|typeof|case|in|of|do|else|yield|await|new|delete|void|instanceof)\s*$/;
+
+/**
+ * Scan a regex literal starting at `source[start] === '/'`. Returns the index
+ * just past the closing delimiter and its flags, or -1 when the literal does not
+ * terminate on the same line (in which case the `/` was a division operator).
+ */
+function scanRegexLiteral(source: string, start: number): number {
+  let i = start + 1;
+  let inClass = false;
+  while (i < source.length) {
+    const ch = source[i];
+    if (ch === '\n') return -1;
+    if (ch === '\\') {
+      i += 2;
+      continue;
+    }
+    if (inClass) {
+      if (ch === ']') inClass = false;
+    } else if (ch === '[') {
+      inClass = true;
+    } else if (ch === '/') {
+      i++;
+      while (i < source.length && /[a-z]/.test(source[i])) i++;
+      return i;
+    }
+    i++;
+  }
+  return -1;
+}
+
 function stripCommentsKeepStrings(source: string): string {
   const len = source.length;
   const out: string[] = new Array(len);
@@ -569,6 +624,9 @@ function stripCommentsKeepStrings(source: string): string {
   let inLine = false;
   let inBlock = false;
   let stringDelim: string | null = null;
+  /** Last non-whitespace character emitted outside comments/strings. */
+  let prev = '';
+  let prevIdx = -1;
   while (i < len) {
     const ch = source[i];
     const next = source[i + 1];
@@ -626,10 +684,35 @@ function stripCommentsKeepStrings(source: string): string {
     if (ch === '"' || ch === "'" || ch === '`') {
       stringDelim = ch;
       out[i] = ch;
+      prev = ch;
+      prevIdx = i;
       i++;
       continue;
     }
+    if (ch === '/') {
+      // Regex literal vs. division: a `/` can only start a regex where an
+      // expression may start — after an operator, an opening bracket, a
+      // statement separator, or one of the keywords above.
+      const isRegexStart =
+        prevIdx === -1 ||
+        '(,=:[!&|?{};+-*%~^<>'.includes(prev) ||
+        REGEX_PRECEDING_KEYWORD.test(source.slice(Math.max(0, prevIdx - 12), prevIdx + 1));
+      if (isRegexStart) {
+        const end = scanRegexLiteral(source, i);
+        if (end !== -1) {
+          for (let k = i; k < end; k++) out[k] = source[k];
+          prev = '/';
+          prevIdx = end - 1;
+          i = end;
+          continue;
+        }
+      }
+    }
     out[i] = ch;
+    if (!/\s/.test(ch)) {
+      prev = ch;
+      prevIdx = i;
+    }
     i++;
   }
   return out.join('');
@@ -666,19 +749,249 @@ const SSRF_BASE_IDENT_RE = /^(?:BASE|API|URL|BASE_URL|API_BASE|baseUrl|daemonUrl
 
 const LOCAL_URL_LITERAL_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?/i;
 
+// ---------------------------------------------------------------------------
+// Backward guard scan — a validator a few lines above the sink
+// ---------------------------------------------------------------------------
+
+/** How far above a sink to look for a guard before giving up. */
+const GUARD_WINDOW = 40;
+
+/**
+ * A line that opens a function/method body — the top of the block we scan.
+ * Control-flow braces (`if`, `try`, `for`, …) do NOT stop the walk: a guard
+ * normally sits above them, at the top of the enclosing function.
+ */
+const BLOCK_OPENER_RE =
+  /\bfunction\b|=>\s*\{|^\s*(?:(?:export|public|private|protected|static|async|readonly)\s+)*(?!if\b|for\b|while\b|switch\b|catch\b|do\b|return\b)[A-Za-z_$][\w$]*\s*\([^)]*\)\s*(?::[^={]*)?\{\s*$/;
+
+/** `assertFoo(x)` / `invariant(x)` — a validator that throws on bad input. */
+const ASSERT_CALL_RE = /\b(?:assert|invariant|ensure|require|validate|check)[A-Za-z_$]*\s*\(/;
+
+/** A conditional that exits the block — `if (...) return|throw|continue`. */
+const EXIT_RE = /\b(?:return|throw|continue|process\.exit)\b/;
+
+function escapeForRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Extract the full expression of each `${...}` interpolation on `line`.
+ * Only dotted identifier chains are returned (`this.table`, `pid`, `n.id`);
+ * anything else (a call, an operator expression) yields the raw trimmed text.
+ */
+function extractInterpolatedExprs(line: string): string[] {
+  const exprs: string[] = [];
+  for (let i = 0; i < line.length - 1; i++) {
+    if (line[i] !== '$' || line[i + 1] !== '{') continue;
+    let depth = 1;
+    let j = i + 2;
+    while (j < line.length && depth > 0) {
+      if (line[j] === '{') depth++;
+      else if (line[j] === '}') depth--;
+      if (depth === 0) break;
+      j++;
+    }
+    if (depth !== 0) break;
+    exprs.push(line.slice(i + 2, j).trim());
+    i = j;
+  }
+  return exprs;
+}
+
+/**
+ * Walk backwards from `fromLine` through the enclosing block looking for a
+ * validator applied to `expr`. Recognised shapes:
+ *   - `assertSafeX(expr)` / `validateX(expr)` — a throwing assertion,
+ *   - `if (... expr ...) return|throw|continue` — an early-exit guard.
+ *
+ * Heuristic by design: it proves a developer checked this value on this path,
+ * not that the check is sufficient. Used to suppress findings, never to raise
+ * severity.
+ */
+function hasGuardAbove(lines: string[], fromLine: number, expr: string): boolean {
+  if (!/^[A-Za-z_$][\w$]*(?:\.[\w$]+)*$/.test(expr)) return false;
+  const mention = new RegExp(`(?:^|[^\\w$.])${escapeForRegex(expr)}(?![\\w$])`);
+  const stop = Math.max(0, fromLine - GUARD_WINDOW);
+  for (let i = fromLine - 1; i >= stop; i--) {
+    const line = lines[i];
+    if (mention.test(line)) {
+      if (ASSERT_CALL_RE.test(line)) return true;
+      // `if (...)` whose body exits — on the same line or the next two.
+      if (/\bif\s*\(/.test(line)) {
+        const tail = lines.slice(i, Math.min(lines.length, i + 3)).join('\n');
+        if (EXIT_RE.test(tail)) return true;
+      }
+    }
+    if (BLOCK_OPENER_RE.test(line)) break;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Origin classification — config-derived values are not remote input
+// ---------------------------------------------------------------------------
+
+/** Roots that mean "the operator's own configuration", not remote input. */
+const CONFIG_ROOT_RE = /^(?:this\.|self\.)?(?:cfg|config|settings|options|opts|env|process)\b/;
+
+/** Tokens that mark a value as reaching the process from outside. */
+const UNTRUSTED_TOKEN_RE = /\b(?:req|request|body|params|query|argv|stdin|payload|incoming)\b/;
+
+/**
+ * True when `expr` is a call whose every argument is a string literal or a
+ * config-rooted member access — e.g. `modelUrl(this.cfg, this.model, 'x')`.
+ */
+function isConfigDerivedCall(expr: string): boolean {
+  const m = /^[A-Za-z_$][\w$]*(?:\.[\w$]+)*\s*\((.*)\)$/s.exec(expr);
+  if (!m) return false;
+  const args = m[1].trim();
+  if (args === '') return true;
+  if (args.includes('(') || args.includes(')')) return false; // nested calls — give up
+  return args.split(',').every((raw) => {
+    const arg = raw.trim();
+    if (/^(['"`]).*\1$/.test(arg)) return true;
+    if (UNTRUSTED_TOKEN_RE.test(arg)) return false;
+    return CONFIG_ROOT_RE.test(arg) || /^this\.[\w$.]+$/.test(arg);
+  });
+}
+
+/**
+ * True when `expr` is a `for (const expr of ARR)` loop variable whose array is
+ * declared locally in the same file and carries no untrusted-source token.
+ */
+function isLocalLoopVariable(lines: string[], fromLine: number, expr: string): boolean {
+  if (!/^[A-Za-z_$][\w$]*$/.test(expr)) return false;
+  const loopRe = new RegExp(
+    `for\\s*\\(\\s*(?:const|let|var)\\s+${escapeForRegex(expr)}\\s+of\\s+([A-Za-z_$][\\w$.]*)`,
+  );
+  const stop = Math.max(0, fromLine - GUARD_WINDOW);
+  for (let i = fromLine; i >= stop; i--) {
+    const m = loopRe.exec(lines[i]);
+    if (!m) continue;
+    const arr = m[1].split('.')[0];
+    if (UNTRUSTED_TOKEN_RE.test(m[1])) return false;
+    const declRe = new RegExp(`(?:const|let|var)\\s+${escapeForRegex(arr)}\\s*(?::[^=]+)?=(.*)$`);
+    for (let j = 0; j < lines.length; j++) {
+      const d = declRe.exec(lines[j]);
+      if (d) return !UNTRUSTED_TOKEN_RE.test(d[1]);
+    }
+    return false;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Escaper recognition
+// ---------------------------------------------------------------------------
+
+/**
+ * A whole-expression string literal. Each quote style is matched against its own
+ * delimiter, so `'<span style="x">'` — a single-quoted string carrying double
+ * quotes — still counts as a literal.
+ */
+const STRING_LITERAL_RE = /^(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`$\\]|\\.)*`)$/;
+
+/** A call whose name marks it as an output escaper for its argument. */
+const ESCAPER_CALL_RE =
+  /^(?:[A-Za-z_$][\w$]*\.)*(?:esc|escape|escapeHtml|escapeHTML|htmlEscape|sanitize|sanitise|sanitizeHtml|DOMPurify|encodeURI|encodeURIComponent|htmlspecialchars)[A-Za-z_$]*\s*\(/;
+
+/**
+ * Split a JS expression on top-level `+`, ignoring `+` inside strings,
+ * parentheses, brackets, or template interpolations.
+ */
+function splitTopLevelConcat(expr: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let delim: string | null = null;
+  let start = 0;
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i];
+    if (delim) {
+      if (ch === '\\') i++;
+      else if (ch === delim) delim = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') delim = ch;
+    else if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    else if (ch === '+' && depth === 0) {
+      parts.push(expr.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(expr.slice(start).trim());
+  return parts.filter((p) => p !== '');
+}
+
+/** True when every operand of a concatenation is a literal or an escaper call. */
+function isFullyEscapedConcat(expr: string): boolean {
+  const parts = splitTopLevelConcat(expr);
+  if (parts.length === 0) return false;
+  for (const part of parts) {
+    if (STRING_LITERAL_RE.test(part)) continue;
+    if (ESCAPER_CALL_RE.test(part)) continue;
+    // A parenthesised ternary whose branches are all safe — e.g.
+    // `(n.repo ? '<b>' + esc(n.repo) + '</b>' : '')`.
+    const ternary = /^\((.*)\)$/s.exec(part);
+    if (ternary) {
+      const q = ternary[1].indexOf('?');
+      if (q !== -1) {
+        const branches = ternary[1].slice(q + 1);
+        const colon = splitTernaryBranches(branches);
+        if (colon && colon.every((b) => isFullyEscapedConcat(b.trim()))) continue;
+      }
+    }
+    return false;
+  }
+  return true;
+}
+
+/** Split `a : b` of a ternary tail on the top-level `:`. */
+function splitTernaryBranches(tail: string): [string, string] | null {
+  let depth = 0;
+  let delim: string | null = null;
+  for (let i = 0; i < tail.length; i++) {
+    const ch = tail[i];
+    if (delim) {
+      if (ch === '\\') i++;
+      else if (ch === delim) delim = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') delim = ch;
+    else if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') depth--;
+    else if (ch === ':' && depth === 0) return [tail.slice(0, i), tail.slice(i + 1)];
+  }
+  return null;
+}
+
 /** Identify XSS `innerHTML = ...` shapes that are safe by construction. */
 function classifyInnerHtmlAssignment(
   line: string,
+  lines?: string[],
+  fromLine?: number,
 ): { safe: true } | { safe: false; confidence: 'high' | 'medium' } {
-  // Extract the RHS after `innerHTML =`.
+  // Extract the RHS after `innerHTML =`, continuing across lines until the
+  // statement terminates — the assignment is commonly a multi-line concat.
   const m = /\.innerHTML\s*=\s*(.+?);?\s*$/.exec(line);
   if (!m) return { safe: false, confidence: 'high' };
-  const rhs = m[1].trim();
+  let rhs = m[1].trim();
+  if (lines && fromLine != null && !/;\s*$/.test(line)) {
+    for (let i = fromLine + 1; i < Math.min(lines.length, fromLine + 15); i++) {
+      const cont = lines[i];
+      rhs += ` ${cont.trim().replace(/;\s*$/, '')}`;
+      if (/;\s*$/.test(cont.trimEnd())) break;
+      if (cont.trim() === '' || /^\s*\}/.test(cont)) break;
+    }
+    rhs = rhs.trim();
+  }
+
+  // Every non-literal operand of the concatenation passes through an escaper.
+  if (isFullyEscapedConcat(rhs)) return { safe: true };
 
   // Literal-only string (no interpolation, no concat).
   // Examples: innerHTML = '', innerHTML = "<div></div>", innerHTML = `static`.
-  const literalOnly = /^(['"])([^'"\\]|\\.)*\1$/.exec(rhs) || /^`([^`$\\]|\\.)*`$/.exec(rhs);
-  if (literalOnly) return { safe: true };
+  if (STRING_LITERAL_RE.test(rhs)) return { safe: true };
 
   // Sanitizer call on the immediate RHS (covers `esc(x)`, `DOMPurify.sanitize(x)`,
   // `encodeURI(x)`, `encodeURIComponent(x)`).
@@ -718,15 +1031,56 @@ function classifySsrfTemplate(
   line: string,
   lines: string[],
   fromLine: number,
-): 'local' | 'downgrade' | null {
+): 'local' | 'fixed_authority' | 'config' | 'downgrade' | null {
+  if (hasFixedAuthority(line, lines, fromLine)) return 'fixed_authority';
+  const exprs = extractInterpolatedExprs(line);
   // Pull the first ${IDENT} in the line.
   const m = /\$\{\s*([A-Za-z_$][\w$]*)\s*\}/.exec(line);
-  if (!m) return null;
-  const ident = m[1];
-  const resolved = resolveStringBindingInFile(lines, ident, fromLine);
-  if (resolved && LOCAL_URL_LITERAL_RE.test(resolved)) return 'local';
-  if (SSRF_BASE_IDENT_RE.test(ident)) return 'downgrade';
+  if (m) {
+    const ident = m[1];
+    const resolved = resolveStringBindingInFile(lines, ident, fromLine);
+    if (resolved && LOCAL_URL_LITERAL_RE.test(resolved)) return 'local';
+    if (SSRF_BASE_IDENT_RE.test(ident)) return 'downgrade';
+  }
+  if (exprs.length > 0 && exprs.every((e) => isConfigDerivedCall(e) || CONFIG_ROOT_RE.test(e))) {
+    return 'config';
+  }
   return null;
+}
+
+/**
+ * True when the URL's authority (scheme + host + port) is fully determined
+ * before the first interpolation, so no interpolated value can redirect the
+ * request to another host. Two shapes qualify:
+ *
+ *   fetch(`https://api.example.com/v1/${id}`)   — literal host, `/` before ${
+ *   fetch(`${BASE_URL}/v1/${id}`)               — BASE_URL resolves to a URL
+ *                                                 literal and `/` follows `}`
+ *
+ * `fetch(\`https://\${host}/x\`)` and `fetch(\`\${BASE}.evil.com\`)` do NOT
+ * qualify — the interpolation reaches the authority.
+ */
+function hasFixedAuthority(line: string, lines: string[], fromLine: number): boolean {
+  const tick = /`([^`]*)`/.exec(line);
+  if (!tick) return false;
+  const tpl = tick[1];
+  const first = tpl.indexOf('${');
+  if (first === -1) return false;
+
+  // Case 1: the template starts with a literal scheme://host/ prefix.
+  if (/^https?:\/\/[^${\s/?#]+[/?#]/.test(tpl.slice(0, first + 2))) return true;
+
+  // Case 2: the template opens with ${IDENT} bound to a URL literal, and the
+  // character right after the closing brace closes the authority.
+  if (first !== 0) return false;
+  const close = tpl.indexOf('}');
+  if (close === -1) return false;
+  const ident = tpl.slice(2, close).trim();
+  if (!/^[A-Za-z_$][\w$]*$/.test(ident)) return false;
+  const resolved = resolveStringBindingInFile(lines, ident, fromLine);
+  if (!resolved || !/^https?:\/\/[^/]+/.test(resolved)) return false;
+  const after = tpl[close + 1] ?? '';
+  return resolved.endsWith('/') || after === '/' || after === '?' || after === '#' || after === '';
 }
 
 /**
@@ -833,6 +1187,8 @@ export function scanSecurity(
     scope?: string;
     rules: RuleName[];
     severityThreshold?: Severity;
+    /** Report findings whose confidence is "low" (default: false). */
+    includeLowConfidence?: boolean;
   },
 ): TraceMcpResult<SecurityScanResult> {
   const activeRules = resolveRules(opts.rules);
@@ -936,6 +1292,21 @@ export function scanSecurity(
             let interpolationSource: 'non_constant' | undefined;
             const usesTemplate = /\$\{/.test(line);
 
+            // Backward guard scan: drop when every interpolated value is
+            // validated by an assertion or an early-exit check above the sink.
+            if (
+              usesTemplate &&
+              (rule.key === 'sql_injection' ||
+                rule.key === 'path_traversal' ||
+                rule.key === 'command_injection' ||
+                rule.key === 'ssrf')
+            ) {
+              const exprs = extractInterpolatedExprs(line);
+              if (exprs.length > 0 && exprs.every((e) => hasGuardAbove(lines, lineIdx, e))) {
+                continue;
+              }
+            }
+
             if (
               usesTemplate &&
               (rule.key === 'command_injection' ||
@@ -987,8 +1358,18 @@ export function scanSecurity(
             let fixOverride: string | null = null;
 
             if (rule.key === 'xss' && /\.innerHTML\s*=/.test(line)) {
-              const cls = classifyInnerHtmlAssignment(line);
+              const cls = classifyInnerHtmlAssignment(line, lines, lineIdx);
               if (cls.safe) continue;
+            }
+
+            // SQL: value comes from a loop over a locally derived array — the
+            // origin is our own code, not remote input.
+            if (rule.key === 'sql_injection' && usesTemplate) {
+              const exprs = extractInterpolatedExprs(line);
+              if (exprs.length > 0 && exprs.every((e) => isLocalLoopVariable(lines, lineIdx, e))) {
+                confidence = 'low';
+                evidence = evidence ?? 'value iterated from a locally derived array';
+              }
             }
 
             if (rule.key === 'path_traversal' && /path\.(?:join|resolve)/.test(line)) {
@@ -1003,7 +1384,11 @@ export function scanSecurity(
 
             if (rule.key === 'ssrf' && usesTemplate) {
               const cls = classifySsrfTemplate(line, lines, lineIdx);
-              if (cls === 'local') continue;
+              if (cls === 'local' || cls === 'fixed_authority') continue;
+              if (cls === 'config') {
+                confidence = 'low';
+                evidence = evidence ?? 'request URL built from operator configuration';
+              }
               if (cls === 'downgrade') {
                 severity = downgradeSeverity(severity); // high -> medium
                 confidence = 'low';
@@ -1062,13 +1447,28 @@ export function scanSecurity(
     }
   }
 
+  // Low-confidence findings are weakly grounded by construction. Reporting them
+  // by default is what trains users to ignore the whole list, so they are opt-in
+  // and the suppressed count is surfaced instead of being silently dropped.
+  let suppressedLow = 0;
+  let reported = findings;
+  if (!opts.includeLowConfidence) {
+    reported = findings.filter((f) => f.confidence !== 'low');
+    suppressedLow = findings.length - reported.length;
+  }
+
   // Sort: critical first, then high, medium, low
-  findings.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+  reported.sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
 
   const summary: Record<Severity, number> = { critical: 0, high: 0, medium: 0, low: 0 };
-  for (const f of findings) {
+  for (const f of reported) {
     summary[f.severity]++;
   }
 
-  return ok({ files_scanned: scanned, findings, summary });
+  return ok({
+    files_scanned: scanned,
+    findings: reported,
+    summary,
+    suppressed_low_confidence: suppressedLow,
+  });
 }

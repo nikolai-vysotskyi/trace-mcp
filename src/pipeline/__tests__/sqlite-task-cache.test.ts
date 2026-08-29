@@ -33,7 +33,14 @@ afterEach(() => {
   } catch {
     // best effort — some tests close the db themselves
   }
-  rmSync(workDir, { recursive: true, force: true });
+  // Windows can still hold the sqlite file briefly after close, which turned
+  // this hook red once on CI. Bound the wait and let the OS reap a stray temp
+  // dir rather than fail a run over cleanup.
+  try {
+    rmSync(workDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  } catch {
+    // best effort
+  }
 });
 
 describe('SqliteTaskCache', () => {

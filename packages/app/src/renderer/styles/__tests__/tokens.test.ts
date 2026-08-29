@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — plain .mjs helper, shared with the CLI check (TRA-289)
@@ -35,6 +35,32 @@ describe('design tokens', () => {
   it('adds no raw hex or Tailwind grey beyond the recorded baseline', () => {
     const { violations } = tokenGuard();
     expect(violations).toEqual([]);
+  });
+
+  /* TRA-344. --label-tertiary is decoration only (1.88:1 light / 2.53:1 dark,
+     and `prefers-contrast: more` lifts --label-secondary but not it). A rule
+     that paints text with it AND sizes that text is by definition styling
+     something a user reads — the exception is a placeholder, which DESIGN.md
+     §2 names as a legitimate tertiary use. Quick open's paths, ⌘-hints and
+     group headers were the last three in the app. */
+  it('never paints sized text with --label-tertiary', () => {
+    const dir = fileURLToPath(new URL('..', import.meta.url));
+    const sources: Array<[string, string]> = [
+      ['app.css', appCss],
+      ...readdirSync(dir)
+        .filter((f) => f.endsWith('.css'))
+        .map((f) => [f, readFileSync(`${dir}/${f}`, 'utf8')] as [string, string]),
+    ];
+    const offenders: string[] = [];
+    for (const [name, css] of sources) {
+      for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        if (!/color:\s*var\(--label-tertiary\)/.test(body)) continue;
+        if (!/font-size:/.test(body)) continue;
+        if (/::placeholder/.test(selector)) continue;
+        offenders.push(`${name}: ${selector.trim().split('\n').pop()?.trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   /* TRA-297: `user-select: none` on body used to be the last word, so no path,

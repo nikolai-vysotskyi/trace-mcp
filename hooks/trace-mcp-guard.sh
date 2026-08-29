@@ -127,7 +127,8 @@ fi
 
 # ─── Mode selection ────────────────────────────────────────────────
 # Resolution order:
-#   1. <PROJECT_ROOT>/.trace-mcp/guard-mode file (per-project, written by app)
+#   1. <PROJECT_ROOT>/.trace-mcp/guard-mode file (per-project, written at
+#      registration by the CLI/daemon, and by the desktop app)
 #   2. TRACE_MCP_GUARD_MODE env var (global default for non-app users)
 #   3. "strict"
 PROJECT_MODE_FILE="$(pwd)/.trace-mcp/guard-mode"
@@ -139,6 +140,21 @@ case "$GUARD_MODE" in
   strict|coach|off) ;;
   *) GUARD_MODE="strict" ;;
 esac
+
+# Coach is a 7-day onboarding grace period, not a permanent setting. The
+# desktop app promotes it to strict on expiry, but a project is now armed with
+# coach at registration (TRA-341) and may never be opened in the app — so the
+# hook expires it too. Clearing install-date makes this fire once; a later
+# manual switch back to coach writes no date and so never expires.
+PROJECT_INSTALL_DATE_FILE="$(pwd)/.trace-mcp/install-date"
+if [[ "$GUARD_MODE" == "coach" && -f "$PROJECT_INSTALL_DATE_FILE" ]]; then
+  INSTALLED_AT=$(head -n1 "$PROJECT_INSTALL_DATE_FILE" 2>/dev/null | tr -d ' \t\n\r')
+  if [[ "$INSTALLED_AT" =~ ^[0-9]+$ ]] && (( $(date +%s) >= INSTALLED_AT + 7 * 24 * 60 * 60 )); then
+    GUARD_MODE="strict"
+    echo "strict" > "$PROJECT_MODE_FILE" 2>/dev/null || true
+    rm -f "$PROJECT_INSTALL_DATE_FILE" 2>/dev/null || true
+  fi
+fi
 if [[ "$GUARD_MODE" == "off" ]]; then
   exit 0
 fi
