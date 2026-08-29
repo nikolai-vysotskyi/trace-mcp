@@ -12,8 +12,8 @@ import { describe, expect, it } from 'vitest';
  * The rule: a package belongs in `dependencies` only if the MAIN process imports
  * it at runtime. Renderer-only packages go in devDependencies.
  */
-const appDir = path.resolve(import.meta.dirname, '..', '..', '..');
-const pkg = JSON.parse(readFileSync(path.join(appDir, 'package.json'), 'utf8'));
+// vitest runs with packages/app as its root, as the other main-process tests assume.
+const pkg = JSON.parse(readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'));
 
 const MAIN_RUNTIME_DEPS = [
   'electron-updater', // main process, Windows update path
