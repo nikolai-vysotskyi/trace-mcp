@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.4.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.3.0...v3.4.0) (2026-08-29)
+
+
+### Features
+
+* **app:** a Language row in the app menu and in Settings (TRA-388) ([#579](https://github.com/nikolai-vysotskyi/trace-mcp/issues/579)) ([d11b655](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d11b6558b8df01c4fdf990b1bf8867e3f1e564c7))
+
+
+### Bug Fixes
+
+* **app:** never swap a running bundle, never call an already-installed update stuck ([#581](https://github.com/nikolai-vysotskyi/trace-mcp/issues/581)) ([8349f7e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8349f7ea64345aa04220dcb044ad13ead504473e))
+* **app:** put the sidebar update card on the Lattice layer ([#582](https://github.com/nikolai-vysotskyi/trace-mcp/issues/582)) ([ad9eaa7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ad9eaa78a8c932a71bb2964a758d74f5caca2545))
+* **app:** the AppKit tab bar is 28px, not 36 — lights sat 4px low ([#583](https://github.com/nikolai-vysotskyi/trace-mcp/issues/583)) ([65105c5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/65105c54e71088e5b082be0fc5acd591955fae4c))
+
+
+### Documentation
+
+* add the trace-mcp vs codegraph head-to-head page (TRA-427) ([#578](https://github.com/nikolai-vysotskyi/trace-mcp/issues/578)) ([7343bf0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7343bf04b0bfffa36df20a1e09e13e75dd9ad58f))
+* dead evidence anchor in skills/README + verified distribution-ledger rows (TRA-393) ([#575](https://github.com/nikolai-vysotskyi/trace-mcp/issues/575)) ([450a719](https://github.com/nikolai-vysotskyi/trace-mcp/commit/450a71917381f1bbe7483effa260bd8f2f3d2263))
+* disambiguate tune_decision_weights vs tune_weights, record consolidation-retirement policy (TRA-205) ([#577](https://github.com/nikolai-vysotskyi/trace-mcp/issues/577)) ([a2f4342](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a2f4342c18cc1aae83391cf8251c8d61d57cbdef))
+* the menu's control column is an inset, not an x coordinate (TRA-388) ([#580](https://github.com/nikolai-vysotskyi/trace-mcp/issues/580)) ([8fca8fe](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8fca8fef38fd0a0a7a66f6210e8e3b43d17ed431))
+
 ## [3.3.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.2.0...v3.3.0) (2026-08-29)
 
 
