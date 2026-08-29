@@ -170,8 +170,10 @@ import {
   type GlobalInstall,
   isStuckOnVersion,
   readAppUpdateState,
+  readLauncherCliPath,
   scanGlobalInstalls,
   shouldAttemptRepair,
+  staleRootInUse,
   type UpdateOutcome,
   writeAppUpdateState,
 } from './update-state';
@@ -624,7 +626,7 @@ ipcMain.handle('check-for-update', async () => {
   // install. Empty on the normal single-root machine. `npm root -g` is folded
   // in because the user's own npm may own a root the static scan never guesses.
   const { configRoot, binRoot } = await resolveNpmRoots();
-  const staleRoots = staleGlobalRoots(configRoot, binRoot);
+  const staleRoots = staleRootClientsUse(configRoot, binRoot);
   return staleRoots.length > 0 ? { ...result, staleRoots } : result;
 });
 
@@ -825,6 +827,15 @@ function staleGlobalRoots(...extraRoots: (string | null | undefined)[]): GlobalI
     scanGlobalInstalls([...globalRootCandidates(), ...extraRoots]),
     cmpSemver,
   );
+}
+
+/**
+ * The stale root MCP clients actually run out of, or null. A stale root nothing
+ * resolves to changes nothing for the user, so it is not reported (TRA-377).
+ */
+function staleRootClientsUse(...extraRoots: (string | null | undefined)[]): GlobalInstall[] {
+  const inUse = staleRootInUse(staleGlobalRoots(...extraRoots), readLauncherCliPath());
+  return inUse ? [inUse] : [];
 }
 
 async function resolveNpmBin(): Promise<string | null> {
@@ -1373,8 +1384,11 @@ ipcMain.handle('apply-update', async () => {
 
   // `npm install -g` writes into exactly one global root. On a machine with
   // several (nvm + Herd + a bundled runtime), the rest keep whatever version
-  // they last received — and nothing else here would ever say so.
-  const staleRoots = staleGlobalRoots(npmRoot, npmRoots.binRoot);
+  // they last received — and nothing else here would ever say so. The log keeps
+  // every stale root (they are all useful when diagnosing an update); only the
+  // one MCP clients actually run is worth surfacing in the UI (TRA-377).
+  const allStaleRoots = staleGlobalRoots(npmRoot, npmRoots.binRoot);
+  const staleRoots = staleRootInUse(allStaleRoots, readLauncherCliPath());
 
   appendUpdateLog({
     event: 'apply-update:ok',
@@ -1382,14 +1396,14 @@ ipcMain.handle('apply-update', async () => {
     pending,
     installedVersion: installedVersion ?? null,
     runningVersion: running,
-    staleRoots,
+    staleRoots: allStaleRoots,
   });
   return {
     ok: true,
     pending,
     outcome,
     version: pending ? installedVersion : undefined,
-    ...(staleRoots.length > 0 ? { staleRoots } : {}),
+    ...(staleRoots ? { staleRoots: [staleRoots] } : {}),
   };
 });
 
