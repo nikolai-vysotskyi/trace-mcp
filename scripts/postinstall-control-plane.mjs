@@ -36,7 +36,11 @@ import { fileURLToPath } from 'node:url';
 // v3: forces regeneration of v2 plists that embedded a concrete cli.js path
 // (drift between src/daemon/lifecycle.ts and this script). v3 uses the launcher
 // shim everywhere so node-version swaps don't pin the daemon to a stale binary.
-const PLIST_VERSION = 3;
+// v4: adds ExitTimeOut — launchd's 5s default SIGKILLed the daemon mid-cleanup
+// (TRA-421), losing both the shutdown log line and the graceful DB close.
+const PLIST_VERSION = 4;
+/** Seconds launchd waits after SIGTERM before SIGKILL. Mirrors PLIST_EXIT_TIMEOUT_SEC. */
+const PLIST_EXIT_TIMEOUT_SEC = 30;
 const PLIST_LABEL = 'com.trace-mcp.server';
 const PLIST_MARKER = `trace-mcp plist v${PLIST_VERSION}`;
 const DEFAULT_DAEMON_PORT = 3741;
@@ -238,6 +242,8 @@ function generatePlist(binaryPath, port) {
   <true/>
   <key>ThrottleInterval</key>
   <integer>5</integer>
+  <key>ExitTimeOut</key>
+  <integer>${PLIST_EXIT_TIMEOUT_SEC}</integer>
   <key>StandardOutPath</key>
   <string>${DAEMON_LOG_PATH}</string>
   <key>StandardErrorPath</key>
