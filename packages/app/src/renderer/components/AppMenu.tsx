@@ -18,7 +18,7 @@
    lives in Settings, and it exists on no other surface to drift against. */
 
 import { Icon } from '../lattice/icons';
-import { Menu, MenuItem, MenuSection, MenuSeparator, useMenuAnchor } from '../lattice/ui';
+import { Menu, MenuChoiceRow, MenuItem, MenuSeparator, useMenuAnchor } from '../lattice/ui';
 import { GLOBAL_ACTIONS, type GlobalAction } from '../../shared/global-actions.js';
 import { APPEARANCE_OPTIONS, type Appearance } from '../theme.js';
 import { describeStaleRoots, formatAgo, type UpdateState } from '../update-check.js';
@@ -149,17 +149,15 @@ export function AppMenu({
           <MenuSeparator />
           {settings && item(settings)}
           <MenuSeparator />
-          <MenuSection>Appearance</MenuSection>
-          {APPEARANCE_OPTIONS.map((option) => (
-            <MenuItem
-              key={option.value}
-              showCheckSlot
-              checked={appearance === option.value}
-              onClick={run(() => onAppearanceChange(option.value))}
-            >
-              {option.label}
-            </MenuItem>
-          ))}
+          {/* One row, not a header plus three checked items. Changing it does
+              NOT close the menu: the whole point of an inline switcher is
+              seeing the app change under it. */}
+          <MenuChoiceRow
+            label="Theme"
+            options={APPEARANCE_OPTIONS}
+            value={appearance}
+            onChange={onAppearanceChange}
+          />
           <MenuSeparator />
           {rest.map(item)}
         </Menu>

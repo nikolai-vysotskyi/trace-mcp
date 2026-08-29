@@ -95,15 +95,60 @@ describe('sidebar app menu', () => {
     expect(header?.querySelector('.status')?.className).toContain('is-info');
   });
 
-  it('offers Appearance as a checked group and reports the pick', () => {
+  /* Nikolai on the four-row APPEARANCE group: "это оч плохо во всплывашке".
+     One labelled row with the switcher inline — and the segments are icon-only,
+     so each one's accessible NAME is what has to carry Auto / Light / Dark. */
+  it('offers Theme as one labelled row with an inline switcher', () => {
     const { trigger, onAppearanceChange } = renderMenu({ appearance: 'light' });
     const menu = openMenu(trigger);
-    const options = within(menu).getAllByRole('menuitemcheckbox');
-    expect(options.map((o) => o.textContent)).toEqual(['Auto', 'Light', 'Dark']);
+
+    const row = within(menu).getByRole('group', { name: 'Theme' });
+    expect(row.textContent).toBe('Theme'); // the label, and no item text
+    const options = within(row).getAllByRole('menuitemradio');
+    expect(options.map((o) => o.getAttribute('aria-label'))).toEqual(['Auto', 'Light', 'Dark']);
+    expect(options.map((o) => o.getAttribute('title'))).toEqual(['Auto', 'Light', 'Dark']);
+    // Selected, not merely hovered: the state is on the element, not the fill.
     expect(options.map((o) => o.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
+    expect(options[1].className).toContain('is-active');
+
     fireEvent.click(options[2]);
     expect(onAppearanceChange).toHaveBeenCalledWith('dark');
-    expect(screen.queryByRole('menu')).toBeNull();
+    // Picking a theme does NOT close the menu — the point of an inline
+    // switcher is watching the app change under it.
+    expect(screen.queryByRole('menu')).not.toBeNull();
+  });
+
+  it('is one Tab stop, entered on the current value', () => {
+    const { trigger } = renderMenu({ appearance: 'dark' });
+    const row = within(openMenu(trigger)).getByRole('group', { name: 'Theme' });
+    const options = within(row).getAllByRole('menuitemradio');
+    expect(options.map((o) => o.tabIndex)).toEqual([-1, -1, 0]);
+  });
+
+  /* The hard part Lead Engineer called out: two axes in one menu. Up/down has
+     to keep moving between rows while left/right moves inside the switcher. */
+  it('moves within the switcher on left/right and out of it on up/down', () => {
+    const onAppearanceChange = vi.fn();
+    const { trigger } = renderMenu({ appearance: 'light', onAppearanceChange });
+    const menu = openMenu(trigger);
+    const row = within(menu).getByRole('group', { name: 'Theme' });
+    const checked = within(row).getByRole('menuitemradio', { name: 'Light' });
+
+    // Down from Settings lands on the row's CHECKED segment, once — not once
+    // per segment.
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(checked);
+
+    fireEvent.keyDown(checked, { key: 'ArrowRight' });
+    expect(onAppearanceChange).toHaveBeenLastCalledWith('dark');
+    fireEvent.keyDown(checked, { key: 'ArrowLeft' });
+    expect(onAppearanceChange).toHaveBeenLastCalledWith('auto');
+
+    // …and down again leaves the row entirely, rather than stepping to Dark.
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
+    expect(row.contains(document.activeElement)).toBe(false);
+    expect(document.activeElement?.textContent).toContain("What's new");
   });
 
   it('runs the commands and opens the links', () => {
@@ -121,10 +166,14 @@ describe('sidebar app menu', () => {
   });
 
   it('arrows through the items and wraps', () => {
-    const { trigger } = renderMenu();
+    const { trigger } = renderMenu({ appearance: 'auto' });
     const menu = openMenu(trigger);
-    const all = Array.from(menu.querySelectorAll<HTMLElement>('[role^="menuitem"]'));
-    expect(all.length).toBe(GLOBAL_ACTIONS.length + 3); // + Auto / Light / Dark
+    /* The stop list, not the element list: the Theme row contributes ONE stop
+       (its checked segment), so up/down sees actions + 1. */
+    const all = Array.from(
+      menu.querySelectorAll<HTMLElement>('[role^="menuitem"]'),
+    ).filter((el) => !el.closest('[data-menu-row]') || el.getAttribute('aria-checked') === 'true');
+    expect(all.length).toBe(GLOBAL_ACTIONS.length + 1); // + the Theme row
 
     // Nothing is highlighted until the first arrow — a macOS menu does not
     // preselect its first item.

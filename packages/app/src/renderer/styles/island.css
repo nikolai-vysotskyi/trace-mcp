@@ -671,6 +671,53 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 }
 .ws-ctx-section:first-child { padding-top: 4px; }
 
+/* A menu row carrying a CONTROL rather than an action (TRA-363 follow-up).
+   Same 30px box and 8px inset as .ws-ctx-item, so the label, the pill and every
+   item above and below sit on one centre line. No hover fill: the row is not
+   the thing you click, the segments are. */
+.ws-ctx-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 30px;
+  padding: 0 8px;
+}
+.ws-ctx-row .ws-ctx-row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--label);
+}
+/* Icon-only segments: drop the text padding, keep the 24px hit floor that
+   controls.css already grows with a pseudo-element. */
+.ws-ctx-row .ws-ctx-seg .lx-seg-item {
+  padding: 0;
+  min-width: 26px;
+}
+/* …and give selection a second cue. Measured on the running renderer: the thumb
+   is 1.19:1 against the track in light and 1.63:1 in dark — under 1.4.11's 3:1,
+   and on a WORD segment that is fine because controls.css deliberately keeps
+   unselected labels at full strength (TRA-292): you can still read "Light".
+   An icon has no such fallback, so here the thumb is the whole message. An
+   unselected icon steps back to --label-secondary — 4.5:1 on the track, still
+   comfortably legible — and the picked one reads at a glance. Hover still
+   brings it back to full: the thumb is what separates hovered from selected. */
+.ws-ctx-row .ws-ctx-seg .lx-seg-item:not(.is-active) {
+  color: var(--label-secondary);
+}
+/* macOS rings the whole TRACK, never one segment — the thumb already says
+   which segment is selected, so a second ring inside it is two answers to one
+   question. */
+.ws-ctx-row .ws-ctx-seg:focus-within {
+  box-shadow: var(--focus-ring);
+}
+.ws-ctx-row .ws-ctx-seg .lx-seg-item:focus-visible {
+  box-shadow: none;
+}
+
 /* Menu header (TRA-363) — what the menu is ABOUT, not something you can pick.
    The app menu has no account to hang on, so the anchor is the product: the
    trigger carries the name, this carries the version and whether it is current.

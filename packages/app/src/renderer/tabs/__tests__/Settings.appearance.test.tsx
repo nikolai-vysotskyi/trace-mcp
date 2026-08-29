@@ -31,7 +31,7 @@ beforeEach(() => {
 describe('Settings — Appearance', () => {
   it('offers Auto / Light / Dark even with no daemon', () => {
     render(<Settings appearance="auto" onAppearanceChange={() => {}} />);
-    const select = screen.getByLabelText('Appearance') as HTMLSelectElement;
+    const select = screen.getByLabelText('Theme') as HTMLSelectElement;
     expect([...select.options].map((o) => o.text)).toEqual(['Auto', 'Light', 'Dark']);
     expect(select.value).toBe('auto');
   });
@@ -39,7 +39,7 @@ describe('Settings — Appearance', () => {
   it('reports the picked appearance upwards', () => {
     const onChange = vi.fn();
     render(<Settings appearance="auto" onAppearanceChange={onChange} />);
-    const select = screen.getByLabelText('Appearance') as HTMLSelectElement;
+    const select = screen.getByLabelText('Theme') as HTMLSelectElement;
     select.value = 'dark';
     select.dispatchEvent(new Event('change', { bubbles: true }));
     expect(onChange).toHaveBeenCalledWith('dark');

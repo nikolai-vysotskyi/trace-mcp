@@ -21,10 +21,17 @@ export type Theme = 'light' | 'dark';
 /** What the user picked. `auto` = follow the system, and is the default. */
 export type Appearance = 'auto' | Theme;
 
-export const APPEARANCE_OPTIONS: ReadonlyArray<{ value: Appearance; label: string }> = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
+/* One list, two surfaces: Settings renders the labels, the app menu's row
+   renders the icons (its segments are icon-only). Same anti-drift rule as
+   src/shared/global-actions.ts — the values and their names are written once. */
+export const APPEARANCE_OPTIONS: ReadonlyArray<{
+  value: Appearance;
+  label: string;
+  icon: string;
+}> = [
+  { value: 'auto', label: 'Auto', icon: 'contrast' },
+  { value: 'light', label: 'Light', icon: 'light_mode' },
+  { value: 'dark', label: 'Dark', icon: 'dark_mode' },
 ];
 
 export function readStoredAppearance(): Appearance {

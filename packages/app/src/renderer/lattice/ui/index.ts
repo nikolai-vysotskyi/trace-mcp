@@ -37,8 +37,22 @@ export type { IslandHeaderProps, MiniButtonProps } from './IslandHeader';
 export { EmptyState } from './EmptyState';
 export type { EmptyStateProps } from './EmptyState';
 
-export { Menu, MenuItem, MenuSection, MenuSeparator, ConfirmPopover, useMenuAnchor } from './Menu';
-export type { MenuProps, MenuItemProps, ConfirmPopoverProps } from './Menu';
+export {
+  ConfirmPopover,
+  Menu,
+  MenuChoiceRow,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
+  useMenuAnchor,
+} from './Menu';
+export type {
+  ConfirmPopoverProps,
+  MenuChoice,
+  MenuChoiceRowProps,
+  MenuItemProps,
+  MenuProps,
+} from './Menu';
 
 export {
   Card,
