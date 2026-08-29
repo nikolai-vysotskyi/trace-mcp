@@ -240,6 +240,10 @@ These workflows define which trace-mcp tools MUST be used at each stage. Follow 
 3. `detect_antipatterns` {} — performance antipattern scan
 4. `compare_branches` { branch: "current" } — symbol-level diff for PR description
 5. Fix any critical/high findings before committing
+6. Commit with the repo's configured git identity — never `git config user.email` to an
+   agent address. It resolves to no GitHub login, so `license/cla` hangs at `pending`
+   forever and the PR reads red. Attribute the agent with an `Agent:` message trailer
+   (see CONTRIBUTING.md).
 
 ### Bug fixing
 1. `predict_bugs` {} — prioritize which files to investigate
