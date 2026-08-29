@@ -304,6 +304,35 @@ Calling a retired name no longer fails with a bare "not found": the server
 answers with the replacement call, so a stale `CLAUDE.md` is a one-line fix
 rather than a dead end.
 
+### Policy: consolidations retire the old name, they don't alias it forever
+
+This is settled, so future consolidations don't re-litigate it (TRA-205,
+folding in the cancelled TRA-212).
+
+**A tool that is consolidated into a superset tool is removed at the next
+major, not kept as a permanent alias.** The alias layer TRA-193 shipped
+additively was measured (TRA-239: 171 → 172 tools, schema tax up) and retired
+outright in 2.0 (TRA-240). Trimming an alias's prose is not enough — the
+registration itself is what every client without deferred tool loading pays
+for on connect, and token cost is the product.
+
+**The old name gets a call-time hint instead of a registration.** MCP has no
+per-tool deprecation signal — a tool is either in `tools/list` or it is a hard
+error — so a removed name would otherwise surface as a bare "not found".
+`src/server/retired-tools.ts` rewrites that one message to name the
+replacement call. It costs nothing on `tools/list`, which is the whole point:
+the migration hint lives on the error path, not in the schema payload.
+
+**Renaming purely for clarity is not worth a registration.** Two similarly
+named tools that do different things (`tune_decision_weights` vs
+`tune_weights`) are disambiguated in their descriptions, not split into new
+names with the old ones aliased — a sentence of prose is free, a second
+registration is not.
+
+Reopening this needs evidence a retired name is still costing users more than
+its removal saved. `src/tools/register/__tests__/tool-schema-budget.test.ts`
+is the gate on any change that grows the always-on surface.
+
 ### Migrating to 3.0 — Node 22
 
 3.0 raised the Node floor: Node 20 and 21 are no longer supported, and
