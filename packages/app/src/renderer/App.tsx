@@ -60,7 +60,12 @@ function normalizeGlobalTab(value: string | null | undefined): GlobalTab {
 type ProjectTab = 'overview' | 'ask' | 'graph' | 'activity' | 'memory' | 'notebook' | 'insights';
 const PROJECT_TABS: { id: ProjectTab; label: string; icon: string }[] = [
   { id: 'overview', label: 'Overview', icon: 'grid_view' },
-  { id: 'ask', label: 'Ask', icon: 'forum' },
+  /* Not a speech bubble (DESIGN.md §5): Ask queries the indexed graph and hands
+     back an answer — a search phrased in words, not a conversation with a
+     person. `manage_search` was the first choice and lost on the render: its
+     two answer lines sit 3 units apart on the 24 grid, which is 2.2px at the
+     18px sidebar size, and they smudge into the magnifier's handle. */
+  { id: 'ask', label: 'Ask', icon: 'search' },
   { id: 'graph', label: 'Graph', icon: 'hub' },
   { id: 'activity', label: 'Activity', icon: 'timeline' },
   { id: 'memory', label: 'Memory', icon: 'neurology' },

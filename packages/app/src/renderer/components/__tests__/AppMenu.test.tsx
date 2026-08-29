@@ -148,7 +148,7 @@ describe('sidebar app menu', () => {
     // …and down again leaves the row entirely, rather than stepping to Dark.
     fireEvent.keyDown(document, { key: 'ArrowDown' });
     expect(row.contains(document.activeElement)).toBe(false);
-    expect(document.activeElement?.textContent).toContain("What's new");
+    expect(document.activeElement?.textContent).toContain('View changelog');
   });
 
   it('runs the commands and opens the links', () => {

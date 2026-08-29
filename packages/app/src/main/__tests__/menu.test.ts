@@ -113,7 +113,7 @@ describe('application menu', () => {
 
   it('sends the shared list’s URL actions to the browser, not to a window', () => {
     click(menu('Help'), 'Get help');
-    click(menu('Help'), "What's new");
+    click(menu('Help'), 'View changelog');
     expect(sent).toEqual([]); // neither is an app-command
   });
 

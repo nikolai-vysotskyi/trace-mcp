@@ -21,7 +21,7 @@
    and it exists only in the in-app menu and Settings — a list with one member
    cannot drift. */
 
-export type GlobalActionId = 'settings' | 'check-for-update' | 'whats-new' | 'get-help';
+export type GlobalActionId = 'settings' | 'check-for-update' | 'view-changelog' | 'get-help';
 
 export interface GlobalAction {
   /** Also the `app-command` name the native menu sends to the focused window. */
@@ -46,17 +46,22 @@ export const GLOBAL_ACTIONS: readonly GlobalAction[] = [
     shortcut: '⌘,',
     icon: 'settings',
   },
+  /* "View changelog", not "What's new": the item opens the releases page, and
+     someone checking whether a specific fix shipped searches for the word
+     "changelog". The glyph names the destination — a document, not sparkles. */
   {
-    id: 'whats-new',
-    label: "What's new",
+    id: 'view-changelog',
+    label: 'View changelog',
     url: 'https://github.com/nikolai-vysotskyi/trace-mcp/releases',
-    icon: 'auto_awesome',
+    icon: 'description',
   },
+  /* A question mark, not a speech bubble: this opens GitHub issues, and a
+     speech bubble would promise a person on the other end. */
   {
     id: 'get-help',
     label: 'Get help',
     url: 'https://github.com/nikolai-vysotskyi/trace-mcp/issues',
-    icon: 'forum',
+    icon: 'help',
   },
   {
     id: 'check-for-update',
