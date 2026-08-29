@@ -584,6 +584,9 @@ new evidence.
 | Deleting the last host of a feature means **re-homing the feature**, in the same pass or in a filed issue | `GuardBadge` was the guard's only surface *and* the only caller of `guard.initialize`. Deleting it left 670 lines of working main-process code with three of eight IPC channels reachable, and new projects silently skipping the coach grace period for weeks. A dead component is a rendering fact; the feature it carried is a separate question. |
 | Per-project state lives on **Project Overview**, not as another workspace-table column | The table is already at nine columns and drops trailing ones under a container query; a status the user needs is the worst candidate for "first to go". Overview is per-project by definition and has the measure for a mode control and a sentence. |
 | A control inside a 32px `ListRow` is the **24px tier**, never `small` | Measured on the running renderer: a `small` segment paints 16px inside a 20px hit box and a `small` button paints 20 in 20 — both under the 24×24 floor, and the row has the height for the regular tier anyway. `small` is for a dense toolbar, not for a list row. |
+| A loading sentence goes in chrome that is **already** on screen, never a new layer over the content | Graph Explorer put "Building graph…" and a 45% scrim across the whole 1044×760 pane on every re-load, landing on top of the node labels underneath. The stats pill was already in the corner; it says it there, and the graph stays readable. Only a pane with nothing drawn in it yet gets an `EmptyState`. |
+| An error the user is meant to act on is never on a timer | Graph Explorer's red toast erased itself after 7s and left a blank pane with no account of what happened. An error persists until it is retried or resolved, and carries the glyph, the sentence and the Retry together. |
+| A primitive's verified contrast is verified against `--surface`, so re-check it on glass | `Badge tone="red"` clears AA over an opaque surface; over the graph overlay's `--viz-glass` its backdrop composites to 253, and the pair had to be re-measured on the running renderer (4.75:1) rather than assumed from the primitive's own test. |
 | A row label never repeats its own control's verb | "Temporary pause" beside a "Pause for 10 minutes" button wrapped to two lines at the 640px minimum and added no meaning. The label names the subject ("Enforcement"), the control names the action. |
 
 ---
@@ -594,6 +597,14 @@ new evidence.
 window chrome, the sidebar and its footer, the workspace dashboard, Project Overview,
 Activity, Memory, MCP Clients, Settings, the onboarding sheet, Graph Explorer,
 Insights, Ask, and **Notebook** — the last one, migrated in TRA-310.
+
+Graph Explorer's **floating overlay layer** — loading, error and the bottleneck
+hotspots panel — came onto the system in TRA-349, the last part of that surface
+still on pre-revision styling. Loading no longer paints anything over the graph
+(the sentence moves into the stats pill; a pane with nothing drawn yet gets an
+`EmptyState`), the error is persistent house anatomy with a Retry instead of a
+7-second red toast, and the panel dropped its own four font sizes and its
+`opacity` dimming for the caption scale and `--label-secondary`.
 
 Project Overview carries a fifth section as of TRA-334: **Guard** — health as a
 `Badge` (tone + glyph + word), mode as a `SegmentedControl`, the coach→strict
@@ -611,7 +622,7 @@ What still carries raw colour, and why:
 
 | File | Count | Status |
 |---|---|---|
-| `tabs/GraphExplorerGPU.tsx` | 51 | Mostly shader/canvas data, not chrome. Legitimate; the panel and legend colours in it are not, and are still owed a pass. |
+| `tabs/GraphExplorerGPU.tsx` | 46 | Shader and canvas data, not chrome — node/link colours, the theme table cosmos.gl is handed, and the three stops of the bottleneck ramp, which have to stay identical to `bottleneckColor01()` or the key would disagree with the pixels it explains. The chrome is done: the toolbar, popover and legend in TRA-296, the overlay layer (loading, error, hotspots panel) in TRA-349. |
 | `styles/island.css` | 36 | The file-tree / graph **domain palette** (`--folder-*`, `--db-*`, `--mod-text`, `--ignored-*`, glass tints). It has hand-picked light *and* dark branches, so it is a deliberate exception, not drift. |
 | `lattice/icons.tsx` | 1 | `AgentMark`'s brand purple — artwork, not chrome. |
 | `lattice/ui/Badge.tsx` | 2 | Two hex in a comment recording what the primitive replaced. |
