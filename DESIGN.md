@@ -588,6 +588,21 @@ you undo them:
   picker out of reach the same way. This lives in the shared `Toolbar` primitive
   (`lattice/ui/Surface.tsx`), so every surface built on it inherits the behaviour — do
   not re-declare a height on top.
+- **A control that cannot shrink needs a narrow form, not just a wrapping row.**
+  `flex-wrap` gives an oversized control its own line; it cannot make that control
+  narrower. A segmented control is sized by its labels and is one flex item, so
+  once it is wider than the line it overflows no matter how the row wraps. Give it
+  a pop-up button below the width where its segments fit — that is what macOS does,
+  and `PopUpButton` already exists. Insights' report picker was 371px in a 262px
+  band at the 640px window minimum with the sidebar at `SIDEBAR_MAX`: it ran 96.6px
+  past the window and left "Risk hotspots" 14 of its 108px, so that report could not
+  be selected at all.
+- **Decide a collapse from a width the collapsing thing cannot change.** Measure the
+  toolbar, not the control's own slot. The slot is narrower beside a title and
+  full-width once the control wraps to a line of its own, so a slot-based threshold
+  is bistable — "segments, wrapped" and "pop-up, inline" are both self-consistent at
+  the same window size, and which one you get depends on which way the user last
+  resized.
 - **A control that can shrink declares a length `flex-basis`, not `auto`.** A wrapping
   flex line is laid out from each item's *hypothetical* size, so `flex-basis: auto`
   advertises a control's full content width and breaks the row before it has spent
@@ -870,6 +885,8 @@ new evidence.
 | The toolbar sits **above** the KPI strip, not below it | Chrome above content. With the strip first, 357px of tiles pushed the toolbar's bottom 33px past a 420px window and nothing on the surface could scroll it back. |
 | A toolbar has `min-height: 52px` and wraps, never a fixed `height` | A non-wrapping 52px row inside `overflow-x: hidden` ran 51px past a 420px pane and put + Add's chevron and the overflow menu outside the window. |
 | The wrap rule belongs to the shared `Toolbar`, not to each surface | Fixed on the Workspace header in TRA-292 and nowhere else, so four surfaces built on the primitive still clipped: at 640×420 Memory overflowed 333px with its search, its prominent "Add decision" and its overflow menu at zero visible pixels and no scrollable ancestor. |
+| An unshrinkable control gets a narrow form; wrapping alone does not save it | `flex-wrap` gives a segmented control its own line but cannot narrow it. Insights' 371px picker in a 262px band ran 96.6px past a 640px window and left "Risk hotspots" 14 of its 108px — unreachable. Below the width where the segments fit it is a `PopUpButton`. |
+| A collapse threshold reads a width the collapsing thing cannot change | Measured against its own slot, the Insights picker was bistable: the slot is narrower beside the title and full-width once the picker wraps, so both controls were self-consistent at one window size and the render depended on which way the user had resized. The toolbar's width is the honest input. |
 | A shrinkable control declares a length `flex-basis`, never `auto` | A wrapping flex line breaks on hypothetical sizes, so `flex-basis: auto` spends none of the control's slack first. `.lx-search` on `auto` wrapped Memory's toolbar at the default 960px window; on `1 1 140px` capped at `max-content` it renders identically and holds one row to a 740px pane. |
 | Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` reproduces the measured 357px; a guessed number drifts the first time a tile changes. |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
