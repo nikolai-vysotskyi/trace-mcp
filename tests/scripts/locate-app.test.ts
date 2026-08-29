@@ -254,6 +254,68 @@ describe.skipIf(process.platform === 'win32')('locateInstalledApp', () => {
     expect(result).toBeNull();
   });
 
+  // TRA-357: a bundle produced by `electron-builder` inside a checkout is a
+  // fully packaged .app with the right bundle id, so plist validation accepts
+  // it. Once it reached the marker, every later `npm install -g` "updated" a
+  // throwaway directory and the user's real install froze for three majors.
+  it('rejects a marker pointing into a build tree and falls back to the real install', () => {
+    const buildTree = path.join(home, 'checkout', 'packages', 'app', 'release', 'mac-arm64');
+    fs.mkdirSync(buildTree, { recursive: true });
+    const builtBundle = createFakeBundle(buildTree);
+
+    const installDir = path.join(home, 'Applications');
+    fs.mkdirSync(installDir, { recursive: true });
+    const installed = createFakeBundle(installDir);
+
+    // Written by hand: writeAppLocationMarker now refuses such a path outright.
+    fs.mkdirSync(path.join(home, '.trace-mcp'), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, '.trace-mcp', 'app-location.json'),
+      JSON.stringify({ appPath: builtBundle, bundleId: BUNDLE_ID, version: '1.51.1' }),
+    );
+
+    const { result } = runLocate({
+      homeDir: home,
+      fallbackDirs: [installDir],
+      // Spotlight indexes build outputs too — the same filter must drop them.
+      mdfindBin: createMdfindStub(home, [builtBundle]),
+      platform: 'darwin',
+    });
+
+    expect(result?.appPath).toBe(installed);
+    expect(result?.source).toBe('fallback');
+  });
+
+  it('rejects a marker inside a git checkout even without a build-tree segment', () => {
+    const checkout = path.join(home, 'scratch-checkout');
+    fs.mkdirSync(path.join(checkout, '.git'), { recursive: true });
+    const inCheckout = createFakeBundle(checkout);
+    fs.mkdirSync(path.join(home, '.trace-mcp'), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, '.trace-mcp', 'app-location.json'),
+      JSON.stringify({ appPath: inCheckout, bundleId: BUNDLE_ID, version: '1.51.1' }),
+    );
+
+    const { result } = runLocate({
+      homeDir: home,
+      fallbackDirs: [],
+      mdfindBin: createMdfindStub(home, []),
+      platform: 'darwin',
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('writeAppLocationMarker refuses to record a locally built bundle', () => {
+    const buildTree = path.join(home, 'proj', 'packages', 'app', 'release', 'mac-arm64');
+    fs.mkdirSync(buildTree, { recursive: true });
+    const builtBundle = createFakeBundle(buildTree);
+
+    runWriteMarker(home, builtBundle, '1.51.1');
+
+    expect(fs.existsSync(path.join(home, '.trace-mcp', 'app-location.json'))).toBe(false);
+  });
+
   it('writeAppLocationMarker round-trips through the marker reader', () => {
     const target = createFakeBundle(path.join(home, 'bundle-here'));
     runWriteMarker(home, target, '1.39.5');

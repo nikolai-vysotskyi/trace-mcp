@@ -40,6 +40,8 @@ export interface NpmOnlyAttempt {
   target: string;
   /** Epoch ms — diagnostic only, not used in decisions. */
   at: number;
+  /** Consecutive npm-only outcomes for this bundle — diagnostic only. */
+  attempts?: number;
 }
 
 export interface AppUpdateState {
@@ -106,6 +108,25 @@ export function computeUpdateOutcome(
     return 'npm-only';
   }
   return 'already-current';
+}
+
+/**
+ * Should we try to stage the bundle swap ourselves?
+ *
+ * Yes exactly when the package on disk is ahead of the running bundle and
+ * nothing is staged yet — the state five consecutive updates left one user in,
+ * with no retry, no warning and no telemetry (TRA-357). A staged zip means the
+ * swap is already waiting for a restart, so there is nothing to repair.
+ */
+export function shouldAttemptRepair(
+  installedVersion: string | undefined,
+  runningVersion: string,
+  hasPendingZip: boolean,
+  cmpSemver: (a: string, b: string) => number,
+): boolean {
+  if (hasPendingZip) return false;
+  if (!installedVersion) return false;
+  return cmpSemver(installedVersion, runningVersion) > 0;
 }
 
 /**

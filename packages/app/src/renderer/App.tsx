@@ -484,6 +484,10 @@ function SidebarFooter({
 // process checks the npm registry (no rate limit) with GitHub Releases as a
 // fallback. Surfaces three states: up-to-date (with last-checked timestamp),
 // update available, and update downloaded but pending restart.
+// Where the compiled bundles live — same repo the postinstall downloads from
+// (scripts/app-dist-repo.mjs). Used by the "manual install" card below.
+const RELEASES_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest';
+
 type UpdateState = {
   available: boolean;
   current?: string;
@@ -502,7 +506,7 @@ function formatAgo(ts?: number, now: number = Date.now()): string {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-function UpdateBanner() {
+export function UpdateBanner() {
   const [state, setState] = useState<UpdateState>({ available: false });
   const [updating, setUpdating] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -567,9 +571,9 @@ function UpdateBanner() {
       } else if (result.outcome === 'npm-only') {
         // The npm package moved but the .app bundle stayed put. Re-run the
         // availability check now — the main process just wrote the sticky
-        // marker, so this call will return { available: false, stuck: true }
-        // and the "Update available" card collapses to "Up to date" instead
-        // of looping the user through the same prompt on the next poll.
+        // marker, so this call returns { available: false, stuck: true } and
+        // the card switches to "needs a manual install" instead of looping the
+        // user through the same prompt on the next poll.
         runCheck();
       }
     } finally {
@@ -642,6 +646,38 @@ function UpdateBanner() {
       </svg>
     </button>
   );
+
+  // The CLI updated, the .app bundle did not, and clicking Update again would
+  // repeat exactly that. Suppressing the "update available" card is correct;
+  // showing a green "Up to date" in its place is what left a user three major
+  // versions behind believing they were current (TRA-357). This state gets its
+  // own honest card with the one action that does work: download the release.
+  if (state.stuck && state.latest) {
+    return (
+      <div
+        className="update-card stuck"
+        role="status"
+        aria-live="polite"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
+        <div className="title">
+          <span>v{state.latest} needs a manual install</span>
+          {refreshButton}
+        </div>
+        <div className="subtitle">
+          The command line tool updated, but the app itself is still v{state.current} — it could not
+          replace its own bundle. Download the release and drag it into Applications.
+        </div>
+        <button
+          type="button"
+          className="btn-prominent"
+          onClick={() => void window.electronAPI?.openExternal?.(RELEASES_URL)}
+        >
+          Download v{state.latest}
+        </button>
+      </div>
+    );
+  }
 
   if (state.available) {
     return (
