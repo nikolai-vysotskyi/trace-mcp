@@ -14,6 +14,25 @@ The full CLA text is available in [CLA.md](CLA.md). Key points:
 - You represent that the work is original and you have authority to contribute it.
 - All contributions remain subject to the [Ethical Use Addendum](LICENSE).
 
+### Commit identity for AI agents
+
+`license/cla` matches a commit's author against a **GitHub login**. An address like
+`some-agent@users.noreply.github.com` belongs to no account, resolves to no login, and the
+check sits at `pending` forever — the PR looks red even when every required check is green.
+
+So: **do not override the repository's git identity when committing.** Leave `user.name` /
+`user.email` as configured for the checkout and record which agent did the work as a message
+trailer instead:
+
+```
+fix(indexer): skip symlinked dirs during walk
+
+Agent: Design/UX Agent
+```
+
+Use a plain `Agent:` trailer, not `Co-authored-by:` — a co-author address that maps to no
+GitHub account re-creates the same unresolvable check.
+
 ## Review Model
 
 trace-mcp currently has a single maintainer with commit access. `master` is protected by required status checks (CodeQL, Semgrep, `impact-report`) — these run on every PR and must pass before merge. There is no required-approving-review count: with one collaborator, a "1 approval" rule can never be satisfied by anyone but the PR author, so it was dropped rather than kept as a check that always reads "satisfied" without anyone having looked. If a second maintainer joins, review requirements will be reinstated.
