@@ -8,8 +8,10 @@
    inspector (closed by default — it is empty until a message is sent). */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { relativeTime } from '../i18n/format';
 import { Icon } from '../lattice/icons';
 import {
   Button,
@@ -56,18 +58,20 @@ type Phase = 'idle' | 'retrieving' | 'streaming' | 'error';
 
 interface SlashCommand {
   name: string;
+  /* Syntax, not prose: the parser matches on it and the user types it back
+     verbatim, so it is the same in every language. */
   usage: string;
-  description: string;
+  descriptionKey: string;
   needsArgs: boolean;
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
-  { name: 'find', usage: '/find <query>', description: 'Search symbols by name', needsArgs: true },
-  { name: 'impact', usage: '/impact <symbol_id>', description: 'Show change impact for a symbol', needsArgs: true },
-  { name: 'scan', usage: '/scan', description: 'Run security scan (OWASP top findings)', needsArgs: false },
+  { name: 'find', usage: '/find <query>', descriptionKey: 'slashFind', needsArgs: true },
+  { name: 'impact', usage: '/impact <symbol_id>', descriptionKey: 'slashImpact', needsArgs: true },
+  { name: 'scan', usage: '/scan', descriptionKey: 'slashScan', needsArgs: false },
 ];
 
-const SUGGESTIONS = ['How does auth work?', 'Explain the plugin system', 'Where are API routes?'];
+const SUGGESTION_KEYS = ['suggestionAuth', 'suggestionPlugins', 'suggestionRoutes'];
 
 /** Parse slash command from input. Returns null if not a slash command. */
 function parseSlash(input: string): { command: string; args: string } | null {
@@ -120,6 +124,7 @@ function loadPanelOpen(): boolean {
 // ── Component ────────────────────────────────────────────────────────
 
 export function AskTab({ root }: { root: string }) {
+  const { t } = useTranslation('ask');
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -205,11 +210,11 @@ export function AskTab({ root }: { root: string }) {
       const d = await r.json();
       setMessages(d.messages ?? []);
     } catch {
-      setError('Failed to load session');
+      setError(t('loadSessionFailed'));
     } finally {
       setLoadingSession(false);
     }
-  }, [root]);
+  }, [root, t]);
 
   // Restore last session on mount / root change
   useEffect(() => {
@@ -242,14 +247,14 @@ export function AskTab({ root }: { root: string }) {
       const r = await fetch(`${BASE}/api/ask/sessions`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_root: root, title: 'New chat' }),
+        body: JSON.stringify({ project_root: root, title: t('newChat') }),
       });
       if (!r.ok) return;
       const { id } = await r.json();
       await loadSessions();
       await selectSession(id);
     } catch {}
-  }, [root, loadSessions, selectSession]);
+  }, [root, loadSessions, selectSession, t]);
 
   // Delete a session
   const deleteSession = useCallback(
@@ -323,11 +328,11 @@ export function AskTab({ root }: { root: string }) {
         setPhase('idle');
         loadSessions();
       } catch (e) {
-        setError((e as Error)?.message ?? 'Slash command failed');
+        setError((e as Error)?.message ?? t('slashFailed'));
         setPhase('error');
       }
     },
-    [loadSessions],
+    [loadSessions, t],
   );
 
   // Send a message (or slash command)
@@ -353,21 +358,21 @@ export function AskTab({ root }: { root: string }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ project_root: root, title: q.slice(0, 60) }),
         });
-        if (!r.ok) throw new Error('Failed to create session');
+        if (!r.ok) throw new Error(t('createSessionFailed'));
         const { id } = await r.json();
         sessionId = id;
         setActiveSessionId(id);
         saveLastSessionId(root, id);
         await loadSessions();
       } catch (e) {
-        setError((e as Error).message ?? 'Failed to create session');
+        setError((e as Error).message ?? t('createSessionFailed'));
         setInput(q);
         return;
       }
     }
 
     if (!sessionId) {
-      setError('Could not establish a chat session');
+      setError(t('noSession'));
       setInput(q);
       return;
     }
@@ -484,7 +489,7 @@ export function AskTab({ root }: { root: string }) {
         setPhase('idle');
         return;
       }
-      setError(err?.message ?? 'Unknown error');
+      setError(err?.message ?? t('unknownError'));
       setPhase('error');
       setStreaming('');
       setStreamingEnvelope(null);
@@ -494,7 +499,7 @@ export function AskTab({ root }: { root: string }) {
     } finally {
       abortRef.current = null;
     }
-  }, [input, busy, ok, activeSessionId, root, loadSessions, sendSlash]);
+  }, [input, busy, ok, activeSessionId, root, loadSessions, sendSlash, t]);
 
   const openSettings = useCallback(() => {
     window.electronAPI?.openSettings?.('ai');
@@ -515,17 +520,17 @@ export function AskTab({ root }: { root: string }) {
       <div className="ask" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         <section className="ask-main">
           <Toolbar>
-            <span className="ask-toolbar-title">Ask</span>
+            <span className="ask-toolbar-title">{t('title')}</span>
           </Toolbar>
           <div className="ask-scroll">
             <div className="ask-measure ask-empty">
               <EmptyState
                 icon="search"
-                title="Connect an AI provider"
-                subtitle="Ask answers questions about this project using a model you supply. Add one in Settings to turn it on."
+                title={t('noProviderTitle')}
+                subtitle={t('noProviderSubtitle')}
                 action={
                   <Button variant="prominent" size="large" onClick={openSettings}>
-                    Open AI settings
+                    {t('openAiSettings')}
                   </Button>
                 }
               />
@@ -537,23 +542,25 @@ export function AskTab({ root }: { root: string }) {
   }
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null;
-  const title = activeSession?.title?.trim() || 'New chat';
-  const providerLabel = !providerReady ? 'Connecting…' : (provider ?? 'No provider');
+  const title = activeSession?.title?.trim() || t('newChat');
+  const providerLabel = !providerReady
+    ? t('connectingProvider')
+    : (provider ?? t('noProvider'));
 
   // ── Main layout ───────────────────────────────────────────────────
   return (
     <div className="ask" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
       {/* ── Chat rail ─────────────────────────────────────────────── */}
-      <aside className="ask-rail" aria-label="Chats">
+      <aside className="ask-rail" aria-label={t('chats')}>
         <div className="ask-rail-head">
           <Button icon="add" onClick={createSession} style={{ width: '100%' }}>
-            New chat
+            {t('newChat')}
           </Button>
         </div>
 
         <div className="ask-rail-list">
           {sessions.length === 0 ? (
-            <div className="ws-sb-empty">No chats yet.</div>
+            <div className="ws-sb-empty">{t('noChats')}</div>
           ) : (
             sessions.map((s) => (
               <SessionRow
@@ -586,8 +593,8 @@ export function AskTab({ root }: { root: string }) {
             active={panelOpen}
             onClick={togglePanel}
             aria-pressed={panelOpen}
-            aria-label={panelOpen ? 'Hide the context panel' : 'Show the context panel'}
-            title={panelOpen ? 'Hide context' : 'Show context'}
+            aria-label={panelOpen ? t('hideContextPanel') : t('showContextPanel')}
+            title={panelOpen ? t('hideContext') : t('showContext')}
           />
         </Toolbar>
 
@@ -596,7 +603,7 @@ export function AskTab({ root }: { root: string }) {
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
         >
           {loadingSession ? (
-            <div className="ask-measure ask-thread" role="status" aria-label="Loading chat">
+            <div className="ask-measure ask-thread" role="status" aria-label={t('loadingChat')}>
               {[0, 1, 2].map((i) => (
                 <div key={i} className={`ask-msg ${i % 2 ? 'is-user' : 'is-assistant'}`}>
                   <div className="ask-bubble">
@@ -609,23 +616,23 @@ export function AskTab({ root }: { root: string }) {
             <div className="ask-measure ask-empty">
               <EmptyState
                 icon="search"
-                title="Ask anything about this codebase"
-                subtitle="Answers are grounded in the indexed graph — the files, symbols and decisions this project already has."
+                title={t('emptyTitle')}
+                subtitle={t('emptySubtitle')}
               />
-              <Section title="Slash commands">
+              <Section title={t('slashCommands')}>
                 <Card>
                   {SLASH_COMMANDS.map((cmd) => (
                     <div key={cmd.name} className="ask-slash-row">
                       <code>{cmd.usage}</code>
-                      <span>{cmd.description}</span>
+                      <span>{t(cmd.descriptionKey)}</span>
                     </div>
                   ))}
                 </Card>
               </Section>
               <div className="ask-suggest">
-                {SUGGESTIONS.map((q) => (
-                  <Button key={q} size="small" onClick={() => prefill(q)}>
-                    {q}
+                {SUGGESTION_KEYS.map((key) => (
+                  <Button key={key} size="small" onClick={() => prefill(t(key))}>
+                    {t(key)}
                   </Button>
                 ))}
               </div>
@@ -635,7 +642,7 @@ export function AskTab({ root }: { root: string }) {
               className="ask-measure ask-thread"
               role="log"
               aria-live="polite"
-              aria-label="Conversation"
+              aria-label={t('conversation')}
             >
               {messages.map((m) => (
                 <Bubble key={m.id} msg={m} />
@@ -658,7 +665,7 @@ export function AskTab({ root }: { root: string }) {
                       <span />
                       <span />
                     </span>
-                    {phase === 'retrieving' ? 'Searching the codebase' : 'Thinking'}
+                    {phase === 'retrieving' ? t('retrieving') : t('thinking')}
                   </div>
                 </div>
               )}
@@ -668,7 +675,7 @@ export function AskTab({ root }: { root: string }) {
                   <Icon name="warning" size={14} />
                   <span className="msg">{error}</span>
                   <Button size="small" onClick={send} disabled={!input.trim() || busy}>
-                    Send again
+                    {t('sendAgain')}
                   </Button>
                 </div>
               )}
@@ -681,7 +688,7 @@ export function AskTab({ root }: { root: string }) {
         <div className="ask-composer">
           <div className="ask-measure ask-composer-inner">
             {slashSuggestions.length > 0 && (
-              <div className="ask-slash-popover" role="listbox" aria-label="Slash commands">
+              <div className="ask-slash-popover" role="listbox" aria-label={t('slashCommands')}>
                 {slashSuggestions.map((cmd, i) => (
                   <button
                     type="button"
@@ -696,7 +703,7 @@ export function AskTab({ root }: { root: string }) {
                     }}
                   >
                     <code>/{cmd.name}</code>
-                    <span className="desc">{cmd.description}</span>
+                    <span className="desc">{t(cmd.descriptionKey)}</span>
                   </button>
                 ))}
               </div>
@@ -706,7 +713,7 @@ export function AskTab({ root }: { root: string }) {
               <textarea
                 ref={taRef}
                 value={input}
-                aria-label="Ask about this project"
+                aria-label={t('composerLabel')}
                 onChange={(e) => {
                   setInput(e.target.value);
                   grow();
@@ -744,7 +751,7 @@ export function AskTab({ root }: { root: string }) {
                     send();
                   }
                 }}
-                placeholder="Ask about this project, or type / for commands"
+                placeholder={t('composerPlaceholder')}
                 rows={1}
                 disabled={!ok}
               />
@@ -753,8 +760,8 @@ export function AskTab({ root }: { root: string }) {
                   variant="icon"
                   icon="stop"
                   onClick={() => abortRef.current?.abort()}
-                  aria-label="Stop generating"
-                  title="Stop generating"
+                  aria-label={t('stopGenerating')}
+                  title={t('stopGenerating')}
                 />
               ) : (
                 <Button
@@ -764,8 +771,8 @@ export function AskTab({ root }: { root: string }) {
                   onClick={send}
                   disabled={!input.trim() || !ok}
                   size="large"
-                  aria-label="Send message"
-                  title="Send (⌘↵)"
+                  aria-label={t('sendMessage')}
+                  title={t('sendShortcut')}
                   style={{ width: 28, padding: 0 }}
                 />
               )}
@@ -785,6 +792,7 @@ export function AskTab({ root }: { root: string }) {
 // ── Markdown renderer with copy-to-clipboard code blocks ─────────────
 
 function CodeBlock({ children, className }: { children?: React.ReactNode; className?: string }) {
+  const { t } = useTranslation('ask');
   const [copied, setCopied] = useState(false);
   const code = typeof children === 'string' ? children : String(children ?? '');
 
@@ -805,8 +813,8 @@ function CodeBlock({ children, className }: { children?: React.ReactNode; classN
         variant="icon"
         icon={copied ? 'check' : 'content_copy'}
         onClick={copy}
-        aria-label={copied ? 'Copied' : 'Copy code'}
-        title={copied ? 'Copied' : 'Copy code'}
+        aria-label={copied ? t('copied') : t('copyCode')}
+        title={copied ? t('copied') : t('copyCode')}
       />
     </div>
   );
@@ -853,17 +861,18 @@ function ContextInspector({
   envelope: ContextEnvelope | null;
   onClose: () => void;
 }) {
+  const { t } = useTranslation('ask');
   return (
-    <aside className="ask-inspector" aria-label="Context">
+    <aside className="ask-inspector" aria-label={t('context')}>
       <IslandHeader
-        title="Context"
+        title={t('context')}
         actions={
           <Button
             variant="icon"
             icon="close"
             onClick={onClose}
-            aria-label="Hide the context panel"
-            title="Hide context"
+            aria-label={t('hideContextPanel')}
+            title={t('hideContext')}
           />
         }
       />
@@ -872,14 +881,14 @@ function ContextInspector({
           <EmptyState
             compact
             icon="description"
-            title="No context yet"
-            subtitle="The files, symbols and decisions the model read appear here after you send a message. Slash commands do not retrieve context."
+            title={t('noContextTitle')}
+            subtitle={t('noContextSubtitle')}
           />
         ) : (
           <>
-            <Section title="Files read" count={envelope.files.length}>
+            <Section title={t('filesRead')} count={envelope.files.length}>
               {envelope.files.length === 0 ? (
-                <EmptyState compact>No files were read.</EmptyState>
+                <EmptyState compact>{t('noFilesRead')}</EmptyState>
               ) : (
                 <div className="ask-rows">
                   {envelope.files.map((f) => (
@@ -894,7 +903,7 @@ function ContextInspector({
             </Section>
 
             {envelope.symbols.length > 0 && (
-              <Section title="Symbols read" count={envelope.symbols.length}>
+              <Section title={t('symbolsRead')} count={envelope.symbols.length}>
                 <div className="ask-rows">
                   {envelope.symbols.map((s) => (
                     <button
@@ -917,7 +926,7 @@ function ContextInspector({
             )}
 
             {envelope.decisions.length > 0 && (
-              <Section title="Decisions consulted" count={envelope.decisions.length}>
+              <Section title={t('decisionsConsulted')} count={envelope.decisions.length}>
                 <div className="ask-rows">
                   {envelope.decisions.map((d) => (
                     <div key={d.id} className="ws-sb-row is-static" title={d.title}>
@@ -967,12 +976,13 @@ function SessionRow({
   onSelect: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation('ask');
   return (
     <button
       type="button"
       className={`ws-sb-row${active ? ' is-selected' : ''}`}
       aria-current={active ? 'true' : undefined}
-      title={session.title || 'Untitled'}
+      title={session.title || t('untitled')}
       onClick={onSelect}
       // Keyboard route for the delete affordance — the row is itself a button,
       // so the ✕ inside it cannot be one (nested interactive content).
@@ -982,12 +992,14 @@ function SessionRow({
         onDelete();
       }}
     >
-      <span className="ws-sb-label">{session.title || 'Untitled'}</span>
-      <span className="ws-sb-count">{formatRelativeTime(session.last_msg_at)}</span>
+      <span className="ws-sb-label">{session.title || t('untitled')}</span>
+      <span className="ws-sb-count">
+        {relativeTime(session.last_msg_at, Date.now(), 'short')}
+      </span>
       <span
         className="ws-sb-trailing"
         aria-hidden="true"
-        title="Delete chat (⌫)"
+        title={t('deleteChat')}
         onClick={(e) => {
           e.stopPropagation();
           onDelete();
@@ -1010,12 +1022,4 @@ function Bubble({ msg }: { msg: ChatMessage }) {
       </div>
     </div>
   );
-}
-
-function formatRelativeTime(ts: number): string {
-  const diff = Date.now() - ts;
-  if (diff < 60_000) return 'now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
-  return `${Math.floor(diff / 86_400_000)}d`;
 }
