@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { t } from './i18n';
 import { registerAppMenu } from './menu';
-import { createTray, restoreAppearance, showMenuWindow } from './tray';
+import { createTray, HIDDEN_WINDOWS, restoreAppearance, showMenuWindow } from './tray';
 import {
   hasPendingUpdate as hasPendingUpdateImpl,
   trySpawnApplyHelper as trySpawnApplyHelperImpl,
@@ -23,6 +23,14 @@ const UPDATE_CHANNEL = updateChannelFor(process.platform);
 // from 60 to ~20 on full-window views. Re-enable the defensive flags only
 // if GPU process crashes resurface.
 app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
+
+// A hidden-window run must not become the active application either: launching a
+// regular app activates it, and macOS follows that to the app's Space, pulling
+// whoever is at the keyboard out of what they were in. Accessory policy keeps the
+// process out of the Dock and out of ⌘-Tab — and it is set here, before `ready`,
+// because by the time the first window exists the activation has already
+// happened (TRA-403).
+if (HIDDEN_WINDOWS) app.setActivationPolicy('accessory');
 
 // Prevent multiple instances. If a second launch happens, bring the existing
 // window forward instead of letting the new process die silently.
