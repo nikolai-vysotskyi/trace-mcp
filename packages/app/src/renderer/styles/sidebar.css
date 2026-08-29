@@ -39,8 +39,12 @@
   border-right: 0.5px solid var(--separator);
   -webkit-app-region: no-drag;
 }
+/* macOS: the NSVisualEffectView shows through. It samples what is behind the
+   WINDOW, so in light appearance --sidebar-scrim puts a floor under how dark a
+   dark desktop can drag it; in dark appearance the token is `transparent` and
+   the material is the whole material. See tokens.css and DESIGN.md §1 (TRA-369). */
 .ws-stage[data-platform="mac"] .ws-sidebar {
-  background: transparent;
+  background: var(--sidebar-scrim);
 }
 
 /* The strip the traffic lights sit in, plus the sidebar toggle past them
