@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { t } from '../i18n';
 import { Button, ConfirmPopover, EmptyState, StatusDot } from '../lattice/ui';
 
 /** Rendered at the bottom of the AI settings section when provider=ollama.
@@ -31,7 +33,7 @@ function fmtBytes(n: number | undefined): string {
 function fmtExpires(iso: string | undefined): string | null {
   if (!iso) return null;
   const ms = new Date(iso).getTime() - Date.now();
-  if (!Number.isFinite(ms) || ms <= 0) return 'expiring';
+  if (!Number.isFinite(ms) || ms <= 0) return t('guard:ollama.expiring');
   const s = Math.round(ms / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.round(s / 60);
@@ -40,6 +42,9 @@ function fmtExpires(iso: string | undefined): string | null {
 }
 
 export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
+  /* Subscribes the panel to language changes; strings resolve through the
+     module-level `t`, which the helpers above share. */
+  useTranslation('guard');
   const api = window.electronAPI?.ollama;
   const [status, setStatus] = useState<Status | null>(null);
   const [installed, setInstalled] = useState<OllamaInstalledModel[]>([]);
@@ -95,44 +100,64 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
   const onStart = () =>
     withBusy('daemon:start', async () => {
       const r = await api!.start(baseUrl);
-      if (!r.ok) setNotice(`Couldn't start Ollama: ${r.error ?? 'unknown error'}`);
+      if (!r.ok)
+        setNotice(
+          t('guard:ollama.startFailed', { error: r.error ?? t('guard:ollama.unknownError') }),
+        );
     });
   const onStop = () =>
     withBusy('daemon:stop', async () => {
       const r = await api!.stop(baseUrl);
-      if (!r.ok) setNotice(`Couldn't stop Ollama: ${r.error ?? 'unknown error'}`);
+      if (!r.ok)
+        setNotice(t('guard:ollama.stopFailed', { error: r.error ?? t('guard:ollama.unknownError') }));
     });
   const onUnload = (name: string) =>
     withBusy(`unload:${name}`, async () => {
       const r = await api!.unload(name, baseUrl);
-      if (!r.ok) setNotice(`Couldn't unload ${name}: ${r.error ?? 'unknown error'}`);
+      if (!r.ok)
+        setNotice(
+          t('guard:ollama.unloadFailed', {
+            name,
+            error: r.error ?? t('guard:ollama.unknownError'),
+          }),
+        );
     });
   const onDelete = (name: string) =>
     withBusy(`delete:${name}`, async () => {
       const r = await api!.delete(name, baseUrl);
-      if (!r.ok) setNotice(`Couldn't delete ${name}: ${r.error ?? 'unknown error'}`);
+      if (!r.ok)
+        setNotice(
+          t('guard:ollama.deleteFailed', {
+            name,
+            error: r.error ?? t('guard:ollama.unknownError'),
+          }),
+        );
     });
 
   if (!api) {
     return (
       <p className="text-[13px] leading-4 px-1" style={{ color: 'var(--label-secondary)' }}>
-        Ollama control is only available inside the trace-mcp app.
+        {t('guard:ollama.unavailable')}
       </p>
     );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <Section title="Ollama">
+      <Section title={t('guard:ollama.title')}>
         <Card>
           <div className="flex items-center gap-2.5 px-3" style={{ minHeight: 44 }}>
             <StatusDot
               tone={status?.running ? 'green' : 'neutral'}
-              title={status?.running ? 'Running' : 'Not running'}
+              title={t(status?.running ? 'guard:ollama.runningShort' : 'guard:ollama.notRunning')}
             />
             <div className="flex-1 min-w-0">
               <div className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
-                {status?.running ? `Running · ${status.version ?? 'unknown version'}` : 'Not running'}
+                {status?.running
+                  ? t('guard:ollama.running', {
+                      version: status.version ?? t('guard:ollama.unknownVersion'),
+                    })
+                  : t('guard:ollama.notRunning')}
               </div>
               <div
                 className="text-[11px] leading-[13px] truncate"
@@ -144,11 +169,11 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
             </div>
             {status?.running ? (
               <Button size="small" disabled={busy === 'daemon:stop'} onClick={onStop}>
-                {busy === 'daemon:stop' ? 'Stopping…' : 'Stop'}
+                {t(busy === 'daemon:stop' ? 'guard:ollama.stopping' : 'guard:ollama.stop')}
               </Button>
             ) : (
               <Button size="small" disabled={busy === 'daemon:start'} onClick={onStart}>
-                {busy === 'daemon:start' ? 'Starting…' : 'Start'}
+                {t(busy === 'daemon:start' ? 'guard:ollama.starting' : 'guard:ollama.start')}
               </Button>
             )}
           </div>
@@ -167,14 +192,14 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
 
       {status?.running && (
         <>
-          <Section title="Loaded in memory" count={running.length}>
+          <Section title={t('guard:ollama.loadedTitle')} count={running.length}>
             <Card>
               {running.length === 0 ? (
                 <EmptyState
                   compact
                   icon="database"
-                  title="Nothing loaded"
-                  subtitle="A model appears here while it is held in memory."
+                  title={t('guard:ollama.loadedEmptyTitle')}
+                  subtitle={t('guard:ollama.loadedEmptyBody')}
                 />
               ) : (
                 running.map((m, i) => (
@@ -183,9 +208,13 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
                     last={i === running.length - 1}
                     title={m.name}
                     subtitle={[
-                      `${fmtBytes(m.size_vram)} VRAM`,
-                      m.size > m.size_vram ? `${fmtBytes(m.size - m.size_vram)} RAM` : null,
-                      fmtExpires(m.expires_at) ? `unload in ${fmtExpires(m.expires_at)}` : null,
+                      t('guard:ollama.vram', { size: fmtBytes(m.size_vram) }),
+                      m.size > m.size_vram
+                        ? t('guard:ollama.ram', { size: fmtBytes(m.size - m.size_vram) })
+                        : null,
+                      fmtExpires(m.expires_at)
+                        ? t('guard:ollama.unloadIn', { time: fmtExpires(m.expires_at) })
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(' · ')}
@@ -195,7 +224,11 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
                         disabled={busy === `unload:${m.name}`}
                         onClick={() => onUnload(m.name)}
                       >
-                        {busy === `unload:${m.name}` ? 'Unloading…' : 'Unload'}
+                        {t(
+                          busy === `unload:${m.name}`
+                            ? 'guard:ollama.unloading'
+                            : 'guard:ollama.unload',
+                        )}
                       </Button>
                     }
                   />
@@ -204,14 +237,14 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
             </Card>
           </Section>
 
-          <Section title="Installed on disk" count={installed.length}>
+          <Section title={t('guard:ollama.installedTitle')} count={installed.length}>
             <Card>
               {installed.length === 0 ? (
                 <EmptyState
                   compact
                   icon="database"
-                  title="No models installed"
-                  subtitle="Run ollama pull <name> in a terminal to add one."
+                  title={t('guard:ollama.installedEmptyTitle')}
+                  subtitle={t('guard:ollama.installedEmptyBody')}
                 />
               ) : (
                 installed.map((m, i) => (
@@ -235,7 +268,11 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
                           setConfirmDelete({ name: m.name, x: r.right, y: r.bottom + 4 });
                         }}
                       >
-                        {busy === `delete:${m.name}` ? 'Deleting…' : 'Delete'}
+                        {t(
+                          busy === `delete:${m.name}`
+                            ? 'guard:ollama.deleting'
+                            : 'guard:ollama.delete',
+                        )}
                       </Button>
                     }
                   />
@@ -254,9 +291,9 @@ export function OllamaPanel({ baseUrl }: { baseUrl?: string }) {
           y={confirmDelete.y}
           align="end"
           danger
-          title={`Delete ${confirmDelete.name}?`}
-          body="The model is removed from disk. Pulling it again re-downloads it."
-          confirmLabel="Delete model"
+          title={t('guard:ollama.confirmTitle', { name: confirmDelete.name })}
+          body={t('guard:ollama.confirmBody')}
+          confirmLabel={t('guard:ollama.confirmAction')}
           onConfirm={() => {
             const { name } = confirmDelete;
             setConfirmDelete(null);
