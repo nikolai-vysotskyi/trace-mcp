@@ -1,7 +1,7 @@
 ---
 title: "trace-mcp MCP Tools Reference — every code-intelligence tool, by framework"
 description: "Full reference for trace-mcp's MCP tools and 9 resources — navigation, refactoring, impact analysis, security, and framework-aware queries. Tools register dynamically based on what your repo uses."
-updated: 2026-08-28
+updated: 2026-08-29
 ---
 
 # Tools reference
