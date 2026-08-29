@@ -160,8 +160,11 @@ import {
 } from './ollama-control';
 import {
   computeUpdateOutcome,
+  findStaleRoots,
+  type GlobalInstall,
   isStuckOnVersion,
   readAppUpdateState,
+  scanGlobalInstalls,
   shouldAttemptRepair,
   type UpdateOutcome,
   writeAppUpdateState,
@@ -588,6 +591,17 @@ function fetchLatestRelease(): Promise<{
 }
 
 ipcMain.handle('check-for-update', async () => {
+  const result = await checkForUpdate();
+  // Divergence between global roots exists independently of whether an update
+  // is available, so it rides along with every check rather than only after an
+  // install. Empty on the normal single-root machine. `npm root -g` is folded
+  // in because the user's own npm may own a root the static scan never guesses.
+  const { configRoot, binRoot } = await resolveNpmRoots();
+  const staleRoots = staleGlobalRoots(configRoot, binRoot);
+  return staleRoots.length > 0 ? { ...result, staleRoots } : result;
+});
+
+async function checkForUpdate() {
   const now = Date.now();
   const current = app.getVersion().replace(/^v/, '');
   // Read the persisted "I tried npm-only" marker once. If the user already
@@ -682,7 +696,7 @@ ipcMain.handle('check-for-update', async () => {
       error: toUpdateErrorMessage(err),
     };
   }
-});
+}
 
 // IPC: apply update (runs npm update -g trace-mcp, which triggers postinstall → app update)
 
@@ -693,8 +707,7 @@ ipcMain.handle('check-for-update', async () => {
 // without invoking a subshell (which would otherwise be needed to source
 // .zshrc / .bashrc).
 let cachedNpmBin: string | null | undefined;
-async function resolveNpmBin(): Promise<string | null> {
-  if (cachedNpmBin !== undefined) return cachedNpmBin;
+function npmBinCandidates(): string[] {
   const home = os.homedir();
   const guesses: string[] = [
     // Homebrew (Apple Silicon and Intel)
@@ -732,6 +745,47 @@ async function resolveNpmBin(): Promise<string | null> {
       /* dir absent — skip */
     }
   }
+  return guesses;
+}
+
+/**
+ * `<prefix>/lib/node_modules` for every global npm root we know how to find —
+ * not just the one the resolved npm binary owns.
+ *
+ * Most come from `npmBinCandidates()`, but a runtime can ship a global root
+ * whose npm binary we never look for (nothing resolves `npm` to it, so it was
+ * never a candidate) and still be the root some client's PATH lands on. Those
+ * are listed separately below.
+ */
+function globalRootCandidates(): string[] {
+  const home = os.homedir();
+  return [
+    ...npmBinCandidates().map((npm) =>
+      path.resolve(path.dirname(npm), '..', 'lib', 'node_modules'),
+    ),
+    // Bundled Node runtimes and prefix-style installs whose bin dir we do not
+    // scan for npm, but which still hold their own global node_modules.
+    path.join(home, '.hermes/node/lib/node_modules'),
+    path.join(home, '.local/lib/node_modules'),
+    '/usr/lib/node_modules',
+  ];
+}
+
+/**
+ * Global roots stuck on an older trace-mcp than the newest one on this machine.
+ * `extraRoots` lets callers fold in a root we learned about at runtime (e.g.
+ * `npm root -g`) that the static candidate scan would miss.
+ */
+function staleGlobalRoots(...extraRoots: (string | null | undefined)[]): GlobalInstall[] {
+  return findStaleRoots(
+    scanGlobalInstalls([...globalRootCandidates(), ...extraRoots]),
+    cmpSemver,
+  );
+}
+
+async function resolveNpmBin(): Promise<string | null> {
+  if (cachedNpmBin !== undefined) return cachedNpmBin;
+  const guesses = npmBinCandidates();
   // Prefer a node version that already has `trace-mcp` installed: when nvm
   // hosts multiple versions (e.g. v22 and v24) and only v22 has the global
   // package, picking the latest version's npm would install into a sibling
@@ -796,10 +850,17 @@ async function resolveNpmRoots(): Promise<{ configRoot: string | null; binRoot: 
   return { configRoot, binRoot };
 }
 
+// `npm root -g` is a subprocess, and the 10-minute update poll now asks for it
+// too. It is a fixed property of the resolved npm binary, so resolve it once.
+let cachedNpmRoot: string | null | undefined;
 async function resolveNpmRoot(): Promise<string | null> {
+  if (cachedNpmRoot !== undefined) return cachedNpmRoot;
   const npmBin = await resolveNpmBin();
-  if (!npmBin) return null;
-  return new Promise((resolve) => {
+  if (!npmBin) {
+    cachedNpmRoot = null;
+    return null;
+  }
+  cachedNpmRoot = await new Promise<string | null>((resolve) => {
     // execFile bypasses shell parsing — npmBin is a filesystem path that
     // could in theory contain a space or quote.
     execFile(
@@ -816,6 +877,7 @@ async function resolveNpmRoot(): Promise<string | null> {
       },
     );
   });
+  return cachedNpmRoot;
 }
 
 function forceRemove(p: string): boolean {
@@ -1246,14 +1308,26 @@ ipcMain.handle('apply-update', async () => {
     });
   }
 
+  // `npm install -g` writes into exactly one global root. On a machine with
+  // several (nvm + Herd + a bundled runtime), the rest keep whatever version
+  // they last received — and nothing else here would ever say so.
+  const staleRoots = staleGlobalRoots(npmRoot, npmRoots.binRoot);
+
   appendUpdateLog({
     event: 'apply-update:ok',
     outcome,
     pending,
     installedVersion: installedVersion ?? null,
     runningVersion: running,
+    staleRoots,
   });
-  return { ok: true, pending, outcome, version: pending ? installedVersion : undefined };
+  return {
+    ok: true,
+    pending,
+    outcome,
+    version: pending ? installedVersion : undefined,
+    ...(staleRoots.length > 0 ? { staleRoots } : {}),
+  };
 });
 
 // Pending update plumbing — postinstall stages a verified zip next to the
