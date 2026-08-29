@@ -57,7 +57,10 @@ function menu(label: string): Item[] {
   return found.submenu;
 }
 
-/** Every accelerator in the whole menu, flattened. */
+/** Every accelerator in the whole menu, flattened. Deliberately not scoped to
+    one menu: Settings and Quit live in the app menu on macOS and at the bottom
+    of File everywhere else, and the promise being tested is that the KEY works,
+    not where the item sits. CI runs this on Linux and a dev runs it on macOS. */
 function accelerators(): Map<string, string> {
   const out = new Map<string, string>();
   for (const top of template) {
@@ -139,6 +142,29 @@ describe('application menu', () => {
     focusedId = 99;
     buildAppMenu();
     expect(menu('View').some((i) => /^CmdOrCtrl\+\d$/.test(i.accelerator ?? ''))).toBe(false);
+  });
+
+  /* CI caught this the hard way: the first version built the app menu only on
+     macOS, so on Windows and Linux — where the app also ships — Settings and
+     Quit had no home at all and ⌘, was dead. */
+  it('keeps Settings and Quit reachable on Windows and Linux', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    try {
+      vi.resetModules();
+      // `.js` — the main tsconfig is on node16 resolution, which requires the
+      // extension on a dynamic import even though the static one above is fine.
+      const { buildAppMenu: buildForLinux } = await import('../menu.js');
+      buildForLinux();
+      expect(template[0].label).toBe('File'); // no app menu off macOS
+      const file = menu('File').map((i) => i.label ?? i.role);
+      expect(file).toContain('Settings…');
+      expect(file).toContain('quit');
+      expect(accelerators().get('Settings…')).toBe('CmdOrCtrl+,');
+    } finally {
+      if (platform) Object.defineProperty(process, 'platform', platform);
+      vi.resetModules();
+    }
   });
 
   it('drops the command instead of throwing when no window has focus', () => {

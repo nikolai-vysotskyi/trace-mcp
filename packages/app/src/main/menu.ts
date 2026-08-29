@@ -102,6 +102,9 @@ export function buildAppMenu(): Menu {
     ],
   };
 
+  /* Off macOS there is no app menu, so Settings and Quit would have no home at
+     all — they go to the bottom of File, which is where Windows and Linux users
+     look for them anyway. Ctrl+, still works; the accelerator is the same. */
   const fileMenu: MenuItemConstructorOptions = {
     label: 'File',
     submenu: [
@@ -113,6 +116,14 @@ export function buildAppMenu(): Menu {
       { type: 'separator' },
       { label: 'Close tab', accelerator: 'CmdOrCtrl+W', role: 'close' },
       { label: 'Close window', accelerator: 'CmdOrCtrl+Shift+W', click: closeWindowGroup },
+      ...(isMac
+        ? []
+        : ([
+            { type: 'separator' },
+            { label: 'Settings…', accelerator: 'CmdOrCtrl+,', click: () => send('settings') },
+            { type: 'separator' },
+            { role: 'quit' },
+          ] as MenuItemConstructorOptions[])),
     ],
   };
 
@@ -182,6 +193,14 @@ export function buildAppMenu(): Menu {
     submenu: [
       { label: 'trace-mcp help', click: () => void shell.openExternal(HELP_URL) },
       { label: 'Report an issue', click: () => void shell.openExternal(ISSUES_URL) },
+      // On macOS these live in the app menu; elsewhere Help is where they go.
+      ...(isMac
+        ? []
+        : ([
+            { type: 'separator' },
+            { label: 'Check for updates…', click: () => send('check-for-update') },
+            { role: 'about' },
+          ] as MenuItemConstructorOptions[])),
     ],
   };
 
