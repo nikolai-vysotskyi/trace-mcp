@@ -1488,8 +1488,8 @@ function AppPrefsCard({
             aria-label={t('settings:appearance.theme')}
           />
         </PrefRow>
-        {/* Full names here, not the menu row's two letters — a pop-up button has
-            the width for them, and they are written in their own language. */}
+        {/* The same list the app menu's Language row shows, from the same
+            localeOptions() — one control on two surfaces, as Appearance is. */}
         <PrefRow label={t('settings:app.language')} last>
           <PopUpButton
             options={localeOptions()}

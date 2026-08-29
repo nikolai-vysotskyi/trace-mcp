@@ -1,0 +1,22 @@
+export const menu = {
+  file: 'Fichier',
+  newWindow: 'Nouvelle fenêtre',
+  openProject: 'Ouvrir un projet…',
+  quickOpen: 'Ouverture rapide…',
+  closeTab: 'Fermer l’onglet',
+  closeWindow: 'Fermer la fenêtre',
+  edit: 'Édition',
+  find: 'Rechercher',
+  view: 'Présentation',
+  toggleSidebar: 'Afficher ou masquer la barre latérale',
+  reload: 'Recharger',
+  window: 'Fenêtre',
+  help: 'Aide',
+  documentation: 'Documentation',
+  selectProjectRoot: 'Choisir la racine du projet',
+
+  settings: 'Réglages…',
+  viewChangelog: 'Voir les nouveautés',
+  getHelp: 'Obtenir de l’aide',
+  checkForUpdate: 'Rechercher les mises à jour…',
+} as const;
