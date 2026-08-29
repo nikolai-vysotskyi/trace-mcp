@@ -60,6 +60,17 @@ baseline is flat at 20–45/day for the whole quarter. The graph measures our
 release cadence and registry mirrors, not users. If it must appear in a
 report, annotate the publish days.
 
+Re-confirmed 2026-08-29 (TRA-413) with a stronger tell than publish-day
+peaks: `https://api.npmjs.org/versions/trace-mcp/last-week` shows all 104
+published versions clustered at a near-uniform 136–198 weekly downloads
+while the median version is 2, and day-old releases hit parity with
+month-old ones instantly. That is a mirror sweeping the version history,
+not users — nobody installs `1.48.0`, `1.48.1` and `1.48.2` in equal
+measure. Decision: the npm-downloads badge is removed from the homepage
+trust strip and no download figure is cited on any public surface. Adoption
+metric of record is GitHub stars + traffic uniques. Re-check the per-version
+flatness quarterly, not per run.
+
 GitHub stars, same date: 101 total (April 58, May 23, June 8, July 5,
 August 6), 14 forks — a launch burst that decayed ~10× and stayed flat.
 
