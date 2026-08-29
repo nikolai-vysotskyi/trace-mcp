@@ -40,6 +40,7 @@ export const settings = {
 
   modified: 'Modificado',
   issues_one: '{{count}} problema',
+  issues_many: '{{count}} de problemas',
   issues_other: '{{count}} problemas',
 
   reset: 'Restablecer',
@@ -79,6 +80,7 @@ export const settings = {
   'bar.saved': 'Guardado',
   'bar.saveFailed': 'No se pudo guardar — el daemon rechazó el cambio',
   'bar.unsaved_one': '{{count}} cambio sin guardar',
+  'bar.unsaved_many': '{{count}} de cambios sin guardar',
   'bar.unsaved_other': '{{count}} cambios sin guardar',
   'bar.hideChanges': 'Ocultar los cambios',
   'bar.reviewChanges': 'Revisar los cambios',

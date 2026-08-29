@@ -1,0 +1,22 @@
+export const menu = {
+  file: 'Arquivo',
+  newWindow: 'Nova janela',
+  openProject: 'Abrir projeto…',
+  quickOpen: 'Abertura rápida…',
+  closeTab: 'Fechar aba',
+  closeWindow: 'Fechar janela',
+  edit: 'Editar',
+  find: 'Localizar',
+  view: 'Exibir',
+  toggleSidebar: 'Alternar barra lateral',
+  reload: 'Recarregar',
+  window: 'Janela',
+  help: 'Ajuda',
+  documentation: 'Documentação',
+  selectProjectRoot: 'Selecionar a raiz do projeto',
+
+  settings: 'Configurações…',
+  viewChangelog: 'Ver o changelog',
+  getHelp: 'Obter ajuda',
+  checkForUpdate: 'Verificar atualizações…',
+} as const;

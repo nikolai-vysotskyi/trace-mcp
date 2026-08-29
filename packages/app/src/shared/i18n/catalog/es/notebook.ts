@@ -1,6 +1,7 @@
 export const notebook = {
   title: 'Cuaderno',
   cells_one: '{{count}} celda',
+  cells_many: '{{count}} de celdas',
   cells_other: '{{count}} celdas',
   addCell: 'Añadir una celda',
   removeCell: 'Eliminar la celda',
@@ -11,6 +12,7 @@ export const notebook = {
   runningStatus: 'En ejecución',
   unknownError: 'Error desconocido',
   truncated_one: '… (recortado, {{count}} carácter más)',
+  truncated_many: '… (recortado, {{count}} de caracteres más)',
   truncated_other: '… (recortado, {{count}} caracteres más)',
 
   searchDescription: 'Buscar símbolos por nombre en todo el proyecto',

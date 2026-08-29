@@ -56,6 +56,7 @@ export const overview = {
 
   sectionQuality: 'Calidad',
   findings_one: '{{n}} hallazgo',
+  findings_many: '{{n}} de hallazgos',
   findings_other: '{{n}} hallazgos',
   smellCategoryLabel: 'Categoría del hallazgo',
   smellDebug: 'Depuración',
@@ -81,6 +82,7 @@ export const overview = {
   groupFor: 'Grupo de {{name}}',
   actionsFor: 'Acciones para {{name}}',
   endpoints_one: '{{n}} endpoint',
+  endpoints_many: '{{n}} de endpoints',
   endpoints_other: '{{n}} endpoints',
   removeTitle: '¿Quitar {{name}}?',
   removeBody: 'El servicio deja de seguirse aquí. En el disco no cambia nada.',
