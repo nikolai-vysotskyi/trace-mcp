@@ -17,7 +17,9 @@ Rules for keeping it honest:
 - Record the **decisions and the dead ends** too, not just the state. A closed
   door with no reason written down gets pushed on again next month.
 - Numbers quoted to the outside world come from `docs/_data/counts.yml`
-  (currently 169 tools / 80 languages / 87 frameworks). Never hand-type them.
+  (169 tools / 81 languages / 87 frameworks as of 2026-08-29). Never hand-type
+  them, and re-read the file rather than trusting a number written here: the
+  language count moved from 80 to 81 within a day of this ledger being started.
 
 ## Surfaces
 
@@ -26,7 +28,7 @@ Rules for keeping it honest:
 | [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) | Yes — `io.github.nikolai-vysotskyi/trace-mcp` | Current: 3.1.1, correct counts | Automatic: `.github/workflows/publish-mcp-registry.yml` republishes `server.json` on every release (GitHub OIDC, no secret) | 2026-08-29 |
 | [glama.ai](https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp) | Yes | Correct — scrapes README/npm live | Nothing to do; fix the README and it follows | 2026-08-29 |
 | [pulsemcp.com](https://www.pulsemcp.com/servers/nikolai-vysotskyi-trace) | Yes | **Stale: "44+ tools"** — their hand-written `server.json`, kept "until the maintainer publishes to the official registry" | Their submissions are **paused**; their own submit page says publishing to the official registry is the fix. Done 2026-08-29 — waiting on their next sync | 2026-08-29 |
-| [mcpservers.org](https://mcpservers.org/servers/nikolai-vysotskyi/trace-mcp) | Yes | Body correct; **header stale**: "53 framework integrations across 68 languages, 100+ tools" | Free form at `/submit` (no account, needs a contact email). Correction submitted 2026-08-29, review ≤12h. Premium $39 — declined | 2026-08-29 |
+| [mcpservers.org](https://mcpservers.org/servers/nikolai-vysotskyi/trace-mcp) | Yes | Body correct; **header stale**: "53 framework integrations across 68 languages, 100+ tools" | Free form at `/submit` (no account, needs a contact email). Correction submitted 2026-08-29, review ≤12h — but it said "80 languages … up to 99% fewer tokens", and master has since moved to 81 languages and a 40–50% claim, so re-submit once it lands. Premium $39 — declined | 2026-08-29 |
 | [mcpmarket.com](https://mcpmarket.com/server/trace) | Yes, as **"Trace"** | Same stale "53 frameworks / 68 languages" copy | No self-serve edit. $29 paid listing, or email support@mcpmarket.com. Free queue re-submit answers "already listed" | 2026-08-29 |
 | [mcp.so](https://mcp.so) | **No** | — | **Free submission no longer exists** — `/submit` offers only "Pay and submit automatically", $39. They ingest the official registry, so expect a free pickup | 2026-08-29 |
 | [smithery.ai](https://smithery.ai) | **No** | — | Requires a Smithery account via GitHub OAuth — an agent must not authorize that on Nikolai's behalf. They also ingest the official registry | 2026-08-29 |
