@@ -573,6 +573,10 @@ new evidence.
 | Tokens and primitives land before any surface | A surface migrated against a moving token layer gets migrated twice. |
 | A `var(--x, #hex)` fallback is a bug, not a safety net | `--red` and `--orange` were never defined, so four call sites quietly painted Tailwind `#ef4444` (3.76:1) and `#f97316` (2.8:1) on light. A fallback hides exactly the case the token guard exists to catch. |
 | A component nothing renders gets deleted, not migrated | `ProjectRow`, `ProjectDetail` and `GuardBadge` lost their host in the workspace rebuild and carried 10 of the guard's raw hex for three weeks. Rung one is always "does this need to exist". |
+| Deleting the last host of a feature means **re-homing the feature**, in the same pass or in a filed issue | `GuardBadge` was the guard's only surface *and* the only caller of `guard.initialize`. Deleting it left 670 lines of working main-process code with three of eight IPC channels reachable, and new projects silently skipping the coach grace period for weeks. A dead component is a rendering fact; the feature it carried is a separate question. |
+| Per-project state lives on **Project Overview**, not as another workspace-table column | The table is already at nine columns and drops trailing ones under a container query; a status the user needs is the worst candidate for "first to go". Overview is per-project by definition and has the measure for a mode control and a sentence. |
+| A control inside a 32px `ListRow` is the **24px tier**, never `small` | Measured on the running renderer: a `small` segment paints 16px inside a 20px hit box and a `small` button paints 20 in 20 — both under the 24×24 floor, and the row has the height for the regular tier anyway. `small` is for a dense toolbar, not for a list row. |
+| A row label never repeats its own control's verb | "Temporary pause" beside a "Pause for 10 minutes" button wrapped to two lines at the 640px minimum and added no meaning. The label names the subject ("Enforcement"), the control names the action. |
 
 ---
 
@@ -582,6 +586,11 @@ new evidence.
 window chrome, the sidebar and its footer, the workspace dashboard, Project Overview,
 Activity, Memory, MCP Clients, Settings, the onboarding sheet, Graph Explorer,
 Insights, Ask, and **Notebook** — the last one, migrated in TRA-310.
+
+Project Overview carries a fifth section as of TRA-334: **Guard** — health as a
+`Badge` (tone + glyph + word), mode as a `SegmentedControl`, the coach→strict
+date, and the bypass readout with its pause/resume control. It is also what calls
+`guard.initialize`, which nothing had called since `GuardBadge` was deleted.
 
 **The legacy alias layer is gone** (TRA-315). `app.css` no longer declares
 `--text-primary/secondary/tertiary`, `--bg-*`, `--border*`, `--success`, `--warning`

@@ -8,7 +8,7 @@
  *              toolbar's bottom edge, not a full-bleed accent band across the
  *              content.
  *   Content  — inset grouped lists capped at a readable measure and centred:
- *              Index · Coverage · Quality · Services.
+ *              Index · Guard · Coverage · Quality · Services.
  *
  * What this replaces, measured on the running app before the rewrite:
  *   - "Re-index Project" as a 1640px-wide accent-filled bar spanning the whole
@@ -20,6 +20,7 @@
  *     (2.21:1), and row actions that only existed on hover.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { GuardSection } from '../components/GuardSection';
 import { ProjectStatsModal } from '../components/ProjectStatsModal';
 import { useDaemon } from '../hooks/useDaemon';
 import { Icon } from '../lattice/icons';
@@ -605,6 +606,12 @@ export function ProjectOverview({
               )}
             </Card>
           </Section>
+
+          {/* ── Guard ─────────────────────────────────────────────────
+              Second, not last: it is live state about how agents read this
+              project, which is the same class of question as Index. Coverage,
+              Quality and Services are analysis of what was read. */}
+          <GuardSection root={root} />
 
           {/* ── Coverage ───────────────────────────────────────────── */}
           <Section
