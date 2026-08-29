@@ -228,6 +228,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 * seven MCP tools are removed. Each was a deprecated alias for a superset tool that already covered it:
 
+| Retired tool (1.x) | Replacement (2.0) |
+|---|---|
+| `pin_symbol { symbol_id }` | `pin { symbol_id }` |
+| `pin_file { file_path }` | `pin { file_path }` |
+| `search_with_mode { query, mode }` | `search { query, retriever: mode }` |
+| `get_dead_exports { file_pattern }` | `get_dead_code { file_pattern, mode: "exports_only" }` |
+| `get_untested_exports { file_pattern }` | `get_untested_symbols { file_pattern, scope: "exports_only" }` |
+| `get_session_resume { max_sessions }` | `get_wake_up { scope: "resume", max_sessions }` |
+| `get_project_memo { include_history, limit }` | `get_wake_up { scope: "project", include_history, history_limit }` |
+
+Every call is expressible in the replacement without loss of behaviour or response shape. Full notes: [Migrating from 1.x](https://trace-mcp.com/tools-reference.html).
+
+Two rarely-used `search` parameters were also removed: `fusion_weights` (per-channel weights now come from `~/.trace-mcp/tuning.jsonc`, written by `tune_weights`) and `fusion_debug`.
+
 ### Features
 
 * retire the 7 deprecated consolidation aliases, cut the search schema (TRA-240) ([#415](https://github.com/nikolai-vysotskyi/trace-mcp/issues/415)) ([9459d4c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9459d4ce5cb305c2f89b5b7cee2cb7f4798fc1da))
