@@ -1902,9 +1902,52 @@ layout: null
       }
       .category-sub { font-size: 16px; }
     }
+    /* ── Accessibility layer ──
+       Mirrors docs/assets/css/docs.css. The landing page is a standalone
+       hand-written file, so it does not inherit the sheet the 17 doc pages
+       share; without these three rules it was the only page on the site
+       falling back to Chrome's default focus ring and ignoring
+       prefers-reduced-motion. Standard: docs/DESIGN-WEB.md §5. */
+
+    .skip-link {
+      position: absolute;
+      left: -9999px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .skip-link:focus {
+      left: 16px;
+      top: 12px;
+      z-index: 200;
+      padding: 10px 16px;
+      background: var(--text-display);
+      color: var(--black);
+    }
+
+    /* The UA ring is rgb(153,200,255) — a second accent colour, which the
+       design system forbids. :where() keeps specificity at 0 so any component
+       that needs its own ring still wins without !important. */
+    :where(a, button, summary):focus-visible {
+      outline: 1px solid var(--text-display);
+      outline-offset: 2px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 <body>
+
+<a class="skip-link" href="#content">Skip to content</a>
 
 <nav>
   <div class="container">
@@ -1933,7 +1976,7 @@ layout: null
   </div>
 </nav>
 
-<main>
+<main id="content">
 
   <!-- ── HERO ── -->
   <section class="hero" style="border-top: none;">
@@ -2769,6 +2812,11 @@ layout: null
 </footer>
 
 <script>
+  // The CSS @media (prefers-reduced-motion) block stops transitions and
+  // keyframes, but not motion driven from JS — the rAF count-up and the
+  // staggered segment fill run regardless. Both check this flag.
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   // Reveal on scroll
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(e => {
@@ -2783,6 +2831,7 @@ layout: null
   // Stat counters
   function animateNum(el) {
     const target = parseInt(el.dataset.count, 10);
+    if (reduceMotion) { el.textContent = target; return; }
     const duration = 1400;
     const start = performance.now();
     function tick(now) {
@@ -2822,7 +2871,7 @@ layout: null
               setTimeout(() => {
                 s.classList.add('filled');
                 if (idx === filled - 1 && filled === total) s.classList.add('peak');
-              }, idx * 30);
+              }, reduceMotion ? 0 : idx * 30);
             }
           });
           segObs.unobserve(entry.target);
