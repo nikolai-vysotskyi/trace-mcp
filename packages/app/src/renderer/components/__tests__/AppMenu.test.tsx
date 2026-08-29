@@ -12,7 +12,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GLOBAL_ACTIONS } from '../../../shared/global-actions.js';
-import { LOCALE_KEY } from '../../../shared/i18n/locales.js';
+import { LOCALES, LOCALE_KEY } from '../../../shared/i18n/locales.js';
 import { setLocale, t } from '../../i18n';
 import type { UpdateState } from '../../update-check.js';
 import { AppMenu, type AppMenuProps } from '../AppMenu';
@@ -142,16 +142,21 @@ describe('sidebar app menu', () => {
     const { trigger } = renderMenu();
     const row = within(openMenu(trigger)).getByRole('group', { name: 'Language' });
 
+    /* Read from LOCALES rather than spelled out: shipping a language is a
+       one-line change there (TRA-389), and a test that has to be edited
+       alongside it is a test that gets edited without being read. */
     const options = within(row).getAllByRole('menuitemradio');
-    expect(options.map((o) => o.textContent)).toEqual(['EN', 'RU']);
-    expect(options.map((o) => o.getAttribute('aria-label'))).toEqual(['English', 'Русский']);
-    expect(options.map((o) => o.getAttribute('title'))).toEqual(['English', 'Русский']);
-    expect(options.map((o) => o.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+    expect(options.map((o) => o.textContent)).toEqual(LOCALES.map((l) => l.short));
+    expect(options.map((o) => o.getAttribute('aria-label'))).toEqual(LOCALES.map((l) => l.label));
+    expect(options.map((o) => o.getAttribute('title'))).toEqual(LOCALES.map((l) => l.label));
+    expect(options.map((o) => o.getAttribute('aria-checked'))).toEqual(
+      LOCALES.map((l) => String(l.code === 'en')),
+    );
     expect(options[0].className).toContain('is-active');
     // The track says it holds words, which is what island.css keys the padding
     // and the full-strength unselected colour off.
     expect(row.querySelector('.ws-ctx-seg')?.className).toContain('is-text');
-    expect(options.map((o) => o.tabIndex)).toEqual([0, -1]);
+    expect(options.map((o) => o.tabIndex)).toEqual(LOCALES.map((_, i) => (i === 0 ? 0 : -1)));
   });
 
   it('switches the whole menu at once, without closing it', () => {
@@ -175,10 +180,13 @@ describe('sidebar app menu', () => {
     const menu = openMenu(trigger);
     const checked = within(menu).getByRole('menuitemradio', { name: 'English' });
 
+    // The neighbour is whichever language LOCALES lists second, not Russian by
+    // name — the list grows (TRA-389) and this test is about the arrow keys.
+    const next = LOCALES[1];
     fireEvent.keyDown(checked, { key: 'ArrowRight' });
-    expect(within(menu).getByRole('group', { name: 'Язык' })).toBeTruthy();
+    expect(within(menu).getByRole('menuitemradio', { name: next.label })).toBeTruthy();
 
-    fireEvent.keyDown(within(menu).getByRole('menuitemradio', { name: 'Русский' }), {
+    fireEvent.keyDown(within(menu).getByRole('menuitemradio', { name: next.label }), {
       key: 'ArrowLeft',
     });
     expect(within(menu).getByRole('group', { name: 'Language' })).toBeTruthy();

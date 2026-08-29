@@ -18,13 +18,22 @@ export interface LocaleInfo {
   short: string;
 }
 
-export type Locale = 'en' | 'ru';
+export type Locale = 'en' | 'es' | 'ru' | 'zh';
 
 export const DEFAULT_LOCALE: Locale = 'en';
 
+/* Ordered by the code, not by size or by how close a language is to English:
+   a list whose order encodes a ranking of its entries invites the argument
+   about the ranking. `zh` is the bare macrolanguage tag on purpose — Intl
+   reads it as Simplified, which is what the catalogue is, and `pickLocale`
+   matches on the primary subtag, so zh-CN and zh-TW both land here. A reader
+   of Traditional gets Simplified rather than English; if that turns out to
+   matter, the fix is a zh-Hant catalogue, not a narrower tag on this one. */
 export const LOCALES: readonly LocaleInfo[] = [
   { code: 'en', label: 'English', short: 'EN' }, // i18n-exempt — see LocaleInfo.label
+  { code: 'es', label: 'Español', short: 'ES' }, // i18n-exempt
   { code: 'ru', label: 'Русский', short: 'RU' }, // i18n-exempt
+  { code: 'zh', label: '简体中文', short: 'ZH' }, // i18n-exempt
 ];
 
 /** Same shape as THEME_KEY: one localStorage key, absent means "not chosen". */

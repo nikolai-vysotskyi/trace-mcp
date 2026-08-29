@@ -11,6 +11,7 @@
  *   node scripts/electron-cdp.mjs launch --visible  # …and put it on screen
  *   node scripts/electron-cdp.mjs shot out.png      # screenshot the current page
  *   node scripts/electron-cdp.mjs shot out.png --view=project --tab=graph --dark
+ *   node scripts/electron-cdp.mjs shot out.png --locale=zh --size=640x420
  *
  * `launch` uses its own --user-data-dir so it does not fight the installed
  * trace-mcp.app for Electron's single-instance lock. Once it is up, an external
@@ -129,6 +130,28 @@ async function shot(outFile, opts) {
     });
     await sleep(opts.settleMs);
   }
+  /* A language is stored exactly where the theme is, so it is switched the same
+     way — and it has to be, because German and Spanish run longer than English
+     and the shots that matter are the ones at the window minimum (TRA-389). */
+  if (opts.locale) {
+    await cdp.send('Runtime.evaluate', {
+      expression: `localStorage.setItem('trace-mcp-locale', ${JSON.stringify(opts.locale)});
+        location.reload();`,
+    });
+    await sleep(opts.settleMs);
+  }
+  /* `--size=640x420` is the window minimum from DESIGN.md. Metrics override
+     rather than a window resize: the renderer is what has to survive the width,
+     and CDP can only reach the renderer. */
+  if (opts.size) {
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: opts.size.width,
+      height: opts.size.height,
+      deviceScaleFactor: 2,
+      mobile: false,
+    });
+    await sleep(opts.settleMs);
+  }
   /* Accessibility settings the material has to survive. */
   if (opts.media?.length) {
     await cdp.send('Emulation.setEmulatedMedia', { features: opts.media });
@@ -141,6 +164,13 @@ async function shot(outFile, opts) {
       expression: `[...document.querySelectorAll('.ws-sb-row')]
         .find((r) => r.textContent.trim() === ${JSON.stringify(opts.click)})?.click()`,
     });
+    await sleep(opts.settleMs);
+  }
+  /* The escape hatch for everything the flags above do not name — dismissing a
+     sheet that happens to be up, seeding a fixture. Last, so it runs against
+     the surface the other flags already put on screen. */
+  if (opts.evaluate) {
+    await cdp.send('Runtime.evaluate', { expression: opts.evaluate });
     await sleep(opts.settleMs);
   }
   mkdirSync(path.dirname(path.resolve(outFile)), { recursive: true });
@@ -164,12 +194,16 @@ if (cmd === 'launch') {
   if (rest.includes('--reduce-transparency'))
     media.push({ name: 'prefers-reduced-transparency', value: 'reduce' });
   if (rest.includes('--increase-contrast')) media.push({ name: 'prefers-contrast', value: 'more' });
+  const size = flag('size')?.match(/^(\d+)x(\d+)$/);
   await shot(out, {
     url: flag('url'),
     appearance: rest.includes('--dark') ? 'dark' : rest.includes('--light') ? 'light' : undefined,
+    locale: flag('locale'),
+    size: size ? { width: Number(size[1]), height: Number(size[2]) } : undefined,
     media,
     settleMs: Number(flag('settle') ?? 1500),
     click: flag('click'),
+    evaluate: flag('eval'),
   });
 } else {
   console.error(

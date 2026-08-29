@@ -7,7 +7,7 @@
 // nothing to do with the daemon.
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LOCALE_KEY } from '../../../shared/i18n/locales.js';
+import { LOCALES, LOCALE_KEY } from '../../../shared/i18n/locales.js';
 import { setLocale } from '../../i18n';
 import { Settings } from '../Settings';
 
@@ -59,7 +59,7 @@ describe('Settings — app preferences', () => {
   it('offers Language beside Theme, in the languages own names', () => {
     render(<Settings appearance="auto" onAppearanceChange={() => {}} />);
     const select = screen.getByLabelText('Language') as HTMLSelectElement;
-    expect([...select.options].map((o) => o.text)).toEqual(['English', 'Русский']);
+    expect([...select.options].map((o) => o.text)).toEqual(LOCALES.map((l) => l.label));
     expect(select.value).toBe('en');
   });
 
