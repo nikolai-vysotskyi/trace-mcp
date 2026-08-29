@@ -231,9 +231,9 @@ export function verifyIndex(db: Database.Database, options?: VerifyOptions): Ver
       if (lengths.length === 1 && lengths[0].len > 0 && lengths[0].len % 4 === 0) {
         const inferredDim = lengths[0].len / 4;
         try {
-          db.prepare(
-            "INSERT OR REPLACE INTO embedding_meta (key, value) VALUES ('dim', ?)",
-          ).run(String(inferredDim));
+          db.prepare("INSERT OR REPLACE INTO embedding_meta (key, value) VALUES ('dim', ?)").run(
+            String(inferredDim),
+          );
           checks.push({
             name: 'embedding_dim',
             status: 'ok',

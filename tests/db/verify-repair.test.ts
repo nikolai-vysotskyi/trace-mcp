@@ -212,7 +212,9 @@ describe('verifyIndex against the shipped schema', () => {
     const dim = 4;
     db.prepare('INSERT INTO files (path, indexed_at) VALUES (?, 0)').run('a.ts');
     const sym = db
-      .prepare("INSERT INTO symbols (symbol_id, file_id, kind, name, fqn, byte_start, byte_end)\n         VALUES (?, 1, 'function', ?, ?, 0, 1)")
+      .prepare(
+        "INSERT INTO symbols (symbol_id, file_id, kind, name, fqn, byte_start, byte_end)\n         VALUES (?, 1, 'function', ?, ?, 0, 1)",
+      )
       .run('a.ts::foo', 'foo', 'a.foo');
     db.prepare('INSERT INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)').run(
       Number(sym.lastInsertRowid),
@@ -235,7 +237,9 @@ describe('verifyIndex against the shipped schema', () => {
 
     const dim = 8;
     db.prepare('INSERT INTO files (path, indexed_at) VALUES (?, 0)').run('a.ts');
-    const insertSym = db.prepare("INSERT INTO symbols (symbol_id, file_id, kind, name, fqn, byte_start, byte_end)\n         VALUES (?, 1, 'function', ?, ?, 0, 1)");
+    const insertSym = db.prepare(
+      "INSERT INTO symbols (symbol_id, file_id, kind, name, fqn, byte_start, byte_end)\n         VALUES (?, 1, 'function', ?, ?, 0, 1)",
+    );
     const insertEmb = db.prepare(
       'INSERT INTO symbol_embeddings (symbol_id, embedding) VALUES (?, ?)',
     );
