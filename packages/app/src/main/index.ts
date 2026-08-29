@@ -30,7 +30,11 @@ app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
 // process out of the Dock and out of ⌘-Tab — and it is set here, before `ready`,
 // because by the time the first window exists the activation has already
 // happened (TRA-403). A shipped build is never accessory; see window-mode.ts.
-if (ACCESSORY_APP) app.setActivationPolicy('accessory');
+// Guarded on darwin because `setActivationPolicy` is a macOS-only method — it
+// does not exist on the Windows/Linux `app` object, and since TRA-407 made
+// ACCESSORY_APP true for *every* unpackaged build, an unguarded call would
+// throw on the first line of every `electron .` run off macOS.
+if (ACCESSORY_APP && process.platform === 'darwin') app.setActivationPolicy('accessory');
 
 // Prevent multiple instances. If a second launch happens, bring the existing
 // window forward instead of letting the new process die silently.
