@@ -440,6 +440,21 @@ node packages/app/scripts/design-tokens.mjs --update-baseline  # only ever to LO
 The renderer also ships a gallery: `?view=gallery[&theme=dark]` renders every primitive
 variant × size × state.
 
+### Title a design PR `feat:` / `fix:` / `refactor:` — never `design:`
+
+`design` is not a Conventional Commits type, and `.github/workflows/pr-title-lint.yml`
+rejects it. That check is not pedantry: release-please classifies releases from the
+squash-merge subject, which GitHub takes from the PR title, so an unclassifiable title
+means the change ships and then sits unreleased (TRA-104). Pick by what the change
+*does* — a new or rebuilt surface is `feat(app):`, a contrast or spacing correction is
+`fix(app):`, a pure restructure is `refactor(app):`.
+
+Two related things that cost a run to rediscover: `gh pr merge` refuses on this repo
+because `master` requires signed commits and `gh` pre-checks the branch, while the REST
+endpoint (`gh api -X PUT repos/…/pulls/N/merge -f merge_method=squash`) succeeds —
+GitHub signs the squash commit itself. And `master` is `strict`, so rebase onto it
+before expecting a merge to go through.
+
 ---
 
 ## 10. Review checklist for a new screen
