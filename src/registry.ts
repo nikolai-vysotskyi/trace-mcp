@@ -79,25 +79,29 @@ function emptyRegistry(): Registry {
 // corrupting the cache.
 // ponytail: mtime is the cross-process invalidation signal (another daemon/CLI
 // writing the file bumps it); within-process writes drop the cache explicitly
-// in saveRegistry. Ceiling: sub-mtime-resolution double-writes from a *foreign*
-// process could serve one stale read — acceptable for a registry that changes
-// on register/unregister only.
-let _registryCache: { mtimeMs: number; reg: Registry } | null = null;
+// in saveRegistry. mtime alone is not enough: filesystem timestamp granularity
+// is coarse (~15ms on Windows), so two writes can share one mtime and hide the
+// second (TRA-326). Size is a cheap second signal, and any file younger than
+// one granularity tick is never trusted from cache at all.
+const MTIME_GRANULARITY_MS = 50;
+let _registryCache: { mtimeMs: number; size: number; reg: Registry } | null = null;
 
 function loadRegistry(): Registry {
   let mtimeMs: number;
+  let size: number;
   try {
-    mtimeMs = fs.statSync(REGISTRY_PATH).mtimeMs;
+    ({ mtimeMs, size } = fs.statSync(REGISTRY_PATH));
   } catch {
     return emptyRegistry(); // no registry file yet
   }
-  if (_registryCache && _registryCache.mtimeMs === mtimeMs) {
+  const settled = Date.now() - mtimeMs >= MTIME_GRANULARITY_MS;
+  if (settled && _registryCache?.mtimeMs === mtimeMs && _registryCache.size === size) {
     return structuredClone(_registryCache.reg);
   }
   try {
     const raw = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
     if (raw.version === 1 && raw.projects) {
-      _registryCache = { mtimeMs, reg: raw as Registry };
+      _registryCache = { mtimeMs, size, reg: raw as Registry };
       return structuredClone(raw as Registry);
     }
     return emptyRegistry();
