@@ -4,7 +4,7 @@
   "src/renderer/lattice/icons.tsx": 1,
   "src/renderer/lattice/ui/Badge.tsx": 2,
   "src/renderer/styles/controls.css": 1,
-  "src/renderer/styles/island.css": 71,
+  "src/renderer/styles/island.css": 70,
   "src/renderer/tabs/GraphExplorerGPU.tsx": 95,
   "src/renderer/tabs/MemoryExplorer.tsx": 1,
   "src/renderer/tabs/Settings.tsx": 2,

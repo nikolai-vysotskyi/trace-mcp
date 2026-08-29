@@ -321,7 +321,7 @@ Every data surface owes four states, and each has a house form:
 ```
 ┌─ window: hiddenInset, 12px radius, min 640×420 ───────────────────┐
 │ ┌ sidebar (transparent → vibrancy) ┬ content pane (opaque) ─────┐ │
-│ │ 44px traffic-light strip [drag]  │ 44px header [drag]         │ │
+│ │ --top-band-h strip [drag]        │ --top-band-h header [drag] │ │
 │ ├──────────────────────────────────┼────────────────────────────┤ │
 │ │ scroll: 6px inset, 28px rows     │ 52px toolbar (glass)       │ │
 │ │                                  ├────────────────────────────┤ │
@@ -335,11 +335,16 @@ Every data surface owes four states, and each has a house form:
 - **Sidebar** — 220px default, 180–320px drag range, flush to the window edge: no
   radius, no shadow. The hairline separator and the material *are* the edge. Width and
   collapsed state persist and sync across windows (`renderer/sidebar-prefs.ts`).
-- **Traffic lights are native.** `trafficLightPosition: {x: 14, y: 18}` centres the 12px
-  lights on the 44px strip the sidebar reserves. When the sidebar is collapsed the
-  content header takes a `78px` left pad so the lights land on it instead.
-  **Never draw traffic lights in CSS** — the hand-drawn `.ws-lights` circles are gone
-  and must not come back.
+- **The traffic-light centre line is the app's top-band baseline.** Every control in a
+  top band — the sidebar toggle, the window's own controls, search, segmented controls,
+  primary actions — is centred on it. The band height and `trafficLightPosition` are two
+  views of ONE number and must be derived from a single source, never written twice.
+  That source is `packages/app/src/shared/chrome-metrics.ts`: `TOP_BAND_H` sizes every
+  band via `--top-band-h`, and `TRAFFIC_LIGHT_Y` is computed from it. See
+  "The top band" below.
+- **Traffic lights are native.** When the sidebar is collapsed the content header takes a
+  `78px` left pad so the lights land on it instead. **Never draw traffic lights in CSS** —
+  the hand-drawn `.ws-lights` circles are gone and must not come back.
 - **Drag regions**: exactly two — the sidebar's top 44px and the content pane's 44px
   header. `<main>` is not a drag region. Every interactive child inside a drag region
   needs `-webkit-app-region: no-drag`.
@@ -360,6 +365,37 @@ Every data surface owes four states, and each has a house form:
   permanent update strip, 70.5px of chrome under a column meant for navigation
   (TRA-305 → TRA-306 → TRA-363). The row is the product: its name, a chevron, and a
   pop-up. See "Where a global action lives" below.
+
+### The top band
+
+`--top-band-h` (44px) is the height of every top band, and `TOP_BAND_H` in
+`packages/app/src/shared/chrome-metrics.ts` is where that number lives. The main process
+derives `trafficLightPosition` from it; `tokens.css` declares `--top-band-h` from it;
+`.ws-sidebar-titlebar` and `.ws-content-head` read the token. Nothing writes a band
+height by hand.
+
+Why this is a rule and not a preference: it was written twice, and the two copies
+disagreed. `height: 44px` centres a control at 22; `trafficLightPosition.y = 18` put the
+lights' centre at 25 — and the comment above it asserted they were centred. Three pixels
+of misalignment on the most-looked-at row in the app, shipped, with a comment vouching
+for it (TRA-370).
+
+Two things to know before touching the offset:
+
+- **`trafficLightPosition.y` is not the circle's top edge.** The button's frame carries a
+  point above it, so the light renders one point lower than the offset asks for. The
+  centring offset is `(TOP_BAND_H − 12) / 2 − 1`, not `(TOP_BAND_H − 12) / 2`. Measured on
+  macOS 26 / Electron 41 by screen-capturing the real window and reading the red light's
+  row profile: y=18 → centre 25.0, y=15 → centre 22.0.
+- **Verify it by measuring, not by looking.** There are no traffic lights on the Vite dev
+  server, so a browser cannot show this at all. Launch the Electron window
+  (`node packages/app/scripts/electron-cdp.mjs launch`), capture the screen, and compare
+  the light's pixel centre against the toggle's `getBoundingClientRect()` centre. Both
+  appearances, sidebar expanded and collapsed.
+
+`packages/app/src/main/__tests__/chrome-metrics.test.ts` and the top-band block in
+`src/renderer/styles/__tests__/tokens.test.ts` fail if the constant, the token, the
+stylesheets and `tray.ts` ever drift apart again.
 
 ### Where a global action lives
 

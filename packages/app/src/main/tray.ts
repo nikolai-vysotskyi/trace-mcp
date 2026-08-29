@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Tray } from 'electron';
+import { TRAFFIC_LIGHT_X, TRAFFIC_LIGHT_Y } from '../shared/chrome-metrics.js';
 import { DaemonClient } from './api-client';
 import { ensureDaemon, restartDaemon } from './daemon-lifecycle';
 
@@ -107,8 +108,10 @@ function createWindowOptions(
     // desaturates it when the window loses key, and macOS honours Reduce
     // Transparency for free — no CSS backdrop-filter fallback needed.
     opts.titleBarStyle = 'hiddenInset';
-    // y=18 centres the 12px lights on the 44px title strip the sidebar reserves.
-    opts.trafficLightPosition = { x: 14, y: 18 };
+    // Derived from the band height in src/shared/chrome-metrics.ts — the same
+    // number `--top-band-h` is generated from. Never write the offset by hand:
+    // that is what put the lights 3px below the sidebar toggle (TRA-370).
+    opts.trafficLightPosition = { x: TRAFFIC_LIGHT_X, y: TRAFFIC_LIGHT_Y };
     opts.vibrancy = 'sidebar';
     opts.visualEffectState = 'followWindow';
     opts.backgroundColor = '#00000000';

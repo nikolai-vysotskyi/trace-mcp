@@ -1,6 +1,12 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import {
+  TOP_BAND_H,
+  TRAFFIC_LIGHT_D,
+  TRAFFIC_LIGHT_Y,
+  trafficLightCentreY,
+} from '../../../shared/chrome-metrics.js';
 // @ts-expect-error — plain .mjs helper, shared with the CLI check (TRA-289)
 import {
   contrast,
@@ -99,6 +105,58 @@ describe('design tokens', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  /* TRA-370. The traffic lights are positioned by the MAIN process and the band
+     they sit in is sized by CSS. When those were two literals in two files they
+     disagreed — a 44px strip centres at 22, `trafficLightPosition.y = 18` put
+     the lights' centre at 25, and the comment above it claimed they matched.
+     These four assertions are the guard: the token must equal the constant, the
+     offset must be derived from it and land the lights on the band's centre,
+     and no stylesheet may write a band height by hand again. */
+  describe('the top band (TRA-370)', () => {
+    it('generates --top-band-h from src/shared/chrome-metrics.ts', () => {
+      expect(tokensCss).toMatch(
+        new RegExp(`--top-band-h:\\s*${TOP_BAND_H}px`),
+      );
+    });
+
+    it('centres the traffic lights on the band, not 3px below it', () => {
+      expect(trafficLightCentreY()).toBe(TOP_BAND_H / 2);
+      // Measured on the real window: y=18 renders the light's centre at 25,
+      // y=15 at 22. Slope 1, so the offset that centres a 12px light in a 44px
+      // band is 15 — one less than naive (44-12)/2, because the button's frame
+      // carries a point above the circle.
+      expect(TRAFFIC_LIGHT_Y).toBe((TOP_BAND_H - TRAFFIC_LIGHT_D) / 2 - 1);
+    });
+
+    it('sizes every top band from the token instead of a literal', () => {
+      const sidebarCss = readFileSync(
+        fileURLToPath(new URL('../sidebar.css', import.meta.url)),
+        'utf8',
+      );
+      for (const selector of ['.ws-sidebar-titlebar', '.ws-content-head']) {
+        const body = new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(sidebarCss)?.[1];
+        expect(body, `${selector} not found`).toBeDefined();
+        expect(body).toMatch(/height:\s*var\(--top-band-h\)/);
+      }
+    });
+
+    it('leaves no stylesheet writing a band height by hand', () => {
+      const dir = fileURLToPath(new URL('..', import.meta.url));
+      const offenders: string[] = [];
+      for (const name of readdirSync(dir).filter((f) => f.endsWith('.css'))) {
+        const css = readFileSync(`${dir}/${name}`, 'utf8');
+        for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+          if (!/-webkit-app-region:\s*drag/.test(body)) continue;
+          const height = /(?:^|[;{\s])height:\s*([^;]+)/.exec(body)?.[1]?.trim();
+          if (height && !height.includes('var(--top-band-h)')) {
+            offenders.push(`${name}: ${selector.trim().split('\n').pop()?.trim()} → ${height}`);
+          }
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
   });
 
   /* TRA-297: `user-select: none` on body used to be the last word, so no path,
