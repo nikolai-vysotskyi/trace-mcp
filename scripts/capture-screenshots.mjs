@@ -875,9 +875,12 @@ async function capture(manifest, only) {
     // Always-on-top for the same reason the flag exists: Chromium stops
     // compositing an occluded window, and a window capture of one is a stale
     // frame. Nothing else may cover the window while it is being photographed.
+    // `visible` opts this unpackaged run out of the accessory default (TRA-407):
+    // a window whose app is not active draws grey traffic lights, and the
+    // publication capture refuses those.
     {
       cwd: path.join(REPO_ROOT, 'packages/app'),
-      env: { ...env, TRACE_MCP_DEV_ALWAYS_ON_TOP: '1' },
+      env: { ...env, TRACE_MCP_DEV_ALWAYS_ON_TOP: '1', TRACE_MCP_WINDOW_MODE: 'visible' },
       stdio: 'ignore',
     },
   );

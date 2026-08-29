@@ -94,8 +94,12 @@ function launch(visible) {
      then has to stay on top, or Chromium stops compositing an occluded window
      and the shot comes back as the frame it painted minutes ago. */
   const env = { ...process.env };
-  if (visible) env.TRACE_MCP_DEV_ALWAYS_ON_TOP = '1';
-  else env.TRACE_MCP_WINDOW_MODE = 'hidden';
+  if (visible) {
+    env.TRACE_MCP_DEV_ALWAYS_ON_TOP = '1';
+    /* An unpackaged build is accessory by default (TRA-407); the one run that
+       wants eyes on the window wants a normal foreground app too. */
+    env.TRACE_MCP_WINDOW_MODE = 'visible';
+  } else env.TRACE_MCP_WINDOW_MODE = 'hidden';
   delete env.ELECTRON_RUN_AS_NODE;
   const child = spawn(
     electron,

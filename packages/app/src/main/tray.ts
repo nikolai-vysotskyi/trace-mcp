@@ -28,7 +28,11 @@ const isMac = process.platform === 'darwin';
  * Set by `scripts/electron-cdp.mjs`. `TRACE_MCP_AGENT_RUN=1` is the same
  * request from the other direction — "nobody is looking at this run" — and is
  * what an agent launching the app some other way sets. Never set in a shipped
- * build; a human running `pnpm dev` has neither and sees today's behaviour.
+ * build.
+ *
+ * This governs whether a window is mapped. Whether the process shows up in the
+ * Dock and ⌘-Tab is a separate decision — see `activation-policy.ts`, which is
+ * accessory for every unpackaged build whether or not either variable is set.
  */
 export const HIDDEN_WINDOWS =
   process.env.TRACE_MCP_WINDOW_MODE === 'hidden' || process.env.TRACE_MCP_AGENT_RUN === '1';

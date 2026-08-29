@@ -968,6 +968,15 @@ agent launches:
 
 - **The app: never shown.** `electron-cdp.mjs launch` is hidden and accessory by default.
   A visible window needs `--visible` and a reason stated where you use it.
+- **Every unpackaged build is accessory, flag or no flag** (TRA-407). Tying it to
+  `TRACE_MCP_WINDOW_MODE=hidden` made it a rule that held only when somebody remembered
+  the flag, and `electron .` run straight from a checkout still stole the screen. The
+  decision now lives in one pure function, `packages/app/src/main/activation-policy.ts`:
+  `hidden` is always accessory; a packaged build is otherwise always `regular` (it is a
+  real app); an unpackaged build is accessory unless it asks for `TRACE_MCP_WINDOW_MODE=visible`,
+  which is what `electron-cdp.mjs --visible` sets — the one run that wants eyes on the
+  window wants a foreground app too. `TRACE_MCP_AGENT_RUN=1` forces accessory in any
+  build, packaged included.
 - **The browser: `--headless --isolated`.** Headless removes the window entirely and
   screenshots still come out; `--isolated` gives Chrome a throwaway profile so it can
   never adopt or disturb the one the user has open. Both belong in the MCP server's own
