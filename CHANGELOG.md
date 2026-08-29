@@ -6,6 +6,71 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.3.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.2.0...v3.3.0) (2026-08-29)
+
+
+### Features
+
+* **app:** i18n runtime, en/ru catalogues and a check against inline strings (TRA-379) ([#535](https://github.com/nikolai-vysotskyi/trace-mcp/issues/535)) ([e0ec6cc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e0ec6cc287333d1c3c2ec941f99709ed73b3e979))
+* **app:** read Settings, the config schema and the Guard panels from the catalogue (TRA-383) ([#541](https://github.com/nikolai-vysotskyi/trace-mcp/issues/541)) ([8b9072d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8b9072d3f660fdd247c03db83be53b39925d3a10))
+* **app:** read the exploration tabs from the string catalogue (TRA-385) ([#545](https://github.com/nikolai-vysotskyi/trace-mcp/issues/545)) ([84ec15b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/84ec15b9dc176f37c9f2fe19e85ee93413e750ad))
+* **app:** read the overview and activity tabs from the catalogue (TRA-384) ([#543](https://github.com/nikolai-vysotskyi/trace-mcp/issues/543)) ([79f2953](https://github.com/nikolai-vysotskyi/trace-mcp/commit/79f2953efdacc6620481d0c677eb1c653badf65b))
+* **app:** read the workspace, sidebar, app shell and UI primitives from the catalogue (TRA-387) ([#568](https://github.com/nikolai-vysotskyi/trace-mcp/issues/568)) ([7d92325](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7d92325f1c6e7b7a4496eb478d85873e74994192))
+* **app:** translate the application menu, the tray and the main-process dialog (TRA-386) ([#539](https://github.com/nikolai-vysotskyi/trace-mcp/issues/539)) ([1c7e737](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1c7e737d471c618993dd75e737b6f2408a00bf5a))
+* **server:** progressive tool disclosure — minimal default + load_tools (TRA-402) ([#553](https://github.com/nikolai-vysotskyi/trace-mcp/issues/553)) ([4cccd8a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4cccd8aee24d1b6af15981769dc39578284b4533)), closes [#519](https://github.com/nikolai-vysotskyi/trace-mcp/issues/519)
+
+
+### Bug Fixes
+
+* **app:** bound the sidebar material against --surface in both appearances (TRA-369) ([#529](https://github.com/nikolai-vysotskyi/trace-mcp/issues/529)) ([c9b2ede](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c9b2ede58b6976770520983ca0929298cfe744a7))
+* **app:** drive the app without taking the screen (TRA-403) ([#554](https://github.com/nikolai-vysotskyi/trace-mcp/issues/554)) ([66ed81b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/66ed81b43b90c3b425a773055ac4787ab502af2b))
+* **app:** every unpackaged build runs as an accessory app (TRA-407) ([#559](https://github.com/nikolai-vysotskyi/trace-mcp/issues/559)) ([c1588c1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c1588c162f23ebdea1011e925b5c9394a60f03b0))
+* **app:** give Insights' report picker a narrow form so every report stays reachable ([#534](https://github.com/nikolai-vysotskyi/trace-mcp/issues/534)) ([051716f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/051716ffe199c6f183bef82ad761711286a9f2c9))
+* **app:** group the app menu by what an item does, and take the theme pill's proportions from the reference (TRA-376) ([#538](https://github.com/nikolai-vysotskyi/trace-mcp/issues/538)) ([2331b60](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2331b60114a38a7ea7d3e1d407a0976e552f4aaa))
+* **app:** guard setActivationPolicy on darwin, give dev:electron the opt-out ([#567](https://github.com/nikolai-vysotskyi/trace-mcp/issues/567)) ([5acf89e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5acf89ec20f1f97a827768bfbeef53eca4a36ef8))
+* **app:** honour TRACE_MCP_AGENT_RUN as well (TRA-403) ([#557](https://github.com/nikolai-vysotskyi/trace-mcp/issues/557)) ([3418e32](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3418e32f50a5b6f1c9144062264a18a8dd78dabf))
+* **app:** one state for a slow daemon, and numbers that go stale instead of blank ([#550](https://github.com/nikolai-vysotskyi/trace-mcp/issues/550)) ([b16c320](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b16c320dde3ab29d0ddd0fa3f688e7a0f4d13dce))
+* **app:** report a stale npm root only when MCP clients run it ([#537](https://github.com/nikolai-vysotskyi/trace-mcp/issues/537)) ([0d6f924](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0d6f9249ca023fa21b23a7e87e6eacfff738a0a1))
+* **app:** the native tab bar is a second top band, not a replacement (TRA-399) ([#552](https://github.com/nikolai-vysotskyi/trace-mcp/issues/552)) ([29da930](https://github.com/nikolai-vysotskyi/trace-mcp/commit/29da93025220ad558c56b9f3a924977cb66363cf))
+* **config:** index every registered language by default (TRA-400) ([#549](https://github.com/nikolai-vysotskyi/trace-mcp/issues/549)) ([1d5be08](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1d5be082011ee79d9cd43090eea5fcebdca65d84))
+* **daemon:** enforce the loaded-project cap in steady state, not just at boot ([#572](https://github.com/nikolai-vysotskyi/trace-mcp/issues/572)) ([345ef7e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/345ef7eff2f213f0c7e19d22858e20b2a121eaf5))
+* **daemon:** stop the health watchdog from killing a busy daemon (TRA-421) ([#573](https://github.com/nikolai-vysotskyi/trace-mcp/issues/573)) ([551d656](https://github.com/nikolai-vysotskyi/trace-mcp/commit/551d656c482713fbfcd4b17a7e0f7611835ba722))
+* **docs:** install surfaces advertised the 99% peak as the token average (TRA-393) ([#542](https://github.com/nikolai-vysotskyi/trace-mcp/issues/542)) ([9adf592](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9adf592aad7b60a78e4b17fe571179ec889291c4))
+* **docs:** name the seven tools retired in v2.0.0, and hint them at call time (TRA-412) ([#566](https://github.com/nikolai-vysotskyi/trace-mcp/issues/566)) ([50531b5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/50531b59d09924015f6ad2ce6b94f2d2689a5a34))
+* **docs:** photograph the window, and refuse a frame without its chrome (TRA-390) ([#544](https://github.com/nikolai-vysotskyi/trace-mcp/issues/544)) ([7882ea1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7882ea1067b34f59dc96df88a55cc93a97ecf0f3))
+* **indexer:** register the VHDL language plugin, publish a capability matrix ([#547](https://github.com/nikolai-vysotskyi/trace-mcp/issues/547)) ([255f425](https://github.com/nikolai-vysotskyi/trace-mcp/commit/255f4257e44fa696ef98a0c236b82d66441bebeb))
+* **logger:** serialize Errors logged under the `error` key ([#571](https://github.com/nikolai-vysotskyi/trace-mcp/issues/571)) ([08df073](https://github.com/nikolai-vysotskyi/trace-mcp/commit/08df073092cc58f446db2e821f88d9dd42d94105))
+* **registry:** stop persisting one-shot agent-run checkouts ([#548](https://github.com/nikolai-vysotskyi/trace-mcp/issues/548)) ([84f81a4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/84f81a4508bac763319a8101269c3ec6cbed1c35))
+* **site:** give the landing page the accessibility layer the docs already have (TRA-408) ([#561](https://github.com/nikolai-vysotskyi/trace-mcp/issues/561)) ([a1cc98b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a1cc98bdd29d38bd26de3096ef788cb8c88b9393))
+* **site:** show one appearance of the app screenshot, not both (TRA-390) ([#546](https://github.com/nikolai-vysotskyi/trace-mcp/issues/546)) ([6ebbbd5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6ebbbd560e806b21cfdb6f168f090836fb9c380e))
+* **update:** stop re-downloading the version already installed ([#556](https://github.com/nikolai-vysotskyi/trace-mcp/issues/556)) ([dd40f40](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dd40f405a3513d185f774a8692db92f2bb8e700d))
+
+
+### Performance
+
+* **app:** stop shipping react-i18next in app.asar, measure startup on the renderer's own clock (TRA-398) ([#551](https://github.com/nikolai-vysotskyi/trace-mcp/issues/551)) ([19efc6a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/19efc6a7d6ef8166019029b78040da337937533a))
+
+
+### Documentation
+
+* add ops/distribution.md, the external listings ledger ([#570](https://github.com/nikolai-vysotskyi/trace-mcp/issues/570)) ([d48318b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d48318baedeb79faa6098ef43eb805027c1de12b))
+* correct stale tool-surface claims and unhardcode homepage counts ([#569](https://github.com/nikolai-vysotskyi/trace-mcp/issues/569)) ([ecb114d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ecb114d181b89b0bcda30d11027dc8b0311c5c90))
+* correct the sidebar material's backdrop, with the shot matrix (TRA-404) ([#555](https://github.com/nikolai-vysotskyi/trace-mcp/issues/555)) ([75e7081](https://github.com/nikolai-vysotskyi/trace-mcp/commit/75e708167080a8be968c2758463a480a011e0dbd))
+* measure the sidebar material without hijacking the desktop (TRA-404) ([#558](https://github.com/nikolai-vysotskyi/trace-mcp/issues/558)) ([48f1c16](https://github.com/nikolai-vysotskyi/trace-mcp/commit/48f1c169cfa49643919de85479a50d9ff1797242))
+* reclassify GA4 telemetry credentials as public by design ([#532](https://github.com/nikolai-vysotskyi/trace-mcp/issues/532)) ([9cdccf9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9cdccf9b4a09768f1978cbc4d0bc87649dd87799))
+* rewrite the landing page and README framing in a plain voice (TRA-418) ([#574](https://github.com/nikolai-vysotskyi/trace-mcp/issues/574)) ([9af6469](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9af6469763e09089c9496f0ab17ef019040afbe8))
+* **site:** put the documentation pages in the Nothing design system ([#540](https://github.com/nikolai-vysotskyi/trace-mcp/issues/540)) ([b4b87c7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b4b87c71f96e8374a63617c8e3237e18f28c0302))
+* stop citing npm downloads — the count is mirror-inflated (TRA-413) ([#564](https://github.com/nikolai-vysotskyi/trace-mcp/issues/564)) ([fd29351](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fd29351c6a8bb2d316742fa75c7c47790857f0a5))
+* two more surfaces sold a peak token number as the average (TRA-393) ([#562](https://github.com/nikolai-vysotskyi/trace-mcp/issues/562)) ([1bc3876](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1bc38761a1a32802b125aa8b504ee6dbb6a25c17))
+
+
+### CI/CD
+
+* **codeql:** exclude js/path-injection, encoding the TRA-301 decision (TRA-381) ([#533](https://github.com/nikolai-vysotskyi/trace-mcp/issues/533)) ([85f0dbb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/85f0dbb6a6a2f55224949bf89ad0a606335244e6))
+* drop nosemgrep-suppressed findings from the Semgrep SARIF (TRA-411) ([#563](https://github.com/nikolai-vysotskyi/trace-mcp/issues/563)) ([3fd91ab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3fd91ab6ee8e42a7b29c9aaeeb2e8d1353f42325))
+* fail on invisible Unicode in prose and AI provenance marks ([#565](https://github.com/nikolai-vysotskyi/trace-mcp/issues/565)) ([8416082](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8416082a12d1f6cfd943a6561af3d702c3f3ce40))
+* run cross-platform tests on refactoring path changes ([#530](https://github.com/nikolai-vysotskyi/trace-mcp/issues/530)) ([aa24222](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aa24222367c6d7a64bb0c45f8487cb8ea62a0ee9))
+
 ## [3.2.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.1.1...v3.2.0) (2026-08-29)
 
 
