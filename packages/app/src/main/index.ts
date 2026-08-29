@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { t } from './i18n';
 import { registerAppMenu } from './menu';
-import { createTray, HIDDEN_WINDOWS, restoreAppearance, showMenuWindow } from './tray';
+import { ACCESSORY_APP, createTray, restoreAppearance, showMenuWindow } from './tray';
 import {
   hasPendingUpdate as hasPendingUpdateImpl,
   trySpawnApplyHelper as trySpawnApplyHelperImpl,
@@ -24,13 +24,17 @@ const UPDATE_CHANNEL = updateChannelFor(process.platform);
 // if GPU process crashes resurface.
 app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
 
-// A hidden-window run must not become the active application either: launching a
-// regular app activates it, and macOS follows that to the app's Space, pulling
+// A development or capture run must not become the active application: launching
+// a regular app activates it, and macOS follows that to the app's Space, pulling
 // whoever is at the keyboard out of what they were in. Accessory policy keeps the
 // process out of the Dock and out of ⌘-Tab — and it is set here, before `ready`,
 // because by the time the first window exists the activation has already
-// happened (TRA-403).
-if (HIDDEN_WINDOWS) app.setActivationPolicy('accessory');
+// happened (TRA-403). A shipped build is never accessory; see window-mode.ts.
+// Guarded on darwin because `setActivationPolicy` is a macOS-only method — it
+// does not exist on the Windows/Linux `app` object, and since TRA-407 made
+// ACCESSORY_APP true for *every* unpackaged build, an unguarded call would
+// throw on the first line of every `electron .` run off macOS.
+if (ACCESSORY_APP && process.platform === 'darwin') app.setActivationPolicy('accessory');
 
 // Prevent multiple instances. If a second launch happens, bring the existing
 // window forward instead of letting the new process die silently.

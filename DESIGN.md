@@ -968,6 +968,14 @@ agent launches:
 
 - **The app: never shown.** `electron-cdp.mjs launch` is hidden and accessory by default.
   A visible window needs `--visible` and a reason stated where you use it.
+- **Every unpackaged build is accessory**, not only the ones launched through that script.
+  A plain `electron .` gets no Dock icon and no ⌘-Tab entry, because a rule that holds only
+  when somebody remembers a flag is not a rule. A shipped build is a real app and keeps
+  both. The opt-out for a human debugging the dev build is `TRACE_MCP_WINDOW_MODE=visible`
+  (`electron-cdp.mjs --visible` and `pnpm dev:electron` both set it). The decision itself is
+  one pure function, `shouldRunAsAccessory` in `src/shared/window-mode.ts`; applying it is
+  guarded on darwin, since `setActivationPolicy` is macOS-only and the default now reaches
+  every unpackaged run on every platform.
 - **The browser: `--headless --isolated`.** Headless removes the window entirely and
   screenshots still come out; `--isolated` gives Chrome a throwaway profile so it can
   never adopt or disturb the one the user has open. Both belong in the MCP server's own
