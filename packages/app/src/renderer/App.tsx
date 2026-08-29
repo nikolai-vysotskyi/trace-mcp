@@ -9,7 +9,15 @@ import { WindowTabBar } from './components/WindowTabBar';
 import { t } from './i18n';
 import { formatNumber } from './i18n/format';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
-import { HeaderSlotProvider, Menu, MenuItem, MenuSeparator, PopUpButton } from './lattice/ui';
+import {
+  Button,
+  Card,
+  HeaderSlotProvider,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  PopUpButton,
+} from './lattice/ui';
 import {
   formatAgo,
   QUARANTINE_COMMAND,
@@ -431,21 +439,94 @@ const RELEASES_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp/releases/la
 // downloaded and waiting on a restart, and a bundle that could not replace
 // itself. "Up to date" used to be a permanent 28px strip above the footer whose
 // whole job was to say nothing was wrong; it says that in the app menu's
-// header now, next to Check for updates (TRA-363).
+// header now, next to Check for updates (TRA-363). Its four parts — title,
+// caption, command line, shell — are below; `UpdateCard` itself follows them.
+
+/** Card title — 13/16/590, the window's Body semibold, not a 12px one-off. */
+function CardTitle({ children, tone }: { children: React.ReactNode; tone?: 'warn' }) {
+  return (
+    <div
+      className="flex items-center gap-1.5 text-[13px] leading-4 font-[590] tracking-[-0.005em]"
+      style={{ color: tone === 'warn' ? 'var(--status-orange)' : 'var(--label)' }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Caption line — 11/13, --label-secondary. The old 10.5px was off the scale.
+    Each utility is its own literal: Tailwind's scanner does not extract a class
+    that a `${…}` interpolation runs straight into, and the missing one is
+    silent — measured on the built CSS. */
+function CardSubtitle({ children, error }: { children: React.ReactNode; error?: string }) {
+  return (
+    <div
+      className={['text-[11px]', 'leading-[13px]', error ? 'truncate' : ''].join(' ')}
+      style={{ color: error ? 'var(--status-orange)' : 'var(--label-secondary)' }}
+      title={error}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* The card's shell. Material, radius and hairline come from Lattice `Card` —
+   the same opaque --surface tile at --radius-card the rest of the window is
+   built from. It used to hand-roll --fill-tertiary at an 8px radius, which is
+   why it read as a flat grey rectangle next to tiles it sat 200px away from
+   (TRA-429). `.update-card` survives only as the animation + margin hook. */
+function CardShell({
+  children,
+  warn = false,
+  live = false,
+}: {
+  children: React.ReactNode;
+  warn?: boolean;
+  live?: boolean;
+}) {
+  return (
+    <Card
+      className="update-card"
+      style={
+        {
+          WebkitAppRegion: 'no-drag',
+          ...(warn ? { borderColor: 'var(--status-orange)' } : null),
+        } as React.CSSProperties
+      }
+    >
+      {/* The live region is the body, not the Card: `Card` owns the material
+          and takes no ARIA. It appears without the user asking, so assistive
+          tech has to hear it. */}
+      <div
+        className="flex flex-col gap-2 p-3"
+        {...(live ? ({ role: 'status', 'aria-live': 'polite' } as const) : null)}
+      >
+        {children}
+      </div>
+    </Card>
+  );
+}
+
 /** A command the user has to run themselves: selectable, and copyable in one
-    click — a command you cannot copy is a screenshot, not an instruction. */
+    click — a command you cannot copy is a screenshot, not an instruction.
+    `.lx-sheet-command` is the app's command field (surface-sunken well,
+    hairline, --radius-input, mono at the caption size) and the copy control is
+    the icon `Button`; the card had grown its own 5px-radius box with a 10px
+    mono and a hand-rolled button, which is the geometry this card was on
+    before TRA-429. */
 function CommandLine({ command, label }: { command: string; label: string }) {
   return (
-    <div className="update-card-command">
+    <div className="lx-sheet-command">
       <code>{command}</code>
-      <button
-        type="button"
+      <Button
+        variant="icon"
+        size="small"
+        icon="content_copy"
+        iconSize={13}
         onClick={() => void navigator.clipboard?.writeText(command)}
         aria-label={label}
         title={label}
-      >
-        <Icon name="content_copy" size={12} />
-      </button>
+      />
     </div>
   );
 }
@@ -457,26 +538,22 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
   // Pending swap takes precedence — the user's next click should restart, not redownload.
   if (pendingVersion) {
     return (
-      <div className="update-card" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <div className="title">
-          <span className="ready-icon" aria-hidden="true">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path
-                d="M2.5 6.2l2.4 2.4 4.6-4.6"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+      <CardShell>
+        <CardTitle>
+          <span className="flex" style={{ color: 'var(--status-green)' }} aria-hidden="true">
+            <Icon name="check" size={13} />
           </span>
           {t('cardReadyTitle', { version: pendingVersion })}
-        </div>
-        <div className="subtitle">{t('cardReadySubtitle', { current: state.current })}</div>
-        <button type="button" className="btn-prominent success" onClick={update.restart}>
+        </CardTitle>
+        <CardSubtitle>{t('cardReadySubtitle', { current: state.current })}</CardSubtitle>
+        {/* Accent, not green: macOS paints the one default action in the accent
+            colour, and the green here is the state (the check above), not the
+            button. The old `.btn-prominent.success` was the only green button
+            in the app. */}
+        <Button variant="prominent" className="w-full" onClick={update.restart}>
           {t('cardRestart')}
-        </button>
-      </div>
+        </Button>
+      </CardShell>
     );
   }
 
@@ -487,57 +564,62 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
   // own honest card with the one action that does work: download the release.
   if (state.stuck && state.latest) {
     return (
-      <div
-        className="update-card stuck"
-        role="status"
-        aria-live="polite"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      >
-        <div className="title">{t('cardStuckTitle', { version: state.latest })}</div>
-        <div className="subtitle">{t('cardStuckSubtitle', { current: state.current })}</div>
-        <button
-          type="button"
-          className="btn-prominent"
+      <CardShell warn live>
+        <CardTitle tone="warn">{t('cardStuckTitle', { version: state.latest })}</CardTitle>
+        <CardSubtitle>{t('cardStuckSubtitle', { current: state.current })}</CardSubtitle>
+        <Button
+          variant="prominent"
+          icon="download"
+          className="w-full"
           onClick={() => void window.electronAPI?.openExternal?.(RELEASES_URL)}
         >
           {t('cardDownload', { version: state.latest })}
-        </button>
+        </Button>
         {/* The download alone dead-ends: our macOS builds are ad-hoc signed, so
             Gatekeeper calls the file the browser just fetched "damaged". An
             escape hatch that ends in an error dialog is not an escape hatch —
             the card carries the command that clears it (TRA-431). */}
-        <div className="subtitle">{t('cardStuckQuarantine')}</div>
+        <CardSubtitle>{t('cardStuckQuarantine')}</CardSubtitle>
         <CommandLine command={QUARANTINE_COMMAND} label={t('copyQuarantineCommand')} />
-      </div>
+      </CardShell>
     );
   }
 
   if (!state.available) return null;
 
   return (
-    <div
-      className="update-card"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-      // It appears without the user asking, so assistive tech has to hear it.
-      role="status"
-      aria-live="polite"
-    >
-      <div className="title">{t('cardAvailableTitle', { version: state.latest })}</div>
-      <div className="subtitle">
+    <CardShell live>
+      <CardTitle>{t('cardAvailableTitle', { version: state.latest })}</CardTitle>
+      <CardSubtitle>
         {t('cardAvailableSubtitle', {
           current: state.current,
           when: formatAgo(state.lastChecked),
         })}
-      </div>
-      {state.error && (
-        <div className="subtitle error" title={state.error}>
-          {state.error}
-        </div>
-      )}
-      <button type="button" className="btn-prominent" onClick={update.apply} disabled={updating}>
+      </CardSubtitle>
+      {state.error && <CardSubtitle error={state.error}>{state.error}</CardSubtitle>}
+      {/* `is-status`, not a plain disabled button: the download takes minutes,
+          and 0.4 opacity on the one thing that says it is running reads as a
+          hung app. The capsule keeps its accent fill and its label; the bar
+          below is what carries "still going" (TRA-429). npm gives us no byte
+          count — `npm install -g` is one opaque execFile in the main process —
+          so the honest shape is indeterminate, never a fake percentage. */}
+      <Button
+        variant="prominent"
+        className={['w-full', updating ? 'is-status' : ''].join(' ')}
+        onClick={update.apply}
+        disabled={updating}
+      >
         {updating ? t('cardUpdating') : t('cardUpdate')}
-      </button>
-    </div>
+      </Button>
+      {updating && (
+        <div
+          className="update-progress"
+          role="progressbar"
+          aria-label={t('cardUpdating')}
+          aria-valuetext={t('cardUpdating')}
+        />
+      )}
+    </CardShell>
   );
 }
 
