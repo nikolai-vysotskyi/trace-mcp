@@ -73,6 +73,7 @@ import { TomlLanguagePlugin } from './toml/index.js';
 import { TypeScriptLanguagePlugin } from './typescript/index.js';
 import { VerilogLanguagePlugin } from './verilog/index.js';
 import { VerseLanguagePlugin } from './verse/index.js';
+import { VhdlLanguagePlugin } from './vhdl/index.js';
 import { VimScriptLanguagePlugin } from './vimscript/index.js';
 import { VueLanguagePlugin } from './vue/index.js';
 import { WolframLanguagePlugin } from './wolfram/index.js';
@@ -137,6 +138,7 @@ export function createAllLanguagePlugins(): LanguagePlugin[] {
     new CudaLanguagePlugin(),
     new CobolLanguagePlugin(),
     new VerilogLanguagePlugin(),
+    new VhdlLanguagePlugin(),
     new GlslLanguagePlugin(),
     new MesonLanguagePlugin(),
     new VimScriptLanguagePlugin(),
