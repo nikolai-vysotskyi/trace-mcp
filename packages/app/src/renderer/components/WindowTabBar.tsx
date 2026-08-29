@@ -58,8 +58,8 @@ export function WindowTabBar() {
           display: 'flex',
           alignItems: 'stretch',
           height: 36,
-          background: 'var(--bg-primary)',
-          borderBottom: '1px solid var(--sidebar-border)',
+          background: 'var(--surface-sunken)',
+          borderBottom: '1px solid var(--separator)',
           WebkitAppRegion: 'drag',
           paddingLeft: 4,
           paddingRight: 4,
@@ -82,8 +82,8 @@ export function WindowTabBar() {
               padding: '0 12px',
               fontSize: 11,
               fontWeight: tab.active ? 600 : 400,
-              color: tab.active ? 'var(--text-primary)' : 'var(--text-secondary)',
-              background: tab.active ? 'var(--bg-active)' : 'transparent',
+              color: tab.active ? 'var(--label)' : 'var(--label-secondary)',
+              background: tab.active ? 'var(--fill-tertiary)' : 'transparent',
               border: 'none',
               borderRadius: '6px 6px 0 0',
               cursor: 'pointer',
@@ -123,12 +123,12 @@ export function WindowTabBar() {
                 borderRadius: 3,
                 fontSize: 12,
                 lineHeight: 1,
-                color: 'var(--text-tertiary)',
+                color: 'var(--label-secondary)',
                 opacity: 0.6,
               }}
               onMouseEnter={(e) => {
                 (e.target as HTMLElement).style.opacity = '1';
-                (e.target as HTMLElement).style.background = 'var(--bg-secondary)';
+                (e.target as HTMLElement).style.background = 'var(--fill-quaternary)';
               }}
               onMouseLeave={(e) => {
                 (e.target as HTMLElement).style.opacity = '0.6';
