@@ -9,6 +9,12 @@ import {
   hasPendingUpdate as hasPendingUpdateImpl,
   trySpawnApplyHelper as trySpawnApplyHelperImpl,
 } from './apply-pending-helper';
+import { updateChannelFor } from './update-channel';
+
+// Exactly one update mechanism per platform — see update-channel.ts for why
+// macOS cannot use electron-updater and Windows can. Every update code path
+// below branches on this constant and nothing else.
+const UPDATE_CHANNEL = updateChannelFor(process.platform);
 
 // SharedArrayBuffer needed for cosmos.gl workers. GPU compositing + Skia
 // renderer are kept ON — disabling them forces a per-frame CPU readback of
@@ -590,6 +596,27 @@ function fetchLatestRelease(): Promise<{
   });
 }
 
+// --- Windows: electron-updater ---------------------------------------------
+//
+// NSIS + `latest.yml` on the GitHub release. Loaded lazily and only on the
+// electron-updater channel so macOS never pulls the module in at all — the
+// two mechanisms must never both be live in one process.
+let winUpdateDownloaded = false;
+
+async function getAutoUpdater() {
+  if (UPDATE_CHANNEL !== 'electron-updater') {
+    throw new Error(`electron-updater is not the update channel on ${process.platform}`);
+  }
+  const { autoUpdater } = await import('electron-updater');
+  // Download only when the user asks: the renderer's Update button drives the
+  // whole flow, so a silent background download would fight the UI's state.
+  autoUpdater.autoDownload = false;
+  // A downloaded update still installs if the user quits instead of pressing
+  // Restart — same self-healing property the macOS before-quit hook gives us.
+  autoUpdater.autoInstallOnAppQuit = true;
+  return autoUpdater;
+}
+
 ipcMain.handle('check-for-update', async () => {
   const result = await checkForUpdate();
   // Divergence between global roots exists independently of whether an update
@@ -604,6 +631,23 @@ ipcMain.handle('check-for-update', async () => {
 async function checkForUpdate() {
   const now = Date.now();
   const current = app.getVersion().replace(/^v/, '');
+
+  if (UPDATE_CHANNEL === 'electron-updater') {
+    try {
+      const updater = await getAutoUpdater();
+      const result = await updater.checkForUpdates();
+      const latest = result?.updateInfo?.version?.replace(/^v/, '');
+      if (!latest) return { available: false, current, lastChecked: now };
+      return { available: cmpSemver(latest, current) > 0, current, latest, lastChecked: now };
+    } catch (err) {
+      appendUpdateLog({
+        event: 'check-for-update:electron-updater-failed',
+        error: (err as Error)?.message ?? String(err),
+      });
+      return { available: false, current, lastChecked: now, error: toUpdateErrorMessage(err) };
+    }
+  }
+
   // Read the persisted "I tried npm-only" marker once. If the user already
   // clicked Update for exactly this (bundle, latest) pair and nothing on
   // disk has moved, we suppress the banner — clicking Update again will
@@ -1165,6 +1209,25 @@ async function repairStaleBundle(reason: string, roots?: {
 }
 
 ipcMain.handle('apply-update', async () => {
+  if (UPDATE_CHANNEL === 'electron-updater') {
+    // No npm involvement at all on Windows: electron-updater downloads the
+    // NSIS installer described by latest.yml and runs it on quit/restart.
+    try {
+      const updater = await getAutoUpdater();
+      // downloadUpdate() requires a check in this same process first.
+      const check = await updater.checkForUpdates();
+      const version = check?.updateInfo?.version?.replace(/^v/, '');
+      await updater.downloadUpdate();
+      winUpdateDownloaded = true;
+      appendUpdateLog({ event: 'apply-update:electron-updater-downloaded', version });
+      return { ok: true, pending: true, outcome: 'bundle-pending' as UpdateOutcome, version };
+    } catch (err) {
+      const summary = (err as Error)?.message ?? String(err);
+      appendUpdateLog({ event: 'apply-update:electron-updater-failed', summary });
+      return { ok: false, error: `${summary}\n\nFull log: ${UPDATE_LOG}` };
+    }
+  }
+
   // `install --force` is the robust swap: it replaces the package directory
   // wholesale rather than relying on `update`'s rename dance, which breaks when
   // the prior install left trace-mcp in a partially-extracted state.
@@ -1350,6 +1413,7 @@ const APPLY_HELPER = app.isPackaged
   : path.join(__dirname, '..', '..', '..', '..', 'scripts', 'apply-pending-update.mjs');
 
 function hasPendingUpdate(): boolean {
+  if (UPDATE_CHANNEL !== 'zip-staged') return false;
   return hasPendingUpdateImpl({ pendingZip: PENDING_ZIP, pendingVersion: PENDING_VERSION });
 }
 
@@ -1364,6 +1428,10 @@ function clearPendingFiles(): void {
 }
 
 ipcMain.handle('check-pending-update', () => {
+  // Windows: the pending state is whatever electron-updater has downloaded.
+  if (UPDATE_CHANNEL === 'electron-updater') {
+    return { pending: winUpdateDownloaded };
+  }
   // Only the zip-staged path can actually swap the Electron bundle on
   // restart. The previous "npm-install path" branch claimed pending=true
   // whenever the on-disk package was ahead of the running process, but
@@ -1391,12 +1459,20 @@ function trySpawnApplyHelper(): boolean {
   return trySpawnApplyHelperImpl(
     { pendingZip: PENDING_ZIP, pendingVersion: PENDING_VERSION, applyHelper: APPLY_HELPER },
     process.pid,
+    UPDATE_CHANNEL,
   );
 }
 
 // IPC: restart the app. If a staged update is waiting, apply it; otherwise
 // just relaunch.
-ipcMain.handle('restart-app', () => {
+ipcMain.handle('restart-app', async () => {
+  // Windows: hand the exit to electron-updater, which runs the downloaded
+  // NSIS installer and relaunches the new build itself.
+  if (UPDATE_CHANNEL === 'electron-updater' && winUpdateDownloaded) {
+    const updater = await getAutoUpdater();
+    updater.quitAndInstall();
+    return;
+  }
   if (trySpawnApplyHelper()) {
     app.exit(0);
     return;

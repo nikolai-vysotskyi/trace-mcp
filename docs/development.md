@@ -120,6 +120,29 @@ tests/
 
 ---
 
+## Desktop app update channels
+
+The Electron app updates itself differently per platform, and the split is
+deliberate. `packages/app/src/main/update-channel.ts` is the single place that
+decides which one a platform gets; no platform ever runs both.
+
+| Platform | Mechanism | Why |
+| --- | --- | --- |
+| macOS | Staged zip (`scripts/postinstall-app.mjs` + `scripts/apply-pending-update.mjs`) | Squirrel.Mac, which electron-updater uses on macOS, validates the replacement bundle's code signature. We ship ad-hoc signed (`Signature=adhoc`, `TeamIdentifier=not set`), so it would need a paid Apple Developer ID — ruled out. The npm postinstall drops a verified zip next to the `.app` and a detached helper swaps the bundle on exit. |
+| Windows | `electron-updater` + NSIS | Windows imposes no signature requirement on the swap, so the standard mechanism works unsigned. Driven by `latest.yml`, generated from the `win.publish` block in `packages/app/electron-builder.yml` and uploaded to the GitHub release by `.github/workflows/release.yml`. A missing `latest.yml` fails the release. |
+| Linux | none | No packaged target today (`linux.target: []`). |
+
+Consequences worth knowing before touching this:
+
+- `publish` lives under `win:`, not at the top level. Hoisting it would make
+  electron-builder emit `latest-mac.yml` and point macOS installs at an update
+  path that cannot succeed.
+- `electron-updater` is the app's only production `dependency`. Everything the
+  renderer imports is bundled by Vite and therefore belongs in
+  `devDependencies` — that is what keeps the packaged `node_modules` small.
+
+---
+
 ## Adding a new integration plugin
 
 1. Create a directory under the appropriate category in `src/indexer/plugins/integration/`:
