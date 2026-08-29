@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.0.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.3.0...v3.0.0) (2026-08-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* Node 20 and 21 are no longer supported; Node >=22 is required.
+
+### Features
+
+* raise the Node floor to 22 and re-ground the dependabot ignores ([#482](https://github.com/nikolai-vysotskyi/trace-mcp/issues/482)) ([742565f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/742565ff8f4c2e263a2087a50bce0802a0749ff1))
+
+
+### Bug Fixes
+
+* **app:** close the last hit-target gaps found in the TRA-284 final walk ([#488](https://github.com/nikolai-vysotskyi/trace-mcp/issues/488)) ([5788340](https://github.com/nikolai-vysotskyi/trace-mcp/commit/57883408843ecc0c204f8cae2a003d220583f2d5))
+* **daemon:** auto-deregister stale one-shot agent-run workdirs (TRA-335) ([#487](https://github.com/nikolai-vysotskyi/trace-mcp/issues/487)) ([205905c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/205905cc385ff6c688a4eeaf24c1403b548b23c2))
+* **verify:** read embedding_meta as the KV table it actually is ([#485](https://github.com/nikolai-vysotskyi/trace-mcp/issues/485)) ([dae8004](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dae80041b4c8b8f09d48bd76a9a5795bee2597bc))
+
+
+### Refactoring
+
+* **app:** retire the legacy palette — one token layer, no ghosts (TRA-315) ([#484](https://github.com/nikolai-vysotskyi/trace-mcp/issues/484)) ([9e52c1a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9e52c1aadef16409d639c60f30421825dcaf9bf0))
+
 ## [2.3.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v2.2.0...v2.3.0) (2026-08-29)
 
 
