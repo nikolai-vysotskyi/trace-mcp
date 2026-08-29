@@ -217,10 +217,13 @@ const ToolsConfigSchema = z
   .object({
     // Default trimmed to 'standard' (~50 tools) per TRA-5: session mining of
     // 1813 local sessions showed only 64/~170 tools ever get called, and the
-    // top dozen cover the vast majority of calls. 'full' remains available
-    // as an explicit opt-in (config `tools.preset: "full"` or
-    // `TRACE_MCP_PRESET=full`) for anyone who wants the entire surface.
-    preset: z.string().default('standard'),
+    // top dozen cover the vast majority of calls. TRA-402 took it one step
+    // further to 'minimal' (~25 tools) once `load_tools` made a preset a
+    // deferral rather than a permanent restriction — anything outside the
+    // default is now one call away instead of gone for the session. 'standard'
+    // and 'full' remain available as explicit opt-ins (config
+    // `tools.preset: "full"` or `TRACE_MCP_PRESET=full`).
+    preset: z.string().default('minimal'),
     include: z.array(z.string()).optional(),
     exclude: z.array(z.string()).optional(),
     descriptions: z.record(z.string(), ToolDescriptionOverrideSchema).optional(),

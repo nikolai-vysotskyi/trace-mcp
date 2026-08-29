@@ -4,6 +4,7 @@ import { logger } from '../../logger.js';
 import { resolveWorktreeAware, worktreeHint } from '../../registry-worktree.js';
 import { resolveDeepestKnownRoot } from '../../subproject/resolve.js';
 import { isTransientError, withRetry } from '../../utils/retry.js';
+import { LOAD_TOOLS_HINT, expandLoadRequest, planToolLoad } from '../../server/tool-surface.js';
 import type { Backend } from './types.js';
 
 /**
@@ -43,6 +44,21 @@ export interface ProxyBackendOptions {
    * (TRA-250). Omit to forward the daemon's full surface unchanged.
    */
   toolFilter?: (name: string) => boolean;
+  /**
+   * Progressive tool disclosure on the daemon path (TRA-402). `load_tools` has
+   * to be answered here rather than forwarded: the daemon serves one full
+   * surface to every session and has no idea which tools *this* session has
+   * paid for. Given this hook, the proxy resolves the request against the
+   * daemon's advertised tool list, widens `toolFilter` through `load`, replies
+   * itself, and pushes `notifications/tools/list_changed` at the client.
+   * Omit to forward `load_tools` like any other call.
+   */
+  toolSurface?: {
+    /** Hard-excluded by `tools.exclude`; escalation must not undo that. */
+    isExcluded: (name: string) => boolean;
+    /** Widen this session's surface to include `names`. */
+    load: (names: string[]) => void;
+  };
   /**
    * Test seam: build a transport for the resolved /mcp URL + project root.
    * Defaults to a real StreamableHTTPClientTransport.
@@ -144,6 +160,12 @@ export class ProxyBackend implements Backend {
   private resolveReinit: (() => void) | null = null;
   /** Ids of in-flight `tools/list` requests, whose responses need filtering. */
   private readonly pendingToolsListIds = new Set<string | number>();
+  /**
+   * The daemon's last *unfiltered* `tools/list` result — the only place the
+   * proxy learns which tools exist beyond this session's preset, and the source
+   * of the schemas `load_tools` echoes back (TRA-402).
+   */
+  private daemonTools: Array<{ name: string; description?: string; inputSchema?: unknown }> = [];
 
   constructor(opts: ProxyBackendOptions) {
     this.opts = opts;
@@ -189,6 +211,10 @@ export class ProxyBackend implements Backend {
     if (this.opts.toolFilter) {
       const id = messageId(msg);
       const called = toolCallName(msg);
+      if (called === 'load_tools' && this.opts.toolSurface && id !== undefined) {
+        this.handleLoadTools(msg, id);
+        return;
+      }
       // A filtered-out tool must be genuinely uncallable, not merely hidden
       // from tools/list — answer it here instead of forwarding (TRA-250).
       if (called !== undefined && !this.opts.toolFilter(called)) {
@@ -305,6 +331,89 @@ export class ProxyBackend implements Backend {
   }
 
   /**
+   * Answer a `load_tools` call locally instead of forwarding it (TRA-402).
+   *
+   * Resolves the request against the daemon's advertised surface, widens this
+   * session's filter, replies with the same payload shape the in-process tool
+   * produces, and emits `tools/list_changed` so a client that honours the
+   * notification re-reads the now-larger surface. A client that ignores it
+   * still gets the loaded tools' schemas in the reply and can drive them
+   * through `batch`.
+   */
+  private handleLoadTools(msg: JSONRPCMessage, id: string | number): void {
+    const surface = this.opts.toolSurface!;
+    const filter = this.opts.toolFilter!;
+    const args = ((msg as Record<string, unknown>).params as Record<string, unknown> | undefined)
+      ?.arguments as { preset?: string; tools?: string[] } | undefined;
+    const reply = (result: unknown): void => {
+      this.onmessage?.({ jsonrpc: '2.0', id, result } as unknown as JSONRPCMessage);
+    };
+
+    const deferred = this.daemonTools.filter((t) => !filter(t.name));
+    const deferredNames = deferred.map((t) => t.name);
+    const known = new Set(this.daemonTools.map((t) => t.name));
+
+    // No arguments is the discovery call (mirrors the in-process tool).
+    if (!args?.preset && !(args?.tools && args.tools.length > 0)) {
+      reply({
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              loaded: [],
+              deferred_tools: deferredNames,
+              hint: 'Names only — the schemas are what this session is not paying for. Call load_tools again with `tools` or `preset` to pull any of them in.',
+            }),
+          },
+        ],
+      });
+      return;
+    }
+
+    const plan = planToolLoad(
+      expandLoadRequest({ preset: args.preset, tools: args.tools }, deferredNames),
+      {
+        isLoaded: (n) => known.has(n) && filter(n),
+        isDeferred: (n) => known.has(n),
+        isExcluded: surface.isExcluded,
+      },
+    );
+
+    if (plan.load.length > 0) {
+      surface.load(plan.load);
+      // Push the spec notification at the client. Fire-and-forget by design:
+      // there is nothing useful to do if the client's transport rejects it,
+      // and the reply below already carries the schemas as a fallback.
+      this.onmessage?.({
+        jsonrpc: '2.0',
+        method: 'notifications/tools/list_changed',
+      } as unknown as JSONRPCMessage);
+    }
+
+    const byName = new Map(this.daemonTools.map((t) => [t.name, t]));
+    reply({
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            loaded: plan.load,
+            already_loaded: plan.alreadyLoaded,
+            unknown: plan.unknown,
+            blocked: plan.blocked,
+            tools: plan.load.map((n) => ({
+              name: n,
+              description: byName.get(n)?.description,
+              input_schema: byName.get(n)?.inputSchema,
+            })),
+            still_deferred: deferredNames.length - plan.load.length,
+            hint: plan.load.length > 0 ? LOAD_TOOLS_HINT : undefined,
+          }),
+        },
+      ],
+    });
+  }
+
+  /**
    * Narrow a daemon `tools/list` reply to this session's preset. The daemon
    * always answers with its full surface — filtering it out here is what makes
    * the preset actually reach the client on the daemon path (TRA-250).
@@ -317,6 +426,11 @@ export class ProxyBackend implements Backend {
       | { tools?: Array<{ name?: unknown }> }
       | undefined;
     if (!Array.isArray(result?.tools)) return msg;
+    this.daemonTools = result.tools as Array<{
+      name: string;
+      description?: string;
+      inputSchema?: unknown;
+    }>;
     const tools = result.tools.filter((t) => typeof t?.name !== 'string' || filter(t.name));
     if (tools.length === result.tools.length) return msg;
     logger.debug(
