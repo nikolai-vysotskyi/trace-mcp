@@ -6,10 +6,13 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "dist/main",
-    "rootDir": "src/main",
+    "outDir": "dist",
+    "rootDir": "src",
     "lib": ["ES2022"],
     "types": ["node"]
   },
-  "include": ["src/main/**/*"]
+  // `src/shared` holds definitions both processes read (TRA-363). rootDir has
+  // to be their common parent for tsc to emit it, which keeps main's output at
+  // dist/main/index.js — the path package.json#main already points at.
+  "include": ["src/main/**/*", "src/shared/**/*"]
 }

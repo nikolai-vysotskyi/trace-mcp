@@ -623,7 +623,23 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   white-space: nowrap;
   cursor: default;
 }
-.ws-ctx-item:hover:not(:disabled) { background: var(--accent-fill); color: var(--on-accent); }
+/* Focus IS the highlight in a menu: arrowing down moves real DOM focus, so the
+   keyboard path has to paint the same selection the pointer does (TRA-363).
+   `:focus`, not `:focus-visible` — Chromium's heuristic for a programmatic
+   focus() is not reliable, and a menu item is never focused by any other
+   means (the menu closes on the click that would have done it). */
+.ws-ctx-item:hover:not(:disabled),
+.ws-ctx-item:focus:not(:disabled) {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  outline: none;
+}
+/* …and it is the ONLY indicator: the house `*:focus-visible` ring drew a blue
+   halo around an already-blue row, which reads as a button on a surface, not a
+   highlighted menu item. macOS draws the fill and nothing else. */
+.ws-ctx-item:focus-visible {
+  box-shadow: none;
+}
 .ws-ctx-item:disabled { color: var(--label-secondary); cursor: default; }
 /* Leading icon column — muted, white on accent hover (macOS idiom). */
 .ws-ctx-item .ws-ctx-ico {
@@ -635,7 +651,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   justify-content: center;
   color: var(--label-secondary);
 }
-.ws-ctx-item:hover:not(:disabled) .ws-ctx-ico { color: rgba(255, 255, 255, 0.85); }
+.ws-ctx-item:hover:not(:disabled) .ws-ctx-ico,
+.ws-ctx-item:focus:not(:disabled) .ws-ctx-ico { color: rgba(255, 255, 255, 0.85); }
 /* Trailing shortcut hint (⌘C etc.) — tertiary, dims to white on hover. */
 .ws-ctx-item .ws-ctx-sc {
   margin-left: auto;
@@ -643,7 +660,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   color: var(--label-secondary);
   font-size: 12px;
 }
-.ws-ctx-item:hover:not(:disabled) .ws-ctx-sc { color: rgba(255, 255, 255, 0.85); }
+.ws-ctx-item:hover:not(:disabled) .ws-ctx-sc,
+.ws-ctx-item:focus:not(:disabled) .ws-ctx-sc { color: rgba(255, 255, 255, 0.85); }
 /* Leading check column for a toggle item (role=menuitemcheckbox). Reserved on
    EVERY item of a menu that has one, so labels stay on one left edge whether
    or not their row is checked — macOS never reflows a menu on toggle.
@@ -651,23 +669,29 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
    slot rendered as a zero-width span and the checkmark landed on the label
    (TRA-294). */
 .ws-ctx-item .ws-ctx-check {
-  width: 14px;
+  /* 16px, matching .ws-ctx-ico: one menu can hold both kinds of item (the app
+     menu has icon commands and a checkable Appearance group), and at 14 the
+     two gutters put their labels 2px apart. */
+  width: 16px;
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--accent);
 }
-.ws-ctx-item:hover:not(:disabled) .ws-ctx-check { color: var(--on-accent); }
+.ws-ctx-item:hover:not(:disabled) .ws-ctx-check,
+.ws-ctx-item:focus:not(:disabled) .ws-ctx-check { color: var(--on-accent); }
 /* Destructive item. Red LABEL on the flat menu, white on the accent hover —
    never a red fill, which reads as "selected" rather than "dangerous". */
 .ws-ctx-item.danger { color: var(--status-red); }
 .ws-ctx-item.danger .ws-ctx-ico { color: var(--status-red); }
-.ws-ctx-item.danger:hover:not(:disabled) {
+.ws-ctx-item.danger:hover:not(:disabled),
+.ws-ctx-item.danger:focus:not(:disabled) {
   background: var(--danger-fill);
   color: var(--on-accent);
 }
-.ws-ctx-item.danger:hover:not(:disabled) .ws-ctx-ico { color: var(--on-accent); }
+.ws-ctx-item.danger:hover:not(:disabled) .ws-ctx-ico,
+.ws-ctx-item.danger:focus:not(:disabled) .ws-ctx-ico { color: var(--on-accent); }
 /* Group divider — a hairline with 5px of air, inset to the menu's padding. */
 .ws-ctx-sep {
   height: 0.5px;
@@ -686,6 +710,58 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   user-select: none;
 }
 .ws-ctx-section:first-child { padding-top: 4px; }
+
+/* Menu header (TRA-363) — what the menu is ABOUT, not something you can pick.
+   The app menu has no account to hang on, so the anchor is the product: the
+   trigger carries the name, this carries the version and whether it is current.
+   Same 9px left inset as .ws-ctx-section, so header, group headers and item
+   labels sit on one edge. */
+.ws-ctx-header {
+  padding: 4px 9px 7px;
+  user-select: none;
+}
+.ws-ctx-header .name {
+  font-size: 13px;
+  font-weight: 590;
+  letter-spacing: -0.01em;
+  color: var(--label);
+}
+.ws-ctx-header .status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 1px;
+  font-size: 11px;
+  color: var(--label-secondary);
+}
+.ws-ctx-header .status .text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Never colour alone: the dot repeats what the sentence beside it already
+   says, it does not replace it. */
+.ws-ctx-header .dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--label-secondary);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--label-secondary) 60%, black 40%);
+}
+.ws-ctx-header .status.is-ok .dot {
+  background: var(--status-green);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--status-green) 60%, black 40%);
+}
+.ws-ctx-header .status.is-info .dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--accent) 60%, black 40%);
+}
+.ws-ctx-header .status.is-warn .dot {
+  background: var(--status-orange);
+  box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--status-orange) 60%, black 40%);
+}
 
 /* ── Confirmation popover (.mac-popover) — paired with the context menu ──── */
 .ws-popover {

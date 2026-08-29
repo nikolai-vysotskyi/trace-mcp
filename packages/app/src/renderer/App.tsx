@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppMenu } from './components/AppMenu';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { QuickOpen, type QuickOpenItem } from './components/QuickOpen';
+import { SidebarRow } from './components/SidebarRow';
 import { WindowTabBar } from './components/WindowTabBar';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
 import { Menu, MenuItem, MenuSeparator, PopUpButton } from './lattice/ui';
+import { formatAgo, type UpdateCheck, useUpdateCheck } from './update-check.js';
 import {
   clampSidebarWidth,
   readSidebarCollapsed,
@@ -92,54 +95,6 @@ import {
 } from './recent-projects.js';
 
 export { removeRecentProject };
-
-/** One 28px sidebar row: 16px leading glyph, 13px label, optional trailing. */
-function SidebarRow({
-  icon,
-  glyph,
-  label,
-  selected = false,
-  onClick,
-  onKeyDown,
-  onContextMenu,
-  title,
-  count,
-  trailing,
-  rowRef,
-  ...aria
-}: {
-  icon?: string;
-  glyph?: React.ReactNode;
-  label: React.ReactNode;
-  selected?: boolean;
-  onClick: () => void;
-  onKeyDown?: (e: React.KeyboardEvent) => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
-  title?: string;
-  count?: React.ReactNode;
-  trailing?: React.ReactNode;
-  rowRef?: React.Ref<HTMLButtonElement>;
-} & React.AriaAttributes & { role?: string; tabIndex?: number }) {
-  return (
-    <button
-      type="button"
-      ref={rowRef}
-      className={`ws-sb-row${selected ? ' is-selected' : ''}`}
-      onClick={onClick}
-      onKeyDown={onKeyDown}
-      onContextMenu={onContextMenu}
-      title={title}
-      {...aria}
-    >
-      <span className="ws-sb-ico" aria-hidden="true">
-        {glyph ?? (icon ? <Icon name={icon} size={16} /> : null)}
-      </span>
-      {typeof label === 'string' ? <span className="ws-sb-label">{label}</span> : label}
-      {count !== undefined && <span className="ws-sb-count">{count}</span>}
-      {trailing}
-    </button>
-  );
-}
 
 function RecentProjects() {
   const [recent, setRecent] = useState<string[]>(getRecentProjects);
@@ -440,176 +395,18 @@ function ProjectFileExplorer({
   );
 }
 
-// ── Sidebar footer ───────────────────────────────────────────
-// ONE row pinned below the scroll region, in the SAME row system as the nav
-// above it (.ws-sb-row: 28px, 16px leading glyph at x=14, 13px label at x=38).
-//
-// TRA-305 put the footer on that row system, which was right, but it also
-// parked Appearance in a second static row — 70.5px of footer under a 38px
-// update banner, and the bottom of the sidebar read as heavy (TRA-306).
-// Appearance is a preference, not a navigation destination, and no macOS app
-// pins an appearance switcher to its sidebar: it moved to the Settings screen,
-// where Auto / Light / Dark are still all three one click away. In project
-// windows, Settings opens the menu window via IPC instead of navigating.
-function SidebarFooter({
-  active,
-  onOpenSettingsInPlace,
-}: {
-  active: boolean;
-  onOpenSettingsInPlace?: () => void;
-}) {
-  const handleSettings = () => {
-    if (onOpenSettingsInPlace) {
-      onOpenSettingsInPlace();
-    } else {
-      const api = window.electronAPI;
-      api?.openSettings?.();
-    }
-  };
-  return (
-    <div className="ws-sb-footer">
-      <SidebarRow
-        icon="settings"
-        label="Settings"
-        selected={active}
-        aria-current={active ? 'page' : undefined}
-        onClick={handleSettings}
-      />
-    </div>
-  );
-}
-
-// ── Update banner ────────────────────────────────────────────
-// Always rendered at the bottom of the sidebar. Polls every 10min — the main
-// process checks the npm registry (no rate limit) with GitHub Releases as a
-// fallback. Surfaces three states: up-to-date (with last-checked timestamp),
-// update available, and update downloaded but pending restart.
 // Where the compiled bundles live — same repo the postinstall downloads from
 // (scripts/app-dist-repo.mjs). Used by the "manual install" card below.
 const RELEASES_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest';
 
-type UpdateState = {
-  available: boolean;
-  current?: string;
-  latest?: string;
-  lastChecked?: number;
-  error?: string;
-  stuck?: boolean;
-  staleRoots?: { root: string; version: string }[];
-};
-
-/**
- * `npm install -g` only ever writes into the global root its own npm owns. On a
- * machine with several (nvm + Herd + a bundled runtime) the rest keep an old
- * version, and every other signal here still reads "Up to date" — so a client
- * wired to a stale root runs old code with nothing saying so (TRA-364). We
- * cannot safely write into a root the user never pointed us at, so we say it
- * out loud instead: the status row goes to the warning treatment and its
- * tooltip names each stale root and the command that fixes it.
- */
-function describeStaleRoots(staleRoots: { root: string; version: string }[]): {
-  label: string;
-  title: string;
-} {
-  const label =
-    staleRoots.length === 1
-      ? `Another npm install is on v${staleRoots[0].version}`
-      : `${staleRoots.length} other npm installs are out of date`;
-  const lines = staleRoots.map((r) => `v${r.version} — ${r.root}/trace-mcp`);
-  return {
-    label,
-    title: `${label}. This app updated the root it resolves to; these were not touched:\n${lines.join('\n')}\n\nFix each with its own npm: <root>/../../bin/npm install -g trace-mcp@latest`,
-  };
-}
-
-function formatAgo(ts?: number, now: number = Date.now()): string {
-  if (!ts) return 'never';
-  const s = Math.max(0, Math.floor((now - ts) / 1000));
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return `${Math.floor(s / 86400)}d ago`;
-}
-
-export function UpdateBanner() {
-  const [state, setState] = useState<UpdateState>({ available: false });
-  const [updating, setUpdating] = useState(false);
-  const [checking, setChecking] = useState(false);
-  const [pendingVersion, setPendingVersion] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now());
-  const cancelledRef = useRef(false);
-
-  const runCheck = async () => {
-    const api = window.electronAPI;
-    if (!api?.checkForUpdate) return;
-    setChecking(true);
-    try {
-      const [upd, pend] = await Promise.all([
-        api.checkForUpdate(),
-        api.checkPendingUpdate
-          ? api.checkPendingUpdate()
-          : Promise.resolve<{ pending: boolean; version?: string }>({ pending: false }),
-      ]);
-      if (cancelledRef.current) return;
-      if (upd) setState(upd);
-      if (pend?.pending) setPendingVersion(pend.version || (upd?.latest ?? null));
-      else setPendingVersion(null);
-    } catch (err) {
-      if (!cancelledRef.current) setState((s) => ({ ...s, error: (err as Error).message }));
-    } finally {
-      if (!cancelledRef.current) setChecking(false);
-    }
-  };
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runCheck is intentionally captured once on mount; adding it would tear down the polling interval on every state update inside runCheck (setState calls), defeating the 10-min cadence. The cancelledRef guards against state updates after unmount.
-  useEffect(() => {
-    cancelledRef.current = false;
-    runCheck();
-    const poll = setInterval(runCheck, 600_000);
-    const tick = setInterval(() => setNow(Date.now()), 15_000);
-    // "Check for updates…" in the application menu (TRA-297). App.tsx receives
-    // the IPC command and re-broadcasts it here so the banner stays the single
-    // owner of update state.
-    const onMenuCheck = () => runCheck();
-    window.addEventListener('trace-mcp:check-update', onMenuCheck);
-    return () => {
-      cancelledRef.current = true;
-      clearInterval(poll);
-      clearInterval(tick);
-      window.removeEventListener('trace-mcp:check-update', onMenuCheck);
-    };
-  }, []);
-
-  const handleUpdate = async () => {
-    const api = window.electronAPI;
-    if (!api) return;
-    setUpdating(true);
-    setState((s) => ({ ...s, error: undefined }));
-    try {
-      const result = await api.applyUpdate();
-      if (result?.ok && api.checkPendingUpdate) {
-        const pend = await api.checkPendingUpdate();
-        if (pend?.pending) setPendingVersion(pend.version || state.latest || null);
-      }
-      if (!result?.ok) {
-        setState((s) => ({ ...s, error: result?.error || 'update failed' }));
-      } else if (result.outcome === 'npm-only') {
-        // The npm package moved but the .app bundle stayed put. Re-run the
-        // availability check now — the main process just wrote the sticky
-        // marker, so this call returns { available: false, stuck: true } and
-        // the card switches to "needs a manual install" instead of looping the
-        // user through the same prompt on the next poll.
-        runCheck();
-      }
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  const handleRestart = () => {
-    const api = window.electronAPI;
-    api?.restartApp();
-  };
+// ── Update card ──────────────────────────────────────────────
+// Only the states you can DO something about: an update available, one
+// downloaded and waiting on a restart, and a bundle that could not replace
+// itself. "Up to date" used to be a permanent 28px strip above the footer whose
+// whole job was to say nothing was wrong; it says that in the app menu's
+// header now, next to Check for updates (TRA-363).
+export function UpdateCard({ update }: { update: UpdateCheck }) {
+  const { state, pendingVersion, updating } = update;
 
   // Pending swap takes precedence — the user's next click should restart, not redownload.
   if (pendingVersion) {
@@ -630,47 +427,12 @@ export function UpdateBanner() {
           v{pendingVersion} ready
         </div>
         <div className="subtitle">Restart to install · v{state.current}</div>
-        <button type="button" className="btn-prominent success" onClick={handleRestart}>
+        <button type="button" className="btn-prominent success" onClick={update.restart}>
           Restart to install
         </button>
       </div>
     );
   }
-
-  const refreshButton = (
-    <button
-      type="button"
-      className={`update-refresh${checking ? ' spinning' : ''}`}
-      onClick={runCheck}
-      disabled={checking}
-      title="Check for updates"
-      aria-label="Check for updates"
-    >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path
-          d="M10 2.5v2.6H7.4"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M2 9.5V6.9h2.6"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M9.3 5.1A3.7 3.7 0 003 4.6M2.7 6.9a3.7 3.7 0 006.3.5"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </button>
-  );
 
   // The CLI updated, the .app bundle did not, and clicking Update again would
   // repeat exactly that. Suppressing the "update available" card is correct;
@@ -685,10 +447,7 @@ export function UpdateBanner() {
         aria-live="polite"
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
-        <div className="title">
-          <span>v{state.latest} needs a manual install</span>
-          {refreshButton}
-        </div>
+        <div className="title">v{state.latest} needs a manual install</div>
         <div className="subtitle">
           The command line tool updated, but the app itself is still v{state.current} — it could not
           replace its own bundle. Download the release and drag it into Applications.
@@ -704,47 +463,28 @@ export function UpdateBanner() {
     );
   }
 
-  if (state.available) {
-    return (
-      <div className="update-card" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <div className="title">
-          <span>v{state.latest} available</span>
-          {refreshButton}
-        </div>
-        <div className="subtitle">
-          Currently v{state.current} · checked {formatAgo(state.lastChecked, now)}
-        </div>
-        {state.error && (
-          <div className="subtitle error" title={state.error}>
-            {state.error}
-          </div>
-        )}
-        <button type="button" className="btn-prominent" onClick={handleUpdate} disabled={updating}>
-          {updating ? 'Updating…' : 'Update'}
-        </button>
-      </div>
-    );
-  }
+  if (!state.available) return null;
 
-  // Idle: minimal status row. No card chrome — stays out of the way.
-  const isError = !!state.error;
-  // A stale sibling root is not an error, but it must not read as healthy
-  // either — it borrows the same warning treatment when nothing worse is up.
-  const stale = !isError && state.staleRoots?.length ? describeStaleRoots(state.staleRoots) : null;
   return (
     <div
-      className={`update-idle${isError || stale ? ' error' : ''}`}
-      // The only place the app reports update health. It changes without the
-      // user asking, so assistive tech has to hear it (TRA-297).
+      className="update-card"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      // It appears without the user asking, so assistive tech has to hear it.
       role="status"
       aria-live="polite"
-      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
-      <span className="dot" aria-hidden="true" />
-      <span className="label" title={isError ? state.error : (stale?.title ?? undefined)}>
-        {isError ? state.error : (stale?.label ?? `Up to date · v${state.current ?? '—'}`)}
-      </span>
-      {refreshButton}
+      <div className="title">v{state.latest} available</div>
+      <div className="subtitle">
+        Currently v{state.current} · checked {formatAgo(state.lastChecked)}
+      </div>
+      {state.error && (
+        <div className="subtitle error" title={state.error}>
+          {state.error}
+        </div>
+      )}
+      <button type="button" className="btn-prominent" onClick={update.apply} disabled={updating}>
+        {updating ? 'Updating…' : 'Update'}
+      </button>
     </div>
   );
 }
@@ -824,6 +564,10 @@ export function App() {
   const { view, tab, root } = getUrlParams();
   const isProject = view === 'project' && root !== null;
   const { theme, appearance, setAppearance } = useTheme();
+  /* One owner of update state for the whole window: the app menu's header
+     reports it, the card acts on it, and "Check for updates…" — from the
+     application menu or from the app menu — drives the same check (TRA-363). */
+  const update = useUpdateCheck();
 
   const [globalTab, setGlobalTab] = useState<GlobalTab>(normalizeGlobalTab(tab));
   const [projectTab, setProjectTab] = useState<ProjectTab>('overview');
@@ -1004,11 +748,11 @@ export function App() {
           void pickProject();
           break;
         case 'check-for-update':
-          window.dispatchEvent(new CustomEvent('trace-mcp:check-update'));
+          update.check();
           break;
       }
     });
-  }, [toggleSidebar, selectSection, focusSearch, openSettings, pickProject]);
+  }, [toggleSidebar, selectSection, focusSearch, openSettings, pickProject, update.check]);
 
   // ⌘P — the second quick-open key. Not in the menu (one accelerator per item).
   useEffect(() => {
@@ -1161,10 +905,14 @@ export function App() {
               )}
             </nav>
 
-            <UpdateBanner />
-            <SidebarFooter
-              active={!isProject && globalTab === 'settings'}
-              onOpenSettingsInPlace={isProject ? undefined : () => setGlobalTab('settings')}
+            <UpdateCard update={update} />
+            <AppMenu
+              update={update.state}
+              checking={update.checking}
+              onCheckForUpdate={update.check}
+              appearance={appearance}
+              onAppearanceChange={setAppearance}
+              onSettings={openSettings}
             />
           </aside>
         )}
