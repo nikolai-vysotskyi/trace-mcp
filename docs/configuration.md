@@ -450,7 +450,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 | `tools.instructions_verbosity` | `"full"` | Server-level instructions (the tool-routing block). `full` ~2K tokens, `minimal` ~200 |
 | `tools.agent_behavior` | `"off"` | Behavior rules appended to instructions — see [Agent behavior rules](#agent-behavior-rules) |
 | `tools.meta_fields` | `true` | Meta fields in responses (`_hints`, `_budget_warning`, etc.). Set `false` or list to narrow |
-| `tools.compact_schemas` | `false` | Strip advanced/optional params from tool schemas. Cuts schema size 40–60% |
+| `tools.compact_schemas` | `false` | Strip advanced/optional params from tool schemas. Cuts schema size ~42% (measured 2026-08-29) |
 
 ### Agent behavior rules
 
