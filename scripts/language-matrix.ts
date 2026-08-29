@@ -24,6 +24,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import picomatch from 'picomatch';
 import { TraceMcpConfigSchema } from '../src/config.js';
+import { IMPORT_EDGE_LANGUAGES } from '../src/indexer/edge-resolvers/import-capable-languages.js';
 import { createAllLanguagePlugins } from '../src/indexer/plugins/language/all.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -115,10 +116,7 @@ export function buildMatrix(): { rows: MatrixRow[]; counts: Record<string, numbe
       extensions: plugin.supportedExtensions,
       parser: classifyParser(source),
       indexedByDefault: plugin.supportedExtensions.some(reachable),
-      imports:
-        /importPatterns:\s*\[/.test(source) ||
-        /edgeType:\s*['"`]\w*imports['"`]/.test(source) ||
-        resolvers.has(`${key}-imports.ts`),
+      imports: IMPORT_EDGE_LANGUAGES.has(key),
       calls: resolvers.has(`${key}-calls.ts`),
       types: resolvers.has(`${key}-types.ts`) || resolvers.has(`${key}-heritage.ts`),
       tested: testSources.includes(className),
@@ -179,7 +177,7 @@ extraction; call graphs and type edges are a much smaller set.
 | --- | --- |
 | Parser | \`tree-sitter\` — real grammar-based AST. \`regex\` — pattern extraction, no AST. \`custom\` — hand-written parser for a structured format. |
 | Default | The shipped default \`include\` globs reach files with this extension. Where this is empty the plugin only runs once you add the extension to \`include\` in \`.trace-mcp.json\`. |
-| Imports | The plugin produces import/dependency edges. |
+| Imports | Import statements are resolved into graph edges. Plugins outside this set still parse imports, but nothing turns them into edges yet. |
 | Calls | A call-graph resolver exists, so "who calls this" is answerable for this language. |
 | Types | Type-annotation or inheritance edges are resolved. |
 | Tests | At least one test exercises this plugin directly. |
@@ -205,6 +203,12 @@ navigation — that covers most "find it and read it" work. What it does not giv
 you is a call graph: that needs an AST plus a per-language resolver. Where the
 Calls column is empty, \`get_call_graph\` returns nothing for that language
 unless you enable LSP enrichment (\`lsp.enabled: true\`) or ingest a SCIP index.
+
+**Imports means edges, not parsing.** Most plugins extract import statements;
+far fewer have a pipeline pass that resolves the specifier to a target node, and
+without one the extracted import never becomes an edge. This column counts the
+second thing, so it is much shorter than the language list — see
+\`src/indexer/edge-resolvers/import-capable-languages.ts\`.
 
 ### Matrix
 
