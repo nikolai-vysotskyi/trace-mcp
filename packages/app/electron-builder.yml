@@ -8,11 +8,15 @@ files:
   - package.json
   - assets/**
   - build/icon.png
-  # The main process imports nothing but Node builtins and `electron`, and Vite
-  # already bundles every renderer dependency into dist/renderer. Without this,
-  # electron-builder auto-includes the production node_modules tree anyway —
-  # 27.5 MB of @luma.gl/@cosmos.gl/micromark that nothing ever loads (TRA-257).
-  - '!node_modules/**'
+  # The renderer's dependencies are all bundled into dist/renderer by Vite, so
+  # they live in devDependencies — electron-builder only packages production
+  # `dependencies`, which keeps the 27.5 MB of @luma.gl/@cosmos.gl/micromark
+  # that nothing ever loads out of the bundle (TRA-257). The one production
+  # dependency left is electron-updater, which the main process needs at
+  # runtime on Windows, so node_modules is no longer excluded wholesale.
+  # (`files` is an allow-list once it contains any inclusion pattern, so
+  # node_modules has to be named explicitly to be packaged at all.)
+  - node_modules/**
   - '!dist/main/__tests__/**'
 extraResources:
   - from: ../../scripts/apply-pending-update.mjs
@@ -29,6 +33,15 @@ mac:
 
 win:
   icon: build/icon.ico
+  # Windows-only on purpose. This block is what makes electron-builder emit
+  # `latest.yml` next to the installer, which is the file electron-updater
+  # reads. It must NOT be hoisted to the top level: macOS ships ad-hoc signed
+  # and Squirrel.Mac would reject the swap, so macOS stays on the staged-zip
+  # path and must never get a latest-mac.yml on the release.
+  publish:
+    - provider: github
+      owner: nikolai-vysotskyi
+      repo: trace-mcp
   target:
     - target: nsis
       arch:

@@ -40,7 +40,11 @@ describe('apply-pending-helper', () => {
 
   it('does not spawn the helper when there is no pending update', () => {
     fs.writeFileSync(applyHelper, '// noop');
-    const spawned = trySpawnApplyHelper({ pendingZip, pendingVersion, applyHelper }, 4242);
+    const spawned = trySpawnApplyHelper(
+      { pendingZip, pendingVersion, applyHelper },
+      4242,
+      'zip-staged',
+    );
     expect(spawned).toBe(false);
     expect(spawn).not.toHaveBeenCalled();
   });
@@ -51,6 +55,7 @@ describe('apply-pending-helper', () => {
     const spawned = trySpawnApplyHelper(
       { pendingZip, pendingVersion, applyHelper: path.join(dir, 'missing.mjs') },
       4242,
+      'zip-staged',
     );
     expect(spawned).toBe(false);
     expect(spawn).not.toHaveBeenCalled();
@@ -65,7 +70,11 @@ describe('apply-pending-helper', () => {
       pid: 555,
     } as unknown as ReturnType<typeof spawn>);
 
-    const spawned = trySpawnApplyHelper({ pendingZip, pendingVersion, applyHelper }, 4242);
+    const spawned = trySpawnApplyHelper(
+      { pendingZip, pendingVersion, applyHelper },
+      4242,
+      'zip-staged',
+    );
 
     expect(spawned).toBe(true);
     expect(spawn).toHaveBeenCalledTimes(1);
@@ -84,8 +93,10 @@ describe('apply-pending-helper', () => {
     });
 
     expect(() =>
-      trySpawnApplyHelper({ pendingZip, pendingVersion, applyHelper }, 4242),
+      trySpawnApplyHelper({ pendingZip, pendingVersion, applyHelper }, 4242, 'zip-staged'),
     ).not.toThrow();
-    expect(trySpawnApplyHelper({ pendingZip, pendingVersion, applyHelper }, 4242)).toBe(false);
+    expect(
+      trySpawnApplyHelper({ pendingZip, pendingVersion, applyHelper }, 4242, 'zip-staged'),
+    ).toBe(false);
   });
 });
