@@ -14,6 +14,7 @@
    control in one click. <ConfirmPopover> is the paired destructive-action
    confirmation; it deliberately KEEPS a click-eating scrim (see comment there). */
 
+import type React from 'react';
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { FloatingLayer } from '../FloatingLayer';
 import { Icon } from '../icons';
@@ -77,13 +78,33 @@ export function Menu({ x, y, align = 'start', onClose, className, children }: Me
     };
     /* Every enabled item, in DOM order. Read per keypress rather than cached:
        a menu's items can be conditional (an item that only exists while an
-       update is pending), and a stale list arrows onto a node that is gone. */
-    const items = (): HTMLElement[] =>
-      Array.from(
-        layerRef.current?.querySelectorAll<HTMLElement>(
-          '[role^="menuitem"]:not([disabled]):not([aria-disabled="true"])',
-        ) ?? [],
-      );
+       update is pending), and a stale list arrows onto a node that is gone.
+
+       A MenuChoiceRow is ONE stop, not one per segment: up/down step over the
+       whole row and left/right move inside it, which is the only arrangement
+       that leaves both axes meaning something. Its stop is whichever segment is
+       currently checked, so arrowing back into the row lands on the live value
+       rather than on a fixed position. */
+    const ENABLED = '[role^="menuitem"]:not([disabled]):not([aria-disabled="true"])';
+    const items = (): HTMLElement[] => {
+      const layer = layerRef.current;
+      if (!layer) return [];
+      const out: HTMLElement[] = [];
+      // Document order, and a row container always precedes its own segments.
+      for (const el of Array.from(
+        layer.querySelectorAll<HTMLElement>(`${ENABLED}, [data-menu-row]`),
+      )) {
+        if (el.hasAttribute('data-menu-row')) {
+          const stop =
+            el.querySelector<HTMLElement>('[aria-checked="true"]') ??
+            el.querySelector<HTMLElement>(ENABLED);
+          if (stop) out.push(stop);
+        } else if (!el.closest('[data-menu-row]')) {
+          out.push(el);
+        }
+      }
+      return out;
+    };
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         // Consume Escape: the menu is the topmost layer, an enclosing surface
@@ -207,6 +228,107 @@ export function MenuItem({
       {children}
       {shortcut != null ? <span className="ws-ctx-sc">{shortcut}</span> : null}
     </button>
+  );
+}
+
+export interface MenuChoice<T extends string> {
+  value: T;
+  /** The segments are icon-only, so this is the accessible name AND the tooltip. */
+  label: string;
+  icon: string;
+}
+
+export interface MenuChoiceRowProps<T extends string> {
+  /** Visible row label; also the group's accessible name. */
+  label: string;
+  options: ReadonlyArray<MenuChoice<T>>;
+  value: T;
+  onChange: (next: T) => void;
+}
+
+/**
+ * A menu row that carries a CHOICE rather than an action: a label on the left,
+ * an inline segmented control on the right, one row (TRA-363 follow-up).
+ *
+ * The alternative — a section header plus one checked item per value — spends
+ * four rows on a three-state preference, inside a popover whose justification
+ * was that a menu item costs no sidebar height. A header above a single control
+ * is weight without information; the row's own label already says what it is.
+ *
+ * ARIA, because a control inside a menu is where this usually goes wrong:
+ * `role="group"` is a legal child of `role="menu"` and the segments are
+ * `menuitemradio`, so the set announces as "Theme, Dark, selected" instead of
+ * three unrelated pressed buttons. Roving tabindex keeps the row a single Tab
+ * stop; `Menu`'s traversal keeps it a single up/down stop.
+ */
+export function MenuChoiceRow<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: MenuChoiceRowProps<T>): ReactNode {
+  const rowRef = useRef<HTMLDivElement>(null);
+  /* Focus follows selection, but only when the keyboard put it there. A click
+     selects without stealing focus from wherever it already was. */
+  const keyboardRef = useRef(false);
+
+  useEffect(() => {
+    if (!keyboardRef.current) return;
+    keyboardRef.current = false;
+    rowRef.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+  }, [value]);
+
+  const step = (delta: number, e: React.KeyboardEvent): void => {
+    e.preventDefault();
+    e.stopPropagation();
+    const from = Math.max(
+      0,
+      options.findIndex((o) => o.value === value),
+    );
+    const next = options[(from + delta + options.length) % options.length];
+    if (next.value === value) return;
+    keyboardRef.current = true;
+    onChange(next.value);
+  };
+
+  return (
+    <div
+      ref={rowRef}
+      className="ws-ctx-row"
+      role="group"
+      aria-label={label}
+      data-menu-row=""
+      /* Left/right only. Up/down and Home/End are consumed by Menu's document
+         listener in the capture phase before they reach here, which is what
+         keeps them meaning "move between rows". */
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowRight') step(1, e);
+        else if (e.key === 'ArrowLeft') step(-1, e);
+      }}
+    >
+      <span className="ws-ctx-row-label">{label}</span>
+      <div className="lx-seg sz-small ws-ctx-seg">
+        {options.map((option) => {
+          const checked = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="menuitemradio"
+              aria-checked={checked}
+              aria-label={option.label}
+              title={option.label}
+              // Roving tabindex: the row is one Tab stop, entered on its value.
+              tabIndex={checked ? 0 : -1}
+              className={'lx-seg-item' + (checked ? ' is-active' : '')}
+              onClick={() => onChange(option.value)}
+            >
+              <Icon name={option.icon} size={14} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
