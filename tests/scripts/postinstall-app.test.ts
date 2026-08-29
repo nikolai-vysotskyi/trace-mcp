@@ -274,4 +274,33 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
     expect(fs.statSync(fx.appPath).mtimeMs).toBe(before);
     expect(stdout).not.toContain('updated to');
   });
+
+  // The marker has two writers that disagree on format: this script writes
+  // `tag_name` ("v3.1.1"), apply-pending-update.mjs writes the normalized
+  // pending version ("3.1.1"). The test above only ever covered the first
+  // form, so the mismatch was invisible: after any GUI-applied update every
+  // later install re-downloaded the whole zip and re-staged a version already
+  // installed, leaving a "restart to install" banner that never cleared.
+  it('is a no-op when the marker was written by the GUI apply path (no leading v)', async () => {
+    installBundle('3.1.1');
+    publishRelease('3.1.1');
+    fs.writeFileSync(path.join(fx.installDir, '.trace-mcp-version'), '3.1.1');
+
+    const before = fs.statSync(fx.appPath).mtimeMs;
+    const stdout = await runPostinstall();
+
+    expect(fs.statSync(fx.appPath).mtimeMs).toBe(before);
+    expect(stdout).not.toContain('updated to');
+  });
+
+  it('does not stage a phantom pending update for the running version', async () => {
+    installBundle('3.1.1');
+    publishRelease('3.1.1');
+    fs.writeFileSync(path.join(fx.installDir, '.trace-mcp-version'), '3.1.1');
+
+    await runPostinstall({ appRunning: true });
+
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.zip'))).toBe(false);
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending-version'))).toBe(false);
+  });
 });
