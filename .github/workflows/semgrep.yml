@@ -60,6 +60,13 @@ jobs:
 
           semgrep "$@" --sarif --output semgrep.sarif || true
 
+          # Drop findings an inline `nosemgrep` already suppressed (TRA-411).
+          # Semgrep still writes them into the SARIF tagged
+          # `suppressions: [{kind: inSource}]`, and code-scanning opens an alert
+          # for them anyway — which kept "Semgrep OSS" red on master over a
+          # finding that is mitigated and annotated at the call site.
+          python3 -c 'import json,sys; p="semgrep.sarif"; d=json.load(open(p)); [r.__setitem__("results",[x for x in r.get("results",[]) if not x.get("suppressions")]) for r in d.get("runs",[])]; json.dump(d,open(p,"w"))'
+
           if [ -n "$BASELINE_SHA" ]; then
             echo "::group::Gate: findings introduced vs ${BASELINE_SHA}"
             semgrep "$@" --baseline-commit "$BASELINE_SHA" --error
