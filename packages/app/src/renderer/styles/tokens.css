@@ -114,6 +114,14 @@
   --space-40: 40px;
   --space-48: 48px;
 
+  /* ---- Window chrome — the top band (TRA-370)
+     The traffic-light centre line. EVERY top band in the app is this tall, and
+     every control in one is centred in it. The main process derives
+     `trafficLightPosition` from the same number, so the system's lights land on
+     the same line as the toggle we draw — src/shared/chrome-metrics.ts owns it,
+     and styles/__tests__/tokens.test.ts fails if these two drift apart. */
+  --top-band-h: 44px;
+
   /* ---- Motion */
   --dur-micro: 120ms;
   --dur-standard: 200ms;

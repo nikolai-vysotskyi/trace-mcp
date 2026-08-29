@@ -195,51 +195,11 @@
   overflow: hidden;
 }
 
-/* ============================================================================
-   TOP BAR — project tabs (browser style)
-   ============================================================================ */
-.ws-topbar {
-  height: 42px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 8px 0 14px;
-  background: linear-gradient(180deg, var(--surface-sunken), var(--surface-sunken));
-  -webkit-app-region: drag;
-}
-.ws-topbar > * { -webkit-app-region: no-drag; }
-/* NOTE: the hand-drawn `.ws-lights` / `.ws-light` circles that used to live
-   here are gone (TRA-291) — the window is `titleBarStyle: 'hiddenInset'` and
-   renders the REAL traffic lights. Never re-draw them in CSS. */
-
-.ws-ptabs { display: flex; align-items: center; gap: 3px; flex: 1; min-width: 0; overflow: hidden; }
-.ws-ptab {
-  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 7px 0 9px;
-  border-radius: var(--radius-input); font-size: 13px; color: var(--label-secondary); cursor: default;
-  max-width: 210px; transition: background .12s, color .12s;
-}
-.ws-ptab:hover { background: var(--fill-quaternary); }
-.ws-ptab.is-active { background: var(--surface); color: var(--label); box-shadow: var(--shadow); }
-.ws-ptab .ic {
-  width: 18px; height: 18px; border-radius: var(--radius-row); flex: none;
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; font-size: 8px; font-weight: 800; letter-spacing: -0.02em;
-}
-.ws-ptab .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ws-ptab .x {
-  width: 17px; height: 17px; border-radius: var(--radius-row); flex: none;
-  display: flex; align-items: center; justify-content: center; color: var(--label-secondary);
-  opacity: 0; transition: opacity .12s, background .12s;
-}
-.ws-ptab:hover .x, .ws-ptab.is-active .x { opacity: 0.8; }
-.ws-ptab .x:hover { background: var(--fill-quaternary); color: var(--label); }
-.ws-ptab-add {
-  width: 28px; height: 28px; flex: none; border-radius: var(--radius-row);
-  display: flex; align-items: center; justify-content: center; color: var(--label-secondary);
-  cursor: default; transition: background .12s, color .12s;
-}
-.ws-ptab-add:hover { background: var(--fill-quaternary); color: var(--label); }
+/* The browser-style project tab bar that used to live here is gone (TRA-370).
+   Nothing rendered `.ws-topbar` / `.ws-ptab*` — the app has one top band, and
+   this block's 42px height was a third, unreachable answer to how tall it is.
+   The window is `titleBarStyle: 'hiddenInset'` and renders the REAL traffic
+   lights; never re-draw them in CSS, and never write a band height here. */
 
 /* the agent avatar mark (Solar "black hole", see NOTICE) */
 .ws-ai-star { width: 18px; height: 18px; display: block; }
