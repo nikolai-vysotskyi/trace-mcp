@@ -586,6 +586,14 @@ input[type='checkbox']:focus-visible {
   position: absolute;
   inset: -2px 0;
 }
+.lx-seg.sz-small .lx-seg-item::after {
+  /* The SMALL track is 20px, so its segments are painted 16px and -2px only
+     reaches 20. Measured on the running app: Graph's Files/Symbols at 43x20
+     and 66x20, the workspace's Table/Compact at 48x20 and 68x20. -4px puts all
+     four on the 24px floor; the overflow is invisible and the track has room
+     for it inside a 52px toolbar. */
+  inset: -4px 0;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .lx-btn,
