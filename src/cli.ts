@@ -2862,11 +2862,21 @@ program
     // SQLite cache/mmap for projects nobody has touched recently. Stays
     // registered — reloads lazily on the next request (see the /mcp
     // auto-register path and /api/projects/reindex-file). 0 disables.
+    // The same sweep also enforces `daemon_eager_load_projects` as a steady-state
+    // LRU ceiling, not just a startup budget: lazy loads (auto-register,
+    // reindex-file) used to walk past it unchecked — TRA-422 measured an
+    // eager-8 daemon holding 11 projects within three minutes of boot, ~100 MB
+    // resident each. See docs/daemon-memory.md for the attribution.
     const configuredIdleUnloadMinutes =
       typeof globalRaw.project_idle_unload_minutes === 'number'
         ? globalRaw.project_idle_unload_minutes
         : 30;
+    const configuredMaxLoadedProjects =
+      typeof globalRaw.daemon_eager_load_projects === 'number'
+        ? globalRaw.daemon_eager_load_projects
+        : 8;
     projectManager.startIdleUnloadSweep(configuredIdleUnloadMinutes * 60_000, {
+      maxLoaded: configuredMaxLoadedProjects,
       onUnloaded: (roots) => {
         for (const root of roots) {
           // Same cleanup as the DELETE endpoint: without it the progress

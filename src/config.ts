@@ -1012,6 +1012,15 @@ export const TraceMcpConfigSchema = z.object({
    * (TRA-278), so an unbounded eager load turned ~100 registered repos into a
    * multi-GB RSS spike at every daemon start. 0 disables the cap and restores
    * the old load-everything behaviour.
+   *
+   * TRA-422: this is also the daemon's steady-state ceiling, not just its
+   * startup budget. The idle-unload sweep evicts least-recently-accessed
+   * projects back down to this number, so lazy loads can no longer drift past
+   * it. The rationale for 8: a fully warmed project costs ~100 MB resident on
+   * a real machine (measured via vmmap — ~35 MB SQLite mmap of its index.db,
+   * ~23 MB native page cache and tree-sitter, the rest V8 heap), so 8 caps the
+   * marginal cost at ~800 MB on top of the daemon's ~350 MB fixed footprint.
+   * Attribution and the measuring procedure: docs/daemon-memory.md.
    */
   daemon_eager_load_projects: z.number().int().min(0).max(1000).default(8),
   /**
