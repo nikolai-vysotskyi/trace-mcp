@@ -35,7 +35,7 @@ trace-mcp add    # indexes the current project
 
 Agents without routing guidance will happily `Grep` a 5,000-file repo, `Read` 15 files to understand one feature, and miss cross-file references when renaming. These skills encode the rules that cut token usage by 40–50% on average across a session — much more on individual structured lookups — while improving accuracy.
 
-See the [benchmark results in the main repo](https://github.com/nikolai-vysotskyi/trace-mcp#token-savings) for concrete numbers.
+See the [benchmark results in the main repo](https://github.com/nikolai-vysotskyi/trace-mcp#token-reduction--what-we-measured) for concrete numbers.
 
 ## License
 
