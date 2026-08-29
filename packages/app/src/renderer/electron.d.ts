@@ -51,6 +51,9 @@ declare global {
       restartApp: () => Promise<void>;
       openSettings: (section?: string) => Promise<{ ok: boolean }>;
       openClients: () => Promise<{ ok: boolean }>;
+      // Application menu ↔ renderer (TRA-297)
+      setWindowSections: (sections: { id: string; label: string }[]) => void;
+      onAppCommand: (callback: (command: string, arg?: unknown) => void) => () => void;
       // Tab management (Windows custom tab bar)
       getPlatform: () => Promise<string>;
       focusTab: (tabId: string) => Promise<{ ok: boolean }>;
