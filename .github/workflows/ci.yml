@@ -564,6 +564,12 @@ jobs:
         working-directory: packages/app
         run: pnpm run test
 
+      # Fails when a user-facing string reappears inline in a surface whose
+      # strings were already extracted (TRA-379).
+      - name: Check extracted strings
+        working-directory: packages/app
+        run: pnpm run check:i18n
+
       - name: Build (renderer + main)
         working-directory: packages/app
         run: pnpm run build
