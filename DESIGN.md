@@ -81,16 +81,35 @@ Two rules follow, and neither is optional:
    behind} × {window active, window inactive}, then the same set in dark. And it has to
    be shot in the **Electron window** — there is no `NSVisualEffectView` on the Vite dev
    server, so none of this is visible in a browser.
-2. **The material never gets to decide how dark the sidebar goes in light appearance.**
-   `--sidebar-scrim` is a stated floor: white at `.70` above the material, so whatever
-   the material renders, the sidebar lands at least 70% of the way from it to white and
-   can never go below `#b2b2b2`. The remaining `.30` still carries the material, so the
-   sidebar keeps picking up the desktop's tint — it just cannot be dragged to grey by a
-   dark desktop and read as dirt beside the white content pane.
+2. **The drift is bounded in BOTH appearances, and the bound is a relationship to the
+   content pane — not an absolute colour.** The pull goes light over a light desktop and
+   dark over a dark one, and either direction ends at mid-grey. Measured on the shipped
+   build, dark appearance, sidebar swatch against a `#141414` well: `#222222` over a
+   black desktop, `#4f4f4f` over a white one — 45 levels of swing from nothing but the
+   user's wallpaper. Light had the same problem mirrored. A one-sided floor fixes one
+   half and leaves the other exactly as wrong; that mistake has been made here once
+   already.
 
-   Dark appearance gets **no** floor (`--sidebar-scrim: transparent`). There the
-   material can only take the sidebar toward black, which is where it belongs, and glass
-   is the entire point. Light is the appearance to be careful with; dark is the easy one.
+   The rule: **the sidebar sits just above the content pane's `--surface-sunken` well in
+   lightness, by a bounded amount, in both appearances.** `--sidebar-scrim` is what
+   enforces it, and every value of it is `--surface` at some alpha — never `transparent`
+   (unbounded) and never a colour of its own (a bound that stops tracking the surface it
+   is meant to stay near).
+
+   - **Light: flat `--surface`, alpha 1.** No drift term at all. This is the measured
+     target, not a retreat from glass: the render Nikolai approved samples `#ffffff` —
+     our own `--surface`, uniform top to bottom — against a `#f5f5f7` well, and the one
+     he rejected samples `#e4e3e4`. Holding a white floor with a translucent layer lands
+     on the same pixel with more machinery and a residual drift to bound anyway, and
+     glass in light has the least to give: over a light desktop it is invisible, over a
+     dark one it is the defect.
+   - **Dark: `--surface` at `.78`.** The glass survives where it has somewhere to go —
+     `.22` of the material still comes through, enough to see the desktop in the sidebar
+     and not enough to drag it to mid-grey.
+
+   The number to report for any change here is the **delta between the sidebar's rendered
+   pixels and the well's**, per cell of the matrix above, plus the spread across cells.
+   The spread is the bound; a single cell says nothing about it.
 
 Under `prefers-reduced-transparency: reduce` the sidebar paints `--surface` itself
 rather than letting macOS make the effect view opaque: the system's opaque fill follows
