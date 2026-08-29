@@ -100,6 +100,10 @@ export function computeRelativeSpecifier(fromFile: string, toFile: string): stri
   // Strip extension if it's a TS/JS file
   rel = stripExtension(rel);
 
+  // Normalize separators first — on Windows path.relative yields 'utils\index',
+  // and every check below is written against forward slashes.
+  rel = rel.replace(/\\/g, '/');
+
   // Handle index files: ./utils/index → ./utils
   if (rel.endsWith('/index') || rel === 'index') {
     rel = rel === 'index' ? '.' : rel.slice(0, -6);
@@ -110,8 +114,7 @@ export function computeRelativeSpecifier(fromFile: string, toFile: string): stri
     rel = `./${rel}`;
   }
 
-  // Normalize separators to forward slashes
-  return rel.replace(/\\/g, '/');
+  return rel;
 }
 
 /**
