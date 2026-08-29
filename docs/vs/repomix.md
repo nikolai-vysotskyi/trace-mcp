@@ -91,20 +91,20 @@ If you are picking between them, the question is not "which is better" — it is
 |---|:---:|:---:|
 | **GitHub stars** | 100 | 28.1K |
 | Model | live index (SQLite + FTS5) | one-shot pack |
-| Tree-sitter AST parsing | ✅ {{ site.data.counts.languages }} languages | ✅ `--compress` only (~20) |
-| Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files |
-| Cross-file dependency graph | ✅ directed edge graph | ❌ |
-| Framework-aware edges | ✅ {{ site.data.counts.frameworks }} integrations | ❌ |
-| Call graph | ✅ bidirectional, graph-based | ❌ |
-| Impact analysis | ✅ reverse dependency traversal | ❌ |
-| Search | ✅ FTS5 + embeddings + graph | ❌ no search |
-| Refactoring tools | ✅ rename, move, signature, codemod, extract | ❌ |
-| Security scanning | ✅ OWASP Top-10, taint analysis | ✅ Secretlint (secrets only) |
-| Freshness | ✅ incremental, file-watcher, content hash | ❌ snapshot at pack time, full repack |
-| Remote repositories | ✅ multi-repo subprojects | ✅ packs remote repos directly |
-| Official MCP server | ✅ core product | ✅ `--mcp` |
+| Tree-sitter AST parsing | ✓ {{ site.data.counts.languages }} languages | ✓ `--compress` only (~20) |
+| Token-efficient symbol lookup | ✓ outlines, symbols, bundles | ✗ packs entire files |
+| Cross-file dependency graph | ✓ directed edge graph | ✗ |
+| Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | ✗ |
+| Call graph | ✓ bidirectional, graph-based | ✗ |
+| Impact analysis | ✓ reverse dependency traversal | ✗ |
+| Search | ✓ FTS5 + embeddings + graph | ✗ no search |
+| Refactoring tools | ✓ rename, move, signature, codemod, extract | ✗ |
+| Security scanning | ✓ OWASP Top-10, taint analysis | ✓ Secretlint (secrets only) |
+| Freshness | ✓ incremental, file-watcher, content hash | ✗ snapshot at pack time, full repack |
+| Remote repositories | ✓ multi-repo subprojects | ✓ packs remote repos directly |
+| Official MCP server | ✓ core product | ✓ `--mcp` |
 | Setup cost | index build, then instant queries | none, but re-pack on every change |
-| Works offline, no API keys | ✅ | ✅ |
+| Works offline, no API keys | ✓ | ✓ |
 | Written in | TypeScript | TypeScript |
 
 ## When to pick Repomix

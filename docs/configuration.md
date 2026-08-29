@@ -202,15 +202,15 @@ AI features enable semantic search (vector embeddings) and optional LLM-powered 
 
 | Provider | Embeddings | LLM (summarization) | Requires | Setup |
 |---|---|---|---|---|
-| **`onnx`** (default) | ✅ local, offline | ❌ | `@huggingface/transformers` (optional dep) | Zero-config — model auto-downloads (~23 MB) on first use |
-| **`ollama`** | ✅ via Ollama | ✅ via Ollama | Running Ollama instance | Install Ollama + pull models |
-| **`lmstudio`** | ✅ via LM Studio | ✅ via LM Studio | LM Studio server running | OpenAI-compatible, no API key |
-| **`openai`** | ✅ | ✅ | API key | `api_key` or `OPENAI_API_KEY` env |
-| **`anthropic`** | ❌ (no embeddings API) | ✅ | API key | `api_key` or `ANTHROPIC_API_KEY` env |
-| **`gemini`** | ✅ | ✅ | API key | Google Generative Language API (consumer) — `api_key` (AIza…) or `GEMINI_API_KEY` env |
-| **`vertex`** | ✅ | ✅ | OAuth token + GCP project | Google Vertex AI (GCP) — `api_key` = access token, plus `vertex_project` + `vertex_location` |
-| **`voyage`** | ✅ (code-tuned) | ❌ | API key | Voyage AI embeddings only — pair with another provider for inference |
-| **`mistral`** / **`groq`** / **`together`** / **`deepseek`** / **`xai`** | ✅ | ✅ | API key | OpenAI-compatible endpoints — per-provider `*_API_KEY` env |
+| **`onnx`** (default) | ✓ local, offline | ✗ | `@huggingface/transformers` (optional dep) | Zero-config — model auto-downloads (~23 MB) on first use |
+| **`ollama`** | ✓ via Ollama | ✓ via Ollama | Running Ollama instance | Install Ollama + pull models |
+| **`lmstudio`** | ✓ via LM Studio | ✓ via LM Studio | LM Studio server running | OpenAI-compatible, no API key |
+| **`openai`** | ✓ | ✓ | API key | `api_key` or `OPENAI_API_KEY` env |
+| **`anthropic`** | ✗ (no embeddings API) | ✓ | API key | `api_key` or `ANTHROPIC_API_KEY` env |
+| **`gemini`** | ✓ | ✓ | API key | Google Generative Language API (consumer) — `api_key` (AIza…) or `GEMINI_API_KEY` env |
+| **`vertex`** | ✓ | ✓ | OAuth token + GCP project | Google Vertex AI (GCP) — `api_key` = access token, plus `vertex_project` + `vertex_location` |
+| **`voyage`** | ✓ (code-tuned) | ✗ | API key | Voyage AI embeddings only — pair with another provider for inference |
+| **`mistral`** / **`groq`** / **`together`** / **`deepseek`** / **`xai`** | ✓ | ✓ | API key | OpenAI-compatible endpoints — per-provider `*_API_KEY` env |
 
 ### Minimal setup — local embeddings (no API keys)
 
