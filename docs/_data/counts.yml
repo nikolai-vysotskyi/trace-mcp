@@ -18,3 +18,13 @@
 # (TRA-259) checks those against the real tool filter, which is exact where a
 # hand-maintained number would only be a copy.
 tools: 169
+
+# TRA-275: `languages` and `frameworks` are derived — PluginRegistry
+# .createWithDefaults() knows them exactly — so readme-claims.test.ts asserts
+# these two match the registry EXACTLY, not within the ±tolerance the prose
+# surfaces get. A plugin add fails CI here with the number to write.
+#
+# README.md / CLAUDE.md / AGENTS.md / skills/ are not Jekyll-rendered, so they
+# keep prose numbers and stay on the ±tolerance guard.
+languages: 80
+frameworks: 87
