@@ -497,6 +497,9 @@ new evidence.
 | Sidebar file paths use a `dir`/`name` flex split, not `direction: rtl` | The rtl hack mangled any path containing `.` or `_` runs (`.idea/workspace.xml` → `idea/workspace.xml.`). |
 | Whitespace separates sidebar groups, not rules | Fewer lines, clearer grouping; matches the platform sidebar. |
 | Rows are windowed past 100 items | A thousand projects costs what a hundred does. |
+| A surface with extra columns collapses them with a **container query**, trailing column first | At the 640px window minimum the app sidebar already takes 220. Ask's chat rail + inspector left the conversation at zero width and painted the inspector over its own toolbar. The rules must be last in the file — a container query adds no specificity. |
+| A side inspector starts **closed** and persists the user's choice | 280px of "this appears after you send a message" is not worth the width. The toolbar toggle is how it is discovered. |
+| A failed send puts the question back in the composer | Losing what you typed is a worse cost than the error itself, and it makes "Send again" a single click instead of a retype. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
 | Tokens and primitives land before any surface | A surface migrated against a moving token layer gets migrated twice. |
 
@@ -504,11 +507,11 @@ new evidence.
 
 ## 12. Migration status
 
-The token layer, the control primitives, the window chrome, the sidebar and its
-footer, the workspace dashboard, and Project Overview are on this system.
+On this system: the token layer, the control primitives, the window chrome, the
+sidebar and its footer, the workspace dashboard, Project Overview, Activity, Memory,
+MCP Clients, Settings, the onboarding sheet, Graph Explorer, Insights, and **Ask**.
 
-Activity, Memory, MCP Clients, Settings, the onboarding dialog, Graph Explorer and
-Insights are still being migrated. Until they are, `styles/island.css` keeps a set of
+Still to migrate: **Notebook**. Until it is, `styles/island.css` keeps a set of
 **legacy aliases** (`--text-1/2/3`, `--frame`, `--island`, `--row-hover`, `--sep`, …)
 that map onto the tokens above, plus per-domain styles that this document's "never"
 list already forbids — glass stat cards, ALL-CAPS labels, raw hex. **Those are being
