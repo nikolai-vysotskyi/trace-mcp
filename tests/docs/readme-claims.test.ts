@@ -329,6 +329,70 @@ describe('docs site numeric claims (TRA-174)', () => {
     }
   });
 
+  it('docs/_data/counts.yml language and framework counts match the registry exactly (TRA-275)', () => {
+    // Exact, not ±tolerance: unlike the tool count these are derived, so the
+    // registry is an exact receipt (same reasoning as preset-claims.test.ts).
+    expect(
+      lookupCount('languages'),
+      'update `languages:` in docs/_data/counts.yml — a language plugin was added or removed',
+    ).toBe(langPlugins);
+    expect(
+      lookupCount('frameworks'),
+      'update `frameworks:` in docs/_data/counts.yml — a framework plugin was added or removed',
+    ).toBe(fwPlugins);
+  });
+
+  it('no docs page hardcodes its own language / framework count any more (TRA-275)', () => {
+    // TRA-272 had to sweep "85 framework integrations" -> "87" across 8 files
+    // (docs/index.html alone had 9 occurrences) and nothing failed in between,
+    // because ±5 tolerates a whole plugin batch. These pages read the tags now.
+    const pages: Array<{ path: string; keys: string[] }> = [
+      { path: 'docs/index.html', keys: ['languages', 'frameworks'] },
+      { path: 'docs/llms.txt', keys: ['languages', 'frameworks'] },
+      { path: 'docs/llms-full.txt', keys: ['languages', 'frameworks'] },
+      { path: 'docs/comparisons.md', keys: ['languages', 'frameworks'] },
+      { path: 'docs/supported-frameworks.md', keys: ['languages'] },
+      { path: 'docs/quality-gates.md', keys: ['languages', 'frameworks'] },
+      { path: 'docs/architecture.md', keys: ['languages'] },
+    ];
+    for (const { path, keys } of pages) {
+      const raw = readFileSync(join(REPO_ROOT, path), 'utf-8');
+      for (const key of keys) {
+        expect(
+          raw.includes(`site.data.counts.${key}`),
+          `${path} no longer reads {{ site.data.counts.${key} }} — keep the number in docs/_data/counts.yml.`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('front matter in docs/supported-frameworks.md still states the real counts (TRA-275)', () => {
+    // Jekyll does not render Liquid inside front matter, so the page title and
+    // meta description keep prose numbers. They are the only two left in docs/,
+    // and they are what search results show — check them exactly.
+    const frontMatter = readFileSync(
+      join(REPO_ROOT, 'docs/supported-frameworks.md'),
+      'utf-8',
+    ).split('---')[1];
+    for (const [unit, expected] of [
+      [/languages?/, langPlugins],
+      [/framework integrations?/, fwPlugins],
+    ] as const) {
+      const claims = findAllClaims(unit, frontMatter);
+      expect(
+        claims.length,
+        `no "X ${unit.source}" claim in supported-frameworks.md front matter`,
+      ).toBeGreaterThan(0);
+      for (const claim of claims) {
+        expect(
+          claim.count,
+          `docs/supported-frameworks.md front matter is stale — Liquid does not render there, ` +
+            `so update the prose by hand. Line: "${claim.rawLine}"`,
+        ).toBe(expected);
+      }
+    }
+  });
+
   it('every {{ site.data.counts.* }} tag in docs/ resolves to a number (TRA-263)', () => {
     // Jekyll renders an unknown key as the empty string rather than failing the
     // build, so a typo would ship as "trace-mcp exposes  MCP tools".
