@@ -1383,11 +1383,11 @@ layout: null
       display: block;
       width: 100%;
       height: auto;
-      background: var(--ghost);
     }
-    .theme-dark-only { display: none; }
-    [data-theme="dark"] .theme-dark-only { display: block; }
-    [data-theme="dark"] .theme-light-only { display: none; }
+    /* `img.` — the class alone loses to `.app-frame img` and both appearances render. */
+    img.theme-dark-only { display: none; }
+    [data-theme="dark"] img.theme-dark-only { display: block; }
+    [data-theme="dark"] img.theme-light-only { display: none; }
 
     .app-gallery {
       display: grid;
