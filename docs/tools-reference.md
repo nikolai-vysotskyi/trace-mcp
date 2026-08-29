@@ -299,3 +299,19 @@ structure in the whole tool schema, paid by every client on every session.
 Together these changes cut the always-on tool surface from 148 to 141
 registrations and the serialized schema every MCP client without lazy tool
 loading pays at session start from 90,579 to 86,217 characters.
+
+Calling a retired name no longer fails with a bare "not found": the server
+answers with the replacement call, so a stale `CLAUDE.md` is a one-line fix
+rather than a dead end.
+
+### Migrating to 3.0 — Node 22
+
+3.0 raised the Node floor: Node 20 and 21 are no longer supported, and
+`node >= 22` is required. No tool signature or response shape changed. If
+`npx -y trace-mcp@latest serve` started failing at startup rather than at a
+tool call, check `node --version` first.
+
+Both majors landed within a day of each other (2.0.0 on 2026-08-28, 3.0.0 on
+2026-08-29), so an install floating on `latest` may have taken both at once.
+Pin a major in your MCP client config (`trace-mcp@3`) if you would rather
+adopt them deliberately.
