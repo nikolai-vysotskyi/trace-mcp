@@ -112,6 +112,16 @@ Order: sticky header (brand + theme toggle) → `h1` → prose → `Last updated
   wide tool table scrolls itself instead of the page.
 - Code: `--surface` fill, `--border` outline, 4px radius inline / 8px block.
   Syntax highlighting differentiates by **weight and opacity**, not hue.
+- The `See also` footer is a **grid, one cell per link**
+  (`repeat(auto-fill, minmax(200px, 1fr))`) — 3 columns at 1440px, 2 at
+  500px. Never an inline `·`-separated strip: at 17 entries that wrapped
+  mid-label, so no link read as a single target.
+
+**Who owns the footer nav.** Which pages are listed, what they are called, and
+in what order is `docs/_data/docs_nav.yml`, and that belongs to the **SEO
+agent** — it is internal-link structure. This file governs only how the
+resulting list is laid out. Adding, renaming, or reordering an entry to suit
+the layout is out of bounds; if the list needs to change shape, ask.
 
 ---
 
@@ -121,14 +131,44 @@ The capture script `scripts/capture-screenshots.mjs` is owned by the
 Design/UX Agent. **Do not write another capture path and do not edit that
 script.** Need a different angle or a new surface? File an issue against it.
 
-This file governs presentation only:
+This file governs presentation only. The rule below is `.app-frame` /
+`.app-gallery` in `docs/index.html`, which is what ships today — measured in
+the browser, not aspirational:
 
-- Shot from the real Electron window — traffic lights and rounded corners
-  must be present. No traffic lights means it came from a browser: reject it.
-- Never butt two screenshots together. Minimum 24px between them.
-- One border (`--border`) and one radius (8px) for every image on the site.
-- No visible errors, skeletons, scratch directories, or personal paths.
-- Caption in Space Mono 11px caps at `--text-secondary`, below the image.
+**The frame.** Every app screenshot sits in a `<figure class="app-frame">`:
+
+- `1px solid var(--border-visible)` outline, `var(--surface)` fill, `20px`
+  padding. **Square corners — `border-radius: 0`,** on the frame and on the
+  image. The rounding a reader sees belongs to the macOS window inside the
+  shot; a second radius on the frame would read as a second window.
+- The image is `width: 100%`, `display: block`, over a `var(--ghost)` fill so
+  a slow load is a flat plate, not a white flash.
+- Hover raises the outline to `--text-display`. That is the only state.
+
+**The caption sits above the image, not below it** — a `.app-frame-meta` row
+in Space Mono 10px caps at `--text-disabled`, `0.1em` tracking, `20px` above
+the image. It reads as an instrument label on the bezel: subject on the left
+(`--text-display`), a hairline rule spanning the gap, context on the right.
+A caption below would read as body prose and compete with the section text.
+
+**Never butt two screenshots together.** Grid gap is `24px` on desktop, `16px`
+below 900px. Never zero.
+
+**A light/dark pair is one image, not two.** Show the appearance the reader
+already chose — `.theme-light-only` / `.theme-dark-only`, switched off
+`data-theme` — never stacked one above the other. Two appearances of the same
+screen stacked read as one broken image, and they double the bytes for a view
+the reader did not ask for.
+
+**Content.** Shot from the real Electron window — traffic lights and rounded
+window corners must be present. No traffic lights means it came from a
+browser: reject it. No visible errors, skeletons, scratch directories, or
+personal paths.
+
+**Weight.** WebP, `loading="lazy"`, and explicit `width`/`height` so the
+image reserves its box and costs no CLS. The four app shots are 39–132 KB
+each. A PNG app screenshot is a bug — the pair alone was megabytes before the
+WebP conversion.
 
 ---
 
@@ -146,6 +186,10 @@ This file governs presentation only:
 - Parallax or scroll-jacking.
 - Re-linking the Primer stylesheet, or adding a Google Fonts `<link>`.
 - Shipping a colour change verified in one theme only.
+- Two screenshots butted together, or a light/dark pair stacked rather than
+  theme-switched.
+- A PNG app screenshot. WebP only.
+- A long link list as an inline `·`-separated strip.
 
 ---
 

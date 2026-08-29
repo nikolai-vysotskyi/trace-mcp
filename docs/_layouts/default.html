@@ -77,6 +77,15 @@
         <footer class="docs-footer">
           <span class="label">See also</span>
           {%- comment -%}
+            Rendered as a grid, not a `·`-separated strip. At 17 entries the
+            strip wrapped mid-label — "Cut Claude Code token / usage" and
+            "TOON / savings" broke across lines — so no link read as one
+            target. One cell per link fixes that without touching which links
+            exist, their labels, or their order: that structure is the SEO
+            agent's, this is only how it looks.
+          {%- endcomment -%}
+          <nav class="footer-links" aria-label="Documentation pages">
+          {%- comment -%}
             Every doc page, not a hand-picked four. The old footer linked only
             tools-reference / architecture / configuration, which left the other
             eight pages on 1–2 inbound internal links each — comparisons.html,
@@ -85,10 +94,11 @@
           {%- endcomment -%}
           {%- for item in site.data.docs_nav -%}
             {%- unless page.url == item.url -%}
-              <a href="{{ item.url | relative_url }}">{{ item.title }}</a><span class="sep">·</span>
+              <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
             {%- endunless -%}
           {%- endfor -%}
           <a href="{{ '/' | relative_url }}">Home</a>
+          </nav>
         </footer>
       </div>
     </main>
