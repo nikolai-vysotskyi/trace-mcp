@@ -15,8 +15,10 @@ import {
   type GlobalInstall,
   isStuckOnVersion,
   readAppUpdateState,
+  readLauncherCliPath,
   scanGlobalInstalls,
   shouldAttemptRepair,
+  staleRootInUse,
   writeAppUpdateState,
 } from '../update-state';
 
@@ -187,5 +189,85 @@ describe('findStaleRoots', () => {
       cmpSemver,
     );
     expect(stale.map((s) => s.root)).toEqual(['/old', '/older']);
+  });
+});
+
+/* TRA-377: the app menu's warning renders exactly when these two say it should.
+   A stale root nothing resolves to is inert; the one the launcher shim points
+   into means every MCP client is running the old server. */
+describe('readLauncherCliPath', () => {
+  let tmp: string;
+  const write = (body: string): string => {
+    const p = path.join(tmp, 'launcher.env');
+    fs.writeFileSync(p, body);
+    return p;
+  };
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-launcher-env-'));
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('reads TRACE_MCP_CLI, unquoting the way the shim does', () => {
+    const p = write(
+      '# Managed by `trace-mcp init`\nTRACE_MCP_NODE=/n/bin/node\nTRACE_MCP_CLI="/nvm/lib/node_modules/trace-mcp/dist/cli.js"\nTRACE_MCP_VERSION=3.0.0\n',
+    );
+    expect(readLauncherCliPath(p)).toBe('/nvm/lib/node_modules/trace-mcp/dist/cli.js');
+  });
+
+  it('returns null when the launcher was never installed or has no CLI key', () => {
+    expect(readLauncherCliPath(path.join(tmp, 'absent.env'))).toBeNull();
+    expect(readLauncherCliPath(write('TRACE_MCP_NODE=/n/bin/node\n'))).toBeNull();
+  });
+});
+
+describe('staleRootInUse', () => {
+  let tmp: string;
+
+  const makeRoot = (name: string, version: string): string => {
+    const root = path.join(tmp, name);
+    const pkgDir = path.join(root, 'trace-mcp');
+    fs.mkdirSync(path.join(pkgDir, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ version }));
+    fs.writeFileSync(path.join(pkgDir, 'dist', 'cli.js'), '');
+    return root;
+  };
+  const cli = (root: string): string => path.join(root, 'trace-mcp', 'dist', 'cli.js');
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-in-use-'));
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('returns the stale root the launcher points into', () => {
+    const stale = makeRoot('hermes', '3.0.0');
+    expect(staleRootInUse([{ root: stale, version: '3.0.0' }], cli(stale))).toEqual({
+      root: stale,
+      version: '3.0.0',
+    });
+  });
+
+  it('stays silent when clients run a current root instead', () => {
+    const stale = makeRoot('hermes', '3.0.0');
+    const current = makeRoot('nvm', '3.1.1');
+    expect(staleRootInUse([{ root: stale, version: '3.0.0' }], cli(current))).toBeNull();
+  });
+
+  it('stays silent when the launcher was never installed', () => {
+    const stale = makeRoot('hermes', '3.0.0');
+    expect(staleRootInUse([{ root: stale, version: '3.0.0' }], null)).toBeNull();
+    expect(staleRootInUse([{ root: stale, version: '3.0.0' }], path.join(tmp, 'gone.js'))).toBeNull();
+  });
+
+  it('matches through symlinks — the shim resolves to the real package dir', () => {
+    const stale = makeRoot('hermes', '3.0.0');
+    const linkRoot = path.join(tmp, 'linked');
+    fs.mkdirSync(linkRoot);
+    fs.symlinkSync(path.join(stale, 'trace-mcp'), path.join(linkRoot, 'trace-mcp'), 'dir');
+    expect(staleRootInUse([{ root: stale, version: '3.0.0' }], cli(linkRoot))?.root).toBe(stale);
   });
 });
