@@ -9,7 +9,12 @@ import { hardenStdio } from './server/transport-hardening.js';
 import { installProcessSafetyNet } from './server/process-safety-net.js';
 import { startParentDeathWatch } from './server/parent-death-watch.js';
 import { armBoundedExit } from './server/bounded-shutdown.js';
-import { startDaemonLogRotation } from './daemon/lifecycle.js';
+import {
+  clearOwnDaemonPidFile,
+  logPreviousExit,
+  startDaemonLogRotation,
+  writeOwnDaemonPidFile,
+} from './daemon/lifecycle.js';
 
 if (process.argv.includes('serve') || process.argv.length === 2) {
   hardenStdio();
@@ -477,6 +482,14 @@ program
     // Rotate daemon.log from within the long-lived daemon — the spawn-point
     // rotation only fires at restart, so a long-running daemon never rotated it.
     startDaemonLogRotation();
+    // TRA-421: say what launchd recorded about the previous run *before* doing
+    // anything else, so a crash loop is visible in daemon.log itself rather
+    // than only via `launchctl print` after someone thinks to look.
+    logPreviousExit();
+    // TRA-421: register our own PID so clients can tell "busy" from "dead"
+    // without /health. Under launchd nobody else writes this file, which left
+    // the #237 restart-war guard permanently disarmed on macOS.
+    writeOwnDaemonPidFile();
     // Auto-update (same logic as serve)
     const globalRaw = loadGlobalConfigRaw();
     if (globalRaw.auto_update !== false) {
@@ -2824,6 +2837,9 @@ program
       clearInterval(rateBucketCleanup);
       clearInterval(clientSweep);
       await projectManager.shutdown();
+      // Drop our PID registration last: while it exists, clients treat the
+      // daemon as alive-but-busy and refuse to restart it (TRA-421).
+      clearOwnDaemonPidFile();
       httpServer.close(() => process.exit(0));
     };
     process.on('SIGINT', shutdown);

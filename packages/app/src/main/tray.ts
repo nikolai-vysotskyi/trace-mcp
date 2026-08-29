@@ -10,7 +10,12 @@ import {
   themeSourceFor,
   writeAppearance,
 } from './appearance';
-import { ensureDaemon, restartDaemon } from './daemon-lifecycle';
+import {
+  ensureDaemon,
+  isDaemonProcessAlive,
+  restartDaemon,
+  shouldRestartUnreachableDaemon,
+} from './daemon-lifecycle';
 import { t } from './i18n';
 
 const isMac = process.platform === 'darwin';
@@ -109,6 +114,13 @@ const VERSION_MISMATCH_RESTART_COOLDOWN_MS = 60_000;
  */
 let lastDaemonStartAttempt = 0;
 const DAEMON_STARTUP_GRACE_MS = 60_000;
+/**
+ * When the daemon first stopped answering /health in the current outage, or 0
+ * while it is reachable. Feeds `shouldRestartUnreachableDaemon` so a daemon
+ * that is provably running gets left alone until it has been mute for longer
+ * than any legitimate warm-up (TRA-421).
+ */
+let firstUnreachableAt = 0;
 
 const daemon = new DaemonClient();
 
@@ -672,6 +684,7 @@ async function checkHealth(): Promise<void> {
       daemonReachable = true;
       consecutiveFailures = 0;
       _lastRestartAttempt = 0;
+      firstUnreachableAt = 0;
       setTrayIcon(true);
       tray.setContextMenu(buildContextMenu());
       return;
@@ -679,6 +692,7 @@ async function checkHealth(): Promise<void> {
 
     daemonReachable = false;
     setTrayIcon(false);
+    if (firstUnreachableAt === 0) firstUnreachableAt = Date.now();
 
     // Grace period after a recent ensure/restart: a freshly spawned daemon
     // may be busy with post-update migrations, FK recovery, or a cold reindex
@@ -693,6 +707,23 @@ async function checkHealth(): Promise<void> {
     }
 
     consecutiveFailures++;
+
+    // TRA-421: never kill a process that is provably running. A missed /health
+    // means "no answer", not "no daemon" — and restarting a busy daemon just
+    // replays its slow startup, which is how 626 restarts happened in 13 hours.
+    // The startup grace above only spaced those restarts out; this stops them.
+    if (
+      !shouldRestartUnreachableDaemon({
+        processAlive: isDaemonProcessAlive(),
+        unreachableForMs: Date.now() - firstUnreachableAt,
+      })
+    ) {
+      if (consecutiveFailures === 1) {
+        console.log('[trace-mcp] daemon unreachable but process is alive — waiting, not restarting');
+      }
+      tray.setContextMenu(buildContextMenu());
+      return;
+    }
 
     if (shouldAttemptRestart(consecutiveFailures)) {
       // First failure → try a soft start (noop if already running, stale PID, etc.).
