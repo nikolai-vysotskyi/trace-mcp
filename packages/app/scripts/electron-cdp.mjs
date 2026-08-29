@@ -8,6 +8,7 @@
  * tab has. This script is the launch path for that.
  *
  *   node scripts/electron-cdp.mjs launch            # build + run with CDP on :9222
+ *   node scripts/electron-cdp.mjs launch --visible  # …and put it on screen
  *   node scripts/electron-cdp.mjs shot out.png      # screenshot the current page
  *   node scripts/electron-cdp.mjs shot out.png --view=project --tab=graph --dark
  *
@@ -15,6 +16,10 @@
  * trace-mcp.app for Electron's single-instance lock. Once it is up, an external
  * CDP client can attach to http://127.0.0.1:9222 — including chrome-devtools
  * MCP, which takes `--browser-url http://127.0.0.1:9222`.
+ *
+ * The window is never shown unless you ask for it. Everything here drives the
+ * app over CDP, which does not care whether the window is on screen — and the
+ * person at the keyboard does (TRA-403).
  */
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -77,10 +82,20 @@ async function connect(wsUrl) {
   };
 }
 
-function launch() {
+function launch(visible) {
   mkdirSync(USER_DATA_DIR, { recursive: true });
   const electron = path.join(APP_DIR, 'node_modules', '.bin', 'electron');
-  const env = { ...process.env, TRACE_MCP_DEV_ALWAYS_ON_TOP: '1' };
+  /* Nothing on screen by default. A review run happens while somebody is using
+     the machine, and macOS follows an app activation to that app's Space — a
+     visible window pulls them out of whatever they were in (TRA-403). The
+     renderer paints either way, and a CDP screenshot of an unmapped window is a
+     real frame, so `shot` loses nothing.
+     `--visible` is for the one case that needs eyes on the running window; it
+     then has to stay on top, or Chromium stops compositing an occluded window
+     and the shot comes back as the frame it painted minutes ago. */
+  const env = { ...process.env };
+  if (visible) env.TRACE_MCP_DEV_ALWAYS_ON_TOP = '1';
+  else env.TRACE_MCP_WINDOW_MODE = 'hidden';
   delete env.ELECTRON_RUN_AS_NODE;
   const child = spawn(
     electron,
@@ -124,9 +139,9 @@ async function shot(outFile, opts) {
     await sleep(opts.settleMs);
   }
   mkdirSync(path.dirname(path.resolve(outFile)), { recursive: true });
-  /* Needs a visible window: an occluded one stops compositing, and the capture
-     then either hangs or hands back the last frame it painted. `launch` sets
-     TRACE_MCP_DEV_ALWAYS_ON_TOP for exactly this reason. */
+  /* Works on the unmapped window `launch` opens — an unshown window is not an
+     occluded one, and Chromium keeps painting it. (An occluded *visible* window
+     is the stale-pixel case, which is why `--visible` implies always-on-top.) */
   const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
   writeFileSync(outFile, Buffer.from(data, 'base64'));
   cdp.close();
@@ -135,7 +150,7 @@ async function shot(outFile, opts) {
 
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === 'launch') {
-  launch();
+  launch(rest.includes('--visible'));
 } else if (cmd === 'shot') {
   const out = rest.find((a) => !a.startsWith('--'));
   if (!out) throw new Error('usage: electron-cdp.mjs shot <out.png> [--url=…] [--dark|--light]');
@@ -152,6 +167,8 @@ if (cmd === 'launch') {
     click: flag('click'),
   });
 } else {
-  console.error('usage: electron-cdp.mjs launch | shot <out.png> [--url=…] [--dark|--light]');
+  console.error(
+    'usage: electron-cdp.mjs launch [--visible] | shot <out.png> [--url=…] [--dark|--light]',
+  );
   process.exit(1);
 }
