@@ -207,7 +207,7 @@ export function buildAppMenu(): Menu {
       // pages is a coin toss.
       { label: 'Documentation', click: () => void shell.openExternal(DOCS_URL) },
       actionItem('get-help'),
-      actionItem('whats-new'),
+      actionItem('view-changelog'),
       // On macOS these live in the app menu; elsewhere Help is where they go.
       ...(isMac
         ? []

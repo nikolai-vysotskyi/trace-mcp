@@ -72,10 +72,19 @@ const GLYPHS: Record<string, string> = {
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/>',
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
-  auto_awesome:
-    '<path d="M12 3l1.8 4.7L18.5 9l-4.7 1.8L12 15l-1.8-4.7L5.5 9l4.7-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/>',
-  forum:
-    '<path d="M4 4h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M20 9h0a2 2 0 0 1 2 2v9l-3-2"/>',
+  // Question mark in a circle — the glyph for help. Honest about what help is
+  // here: a page of answers, not someone waiting to talk to you.
+  help:
+    '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4"/><circle cx="12" cy="16.6" r="0.7" fill="currentColor" stroke="none"/>',
+  /* REMOVED, and not to be re-added under any name (DESIGN.md §5):
+     - `auto_awesome` (sparkles) — decorates rather than names. It is the
+       AI-marketing glyph; on a developer tool it says "exciting" instead of
+       saying what the item does. `View changelog` uses `description`.
+     - `forum` (speech bubbles) — promises a conversation with a person. Every
+       place we used it opens a page or a text field instead: `Get help` opens
+       GitHub issues (`help`), Ask queries the index (`search`).
+     A glyph is a name, not decoration. If you reach for either of these, the
+     item you are labelling probably has a more specific destination to name. */
   pause: '<path d="M8 5v14M16 5v14"/>',
   play_arrow: '<path d="M7 5v14l12-7z"/>',
   download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
