@@ -37,6 +37,7 @@ vi.mock('../../hooks/useDaemon', () => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it('gives every group a title', () => {
@@ -135,6 +136,26 @@ it('navigates into a section and back from the toolbar', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: 'Back' }));
   expect(screen.getByRole('heading', { name: 'Settings', level: 2 })).toBeTruthy();
+});
+
+/* TRA-333: the model-list fetch outlived the component. Its `finally` ran
+   `setLoading(false)` after the test's jsdom was torn down, React reached for
+   `window`, and vitest failed the whole run on the unhandled error even though
+   every test passed. */
+it('aborts the in-flight model fetch when the settings tab unmounts', async () => {
+  let signal: AbortSignal | undefined;
+  const fetchMock = vi.fn((_url: unknown, init?: { signal?: AbortSignal }) => {
+    signal = init?.signal;
+    return new Promise<never>(() => {}); // never settles on its own
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const { unmount } = render(<Settings />);
+  fireEvent.click(screen.getByRole('button', { name: /^AI and embeddings/ }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+
+  unmount();
+  expect(signal?.aborted).toBe(true);
 });
 
 /* An absent key IS the default — the daemon applies the default when the key
