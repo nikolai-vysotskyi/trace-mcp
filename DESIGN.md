@@ -426,6 +426,27 @@ Every data surface owes four states, and each has a house form:
   never indexed" are different sentences. "0 of 0 dependencies covered" is an empty
   state, not a full green meter.
 
+### One condition gets one sentence, and stale beats empty
+
+Two rules for a surface whose data source can be slow, and both were broken at once in
+TRA-397 — a busy daemon produced three different banners in sequence and then replaced
+every number with an em dash.
+
+**A timeout threshold is not a diagnosis.** "The request is taking a while", "the feed
+dropped" and "the request failed" are one condition — the service is busy — seen at three
+moments. Reduce them to one state with one line before they reach the screen, and hold it
+steady: degradation waits out a grace period (`DEGRADED_GRACE_MS`) so a feed that blinks
+does not blink a banner with it, while recovery publishes immediately. Escalating copy
+makes a working app look broken. Keep apart only what the user would act on differently —
+"busy" and "not running" are two states because one is a wait and the other is a button.
+
+**Values that were true a minute ago outrank no values at all.** A refresh that fails must
+leave the last good ones on screen, cache them across launches, and say once — above them,
+where they are read before the numbers are — that they are the last indexed ones. Em dashes
+and "Couldn't be measured" are for a number nobody has ever had, not for one that is a few
+minutes old. The corollary: that line has to match the screen. Saying "these are the last
+indexed numbers" over a row of em dashes is the same lie in the other direction.
+
 ---
 
 ## 6. Layout skeleton
