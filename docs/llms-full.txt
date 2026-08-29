@@ -403,7 +403,7 @@ Serena is a live LSP proxy: it forwards questions to a real language server, so 
 
 Pick Serena when you work in one language with a first-class language server, want zero index state, or need runtime inspection. Pick trace-mcp for polyglot or unusual stacks, framework edges no language server models (route → handler, controller → template, model → table), graph impact analysis rather than plain references, and everything past navigation — security scanning with type-aware taint pruning, SARIF 2.1.0, quality gates, AST codemods, and code-linked decision memory that is verified non-stale at recall time.
 
-Honest caveats: trace-mcp's AST resolution is less precise than live LSP by default, we have not yet read Serena's source (it is the priority for our next competitor deep-dive), and Serena's ~55-tool surface is materially cheaper than our {{ site.data.counts.tools }}.
+Honest caveats: trace-mcp's AST resolution is less precise than live LSP by default, we have not yet read Serena's source (it is the priority for our next competitor deep-dive), and Serena's ~55-tool surface is now in the same range as our 28-tool default rather than an order of magnitude cheaper.
 
 Full page: https://trace-mcp.com/vs/serena.html
 
@@ -418,6 +418,18 @@ Where it leads: advertised tool cost (~7K vs trace-mcp's ~11.6K on the shipped d
 Where trace-mcp leads: {{ site.data.counts.frameworks }} framework integrations producing edges a language-agnostic parser cannot; a refactoring engine (rename, move, signature change, AST codemod, verified dead-code removal) against a read-only analyser; OWASP Top-10 and taint scanning with SARIF 2.1.0 output; configurable quality gates in CI; and decision memory bound to symbol IDs and staleness-verified rather than flat ADR markdown.
 
 Full page: https://trace-mcp.com/vs/codebase-memory-mcp.html
+
+---
+
+# trace-mcp vs codegraph
+
+colbymchenry/codegraph is the largest project in this field by stars (~68.6K, MIT, TypeScript with a native Rust extraction kernel). Verified on August 29, 2026 against its source at commit 6a056ec (the `main` head shipped after the v1.6.0 tag): it defines eight MCP tools and advertises exactly one of them, `codegraph_explore` — `DEFAULT_MCP_TOOLS` is the single-element set, with the other seven fully implemented behind a `CODEGRAPH_MCP_TOOLS` env allowlist. Its stated reasoning is that the rest are narrower slices of `explore` and that the presence of a tool steers agents into mis-picking it. It parses 34 languages via tree-sitter, links URL patterns to handlers across 17 frameworks, bridges cross-language flows in mixed iOS / React Native / Expo codebases, persists to SQLite, and runs fully local with no API key.
+
+Where it leads: the advertised surface (one tool against trace-mcp's 28 / ~11.6K tokens); a published A/B benchmark across seven repositories reporting 88% fewer tool calls, 62% fewer tokens, 44% lower cost and 53% faster, with model, queries, four-runs-per-arm and a documented correction to its own earlier harness — self-run rather than third-party reproduced, but more transparent than anything we publish; and a native Rust parsing kernel with a WASM fallback and cgroup-aware resource scaling. It also publishes its own downside, which we repeat rather than exploit: its responses leave roughly 80% more retrieval context resident at the end of a multi-turn session than a file-reading agent's (67K vs 18K tokens on VS Code).
+
+Where trace-mcp leads: everything past navigation. codegraph has no refactoring tools, no security or taint analysis, no control-flow graph, no SARIF output, no cross-session memory and no graph visualization — by design and by its own README's scope. trace-mcp also covers {{ site.data.counts.languages }} languages against 34, and its {{ site.data.counts.frameworks }} framework integrations model edges beyond routing (controller → template, model → table) that codegraph's route → handler resolution does not.
+
+Full page: https://trace-mcp.com/vs/codegraph.html
 
 ---
 
