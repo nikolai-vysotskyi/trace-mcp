@@ -444,7 +444,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"standard"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `standard` (59 tools, default — covers >99% of real-world tool calls per session-log mining), `minimal` (24 tools), `review` (26 tools), `architecture` (34 tools), or `full` (every registered tool, opt-in) |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (27 tools), `architecture` (35 tools), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -452,6 +452,40 @@ The `tools.*` section controls what the MCP server injects into every session �
 | `tools.agent_behavior` | `"off"` | Behavior rules appended to instructions — see [Agent behavior rules](#agent-behavior-rules) |
 | `tools.meta_fields` | `true` | Meta fields in responses (`_hints`, `_budget_warning`, etc.). Set `false` or list to narrow |
 | `tools.compact_schemas` | `false` | Strip advanced/optional params from tool schemas. Cuts schema size ~42% (measured 2026-08-29) |
+
+### Progressive tool disclosure
+
+A preset used to be permanent: a tool outside it was never registered, so the
+session that saved schema tokens also lost the tool for the rest of its life.
+That made the small presets a bad trade, and most sessions ran `full` and paid
+the whole surface up front.
+
+Since v3.3 a preset is a *deferral*. Tools outside it are registered but
+disabled — absent from `tools/list`, so you don't pay their schemas — and the
+always-available `load_tools` pulls any of them in mid-session:
+
+```
+load_tools()                                  # list what this session deferred
+load_tools({ tools: ["taint_analysis"] })     # load one
+load_tools({ preset: "architecture" })        # load a preset's worth
+load_tools({ preset: "full" })                # load everything deferred
+```
+
+Loading emits `notifications/tools/list_changed`, and clients that honour it
+(Claude Code among them) re-read the larger surface and can call the new tools
+directly. Clients that ignore the notification are not stuck: `load_tools`
+returns each loaded tool's full JSON schema in its response, and the loaded tool
+is immediately reachable through `batch` — `batch({ calls: [{ tool, args }] })`
+— which is in every preset.
+
+What escalation cannot do is widen `tools.exclude`. Exclusion stays a hard
+restriction; `load_tools` reports those names under `blocked` and leaves them
+off. If you want a tool gone, exclude it — don't rely on the preset.
+
+Measured `tools/list` cost of each preset on this repo (serialized chars,
+2026-08-29): `minimal` 34.0k, `review` 28.9k, `architecture` 33.6k, `standard`
+64.6k, `full` 157.1k. `load_tools` itself is 0.9k of that — the price of making
+the other 123k optional.
 
 Every `tools.*` option works from a project-local config file (`.trace-mcp/.config.json`) as well as the global one — none of them are global-only. The tool surface is built once per MCP session, so a change takes effect on the next session (restart the MCP client); the daemon does not need restarting.
 

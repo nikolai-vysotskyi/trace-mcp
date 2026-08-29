@@ -120,7 +120,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | {{ site.data.counts.languages }} | 40+ (via LSP) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | {{ site.data.counts.frameworks }} | ❌ | ❌ (Python entry points only) | ❌ | ❌ | ❌ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✅ | ❌ | ❌ | ✅ cross-service HTTP | ✅ polyglot dep graph | ❌ | ✅ PHP↔TS API drift |
-| MCP tools advertised (default) | 54 (~19K tok); 24 `minimal` (~8.8K); {{ site.data.counts.tools }} `full` (~50K) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok) | 21 | 90 | 224 |
+| MCP tools advertised (default) | 28 `minimal` (~9.8K tok, default); 54 `standard` (~19K); {{ site.data.counts.tools }} `full` (~50K) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok) | 21 | 90 | 224 |
 | Session memory | ✅ | ✅ (manual notes) | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✅ | ❌ | ✅ multi-repo daemon | ✅ cross-service | ✅ cross-project search | ❌ | ❌ |
@@ -157,14 +157,14 @@ Both of the biggest projects in this space (by stars) made the same product call
 
 | Configuration | Tools | `tools/list` wire | Server instructions |
 |---|---:|---:|---:|
-| `preset: "standard"` (shipped default) | 54 | ~18.8K tok | ~1.75K tok |
-| `preset: "minimal"` | 24 | ~8.8K tok | ~1.75K tok |
+| `preset: "minimal"` (shipped default) | 28 | ~9.8K tok | ~1.75K tok |
+| `preset: "standard"` | 54 | ~18.8K tok | ~1.75K tok |
 | `preset: "full"` (explicit opt-in) | 165 | ~49.9K tok | ~2.1K tok |
 | `standard` + `description_verbosity: "none"` | 54 | ~8.4K tok | 0 |
 
-The tool counts in that table are what *this* repo serves, not the preset's ceiling: registration is gated on detected frameworks, so `minimal` (24 tools) hits its ceiling here while `standard` (59 tools) serves 54 of its 59 and `full` ({{ site.data.counts.tools }} tools) serves 165. Quote the ceilings when comparing on paper and the live numbers when comparing session cost.
+The tool counts in that table are what *this* repo serves, not the preset's ceiling: registration is gated on detected frameworks, so `minimal` (28 tools) hits its ceiling here while `standard` (60 tools) serves 54 of its 60 and `full` ({{ site.data.counts.tools }} tools) serves 165. Quote the ceilings when comparing on paper and the live numbers when comparing session cost.
 
-So the honest default is **~20.6K tokens, not the ~51K this page used to quote** — a 2.5× correction in our own favour, caused by three landed changes (preset honoured on the daemon path, seven deprecated aliases retired, `compact_schemas` extended to the whole surface) that this page had not caught up with.
+So the honest default is **~11.6K tokens, not the ~51K this page used to quote** — a 2.5× correction in our own favour, caused by four landed changes (preset honoured on the daemon path, seven deprecated aliases retired, `compact_schemas` extended to the whole surface, and the default preset moved to `minimal` once `load_tools` made everything outside it one call away) that this page had not caught up with. The `minimal` row's ~9.8K is derived, not re-measured: the preset grew 25 → 28 tools and 30,540 → 34,041 serialized chars when it absorbed the always-load set, +11.5% on the ~8.8K that was measured live.
 
 **A third mechanism worth reading, from the budget-policy peer (GlitterKill/SDL-MCP, 467 stars, TypeScript; source read August 29, 2026, not its README).** It solves the same problem *losslessly* rather than by dropping tools. `src/gateway/index.ts` registers **four** namespace tools — `sdl.query`, `sdl.code`, `sdl.repo`, `sdl.agent` — each of whose wire schema is a `oneOf` over per-action envelopes (`buildGatewayWireSchema` in `src/gateway/thin-schemas.ts`), with the 29 flat tool names kept only as deprecated aliases behind `emitLegacyTools`. `src/gateway/compact-schema.ts` then flattens the union and deduplicates repeated sub-schemas into `$defs`/`$ref` before the schema ever reaches `tools/list`. Two further pieces sit on top: `src/mcp/response-projection/budgets.ts` quantises every tool *result* into eight fixed budget classes (120 / 200 / 500 / 1K / 2K / 8K tokens) rather than accepting an arbitrary caller number, with `Math.min(class, callerCap, 8K)` as the rule; and a result that overflows its class is returned as an opaque **handle** (`responseMode: "handle"`, recovered in 8 KiB pages) instead of being truncated, so nothing is silently lost. Their stated reason for fixed classes is that a size that varies per call makes responses prompt-cache-unstable — the same reasoning drives an explicit ban on timestamps, durations, session IDs, counters and machine paths in default responses.
 

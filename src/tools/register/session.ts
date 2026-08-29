@@ -29,6 +29,7 @@ import { getSurprises } from '../analysis/surprises.js';
 import { getHotspots } from '../git/git-analysis.js';
 import { filterDecisionsByTaskNouns, planTurn } from '../navigation/plan-turn.js';
 import { listPresets } from '../project/presets.js';
+import { runLoadTools } from '../../server/tool-surface.js';
 import { getIndexHealth, getProjectMap } from '../project/project.js';
 import { getDeadCodeV2 } from '../refactoring/dead-code.js';
 
@@ -51,6 +52,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     registeredToolNames,
     toolHandlers,
     presetName,
+    deferredTools,
   } = ctx;
 
   // --- Resources ---
@@ -270,7 +272,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
 
   _originalTool(
     'get_preset_info',
-    'Show active tool preset, available presets, and which tools are registered in this session. Read-only. Returns JSON: { active_preset, registered_tools, tool_names, available_presets }.',
+    'Show active tool preset, available presets, which tools are registered in this session, and which are deferred (loadable via load_tools). Read-only. Returns JSON: { active_preset, registered_tools, tool_names, available_presets, deferred_tools }.',
     {},
     async () => {
       const presets = listPresets();
@@ -283,10 +285,50 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
               registered_tools: registeredToolNames.length,
               tool_names: registeredToolNames,
               available_presets: presets,
+              // TRA-402: the deferred half of the surface. Names only — the
+              // schemas are exactly what this session is not paying for. Call
+              // `load_tools` to pull any of them in.
+              deferred_tools: [...deferredTools.keys()],
             }),
           },
         ],
       };
+    },
+  );
+
+  // --- Progressive tool disclosure (TRA-402) ---
+  //
+  // The escape hatch that turns a preset from a restriction into a deferral.
+  // Registered outside the gate so it is reachable from every preset — an
+  // escalation path only documented in the README would leave a `minimal`
+  // session permanently unable to reach the other 140 tools.
+  _originalTool(
+    'load_tools',
+    "Load tools this session's preset deferred, by preset name and/or explicit tool names. Call with no arguments to list what is deferred. Emits notifications/tools/list_changed and returns the loaded tools' schemas, so they are usable even if your client ignores that notification (call them through `batch`). Returns JSON: { loaded, already_loaded, unknown, blocked, tools, hint }.",
+    {
+      preset: optionalNonEmptyString(64).describe(
+        'Preset whose members to load (minimal, standard, review, architecture, full). "full" loads everything deferred.',
+      ),
+      tools: z
+        .array(z.string().min(1).max(128))
+        .max(200)
+        .optional()
+        .describe('Explicit tool names to load. Unions with `preset` when both are given.'),
+    },
+    async ({ preset, tools }) => {
+      const payload = runLoadTools(
+        {
+          deferredTools,
+          toolHandlers,
+          registeredToolNames,
+          isExcluded: (n) => (config.tools?.exclude ?? []).includes(n),
+          // One notification for the whole batch — the SDK's own enable() fires
+          // one per tool, which is ~140 frames for load_tools({preset:"full"}).
+          notifyListChanged: () => server.sendToolListChanged(),
+        },
+        { preset, tools },
+      );
+      return { content: [{ type: 'text' as const, text: j(payload) }] };
     },
   );
 

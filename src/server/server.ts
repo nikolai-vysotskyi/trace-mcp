@@ -60,6 +60,7 @@ import { validatePath } from '../utils/security.js';
 import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
 import { buildInstructions } from './instructions.js';
+import { resolvePresetName } from './tool-filter.js';
 import { installToolGate } from './tool-gate.js';
 import type { MetaContext, ProjectRelay, ServerContext, ToolHandlerMap } from './types.js';
 
@@ -515,7 +516,9 @@ export function createServer(
   }
 
   // Install tool gate (preset filtering, description overrides, savings/journal wrapping)
-  const presetName = process.env.TRACE_MCP_PRESET ?? config.tools?.preset ?? 'standard';
+  // Single source of truth for the default, shared with the daemon proxy's
+  // per-session filter — the two used to spell it out separately.
+  const presetName = resolvePresetName(config);
   const presetResult = resolvePreset(presetName);
   const activePreset = presetResult ?? 'all';
 
@@ -525,7 +528,7 @@ export function createServer(
   // server, and the desktop app can render the project status badge.
   const heartbeat = startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
 
-  const { _originalTool, registeredToolNames, toolHandlers } = installToolGate(
+  const { _originalTool, registeredToolNames, toolHandlers, deferredTools } = installToolGate(
     server,
     config,
     activePreset,
@@ -660,6 +663,7 @@ export function createServer(
     registeredToolNames,
     toolHandlers,
     presetName,
+    deferredTools,
   };
 
   // Session providers — register enabled providers into the shared singleton

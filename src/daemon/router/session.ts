@@ -332,6 +332,16 @@ export class StdioSession {
     return this.wakePromise;
   }
 
+  /** Tools this session escalated into via `load_tools` (TRA-402). */
+  private readonly loadedTools = new Set<string>();
+  /** Preset/include/exclude filter, before any `load_tools` escalation. */
+  private baseFilter: ((name: string) => boolean) | null = null;
+
+  private baseToolFilter(name: string): boolean {
+    this.baseFilter ??= createToolFilter(this.opts.config);
+    return this.baseFilter(name);
+  }
+
   private buildProxyBackend(): ProxyBackend {
     const daemonUrl = this.opts.daemonUrl ?? `http://127.0.0.1:${this.opts.daemonPort}`;
     return new ProxyBackend({
@@ -347,7 +357,17 @@ export class StdioSession {
       // The preset is a property of *this* client session, not of the daemon
       // (which serves every tool to everyone) — so it has to be applied here
       // on the way out, or it never reaches a daemon-backed client (TRA-250).
-      toolFilter: createToolFilter(this.opts.config),
+      toolFilter: (name) => this.baseToolFilter(name) || this.loadedTools.has(name),
+      // TRA-402: `load_tools` is answered by the proxy, not the daemon — the
+      // daemon serves one full surface to every session and has no idea which
+      // tools *this* session has paid for. Escalation state lives on the
+      // Session so it survives a backend swap after a daemon restart.
+      toolSurface: {
+        isExcluded: (name) => (this.opts.config.tools?.exclude ?? []).includes(name),
+        load: (names) => {
+          for (const name of names) this.loadedTools.add(name);
+        },
+      },
     });
   }
 

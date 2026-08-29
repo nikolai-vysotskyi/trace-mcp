@@ -112,7 +112,7 @@ What to do about it:
 
 - Run `tools/list` against each server you have connected and count the tokens. Most people have never looked.
 - Disconnect servers you are not using in this project. A server connected "just in case" is a fixed tax.
-- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (24 tools), `standard` (59 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config.
+- Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (28 tools), `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config.
 - **Previously noted here as broken, now fixed:** presets used to take effect only when the daemon was bypassed (`TRACE_MCP_NO_DAEMON=1`) and were silently ignored on the default daemon-backed path. That bug is shipped and closed — the preset is honoured on both paths, and `TRACE_MCP_NO_DAEMON=1` is no longer needed as a workaround. Measured on the default path: `standard` serves ~18.8K tokens of `tools/list` plus ~1.75K of server instructions, against ~50K for `full`.
 - **One caveat that is still live:** set these in the global `~/.trace-mcp/.config.json`. `tools.preset` is honoured from a project-local `.trace-mcp/.config.json` too, but `tools.description_verbosity` / `tools.instructions_verbosity` are not — set those globally until that is fixed.
 

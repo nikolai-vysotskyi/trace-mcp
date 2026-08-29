@@ -32,11 +32,24 @@ export const UNGATED_META_TOOLS: ReadonlySet<string> = new Set([
   'get_session_stats',
   'plan_turn',
   'batch',
+  // TRA-402: escalation itself can never be gated — a preset that hides
+  // load_tools would make its own deferred half permanently unreachable.
+  'load_tools',
 ]);
 
-/** Preset name this session runs with: env beats config, default `standard`. */
+/**
+ * Preset name this session runs with: env beats config, default `minimal`.
+ *
+ * The default was `standard` (55 tools, ~64.6k serialized chars) until TRA-402
+ * gave presets an escape hatch. Until then a preset was permanent — anything
+ * outside it was unreachable for the whole session — so a small default meant
+ * silently taking capabilities away. With `load_tools` the deferred half is one
+ * call away, which makes the cheap surface the right default: `minimal` is
+ * ~30.5k chars, roughly half of `standard` and a fifth of `full`, paid by every
+ * session before it asks its first question.
+ */
 export function resolvePresetName(config: TraceMcpConfig): string {
-  return process.env.TRACE_MCP_PRESET ?? config.tools?.preset ?? 'standard';
+  return process.env.TRACE_MCP_PRESET ?? config.tools?.preset ?? 'minimal';
 }
 
 /** Resolved preset set; unknown names fall back to the full surface. */

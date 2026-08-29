@@ -134,12 +134,15 @@ describe('daemon proxy honours the session tool preset (TRA-250)', () => {
     expect(names.length).toBe(DAEMON_TOOLS.length);
   });
 
-  it('applies the shipped default (standard) when no preset is configured', async () => {
+  it('applies the shipped default (minimal) when no preset is configured', async () => {
+    // The default moved standard → minimal in TRA-402, once load_tools made
+    // everything outside the preset one call away instead of gone for good.
     const names = await proxiedToolNames({} as TraceMcpConfig);
-    const expected = new Set([...(TOOL_PRESETS.standard as string[]), ...UNGATED_META_TOOLS]);
+    const expected = new Set([...(TOOL_PRESETS.minimal as string[]), ...UNGATED_META_TOOLS]);
     expect(names.filter((n) => !expected.has(n))).toEqual([]);
     // The whole point of the issue: the default must not be the full surface.
-    expect(names.length).toBeLessThan(DAEMON_TOOLS.length / 2);
+    expect(names.length).toBeLessThan(DAEMON_TOOLS.length / 4);
+    expect(names, 'the default surface must carry its own escape hatch').toContain('load_tools');
   });
 
   it('lets TRACE_MCP_PRESET override the config on the proxied path', async () => {
@@ -219,6 +222,142 @@ describe('proxied tools/list token budget (TRA-250)', () => {
       ).toBeLessThanOrEqual(max);
     });
   }
+});
+
+describe('daemon proxy answers load_tools locally (TRA-402)', () => {
+  /**
+   * The daemon serves one full surface to every session, so a forwarded
+   * `load_tools` would report "nothing is deferred" and escalation would
+   * silently do nothing on the shipped path. These assert the proxy handles it
+   * itself and that the escalation actually widens what the client can see.
+   */
+  async function startEscalatingProxy(config: TraceMcpConfig) {
+    const transport = new FakeDaemonTransport(DAEMON_TOOLS);
+    const toClient: JSONRPCMessage[] = [];
+    const loaded = new Set<string>();
+    const base = createToolFilter(config);
+    const backend = new ProxyBackend({
+      daemonUrl: 'http://127.0.0.1:0',
+      projectRoot: '/nonexistent/fake-project',
+      clientId: 'tra-402-test',
+      toolFilter: (name) => base(name) || loaded.has(name),
+      toolSurface: {
+        isExcluded: (name) => (config.tools?.exclude ?? []).includes(name),
+        load: (names) => {
+          for (const n of names) loaded.add(n);
+        },
+      },
+      transportFactory: () => transport,
+    });
+    backend.onmessage = (m) => toClient.push(m);
+    backends.push(backend);
+    await backend.start();
+
+    let id = 0;
+    const listTools = async (): Promise<string[]> => {
+      await backend.send({
+        jsonrpc: '2.0',
+        id: ++id,
+        method: 'tools/list',
+        params: {},
+      } as JSONRPCMessage);
+      const reply = toClient.at(-1) as { result?: { tools?: Array<{ name: string }> } };
+      return (reply.result?.tools ?? []).map((t) => t.name);
+    };
+    const loadTools = async (args: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      await backend.send({
+        jsonrpc: '2.0',
+        id: ++id,
+        method: 'tools/call',
+        params: { name: 'load_tools', arguments: args },
+      } as unknown as JSONRPCMessage);
+      const reply = toClient.at(-1) as { result?: { content?: Array<{ text: string }> } };
+      return JSON.parse(reply.result?.content?.[0]?.text ?? '{}');
+    };
+    return { backend, transport, toClient, listTools, loadTools };
+  }
+
+  const minimalConfig = { tools: { preset: 'minimal' } } as TraceMcpConfig;
+
+  it('never forwards load_tools to the daemon', async () => {
+    const p = await startEscalatingProxy(minimalConfig);
+    await p.listTools();
+    await p.loadTools({ tools: ['get_pagerank'] });
+    expect(
+      p.transport.forwarded.some(
+        (m) =>
+          (m as { method?: string }).method === 'tools/call' &&
+          ((m as { params?: { name?: string } }).params?.name ?? '') === 'load_tools',
+      ),
+    ).toBe(false);
+  });
+
+  it('widens the proxied tools/list after a load', async () => {
+    const p = await startEscalatingProxy(minimalConfig);
+    expect(await p.listTools()).not.toContain('get_pagerank');
+    const result = await p.loadTools({ tools: ['get_pagerank'] });
+    expect(result.loaded).toEqual(['get_pagerank']);
+    expect(await p.listTools()).toContain('get_pagerank');
+  });
+
+  it('makes a loaded tool callable, where it was rejected before', async () => {
+    const p = await startEscalatingProxy(minimalConfig);
+    await p.listTools();
+    await p.loadTools({ tools: ['get_pagerank'] });
+    await p.backend.send({
+      jsonrpc: '2.0',
+      id: 99,
+      method: 'tools/call',
+      params: { name: 'get_pagerank', arguments: {} },
+    } as unknown as JSONRPCMessage);
+    expect((p.toClient.at(-1) as { error?: unknown }).error).toBeUndefined();
+  });
+
+  it('pushes notifications/tools/list_changed at the client, once per load', async () => {
+    const p = await startEscalatingProxy(minimalConfig);
+    await p.listTools();
+    await p.loadTools({ preset: 'architecture' });
+    const notifications = p.toClient.filter(
+      (m) => (m as { method?: string }).method === 'notifications/tools/list_changed',
+    );
+    expect(notifications).toHaveLength(1);
+  });
+
+  it('returns the loaded tools schemas so a client ignoring the notification can still use them', async () => {
+    const p = await startEscalatingProxy(minimalConfig);
+    await p.listTools();
+    const result = (await p.loadTools({ tools: ['get_pagerank'] })) as {
+      tools: Array<{ name: string; description?: string; input_schema?: unknown }>;
+      hint?: string;
+    };
+    expect(result.tools[0]).toMatchObject({ name: 'get_pagerank' });
+    expect(result.tools[0].input_schema).toBeDefined();
+    expect(result.hint).toContain('batch');
+  });
+
+  it('lists the deferred surface when called with no arguments', async () => {
+    const p = await startEscalatingProxy(minimalConfig);
+    await p.listTools();
+    const result = (await p.loadTools({})) as { deferred_tools: string[] };
+    expect(result.deferred_tools).toContain('get_pagerank');
+    expect(result.deferred_tools).not.toContain('search');
+  });
+
+  it('refuses to escalate a tools.exclude entry', async () => {
+    const p = await startEscalatingProxy({
+      tools: { preset: 'minimal', exclude: ['get_pagerank'] },
+    } as TraceMcpConfig);
+    await p.listTools();
+    const result = await p.loadTools({ preset: 'full' });
+    expect(result.blocked).toEqual(['get_pagerank']);
+    expect(await p.listTools()).not.toContain('get_pagerank');
+  });
+
+  it('passes toolSurface when constructing ProxyBackend, or escalation is dead on the shipped path', () => {
+    const src = readFileSync(fileURLToPath(new URL('../session.ts', import.meta.url)), 'utf8');
+    const ctor = src.slice(src.indexOf('new ProxyBackend('));
+    expect(ctor.slice(0, ctor.indexOf('});'))).toContain('toolSurface:');
+  });
 });
 
 describe('StdioSession wires the filter into every proxy backend (TRA-250)', () => {

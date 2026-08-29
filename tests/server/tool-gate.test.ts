@@ -19,6 +19,9 @@ function createMockServer() {
       const schema = args.length > schemaIdx + 1 ? args[schemaIdx] : undefined;
       const cb = args[args.length - 1] as (...args: unknown[]) => unknown;
       registered.push({ name, desc, schema, cb });
+      // Mirror the SDK: server.tool() hands back a RegisteredTool whose
+      // `enabled` flag the gate flips off for deferred tools (TRA-402).
+      return { name, enabled: true };
     }),
   };
   return { server: server as any, registered };
@@ -93,20 +96,25 @@ describe('installToolGate', () => {
       expect(mockServer.registered[0].name).toBe('search');
     });
 
+    // Since TRA-402 a filtered-out tool is still handed to the SDK — just
+    // disabled, so it stays out of tools/list and tools/call while load_tools
+    // can turn it on mid-session. The assertion that matters is therefore
+    // "what is on this session's surface", i.e. registeredToolNames, not
+    // "what reached server.tool".
     it('filters tools by preset set', () => {
       const preset = new Set(['search', 'get_outline']);
-      install({}, preset);
+      const gate = install({}, preset);
 
       mockServer.server.tool('search', 'desc', async () => ({}));
       mockServer.server.tool('get_outline', 'desc', async () => ({}));
       mockServer.server.tool('blocked_tool', 'desc', async () => ({}));
 
-      expect(mockServer.registered).toHaveLength(2);
-      expect(mockServer.registered.map((r: any) => r.name)).toEqual(['search', 'get_outline']);
+      expect(gate.registeredToolNames).toEqual(['search', 'get_outline']);
+      expect([...gate.deferredTools.keys()]).toEqual(['blocked_tool']);
     });
 
     it('exclude takes priority over include', () => {
-      install({
+      const gate = install({
         tools: { include: ['search', 'get_outline'], exclude: ['search'] },
       });
 
@@ -114,19 +122,19 @@ describe('installToolGate', () => {
       mockServer.server.tool('get_outline', 'desc', async () => ({}));
 
       // search excluded even though in include
-      expect(mockServer.registered).toHaveLength(1);
-      expect(mockServer.registered[0].name).toBe('get_outline');
+      expect(gate.registeredToolNames).toEqual(['get_outline']);
     });
 
     it('include overrides preset filtering', () => {
       const preset = new Set(['get_outline']);
-      install({ tools: { include: ['search'] } }, preset);
+      const gate = install({ tools: { include: ['search'] } }, preset);
 
       mockServer.server.tool('search', 'desc', async () => ({}));
       mockServer.server.tool('get_outline', 'desc', async () => ({}));
       mockServer.server.tool('blocked', 'desc', async () => ({}));
 
-      expect(mockServer.registered.map((r: any) => r.name)).toEqual(['search', 'get_outline']);
+      expect(gate.registeredToolNames).toEqual(['search', 'get_outline']);
+      expect([...gate.deferredTools.keys()]).toEqual(['blocked']);
     });
 
     it('returns registered tool names', () => {
