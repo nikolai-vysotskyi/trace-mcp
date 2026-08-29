@@ -1,0 +1,51 @@
+{
+  "$comment": "Which screenshots docs/ and trace-mcp.com ship. Adding one is a data change — see docs/development.md § Screenshots.",
+  "capture": {
+    "viewport": { "width": 1280, "height": 800 },
+    "deviceScaleFactor": 1.5,
+    "format": "webp",
+    "quality": 82,
+    "sidebarWidth": 232
+  },
+  "$demoGuardSession": "Guard health comes from a heartbeat an attached agent session writes; a capture has no agent. Seeded so the screenshots show a configured install rather than a red 'Not running' badge. Remove this key to capture the unconfigured state instead.",
+  "demoGuardSession": { "toolCalls": 128 },
+  "demoProjects": [
+    { "name": "trace-mcp", "subtree": ".", "recent": true, "exclude": ["tests/fixtures"] },
+    { "name": "trace-mcp-app", "subtree": "packages/app", "recent": true }
+  ],
+  "shots": [
+    {
+      "name": "app-projects",
+      "view": "menu",
+      "tab": "workspace",
+      "theme": "light",
+      "alt": "trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics"
+    },
+    {
+      "name": "app-overview",
+      "view": "project",
+      "project": "trace-mcp",
+      "clicks": ["Overview"],
+      "theme": "light",
+      "alt": "trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage"
+    },
+    {
+      "name": "app-graph",
+      "view": "project",
+      "project": "trace-mcp",
+      "clicks": ["Graph", { "label": "Fit", "afterMs": 2500 }],
+      "theme": "light",
+      "settleMs": 6000,
+      "alt": "trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance"
+    },
+    {
+      "name": "app-dark-graph",
+      "view": "project",
+      "project": "trace-mcp",
+      "clicks": ["Graph", { "label": "Fit", "afterMs": 2500 }],
+      "theme": "dark",
+      "settleMs": 6000,
+      "alt": "trace-mcp app — GPU graph explorer visualizing symbol connections, dark appearance"
+    }
+  ]
+}

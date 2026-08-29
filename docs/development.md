@@ -54,6 +54,7 @@ pnpm run build
 | `pnpm run format:check` | Check formatting without writing |
 | `pnpm run biome:ci` | Full Biome check (formatter + linter) — same as CI |
 | `pnpm run serve` | Start MCP server (dev) |
+| `node scripts/capture-screenshots.mjs` | Regenerate every docs/site screenshot from a seeded demo state |
 
 ## Code style — Biome
 
@@ -260,3 +261,40 @@ Two invariants this path depends on:
 - **A bundle that could not be replaced is never reported as up to date.** The
   suppression marker in `update-state.ts` stops re-prompting, and the sidebar
   renders that state as "needs a manual install" with a release link.
+
+## Screenshots — one script, one seeded state
+
+Every screenshot in `README.md` and on trace-mcp.com is produced by
+`scripts/capture-screenshots.mjs`. Do not take them by hand: hand-taken shots
+carry whatever happened to be on the machine — a developer's own project list,
+a `Daemon unreachable` banner, half-loaded skeletons — and nothing records what
+version of the app they show.
+
+```bash
+pnpm run build                       # the CLI bundle the demo daemon runs from
+pnpm --dir packages/app run build    # the renderer being photographed
+node scripts/capture-screenshots.mjs             # regenerate everything
+node scripts/capture-screenshots.mjs app-graph   # just one (marker left alone)
+node scripts/capture-screenshots.mjs --check     # are the committed ones stale?
+```
+
+The run launches the real Electron window against a seeded demo state and
+writes WebP files into `docs/images/`. It does not touch the daemon you already
+have running, your `~/.trace-mcp`, or your project registry: the demo daemon
+gets its own port and its own `TRACE_MCP_DATA_DIR`, the demo projects are
+`git archive` extracts of this repo at HEAD placed under `/tmp/trace-mcp-demo`,
+and Electron gets a throwaway Chromium profile. Nothing in the frame identifies
+a machine or a person.
+
+**Adding a screenshot is a data change.** Append an entry to
+`scripts/screenshots.manifest.json` — the surface to open, which controls to
+click, the appearance, and the `alt` text — and re-run the script. The `alt` in
+the manifest is the same string that belongs in `README.md` and
+`docs/index.html`; keep them equal when a screenshot's content changes, because
+stale alt text is both an accessibility bug and an SEO one.
+
+**Freshness.** `docs/images/screenshots.json` records the app version and the
+commit of the last change under `packages/app/src/renderer` / `src/main`.
+`--check` compares that against HEAD and exits non-zero with a reason when the
+UI has moved on — that is the signal the docs and SEO autopilots read, so they
+never have to eyeball an image to know whether it is current.
