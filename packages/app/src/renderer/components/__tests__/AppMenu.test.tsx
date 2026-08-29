@@ -10,9 +10,10 @@
      focus comes back to the trigger instead of landing on <body>. */
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GLOBAL_ACTIONS } from '../../../shared/global-actions.js';
-import { t } from '../../i18n';
+import { LOCALE_KEY } from '../../../shared/i18n/locales.js';
+import { setLocale, t } from '../../i18n';
 import type { UpdateState } from '../../update-check.js';
 import { AppMenu, type AppMenuProps } from '../AppMenu';
 
@@ -46,6 +47,13 @@ function openMenu(trigger: HTMLElement): HTMLElement {
 beforeEach(() => {
   openExternal.mockReset();
   (window as unknown as { electronAPI: unknown }).electronAPI = { openExternal };
+});
+
+/* The Language row switches for real — there is no store to fake, which is the
+   point of it. Put the language back so the rest of the file reads English. */
+afterEach(() => {
+  setLocale('en');
+  localStorage.removeItem(LOCALE_KEY);
 });
 
 describe('sidebar app menu', () => {
@@ -126,6 +134,60 @@ describe('sidebar app menu', () => {
     expect(options.map((o) => o.tabIndex)).toEqual([-1, -1, 0]);
   });
 
+  /* TRA-388. Same row shape as Theme, with the one difference the values force:
+     a language name is a word, so the segments carry the two-letter form and
+     the full name — written in its OWN language, never translated — is the
+     accessible name and the tooltip. */
+  it('offers Language as one labelled row whose segments are words', () => {
+    const { trigger } = renderMenu();
+    const row = within(openMenu(trigger)).getByRole('group', { name: 'Language' });
+
+    const options = within(row).getAllByRole('menuitemradio');
+    expect(options.map((o) => o.textContent)).toEqual(['EN', 'RU']);
+    expect(options.map((o) => o.getAttribute('aria-label'))).toEqual(['English', 'Русский']);
+    expect(options.map((o) => o.getAttribute('title'))).toEqual(['English', 'Русский']);
+    expect(options.map((o) => o.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+    expect(options[0].className).toContain('is-active');
+    // The track says it holds words, which is what island.css keys the padding
+    // and the full-strength unselected colour off.
+    expect(row.querySelector('.ws-ctx-seg')?.className).toContain('is-text');
+    expect(options.map((o) => o.tabIndex)).toEqual([0, -1]);
+  });
+
+  it('switches the whole menu at once, without closing it', () => {
+    const { trigger } = renderMenu();
+    const menu = openMenu(trigger);
+    const row = within(menu).getByRole('group', { name: 'Language' });
+
+    fireEvent.click(within(row).getByRole('menuitemradio', { name: 'Русский' }));
+
+    // The row it lives in, and a neighbour it does not own: the switch is the
+    // whole UI, not one label.
+    expect(within(menu).getByRole('group', { name: 'Язык' })).toBeTruthy();
+    expect(within(menu).getByRole('group', { name: 'Оформление' })).toBeTruthy();
+    expect(localStorage.getItem(LOCALE_KEY)).toBe('ru');
+    // …and the menu is still open to see it happen.
+    expect(screen.queryByRole('menu')).not.toBeNull();
+  });
+
+  it('moves within the Language row on left/right and past it on down', () => {
+    const { trigger } = renderMenu();
+    const menu = openMenu(trigger);
+    const checked = within(menu).getByRole('menuitemradio', { name: 'English' });
+
+    fireEvent.keyDown(checked, { key: 'ArrowRight' });
+    expect(within(menu).getByRole('group', { name: 'Язык' })).toBeTruthy();
+
+    fireEvent.keyDown(within(menu).getByRole('menuitemradio', { name: 'Русский' }), {
+      key: 'ArrowLeft',
+    });
+    expect(within(menu).getByRole('group', { name: 'Language' })).toBeTruthy();
+
+    // Down out of the row reaches the items below, not the next segment.
+    fireEvent.keyDown(document, { key: 'End' });
+    expect(document.activeElement?.textContent).toContain('Check for updates');
+  });
+
   /* The hard part Lead Engineer called out: two axes in one menu. Up/down has
      to keep moving between rows while left/right moves inside the switcher. */
   it('moves within the switcher on left/right and out of it on up/down', () => {
@@ -146,9 +208,12 @@ describe('sidebar app menu', () => {
     fireEvent.keyDown(checked, { key: 'ArrowLeft' });
     expect(onAppearanceChange).toHaveBeenLastCalledWith('auto');
 
-    // …and down again leaves the row entirely, rather than stepping to Dark.
+    // …and down again leaves the row entirely, rather than stepping to Dark:
+    // the next stop is the Language row, then the first real item after it.
     fireEvent.keyDown(document, { key: 'ArrowDown' });
     expect(row.contains(document.activeElement)).toBe(false);
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('English');
+    fireEvent.keyDown(document, { key: 'ArrowDown' });
     expect(document.activeElement?.textContent).toContain('View changelog');
   });
 
@@ -184,12 +249,12 @@ describe('sidebar app menu', () => {
   it('arrows through the items and wraps', () => {
     const { trigger } = renderMenu({ appearance: 'auto' });
     const menu = openMenu(trigger);
-    /* The stop list, not the element list: the Theme row contributes ONE stop
-       (its checked segment), so up/down sees actions + 1. */
+    /* The stop list, not the element list: each choice row contributes ONE stop
+       (its checked segment), so up/down sees actions + 2. */
     const all = Array.from(
       menu.querySelectorAll<HTMLElement>('[role^="menuitem"]'),
     ).filter((el) => !el.closest('[data-menu-row]') || el.getAttribute('aria-checked') === 'true');
-    expect(all.length).toBe(GLOBAL_ACTIONS.length + 1); // + the Theme row
+    expect(all.length).toBe(GLOBAL_ACTIONS.length + 2); // + Theme and Language
 
     // Nothing is highlighted until the first arrow — a macOS menu does not
     // preselect its first item.

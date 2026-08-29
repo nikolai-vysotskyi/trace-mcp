@@ -27,6 +27,7 @@ export const shell = {
   resizeSidebar: 'Resize sidebar',
   appMenu: 'App menu',
   theme: 'Theme',
+  language: 'Language',
   themeAuto: 'Auto',
   themeLight: 'Light',
   themeDark: 'Dark',
