@@ -246,6 +246,16 @@ describe('docs site numeric claims (TRA-174)', () => {
     // integrations, 138 tools". docs/configuration.md was unguarded too.
     { path: 'server.json', tolerance: 5 },
     { path: 'docs/configuration.md', tolerance: 5, skipLine: /output_format|preset/ },
+    // TRA-361: the install surfaces — the npm page and the Claude Code / Codex
+    // plugin marketplaces — were the last unguarded copies, and every one of
+    // them still advertised "60(+) framework integrations, 81 languages" while
+    // server.json next to them said 87 / 80. Their `version` fields were
+    // guarded (tests/plugin/manifest-sync.test.ts), their prose was not.
+    { path: 'package.json', tolerance: 5 },
+    { path: '.claude-plugin/plugin.json', tolerance: 5 },
+    { path: '.claude-plugin/marketplace.json', tolerance: 5 },
+    { path: '.codex-plugin/plugin.json', tolerance: 5 },
+    { path: '.codex-plugin/marketplace.json', tolerance: 5 },
   ];
 
   for (const { path, tolerance, skipLine } of docs) {
