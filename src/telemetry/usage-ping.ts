@@ -4,9 +4,11 @@
  * Separate from the observability bridge in `index.ts`/`otlp.ts`/`langfuse.ts`:
  * that bridge exports a *user's own* spans to a backend *they* configure. This
  * module reports back to the maintainer instead — a single daily event with
- * an anonymous install id, the trace-mcp version, Node major version, and
- * platform. No project paths, file names, query content, or anything else
- * that could identify a user or their code.
+ * an anonymous install id, the trace-mcp version, Node major version,
+ * platform, and two aggregate counters since the previous ping (tool calls
+ * and estimated tokens saved). No project paths, file names, query content,
+ * per-tool or per-project breakdown, or anything else that could identify a
+ * user or their code.
  *
  * Transport is GA4's Measurement Protocol (a plain HTTP POST to a Google
  * endpoint) rather than a self-hosted collector, so there's no backend to
@@ -23,6 +25,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../logger.js';
+import { loadPersistentSavings } from '../savings.js';
 import { TELEMETRY_STATE_PATH } from '../shared/paths.js';
 
 declare const GA_MEASUREMENT_ID_INJECTED: string;
@@ -36,6 +39,9 @@ interface TelemetryState {
   installId: string;
   /** UTC calendar date (YYYY-MM-DD) of the last successfully sent ping. */
   lastPingDate?: string;
+  /** Cumulative totals at the last ping — the next ping reports the delta. */
+  lastTokensSaved?: number;
+  lastCalls?: number;
 }
 
 function isDisabled(env: NodeJS.ProcessEnv): boolean {
@@ -52,7 +58,13 @@ function loadOrCreateState(): TelemetryState {
     const parsed = JSON.parse(
       fs.readFileSync(TELEMETRY_STATE_PATH, 'utf8'),
     ) as Partial<TelemetryState>;
-    if (parsed.installId) return { installId: parsed.installId, lastPingDate: parsed.lastPingDate };
+    if (parsed.installId)
+      return {
+        installId: parsed.installId,
+        lastPingDate: parsed.lastPingDate,
+        lastTokensSaved: parsed.lastTokensSaved,
+        lastCalls: parsed.lastCalls,
+      };
   } catch {
     // No state file yet (first run) or it's unreadable — start fresh below.
   }
@@ -69,6 +81,14 @@ export interface UsagePingOptions {
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   nowMs?: number;
+  /** Injectable for tests; defaults to the on-disk cumulative savings file. */
+  loadSavings?: typeof loadPersistentSavings;
+}
+
+/** Delta since the last ping, floored at 0 so a reset savings file can't send a negative. */
+function delta(total: number | undefined, last: number | undefined): number {
+  if (typeof total !== 'number' || !Number.isFinite(total) || total < 0) return 0;
+  return Math.max(0, Math.round(total - (last ?? 0)));
 }
 
 /**
@@ -87,6 +107,10 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
   const today = utcDate(opts.nowMs ?? Date.now());
   if (state.lastPingDate === today) return;
 
+  const savings = (opts.loadSavings ?? loadPersistentSavings)();
+  const tokensSaved = delta(savings?.total_tokens_saved, state.lastTokensSaved);
+  const calls = delta(savings?.total_calls, state.lastCalls);
+
   const fetchImpl = opts.fetchImpl ?? fetch;
   const url = `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(measurementId)}&api_secret=${encodeURIComponent(apiSecret)}`;
 
@@ -102,6 +126,14 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
               version: opts.version,
               platform: process.platform,
               node_major: process.versions.node.split('.')[0],
+              tokens_saved: tokensSaved,
+              calls,
+              // Without these two GA4 keeps the event but doesn't count the
+              // install as an active user — reports read 0 while the raw event
+              // count is non-zero. See the "Tip" under `session_id` /
+              // `engagement_time_msec` in the Measurement Protocol reference.
+              session_id: String(Math.floor((opts.nowMs ?? Date.now()) / 1000)),
+              engagement_time_msec: 1,
             },
           },
         ],
@@ -113,7 +145,12 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
   }
 
   try {
-    saveState({ installId: state.installId, lastPingDate: today });
+    saveState({
+      installId: state.installId,
+      lastPingDate: today,
+      lastTokensSaved: savings?.total_tokens_saved ?? state.lastTokensSaved,
+      lastCalls: savings?.total_calls ?? state.lastCalls,
+    });
   } catch (err) {
     logger.debug({ err }, 'telemetry.usage_ping_state_save_failed');
   }

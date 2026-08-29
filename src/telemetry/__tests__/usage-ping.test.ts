@@ -67,6 +67,59 @@ describe('sendUsagePing', () => {
     expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
   });
 
+  it('carries session_id and engagement_time_msec so GA4 counts the install as an active user', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({
+      version: '1.2.3',
+      env: CONFIGURED_ENV,
+      fetchImpl,
+      nowMs: 1_700_000_000_000,
+    });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.session_id).toBe('1700000000');
+    expect(params.engagement_time_msec).toBe(1);
+  });
+
+  it('reports savings as a delta since the previous ping and remembers the new totals', async () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({
+        installId: 'fixed-id',
+        lastPingDate: '2000-01-01',
+        lastTokensSaved: 1000,
+        lastCalls: 10,
+      }),
+    );
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({
+      version: '1.2.3',
+      env: CONFIGURED_ENV,
+      fetchImpl,
+      loadSavings: () => ({ total_tokens_saved: 2500, total_calls: 40 }) as never,
+    });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.tokens_saved).toBe(1500);
+    expect(params.calls).toBe(30);
+    const written = JSON.parse(String(vi.mocked(fs.writeFileSync).mock.calls[0]![1]));
+    expect(written.lastTokensSaved).toBe(2500);
+    expect(written.lastCalls).toBe(40);
+  });
+
+  it('sends zeroed counters when there is no savings file and never a negative delta', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({
+      version: '1.2.3',
+      env: CONFIGURED_ENV,
+      fetchImpl,
+      loadSavings: () => null,
+    });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.tokens_saved).toBe(0);
+    expect(params.calls).toBe(0);
+  });
+
   it('does not send a second ping the same UTC day', async () => {
     const today = new Date().toISOString().slice(0, 10);
     vi.mocked(fs.readFileSync).mockReturnValue(

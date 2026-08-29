@@ -345,7 +345,7 @@ trace-mcp runs entirely on your machine. Nothing about your source code is uploa
 
 trace-mcp sends at most one anonymous ping per day, per install, to help us count active installs. It is:
 
-- **Anonymous** — a random install id (`~/.trace-mcp/telemetry-state.json`), the trace-mcp version, Node major version, and OS platform. No project names, file paths, query content, code, or anything else that could identify you or your codebase.
+- **Anonymous** — a random install id (`~/.trace-mcp/telemetry-state.json`), the trace-mcp version, Node major version, OS platform, and two aggregate counters since the previous ping: how many tool calls you made and the estimated tokens they saved (the same totals `trace-mcp savings` prints). No project names, file paths, query content, per-tool or per-project breakdown, code, or anything else that could identify you or your codebase.
 - **Opt-out** — set `TRACE_MCP_TELEMETRY=off` to disable it entirely.
 - **Small blast radius by construction** — transport is [GA4's Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4), a single HTTP POST, not a custom backend or SDK.
 - **Its credentials are public by design** — the GA4 measurement id and write-only `api_secret` are compiled into the published bundle, so you can read exactly where the ping goes. See [SECURITY.md](SECURITY.md#telemetry-credentials--public-by-design).
