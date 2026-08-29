@@ -557,7 +557,7 @@ function useProviderModels(
           size: m.size ? `${(m.size / 1e9).toFixed(1)} GB` : undefined,
         }));
         list.sort((a, b) => a.name.localeCompare(b.name));
-        setModels(list);
+        if (!ctrl.signal.aborted) setModels(list);
       }
       // ── Anthropic: static list (no models API) ──
       else if (provider === 'anthropic') {
@@ -576,25 +576,34 @@ function useProviderModels(
           name: (m.name ?? '').replace(/^models\//, ''),
         }));
         list.sort((a, b) => a.name.localeCompare(b.name));
-        setModels(list);
+        if (!ctrl.signal.aborted) setModels(list);
       }
       // ── All OpenAI-compatible providers ──
       else if (OPENAI_COMPAT_PROVIDERS.has(provider)) {
         const url = baseUrl || defaults?.baseUrl || '';
-        setModels(
-          await fetchOpenAICompatModels(url.replace(/\/+$/, ''), key, label, ctrl.signal),
+        const list = await fetchOpenAICompatModels(
+          url.replace(/\/+$/, ''),
+          key,
+          label,
+          ctrl.signal,
         );
+        if (!ctrl.signal.aborted) setModels(list);
       }
     } catch (e) {
       const err = e as Error;
-      if (err.name !== 'AbortError') setError(err.message ?? 'Failed to fetch models');
+      if (err.name !== 'AbortError' && !ctrl.signal.aborted)
+        setError(err.message ?? 'Failed to fetch models');
     } finally {
-      setLoading(false);
+      // Aborted means either a newer fetch superseded this one or the component
+      // unmounted — either way this run owns no state any more. Without the
+      // guard the settle lands after teardown and React touches a gone `window`.
+      if (!ctrl.signal.aborted) setLoading(false);
     }
   }, [provider, baseUrl, apiKey]);
 
   useEffect(() => {
     fetchModels();
+    return () => abortRef.current?.abort();
   }, [fetchModels]);
 
   return { models, loading, error, refresh: fetchModels };
