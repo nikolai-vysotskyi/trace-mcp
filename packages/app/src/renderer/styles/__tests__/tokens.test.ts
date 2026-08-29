@@ -58,14 +58,20 @@ describe('design tokens', () => {
   /* Dimming a label to signal "secondary" needs surface headroom, and a filled
      accent row has none — the same call the decision log already made for the
      shortcut hint. White at .85 on --accent-fill measured 4.22:1 light and
-     3.89:1 dark, and the count is a number the user reads. */
-  it('paints the selected sidebar row icon and count at full --on-accent', () => {
+     3.89:1 dark.
+
+     Assert on .ws-sb-ico, not .ws-sb-count: the first version of this test
+     anchored on .ws-sb-count, which is styled in sidebar.css and rendered by no
+     component — so it would have passed unchanged if the rule stopped covering
+     the one element that is actually on screen. A guard aimed at dead markup
+     guards nothing. */
+  it('paints the selected sidebar row glyph at full --on-accent', () => {
     const sidebarCss = readFileSync(
       fileURLToPath(new URL('../sidebar.css', import.meta.url)),
       'utf8',
     );
     expect(sidebarCss).toMatch(
-      /\.ws-sidebar:focus-within[^{]*\.ws-sb-count\s*\{[^}]*color:\s*var\(--on-accent\)/,
+      /\.ws-sidebar:focus-within[^{]*\.ws-sb-ico[^{]*\{[^}]*color:\s*var\(--on-accent\)/,
     );
   });
 
