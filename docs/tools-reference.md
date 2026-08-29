@@ -257,7 +257,7 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 | "How much am I spending on tokens?" | `get_session_analytics` — full breakdown by tool, file, model |
 | "Where am I wasting tokens?" | `get_optimization_report` — detects repeated reads, bash-grep, large files |
 | "How much would trace-mcp save?" | `get_real_savings` — compares actual reads vs compact alternatives |
-| "Quick efficiency benchmark" | `benchmark_project` — 92%+ reduction on typical projects |
+| "Quick efficiency benchmark" | `benchmark_project` — synthetic per-category estimate of the structured-task ceiling, not measured savings (use `get_real_savings` for those) |
 | "What tech isn't covered?" | `get_coverage_report` — gaps in plugin coverage for your deps |
 
 ---
