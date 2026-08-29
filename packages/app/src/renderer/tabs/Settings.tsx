@@ -1430,7 +1430,11 @@ function AppearanceCard({
             options={APPEARANCE_OPTIONS}
             value={appearance}
             onChange={onChange}
-            aria-label="Appearance"
+            // "Theme", matching the visible label beside it — an accessible
+            // name that disagrees with the label a sighted user reads out loud
+            // is a voice-control dead end (WCAG 2.5.3). "Appearance" is the
+            // GROUP heading above, and stays that.
+            aria-label="Theme"
           />
         </div>
       </Card>

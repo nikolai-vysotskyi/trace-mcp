@@ -422,6 +422,47 @@ same reason.
 The footer never grows a second row for any of this. If a new global action needs a
 home, it is a menu item.
 
+### A choice in a menu is one row, not a group of items
+
+A menu item is a **destination or a command**: you pick it, something happens, the
+menu closes. A **choice** is not that — it is a setting with two or three values
+that you may want to try, and it does not belong in the same shape.
+
+Appearance shipped as the wrong shape first: an `APPEARANCE` caps header plus three
+checked items, four rows for one three-state preference, in a menu whose whole
+premise was that the sidebar footer should stop spending a row per thing. A caps
+header over a single control is weight without information.
+
+**The rule.** A choice inside a menu is one row: its name on the left, the control
+inline on the right, on the same centre line as every item above and below it
+(`MenuChoiceRow` in `lattice/ui/Menu.tsx`, `.ws-ctx-row` in `styles/island.css`).
+Two to four short values → a segmented pill. More than four, or values that need
+words → a pop-up button on the same row shape. Never a section header plus one
+item per value.
+
+What the row has to get right, all of it enforced by
+`components/__tests__/AppMenu.test.tsx`:
+
+- **Geometry.** Same 30px box and 8px inset as `.ws-ctx-item`, so the label, the
+  control and the neighbouring items share one centre line and the control's right
+  edge lands in the same column as an item's shortcut. Measured: 214.5px for both.
+- **Roles.** `role="group"` + `aria-label` on the row, `role="menuitemradio"` +
+  `aria-checked` on each value. Not `radiogroup` / `radio` — a `radiogroup` is not
+  a legal child of `role="menu"`, and `aria-pressed` (what the shared
+  `SegmentedControl` uses) says "toggled", not "chosen".
+- **Two axes on the keyboard.** Up/Down keep moving between menu *rows*: the row is
+  a single stop, marked `data-menu-row`, and the stop resolves to whichever segment
+  is checked right now. Left/Right move *within* the control and change the value.
+  Roving `tabIndex` puts the one Tab stop on the current value.
+- **Icon-only segments carry their name in `aria-label` and in `title`.** The
+  visible glyph is not a label; screen readers and hover both need the word.
+- **Selection needs a second cue when the segments are icons.** The thumb alone is
+  1.19:1 (light) / 1.63:1 (dark) against the track — fine for word segments, which
+  stay readable regardless, but an icon has nothing else to fall back on, so an
+  unselected icon drops to `--label-secondary`.
+- **Picking a value does not close the menu.** The point of an inline switcher is
+  watching the app change under it. A command still closes; a choice does not.
+
 ### The window minimum is a size that has to work
 
 `main/tray.ts` sets `minWidth: 640, minHeight: 420`. Every surface must be usable
@@ -654,8 +695,11 @@ new evidence.
 | `listPending` separates "daemon hasn't answered" from "never indexed" | `status ?? 'unknown'` blamed the project for the daemon's silence. |
 | Sidebar footer is `.ws-sb-row`, not its own geometry | One row system for the whole sidebar; the footer's labels started 26px left of every other label. |
 | Appearance is Auto / Light / Dark, with Auto clearing the key | The old `toggle` only ever wrote `light` or `dark`, so one click pinned the app forever and the system listener stopped mattering. |
-| Appearance lives in Settings, not the sidebar footer | A preference is not a navigation destination, and a second footer row cost 28px at the bottom of every window. It renders in Settings' daemon-down and loading states too — the theme is localStorage, not daemon config. (TRA-363 added it back as a checked group *inside* the app menu — a menu item costs no sidebar height, which is what the objection was about.) |
+| Appearance lives in Settings, not the sidebar footer | A preference is not a navigation destination, and a second footer row cost 28px at the bottom of every window. It renders in Settings' daemon-down and loading states too — the theme is localStorage, not daemon config. (TRA-363 added it back *inside* the app menu, as one `Theme` row — a menu row costs no sidebar height, which is what the objection was about.) |
 | The sidebar footer is one row, and that row opens a menu | Every global action was costing 28px of a column meant for navigation: Settings, then Appearance, then a permanent "● Up to date · v3.1.1 ⟳" strip — 70.5px measured, of which the update row's entire message was "nothing is wrong". One row is 42.5px and the next global action costs a menu item instead of a row (TRA-363). |
+| A choice in a menu is one row with the control inline, not a header plus one item per value | Appearance first shipped as an `APPEARANCE` caps header over three checked items: four rows for one three-state preference, in the menu built to stop the footer spending a row per thing. A header over a single control is weight without information. One row, name left, pill right, on the shared centre line — and the rule is written for every future choice, not solved for Theme (TRA-363). |
+| A choice row is `group` + `menuitemradio`, one keyboard stop, and does not close the menu | `radiogroup` is not a legal child of `role="menu"`, and the shared `SegmentedControl`'s `aria-pressed` says "toggled" rather than "chosen". The row is one Up/Down stop resolved to the checked segment, Left/Right move inside it, and picking a value leaves the menu open — an inline switcher exists so you can watch the app change under it. |
+| Icon-only segments dim when unselected; word segments do not | The selected thumb is 1.19:1 light / 1.63:1 dark against the track. On a word that is enough because the word stays readable (TRA-292); an icon has no fallback, so the only cue would be a sub-3:1 fill. Unselected icons drop to `--label-secondary` (4.5:1 on the track). |
 | A global action is defined once, in `src/shared/global-actions.ts` | The native menu and the app menu both offer Settings / What's new / Get help / Check for updates. Two hand-maintained lists drift — a relabelled item, a moved key, an action added to one and forgotten in the other. Neither surface types a label; both read the entry. |
 | "Up to date" belongs in the app menu's header, not in a sidebar row | It is the answer to a question you only ask when you go looking, and it belongs next to the action that re-asks it. A permanent strip pays 28px in every window, forever, to report the absence of news. The states you can *act* on — update available, restart pending, bundle stuck — still get a card in the sidebar. |
 | A menu anchors on the app, because there is no account to anchor on | The pattern this came from is an account menu, held together by an identity at the top. We have no users. The product is the identity: the trigger carries the name, the header carries the version and whether it is current. |
