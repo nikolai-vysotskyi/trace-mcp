@@ -27,7 +27,10 @@ import {
   type MenuItemConstructorOptions,
 } from 'electron';
 import { type GlobalActionId, globalAction } from '../shared/global-actions.js';
-import { showMenuWindow } from './tray';
+import { isLocale } from '../shared/i18n/locales.js';
+import { startI18n, t } from './i18n';
+import { readLocale, writeLocale } from './locale';
+import { refreshTrayMenu, showMenuWindow } from './tray';
 
 const isMac = process.platform === 'darwin';
 
@@ -74,8 +77,12 @@ function actionItem(id: GlobalActionId): MenuItemConstructorOptions {
   const action = globalAction(id);
   const url = action.url;
   return url
-    ? { label: action.label, click: () => void shell.openExternal(url) }
-    : { label: action.label, accelerator: action.accelerator, click: () => send(action.id) };
+    ? { label: t(action.labelKey), click: () => void shell.openExternal(url) }
+    : {
+        label: t(action.labelKey),
+        accelerator: action.accelerator,
+        click: () => send(action.id),
+      };
 }
 
 function sectionItems(): MenuItemConstructorOptions[] {
@@ -117,16 +124,24 @@ export function buildAppMenu(): Menu {
      all — they go to the bottom of File, which is where Windows and Linux users
      look for them anyway. Ctrl+, still works; the accelerator is the same. */
   const fileMenu: MenuItemConstructorOptions = {
-    label: 'File',
+    label: t('menu:file'),
     submenu: [
       // The menu window IS this app's main window: ⌘N creates it when it has
       // been closed, and brings it forward when it hasn't.
-      { label: 'New window', accelerator: 'CmdOrCtrl+N', click: () => showMenuWindow() },
-      { label: 'Open project…', accelerator: 'CmdOrCtrl+O', click: () => send('open-project') },
-      { label: 'Quick open…', accelerator: 'CmdOrCtrl+Shift+O', click: () => send('quick-open') },
+      { label: t('menu:newWindow'), accelerator: 'CmdOrCtrl+N', click: () => showMenuWindow() },
+      {
+        label: t('menu:openProject'),
+        accelerator: 'CmdOrCtrl+O',
+        click: () => send('open-project'),
+      },
+      {
+        label: t('menu:quickOpen'),
+        accelerator: 'CmdOrCtrl+Shift+O',
+        click: () => send('quick-open'),
+      },
       { type: 'separator' },
-      { label: 'Close tab', accelerator: 'CmdOrCtrl+W', role: 'close' },
-      { label: 'Close window', accelerator: 'CmdOrCtrl+Shift+W', click: closeWindowGroup },
+      { label: t('menu:closeTab'), accelerator: 'CmdOrCtrl+W', role: 'close' },
+      { label: t('menu:closeWindow'), accelerator: 'CmdOrCtrl+Shift+W', click: closeWindowGroup },
       ...(isMac
         ? []
         : ([
@@ -141,7 +156,7 @@ export function buildAppMenu(): Menu {
   // Plain roles, so undo/redo/cut/copy/paste keep working inside every text
   // field — that is what they are here for, not decoration.
   const editMenu: MenuItemConstructorOptions = {
-    label: 'Edit',
+    label: t('menu:edit'),
     submenu: [
       { role: 'undo' },
       { role: 'redo' },
@@ -151,15 +166,15 @@ export function buildAppMenu(): Menu {
       { role: 'paste' },
       { role: 'selectAll' },
       { type: 'separator' },
-      { label: 'Find', accelerator: 'CmdOrCtrl+F', click: () => send('find') },
+      { label: t('menu:find'), accelerator: 'CmdOrCtrl+F', click: () => send('find') },
     ],
   };
 
   const viewMenu: MenuItemConstructorOptions = {
-    label: 'View',
+    label: t('menu:view'),
     submenu: [
       {
-        label: 'Toggle sidebar',
+        label: t('menu:toggleSidebar'),
         accelerator: 'CmdOrCtrl+Alt+S',
         click: () => send('toggle-sidebar'),
       },
@@ -167,7 +182,7 @@ export function buildAppMenu(): Menu {
         ? ([{ type: 'separator' }, ...sections] as MenuItemConstructorOptions[])
         : []),
       { type: 'separator' },
-      { label: 'Reload', accelerator: 'CmdOrCtrl+R', role: 'reload' },
+      { label: t('menu:reload'), accelerator: 'CmdOrCtrl+R', role: 'reload' },
       { type: 'separator' },
       { role: 'resetZoom' },
       { role: 'zoomIn' },
@@ -178,7 +193,7 @@ export function buildAppMenu(): Menu {
   };
 
   const windowMenu: MenuItemConstructorOptions = {
-    label: 'Window',
+    label: t('menu:window'),
     role: 'window',
     submenu: [
       { role: 'minimize' },
@@ -198,14 +213,17 @@ export function buildAppMenu(): Menu {
   };
 
   // Plain label, no `role: 'help'`: AppKit recognises a menu titled "Help" and
-  // adds the system Help search to it itself.
+  // adds the system Help search to it itself. It matches on the localised title
+  // from the app's own bundle, which an Electron app does not have — so in
+  // Russian the system search item drops out. A translated menu bar is worth
+  // more than a search field over documentation we do not ship as Apple Help.
   const helpMenu: MenuItemConstructorOptions = {
-    label: 'Help',
+    label: t('menu:help'),
     submenu: [
       // "Documentation", not the old "trace-mcp help": next to the shared
       // "Get help" item, two things called help and pointing at different
       // pages is a coin toss.
-      { label: 'Documentation', click: () => void shell.openExternal(DOCS_URL) },
+      { label: t('menu:documentation'), click: () => void shell.openExternal(DOCS_URL) },
       actionItem('get-help'),
       actionItem('view-changelog'),
       // On macOS these live in the app menu; elsewhere Help is where they go.
@@ -233,14 +251,33 @@ export function installAppMenu(): void {
   Menu.setApplicationMenu(buildAppMenu());
 }
 
-/** Call once from whenReady. Rebuilds on focus so ⌘1…⌘9 always name the
-    sections of the window the user is actually looking at. */
+/** Call once from whenReady, before the first window. Rebuilds on focus so
+    ⌘1…⌘9 always name the sections of the window the user is actually looking
+    at, and on a language change because `Menu.setApplicationMenu` replaces the
+    menu wholesale — there is no per-item relabel to reach for. */
 export function registerAppMenu(): void {
+  // The language the renderer chose last run, mirrored to userData because
+  // localStorage is not readable from here (locale.ts). Before the first
+  // build, so the cold-launch menu is already in it.
+  startI18n(readLocale(app.getPath('userData')));
+
   ipcMain.on('window-sections', (event, sections: WindowSection[]) => {
     if (!Array.isArray(sections)) return;
     setWindowSections(event.sender.id, sections);
     event.sender.once('destroyed', () => forgetWindowSections(event.sender.id));
   });
+
+  /* The renderer's language choice, mirroring `set-appearance`. Handled here
+     rather than in tray.ts so the redraw can reach both surfaces: tray.ts is
+     imported BY this file, and the reverse import would close a cycle. */
+  ipcMain.on('set-locale', (_event, value: unknown) => {
+    if (!isLocale(value)) return;
+    writeLocale(app.getPath('userData'), value);
+    startI18n(value);
+    installAppMenu();
+    refreshTrayMenu();
+  });
+
   installAppMenu();
   app.on('browser-window-focus', () => installAppMenu());
 }

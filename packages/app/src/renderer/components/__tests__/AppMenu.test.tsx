@@ -12,6 +12,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GLOBAL_ACTIONS } from '../../../shared/global-actions.js';
+import { t } from '../../i18n';
 import type { UpdateState } from '../../update-check.js';
 import { AppMenu, type AppMenuProps } from '../AppMenu';
 
@@ -72,7 +73,7 @@ describe('sidebar app menu', () => {
     const { trigger } = renderMenu();
     const menu = openMenu(trigger);
     for (const action of GLOBAL_ACTIONS) {
-      const item = within(menu).getByRole('menuitem', { name: new RegExp(action.label) });
+      const item = within(menu).getByRole('menuitem', { name: new RegExp(t(action.labelKey)) });
       if (action.shortcut) expect(item.textContent).toContain(action.shortcut);
     }
   });

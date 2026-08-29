@@ -17,6 +17,7 @@
    Appearance is not in that list: it is a preference with three states, it also
    lives in Settings, and it exists on no other surface to drift against. */
 
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../lattice/icons';
 import { Menu, MenuChoiceRow, MenuItem, MenuSeparator, useMenuAnchor } from '../lattice/ui';
 import { GLOBAL_ACTIONS, type GlobalAction } from '../../shared/global-actions.js';
@@ -70,6 +71,9 @@ export function AppMenu({
   onSettings,
 }: AppMenuProps) {
   const menu = useMenuAnchor();
+  // Unnamespaced: the shared action list carries fully-qualified keys, because
+  // the native menu resolves the same ones in the main process.
+  const { t } = useTranslation();
   const open = menu.at !== null;
   const summary = updateSummary(update, checking);
 
@@ -107,7 +111,7 @@ export function AppMenu({
       disabled={action.id === 'check-for-update' && checking}
       onClick={runAction(action)}
     >
-      {action.label}
+      {t(action.labelKey)}
     </MenuItem>
   );
 

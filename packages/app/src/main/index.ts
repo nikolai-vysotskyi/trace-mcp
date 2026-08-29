@@ -3,6 +3,7 @@ import { execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import { t } from './i18n';
 import { registerAppMenu } from './menu';
 import { createTray, restoreAppearance, showMenuWindow } from './tray';
 import {
@@ -42,7 +43,7 @@ const dockIconPath = path.join(__dirname, '..', '..', 'build', 'icon.png');
 ipcMain.handle('select-folder', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory', 'createDirectory'],
-    title: 'Select project root',
+    title: t('menu:selectProjectRoot'),
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];

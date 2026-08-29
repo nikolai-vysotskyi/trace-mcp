@@ -10,6 +10,7 @@ import {
   writeAppearance,
 } from './appearance';
 import { ensureDaemon, restartDaemon } from './daemon-lifecycle';
+import { t } from './i18n';
 
 const isMac = process.platform === 'darwin';
 
@@ -208,7 +209,7 @@ function getTabList(focusedWebContentsId?: number): TabInfo[] {
   if (menuWindow && !menuWindow.isDestroyed()) {
     tabs.push({
       id: 'menu',
-      title: 'Menu',
+      title: t('tray:menuWindow'),
       type: 'menu',
       active: menuWindow.webContents.id === focusedWebContentsId,
     });
@@ -311,7 +312,7 @@ export function showMenuWindow(tab?: string): void {
   }
 
   menuWindow.webContents.on('did-finish-load', () => {
-    menuWindow?.setTitle('Menu');
+    menuWindow?.setTitle(t('tray:menuWindow'));
   });
 
   menuWindow.once('ready-to-show', () => {
@@ -482,18 +483,18 @@ function createDotIcon(hex: string, glow: boolean): Electron.NativeImage {
 }
 
 function buildContextMenu(): Menu {
-  const statusLabel = daemonReachable ? 'Daemon running' : 'Daemon stopped';
+  const statusLabel = daemonReachable ? t('tray:daemonRunning') : t('tray:daemonStopped');
   const dotIcon = createDotIcon(daemonReachable ? '#34c759' : '#8e8e93', daemonReachable);
 
   return Menu.buildFromTemplate([
     { label: statusLabel, enabled: false, icon: dotIcon },
     { type: 'separator' },
-    { label: 'Workspace', click: () => showWindow('workspace') },
-    { label: 'MCP Clients', click: () => showWindow('clients') },
-    { label: 'Settings', click: () => showWindow('settings') },
+    { label: t('tray:workspace'), click: () => showWindow('workspace') },
+    { label: t('tray:clients'), click: () => showWindow('clients') },
+    { label: t('tray:settings'), click: () => showWindow('settings') },
     { type: 'separator' },
     {
-      label: 'Quit trace-mcp',
+      label: t('tray:quit'),
       click: () => {
         cleanup();
         app.quit();
@@ -509,7 +510,18 @@ function setTrayIcon(reachable: boolean): void {
     img.setTemplateImage(true);
   }
   tray.setImage(img);
-  tray.setToolTip(reachable ? 'trace-mcp — running' : 'trace-mcp — daemon unreachable');
+  tray.setToolTip(reachable ? t('tray:tooltipRunning') : t('tray:tooltipStopped'));
+}
+
+/** Redraw everything the tray shows in words, after a language change. The IPC
+    that triggers it lives in menu.ts — this file is imported BY that one, and
+    importing back would close a cycle. No-op before `createTray`. */
+export function refreshTrayMenu(): void {
+  if (!tray || tray.isDestroyed()) return;
+  setTrayIcon(daemonReachable);
+  tray.setContextMenu(buildContextMenu());
+  if (menuWindow && !menuWindow.isDestroyed()) menuWindow.setTitle(t('tray:menuWindow'));
+  broadcastTabList();
 }
 
 function shouldAttemptRestart(failureTick: number): boolean {

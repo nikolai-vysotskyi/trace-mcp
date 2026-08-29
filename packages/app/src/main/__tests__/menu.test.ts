@@ -47,9 +47,10 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() },
 }));
 
-vi.mock('../tray', () => ({ showMenuWindow: vi.fn() }));
+vi.mock('../tray', () => ({ showMenuWindow: vi.fn(), refreshTrayMenu: vi.fn() }));
 
 import { GLOBAL_ACTIONS } from '../../shared/global-actions.js';
+import { startI18n, t } from '../i18n';
 import { buildAppMenu, forgetWindowSections, setWindowSections } from '../menu';
 
 function menu(label: string): Item[] {
@@ -107,7 +108,7 @@ describe('application menu', () => {
   it('carries every shared global action, by the shared label', () => {
     const labels = template.flatMap((top) => (top.submenu ?? []).map((i) => i.label));
     for (const action of GLOBAL_ACTIONS) {
-      expect(labels).toContain(action.label);
+      expect(labels).toContain(t(action.labelKey));
     }
   });
 
@@ -183,6 +184,23 @@ describe('application menu', () => {
     } finally {
       if (platform) Object.defineProperty(process, 'platform', platform);
       vi.resetModules();
+    }
+  });
+
+  /* TRA-386: `Menu.setApplicationMenu` replaces the menu wholesale, so a
+     language change has to rebuild every label — a bar half in Russian is the
+     failure this pins. */
+  it('rebuilds every top-level title in the active language', () => {
+    startI18n('ru');
+    try {
+      buildAppMenu();
+      const titles = template.map((m) => m.label);
+      expect(titles).toContain('Файл');
+      expect(titles).toContain('Справка');
+      expect(menu('Правка').map((i) => i.label ?? i.role)).toContain('Найти');
+    } finally {
+      startI18n('en');
+      buildAppMenu();
     }
   });
 

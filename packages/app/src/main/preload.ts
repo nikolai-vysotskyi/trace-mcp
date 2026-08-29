@@ -62,6 +62,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAppearance: (appearance: 'auto' | 'light' | 'dark'): void => {
     ipcRenderer.send('set-appearance', appearance);
   },
+  /** Mirror the renderer's language choice into the main process, which draws
+      the application menu and the tray and cannot read localStorage. */
+  setLocale: (locale: string): void => {
+    ipcRenderer.send('set-locale', locale);
+  },
   syncSidebarWidth: (width: number): void => {
     ipcRenderer.send('sync-sidebar-width', width);
   },
