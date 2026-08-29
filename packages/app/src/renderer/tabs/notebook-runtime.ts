@@ -25,50 +25,82 @@ const BASE = 'http://127.0.0.1:3741';
 
 export type ToolName = 'search' | 'get_outline' | 'get_symbol' | 'find_usages';
 
+/* The catalog carries KEYS, not sentences (TRA-385). Two reasons: this module
+   is deliberately React-free and must not pull the renderer's i18n runtime in,
+   and a tool's label, description and error sentence are read by the component
+   that draws them — which re-renders on a language switch, where a constant
+   resolved at import time would not. */
 export interface ToolField {
   key: string;
-  label: string;
-  placeholder?: string;
+  /** Catalogue key for the field's form label. */
+  labelKey: string;
+  /** Catalogue key for the example value shown in the empty field. */
+  placeholderKey?: string;
+  /** Catalogue key for "you have to fill this in" — required fields only. */
+  missingKey?: string;
   required?: boolean;
 }
 
 export interface ToolDef {
+  /** Also the label: a tool name is API vocabulary, identical in every language. */
   name: ToolName;
-  label: string;
-  description: string;
+  descriptionKey: string;
   fields: ToolField[];
 }
 
 export const NOTEBOOK_TOOLS: ToolDef[] = [
   {
     name: 'search',
-    label: 'search',
-    description: 'Search symbols by name across the project',
+    descriptionKey: 'notebook:searchDescription',
     fields: [
-      { key: 'query', label: 'Query', placeholder: 'e.g. registerTool', required: true },
-      // Optionality lives in the placeholder, not the label: "Kind (optional)"
-      // wrapped to two lines in the form's label column and broke the row's
-      // baseline. `required` is what the runtime actually reads.
-      { key: 'kind', label: 'Kind', placeholder: 'function | class | method — optional' },
+      {
+        key: 'query',
+        labelKey: 'notebook:queryLabel',
+        placeholderKey: 'notebook:queryPlaceholder',
+        missingKey: 'notebook:queryMissing',
+        required: true,
+      },
+      { key: 'kind', labelKey: 'notebook:kindLabel', placeholderKey: 'notebook:kindPlaceholder' },
     ],
   },
   {
     name: 'get_outline',
-    label: 'get_outline',
-    description: 'Get symbol signatures for a file',
-    fields: [{ key: 'path', label: 'Path', placeholder: 'src/server/server.ts', required: true }],
+    descriptionKey: 'notebook:outlineDescription',
+    fields: [
+      {
+        key: 'path',
+        labelKey: 'notebook:pathLabel',
+        placeholderKey: 'notebook:pathPlaceholder',
+        missingKey: 'notebook:pathMissing',
+        required: true,
+      },
+    ],
   },
   {
     name: 'get_symbol',
-    label: 'get_symbol',
-    description: 'Read a single symbol by FQN',
-    fields: [{ key: 'fqn', label: 'FQN', placeholder: 'src/foo.ts::Bar#class', required: true }],
+    descriptionKey: 'notebook:symbolDescription',
+    fields: [
+      {
+        key: 'fqn',
+        labelKey: 'notebook:fqnLabel',
+        placeholderKey: 'notebook:fqnPlaceholder',
+        missingKey: 'notebook:fqnMissing',
+        required: true,
+      },
+    ],
   },
   {
     name: 'find_usages',
-    label: 'find_usages',
-    description: 'Find all references to a symbol',
-    fields: [{ key: 'symbol_id', label: 'Symbol ID', placeholder: 'src/foo.ts::Bar#class', required: true }],
+    descriptionKey: 'notebook:usagesDescription',
+    fields: [
+      {
+        key: 'symbol_id',
+        labelKey: 'notebook:symbolIdLabel',
+        placeholderKey: 'notebook:symbolIdPlaceholder',
+        missingKey: 'notebook:symbolIdMissing',
+        required: true,
+      },
+    ],
   },
 ];
 
@@ -85,6 +117,10 @@ export const TOOL_BY_NAME: Record<ToolName, ToolDef> = NOTEBOOK_TOOLS.reduce(
 // MCP JSON-RPC channel. We open a fresh JSON-RPC session per call — cheap
 // enough for ad-hoc exploration. Replace with a persistent session if this
 // tab becomes a heavy surface.
+//
+// The throws below stay in English on purpose: they name a JSON-RPC protocol
+// violation, not a thing the reader did, and translating them would cost this
+// module its no-React contract for two sentences nobody should ever see.
 
 export interface NotebookClient {
   callTool(tool: ToolName, args: Record<string, string>, root: string): Promise<unknown>;

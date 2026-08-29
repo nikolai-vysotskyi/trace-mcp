@@ -10,6 +10,11 @@
  * lattice/ui. Cells are local React state only; no persistence in this slice.
  */
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+/* Side-effect import: renderer/i18n starts i18next on load, and this is the one
+   surface in the slice that reaches the catalogue only through `useTranslation`
+   — without it a test that renders Notebook in isolation gets raw keys. */
+import '../i18n';
 import { Icon } from '../lattice/icons';
 import {
   Button,
@@ -39,7 +44,9 @@ const MEASURE = 720;
     in the tool catalog wraps to a second line and breaks its row's baseline. */
 const LABEL_COL = 88;
 
-const TOOL_OPTIONS = NOTEBOOK_TOOLS.map((t) => ({ value: t.name, label: t.label }));
+/* A tool's name IS its label — `search`, `get_outline` read the same in every
+   language, so this list needs no translation pass. */
+const TOOL_OPTIONS = NOTEBOOK_TOOLS.map((tool) => ({ value: tool.name, label: tool.name }));
 
 // ── Cell state ───────────────────────────────────────────────────────
 
@@ -77,6 +84,7 @@ export function Notebook({
   root: string;
   client?: NotebookClient;
 }) {
+  const { t } = useTranslation('notebook');
   const [cells, setCells] = useState<Cell[]>(() => [makeCell()]);
   const [scrolled, setScrolled] = useState(false);
 
@@ -103,7 +111,7 @@ export function Notebook({
         updateCell(id, {
           status: 'error',
           // Says what to do next, not which form control failed validation.
-          error: `Enter a ${missing.label.toLowerCase()} to run this cell.`,
+          error: t(missing.missingKey ?? ''),
           result: null,
         });
         return;
@@ -113,10 +121,10 @@ export function Notebook({
         const result = await client.callTool(cell.tool, cell.args, root);
         updateCell(id, { status: 'ok', result });
       } catch (err) {
-        updateCell(id, { status: 'error', error: (err as Error).message ?? 'Unknown error' });
+        updateCell(id, { status: 'error', error: (err as Error).message ?? t('unknownError') });
       }
     },
-    [cells, client, root, updateCell],
+    [cells, client, root, updateCell, t],
   );
 
   return (
@@ -134,7 +142,7 @@ export function Notebook({
             className="text-[15px] leading-5 font-semibold shrink-0"
             style={{ color: 'var(--label)' }}
           >
-            Notebook
+            {t('title')}
           </h2>
           <p
             className="text-[11px] leading-[13px] truncate"
@@ -149,7 +157,7 @@ export function Notebook({
           className="shrink-0 text-[11px] leading-[13px] tabular-nums"
           style={{ color: 'var(--label-secondary)' }}
         >
-          {cells.length === 1 ? '1 cell' : `${cells.length} cells`}
+          {t('cells', { count: cells.length })}
         </span>
       </Toolbar>
 
@@ -174,8 +182,8 @@ export function Notebook({
           ))}
 
           <div className="flex">
-            <Button icon="add" onClick={addCell} aria-label="Add cell">
-              Add cell
+            <Button icon="add" onClick={addCell} aria-label={t('addCell')}>
+              {t('addCell')}
             </Button>
           </div>
         </div>
@@ -199,6 +207,7 @@ function CellView({
   onRun: () => void;
   onRemove?: () => void;
 }) {
+  const { t } = useTranslation('notebook');
   const def = TOOL_BY_NAME[cell.tool];
   const running = cell.status === 'running';
 
@@ -220,7 +229,7 @@ function CellView({
         <PopUpButton
           options={TOOL_OPTIONS}
           value={cell.tool}
-          aria-label="Tool"
+          aria-label={t('tool')}
           onChange={(next) => {
             const nextDef = TOOL_BY_NAME[next];
             // Reset args when switching tool to avoid carrying stale keys.
@@ -231,15 +240,15 @@ function CellView({
         />
         <span className="flex-1" />
         <Button onClick={onRun} disabled={running} className={running ? 'is-status' : undefined}>
-          {running ? 'Running…' : 'Run'}
+          {running ? t('running') : t('run')}
         </Button>
         {onRemove && (
           <Button
             variant="icon"
             icon="close"
             onClick={onRemove}
-            aria-label={`Remove cell ${index}`}
-            title="Remove cell"
+            aria-label={t('removeCellNumbered', { index })}
+            title={t('removeCell')}
           />
         )}
       </div>
@@ -253,13 +262,13 @@ function CellView({
               className="shrink-0 text-[13px] leading-4 text-right"
               style={{ color: 'var(--label-secondary)', width: LABEL_COL }}
             >
-              {f.label}
+              {t(f.labelKey)}
             </span>
             <input
               type="text"
               className="lx-input mono"
               value={cell.args[f.key] ?? ''}
-              placeholder={f.placeholder}
+              placeholder={f.placeholderKey ? t(f.placeholderKey) : undefined}
               onChange={(e) => onChange({ args: { ...cell.args, [f.key]: e.target.value } })}
               onKeyDown={(e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -280,12 +289,12 @@ function CellView({
             className="text-[11px] leading-[13px]"
             style={{ color: 'var(--label-secondary)', paddingLeft: LABEL_COL + 12 }}
           >
-            {def.description}
+            {t(def.descriptionKey)}
           </p>
         )}
         {cell.status === 'running' && (
           <ResultBox>
-            <div role="status" aria-label="Running" className="flex flex-col gap-2">
+            <div role="status" aria-label={t('runningStatus')} className="flex flex-col gap-2">
               <Skeleton width="62%" height={11} />
               <Skeleton width="86%" height={11} />
               <Skeleton width="44%" height={11} />
@@ -331,11 +340,14 @@ function ResultBox({ children, muted = false }: { children: React.ReactNode; mut
 }
 
 function ResultView({ result }: { result: unknown }) {
+  const { t } = useTranslation('notebook');
   const text = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
   // Truncate very large responses; the cell can be re-run if the user needs all of it.
   const MAX = 16_000;
   const truncated = text.length > MAX;
-  const body = truncated ? `${text.slice(0, MAX)}\n… (truncated, ${text.length - MAX} more chars)` : text;
+  const body = truncated
+    ? `${text.slice(0, MAX)}\n${t('truncated', { count: text.length - MAX })}`
+    : text;
   return (
     <pre
       className="text-[11px] leading-4 overflow-auto"

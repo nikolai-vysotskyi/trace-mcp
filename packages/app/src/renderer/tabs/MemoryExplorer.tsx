@@ -6,7 +6,10 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
 import { matchesFilter } from '../components/FilterBar';
+import { formatDate as formatDateIntl, formatNumber } from '../i18n/format';
 import { Icon } from '../lattice/icons';
 import {
   Badge,
@@ -109,7 +112,7 @@ function shortPath(p: string): string {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    return formatDateIntl(new Date(iso), {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -134,18 +137,23 @@ function parseTags(raw: string | null): string[] {
 /* Decision categories. A tone is one channel; `label` is the other, so the
    colour never has to be read on its own. Tones come from the shared status
    palette — the old map was seven hand-picked hex pairs at 9px/700 ALL CAPS. */
-const TYPE_META: Record<string, { label: string; tone: Tone }> = {
-  architecture_decision: { label: 'Architecture', tone: 'purple' },
-  tech_choice: { label: 'Tech choice', tone: 'blue' },
-  bug_root_cause: { label: 'Bug root cause', tone: 'red' },
-  preference: { label: 'Preference', tone: 'green' },
-  tradeoff: { label: 'Trade-off', tone: 'orange' },
-  discovery: { label: 'Discovery', tone: 'accent' },
-  convention: { label: 'Convention', tone: 'neutral' },
+const TYPE_META: Record<string, { labelKey: string; tone: Tone }> = {
+  architecture_decision: { labelKey: 'typeArchitecture', tone: 'purple' },
+  tech_choice: { labelKey: 'typeTechChoice', tone: 'blue' },
+  bug_root_cause: { labelKey: 'typeBugRootCause', tone: 'red' },
+  preference: { labelKey: 'typePreference', tone: 'green' },
+  tradeoff: { labelKey: 'typeTradeoff', tone: 'orange' },
+  discovery: { labelKey: 'typeDiscovery', tone: 'accent' },
+  convention: { labelKey: 'typeConvention', tone: 'neutral' },
 };
 
-function typeMeta(type: string): { label: string; tone: Tone } {
-  return TYPE_META[type] ?? { label: type.replace(/_/g, ' '), tone: 'neutral' };
+/** A type the API grew after this map was written falls back to its own raw
+    value with the underscores rubbed out — data, so not translated. */
+function typeMeta(type: string, t: TFunction): { label: string; tone: Tone } {
+  const known = TYPE_META[type];
+  return known
+    ? { label: t(known.labelKey), tone: known.tone }
+    : { label: type.replace(/_/g, ' '), tone: 'neutral' };
 }
 
 /** Tone → the CSS variable it paints with, for the one place that needs the
@@ -183,21 +191,25 @@ function rovingArrowKeys(e: KeyboardEvent<HTMLDivElement>) {
   rows[next]?.focus();
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  manual: 'Added by hand',
-  mined: 'Mined from a session',
-  auto: 'Recorded automatically',
+const SOURCE_KEY: Record<string, string> = {
+  manual: 'sourceManual',
+  mined: 'sourceMined',
+  auto: 'sourceAuto',
 };
 
 function TypeBadge({ type }: { type: string }) {
-  const { label, tone } = typeMeta(type);
+  const { t } = useTranslation('memory');
+  const { label, tone } = typeMeta(type, t);
   return <Badge tone={tone}>{label}</Badge>;
 }
 
 function SourceBadge({ source }: { source: string }) {
+  const { t } = useTranslation('memory');
+  const key = SOURCE_KEY[source];
+  const label = key ? t(key) : source;
   return (
-    <Badge tone="neutral" title={SOURCE_LABEL[source] ?? source}>
-      {SOURCE_LABEL[source] ?? source}
+    <Badge tone="neutral" title={label}>
+      {label}
     </Badge>
   );
 }
@@ -261,6 +273,7 @@ function TypeMix({
   activeType: string;
   onTypeClick: (type: string) => void;
 }) {
+  const { t } = useTranslation('memory');
   const entries = Object.entries(stats.by_type)
     .filter(([, n]) => n > 0)
     .sort((a, b) => b[1] - a[1]);
@@ -276,12 +289,12 @@ function TypeMix({
         {entries.map(([type, n]) => (
           <div
             key={type}
-            title={`${typeMeta(type).label}: ${n}`}
+            title={t('typeShare', { type: typeMeta(type, t).label, total: formatNumber(n) })}
             style={{
               width: `${(n / total) * 100}%`,
               minWidth: 2,
               borderRadius: 2,
-              background: TONE_VAR[typeMeta(type).tone],
+              background: TONE_VAR[typeMeta(type, t).tone],
               opacity: activeType === '' || activeType === type ? 1 : 0.3,
               transition: 'opacity var(--dur-micro) var(--ease-out)',
             }}
@@ -290,7 +303,7 @@ function TypeMix({
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {entries.map(([type, n]) => {
-          const meta = typeMeta(type);
+          const meta = typeMeta(type, t);
           const active = activeType === type;
           return (
             <button
@@ -299,11 +312,11 @@ function TypeMix({
               className={`lx-chip single${active ? ' is-on' : ''}`}
               aria-pressed={active}
               onClick={() => onTypeClick(type)}
-              title={`Show only ${meta.label.toLowerCase()} decisions`}
+              title={t('showOnlyType', { type: meta.label.toLowerCase() })}
             >
               <StatusDot tone={meta.tone} size={6} />
               {meta.label}
-              <span className="tabular-nums">{n}</span>
+              <span className="tabular-nums">{formatNumber(n)}</span>
             </button>
           );
         })}
@@ -345,6 +358,7 @@ function DecisionForm({
   onSubmit: (values: DecisionFormValues) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation('memory');
   const [values, setValues] = useState<DecisionFormValues>({ ...EMPTY_FORM, ...initial });
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -355,14 +369,14 @@ function DecisionForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!values.title.trim()) { setError('Title is required'); return; }
-    if (!values.content.trim()) { setError('Content is required'); return; }
+    if (!values.title.trim()) { setError(t('titleRequired')); return; }
+    if (!values.content.trim()) { setError(t('contentRequired')); return; }
     setError(null);
     setPending(true);
     try {
       await onSubmit(values);
     } catch (err) {
-      setError((err as Error).message ?? 'Unknown error');
+      setError((err as Error).message ?? t('unknownError'));
     } finally {
       setPending(false);
     }
@@ -396,13 +410,13 @@ function DecisionForm({
     >
       <div className="space-y-1.5">
         <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
-          Title *
+          {t('formTitle')}
         </label>
         <input
           type="text"
           value={values.title}
           onChange={set('title')}
-          placeholder="Short summary"
+          placeholder={t('formTitlePlaceholder')}
           style={inputStyle}
           disabled={pending}
         />
@@ -410,12 +424,12 @@ function DecisionForm({
 
       <div className="space-y-1.5">
         <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
-          Content *
+          {t('formContent')}
         </label>
         <textarea
           value={values.content}
           onChange={set('content')}
-          placeholder="Full decision text, reasoning, context…"
+          placeholder={t('formContentPlaceholder')}
           rows={4}
           style={{ ...inputStyle, resize: 'vertical' }}
           disabled={pending}
@@ -425,7 +439,7 @@ function DecisionForm({
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
           <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
-            Type
+            {t('formType')}
           </label>
           <select
             value={values.type}
@@ -433,9 +447,9 @@ function DecisionForm({
             style={inputStyle}
             disabled={pending}
           >
-            {DECISION_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t.replace(/_/g, ' ')}
+            {DECISION_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {typeMeta(type, t).label}
               </option>
             ))}
           </select>
@@ -443,13 +457,13 @@ function DecisionForm({
 
         <div className="space-y-1.5">
           <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
-            Tags (comma-separated)
+            {t('formTags')}
           </label>
           <input
             type="text"
             value={values.tags}
             onChange={set('tags')}
-            placeholder="e.g. auth, api, db"
+            placeholder={t('formTagsPlaceholder')}
             style={inputStyle}
             disabled={pending}
           />
@@ -459,13 +473,13 @@ function DecisionForm({
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
           <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
-            File path (optional)
+            {t('formFilePath')}
           </label>
           <input
             type="text"
             value={values.file_path}
             onChange={set('file_path')}
-            placeholder="src/auth/index.ts"
+            placeholder={t('formFilePathPlaceholder')}
             style={inputStyle}
             disabled={pending}
           />
@@ -473,13 +487,13 @@ function DecisionForm({
 
         <div className="space-y-1.5">
           <label className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
-            Symbol ID (optional)
+            {t('formSymbolId')}
           </label>
           <input
             type="text"
             value={values.symbol_id}
             onChange={set('symbol_id')}
-            placeholder="MyClass.myMethod"
+            placeholder={t('formSymbolIdPlaceholder')}
             style={inputStyle}
             disabled={pending}
           />
@@ -500,10 +514,10 @@ function DecisionForm({
       {/* macOS puts the confirming action last, on the trailing edge. */}
       <div className="flex justify-end gap-2 pt-1">
         <Button type="button" onClick={onCancel} disabled={pending}>
-          Cancel
+          {t('cancel')}
         </Button>
         <Button type="submit" variant="prominent" disabled={pending}>
-          {pending ? 'Saving…' : submitLabel}
+          {pending ? t('saving') : submitLabel}
         </Button>
       </div>
 
@@ -530,6 +544,7 @@ function DecisionCard({
   onUpdated: (updated: DecisionRow) => void;
   onInvalidated: (id: number) => void;
 }) {
+  const { t } = useTranslation('memory');
   const tags = parseTags(decision.tags);
   const isActive = decision.valid_until === null;
   const [editing, setEditing] = useState(false);
@@ -605,7 +620,7 @@ function DecisionCard({
             symbol_id: decision.symbol_id ?? '',
             tags: parseTags(decision.tags).join(', '),
           }}
-          submitLabel="Save changes"
+          submitLabel={t('saveChanges')}
           onSubmit={handleEdit}
           onCancel={() => setEditing(false)}
         />
@@ -633,7 +648,7 @@ function DecisionCard({
               <StatusDot
                 tone={isActive ? 'green' : 'neutral'}
                 size={6}
-                title={isActive ? 'Active' : 'Expired'}
+                title={isActive ? t('active') : t('expired')}
               />
             </span>
 
@@ -647,7 +662,7 @@ function DecisionCard({
                 </span>
                 <TypeBadge type={decision.type} />
                 <SourceBadge source={decision.source} />
-                {!isActive && <Badge tone="neutral">Expired</Badge>}
+                {!isActive && <Badge tone="neutral">{t('expired')}</Badge>}
               </div>
 
               <div
@@ -680,8 +695,8 @@ function DecisionCard({
                 onClick={() => (rowMenu.at ? rowMenu.close() : rowMenu.open())}
                 aria-haspopup="menu"
                 aria-expanded={rowMenu.at !== null}
-                aria-label={`Actions for ${decision.title}`}
-                title="Actions"
+                aria-label={t('actionsFor', { title: decision.title })}
+                title={t('actions')}
               />
             </div>
 
@@ -699,7 +714,7 @@ function DecisionCard({
                   setEditing(true);
                 }}
               >
-                Edit decision…
+                {t('editDecision')}
               </MenuItem>
               {isActive && (
                 <>
@@ -714,7 +729,7 @@ function DecisionCard({
                       if (at) confirm.openAt(at);
                     }}
                   >
-                    Invalidate decision…
+                    {t('invalidateDecision')}
                   </MenuItem>
                 </>
               )}
@@ -727,9 +742,9 @@ function DecisionCard({
               y={confirm.at.y}
               align="end"
               danger
-              title={`Invalidate ${decision.title}?`}
-              body="It stops being read back to assistants from now on. The record itself is kept, with today as its end date."
-              confirmLabel={actionPending ? 'Invalidating…' : 'Invalidate'}
+              title={t('invalidateConfirmTitle', { title: decision.title })}
+              body={t('invalidateConfirmBody')}
+              confirmLabel={actionPending ? t('invalidating') : t('invalidate')}
               onConfirm={() => void handleInvalidate()}
               onCancel={confirm.close}
             />
@@ -754,7 +769,7 @@ function DecisionCard({
               >
                 {decision.symbol_id && (
                   <>
-                    <span style={{ color: 'var(--label-secondary)' }}>Symbol</span>
+                    <span style={{ color: 'var(--label-secondary)' }}>{t('fieldSymbol')}</span>
                     <span
                       className="truncate"
                       style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
@@ -766,7 +781,7 @@ function DecisionCard({
                 )}
                 {decision.file_path && (
                   <>
-                    <span style={{ color: 'var(--label-secondary)' }}>File</span>
+                    <span style={{ color: 'var(--label-secondary)' }}>{t('fieldFile')}</span>
                     <span
                       className="truncate"
                       style={{ color: 'var(--label)', fontFamily: 'var(--font-mono)' }}
@@ -776,13 +791,13 @@ function DecisionCard({
                     </span>
                   </>
                 )}
-                <span style={{ color: 'var(--label-secondary)' }}>Valid from</span>
+                <span style={{ color: 'var(--label-secondary)' }}>{t('fieldValidFrom')}</span>
                 <span className="tabular-nums" style={{ color: 'var(--label)' }}>
                   {formatDate(decision.valid_from)}
                 </span>
                 {decision.valid_until && (
                   <>
-                    <span style={{ color: 'var(--label-secondary)' }}>Expired</span>
+                    <span style={{ color: 'var(--label-secondary)' }}>{t('expired')}</span>
                     <span className="tabular-nums" style={{ color: 'var(--label)' }}>
                       {formatDate(decision.valid_until)}
                     </span>
@@ -790,9 +805,9 @@ function DecisionCard({
                 )}
                 {decision.confidence < 1 && (
                   <>
-                    <span style={{ color: 'var(--label-secondary)' }}>Confidence</span>
+                    <span style={{ color: 'var(--label-secondary)' }}>{t('fieldConfidence')}</span>
                     <span className="tabular-nums" style={{ color: 'var(--label)' }}>
-                      {Math.round(decision.confidence * 100)}%
+                      {formatNumber(decision.confidence, { style: 'percent' })}
                     </span>
                   </>
                 )}
@@ -816,6 +831,7 @@ function DecisionCard({
 }
 
 function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
+  const { t } = useTranslation('memory');
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
   const [stats, setStats] = useState<DecisionStats | null>(null);
   const [total, setTotal] = useState(0);
@@ -964,12 +980,10 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
           style={{ color: 'var(--label-secondary)' }}
         >
           <span style={{ color: 'var(--label)' }}>
-            {stats == null
-              ? '—'
-              : `${stats.total.toLocaleString()} decision${stats.total === 1 ? '' : 's'}`}
+            {stats == null ? '—' : t('decisionsCount', { count: stats.total })}
           </span>
           {stats != null && stats.total > stats.active && (
-            <span>· {(stats.total - stats.active).toLocaleString()} expired</span>
+            <span>{t('expiredCount', { total: formatNumber(stats.total - stats.active) })}</span>
           )}
         </span>
 
@@ -979,8 +993,8 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
           <SearchField
             value={exclude}
             onChange={setExclude}
-            placeholder="Exclude"
-            aria-label="Exclude decisions containing"
+            placeholder={t('excludePlaceholder')}
+            aria-label={t('excludeLabel')}
             className="shrink-0"
           />
         ) : null}
@@ -988,8 +1002,8 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
         <SearchField
           value={query}
           onChange={setQuery}
-          placeholder="Search decisions"
-          aria-label="Search decisions"
+          placeholder={t('searchPlaceholder')}
+          aria-label={t('searchPlaceholder')}
         />
 
         <Button
@@ -998,7 +1012,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
           onClick={() => setShowAddForm(true)}
           disabled={showAddForm}
         >
-          Add decision
+          {t('addDecision')}
         </Button>
 
         <Button
@@ -1008,8 +1022,8 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
           onClick={() => (overflow.at ? overflow.close() : overflow.open())}
           aria-haspopup="menu"
           aria-expanded={overflow.at !== null}
-          aria-label="More actions"
-          title="More actions"
+          aria-label={t('moreActions')}
+          title={t('moreActions')}
         />
       </Toolbar>
 
@@ -1027,7 +1041,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
               }
             }}
           >
-            Exclude field
+            {t('excludeField')}
           </MenuItem>
           {hasFilters && (
             <>
@@ -1041,7 +1055,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
                   overflow.close();
                 }}
               >
-                Clear search and filters
+                {t('clearFilters')}
               </MenuItem>
             </>
           )}
@@ -1056,7 +1070,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
           {showAddForm && (
             <DecisionForm
               root={root}
-              submitLabel="Add decision"
+              submitLabel={t('addDecision')}
               onSubmit={handleAdd}
               onCancel={() => setShowAddForm(false)}
             />
@@ -1069,7 +1083,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
           )}
 
           <Section
-            title="Decisions"
+            title={t('decisions')}
             trailing={
               loading || failed ? undefined : (
                 <span
@@ -1077,8 +1091,11 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
                   style={{ color: 'var(--label-secondary)' }}
                 >
                   {visibleDecisions.length === total
-                    ? `${total.toLocaleString()} found`
-                    : `${visibleDecisions.length.toLocaleString()} of ${total.toLocaleString()}`}
+                    ? t('found', { total: formatNumber(total) })
+                    : t('foundOfTotal', {
+                        shown: formatNumber(visibleDecisions.length),
+                        total: formatNumber(total),
+                      })}
                 </span>
               )
             }
@@ -1088,7 +1105,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
 
               {!loading && failed && (
                 <SectionError
-                  what="the decisions for this project"
+                  what={t('loadFailedWhat')}
                   onRetry={() => fetchDecisions(debouncedQuery, activeType)}
                 />
               )}
@@ -1098,8 +1115,8 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
                   <EmptyState
                     compact
                     icon="search"
-                    title="No matching decisions"
-                    subtitle="Nothing stored for this project matches the current search and filters."
+                    title={t('noMatchesTitle')}
+                    subtitle={t('noMatchesSubtitle')}
                     action={
                       <Button
                         icon="close"
@@ -1109,7 +1126,7 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
                           setActiveType('');
                         }}
                       >
-                        Clear search and filters
+                        {t('clearFilters')}
                       </Button>
                     }
                   />
@@ -1117,11 +1134,11 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
                   <EmptyState
                     compact
                     icon="neurology"
-                    title="No decisions yet"
-                    subtitle="A decision is a note about why this codebase is the way it is — a trade-off, a convention, the root cause of a bug. Assistants read them back before they change your code."
+                    title={t('noDecisionsTitle')}
+                    subtitle={t('noDecisionsSubtitle')}
                     action={
                       <Button variant="prominent" icon="add" onClick={() => setShowAddForm(true)}>
-                        Add the first decision
+                        {t('addFirstDecision')}
                       </Button>
                     }
                   />
@@ -1160,8 +1177,10 @@ function DecisionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
                   }}
                 >
                   {exclude
-                    ? `${(decisions.length - visibleDecisions.length).toLocaleString()} more hidden by the exclude filter`
-                    : 'Narrow the search to see the rest'}
+                    ? t('hiddenByExclude', {
+                        total: formatNumber(decisions.length - visibleDecisions.length),
+                      })
+                    : t('narrowSearch')}
                 </div>
               )}
             </Card>
@@ -1183,6 +1202,7 @@ function CorpusQueryModal({
   root: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation('memory');
   const [query, setQuery] = useState('');
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<{ excerpt: string; tokens_used: number } | null>(null);
@@ -1205,7 +1225,7 @@ function CorpusQueryModal({
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setResult({ excerpt: data.excerpt ?? '', tokens_used: data.tokens_used ?? 0 });
     } catch (err) {
-      setError((err as Error).message ?? 'Query failed');
+      setError((err as Error).message ?? t('queryFailed'));
     } finally {
       setPending(false);
     }
@@ -1239,7 +1259,7 @@ function CorpusQueryModal({
           overflowY: 'auto',
         }}
         role="dialog"
-        aria-label={`Query corpus ${corpusName}`}
+        aria-label={t('queryCorpus', { name: corpusName })}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === 'Escape') onClose();
@@ -1247,10 +1267,16 @@ function CorpusQueryModal({
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-[17px] leading-[22px] font-semibold" style={{ color: 'var(--label)' }}>
-            Query{' '}
+            {t('queryHeading')}{' '}
             <span style={{ fontFamily: 'var(--font-mono)' }}>{corpusName}</span>
           </span>
-          <Button variant="icon" icon="close" onClick={onClose} aria-label="Close" title="Close" />
+          <Button
+            variant="icon"
+            icon="close"
+            onClick={onClose}
+            aria-label={t('close')}
+            title={t('close')}
+          />
         </div>
 
         <form onSubmit={(e) => { void handleQuery(e); }} className="flex gap-2">
@@ -1258,9 +1284,9 @@ function CorpusQueryModal({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="What do you want to know from this corpus?"
+            placeholder={t('queryPlaceholder')}
             autoFocus
-            aria-label="Corpus query"
+            aria-label={t('queryLabel')}
             className="flex-1 outline-none px-2.5 text-[13px]"
             style={{
               background: 'var(--fill-quaternary)',
@@ -1279,7 +1305,7 @@ function CorpusQueryModal({
             variant="prominent"
             disabled={pending || !query.trim()}
           >
-            {pending ? 'Searching…' : 'Search'}
+            {pending ? t('searching') : t('search')}
           </Button>
         </form>
 
@@ -1301,10 +1327,10 @@ function CorpusQueryModal({
                 className="text-[11px] leading-[13px] tabular-nums"
                 style={{ color: 'var(--label-secondary)' }}
               >
-                ~{result.tokens_used.toLocaleString()} tokens
+                {t('tokensUsed', { total: formatNumber(result.tokens_used) })}
               </span>
               <Button size="small" icon={copied ? 'check' : 'content_copy'} onClick={handleCopy}>
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? t('copied') : t('copy')}
               </Button>
             </div>
             <pre
@@ -1329,6 +1355,7 @@ function CorpusQueryModal({
 }
 
 function CorporaView({ root, subTab }: { root: string; subTab?: ReactNode }) {
+  const { t } = useTranslation('memory');
   const [corpora, setCorpora] = useState<CorpusItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [queryCorpus, setQueryCorpus] = useState<string | null>(null);
@@ -1374,11 +1401,7 @@ function CorporaView({ root, subTab }: { root: string; subTab?: ReactNode }) {
   return (
     <ViewShell
       subTab={subTab}
-      status={
-        loading
-          ? 'Loading…'
-          : `${corpora.length.toLocaleString()} corpus${corpora.length === 1 ? '' : 'es'}`
-      }
+      status={loading ? t('loading') : t('corporaCount', { count: corpora.length })}
     >
       {queryCorpus && (
         <CorpusQueryModal
@@ -1388,7 +1411,7 @@ function CorporaView({ root, subTab }: { root: string; subTab?: ReactNode }) {
         />
       )}
 
-      <Section title="Corpora">
+      <Section title={t('corpora')}>
         <Card>
           {loading && <SkeletonRows rows={3} />}
 
@@ -1396,8 +1419,8 @@ function CorporaView({ root, subTab }: { root: string; subTab?: ReactNode }) {
             <EmptyState
               compact
               icon="database"
-              title="No corpora yet"
-              subtitle="A corpus is a saved slice of this codebase an assistant can pull in one call. Build one with the build_corpus tool."
+              title={t('noCorporaTitle')}
+              subtitle={t('noCorporaSubtitle')}
             />
           )}
 
@@ -1449,18 +1472,26 @@ function CorporaView({ root, subTab }: { root: string; subTab?: ReactNode }) {
                         style={{ color: 'var(--label-secondary)' }}
                       >
                         <span>
-                          {c.symbolCount.toLocaleString()} symbols · {c.fileCount.toLocaleString()}{' '}
-                          files
+                          {t('corpusSize', {
+                            symbols: formatNumber(c.symbolCount),
+                            files: formatNumber(c.fileCount),
+                          })}
                         </span>
-                        <span>~{(c.tokenBudget / 1000).toFixed(0)}K token budget</span>
-                        {c.sizeKB !== null && <span>{c.sizeKB} KB</span>}
+                        <span>
+                          {t('corpusBudget', {
+                            budget: formatNumber(Math.round(c.tokenBudget / 1000)),
+                          })}
+                        </span>
+                        {c.sizeKB !== null && (
+                          <span>{t('corpusKb', { size: formatNumber(c.sizeKB) })}</span>
+                        )}
                         <span>{formatDate(c.createdAt)}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       <Button variant="prominent" onClick={() => setQueryCorpus(c.name)}>
-                        Query
+                        {t('query')}
                       </Button>
                       <CorpusDeleteButton
                         name={c.name}
@@ -1489,6 +1520,7 @@ function CorpusDeleteButton({
   pending: boolean;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation('memory');
   const confirm = useMenuAnchor();
   return (
     <>
@@ -1498,8 +1530,8 @@ function CorpusDeleteButton({
         icon="trash"
         disabled={pending}
         onClick={() => (confirm.at ? confirm.close() : confirm.open())}
-        aria-label={`Delete corpus ${name}`}
-        title={`Delete corpus ${name}`}
+        aria-label={t('deleteCorpus', { name })}
+        title={t('deleteCorpus', { name })}
       />
       {confirm.at && (
         <ConfirmPopover
@@ -1507,9 +1539,9 @@ function CorpusDeleteButton({
           y={confirm.at.y}
           align="end"
           danger
-          title={`Delete corpus ${name}?`}
-          body="The saved slice is removed. The code it points at is untouched, and you can rebuild it."
-          confirmLabel={pending ? 'Deleting…' : 'Delete corpus'}
+          title={t('deleteCorpusConfirm', { name })}
+          body={t('deleteCorpusBody')}
+          confirmLabel={pending ? t('deleting') : t('deleteCorpusAction')}
           onConfirm={() => {
             onDelete();
             confirm.close();
@@ -1522,6 +1554,7 @@ function CorpusDeleteButton({
 }
 
 function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
+  const { t } = useTranslation('memory');
   const [sessions, setSessions] = useState<MinedSession[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -1541,13 +1574,9 @@ function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
   return (
     <ViewShell
       subTab={subTab}
-      status={
-        loading
-          ? 'Loading…'
-          : `${sessions.length.toLocaleString()} session${sessions.length === 1 ? '' : 's'}`
-      }
+      status={loading ? t('loading') : t('sessionsCount', { count: sessions.length })}
     >
-      <Section title="Mined sessions">
+      <Section title={t('minedSessions')}>
         <Card>
           {loading && <SkeletonRows rows={4} />}
 
@@ -1555,8 +1584,8 @@ function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
             <EmptyState
               compact
               icon="history"
-              title="No sessions mined yet"
-              subtitle="Mining reads past assistant transcripts for decisions worth keeping. Run the mine_sessions tool to fill this list."
+              title={t('noSessionsTitle')}
+              subtitle={t('noSessionsSubtitle')}
             />
           )}
 
@@ -1588,7 +1617,7 @@ function SessionsView({ root, subTab }: { root: string; subTab?: ReactNode }) {
                     {/* A count is the signal, so it is a number and a noun —
                         not a green-vs-grey colour swap on the same string. */}
                     <Badge tone={s.decisions_found > 0 ? 'green' : 'neutral'}>
-                      {s.decisions_found} decision{s.decisions_found === 1 ? '' : 's'}
+                      {t('sessionDecisions', { count: s.decisions_found })}
                     </Badge>
                   </div>
                 </div>
@@ -1618,6 +1647,7 @@ function ReviewCard({
   onApprove: (id: number) => Promise<void>;
   onReject: (id: number) => Promise<void>;
 }) {
+  const { t } = useTranslation('memory');
   const [pending, setPending] = useState<'approve' | 'reject' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -1634,7 +1664,7 @@ function ReviewCard({
         await onReject(decision.id);
       }
     } catch (e) {
-      setError((e as Error).message ?? 'Action failed');
+      setError((e as Error).message ?? t('actionFailed'));
       setPending(null);
     }
   };
@@ -1651,7 +1681,7 @@ function ReviewCard({
         <TypeBadge type={decision.type} />
         <SourceBadge source={decision.source} />
         <Badge tone="orange" icon="schedule">
-          Awaiting review
+          {t('awaitingReview')}
         </Badge>
       </div>
 
@@ -1669,7 +1699,7 @@ function ReviewCard({
           className="text-[11px] leading-[13px] shrink-0"
           style={{ color: 'var(--label-secondary)' }}
         >
-          Confidence
+          {t('confidence')}
         </span>
         <div
           className="flex-1 overflow-hidden"
@@ -1688,7 +1718,7 @@ function ReviewCard({
           className="text-[11px] leading-[13px] tabular-nums"
           style={{ color: 'var(--label)' }}
         >
-          {confidencePct}%
+          {formatNumber(confidencePct / 100, { style: 'percent' })}
         </span>
       </div>
 
@@ -1697,7 +1727,10 @@ function ReviewCard({
         style={{ color: 'var(--label-secondary)', fontFamily: 'var(--font-mono)' }}
       >
         {decision.session_id && (
-          <span className="truncate max-w-[180px]" title={`Session ${decision.session_id}`}>
+          <span
+            className="truncate max-w-[180px]"
+            title={t('sessionTitle', { id: decision.session_id })}
+          >
             {decision.session_id.slice(0, 14)}…
           </span>
         )}
@@ -1707,7 +1740,7 @@ function ReviewCard({
           </span>
         )}
         {decision.git_branch && (
-          <Badge tone="neutral" title={`Captured on branch ${decision.git_branch}`}>
+          <Badge tone="neutral" title={t('capturedOnBranch', { branch: decision.git_branch })}>
             {decision.git_branch}
           </Badge>
         )}
@@ -1730,14 +1763,14 @@ function ReviewCard({
           disabled={pending !== null}
           onClick={() => { void handle('approve')(); }}
         >
-          {pending === 'approve' ? 'Approving…' : 'Approve'}
+          {pending === 'approve' ? t('approving') : t('approve')}
         </Button>
         <Button
           icon="close"
           disabled={pending !== null}
           onClick={() => { void handle('reject')(); }}
         >
-          {pending === 'reject' ? 'Rejecting…' : 'Reject'}
+          {pending === 'reject' ? t('rejecting') : t('reject')}
         </Button>
         {error && (
           <span
@@ -1768,6 +1801,7 @@ function ReviewView({
   subTab?: ReactNode;
   onPendingCountChange?: (count: number) => void;
 }) {
+  const { t } = useTranslation('memory');
   const [decisions, setDecisions] = useState<DecisionRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -1824,7 +1858,7 @@ function ReviewView({
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error ?? `HTTP ${res.status}`);
       }
-      showToast(`Decision ${status}.`, 'success');
+      showToast(t(status === 'approved' ? 'approved' : 'rejected'), 'success');
     } catch (e) {
       // Revert: reinsert at original index so list order is preserved.
       setDecisions((prev) => {
@@ -1833,7 +1867,7 @@ function ReviewView({
         return next;
       });
       onPendingCountChange?.(decisions.length);
-      showToast((e as Error).message ?? 'Action failed', 'error');
+      showToast((e as Error).message ?? t('actionFailed'), 'error');
       throw e;
     }
   };
@@ -1843,8 +1877,8 @@ function ReviewView({
       subTab={subTab}
       status={
         loading
-          ? 'Loading…'
-          : `${decisions.length.toLocaleString()} awaiting review`
+          ? t('loading')
+          : t('awaitingReviewCount', { total: formatNumber(decisions.length) })
       }
     >
       {toast && (
@@ -1865,7 +1899,7 @@ function ReviewView({
         </div>
       )}
 
-      <Section title="Review queue">
+      <Section title={t('reviewQueue')}>
         <Card>
           {loading && <SkeletonRows rows={3} />}
 
@@ -1873,8 +1907,8 @@ function ReviewView({
             <EmptyState
               compact
               icon="done_all"
-              title="Nothing to review"
-              subtitle="Decisions mined from past sessions land here first, so you can approve or reject them before assistants read them back."
+              title={t('nothingToReviewTitle')}
+              subtitle={t('nothingToReviewSubtitle')}
             />
           )}
 
@@ -1905,6 +1939,7 @@ function ReviewView({
 type SubTab = 'decisions' | 'review' | 'corpora' | 'sessions';
 
 export function MemoryExplorer({ root }: { root: string }) {
+  const { t } = useTranslation('memory');
   const [activeTab, setActiveTab] = useState<SubTab>('decisions');
   // Pending count lives in the parent so the Review (N) badge in the tab bar
   // stays in sync with optimistic mutations inside ReviewView.
@@ -1928,10 +1963,10 @@ export function MemoryExplorer({ root }: { root: string }) {
   }, [root]);
 
   const tabs: { key: SubTab; label: string }[] = [
-    { key: 'decisions', label: 'Decisions' },
-    { key: 'review', label: `Review (${pendingCount})` },
-    { key: 'corpora', label: 'Corpora' },
-    { key: 'sessions', label: 'Sessions' },
+    { key: 'decisions', label: t('tabDecisions') },
+    { key: 'review', label: t('tabReview', { total: formatNumber(pendingCount) }) },
+    { key: 'corpora', label: t('tabCorpora') },
+    { key: 'sessions', label: t('tabSessions') },
   ];
 
   const switcher = (
@@ -1940,7 +1975,7 @@ export function MemoryExplorer({ root }: { root: string }) {
       options={tabs.map((t) => ({ value: t.key, label: t.label }))}
       value={activeTab}
       onChange={setActiveTab}
-      aria-label="Memory section"
+      aria-label={t('section')}
     />
   );
 

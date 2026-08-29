@@ -13,6 +13,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { formatDate, formatNumber } from '../i18n/format';
 import { Badge, type Tone } from '../lattice/ui';
 
 const BASE = 'http://127.0.0.1:3741';
@@ -113,21 +115,21 @@ type SectionKey =
   | 'quality'
   | 'content';
 
-const SECTIONS: Array<{ key: SectionKey; label: string }> = [
-  { key: 'index', label: 'Index' },
-  { key: 'tools', label: 'Tools' },
-  { key: 'decisions', label: 'Decisions' },
-  { key: 'performance', label: 'Performance' },
-  { key: 'subprojects', label: 'Subprojects' },
-  { key: 'quality', label: 'Quality' },
-  { key: 'content', label: 'Content' },
+const SECTIONS: Array<{ key: SectionKey; labelKey: string }> = [
+  { key: 'index', labelKey: 'tabIndex' },
+  { key: 'tools', labelKey: 'tabTools' },
+  { key: 'decisions', labelKey: 'tabDecisions' },
+  { key: 'performance', labelKey: 'tabPerformance' },
+  { key: 'subprojects', labelKey: 'tabSubprojects' },
+  { key: 'quality', labelKey: 'tabQuality' },
+  { key: 'content', labelKey: 'tabContent' },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function fmtNumber(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—';
-  return n.toLocaleString();
+  return formatNumber(n);
 }
 
 function fmtMs(n: number | null | undefined): string {
@@ -162,10 +164,11 @@ interface BarDatum {
 }
 
 function HBarChart({ data, max }: { data: BarDatum[]; max?: number }) {
+  const { t } = useTranslation('stats');
   if (data.length === 0) {
     return (
       <div className="text-[11px]" style={{ color: 'var(--label-secondary)' }}>
-        No data
+        {t('noData')}
       </div>
     );
   }
@@ -175,7 +178,11 @@ function HBarChart({ data, max }: { data: BarDatum[]; max?: number }) {
       {data.map((d) => {
         const pct = (d.value / localMax) * 100;
         return (
-          <div key={d.label} className="flex items-center gap-2" title={d.hint ?? `${d.value}`}>
+          <div
+            key={d.label}
+            className="flex items-center gap-2"
+            title={d.hint ?? formatNumber(d.value)}
+          >
             <span
               className="shrink-0 text-[11px] tabular-nums w-32 truncate"
               style={{
@@ -202,7 +209,7 @@ function HBarChart({ data, max }: { data: BarDatum[]; max?: number }) {
               className="shrink-0 text-[11px] tabular-nums w-12 text-right"
               style={{ color: 'var(--label-secondary)' }}
             >
-              {d.value.toLocaleString()}
+              {formatNumber(d.value)}
             </span>
           </div>
         );
@@ -248,18 +255,25 @@ function StatTile({ label, value }: { label: string; value: string }) {
 }
 
 function NoData({ reason }: { reason?: string }) {
+  const { t } = useTranslation('stats');
   return (
     <div
       className="text-[12px] text-center px-3 py-6"
       style={{ color: 'var(--label-secondary)' }}
     >
-      {reason ?? 'No data available for this section.'}
+      {reason ?? t('noSectionData')}
     </div>
   );
 }
 
+/** Date + time, the way the active language writes them. */
+function fmtDateTime(value: string): string {
+  return formatDate(new Date(value), { dateStyle: 'medium', timeStyle: 'short' });
+}
+
 function IndexPanel({ data }: { data: IndexSection | null }) {
-  if (!data) return <NoData reason="Index data unavailable (project not indexed)." />;
+  const { t } = useTranslation('stats');
+  if (!data) return <NoData reason={t('indexUnavailable')} />;
   const tierData: BarDatum[] = Object.entries(data.resolution_tiers).map(([tier, count]) => ({
     label: tier,
     value: count,
@@ -267,17 +281,17 @@ function IndexPanel({ data }: { data: IndexSection | null }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2">
-        <StatTile label="Files" value={fmtNumber(data.files)} />
-        <StatTile label="Symbols" value={fmtNumber(data.symbols)} />
-        <StatTile label="Edges" value={fmtNumber(data.edges)} />
-        <StatTile label="Coverage" value={fmtPct(data.dependency_coverage_pct)} />
+        <StatTile label={t('files')} value={fmtNumber(data.files)} />
+        <StatTile label={t('symbols')} value={fmtNumber(data.symbols)} />
+        <StatTile label={t('edges')} value={fmtNumber(data.edges)} />
+        <StatTile label={t('coverage')} value={fmtPct(data.dependency_coverage_pct)} />
         <StatTile
-          label="Last Indexed"
-          value={data.last_indexed ? new Date(data.last_indexed).toLocaleString() : '—'}
+          label={t('lastIndexed')}
+          value={data.last_indexed ? fmtDateTime(data.last_indexed) : '—'}
         />
       </div>
       <div>
-        <SectionHeader>Edge resolution tiers</SectionHeader>
+        <SectionHeader>{t('edgeResolutionTiers')}</SectionHeader>
         <HBarChart data={tierData} />
       </div>
     </div>
@@ -285,18 +299,22 @@ function IndexPanel({ data }: { data: IndexSection | null }) {
 }
 
 function ToolsPanel({ data }: { data: ToolsSection | null }) {
-  if (!data) return <NoData reason="Tool stats unavailable." />;
+  const { t } = useTranslation('stats');
+  if (!data) return <NoData reason={t('toolsUnavailable')} />;
   if (data.per_tool.length === 0) {
-    return <NoData reason="No tool calls recorded in the last 24h." />;
+    return <NoData reason={t('noToolCalls')} />;
   }
   return (
     <div className="flex flex-col gap-3">
       <div className="flex gap-2">
-        <StatTile label="Window" value={`${Math.round(data.window_ms / 3_600_000)}h`} />
-        <StatTile label="Total calls" value={fmtNumber(data.total_calls)} />
+        <StatTile
+          label={t('window')}
+          value={t('windowHours', { total: Math.round(data.window_ms / 3_600_000) })}
+        />
+        <StatTile label={t('totalCalls')} value={fmtNumber(data.total_calls)} />
       </div>
       <div>
-        <SectionHeader>Per-tool latency (last 24h)</SectionHeader>
+        <SectionHeader>{t('perToolLatency')}</SectionHeader>
         <table
           className="w-full border-collapse text-[12px]"
           style={{ color: 'var(--label)' }}
@@ -311,7 +329,7 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
                   letterSpacing: '0.05em',
                 }}
               >
-                Tool
+                {t('colTool')}
               </th>
               <th
                 className="text-right py-1.5 px-2 text-[10px] font-semibold"
@@ -321,7 +339,7 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
                   letterSpacing: '0.05em',
                 }}
               >
-                Count
+                {t('colCount')}
               </th>
               <th
                 className="text-right py-1.5 px-2 text-[10px] font-semibold"
@@ -331,7 +349,7 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
                   letterSpacing: '0.05em',
                 }}
               >
-                Median
+                {t('colMedian')}
               </th>
               <th
                 className="text-right py-1.5 px-2 text-[10px] font-semibold"
@@ -341,7 +359,7 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
                   letterSpacing: '0.05em',
                 }}
               >
-                p95
+                {t('colP95')}
               </th>
             </tr>
           </thead>
@@ -370,7 +388,8 @@ function ToolsPanel({ data }: { data: ToolsSection | null }) {
 }
 
 function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
-  if (!data) return <NoData reason="Decisions unavailable (decisions.db not initialised)." />;
+  const { t } = useTranslation('stats');
+  if (!data) return <NoData reason={t('decisionsUnavailable')} />;
   const byTypeData: BarDatum[] = Object.entries(data.by_type).map(([type, count]) => ({
     label: type,
     value: count,
@@ -384,22 +403,22 @@ function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-2">
-        <StatTile label="Total" value={fmtNumber(data.total)} />
+        <StatTile label={t('total')} value={fmtNumber(data.total)} />
       </div>
       <div>
-        <SectionHeader>By type</SectionHeader>
+        <SectionHeader>{t('byType')}</SectionHeader>
         <HBarChart data={byTypeData} />
       </div>
       {histData && (
         <div>
-          <SectionHeader>Confidence histogram</SectionHeader>
+          <SectionHeader>{t('confidenceHistogram')}</SectionHeader>
           <HBarChart data={histData} />
         </div>
       )}
       <div>
-        <SectionHeader>Top 5 most-linked decisions</SectionHeader>
+        <SectionHeader>{t('topLinked')}</SectionHeader>
         {data.top_linked.length === 0 ? (
-          <NoData reason="No linked decisions yet." />
+          <NoData reason={t('noLinkedDecisions')} />
         ) : (
           <table
             className="w-full border-collapse text-[12px]"
@@ -415,7 +434,7 @@ function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
                     letterSpacing: '0.05em',
                   }}
                 >
-                  Title
+                  {t('colTitle')}
                 </th>
                 <th
                   className="text-left py-1.5 px-2 text-[10px] font-semibold"
@@ -425,7 +444,7 @@ function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
                     letterSpacing: '0.05em',
                   }}
                 >
-                  Type
+                  {t('colType')}
                 </th>
                 <th
                   className="text-right py-1.5 px-2 text-[10px] font-semibold"
@@ -435,7 +454,7 @@ function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
                     letterSpacing: '0.05em',
                   }}
                 >
-                  Refs
+                  {t('colRefs')}
                 </th>
               </tr>
             </thead>
@@ -462,28 +481,32 @@ function DecisionsPanel({ data }: { data: DecisionsSection | null }) {
 }
 
 function PerformancePanel({ data }: { data: PerformanceSection | null }) {
+  const { t } = useTranslation('stats');
   if (!data) return <NoData />;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap gap-2">
         <StatTile
-          label="Embedding cache hit rate"
+          label={t('embeddingCacheHitRate')}
           value={data.embedding_cache_hit_rate !== null ? fmtPct(data.embedding_cache_hit_rate) : '—'}
         />
-        <StatTile label="Search p50" value={fmtMs(data.search_latency_p50_ms)} />
-        <StatTile label="Search p95" value={fmtMs(data.search_latency_p95_ms)} />
+        <StatTile label={t('searchP50')} value={fmtMs(data.search_latency_p50_ms)} />
+        <StatTile label={t('searchP95')} value={fmtMs(data.search_latency_p95_ms)} />
         <StatTile
-          label="Indexer (files/s)"
+          label={t('indexerThroughput')}
           value={
             data.indexer_throughput_files_per_sec !== null
-              ? data.indexer_throughput_files_per_sec.toFixed(2)
+              ? formatNumber(data.indexer_throughput_files_per_sec, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })
               : '—'
           }
         />
       </div>
       {data.notes.length > 0 && (
         <div>
-          <SectionHeader>Notes</SectionHeader>
+          <SectionHeader>{t('notes')}</SectionHeader>
           <ul className="text-[11px] space-y-0.5 list-disc list-inside" style={{ color: 'var(--label-secondary)' }}>
             {data.notes.map((n) => (
               <li key={n}>{n}</li>
@@ -496,11 +519,12 @@ function PerformancePanel({ data }: { data: PerformanceSection | null }) {
 }
 
 function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
-  if (!data) return <NoData reason="Subprojects unavailable (topology.db not initialised)." />;
-  if (data.count === 0) return <NoData reason="No subprojects registered." />;
+  const { t } = useTranslation('stats');
+  if (!data) return <NoData reason={t('subprojectsUnavailable')} />;
+  if (data.count === 0) return <NoData reason={t('noSubprojects')} />;
   return (
     <div className="flex flex-col gap-3">
-      <StatTile label="Count" value={fmtNumber(data.count)} />
+      <StatTile label={t('count')} value={fmtNumber(data.count)} />
       <table className="w-full border-collapse text-[12px]" style={{ color: 'var(--label)' }}>
         <thead>
           <tr style={{ borderBottom: '0.5px solid var(--separator)' }}>
@@ -512,7 +536,7 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
                 letterSpacing: '0.05em',
               }}
             >
-              Name
+              {t('colName')}
             </th>
             <th
               className="text-left py-1.5 px-2 text-[10px] font-semibold"
@@ -522,7 +546,7 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
                 letterSpacing: '0.05em',
               }}
             >
-              Repo Root
+              {t('colRepoRoot')}
             </th>
             <th
               className="text-right py-1.5 px-2 text-[10px] font-semibold"
@@ -532,7 +556,7 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
                 letterSpacing: '0.05em',
               }}
             >
-              Services
+              {t('colServices')}
             </th>
             <th
               className="text-right py-1.5 px-2 text-[10px] font-semibold"
@@ -542,7 +566,7 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
                 letterSpacing: '0.05em',
               }}
             >
-              Endpoints
+              {t('colEndpoints')}
             </th>
             <th
               className="text-left py-1.5 px-2 text-[10px] font-semibold"
@@ -552,7 +576,7 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
                 letterSpacing: '0.05em',
               }}
             >
-              Link
+              {t('colLink')}
             </th>
           </tr>
         </thead>
@@ -589,17 +613,18 @@ function SubprojectsPanel({ data }: { data: SubprojectsSection | null }) {
 }
 
 function QualityPanel({ data }: { data: QualitySection | null }) {
+  const { t } = useTranslation('stats');
   if (!data) return <NoData />;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-2">
-        <StatTile label="Dead exports" value={fmtNumber(data.dead_exports)} />
-        <StatTile label="Untested symbols" value={fmtNumber(data.untested_symbols)} />
+        <StatTile label={t('deadExports')} value={fmtNumber(data.dead_exports)} />
+        <StatTile label={t('untestedSymbols')} value={fmtNumber(data.untested_symbols)} />
       </div>
       <div>
-        <SectionHeader>Top 10 complexity hotspots</SectionHeader>
+        <SectionHeader>{t('complexityHotspots')}</SectionHeader>
         {data.complexity_hotspots.length === 0 ? (
-          <NoData reason="No complexity data recorded." />
+          <NoData reason={t('noComplexityData')} />
         ) : (
           <table
             className="w-full border-collapse text-[12px]"
@@ -615,7 +640,7 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
                     letterSpacing: '0.05em',
                   }}
                 >
-                  Symbol
+                  {t('colSymbol')}
                 </th>
                 <th
                   className="text-left py-1.5 px-2 text-[10px] font-semibold"
@@ -625,7 +650,7 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
                     letterSpacing: '0.05em',
                   }}
                 >
-                  Location
+                  {t('colLocation')}
                 </th>
                 <th
                   className="text-right py-1.5 px-2 text-[10px] font-semibold"
@@ -635,7 +660,7 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
                     letterSpacing: '0.05em',
                   }}
                 >
-                  Cyclomatic
+                  {t('colCyclomatic')}
                 </th>
               </tr>
             </thead>
@@ -685,6 +710,7 @@ function QualityPanel({ data }: { data: QualitySection | null }) {
 }
 
 function ContentPanel({ data }: { data: ContentSection | null }) {
+  const { t } = useTranslation('stats');
   if (!data) return <NoData />;
   const langData: BarDatum[] = data.languages.map((l) => ({
     label: l.language,
@@ -697,15 +723,15 @@ function ContentPanel({ data }: { data: ContentSection | null }) {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <SectionHeader>Language distribution</SectionHeader>
+        <SectionHeader>{t('languageDistribution')}</SectionHeader>
         <HBarChart data={langData} />
       </div>
       <div>
-        <SectionHeader>Framework distribution</SectionHeader>
+        <SectionHeader>{t('frameworkDistribution')}</SectionHeader>
         <HBarChart data={fwData} />
       </div>
       <div>
-        <SectionHeader>Top 10 largest files (by symbol count)</SectionHeader>
+        <SectionHeader>{t('largestFiles')}</SectionHeader>
         {data.largest_files.length === 0 ? (
           <NoData />
         ) : (
@@ -723,7 +749,7 @@ function ContentPanel({ data }: { data: ContentSection | null }) {
                     letterSpacing: '0.05em',
                   }}
                 >
-                  Path
+                  {t('colPath')}
                 </th>
                 <th
                   className="text-right py-1.5 px-2 text-[10px] font-semibold"
@@ -733,7 +759,7 @@ function ContentPanel({ data }: { data: ContentSection | null }) {
                     letterSpacing: '0.05em',
                   }}
                 >
-                  Symbols
+                  {t('colSymbols')}
                 </th>
               </tr>
             </thead>
@@ -766,6 +792,7 @@ export interface ProjectStatsModalProps {
 }
 
 export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
+  const { t } = useTranslation('stats');
   const [payload, setPayload] = useState<ProjectStatsPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -786,12 +813,12 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
       setPayload(data);
       setError(null);
     } catch (err) {
-      setError((err as Error)?.message ?? 'Failed to load stats');
+      setError((err as Error)?.message ?? t('loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [root]);
+  }, [root, t]);
 
   useEffect(() => {
     void fetchPayload();
@@ -844,7 +871,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
         }}
         role="dialog"
         aria-modal="true"
-        aria-label={`Stats for ${projectName}`}
+        aria-label={t('windowTitle', { project: projectName })}
       >
         {/* Header */}
         <div
@@ -859,7 +886,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
               className="text-[13px] font-semibold truncate"
               style={{ color: 'var(--label)' }}
             >
-              Stats — {projectName}
+              {t('heading', { project: projectName })}
             </div>
             <div
               className="text-[10px] truncate"
@@ -884,7 +911,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
                 border: '0.5px solid var(--separator)',
               }}
             >
-              {refreshing ? 'Refreshing…' : 'Refresh'}
+              {refreshing ? t('refreshing') : t('refresh')}
             </button>
             <button
               type="button"
@@ -897,12 +924,12 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
                 border: '0.5px solid var(--separator)',
               }}
             >
-              Export JSON
+              {t('exportJson')}
             </button>
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
+              aria-label={t('close')}
               className="w-6 h-6 rounded-full flex items-center justify-center transition-colors"
               style={{ color: 'var(--label-secondary)' }}
               onMouseEnter={(e) => {
@@ -952,7 +979,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
                   cursor: 'pointer',
                 }}
               >
-                {s.label}
+                {t(s.labelKey)}
               </button>
             );
           })}
@@ -965,7 +992,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
               className="flex items-center justify-center h-full text-[12px]"
               style={{ color: 'var(--label-secondary)' }}
             >
-              Loading…
+              {t('loading')}
             </div>
           ) : error ? (
             <div
@@ -986,7 +1013,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
                   border: '0.5px solid var(--separator)',
                 }}
               >
-                Retry
+                {t('retry')}
               </button>
             </div>
           ) : payload ? (
@@ -1014,7 +1041,7 @@ export function ProjectStatsModal({ root, onClose }: ProjectStatsModalProps) {
               background: 'var(--fill-quaternary)',
             }}
           >
-            Generated {new Date(payload.generated_at).toLocaleString()} · cached 30s · press Esc to close
+            {t('footer', { generated: fmtDateTime(payload.generated_at) })}
           </div>
         )}
       </div>

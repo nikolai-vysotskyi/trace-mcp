@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+/* jsdom because the sentence now comes from the catalogue, and the i18n
+   runtime reads localStorage + navigator.languages when it starts (TRA-385). */
 import { describe, expect, it } from 'vitest';
 
 import { userFacingError } from '../graph-error';
