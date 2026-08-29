@@ -20,6 +20,7 @@ import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { Gallery } from '../Gallery';
+import { Toolbar } from '../Surface';
 
 // jsdom rewrites import.meta.url to an http: URL, so resolve off the vitest
 // root (packages/app) instead.
@@ -201,6 +202,44 @@ describe('badge contrast', () => {
         expect(token(`badge-${tone}-fg`, scope).toLowerCase()).not.toBe('#ffffff');
       }
     }
+  });
+});
+
+/* TRA-347. At the 640x420 window minimum the content pane is 420px wide and
+   clips with `overflow-x: hidden` — a fixed-height, non-wrapping toolbar there
+   does not shrink, scroll or clip, it just runs off the edge. Memory's row was
+   703px of content in 420px, which left its search field, its prominent "Add
+   decision" and its overflow menu at zero visible pixels with no scrollable
+   ancestor. DESIGN.md has required `min-height` + `flex-wrap` since TRA-292;
+   the rule reached the Workspace header but never the shared primitive.
+
+   Both halves are asserted, because either one alone regresses: without the
+   wrap the row clips, and without a length flex-basis on the search field the
+   row wraps ~180px earlier than it must (a wrapping flex line is laid out from
+   each item's hypothetical size, and `flex-basis: auto` advertises the field's
+   full content width), which put Memory on two rows at the default window. */
+describe('a toolbar wraps; it never clips', () => {
+  it('gives Toolbar a min-height and a wrap, never a fixed height', () => {
+    const { container } = render(<Toolbar>{null}</Toolbar>);
+    const bar = container.querySelector('[role="toolbar"]') as HTMLElement;
+    expect(bar).toBeTruthy();
+    expect(bar.style.minHeight).toBe('52px');
+    expect(bar.style.height, 'a fixed height cannot wrap — use min-height').toBe('');
+    expect(bar.className).toMatch(/\bflex-wrap\b/);
+  });
+
+  it('bases the search field on its own min-width so it shrinks before the row wraps', () => {
+    const search = rules().find((x) => x.selector === '.lx-search')!;
+    const min = decl(search.body, 'min-width');
+    const basis = decl(search.body, 'flex')?.split(/\s+/)[2];
+    expect(min).toBe('140px');
+    expect(basis, 'flex-basis: auto wraps the toolbar early — use the min-width').toBe(min);
+    // Capped at the content width, so where there is room it renders unchanged.
+    expect(decl(search.body, 'max-width')).toBe('max-content');
+    // ...and the grow variant still fills, so the cap must not leak into it.
+    expect(decl(rules().find((x) => x.selector === '.lx-search.grow')!.body, 'max-width')).toBe(
+      'none',
+    );
   });
 });
 
