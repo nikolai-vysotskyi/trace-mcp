@@ -141,8 +141,10 @@ the browser, not aspirational:
   padding. **Square corners — `border-radius: 0`,** on the frame and on the
   image. The rounding a reader sees belongs to the macOS window inside the
   shot; a second radius on the frame would read as a second window.
-- The image is `width: 100%`, `display: block`, over a `var(--ghost)` fill so
-  a slow load is a flat plate, not a white flash.
+- The image is `width: 100%`, `display: block`, and carries **no fill of its
+  own**. The shots are window photographs with transparent rounded corners;
+  a `--ghost` plate behind them paints four grey blocks into those corners.
+  The frame's `--surface` is what shows through.
 - Hover raises the outline to `--text-display`. That is the only state.
 
 **The caption sits above the image, not below it** — a `.app-frame-meta` row
@@ -155,10 +157,16 @@ A caption below would read as body prose and compete with the section text.
 below 900px. Never zero.
 
 **A light/dark pair is one image, not two.** Show the appearance the reader
-already chose — `.theme-light-only` / `.theme-dark-only`, switched off
+already chose — `img.theme-light-only` / `img.theme-dark-only`, switched off
 `data-theme` — never stacked one above the other. Two appearances of the same
 screen stacked read as one broken image, and they double the bytes for a view
 the reader did not ask for.
+
+Write those selectors as `img.theme-*`, not `.theme-*`: the bare class (0,1,0)
+loses to `.app-frame img` (0,1,1), the `display: none` never lands, and both
+appearances render stacked — which is exactly how the pair shipped and how
+TRA-390 was reported. Check `display` in the browser, in both themes; the
+markup alone does not tell you which rule won.
 
 **Content.** Shot from the real Electron window — traffic lights and rounded
 window corners must be present. No traffic lights means it came from a
@@ -200,6 +208,8 @@ appearance without a screenshot or a measurement is not a finding.
 
 **Both themes**
 - [ ] Dark and light both screenshotted, no unstyled flash on load.
+- [ ] Exactly one image of a light/dark pair has computed `display: block` —
+      read it off the element, in each theme.
 - [ ] Theme choice survives landing → doc page navigation.
 - [ ] Body text ≥ 4.5:1, large text ≥ 3:1, in both.
 
