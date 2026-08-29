@@ -265,6 +265,31 @@ already exists here** — that is how the app ended up with four different pill 
 | `EmptyState` | full and `compact`. |
 | `Menu` / `MenuItem` / `MenuSection` / `MenuSeparator` / `ConfirmPopover` / `useMenuAnchor` | one anchor implementation shared by every surface. |
 
+### An icon names the action
+
+A glyph is a **name**, not decoration. A glyph that decorates rather than names —
+sparkles, and anything else that says "exciting" instead of saying what the item does
+— does not go into the interface. When an item leads somewhere specific, the glyph
+matches the destination: a question mark for help, a document for a changelog.
+
+Two glyphs are **rejected by name**, and a test enforces it
+(`lattice/__tests__/icons.test.ts` scans the whole renderer, not just the icon map,
+because re-adding a banned body under a new key is the same regression wearing a hat):
+
+| Rejected | Why | Use instead |
+|---|---|---|
+| `auto_awesome` (sparkles) | Decorates rather than names. It is the AI-marketing glyph; on a developer tool it reads as ornament and says nothing about what the item does. | The glyph for the destination — `description` for `View changelog`. |
+| `forum` (speech bubbles) | Promises a conversation with a person. Nothing in this app is one: `Get help` opens GitHub issues, `Ask` queries the indexed graph. | `help` (question mark in a circle) for help; `search` for Ask. |
+
+Judge the replacement at the size it renders, not on the 24-grid. `manage_search`
+was the first pick for Ask and lost on the render: its two answer lines are 3 units
+apart, which is 2.2px at the 18px sidebar size, and they smudge into the magnifier's
+handle. A glyph that only reads at 24px is not a glyph this app has a use for.
+
+**When a reference is supplied, match it.** If it looks wrong for us, say so in the PR
+and argue it. A substitution nobody mentions costs a review round every time, and it
+is how this pair shipped in the first place.
+
 ### Prominent buttons are flat
 
 macOS 26 dropped the gradient and the bezel. `.lx-btn.v-prominent` is a flat
@@ -429,7 +454,7 @@ stylesheets and `tray.ts` ever drift apart again.
 ### Where a global action lives
 
 An action that belongs to the app rather than to the surface in front of you —
-Settings, Check for updates, What's new, Get help — has exactly two homes, and
+Settings, Check for updates, View changelog, Get help — has exactly two homes, and
 **one definition**: `packages/app/src/shared/global-actions.ts`.
 
 - The **native application menu** (`main/menu.ts`) builds its items from that list.
@@ -773,7 +798,9 @@ new evidence.
 | A choice in a menu is one row with the control inline, not a header plus one item per value | Appearance first shipped as an `APPEARANCE` caps header over three checked items: four rows for one three-state preference, in the menu built to stop the footer spending a row per thing. A header over a single control is weight without information. One row, name left, pill right, on the shared centre line — and the rule is written for every future choice, not solved for Theme (TRA-363). |
 | A choice row is `group` + `menuitemradio`, one keyboard stop, and does not close the menu | `radiogroup` is not a legal child of `role="menu"`, and the shared `SegmentedControl`'s `aria-pressed` says "toggled" rather than "chosen". The row is one Up/Down stop resolved to the checked segment, Left/Right move inside it, and picking a value leaves the menu open — an inline switcher exists so you can watch the app change under it. |
 | Icon-only segments dim when unselected; word segments do not | The selected thumb is 1.19:1 light / 1.63:1 dark against the track. On a word that is enough because the word stays readable (TRA-292); an icon has no fallback, so the only cue would be a sub-3:1 fill. Unselected icons drop to `--label-secondary` (4.5:1 on the track). |
-| A global action is defined once, in `src/shared/global-actions.ts` | The native menu and the app menu both offer Settings / What's new / Get help / Check for updates. Two hand-maintained lists drift — a relabelled item, a moved key, an action added to one and forgotten in the other. Neither surface types a label; both read the entry. |
+| A global action is defined once, in `src/shared/global-actions.ts` | The native menu and the app menu both offer Settings / View changelog / Get help / Check for updates. Two hand-maintained lists drift — a relabelled item, a moved key, an action added to one and forgotten in the other. Neither surface types a label; both read the entry. |
+| A glyph names the action; sparkles and speech bubbles are banned by name | `auto_awesome` decorates instead of naming — it says "exciting", not what the item does. `forum` promises a person to talk to, and no surface here provides one. Both shipped anyway, against a reference that showed the right glyphs, which is the second half of this decision: when a reference is supplied, match it or argue it in the PR — never substitute silently. |
+| "View changelog", not "What's new" | The item opens the releases page. Someone checking whether a specific fix shipped searches for the word "changelog"; "What's new" describes a feeling about the page, not the page. |
 | "Up to date" belongs in the app menu's header, not in a sidebar row | It is the answer to a question you only ask when you go looking, and it belongs next to the action that re-asks it. A permanent strip pays 28px in every window, forever, to report the absence of news. The states you can *act* on — update available, restart pending, bundle stuck — still get a card in the sidebar. |
 | A menu anchors on the app, because there is no account to anchor on | The pattern this came from is an account menu, held together by an identity at the top. We have no users. The product is the identity: the trigger carries the name, the header carries the version and whether it is current. |
 | In a menu, focus IS the highlight — and the only one | Arrowing moves real DOM focus, so `:focus` has to paint the same accent fill `:hover` does. The house `*:focus-visible` ring on top of that fill drew a blue halo round an already-blue row, which reads as a button on a surface; macOS draws the fill and nothing else. |
