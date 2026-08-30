@@ -28,35 +28,19 @@ export interface BaselineRoll {
 }
 
 /**
- * A snapshot of an empty workspace is not a baseline (TRA-458).
- *
- * Two reasons, and either one is enough. It is what a failed reading leaves
- * behind — a daemon that never answered derives the same zeros as a workspace
- * with nothing in it, and once stored the two are indistinguishable. And even
- * when it is genuine, the only delta it can produce is the current value
- * repeated: "656.2k symbols, ↑ +656.2k" restates the number instead of
- * comparing it, which is the bare number DESIGN.md §7 asks a comparison line
- * to replace.
- */
-function isComparable(b: KpiBaseline | null): b is KpiBaseline {
-  return b !== null && b.kpis.totalProjects > 0;
-}
-
-/**
  * Decide which baseline to show and which to store.
  *
- *  - nothing comparable stored → start tracking now, show no delta yet
- *  - stored today              → compare against it, keep it
- *  - stored earlier            → compare against it, then replace it
+ *  - nothing stored → start tracking now, show no delta yet
+ *  - stored today   → compare against it, keep it
+ *  - stored earlier → compare against it, then replace it with today's reading
  */
 export function rollBaseline(
   nowMs: number,
   stored: KpiBaseline | null,
   current: WorkspaceKpis,
 ): BaselineRoll {
-  const fresh: KpiBaseline | null =
-    current.totalProjects > 0 ? { at: new Date(nowMs).toISOString(), kpis: current } : null;
-  if (!isComparable(stored)) return { previous: null, next: fresh };
+  const fresh: KpiBaseline = { at: new Date(nowMs).toISOString(), kpis: current };
+  if (!stored) return { previous: null, next: fresh };
   const age = nowMs - Date.parse(stored.at);
   if (!Number.isFinite(age) || age < 0) return { previous: null, next: fresh };
   if (age >= BASELINE_MAX_AGE_MS) return { previous: stored, next: fresh };

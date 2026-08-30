@@ -57,13 +57,6 @@
   opacity: 1;
   color: var(--label-secondary);
 }
-/* --label-secondary is a label colour for an UNTINTED surface; on the accent
-   fill it is dark-on-blue and fails contrast outright. A prominent button
-   running its own action ("Updating…" in the sidebar's update card) keeps
-   --on-accent (TRA-429). */
-.lx-btn.v-prominent.is-status:disabled {
-  color: var(--on-accent);
-}
 
 /* sizes ------------------------------------------------------------------- */
 .lx-btn.sz-small {
@@ -610,28 +603,6 @@ input[type='checkbox']:focus-visible {
      four on the 24px floor; the overflow is invisible and the track has room
      for it inside a 52px toolbar. */
   inset: -4px 0;
-}
-
-/* ── KPI tile (workspace/components/KpiTile.tsx) ──────────────────────────
-   The card's opaque background lives here rather than inline, because the
-   hover tint has to compose with it: an inline `background:` shorthand also
-   writes `background-image: none` inline, and no stylesheet rule outranks an
-   inline declaration.
-
-   A tile that filters the list answers the pointer; a tile that only reports a
-   number (a `<div>`, not a `<button>`) does not. Before TRA-475 neither did,
-   and the accent border was the only thing on the strip that said "clickable"
-   — which is the same mark that means "selected".
-
-   The tint is a second background LAYER, so the card stays opaque --surface
-   and its footnote keeps --label-secondary at 4.64:1 in light and 5.37:1 in
-   dark. --fill-tertiary, which is what a chip hovers to, would put it at
-   4.45:1 — the measurement that already ruled a tint out for the ACTIVE tile. */
-[data-kpi] {
-  background: var(--surface);
-}
-button[data-kpi]:hover {
-  background-image: linear-gradient(var(--fill-quaternary), var(--fill-quaternary));
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -4,7 +4,6 @@ import { logger } from '../../logger.js';
 import type { ChangeScope } from '../../plugin-api/types.js';
 import type { PipelineState } from '../pipeline-state.js';
 import { EsModuleResolver } from '../resolvers/es-modules.js';
-import { ESM_IMPORT_LANGUAGES } from './import-capable-languages.js';
 import { PhantomPackageFactory } from './phantom-externals.js';
 
 /**
@@ -102,6 +101,25 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
      DO UPDATE SET metadata = excluded.metadata`,
   );
 
+  // Languages whose `imports` edges carry filesystem-path specifiers (vs FQNs
+  // like PHP's `use`). CSS/HTML/XML/SVG `@import`/href/src targets resolve via
+  // the same oxc-resolver pass — without this, asset files stay isolated.
+  const TS_JS_LANGS = new Set([
+    'typescript',
+    'javascript',
+    'tsx',
+    'jsx',
+    'vue',
+    'css',
+    'scss',
+    'sass',
+    'less',
+    'stylus',
+    'html',
+    'xml',
+    'svg',
+  ]);
+
   store.db.transaction(() => {
     for (const [fileId, imports] of state.pendingImports) {
       const file = fileMap.get(fileId);
@@ -110,7 +128,7 @@ export function resolveEsmImportEdges(state: PipelineState, _scope?: ChangeScope
       // resolvers. Without this guard, PHP `use` entries (PHP FQNs like
       // `App\Actions\Foo`) get run through npm bucketing and pollute the
       // phantom graph.
-      if (!ESM_IMPORT_LANGUAGES.has(file.language ?? '')) continue;
+      if (!TS_JS_LANGS.has(file.language ?? '')) continue;
 
       const absSource = path.resolve(state.rootPath, file.path);
       const sourceNodeId = fileNodeMap.get(fileId);

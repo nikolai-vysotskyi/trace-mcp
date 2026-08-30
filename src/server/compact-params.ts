@@ -37,7 +37,7 @@ export const COMPACT_CORE_PARAMS: Record<string, string[]> = {
   get_control_flow: ['symbol_id', 'fqn'],
   graph_query: ['query', 'depth'],
   check_duplication: ['name', 'kind', 'symbol_id'],
-  get_untested_symbols: ['file_pattern', 'scope', 'level', 'max_results'],
+  get_untested_symbols: ['file_pattern', 'scope', 'max_results'],
   get_complexity_trend: ['file_path'],
   get_coupling_trend: ['file_path', 'since_days'],
   get_symbol_complexity_trend: ['symbol_id'],

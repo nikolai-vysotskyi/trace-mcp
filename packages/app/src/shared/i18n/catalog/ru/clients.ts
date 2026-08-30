@@ -7,6 +7,12 @@ export const clients = {
   detecting: 'Ищем клиентов',
   loadingSessions: 'Загружаем сессии',
 
+  daemonDownTitle: 'Сервис недоступен',
+  daemonDownSubtitle:
+    'Клиенты trace-mcp подключаются через локальный сервис. Запустите его, чтобы увидеть и настроить их.',
+  startDaemon: 'Запустить сервис',
+  starting: 'Запускаем…',
+
   noSessionsTitle: 'Активных сессий нет',
   noSessionsSubtitle: 'Сессия появится здесь, когда клиент подключится к сервису.',
   unnamedSession: 'Сессия без имени',
@@ -21,9 +27,6 @@ export const clients = {
   updateAvailable: 'Есть обновление',
   update: 'Обновить',
   updating: 'Обновляем…',
-  updateAll: 'Обновить все',
-  updatingProgress: 'Обновляем {{done}} из {{total}}',
-  writeFailed: 'Не удалось записать конфигурацию.',
   driftedField: 'Разошлось поле: {{field}}',
   setUpManually: 'Настроить вручную…',
   hideSteps: 'Скрыть шаги',

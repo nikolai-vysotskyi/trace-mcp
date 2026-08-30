@@ -53,10 +53,6 @@ describe('language plugin registration', () => {
 
 describe('docs/language-matrix.md', () => {
   it('is regenerated from the code', () => {
-    // `pnpm docs:sitemap` stamps `updated:` into the front matter of every page
-    // in the sitemap, this one included since it was published. That line comes
-    // from git, not from the generator, so drop it before comparing.
-    const withoutStamp = (s: string) => s.replace(/^updated:.*\n/m, '');
-    expect(withoutStamp(readFileSync(MATRIX, 'utf8'))).toBe(withoutStamp(renderMatrix()));
+    expect(readFileSync(MATRIX, 'utf8')).toBe(renderMatrix());
   });
 });

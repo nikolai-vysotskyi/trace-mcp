@@ -121,7 +121,7 @@ export class FilePersister {
       if (this.tryFastSymbolUpdate(fileId, ext)) {
         this.state.changedFileIds.add(fileId);
         store.updateFileHash(fileId, ext.hash, ext.contentSize, ext.mtimeMs);
-        store.updateFileGitignored(fileId, ext.gitignored);
+        if (ext.gitignored) store.updateFileGitignored(fileId, true);
         // Workspace may change between indexing runs (e.g., after monorepo
         // detection logic was fixed). Update even on fast path.
         if (ext.workspace) store.updateFileWorkspace(fileId, ext.workspace);
@@ -168,11 +168,10 @@ export class FilePersister {
       }
     }
 
-    // Flag gitignored files — indexed for graph metadata, content not served to
-    // AI. Written unconditionally: the flag used to be set-only, so a file that
-    // stopped being ignored kept `gitignored = 1` forever and every consumer
-    // that filters on the column (summaries, source-reader) silently dropped it.
-    store.updateFileGitignored(fileId, ext.gitignored);
+    // Flag gitignored files — indexed for graph metadata, content not served to AI
+    if (ext.gitignored) {
+      store.updateFileGitignored(fileId, true);
+    }
 
     // Persist base extraction symbols, edges, and entities
     this.persistSymbolsAndEntities(fileId, ext.relPath, ext.symbols, ext.otherEdges, ext);

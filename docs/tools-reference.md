@@ -1,7 +1,7 @@
 ---
-title: "trace-mcp MCP Tools Reference — code-intelligence tools by task and framework"
-description: "The trace-mcp MCP tools you reach for most, grouped by task — navigation, refactoring, impact analysis, security, and framework-aware queries. Every tool is listed in the tool index."
-updated: 2026-08-30
+title: "trace-mcp MCP Tools Reference — every code-intelligence tool, by framework"
+description: "Full reference for trace-mcp's MCP tools and 9 resources — navigation, refactoring, impact analysis, security, and framework-aware queries. Tools register dynamically based on what your repo uses."
+updated: 2026-08-29
 ---
 
 # Tools reference
@@ -11,7 +11,7 @@ updated: 2026-08-30
   "@context": "https://schema.org",
   "@type": "TechArticle",
   "headline": "Tools reference",
-  "description": "The most-used of the {{ site.data.counts.tools }} MCP tools and 9 resources trace-mcp exposes, grouped by task and registered dynamically per detected framework.",
+  "description": "Full list of the {{ site.data.counts.tools }} MCP tools and 9 resources trace-mcp exposes, registered dynamically per detected framework.",
   "url": "https://trace-mcp.com/tools-reference.html",
   "datePublished": "2026-04-05",
   "dateModified": "2026-04-15",
@@ -32,10 +32,6 @@ updated: 2026-08-30
 }
 </script>
 trace-mcp exposes {{ site.data.counts.tools }} MCP tools and 9 resources.
-
-This page groups the ones you reach for by hand. For the complete list —
-every registered tool with its one-line description, generated from the
-registrations themselves — see the [tool index](tools-index.md).
 
 Tools are registered dynamically based on detected frameworks — you only see tools relevant to your project.
 
@@ -101,7 +97,7 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | `get_implementations` | Find all classes that implement or extend a given interface/base class |
 | `get_type_hierarchy` | Walk TypeScript class/interface hierarchy: ancestors and descendants |
 | `get_api_surface` | List all exported symbols (public API) of a file or matching files |
-| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Returns the "unreached" tier (no test imports the source) by default; `level: "imported_not_called"` / `"all"` opt into the weaker tier, where transitively-exercised symbols also land. Pass `scope: "exports_only"` for the fast exports-only scan |
+| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). Pass `scope: "exports_only"` for the fast exports-only scan |
 | `self_audit` | One-shot project health: dead exports, untested code, dependency hotspots, heritage metrics |
 
 ## Quality & security

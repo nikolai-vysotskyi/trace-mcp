@@ -99,7 +99,7 @@ describe('IndexingPipeline — rename detection by content hash', () => {
     fs.writeFileSync(path.join(tmpRoot, oldRel), 'export const x = 1;\n');
     await pipeline.indexAll();
 
-    expect(store.getFile(oldRel)).toBeDefined();
+    const oldId = store.getFile(oldRel)!.id;
 
     fs.unlinkSync(path.join(tmpRoot, oldRel));
     // Content differs slightly — must not be treated as a rename.
@@ -107,13 +107,7 @@ describe('IndexingPipeline — rename detection by content hash', () => {
 
     await pipeline.indexAll();
 
-    // Asserted by content rather than by row id: the scope reconcile (TRA-468)
-    // drops the vanished path before extraction, so SQLite is free to hand the
-    // freed rowid straight back to the new file. A carried-over rename would
-    // show up as the OLD symbol surviving under the new path.
-    expect(store.getFile(oldRel)).toBeUndefined();
-    const after = store.getFile(newRel);
-    expect(after).toBeDefined();
-    expect(store.getSymbolsByFile(after!.id).map((s) => s.name)).toEqual(['y']);
+    expect(store.getFile(newRel)).toBeDefined();
+    expect(store.getFile(newRel)!.id).not.toBe(oldId);
   });
 });
