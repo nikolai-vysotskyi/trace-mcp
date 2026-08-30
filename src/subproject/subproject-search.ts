@@ -3,6 +3,7 @@
  * Extracted from SubprojectManager to reduce class complexity.
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import Database from 'better-sqlite3';
 import { searchFts } from '../db/fts.js';
 import { logger } from '../logger.js';
@@ -91,7 +92,13 @@ function searchRepoDb(
   return items;
 }
 
-const normRoot = (root: string): string => root.replace(/\/+$/, '');
+/**
+ * Canonical form for comparing two repo roots. `path.resolve` collapses
+ * trailing and duplicated separators the same way `upsertSubproject` does when
+ * it writes the row — and unlike a `/\/+$/` strip it carries no ReDoS risk on
+ * a path that ultimately comes from a tool caller.
+ */
+const normRoot = (root: string): string => path.resolve(root);
 
 /**
  * Subprojects reachable from `projectRoot`: those registered under it, plus —
