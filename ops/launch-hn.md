@@ -5,9 +5,12 @@ Nikolai posts this.** An agent may write and revise it; publishing under the
 project's name is his call, and it is irreversible in a way a directory listing
 is not.
 
-Numbers below come from `docs/_data/counts.yml` and the README's own framing.
-Re-read both before posting — 80 became 81 languages inside a day once, and a
-Show HN thread is the worst place to be caught with a stale figure.
+Numbers below come from `docs/_data/counts.yml` and the README's own framing,
+verified 2026-08-30 (81 languages / 87 frameworks / 169 tools). Re-read both
+before posting — 80 became 81 languages inside a day once, and a Show HN thread
+is the worst place to be caught with a stale figure. Nothing enforces this file:
+`tests/docs/readme-claims.test.ts` guards README.md only, so these figures go
+stale silently.
 
 ## When to post
 
@@ -26,8 +29,9 @@ then stay available for ~4 hours; an unanswered thread dies.
 
 Show HN: Trace-mcp – a code graph for AI agents, so they stop re-reading files
 
-Keep it under 80 characters and resist adjectives. "Framework-aware code
-intelligence" is what the package says; it is not what a reader recognises.
+Keep it to 80 characters or fewer (the line above is exactly 80, HN's cap) and
+resist adjectives. "Framework-aware code intelligence" is what the package says;
+it is not what a reader recognises.
 
 ## Body
 
@@ -49,16 +53,22 @@ intelligence" is what the package says; it is not what a reader recognises.
 > but that is a per-call peak and I have stopped quoting it as if it were the
 > average.
 >
-> Runs entirely locally. No API keys, no cloud, MIT. `npx trace-mcp benchmark .`
-> prints the per-task numbers against your own repo in about five minutes, which
-> is a better argument than anything I can write here.
+> Runs entirely locally. No API keys, no code leaves the machine, MIT.
+> `npx trace-mcp index . && npx trace-mcp benchmark .` prints the per-task
+> numbers against your own repo in about five minutes, which is a better
+> argument than anything I can write here.
 
 ## First comment — post it yourself, immediately
 
 HN treats a maintainer who names the limits first as credible and one who waits
 to be caught as not. This is the whole reason the thread is worth having.
 
-> Three things worth knowing before you try it:
+> Four things worth knowing before you try it:
+>
+> It sends one anonymous ping per day per install — a random id, version, OS,
+> and two aggregate counters, no paths and no code. `TRACE_MCP_TELEMETRY=off`
+> kills it, and the source is `src/telemetry/usage-ping.ts`. Saying "local-first"
+> without saying that first is how a thread goes bad.
 >
 > The headline benchmark is a **synthetic estimate**, not measured savings. The
 > "without" side is computed from file sizes in the index and the "with" side from
@@ -80,12 +90,14 @@ to be caught as not. This is the whole reason the thread is worth having.
 Each answer must be checkable in one click. Do not improvise these.
 
 1. **"How is this different from Serena / codebase-memory-mcp / Repomix?"** →
-   `trace-mcp.com/comparisons.html` plus the three head-to-head pages. Never
-   disparage a competitor from memory; the comparison pages are written to survive
-   the maintainer of the other project reading them, which on HN they will.
+   `trace-mcp.com/comparisons.html` plus the four head-to-head pages (Serena,
+   Repomix, codegraph, codebase-memory-mcp). Never disparage a competitor from
+   memory; the comparison pages are written to survive the maintainer of the
+   other project reading them, which on HN they will.
 2. **"40–50% of what, measured how?"** → the README's "Token reduction" section
-   and `npx trace-mcp benchmark .`. Say plainly that mixed real-world workloads
-   land 30–60% depending on stack.
+   and `npx trace-mcp index . && npx trace-mcp benchmark .` (the benchmark reads
+   an existing index — without the index step it has nothing to measure). Say
+   plainly that mixed real-world workloads land 30–60% depending on stack.
 3. **"Why not just use the LSP?"** → we do, optionally, as an enrichment pass. The
    graph exists so an answer costs one call instead of a live query per edge, and
    so cross-language framework edges exist at all — no LSP knows that an Inertia
