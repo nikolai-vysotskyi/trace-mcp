@@ -64,6 +64,27 @@ npm/yarn are not officially supported for contributor workflows — please use p
 
 Read **[DESIGN.md](DESIGN.md)** first. It is the design system the app is actually built on — tokens, type scale, 4pt geometry, the glass-on-navigation-only material model, the `lattice/ui` primitives, and the accessibility floors — plus a review checklist to run against a new screen. Colour and contrast are enforced in CI by `packages/app/scripts/design-tokens.mjs`: a new raw hex or Tailwind grey in the renderer, or any text token under 4.5:1, fails the build.
 
+### The desktop app ships the server
+
+A DMG user never runs npm, so the app carries its own copy of the server and
+installs the daemon itself on first launch and after every version change
+(`packages/app/src/main/daemon-install.ts`). It runs that copy through the app's
+own binary with `ELECTRON_RUN_AS_NODE=1`, which is why the DMG needs no Node on
+the machine at all.
+
+`packages/app/scripts/stage-server.mjs` assembles the payload from `dist/` plus
+the handful of packages tsup leaves external. Two consequences for a change to
+the server's dependencies:
+
+- **A new native or wasm dependency must be added to `NATIVE_EXTERNALS` in
+  `tsup.config.ts` AND to `PAYLOAD_ROOTS` in that script.** A test fails if the
+  two drift, because a package missing from the payload is a daemon that starts
+  fine from npm and dies inside the DMG.
+- **The `.node` binaries are built for the machine that packages the app**, so
+  each architecture builds on a runner of that architecture. The stage script
+  refuses a cross-architecture build rather than shipping a bundle whose daemon
+  cannot load its own database.
+
 ## License
 
 All contributions are licensed under the [MIT License](LICENSE).

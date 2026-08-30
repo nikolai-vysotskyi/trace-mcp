@@ -1,4 +1,4 @@
-import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } from 'electron';
 import { execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
@@ -166,6 +166,7 @@ ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: strin
   });
 });
 
+import { type DaemonSetupState, ensureDaemonInstalled } from './daemon-install';
 import { isDaemonProcessAlive, restartDaemon } from './daemon-lifecycle';
 import { isPlausibleInstallPath } from './install-path';
 import {
@@ -197,6 +198,36 @@ import {
 ipcMain.handle('restart-daemon', async () => {
   return restartDaemon();
 });
+
+// Daemon setup (TRA-438). The app installs its own daemon on first launch and
+// repairs it after a version change, so the DMG needs no npm and no Node. The
+// renderer reads this to say "Setting up…" rather than "The daemon isn't
+// running" — the second is true but useless when nothing has been installed yet.
+let daemonSetupState: DaemonSetupState = { phase: 'idle' };
+
+function setDaemonSetupState(next: DaemonSetupState): void {
+  daemonSetupState = next;
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('daemon:setup-state', next);
+  }
+}
+
+ipcMain.handle('daemon:setup-state', () => daemonSetupState);
+ipcMain.handle('daemon:setup-retry', async () => {
+  await runDaemonSetup();
+  return daemonSetupState;
+});
+
+/** Install or repair the bundled daemon. Idempotent; safe on every launch. */
+async function runDaemonSetup(): Promise<void> {
+  setDaemonSetupState({ phase: 'installing' });
+  try {
+    const result = await ensureDaemonInstalled({ appVersion: app.getVersion() });
+    setDaemonSetupState(result.state);
+  } catch (err) {
+    setDaemonSetupState({ phase: 'failed', message: (err as Error).message });
+  }
+}
 
 // IPC: is the daemon's OS process provably alive, independent of /health?
 // TRA-525: the renderer only has HTTP, so a starved daemon (event loop blocked
@@ -1640,6 +1671,11 @@ app.whenReady().then(() => {
   // both read from nativeTheme at construction, so the app's Appearance choice
   // has to reach the native layer first or the window opens in the wrong one.
   restoreAppearance();
+  // Install/repair the daemon before the tray's watchdog starts poking at it:
+  // on a DMG-only machine there is nothing to poke yet, and the watchdog's
+  // "restart" would have nothing to restart (TRA-438). Not awaited — the
+  // window opens while setup runs, and the renderer follows `daemon:setup-state`.
+  void runDaemonSetup();
   createTray();
   // Open the main window straight away — the tray remains for background control.
   // Users who close the window still have the tray; users who quit via ⌘Q shut down.

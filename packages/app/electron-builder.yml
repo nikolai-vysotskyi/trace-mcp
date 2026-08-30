@@ -18,7 +18,23 @@ files:
   # node_modules has to be named explicitly to be packaged at all.)
   - node_modules/**
   - '!dist/main/__tests__/**'
+# Stages the server into `server-payload/` right before packaging (TRA-438).
+# A hook rather than a CI step on purpose: `pnpm exec electron-builder` is
+# invoked directly by .github/workflows/release.yml, and a build that forgot
+# to stage the payload would ship a DMG whose daemon cannot be installed.
+beforePack: scripts/stage-server.mjs
 extraResources:
+  # The trace-mcp server itself. Someone who installs the DMG never runs npm,
+  # so the app has to be able to install the daemon out of its own bundle —
+  # see packages/app/src/main/daemon-install.ts.
+  - from: server-payload
+    to: server
+  # Named separately because electron-builder's file matcher drops a
+  # `node_modules` directory found *inside* a copied tree; addressing it as the
+  # `from` root is what gets it copied. Without this the app ships a daemon
+  # that cannot load better-sqlite3 or a single tree-sitter grammar.
+  - from: server-payload/node_modules
+    to: server/node_modules
   - from: ../../scripts/apply-pending-update.mjs
     to: scripts/apply-pending-update.mjs
   # locate-app.mjs is imported by apply-pending-update.mjs at runtime, so it
