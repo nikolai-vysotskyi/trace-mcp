@@ -293,10 +293,56 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
     expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
       '3.5.2',
     );
-    // ...and the unreachable copy is gone rather than left on disk forever.
-    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.zip'))).toBe(false);
-    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.sha256'))).toBe(false);
-    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending-version'))).toBe(false);
+    // The other copy is an install too, so it is re-staged rather than left
+    // holding the corrupt leftover: same version, and a zip that verifies.
+    expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
+      '3.5.2',
+    );
+    expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending.zip')).toString()).not.toBe(
+      'orphan',
+    );
+    expect(
+      fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending.sha256'), 'utf-8'),
+    ).not.toBe('f'.repeat(64));
+  });
+
+  /* Found on the founder's machine: `/Applications/trace-mcp.app` sat on 3.3.0
+     while `~/Applications/trace-mcp.app` tracked 3.6.0. A bundle that is never
+     launched never writes the location marker, so nothing ever resolves to it
+     and nothing ever updates it — it stays behind forever while every
+     `npm install -g` reports success. One download, applied to every install. */
+  it('updates every installed bundle, not just the resolved one', async () => {
+    installBundle('3.4.0');
+    const systemDir = path.join(tmp, 'Applications');
+    fs.mkdirSync(systemDir, { recursive: true });
+    const systemApp = path.join(systemDir, 'trace-mcp.app');
+    writeBundle(systemApp, '3.3.0');
+
+    publishRelease('3.5.2');
+
+    const stdout = await runPostinstall();
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
+    expect(readBundleVersion(systemApp)).toBe('3.5.2');
+    expect(stdout).toContain('2 installed bundles');
+    // Each swap records its own version marker, and leaves no backup behind.
+    expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-version'), 'utf-8')).toBe('v3.5.2');
+    expect(fs.readdirSync(systemDir).filter((f) => f.includes('.bak-'))).toEqual([]);
+  });
+
+  it('leaves an already-current sibling bundle untouched', async () => {
+    installBundle('3.4.0');
+    const systemDir = path.join(tmp, 'Applications');
+    fs.mkdirSync(systemDir, { recursive: true });
+    const systemApp = path.join(systemDir, 'trace-mcp.app');
+    writeBundle(systemApp, '3.5.2');
+    const before = fs.statSync(systemApp).mtimeMs;
+
+    publishRelease('3.5.2');
+    await runPostinstall();
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
+    expect(fs.statSync(systemApp).mtimeMs).toBe(before);
   });
 
   /* The state this was found in: marker and running app agreed on
