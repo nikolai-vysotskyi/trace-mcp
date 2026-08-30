@@ -655,7 +655,10 @@ function shouldAttemptRestart(failureTick: number): boolean {
   return (failureTick - last) % RESTART_RETRY_EVERY === 0;
 }
 
-async function checkHealth(): Promise<void> {
+/** Exported for tests: the restart policy only exists as the sequence of
+    decisions this function makes across polls, so testing the pure helpers it
+    calls does not cover it (TRA-558). Everything else calls it via the timer. */
+export async function checkHealth(): Promise<void> {
   try {
     const health = await daemon.health();
     if (!daemonReachable || consecutiveFailures > 0) {
