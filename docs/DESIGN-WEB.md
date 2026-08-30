@@ -110,6 +110,17 @@ Order: sticky header (brand + theme toggle) → `h1` → prose → `Last updated
   head is a Space Mono 10px caps label, not a bold band. Every table is
   wrapped in a focusable `.table-scroll` region by the layout script, so a
   wide tool table scrolls itself instead of the page.
+- **A scroll region says so.** A region with more to the right carries a
+  `scroll →` label — Space Mono 10px caps at `--text-disabled`, right-aligned
+  10px above the head row, the same instrument-label voice as the `thead`.
+  The script adds it only while the region is genuinely scrollable and not
+  yet at its end, and re-measures on resize and after the webfonts land.
+  Without it the last column simply ends mid-word: macOS hides the overlay
+  scrollbar at rest and a phone never draws one, so nothing on screen
+  distinguishes "scrolls" from "clipped". This is not a mobile-only case —
+  three of the five tables on `comparisons.html` overflow the 880px prose
+  column at 1440px. No fade or gradient mask: gradients in chrome are out
+  (§4), and a fade states less than a word does.
 - Capability marks in a comparison table are **`✓` and `✗` text, never `✅`
   and `❌`**. The emoji pair is a filled multi-colour icon and a second and
   third accent colour — 305 of them on `comparisons.html` alone painted the
@@ -228,6 +239,9 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] `document.documentElement.scrollWidth === window.innerWidth` at the
       narrow width — no sideways page scroll.
 - [ ] Wide tables scroll themselves, not the page.
+- [ ] Every region where `scrollWidth > clientWidth` shows the `scroll →`
+      label, and every region that fits does not — count both, at 1440px and
+      at 390px.
 
 **Type & spacing**
 - [ ] Within the 2 families / 3 sizes / 2 weights budget.
