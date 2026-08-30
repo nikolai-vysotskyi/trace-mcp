@@ -37,6 +37,26 @@ const PORT = 3797;
 const TMP_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-bindorder-'));
 const PID_FILE = path.join(TMP_HOME, 'daemon.pid');
 
+/**
+ * This suite exercises the built `dist/cli.js`, and `pnpm test` has no build
+ * step. A missing build is an obvious failure, but a *stale* one is worse: it
+ * would run the pre-fix daemon and false-pass the very regression guarded here.
+ * So skip unless the build is at least as new as the sources under test, and
+ * say why.
+ */
+const SOURCES = ['src/cli.ts', 'src/daemon/lifecycle.ts'].map((p) => path.join(REPO_ROOT, p));
+function buildIsCurrent(): boolean {
+  if (!fs.existsSync(CLI)) return false;
+  const builtAt = fs.statSync(CLI).mtimeMs;
+  return SOURCES.every((src) => !fs.existsSync(src) || fs.statSync(src).mtimeMs <= builtAt);
+}
+const BUILD_CURRENT = buildIsCurrent();
+if (!BUILD_CURRENT) {
+  console.warn(
+    `[pid-registration-bind-order] skipped: ${CLI} is missing or older than src/cli.ts — run \`pnpm run build\` first.`,
+  );
+}
+
 const children: ChildProcess[] = [];
 
 function spawnDaemon(): ChildProcess {
@@ -109,33 +129,34 @@ afterAll(async () => {
   fs.rmSync(TMP_HOME, { recursive: true, force: true });
 }, 40_000);
 
-describe('daemon.pid is only claimed by the process that owns the port', () => {
-  it('survives a second daemon losing the bind race and dying', async () => {
-    expect(fs.existsSync(CLI)).toBe(true); // CI builds dist before the test shards
+describe.skipIf(!BUILD_CURRENT)(
+  'daemon.pid is only claimed by the process that owns the port',
+  () => {
+    it('survives a second daemon losing the bind race and dying', async () => {
+      const winner = spawnDaemon();
+      const health = await waitForHealth(90_000);
+      expect(health, 'first daemon never answered /health').not.toBeNull();
+      expect(health?.pid).toBe(winner.pid);
 
-    const winner = spawnDaemon();
-    const health = await waitForHealth(90_000);
-    expect(health, 'first daemon never answered /health').not.toBeNull();
-    expect(health?.pid).toBe(winner.pid);
+      // The winner registered itself, and it did so as the process that listens.
+      expect(readRegistration()).toEqual({ pid: winner.pid, alive: true });
 
-    // The winner registered itself, and it did so as the process that listens.
-    expect(readRegistration()).toEqual({ pid: winner.pid, alive: true });
+      // The loser: same port, must exit rather than take over.
+      const loser = spawnDaemon();
+      const loserExit = await waitForExit(loser, 120_000);
+      expect(loserExit, 'second daemon should have exited on EADDRINUSE').not.toBeNull();
+      expect(loserExit).not.toBe(0);
 
-    // The loser: same port, must exit rather than take over.
-    const loser = spawnDaemon();
-    const loserExit = await waitForExit(loser, 120_000);
-    expect(loserExit, 'second daemon should have exited on EADDRINUSE').not.toBeNull();
-    expect(loserExit).not.toBe(0);
+      // Give any stray write a chance to land before asserting.
+      await new Promise((r) => setTimeout(r, 1_000));
 
-    // Give any stray write a chance to land before asserting.
-    await new Promise((r) => setTimeout(r, 1_000));
-
-    // The whole point: after the loser died, the registration still names the
-    // live winner. Before the fix this read `{ pid: <loser>, alive: false }`,
-    // and the watchdog restarted a daemon that was serving fine.
-    const after = readRegistration();
-    expect(after.alive).toBe(true);
-    expect(after.pid).toBe(winner.pid);
-    expect(winner.exitCode).toBeNull();
-  }, 240_000);
-});
+      // The whole point: after the loser died, the registration still names the
+      // live winner. Before the fix this read `{ pid: <loser>, alive: false }`,
+      // and the watchdog restarted a daemon that was serving fine.
+      const after = readRegistration();
+      expect(after.alive).toBe(true);
+      expect(after.pid).toBe(winner.pid);
+      expect(winner.exitCode).toBeNull();
+    }, 240_000);
+  },
+);

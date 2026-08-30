@@ -2782,6 +2782,8 @@ program
     });
 
     let daemonShuttingDown = false;
+    /** Set once we own the port; cleared on shutdown so it cannot re-register a dying PID. */
+    let pidReassert: NodeJS.Timeout | undefined;
     const shutdown = async (reason?: string) => {
       // Re-entrancy guard: a SIGTERM delivered while the event loop was starved
       // by an indexing run only gets *processed* at the next yield, and a second
@@ -2845,7 +2847,11 @@ program
       clearInterval(clientSweep);
       await projectManager.shutdown();
       // Drop our PID registration last: while it exists, clients treat the
-      // daemon as alive-but-busy and refuse to restart it (TRA-421).
+      // daemon as alive-but-busy and refuse to restart it (TRA-421). Stop the
+      // re-assert first — httpServer.close() below waits on live SSE sessions,
+      // so a tick landing after the unlink would recreate daemon.pid naming a
+      // process that is already on its way out (TRA-556).
+      clearInterval(pidReassert);
       clearOwnDaemonPidFile();
       httpServer.close(() => process.exit(0));
     };
@@ -3044,7 +3050,7 @@ program
       // rest of this daemon's life. Re-assert it periodically; the write is
       // skipped unless the file actually differs, so this is idempotent and
       // costs one stat per tick. unref'd — never holds the process open.
-      const pidReassert = setInterval(reassertOwnDaemonPidFile, PID_REASSERT_INTERVAL_MS);
+      pidReassert = setInterval(reassertOwnDaemonPidFile, PID_REASSERT_INTERVAL_MS);
       pidReassert.unref();
       const projectCount = projectManager.listProjects().length;
       logger.info(
