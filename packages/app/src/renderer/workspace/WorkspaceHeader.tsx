@@ -303,8 +303,14 @@ export function WorkspaceHeader({
           delta={delta((k) => k.totalProjects)}
           deltaCaption={deltaCaption}
           footnote={t('kpiTrackingFromToday')}
-          active={isDefaultFilter(filter)}
-          onClick={() => onFilterChange(EMPTY_FILTER)}
+          /* No `active`, and no click. The accent border on this strip means
+             "this tile's filter is on", and Projects had it whenever no filter
+             was on — so the resting dashboard, which is what every launch
+             opens to, marked one tile selected above a list showing everything
+             (TRA-475). The click it carried cleared an already-empty filter;
+             clearing is still on the Filter menu, the overflow menu, and the
+             lit preset tile itself. Projects is a readout, like Files and
+             Symbols beside it. */
         />
         <KpiTile
           label={t('kpiFiles')}

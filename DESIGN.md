@@ -492,6 +492,32 @@ this one was declared in TRA-265 and never rendered a pixel. Tables that pin col
 `border-collapse: separate` with `border-spacing: 0`, which also moves the row hairline
 from the `<tr>` (ignored in the separated model) onto the cells.
 
+### A card is a control or it is a readout, and the resting screen shows no selection
+
+Three rules for any strip that mixes numbers with filters — the workspace KPI grid is
+the one we have, and it broke all three at once (TRA-475).
+
+**A mark that means "on" never sits on a tile that is off.** The accent border on the
+KPI strip means "this tile's filter is narrowing the list below". Projects carried it
+whenever *no* filter was on, which is the state every launch opens to: one tile ringed
+in accent, `aria-pressed="true"`, directly above a list showing everything. "Nothing is
+filtered" is drawn by six identical `--separator` hairlines, not by electing a tile to
+stand for *all*. A chip row may have an explicit **All** chip; a row of counts may not,
+because there the mark is the only thing distinguishing a control from a number.
+
+**A readout is content, so it is a `<div>`.** `<button disabled>` puts a number into the
+accessibility tree as a control the user is told they may not operate, when there was
+never a control. Dimming is for an action that exists and is unavailable now.
+
+**A card that is a control answers the pointer.** `cursor: pointer` — a `<button>` in
+Chromium defaults to `default` — plus a `--fill-quaternary` hover, applied as a second
+background *layer* so the card stays opaque `--surface`. That keeps `--label-secondary`
+on the footnote at 4.64:1 light / 5.37:1 dark; `--fill-tertiary`, which is what a chip
+hovers to, puts it at 4.45:1, and that measurement is why the *selected* tile is a
+border rather than a tint. The background therefore lives in `controls.css`, not in the
+component's `style` prop: an inline `background:` shorthand also writes
+`background-image: none` inline, which no stylesheet rule can outrank.
+
 ### States are part of the component, not an afterthought
 
 Every data surface owes four states, and each has a house form:

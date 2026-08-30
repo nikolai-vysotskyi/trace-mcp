@@ -27,6 +27,7 @@ function renderHeader(
     dense: boolean;
     hideViewToggle: boolean;
     kpis: WorkspaceKpis;
+    filter: WorkspaceFilter;
   }> = {},
 ) {
   const { container } = render(
@@ -164,6 +165,41 @@ describe('WorkspaceHeader KPI strip', () => {
       const lines = [...kpiTile(label).children].map((c) => c.textContent?.trim() ?? '');
       expect(lines).toHaveLength(3);
       expect(lines[2]).not.toBe('');
+    }
+  });
+
+  /* The accent border on this strip means "this tile's filter is on". Projects
+     carried it whenever NO filter was on, so every launch opened with one tile
+     marked selected above a list showing everything (TRA-475). */
+  it('marks nothing selected while nothing is filtered', () => {
+    renderHeader(false);
+    for (const label of ['Projects', 'Files', 'Symbols', 'Healthy', 'Needs attention', 'Indexing']) {
+      expect(kpiTile(label).getAttribute('aria-pressed')).not.toBe('true');
+      expect(kpiTile(label).getAttribute('style')).toContain('var(--separator)');
+    }
+  });
+
+  it('lights only the tile whose own filter is on', () => {
+    renderHeader(false, { filter: { ...EMPTY_FILTER, preset: 'healthy' } });
+    expect(kpiTile('Healthy').getAttribute('aria-pressed')).toBe('true');
+    expect(kpiTile('Healthy').getAttribute('style')).toContain('var(--accent)');
+    for (const label of ['Projects', 'Needs attention', 'Indexing']) {
+      expect(kpiTile(label).getAttribute('style')).toContain('var(--separator)');
+    }
+  });
+
+  /* A readout is content. As `<button disabled>` a number went into the
+     accessibility tree as a control the user is told they may not operate,
+     when there was never a control to operate. */
+  it('renders a tile with no filter behind it as content, not a disabled button', () => {
+    renderHeader(false);
+    for (const label of ['Projects', 'Files', 'Symbols']) {
+      expect(kpiTile(label).tagName).toBe('DIV');
+    }
+    for (const label of ['Healthy', 'Needs attention', 'Indexing']) {
+      const tile = kpiTile(label);
+      expect(tile.tagName).toBe('BUTTON');
+      expect((tile as HTMLButtonElement).disabled).toBe(false);
     }
   });
 
