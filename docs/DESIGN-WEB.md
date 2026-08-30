@@ -1,3 +1,10 @@
+---
+layout: default
+title: DESIGN-WEB.md — the trace-mcp.com visual standard
+description: Internal working document. The visual standard for trace-mcp.com.
+noindex: true
+---
+
 # DESIGN-WEB.md — the trace-mcp.com visual standard
 
 This file governs **the website only**: `docs/index.html`, `docs/_layouts/`,

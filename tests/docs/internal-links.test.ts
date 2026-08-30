@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -74,6 +74,33 @@ describe('docs footer nav covers every indexed page', () => {
       `sitemap lastmod older than the page's last commit — run \`pnpm docs:sitemap\`: ${stale
         .map((e) => `${e.path} (${e.lastmod} < ${e.git})`)
         .join(', ')}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * The two checks above only compare sitemap.xml against the nav, so a page
+   * absent from *both* was invisible to them. On 2026-08-30 four such pages
+   * were live on trace-mcp.com — /language-matrix.html, /daemon-memory.html,
+   * /ROADMAP.html and /DESIGN-WEB.html — each a fully rendered 200 with a
+   * <title>, each with no inbound link anywhere on the site, and all four
+   * reported "URL is unknown to Google" by the Search Console API.
+   *
+   * Every .md under docs/ becomes a public URL, so the source of truth is the
+   * directory, not the sitemap. A page is either indexed (in the sitemap) or
+   * deliberately not (`noindex: true` in its front matter) — never neither.
+   */
+  it('every published docs page is in the sitemap or marked noindex', () => {
+    const pages = readdirSync(DOCS, { recursive: true, encoding: 'utf-8' })
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => f.replace(/\\/g, '/'));
+    const indexed = new Set(sitemapPaths().map((p) => p.replace(/^\//, '').replace(/\.html$/, '.md')));
+    const orphans = pages.filter((f) => {
+      if (indexed.has(f)) return false;
+      return !/^---\n[\s\S]*?^noindex:\s*true\s*$[\s\S]*?^---$/m.test(readFileSync(join(DOCS, f), 'utf-8'));
+    });
+    expect(
+      orphans,
+      `docs pages that are neither in sitemap.xml nor marked \`noindex: true\`: ${orphans.join(', ')}`,
     ).toEqual([]);
   });
 
