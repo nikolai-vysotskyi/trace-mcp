@@ -87,6 +87,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stuck?: boolean;
     /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
     staleRoots?: { root: string; version: string }[];
+    /** Absolute path to the running `.app`, so copyable commands name the real install. */
+    installPath?: string;
   }> => ipcRenderer.invoke('check-for-update'),
   checkPendingUpdate: (): Promise<{ pending: boolean; version?: string }> =>
     ipcRenderer.invoke('check-pending-update'),

@@ -49,6 +49,8 @@ declare global {
         stuck?: boolean;
         /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
         staleRoots?: { root: string; version: string }[];
+        /** Absolute path to the running `.app`, so copyable commands name the real install. */
+        installPath?: string;
       }>;
       checkPendingUpdate: () => Promise<{ pending: boolean; version?: string }>;
       applyUpdate: () => Promise<{
