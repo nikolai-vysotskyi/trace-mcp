@@ -132,17 +132,11 @@ trace-mcp ships with an optional Electron desktop app (`packages/app`) that give
   <img src="docs/images/app-dark-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, dark appearance" width="820" height="512" loading="lazy" />
 </p>
 
-**Install:** grab the latest build from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest) —
+**Install on macOS:** [**Download the .dmg**](https://trace-mcp.com/) — open it and drag trace-mcp to Applications. The button on the site picks Apple Silicon or Intel for you; if you would rather choose yourself, both builds are on the [Releases page](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest). The app is signed with a Developer ID and notarized by Apple, so it opens without a warning — if macOS ever does warn you about a trace-mcp build, that warning is real and the download should not be trusted.
 
-- **macOS** — `trace-mcp-<version>-arm64-mac.zip` (Apple Silicon) or `trace-mcp-<version>-mac.zip` (Intel). Unzip and drag `trace-mcp.app` into `/Applications`. macOS builds are ad-hoc signed, not notarized, so the first launch of a browser-downloaded copy reports *"trace-mcp is damaged and can't be opened"*. It is not damaged — that is the download quarantine flag. Clear it once:
+**Install on Windows:** run `trace-mcp.Setup.<version>.exe` from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest).
 
-  ```bash
-  xattr -dr com.apple.quarantine /Applications/trace-mcp.app
-  ```
-
-- **Windows** — run `trace-mcp.Setup.<version>.exe`.
-
-The app talks to the same `trace-mcp` daemon (`http://127.0.0.1:3741`) that MCP clients use, so anything you index from the app is immediately available to Claude Code / Cursor / etc.
+The app talks to the same `trace-mcp` daemon (`http://127.0.0.1:3741`) that MCP clients use, so anything you index from the app is immediately available to Claude Code / Cursor / etc. If you only want the MCP server and the CLI, you do not need the app at all — [`npm install -g trace-mcp`](#quick-start) is the whole install.
 
 ---
 
