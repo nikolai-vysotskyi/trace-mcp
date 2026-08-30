@@ -17,15 +17,33 @@
  *    at report time from one published rate, so a price change re-prices the
  *    whole history instead of freezing whatever list price was current when
  *    each install pinged.
+ *
+ *    That rate is the *cheapest* of the three models `src/analytics/real-savings.ts`
+ *    prices, so the published dollar figure is a floor: whatever mix of models
+ *    our installs actually run, nobody saved less than this. Pricing at Opus —
+ *    the most expensive of the three, and 5x the floor — would need a caveat
+ *    printed next to the number every time it is quoted, and the one thing a
+ *    screenshot reliably loses is the caveat. A blended rate would be the
+ *    honest middle, but we do not measure the model mix these savings came
+ *    from, so any blend we picked would be invented weights wearing a decimal
+ *    point.
+ *
+ *    ponytail: the ping already carries a `model` param, so segmenting
+ *    `tokens_saved` by `customEvent:model` and pricing each slice at its own
+ *    rate would give a real blend. Worth doing once that dimension is
+ *    registered in GA4 and has enough history to be stable; until then the
+ *    floor is the number that cannot be wrong in our favour.
  */
 
 /**
- * Claude Opus input price, per token. Kept in sync with `MODEL_PRICING` in
- * `src/analytics/real-savings.ts` by tests/scripts/ga4-savings.test.ts — the
- * snapshot runs in CI without a build step, so it cannot import the TypeScript.
+ * Claude Haiku input price, per token — the cheapest tracked model, making the
+ * published figure a floor rather than a best case. Kept in sync with
+ * `MODEL_PRICING` in `src/analytics/real-savings.ts` by
+ * tests/scripts/ga4-savings.test.ts — the snapshot runs in CI without a build
+ * step, so it cannot import the TypeScript.
  */
-export const PRICE_MODEL = 'claude-opus-4-6';
-export const PRICE_PER_TOKEN = 5.0 / 1_000_000;
+export const PRICE_MODEL = 'claude-haiku-4-5';
+export const PRICE_PER_TOKEN = 1.0 / 1_000_000;
 
 /**
  * Multiple of the median per-user day above which a day is treated as inflated.

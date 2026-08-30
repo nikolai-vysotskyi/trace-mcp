@@ -1,4 +1,4 @@
-/** Model whose published input price backs the dollar figure. */
+/** Cheapest tracked model, whose input price floors the dollar figure. */
 export const PRICE_MODEL: string;
 
 /** That model's input price, per token. */

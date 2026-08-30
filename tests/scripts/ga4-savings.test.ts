@@ -43,6 +43,23 @@ describe('sanitizedTokens', () => {
     expect(result.tokens).toBe(result.raw);
   });
 
+  it('trims at exactly MIN_DAYS_FOR_TRIM but not one day below it', () => {
+    // The boundary itself, so an off-by-one in the guard cannot pass: 5 days
+    // trim, 4 do not. Same flood in both, only the series length differs.
+    const flood = { tokens: 9_000_000, users: 10 };
+
+    expect(sanitizedTokens([...flat(4, 1000), flood])).toMatchObject({
+      days: 5,
+      capped_days: 1,
+      tokens: 4000 + 5000,
+    });
+    expect(sanitizedTokens([...flat(3, 1000), flood])).toMatchObject({
+      days: 4,
+      capped_days: 0,
+      tokens: 3000 + 9_000_000,
+    });
+  });
+
   it('survives an all-zero history without erasing it', () => {
     // A zero median would cap every day at zero if the guard were missing.
     const days = [...flat(10, 0), { tokens: 500, users: 1 }];
@@ -65,8 +82,20 @@ describe('sanitizedTokens', () => {
 
 describe('usd', () => {
   it('prices tokens at the published rate', () => {
-    expect(usd(1_000_000)).toBe(5);
+    expect(usd(1_000_000)).toBe(1);
     expect(usd(0)).toBe(0);
+  });
+
+  it('prices at the cheapest model we track, so the figure is a floor', () => {
+    const source = fs.readFileSync(path.join(REPO_ROOT, 'src/analytics/real-savings.ts'), 'utf8');
+    const rates = [...source.matchAll(/'claude-[\w.-]+':\s*([0-9.]+)\s*\/\s*1_000_000/g)].map((m) =>
+      Number(m[1]),
+    );
+    expect(rates.length).toBeGreaterThan(1);
+    expect(
+      PRICE_PER_TOKEN * 1_000_000,
+      'usd_saved is published as a floor; PRICE_MODEL must be the cheapest entry in MODEL_PRICING',
+    ).toBe(Math.min(...rates));
   });
 });
 

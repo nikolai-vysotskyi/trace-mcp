@@ -31,6 +31,9 @@ const OUT = 'docs/_data/adoption.yml';
  */
 const SINCE = '2025-01-01';
 
+/** The daily install ping (`src/telemetry/usage-ping.ts`) — it carries `tokens_saved`. */
+const PING_EVENT = 'app_open';
+
 function accessToken(key) {
   const b64 = (o) =>
     Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url');
@@ -119,10 +122,21 @@ const [d1, d7, d28, versions, countries, clients, saved, installs] = await Promi
   }),
   // Daily rather than one total: the sanitizer needs the series to find the
   // median day, and a raw sum of an unauthenticated counter is not publishable.
+  //
+  // Filtered to the ping event, because the cap divides tokens by `activeUsers`
+  // to get a per-user rate. Unfiltered, that denominator is the property's
+  // whole daily audience; if any of it ever stops carrying `tokens_saved`, the
+  // rate tracks traffic instead of usage and the cap drifts in both directions.
+  // Today the ping is the property's only event, so this filter changes no
+  // number — it keeps the denominator pinned to the population the numerator
+  // comes from if that stops being true.
   report(token, propertyId, {
     dateRanges: [{ startDate: SINCE, endDate: 'today' }],
     dimensions: [{ name: 'date' }],
     metrics: [{ name: 'customEvent:tokens_saved' }, { name: 'activeUsers' }],
+    dimensionFilter: {
+      filter: { fieldName: 'eventName', stringFilter: { value: PING_EVENT } },
+    },
     limit: 100000,
   }).catch(() => null),
   report(token, propertyId, {
@@ -173,6 +187,9 @@ events_28d: ${num(d28, 1)}
 #
 # Dollars are derived here, not sent by the client, so a price change re-prices
 # the whole history: ${PRICE_MODEL} input at $${(PRICE_PER_TOKEN * 1_000_000).toFixed(2)}/Mtok.
+# That is the cheapest model we price, so \`usd_saved\` is a floor — quote it as
+# "at least", never as a typical or best case. Pricing at Opus would multiply it
+# by five and need a caveat carried alongside the number forever.
 savings:
   tokens_saved: ${savings.tokens}
   tokens_saved_raw: ${savings.raw}
