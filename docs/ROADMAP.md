@@ -87,6 +87,15 @@ trust strip and no download figure is cited on any public surface. Adoption
 metric of record is GitHub stars + traffic uniques. Re-check the per-version
 flatness quarterly, not per run.
 
+The same caveat now covers **git clones** (measured 2026-08-30, TRA-540):
+16,006 clones / 928 uniques in 14 days, ramping 166 → 8,736 per day across
+08-24…08-29 while human page views stayed flat at ~20/day. Unique *cloners*
+inflated along with the raw count (62 → 300), so clone uniques are no safer
+than clone totals. Whatever swept the npm version history swept git too. The
+metric of record is therefore GitHub stars plus traffic **views** uniques only
+— clones are excluded from it. Channel-by-channel state now lives in
+`ops/user-signal.md`.
+
 GitHub stars, same date: 101 total (April 58, May 23, June 8, July 5,
 August 6), 14 forks — a launch burst that decayed ~10× and stayed flat.
 
