@@ -23,6 +23,15 @@ const STATUSES = [
   },
 ];
 
+/* What every configured client looks like the moment after a trace-mcp
+   upgrade — the entry that drifted is the one trace-mcp writes, so drift is
+   never one row. This is the common state of this screen, not an edge case. */
+const ALL_DRIFTED = [
+  { client: 'claude-code', configPath: '/Users/x/.claude.json', status: 'stale', staleReason: 'cwd' },
+  { client: 'cursor', configPath: '/Users/x/.cursor/mcp.json', status: 'stale', staleReason: 'cwd' },
+  { client: 'amp', configPath: '/Users/x/.config/amp/settings.json', status: 'stale', staleReason: 'fields' },
+];
+
 const CLIENTS = [
   {
     id: '401b97c5aaaa',
@@ -45,11 +54,20 @@ vi.mock('../../hooks/useDaemon', () => ({
   }),
 }));
 
+function api(): {
+  getMcpClientStatuses: ReturnType<typeof vi.fn>;
+  configureMcpClient: ReturnType<typeof vi.fn>;
+  updateMcpClients: ReturnType<typeof vi.fn>;
+} {
+  return (window as unknown as { electronAPI: never }).electronAPI;
+}
+
 beforeEach(() => {
   (window as unknown as { electronAPI: unknown }).electronAPI = {
     getMcpClientStatuses: vi.fn().mockResolvedValue({ ok: true, statuses: STATUSES }),
     detectMcpClients: vi.fn().mockResolvedValue([]),
     configureMcpClient: vi.fn().mockResolvedValue({ ok: true }),
+    updateMcpClients: vi.fn().mockResolvedValue({ ok: true }),
   };
 });
 
@@ -133,4 +151,77 @@ it('opens the enforcement-level menu from the Claude row', async () => {
   fireEvent.click(claude as HTMLElement);
   const menu = await screen.findByRole('menu');
   expect(within(menu).getByRole('menuitem', { name: 'Max' })).toBeTruthy();
+});
+
+// ── TRA-497 ──────────────────────────────────────────────────────────────
+
+/* Connect asks which enforcement level to set up at. Update repairs an entry
+   that drifted on an upgrade — the level is already in the file, and the only
+   thing re-asking can do is overwrite the user's answer with a fresh guess. */
+it('repairs a drifted config without asking for an enforcement level', async () => {
+  render(<Clients />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
+
+  await waitFor(() => expect(api().updateMcpClients).toHaveBeenCalledWith(['windsurf']));
+  expect(api().configureMcpClient).not.toHaveBeenCalled();
+  expect(screen.queryByRole('menu')).toBeNull();
+});
+
+/* Six identical clicks is what this screen costs after every upgrade, and the
+   list already sorts the drifted rows into one bucket at the top of it. */
+it('offers one action for the whole drifted bucket, and names its size', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: ALL_DRIFTED });
+  render(<Clients />);
+
+  const all = await screen.findByRole('button', { name: 'Update all · 3' });
+  fireEvent.click(all);
+
+  await waitFor(() => expect(api().updateMcpClients).toHaveBeenCalledTimes(3));
+  expect(api().updateMcpClients.mock.calls.map(([names]) => names[0])).toEqual([
+    'claude-code',
+    'cursor',
+    'amp',
+  ]);
+});
+
+/* One drifted row is not a bucket — the row's own button is the shorter path,
+   and a second control that does the same thing is just more to read. */
+it('offers no bulk action when a single row has drifted', async () => {
+  render(<Clients />);
+  await screen.findByRole('button', { name: 'Update' });
+  expect(screen.queryByRole('button', { name: /Update all/ })).toBeNull();
+});
+
+/* The whole defect this screen shipped with: `configureMcpClient` returned
+   `{ ok: false }` for four months and the renderer dropped it on the floor, so
+   a button that could not run looked exactly like one with nothing to do. */
+it('says on the row when a write failed, and keeps the row actionable', async () => {
+  api().updateMcpClients.mockResolvedValue({ ok: false, error: 'Error: EACCES' });
+  render(<Clients />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Update' }));
+
+  expect(await screen.findByText('Error: EACCES')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Update' })).toBeTruthy();
+});
+
+/* One condition gets one sentence (DESIGN.md §5): this screen used to phrase
+   the dead daemon in its own words, two tabs from Workspace phrasing it in
+   Workspace's. Both read DaemonDownPane now. */
+it('states an unreachable daemon in the same words as every other surface', async () => {
+  vi.resetModules();
+  vi.doMock('../../hooks/useDaemon', () => ({
+    useDaemon: () => ({
+      clients: [],
+      loading: false,
+      connected: false,
+      restarting: false,
+      restartDaemon: vi.fn(),
+      fetchClients: vi.fn(),
+    }),
+  }));
+  const { Clients: Down } = await import('../Clients');
+  render(<Down />);
+
+  expect(await screen.findByText("The daemon isn't running")).toBeTruthy();
+  expect(screen.queryByText('Daemon not reachable')).toBeNull();
 });

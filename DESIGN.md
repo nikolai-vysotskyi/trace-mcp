@@ -518,6 +518,44 @@ border rather than a tint. The background therefore lives in `controls.css`, not
 component's `style` prop: an inline `background:` shorthand also writes
 `background-image: none` inline, which no stylesheet rule can outrank.
 
+### A row action reports its own result, and the same click is not asked N times
+
+Three rules, all broken at once on MCP clients (TRA-497), all about a list whose rows
+carry an action.
+
+**A control that ran reports what happened, on the row.** Connect and Update spawned
+`trace-mcp init` with `--mcp-client cursor` as one argv entry — `execFile` takes an
+array, so that is a single unknown option, and commander exits 1 before doing anything.
+The renderer read `result?.ok` and, when it was false, *did nothing*: no refresh, no
+sentence, no changed state. So every action on that screen had been inert since the
+screen shipped in April, and looked exactly like an action with nothing to do. Four
+months of nobody noticing is what a swallowed result buys. A write that failed says so
+in the row's caption slot, in `--status-red`, with a glyph beside it — the failure
+outranks whatever the caption held before, because it is the only thing on the row the
+user can act on. The row keeps its button: a report is not a dead end.
+
+**An action offered on N rows that are one bucket is offered once for the bucket.** If
+the list already sorts those rows together — MCP clients ranks `stale` to the top —
+then the screen has already decided they are one thing, and making the user click N
+times is the screen refusing to act on what it knows. The action goes in the **section
+header**, not the toolbar: the toolbar speaks for the surface, and a surface with two
+lists has no business putting one list's action there. `Section` takes an `action` slot
+for exactly this. It appears from **two** rows up; at one row the row's own button is
+the shorter path and a second control is only more to read. Its label carries the size
+of what it will do (`Update all · 6`), it runs the items one at a time so a row that
+fails names itself, and it counts up while it works. Its right edge lines up with the
+column of row buttons under it (12px in), not with the caption beside it (4px) — the
+edge the eye compares is the one directly below.
+
+**Setup asks; repair does not.** The same handler drove Connect and Update, so
+repairing a config that had drifted re-opened the enforcement-level menu — a setup
+question, asked about a config whose answer was already on disk, with no indication of
+which level it was on. Whatever the user picked silently became the new level. A repair
+reconciles what drifted and touches nothing else; if the only available call cannot
+promise that, the call is wrong, not the rule. `trace-mcp clients update` exists because
+`init` could not make that promise: every flag combination it has either installs hooks
+and tweakcc or writes `tools.agent_behavior = "off"`.
+
 ### States are part of the component, not an afterthought
 
 Every data surface owes four states, and each has a house form:

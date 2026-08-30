@@ -7,11 +7,6 @@ export const clients = {
   detecting: '正在检测客户端',
   loadingSessions: '正在加载会话',
 
-  daemonDownTitle: '无法连接守护进程',
-  daemonDownSubtitle: 'trace-mcp 的客户端通过本地守护进程连接。启动它才能查看和配置。',
-  startDaemon: '启动守护进程',
-  starting: '启动中…',
-
   noSessionsTitle: '没有活跃会话',
   noSessionsSubtitle: '当有客户端连接到守护进程时，会话会出现在这里。',
   unnamedSession: '未命名会话',
@@ -26,6 +21,9 @@ export const clients = {
   updateAvailable: '有可用更新',
   update: '更新',
   updating: '更新中…',
+  updateAll: '全部更新',
+  updatingProgress: '正在更新 {{done}}/{{total}}',
+  writeFailed: '无法写入配置。',
   driftedField: '偏移字段：{{field}}',
   setUpManually: '手动配置…',
   hideSteps: '隐藏步骤',
