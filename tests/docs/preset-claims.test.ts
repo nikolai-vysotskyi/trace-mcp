@@ -24,6 +24,11 @@ function servedCount(preset: string): number {
 // comparisons.md stated its own preset sizes (`minimal` 24, `standard` 55) and
 // drifted for exactly as long as it was outside this list (TRA-263). Its claims
 // were reworded into the `<preset>` (N tools) shape so they land in scope here.
+//
+// TRA-455: and then drifted again in the *other* word order. Its comparison-table
+// row reads ``60 `standard` `` — count first, name second — which the original
+// pattern below did not see, so the row sat at a stale 54 while the two claims
+// worded the guarded way stayed correct. Both orders are matched now.
 const DOCS = [
   'docs/configuration.md',
   'docs/llms-full.txt',
@@ -38,16 +43,23 @@ describe('documented tool-preset sizes', () => {
       const text = readFileSync(join(REPO_ROOT, path), 'utf8');
       let checked = 0;
       for (const preset of PRESETS) {
-        const m = text.match(new RegExp('`' + preset + '` \\((~?\\d+) tools'));
-        if (!m) continue;
-        checked++;
-        const claimed = m[1];
+        // Both orders: "`standard` (60 tools)" and "60 `standard`".
+        const patterns = [
+          new RegExp('`' + preset + '` \\((~?\\d+) tools'),
+          new RegExp('(~?\\d+) `' + preset + '`'),
+        ];
         const actual = servedCount(preset);
-        if (claimed !== String(actual)) {
-          throw new Error(
-            `${path} claims preset "${preset}" is ${claimed} tools; the tool filter admits ${actual}. ` +
-              'Update the doc (or the preset).',
-          );
+        for (const pattern of patterns) {
+          for (const m of text.matchAll(new RegExp(pattern, 'g'))) {
+            checked++;
+            const claimed = m[1];
+            if (claimed !== String(actual)) {
+              throw new Error(
+                `${path} claims preset "${preset}" is ${claimed} tools; the tool filter admits ${actual}. ` +
+                  'Update the doc (or the preset).',
+              );
+            }
+          }
         }
       }
       expect(checked, `no preset claims found in ${path}`).toBeGreaterThan(0);
