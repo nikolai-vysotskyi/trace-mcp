@@ -218,8 +218,29 @@ export function WorkspaceHeader({
         : undefined,
     [baseline, t],
   );
+  /**
+   * The daemon is unreachable and what is on screen is the restored snapshot.
+   *
+   * Every tile here is one `deriveKpis(data.projects)` call over one array:
+   * `totalProjects` is its length, `totalFiles` a sum over its elements
+   * (`types.ts`). Wiring the first pair to `listFailed` and the second to
+   * `metricsFailed` made sense while they had two upstreams; they merge in
+   * `mergeIntoViewModel` before either flag is read. So the strip blanked the
+   * tile that counts the array and printed four that sum it — one array, two
+   * answers about whether it was knowable, over a pane promising "nothing was
+   * lost" (TRA-495). The stocks keep their last reading instead.
+   */
+  const snapshotOnly = listFailed && kpis.totalProjects > 0;
+
+  /* No delta while the strip is a snapshot. A delta is a statement about now,
+     and the whole content of the pane below is that there is no now to read:
+     "↑ +21.4k vs 3 hours ago" in --status-green, 500px above "The daemon isn't
+     running". TRA-458 stopped the baseline being WRITTEN in this state; this
+     stops an already-rolled one being displayed on the frame after the
+     connection drops, which is the frame every user sees. Each tile falls back
+     to its footnote — a criterion or a ratio, still true of a snapshot. */
   const delta = (pick: (k: WorkspaceKpis) => number): number | null =>
-    baseline ? pick(kpis) - pick(baseline.kpis) : null;
+    baseline && !snapshotOnly ? pick(kpis) - pick(baseline.kpis) : null;
 
   const filterMenu = useMenuAnchor();
   const overflowMenu = useMenuAnchor();
@@ -299,7 +320,10 @@ export function WorkspaceHeader({
           value={kpis.totalProjects}
           dense={dense}
           pending={listLoading}
-          unavailable={listFailed}
+          /* Only when there is nothing to fall back on — a cold start against a
+             daemon that never answered, where `metricsFailed` blanks the other
+             four too and the strip is six em dashes, uniformly. */
+          unavailable={listFailed && !snapshotOnly}
           delta={delta((k) => k.totalProjects)}
           deltaCaption={deltaCaption}
           footnote={t('kpiTrackingFromToday')}
@@ -376,6 +400,10 @@ export function WorkspaceHeader({
           tone="busy"
           dense={dense}
           pending={listLoading}
+          /* Unconditionally, unlike the five tiles beside it: Indexing is the
+             only reading here that measures activity rather than stock, and a
+             daemon that is not running is indexing nothing. Carrying a cached
+             count through would be the one genuine lie on a stale strip. */
           unavailable={listFailed}
           footnote={
             kpis.indexing === 0

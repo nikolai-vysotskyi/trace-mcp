@@ -634,6 +634,36 @@ holding the daemon state says it; the cards inside it go quiet. A tooltip repeat
 the sentence when the tile is too short for a caption is the same defect with a
 smaller audience.
 
+**One source gets one verdict on whether it is knowable.** Two readings off the same
+array must not disagree about whether the array is there. The Workspace strip is a
+single `deriveKpis(projects)` call — `totalProjects` is that array's length,
+`totalFiles` a sum over its elements — but Projects and Indexing were gated on
+`listFailed` while Files, Symbols, Healthy and Needs attention were gated on
+`metricsFailed`. The split was true when the two halves had two upstreams; they merge
+in `mergeIntoViewModel` before either flag is read. So with the daemon down the tile
+that *counts* the array printed an em dash beside four tiles that *summed* it, over a
+pane promising "nothing was lost" — and the strip disproved itself two tiles along,
+where Healthy's comparison line ("grade A or B, no security findings" rather than "no
+projects yet") is chosen by `totalProjects > 0` (TRA-495). When flags multiply,
+re-derive them from what the values actually read, not from what they used to read.
+
+**A delta is a statement about now; a snapshot has no now.** Stale values stay
+(paragraph above), but every comparison that asserts *change* goes: `↑ +21.4k vs 3
+hours ago` in `--status-green` is a claim to have measured 21,400 new files, made by
+an app whose next paragraph is that it cannot reach the thing that measures. Not
+storing a baseline in that state is not enough — the baseline that was already rolled
+gets displayed on the frame *after* the connection drops, which is the frame every
+user sees. Fall back to the comparisons that survive a snapshot: a criterion ("grade
+A or B, no security findings") or a ratio ("1,787 per project"). The slot is never
+left empty.
+
+**A stock survives the source dying; an activity reading does not.** Files, symbols
+and project counts sit on disk whether or not the daemon answers, so they go stale.
+"Indexing" is a count of what is happening right now, and nothing is: it keeps its em
+dash while the tiles beside it keep their numbers. That is not the inconsistency the
+paragraph above forbids — it is the one distinction on the strip that is real, and
+each tile follows from what it measures.
+
 ---
 
 ## 6. Layout skeleton
