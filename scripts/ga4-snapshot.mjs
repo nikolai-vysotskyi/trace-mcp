@@ -16,8 +16,23 @@
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { PRICE_MODEL, PRICE_PER_TOKEN, sanitizedTokens, usd } from './ga4-savings.mjs';
 
 const OUT = 'docs/_data/adoption.yml';
+
+/**
+ * First day the property could have data. GA4 clamps a start date that predates
+ * the property, so an early constant just means "everything".
+ *
+ * ponytail: retention is 14 months, so once the property is older than that
+ * this stops being an all-time total and silently becomes a trailing window.
+ * The fix then is to freeze the oldest expiring month into a carried-forward
+ * baseline in adoption.yml; not worth building until there is a month to lose.
+ */
+const SINCE = '2025-01-01';
+
+/** The daily install ping (`src/telemetry/usage-ping.ts`) — it carries `tokens_saved`. */
+const PING_EVENT = 'app_open';
 
 function accessToken(key) {
   const b64 = (o) =>
@@ -105,9 +120,24 @@ const [d1, d7, d28, versions, countries, clients, saved, installs] = await Promi
     metrics: [{ name: 'activeUsers' }],
     limit: 25,
   }),
+  // Daily rather than one total: the sanitizer needs the series to find the
+  // median day, and a raw sum of an unauthenticated counter is not publishable.
+  //
+  // Filtered to the ping event, because the cap divides tokens by `activeUsers`
+  // to get a per-user rate. Unfiltered, that denominator is the property's
+  // whole daily audience; if any of it ever stops carrying `tokens_saved`, the
+  // rate tracks traffic instead of usage and the cap drifts in both directions.
+  // Today the ping is the property's only event, so this filter changes no
+  // number — it keeps the denominator pinned to the population the numerator
+  // comes from if that stops being true.
   report(token, propertyId, {
-    dateRanges: range(28),
-    metrics: [{ name: 'customEvent:tokens_saved' }],
+    dateRanges: [{ startDate: SINCE, endDate: 'today' }],
+    dimensions: [{ name: 'date' }],
+    metrics: [{ name: 'customEvent:tokens_saved' }, { name: 'activeUsers' }],
+    dimensionFilter: {
+      filter: { fieldName: 'eventName', stringFilter: { value: PING_EVENT } },
+    },
+    limit: 100000,
   }).catch(() => null),
   report(token, propertyId, {
     dateRanges: range(28),
@@ -116,6 +146,13 @@ const [d1, d7, d28, versions, countries, clients, saved, installs] = await Promi
     limit: 10,
   }).catch(() => null),
 ]);
+
+const savings = sanitizedTokens(
+  (saved?.rows ?? []).map((row) => ({
+    tokens: Number(row.metricValues?.[0]?.value ?? 0),
+    users: Number(row.metricValues?.[1]?.value ?? 0),
+  })),
+);
 
 const yaml = (obj, indent = 2) =>
   Object.entries(obj)
@@ -138,7 +175,30 @@ active_users:
   week: ${num(d7)}
   month: ${num(d28)}
 events_28d: ${num(d28, 1)}
-tokens_saved_28d: ${saved ? num(saved) : 0}
+
+# Tokens the indexed answers saved against reading the same code raw, summed
+# across every install that has not opted out, since ${SINCE}.
+#
+# \`tokens_saved\` is the sanitized figure and the only one to quote: days whose
+# per-user rate ran away from the median are capped, because the ping's
+# credentials are public and the counter is inflatable by anyone. \`tokens_saved_raw\` is
+# kept beside it so the gap between them stays visible — a widening gap is the
+# signal that someone is flooding the endpoint.
+#
+# Dollars are derived here, not sent by the client, so a price change re-prices
+# the whole history: ${PRICE_MODEL} input at $${(PRICE_PER_TOKEN * 1_000_000).toFixed(2)}/Mtok.
+# That is the cheapest model we price, so \`usd_saved\` is a floor — quote it as
+# "at least", never as a typical or best case. Pricing at Opus would multiply it
+# by five and need a caveat carried alongside the number forever.
+savings:
+  tokens_saved: ${savings.tokens}
+  tokens_saved_raw: ${savings.raw}
+  usd_saved: ${usd(savings.tokens)}
+  price_model: "${PRICE_MODEL}"
+  price_usd_per_mtok: ${(PRICE_PER_TOKEN * 1_000_000).toFixed(2)}
+  since: "${SINCE}"
+  days: ${savings.days}
+  capped_days: ${savings.capped_days}
 installs_28d:
 ${yaml(installs ? breakdown(installs) : {})}
 by_version:
