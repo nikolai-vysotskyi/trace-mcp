@@ -110,7 +110,10 @@ describe('a slow daemon', () => {
     // …and the line above them must not claim otherwise.
     expect(banners()[0]).toContain("The numbers arrive when it's done.");
     expect(kpi('Files')).toBe('—');
-    expect(screen.getAllByText("Couldn't be measured").length).toBeGreaterThan(0);
+    /* The banner owns the sentence. Four tiles each captioned "Couldn't be
+       measured" under a banner promising the numbers are on their way said the
+       opposite thing four times in the same 200px (TRA-488). */
+    expect(screen.queryByText("Couldn't be measured")).toBeNull();
   });
 
   it('offers the retry that matches, and never a restart', () => {
@@ -131,6 +134,26 @@ describe('an unreachable daemon', () => {
     expect(screen.getByText("The daemon isn't running")).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start daemon' })).toBeTruthy();
     expect(banners()).toHaveLength(0);
+  });
+
+  /* …nor six more sentences in the strip above it. The KPI tiles stay on screen
+     when DaemonDownPane takes the pane, and each used to caption its em dash
+     "Couldn't be measured" — one dead daemon, announced seven times in one
+     window (TRA-488, the defect TRA-469 fixed on Project Overview). */
+  it('leaves the sentence to the pane and keeps the tiles to em dashes', () => {
+    data = {
+      ...OK,
+      projects: [],
+      metricsLoading: true,
+      errorKind: 'offline',
+      daemonState: 'unreachable',
+      connected: false,
+    };
+    render(<Workspace />);
+
+    expect(screen.getByText("The daemon isn't running")).toBeTruthy();
+    expect(kpi('Files')).toBe('—');
+    expect(screen.queryByText("Couldn't be measured")).toBeNull();
   });
 });
 

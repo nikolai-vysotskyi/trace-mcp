@@ -70,7 +70,6 @@ export const workspace = {
   kpiNoChange: 'Keine Änderung',
   kpiNoChangeVs: 'Keine Änderung {{caption}}',
   kpiNotAvailable: 'Nicht verfügbar',
-  kpiUnavailable: 'Konnte nicht gemessen werden',
 
   // ── Table ───────────────────────────────────────────────────────────────
   projectsGrid: 'Projekte',
