@@ -26,6 +26,7 @@ declare global {
           configPath: string | null;
           status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
           staleReason?: string;
+          level?: 'base' | 'standard' | 'max' | null;
         }>;
       }>;
       configureMcpClient: (
