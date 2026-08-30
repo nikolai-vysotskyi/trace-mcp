@@ -66,6 +66,45 @@ describe('getMcpClientStatuses', () => {
     expect(s.staleReason).toBeUndefined();
   });
 
+  // TRA-501: a global registration must not depend on the directory the CLI
+  // ran in. Before the fix, writing from one directory and asking for status
+  // from another reported `drift: cwd` forever — and a repair run from the
+  // wrong directory (the desktop app always is) wrote that directory back.
+  it('keeps a global entry directory-independent across writer and status', () => {
+    const otherRoot = path.join(sandbox, 'somewhere-else');
+    fs.mkdirSync(otherRoot, { recursive: true });
+
+    configureMcpClients(['cursor', 'factory-droid', 'amp'], projectRoot, { scope: 'global' });
+
+    // Written from projectRoot, asked about from an unrelated root.
+    const statuses = getMcpClientStatuses(otherRoot, 'global', ['cursor', 'factory-droid', 'amp']);
+    expect(statuses.map((s) => s.status)).toEqual(['up_to_date', 'up_to_date', 'up_to_date']);
+
+    const cursorEntry = JSON.parse(
+      fs.readFileSync(path.join(fakeHome, '.cursor', 'mcp.json'), 'utf-8'),
+    ).mcpServers['trace-mcp'];
+    expect(cursorEntry.cwd).toBeUndefined();
+  });
+
+  it('flags an existing global entry that still carries a cwd as stale, and repairs it (TRA-501)', () => {
+    configureMcpClients(['cursor'], projectRoot, { scope: 'global' });
+    const configPath = path.join(fakeHome, '.cursor', 'mcp.json');
+    const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    c.mcpServers['trace-mcp'].cwd = '/some/stale/path';
+    fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
+
+    const [before] = getMcpClientStatuses(projectRoot, 'global', ['cursor']);
+    expect(before.status).toBe('stale');
+    expect(before.staleReason).toBe('cwd');
+
+    configureMcpClients(['cursor'], projectRoot, { scope: 'global' });
+    const [after] = getMcpClientStatuses(projectRoot, 'global', ['cursor']);
+    expect(after.status).toBe('up_to_date');
+    expect(
+      JSON.parse(fs.readFileSync(configPath, 'utf-8')).mcpServers['trace-mcp'].cwd,
+    ).toBeUndefined();
+  });
+
   it('flags `stale` with reason="alwaysLoad" when the on-disk entry carries a stale flag (GH #354)', () => {
     // Simulate an installation done by a pre-#354 `init`, which used to
     // write `alwaysLoad: true`. init no longer writes it, so an entry that

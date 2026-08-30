@@ -34,6 +34,20 @@ export const clientsCommand = new Command('clients').description(
   'Inspect MCP client configurations',
 );
 
+/**
+ * Project root for the scope-dependent parts of a client config. Global-scope
+ * entries no longer use it at all (TRA-501), so a cwd with no root marker is
+ * not a reason to fail: `findProjectRoot` throws there, which is exactly what
+ * the desktop app hits when it shells out from inside a packaged bundle.
+ */
+function resolveProjectRoot(): string {
+  try {
+    return findProjectRoot(process.cwd());
+  } catch {
+    return process.cwd();
+  }
+}
+
 clientsCommand
   .command('status')
   .description(
@@ -47,7 +61,7 @@ clientsCommand
   )
   .action((opts: { json?: boolean; scope?: 'global' | 'project'; client?: string }) => {
     const scope = opts.scope === 'project' ? 'project' : 'global';
-    const projectRoot = findProjectRoot(process.cwd());
+    const projectRoot = resolveProjectRoot();
     const clientNames = opts.client
       ? // biome-ignore lint/suspicious/noExplicitAny: validated downstream by getMcpClientStatuses
         (opts.client
@@ -83,7 +97,7 @@ clientsCommand
       opts: { json?: boolean; scope?: 'global' | 'project'; dryRun?: boolean },
     ) => {
       const scope = opts.scope === 'project' ? 'project' : 'global';
-      const projectRoot = findProjectRoot(process.cwd());
+      const projectRoot = resolveProjectRoot();
 
       const targets = (
         clients.length > 0

@@ -125,9 +125,12 @@ export function configureMcpClients(
     if (name === 'warp') {
       const hasClaudeCode = clientNames.includes('claude-code');
       const launcher = getLauncherPath();
+      // No working_directory: Warp's MCP config is cloud-synced and user-level,
+      // so pinning it to the directory `init` ran in would be wrong everywhere
+      // else (TRA-501). Warp launches the server in the session's own directory.
       const snippet = JSON.stringify({
         mcpServers: {
-          'trace-mcp': { command: launcher, args: ['serve'], working_directory: projectRoot },
+          'trace-mcp': { command: launcher, args: ['serve'] },
         },
       });
       results.push({
@@ -150,7 +153,7 @@ export function configureMcpClients(
         results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
         continue;
       }
-      const entry = { ...buildMcpEntry(), args: ['serve'], cwd: projectRoot };
+      const entry = buildExpectedEntry(name, projectRoot, opts.scope);
 
       if (fs.existsSync(configPath) && ampEntryMatches(configPath, entry)) {
         results.push({ target: configPath, action: 'already_configured', detail: name });
@@ -184,11 +187,8 @@ export function configureMcpClients(
         results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
         continue;
       }
-      const entry: McpServerEntry & { type: 'stdio' } = {
-        type: 'stdio',
-        ...buildMcpEntry(),
-        args: ['serve'],
-        cwd: projectRoot,
+      const entry = buildExpectedEntry(name, projectRoot, opts.scope) as McpServerEntry & {
+        type: 'stdio';
       };
 
       if (fs.existsSync(configPath) && factoryEntryMatches(configPath, entry)) {
@@ -224,7 +224,7 @@ export function configureMcpClients(
         continue;
       }
 
-      const entry = { ...buildMcpEntry(), args: ['serve'], cwd: projectRoot };
+      const entry = buildExpectedEntry(name, projectRoot, opts.scope);
 
       if (fs.existsSync(configPath) && hermesEntryMatches(configPath, entry)) {
         results.push({ target: configPath, action: 'already_configured', detail: name });
@@ -284,11 +284,10 @@ export function configureMcpClients(
       }
 
       try {
-        const action = writeCodexTomlEntry(configPath, {
-          ...buildMcpEntry(),
-          args: ['serve'],
-          cwd: projectRoot,
-        });
+        const action = writeCodexTomlEntry(
+          configPath,
+          buildExpectedEntry(name, projectRoot, opts.scope),
+        );
         results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
       } catch (err) {
         results.push({
@@ -729,9 +728,33 @@ const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
 ];
 
 /**
+ * Clients whose config file is user-level no matter which scope was asked
+ * for — `getConfigPath` ignores `projectRoot` for these, so a project-scoped
+ * run would otherwise pin one project's path into a shared global file.
+ */
+const ALWAYS_GLOBAL_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
+  'claude-desktop',
+  'hermes',
+  'cline',
+  'kilocode',
+  'antigravity',
+  'kimi',
+]);
+
+/**
  * Build the entry we'd write for `name` right now. Single source of truth
  * shared by configureMcpClients() and getMcpClientStatuses() so drift
  * detection can never disagree with what init actually writes.
+ *
+ * A global registration deliberately carries NO `cwd` (TRA-501). `cwd` is the
+ * working directory the client spawns `trace-mcp serve` in, and `serve` takes
+ * whatever it is handed — so pinning it to `findProjectRoot(process.cwd())`
+ * made the "correct" contents of a user-level entry depend on the directory
+ * the CLI happened to run in: `clients status` reported `drift: cwd` from any
+ * other directory, and a repair driven by the desktop app (which shells out
+ * from the Electron bundle) wrote the app's own package directory into every
+ * client. Without it the client's own working directory wins, which for an
+ * editor is the project the user actually has open.
  */
 function buildExpectedEntry(
   name: DetectedMcpClient['name'],
@@ -739,7 +762,10 @@ function buildExpectedEntry(
   scope: McpScope,
 ): McpServerEntry & { type?: 'stdio' } {
   const base: McpServerEntry = { ...buildMcpEntry(), args: ['serve'] };
-  if (scope === 'global' || (name !== 'claude-code' && name !== 'claw-code')) {
+  const effectiveScope: McpScope = ALWAYS_GLOBAL_CLIENTS.has(name) ? 'global' : scope;
+  // claude-code/claw-code read a project-scoped config from the project root
+  // itself, so they already run there — no cwd needed.
+  if (effectiveScope === 'project' && name !== 'claude-code' && name !== 'claw-code') {
     base.cwd = projectRoot;
   }
   // alwaysLoad is intentionally never set here — see McpServerEntry.alwaysLoad.
