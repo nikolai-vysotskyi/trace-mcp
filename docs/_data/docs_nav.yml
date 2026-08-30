@@ -3,6 +3,8 @@
 # if a sitemap page is missing here.
 - title: Tools reference
   url: /tools-reference.html
+- title: Tool index
+  url: /tools-index.html
 - title: Comparisons
   url: /comparisons.html
 - title: vs Repomix
