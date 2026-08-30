@@ -18,8 +18,10 @@ const daemon = {
   projects: [] as { root: string; status: string; progress?: { phase: string; percent: number } }[],
   loading: false,
   connected: true,
+  restarting: false,
   reindexProject: vi.fn(),
   addProject: vi.fn(),
+  restartDaemon: vi.fn(),
 };
 
 vi.mock('../../hooks/useDaemon', () => ({
@@ -57,8 +59,10 @@ beforeEach(() => {
   daemon.projects = [{ root: ROOT, status: 'ready' }];
   daemon.loading = false;
   daemon.connected = true;
+  daemon.restarting = false;
   daemon.reindexProject.mockClear();
   daemon.addProject.mockClear();
+  daemon.restartDaemon.mockClear();
 });
 
 afterEach(() => vi.unstubAllGlobals());
@@ -217,19 +221,39 @@ describe('ProjectOverview surface', () => {
     expect(screen.getByRole('button', { name: 'Re-add project' })).toBeTruthy();
   });
 
-  it('says the daemon is unreachable rather than blaming the project', async () => {
+  /* TRA-469. With the daemon actually stopped this surface said the same thing
+     six times, and four of those said "the daemon may still be indexing" — a
+     wait offered for a process that is not running, each with a Retry firing at
+     a refused socket. One statement, one action. */
+  it('answers an unreachable daemon once, with the button that starts it', async () => {
     daemon.projects = [];
     daemon.loading = false;
     daemon.connected = false;
     mockApi({ '/stats': null, '/coverage': null, '/subprojects': null, '/smells': null });
     render(<ProjectOverview root={ROOT} />);
 
-    /* The toolbar always renders, so it carries the diagnosis even when every
-       section fetch failed and the Status row never appeared. */
-    const action = await screen.findByRole('button', { name: 'Daemon unreachable' });
-    expect(action).toHaveProperty('disabled', true);
-    expect(action.className).toContain('is-status');
+    expect(await screen.findByText("The daemon isn't running")).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Start daemon' })).toBeTruthy();
+
+    /* Not one SectionError, and so not one Retry, and no second copy of the
+       diagnosis in the toolbar. */
+    expect(screen.queryByText(/may still be indexing/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Daemon unreachable' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Index project' })).toBeNull();
+  });
+
+  /* The reducer, not a bare `!connected`: the feed is closed on mount, and a
+     naive test flashes the daemon-down pane on every project open. */
+  it('does not show the daemon-down pane while the first read is in flight', async () => {
+    daemon.projects = [];
+    daemon.loading = true;
+    daemon.connected = false;
+    mockApi({ '/stats': STATS, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText('Checking…')).toBeTruthy();
+    expect(screen.queryByText("The daemon isn't running")).toBeNull();
   });
 
   it('keeps the chrome and offers a retry when a section fails', async () => {

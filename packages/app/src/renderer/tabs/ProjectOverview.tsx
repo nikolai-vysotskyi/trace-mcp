@@ -21,6 +21,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { DaemonDownPane } from '../components/DaemonDownPane';
 import { GuardSection } from '../components/GuardSection';
 import { ProjectStatsModal } from '../components/ProjectStatsModal';
 import { useDaemon } from '../hooks/useDaemon';
@@ -47,6 +48,7 @@ import {
   useMenuAnchor,
   type Tone,
 } from '../lattice/ui';
+import { deriveDaemonState } from '../workspace/useWorkspaceProjects';
 
 interface ProjectStats {
   files: number;
@@ -227,7 +229,15 @@ export function ProjectOverview({
   onNavigateToService?: (serviceName: string) => void;
 }) {
   const { t } = useTranslation('overview');
-  const { projects, loading: daemonLoading, connected, reindexProject, addProject } = useDaemon();
+  const {
+    projects,
+    loading: daemonLoading,
+    connected,
+    restarting,
+    reindexProject,
+    addProject,
+    restartDaemon,
+  } = useDaemon();
   const project = projects.find((p) => p.root === root);
   const status = project?.status ?? 'unknown';
   const progress = project?.progress;
@@ -235,6 +245,19 @@ export function ProjectOverview({
      indexed". Without this the panel offered "Index project" for a project it
      was simultaneously reporting 78 files and 700 symbols for. */
   const listPending = !project && (daemonLoading || !connected);
+
+  /* The same reducer the Workspace reads, not a fresh `!connected` (TRA-469):
+     `connected` is false on mount, and a naive test flashes a daemon-down pane
+     on every project open. `deriveDaemonState` already encodes "has not
+     answered yet is not failing to". There is no metrics fetch on this surface,
+     so the only degraded reading it can produce is the one from the feed. */
+  const daemonDown =
+    deriveDaemonState({
+      loading: daemonLoading,
+      connected,
+      liveProjects: projects.length,
+      metricsErrorKind: null,
+    }) === 'unreachable';
 
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [statsLoad, setStatsLoad] = useState<Load>('loading');
@@ -462,13 +485,17 @@ export function ProjectOverview({
           </div>
         </div>
 
-        {listPending ? (
+        {daemonDown ? (
+          /* Nothing. DaemonDownPane below owns the diagnosis and carries the
+             one button that helps; a second "Daemon unreachable" chip up here
+             is the same sentence said twice (TRA-469). Every action this
+             toolbar can offer talks to the daemon that isn't there. */
+          null
+        ) : listPending ? (
           /* Offering "Index project" before the daemon has answered invites the
-             user to re-index something that may already be indexed. The toolbar
-             always renders, so the daemon-down wording lives here rather than in
-             the Status row, which is itself missing when the fetch failed. */
+             user to re-index something that may already be indexed. */
           <Button className="is-status" disabled>
-            {connected ? t('statusChecking') : t('statusDaemonUnreachable')}
+            {t('statusChecking')}
           </Button>
         ) : project ? (
           /* While indexing the action is unavailable, and a DISABLED prominent
@@ -560,6 +587,16 @@ export function ProjectOverview({
       )}
 
       {/* ── Content ──────────────────────────────────────────────────── */}
+      {/* One statement and one action, in place of five sections whose every
+          number came from the daemon that is not running. Each of those
+          sections would otherwise render a SectionError reading "the daemon may
+          still be indexing" — a wait, offered for a process that has stopped —
+          with a Retry that fires at a refused socket (TRA-469). */}
+      {daemonDown ? (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <DaemonDownPane restarting={restarting} onRestart={() => void restartDaemon()} />
+        </div>
+      ) : (
       <div
         className="flex-1 overflow-auto"
         onScroll={(e) => setScrolled((e.target as HTMLElement).scrollTop > 0)}
@@ -984,6 +1021,7 @@ export function ProjectOverview({
           </Section>
         </div>
       </div>
+      )}
 
       {rowMenu.at && rowMenuFor && (
         <Menu

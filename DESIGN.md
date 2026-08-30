@@ -531,6 +531,17 @@ and "Couldn't be measured" are for a number nobody has ever had, not for one tha
 minutes old. The corollary: that line has to match the screen. Saying "these are the last
 indexed numbers" over a row of em dashes is the same lie in the other direction.
 
+**The surface decides reachability before any section is allowed to explain itself.** A
+shared error primitive states one diagnosis for every caller — `SectionError` says "the
+daemon may still be indexing" and cannot know whether that is true. So the surface has to
+ask first: with the service unreachable it takes the whole pane with the one statement and
+the one button, and never renders section-level errors at all. Otherwise every failed fetch
+on the screen repeats a guess the surface has already contradicted in its own toolbar, each
+with a Retry aimed at a socket that is refusing (TRA-469). Two callers of this now exist, so
+the pane is a shared component (`components/DaemonDownPane.tsx`) and the reachability test is
+one exported reducer (`deriveDaemonState`) — never a fresh `!connected`, which is true on
+mount and would flash the pane on every open.
+
 ---
 
 ## 6. Layout skeleton
