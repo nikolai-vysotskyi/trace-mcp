@@ -91,6 +91,29 @@ function writePgrepStub(dir: string, running: boolean): string {
   return stub;
 }
 
+/**
+ * A pgrep stub that answers "not running" until its `runningFromCall`-th
+ * invocation and "running" from then on — the user launching the app midway
+ * through a multi-bundle sweep.
+ */
+function writeFlippingPgrepStub(dir: string, runningFromCall: number): string {
+  const stub = path.join(dir, 'pgrep-flip-stub.sh');
+  const counter = path.join(dir, 'pgrep-calls');
+  fs.rmSync(counter, { force: true });
+  fs.writeFileSync(
+    stub,
+    `#!/bin/sh
+n=$(cat '${counter}' 2>/dev/null || echo 0)
+n=$((n+1))
+echo "$n" > '${counter}'
+[ "$n" -ge ${runningFromCall} ] && { echo 4242; exit 0; }
+exit 1
+`,
+    { mode: 0o755 },
+  );
+  return stub;
+}
+
 /** A stub for `/bin/ps -p <pid> -o comm=`, reporting `appPath`'s main binary. */
 function writePsStub(dir: string, appPath: string): string {
   const stub = path.join(dir, 'ps-stub.sh');
@@ -204,7 +227,12 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
    * the child's own HTTP request.
    */
   function runPostinstall(
-    opts: { appRunning?: boolean; appRunningEnv?: boolean; runningBundle?: string } = {},
+    opts: {
+      appRunning?: boolean;
+      appRunningEnv?: boolean;
+      runningBundle?: string;
+      pgrepRunningFromCall?: number;
+    } = {},
   ): Promise<string> {
     const child = spawn(process.execPath, [SCRIPT_PATH], {
       env: {
@@ -213,7 +241,9 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
         TRACE_MCP_APP_DIST_REPO: DIST_REPO,
         TRACE_MCP_UPDATE_API_BASE: fx.baseUrl,
         TRACE_MCP_APP_RUNNING: opts.appRunningEnv ? '1' : '',
-        TRACE_MCP_PGREP_BIN: writePgrepStub(tmp, opts.appRunning ?? false),
+        TRACE_MCP_PGREP_BIN: opts.pgrepRunningFromCall
+          ? writeFlippingPgrepStub(tmp, opts.pgrepRunningFromCall)
+          : writePgrepStub(tmp, opts.appRunning ?? false),
         // Left at a binary that reports no such pid unless a test names the
         // bundle it wants "running"; that keeps every other case on the
         // marker-resolved path they were written against.
@@ -293,10 +323,82 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
     expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
       '3.5.2',
     );
-    // ...and the unreachable copy is gone rather than left on disk forever.
-    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.zip'))).toBe(false);
-    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.sha256'))).toBe(false);
-    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending-version'))).toBe(false);
+    // The other copy is an install too, so it is re-staged rather than left
+    // holding the corrupt leftover: same version, and a zip that verifies.
+    expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
+      '3.5.2',
+    );
+    expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending.zip')).toString()).not.toBe(
+      'orphan',
+    );
+    expect(
+      fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending.sha256'), 'utf-8'),
+    ).not.toBe('f'.repeat(64));
+  });
+
+  /* Found on the founder's machine: `/Applications/trace-mcp.app` sat on 3.3.0
+     while `~/Applications/trace-mcp.app` tracked 3.6.0. A bundle that is never
+     launched never writes the location marker, so nothing ever resolves to it
+     and nothing ever updates it — it stays behind forever while every
+     `npm install -g` reports success. One download, applied to every install. */
+  it('updates every installed bundle, not just the resolved one', async () => {
+    installBundle('3.4.0');
+    const systemDir = path.join(tmp, 'Applications');
+    fs.mkdirSync(systemDir, { recursive: true });
+    const systemApp = path.join(systemDir, 'trace-mcp.app');
+    writeBundle(systemApp, '3.3.0');
+
+    publishRelease('3.5.2');
+
+    const stdout = await runPostinstall();
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
+    expect(readBundleVersion(systemApp)).toBe('3.5.2');
+    expect(stdout).toContain('2 installed bundles');
+    // Each swap records its own version marker, and leaves no backup behind.
+    expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-version'), 'utf-8')).toBe('v3.5.2');
+    expect(fs.readdirSync(systemDir).filter((f) => f.includes('.bak-'))).toEqual([]);
+  });
+
+  /* TRA-555: swapping a ~100 MB bundle takes seconds, so the user can launch
+     the app while the sweep is between bundles. A single hoisted "is it
+     running" answer would then swap a live bundle out from under a running
+     process — TRA-431, once per install. pgrep here says "not running" for the
+     first bundle and "running" for the second. */
+  it('re-checks whether the app is running between bundles', async () => {
+    installBundle('3.4.0');
+    const systemDir = path.join(tmp, 'Applications');
+    fs.mkdirSync(systemDir, { recursive: true });
+    const systemApp = path.join(systemDir, 'trace-mcp.app');
+    writeBundle(systemApp, '3.3.0');
+
+    publishRelease('3.5.2');
+
+    // Call 1 is the startup runningBundlePath() probe, calls 2 and 3 are the
+    // per-bundle checks — so the app "launches" just before the second swap.
+    await runPostinstall({ pgrepRunningFromCall: 3 });
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
+    // Second bundle was left alone and got a staged update instead.
+    expect(readBundleVersion(systemApp)).toBe('3.3.0');
+    expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
+      '3.5.2',
+    );
+  });
+
+  it('leaves an already-current sibling bundle untouched', async () => {
+    installBundle('3.4.0');
+    const systemDir = path.join(tmp, 'Applications');
+    fs.mkdirSync(systemDir, { recursive: true });
+    const systemApp = path.join(systemDir, 'trace-mcp.app');
+    writeBundle(systemApp, '3.5.2');
+    const before = fs.statSync(systemApp).mtimeMs;
+
+    publishRelease('3.5.2');
+    await runPostinstall();
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
+    expect(fs.statSync(systemApp).mtimeMs).toBe(before);
   });
 
   /* The state this was found in: marker and running app agreed on

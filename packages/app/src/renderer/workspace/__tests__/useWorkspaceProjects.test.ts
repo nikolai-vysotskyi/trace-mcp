@@ -86,6 +86,35 @@ describe('deriveDaemonState', () => {
   it('keeps a daemon that never answered at all distinct', () => {
     expect(deriveDaemonState({ ...base, connected: false, liveProjects: 0 })).toBe('unreachable');
   });
+
+  /**
+   * TRA-525: measured on Nikolai's Mac, indexing starves the daemon's event
+   * loop to a /health p50 of 7.8s, so a cold-started daemon can be running hard
+   * and still look, from the renderer, exactly like a daemon that isn't there.
+   * "The daemon isn't running" then offers to start something already started.
+   */
+  const mute = { ...base, connected: false, liveProjects: 0 };
+
+  it('does not say "isn\'t running" about a process that is provably running', () => {
+    expect(deriveDaemonState({ ...mute, processAlive: true })).toBe('stale');
+  });
+
+  it('still says "isn\'t running" when the process really is gone', () => {
+    expect(deriveDaemonState({ ...mute, processAlive: false })).toBe('unreachable');
+  });
+
+  it('falls back to the old reading when liveness is unknown', () => {
+    // undefined = the main-process bridge has not answered yet. Guessing
+    // "alive" would suppress a real DaemonDownPane; only a definite true wins.
+    expect(deriveDaemonState({ ...mute, processAlive: undefined })).toBe('unreachable');
+  });
+
+  it('does not upgrade a degraded-but-connected daemon just because it is alive', () => {
+    expect(deriveDaemonState({ ...base, metricsErrorKind: 'timeout', processAlive: true })).toBe(
+      'stale',
+    );
+    expect(deriveDaemonState({ ...base, processAlive: true })).toBe('ok');
+  });
 });
 
 describe('metrics snapshot', () => {
