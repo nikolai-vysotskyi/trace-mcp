@@ -87,7 +87,6 @@ export const workspace = {
   kpiNoChange: 'No change',
   kpiNoChangeVs: 'No change {{caption}}',
   kpiNotAvailable: 'Not available',
-  kpiUnavailable: "Couldn't be measured",
 
   // ── Table ───────────────────────────────────────────────────────────────
   projectsGrid: 'Projects',

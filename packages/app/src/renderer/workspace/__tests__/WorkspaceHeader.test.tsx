@@ -108,7 +108,11 @@ describe('WorkspaceHeader KPI strip', () => {
       // finished and failed, so it must settle on an em dash instead.
       expect(kpiTile(label).querySelector('.ws-skel')).toBeNull();
       expect(kpiValue(label)).toBe('—');
-      expect(kpiTile(label).textContent).toContain("Couldn't be measured");
+      // The em dash is the whole statement. The caption slot is for a
+      // comparison, and four cards repeating one failure sentence is not one
+      // — the banner or the daemon-down pane says it, once (TRA-488).
+      expect(kpiTile(label).textContent).not.toContain("Couldn't be measured");
+      expect(kpiTile(label).querySelector('[aria-label="Not available"]')).not.toBeNull();
     }
   });
 
@@ -259,11 +263,15 @@ describe('WorkspaceHeader at a pane that cannot afford the full layout', () => {
     }
   });
 
-  it('keeps "couldn\'t be measured" reachable when dense drops the caption', () => {
+  it('says "unknown" once when dense, on the em dash itself', () => {
     renderHeader(true, { dense: true, metricsFailed: true });
     const tile = kpiTile('Files');
     expect(kpiValue('Files')).toBe('—');
-    expect(tile.getAttribute('title')).toBe("Couldn't be measured");
+    // The dense tile carried a `title` tooltip repeating the failure sentence,
+    // which is the same sentence the banner above it already holds. The em
+    // dash's own accessible name is what a reader needs here (TRA-488).
+    expect(tile.getAttribute('title')).toBeNull();
+    expect(tile.querySelector('[aria-label="Not available"]')).not.toBeNull();
   });
 
   it('hides the view toggle when Compact is the only view that fits', () => {

@@ -69,7 +69,6 @@ export const workspace = {
   kpiNoChange: 'Sin cambios',
   kpiNoChangeVs: 'Sin cambios {{caption}}',
   kpiNotAvailable: 'No disponible',
-  kpiUnavailable: 'No se pudo medir',
 
   projectsGrid: 'Proyectos',
   loadingProjects: 'Cargando los proyectos',
