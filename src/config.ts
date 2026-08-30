@@ -358,6 +358,14 @@ const IgnoreConfigSchema = z
     directories: z.array(z.string()).default([]),
     /** Extra gitignore-style patterns to exclude from indexing. */
     patterns: z.array(z.string()).default([]),
+    /**
+     * Respect the project's root `.gitignore` when walking the tree. On by
+     * default: git-ignored trees are vendored/generated content that poisons
+     * search precision (TRA-468). Set false to index them anyway — they are
+     * then flagged `files.gitignored = 1` and their content is still not
+     * served to AI.
+     */
+    gitignore: z.boolean().default(true),
   })
   .prefault({});
 
