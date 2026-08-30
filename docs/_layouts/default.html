@@ -145,9 +145,8 @@
         if (!table.parentElement.classList.contains('table-scroll')) {
           var wrap = document.createElement('div');
           wrap.className = 'table-scroll';
-          wrap.setAttribute('tabindex', '0');
-          wrap.setAttribute('role', 'region');
-          wrap.setAttribute('aria-label', 'Scrollable table');
+          wrap.setAttribute('role', 'group');
+          wrap.setAttribute('aria-label', 'Table');
           table.parentNode.insertBefore(wrap, table);
           wrap.appendChild(table);
         }
@@ -157,12 +156,21 @@
       // table clipped mid-word. macOS hides the overlay scrollbar at rest and
       // a phone never draws one, so the last column just ends. Label the
       // region when — and only when — it actually has more to the right.
+      //
+      // Code blocks are the same region with the same problem: a 390px phone
+      // hides most of a config sample, and `pre` already scrolls itself.
       (function () {
-        var regions = [].slice.call(document.querySelectorAll('.table-scroll'));
+        var regions = [].slice.call(
+          document.querySelectorAll('.table-scroll, .prose pre')
+        );
         if (!regions.length) return;
         regions.forEach(function (region) {
+          if (region.tagName === 'PRE') {
+            region.setAttribute('role', 'group');
+            region.setAttribute('aria-label', 'Code sample');
+          }
           var hint = document.createElement('div');
-          hint.className = 'table-hint';
+          hint.className = 'scroll-hint';
           hint.setAttribute('aria-hidden', 'true');
           hint.textContent = 'scroll →';
           region.parentNode.insertBefore(hint, region);
@@ -170,9 +178,15 @@
             measure(region, hint);
           });
         });
+        // Only a region that actually overflows is a tab stop. Making every
+        // code block focusable at 1440px would add 27 dead stops to the
+        // configuration page for nothing.
         function measure(region, hint) {
           var more = region.scrollWidth - region.clientWidth - region.scrollLeft > 1;
           hint.classList.toggle('is-visible', more);
+          var scrollable = region.scrollWidth - region.clientWidth > 1;
+          if (scrollable) region.setAttribute('tabindex', '0');
+          else if (region !== document.activeElement) region.removeAttribute('tabindex');
         }
         function measureAll() {
           regions.forEach(function (region) {
