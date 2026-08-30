@@ -5,7 +5,10 @@ const DEFAULT_BASE = 'http://127.0.0.1:3741';
 // ── Response types ──────────────────────────────────────────────────
 
 export interface HealthResponse {
-  status: 'ok';
+  /** `starting` until startup indexing finishes — alive, but not warmed yet.
+      See src/daemon/health-payload.ts for the contract. Older daemons that
+      predate the field send nothing; callers read that as `ok`. */
+  status: 'ok' | 'starting';
   transport: string;
   /** Daemon binary version. Older daemons (pre-1.24.1) may omit this field. */
   version?: string;
