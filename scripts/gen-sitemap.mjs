@@ -24,11 +24,18 @@ export function sourceFor(urlPath) {
   return urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, '').replace(/\.html$/, '.md');
 }
 
+/**
+ * `%cs` renders the committer date in the *commit's own* timezone, so the same
+ * commit dates to 2026-08-29 from a GitHub squash (-07:00) and 2026-08-30 from
+ * Dubai (+04:00) — which is what walked ten unrelated pages' dates backwards.
+ * Pin the rendering to UTC so the answer is the same on every machine.
+ */
 export function gitDate(file) {
-  const out = execFileSync('git', ['log', '-1', '--format=%cs', '--', `docs/${file}`], {
-    cwd: join(DOCS, '..'),
-    encoding: 'utf-8',
-  }).trim();
+  const out = execFileSync(
+    'git',
+    ['log', '-1', '--date=format-local:%Y-%m-%d', '--format=%cd', '--', `docs/${file}`],
+    { cwd: join(DOCS, '..'), encoding: 'utf-8', env: { ...process.env, TZ: 'UTC' } },
+  ).trim();
   // A page added in the working tree has no commit yet — date it today rather
   // than throwing, so `pnpm docs:sitemap` can be run before the first commit.
   if (!out) return new Date().toISOString().slice(0, 10);
@@ -46,10 +53,22 @@ export function stampUpdated(file, date) {
   const raw = readFileSync(path, 'utf-8');
   const fm = raw.match(/^---\n([\s\S]*?)\n---\n/);
   if (!fm) throw new Error(`docs/${file} has no front matter to stamp`);
+  const current = fm[1].match(/^updated:[ \t]*(\S+)/m)?.[1];
+  const next = keepLater(current, date);
+  if (next === current) return;
   const body = /^updated:.*$/m.test(fm[1])
-    ? fm[1].replace(/^updated:.*$/m, `updated: ${date}`)
-    : `${fm[1]}\nupdated: ${date}`;
+    ? fm[1].replace(/^updated:.*$/m, `updated: ${next}`)
+    : `${fm[1]}\nupdated: ${next}`;
   writeFileSync(path, `---\n${body}\n---\n${raw.slice(fm[0].length)}`);
+}
+
+/**
+ * A published date only ever moves forward. Without this, re-running the
+ * generator revises already-crawled pages backwards — the exact signal
+ * tests/docs/page-dates.test.ts exists to protect.
+ */
+export function keepLater(committed, fresh) {
+  return committed && committed > fresh ? committed : fresh;
 }
 
 /** A shallow clone dates every file to the one fetched commit — gitDate is meaningless there. */
@@ -64,9 +83,11 @@ export function isShallow() {
 
 export function rewrite(xml) {
   return xml.replace(
-    /<loc>https:\/\/trace-mcp\.com([^<]*)<\/loc>(\s*)<lastmod>[^<]*<\/lastmod>/g,
-    (_m, path, gap) =>
-      `<loc>https://trace-mcp.com${path}</loc>${gap}<lastmod>${gitDate(sourceFor(path))}</lastmod>`,
+    /<loc>https:\/\/trace-mcp\.com([^<]*)<\/loc>(\s*)<lastmod>([^<]*)<\/lastmod>/g,
+    (_m, path, gap, current) => {
+      const next = keepLater(current.trim(), gitDate(sourceFor(path)));
+      return `<loc>https://trace-mcp.com${path}</loc>${gap}<lastmod>${next}</lastmod>`;
+    },
   );
 }
 
