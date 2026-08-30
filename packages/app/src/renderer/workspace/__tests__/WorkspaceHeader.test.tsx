@@ -18,19 +18,18 @@ const ZERO_KPIS: WorkspaceKpis = {
 
 let strip: HTMLElement;
 
-function renderHeader(
-  metricsLoading: boolean,
-  extra: Partial<{
-    listLoading: boolean;
-    metricsFailed: boolean;
-    listFailed: boolean;
-    dense: boolean;
-    hideViewToggle: boolean;
-    kpis: WorkspaceKpis;
-    filter: WorkspaceFilter;
-  }> = {},
-) {
-  const { container } = render(
+type HeaderExtra = Partial<{
+  listLoading: boolean;
+  metricsFailed: boolean;
+  listFailed: boolean;
+  dense: boolean;
+  hideViewToggle: boolean;
+  kpis: WorkspaceKpis;
+  filter: WorkspaceFilter;
+}>;
+
+function header(metricsLoading: boolean, extra: HeaderExtra) {
+  return (
     <WorkspaceHeader
       kpis={ZERO_KPIS}
       metricsLoading={metricsLoading}
@@ -41,9 +40,22 @@ function renderHeader(
       onRefresh={() => {}}
       refreshing={false}
       {...extra}
-    />,
+    />
   );
+}
+
+/**
+ * Renders the strip and returns a re-render for the same header with new props.
+ * The daemon-down cases need it: `listFailed` is never true on the first frame
+ * of a real launch — the snapshot restores, the baseline rolls off it, and the
+ * connection is only pronounced dead {@link DEGRADED_GRACE_MS} later. Mounting
+ * straight into the failed state skips the frame everybody actually sees.
+ */
+function renderHeader(metricsLoading: boolean, extra: HeaderExtra = {}) {
+  const { container, rerender } = render(header(metricsLoading, extra));
   strip = container;
+  return (nextLoading: boolean, nextExtra: HeaderExtra) =>
+    rerender(header(nextLoading, nextExtra));
 }
 
 /** The KPI tile whose label is `label`. */
@@ -118,7 +130,6 @@ describe('WorkspaceHeader KPI strip', () => {
 
   it('never turns a dead daemon into a negative delta', () => {
     renderHeader(false, { listFailed: true });
-    expect(kpiValue('Projects')).toBe('—');
     expect(kpiTile('Projects').textContent).not.toMatch(/[↑↓]/);
   });
 
@@ -223,6 +234,79 @@ describe('WorkspaceHeader KPI strip', () => {
     }
     // Indexing really is a subset of the workspace, so it keeps its share.
     expect(kpiTile('Indexing').children[2]!.textContent).toBe('8% of 53 projects');
+  });
+});
+
+/* Every tile on this strip is one `deriveKpis(data.projects)` call over one
+   array: `totalProjects` is that array's length, `totalFiles` a sum over its
+   elements. With the daemon unreachable the array is the restored localStorage
+   snapshot, and the strip used to blank the tile reporting the length while
+   four tiles reported sums over the contents — one array, two answers about
+   whether it was knowable, over a pane headed "The daemon isn't running" and
+   promising "nothing was lost" (TRA-495). */
+describe('WorkspaceHeader with the daemon down', () => {
+  const SNAPSHOT: WorkspaceKpis = {
+    totalProjects: 64,
+    totalFiles: 114_400,
+    totalSymbols: 767_300,
+    healthy: 39,
+    needsAttention: 54,
+    indexing: 0,
+  };
+
+  /** Mount alive so the baseline rolls, then lose the daemon — the real order. */
+  function loseTheDaemon(kpis: WorkspaceKpis = SNAPSHOT) {
+    const rerender = renderHeader(false, { kpis });
+    rerender(false, { kpis, listFailed: true });
+  }
+
+  beforeEach(() => localStorage.clear());
+
+  it('keeps every stock reading the snapshot still holds', () => {
+    loseTheDaemon();
+    expect(kpiValue('Projects')).toBe('64');
+    expect(kpiValue('Files')).toBe('114.4k');
+    expect(kpiValue('Symbols')).toBe('767.3k');
+    expect(kpiValue('Healthy')).toBe('39');
+    expect(kpiValue('Needs attention')).toBe('54');
+  });
+
+  it('claims no delta, because a delta is a statement about now', () => {
+    // The baseline is real and five hours old, so every tile would otherwise
+    // print "↑ +114.4k vs 5 hours ago" — growth measured by an app that has
+    // just said it cannot reach the thing that measures.
+    localStorage.setItem(
+      LS_BASELINE_KEY,
+      JSON.stringify({
+        at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+        kpis: { ...SNAPSHOT, totalFiles: 93_000, totalSymbols: 656_200, totalProjects: 53 },
+      }),
+    );
+    loseTheDaemon();
+    for (const label of ['Projects', 'Files', 'Symbols', 'Healthy', 'Needs attention']) {
+      expect(kpiTile(label).textContent).not.toMatch(/[↑↓]/);
+      // …and the comparison slot is not left empty either: each falls back to
+      // its footnote, which stays true of a snapshot.
+      expect(kpiTile(label).children[2]!.textContent).not.toBe('');
+    }
+  });
+
+  it('leaves Indexing unknown — a daemon that is not running is indexing nothing', () => {
+    // The one reading on the strip that measures activity rather than stock.
+    // A cached count here would be the single genuine lie.
+    loseTheDaemon();
+    expect(kpiValue('Indexing')).toBe('—');
+    expect(kpiTile('Indexing').querySelector('[aria-label="Not available"]')).not.toBeNull();
+  });
+
+  it('falls back to six em dashes when there is no snapshot to hold', () => {
+    // Cold start against a daemon that never answered: nothing was restored,
+    // so the strip has nothing to be stale about and says so uniformly.
+    const empty: WorkspaceKpis = { ...SNAPSHOT, totalProjects: 0, totalFiles: 0, totalSymbols: 0, healthy: 0, needsAttention: 0 };
+    renderHeader(true, { kpis: empty, listFailed: true, metricsFailed: true });
+    for (const label of ['Projects', 'Files', 'Symbols', 'Healthy', 'Needs attention', 'Indexing']) {
+      expect(kpiValue(label)).toBe('—');
+    }
   });
 });
 
