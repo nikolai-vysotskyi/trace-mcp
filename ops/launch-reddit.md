@@ -44,9 +44,52 @@ audience actually is, and it is the one with a karma gate and an explicit
 "built with Claude BY YOU" framing requirement. Check the karma balance before
 writing anything.
 
-## Post — r/mcp (flair: `showcase`)
+## Post — r/ClaudeAI (flair: `Built with Claude` or `Promotion`)
+
+The sub the table says to post to first, so the finished copy is here. Rule 7
+needs three things on the page, all true and all easy to leave out: that **you**
+built it, that it is **for Claude Code**, and that it is **free**.
 
 Title:
+
+> I got tired of watching Claude Code re-read the same files, so I built it a code graph
+
+Body:
+
+> My own project, and free — MIT, no paid tier.
+>
+> If you use Claude Code on a repo big enough that it starts forgetting, the
+> thing eating your budget is re-reading, not thinking. Ask it "what breaks if I
+> change this model?" and it greps, opens twenty files, answers — then does the
+> same walk again two turns later. Cost scales with the repo instead of with the
+> question.
+>
+> So I built trace-mcp: it indexes the repo once into a local graph and serves it
+> to Claude Code over MCP, so the agent looks structure up instead of deriving it
+> again every turn. `get_change_impact` on a model gives the blast radius in one
+> call, and it crosses language boundaries — it knows an Inertia render string
+> ties PHP to a Vue component, that a DI decorator is an edge, that an Eloquent
+> relation implies a table from a migration.
+>
+> Numbers, honestly: about 40–50% fewer tokens across a mixed session. Individual
+> structured calls go much higher, but that is a per-call peak and quoting it as
+> an average is how these posts lose credibility. Runs locally, no API keys. One
+> anonymous daily ping goes to Google Analytics; `TRACE_MCP_TELEMETRY=off` kills
+> it.
+>
+> `npx trace-mcp index . && npx trace-mcp benchmark .` prints per-task numbers for
+> your own repo — read the caveats in the reply below before you quote them at
+> anyone. Happy to answer anything, including where it is worse than the
+> alternatives.
+
+Drop the tree-sitter detail and the language count — that audience reads counts
+as bragging. Keep promotional adjectives out entirely: the rule says
+"promotional language minimal" and the sub enforces it by downvote regardless.
+Post the benchmark caveats as your own first comment, the way the HN draft does.
+
+## Post — r/mcp (flair: `showcase`)
+
+Second, and expect little. Title:
 
 > I built an MCP server that gives the agent a code graph instead of letting it re-read files
 
@@ -75,32 +118,20 @@ Body:
 > alternatives — Repomix is the better tool if you only want to stuff a repo into
 > one prompt, and I say so on the comparison page.
 
-## What changes for r/ClaudeAI (flair: `Built with Claude` or `Promotion`)
-
-Same substance, different opening. That sub cares about the Claude Code
-workflow, not the architecture, so lead with the workflow and put the graph
-second:
-
-> If you use Claude Code on a repo big enough that it forgets, the thing eating
-> your budget is re-reading, not thinking. […]
-
-Keep the numbers paragraph and the telemetry sentence verbatim. Drop the
-tree-sitter and Inertia detail — it reads as showing off to that audience.
-
-Rule 7 also requires two things the r/mcp version does not: say plainly that
-**it is free** (MIT, no paid tier), and be explicit that it was **built for
-Claude Code by the person posting**. Both are true; they just have to be on the
-page. Keep promotional adjectives out entirely — the rule says "promotional
-language minimal" and that sub enforces it by downvote regardless.
+The r/mcp version keeps the architecture detail the r/ClaudeAI one drops — that
+sub is people who build MCP servers, so tree-sitter and the framework-edge
+examples are the interesting part rather than showing off.
 
 ## Answering the comments
 
 The Reddit versions of the HN questions, in the order they actually arrive:
 
 1. **"Isn't this just what Serena/Repomix does?"** → `trace-mcp.com/comparisons.html`
-   and the four head-to-head pages (Serena, Repomix, codegraph,
+   and the five head-to-head pages (Serena, Repomix, codegraph, Context Mode,
    codebase-memory-mcp). Link, do not paraphrase — paraphrasing a competitor from
-   memory is how you get corrected by their maintainer in public.
+   memory is how you get corrected by their maintainer in public. Context Mode is
+   the likeliest "but what about X" in these subs given its star count, and it has
+   its own page; know that before the comment arrives.
 2. **"Show the benchmark — measured with which tokenizer, against which
    baseline?"** This is the one that decides the thread, and it arrives fast. Two
    comparable posts in these subs were taken apart on exactly this: one for
@@ -110,18 +141,25 @@ The Reddit versions of the HN questions, in the order they actually arrive:
    a chars-per-token ratio that is **calibrated against a real BPE tokenizer**
    (`gpt-tokenizer`, cl100k_base) when it is installed, falling back to 4.0
    otherwise — and the result carries `chars_per_token` and
-   `tokenizer_calibrated` so you can see which happened. Say the two limits
-   yourself: cl100k_base is OpenAI's tokenizer, not Claude's, and the "without
-   trace-mcp" side is *modelled* from file sizes rather than measured from a real
-   agent run. For measured numbers from real sessions there is
-   `trace-mcp analytics savings`. Never let someone else be the one to point out
-   that the estimate is an estimate.
+   `tokenizer_calibrated` so you can see which happened. Then say all three
+   limits yourself, biggest first: **neither side is measured** — the "without"
+   side is modelled from file sizes and the trace-mcp side from fixed
+   per-scenario multipliers, not real tool invocations (`accuracy.caveats[1]`
+   ships that sentence in the JSON, and the multipliers are visible constants a
+   few lines into the file you just invited them to open). And cl100k_base is
+   OpenAI's tokenizer, not Claude's. It models a ceiling. For numbers measured
+   from real sessions there is `trace-mcp analytics savings`. Never let someone
+   else be the one to point out that the estimate is an estimate.
 3. **"169 tools is going to blow up my context."** → fair. Tools register per
    detected framework, presets narrow it further, and shrinking the surface is
    ongoing work. Don't argue this one; agree and describe the mechanism.
 4. **"Does it phone home?"** → yes, one anonymous ping a day: random id, version,
-   OS, two aggregate counters. No paths, no code. `TRACE_MCP_TELEMETRY=off`,
-   source at `src/telemetry/usage-ping.ts`. Answer in full the first time.
+   OS, two aggregate counters. No paths, no code. **Say where it goes** — an HTTP
+   POST to `google-analytics.com` via the GA4 Measurement Protocol, with the
+   measurement id and write-only api_secret shipped in the bundle by design.
+   `TRACE_MCP_TELEMETRY=off`, source at `src/telemetry/usage-ping.ts`. "You forgot
+   to mention it's Google" is a cheap and correct reply, and it lands twice as
+   hard after you have said you were answering in full. So answer in full.
 5. **"Another AI-generated slop tool"** → the fair answer is the repo: tests, a
    changelog, issues from strangers that got fixed. Do not argue about how the
    code was written; point at what it does and let them look. Related and worth
