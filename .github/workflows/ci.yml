@@ -49,11 +49,11 @@ concurrency:
 
 env:
   # Skip OUR three postinstall scripts. We do NOT use --ignore-scripts on the
-  # build install because that would also block pnpm from compiling native
-  # bindings (better-sqlite3, @parcel/watcher) — listed in the package.json
-  # `pnpm.onlyBuiltDependencies`. Without the .node binary, 67 tests that hit
-  # SQLite fail with "Could not locate the bindings file". These env vars let
-  # our own scripts opt out cleanly while pnpm's native compile still runs.
+  # build install because that would also block the install scripts pnpm is
+  # allowed to run via `pnpm.onlyBuiltDependencies` (@parcel/watcher, esbuild).
+  # These env vars let our own scripts opt out cleanly while those still run.
+  # better-sqlite3 is deliberately NOT on that list — it ships N-API prebuilds
+  # and must never be compiled here (TRA-567).
   TRACE_MCP_NO_POSTINSTALL: '1'
   TRACE_MCP_NO_AUTO_UPDATE: '1'
   # Preflight (codesign warm-up) intentionally left enabled — it's a no-op on
@@ -101,7 +101,14 @@ jobs:
             # `apply_move` does path arithmetic on `path.relative` output, so
             # its separator handling is Windows-shaped by construction — #527
             # was all-green here and broke the release PR on Windows.
+            # TRA-567: fourth Windows-shaped hole, and the first one that came
+            # from a dependency rather than our code — a better-sqlite3 bump
+            # made pnpm compile it from source, which only fails on Windows.
+            # Any lockfile change can move a native binding, so dep bumps now
+            # pay the cross-platform run instead of the release job doing it.
             platform:
+              - 'pnpm-lock.yaml'
+              - 'tests/db/native-prebuild.test.ts'
               - 'src/tools/refactoring/**'
               - 'tests/refactoring/**'
               - 'src/dangerous-root.ts'
