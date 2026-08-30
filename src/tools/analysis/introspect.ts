@@ -804,10 +804,16 @@ interface UntestedSymbolItem {
   level: TestReachLevel;
 }
 
+/** Requested classification tier — `all` restores the pre-TRA-515 combined output. */
+type TestReachFilter = TestReachLevel | 'all';
+
 interface GetUntestedSymbolsResult {
   file_pattern: string | null;
+  /** Which tier the `untested` list and `total_untested` count cover. */
+  level: TestReachFilter;
   untested: UntestedSymbolItem[];
   total_symbols: number;
+  /** Count of symbols at the requested `level` — NOT the sum of both tiers. */
   total_untested: number;
   by_level: { unreached: number; imported_not_called: number };
 }
@@ -849,14 +855,22 @@ const CODE_LANGUAGES = new Set([
  *
  * Uses import-graph test_covers edges + test file name matching + symbol name matching.
  *
+ * `imported_not_called` is a weak signal: `test_covers` records direct edges only,
+ * so a helper exercised transitively through a covered caller still lands there.
+ * It therefore dominates the raw count (on this repo: 4558 of 5209) and is excluded
+ * from the default output — the default headline is the actionable `unreached` set.
+ *
  * @param includeNonCode  When true, restores legacy behaviour and includes symbols
  *                        from non-code files (markdown, json, yaml, …). Default false.
+ * @param level           Which tier to report. Default 'unreached'; 'all' restores
+ *                        the pre-TRA-515 combined list.
  */
 export function getUntestedSymbols(
   store: Store,
   filePattern?: string,
   maxResults?: number,
   includeNonCode = false,
+  level: TestReachFilter = 'unreached',
 ): GetUntestedSymbolsResult {
   // ── 1. Query all symbols with file paths ──────────────────────────────────
   const likeClause = filePattern
@@ -1017,14 +1031,16 @@ export function getUntestedSymbols(
     return a.file.localeCompare(b.file) || a.name.localeCompare(b.name);
   });
 
-  const limited = maxResults ? untested.slice(0, maxResults) : untested;
   const unreachedCount = untested.filter((u) => u.level === 'unreached').length;
+  const selected = level === 'all' ? untested : untested.filter((u) => u.level === level);
+  const limited = maxResults ? selected.slice(0, maxResults) : selected;
 
   return {
     file_pattern: filePattern ?? null,
+    level,
     untested: limited,
     total_symbols: candidates.length,
-    total_untested: untested.length,
+    total_untested: selected.length,
     by_level: {
       unreached: unreachedCount,
       imported_not_called: untested.length - unreachedCount,
