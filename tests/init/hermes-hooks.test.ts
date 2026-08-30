@@ -44,7 +44,10 @@ describe('installHermesHooks', () => {
 
     expect(byTarget(results, scriptPath()).action).toBe('created');
     expect(fs.readFileSync(scriptPath(), 'utf-8')).toContain('trace-mcp-hermes-guard v');
-    expect(fs.statSync(scriptPath()).mode & 0o111).toBeTruthy();
+    // Windows has no POSIX permission bits — fs.chmod is a no-op there and mode & 0o111 is always 0.
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(scriptPath()).mode & 0o111).toBeTruthy();
+    }
   });
 
   it('skips config.yaml wiring when Hermes has never been set up', () => {
