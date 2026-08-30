@@ -69,12 +69,23 @@ Five repository secrets feed it: `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`,
 no agent handles the certificate material. The workflow runs only on
 `push: master` / `workflow_dispatch`, so a fork PR can never reach them.
 
-`latest-mac.yml` is **still not published**, deliberately. Signing removes the
-reason macOS could not use Squirrel.Mac, but every copy installed before this
-release is unsigned, and the channel flip is a separate change
-(`packages/app/src/main/update-channel.ts`). It also has to solve the per-arch
-clobber first: our matrix builds arm64 and x64 in parallel jobs and
-electron-builder names both files `latest-mac.yml`.
+`latest-mac.yml` **is published** as of TRA-437 (merged 2026-08-30): macOS
+updates through `electron-updater` + Squirrel.Mac, and the homegrown staged-zip
+updater is deleted. The per-arch clobber that blocked it was solved by building
+both architectures in one job rather than a matrix — electron-builder writes one
+feed per invocation listing only that invocation's files. Builds up to and
+including 3.8.0 are ad-hoc signed and cannot self-update; `postinstall-app.mjs`
+swaps those, and only those, once.
+
+**The README and the landing page lead with the DMG** since 2026-08-31
+(TRA-440 / TRA-441). `docs/index.html` has a "Download for macOS" button in the
+hero that resolves the architecture itself and reads the asset URL from the
+GitHub releases API — no version string is written into the page, and without
+JavaScript the button falls back to the releases page. `README.md` links that
+button instead of naming a zip. The unzip-and-drag instruction and the
+`xattr -dr com.apple.quarantine` workaround are **gone on purpose**: now that
+builds are notarized, a Gatekeeper warning about trace-mcp means something, and
+documentation that teaches people to silence it is worse than no documentation.
 
 **Mac App Store is a closed door**, decided 2026-08-29. Not a backlog item:
 the App Store sandbox forbids what this app is for — it spawns `node`/`npm`
