@@ -797,7 +797,6 @@ function StatsSummaryBar({
       {/* Window picker — segmented control, click does not toggle the bar */}
       <div onClick={stopBubble} onKeyDown={stopBubble} className="shrink-0">
         <SegmentedControl
-          size="small"
           options={WINDOW_OPTIONS.map((o) => ({ value: String(o.value), label: t(o.labelKey) }))}
           value={String(windowMs)}
           onChange={(v) => onWindowChange(Number(v))}

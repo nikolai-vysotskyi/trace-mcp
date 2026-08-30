@@ -303,9 +303,21 @@ in the app.
 
 | Size | Height | Use |
 |---|---|---|
-| `small` | 20px | dense toolbars, inline controls |
+| `small` | 20px | dense toolbars, inline controls — **buttons only** |
 | `regular` | 24px | **the default** |
 | `large` | 28px | the single prominent action on a surface |
+
+**A size tier is only offered where the control can survive it (TRA-522).** The tiers
+are heights, not permissions: a control that spends part of its height on its own
+chrome has less left over than the number suggests. The segmented control pays a 2px
+inset at each edge, so a 20px track holds a 16px segment holding a 13px label — 2px of
+air, which is not a small control, it is a crushed one. `SegmentedControl` therefore has
+no `small`; its smallest size is 24px. A button at 20px is fine, because a button pays
+no inset.
+
+Consequence for the toolbar: **every control on one toolbar row is the same height.**
+The Workspace toolbar runs a 24px search field and two 24px buttons; a 20px view toggle
+beside them was two defects at once — a squeezed label and a broken baseline.
 
 ### Hit targets: ≥ 24×24, always
 
@@ -319,6 +331,10 @@ The two techniques in use, both worth copying:
   without moving a single painted pixel. Small buttons get all four sides; segmented
   items get vertical only, because they already clear 24px wide and the 2px inter-segment
   gap is not wide enough to share.
+
+A hit-target hack that has to reach further than `-2px` is a warning, not a fix: it says
+the painted control is too small for what it is. The segmented control's `-4px` variant
+was that warning, and it went away with the 20px tier it propped up (TRA-522).
 
 ### Radii — concentric, from the scale
 
@@ -941,6 +957,9 @@ What the row has to get right, all of it enforced by
   the segment, little outside the pill*: the default 24px track, 24×20 segments, a
   12px glyph — 6px beside the icon, 4px above it, and 3px between pill and row.
   A segment never goes under the 24px hit-target floor to look squarer.
+  *Follow-up (TRA-522): dropping `sz-small` here fixed this row and left the tier
+  standing, so the identical squeeze shipped again on the Workspace toolbar. The tier
+  is now deleted — the segmented control has no size below 24px.*
 
 ### Every string comes from the catalogue, and the length is not yours to assume
 
@@ -1420,6 +1439,8 @@ new evidence.
 | Prominent buttons are a flat accent capsule | macOS 26 dropped the gradient + bezel entirely. |
 | Segmented selection is the thumb, and unselected labels stay at `--label` | macOS draws unselected segments at full strength; `--label-secondary` on the recessed track measured 4.45:1. |
 | An icon-only segment gets the 24px track, not `sz-small` (TRA-376) | At 20px the track leaves 1px above a 14px glyph, and `sz-small`'s `padding: 0 8px` wins the cascade over the menu's own `padding: 0` — squeezed vertically, loose horizontally. |
+| There is no 20px segmented control at all (TRA-522) | TRA-376 fixed the tier's victim, not the tier, so the same squeeze shipped again on the Workspace toolbar: track 122×20, segments 16px, a 13px label with 2px of air, beside a 24px search field and two 24px buttons. **A defect found in a shared primitive is fixed in the primitive.** Opting one component out is a fix with a return date. |
+| A size tier is offered only where the control can survive it (TRA-522) | The tiers are heights, not permissions. A segmented control spends 4px of its height on its own inset; a button spends none, so `small` is right for one and wrong for the other. |
 | A menu trigger with its menu open draws no focus ring (TRA-376) | The house ring carries a 1px **inset** accent border. On a full-width row, held for as long as the menu is up, that is a blue rectangle that reads as a focused text field. |
 | Badge tint at 18% with a per-tone `--badge-*-fg` label | White-on-a-light-fill was 1.6:1. The tone's own hue, darkened until it clears AA over its own tint, is legible in both appearances. |
 | Badges/chips/headers are sentence case | ALL CAPS is reserved for the 10px group header and nowhere else. |
