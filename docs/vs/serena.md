@@ -107,7 +107,7 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 | SARIF / CI output | ✓ 2.1.0, schema-validated | ✗ |
 | Multi-repo subprojects | ✓ cross-repo API linking | ✗ |
 | Graph visualization | ✓ desktop app | ✗ |
-| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | ~55 |
+| MCP tools advertised (default) | 28 (~11.6K tok incl. server instructions); {{ site.data.counts.tools }} on `full` | ~55 |
 | Written in | TypeScript | Python |
 
 ## When to pick Serena

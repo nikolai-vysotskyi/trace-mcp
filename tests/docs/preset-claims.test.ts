@@ -75,6 +75,20 @@ describe('documented tool-preset sizes', () => {
  */
 const VS_DEFAULT_PRESET = 'minimal';
 const VS_TOKEN_ANCHOR = '11.6K';
+
+/**
+ * TRA-448: the same default surface was priced at ~9.8K, ~9K and ~11.6K on three
+ * pages, with nothing saying why. Two of those are real and mean different
+ * things — `tools/list` schema alone, and schema plus the server-instructions
+ * block a client also pays at session start — and the ~9K was simply stale.
+ * The tool *count* has had a receipt since TRA-427; the token figure had none,
+ * so a re-measurement would silently strand the pages nobody edited.
+ *
+ * ponytail: this pins the pair rather than re-measuring it. A re-measure is a
+ * two-line change here and the failure names both figures; adding a live
+ * tokenizer run to a docs test buys nothing the pin does not.
+ */
+const DEFAULT_SURFACE_TOKENS = { schema: '9.8K', wire: '11.6K' };
 // The label is stable across the pages; the cell after it is free-form prose.
 const VS_DEFAULT_ROW = /^\|[^|\n]*advertised[^|\n]*\(default\)[^|\n]*\|([^|\n]*)\|/gim;
 // ponytail: bare-number coverage, so "28.1K stars" does not count as the claim.
@@ -130,5 +144,40 @@ describe('head-to-head pages quote the real default surface', () => {
       silent,
       `these pages sell the ~${VS_TOKEN_ANCHOR} default surface without ever saying it is ${served} tools`,
     ).toEqual([]);
+  });
+
+  it('the "advertised (default)" row prices the wire cost, and says what is in it', () => {
+    const wrong: string[] = [];
+    for (const f of pages) {
+      for (const m of readFileSync(join(vsDir, f), 'utf8').matchAll(VS_DEFAULT_ROW)) {
+        const cell = m[1];
+        // The cell quotes one of our own figures. It has to be the wire cost —
+        // the schema-only 9.8K here would undercount what a client actually
+        // pays — and it has to say the instructions block is included.
+        if (!cell.includes(DEFAULT_SURFACE_TOKENS.wire) || !cell.includes('server instructions')) {
+          wrong.push(`docs/vs/${f}: ${cell.trim()}`);
+        }
+      }
+    }
+    expect(
+      wrong,
+      `each row must price the default surface at ~${DEFAULT_SURFACE_TOKENS.wire} and name the ` +
+        `server-instructions block; ~${DEFAULT_SURFACE_TOKENS.schema} is \`tools/list\` alone`,
+    ).toEqual([]);
+  });
+});
+
+/**
+ * comparisons.md carries both figures in one cell, so it is the page that has to
+ * distinguish them — the drift TRA-448 found was a reader comparing this row
+ * against a docs/vs row and seeing two prices for the same thing.
+ */
+describe('comparisons.md separates the two default-surface figures', () => {
+  it('names the schema cost and the wire cost, and labels each', () => {
+    const text = readFileSync(join(REPO_ROOT, 'docs/comparisons.md'), 'utf8');
+    const row = text.match(VS_DEFAULT_ROW)?.[0] ?? '';
+    expect(row, 'no "advertised (default)" row in docs/comparisons.md').not.toBe('');
+    expect(row).toContain(`~${DEFAULT_SURFACE_TOKENS.schema} tok schema`);
+    expect(row).toContain(`~${DEFAULT_SURFACE_TOKENS.wire} with server instructions`);
   });
 });

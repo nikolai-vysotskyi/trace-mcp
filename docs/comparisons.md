@@ -123,7 +123,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | {{ site.data.counts.languages }} | 40+ (via LSP) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | {{ site.data.counts.frameworks }} | ✗ | ✗ (Python entry points only) | ✗ | ✗ | ✗ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✓ | ✗ | ✗ | ✓ cross-service HTTP | ✓ polyglot dep graph | ✗ | ✓ PHP↔TS API drift |
-| MCP tools advertised (default) | 28 `minimal` (~9.8K tok, default); 54 `standard` (~19K); {{ site.data.counts.tools }} `full` (~50K) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok) | 21 | 90 | 224 |
+| MCP tools advertised (default) | 28 `minimal` (~9.8K tok schema, ~11.6K with server instructions — default); 54 `standard` (~19K); {{ site.data.counts.tools }} `full` (~50K) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok) | 21 | 90 | 224 |
 | Session memory | ✓ | ✓ (manual notes) | ✗ | ✓ | ✗ | ✗ | ✗ |
 | CI/PR reports | ✓ | ✗ | ✓ blast-radius GitHub Action | ✗ | ✗ | ✗ | ✓ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✓ | ✗ | ✓ multi-repo daemon | ✓ cross-service | ✓ cross-project search | ✗ | ✗ |

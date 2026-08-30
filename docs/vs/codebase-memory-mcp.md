@@ -106,7 +106,7 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 | Code-linked decision memory | ✓ decisions bound to symbol IDs, staleness-verified | partial (`manage_adr` markdown documents) |
 | Runtime trace ingestion | ✗ | ✓ `ingest_traces` |
 | Graph visualization | ✓ desktop app | ✓ 3D web UI |
-| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
+| MCP tools advertised (default) | 28 (~11.6K tok incl. server instructions); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
 | Supply-chain posture | OpenSSF Scorecard, CodeQL, Semgrep | SLSA L3, VirusTotal, OpenSSF Scorecard |
 | Published benchmark | ✗ | ✓ preprint, not independently reproduced |
 | Written in | TypeScript | C |

@@ -98,7 +98,7 @@ Pick codegraph if the job is *orient an agent in a repository it has never seen*
 | Framework edges beyond routing | ✓ controller → template, model → table, component → component | partial — route → handler, plus React Native `component`/`property` nodes |
 | Cross-language edges | ✓ | ✓ Swift ↔ ObjC, RN bridge / TurboModules / Expo / Fabric |
 | MCP tools defined | {{ site.data.counts.tools }} | 8 |
-| MCP tools advertised by default | 28 (~11.6K tok) | **1** (`codegraph_explore`) |
+| MCP tools advertised by default | 28 (~11.6K tok incl. server instructions) | **1** (`codegraph_explore`) |
 | Rest of the surface reachable | ✓ `load_tools`, one call | ✓ `CODEGRAPH_MCP_TOOLS` env allowlist, restart |
 | Persistent graph across restarts | ✓ SQLite + FTS5 | ✓ SQLite |
 | Runs fully local, no API key | ✓ | ✓ |
