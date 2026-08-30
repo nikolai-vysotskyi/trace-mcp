@@ -173,7 +173,20 @@ export function isDaemonProcessAlive(): boolean {
 export const WEDGED_DAEMON_MS = 5 * 60_000;
 
 /**
- * Health-watchdog restart policy (TRA-421).
+ * How long a *gone* daemon is left alone before the watchdog restarts it again.
+ * launchd's own `ThrottleInterval` is 5s, so between our kill and the
+ * replacement's PID registration there is a window in which `daemon.pid` names
+ * a dead process. Without a floor here the watchdog fires a second restart into
+ * that window — 111 of the 809 restart requests in the TRA-543 sample landed
+ * less than 10s after the previous one.
+ */
+export const DEAD_DAEMON_MS = 10_000;
+
+/** Upper bound on the escalating restart interval. */
+export const MAX_RESTART_BACKOFF_MS = 60 * 60_000;
+
+/**
+ * Health-watchdog restart policy (TRA-421, extended by TRA-543).
  *
  * The observed failure was 626 daemon restarts in 13 hours: /health timed out
  * while the daemon was busy, the watchdog read that as death, `daemon restart`
@@ -181,15 +194,73 @@ export const WEDGED_DAEMON_MS = 5 * 60_000;
  * existing `DAEMON_STARTUP_GRACE_MS` only delayed each iteration — it never
  * broke the cycle, because after the grace window the daemon was still busy.
  *
- * The rule that does break it: never kill a process that is provably running.
+ * The first rule that breaks it: never kill a process that is provably running.
  * Restart only when the daemon is actually gone, or when it has been alive but
  * mute for longer than any legitimate warm-up.
+ *
+ * That rule alone was not enough. TRA-543 measured 809 restarts in 22.8 hours
+ * on the shipped build — a *fixed* wedged threshold still permits an unbounded
+ * loop, because every restart guarantees the next daemon is also mute (a cold
+ * start over 66 registered projects takes longer than the threshold). So the
+ * threshold escalates: a restart that did not help buys the next daemon twice
+ * as long before we conclude the same thing again. `restartsThisOutage` resets
+ * when /health answers.
  */
 export function shouldRestartUnreachableDaemon(state: {
   processAlive: boolean;
   unreachableForMs: number;
+  restartsThisOutage?: number;
   wedgedAfterMs?: number;
 }): boolean {
-  if (!state.processAlive) return true;
-  return state.unreachableForMs >= (state.wedgedAfterMs ?? WEDGED_DAEMON_MS);
+  const base = state.processAlive ? (state.wedgedAfterMs ?? WEDGED_DAEMON_MS) : DEAD_DAEMON_MS;
+  const threshold = Math.min(
+    base * 2 ** Math.max(0, state.restartsThisOutage ?? 0),
+    MAX_RESTART_BACKOFF_MS,
+  );
+  return state.unreachableForMs >= threshold;
+}
+
+/** How many times a given mismatched daemon version is worth restarting away from. */
+export const MAX_VERSION_MISMATCH_RESTARTS = 2;
+
+/** What the watchdog remembers between version-mismatch checks. */
+export interface VersionMismatchState {
+  /** The mismatched daemon version we last acted on, or '' if none. */
+  seenVersion: string;
+  /** Restarts already spent on `seenVersion`. */
+  restarts: number;
+}
+
+/**
+ * Version-mismatch restart policy (TRA-543).
+ *
+ * The desktop app restarts the daemon when /health reports a version other than
+ * the app's, on the theory that npm swapped the binary and the old code is
+ * still resident. That is right once. It is wrong forever: launchd starts
+ * whatever is on disk, so if the replacement reports the same version again,
+ * no number of further restarts will change it — and the 60 s cooldown that was
+ * supposed to "prevent a loop" merely set the loop's period. Measured over
+ * 22.8 h on Nikolai's machine: 716 restart requests with a 60.4 s median gap.
+ *
+ * Caller owns the clock (the cooldown); this owns the budget.
+ */
+export function nextVersionMismatchAction(
+  daemonVersion: string | undefined,
+  appVersion: string,
+  state: VersionMismatchState,
+): { action: 'none' | 'restart' | 'give-up'; state: VersionMismatchState } {
+  // No answer, a dev build, or agreement: nothing to do, and agreement clears
+  // the budget so a later genuine mismatch starts fresh.
+  if (!daemonVersion || daemonVersion === '0.0.0-dev') return { action: 'none', state };
+  if (daemonVersion === appVersion) {
+    return { action: 'none', state: { seenVersion: '', restarts: 0 } };
+  }
+  // A *different* mismatched version means the last restart did change
+  // something — the new one gets its own attempts.
+  const next =
+    daemonVersion === state.seenVersion ? state : { seenVersion: daemonVersion, restarts: 0 };
+  if (next.restarts >= MAX_VERSION_MISMATCH_RESTARTS) {
+    return { action: 'give-up', state: next };
+  }
+  return { action: 'restart', state: { ...next, restarts: next.restarts + 1 } };
 }

@@ -17,7 +17,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  DEAD_DAEMON_MS,
+  MAX_VERSION_MISMATCH_RESTARTS,
+  nextVersionMismatchAction,
   shouldRestartUnreachableDaemon,
+  type VersionMismatchState,
   WEDGED_DAEMON_MS,
 } from '../../../packages/app/src/main/daemon-lifecycle.js';
 
@@ -29,7 +33,21 @@ describe('shouldRestartUnreachableDaemon', () => {
   });
 
   it('restarts when the daemon process is actually gone', () => {
-    expect(shouldRestartUnreachableDaemon({ processAlive: false, unreachableForMs: 0 })).toBe(true);
+    expect(
+      shouldRestartUnreachableDaemon({ processAlive: false, unreachableForMs: DEAD_DAEMON_MS }),
+    ).toBe(true);
+  });
+
+  /**
+   * TRA-543: launchd needs ThrottleInterval (5s) to respawn, and the
+   * replacement registers its PID a moment later. A gone daemon is restarted,
+   * but not again within that window — 111 of 809 sampled restart requests
+   * landed under 10s after the previous one.
+   */
+  it('does not fire a second restart into the respawn window', () => {
+    expect(shouldRestartUnreachableDaemon({ processAlive: false, unreachableForMs: 0 })).toBe(
+      false,
+    );
   });
 
   it('restarts a live daemon that has been mute past the wedged threshold', () => {
@@ -62,5 +80,115 @@ describe('shouldRestartUnreachableDaemon', () => {
     const hours = OUTAGE_MS / 3_600_000;
     expect(restarts / hours).toBeLessThanOrEqual(12);
     expect(restarts).toBeLessThan(626);
+  });
+
+  /**
+   * TRA-543. The simulation above modelled a restart as resetting the outage
+   * clock; `tray.ts` did not do that, and its success path never cleared
+   * `firstUnreachableAt` either — so in the field the wedged threshold was
+   * cleared by every poll after the first slow start and the guard never fired.
+   * Measured on Nikolai's machine over 22.8 h of `daemon.log`: 809 restart
+   * requests, all `trace-mcp daemon restart` from the desktop app, median gap
+   * 176 s, 2 s median daemon lifetime, and no daemon ever finishing its cold
+   * index of 66 projects.
+   *
+   * Both halves of the fix are exercised here: the clock resets per restart
+   * (tray.ts) and the threshold doubles per restart (this policy). A daemon
+   * that can never warm up inside one window must cost a bounded number of
+   * restarts per day, not a constant rate.
+   */
+  it('bounds restarts of a daemon that never warms up, over a full day', () => {
+    const POLL_MS = 5_000;
+    const DAY_MS = 24 * 3_600_000;
+    let restarts = 0;
+    let restartsInFirstHour = 0;
+    let unreachableSince = 0;
+    for (let t = 0; t < DAY_MS; t += POLL_MS) {
+      if (
+        shouldRestartUnreachableDaemon({
+          processAlive: true,
+          unreachableForMs: t - unreachableSince,
+          restartsThisOutage: restarts,
+        })
+      ) {
+        restarts++;
+        if (t < 3_600_000) restartsInFirstHour++;
+        unreachableSince = t; // the replacement is a new process: new clock
+      }
+    }
+    // Steps of 5, 10, 20, 40 minutes, then hourly at the cap.
+    expect(restartsInFirstHour).toBeLessThanOrEqual(4); // was ~20/h in the field
+    expect(restarts).toBeLessThanOrEqual(30); // was 809 over 22.8 h
+  });
+
+  it('still restarts promptly the first time a healthy daemon goes mute', () => {
+    // Escalation must not blunt the first response: a fresh outage (counter at
+    // zero) keeps the plain TRA-421 threshold.
+    expect(
+      shouldRestartUnreachableDaemon({
+        processAlive: true,
+        unreachableForMs: WEDGED_DAEMON_MS,
+        restartsThisOutage: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRestartUnreachableDaemon({
+        processAlive: true,
+        unreachableForMs: WEDGED_DAEMON_MS,
+        restartsThisOutage: 1,
+      }),
+    ).toBe(false);
+  });
+});
+
+/**
+ * TRA-543, the dominant half. 716 of the 809 restart requests in the sample had
+ * a 60.4 s median gap — exactly `VERSION_MISMATCH_RESTART_COOLDOWN_MS`. The
+ * watchdog was not the one firing them: the version-mismatch branch on
+ * checkHealth's *success* path was, once a minute, for as long as the app ran,
+ * because a restart cannot change which binary is on disk.
+ */
+describe('nextVersionMismatchAction', () => {
+  const fresh: VersionMismatchState = { seenVersion: '', restarts: 0 };
+
+  it('restarts once when the daemon reports an older version than the app', () => {
+    expect(nextVersionMismatchAction('3.5.1', '3.6.0', fresh).action).toBe('restart');
+  });
+
+  it('does nothing when the versions agree, and clears the budget', () => {
+    const spent: VersionMismatchState = { seenVersion: '3.5.1', restarts: 2 };
+    expect(nextVersionMismatchAction('3.6.0', '3.6.0', spent)).toEqual({
+      action: 'none',
+      state: { seenVersion: '', restarts: 0 },
+    });
+  });
+
+  it('ignores a dev build and a daemon that reports no version', () => {
+    expect(nextVersionMismatchAction('0.0.0-dev', '3.6.0', fresh).action).toBe('none');
+    expect(nextVersionMismatchAction(undefined, '3.6.0', fresh).action).toBe('none');
+  });
+
+  it('gives up once the same mismatched version survives its restart budget', () => {
+    let state = fresh;
+    const actions: string[] = [];
+    // Every minute for two hours the daemon comes back reporting the same
+    // version. The old code restarted on all 120 of them.
+    for (let i = 0; i < 120; i++) {
+      const d = nextVersionMismatchAction('3.5.1', '3.6.0', state);
+      actions.push(d.action);
+      state = d.state;
+    }
+    expect(actions.filter((a) => a === 'restart')).toHaveLength(MAX_VERSION_MISMATCH_RESTARTS);
+    expect(actions.at(-1)).toBe('give-up');
+  });
+
+  it('gives a genuinely new mismatched version its own budget', () => {
+    let state = fresh;
+    for (let i = 0; i < 5; i++) state = nextVersionMismatchAction('3.5.1', '3.6.0', state).state;
+    // The restart did move the daemon, just not all the way: 3.5.5 is new, so
+    // it is worth acting on rather than lumping in with the exhausted budget.
+    const d = nextVersionMismatchAction('3.5.5', '3.6.0', state);
+    expect(d.action).toBe('restart');
+    expect(d.state).toEqual({ seenVersion: '3.5.5', restarts: 1 });
   });
 });

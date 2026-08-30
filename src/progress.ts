@@ -122,7 +122,11 @@ export class ProgressState {
       logger.error({ pipeline: name, error: current.error }, '%s failed: %s', name, current.error);
     } else if (partial.processed !== undefined && current.total > 0) {
       const pct = Math.round((current.processed / current.total) * 100);
-      logger.info(
+      // Debug, not info: these ticks were 42% of the 39 MB of daemon.log
+      // measured in TRA-543, which is what made the interesting lines
+      // unfindable. The live view reads `snapshot()` / the SSE progress feed,
+      // not the log; start and completion stay at info.
+      logger.debug(
         { pipeline: name, processed: current.processed, total: current.total, pct },
         '%s progress: %d/%d (%d%%)',
         name,
