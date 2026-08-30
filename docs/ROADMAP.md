@@ -49,8 +49,14 @@ needs to change shape.**
 The adoption metric of record is **active installs**, from the anonymous
 daily ping in `src/telemetry/usage-ping.ts` (one event per install per UTC
 day, opt-out via `TRACE_MCP_TELEMETRY=off`). Read it in the GA4 property
-`G-WSYYT2WZJV`. Refresh the line below monthly so future revisions see a
-trend instead of re-deriving one.
+`G-WSYYT2WZJV` (account `Nikolai`, property `551114458` — note the login also
+holds unrelated properties; do not write to those).
+
+**Do not refresh this by hand.** `.github/workflows/ga4-snapshot.yml` pulls the
+numbers daily via the GA4 Data API into `docs/_data/adoption.yml` — active
+users by day/week/month, and the breakdown by version, country and MCP client.
+That file is the durable record: GA4 itself keeps event data for 14 months at
+most, so anything older survives only there.
 
 Caveat when citing it: the ping's credentials ship in plaintext inside the
 published npm package (public by design — see SECURITY.md "Telemetry
