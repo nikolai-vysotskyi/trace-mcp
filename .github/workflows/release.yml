@@ -6,18 +6,20 @@ on:
   workflow_dispatch:
     inputs:
       publish_tag:
-        description: 'Force-publish this existing git tag (e.g. v1.38.0) when the normal release-please flow already created the tag but the publish job failed.'
+        description: 'Force-publish this existing git tag (e.g. v1.38.0) when the normal release-please flow already created the tag but the publish job failed — or when a failed build left the release marked a prerelease because its assets were incomplete (TRA-566). Re-verifies the assets and returns it to stable.'
         required: false
         default: ''
 
 permissions:
   contents: read
 
-# Scorecard flags the three job-level `contents: write` grants below
-# (release-please, and the macOS/Windows build jobs). They are accepted, not
-# oversights: release-please has to push the release branch and cut the tag,
-# and the build jobs upload signed installers as release assets. Both are
-# already scoped to the job, never top-level (TRA-255).
+# Scorecard flags the four job-level `contents: write` grants below
+# (release-please, the macOS/Windows build jobs, and verify-release-assets).
+# They are accepted, not oversights: release-please has to push the release
+# branch and cut the tag, the build jobs upload signed installers as release
+# assets, and verify-release-assets has to be able to take an incomplete
+# release back out of `latest` (TRA-566). All are already scoped to the job,
+# never top-level (TRA-255).
 
 jobs:
   release-please:
@@ -63,9 +65,10 @@ jobs:
           )
           gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${FOOTER}"
 
-  # Gate between the app builds and npm. release-please marks the GitHub
-  # Release `latest` the moment it cuts the tag, but the zips land 2-5 minutes
-  # later from the matrix jobs below. scripts/postinstall-app.mjs resolves the
+  # Gate between the app builds and npm, and the one place that can take a
+  # release back out of `latest`. The release exists the moment the tag is cut,
+  # but the zips land 2-5 minutes later from the matrix jobs below.
+  # scripts/postinstall-app.mjs resolves the
   # update from /releases/latest and returns silently when the arch zip or its
   # .sha256 is not there yet — so every `npm install -g trace-mcp` inside that
   # window updates the CLI and quietly leaves the old `.app` behind, with no
@@ -80,17 +83,80 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.event.inputs.publish_tag != '' && github.event.inputs.publish_tag || needs.release-please.outputs.tag_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Assert every updater artifact is on the release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.inputs.publish_tag != '' && github.event.inputs.publish_tag || needs.release-please.outputs.tag_name }}
+        id: assert
         run: |
           gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets' \
             | node scripts/verify-release-assets.mjs "${TAG#v}"
+
+      # TRA-566: this gate named the v3.9.0 problem exactly and still left every
+      # Windows install broken, because it runs after the release is public and
+      # newest. Windows electron-updater reads latest.yml off /releases/latest
+      # and nothing else; v3.9.0 had none and never would, so the check found no
+      # feed — no error the user sees, and no installer to fetch by hand either.
+      # A red CI run does not help a user whose updater is pointed at it.
+      #
+      # So take the release back out of `latest` when its assets do not verify.
+      # `prerelease` is the flag that does this — /releases/latest is documented
+      # and observed to skip prereleases and fall back to the previous stable
+      # release. It is also honest: a release missing half its installers IS a
+      # prerelease.
+      #
+      # The obvious-looking alternative does NOT work. PATCHing the release with
+      # `make_latest=false` returns 200 and changes nothing. Measured on a
+      # scratch repo, polling /releases/latest until it settled (the endpoint is
+      # eventually consistent, so a single read right after a mutation lies):
+      #
+      #   PATCH newest make_latest=false  → latest unchanged   (no-op)
+      #   PATCH newest prerelease=true    → latest falls back   ✓
+      #   PATCH newest prerelease=false   → latest returns
+      #
+      # Nor can we pick the fallback ourselves by walking back to "the last
+      # complete release": the expected asset set changes over time, so older
+      # releases fail today's audit for reasons that were never faults. v3.8.0
+      # has no latest-mac.yml because macOS only moved to electron-updater in
+      # 3.9.0 (TRA-437). GitHub's own fallback does not have that problem.
+      - name: Take an incomplete release out of `latest`
+        if: failure() && steps.assert.outcome == 'failure'
+        run: |
+          ID=$(gh release view "$TAG" --repo "${{ github.repository }}" --json databaseId --jq '.databaseId')
+          if [ -z "$ID" ]; then
+            echo "::error::could not resolve a release id for $TAG — it may still be \`latest\` while incomplete"
+            exit 1
+          fi
+          # Retried: losing this one call is precisely the TRA-566 outcome.
+          for i in 1 2 3; do
+            if gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -F prerelease=true --silent; then
+              echo "::warning::$TAG is incomplete and has been marked a prerelease; /releases/latest falls back to the previous stable release"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::$TAG is incomplete and could NOT be demoted — users are still being offered a broken release"
+          exit 1
+
+      # The un-stick path. Re-running this workflow with `publish_tag` after the
+      # assets are fixed re-verifies them and returns the release to stable.
+      # A no-op on the normal path, where the release is already stable.
+      - name: Return a now-complete release to stable
+        run: |
+          ID=$(gh release view "$TAG" --repo "${{ github.repository }}" --json databaseId --jq '.databaseId')
+          if [ "$(gh api "repos/${{ github.repository }}/releases/$ID" --jq .prerelease)" != "true" ]; then
+            exit 0
+          fi
+          for i in 1 2 3; do
+            gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -F prerelease=false --silent && exit 0
+            sleep 5
+          done
+          echo "::error::$TAG verified but could not be returned to stable — users will not be offered it"
+          exit 1
 
   publish:
     needs: [release-please, verify-release-assets]
