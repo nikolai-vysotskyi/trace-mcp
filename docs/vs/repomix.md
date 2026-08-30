@@ -1,7 +1,7 @@
 ---
 title: "Repomix Alternative: trace-mcp vs Repomix for AI code context"
 description: "Repomix packs your repository into one prompt. trace-mcp indexes it into a queryable graph. Head-to-head on token cost, freshness, search, and refactoring — plus when Repomix is still the right pick."
-updated: 2026-08-30
+updated: 2026-08-29
 ---
 
 # Repomix alternative: trace-mcp vs Repomix
@@ -91,20 +91,20 @@ If you are picking between them, the question is not "which is better" — it is
 |---|:---:|:---:|
 | **GitHub stars** | 100 | 28.1K |
 | Model | live index (SQLite + FTS5) | one-shot pack |
-| Tree-sitter AST parsing | ✓ {{ site.data.counts.languages }} languages | ✓ `--compress` only (~20) |
-| Token-efficient symbol lookup | ✓ outlines, symbols, bundles | ✗ packs entire files |
-| Cross-file dependency graph | ✓ directed edge graph | ✗ |
-| Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | ✗ |
-| Call graph | ✓ bidirectional, graph-based | ✗ |
-| Impact analysis | ✓ reverse dependency traversal | ✗ |
-| Search | ✓ FTS5 + embeddings + graph | ✗ no search |
-| Refactoring tools | ✓ rename, move, signature, codemod, extract | ✗ |
-| Security scanning | ✓ OWASP Top-10, taint analysis | ✓ Secretlint (secrets only) |
-| Freshness | ✓ incremental, file-watcher, content hash | ✗ snapshot at pack time, full repack |
-| Remote repositories | ✓ multi-repo subprojects | ✓ packs remote repos directly |
-| Official MCP server | ✓ core product | ✓ `--mcp` |
+| Tree-sitter AST parsing | ✅ {{ site.data.counts.languages }} languages | ✅ `--compress` only (~20) |
+| Token-efficient symbol lookup | ✅ outlines, symbols, bundles | ❌ packs entire files |
+| Cross-file dependency graph | ✅ directed edge graph | ❌ |
+| Framework-aware edges | ✅ {{ site.data.counts.frameworks }} integrations | ❌ |
+| Call graph | ✅ bidirectional, graph-based | ❌ |
+| Impact analysis | ✅ reverse dependency traversal | ❌ |
+| Search | ✅ FTS5 + embeddings + graph | ❌ no search |
+| Refactoring tools | ✅ rename, move, signature, codemod, extract | ❌ |
+| Security scanning | ✅ OWASP Top-10, taint analysis | ✅ Secretlint (secrets only) |
+| Freshness | ✅ incremental, file-watcher, content hash | ❌ snapshot at pack time, full repack |
+| Remote repositories | ✅ multi-repo subprojects | ✅ packs remote repos directly |
+| Official MCP server | ✅ core product | ✅ `--mcp` |
 | Setup cost | index build, then instant queries | none, but re-pack on every change |
-| Works offline, no API keys | ✓ | ✓ |
+| Works offline, no API keys | ✅ | ✅ |
 | Written in | TypeScript | TypeScript |
 
 ## When to pick Repomix
@@ -150,6 +150,6 @@ Yes, and it is a sensible setup — Repomix for handing a whole small or third-p
 ## Next steps
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
+- The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html)
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with us.
 - [Get started](/#install) — no configuration required.

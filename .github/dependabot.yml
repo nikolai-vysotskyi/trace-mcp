@@ -27,21 +27,6 @@ updates:
       - dependency-name: "@types/node"
         update-types:
           - version-update:semver-major
-      # commander@15 declares `engines.node >=22.12.0`; our `engines.node` is
-      # >=22.0.0, so taking it would silently break installs on Node 22.0-22.11
-      # without a support-policy change we have no reason to make — commander 14
-      # is doing the job. Removed in #482 on the assumption that the >=22 floor
-      # already covered it (TRA-329); restored in TRA-463 with the exact gap
-      # written down. Lift this together with the `engines.node` floor.
-      #
-      # Note for whoever lifts it: this YAML entry is not the only thing holding
-      # commander 15 back. PR #197 was closed with `@dependabot ignore this
-      # major version`, which lives in Dependabot's own per-repo state — deleting
-      # the entry here does NOT clear it. Comment `@dependabot unignore
-      # commander` on any Dependabot PR (or reopen #197) as well.
-      - dependency-name: "commander"
-        update-types:
-          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production
@@ -95,50 +80,6 @@ updates:
       # manual build-and-sign pass per target platform, so it must never
       # arrive as an auto-mergeable dependency PR. Bump it deliberately.
       - dependency-name: "electron"
-        update-types:
-          - version-update:semver-major
-    groups:
-      production-minor-patch:
-        dependency-type: production
-        update-types:
-          - minor
-          - patch
-      development-minor-patch:
-        dependency-type: development
-        update-types:
-          - minor
-          - patch
-
-  - package-ecosystem: npm
-    directory: /packages/vscode-extension
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: Etc/UTC
-    # Supply-chain: wait before proposing a freshly published version, so a
-    # compromised-maintainer publish has time to be yanked upstream.
-    cooldown:
-      default-days: 7
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
-      - npm
-      - vscode-extension
-    commit-message:
-      prefix: chore(vscode-deps)
-      prefix-development: chore(vscode-deps-dev)
-      include: scope
-    ignore:
-      # Same reasoning as the root manifest: @types/node tracks the minimum
-      # supported runtime declared in `engines.node` (>=22), not the latest.
-      - dependency-name: "@types/node"
-        update-types:
-          - version-update:semver-major
-      # @types/vscode is the *minimum* VS Code API the extension supports and
-      # is matched by `engines.vscode`. Bumping it silently drops support for
-      # older editors, so it moves only together with `engines.vscode`.
-      - dependency-name: "@types/vscode"
         update-types:
           - version-update:semver-major
     groups:

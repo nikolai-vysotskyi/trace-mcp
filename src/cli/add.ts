@@ -334,17 +334,14 @@ export const addCommand = new Command('add')
       // 2. Check if already registered
       const existing = getProject(projectRoot);
       if (existing && !opts.force) {
-        // `add` on a registered project is nearly always "reindex it" — say so
-        // instead of just refusing (GH #297).
-        const hint = `Run \`trace-mcp index ${dir}\` to reindex, or --force to re-register.`;
         if (opts.json) {
-          console.log(JSON.stringify({ status: 'already_registered', project: existing, hint }));
+          console.log(JSON.stringify({ status: 'already_registered', project: existing }));
         } else {
           p.note(
             `Already registered: ${existing.name}\nDB: ${shortPath(existing.dbPath)}`,
             'Existing',
           );
-          p.outro(hint);
+          p.outro('Use --force to re-register.');
         }
         return;
       }

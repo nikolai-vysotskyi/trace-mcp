@@ -19,14 +19,7 @@
 
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../lattice/icons';
-import {
-  Menu,
-  MenuChoiceRow,
-  MenuItem,
-  MenuPopUpRow,
-  MenuSeparator,
-  useMenuAnchor,
-} from '../lattice/ui';
+import { Menu, MenuChoiceRow, MenuItem, MenuSeparator, useMenuAnchor } from '../lattice/ui';
 import { GLOBAL_ACTIONS, type GlobalAction } from '../../shared/global-actions.js';
 import { appearanceOptions, type Appearance } from '../theme.js';
 import { localeOptions, t, useLocale } from '../i18n/index.js';
@@ -209,10 +202,10 @@ export function AppMenu({
           />
           {/* Same group as Theme, no separator between them: both are app
               preferences you may want to try, as opposed to the commands below.
-              A pop-up rather than Theme's pill: ten languages named in their own
-              scripts are words, not glyphs, and DESIGN.md puts anything past
-              four values on this side of the line (TRA-450). */}
-          <MenuPopUpRow
+              Two languages fit a pill; the segments carry the two-letter form
+              because a language name is a word, and the full name — written in
+              its own language — is the accessible name and the tooltip. */}
+          <MenuChoiceRow
             label={t('shell:language')}
             options={localeOptions()}
             value={locale}

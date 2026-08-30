@@ -5,8 +5,9 @@
  * that bridge exports a *user's own* spans to a backend *they* configure. This
  * module reports back to the maintainer instead — a single daily event with
  * an anonymous install id, the trace-mcp version, Node major version,
- * platform, and two aggregate counters since the previous ping (tool calls
- * and estimated tokens saved). No project paths, file names, query content,
+ * platform, IANA timezone, the MCP client name (e.g. "claude-code"), and two
+ * aggregate counters since the previous ping (tool calls and estimated tokens
+ * saved). No IP override, no project paths, file names, query content,
  * per-tool or per-project breakdown, or anything else that could identify a
  * user or their code.
  *
@@ -42,6 +43,8 @@ interface TelemetryState {
   /** Cumulative totals at the last ping — the next ping reports the delta. */
   lastTokensSaved?: number;
   lastCalls?: number;
+  /** MCP client name from the most recent `initialize` (e.g. "claude-code"). */
+  client?: string;
 }
 
 function isDisabled(env: NodeJS.ProcessEnv): boolean {
@@ -64,6 +67,7 @@ function loadOrCreateState(): TelemetryState {
         lastPingDate: parsed.lastPingDate,
         lastTokensSaved: parsed.lastTokensSaved,
         lastCalls: parsed.lastCalls,
+        client: parsed.client,
       };
   } catch {
     // No state file yet (first run) or it's unreadable — start fresh below.
@@ -83,6 +87,32 @@ export interface UsagePingOptions {
   nowMs?: number;
   /** Injectable for tests; defaults to the on-disk cumulative savings file. */
   loadSavings?: typeof loadPersistentSavings;
+}
+
+/**
+ * Remember which MCP client connected, for the next ping's `client` dimension.
+ * Called from the `initialize` handler — the ping itself fires before any
+ * client has spoken, so this lands one session later. Name only, no version,
+ * no arguments: enough to tell Claude Code from Cursor, nothing more.
+ */
+export function recordUsagePingClient(name: string, env: NodeJS.ProcessEnv = process.env): void {
+  if (isDisabled(env)) return;
+  try {
+    const state = loadOrCreateState();
+    if (state.client === name) return;
+    saveState({ ...state, client: name });
+  } catch (err) {
+    logger.debug({ err }, 'telemetry.usage_ping_client_record_failed');
+  }
+}
+
+/** IANA zone of the machine, e.g. "Europe/Berlin". Coarse "where" without an IP lookup. */
+function timezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 /** Delta since the last ping, floored at 0 so a reset savings file can't send a negative. */
@@ -128,6 +158,8 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
               node_major: process.versions.node.split('.')[0],
               tokens_saved: tokensSaved,
               calls,
+              client: state.client ?? 'unknown',
+              timezone: timezone(),
               // Without these two GA4 keeps the event but doesn't count the
               // install as an active user — reports read 0 while the raw event
               // count is non-zero. See the "Tip" under `session_id` /
@@ -150,6 +182,7 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
       lastPingDate: today,
       lastTokensSaved: savings?.total_tokens_saved ?? state.lastTokensSaved,
       lastCalls: savings?.total_calls ?? state.lastCalls,
+      client: state.client,
     });
   } catch (err) {
     logger.debug({ err }, 'telemetry.usage_ping_state_save_failed');

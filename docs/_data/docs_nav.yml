@@ -3,8 +3,6 @@
 # if a sitemap page is missing here.
 - title: Tools reference
   url: /tools-reference.html
-- title: Tool index
-  url: /tools-index.html
 - title: Comparisons
   url: /comparisons.html
 - title: vs Repomix
@@ -15,14 +13,10 @@
   url: /vs/codebase-memory-mcp.html
 - title: vs codegraph
   url: /vs/codegraph.html
-- title: vs Context Mode
-  url: /vs/context-mode.html
 - title: Cut Claude Code token usage
   url: /reduce-claude-code-token-usage.html
 - title: Supported frameworks
   url: /supported-frameworks.html
-- title: Language matrix
-  url: /language-matrix.html
 - title: Architecture
   url: /architecture.html
 - title: Configuration
@@ -37,8 +31,6 @@
   url: /toon-savings.html
 - title: Telemetry
   url: /telemetry.html
-- title: Daemon memory
-  url: /daemon-memory.html
 - title: tweakcc routing
   url: /tweakcc.html
 - title: Development

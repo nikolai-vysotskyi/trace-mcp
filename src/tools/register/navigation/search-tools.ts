@@ -17,7 +17,6 @@ import { computeRetrievalConfidence } from '../../../scoring/retrieval-confidenc
 import { loadTunedWeights } from '../../../runtime/tuning.js';
 import type { ServerContext } from '../../../server/types.js';
 import { SubprojectManager } from '../../../subproject/manager.js';
-import { reachableSubprojects } from '../../../subproject/subproject-search.js';
 import { type SearchResultItemProjected } from '../../navigation/navigation.js';
 import { searchText } from '../../navigation/search-text.js';
 import { suggestQueries } from '../../navigation/suggest.js';
@@ -390,13 +389,10 @@ export function registerSearchTools(server: McpServer, ctx: ServerContext): void
         }
       }
 
-      // Subproject layer: search the subprojects reachable from THIS project.
-      // The topology DB is global, so this pass must be scoped — otherwise a
-      // search in one project fans out across every repo registered on the
-      // machine (TRA-470).
+      // Subproject layer: search across all subprojects when topology is enabled
       if (ctx.topoStore) {
         try {
-          const subprojects = reachableSubprojects(ctx.topoStore.getAllSubprojects(), projectRoot);
+          const subprojects = ctx.topoStore.getAllSubprojects();
           if (subprojects.length > 0) {
             const manager = new SubprojectManager(ctx.topoStore);
             const subResult = manager.subprojectSearch(

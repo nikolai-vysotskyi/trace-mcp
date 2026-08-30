@@ -188,7 +188,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'get_untested_symbols',
-    'Find symbols lacking test coverage. scope="all_symbols" (default) returns only "unreached" symbols (no test file imports the source) — the weaker "imported_not_called" tier is opt-in via `level`. `total_untested` counts the requested level only; `by_level` always carries both. Only source-code languages are considered unless include_non_code=true. scope="exports_only" is the fast export-keyword-only scan. Read-only. Returns JSON: { level, untested: [{ symbol_id, name, kind, file, level }], total_symbols, total_untested, by_level }. Supports `output_format: "toon"`.',
+    'Find symbols lacking test coverage. scope="all_symbols" (default) classifies each as "unreached" (no test file imports the source) or "imported_not_called" (test imports file but never references this symbol) — by default only source-code languages (TypeScript, Python, Go, Ruby, …) are considered, use include_non_code=true to restore the legacy noisy behaviour. scope="exports_only" is the fast export-keyword-only scan. Read-only. Returns JSON: { untested: [{ symbol_id, name, kind, file, classification }], total }. Supports `output_format: "toon"`.',
     {
       file_pattern: z
         .string()
@@ -214,24 +214,18 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         .describe(
           'all_symbols (default): full classification. exports_only: fast export-only scan.',
         ),
-      level: z
-        .enum(['unreached', 'imported_not_called', 'all'])
-        .optional()
-        .describe(
-          'Which tier to return. unreached (default): source files no test reaches — the actionable set. imported_not_called: test imports the file but never references the symbol by name — a weak signal, since test_covers records direct call edges only, so anything exercised transitively lands here and swamps the count. all: both tiers (pre-TRA-515 behaviour). Ignored when scope="exports_only".',
-        ),
       // Inherited from the retired `get_untested_exports` alias (TRA-240) so
       // its TOON support survives the migration — the exports_only payload is
       // the flat-scalar-row shape TOON measurably wins on.
       output_format: OutputFormatSchema,
     },
-    async ({ file_pattern, max_results, include_non_code, scope, level, output_format }) => {
+    async ({ file_pattern, max_results, include_non_code, scope, output_format }) => {
       if (scope === 'exports_only') {
         const result = getUntestedExports(store, file_pattern);
         const fmt = output_format === 'markdown' ? 'json' : output_format;
         return { content: [{ type: 'text', text: encodeResponse(result, fmt) }] };
       }
-      const result = getUntestedSymbols(store, file_pattern, max_results, include_non_code, level);
+      const result = getUntestedSymbols(store, file_pattern, max_results, include_non_code);
       const fmt = output_format === 'markdown' ? 'json' : output_format;
       return { content: [{ type: 'text', text: encodeResponse(result, fmt) }] };
     },

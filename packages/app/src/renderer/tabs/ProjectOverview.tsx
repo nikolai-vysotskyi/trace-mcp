@@ -21,11 +21,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { DaemonDownPane } from '../components/DaemonDownPane';
 import { GuardSection } from '../components/GuardSection';
 import { ProjectStatsModal } from '../components/ProjectStatsModal';
 import { useDaemon } from '../hooks/useDaemon';
-import { deriveDaemonState } from '../workspace/useWorkspaceProjects';
 import { t } from '../i18n';
 import { formatDate, formatNumber, relativeTime } from '../i18n/format';
 import { Icon } from '../lattice/icons';
@@ -229,15 +227,7 @@ export function ProjectOverview({
   onNavigateToService?: (serviceName: string) => void;
 }) {
   const { t } = useTranslation('overview');
-  const {
-    projects,
-    loading: daemonLoading,
-    connected,
-    restarting,
-    restartDaemon,
-    reindexProject,
-    addProject,
-  } = useDaemon();
+  const { projects, loading: daemonLoading, connected, reindexProject, addProject } = useDaemon();
   const project = projects.find((p) => p.root === root);
   const status = project?.status ?? 'unknown';
   const progress = project?.progress;
@@ -245,28 +235,6 @@ export function ProjectOverview({
      indexed". Without this the panel offered "Index project" for a project it
      was simultaneously reporting 78 files and 700 symbols for. */
   const listPending = !project && (daemonLoading || !connected);
-
-  /* One condition gets one sentence (DESIGN.md §5). With the daemon down this
-     surface used to say so six times — the toolbar chip, Guard's own line, and
-     four section errors that each claimed "the daemon may still be indexing",
-     which is the *wait* state for a process that is not running (TRA-469).
-
-     `deriveDaemonState` rather than a fresh `!connected`: `connected` is false
-     for the first moments of every mount, and a naive test would flash a
-     daemon-down pane on every project open. Reusing the reducer is also what
-     keeps the two surfaces from drifting into two definitions of "down".
-
-     Anything but `ok`, not just `unreachable` (TRA-489). Workspace can afford
-     `stale` because it has cached KPI numbers to keep on screen under a banner
-     that qualifies them; this surface caches nothing, so `stale` here is not
-     "last known values" — it is five sections failing at once. */
-  const daemonDown =
-    deriveDaemonState({
-      loading: daemonLoading,
-      connected,
-      liveProjects: projects.length,
-      metricsErrorKind: null,
-    }) !== 'ok';
 
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [statsLoad, setStatsLoad] = useState<Load>('loading');
@@ -350,27 +318,11 @@ export function ProjectOverview({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: status is an intentional trigger — refetches after the project leaves 'indexing' so the panel reflects the new totals.
   useEffect(() => {
-    /* Not before the daemon has answered (TRA-489). `deriveDaemonState` reduces
-       `loading` to 'ok', so the sections render during that window — and four
-       fetches against a refused local socket fail in milliseconds, well before
-       `useDaemon` concedes. That painted the four section errors the pane above
-       exists to replace, which is why the bug looked intermittent: whether you
-       saw it depended on which finished first. There is nothing to ask a daemon
-       that has not answered yet; the sections stay on their skeletons. */
-    if (daemonLoading) return;
     fetchStats();
     fetchCoverage();
     fetchServices();
     fetchSmells(smellsCategory);
-  }, [
-    daemonLoading,
-    fetchStats,
-    fetchCoverage,
-    fetchServices,
-    fetchSmells,
-    smellsCategory,
-    status,
-  ]);
+  }, [fetchStats, fetchCoverage, fetchServices, fetchSmells, smellsCategory, status]);
 
   const handleAddService = async () => {
     const api = window.electronAPI;
@@ -426,13 +378,8 @@ export function ProjectOverview({
 
   const projectName = root.split(/[/\\]/).filter(Boolean).pop() ?? root;
 
-  /* Neutral once the daemon has stopped talking, whatever the last snapshot
-     said. A 'stale' daemon still has 'ready' cached from its last answer, and
-     a green dot over a pane reading "The daemon isn't running" is a second
-     statement about the same condition — and the wrong one (TRA-489). */
-  const statusTone: Tone = daemonDown
-    ? 'neutral'
-    : status === 'indexing'
+  const statusTone: Tone =
+    status === 'indexing'
       ? 'orange'
       : status === 'error'
         ? 'red'
@@ -515,19 +462,13 @@ export function ProjectOverview({
           </div>
         </div>
 
-        {daemonDown ? (
-          /* The pane below owns this diagnosis and offers the button that fixes
-             it, so the toolbar does not repeat it — the same reason the
-             Workspace banner steps aside for DaemonDownPane (TRA-397, TRA-469). */
-          null
-        ) : listPending ? (
+        {listPending ? (
           /* Offering "Index project" before the daemon has answered invites the
              user to re-index something that may already be indexed. The toolbar
-             always renders, so the "still checking" wording lives here rather
-             than in the Status row, which is itself missing when the fetch
-             failed. */
+             always renders, so the daemon-down wording lives here rather than in
+             the Status row, which is itself missing when the fetch failed. */
           <Button className="is-status" disabled>
-            {t('statusChecking')}
+            {connected ? t('statusChecking') : t('statusDaemonUnreachable')}
           </Button>
         ) : project ? (
           /* While indexing the action is unavailable, and a DISABLED prominent
@@ -623,22 +564,6 @@ export function ProjectOverview({
         className="flex-1 overflow-auto"
         onScroll={(e) => setScrolled((e.target as HTMLElement).scrollTop > 0)}
       >
-        {daemonDown ? (
-          /* Every section on this surface reads the daemon, so with the daemon
-             down all five render the same failure. Five broken cards is not
-             five pieces of information — it is one, said five times, and four
-             of those said "may still be indexing" about a process that is not
-             running (TRA-469). One statement, one button.
-
-             The flex column is load-bearing: `.ws-center-empty` centres itself
-             with `flex: 1`, which does nothing inside this scroll container's
-             block formatting context. Without it the pane hugged the top edge
-             and left ~900px of empty content below it, while the same component
-             on Workspace — which does have a flex parent — sat centred. */
-          <div className="h-full flex flex-col">
-            <DaemonDownPane restarting={restarting} onRestart={() => void restartDaemon()} />
-          </div>
-        ) : (
         <div className="flex flex-col gap-6 px-4 py-4 mx-auto w-full" style={{ maxWidth: 720 }}>
           {/* Indexing caption — the phase in words, next to the bar above. */}
           {status === 'indexing' && progress?.phase && (
@@ -1058,7 +983,6 @@ export function ProjectOverview({
             )}
           </Section>
         </div>
-        )}
       </div>
 
       {rowMenu.at && rowMenuFor && (

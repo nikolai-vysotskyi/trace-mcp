@@ -32,7 +32,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       configPath: string | null;
       status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
       staleReason?: string;
-      level?: 'base' | 'standard' | 'max' | null;
     }>;
   }> => ipcRenderer.invoke('get-mcp-client-statuses', scope ?? 'global'),
   configureMcpClient: (
@@ -40,9 +39,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     level: string,
   ): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('configure-mcp-client', clientName, level),
-  /** Repair drifted entries. Setup asks for an enforcement level; this never does. */
-  updateMcpClients: (clientNames: string[]): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('update-mcp-clients', clientNames),
   openProjectTab: (root: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('open-project-tab', root),
   closeCurrentTab: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('close-current-tab'),
@@ -91,8 +87,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stuck?: boolean;
     /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
     staleRoots?: { root: string; version: string }[];
-    /** Absolute path to the running `.app`, so copyable commands name the real install. */
-    installPath?: string;
   }> => ipcRenderer.invoke('check-for-update'),
   checkPendingUpdate: (): Promise<{ pending: boolean; version?: string }> =>
     ipcRenderer.invoke('check-pending-update'),

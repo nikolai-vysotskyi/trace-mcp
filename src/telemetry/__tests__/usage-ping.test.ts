@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('node:fs');
 
 import fs from 'node:fs';
-import { sendUsagePing } from '../usage-ping.js';
+import { recordUsagePingClient, sendUsagePing } from '../usage-ping.js';
 
 function makeFetchSpy(): {
   fetchImpl: typeof fetch;
@@ -79,6 +79,36 @@ describe('sendUsagePing', () => {
       .events[0]!.params;
     expect(params.session_id).toBe('1700000000');
     expect(params.engagement_time_msec).toBe(1);
+  });
+
+  it('reports the MCP client name recorded by a previous session, and the machine timezone', async () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ installId: 'fixed-id', lastPingDate: '2000-01-01', client: 'claude-code' }),
+    );
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.client).toBe('claude-code');
+    expect(params.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
+  it('falls back to an unknown client when nothing has connected yet', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.client).toBe('unknown');
+  });
+
+  it('records the client name for the next ping, and honours the opt-out', () => {
+    recordUsagePingClient('cursor', {});
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(vi.mocked(fs.writeFileSync).mock.calls[0]![1])).client).toBe('cursor');
+
+    vi.mocked(fs.writeFileSync).mockClear();
+    recordUsagePingClient('cursor', { TRACE_MCP_TELEMETRY: 'off' });
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
   });
 
   it('reports savings as a delta since the previous ping and remembers the new totals', async () => {

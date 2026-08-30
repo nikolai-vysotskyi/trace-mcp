@@ -107,29 +107,6 @@ export function isPlausibleInstallPath(appPath) {
 }
 
 /**
- * The version the bundle itself claims, read from `Contents/Info.plist`.
- *
- * This is the only honest answer to "what is installed". The sibling
- * `.trace-mcp-version` file records what the last swap *intended*, and the two
- * part company whenever a bundle is replaced out-of-band — a hand-dragged
- * older `.app`, a restore from a backup. Callers that gate on the marker alone
- * then see "already up to date" forever (TRA-443).
- *
- * @param {string} appPath
- * @returns {string | undefined} Version without a leading `v`, or undefined
- *   when the plist cannot be read.
- */
-export function readBundleVersion(appPath) {
-  try {
-    const raw = fs.readFileSync(path.join(appPath, 'Contents', 'Info.plist'), 'utf-8');
-    const m = raw.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/);
-    return m?.[1]?.trim().replace(/^v/, '') || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
  * @typedef {Object} LocateResult
  * @property {string} appPath - Absolute path to the validated `.app` bundle.
  * @property {'marker'|'mdfind'|'fallback'} source - Which step of the chain resolved it.
@@ -175,78 +152,6 @@ export function locateInstalledApp(options = {}) {
     }
   }
 
-  return null;
-}
-
-/**
- * The `.app` bundle a running trace-mcp process was launched from, or null.
- *
- * A machine can hold more than one installed bundle — dragged into
- * `/Applications` once, re-installed into `~/Applications` later — and the two
- * updaters then disagree about which one "the install" is: `postinstall-app.mjs`
- * asks `locateInstalledApp()` (marker first), while Electron main derives its
- * install dir from `process.execPath`. When they diverge, postinstall stages
- * `.trace-mcp-pending.zip` next to a bundle nobody is running, the running copy
- * never sees a pending update, and it stays behind forever while every
- * `npm install -g` reports success — the TRA-357 shape one level up, observed
- * with a 112 MB orphan zip beside a `/Applications` bundle two releases behind.
- *
- * The running bundle is the only copy the user can actually observe, so it is
- * the honest target. `pgrep -f` alone cannot answer this — it matches on the
- * bundle-relative path and returns pids, not paths — so we resolve each pid's
- * executable through `ps -o comm=` and walk back up to the `.app`.
- *
- * Same two gates as every other resolver here: a build-tree path never counts
- * as an install, and the bundle id must match.
- *
- * @param {LocateOptions & { pgrepBin?: string, psBin?: string }} [options]
- * @returns {string | null}
- */
-export function runningBundlePath(options = {}) {
-  const platform = options.platform ?? process.platform;
-  if (platform !== 'darwin') return null;
-
-  const appName = options.appName ?? APP_NAME;
-  const bundleId = options.bundleId ?? BUNDLE_ID;
-  const pgrepBin = options.pgrepBin ?? '/usr/bin/pgrep';
-  const psBin = options.psBin ?? '/bin/ps';
-  const plistBuddyBin = options.plistBuddyBin ?? '/usr/libexec/PlistBuddy';
-  const marker = `${appName}${path.sep}Contents${path.sep}MacOS${path.sep}`;
-
-  let pids;
-  try {
-    pids = execFileSync(pgrepBin, ['-f', marker], {
-      stdio: ['ignore', 'pipe', 'ignore'],
-      encoding: 'utf-8',
-      timeout: 5_000,
-    })
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => /^\d+$/.test(line));
-  } catch {
-    // Non-zero exit is pgrep's "no match" — indistinguishable from a failure
-    // here, and both mean the same thing to callers: no running bundle.
-    return null;
-  }
-
-  for (const pid of pids) {
-    let comm;
-    try {
-      comm = execFileSync(psBin, ['-p', pid, '-o', 'comm='], {
-        stdio: ['ignore', 'pipe', 'ignore'],
-        encoding: 'utf-8',
-        timeout: 5_000,
-      }).trim();
-    } catch {
-      continue;
-    }
-    const at = comm.indexOf(marker);
-    if (at === -1) continue;
-    const candidate = comm.slice(0, at + appName.length);
-    if (!isPlausibleInstallPath(candidate)) continue;
-    if (!isValidAppBundle(candidate, bundleId, plistBuddyBin)) continue;
-    return candidate;
-  }
   return null;
 }
 

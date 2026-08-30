@@ -258,6 +258,15 @@ anyone who runs `npm install trace-mcp`. This is intended, not a leak.
   lower-confidence signal that can be inflated by a third party. Treat them as
   directional, not as an auditable metric.
 
+What the ping deliberately does **not** carry: no IP address is sent, and the
+`ip_override` / `user_location` fields of the Measurement Protocol are left
+unset, so Google derives no location from the request. The coarse "where" in
+our reports is the machine's IANA timezone (`Europe/Berlin`), a value already
+readable by any process on the machine. The only per-install identifier is a
+random UUID generated locally on first run; there is no account, email,
+hostname, username, repository name, or path anywhere in the payload, and
+nothing is added to make an install attributable to a person or a company.
+
 Source maps (`dist/*.map`) are published alongside the bundle so that stack
 traces from user installs are readable. They contain the same credentials as
 the bundle, which — given the above — adds no exposure.

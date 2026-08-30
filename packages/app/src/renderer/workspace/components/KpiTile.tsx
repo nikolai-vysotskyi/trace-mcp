@@ -29,9 +29,9 @@ export interface KpiTileProps {
   footnote?: string;
   tone?: KpiTone;
   /**
-   * The pane is too short or too narrow to spend 112px per tile. Collapses the
+   * The pane is too short or too narrow to spend 99px per tile. Collapses the
    * card to one 36px line — label at the leading edge, value at the trailing
-   * edge — and drops the comparison. Six full tiles are 396px tall, which at
+   * edge — and drops the comparison. Six full tiles are 357px tall, which at
    * the app's 420px minimum window height leaves the toolbar and the whole
    * project list below the window edge with nothing to scroll (TRA-325).
    */
@@ -107,34 +107,37 @@ export function KpiTile({
   const { t } = useTranslation('workspace');
   const interactive = onClick !== undefined;
   const valueColor = unavailable ? 'var(--label-secondary)' : tone ? TONE_COLOR[tone] : 'var(--label)';
-  // Same card either way — only the wrapper differs.
-  const shell = {
-    'data-kpi': label,
-    'data-dense': dense ? '' : undefined,
-    className: dense
-      ? 'flex flex-row items-baseline justify-between gap-2 text-left transition-colors'
-      : 'flex flex-col items-start gap-1 text-left transition-colors',
-    style: {
-      // No `flex` basis: the strip is a grid whose track count already
-      // guarantees at least 132px per tile, and a flex-grow here is what let
-      // a last-row tile stretch to 5.5x its siblings (TRA-467). `minWidth: 0`
-      // so a long footnote sizes to its track instead of widening it.
-      minWidth: 0,
-      padding: dense ? '8px 12px' : 16,
-      borderRadius: 12,
-      // `background` and the hover tint live in controls.css (`[data-kpi]`):
-      // an inline shorthand here would set `background-image: none` inline,
-      // which no stylesheet rule can then override. A card is content and
-      // stays opaque --surface in both states — tinting the ACTIVE tile
-      // pushed --label-secondary to 4.45:1 on its footnote, and that token
-      // only clears 4.5 over an untinted surface. Selection is the accent
-      // border + aria-pressed, which as a UI boundary needs only 3:1.
-      border: `0.5px solid ${active ? 'var(--accent)' : 'var(--separator)'}`,
-    },
-  };
 
-  const content = (
-    <>
+  return (
+    <button
+      type="button"
+      disabled={!interactive}
+      aria-pressed={interactive ? active : undefined}
+      data-kpi={label}
+      data-dense={dense ? '' : undefined}
+      // Dense drops the comparison line, so the one sentence that explains an
+      // em dash has to survive somewhere the user can still reach it.
+      title={dense && unavailable ? t('kpiUnavailable') : undefined}
+      onClick={onClick}
+      className={
+        dense
+          ? 'flex flex-row items-baseline justify-between gap-2 text-left transition-colors'
+          : 'flex flex-col items-start gap-1 text-left transition-colors'
+      }
+      style={{
+        minWidth: 132,
+        flex: '1 1 132px',
+        padding: dense ? '8px 12px' : 16,
+        borderRadius: 12,
+        // A card is content: it stays opaque --surface in BOTH states. Tinting
+        // the active tile pushed --label-secondary to 4.45:1 on its footnote —
+        // that token only clears 4.5 over an untinted surface. Selection is the
+        // accent border + aria-pressed, which as a UI boundary needs only 3:1.
+        background: 'var(--surface)',
+        border: `0.5px solid ${active ? 'var(--accent)' : 'var(--separator)'}`,
+        cursor: interactive ? 'pointer' : 'default',
+      }}
+    >
       {/* Active is signalled by the accent BORDER + aria-pressed, not by an
           accent label: --accent on the active tile's --fill-tertiary tint
           measures 3.28:1, and --badge-accent-fg only reaches 4.29:1. Promoting
@@ -179,65 +182,22 @@ export function KpiTile({
 
       {/* The comparison line is the first thing to go when the pane is short:
           it is the tallest part of the tile and the only part a user can
-          reconstruct by widening the window. The value never goes.
-
-          Two lines are reserved whatever the string does. A tile is 132–214px
-          wide and the catalogue runs +30% longer than English in German and
-          Russian, so whether this wraps is not something the layout gets to
-          assume — and `kpiStripHeight()` in Workspace.tsx sizes the whole strip
-          off one constant tile height. Reserving the second line keeps that
-          constant true in every language instead of only in English. */}
-      {dense ? null : (
-        <span
-          className="text-[11px] leading-[13px]"
-          style={{ color: 'var(--label-secondary)', minHeight: 26, display: 'block' }}
-        >
-          {/* `unavailable` outranks `pending`: a fetch that finished and failed
-              is not still loading, so the skeleton must not win when both are
-              set. And an unavailable tile says nothing here at all — the em
-              dash above already reads as "unknown" and carries that as its
-              accessible name, while this slot is for a comparison and a failure
-              sentence is not one.
-
-              Whenever a tile is unavailable, a surface that knows WHY is
-              already on screen: the busy banner above the strip, or
-              DaemonDownPane in the pane below. (`unavailable` is only reached
-              through `metricsFailed`/`listFailed`, and both imply a non-`ok`
-              daemonState — see `deriveDaemonState`.) Captioning each tile
-              "Couldn't be measured" put four of those under a banner promising
-              the numbers were on their way, and six over a pane already headed
-              "The daemon isn't running" (TRA-488). One condition, one sentence
-              — the rule TRA-469 and TRA-471 settled for the other surfaces. */}
-          {pending && !unavailable ? (
-            <Skeleton width={92} height={11} />
-          ) : unavailable ? null : delta !== null ? (
+          reconstruct by widening the window. The value never goes. */}
+      {dense ? null : pending && !unavailable ? (
+        // `unavailable` outranks `pending`: a fetch that finished and failed is
+        // not still loading, so the skeleton must not win when both are set.
+        <Skeleton width={92} height={11} />
+      ) : (
+        <span className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
+          {unavailable ? (
+            t('kpiUnavailable')
+          ) : delta !== null ? (
             <DeltaChip delta={delta} caption={deltaCaption} />
           ) : (
             footnote
           )}
         </span>
       )}
-    </>
-  );
-
-  /* A tile with no filter behind it is a readout, and a readout is content. It
-     rendered as `<button disabled>` until TRA-475, which puts a number in the
-     accessibility tree as a control the user is told they may not operate —
-     there was never a control. Only a tile that filters the list is a button;
-     everything else is a `<div>` and leaves the tree entirely. */
-  return interactive ? (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      {...shell}
-      // A `<button>` in Chromium is `cursor: default`; a card the size of this
-      // one has to say it is clickable before the pointer is over it.
-      className={`${shell.className} cursor-pointer`}
-    >
-      {content}
     </button>
-  ) : (
-    <div {...shell}>{content}</div>
   );
 }

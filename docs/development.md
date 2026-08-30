@@ -1,7 +1,7 @@
 ---
 title: "Contributing to trace-mcp — local setup, build, and test"
 description: "How to set up trace-mcp for local development: install, build, run the test suite, and the conventions to follow before opening a PR."
-updated: 2026-08-30
+updated: 2026-08-29
 ---
 
 # Development
@@ -131,7 +131,7 @@ the component that renders it, and English is the source language.
 packages/app/src/shared/i18n/
   locales.ts              # which languages ship, their names, the localStorage key
   catalog/en/<surface>.ts # the strings, one file per surface (= one i18next namespace)
-  catalog/ru/<surface>.ts # a translation, same keys — one such directory per language
+  catalog/ru/<surface>.ts # its translation, same keys
 packages/app/src/renderer/i18n/
   index.ts                # i18next init, setLocale, useLocale, t
   format.ts               # Intl wrappers: relativeTime, formatDate, formatNumber
@@ -161,46 +161,10 @@ Module-level helpers that are not components import `t` from `renderer/i18n` ins
 Never concatenate a sentence, and never format a date or a number by hand — use
 `renderer/i18n/format.ts`.
 
-**Which languages ship.** Ten: `en · de · es · fr · hi · ja · ko · pt-BR · ru · zh`.
-English is first because it is the source language and the `fallbackLng`; the rest are
-ordered by code. An order that encodes importance only invites the argument about the
-order.
-
-The set is weighted to a developer audience rather than to general speaker counts —
-that is why Chinese, Japanese and Korean are in it. English stays the source because
-every issue and discussion this repo has is in English.
-
-**What the evidence actually supported, and where it ran out (TRA-389).** Worth keeping,
-because the next person to ask "who are our users" will otherwise re-run these searches:
-
-- npm exposes no per-country download data for a package. Nothing to read. Don't go
-  looking again.
-- GitHub traffic gives referrers, not geography — `Google`, `reddit.com`,
-  `trace-mcp.com`, one `yandex.ru`. Useless for this question.
-- Self-reported profile locations were all that was left: of 102 stargazers, 31 disclose
-  one. Largest cluster Russian-speaking (Moscow ×3, Kiev, Bishkek), then China ×2 (plus
-  a fork by `iflow-mcp`, a Chinese MCP tooling account), then a Spanish-speaking scatter
-  (Tijuana, plus the forks `computo-experto`, `cerebrotecnologico`, `felipecordero`).
-  German: one stargazer, one fork.
-
-That signal is thin, and on its own it supported exactly the four languages TRA-389
-shipped. The set is ten because #594 chose to weight the developer audience instead of
-waiting for evidence this project cannot collect — a judgement call, made knowingly,
-not a reading of the data above. Note the cost it accepted: **every language
-is a permanent commitment on every future string**, and `catalog-parity.test.ts` will
-enforce it on ten catalogues from here on.
-
 **Adding a language.** Add it to `LOCALES` in `shared/i18n/locales.ts`, copy
 `catalog/en/` to `catalog/<code>/` and translate it. `catalog-parity.test.ts` then
 fails until every key exists and every `{{placeholder}}` survived; nothing else needs
 wiring, and the Language control picks the new entry up from `LOCALES`.
-
-Two things a copy-and-translate pass gets wrong. **Plurals are per-language**: write the
-forms the language actually has, not a mirror of English's `_one`/`_other`. Chinese has
-one (`_other` alone), Russian has four. The parity test compares base keys precisely so
-that it cannot force a language into English's shape. And **length**: German and Spanish
-run longer than English, so check the workspace table headers, the bulk actions bar and
-the segmented controls at the 640×420 window minimum.
 
 **The checks.**
 

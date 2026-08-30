@@ -10,7 +10,6 @@ import type { McpClientStatus } from '../../src/init/mcp-client.js';
 
 vi.mock('../../src/init/mcp-client.js', () => ({
   getMcpClientStatuses: vi.fn(),
-  configureMcpClients: vi.fn(() => []),
 }));
 
 vi.mock('../../src/project-root.js', () => ({
@@ -18,11 +17,10 @@ vi.mock('../../src/project-root.js', () => ({
 }));
 
 const { clientsCommand } = await import('../../src/cli/clients.js');
-const { configureMcpClients, getMcpClientStatuses } = await import('../../src/init/mcp-client.js');
+const { getMcpClientStatuses } = await import('../../src/init/mcp-client.js');
 const { findProjectRoot } = await import('../../src/project-root.js');
 
 const mockGetMcpClientStatuses = vi.mocked(getMcpClientStatuses);
-const mockConfigureMcpClients = vi.mocked(configureMcpClients);
 const mockFindProjectRoot = vi.mocked(findProjectRoot);
 
 async function run(args: string[]): Promise<void> {
@@ -38,8 +36,6 @@ function printed(): string {
 beforeEach(() => {
   vi.clearAllMocks();
   mockFindProjectRoot.mockReturnValue('/proj/current');
-  mockConfigureMcpClients.mockReturnValue([]);
-  process.exitCode = undefined;
   logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 
@@ -106,20 +102,6 @@ describe('clients status — human output', () => {
     expect(mockGetMcpClientStatuses).toHaveBeenCalledWith('/proj/current', 'global', undefined);
   });
 
-  /* A packaged desktop app shells out from inside its bundle, where no root
-     marker exists and findProjectRoot throws. Global scope no longer needs a
-     project root (TRA-501), so that must not take the command down. */
-  it('falls back to cwd when no project root can be found', async () => {
-    mockFindProjectRoot.mockImplementation(() => {
-      throw new Error('Could not find project root');
-    });
-    mockGetMcpClientStatuses.mockReturnValue([]);
-
-    await run(['status']);
-
-    expect(mockGetMcpClientStatuses).toHaveBeenCalledWith(process.cwd(), 'global', undefined);
-  });
-
   it('parses --client into a trimmed, filtered array', async () => {
     mockGetMcpClientStatuses.mockReturnValue([]);
 
@@ -130,96 +112,6 @@ describe('clients status — human output', () => {
       'cursor',
       'windsurf',
     ]);
-  });
-});
-
-describe('clients update', () => {
-  it('repairs every stale client when no names are given', async () => {
-    mockGetMcpClientStatuses.mockReturnValue(SAMPLE_STATUSES);
-
-    await run(['update']);
-
-    expect(mockConfigureMcpClients).toHaveBeenCalledWith(['windsurf'], '/proj/current', {
-      scope: 'global',
-      dryRun: undefined,
-    });
-  });
-
-  it('repairs exactly the named clients, drifted or not', async () => {
-    await run(['update', 'cursor', 'amp']);
-
-    expect(mockGetMcpClientStatuses).not.toHaveBeenCalled();
-    expect(mockConfigureMcpClients).toHaveBeenCalledWith(['cursor', 'amp'], '/proj/current', {
-      scope: 'global',
-      dryRun: undefined,
-    });
-  });
-
-  /* The whole reason this command exists rather than another `init` flag: an
-     update must not re-open the enforcement-level question the user already
-     answered. configureMcpClients writes the MCP entry and nothing else. */
-  it('does not write hooks, tweakcc or agent_behavior', async () => {
-    await run(['update', 'cursor']);
-
-    const [, , opts] = mockConfigureMcpClients.mock.calls[0];
-    expect(Object.keys(opts).sort()).toEqual(['dryRun', 'scope']);
-  });
-
-  it('says so and calls nothing when every config already matches', async () => {
-    mockGetMcpClientStatuses.mockReturnValue([
-      { client: 'cursor', configPath: '/home/.cursor/mcp.json', status: 'up_to_date' },
-    ]);
-
-    await run(['update']);
-
-    expect(mockConfigureMcpClients).not.toHaveBeenCalled();
-    expect(printed()).toContain('already matches');
-    expect(process.exitCode).toBeUndefined();
-  });
-
-  it('passes project scope and --dry-run through', async () => {
-    await run(['update', 'cursor', '--scope', 'project', '--dry-run']);
-
-    expect(mockConfigureMcpClients).toHaveBeenCalledWith(['cursor'], '/proj/current', {
-      scope: 'project',
-      dryRun: true,
-    });
-  });
-
-  it('exits non-zero when a write failed', async () => {
-    mockConfigureMcpClients.mockReturnValue([
-      { target: '/home/.cursor/mcp.json', action: 'skipped', detail: 'Error: EACCES' },
-    ]);
-
-    await run(['update', 'cursor']);
-
-    expect(process.exitCode).toBe(1);
-  });
-
-  it('stays zero for a dry run, which also reports every row as skipped', async () => {
-    mockConfigureMcpClients.mockReturnValue([
-      { target: '/home/.cursor/mcp.json', action: 'skipped', detail: 'Would configure cursor' },
-    ]);
-
-    await run(['update', 'cursor', '--dry-run']);
-
-    expect(process.exitCode).toBeUndefined();
-  });
-
-  it('emits scope, projectRoot, clients and steps as JSON', async () => {
-    mockConfigureMcpClients.mockReturnValue([
-      { target: '/home/.cursor/mcp.json', action: 'updated', detail: 'cursor (global)' },
-    ]);
-
-    await run(['update', 'cursor', '--json']);
-
-    const parsed = JSON.parse(printed());
-    expect(parsed).toMatchObject({
-      scope: 'global',
-      projectRoot: '/proj/current',
-      clients: ['cursor'],
-    });
-    expect(parsed.steps[0].action).toBe('updated');
   });
 });
 

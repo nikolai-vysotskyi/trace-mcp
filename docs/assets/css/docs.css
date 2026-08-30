@@ -349,9 +349,7 @@ main {
 .prose a:hover {
   text-decoration-color: var(--accent);
 }
-/* Scroll regions are tab stops too. Left out, they fall through to Chrome's
-   own ring — blue in the light theme, which is a second accent colour. */
-:where(a, button, summary, .table-scroll, .prose pre):focus-visible {
+:where(a, button, summary):focus-visible {
   outline: 1px solid var(--text-display);
   outline-offset: 2px;
 }
@@ -421,28 +419,6 @@ main {
 .prose .table-scroll {
   overflow-x: auto;
 }
-/* Instrument label for a region that has more to the right — same voice as
-   the thead label it sits above. The script adds .is-visible only while the
-   region is actually scrollable and not yet at its end. */
-.prose .scroll-hint {
-  display: none;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-disabled);
-  text-align: right;
-  margin-bottom: 10px;
-}
-.prose .scroll-hint.is-visible {
-  display: block;
-}
-/* The label belongs to the region under it: 10px, not the 20px paragraph gap.
-   Hidden, it contributes no margin and the region keeps its own 20px. */
-.prose .scroll-hint.is-visible + .table-scroll,
-.prose .scroll-hint.is-visible + pre {
-  margin-top: 0;
-}
 .prose table {
   width: 100%;
   border-collapse: collapse;
@@ -478,20 +454,6 @@ main {
 .prose td:last-child,
 .prose th:last-child {
   padding-right: 0;
-}
-
-/* Capability marks. The comparison tables used ✅/❌ — emoji as UI, and a
-   green that is a second accent colour. The mark is now plain ✓/✗ text, and
-   yes/no separate on opacity, which is how this system encodes state.
-   `font-variant-emoji: text` keeps a platform from re-colouring them. */
-.prose .mark {
-  font-variant-emoji: text;
-}
-.prose .mark-yes {
-  color: var(--text-display);
-}
-.prose .mark-no {
-  color: var(--text-disabled);
 }
 
 .prose blockquote {

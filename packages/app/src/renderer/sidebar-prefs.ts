@@ -53,36 +53,15 @@ export function writeSidebarCollapsed(collapsed: boolean): void {
  * Split a path into a truncatable directory part and the filename, which must
  * never be truncated.
  *
- * Splitting here rather than in CSS is what keeps the two parts independently
- * styleable in plain LTR. It replaced a `direction: rtl` truncation that
- * reordered a path's trailing punctuation under the bidi algorithm — that is
- * why `.idea/workspace.xml` rendered as `idea/workspace.xml.` and
- * `__external__/_root/php.synthetic` as `…l__/_root/php.synthetic__`.
- *
- * What a row actually shows is `name` followed by `parentDir()`, not `dir` —
- * see that function for why.
+ * The previous implementation truncated with `direction: rtl`, which reorders
+ * the trailing punctuation of a path under the bidi algorithm — that is why
+ * `.idea/workspace.xml` rendered as `idea/workspace.xml.` and
+ * `__external__/_root/php.synthetic` as `…l__/_root/php.synthetic__`. Splitting
+ * here and ellipsising only `dir` in plain LTR gets head-truncation with no
+ * bidi involvement at all.
  */
 export function splitPath(displayPath: string): { dir: string; name: string } {
   const idx = Math.max(displayPath.lastIndexOf('/'), displayPath.lastIndexOf('\\'));
   if (idx < 0) return { dir: '', name: displayPath };
   return { dir: displayPath.slice(0, idx + 1), name: displayPath.slice(idx + 1) };
-}
-
-/**
- * The location a file row shows *after* its filename: the last path segment
- * only, without separators.
- *
- * A sidebar row is 180–320px wide and a repo-relative path does not fit in it.
- * Putting the whole directory first cost up to 45% of the row and then spent
- * the remainder truncating the filename — the one token that identifies the
- * file — so `src/renderer/tabs/Settings.tsx` rendered as `src/render…Settings.t…`
- * (TRA-503). Quick open already showed the filename as the label and the
- * directory as the detail; this is the same order, and the leaf segment is the
- * part that distinguishes siblings (`types.ts` in `workspace/` from `types.ts`
- * in `tabs/`). Everything above the leaf stays in the row's tooltip.
- */
-export function parentDir(displayPath: string): string {
-  const { dir } = splitPath(displayPath);
-  const segments = dir.split(/[/\\]/).filter(Boolean);
-  return segments[segments.length - 1] ?? '';
 }

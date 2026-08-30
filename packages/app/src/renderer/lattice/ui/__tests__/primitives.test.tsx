@@ -172,17 +172,6 @@ describe('controls.css geometry', () => {
     expect(offenders).toEqual([]);
   });
 
-  /* TRA-522. The segmented control is the one primitive that pays a fixed 4px
-     inset out of its own height, so a 20px track leaves a 16px segment holding
-     a 12px label — 2px of air, which is the squeeze Nikolai reported twice: on
-     the app menu's Theme pill (TRA-376) and then on the Workspace toolbar's
-     Table/Compact toggle. The first fix only stopped ONE component opting in,
-     which is why it recurred. The tier is gone; this keeps it gone. */
-  it('has no 20px segmented control — that tier crushes its own label', () => {
-    expect(rules().filter((r) => /\.lx-seg\.sz-small\b/.test(r.selector))).toEqual([]);
-    expect(decl(rules().find((x) => x.selector === '.lx-seg')!.body, 'height')).toBe('24px');
-  });
-
   it('keeps cursor: default on buttons (that is the macOS behaviour)', () => {
     const btn = rules().find((x) => x.selector === '.lx-btn')!;
     expect(decl(btn.body, 'cursor')).toBe('default');

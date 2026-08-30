@@ -173,14 +173,8 @@
    this rule actually reaches is .ws-sb-ico. A glyph's floor is 3:1, which the
    dimmed white already met — so this was a consistency fix, not the AA fix the
    original commit message claimed. .ws-sb-count is styled here and rendered by
-   no component in the app; see TRA-358 for build-or-delete.
-
-   .ws-sb-path .dir joined it in TRA-503: the file row's location is
-   --label-secondary, which in light appearance is half-opacity black — it
-   rendered near-black on the accent fill, beside a white filename and a white
-   count. */
+   no component in the app; see TRA-358 for build-or-delete. */
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-ico,
-.ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-path .dir,
 .ws-sidebar:focus-within .ws-sb-row.is-selected .ws-sb-count {
   color: var(--on-accent);
 }
@@ -255,24 +249,20 @@
   -webkit-app-region: no-drag;
 }
 
-/* File-explorer row: <name> then <parent dir>, the way quick open lists a file.
-   The name leads at --label and the location follows in secondary text, because
-   only one of the two survives a 180–320px row — and the reader needs the name.
-   Location-first spent up to 45% of the row on `src/renderer/tabs/` and still
-   truncated the filename's extension (TRA-503). */
+/* File-explorer row: <dir>/<name> where the DIRECTORY truncates and the
+   filename never does. Replaces the `direction: rtl` hack, which mangled
+   any path containing `.` or `_` runs. */
 .ws-sb-path {
   display: flex;
   flex: 1;
   min-width: 0;
   align-items: baseline;
 }
-/* The location absorbs essentially all of the shrink (999 vs 1), so the
-   filename only ever truncates once the location is down to nothing — and it
-   fades out to the RIGHT of the name, where a truncation reads as one. */
+/* The directory absorbs essentially all of the shrink (999 vs 1), so the
+   filename only ever truncates once the directory is down to nothing. */
 .ws-sb-path .dir {
   flex: 0 999 auto;
   min-width: 0;
-  margin-left: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

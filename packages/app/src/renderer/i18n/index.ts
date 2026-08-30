@@ -27,24 +27,15 @@ import {
 
 export { LOCALES, type Locale } from '../../shared/i18n/locales.js';
 
-/* One list, two surfaces — the app menu's row and Settings render the same
-   entries. Same anti-drift rule as theme.ts's appearanceOptions().
+/* One list, two surfaces: the app menu's row renders `text`, Settings renders
+   `label`. Same anti-drift rule as theme.ts's appearanceOptions().
 
    Nothing here goes through `t` — a language list is the one place where
    translating the entries is wrong, so this is not a function for the reason
    appearanceOptions() is one (see LocaleInfo.label). It is a function so both
-   surfaces get the same shape without either of them knowing LocaleInfo.
-
-   Both names on one line, own first: "简体中文" is what a Chinese reader scans
-   for and "Chinese (Simplified)" is the only way everyone else can tell four
-   unfamiliar scripts apart. A native pop-up's row is one line, so they are
-   joined rather than stacked — and English, whose two names are the same word,
-   is not printed twice. */
-export function localeOptions(): ReadonlyArray<{ value: Locale; label: string }> {
-  return LOCALES.map((l) => ({
-    value: l.code,
-    label: l.label === l.englishLabel ? l.label : `${l.label} — ${l.englishLabel}`,
-  }));
+   surfaces get the same shape without either of them knowing LocaleInfo. */
+export function localeOptions(): ReadonlyArray<{ value: Locale; label: string; text: string }> {
+  return LOCALES.map((l) => ({ value: l.code, label: l.label, text: l.short }));
 }
 
 /** The stored choice, or the best match for the system's languages. */

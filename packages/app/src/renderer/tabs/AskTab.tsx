@@ -23,7 +23,7 @@ import {
   StatusDot,
   Toolbar,
 } from '../lattice/ui';
-import { parentDir, splitPath } from '../sidebar-prefs.js';
+import { splitPath } from '../sidebar-prefs.js';
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -946,19 +946,18 @@ function ContextInspector({
   );
 }
 
-/** One 28px row showing the filename, then its parent directory in secondary
-    text — the location is what truncates, never the name (DESIGN.md §4). */
+/** One 28px row showing `<dir>/<name>`, where the directory truncates at the
+    head and the filename never does (DESIGN.md §4). */
 function PathRow({ path, onClick }: { path: string; onClick: () => void }) {
-  const { name } = splitPath(path);
-  const parent = parentDir(path);
+  const { dir, name } = splitPath(path);
   return (
     <button type="button" className="ws-sb-row" title={path} onClick={onClick}>
       <span className="ws-sb-ico" aria-hidden="true">
         <Icon name="description" size={16} />
       </span>
       <span className="ws-sb-path">
+        <span className="dir">{dir}</span>
         <span className="name">{name}</span>
-        {parent && <span className="dir">{parent}</span>}
       </span>
     </button>
   );

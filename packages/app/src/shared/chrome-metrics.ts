@@ -41,26 +41,14 @@ export const TRAFFIC_LIGHT_Y = centreLightsIn(TOP_BAND_H);
    swallows whatever the app drew on that line, which is the entire surface
    toolbar plus the sidebar toggle.
 
-   Measured on macOS 26.5 / Electron 41.10.6, two tabs open, by the MARKER ROW:
-   paint the whole renderer a colour macOS chrome never uses (#FF00FF), then
-   photograph the window (`screencapture -l<CGWindowID>`) and read the row
-   profile. The first fully magenta row IS the bar's bottom edge, because the
-   bar is the only thing that can cover the marker. y=0..27.5 is plate (the last
-   two of those rows being its separator), y=28.0 is the first clean marker row.
-
-   Read it that way and only that way. TRA-432: the first measurement asked
-   "where does the sidebar's material resume?" instead, got 36.0, and shipped
-   it — but 36.0 is where OUR OWN reserved band ends, not the bar. The 8px
-   between them is this constant over-reserving, rendered in the window's
-   backdrop, which looks exactly like a bar that is 8px taller. A band 8px too
-   tall centres the traffic lights 4px too low, and that is what users saw. The
-   marker row cannot make that mistake: nothing but the bar hides the marker.
-
-   If a future macOS changes the metric, this is the one constant that absorbs
-   it — re-measure with the marker, do not eyeball a screenshot. */
+   Measured on macOS 26.5 / Electron 41.10.6 by photographing the window
+   (`screencapture -l<CGWindowID>`) with two tabs open and reading the column
+   profile down the sidebar: the tab bar's plate runs from y=0 to y=36.0, and
+   the sidebar's own material resumes at 36.0. If a future macOS changes the
+   metric, this is the one constant that absorbs it. */
 
 /** Height of the AppKit tab bar on a tabbed window, in CSS px. */
-export const MAC_TAB_BAR_H = 28;
+export const MAC_TAB_BAR_H = 36;
 
 /** Offset that centres the lights in the TAB BAR, which owns the top band then. */
 export const TRAFFIC_LIGHT_Y_TABBED = centreLightsIn(MAC_TAB_BAR_H);

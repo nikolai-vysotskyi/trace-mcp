@@ -1,7 +1,7 @@
 ---
 title: "codebase-memory-mcp Alternative: trace-mcp vs codebase-memory-mcp"
 description: "Both build a persistent code knowledge graph for AI agents. Head-to-head on language coverage, advertised tool cost, framework awareness, refactoring and security — including the two places codebase-memory-mcp is clearly ahead."
-updated: 2026-08-30
+updated: 2026-08-29
 ---
 
 # codebase-memory-mcp alternative: trace-mcp vs codebase-memory-mcp
@@ -91,24 +91,24 @@ The split is depth versus breadth, in both directions. codebase-memory-mcp is br
 |---|:---:|:---:|
 | **GitHub stars** | 100 | 41.0K |
 | Languages | {{ site.data.counts.languages }} | 161 |
-| Framework integrations | ✓ {{ site.data.counts.frameworks }} | ✗ (partial REST routes) |
-| Persistent knowledge graph | ✓ SQLite + FTS5 | ✓ |
-| Knowledge-graph queries | ✓ `graph_query` | ✓ Cypher-like |
-| Impact analysis | ✓ reverse dependency traversal + decorator filter | ✓ `detect_changes` |
-| Call graph | ✓ bidirectional | ✓ `trace_call_path` |
-| Cross-service / multi-repo | ✓ cross-repo API linking | ✓ cross-service HTTP linking |
-| IaC as graph nodes | ✓ K8s/Kustomize/HCL/Docker, cross-file resolved | ✓ K8s/Kustomize/HCL/Docker |
-| Clone / community detection | ✓ AST Type-2 subtree hashing, 11 antipatterns | ✓ MinHash near-clone, Louvain communities |
-| Refactoring tools | ✓ rename, move, signature, AST codemod, extract | ✗ |
-| Security scanning | ✓ OWASP Top-10, type-aware taint, SARIF 2.1.0 | ✗ |
-| Control-flow graph | ✓ basic blocks, loop back-edges, try/catch merges | ✗ |
-| Quality gates in CI | ✓ complexity / security / coverage thresholds | ✗ |
-| Code-linked decision memory | ✓ decisions bound to symbol IDs, staleness-verified | partial (`manage_adr` markdown documents) |
-| Runtime trace ingestion | ✗ | ✓ `ingest_traces` |
-| Graph visualization | ✓ desktop app | ✓ 3D web UI |
+| Framework integrations | ✅ {{ site.data.counts.frameworks }} | ❌ (partial REST routes) |
+| Persistent knowledge graph | ✅ SQLite + FTS5 | ✅ |
+| Knowledge-graph queries | ✅ `graph_query` | ✅ Cypher-like |
+| Impact analysis | ✅ reverse dependency traversal + decorator filter | ✅ `detect_changes` |
+| Call graph | ✅ bidirectional | ✅ `trace_call_path` |
+| Cross-service / multi-repo | ✅ cross-repo API linking | ✅ cross-service HTTP linking |
+| IaC as graph nodes | ✅ K8s/Kustomize/HCL/Docker, cross-file resolved | ✅ K8s/Kustomize/HCL/Docker |
+| Clone / community detection | ✅ AST Type-2 subtree hashing, 11 antipatterns | ✅ MinHash near-clone, Louvain communities |
+| Refactoring tools | ✅ rename, move, signature, AST codemod, extract | ❌ |
+| Security scanning | ✅ OWASP Top-10, type-aware taint, SARIF 2.1.0 | ❌ |
+| Control-flow graph | ✅ basic blocks, loop back-edges, try/catch merges | ❌ |
+| Quality gates in CI | ✅ complexity / security / coverage thresholds | ❌ |
+| Code-linked decision memory | ✅ decisions bound to symbol IDs, staleness-verified | partial (`manage_adr` markdown documents) |
+| Runtime trace ingestion | ❌ | ✅ `ingest_traces` |
+| Graph visualization | ✅ desktop app | ✅ 3D web UI |
 | MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 15 (~7K tok); profiles: 11 / 7 |
 | Supply-chain posture | OpenSSF Scorecard, CodeQL, Semgrep | SLSA L3, VirusTotal, OpenSSF Scorecard |
-| Published benchmark | ✗ | ✓ preprint, not independently reproduced |
+| Published benchmark | ❌ | ✅ preprint, not independently reproduced |
 | Written in | TypeScript | C |
 
 ## When to pick codebase-memory-mcp
@@ -149,6 +149,6 @@ Only trace-mcp. codebase-memory-mcp is read-only analysis.
 ## Next steps
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codegraph](/vs/codegraph.html)
 - [Decision memory](/decision-memory.html) — how code-linked decisions differ from a notes file.
 - [Get started](/#install) — no configuration required.

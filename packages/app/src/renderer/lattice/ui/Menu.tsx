@@ -18,7 +18,6 @@ import type React from 'react';
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { FloatingLayer } from '../FloatingLayer';
 import { Icon } from '../icons';
-import { PopUpButton, type PopUpOption } from './PopUpButton';
 
 /** Anchors a Menu under the button held in `ref`, or at an explicit point.
     Lives here rather than next to one surface because every surface with an
@@ -96,12 +95,9 @@ export function Menu({ x, y, align = 'start', onClose, className, children }: Me
         layer.querySelectorAll<HTMLElement>(`${ENABLED}, [data-menu-row]`),
       )) {
         if (el.hasAttribute('data-menu-row')) {
-          /* A pill row stops on its checked segment; a MenuPopUpRow has no
-             segments at all, so its single control is the stop. */
           const stop =
             el.querySelector<HTMLElement>('[aria-checked="true"]') ??
-            el.querySelector<HTMLElement>(ENABLED) ??
-            el.querySelector<HTMLElement>('select:not([disabled])');
+            el.querySelector<HTMLElement>(ENABLED);
           if (stop) out.push(stop);
         } else if (!el.closest('[data-menu-row]')) {
           out.push(el);
@@ -240,9 +236,11 @@ export interface MenuChoice<T extends string> {
   /** The accessible name AND the tooltip. For an icon segment it is the only name;
       for a word segment it is the long form the short text abbreviates. */
   label: string;
-  /** A pill segment is a glyph, always: a choice whose values need words does
-      not fit 20px squares and belongs in a MenuPopUpRow instead. */
-  icon: string;
+  /** An icon segment. Omit it and give `text` when no glyph names the value. */
+  icon?: string;
+  /** A word segment: the short visible form ("EN"). Language names are words,
+      not glyphs, so the Language row uses this (TRA-388). */
+  text?: string;
 }
 
 export interface MenuChoiceRowProps<T extends string> {
@@ -314,10 +312,12 @@ export function MenuChoiceRow<T extends string>({
       }}
     >
       <span className="ws-ctx-row-label">{label}</span>
-      {/* The 24px track carries square 20px segments; island.css sets their
-          geometry. There is no smaller track any more — the 20px tier this row
-          used to ask for was deleted in TRA-522. */}
-      <div className="lx-seg ws-ctx-seg">
+      {/* No `sz-small`: at 20px the track left 1px above and below a 14px glyph
+          while the segments ran 30px wide, which is the squeeze Nikolai saw —
+          crushed vertically, loose horizontally (TRA-376). The default 24px
+          track carries square 20px segments; island.css sets their geometry.
+          `is-text` swaps that square for a padded word segment. */}
+      <div className={'lx-seg ws-ctx-seg' + (options[0]?.icon ? '' : ' is-text')}>
         {options.map((option) => {
           const checked = option.value === value;
           return (
@@ -333,53 +333,11 @@ export function MenuChoiceRow<T extends string>({
               className={'lx-seg-item' + (checked ? ' is-active' : '')}
               onClick={() => onChange(option.value)}
             >
-              <Icon name={option.icon} size={12} />
+              {option.icon ? <Icon name={option.icon} size={12} /> : option.text}
             </button>
           );
         })}
       </div>
-    </div>
-  );
-}
-
-export interface MenuPopUpRowProps<T extends string> {
-  /** Visible row label; also the pop-up button's accessible name. */
-  label: string;
-  options: ReadonlyArray<PopUpOption<T>>;
-  value: T;
-  onChange: (next: T) => void;
-}
-
-/**
- * The same row as MenuChoiceRow for a choice a pill cannot carry: too many
- * values, or values that are words rather than glyphs (TRA-450).
- *
- * DESIGN.md draws the line at four. Language is the case that crossed it — ten
- * languages named in their own scripts do not fit ten 20px segments — and the
- * native pop-up is the right escape hatch precisely because its list IS the
- * platform's menu, scrolling and type-ahead included, for no code of ours.
- *
- * Changing the value does not close the enclosing menu: watching the app
- * switch language under the row is the whole point of an inline switcher.
- *
- * No `role="group"`, unlike MenuChoiceRow: a group exists there to bind several
- * radios into one set, and here there is a single control that already carries
- * the row's name. Wrapping it would only make a screen reader say "Language"
- * twice. `data-menu-row` still marks it, because Menu's up/down traversal reads
- * that attribute — not the role — to treat a row as one stop.
- */
-export function MenuPopUpRow<T extends string>({
-  label,
-  options,
-  value,
-  onChange,
-}: MenuPopUpRowProps<T>): ReactNode {
-  return (
-    <div className="ws-ctx-row" data-menu-row="">
-      <span className="ws-ctx-row-label" aria-hidden="true">
-        {label}
-      </span>
-      <PopUpButton options={options} value={value} onChange={onChange} aria-label={label} />
     </div>
   );
 }

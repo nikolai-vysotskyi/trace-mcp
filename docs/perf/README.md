@@ -1,14 +1,3 @@
----
-layout: default
-title: Desktop app performance baseline
-# Without this, Jekyll publishes this file at /perf/README.html and GitHub
-# Pages stops serving it as the directory index, so /perf/ — the URL that
-# already existed — starts returning the "Page not found" body under a 200.
-permalink: /perf/
-description: Internal working document. Measured performance history for the trace-mcp desktop app.
-noindex: true
----
-
 # Desktop app performance baseline
 
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
