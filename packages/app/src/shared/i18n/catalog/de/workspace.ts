@@ -62,6 +62,8 @@ export const workspace = {
   kpiNoProjectsYet: 'noch keine Projekte',
   kpiNothingIndexedYet: 'noch nichts indexiert',
   kpiNothingRunning: 'nichts läuft',
+  kpiHealthyCriteria: 'Note A oder B, keine Sicherheitsfunde',
+  kpiNeedsAttentionCriteria: 'niedrige Note oder Funde',
   kpiShare_one: '{{percent}} % von {{total}} Projekt',
   kpiShare_other: '{{percent}} % von {{total}} Projekten',
   kpiDeltaCaption: 'ggü. {{when}}',

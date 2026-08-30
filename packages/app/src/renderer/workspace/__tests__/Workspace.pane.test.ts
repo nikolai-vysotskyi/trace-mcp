@@ -18,16 +18,16 @@ const pane = (winW: number, winH: number) => ({ w: winW - 220, h: winH - 44 });
 
 describe('kpiStripHeight', () => {
   it('reproduces the strip measured at the minimum window', () => {
-    // 640 − 220 = a 420px pane: two tiles per row, three rows of 99px.
-    expect(kpiStripHeight(420)).toBe(357);
+    // 640 − 220 = a 420px pane: two tiles per row, three rows of 112px.
+    expect(kpiStripHeight(420)).toBe(396);
   });
 
   it('is one row of tiles once the pane fits all six', () => {
-    expect(kpiStripHeight(1060)).toBe(99 + 28);
+    expect(kpiStripHeight(1060)).toBe(112 + 28);
   });
 
   it('never divides by a zero-width pane', () => {
-    expect(kpiStripHeight(0)).toBe(6 * 99 + 5 * 16 + 28);
+    expect(kpiStripHeight(0)).toBe(6 * 112 + 5 * 16 + 28);
   });
 });
 
@@ -67,7 +67,7 @@ describe('isNarrowPane', () => {
 describe('isDensePane', () => {
   it('is dense at the app minimum window', () => {
     const p = pane(640, 420);
-    // 376 − 52 toolbar − 357 strip is negative: the list had nowhere to be.
+    // 376 − 52 toolbar − 396 strip is negative: the list had nowhere to be.
     expect(isDensePane(p.w, p.h)).toBe(true);
   });
 
