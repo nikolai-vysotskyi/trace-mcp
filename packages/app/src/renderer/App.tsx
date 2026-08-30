@@ -21,7 +21,6 @@ import {
 } from './lattice/ui';
 import {
   formatAgo,
-  quarantineCommand,
   type UpdateCheck,
   useUpdateCheck,
 } from './update-check.js';
@@ -465,7 +464,6 @@ function ProjectFileExplorer({
 
 // Where the compiled bundles live — same repo the postinstall downloads from
 // (scripts/app-dist-repo.mjs). Used by the "manual install" card below.
-const RELEASES_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest';
 
 // ── Update card ──────────────────────────────────────────────
 // Only the states you can DO something about: an update available, one
@@ -566,7 +564,7 @@ function CommandLine({ command, label }: { command: string; label: string }) {
 
 export function UpdateCard({ update }: { update: UpdateCheck }) {
   const { t } = useTranslation('update');
-  const { state, pendingVersion, updating } = update;
+  const { state, pendingVersion, updating, progress } = update;
 
   // Pending swap takes precedence — the user's next click should restart, not redownload.
   if (pendingVersion) {
@@ -590,37 +588,6 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
     );
   }
 
-  // The CLI updated, the .app bundle did not, and clicking Update again would
-  // repeat exactly that. Suppressing the "update available" card is correct;
-  // showing a green "Up to date" in its place is what left a user three major
-  // versions behind believing they were current (TRA-357). This state gets its
-  // own honest card with the one action that does work: download the release.
-  if (state.stuck && state.latest) {
-    return (
-      <CardShell warn live>
-        <CardTitle tone="warn">{t('cardStuckTitle', { version: state.latest })}</CardTitle>
-        <CardSubtitle>{t('cardStuckSubtitle', { current: state.current })}</CardSubtitle>
-        <Button
-          variant="prominent"
-          icon="download"
-          className="w-full"
-          onClick={() => void window.electronAPI?.openExternal?.(RELEASES_URL)}
-        >
-          {t('cardDownload', { version: state.latest })}
-        </Button>
-        {/* The download alone dead-ends: our macOS builds are ad-hoc signed, so
-            Gatekeeper calls the file the browser just fetched "damaged". An
-            escape hatch that ends in an error dialog is not an escape hatch —
-            the card carries the command that clears it (TRA-431). */}
-        <CardSubtitle>{t('cardStuckQuarantine')}</CardSubtitle>
-        <CommandLine
-          command={quarantineCommand(state.installPath)}
-          label={t('copyQuarantineCommand')}
-        />
-      </CardShell>
-    );
-  }
-
   if (!state.available) return null;
 
   return (
@@ -636,9 +603,7 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
       {/* `is-status`, not a plain disabled button: the download takes minutes,
           and 0.4 opacity on the one thing that says it is running reads as a
           hung app. The capsule keeps its accent fill and its label; the bar
-          below is what carries "still going" (TRA-429). npm gives us no byte
-          count — `npm install -g` is one opaque execFile in the main process —
-          so the honest shape is indeterminate, never a fake percentage. */}
+          below is what carries "still going" (TRA-429). */}
       <Button
         variant="prominent"
         className={['w-full', updating ? 'is-status' : ''].join(' ')}
@@ -647,12 +612,19 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
       >
         {updating ? t('cardUpdating') : t('cardUpdate')}
       </Button>
+      {/* electron-updater reports real bytes, so the bar is determinate: it
+          fills, and a stalled download stops moving instead of animating
+          forever. Before the first `download-progress` event `progress` is 0,
+          which is an honest empty bar rather than a fake position. */}
       {updating && (
         <div
           className="update-progress"
           role="progressbar"
           aria-label={t('cardUpdating')}
-          aria-valuetext={t('cardUpdating')}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress ?? 0)}
+          style={{ '--update-progress': `${progress ?? 0}%` } as React.CSSProperties}
         />
       )}
     </CardShell>

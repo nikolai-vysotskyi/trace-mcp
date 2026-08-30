@@ -44,9 +44,22 @@ interface Fixture {
   releaseBody: unknown;
 }
 
-function writeBundle(appPath: string, version: string): void {
+/**
+ * @param selfUpdating  Omits the apply-pending helper from `Contents/Resources`,
+ *   which is how the postinstall recognises a build that owns its own updates
+ *   and must not be touched from outside (TRA-437). Defaults to a legacy bundle
+ *   because that is what every swap test here is about.
+ */
+function writeBundle(appPath: string, version: string, selfUpdating = false): void {
   const contents = path.join(appPath, 'Contents');
   fs.mkdirSync(path.join(contents, 'MacOS'), { recursive: true });
+  if (!selfUpdating) {
+    fs.mkdirSync(path.join(contents, 'Resources', 'scripts'), { recursive: true });
+    fs.writeFileSync(
+      path.join(contents, 'Resources', 'scripts', 'apply-pending-update.mjs'),
+      '// legacy staged-swap helper\n',
+    );
+  }
   fs.writeFileSync(
     path.join(contents, 'Info.plist'),
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -271,6 +284,64 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
     });
   }
 
+  /* TRA-437. This hook is now the bridge off the old updater and nothing else:
+     a build that owns its own updates via electron-updater must never have its
+     bundle written from outside, or the two mechanisms race over the same
+     `.app` — the failure the rewrite existed to make impossible. */
+  describe('electron-updater bundles', () => {
+    it('leaves a self-updating bundle alone even when it is behind', async () => {
+      writeBundle(fx.appPath, '3.3.0', true);
+      publishRelease('3.9.0');
+
+      const stdout = await runPostinstall();
+
+      expect(readBundleVersion(fx.appPath)).toBe('3.3.0');
+      expect(stdout).toContain('updates itself');
+      // Not staged either: staging is the other half of the swap, and the app
+      // that would apply it no longer exists.
+      expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.zip'))).toBe(false);
+    });
+
+    it('reclaims staging left beside a bundle that has finished migrating', async () => {
+      writeBundle(fx.appPath, '3.9.0', true);
+      for (const [name, body] of [
+        ['.trace-mcp-pending.zip', 'leftover'],
+        ['.trace-mcp-pending.sha256', 'f'.repeat(64)],
+        ['.trace-mcp-pending-version', '3.5.2'],
+      ] as const) {
+        fs.writeFileSync(path.join(fx.installDir, name), body);
+      }
+      publishRelease('3.9.0');
+
+      await runPostinstall();
+
+      for (const name of [
+        '.trace-mcp-pending.zip',
+        '.trace-mcp-pending.sha256',
+        '.trace-mcp-pending-version',
+      ]) {
+        expect(fs.existsSync(path.join(fx.installDir, name))).toBe(false);
+      }
+    });
+
+    /* The staged-zip updater's state file. Nothing reads it any more, but a
+       stale "stuck on 3.3.0" marker on an upgrading user's disk must not be
+       able to influence anything ever again — so it is removed, not orphaned. */
+    it('deletes the old app-update-state.json', async () => {
+      const statePath = path.join(fx.home, '.trace-mcp', 'app-update-state.json');
+      fs.writeFileSync(
+        statePath,
+        JSON.stringify({ lastNpmOnlyAttempt: { bundle: '3.3.0', target: '3.9.0', at: 1 } }),
+      );
+      writeBundle(fx.appPath, '3.9.0', true);
+      publishRelease('3.9.0');
+
+      await runPostinstall();
+
+      expect(fs.existsSync(statePath)).toBe(false);
+    });
+  });
+
   it('replaces a bundle that is several majors behind', async () => {
     // The exact shape of the incident: installed 1.50.0, released 3.1.1.
     installBundle('1.50.0');
@@ -354,7 +425,7 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
 
     expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
     expect(readBundleVersion(systemApp)).toBe('3.5.2');
-    expect(stdout).toContain('2 installed bundles');
+    expect(stdout).toContain('2 legacy bundles');
     // Each swap records its own version marker, and leaves no backup behind.
     expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-version'), 'utf-8')).toBe('v3.5.2');
     expect(fs.readdirSync(systemDir).filter((f) => f.includes('.bak-'))).toEqual([]);

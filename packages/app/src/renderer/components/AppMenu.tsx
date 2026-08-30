@@ -59,13 +59,7 @@ function updateSummary(update: UpdateState, checking: boolean): Summary {
   if (update.available) {
     return { text: t('update:headerAvailable', { version: update.latest }), tone: 'is-info' };
   }
-  /* `stuck` is available: false — the CLI moved and the bundle did not. Calling
-     that "Up to date" is the failure TRA-357 fixed on the card, and this header
-     is a second place it could be told. */
-  if (update.stuck && update.latest) {
-    return { text: t('update:headerManualInstall', { version: update.latest }), tone: 'is-warn' };
-  }
-  /* Same shape of lie, different cause: this root is current, but the npm root
+  /* This root is current, but the npm root this root is current, but the npm root
      the launcher shim points into is not, so every MCP client is on the old
      server (TRA-364). The main process only sends roots that are actually in
      use, so reaching here always means the user has something to fix. */

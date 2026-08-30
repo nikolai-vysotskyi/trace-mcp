@@ -7,19 +7,11 @@ export const update = {
   headerVersion: '版本 {{version}}',
   headerChecking: '检查中…',
   headerAvailable: '有新版本 {{version}}',
-  headerManualInstall: '版本 {{version}} 需要手动安装',
   headerUpToDate: '已是最新 · {{when}}检查过',
 
   cardReadyTitle: 'v{{version}} 已就绪',
   cardReadySubtitle: '重启以安装 · v{{current}}',
   cardRestart: '重启以安装',
-  cardStuckTitle: 'v{{version}} 需要手动安装',
-  cardStuckSubtitle:
-    '命令行工具已更新，但应用本身仍是 v{{current}}——它无法替换自己的程序包。请下载发行版并拖入「应用程序」。',
-  cardDownload: '下载 v{{version}}',
-  cardStuckQuarantine:
-    'macOS 会说下载的文件已损坏。其实没有——移入「应用程序」后执行一次这条命令：',
-  copyQuarantineCommand: '复制命令',
   cardAvailableTitle: '有新版本 v{{version}}',
   cardAvailableSubtitle: '当前 v{{current}} · {{when}}检查过',
   cardUpdate: '更新',

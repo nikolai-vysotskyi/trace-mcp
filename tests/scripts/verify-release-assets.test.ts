@@ -37,6 +37,10 @@ describe('verify-release-assets', () => {
       'trace-mcp-3.1.1-win.zip.sha256',
       'trace-mcp.Setup.3.1.1.exe',
       'trace-mcp.Setup.3.1.1.exe.sha256',
+      // No `.sha256` sibling: electron-updater resolves these by fixed name and
+      // carries its own sha512 per file inside them (TRA-437).
+      'latest-mac.yml',
+      'latest.yml',
     ]);
   });
 

@@ -7,19 +7,11 @@ export const update = {
   headerVersion: 'Versão {{version}}',
   headerChecking: 'Verificando…',
   headerAvailable: 'Versão {{version}} disponível',
-  headerManualInstall: 'A versão {{version}} exige instalação manual',
   headerUpToDate: 'Atualizado · verificado {{when}}',
 
   cardReadyTitle: 'v{{version}} pronta',
   cardReadySubtitle: 'Reinicie para instalar · v{{current}}',
   cardRestart: 'Reiniciar para instalar',
-  cardStuckTitle: 'A v{{version}} exige instalação manual',
-  cardStuckSubtitle:
-    'A ferramenta de linha de comando foi atualizada, mas o app em si continua na v{{current}} — ele não conseguiu substituir o próprio pacote. Baixe a release e arraste-a para Aplicativos.',
-  cardDownload: 'Baixar a v{{version}}',
-  cardStuckQuarantine:
-    'O macOS vai dizer que o download está danificado. Não está — rode isto uma vez depois de movê-lo para Aplicativos:',
-  copyQuarantineCommand: 'Copiar comando',
   cardAvailableTitle: 'v{{version}} disponível',
   cardAvailableSubtitle: 'Você está na v{{current}} · verificado {{when}}',
   cardUpdate: 'Atualizar',

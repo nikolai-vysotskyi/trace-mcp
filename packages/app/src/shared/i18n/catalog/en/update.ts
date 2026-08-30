@@ -15,7 +15,6 @@ export const update = {
   headerVersion: 'Version {{version}}',
   headerChecking: 'Checking…',
   headerAvailable: 'Version {{version}} available',
-  headerManualInstall: 'Version {{version}} needs a manual install',
   /** `when` is a relative time from i18n/format.ts, e.g. "2 hr. ago". */
   headerUpToDate: 'Up to date · checked {{when}}',
 
@@ -23,15 +22,6 @@ export const update = {
   cardReadyTitle: 'v{{version}} ready',
   cardReadySubtitle: 'Restart to install · v{{current}}',
   cardRestart: 'Restart to install',
-  cardStuckTitle: 'v{{version}} needs a manual install',
-  cardStuckSubtitle:
-    'The command line tool updated, but the app itself is still v{{current}} — it could not replace its own bundle. Download the release and drag it into Applications.',
-  cardDownload: 'Download v{{version}}',
-  /* Our macOS builds are ad-hoc signed, so Gatekeeper rejects a browser
-     download as "damaged". Say it before the user hits it (TRA-431). */
-  cardStuckQuarantine:
-    'macOS will call the download damaged. It is not — run this once after moving it into Applications:',
-  copyQuarantineCommand: 'Copy command',
   cardAvailableTitle: 'v{{version}} available',
   cardAvailableSubtitle: 'Currently v{{current}} · checked {{when}}',
   cardUpdate: 'Update',

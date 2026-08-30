@@ -22,20 +22,30 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Artifacts an updater or a human resolves by name, plus the checksum each requires. */
+/**
+ * Artifacts an updater or a human resolves by name, plus the checksum each
+ * requires. The two channel files are listed separately: electron-updater
+ * resolves them by a fixed name and they ship without a `.sha256` sibling.
+ */
 export function expectedAssets(version) {
   return [
-    `trace-mcp-${version}-arm64-mac.zip`, // macOS Apple silicon (staged-zip updater)
-    `trace-mcp-${version}-mac.zip`, // macOS Intel (staged-zip updater)
-    // The signed+notarized DMGs are the only macOS download a human gets
-    // (TRA-436). They are not an updater input, but a release that lost one
-    // leaves that architecture with no installable build and nothing else
-    // notices, so it is asserted here with everything else.
-    `trace-mcp-${version}-arm64.dmg`, // macOS Apple silicon installer
-    `trace-mcp-${version}-x64.dmg`, // macOS Intel installer
-    `trace-mcp-${version}-win.zip`, // Windows portable
-    `trace-mcp.Setup.${version}.exe`, // Windows NSIS installer
-  ].flatMap((name) => [name, `${name}.sha256`]);
+    ...[
+      `trace-mcp-${version}-arm64-mac.zip`, // macOS Apple silicon (Squirrel.Mac)
+      `trace-mcp-${version}-mac.zip`, // macOS Intel (Squirrel.Mac)
+      // The signed+notarized DMGs are the only macOS download a human gets
+      // (TRA-436). They are not an updater input, but a release that lost one
+      // leaves that architecture with no installable build and nothing else
+      // notices, so it is asserted here with everything else.
+      `trace-mcp-${version}-arm64.dmg`, // macOS Apple silicon installer
+      `trace-mcp-${version}-x64.dmg`, // macOS Intel installer
+      `trace-mcp-${version}-win.zip`, // Windows portable
+      `trace-mcp.Setup.${version}.exe`, // Windows NSIS installer
+    ].flatMap((name) => [name, `${name}.sha256`]),
+    // Without these, every installed app polls a feed that 404s and no update
+    // is ever offered again — silently, on both platforms (TRA-437).
+    'latest-mac.yml',
+    'latest.yml',
+  ];
 }
 
 /**

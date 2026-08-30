@@ -51,22 +51,28 @@ declare global {
         latest?: string;
         lastChecked?: number;
         error?: string;
-        stuck?: boolean;
         /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
         staleRoots?: { root: string; version: string }[];
-        /** Absolute path to the running `.app`, so copyable commands name the real install. */
-        installPath?: string;
       }>;
-      checkPendingUpdate: () => Promise<{ pending: boolean; version?: string }>;
+      /** `percent` is only present while a download is still in flight. */
+      checkPendingUpdate: () => Promise<{ pending: boolean; version?: string; percent?: number }>;
       applyUpdate: () => Promise<{
         ok: boolean;
         pending?: boolean;
         error?: string;
-        outcome?: 'bundle-pending' | 'npm-only' | 'already-current';
         version?: string;
         /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
         staleRoots?: { root: string; version: string }[];
       }>;
+      /** electron-updater's `download-progress`, forwarded verbatim. */
+      onUpdateProgress: (
+        callback: (p: {
+          percent: number;
+          bytesPerSecond: number;
+          transferred: number;
+          total: number;
+        }) => void,
+      ) => () => void;
       restartApp: () => Promise<void>;
       openSettings: (section?: string) => Promise<{ ok: boolean }>;
       openClients: () => Promise<{ ok: boolean }>;

@@ -118,24 +118,4 @@ describe('update-check strings', () => {
     expect(ru.title).toContain(ru.command);
   });
 
-  /* The command is the manual-install card's only working action, so it has to
-     name the bundle the user really has. `/Applications` was hard-coded while
-     the locator prefers `~/Applications` — `xattr` then fails on a path that
-     does not exist and the escape hatch dead-ends (TRA-460). */
-  it('clears quarantine on the install we actually found', () => {
-    expect(quarantineCommand('/Users/x/Applications/trace-mcp.app')).toBe(
-      'xattr -dr com.apple.quarantine /Users/x/Applications/trace-mcp.app',
-    );
-  });
-
-  it('falls back to /Applications when the bundle path is unknown', () => {
-    expect(quarantineCommand()).toBe('xattr -dr com.apple.quarantine /Applications/trace-mcp.app');
-    expect(quarantineCommand('')).toBe('xattr -dr com.apple.quarantine /Applications/trace-mcp.app');
-  });
-
-  it('quotes a path the shell would otherwise split', () => {
-    expect(quarantineCommand('/Users/x/My Apps/trace-mcp.app')).toBe(
-      "xattr -dr com.apple.quarantine '/Users/x/My Apps/trace-mcp.app'",
-    );
-  });
 });
