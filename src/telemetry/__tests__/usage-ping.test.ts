@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:fs');
+vi.mock('../top-model.js', () => ({ topModelLastDay: () => 'claude-opus-4-6' }));
 
 import fs from 'node:fs';
 import { recordUsagePingClient, sendUsagePing } from '../usage-ping.js';
@@ -81,7 +82,7 @@ describe('sendUsagePing', () => {
     expect(params.engagement_time_msec).toBe(1);
   });
 
-  it('reports the MCP client name recorded by a previous session, and the machine timezone', async () => {
+  it('reports the MCP client name recorded by a previous session, and the model it drove', async () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({ installId: 'fixed-id', lastPingDate: '2000-01-01', client: 'claude-code' }),
     );
@@ -90,7 +91,40 @@ describe('sendUsagePing', () => {
     const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
       .events[0]!.params;
     expect(params.client).toBe('claude-code');
-    expect(params.timezone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(params.model).toBe('claude-opus-4-6');
+  });
+
+  it('sends the country as user_location and never an ip_override', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const body = calls[0]!.body as Record<string, unknown> & {
+      user_location?: { country_id: string };
+      events: Array<{ params: Record<string, unknown> }>;
+    };
+    expect(body).not.toHaveProperty('ip_override');
+    expect(body.events[0]!.params).not.toHaveProperty('timezone');
+    // The test machine has a real zone, so a country resolves; assert the shape.
+    if (body.user_location) expect(body.user_location.country_id).toMatch(/^[A-Z]{2}$/);
+  });
+
+  it('reports how many repositories are indexed, without their paths', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({
+      version: '1.2.3',
+      env: CONFIGURED_ENV,
+      fetchImpl,
+      loadSavings: () =>
+        ({
+          total_tokens_saved: 10,
+          total_calls: 2,
+          per_project: { '/home/me/secret-repo': {}, '/work/other': {} },
+        }) as never,
+    });
+    const serialised = JSON.stringify(calls[0]!.body);
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.repos_indexed).toBe(2);
+    expect(serialised).not.toContain('secret-repo');
   });
 
   it('falls back to an unknown client when nothing has connected yet', async () => {

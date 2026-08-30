@@ -1,7 +1,7 @@
 ---
 title: "codebase-memory-mcp Alternative: trace-mcp vs codebase-memory-mcp"
 description: "Both build a persistent code knowledge graph for AI agents. Head-to-head on language coverage, advertised tool cost, framework awareness, refactoring and security — including the two places codebase-memory-mcp is clearly ahead."
-updated: 2026-08-29
+updated: 2026-08-30
 ---
 
 # codebase-memory-mcp alternative: trace-mcp vs codebase-memory-mcp
