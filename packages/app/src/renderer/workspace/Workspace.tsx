@@ -26,6 +26,7 @@ import { t } from '../i18n';
 import { formatNumber } from '../i18n/format';
 import { Button, EmptyState } from '../lattice/ui';
 import { addRecentProject, removeRecentProject } from '../recent-projects';
+import { DaemonDownPane } from '../components/DaemonDownPane';
 import { AddProjectControl } from './AddProjectControl';
 import { BulkActionsBar } from './BulkActionsBar';
 import { WorkspaceCompactView } from './WorkspaceCompactView';
@@ -82,7 +83,11 @@ function loadFilter(): WorkspaceFilter {
 // Pane and strip geometry, all read off the rendered surface rather than guessed.
 const TILE_MIN_W = 132; // KpiTile's flex basis
 const TILE_GAP = 16; // gap-4
-const TILE_H = 99; // a full-height tile: 16 + 13 + 4 + 32 + 4 + 13 + 16 + hairlines
+// A full-height tile: 16 + 13 + 4 + 32 + 4 + 26 + 16 + hairlines. The comparison
+// line reserves two 13px lines rather than one, because at 132–214px of tile a
+// criterion or a long translation wraps and a one-line constant would then
+// under-report the strip by 13px a row (TRA-459).
+const TILE_H = 112;
 const STRIP_PAD = 28; // pt-4 + pb-3
 const TOOLBAR_H = 52;
 const PANE_PAD = 32; // px-4, both sides
@@ -102,14 +107,38 @@ const MIN_SCROLL_WINDOW = 160;
 export const TABLE_MIN_PANE_W = PANE_PAD + FROZEN_COLS_W + MIN_SCROLL_WINDOW;
 
 /**
- * How tall the full-height KPI strip would be in a pane this wide. The tiles
- * flex-wrap, so width decides how many rows of 99px there are — at the app's
- * 640px minimum window this returns 357, which is what the strip measured.
+ * How many tiles go in a row at this pane width — always a divisor of
+ * `KPI_COUNT`, so every row is full.
+ *
+ * The strip used to be a wrapping flexbox of `flex: 1 1 132px` tiles, which
+ * packs as many as fit and then stretches whatever landed in the last row
+ * across the leftover width. Measured in the Electron window at a 1000px window:
+ * five tiles at 137px and the sixth at 748px, carrying the same three lines of
+ * content (TRA-467). A dashboard card is one size; only the column count
+ * responds to width. Restricting the count to a divisor of six is what removes
+ * the ragged last row that the stretching existed to hide.
+ *
+ * `0` is an unmeasured pane on first paint. It falls through to one column —
+ * the same six-row answer the old `Math.max(1, …)` gave — so the first frame is
+ * unchanged.
+ */
+export function kpiColumns(paneW: number): number {
+  const inner = Math.max(0, paneW - PANE_PAD);
+  const fits = (n: number) => n * TILE_MIN_W + (n - 1) * TILE_GAP <= inner;
+  return [6, 3, 2].find(fits) ?? 1;
+}
+
+/**
+ * How tall the full-height KPI strip would be in a pane this wide. Width decides
+ * the column count and so how many rows of 112px there are — at the app's 640px
+ * minimum window that is three rows, 396px.
+ *
+ * This reads `kpiColumns()` rather than repeating the packing rule: a layout
+ * number written twice is how the top band ended up 3px out of true (DESIGN.md,
+ * "The top band").
  */
 export function kpiStripHeight(paneW: number): number {
-  const inner = Math.max(0, paneW - PANE_PAD);
-  const perRow = Math.max(1, Math.floor((inner + TILE_GAP) / (TILE_MIN_W + TILE_GAP)));
-  const rows = Math.ceil(KPI_COUNT / perRow);
+  const rows = KPI_COUNT / kpiColumns(paneW);
   return rows * TILE_H + (rows - 1) * TILE_GAP + STRIP_PAD;
 }
 
@@ -168,24 +197,6 @@ export function busyMessage(o: {
     });
   }
   return t(o.haveNumbers ? 'workspace:busyStale' : 'workspace:busyFresh');
-}
-
-/** The pane shown when the daemon is not answering at all. */
-function DaemonDownPane({ restarting, onRestart }: { restarting: boolean; onRestart: () => void }) {
-  const { t } = useTranslation('workspace');
-  return (
-    <EmptyState
-      icon="cable"
-      iconSize={32}
-      title={t('daemonDownTitle')}
-      subtitle={t('daemonDownSubtitle')}
-      action={
-        <Button variant="prominent" size="large" onClick={onRestart} disabled={restarting}>
-          {restarting ? t('startingDaemon') : t('startDaemon')}
-        </Button>
-      }
-    />
-  );
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
@@ -277,6 +288,7 @@ export function Workspace() {
 
   const narrow = isNarrowPane(pane.w);
   const dense = isDensePane(pane.w, pane.h);
+  const kpiCols = kpiColumns(pane.w);
   // The stored preference is never rewritten: widening the window has to bring
   // the user's own choice back, not whatever the narrow layout fell back to.
   const effectiveView: ViewMode = narrow ? 'compact' : view;
@@ -342,6 +354,7 @@ export function Workspace() {
         refreshing={data.refreshing}
         scrolled={scrolled}
         dense={dense}
+        kpiColumns={kpiCols}
         hideViewToggle={narrow}
         rightExtra={<AddProjectControl onAdd={(root) => data.addProject(root)} />}
         // Above the tiles, not below them: the line that says these numbers

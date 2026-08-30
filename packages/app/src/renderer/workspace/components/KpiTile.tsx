@@ -29,9 +29,9 @@ export interface KpiTileProps {
   footnote?: string;
   tone?: KpiTone;
   /**
-   * The pane is too short or too narrow to spend 99px per tile. Collapses the
+   * The pane is too short or too narrow to spend 112px per tile. Collapses the
    * card to one 36px line — label at the leading edge, value at the trailing
-   * edge — and drops the comparison. Six full tiles are 357px tall, which at
+   * edge — and drops the comparison. Six full tiles are 396px tall, which at
    * the app's 420px minimum window height leaves the toolbar and the whole
    * project list below the window edge with nothing to scroll (TRA-325).
    */
@@ -125,8 +125,11 @@ export function KpiTile({
           : 'flex flex-col items-start gap-1 text-left transition-colors'
       }
       style={{
-        minWidth: 132,
-        flex: '1 1 132px',
+        // No `flex` basis: the strip is a grid whose track count already
+        // guarantees at least 132px per tile, and a flex-grow here is what let
+        // a last-row tile stretch to 5.5x its siblings (TRA-467). `minWidth: 0`
+        // so a long footnote sizes to its track instead of widening it.
+        minWidth: 0,
         padding: dense ? '8px 12px' : 16,
         borderRadius: 12,
         // A card is content: it stays opaque --surface in BOTH states. Tinting
@@ -182,14 +185,25 @@ export function KpiTile({
 
       {/* The comparison line is the first thing to go when the pane is short:
           it is the tallest part of the tile and the only part a user can
-          reconstruct by widening the window. The value never goes. */}
-      {dense ? null : pending && !unavailable ? (
-        // `unavailable` outranks `pending`: a fetch that finished and failed is
-        // not still loading, so the skeleton must not win when both are set.
-        <Skeleton width={92} height={11} />
-      ) : (
-        <span className="text-[11px] leading-[13px]" style={{ color: 'var(--label-secondary)' }}>
-          {unavailable ? (
+          reconstruct by widening the window. The value never goes.
+
+          Two lines are reserved whatever the string does. A tile is 132–214px
+          wide and the catalogue runs +30% longer than English in German and
+          Russian, so whether this wraps is not something the layout gets to
+          assume — and `kpiStripHeight()` in Workspace.tsx sizes the whole strip
+          off one constant tile height. Reserving the second line keeps that
+          constant true in every language instead of only in English. */}
+      {dense ? null : (
+        <span
+          className="text-[11px] leading-[13px]"
+          style={{ color: 'var(--label-secondary)', minHeight: 26, display: 'block' }}
+        >
+          {/* `unavailable` outranks `pending`: a fetch that finished and failed
+              is not still loading, so the skeleton must not win when both are
+              set. */}
+          {pending && !unavailable ? (
+            <Skeleton width={92} height={11} />
+          ) : unavailable ? (
             t('kpiUnavailable')
           ) : delta !== null ? (
             <DeltaChip delta={delta} caption={deltaCaption} />

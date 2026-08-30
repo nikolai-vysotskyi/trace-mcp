@@ -524,6 +524,28 @@ does not blink a banner with it, while recovery publishes immediately. Escalatin
 makes a working app look broken. Keep apart only what the user would act on differently —
 "busy" and "not running" are two states because one is a wait and the other is a button.
 
+**A surface whose every section reads one source states its failure once, at
+surface level.** Five sections that each fetch from the daemon do not produce five
+pieces of information when the daemon is down — they produce one, said five times.
+Project Overview said it six: the toolbar chip, Guard's own line, and four
+`SectionError`s that each claimed "the daemon may still be indexing", the *wait*
+diagnosis, about a process that was not running, each with a Retry aimed at a
+socket that was refusing (TRA-469). The pane takes the one statement and the one
+button; whatever else was going to say it steps aside, the same way the Workspace
+banner steps aside for `DaemonDownPane`.
+
+The corollary, and the reason this is a rule rather than a fix: **the shared error
+primitive must not name a cause it cannot know.** `SectionError` renders one
+catalogue string in all ten locales; a section that cannot tell "busy" from "not
+running" must not pick one. Deciding that is the surface's job, because the
+surface is what holds the daemon state.
+
+**The test for "down" is a shared reducer, not a fresh `!connected`.**
+`deriveDaemonState()` already encodes that a daemon which has not answered *yet*
+is not one that is failing to. `connected` is false for the first moments of every
+mount, so a surface that invents its own check flashes a daemon-down pane on every
+open.
+
 **Values that were true a minute ago outrank no values at all.** A refresh that fails must
 leave the last good ones on screen, cache them across launches, and say once — above them,
 where they are read before the numbers are — that they are the last indexed ones. Em dashes
@@ -865,7 +887,31 @@ the pane with one `ResizeObserver` and derive from it. `Workspace.tsx` is the pa
 `TABLE_MIN_PANE_W` is *computed* from the table's own frozen columns plus a minimum
 scroll window, and `isDensePane()` compares the pane's height against
 `kpiStripHeight(paneW)` rather than against a guessed breakpoint — which is why it
-reproduces the measured 357px exactly instead of drifting from it.
+reproduces the strip's measured height exactly instead of drifting from it.
+
+**A card grid responds by changing its column count, never its card width.** Cards
+in a dashboard are one size at any given width — the reader compares them, and a
+card that is wider than its neighbour is making a claim the data is not making.
+So the KPI strip is a `grid` of equal `minmax(0, 1fr)` tracks, and only the number
+of tracks reads the pane.
+
+Do not build it out of `flex-wrap` plus `flex: 1 1 <basis>`. That packs as many
+cards as fit and then hands the whole leftover width to whichever cards landed in
+the last row. Measured in the Electron window at a 1000px window: five tiles at
+137px and a sixth at **748px**, all six carrying the same three lines (TRA-467).
+The stretch is not a fallback that only fires at odd sizes — it fires at every
+width where the count does not divide evenly, which included the app's own
+default.
+
+**Pick a column count that divides the number of cards** (six cards → 6 / 3 / 2 / 1).
+Then every row is full, so there is no ragged tail to stretch and no trailing dead
+space either — the two things a card grid can get wrong, removed by the same
+constraint.
+
+**The count and the strip's height are one number.** `kpiColumns(paneW)` in
+`workspace/Workspace.tsx` is the single source; `kpiStripHeight()` divides by it
+rather than re-deriving the packing rule, and `isDensePane()` reads that. Two
+copies of a layout rule is the failure recorded under "The top band".
 
 **What gives way, in order.** Never the identity of the screen; always the
 elaboration.
@@ -1211,7 +1257,11 @@ new evidence.
 | An unshrinkable control gets a narrow form; wrapping alone does not save it | `flex-wrap` gives a segmented control its own line but cannot narrow it. Insights' 371px picker in a 262px band ran 96.6px past a 640px window and left "Risk hotspots" 14 of its 108px — unreachable. Below the width where the segments fit it is a `PopUpButton`. |
 | A collapse threshold reads a width the collapsing thing cannot change | Measured against its own slot, the Insights picker was bistable: the slot is narrower beside the title and full-width once the picker wraps, so both controls were self-consistent at one window size and the render depended on which way the user had resized. The toolbar's width is the honest input. |
 | A shrinkable control declares a length `flex-basis`, never `auto` | A wrapping flex line breaks on hypothetical sizes, so `flex-basis: auto` spends none of the control's slack first. `.lx-search` on `auto` wrapped Memory's toolbar at the default 960px window; on `1 1 140px` capped at `max-content` it renders identically and holds one row to a 740px pane. |
-| Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` reproduces the measured 357px; a guessed number drifts the first time a tile changes. |
+| Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` is derived from the tile's own geometry; a guessed number drifts the first time a tile changes — as it did when the comparison line went from one reserved line to two (TRA-459). |
+| A share of a total is only for a set that really is a **part of that total** | Healthy and Needs attention are overlapping predicates — a grade-B project with 15 dead exports is in both — so "57% of 53 projects" beside "83% of 53 projects" is the grammar of a partition on numbers that do not partition anything. Two shares of one denominator get added by every reader who sees them side by side. A comparison line for an overlapping set names its criterion instead. |
+| A comparison line reserves its height, it does not measure it | The catalogue runs +30% longer in German and Russian and a tile is 132–214px wide, so whether the line wraps is not a property of the design. `KpiTile` reserves two 13px lines whatever the string does, which is what lets one `TILE_H` constant hold: measured on the running renderer, every tile is 112px in en/de/ja and both criterion lines are 26px in ru. The reservation is a floor, not a cap — Russian's delta caption (`↑+105.6k по сравнению с: 9 минут назад`) still runs to four lines and takes its row to 138px, which is a separate defect and not something `TILE_H` can absorb. |
+| A card grid responds by changing its column count, never its card width | `flex-wrap` + `flex: 1 1 132px` hands the leftover width to whichever cards landed in the last row: at a 1000px window five KPI tiles rendered at 137px and the sixth at 748px, all six carrying the same three lines. A card wider than its neighbour makes a claim the data is not making. Equal `minmax(0, 1fr)` tracks, and a count that **divides** the number of cards so no row is ever short (TRA-467). |
+| A surface whose every section reads one source states its failure once, at surface level | Project Overview said one dead daemon six times — the toolbar chip, Guard's line, and four `SectionError`s each claiming "the daemon may still be indexing" with a Retry aimed at a refusing socket. "Busy" is a wait, "not running" is a button; the app knew which one it was and printed the other four times. `DaemonDownPane` is now shared, and the test for down is `deriveDaemonState()` rather than a fresh `!connected` that would flash on every mount (TRA-469). |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
 | A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |

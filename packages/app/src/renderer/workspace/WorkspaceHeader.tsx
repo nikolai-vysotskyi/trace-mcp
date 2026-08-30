@@ -11,7 +11,7 @@
  *             put + Add's chevron and the overflow menu out of reach entirely.
  *  KPI grid — six content cards, each in card anatomy (label → value →
  *             comparison). Opaque, hairline, no shadow, no glass. `dense`
- *             collapses each to a 36px line when the pane cannot afford 99px.
+ *             collapses each to a 36px line when the pane cannot afford 112px.
  *
  * Receives all data + state via props; does not call useWorkspaceProjects.
  */
@@ -74,6 +74,12 @@ export interface WorkspaceHeaderProps {
   scrolled?: boolean;
   /** Collapse the KPI tiles to one line each — see {@link KpiTileProps.dense}. */
   dense?: boolean;
+  /**
+   * How many tiles per row, from `kpiColumns()` in Workspace.tsx — always a
+   * divisor of six, so every row is full and every tile is the same width.
+   * Defaults to three for a standalone render with no pane to measure.
+   */
+  kpiColumns?: number;
   /** The pane is too narrow for the table, so Compact is the only view. */
   hideViewToggle?: boolean;
   /** Slot rendered at the end of the toolbar row (typically AddProjectControl). */
@@ -133,7 +139,16 @@ function toggleInList<T>(list: T[] | null, value: T): T[] | null {
   return arr.length === 0 ? null : arr;
 }
 
-/** `n` as a share of `total`, e.g. "36% of 116 projects". */
+/**
+ * `n` as a share of `total`, e.g. "36% of 116 projects".
+ *
+ * Only for a metric that really is a subset of the workspace — Indexing is a
+ * state every project is either in or not. Healthy and Needs attention are
+ * overlapping predicates (a grade-B project with 15 dead exports is in both),
+ * so a share reads as a partition it isn't: 57% + 83% of the same 53 projects
+ * is impossible arithmetic on the face of the strip (TRA-459). Those two name
+ * their criterion instead.
+ */
 function share(n: number, total: number): string {
   if (total === 0) return t('workspace:kpiNoProjectsYet');
   return t('workspace:kpiShare', {
@@ -159,6 +174,7 @@ export function WorkspaceHeader({
   refreshing,
   scrolled = false,
   dense = false,
+  kpiColumns = 3,
   hideViewToggle = false,
   rightExtra,
   banner,
@@ -270,7 +286,14 @@ export function WorkspaceHeader({
       {banner}
 
       {/* ── KPI grid ───────────────────────────────────────────────── */}
-      <div className="flex items-stretch gap-4 px-4 pt-4 pb-3 flex-wrap">
+      {/* A grid, not a wrapping flexbox. Flex-wrap stretches the last row's
+          survivors across the leftover width, which at a 1000px window put one
+          748px tile next to five 137px ones (TRA-467). Equal tracks, and a
+          column count that divides six so no row is ever short. */}
+      <div
+        className="grid items-stretch gap-4 px-4 pt-4 pb-3"
+        style={{ gridTemplateColumns: `repeat(${kpiColumns}, minmax(0, 1fr))` }}
+      >
         <KpiTile
           label={t('kpiProjects')}
           value={kpis.totalProjects}
@@ -322,7 +345,9 @@ export function WorkspaceHeader({
           dense={dense}
           pending={metricsLoading}
           unavailable={metricsFailed}
-          footnote={share(kpis.healthy, kpis.totalProjects)}
+          footnote={
+            kpis.totalProjects === 0 ? t('kpiNoProjectsYet') : t('kpiHealthyCriteria')
+          }
           active={filter.preset === 'healthy'}
           onClick={() => togglePreset('healthy')}
         />
@@ -333,7 +358,9 @@ export function WorkspaceHeader({
           dense={dense}
           pending={metricsLoading}
           unavailable={metricsFailed}
-          footnote={share(kpis.needsAttention, kpis.totalProjects)}
+          footnote={
+            kpis.totalProjects === 0 ? t('kpiNoProjectsYet') : t('kpiNeedsAttentionCriteria')
+          }
           active={filter.preset === 'needs_attention'}
           onClick={() => togglePreset('needs_attention')}
         />
