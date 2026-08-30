@@ -34,7 +34,7 @@ Rules for keeping it honest:
 | [smithery.ai](https://smithery.ai) | **No** | — | Two blockers, not one: the account needs GitHub OAuth (an agent must not authorize that on Nikolai's behalf), **and** a stdio server is published as an MCPB bundle — `smithery mcp publish ./server.mcpb -n <org>/<name>`, per `smithery.ai/docs/build/publish.md`. There is **no `smithery.yaml`** in their current docs; older writeups describing one are stale. They also ingest the official registry | 2026-08-29 |
 | [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) | **Yes** | Listed under `Developer Tools`, alphabetical, with the Glama badge and an accurate description | PR to README. Their CONTRIBUTING asks automated agents to append `🤖🤖🤖` to the PR title. Nothing to submit — only re-read the entry when the product's shape changes | 2026-08-29 |
 | [wong2/awesome-mcp-servers](https://github.com/wong2/awesome-mcp-servers) | **No** | — | **Not a separate door.** Its README refuses PRs outright and redirects to `mcpservers.org/submit` — the same form as the mcpservers.org row above. Treat the two as one channel | 2026-08-29 |
-| [Cline MCP Marketplace](https://github.com/cline/mcp-marketplace) | **No** — checked their live catalog API (`api.cline.bot/v1/mcp/marketplace`, 199 entries), not a web search | — | Closest thing to an open door left. Open an issue on `cline/mcp-marketplace` with their `mcp-server-submission` template: repo URL, a **400×400 PNG** logo, reason for addition. `llms-install.md` is optional — their FAQ says a well-written README is usually enough (there is no crawler; Cline itself reads the README at install time). Their step 3 also asks the submitter to confirm they have watched Cline set the server up from the README alone. The logo is now in-repo at `docs/icon-400x400.png`. Manual review, no account or payment | 2026-08-29 |
+| [Cline MCP Marketplace](https://github.com/cline/mcp-marketplace) | **No** — checked their live catalog API (`api.cline.bot/v1/mcp/marketplace`, 199 entries), not a web search | — | Closest thing to an open door left. Open an issue on `cline/mcp-marketplace` with their `mcp-server-submission` template: repo URL, a **400×400 PNG** logo, reason for addition. `llms-install.md` is optional — their FAQ says a well-written README is usually enough (there is no crawler; Cline itself reads the README at install time). Their step 3 also asks the submitter to confirm they have watched Cline set the server up from the README alone. The logo is now in-repo at `docs/icon-400x400.png`. No account or payment — but that step-3 checkbox is **required**, so this is not an agent-alone submission; see "Next door to try" | 2026-08-29 |
 | [Docker MCP Catalog](https://github.com/docker/mcp-registry) | **No** — listed all 328 entries of `servers/` via the GitHub contents API | — | **Blocked on an artifact we don't have.** Both paths need something trace-mcp isn't: "Local" wants a Dockerfile in our repo, "Remote" wants a reachable streamable-http/SSE endpoint. A plain npm/stdio package qualifies for neither. Adding a Dockerfile is a product decision, not a listings one — don't smuggle it in as distribution work | 2026-08-29 |
 | Continue.dev Hub | — | — | **Dead product, not a gap.** Continue was acquired by Cursor (June 2026), the final release shipped 2026-06-19, cloud data was deleted after 2026-07-15, `hub.continue.dev` no longer resolves. The GitHub repo is **not** archived and is still public — do not describe it as read-only — but it has shipped nothing since (last commit 2026-07-21). Re-check only if Cursor stands a successor up | 2026-08-29 |
 | [LobeHub](https://lobehub.com/mcp) | **No** — the `trace-mcp` listing there is `Mnehmos/trace-mcp`, an unrelated project with the same name | — | Publishing is `npx @lobehub/market-cli`, and it requires `lhm login` (browser OIDC) plus `lhm github connect` (browser ownership check). There is no token-only path: verified in `@lobehub/market-cli@0.0.41` itself, because their docs pages under `lobehub.com/docs/market/*` are content-free stubs. `plugin publish` and `plugin claim` both go through `createUserSDK()`, which aborts with "Not logged in. Run `lhm login` first" unless a user OAuth token is on disk; the `MARKET_CLIENT_ID`/`MARKET_CLIENT_SECRET` env pair is never used for publishing. Human-only, like Smithery | 2026-08-29 |
@@ -90,10 +90,31 @@ Not blockers to route around — genuinely outside what an agent may do alone:
 
 ## Next door to try
 
-Every directory in the table has now been checked at least once. Of the ones we
-are absent from, **Cline is the only one an agent can finish alone** — the rest
-are gated on a browser login (Smithery, LobeHub), a payment (mcp.so, mcpmarket),
-or an artifact that is a product decision rather than a listing one (Docker's
-Dockerfile). File the Cline issue with `docs/icon-400x400.png` once it is on
-master; the raw URL is
+Every directory in the table has now been checked at least once, and **none of
+the ones we are absent from can be finished by an agent alone.** The previous
+revision of this section said Cline could be; that was wrong, and the correction
+is the useful part:
+
+**Cline's submission form is an attestation, not a form.** Two of its fields are
+required checkboxes — *"I have tested that Cline can successfully set up this
+server using only the README.md and/or llms-install.md file"* and *"The server is
+stable and ready for public use"*. Nobody has run Cline against our README, so
+ticking the first is a false statement, and a listing bought with one is worth
+less than no listing. What is verified (2026-08-29): a clean
+`npm install -g trace-mcp` into an empty prefix pulls 255 packages without error,
+and the installed binary completes an MCP `initialize` handshake over stdio
+(`serverInfo: trace-mcp 3.4.0`). That is the substance behind the checkbox minus
+the client. What remains is one person opening Cline once, pointing it at the
+README, and watching it wire the server up — after that the issue is a two-minute
+fill-in, logo included:
 `https://raw.githubusercontent.com/nikolai-vysotskyi/trace-mcp/master/docs/icon-400x400.png`.
+
+So the remaining doors sort into: needs a browser login (Smithery, LobeHub),
+needs money (mcp.so, mcpmarket), needs a product decision (Docker's Dockerfile),
+or needs someone to witness an install (Cline). The last is by far the cheapest.
+
+**Do not run `trace-mcp daemon stop` while testing on a developer machine.** It
+does not just stop the daemon — it writes `~/.trace-mcp/daemon.disabled`, which
+persistently disables auto-spawn for every later stdio session on that machine,
+including the user's own. Undo with `trace-mcp daemon start`. Learned the hard
+way while verifying the install above.
