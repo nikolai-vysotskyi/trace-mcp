@@ -108,6 +108,7 @@ jobs:
             # pay the cross-platform run instead of the release job doing it.
             platform:
               - 'pnpm-lock.yaml'
+              - 'package.json'
               - 'tests/db/native-prebuild.test.ts'
               - 'src/tools/refactoring/**'
               - 'tests/refactoring/**'
