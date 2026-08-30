@@ -109,6 +109,50 @@ updates:
           - minor
           - patch
 
+  - package-ecosystem: npm
+    directory: /packages/vscode-extension
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    # Supply-chain: wait before proposing a freshly published version, so a
+    # compromised-maintainer publish has time to be yanked upstream.
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - npm
+      - vscode-extension
+    commit-message:
+      prefix: chore(vscode-deps)
+      prefix-development: chore(vscode-deps-dev)
+      include: scope
+    ignore:
+      # Same reasoning as the root manifest: @types/node tracks the minimum
+      # supported runtime declared in `engines.node` (>=22), not the latest.
+      - dependency-name: "@types/node"
+        update-types:
+          - version-update:semver-major
+      # @types/vscode is the *minimum* VS Code API the extension supports and
+      # is matched by `engines.vscode`. Bumping it silently drops support for
+      # older editors, so it moves only together with `engines.vscode`.
+      - dependency-name: "@types/vscode"
+        update-types:
+          - version-update:semver-major
+    groups:
+      production-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+      development-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
