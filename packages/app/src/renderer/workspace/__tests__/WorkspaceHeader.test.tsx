@@ -118,8 +118,65 @@ describe('WorkspaceHeader KPI strip', () => {
 
   it('never turns a dead daemon into a negative delta', () => {
     renderHeader(false, { listFailed: true });
-    expect(kpiValue('Projects')).toBe('—');
     expect(kpiTile('Projects').textContent).not.toMatch(/[↑↓]/);
+  });
+
+  /* One `deriveKpis(data.projects)` call feeds all six tiles: Projects is that
+     array's LENGTH, Files and Symbols are sums over its ELEMENTS. Blanking the
+     length while the sums print is the strip contradicting itself two tiles
+     apart, and contradicting the pane below that promises "nothing was lost"
+     (TRA-495). */
+  it('keeps the stock tiles on their snapshot when the daemon drops', () => {
+    const kpis: WorkspaceKpis = {
+      totalProjects: 64,
+      totalFiles: 114_400,
+      totalSymbols: 767_300,
+      healthy: 39,
+      needsAttention: 54,
+      indexing: 0,
+    };
+    renderHeader(false, { listFailed: true, kpis });
+    expect(kpiValue('Projects')).toBe('64');
+    expect(kpiValue('Files')).toBe('114.4k');
+    expect(kpiValue('Healthy')).toBe('39');
+    // Activity, not stock: a daemon that is not running is not indexing, so a
+    // cached count here would be the one genuine lie on the strip.
+    expect(kpiValue('Indexing')).toBe('—');
+  });
+
+  /* A delta asserts something about NOW — "21.4k files appeared since 3 hours
+     ago" — 500px above a pane saying the daemon isn't running. TRA-458 stopped
+     the baseline being WRITTEN while the daemon is down; it does not stop an
+     already-rolled one being DISPLAYED on the frame the connection drops. */
+  it('shows no delta on any tile while the daemon is unreachable', () => {
+    localStorage.setItem(
+      LS_BASELINE_KEY,
+      JSON.stringify({
+        at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+        kpis: { ...ZERO_KPIS, totalProjects: 57, totalFiles: 93_000 },
+      }),
+    );
+    const kpis: WorkspaceKpis = { ...ZERO_KPIS, totalProjects: 64, totalFiles: 114_400 };
+    renderHeader(false, { listFailed: true, kpis });
+    for (const label of ['Projects', 'Files']) {
+      const comparison = kpiTile(label).children[2]!.textContent!;
+      expect(comparison).not.toMatch(/[↑↓]/);
+      expect(comparison).not.toContain('hours ago');
+      // The slot falls back to the footnote — a ratio or a criterion, which
+      // stays true of a snapshot — rather than going blank.
+      expect(comparison).not.toBe('');
+    }
+  });
+
+  it('em-dashes every tile when the daemon is down with no snapshot behind it', () => {
+    renderHeader(true, {
+      listFailed: true,
+      metricsFailed: true,
+      kpis: { ...ZERO_KPIS, totalProjects: 0 },
+    });
+    for (const label of ['Projects', 'Files', 'Symbols', 'Healthy', 'Needs attention', 'Indexing']) {
+      expect(kpiValue(label)).toBe('—');
+    }
   });
 
   /* The baseline is what every delta chip is measured against, so a reading

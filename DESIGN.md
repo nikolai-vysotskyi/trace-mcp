@@ -621,6 +621,31 @@ is for a number nobody has ever had, not for one that is a few minutes old. The 
 that line has to match the screen. Saying "these are the last indexed numbers" over a row of
 em dashes is the same lie in the other direction.
 
+**Readings off one source give one answer about whether they are knowable.** A strip
+whose tiles are all derived from a single call cannot half-blank: the tile that reports
+an array's *length* must not say "unknown" while four tiles beside it report *sums over
+that array's elements*. The KPI strip did exactly that with the daemon down — Projects
+`—`, Files `114.4k`, Symbols `767.3k` — and disproved itself two tiles further along,
+where Healthy's caption is `totalProjects === 0 ? "No projects yet" : "grade A or B…"`
+and rendered the criterion, so the same frame knew the count it had just refused to
+print (TRA-495). The cause is always the same shape: two `unavailable` flags left over
+from when the halves had two upstreams, still wired after the halves merged. When two
+sources become one, the flags derived from them merge too — otherwise the strip
+contradicts itself *and* the pane below it, which is promising that nothing was lost.
+The one tile that may still blank is one measuring a different quantity: activity, not
+stock. A daemon that is not running is not indexing, so a cached Indexing count would
+be the strip's only genuine lie.
+
+**A delta is a claim about now, and dies with the connection.** "↑ +21.4k vs 3 hours
+ago" asserts that 21,400 files appeared *since* the baseline — present tense, about a
+source the same screen is describing as unreachable 500px lower. Refusing to *write* a
+baseline while the daemon is down (§ the row on baselines below) does not cover this:
+the baseline that lies is the one rolled while the daemon was healthy, displayed on the
+frame after it drops, which is the frame every user sees. Suppress the comparison and
+fall back to the tile's footnote — a criterion ("grade A or B, no security findings")
+or a ratio ("1,787 per project") is a statement about the snapshot itself and stays true
+however old the snapshot is.
+
 **The placeholder is the whole statement. A card with no number explains nothing.**
 The em dash *is* the sentence "we don't have this" — give it an accessible name
 (`aria-label="Not available"`) and stop. The comparison slot underneath answers
@@ -1341,6 +1366,8 @@ new evidence.
 | Skeletons at final geometry instead of spinners or "Loading…" | Nothing shifts when the data lands, and the loading state shows the shape of what is coming. |
 | A failed fetch settles on an em dash | A skeleton that pulses forever promises data that is never coming. |
 | The em dash is the whole statement — no caption, no tooltip repeating it (TRA-488) | The tile's caption slot is a comparison line, and a failure sentence there is multiplied by the number of cards: six tiles said "Couldn't be measured" under a banner promising the numbers were on their way, and over a pane already headed "The daemon isn't running". |
+| Tiles fed by one source blank together or not at all (TRA-495) | Projects is `projects.length` and Files is a sum over that same array. With the daemon down the strip printed `—` for the length and `114.4k` for the sum, and two tiles further along rendered Healthy's non-empty-workspace caption — the frame knew the count it had just refused to print. Indexing is the exception: it measures activity, not stock, so a cached value there is the one real lie. |
+| No delta chip while the source is unreachable (TRA-495) | "↑ +21.4k vs 3 hours ago" is present tense about a daemon the same screen says isn't running. Refusing to *write* the baseline (TRA-458) doesn't help — the one that lies was rolled while the daemon was healthy. The footnote it falls back to is a criterion or a ratio, which stays true of a snapshot. |
 | `listPending` separates "daemon hasn't answered" from "never indexed" | `status ?? 'unknown'` blamed the project for the daemon's silence. |
 | Sidebar footer is `.ws-sb-row`, not its own geometry | One row system for the whole sidebar; the footer's labels started 26px left of every other label. |
 | Appearance is Auto / Light / Dark, with Auto clearing the key | The old `toggle` only ever wrote `light` or `dark`, so one click pinned the app forever and the system listener stopped mattering. |

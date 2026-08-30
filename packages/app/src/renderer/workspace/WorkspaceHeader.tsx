@@ -218,8 +218,24 @@ export function WorkspaceHeader({
         : undefined,
     [baseline, t],
   );
+  // A delta is a claim about NOW — "21.4k files appeared since 3 hours ago".
+  // With the daemon unreachable nothing about now is available; that is the
+  // entire content of DaemonDownPane 500px below. TRA-458 stopped the baseline
+  // being WRITTEN while the daemon is down, which does not stop an
+  // already-rolled one being DISPLAYED on the frame after the connection drops
+  // — the frame every user actually sees. Each tile falls back to its footnote,
+  // which is a criterion or a ratio and stays true of a snapshot (TRA-495).
   const delta = (pick: (k: WorkspaceKpis) => number): number | null =>
-    baseline ? pick(kpis) - pick(baseline.kpis) : null;
+    baseline && !listFailed ? pick(kpis) - pick(baseline.kpis) : null;
+
+  // Projects counts the same array that Files, Symbols, Healthy and Needs
+  // attention sum over — one `deriveKpis(data.projects)` call, one array. A
+  // frame that can print 114.4k files can print 64 projects, so blanking the
+  // length while the sums report is the strip disagreeing with itself two tiles
+  // apart, and contradicting DaemonDownPane's own "nothing was lost" (TRA-495).
+  // The em dash belongs to a strip with nothing behind it — cold start with the
+  // daemon down, no snapshot restored — where the length really is unknown.
+  const noSnapshot = kpis.totalProjects === 0;
 
   const filterMenu = useMenuAnchor();
   const overflowMenu = useMenuAnchor();
@@ -299,7 +315,7 @@ export function WorkspaceHeader({
           value={kpis.totalProjects}
           dense={dense}
           pending={listLoading}
-          unavailable={listFailed}
+          unavailable={listFailed && noSnapshot}
           delta={delta((k) => k.totalProjects)}
           deltaCaption={deltaCaption}
           footnote={t('kpiTrackingFromToday')}
@@ -376,6 +392,10 @@ export function WorkspaceHeader({
           tone="busy"
           dense={dense}
           pending={listLoading}
+          // Plain `listFailed`, unlike Projects above: this is the one reading
+          // on the strip that measures activity rather than stock, and a daemon
+          // that is not running is not indexing. A cached count here would be
+          // the strip's only genuine lie (TRA-495).
           unavailable={listFailed}
           footnote={
             kpis.indexing === 0
