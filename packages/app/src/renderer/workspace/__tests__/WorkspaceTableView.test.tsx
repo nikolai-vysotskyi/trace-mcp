@@ -3,7 +3,13 @@
  */
 import { render, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { ROW_H, WINDOW_THRESHOLD, WorkspaceTableView, visibleRange } from '../WorkspaceTableView';
+import {
+  ROW_H,
+  WINDOW_THRESHOLD,
+  WorkspaceTableView,
+  scrollEdges,
+  visibleRange,
+} from '../WorkspaceTableView';
 import type { ProjectViewModel } from '../types';
 
 const PROJECT: ProjectViewModel = {
@@ -77,6 +83,36 @@ describe('WorkspaceTableView frozen columns', () => {
       expect(cell.style.right).toBe('0px');
       expect(cell.style.background).not.toBe('');
     }
+  });
+
+  // At the default 960×700 window the table is 1025 px in a 707 px pane, so
+  // Dead exports, Untested, Grade and Security sit under the Actions pin. The
+  // seam has to shade, or the table reads as finished at Symbols (TRA-452).
+  it('draws the pinned seams with a shade the scroll state can colour', () => {
+    const container = renderTable();
+    const cells = container.querySelectorAll('thead th, tbody td');
+    const project = cells[1] as HTMLElement;
+    const actions = cells[container.querySelectorAll('thead th').length - 1] as HTMLElement;
+    expect(project.style.boxShadow).toContain('var(--edge-shade-left)');
+    expect(actions.style.boxShadow).toContain('var(--edge-shade-right)');
+    // The checkbox column is the inner half of the left pin — one shade per
+    // pinned group, cast by the cell the rows actually slide under.
+    expect((cells[0] as HTMLElement).style.boxShadow).toBe('');
+  });
+
+  it('shades only the side that still hides content', () => {
+    // Scrolled hard left: 318 px hidden to the right, nothing to the left.
+    expect(scrollEdges(0, 1025, 707)).toEqual({ left: false, right: true });
+    expect(scrollEdges(318, 1025, 707)).toEqual({ left: true, right: false });
+    expect(scrollEdges(160, 1025, 707)).toEqual({ left: true, right: true });
+    // A table that fits its pane is not hiding anything on either side.
+    expect(scrollEdges(0, 707, 707)).toEqual({ left: false, right: false });
+  });
+
+  it('keeps a two-character status label on one line', () => {
+    const container = renderTable();
+    const label = within(container).getByText('OK');
+    expect(label.className).toContain('whitespace-nowrap');
   });
 
   it('leaves the scrolling middle columns unpinned', () => {
