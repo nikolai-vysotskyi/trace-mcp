@@ -13,11 +13,13 @@ on:
 permissions:
   contents: read
 
-# Scorecard flags the three job-level `contents: write` grants below
-# (release-please, and the macOS/Windows build jobs). They are accepted, not
-# oversights: release-please has to push the release branch and cut the tag,
-# and the build jobs upload signed installers as release assets. Both are
-# already scoped to the job, never top-level (TRA-255).
+# Scorecard flags the four job-level `contents: write` grants below
+# (release-please, the macOS/Windows build jobs, and verify-release-assets).
+# They are accepted, not oversights: release-please has to push the release
+# branch and cut the tag, the build jobs upload signed installers as release
+# assets, and verify-release-assets is the only job allowed to promote a
+# release to `latest` (TRA-566). All are already scoped to the job, never
+# top-level (TRA-255).
 
 jobs:
   release-please:
@@ -63,9 +65,32 @@ jobs:
           )
           gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${FOOTER}"
 
-  # Gate between the app builds and npm. release-please marks the GitHub
-  # Release `latest` the moment it cuts the tag, but the zips land 2-5 minutes
-  # later from the matrix jobs below. scripts/postinstall-app.mjs resolves the
+      # TRA-566: release-please marks the release `latest` at tag-cut time, so
+      # v3.9.0 was the newest release for 20 minutes while build-app-win was
+      # failing — and stayed newest after it failed. Windows electron-updater
+      # reads latest.yml off /releases/latest and nothing else, so every
+      # Windows install silently stopped updating against a release that had no
+      # latest.yml and never would.
+      #
+      # Demote it here and promote it in `verify-release-assets` once the
+      # artifacts are actually on the tag. `latest` then keeps resolving to the
+      # last COMPLETE release for the whole build window, which is exactly the
+      # behaviour every updater client already handles. A draft would close the
+      # same gap, but GitHub does not create the git ref for a draft release and
+      # both build jobs check out `ref: tag_name` — this keeps the tag.
+      - name: Hold the release back from `latest` until its assets verify
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          ID=$(gh release view "$TAG" --repo "${{ github.repository }}" --json databaseId --jq '.databaseId')
+          gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -f make_latest=false --silent
+
+  # Gate between the app builds and npm, and the one place that promotes a
+  # release to `latest`. The release exists the moment the tag is cut, but the
+  # zips land 2-5 minutes later from the matrix jobs below.
+  # scripts/postinstall-app.mjs resolves the
   # update from /releases/latest and returns silently when the arch zip or its
   # .sha256 is not there yet — so every `npm install -g trace-mcp` inside that
   # window updates the CLI and quietly leaves the old `.app` behind, with no
@@ -80,17 +105,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.event.inputs.publish_tag != '' && github.event.inputs.publish_tag || needs.release-please.outputs.tag_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Assert every updater artifact is on the release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.inputs.publish_tag != '' && github.event.inputs.publish_tag || needs.release-please.outputs.tag_name }}
         run: |
           gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets' \
             | node scripts/verify-release-assets.mjs "${TAG#v}"
+
+      # Only now is the release safe to advertise. Until this step runs,
+      # /releases/latest still resolves to the previous complete release
+      # (TRA-566) — see the demotion step in `release-please`.
+      - name: Promote the verified release to `latest`
+        run: |
+          ID=$(gh release view "$TAG" --repo "${{ github.repository }}" --json databaseId --jq '.databaseId')
+          gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -f make_latest=true --silent
 
   publish:
     needs: [release-please, verify-release-assets]
