@@ -111,9 +111,6 @@ export function KpiTile({
   const shell = {
     'data-kpi': label,
     'data-dense': dense ? '' : undefined,
-    // Dense drops the comparison line, so the one sentence that explains an
-    // em dash has to survive somewhere the user can still reach it.
-    title: dense && unavailable ? t('kpiUnavailable') : undefined,
     className: dense
       ? 'flex flex-row items-baseline justify-between gap-2 text-left transition-colors'
       : 'flex flex-col items-start gap-1 text-left transition-colors',
@@ -197,12 +194,15 @@ export function KpiTile({
         >
           {/* `unavailable` outranks `pending`: a fetch that finished and failed
               is not still loading, so the skeleton must not win when both are
-              set. */}
+              set — and it renders nothing at all. This slot is the comparison,
+              which answers "compared to what?"; a diagnosis is not a comparison,
+              and the surface holding the daemon state already gives it once,
+              with the action attached. Six cards repeating it is six copies of
+              one sentence. The em dash is the whole statement, and it already
+              carries `kpiNotAvailable` to assistive technology. */}
           {pending && !unavailable ? (
             <Skeleton width={92} height={11} />
-          ) : unavailable ? (
-            t('kpiUnavailable')
-          ) : delta !== null ? (
+          ) : unavailable ? null : delta !== null ? (
             <DeltaChip delta={delta} caption={deltaCaption} />
           ) : (
             footnote

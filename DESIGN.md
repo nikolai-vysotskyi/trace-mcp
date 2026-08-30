@@ -587,12 +587,26 @@ Its refresh affordance stays, though: a control that re-fetches is the list's ow
 way back when the daemon returns, and hiding it would trade a wrong sentence for a
 dead end.
 
+**The surface says it once; the cards inside it go quiet.** The rule above is about
+sections that each fetch; this one is about the repeating element — a KPI strip, a
+grid of tiles, a row of meters — where the multiplier is the layout itself. Every
+tile in it fails for the same one reason, so a per-tile failure caption is one
+sentence printed once per tile: six of "Couldn't be measured" sat above a
+`DaemonDownPane` that had already said it, with the button (TRA-488). A tile's
+third slot is the **comparison** — it answers "compared to what?" — and a diagnosis
+is not a comparison. The unknown value renders as an em dash and nothing else, with
+its accessible name (`kpiNotAvailable`, "Not available") on the dash itself; the
+caption box stays reserved so the strip's height constant holds in every language.
+A `title` tooltip is not the exception — it is the same sentence again, for fewer
+people.
+
 **Values that were true a minute ago outrank no values at all.** A refresh that fails must
 leave the last good ones on screen, cache them across launches, and say once — above them,
-where they are read before the numbers are — that they are the last indexed ones. Em dashes
-and "Couldn't be measured" are for a number nobody has ever had, not for one that is a few
-minutes old. The corollary: that line has to match the screen. Saying "these are the last
-indexed numbers" over a row of em dashes is the same lie in the other direction.
+where they are read before the numbers are — that they are the last indexed ones. An em dash
+is for a number nobody has ever had, not for one that is a few minutes old. The corollary:
+that line has to match the screen. Saying "these are the last indexed numbers" over a row of
+em dashes is the same lie in the other direction — as is captioning those dashes "couldn't
+be measured", past tense and terminal, under a banner promising the numbers are on their way.
 
 ---
 
@@ -1342,6 +1356,7 @@ new evidence.
 | A settled screenshot is not the only frame; sample the first one and sample repeatedly | TRA-467 verified a width sweep of settled sizes and asserted in a comment that the first frame was unchanged — reasoning from the height math, which was unchanged, while the render had gained a new input. The first painted frame was one 748px tile in a 780px strip, the exact geometry that PR removed, on every launch (#612). TRA-471 then left the sidebar file list stuck in `aria-busy` on 2 of 3 navigations, where a clean reload is one of the clean paths (TRA-478). Verify the property you changed, not the one you reasoned about. |
 | A card grid responds by changing its column count, never its card width | `flex-wrap` + `flex: 1 1 132px` hands the leftover width to whichever cards landed in the last row: at a 1000px window five KPI tiles rendered at 137px and the sixth at 748px, all six carrying the same three lines. A card wider than its neighbour makes a claim the data is not making. Equal `minmax(0, 1fr)` tracks, and a count that **divides** the number of cards so no row is ever short (TRA-467). |
 | A surface whose every section reads one source states its failure once, at surface level | Project Overview said one dead daemon six times — the toolbar chip, Guard's line, and four `SectionError`s each claiming "the daemon may still be indexing" with a Retry aimed at a refusing socket. "Busy" is a wait, "not running" is a button; the app knew which one it was and printed the other four times. `DaemonDownPane` is now shared, and the test for down is `deriveDaemonState()` rather than a fresh `!connected` that would flash on every mount (TRA-469). |
+| The surface says the failure once; the repeating cards inside it go quiet | Every tile in a KPI strip fails for the same one reason, so a per-tile caption is one sentence printed once per tile — six of "Couldn't be measured" above a `DaemonDownPane` that had already said it with the button, and, in the busy state, four more under a banner promising the numbers were on their way (TRA-488). The tile's third slot is the comparison, and a diagnosis is not a comparison. The em dash is the whole statement and already carries "Not available" to assistive technology; the reserved caption box stays so `kpiStripHeight()` holds in every language. A `title` tooltip is the same sentence for fewer people, not an exception. |
 | An empty list and no list are two different facts | A `.catch(() => setFiles([]))` makes a refused socket indistinguishable from a filter that matched nothing, and the empty state then explains a result it never received — the sidebar's file list blamed the scope filter while the pane beside it correctly said the daemon was not running (TRA-471). Keep whether the list was answered; assert a cause only for the empty answer you actually got, render nothing for the one you did not, and leave the re-fetching control in place as the way back. |
 | A request with no deadline has no failure state, so the skeleton wins forever | "Daemon down" is not always a refused socket: a wedged daemon still holds :3741 open, the connect sits in `SYN_SENT`, and `fetch` neither resolves nor rejects. The sidebar's file list was the one daemon fetch in the app without `AbortSignal.timeout` — measured on the running renderer, 2 of 6 navigations left six skeletons pulsing and `aria-busy="true"` set indefinitely, four inches from a pane correctly saying the daemon was not running (TRA-478). Give every request a deadline, and derive the render from the request's own terminal state (`'loading' | 'answered' | 'failed'`), never from a boolean a cancelled run can strand. A fixture that rejects immediately — which is every daemon-down test we had — cannot see this class of bug. |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |

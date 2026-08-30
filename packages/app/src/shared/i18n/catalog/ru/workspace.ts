@@ -83,7 +83,6 @@ export const workspace = {
   kpiNoChange: 'Без изменений',
   kpiNoChangeVs: 'Без изменений {{caption}}',
   kpiNotAvailable: 'Нет данных',
-  kpiUnavailable: 'Не удалось измерить',
 
   projectsGrid: 'Проекты',
   loadingProjects: 'Загрузка проектов',

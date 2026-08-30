@@ -30,7 +30,7 @@ function renderHeader(
     filter: WorkspaceFilter;
   }> = {},
 ) {
-  const { container } = render(
+  const result = render(
     <WorkspaceHeader
       kpis={ZERO_KPIS}
       metricsLoading={metricsLoading}
@@ -43,7 +43,8 @@ function renderHeader(
       {...extra}
     />,
   );
-  strip = container;
+  strip = result.container;
+  return result;
 }
 
 /** The KPI tile whose label is `label`. */
@@ -108,7 +109,10 @@ describe('WorkspaceHeader KPI strip', () => {
       // finished and failed, so it must settle on an em dash instead.
       expect(kpiTile(label).querySelector('.ws-skel')).toBeNull();
       expect(kpiValue(label)).toBe('—');
-      expect(kpiTile(label).textContent).toContain("Couldn't be measured");
+      // …and says it once. The em dash is the whole statement: the surface
+      // holding the daemon state already explains it, with the action next to
+      // it, and a per-card caption is that sentence printed six times (TRA-488).
+      expect(kpiTile(label).textContent).toBe(label + '—');
     }
   });
 
@@ -259,11 +263,18 @@ describe('WorkspaceHeader at a pane that cannot afford the full layout', () => {
     }
   });
 
-  it('keeps "couldn\'t be measured" reachable when dense drops the caption', () => {
-    renderHeader(true, { dense: true, metricsFailed: true });
-    const tile = kpiTile('Files');
-    expect(kpiValue('Files')).toBe('—');
-    expect(tile.getAttribute('title')).toBe("Couldn't be measured");
+  it('carries an unmeasured tile with the em dash alone, in either density', () => {
+    // No caption and no `title` tooltip: a tooltip is a second copy of the
+    // diagnosis with a smaller audience, and the diagnosis belongs to the
+    // surface holding the daemon state, not to each card in it (TRA-488).
+    for (const dense of [false, true]) {
+      const { unmount } = renderHeader(true, { dense, metricsFailed: true });
+      const tile = kpiTile('Files');
+      expect(kpiValue('Files')).toBe('—');
+      expect(tile.getAttribute('title')).toBeNull();
+      expect(tile.textContent).toBe('Files—');
+      unmount();
+    }
   });
 
   it('hides the view toggle when Compact is the only view that fits', () => {

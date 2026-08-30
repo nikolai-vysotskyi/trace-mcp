@@ -110,7 +110,11 @@ describe('a slow daemon', () => {
     // …and the line above them must not claim otherwise.
     expect(banners()[0]).toContain("The numbers arrive when it's done.");
     expect(kpi('Files')).toBe('—');
-    expect(screen.getAllByText("Couldn't be measured").length).toBeGreaterThan(0);
+    // The banner is the only thing on screen that explains the em dashes. The
+    // tiles used to caption every one of them "Couldn't be measured" — past
+    // tense and terminal, under a banner that is future tense and transient,
+    // about the same four numbers at the same instant (TRA-488).
+    expect(screen.queryByText("Couldn't be measured")).toBeNull();
   });
 
   it('offers the retry that matches, and never a restart', () => {
@@ -131,6 +135,17 @@ describe('an unreachable daemon', () => {
     expect(screen.getByText("The daemon isn't running")).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start daemon' })).toBeTruthy();
     expect(banners()).toHaveLength(0);
+  });
+
+  /* One dead daemon used to be announced seven times in one window: the pane
+     said it once with a Start daemon button, and the strip above it repeated
+     "Couldn't be measured" on all six tiles (TRA-488). */
+  it('is not repeated once per tile by the strip above it', () => {
+    data = { ...OK, projects: [], daemonState: 'unreachable', connected: false };
+    render(<Workspace />);
+
+    expect(screen.queryByText("Couldn't be measured")).toBeNull();
+    expect(kpi('Projects')).toBe('—');
   });
 });
 
