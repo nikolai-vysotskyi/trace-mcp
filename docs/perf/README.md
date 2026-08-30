@@ -174,3 +174,43 @@ of `App.tsx`, so Vite hoists the chunk into the entry graph with a `modulepreloa
 Replacing the built chunk with a stub moved cold start 439 → 417 ms (~5%, ~22 ms) and
 the renderer share 154 → 144 ms. Not enough to justify splitting the ref-carrying
 component behind `React.lazy`. Revisit only if cold start approaches the 3 s ceiling.
+
+## Tab scaling
+
+`packages/app/scripts/tabs-scale.mjs` answers one question: does the app get slower the
+more project tabs are open? A project tab on macOS is a whole `BrowserWindow` in a native
+tab group, so N tabs means N renderer processes against one daemon.
+
+```bash
+pnpm run build && pnpm -C packages/app run build
+node packages/app/scripts/tabs-scale.mjs --idle 30 --steps 1,3,6 --json out.json
+```
+
+It runs the daemon under test on a private port with a throwaway `TRACE_MCP_DATA_DIR` and
+rewrites every renderer request to `:3741` onto it over CDP. That is not fussiness: the
+renderer hardcodes `http://127.0.0.1:3741` in six files, and on a working machine that
+port is held by whichever daemon got there first, usually mid-reindex over a large
+registry. Measuring against it measures the machine, not the variable under test.
+
+**2026-08-30 — the fifth project tab could not load at all (TRA-526).**
+`useDaemon` opened an `EventSource` per window and held it forever. Chromium allows six
+connections per host and the daemon is one host, so the streams alone exhausted the pool:
+from the sixth window on, every fetch to the daemon queued behind them and timed out after
+`DAEMON_FETCH_TIMEOUT_MS`. Measured, 1→7 project tabs, time from "open this project" to
+its Overview showing real data:
+
+| project tabs | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| before | 1828 ms | 589 | 580 | 589 | **never** | **never** | **never** |
+| after | 1828 ms | 589 | 590 | 587 | 598 | 601 | 594 |
+
+"never" is a 60 s give-up, with the daemon answering a Node client on the same box in 1 ms
+throughout — the stall was entirely client-side. The fix gates both `EventSource`
+subscriptions on `document.visibilityState`; on macOS only the selected tab is on screen,
+so the socket count is one regardless of tab count. Guard:
+`packages/app/src/renderer/__tests__/daemon-sockets.test.tsx`.
+
+What still scales with tab count, and always will: ~5.7 MB JS heap and ~150 MB RSS per
+tab, because each tab is a renderer process. Idle CPU, idle daemon requests and
+interaction latency in the front tab are flat, and closing tabs returns heap, RSS, timers
+and streams to the one-tab baseline — there is no leak.
