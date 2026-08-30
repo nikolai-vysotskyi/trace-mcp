@@ -3489,4 +3489,11 @@ program
     process.stdout.write(`${JSON.stringify(result)}\n`);
   });
 
-program.parse();
+// `from: 'node'` explicitly, never commander's auto-detection. When the app
+// runs this CLI through its own bundled Electron binary
+// (ELECTRON_RUN_AS_NODE=1, see packages/app/src/main/daemon-install.ts),
+// `process.versions.electron` is set and commander switches to its Electron
+// layout — argv[1] is treated as the first user argument, not the script — so
+// `serve-http --port 3741` came out as `error: unknown option '--port'`.
+// argv is [runtime, script, ...args] under both node and Electron-as-node.
+program.parse(process.argv, { from: 'node' });

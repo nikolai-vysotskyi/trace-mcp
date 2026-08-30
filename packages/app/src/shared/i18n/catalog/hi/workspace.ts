@@ -4,6 +4,11 @@ export const workspace = {
     'trace-mcp आपके प्रोजेक्ट एक लोकल बैकग्राउंड सर्विस में इंडेक्स करता है। उन्हें फिर देखने के लिए इसे चालू करें — कुछ भी खोया नहीं है।',
   startDaemon: 'डेमन चालू करें',
   startingDaemon: 'शुरू हो रहा है…',
+  daemonInstallingTitle: 'trace-mcp सेट किया जा रहा है',
+  daemonInstallingSubtitle: 'आपके प्रोजेक्ट इंडेक्स करने वाली बैकग्राउंड सेवा इंस्टॉल हो रही है। यह एक ही बार होता है और कुछ सेकंड लेता है।',
+  daemonInstallFailedTitle: 'सेटअप पूरा नहीं हुआ',
+  daemonInstallRetry: 'फिर कोशिश करें',
+  daemonInstallRetrying: 'सेट हो रहा है…',
 
   busyIndexingStale_one:
     '{{total}} में से {{indexing}} प्रोजेक्ट इंडेक्स हो रहा है। ये पिछली बार के इंडेक्स किए आँकड़े हैं।',

@@ -4,6 +4,11 @@ export const workspace = {
     'O trace-mcp indexa seus projetos num serviço local em segundo plano. Inicie-o para vê-los de novo — nada foi perdido.',
   startDaemon: 'Iniciar daemon',
   startingDaemon: 'Iniciando…',
+  daemonInstallingTitle: 'Configurando o trace-mcp',
+  daemonInstallingSubtitle: 'Instalando o serviço em segundo plano que indexa seus projetos. Isso acontece uma vez e leva alguns segundos.',
+  daemonInstallFailedTitle: 'A configuração não terminou',
+  daemonInstallRetry: 'Tentar de novo',
+  daemonInstallRetrying: 'Configurando…',
 
   busyIndexingStale_one:
     'Indexando {{indexing}} de {{total}} projeto. Estes são os últimos números indexados.',

@@ -13,6 +13,11 @@ export const workspace = {
     'trace-mcp indexes your projects in a local background service. Start it to see them again — nothing was lost.',
   startDaemon: 'Start daemon',
   startingDaemon: 'Starting…',
+  daemonInstallingTitle: 'Setting up trace-mcp',
+  daemonInstallingSubtitle: 'Installing the background service that indexes your projects. This happens once, and takes a few seconds.',
+  daemonInstallFailedTitle: "Setup didn't finish",
+  daemonInstallRetry: 'Try again',
+  daemonInstallRetrying: 'Setting up…',
 
   /* Four whole sentences rather than a lead plus a tail: the two halves decline
      together in Russian, and a language that has to reorder them cannot if the

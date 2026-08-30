@@ -24,6 +24,8 @@ run-benchmark.ts
 
 # Build / packaging artifacts
 packages/app/release/
+# The server copy the app ships, rebuilt by scripts/stage-server.mjs on every pack
+packages/app/server-payload/
 *.tgz
 
 # MCP registry publisher tokens (GitHub PAT + JWT)

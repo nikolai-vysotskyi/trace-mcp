@@ -38,6 +38,25 @@ function isDevCheckout(): boolean {
   }
 }
 
+/**
+ * Is this copy the one the desktop app ships inside its own bundle?
+ *
+ * `packages/app/scripts/stage-server.mjs` drops a marker next to package.json
+ * when it stages the payload. A marker rather than a path shape because the
+ * path differs per platform (`Contents/Resources/server` on macOS,
+ * `resources\server` on Windows) and would silently stop matching the first
+ * time either changed.
+ */
+export function isAppBundled(): boolean {
+  try {
+    const self = fileURLToPath(import.meta.url);
+    const pkgRoot = path.resolve(path.dirname(self), '..');
+    return fs.existsSync(path.join(pkgRoot, 'bundled-in-app'));
+  } catch {
+    return false;
+  }
+}
+
 const UPDATE_CACHE_PATH = path.join(TRACE_MCP_HOME, 'update-check.json');
 
 interface UpdateCache {
@@ -267,6 +286,14 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
   // the direct source path the launcher stores in launcher.env.
   if (isDevCheckout()) {
     logger.debug('Auto-update: skipped — running from dev checkout');
+    return false;
+  }
+
+  // Shipped inside the desktop app (TRA-438). `npm install -g trace-mcp`
+  // cannot reach this copy — the app's own updater replaces the whole bundle —
+  // so an auto-update here can only fail, once per daemon start, forever.
+  if (isAppBundled()) {
+    logger.debug('Auto-update: skipped — this copy ships inside the desktop app');
     return false;
   }
 

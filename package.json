@@ -163,6 +163,15 @@
       "better-sqlite3",
       "esbuild",
       "simple-git-hooks"
-    ]
+    ],
+    "supportedArchitectures": {
+      "os": [
+        "current"
+      ],
+      "cpu": [
+        "x64",
+        "arm64"
+      ]
+    }
   }
 }

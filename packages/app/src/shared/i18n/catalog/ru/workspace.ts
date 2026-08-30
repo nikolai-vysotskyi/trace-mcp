@@ -11,6 +11,11 @@ export const workspace = {
     'trace-mcp индексирует проекты в локальной фоновой службе. Запустите её, чтобы снова увидеть проекты, — ничего не потеряно.',
   startDaemon: 'Запустить службу',
   startingDaemon: 'Запуск…',
+  daemonInstallingTitle: 'Настройка trace-mcp',
+  daemonInstallingSubtitle: 'Устанавливаем фоновую службу, которая индексирует проекты. Это делается один раз и занимает несколько секунд.',
+  daemonInstallFailedTitle: 'Настройка не завершилась',
+  daemonInstallRetry: 'Повторить',
+  daemonInstallRetrying: 'Настраиваем…',
 
   busyIndexingStale_one:
     'Индексируется {{indexing}} из {{total}} проекта. Это последние проиндексированные значения.',

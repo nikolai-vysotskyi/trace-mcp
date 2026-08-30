@@ -4,6 +4,11 @@ export const workspace = {
     'trace-mcp는 로컬 백그라운드 서비스에서 프로젝트를 인덱싱합니다. 데몬을 시작하면 다시 볼 수 있으며, 잃어버린 것은 없습니다.',
   startDaemon: '데몬 시작',
   startingDaemon: '시작하는 중…',
+  daemonInstallingTitle: 'trace-mcp 설정 중',
+  daemonInstallingSubtitle: '프로젝트를 인덱싱하는 백그라운드 서비스를 설치하고 있습니다. 최초 한 번만 진행되며 몇 초 걸립니다.',
+  daemonInstallFailedTitle: '설정을 끝내지 못했습니다',
+  daemonInstallRetry: '다시 시도',
+  daemonInstallRetrying: '설정 중…',
 
   busyIndexingStale_other:
     '프로젝트 {{total}}개 중 {{indexing}}개를 인덱싱 중입니다. 아래는 마지막으로 인덱싱한 수치입니다.',
