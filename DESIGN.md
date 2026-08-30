@@ -1143,6 +1143,30 @@ whether the committed ones are stale. Use that one for anything committed to the
 `electron-cdp.mjs` when you need to point a debugger at the app you are running right now
 and shoot a surface it has no manifest entry for.
 
+### One settled screenshot is not evidence either: sample the first frame, and sample twice
+
+A CDP shot after `--settle` shows the state a surface *converges to*. Two whole classes of
+defect live outside that frame, and TRA-467 shipped one of each.
+
+**The first painted frame.** A `ResizeObserver` reports on the frame after the initial
+commit, so any layout number read off a measured pane is read off zero in the frame the user
+actually sees first. TRA-467 made the KPI column count read `pane.w` and asserted in a code
+comment that "the first frame is unchanged" — reasoning from the height math, which was
+genuinely unchanged, while the *render* now had a new input. The first painted frame was one
+748px tile in a 780px strip: the exact geometry that PR removed, flashing on every launch,
+plus a 512px reflow (#612). A width sweep of settled sizes cannot see this. Sample
+`requestAnimationFrame` from a reload and diff the distinct geometries; there should be one.
+
+**The intermittent frame.** A state that depends on a race renders correctly often enough to
+pass one check. The TRA-471 fix left the sidebar file list stuck in `aria-busy` with six
+skeletons on 2 of 3 navigations, and a clean reload — the obvious way to check — is one of
+the paths that comes back clean (TRA-478). Anything touching async state gets sampled on
+repeated loads, and the pass condition is *every* trial, not the one you looked at.
+
+The general rule behind both: **verify the property you changed, not the property you
+reasoned about.** "Row counts are identical" was true and irrelevant; what changed was what
+decides the columns.
+
 ### A Tailwind class next to `${…}` is not a Tailwind class
 
 `` className={`text-[11px] leading-[13px]${err ? ' truncate' : ''}`} `` compiles, ships,
@@ -1312,6 +1336,7 @@ new evidence.
 | Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` is derived from the tile's own geometry; a guessed number drifts the first time a tile changes — as it did when the comparison line went from one reserved line to two (TRA-459). |
 | A share of a total is only for a set that really is a **part of that total** | Healthy and Needs attention are overlapping predicates — a grade-B project with 15 dead exports is in both — so "57% of 53 projects" beside "83% of 53 projects" is the grammar of a partition on numbers that do not partition anything. Two shares of one denominator get added by every reader who sees them side by side. A comparison line for an overlapping set names its criterion instead. |
 | A comparison line reserves its height, it does not measure it | The catalogue runs +30% longer in German and Russian and a tile is 132–214px wide, so whether the line wraps is not a property of the design. `KpiTile` reserves two 13px lines whatever the string does, which is what lets one `TILE_H` constant hold: measured on the running renderer, every tile is 112px in en/de/ja and both criterion lines are 26px in ru. The reservation is a floor, not a cap — Russian's delta caption (`↑+105.6k по сравнению с: 9 минут назад`) still runs to four lines and takes its row to 138px, which is a separate defect and not something `TILE_H` can absorb. |
+| A settled screenshot is not the only frame; sample the first one and sample repeatedly | TRA-467 verified a width sweep of settled sizes and asserted in a comment that the first frame was unchanged — reasoning from the height math, which was unchanged, while the render had gained a new input. The first painted frame was one 748px tile in a 780px strip, the exact geometry that PR removed, on every launch (#612). TRA-471 then left the sidebar file list stuck in `aria-busy` on 2 of 3 navigations, where a clean reload is one of the clean paths (TRA-478). Verify the property you changed, not the one you reasoned about. |
 | A card grid responds by changing its column count, never its card width | `flex-wrap` + `flex: 1 1 132px` hands the leftover width to whichever cards landed in the last row: at a 1000px window five KPI tiles rendered at 137px and the sixth at 748px, all six carrying the same three lines. A card wider than its neighbour makes a claim the data is not making. Equal `minmax(0, 1fr)` tracks, and a count that **divides** the number of cards so no row is ever short (TRA-467). |
 | A surface whose every section reads one source states its failure once, at surface level | Project Overview said one dead daemon six times — the toolbar chip, Guard's line, and four `SectionError`s each claiming "the daemon may still be indexing" with a Retry aimed at a refusing socket. "Busy" is a wait, "not running" is a button; the app knew which one it was and printed the other four times. `DaemonDownPane` is now shared, and the test for down is `deriveDaemonState()` rather than a fresh `!connected` that would flash on every mount (TRA-469). |
 | An empty list and no list are two different facts | A `.catch(() => setFiles([]))` makes a refused socket indistinguishable from a filter that matched nothing, and the empty state then explains a result it never received — the sidebar's file list blamed the scope filter while the pane beside it correctly said the daemon was not running (TRA-471). Keep whether the list was answered; assert a cause only for the empty answer you actually got, render nothing for the one you did not, and leave the re-fetching control in place as the way back. |
