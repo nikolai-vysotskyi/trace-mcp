@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.8.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.7.0...v3.8.0) (2026-08-30)
+
+
+### Features
+
+* **analytics:** price the saved-token counter server-side, capped for inflation ([#682](https://github.com/nikolai-vysotskyi/trace-mcp/issues/682)) ([fe5027c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fe5027c8825f4920ad9a901eae303af3a43dd4ae))
+* **app:** sign and notarize macOS builds, ship DMG per architecture ([#584](https://github.com/nikolai-vysotskyi/trace-mcp/issues/584)) ([61c07d3](https://github.com/nikolai-vysotskyi/trace-mcp/commit/61c07d34cad901cee627ed2402705fe4afc16ae1))
+
+
+### Bug Fixes
+
+* **app:** a "starting" daemon must not refill the restart budget (TRA-543) ([#683](https://github.com/nikolai-vysotskyi/trace-mcp/issues/683)) ([b2aaecf](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b2aaecf2de048ffaf3c3451a1167d5fbb373b912))
+* **daemon:** a losing spawn can no longer report the live daemon as dead (TRA-525) ([#663](https://github.com/nikolai-vysotskyi/trace-mcp/issues/663)) ([248374e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/248374e8bc624c8e4da547b83fe7668a77f673ce))
+* **update:** re-check whether the app is running per bundle (TRA-555) ([#687](https://github.com/nikolai-vysotskyi/trace-mcp/issues/687)) ([03ebf63](https://github.com/nikolai-vysotskyi/trace-mcp/commit/03ebf635c212932cd18702db67e2751c13b15566))
+* **update:** update every installed bundle, not just the resolved one (TRA-535) ([#672](https://github.com/nikolai-vysotskyi/trace-mcp/issues/672)) ([26d3eed](https://github.com/nikolai-vysotskyi/trace-mcp/commit/26d3eedb397323f6a5c167643d14ed16cd68d344))
+
+
+### Documentation
+
+* **ops:** draft the Reddit material (TRA-393) ([#656](https://github.com/nikolai-vysotskyi/trace-mcp/issues/656)) ([cc6a40e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cc6a40e662cf018101ecbdc19561ac92e93c65c7))
+* **vs:** read Serena's source, correct four rows in its favour (TRA-547) ([#684](https://github.com/nikolai-vysotskyi/trace-mcp/issues/684)) ([391b90a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/391b90a878d6dd4c5bf2ea791a04c14fc5466859))
+
 ## [3.7.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.6.0...v3.7.0) (2026-08-30)
 
 
