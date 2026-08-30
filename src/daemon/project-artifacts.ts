@@ -16,6 +16,7 @@
  * the other tiers.
  */
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
 import { DECISIONS_DB_PATH, projectHash, projectName, TOPOLOGY_DB_PATH } from '../global.js';
@@ -150,8 +151,13 @@ function dropDecisionRows(root: string): DecisionDeleteCounts {
     // Use raw SQLite — DecisionStore would re-run migrations / open a writer
     // pool we don't need just to issue four DELETEs. The schema is stable
     // (project_root TEXT NOT NULL on every project-scoped table).
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Database = require('better-sqlite3') as typeof import('better-sqlite3');
+    // createRequire, not a bare `require`: the ESM bundle rewrites a bare
+    // `require('better-sqlite3')` into the module namespace object, so
+    // `new Database(...)` threw "Database is not a constructor" in every
+    // shipped build while passing under vitest.
+    const Database = createRequire(import.meta.url)(
+      'better-sqlite3',
+    ) as typeof import('better-sqlite3');
     const db = new Database(DECISIONS_DB_PATH);
     try {
       const counts: DecisionDeleteCounts = { ...empty };
