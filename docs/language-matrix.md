@@ -21,7 +21,7 @@ below, see [configuration](configuration.md).
 - **import edges:** 12
 - **call edges (`get_call_graph`, call-aware `find_usages`):** 3
 - **type / inheritance edges:** 2
-- **covered by a plugin test:** 65
+- **covered by a plugin test:** 66
 
 ## What the columns mean
 
@@ -133,7 +133,7 @@ second thing, so it is much shorter than the language list — see
 | scala | .scala .sc | tree-sitter | yes | — | — | — | yes |
 | solidity | .sol | tree-sitter | yes | — | — | — | yes |
 | sql | .sql | regex | yes | — | — | — | yes |
-| svelte | .svelte | regex | yes | — | — | — | — |
+| svelte | .svelte | regex | yes | — | — | — | yes |
 | swift | .swift | tree-sitter | yes | — | — | — | yes |
 | tcl | .tcl .tk .itcl .itk | regex (multi-pass) | yes | — | — | — | yes |
 | toml | .toml | tree-sitter | yes | — | — | — | yes |
