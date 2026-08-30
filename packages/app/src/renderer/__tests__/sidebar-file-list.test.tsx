@@ -76,6 +76,40 @@ describe('sidebar file list, empty', () => {
   });
 });
 
+/* TRA-503. The row used to render `<dir>/<name>`, and at every sidebar width
+   from 180 to 320 the filename is what lost its tail:
+   `src/renderer/tabs/Settings.tsx` came out as `src/render…Settings.t…`. The
+   name leads now and only the location may be shortened — this pins the order
+   and the fact that the location is a leaf segment, not a path. */
+describe('sidebar file row', () => {
+  it('puts the filename before its location, and shows only the leaf directory', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              files: [
+                { path: 'src/renderer/tabs/Settings.tsx', symbols: 32, edges: 0 },
+                { path: 'README.md', symbols: 1, edges: 0 },
+              ],
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+    await renderProjectWindow();
+
+    const [settings, readme] = [...document.querySelectorAll('.ws-sb-path')];
+    expect(settings.querySelector('.name')?.textContent).toBe('Settings.tsx');
+    expect(settings.querySelector('.dir')?.textContent).toBe('tabs');
+    expect([...settings.children].map((c) => c.className)).toEqual(['name', 'dir']);
+    // A file at the project root has no location to show, so it renders none.
+    expect(readme.querySelector('.name')?.textContent).toBe('README.md');
+    expect(readme.querySelector('.dir')).toBeNull();
+  });
+});
+
 /* TRA-478. Every case above rejects immediately, which is the one shape of
    "daemon down" that was never broken. A wedged daemon still holds :3741 open,
    so the connect never completes and the promise never settles — and the list
