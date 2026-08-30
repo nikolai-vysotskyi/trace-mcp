@@ -13,8 +13,11 @@ import {
 import {
   ensureDaemon,
   isDaemonProcessAlive,
+  MAX_VERSION_MISMATCH_RESTARTS,
+  nextVersionMismatchAction,
   restartDaemon,
   shouldRestartUnreachableDaemon,
+  type VersionMismatchState,
 } from './daemon-lifecycle';
 import { t } from './i18n';
 
@@ -96,11 +99,23 @@ const RESTART_RETRY_EVERY = 24;
 let _lastRestartAttempt = 0;
 /**
  * Timestamp of the last daemon restart triggered by a version mismatch.
- * Used to back off so a stuck daemon (one that comes back up still reporting
- * the wrong version) doesn't drive us into a restart loop.
+ *
+ * A cooldown alone does not prevent a loop — it only sets the loop's period.
+ * TRA-543 measured that period: 716 of 809 restart requests in a 22.8 h sample
+ * had a 60.4 s median gap, exactly this constant, because the daemon kept
+ * coming back reporting the same version the app disagreed with. The bound
+ * below is what actually stops it.
  */
 let lastVersionMismatchRestart = 0;
 const VERSION_MISMATCH_RESTART_COOLDOWN_MS = 60_000;
+/**
+ * Which mismatched daemon version we have already restarted away from, and how
+ * often. Owned by `nextVersionMismatchAction` — see the policy there for why a
+ * cooldown alone never stopped this loop.
+ */
+let versionMismatch: VersionMismatchState = { seenVersion: '', restarts: 0 };
+/** Whether the give-up message has been printed for the current `versionMismatch`. */
+let versionMismatchGaveUp = false;
 /**
  * Timestamp of the last time we asked launchd / lifecycle.ts to ensure or
  * restart the daemon. Used to grant a freshly-spawned daemon a grace window
@@ -658,28 +673,37 @@ async function checkHealth(): Promise<void> {
 
     // Version mismatch — npm swapped the binary on disk but the running daemon
     // is still executing the old code from memory. Restart via launchd so the
-    // freshly-installed version takes over. 60s cooldown prevents a loop if
-    // the new daemon also reports the wrong version for any reason.
+    // freshly-installed version takes over.
     const daemonVersion = health.version?.replace(/^v/, '');
     const appVersion = app.getVersion().replace(/^v/, '');
-    if (
-      daemonVersion &&
-      daemonVersion !== '0.0.0-dev' &&
-      daemonVersion !== appVersion &&
-      Date.now() - lastVersionMismatchRestart > VERSION_MISMATCH_RESTART_COOLDOWN_MS
-    ) {
-      lastVersionMismatchRestart = Date.now();
-      console.log(
-        `[trace-mcp] version mismatch — daemon=${daemonVersion} app=${appVersion}, restarting daemon`,
-      );
-      try {
-        lastDaemonStartAttempt = Date.now();
-        const result = restartDaemon();
-        if (!result.ok) {
-          console.warn(`[trace-mcp] version-mismatch restart failed: ${result.error ?? 'unknown'}`);
+    if (Date.now() - lastVersionMismatchRestart > VERSION_MISMATCH_RESTART_COOLDOWN_MS) {
+      const decision = nextVersionMismatchAction(daemonVersion, appVersion, versionMismatch);
+      if (decision.state.seenVersion !== versionMismatch.seenVersion) versionMismatchGaveUp = false;
+      versionMismatch = decision.state;
+      if (decision.action === 'give-up' && !versionMismatchGaveUp) {
+        versionMismatchGaveUp = true; // say this once, not every 60s
+        console.warn(
+          `[trace-mcp] version mismatch persists after ${MAX_VERSION_MISMATCH_RESTARTS} restarts ` +
+            `(daemon=${daemonVersion} app=${appVersion}) — restarting does not change the binary ` +
+            `on disk, so giving up. Reinstall the CLI to match the app.`,
+        );
+      }
+      if (decision.action === 'restart') {
+        lastVersionMismatchRestart = Date.now();
+        console.log(
+          `[trace-mcp] version mismatch — daemon=${daemonVersion} app=${appVersion}, restarting daemon`,
+        );
+        try {
+          lastDaemonStartAttempt = Date.now();
+          const result = restartDaemon();
+          if (!result.ok) {
+            console.warn(
+              `[trace-mcp] version-mismatch restart failed: ${result.error ?? 'unknown'}`,
+            );
+          }
+        } catch (e) {
+          console.warn(`[trace-mcp] version-mismatch restart threw: ${(e as Error).message}`);
         }
-      } catch (e) {
-        console.warn(`[trace-mcp] version-mismatch restart threw: ${(e as Error).message}`);
       }
     }
   } catch (err) {
@@ -697,6 +721,10 @@ async function checkHealth(): Promise<void> {
       consecutiveFailures = 0;
       _lastRestartAttempt = 0;
       firstUnreachableAt = 0;
+      // Same reason as the success path: a reachable daemon ends the outage, so
+      // its escalation budget goes with it. Missing this leaks a previous
+      // outage's backoff into the next, genuinely new one.
+      restartsThisOutage = 0;
       setTrayIcon(true);
       tray.setContextMenu(buildContextMenu());
       return;

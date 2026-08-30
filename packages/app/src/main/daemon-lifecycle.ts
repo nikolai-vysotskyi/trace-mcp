@@ -219,3 +219,48 @@ export function shouldRestartUnreachableDaemon(state: {
   );
   return state.unreachableForMs >= threshold;
 }
+
+/** How many times a given mismatched daemon version is worth restarting away from. */
+export const MAX_VERSION_MISMATCH_RESTARTS = 2;
+
+/** What the watchdog remembers between version-mismatch checks. */
+export interface VersionMismatchState {
+  /** The mismatched daemon version we last acted on, or '' if none. */
+  seenVersion: string;
+  /** Restarts already spent on `seenVersion`. */
+  restarts: number;
+}
+
+/**
+ * Version-mismatch restart policy (TRA-543).
+ *
+ * The desktop app restarts the daemon when /health reports a version other than
+ * the app's, on the theory that npm swapped the binary and the old code is
+ * still resident. That is right once. It is wrong forever: launchd starts
+ * whatever is on disk, so if the replacement reports the same version again,
+ * no number of further restarts will change it — and the 60 s cooldown that was
+ * supposed to "prevent a loop" merely set the loop's period. Measured over
+ * 22.8 h on Nikolai's machine: 716 restart requests with a 60.4 s median gap.
+ *
+ * Caller owns the clock (the cooldown); this owns the budget.
+ */
+export function nextVersionMismatchAction(
+  daemonVersion: string | undefined,
+  appVersion: string,
+  state: VersionMismatchState,
+): { action: 'none' | 'restart' | 'give-up'; state: VersionMismatchState } {
+  // No answer, a dev build, or agreement: nothing to do, and agreement clears
+  // the budget so a later genuine mismatch starts fresh.
+  if (!daemonVersion || daemonVersion === '0.0.0-dev') return { action: 'none', state };
+  if (daemonVersion === appVersion) {
+    return { action: 'none', state: { seenVersion: '', restarts: 0 } };
+  }
+  // A *different* mismatched version means the last restart did change
+  // something — the new one gets its own attempts.
+  const next =
+    daemonVersion === state.seenVersion ? state : { seenVersion: daemonVersion, restarts: 0 };
+  if (next.restarts >= MAX_VERSION_MISMATCH_RESTARTS) {
+    return { action: 'give-up', state: next };
+  }
+  return { action: 'restart', state: { ...next, restarts: next.restarts + 1 } };
+}

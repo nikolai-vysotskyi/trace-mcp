@@ -18,7 +18,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEAD_DAEMON_MS,
+  MAX_VERSION_MISMATCH_RESTARTS,
+  nextVersionMismatchAction,
   shouldRestartUnreachableDaemon,
+  type VersionMismatchState,
   WEDGED_DAEMON_MS,
 } from '../../../packages/app/src/main/daemon-lifecycle.js';
 
@@ -135,5 +138,57 @@ describe('shouldRestartUnreachableDaemon', () => {
         restartsThisOutage: 1,
       }),
     ).toBe(false);
+  });
+});
+
+/**
+ * TRA-543, the dominant half. 716 of the 809 restart requests in the sample had
+ * a 60.4 s median gap — exactly `VERSION_MISMATCH_RESTART_COOLDOWN_MS`. The
+ * watchdog was not the one firing them: the version-mismatch branch on
+ * checkHealth's *success* path was, once a minute, for as long as the app ran,
+ * because a restart cannot change which binary is on disk.
+ */
+describe('nextVersionMismatchAction', () => {
+  const fresh: VersionMismatchState = { seenVersion: '', restarts: 0 };
+
+  it('restarts once when the daemon reports an older version than the app', () => {
+    expect(nextVersionMismatchAction('3.5.1', '3.6.0', fresh).action).toBe('restart');
+  });
+
+  it('does nothing when the versions agree, and clears the budget', () => {
+    const spent: VersionMismatchState = { seenVersion: '3.5.1', restarts: 2 };
+    expect(nextVersionMismatchAction('3.6.0', '3.6.0', spent)).toEqual({
+      action: 'none',
+      state: { seenVersion: '', restarts: 0 },
+    });
+  });
+
+  it('ignores a dev build and a daemon that reports no version', () => {
+    expect(nextVersionMismatchAction('0.0.0-dev', '3.6.0', fresh).action).toBe('none');
+    expect(nextVersionMismatchAction(undefined, '3.6.0', fresh).action).toBe('none');
+  });
+
+  it('gives up once the same mismatched version survives its restart budget', () => {
+    let state = fresh;
+    const actions: string[] = [];
+    // Every minute for two hours the daemon comes back reporting the same
+    // version. The old code restarted on all 120 of them.
+    for (let i = 0; i < 120; i++) {
+      const d = nextVersionMismatchAction('3.5.1', '3.6.0', state);
+      actions.push(d.action);
+      state = d.state;
+    }
+    expect(actions.filter((a) => a === 'restart')).toHaveLength(MAX_VERSION_MISMATCH_RESTARTS);
+    expect(actions.at(-1)).toBe('give-up');
+  });
+
+  it('gives a genuinely new mismatched version its own budget', () => {
+    let state = fresh;
+    for (let i = 0; i < 5; i++) state = nextVersionMismatchAction('3.5.1', '3.6.0', state).state;
+    // The restart did move the daemon, just not all the way: 3.5.5 is new, so
+    // it is worth acting on rather than lumping in with the exhausted budget.
+    const d = nextVersionMismatchAction('3.5.5', '3.6.0', state);
+    expect(d.action).toBe('restart');
+    expect(d.state).toEqual({ seenVersion: '3.5.5', restarts: 1 });
   });
 });
