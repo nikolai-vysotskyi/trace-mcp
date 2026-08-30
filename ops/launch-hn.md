@@ -66,9 +66,11 @@ to be caught as not. This is the whole reason the thread is worth having.
 > Four things worth knowing before you try it:
 >
 > It sends one anonymous ping per day per install — a random id, version, OS,
-> and two aggregate counters, no paths and no code. `TRACE_MCP_TELEMETRY=off`
-> kills it, and the source is `src/telemetry/usage-ping.ts`. Saying "local-first"
-> without saying that first is how a thread goes bad.
+> and two aggregate counters, no paths and no code. It goes to Google Analytics
+> (a GA4 Measurement Protocol POST to `google-analytics.com`).
+> `TRACE_MCP_TELEMETRY=off` kills it, and the source is
+> `src/telemetry/usage-ping.ts`. Saying "local-first" without saying that first is
+> how a thread goes bad.
 >
 > The headline benchmark is a **synthetic estimate**, not measured savings. The
 > "without" side is computed from file sizes in the index and the "with" side from
@@ -90,8 +92,8 @@ to be caught as not. This is the whole reason the thread is worth having.
 Each answer must be checkable in one click. Do not improvise these.
 
 1. **"How is this different from Serena / codebase-memory-mcp / Repomix?"** →
-   `trace-mcp.com/comparisons.html` plus the four head-to-head pages (Serena,
-   Repomix, codegraph, codebase-memory-mcp). Never disparage a competitor from
+   `trace-mcp.com/comparisons.html` plus the five head-to-head pages (Serena,
+   Repomix, codegraph, Context Mode, codebase-memory-mcp). Never disparage a competitor from
    memory; the comparison pages are written to survive the maintainer of the
    other project reading them, which on HN they will.
 2. **"40–50% of what, measured how?"** → the README's "Token reduction" section
@@ -103,7 +105,9 @@ Each answer must be checkable in one click. Do not improvise these.
    so cross-language framework edges exist at all — no LSP knows that an Inertia
    string maps to a Vue component.
 4. **"Does it phone home?"** → local-first, no API keys. There is one anonymous
-   daily ping, documented in the README's "Usage telemetry" section, and it is
+   daily ping — a GA4 Measurement Protocol POST to `google-analytics.com`, with
+   the measurement id and write-only api_secret in the bundle by design —
+   documented in the README's "Usage telemetry" section, and it is
    off with `TRACE_MCP_TELEMETRY=off` (`src/telemetry/usage-ping.ts`). Do not
    point at `docs/telemetry.md` — that page is the OTLP observability bridge, a
    different feature that is disabled by default. Answer this one in full,
@@ -121,4 +125,7 @@ Each answer must be checkable in one click. Do not improvise these.
 - Do not post a second time if the first sinks. A Show HN that flops is allowed
   one repost months later, with a materially different product behind it.
 - Reddit (r/ClaudeAI and neighbours) is a **separate** draft with a different
-  voice — do not cross-post this text verbatim. That draft does not exist yet.
+  voice — do not cross-post this text verbatim. It lives in
+  `ops/launch-reddit.md`, and it carries rule quotes this file does not need:
+  r/mcp bans AI-written promo copy outright, and r/ClaudeAI gates feed posts on
+  OP karma.
