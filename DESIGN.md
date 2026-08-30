@@ -448,6 +448,13 @@ sidebar edges, `8px` internal padding, 8px gap, a 16px icon slot, a 13px label t
 truncates, and an optional trailing count in tabular figures. Label text starts at
 x=38 in every row.
 
+**A file row leads with the filename, not the path.** The name is what identifies
+the row, so it gets `--label` and the front of the line; the *leaf* directory follows
+it in `--label-secondary` and is the only part allowed to shorten. Never the reverse —
+a path-first row spends its width on `src/renderer/tabs/` and then eats the filename's
+extension, which is the one token the reader was looking for (TRA-503). Everything
+above the leaf belongs in the row's tooltip.
+
 **Anything that lives in the sidebar is a row.** Nav items are rows. Settings is a row.
 The idle update banner is a row. The footer was the last strip running its own
 geometry, and putting it on the row system is what made the sidebar read as one thing.
@@ -1431,6 +1438,7 @@ new evidence.
 | A surface that draws its own toolbar owns its whole pane | Wrapping it in the pane's `p-4` doubles every inset the surface already declares — the workspace KPI row started at x=32 with its first card at y=76. |
 | Paths truncate at the **head**, keeping the tail | The tail is the part that distinguishes siblings; tail-truncation hid the only useful segment. |
 | Sidebar file paths use a `dir`/`name` flex split, not `direction: rtl` | The rtl hack mangled any path containing `.` or `_` runs (`.idea/workspace.xml` → `idea/workspace.xml.`). |
+| A file row is **name first, location second** — and the location is the leaf directory, not the path (TRA-503) | A 180–320px row fits one of the two. Location-first spent up to 45% of the row on `src/renderer/tabs/` and truncated the filename anyway: `Settings.tsx` rendered as `src/render…Settings.t…`, losing the extension on every row that overflowed. Quick open already listed a file as name-then-directory; the sidebar and Ask now match it. |
 | Whitespace separates sidebar groups, not rules | Fewer lines, clearer grouping; matches the platform sidebar. |
 | Rows are windowed past 100 items | A thousand projects costs what a hundred does. |
 | A surface with extra columns collapses them with a **container query**, trailing column first | At the 640px window minimum the app sidebar already takes 220. Ask's chat rail + inspector left the conversation at zero width and painted the inspector over its own toolbar. The rules must be last in the file — a container query adds no specificity. |
