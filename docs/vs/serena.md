@@ -16,7 +16,7 @@ updated: 2026-08-30
       "description": "Head-to-head comparison of trace-mcp and Serena as code-navigation MCP servers for AI coding agents.",
       "url": "https://trace-mcp.com/vs/serena.html",
       "datePublished": "2026-08-29",
-      "dateModified": "2026-08-29",
+      "dateModified": "2026-08-30",
       "author": {
         "@type": "Person",
         "name": "Nikolai Vysotskyi",
@@ -72,7 +72,7 @@ updated: 2026-08-30
           "name": "Which has a lower startup cost?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Serena, on a cold repository: there is no index to build, though the language server itself still has to warm up, which on a large TypeScript or Java project is not free. trace-mcp pays a one-time index build and then serves queries from SQLite, so it is faster once warm and survives restarts."
+            "text": "Serena, on a cold repository: there is no index to build, though the language server itself still has to warm up, which on a large TypeScript or Java project is not free. Serena does persist per-file document-symbol caches, so a second start is cheaper than the first. trace-mcp pays a one-time index build and then serves queries from SQLite, so it is faster once warm; both survive restarts, but only trace-mcp's stored state contains edges."
           }
         }
       ]
@@ -96,24 +96,24 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 | Compiler-grade path | ✓ opt-in LSP + offline SCIP ingestion | ✓ live LSP |
 | Framework integrations | ✓ {{ site.data.counts.frameworks }} | ✗ |
 | Cross-language edges | ✓ | ✗ |
-| Persistent graph across restarts | ✓ SQLite + FTS5 | ✗ per-session |
+| Persistent state across restarts | ✓ SQLite + FTS5 graph | partial — on-disk symbol cache, no graph |
 | Impact analysis | ✓ reverse dependency traversal + decorator filter | ✗ |
-| Call graph | ✓ bidirectional, graph-based | partial (LSP call hierarchy) |
-| Refactoring tools | ✓ rename, move, signature, AST codemod, extract | ✓ rename, move, inline, safe-delete |
+| Call graph | ✓ bidirectional, graph-based | ✗ not exposed as a tool |
+| Refactoring tools | ✓ rename, move, signature, AST codemod, extract | ✓ rename, safe-delete; move and inline only via the JetBrains bridge |
 | Live debugger | ✗ deliberately out of lane | ✓ via a JetBrains IDE bridge (optional, beta) |
-| Session memory | ✓ code-linked decision graph | ✓ manual notes |
+| Session memory | ✓ code-linked decision graph, staleness-checked at recall | ✓ markdown notes, cross-referenced but not code-linked |
 | Security scanning | ✓ OWASP Top-10, type-aware taint | ✗ |
 | Control-flow / data-flow | ✓ CFG with basic blocks and loop back-edges | ✗ |
 | SARIF / CI output | ✓ 2.1.0, schema-validated | ✗ |
-| Multi-repo subprojects | ✓ cross-repo API linking | ✗ |
+| Multi-repo subprojects | ✓ cross-repo API linking | partial — query another project, no cross-repo edges |
 | Graph visualization | ✓ desktop app | ✗ |
-| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | ~55 |
+| MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | 29; 52 defined |
 | Written in | TypeScript | Python |
 
 ## When to pick Serena
 
 - **You work in one language with a first-class language server.** For Python or TypeScript, "find all references" and "rename symbol" from a real language server are correct in cases AST heuristics get wrong: overloads, re-exports, generics, dynamic dispatch through interfaces. That is a genuine precision lead, and it is on by default for Serena while it is opt-in for us.
-- **You want zero index state.** Nothing to build, nothing to invalidate, nothing on disk to go stale.
+- **You want no index build step.** There is no graph to construct and nothing to re-index after a pull. Serena is not fully stateless, though — `SolidLanguageServer` keeps two pickled per-file symbol caches under `.serena/cache/<language>/` (`raw_document_symbols.pkl`, `document_symbols.pkl`), loaded on start and keyed by file content hash, so warm queries survive a restart. What it does not keep is edges: no import graph, no call graph, no impact traversal.
 - **You already work inside a JetBrains IDE.** Serena can bridge into it for debugging — breakpoints, stepping and variable inspection driven by the agent (an optional beta tool, and it needs the IDE plus their plugin running). trace-mcp deliberately does not do this; a static graph is not the right tool for a running process, and we are not planning to chase it.
 - **Popularity.** Serena is roughly 280× larger by stars, with correspondingly more community answers and integrations.
 
@@ -129,9 +129,18 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 
 Two honest points.
 
-First, **we have not read Serena's source**. Serena is the largest peer we have never profiled beyond its README, and it is the current priority for our next competitor deep-dive. The table above is built from its public documentation. If you maintain Serena and something is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
+First, **the table above used to be built from Serena's README, and reading the source moved four rows in Serena's favour.** We cloned it at commit `43ae021` (version 1.7.1.dev0, MIT) and read its tool package, its memory package, its project server and its `solidlsp` language-server layer. What changed:
 
-Second, **our default tool surface is expensive.** trace-mcp advertises 28 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is now in the same range as Serena's ~55 tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
+- **It is not stateless.** We claimed "no persistent state, per-session". It persists two pickled document-symbol caches per language and loads them at startup (see the bullet above). Warm symbol lookups do survive a restart; only the edges do not exist.
+- **It can reach other repositories.** We claimed a flat ✗. `query_project` and `list_queryable_projects` run any read-only Serena tool against another registered project, through a small Flask project server. Both are optional tools, off unless enabled, and there are still no edges between repositories — but "cannot" was wrong.
+- **Its memories are more than notes.** We called them manual notes. They are markdown files under `.serena/memories` with topic namespacing, a global scope beside the project scope, and `mem:` cross-references with referential-integrity checking and autofix. What they are not is code-linked: nothing ties a memory to a symbol, and nothing rechecks it against the code when it is recalled. That narrower difference is the real one.
+- **Its default surface is 29 tools, not ~55.** The registry marks 52 tool classes, 23 of them optional (13 are the JetBrains bridge), leaving 29 enabled by default — so the honest comparison against our 28 is "the same size", not "half".
+
+Two rows moved the other way, and we state the evidence rather than the verdict. **Call graph**: `callHierarchy/incomingCalls` and `outgoingCalls` are implemented in the LSP client layer, but no tool class calls them, so an agent cannot ask Serena for a call graph. **Move and inline refactoring**: `JetBrainsMoveTool` and `JetBrainsInlineSymbol` proxy to a running JetBrains IDE; both are optional and beta. Native and always-on are `rename_symbol` and `safe_delete_symbol`.
+
+If you maintain Serena and something here is wrong, [open an issue](https://github.com/nikolai-vysotskyi/trace-mcp/issues) and we will fix it.
+
+Second, **our default tool surface is expensive.** trace-mcp advertises 28 tools, roughly 11.6K tokens, on the shipped default path as of August 29, 2026 — down from ~50K, once the preset bypass on the daemon-backed path was fixed and the default preset moved to `minimal`. That is level with Serena's 29 default tools rather than an order of magnitude above it, and anything outside the default is one `load_tools` call away.
 
 ## FAQ
 
@@ -148,7 +157,7 @@ No. tree-sitter alone covers {{ site.data.counts.languages }} languages with no 
 Not as a graph. "References to this symbol" is an LSP request; "this controller renders that template via Inertia" is not something a language server models.
 
 **Which has a lower startup cost?**
-Serena on a cold repo — no index build, though the language server still has to warm up, which on a large TypeScript or Java project is not free. trace-mcp pays a one-time index build, then serves from SQLite and survives restarts.
+Serena on a cold repo — no index build, though the language server still has to warm up, which on a large TypeScript or Java project is not free. Its pickled symbol caches make the second start cheaper than the first. trace-mcp pays a one-time index build, then serves from SQLite; both survive restarts, but only trace-mcp's stored state includes edges.
 
 ## Next steps
 
