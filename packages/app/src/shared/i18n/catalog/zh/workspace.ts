@@ -60,7 +60,6 @@ export const workspace = {
   kpiNoChange: '无变化',
   kpiNoChangeVs: '无变化，{{caption}}',
   kpiNotAvailable: '不可用',
-  kpiUnavailable: '无法测量',
 
   projectsGrid: '项目',
   loadingProjects: '正在加载项目',

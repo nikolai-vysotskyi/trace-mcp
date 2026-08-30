@@ -530,8 +530,9 @@ Every data surface owes four states, and each has a house form:
   tall, 20px glyph, 13px title). An empty section is not a hero.
 - **Error** — the chrome stays put; the sentence and its Retry action sit together.
   Each section tracks its own load state. A failed fetch must not pulse a skeleton
-  forever promising data that is never coming — settle on an em dash and
-  "Couldn't be measured". A fetch only *fails* if it can: every request to the
+  forever promising data that is never coming — settle on an em dash, and leave the
+  sentence to the surface that knows why (see the next section). A fetch only
+  *fails* if it can: every request to the
   daemon carries `AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS)`, because a wedged
   daemon still holds its port open and a connect that never completes leaves the
   loading state with nothing to leave it (TRA-478).
@@ -589,10 +590,23 @@ dead end.
 
 **Values that were true a minute ago outrank no values at all.** A refresh that fails must
 leave the last good ones on screen, cache them across launches, and say once — above them,
-where they are read before the numbers are — that they are the last indexed ones. Em dashes
-and "Couldn't be measured" are for a number nobody has ever had, not for one that is a few
-minutes old. The corollary: that line has to match the screen. Saying "these are the last
-indexed numbers" over a row of em dashes is the same lie in the other direction.
+where they are read before the numbers are — that they are the last indexed ones. An em dash
+is for a number nobody has ever had, not for one that is a few minutes old. The corollary:
+that line has to match the screen. Saying "these are the last indexed numbers" over a row of
+em dashes is the same lie in the other direction.
+
+**The placeholder is the whole statement. A card with no number explains nothing.**
+The em dash *is* the sentence "we don't have this" — give it an accessible name
+(`aria-label="Not available"`) and stop. The comparison slot underneath answers
+"compared to what?", and a failure message is not a comparison; putting one there
+multiplies the diagnosis by the number of cards on the strip. Six KPI tiles each
+captioned "Couldn't be measured" said it four times *under a banner promising the
+numbers were on their way*, and six times *over a pane already headed "The daemon
+isn't running"* — the two states in which the caption could appear at all (TRA-488).
+This is the same rule as the paragraph above, applied one level down: the surface
+holding the daemon state says it; the cards inside it go quiet. A tooltip repeating
+the sentence when the tile is too short for a caption is the same defect with a
+smaller audience.
 
 ---
 
@@ -1299,7 +1313,8 @@ new evidence.
 | Cards are opaque with a hairline, no shadow, no glass | Cards are content. The active KPI tile painted on accent measured 3.28:1 and pushed its footnote to 4.45:1. |
 | `.lx-btn.is-status:disabled` keeps full opacity | A disabled button whose label is the status readout is information, not an inert control; dimming put it at 2.3:1. |
 | Skeletons at final geometry instead of spinners or "Loading…" | Nothing shifts when the data lands, and the loading state shows the shape of what is coming. |
-| A failed fetch settles on an em dash + "Couldn't be measured" | A skeleton that pulses forever promises data that is never coming. |
+| A failed fetch settles on an em dash | A skeleton that pulses forever promises data that is never coming. |
+| The em dash is the whole statement — no caption, no tooltip repeating it (TRA-488) | The tile's caption slot is a comparison line, and a failure sentence there is multiplied by the number of cards: six tiles said "Couldn't be measured" under a banner promising the numbers were on their way, and over a pane already headed "The daemon isn't running". |
 | `listPending` separates "daemon hasn't answered" from "never indexed" | `status ?? 'unknown'` blamed the project for the daemon's silence. |
 | Sidebar footer is `.ws-sb-row`, not its own geometry | One row system for the whole sidebar; the footer's labels started 26px left of every other label. |
 | Appearance is Auto / Light / Dark, with Auto clearing the key | The old `toggle` only ever wrote `light` or `dark`, so one click pinned the app forever and the system listener stopped mattering. |
