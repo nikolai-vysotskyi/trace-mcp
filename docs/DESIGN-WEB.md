@@ -249,8 +249,11 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] Every region where `scrollWidth > clientWidth` shows the `scroll →`
       label, and every region that fits does not — count both, at 1440px and
       at 390px. A region is any element that scrolls itself: the table
-      wrapper *and* every `pre`. Code blocks were read out of this line once
-      and shipped clipped and unlabelled for months.
+      wrapper, every `pre`, **and the landing page's quickstart
+      `.terminal-body`**. Code blocks were read out of this line once and
+      shipped clipped and unlabelled for months; the landing terminal was
+      missed twice more, because the fix each time landed in `docs.css` and
+      the landing page has its own copy of everything (§7).
 
 **Type & spacing**
 - [ ] Within the 2 families / 3 sizes / 2 weights budget.
@@ -296,6 +299,17 @@ The landing page keeps its own inline copy of the tokens rather than importing
 single file that the SEO agent edits constantly; extracting a shared sheet
 would be a large refactor with a live merge-conflict cost. The tokens in
 Section 1 are the contract — change one, change both files in the same PR.
+
+That duplication is not only a maintenance cost — it is where fixes go
+missing. Twice now a scroll-region rule shipped to all 17 doc pages and left
+the landing page, the busiest page on the site, behaving the old way. The
+landing's quickstart terminal is a scroll region: it carries its own
+`scroll →` label on the terminal header bezel (11px, inheriting that row's
+Space Mono caps, rather than the 10px label a doc page puts above the
+region), becomes a tab stop only while it actually overflows, and is named in
+the page's own `:where(...):focus-visible` list. **Any rule added to
+`docs/assets/css/docs.css` for a scroll region has to be checked against the
+landing page in the same PR.**
 
 The same duplication applies to the accessibility layer, and it is easier to
 forget than a token because nothing looks wrong until you press Tab. The

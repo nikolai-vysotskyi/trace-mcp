@@ -1185,6 +1185,13 @@ layout: null
       color: var(--text-disabled);
     }
     .terminal-header .right { display: flex; align-items: center; gap: 6px; }
+    /* A region with more to the right says so. macOS hides the overlay
+       scrollbar at rest and a phone never draws one, so without this the
+       last line just ends mid-word. Same rule as .scroll-hint on a doc page
+       (docs/assets/css/docs.css); here the label sits on the terminal's own
+       bezel, which is already the right voice. */
+    .terminal-header .scroll-hint { display: none; margin-right: 10px; }
+    .terminal-header .scroll-hint.is-visible { display: inline; }
     .terminal-body {
       padding: 24px;
       font-family: var(--font-mono);
@@ -1929,7 +1936,7 @@ layout: null
     /* The UA ring is rgb(153,200,255) — a second accent colour, which the
        design system forbids. :where() keeps specificity at 0 so any component
        that needs its own ring still wins without !important. */
-    :where(a, button, summary):focus-visible {
+    :where(a, button, summary, .terminal-body):focus-visible {
       outline: 1px solid var(--text-display);
       outline-offset: 2px;
     }
@@ -2620,9 +2627,9 @@ layout: null
         <div class="terminal reveal">
           <div class="terminal-header">
             <span>~/projects/my-app</span>
-            <span class="right"><span class="status-dot" style="background: var(--success); box-shadow: none;"></span> ready</span>
+            <span class="right"><span class="scroll-hint" aria-hidden="true">scroll &rarr;</span><span class="status-dot" style="background: var(--success); box-shadow: none;"></span> ready</span>
           </div>
-          <div class="terminal-body"><span class="cmt"># 1. install the CLI globally (~30 seconds)</span>
+          <div class="terminal-body" role="group" aria-label="Quickstart terminal output"><span class="cmt"># 1. install the CLI globally (~30 seconds)</span>
 <span class="pmt">$</span> npm install -g trace-mcp
 <span class="ok">[OK]</span> trace-mcp@latest installed
 
@@ -2815,6 +2822,31 @@ layout: null
   // keyframes, but not motion driven from JS — the rAF count-up and the
   // staggered segment fill run regardless. Both check this flag.
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // The quickstart terminal is a scroll region: label it while it has more to
+  // the right, and make it a tab stop only while it is actually scrollable.
+  (function () {
+    var region = document.querySelector('.terminal-body');
+    var hint = document.querySelector('.terminal-header .scroll-hint');
+    if (!region || !hint) return;
+    function measure() {
+      hint.classList.toggle(
+        'is-visible',
+        region.scrollWidth - region.clientWidth - region.scrollLeft > 1
+      );
+      if (region.scrollWidth - region.clientWidth > 1) region.setAttribute('tabindex', '0');
+      else if (region !== document.activeElement) region.removeAttribute('tabindex');
+    }
+    region.addEventListener('scroll', measure);
+    measure();
+    // Space Mono lands after first paint and changes every column width with it.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+    var pending = 0;
+    window.addEventListener('resize', function () {
+      cancelAnimationFrame(pending);
+      pending = requestAnimationFrame(measure);
+    });
+  })();
 
   // Reveal on scroll
   const observer = new IntersectionObserver((entries) => {
