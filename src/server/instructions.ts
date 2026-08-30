@@ -1,3 +1,54 @@
+/**
+ * How the instructions refer to the host's own file tools.
+ *
+ * The routing table is written for a host we cannot see, so TRA-512 made it name
+ * tools generically — `read`, `content-match`, `glob` — rather than assume Claude
+ * Code's. When the `initialize` handshake tells us which host is actually
+ * connected we can do better than generic and name its real tools, so these are
+ * a per-profile value the client-profile layer swaps on the wire
+ * (server/client-profile.ts) rather than literals.
+ */
+export interface HostToolNames {
+  /** Parenthetical after "THE RULE", introducing the host's vocabulary. */
+  rubric: string;
+  /** File-read tool. */
+  read: string;
+  /** Content-match tool. */
+  grep: string;
+  /** File-glob tool. */
+  glob: string;
+  /** Line-edit tools, as one phrase. */
+  edit: string;
+}
+
+/** What `buildInstructions` emits, and what an unrecognised host keeps. */
+export const HOST_TOOLS_GENERIC: HostToolNames = {
+  rubric:
+    'host tool names vary — `read`, `content-match`/grep, `glob` mean whatever yours are called',
+  read: '`read`',
+  grep: '`content-match`',
+  glob: '`glob`',
+  edit: 'Edit/Write',
+};
+
+/**
+ * Every instructions line that names a host tool, in a fixed order.
+ *
+ * Retargeting is a substring swap of this array (generic → profile), so both
+ * sides must build from this one function or the swap silently no-ops. Kept
+ * honest by client-profile.test.ts.
+ */
+export function hostToolLines(h: HostToolNames): string[] {
+  return [
+    `THE RULE (${h.rubric}):`,
+    `- Full-file ${h.read} for discovery: not the move. Take \`get_outline\`, then pull the one symbol with \`get_symbol\`. Read the file directly only when you already have the outline and the span you want is a few lines — or the file is not code (.md/.json/.yaml/config), or you are about to edit it.`,
+    `- ${h.grep} or ${h.glob} over source: not the move. \`search\` and \`find_usages\` resolve symbol kinds, imports, and call sites; a text scan cannot rank its hits and misses re-exports, aliases, and dynamic dispatch.`,
+    `- After every ${h.edit} → \`register_edit\` { file_path } (reindexes one file; far lighter than \`reindex\`). If the reply carries \`_duplication_warnings\`, review them before continuing.`,
+    `Use trace-mcp tools instead of ${h.read}/${h.grep}/${h.glob} for source code.`,
+    `Use ${h.read}/${h.grep} only for non-code files (.md, .json, .yaml) or before ${h.edit}.`,
+  ];
+}
+
 /** Builds the MCP server instructions string based on verbosity level. */
 export function buildInstructions(
   detectedFrameworks: string,
@@ -5,16 +56,17 @@ export function buildInstructions(
   agentBehavior: 'strict' | 'minimal' | 'off' = 'off',
 ): string {
   const behaviorBlock = buildBehaviorBlock(agentBehavior);
+  const host = hostToolLines(HOST_TOOLS_GENERIC);
 
   if (verbosity === 'none') return behaviorBlock;
 
   if (verbosity === 'minimal') {
     const core = [
       `trace-mcp: framework-aware code intelligence. Detected: ${detectedFrameworks}.`,
-      'Use trace-mcp tools instead of Read/Grep/Glob for source code.',
+      host[4],
       'Key tools: search, get_outline, get_symbol, get_task_context, get_change_impact, find_usages, batch.',
       'Use batch for 2+ independent queries. Use get_task_context to start tasks.',
-      'Use Read/Grep only for non-code files (.md, .json, .yaml) or before Edit.',
+      host[5],
     ].join(' ');
     return behaviorBlock ? `${core}\n\n${behaviorBlock}` : core;
   }
@@ -22,9 +74,9 @@ export function buildInstructions(
   return [
     `trace-mcp is a framework-aware code intelligence server for this project. Detected frameworks: ${detectedFrameworks}.`,
     '',
-    'THE RULE (host tool names vary — `read`, `content-match`/grep, `glob` mean whatever yours are called):',
-    '- Full-file `read` for discovery: not the move. Take `get_outline`, then pull the one symbol with `get_symbol`. Read the file directly only when you already have the outline and the span you want is a few lines — or the file is not code (.md/.json/.yaml/config), or you are about to edit it.',
-    '- `content-match` or `glob` over source: not the move. `search` and `find_usages` resolve symbol kinds, imports, and call sites; a text scan cannot rank its hits and misses re-exports, aliases, and dynamic dispatch.',
+    host[0],
+    host[1],
+    host[2],
     '',
     'If you catch yourself thinking one of these, that is the signal to switch:',
     '- "I already know the path, so one read is cheaper than a lookup." — knowing the path does not shrink the file. The lookup returns the symbol; the read returns everything around it.',
@@ -61,7 +113,7 @@ export function buildInstructions(
     '- Check waste → `get_optimization_report`; track savings → `get_session_stats`, `get_real_savings`',
     '',
     'Editing:',
-    '- After every Edit/Write → `register_edit` { file_path } (reindexes one file; far lighter than `reindex`). If the reply carries `_duplication_warnings`, review them before continuing.',
+    host[3],
     '- Before writing a new function/class → `check_duplication` { name, kind }',
     '- Rename → `apply_rename`; move a symbol or file → `apply_move`; change params → `change_signature`; delete → `remove_dead_code`. All dry-run by default: review, then re-call with `dry_run: false` (`confirm_large: true` past 20 files). Preview any of them with `plan_refactoring`. `extract_function` is disabled.',
     '- Same mechanical change 2+ times → `apply_codemod` { pattern, replacement, file_pattern }, not a run of edits.',
