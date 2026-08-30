@@ -111,6 +111,32 @@ describe('docs footer nav covers every indexed page', () => {
     ).toEqual([]);
   });
 
+  /**
+   * GitHub Pages serves a directory's README as its index, so docs/perf/README.md
+   * was reachable at /perf/ with no front matter at all. Adding front matter hands
+   * the file to Jekyll, which publishes it at /perf/README.html instead — and /perf/
+   * then falls through to the "Page not found" body served under a 200, a soft 404
+   * on a URL that had been working. Shipped exactly that way in #635 and caught on
+   * the live site afterwards, not by CI.
+   *
+   * `permalink` pins the output URL back to the directory, so the two cannot diverge.
+   */
+  it('every README under docs/ pins its URL with a permalink', () => {
+    const readmes = readdirSync(DOCS, { recursive: true, encoding: 'utf-8' })
+      .map((f) => f.replace(/\\/g, '/'))
+      .filter((f) => !f.startsWith('_') && /(^|\/)README\.md$/.test(f));
+    const unpinned = readmes.filter((f) => {
+      const raw = readFileSync(join(DOCS, f), 'utf-8');
+      if (!raw.startsWith('---\n')) return false; // no front matter: Jekyll leaves the URL alone
+      const expected = `/${f.replace(/README\.md$/, '')}`;
+      return !new RegExp(`^permalink:\\s*${expected}/?\\s*$`, 'm').test(raw);
+    });
+    expect(
+      unpinned,
+      `READMEs with front matter but no \`permalink:\` pinning them to their directory URL: ${unpinned.join(', ')}`,
+    ).toEqual([]);
+  });
+
   it('the layout renders the nav from the data file, not a hardcoded list', () => {
     const layout = readFileSync(join(DOCS, '_layouts', 'default.html'), 'utf-8');
     expect(layout).toMatch(/site\.data\.docs_nav/);
