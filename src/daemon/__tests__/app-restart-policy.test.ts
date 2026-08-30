@@ -140,6 +140,68 @@ describe('shouldRestartUnreachableDaemon', () => {
       }),
     ).toBe(false);
   });
+
+  /**
+   * TRA-525. Every simulation above passes `processAlive: true` — and that is
+   * exactly why they stayed green while the field burned. `processAlive` is read
+   * from `daemon.pid`, and until TRA-525 any losing `daemon restart` spawn could
+   * overwrite that file with its own PID before losing the bind race and dying.
+   * Measured on Nikolai's Mac 2026-08-30: the file named a dead process in 24%
+   * of one-second samples (9/37), once naming dead PID 38747 while live PID
+   * 36600 was serving.
+   *
+   * TRA-543's escalation bounds the loop but does not repair the input, and the
+   * two branches are not interchangeable: a poisoned reading sends a healthy
+   * daemon down the *dead* branch, whose base threshold is 30x tighter (10 s vs
+   * 5 min). Escalation caps the damage either way, so what is left is modest —
+   * 8 kills in the first hour instead of 3, not the 38.8-89/h the field saw
+   * before TRA-543 — but it is still past the "<= 4 restarts in the first hour"
+   * bound asserted above. That bound is a guarantee about a truthful pid file,
+   * and it holds only once TRA-525 keeps the file truthful.
+   *
+   * These counts are a property of the pure policy. The shipped app also gates
+   * every restart behind tray.ts's 60 s DAEMON_STARTUP_GRACE_MS, so wall-clock
+   * cadence is looser than this; the ratio between the branches is the point.
+   */
+  it('a poisoned daemon.pid escalates a healthy daemon down the dead-process branch', () => {
+    const POLL_MS = 5_000;
+    const OUTAGE_MS = 13 * 60 * 60_000;
+
+    /** Replay a whole outage of a live-but-starved daemon; count the kills. */
+    function replay(readProcessAlive: () => boolean) {
+      let restarts = 0;
+      let restartsInFirstHour = 0;
+      let unreachableSince = 0;
+      for (let t = 0; t < OUTAGE_MS; t += POLL_MS) {
+        if (
+          shouldRestartUnreachableDaemon({
+            processAlive: readProcessAlive(),
+            unreachableForMs: t - unreachableSince,
+            restartsThisOutage: restarts,
+          })
+        ) {
+          restarts++;
+          if (t < 3_600_000) restartsInFirstHour++;
+          unreachableSince = t;
+        }
+      }
+      return { restarts, restartsInFirstHour };
+    }
+
+    // Poisoned: a failed spawn registered and died, so liveness reads "dead"
+    // about the daemon that is actually serving.
+    const poisoned = replay(() => false);
+    // Repaired (TRA-525): only the process that owns the port registers, and it
+    // re-asserts if the stale-file sweep removes the entry.
+    const repaired = replay(() => true);
+
+    // The dead branch starts at DEAD_DAEMON_MS, not WEDGED_DAEMON_MS, so the
+    // healthy daemon is killed twice as often before the escalation catches up —
+    // and past the <= 4/hour bound the test above claims.
+    expect(poisoned.restartsInFirstHour).toBe(8);
+    expect(repaired.restartsInFirstHour).toBe(3);
+    expect(poisoned.restarts).toBeGreaterThan(repaired.restarts);
+  });
 });
 
 /**

@@ -156,11 +156,60 @@ export function deriveDaemonState(o: {
   /** Projects the daemon itself has named this session. */
   liveProjects: number;
   metricsErrorKind: MetricsErrorKind | null;
+  /**
+   * TRA-525: the daemon's OS process is provably alive (daemon.pid names a
+   * live, ownership-verified process). `undefined` means "not known" — only a
+   * definite `true` may override the no-feed reading.
+   */
+  processAlive?: boolean;
 }): DaemonState {
   if (o.loading) return 'ok';
-  // No feed and nothing the daemon ever told us: it isn't running.
-  if (!o.connected) return o.liveProjects > 0 ? 'stale' : 'unreachable';
+  if (!o.connected) {
+    // TRA-525: "isn't running" has to mean the process is gone. Measured on
+    // this machine, the daemon's event loop is starved by indexing to a
+    // /health p50 of 7.8s — it stops answering while very much running, and
+    // calling that "isn't running" sends the user to start something that is
+    // already started. A live process with no feed is `stale`: there is
+    // nothing to start, only a wait to sit through.
+    if (o.processAlive === true) return 'stale';
+    // No feed and nothing the daemon ever told us: it isn't running.
+    return o.liveProjects > 0 ? 'stale' : 'unreachable';
+  }
   return o.metricsErrorKind === null ? 'ok' : 'stale';
+}
+
+/**
+ * Poll main-process daemon liveness while `active`. Returns `undefined` until
+ * an answer lands (and outside the app shell, where the bridge is absent), so
+ * the reducer keeps its old reading rather than guessing (TRA-525).
+ */
+export function useDaemonProcessAlive(active: boolean): boolean | undefined {
+  const [alive, setAlive] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (!active) {
+      setAlive(undefined);
+      return;
+    }
+    const probe = window.electronAPI?.daemonProcessAlive;
+    if (!probe) return;
+    let cancelled = false;
+    const read = () => {
+      probe()
+        .then((v) => {
+          if (!cancelled) setAlive(v);
+        })
+        .catch(() => {
+          /* bridge unavailable — leave the reading alone */
+        });
+    };
+    read();
+    const t = setInterval(read, 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [active]);
+  return alive;
 }
 
 interface MetricsSetters {
@@ -311,11 +360,17 @@ export function useWorkspaceProjects(): UseWorkspaceProjectsResult {
   // feed that blinks doesn't blink a banner with it; recovery is immediate,
   // because there is no reason to keep telling someone their data is old
   // once it isn't.
+  // TRA-525: only asked for while the feed is down, and only then — a live
+  // process is the one thing that distinguishes "busy" from "gone", and there
+  // is nothing to distinguish while the feed is up.
+  const processAlive = useDaemonProcessAlive(!daemon.connected && !daemon.loading);
+
   const observedState = deriveDaemonState({
     loading: daemon.loading,
     connected: daemon.connected,
     liveProjects: daemon.projects.length,
     metricsErrorKind: errorKind,
+    processAlive,
   });
   const [daemonState, setDaemonState] = useState<DaemonState>('ok');
   useEffect(() => {

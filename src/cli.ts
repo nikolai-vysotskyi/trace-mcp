@@ -12,6 +12,8 @@ import { armBoundedExit } from './server/bounded-shutdown.js';
 import {
   clearOwnDaemonPidFile,
   logPreviousExit,
+  PID_REASSERT_INTERVAL_MS,
+  reassertOwnDaemonPidFile,
   startDaemonLogRotation,
   writeOwnDaemonPidFile,
 } from './daemon/lifecycle.js';
@@ -487,10 +489,14 @@ program
     // anything else, so a crash loop is visible in daemon.log itself rather
     // than only via `launchctl print` after someone thinks to look.
     logPreviousExit();
-    // TRA-421: register our own PID so clients can tell "busy" from "dead"
-    // without /health. Under launchd nobody else writes this file, which left
-    // the #237 restart-war guard permanently disarmed on macOS.
-    writeOwnDaemonPidFile();
+    // TRA-421 registers our PID so clients can tell "busy" from "dead" without
+    // /health. TRA-525: that registration happens in the listen() callback, NOT
+    // here. Writing it before bind let a process that never becomes the daemon
+    // claim to be one: on `daemon restart` the new process overwrote daemon.pid,
+    // lost the port race to the still-running old daemon, and exited — leaving
+    // the file naming a dead PID. isDaemonProcessAlive() then read "dead" while
+    // a healthy daemon was serving, which disarmed the very guard that exists to
+    // stop the restart war (measured: 724 restarts in 18.7h, peak 89/h).
     // Auto-update (same logic as serve)
     const globalRaw = loadGlobalConfigRaw();
     if (globalRaw.auto_update !== false) {
@@ -2776,6 +2782,8 @@ program
     });
 
     let daemonShuttingDown = false;
+    /** Set once we own the port; cleared on shutdown so it cannot re-register a dying PID. */
+    let pidReassert: NodeJS.Timeout | undefined;
     const shutdown = async (reason?: string) => {
       // Re-entrancy guard: a SIGTERM delivered while the event loop was starved
       // by an indexing run only gets *processed* at the next yield, and a second
@@ -2839,7 +2847,11 @@ program
       clearInterval(clientSweep);
       await projectManager.shutdown();
       // Drop our PID registration last: while it exists, clients treat the
-      // daemon as alive-but-busy and refuse to restart it (TRA-421).
+      // daemon as alive-but-busy and refuse to restart it (TRA-421). Stop the
+      // re-assert first — httpServer.close() below waits on live SSE sessions,
+      // so a tick landing after the unlink would recreate daemon.pid naming a
+      // process that is already on its way out (TRA-556).
+      clearInterval(pidReassert);
       clearOwnDaemonPidFile();
       httpServer.close(() => process.exit(0));
     };
@@ -3028,6 +3040,18 @@ program
     }
 
     httpServer.listen(port, host, () => {
+      // TRA-525: we own the port — only now are we provably "the daemon". A
+      // process that loses the bind race exits via the EADDRINUSE handler above
+      // without ever having touched daemon.pid, so a failed spawn can no longer
+      // convince the app's watchdog that the live daemon died.
+      writeOwnDaemonPidFile();
+      // Self-heal: readDaemonPid() unlinks the file whenever it names a dead
+      // process, so a single poisoning event used to disarm the guard for the
+      // rest of this daemon's life. Re-assert it periodically; the write is
+      // skipped unless the file actually differs, so this is idempotent and
+      // costs one stat per tick. unref'd — never holds the process open.
+      pidReassert = setInterval(reassertOwnDaemonPidFile, PID_REASSERT_INTERVAL_MS);
+      pidReassert.unref();
       const projectCount = projectManager.listProjects().length;
       logger.info(
         {

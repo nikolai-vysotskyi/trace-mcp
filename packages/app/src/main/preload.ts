@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openInIde: (bundlePath: string, filePath: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('open-in-ide', bundlePath, filePath),
   restartDaemon: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('restart-daemon'),
+  /** TRA-525: OS-level daemon liveness, so "busy" can be told from "not running". */
+  daemonProcessAlive: (): Promise<boolean> => ipcRenderer.invoke('daemon:process-alive'),
   detectMcpClients: (): Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]> =>
     ipcRenderer.invoke('detect-mcp-clients'),
   getMcpClientStatuses: (

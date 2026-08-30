@@ -166,7 +166,7 @@ ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: strin
   });
 });
 
-import { restartDaemon } from './daemon-lifecycle';
+import { isDaemonProcessAlive, restartDaemon } from './daemon-lifecycle';
 import { isPlausibleInstallPath } from './install-path';
 import {
   deleteModel as ollamaDelete,
@@ -197,6 +197,13 @@ import {
 ipcMain.handle('restart-daemon', async () => {
   return restartDaemon();
 });
+
+// IPC: is the daemon's OS process provably alive, independent of /health?
+// TRA-525: the renderer only has HTTP, so a starved daemon (event loop blocked
+// by indexing) is indistinguishable from a dead one from there — which is how
+// "The daemon isn't running" ended up on screen above a daemon that was running.
+// Cheap: one small file read plus a signal-0 probe.
+ipcMain.handle('daemon:process-alive', () => isDaemonProcessAlive());
 
 // IPC: trace-mcp guard control (status read + per-project mode toggle + bypass).
 // Status JSON is written by the trace-mcp server (src/server/heartbeat.ts).

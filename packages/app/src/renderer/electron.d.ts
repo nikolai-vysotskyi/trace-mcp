@@ -15,6 +15,8 @@ declare global {
       detectIdeApps: () => Promise<{ id: string; name: string; bundlePath: string }[]>;
       openInIde: (bundlePath: string, filePath: string) => Promise<{ ok: boolean; error?: string }>;
       restartDaemon: () => Promise<{ ok: boolean }>;
+      /** TRA-525: OS-level daemon liveness, independent of /health. */
+      daemonProcessAlive?: () => Promise<boolean>;
       detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
       getMcpClientStatuses: (
         scope?: 'global' | 'project',
