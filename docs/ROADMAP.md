@@ -53,10 +53,13 @@ day, opt-out via `TRACE_MCP_TELEMETRY=off`). Read it in the GA4 property
 holds unrelated properties; do not write to those).
 
 **Do not refresh this by hand.** `.github/workflows/ga4-snapshot.yml` pulls the
-numbers daily via the GA4 Data API into `docs/_data/adoption.yml` — active
-users by day/week/month, and the breakdown by version, country and MCP client.
-That file is the durable record: GA4 itself keeps event data for 14 months at
-most, so anything older survives only there.
+numbers daily via the GA4 Data API — active users by day/week/month, and the
+breakdown by version, country and MCP client — and publishes them to the
+[`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml)
+branch, plus each run's job summary. That branch is the durable record: GA4
+keeps event data for 14 months at most, so anything older survives only there.
+It is deliberately not on `master`: a PR opened by `GITHUB_TOKEN` never
+triggers CI, so it could never satisfy the required checks.
 
 Caveat when citing it: the ping's credentials ship in plaintext inside the
 published npm package (public by design — see SECURITY.md "Telemetry
