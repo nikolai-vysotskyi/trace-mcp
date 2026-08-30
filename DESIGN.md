@@ -470,6 +470,28 @@ whole indicator; the open menu is the rest of it
 (`.ws-sb-row[aria-expanded='true']:focus-visible { box-shadow: none }`). The ring
 stays for the case it is actually for: the row focused with the menu closed.
 
+### A pinned column shades what it covers, or it is lying about the table
+
+A table wider than its pane freezes its identity columns left and its actions right, and
+the rows then slide *underneath* them. That is only legible if the pinned column casts a
+shade over what it covers. Without one the covered content simply stops, and a table
+whose last visible column is Symbols reads as a table that ends at Symbols — at the
+default 960×700 window the workspace table is 1025px in a 707px pane, so four of its ten
+columns sat under the Actions pin with nothing to say so, and a right-aligned `1,043`
+painted down to `1,0`, which reads as the value rather than as half of it.
+
+The shade is `±10px 0 12px -10px var(--scroll-edge-shade)` alongside the hairline, and it
+is **directional**: only the side that still hides content is coloured, so a table
+scrolled to its end shows a plain seam. Toggle it by writing the colour, not the shadow —
+`--edge-shade-left` / `--edge-shade-right` on the scroll container is one style write per
+scroll event instead of a boolean threaded through every cell.
+
+**`box-shadow` does not paint on a cell in a collapsed table.** Chromium drops it, so a
+seam declared on a `td` under `border-collapse: collapse` is a seam that does not exist —
+this one was declared in TRA-265 and never rendered a pixel. Tables that pin columns use
+`border-collapse: separate` with `border-spacing: 0`, which also moves the row hairline
+from the `<tr>` (ignored in the separated model) onto the cells.
+
 ### States are part of the component, not an afterthought
 
 Every data surface owes four states, and each has a house form:
@@ -1207,6 +1229,7 @@ new evidence.
 | Verify in the Electron window, not in Chrome | `navigator.userAgent` says "Mac" in Chrome on macOS too, so the renderer draws the 44px traffic-light reservation with no traffic lights in it — a band that does not exist in the real app. A screenshot off `vite dev` in a browser is a different product. (Nikolai, 2026-08-29; the rule itself lands with TRA-354.) |
 | A rule the enforcement cannot see is a comment | §8 rule 1 named `rgb()` from day one and `tokenGuard()` never counted it, so the ban held for hex and lapsed for `rgb()` — which is how a 3.89:1 label sat on the sidebar with a green build. When a rule goes into §8, check the script actually implements all of it. |
 | The last tile still hand-rolling its material is the one nobody looks at | The sidebar's update card kept `--fill-tertiary` at an 8px radius and a private `.btn-prominent` through the whole TRA-290 migration, because it only appears when there is an update — so every review of the sidebar was a review of a sidebar without it. When a migration says "every surface", enumerate the surfaces that are conditionally rendered too. |
+| A seam you cannot see is a seam you do not have | The workspace table's frozen columns declared a `-1px 0 0 var(--separator)` hairline on the pinned cells from the day they landed, and Chromium had been discarding it the whole time — `box-shadow` does not paint on cells under `border-collapse: collapse`. Nobody noticed, because the failure mode of a missing seam is a table that looks finished. Check a decorative declaration renders; only a screenshot or `getComputedStyle` on the running renderer can tell you it did. |
 | A row label never repeats its own control's verb | "Temporary pause" beside a "Pause for 10 minutes" button wrapped to two lines at the 640px minimum and added no meaning. The label names the subject ("Enforcement"), the control names the action. |
 
 ---
