@@ -98,7 +98,10 @@ const STICKY_HEADER_BG = overPane('var(--fill-quaternary)');
  * ten columns are under the Actions pin, so getting it backwards is silent.
  */
 export function scrollEdges(scrollLeft: number, scrollWidth: number, clientWidth: number) {
-  return { left: scrollLeft > 0, right: scrollLeft < scrollWidth - clientWidth - 1 };
+  return {
+    left: scrollLeft > 0,
+    right: scrollLeft < scrollWidth - clientWidth - 1,
+  };
 }
 
 /**
