@@ -7,19 +7,11 @@ export const update = {
   headerVersion: 'वर्ज़न {{version}}',
   headerChecking: 'जाँच हो रही है…',
   headerAvailable: 'वर्ज़न {{version}} उपलब्ध',
-  headerManualInstall: 'वर्ज़न {{version}} को खुद इंस्टॉल करना होगा',
   headerUpToDate: 'अप टू डेट · {{when}} जाँचा गया',
 
   cardReadyTitle: 'v{{version}} तैयार',
   cardReadySubtitle: 'इंस्टॉल के लिए रीस्टार्ट करें · v{{current}}',
   cardRestart: 'इंस्टॉल के लिए रीस्टार्ट करें',
-  cardStuckTitle: 'v{{version}} को खुद इंस्टॉल करना होगा',
-  cardStuckSubtitle:
-    'कमांड लाइन टूल अपडेट हो गया, पर ऐप अब भी v{{current}} पर है — वह अपना बंडल खुद नहीं बदल सका। रिलीज़ डाउनलोड करके उसे Applications में खींच दें।',
-  cardDownload: 'v{{version}} डाउनलोड करें',
-  cardStuckQuarantine:
-    'macOS डाउनलोड को damaged बताएगा। ऐसा है नहीं — Applications में ले जाने के बाद एक बार यह चलाएँ:',
-  copyQuarantineCommand: 'कमांड कॉपी करें',
   cardAvailableTitle: 'v{{version}} उपलब्ध',
   cardAvailableSubtitle: 'अभी v{{current}} · {{when}} जाँचा गया',
   cardUpdate: 'अपडेट',
