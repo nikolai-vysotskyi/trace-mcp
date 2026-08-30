@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useDocumentVisible } from './useDocumentVisible';
+
 // ── Types (mirrored from api-client.ts — renderer can't import main process modules) ──
 
 export interface ProjectInfo {
@@ -191,11 +193,28 @@ export function useDaemon() {
     }
   }, []);
 
-  // SSE subscription
+  // Initial state load — once per window, on screen or not, so a tab that opens
+  // behind another one still has its data when it is brought forward.
   useEffect(() => {
     fetchProjects();
     fetchClients();
     fetchSettings();
+  }, [fetchProjects, fetchClients, fetchSettings]);
+
+  /* SSE, and only while this window is on screen (TRA-526).
+     Every project tab is a separate BrowserWindow, so an unconditional
+     subscription here is one permanently-open socket PER TAB. Chromium allows
+     six connections per host, and the daemon is one host — so from the sixth
+     window on, every request the app makes to it queues behind the streams and
+     times out after DAEMON_FETCH_TIMEOUT_MS. Measured before this gate: the
+     fifth project tab's Overview never loaded at all, while the same daemon
+     answered a non-Chromium client in 1 ms. On macOS only the selected tab of a
+     tab group is on screen, so gating on visibility holds the socket count at
+     one no matter how many tabs are open, and `onopen` re-fetches whatever the
+     window missed while it was away. */
+  const visible = useDocumentVisible();
+  useEffect(() => {
+    if (!visible) return;
 
     const es = new EventSource(`${BASE}/api/events`);
     eventSourceRef.current = es;
@@ -356,7 +375,7 @@ export function useDaemon() {
       es.close();
       eventSourceRef.current = null;
     };
-  }, [fetchProjects, fetchClients, fetchSettings]);
+  }, [visible, fetchProjects, fetchClients]);
 
   // Actions
   const addProject = useCallback(async (root: string) => {
