@@ -73,6 +73,8 @@ export const workspace = {
   kpiNoProjectsYet: 'проектов пока нет',
   kpiNothingIndexedYet: 'пока ничего не проиндексировано',
   kpiNothingRunning: 'ничего не выполняется',
+  kpiHealthyCriteria: 'оценка A или B, без уязвимостей',
+  kpiNeedsAttentionCriteria: 'низкая оценка или находки',
   kpiShare_one: '{{percent}}% из {{total}} проекта',
   kpiShare_few: '{{percent}}% из {{total}} проектов',
   kpiShare_many: '{{percent}}% из {{total}} проектов',

@@ -26,6 +26,7 @@ function renderHeader(
     listFailed: boolean;
     dense: boolean;
     hideViewToggle: boolean;
+    kpis: WorkspaceKpis;
   }> = {},
 ) {
   const { container } = render(
@@ -165,13 +166,31 @@ describe('WorkspaceHeader KPI strip', () => {
       expect(lines[2]).not.toBe('');
     }
   });
+
+  it('does not give two overlapping sets the grammar of a partition', () => {
+    // Healthy is (grade A or B) AND no security findings; Needs attention is
+    // (grade D or F) OR findings OR ≥10 dead exports. A grade-B project with 15
+    // dead exports is in both, so the workspace this was measured on had 30
+    // healthy and 44 needing attention out of 53 — printed as shares that was
+    // "57% of 53 projects" beside "83% of 53 projects" (TRA-459).
+    renderHeader(false, {
+      kpis: { ...ZERO_KPIS, totalProjects: 53, healthy: 30, needsAttention: 44, indexing: 4 },
+    });
+    for (const label of ['Healthy', 'Needs attention']) {
+      const comparison = kpiTile(label).children[2]!.textContent!;
+      expect(comparison).not.toMatch(/%/);
+      expect(comparison).not.toMatch(/\d/);
+    }
+    // Indexing really is a subset of the workspace, so it keeps its share.
+    expect(kpiTile('Indexing').children[2]!.textContent).toBe('8% of 53 projects');
+  });
 });
 
 describe('WorkspaceHeader at a pane that cannot afford the full layout', () => {
   beforeEach(() => localStorage.clear());
 
   it('puts the toolbar above the KPI strip so chrome is never pushed off-window', () => {
-    // Six full tiles are 357px. With them first, a 420px window — the app's own
+    // Six full tiles are 396px. With them first, a 420px window — the app's own
     // minimum (main/tray.ts) — left the toolbar and the whole list below the
     // bottom edge with no scroll container to reach them (TRA-325).
     renderHeader(false);
