@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_tag:
-        description: 'Force-publish this existing git tag (e.g. v1.38.0) when the normal release-please flow already created the tag but the publish job failed — or when a build job failed and left the release stuck non-`latest` (TRA-566). Re-verifies the assets, then promotes it.'
+        description: 'Force-publish this existing git tag (e.g. v1.38.0) when the normal release-please flow already created the tag but the publish job failed — or when a failed build left the release marked a prerelease because its assets were incomplete (TRA-566). Re-verifies the assets and returns it to stable.'
         required: false
         default: ''
 
@@ -17,9 +17,9 @@ permissions:
 # (release-please, the macOS/Windows build jobs, and verify-release-assets).
 # They are accepted, not oversights: release-please has to push the release
 # branch and cut the tag, the build jobs upload signed installers as release
-# assets, and verify-release-assets is the only job allowed to promote a
-# release to `latest` (TRA-566). All are already scoped to the job, never
-# top-level (TRA-255).
+# assets, and verify-release-assets has to be able to take an incomplete
+# release back out of `latest` (TRA-566). All are already scoped to the job,
+# never top-level (TRA-255).
 
 jobs:
   release-please:
@@ -65,59 +65,9 @@ jobs:
           )
           gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${FOOTER}"
 
-      # TRA-566: creating a release makes it `latest` immediately, so v3.9.0 was
-      # the newest release for 20 minutes while build-app-win was failing — and
-      # stayed newest after it failed. Windows electron-updater reads latest.yml
-      # off /releases/latest and nothing else, so every Windows install silently
-      # stopped updating against a release that had no latest.yml and never
-      # would. `verify-release-assets` caught it, but only after the fact.
-      #
-      # Hold `latest` on the PREVIOUS release until the new one verifies, then
-      # promote it in `verify-release-assets`.
-      #
-      # Note the shape of this: there is no "demote" operation. PATCHing the
-      # newest release with `make_latest=false` looks like one and returns 200,
-      # but it is a NO-OP — /releases/latest still resolves to it. Verified
-      # against a scratch repo:
-      #
-      #   create v1, create v2          → latest = v2
-      #   PATCH v2 make_latest=false    → latest = v2   (unchanged!)
-      #   PATCH v1 make_latest=true     → latest = v1
-      #   create v3                     → latest = v3   (overrides the pin)
-      #   PATCH v3 make_latest=false    → latest = v3   (unchanged!)
-      #
-      # So the ONLY way to move the pointer off a release is to explicitly
-      # promote a different one. Hence "re-pin the previous" rather than the
-      # demotion this step originally (and wrongly) tried to do.
-      #
-      # A draft release would close the same gap, but GitHub does not create the
-      # git ref for a draft, and both build jobs check out `ref: tag_name` —
-      # drafting would break the builds this is meant to protect.
-      - name: Hold `latest` on the previous release until the new one verifies
-        if: steps.release.outputs.release_created == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.release.outputs.tag_name }}
-        run: |
-          PREV=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
-            --jq "[.[] | select(.draft == false and .prerelease == false and .tag_name != \"$TAG\")]
-                  | sort_by(.created_at) | reverse | .[0].id // empty")
-          if [ -z "$PREV" ]; then
-            echo "::notice::no earlier published release to hold \`latest\` on — nothing to do"
-            exit 0
-          fi
-          # Retried: if this one call is lost to a blip the new release stays
-          # `latest` unverified, which is exactly the TRA-566 failure mode.
-          for i in 1 2 3; do
-            gh api -X PATCH "repos/${{ github.repository }}/releases/$PREV" -f make_latest=true --silent && exit 0
-            sleep 5
-          done
-          echo "::error::could not hold \`latest\` on the previous release — the unverified release $TAG is still latest"
-          exit 1
-
-  # Gate between the app builds and npm, and the one place that promotes a
-  # release to `latest`. The release exists the moment the tag is cut, but the
-  # zips land 2-5 minutes later from the matrix jobs below.
+  # Gate between the app builds and npm, and the one place that can take a
+  # release back out of `latest`. The release exists the moment the tag is cut,
+  # but the zips land 2-5 minutes later from the matrix jobs below.
   # scripts/postinstall-app.mjs resolves the
   # update from /releases/latest and returns silently when the arch zip or its
   # .sha256 is not there yet — so every `npm install -g trace-mcp` inside that
@@ -141,29 +91,71 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Assert every updater artifact is on the release
+        id: assert
         run: |
           gh release view "$TAG" --repo "${{ github.repository }}" --json assets --jq '.assets' \
             | node scripts/verify-release-assets.mjs "${TAG#v}"
 
-      # Only now is the release safe to advertise. Until this step runs,
-      # /releases/latest still resolves to the previous complete release
-      # (TRA-566) — see the hold step in `release-please`.
+      # TRA-566: this gate named the v3.9.0 problem exactly and still left every
+      # Windows install broken, because it runs after the release is public and
+      # newest. Windows electron-updater reads latest.yml off /releases/latest
+      # and nothing else; v3.9.0 had none and never would, so the check found no
+      # feed — no error the user sees, and no installer to fetch by hand either.
+      # A red CI run does not help a user whose updater is pointed at it.
       #
-      # This is also the un-stick path: a release left un-promoted because a
-      # build job failed is promoted by re-running this workflow with
-      # `publish_tag` once the assets are actually on the tag.
-      - name: Promote the verified release to `latest`
+      # So take the release back out of `latest` when its assets do not verify.
+      # `prerelease` is the flag that does this — /releases/latest is documented
+      # and observed to skip prereleases and fall back to the previous stable
+      # release. It is also honest: a release missing half its installers IS a
+      # prerelease.
+      #
+      # The obvious-looking alternative does NOT work. PATCHing the release with
+      # `make_latest=false` returns 200 and changes nothing. Measured on a
+      # scratch repo, polling /releases/latest until it settled (the endpoint is
+      # eventually consistent, so a single read right after a mutation lies):
+      #
+      #   PATCH newest make_latest=false  → latest unchanged   (no-op)
+      #   PATCH newest prerelease=true    → latest falls back   ✓
+      #   PATCH newest prerelease=false   → latest returns
+      #
+      # Nor can we pick the fallback ourselves by walking back to "the last
+      # complete release": the expected asset set changes over time, so older
+      # releases fail today's audit for reasons that were never faults. v3.8.0
+      # has no latest-mac.yml because macOS only moved to electron-updater in
+      # 3.9.0 (TRA-437). GitHub's own fallback does not have that problem.
+      - name: Take an incomplete release out of `latest`
+        if: failure() && steps.assert.outcome == 'failure'
         run: |
           ID=$(gh release view "$TAG" --repo "${{ github.repository }}" --json databaseId --jq '.databaseId')
           if [ -z "$ID" ]; then
-            echo "::error::could not resolve a release id for $TAG"
+            echo "::error::could not resolve a release id for $TAG — it may still be \`latest\` while incomplete"
             exit 1
           fi
+          # Retried: losing this one call is precisely the TRA-566 outcome.
           for i in 1 2 3; do
-            gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -f make_latest=true --silent && exit 0
+            if gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -F prerelease=true --silent; then
+              echo "::warning::$TAG is incomplete and has been marked a prerelease; /releases/latest falls back to the previous stable release"
+              exit 0
+            fi
             sleep 5
           done
-          echo "::error::$TAG verified but could not be promoted to \`latest\` — users will not be offered it"
+          echo "::error::$TAG is incomplete and could NOT be demoted — users are still being offered a broken release"
+          exit 1
+
+      # The un-stick path. Re-running this workflow with `publish_tag` after the
+      # assets are fixed re-verifies them and returns the release to stable.
+      # A no-op on the normal path, where the release is already stable.
+      - name: Return a now-complete release to stable
+        run: |
+          ID=$(gh release view "$TAG" --repo "${{ github.repository }}" --json databaseId --jq '.databaseId')
+          if [ "$(gh api "repos/${{ github.repository }}/releases/$ID" --jq .prerelease)" != "true" ]; then
+            exit 0
+          fi
+          for i in 1 2 3; do
+            gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -F prerelease=false --silent && exit 0
+            sleep 5
+          done
+          echo "::error::$TAG verified but could not be returned to stable — users will not be offered it"
           exit 1
 
   publish:
