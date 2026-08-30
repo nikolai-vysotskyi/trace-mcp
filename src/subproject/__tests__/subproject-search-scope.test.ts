@@ -30,8 +30,8 @@ describe('reachableSubprojects (TRA-470)', () => {
   });
 
   it('ignores trailing slashes on either side', () => {
-    expect(reachableSubprojects([repo('/work/shop/api/', '/work/shop/')], '/work/shop')).toHaveLength(
-      1,
-    );
+    expect(
+      reachableSubprojects([repo('/work/shop/api/', '/work/shop/')], '/work/shop'),
+    ).toHaveLength(1);
   });
 });
