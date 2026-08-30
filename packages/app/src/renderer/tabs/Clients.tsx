@@ -100,6 +100,12 @@ interface RichClientStatus {
   configPath: string | null;
   status: ClientConfigStatus;
   staleReason?: string;
+  /**
+   * Enforcement level the config on disk is already on. `null` — or absent, on
+   * a daemon older than the field — means "we don't know", which is the cue to
+   * ask the user rather than reuse a level.
+   */
+  level?: EnforcementLevel | null;
 }
 
 // ── Enforcement levels ────────────────────────────────────────────

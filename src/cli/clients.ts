@@ -56,7 +56,8 @@ function printHumanReport(scope: string, statuses: McpClientStatus[]): void {
     const tag = formatStatusTag(s);
     const path = s.configPath ?? '—';
     const reason = s.staleReason ? `  (drift: ${s.staleReason})` : '';
-    console.log(`  ${pad}  ${tag}  ${path}${reason}`);
+    const level = s.level ? `  level: ${s.level}` : '';
+    console.log(`  ${pad}  ${tag}  ${path}${level}${reason}`);
   }
 }
 

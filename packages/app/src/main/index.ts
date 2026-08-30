@@ -395,6 +395,7 @@ ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global
       configPath: string | null;
       status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
       staleReason?: string;
+      level?: 'base' | 'standard' | 'max' | null;
     }>;
   }>((resolve) => {
     execFile(

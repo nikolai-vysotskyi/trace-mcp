@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       configPath: string | null;
       status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
       staleReason?: string;
+      level?: 'base' | 'standard' | 'max' | null;
     }>;
   }> => ipcRenderer.invoke('get-mcp-client-statuses', scope ?? 'global'),
   configureMcpClient: (
