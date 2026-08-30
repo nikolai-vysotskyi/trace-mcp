@@ -53,6 +53,8 @@ export const workspace = {
   kpiNoProjectsYet: '还没有项目',
   kpiNothingIndexedYet: '还没有索引任何内容',
   kpiNothingRunning: '没有任务在运行',
+  kpiHealthyCriteria: '等级 A 或 B，无安全问题',
+  kpiNeedsAttentionCriteria: '等级低或存在问题',
   kpiShare_other: '{{total}} 个项目中的 {{percent}}%',
   kpiDeltaCaption: '对比{{when}}',
   kpiNoChange: '无变化',
