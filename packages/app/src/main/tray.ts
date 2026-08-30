@@ -121,6 +121,12 @@ const DAEMON_STARTUP_GRACE_MS = 60_000;
  * than any legitimate warm-up (TRA-421).
  */
 let firstUnreachableAt = 0;
+/**
+ * Restarts already attempted in the current outage. Escalates the wedged
+ * threshold so a daemon that cannot warm up inside one window is not shot on
+ * the same cadence forever (TRA-543). Resets when /health answers.
+ */
+let restartsThisOutage = 0;
 
 const daemon = new DaemonClient();
 
@@ -642,6 +648,12 @@ async function checkHealth(): Promise<void> {
     daemonReachable = true;
     consecutiveFailures = 0;
     _lastRestartAttempt = 0;
+    // The outage is over: clear its clock and its restart budget. Leaving
+    // `firstUnreachableAt` set (as this path did until TRA-543) makes the very
+    // first miss of the *next* outage look older than the wedged threshold,
+    // which disarms the TRA-421 guard permanently after one slow start.
+    firstUnreachableAt = 0;
+    restartsThisOutage = 0;
     setTrayIcon(true);
 
     // Version mismatch — npm swapped the binary on disk but the running daemon
@@ -716,6 +728,7 @@ async function checkHealth(): Promise<void> {
       !shouldRestartUnreachableDaemon({
         processAlive: isDaemonProcessAlive(),
         unreachableForMs: Date.now() - firstUnreachableAt,
+        restartsThisOutage,
       })
     ) {
       if (consecutiveFailures === 1) {
@@ -736,6 +749,13 @@ async function checkHealth(): Promise<void> {
       );
       try {
         lastDaemonStartAttempt = Date.now();
+        // Whatever comes back is a different process with its own warm-up, so
+        // its mute clock starts now — and this attempt spends one step of the
+        // escalating budget (TRA-543). Without both, the outage clock only ever
+        // grows and every later poll clears the wedged threshold, which is how
+        // 809 restarts fit into 22.8 hours.
+        firstUnreachableAt = Date.now();
+        restartsThisOutage++;
         const result = useRestart ? restartDaemon() : ensureDaemon();
         if (!result.ok) {
           console.warn(`[trace-mcp] daemon ${action} failed: ${result.error ?? 'unknown'}`);
