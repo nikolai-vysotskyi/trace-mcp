@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 /**
- * Daily adoption snapshot from the GA4 Data API into docs/_data/adoption.yml.
+ * Daily adoption snapshot from the GA4 Data API.
+ *
+ * Writes docs/_data/adoption.yml in the workspace; the workflow publishes it
+ * to the `adoption-data` branch rather than to master, because a PR opened by
+ * GITHUB_TOKEN never triggers CI and so can never satisfy master's required
+ * checks.
  *
  * GA4 keeps event data for 14 months at most (TRA-273), so anything older than
  * that only survives here. The file is the durable record; GA4 is the source.
