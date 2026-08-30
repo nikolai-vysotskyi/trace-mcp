@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.5.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.5.1...v3.5.2) (2026-08-30)
+
+
+### Bug Fixes
+
+* **app:** the dashboard at rest marks nothing selected (TRA-475) ([#617](https://github.com/nikolai-vysotskyi/trace-mcp/issues/617)) ([9618479](https://github.com/nikolai-vysotskyi/trace-mcp/commit/9618479f2a27cfe8ec320653ad7e5b48a0d299f6))
+* **app:** the sidebar file list can no longer pulse a skeleton forever (TRA-478) ([#622](https://github.com/nikolai-vysotskyi/trace-mcp/issues/622)) ([40cb6e6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/40cb6e6ebc3dca5e12f65f68950c05c0d7ee9fe8))
+
+
+### Documentation
+
+* a settled screenshot is not the only frame worth checking (TRA-465) ([#620](https://github.com/nikolai-vysotskyi/trace-mcp/issues/620)) ([f25bd54](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f25bd542674051a5a410c225d88bea153ccbf906))
+
+
+### CI/CD
+
+* fail a PR that duplicates an open PR on the same issue (TRA-476) ([#618](https://github.com/nikolai-vysotskyi/trace-mcp/issues/618)) ([87bf5fc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/87bf5fc4a150ae632a37dcc13e003bd39fcf460d))
+
 ## [3.5.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.5.0...v3.5.1) (2026-08-30)
 
 
