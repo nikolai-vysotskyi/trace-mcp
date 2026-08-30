@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { DaemonSetupState } from './daemon-install';
 
 /* Window chrome the renderer has to lay out around, answered synchronously
    because it gates first paint. `titleBarStyle: 'hiddenInset'` is set for
@@ -22,6 +23,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restartDaemon: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('restart-daemon'),
   /** TRA-525: OS-level daemon liveness, so "busy" can be told from "not running". */
   daemonProcessAlive: (): Promise<boolean> => ipcRenderer.invoke('daemon:process-alive'),
+  /* TRA-438: the app installs its own daemon on first launch. Until that
+     finishes there is no daemon to be down, so the surfaces say "Setting up…"
+     instead of offering a Start button for something not installed yet. */
+  daemonSetupState: (): Promise<DaemonSetupState> => ipcRenderer.invoke('daemon:setup-state'),
+  retryDaemonSetup: (): Promise<DaemonSetupState> => ipcRenderer.invoke('daemon:setup-retry'),
+  onDaemonSetupState: (cb: (state: DaemonSetupState) => void): (() => void) => {
+    const handler = (_e: unknown, state: DaemonSetupState) => cb(state);
+    ipcRenderer.on('daemon:setup-state', handler);
+    return () => ipcRenderer.removeListener('daemon:setup-state', handler);
+  },
   detectMcpClients: (): Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]> =>
     ipcRenderer.invoke('detect-mcp-clients'),
   getMcpClientStatuses: (

@@ -28,6 +28,7 @@ import { resolvePythonHeritageEdges as _resolvePyHeritage } from './edge-resolve
 import { resolvePythonImportEdges as _resolvePyImports } from './edge-resolvers/python-imports.js';
 import { resolveFastapiRouterMounts as _resolveFastapiMounts } from './edge-resolvers/fastapi-mounts.js';
 import { resolvePythonTypeEdges as _resolvePyTypes } from './edge-resolvers/python-types.js';
+import { resolveRustImportEdges as _resolveRustImports } from './edge-resolvers/rust-imports.js';
 import { resolveTestCoversEdges as _resolveTests } from './edge-resolvers/tests.js';
 import { resolveTypeScriptCallEdges as _resolveTsCalls } from './edge-resolvers/typescript-calls.js';
 import { resolveTypeScriptTypeEdges as _resolveTsTypes } from './edge-resolvers/typescript-types.js';
@@ -146,6 +147,11 @@ export class EdgeResolver {
   /** Pass 2e4: Java import edges (package name → source directory). */
   resolveJavaImportEdges(scope?: ChangeScope): void {
     timed('java-imports', () => _resolveJavaImports(this.state, scope));
+  }
+
+  /** Pass 2e5: Rust import edges (module path → module file). */
+  resolveRustImportEdges(scope?: ChangeScope): void {
+    timed('rust-imports', () => _resolveRustImports(this.state, scope));
   }
 
   /** Pass 2e2: PHP import edges (PSR-4 use statements). */

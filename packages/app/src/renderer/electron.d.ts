@@ -1,5 +1,14 @@
 export {};
 
+/** Mirror of `DaemonSetupState` in main/daemon-install.ts. The renderer is
+    compiled separately from Electron main, so the shape is restated rather
+    than imported across that boundary. */
+type DaemonSetupState =
+  | { phase: 'idle' }
+  | { phase: 'installing' }
+  | { phase: 'ready' }
+  | { phase: 'failed'; message: string };
+
 declare global {
   interface Window {
     /** Window chrome facts from the main process. Undefined in a browser. */
@@ -17,6 +26,10 @@ declare global {
       restartDaemon: () => Promise<{ ok: boolean }>;
       /** TRA-525: OS-level daemon liveness, independent of /health. */
       daemonProcessAlive?: () => Promise<boolean>;
+      /** TRA-438: progress of the app's own daemon install. */
+      daemonSetupState?: () => Promise<DaemonSetupState>;
+      retryDaemonSetup?: () => Promise<DaemonSetupState>;
+      onDaemonSetupState?: (cb: (state: DaemonSetupState) => void) => () => void;
       detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
       getMcpClientStatuses: (
         scope?: 'global' | 'project',
