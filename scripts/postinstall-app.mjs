@@ -147,6 +147,13 @@ if (running && located && running !== located.appPath) {
 // so no later install ever resolves to it. Found in the wild at three releases
 // behind (`/Applications` on 3.3.0, `~/Applications` on 3.6.0) with npm
 // reporting success every time. One download, applied to all of them.
+//
+// Scope, deliberately: the running bundle, the marker's bundle, and the two
+// conventional directories. A copy installed somewhere else that is neither
+// running nor the marker target stays invisible here — `mdfind` by bundle id
+// would find it, but Spotlight also indexes build trees and external volumes,
+// and no user has yet been seen installing outside those directories. Revisit
+// if one is.
 INSTALLED_APPS = [target];
 for (const candidate of [
   ...CONVENTIONAL_APP_DIRS.map((dir) => path.join(dir, APP_NAME)),
@@ -481,14 +488,17 @@ async function main() {
       return;
     }
 
-    const appRunning = appIsRunning();
     for (const appPath of stale) {
       try {
         applyTo(appPath, {
           zipPath,
           digest: expectedDigest,
           tagName: release.tag_name,
-          appRunning,
+          // Asked per bundle, not once for the whole sweep: swapping a ~100 MB
+          // bundle takes seconds, and a user who launches the app during that
+          // window would otherwise have the next bundle swapped against a
+          // stale "not running" answer — the TRA-431 failure, once per copy.
+          appRunning: appIsRunning(),
           tmpDir,
         });
       } catch {
