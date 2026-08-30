@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WEDGED_DAEMON_MS } from '../daemon-lifecycle';
+import { checkHealth, createTray } from '../tray';
 
 const MINUTE = 60_000;
 let base = Date.UTC(2027, 0, 1);
@@ -62,7 +63,6 @@ vi.mock('../daemon-lifecycle', async (importOriginal) => ({
   },
 }));
 
-const { checkHealth, createTray } = await import('../tray');
 
 /** Poll `n` times at the current fake clock. */
 async function poll(n = 1): Promise<void> {
