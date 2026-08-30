@@ -81,7 +81,7 @@ function loadFilter(): WorkspaceFilter {
 // thresholds are read off the pane itself.
 
 // Pane and strip geometry, all read off the rendered surface rather than guessed.
-const TILE_MIN_W = 132; // KpiTile's flex basis
+const TILE_MIN_W = 132; // narrowest a KpiTile may be before the column count drops
 const TILE_GAP = 16; // gap-4
 // A full-height tile: 16 + 13 + 4 + 32 + 4 + 26 + 16 + hairlines. The comparison
 // line reserves two 13px lines rather than one, because at 132–214px of tile a
@@ -118,9 +118,12 @@ export const TABLE_MIN_PANE_W = PANE_PAD + FROZEN_COLS_W + MIN_SCROLL_WINDOW;
  * responds to width. Restricting the count to a divisor of six is what removes
  * the ragged last row that the stretching existed to hide.
  *
- * `0` is an unmeasured pane on first paint. It falls through to one column —
- * the same six-row answer the old `Math.max(1, …)` gave — so the first frame is
- * unchanged.
+ * `0` falls through to one column. Nothing on screen reaches that any more —
+ * the pane is measured in a `useLayoutEffect` before the first paint, because
+ * once the column count reads `pane.w` a zero-width first frame is not a no-op
+ * but a 748px tile in a 780px strip. Keep it defined all the same:
+ * `kpiStripHeight(0)` is asserted, and a function that decides layout should
+ * answer for every width rather than trust its callers to screen one out.
  */
 export function kpiColumns(paneW: number): number {
   const inner = Math.max(0, paneW - PANE_PAD);

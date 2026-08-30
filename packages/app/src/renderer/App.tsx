@@ -271,6 +271,10 @@ function ProjectFileExplorer({
   const [sort, setSort] = useState<FileSort>('symbols');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  /* Did a list actually come back? An empty list and no list at all are two
+     different facts, and `setFiles([])` on failure collapsed them into one —
+     which is how a refused socket ended up blaming the scope filter (TRA-471). */
+  const [answered, setAnswered] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; path: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -297,10 +301,14 @@ function ProjectFileExplorer({
     fetch(`${BASE}/api/projects/files?${params}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => {
-        if (!cancelled) setFiles(data.files ?? []);
+        if (cancelled) return;
+        setFiles(data.files ?? []);
+        setAnswered(true);
       })
       .catch(() => {
-        if (!cancelled) setFiles([]);
+        if (cancelled) return;
+        setFiles([]);
+        setAnswered(false);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -383,10 +391,18 @@ function ProjectFileExplorer({
           ))}
         </div>
       ) : files.length === 0 ? (
-        <div className="ws-sb-empty">
-          <Icon name="description" size={20} className="gi" />
-          <span>{t('noFilesMatchScope')}</span>
-        </div>
+        /* Only a list that came back empty can be blamed on the scope. With the
+           daemon down nothing was ever fetched, and the content pane already
+           carries that diagnosis and its Start daemon button — the sidebar does
+           not name a cause it cannot know, and does not say the same thing twice
+           (DESIGN.md §5). The sort pop-up above stays: changing it re-fetches,
+           which is the sidebar's own way back once the daemon answers again. */
+        answered ? (
+          <div className="ws-sb-empty">
+            <Icon name="description" size={20} className="gi" />
+            <span>{t('noFilesMatchScope')}</span>
+          </div>
+        ) : null
       ) : (
         <div role="tree" aria-label={t('projectFiles')} ref={listRef}>
           {files.map((f, i) => {
