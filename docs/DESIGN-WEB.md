@@ -248,7 +248,9 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] Wide tables scroll themselves, not the page.
 - [ ] Every region where `scrollWidth > clientWidth` shows the `scroll →`
       label, and every region that fits does not — count both, at 1440px and
-      at 390px.
+      at 390px. A region is any element that scrolls itself: the table
+      wrapper *and* every `pre`. Code blocks were read out of this line once
+      and shipped clipped and unlabelled for months.
 
 **Type & spacing**
 - [ ] Within the 2 families / 3 sizes / 2 weights budget.
@@ -263,7 +265,11 @@ appearance without a screenshot or a measurement is not a finding.
       `outlineColor` off a focused element, in both themes. It must be
       `--text-display`. Chrome's default is `rgb(153, 200, 255)`; a blue ring
       means no author rule matched, which is a second accent colour and a
-      finding.
+      finding. The rule is a `:where()` list, so a new kind of tab stop is
+      invisible to it until its selector is added — check the ring on every
+      element that takes a `tabindex`, not only the ones that look clickable.
+- [ ] Only a region that actually overflows is a tab stop. 27 focusable code
+      blocks on a desktop where 4 of them scroll is 23 dead stops.
 - [ ] Skip link present and reachable.
 - [ ] `prefers-reduced-motion` honoured.
 - [ ] Tables carry `scope`; images carry `alt`.
