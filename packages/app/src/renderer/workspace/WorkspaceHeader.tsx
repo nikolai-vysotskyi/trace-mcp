@@ -175,17 +175,22 @@ export function WorkspaceHeader({
     return () => clearTimeout(t);
   }, [queryDraft, filter, onFilterChange]);
 
-  // Baseline for the delta chips. Rolled once, after the first real metrics
-  // land — snapshotting the zeros of a cold cache would invent a huge delta.
+  // Baseline for the delta chips. Rolled once, after a reading somebody
+  // actually has. All four states above hand this effect a set of zeros, and
+  // snapshotting those invents a delta the size of the whole workspace — a
+  // failed request in particular clears `metricsLoading` while the numbers are
+  // worthless, so guarding on that alone opened the gate exactly when it had to
+  // stay shut (TRA-458).
+  const kpisAreReal = !metricsLoading && !listLoading && !metricsFailed && !listFailed;
   const [baseline, setBaseline] = useState<KpiBaseline | null>(null);
   const rolled = useRef(false);
   useEffect(() => {
-    if (metricsLoading || rolled.current) return;
+    if (!kpisAreReal || rolled.current) return;
     rolled.current = true;
     const { previous, next } = rollBaseline(Date.now(), loadBaseline(), kpis);
     setBaseline(previous);
     if (next) saveBaseline(next);
-  }, [metricsLoading, kpis]);
+  }, [kpisAreReal, kpis]);
 
   const deltaCaption = useMemo(
     () =>

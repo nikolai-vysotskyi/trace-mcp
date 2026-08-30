@@ -33,18 +33,26 @@ export interface BaselineRoll {
  *  - nothing stored → start tracking now, show no delta yet
  *  - stored today   → compare against it, keep it
  *  - stored earlier → compare against it, then replace it with today's reading
+ *
+ * An empty workspace is not a reading, in either direction (TRA-458). A launch
+ * against a daemon that never answered leaves an all-zero snapshot, and every
+ * KPI then reports its whole value as growth — "656.2k symbols, ↑ +656.2k" is a
+ * bare number wearing an arrow, not a comparison. So a zero-project snapshot is
+ * neither written nor compared against; the next real reading replaces it.
  */
 export function rollBaseline(
   nowMs: number,
   stored: KpiBaseline | null,
   current: WorkspaceKpis,
 ): BaselineRoll {
-  const fresh: KpiBaseline = { at: new Date(nowMs).toISOString(), kpis: current };
-  if (!stored) return { previous: null, next: fresh };
-  const age = nowMs - Date.parse(stored.at);
+  const fresh: KpiBaseline | null =
+    current.totalProjects > 0 ? { at: new Date(nowMs).toISOString(), kpis: current } : null;
+  const usable = stored && stored.kpis.totalProjects > 0 ? stored : null;
+  if (!usable) return { previous: null, next: fresh };
+  const age = nowMs - Date.parse(usable.at);
   if (!Number.isFinite(age) || age < 0) return { previous: null, next: fresh };
-  if (age >= BASELINE_MAX_AGE_MS) return { previous: stored, next: fresh };
-  return { previous: stored, next: null };
+  if (age >= BASELINE_MAX_AGE_MS) return { previous: usable, next: fresh };
+  return { previous: usable, next: null };
 }
 
 function isKpis(v: unknown): v is WorkspaceKpis {

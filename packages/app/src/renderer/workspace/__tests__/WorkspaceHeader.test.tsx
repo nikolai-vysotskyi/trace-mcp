@@ -5,6 +5,7 @@ import { render } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { WorkspaceHeader, activeFilterCount } from '../WorkspaceHeader';
 import { EMPTY_FILTER, type WorkspaceFilter, type WorkspaceKpis } from '../types';
+import { LS_BASELINE_KEY } from '../kpiBaseline';
 
 const ZERO_KPIS: WorkspaceKpis = {
   totalProjects: 78,
@@ -113,6 +114,21 @@ describe('WorkspaceHeader KPI strip', () => {
     renderHeader(false, { listFailed: true });
     expect(kpiValue('Projects')).toBe('—');
     expect(kpiTile('Projects').textContent).not.toMatch(/[↑↓]/);
+  });
+
+  it('snapshots a reading it has, and never one it does not', () => {
+    // `metricsLoading` goes false the moment the request FAILS, so guarding the
+    // snapshot on it alone opened the gate precisely when the numbers were
+    // worthless: an all-zero baseline, and every KPI reporting its whole value
+    // as growth that happened this afternoon (TRA-458).
+    for (const broken of [{ metricsFailed: true }, { listFailed: true }, { listLoading: true }]) {
+      localStorage.clear();
+      renderHeader(false, broken);
+      expect(localStorage.getItem(LS_BASELINE_KEY)).toBeNull();
+    }
+    localStorage.clear();
+    renderHeader(false);
+    expect(localStorage.getItem(LS_BASELINE_KEY)).toContain('"totalProjects":78');
   });
 
   it('gives every tile a comparison, never a bare number', () => {

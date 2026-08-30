@@ -43,6 +43,21 @@ describe('rollBaseline', () => {
       expect(next?.kpis.totalProjects).toBe(10);
     }
   });
+
+  /* A launch against a daemon that never answered leaves zeros behind. Comparing
+     against them reports the whole workspace as this afternoon's growth (TRA-458). */
+  it('never compares against an empty workspace, and replaces that snapshot', () => {
+    const { previous, next } = rollBaseline(NOW, { at: at(NOW - 60_000), kpis: kpis(0) }, kpis(10));
+    expect(previous).toBeNull();
+    expect(next?.kpis.totalProjects).toBe(10);
+  });
+
+  it('never writes an empty workspace as a baseline', () => {
+    expect(rollBaseline(NOW, null, kpis(0)).next).toBeNull();
+    const kept = rollBaseline(NOW, { at: at(NOW - BASELINE_MAX_AGE_MS - 1), kpis: kpis(8) }, kpis(0));
+    expect(kept.previous?.kpis.totalProjects).toBe(8);
+    expect(kept.next).toBeNull();
+  });
 });
 
 /* The baseline's age is the caption on a delta chip; it comes from Intl now
