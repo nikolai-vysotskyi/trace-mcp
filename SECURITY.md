@@ -265,8 +265,11 @@ granularity only, and it is derived from the machine's own timezone setting
 (`Europe/Berlin` → `DE`) via a static table compiled into the bundle
 (`src/telemetry/tz-country.ts`) — no geo-IP service is contacted.
 
-The only per-install identifier is a random UUID generated locally on first
-run. There is no account, email, hostname, username, MAC address, repository
+Machine attributes are reported as a class, not an identity: CPU
+architecture, core count, RAM rounded to whole gigabytes, and the OS kernel
+version. None of them narrows a population to a device, and they are not
+combined into a hash or an id. The only per-install identifier is a random
+UUID generated locally on first run. There is no account, email, hostname, username, MAC address, repository
 name, or file path anywhere in the payload, and no device fingerprint. The
 repository count is a number; the names are never sent.
 
