@@ -23,16 +23,31 @@ describe('verify-release-assets', () => {
     expect(auditReleaseAssets('3.1.1', completeRelease('3.1.1'))).toEqual([]);
   });
 
-  it('names the four zips/installers plus one .sha256 each', () => {
+  it('names the six zips/DMGs/installers plus one .sha256 each', () => {
     expect(expectedAssets('3.1.1')).toEqual([
       'trace-mcp-3.1.1-arm64-mac.zip',
       'trace-mcp-3.1.1-arm64-mac.zip.sha256',
       'trace-mcp-3.1.1-mac.zip',
       'trace-mcp-3.1.1-mac.zip.sha256',
+      'trace-mcp-3.1.1-arm64.dmg',
+      'trace-mcp-3.1.1-arm64.dmg.sha256',
+      'trace-mcp-3.1.1-x64.dmg',
+      'trace-mcp-3.1.1-x64.dmg.sha256',
       'trace-mcp-3.1.1-win.zip',
       'trace-mcp-3.1.1-win.zip.sha256',
       'trace-mcp.Setup.3.1.1.exe',
       'trace-mcp.Setup.3.1.1.exe.sha256',
+    ]);
+  });
+
+  // The DMG is what a browser download gets; losing it strands that arch.
+  it('fails when a macOS DMG is missing', () => {
+    const assets = completeRelease('3.1.1').filter(
+      (a) => !a.name.startsWith('trace-mcp-3.1.1-arm64.dmg'),
+    );
+    expect(auditReleaseAssets('3.1.1', assets)).toEqual([
+      'missing: trace-mcp-3.1.1-arm64.dmg',
+      'missing: trace-mcp-3.1.1-arm64.dmg.sha256',
     ]);
   });
 
@@ -79,6 +94,6 @@ describe('verify-release-assets', () => {
   // A release-please tag is `v3.1.1`; asset names use the bare version. Passing
   // the tag through unstripped would report every asset as missing.
   it('reports everything missing when handed a tag instead of a version', () => {
-    expect(auditReleaseAssets('v3.1.1', completeRelease('3.1.1'))).toHaveLength(8);
+    expect(auditReleaseAssets('v3.1.1', completeRelease('3.1.1'))).toHaveLength(12);
   });
 });

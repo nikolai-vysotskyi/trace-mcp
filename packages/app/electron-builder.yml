@@ -28,16 +28,45 @@ extraResources:
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.png
+  # Signed with a Developer ID Application certificate and notarized by Apple
+  # since 2026-08-29 (TRA-436). Before that the build came out ad-hoc signed, so
+  # any browser download carried com.apple.quarantine and Gatekeeper refused it
+  # as "damaged". Credentials come from CI secrets — CSC_LINK,
+  # CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
+  # A build without them is unsigned and must not be published.
+  hardenedRuntime: true
+  # `spctl --assess` on the build machine tells us nothing the CI verification
+  # step doesn't, and fails spuriously before the notarization ticket is
+  # stapled. Real assessment happens after the release, on a downloaded DMG.
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # Boolean, not `{ teamId: ... }` — electron-builder 26 rejects the object form
+  # ("configuration.mac.notarize should be a boolean"). The team is taken from
+  # APPLE_TEAM_ID in the environment, alongside APPLE_ID and
+  # APPLE_APP_SPECIFIC_PASSWORD, which notarytool needs anyway.
+  notarize: true
   target:
+    # Both shipped on purpose: the zip is what the staged-zip updater consumes
+    # (scripts/postinstall-app.mjs), the DMG is what a human downloads.
+    - target: dmg
     - target: zip
+# Fixed name per arch so the release-asset gate (scripts/verify-release-assets.mjs)
+# can assert both DMGs are present. electron-builder's default drops the `-x64`
+# suffix on Intel, which would make the two legs indistinguishable by name.
+dmg:
+  artifactName: ${productName}-${version}-${arch}.dmg
 
 win:
   icon: build/icon.ico
   # Windows-only on purpose. This block is what makes electron-builder emit
   # `latest.yml` next to the installer, which is the file electron-updater
-  # reads. It must NOT be hoisted to the top level: macOS ships ad-hoc signed
-  # and Squirrel.Mac would reject the swap, so macOS stays on the staged-zip
-  # path and must never get a latest-mac.yml on the release.
+  # reads. It must NOT be hoisted to the top level: macOS is still on the
+  # staged-zip channel (packages/app/src/main/update-channel.ts), and every
+  # copy already installed in the field is an unsigned build. Signing removes
+  # the *reason* macOS could not use Squirrel.Mac, but flipping the channel —
+  # and with it publishing latest-mac.yml — is a separate step that must wait
+  # until no unsigned build is still out there looking for it.
   publish:
     - provider: github
       owner: nikolai-vysotskyi

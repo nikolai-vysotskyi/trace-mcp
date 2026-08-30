@@ -22,11 +22,17 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Artifacts an updater resolves by name, plus the checksum each one requires. */
+/** Artifacts an updater or a human resolves by name, plus the checksum each requires. */
 export function expectedAssets(version) {
   return [
-    `trace-mcp-${version}-arm64-mac.zip`, // macOS Apple silicon
-    `trace-mcp-${version}-mac.zip`, // macOS Intel
+    `trace-mcp-${version}-arm64-mac.zip`, // macOS Apple silicon (staged-zip updater)
+    `trace-mcp-${version}-mac.zip`, // macOS Intel (staged-zip updater)
+    // The signed+notarized DMGs are the only macOS download a human gets
+    // (TRA-436). They are not an updater input, but a release that lost one
+    // leaves that architecture with no installable build and nothing else
+    // notices, so it is asserted here with everything else.
+    `trace-mcp-${version}-arm64.dmg`, // macOS Apple silicon installer
+    `trace-mcp-${version}-x64.dmg`, // macOS Intel installer
     `trace-mcp-${version}-win.zip`, // Windows portable
     `trace-mcp.Setup.${version}.exe`, // Windows NSIS installer
   ].flatMap((name) => [name, `${name}.sha256`]);
