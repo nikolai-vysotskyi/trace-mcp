@@ -106,6 +106,20 @@ describe('clients status — human output', () => {
     expect(mockGetMcpClientStatuses).toHaveBeenCalledWith('/proj/current', 'global', undefined);
   });
 
+  /* A packaged desktop app shells out from inside its bundle, where no root
+     marker exists and findProjectRoot throws. Global scope no longer needs a
+     project root (TRA-501), so that must not take the command down. */
+  it('falls back to cwd when no project root can be found', async () => {
+    mockFindProjectRoot.mockImplementation(() => {
+      throw new Error('Could not find project root');
+    });
+    mockGetMcpClientStatuses.mockReturnValue([]);
+
+    await run(['status']);
+
+    expect(mockGetMcpClientStatuses).toHaveBeenCalledWith(process.cwd(), 'global', undefined);
+  });
+
   it('parses --client into a trimmed, filtered array', async () => {
     mockGetMcpClientStatuses.mockReturnValue([]);
 
