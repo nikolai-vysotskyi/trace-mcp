@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_tag:
-        description: 'Force-publish this existing git tag (e.g. v1.38.0) when the normal release-please flow already created the tag but the publish job failed.'
+        description: 'Force-publish this existing git tag (e.g. v1.38.0) when the normal release-please flow already created the tag but the publish job failed — or when a build job failed and left the release stuck non-`latest` (TRA-566). Re-verifies the assets, then promotes it.'
         required: false
         default: ''
 
@@ -65,27 +65,55 @@ jobs:
           )
           gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${FOOTER}"
 
-      # TRA-566: release-please marks the release `latest` at tag-cut time, so
-      # v3.9.0 was the newest release for 20 minutes while build-app-win was
-      # failing — and stayed newest after it failed. Windows electron-updater
-      # reads latest.yml off /releases/latest and nothing else, so every
-      # Windows install silently stopped updating against a release that had no
-      # latest.yml and never would.
+      # TRA-566: creating a release makes it `latest` immediately, so v3.9.0 was
+      # the newest release for 20 minutes while build-app-win was failing — and
+      # stayed newest after it failed. Windows electron-updater reads latest.yml
+      # off /releases/latest and nothing else, so every Windows install silently
+      # stopped updating against a release that had no latest.yml and never
+      # would. `verify-release-assets` caught it, but only after the fact.
       #
-      # Demote it here and promote it in `verify-release-assets` once the
-      # artifacts are actually on the tag. `latest` then keeps resolving to the
-      # last COMPLETE release for the whole build window, which is exactly the
-      # behaviour every updater client already handles. A draft would close the
-      # same gap, but GitHub does not create the git ref for a draft release and
-      # both build jobs check out `ref: tag_name` — this keeps the tag.
-      - name: Hold the release back from `latest` until its assets verify
+      # Hold `latest` on the PREVIOUS release until the new one verifies, then
+      # promote it in `verify-release-assets`.
+      #
+      # Note the shape of this: there is no "demote" operation. PATCHing the
+      # newest release with `make_latest=false` looks like one and returns 200,
+      # but it is a NO-OP — /releases/latest still resolves to it. Verified
+      # against a scratch repo:
+      #
+      #   create v1, create v2          → latest = v2
+      #   PATCH v2 make_latest=false    → latest = v2   (unchanged!)
+      #   PATCH v1 make_latest=true     → latest = v1
+      #   create v3                     → latest = v3   (overrides the pin)
+      #   PATCH v3 make_latest=false    → latest = v3   (unchanged!)
+      #
+      # So the ONLY way to move the pointer off a release is to explicitly
+      # promote a different one. Hence "re-pin the previous" rather than the
+      # demotion this step originally (and wrongly) tried to do.
+      #
+      # A draft release would close the same gap, but GitHub does not create the
+      # git ref for a draft, and both build jobs check out `ref: tag_name` —
+      # drafting would break the builds this is meant to protect.
+      - name: Hold `latest` on the previous release until the new one verifies
         if: steps.release.outputs.release_created == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag_name }}
         run: |
-          ID=$(gh release view "$TAG" --repo "${{ github.repository }}" --json databaseId --jq '.databaseId')
-          gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -f make_latest=false --silent
+          PREV=$(gh api "repos/${{ github.repository }}/releases?per_page=100" \
+            --jq "[.[] | select(.draft == false and .prerelease == false and .tag_name != \"$TAG\")]
+                  | sort_by(.created_at) | reverse | .[0].id // empty")
+          if [ -z "$PREV" ]; then
+            echo "::notice::no earlier published release to hold \`latest\` on — nothing to do"
+            exit 0
+          fi
+          # Retried: if this one call is lost to a blip the new release stays
+          # `latest` unverified, which is exactly the TRA-566 failure mode.
+          for i in 1 2 3; do
+            gh api -X PATCH "repos/${{ github.repository }}/releases/$PREV" -f make_latest=true --silent && exit 0
+            sleep 5
+          done
+          echo "::error::could not hold \`latest\` on the previous release — the unverified release $TAG is still latest"
+          exit 1
 
   # Gate between the app builds and npm, and the one place that promotes a
   # release to `latest`. The release exists the moment the tag is cut, but the
@@ -119,11 +147,24 @@ jobs:
 
       # Only now is the release safe to advertise. Until this step runs,
       # /releases/latest still resolves to the previous complete release
-      # (TRA-566) — see the demotion step in `release-please`.
+      # (TRA-566) — see the hold step in `release-please`.
+      #
+      # This is also the un-stick path: a release left un-promoted because a
+      # build job failed is promoted by re-running this workflow with
+      # `publish_tag` once the assets are actually on the tag.
       - name: Promote the verified release to `latest`
         run: |
           ID=$(gh release view "$TAG" --repo "${{ github.repository }}" --json databaseId --jq '.databaseId')
-          gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -f make_latest=true --silent
+          if [ -z "$ID" ]; then
+            echo "::error::could not resolve a release id for $TAG"
+            exit 1
+          fi
+          for i in 1 2 3; do
+            gh api -X PATCH "repos/${{ github.repository }}/releases/$ID" -f make_latest=true --silent && exit 0
+            sleep 5
+          done
+          echo "::error::$TAG verified but could not be promoted to \`latest\` — users will not be offered it"
+          exit 1
 
   publish:
     needs: [release-please, verify-release-assets]
