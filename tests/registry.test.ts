@@ -364,6 +364,31 @@ describe('ephemeral workdirs are never persisted', () => {
 
     expect(findEphemeralProjects(0)).toEqual([]);
   });
+
+  // TRA-527: `repo checkout` clones into `workdir/<repo>`, so the root an agent
+  // opens is a level below the run directory — the shape that kept leaking into
+  // registry.json after TRA-396 supposedly closed this.
+  it.each([['trace-mcp'], ['trace-mcp/packages/app']])(
+    'keeps the checkout at workdir/%s out of registry.json',
+    (rel) => {
+      const checkout = path.join(makeEphemeralWorkdir(), ...rel.split('/'));
+      fs.mkdirSync(checkout, { recursive: true });
+      fs.writeFileSync(path.join(checkout, 'package.json'), '{}');
+
+      registerProject(checkout);
+
+      expect(registryProjects()).toEqual({});
+      expect(getProject(checkout)?.root).toBe(checkout);
+    },
+  );
+
+  it('sweeps a legacy workdir/<repo> row the old pattern could not match', () => {
+    const checkout = path.join(makeEphemeralWorkdir(), 'trace-mcp');
+    fs.mkdirSync(checkout, { recursive: true });
+    registerLegacyEphemeral(checkout, 96);
+
+    expect(findEphemeralProjects(72).map((e) => e.root)).toEqual([checkout]);
+  });
 });
 
 // The case #487 missed: the checkout directory still exists, so nothing that

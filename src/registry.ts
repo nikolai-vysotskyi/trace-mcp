@@ -545,9 +545,16 @@ export function findUnregisteredNestedRepos(maxDepth = 4): UnregisteredNestedRep
  * `.../multica_workspaces_<host>/<workspace-id>/<run-id>/workdir`. Each task
  * run gets a brand-new directory, so a project matching this shape is queried
  * exactly once, for the lifetime of that single run, and never touched again.
+ *
+ * TRA-527: the run directory is the container, not the project root — `repo
+ * checkout` clones into `workdir/<repo>`, and a monorepo package sits deeper
+ * still. Anchoring on `workdir$` therefore missed every root an agent actually
+ * opens, and those leaked back into registry.json (three on the reported
+ * machine within hours of TRA-396 shipping). Nothing below a run's workdir
+ * outlives the run, so match the whole subtree.
  */
 const EPHEMERAL_WORKDIR_PATTERN =
-  /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir$/i;
+  /[/\\]multica_workspaces[^/\\]*[/\\][^/\\]+[/\\][^/\\]+[/\\]workdir([/\\]|$)/i;
 
 /**
  * True when `root` is a one-shot agent-run checkout (see
