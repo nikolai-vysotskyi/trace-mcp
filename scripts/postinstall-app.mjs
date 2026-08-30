@@ -34,22 +34,19 @@ import path from 'node:path';
 import { getAppDistRepo } from './app-dist-repo.mjs';
 import {
   APP_NAME,
+  isInstalledApp,
   locateInstalledApp,
   readBundleVersion,
   recoverInterruptedSwap,
   runningBundlePath,
 } from './locate-app.mjs';
 
-// Resolved at top-level after the platform/no-update gates run. `null` means
-// no install was found — the script then exits 0 like the old hardcoded
-// `!fs.existsSync(APP_PATH)` short-circuit. All path constants below are
-// derived from the resolved bundle so pending-zip files are written next to
-// the actual `.app` (same filesystem → atomic rename works).
-let APP_PATH = '';
-let INSTALL_DIR = '';
-let PENDING_ZIP = '';
-let PENDING_VERSION = '';
-let PENDING_CHECKSUM = '';
+// Every installed bundle on this machine, the primary target first. Empty
+// means no install was found — the script then exits 0 like the old hardcoded
+// `!fs.existsSync(APP_PATH)` short-circuit. Pending-zip files are always
+// written next to the `.app` they belong to (same filesystem → atomic rename
+// works), so their paths are derived per bundle rather than kept here.
+let INSTALLED_APPS = [];
 
 // The compiled app is published as release assets on this repo. See
 // scripts/app-dist-repo.mjs. Overridable via env.
@@ -64,9 +61,9 @@ const API_BASE = process.env.TRACE_MCP_UPDATE_API_BASE || 'https://api.github.co
 const PGREP_BIN = process.env.TRACE_MCP_PGREP_BIN || '/usr/bin/pgrep';
 const PS_BIN = process.env.TRACE_MCP_PS_BIN || '/bin/ps';
 // The directories a bundle conventionally lives in — same defaults as
-// locate-app.mjs. Only the orphan sweep below reads them, and only tests
-// override them: a test must never be able to delete files out of the real
-// /Applications on the machine running it.
+// locate-app.mjs. The multi-bundle scan and the orphan sweep below read them,
+// and only tests override them: a test must never be able to swap or delete
+// anything in the real /Applications on the machine running it.
 const CONVENTIONAL_APP_DIRS = (
   process.env.TRACE_MCP_APP_DIRS || `${path.join(os.homedir(), 'Applications')}:/Applications`
 )
@@ -142,20 +139,37 @@ if (running && located && running !== located.appPath) {
   );
 }
 
-APP_PATH = target;
-INSTALL_DIR = path.dirname(APP_PATH);
-PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
-PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
-PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
+// One machine can hold several installed bundles — dragged into
+// `/Applications` once, re-installed into `~/Applications` later. Resolving a
+// single target answers "which one do we agree with the app about", but every
+// copy we do not touch stays frozen at whatever version it was installed at,
+// with no path out: it is not running, so it never writes the location marker,
+// so no later install ever resolves to it. Found in the wild at three releases
+// behind (`/Applications` on 3.3.0, `~/Applications` on 3.6.0) with npm
+// reporting success every time. One download, applied to all of them.
+INSTALLED_APPS = [target];
+for (const candidate of [
+  ...CONVENTIONAL_APP_DIRS.map((dir) => path.join(dir, APP_NAME)),
+  located?.appPath,
+]) {
+  if (candidate && !INSTALLED_APPS.includes(candidate) && isInstalledApp(candidate)) {
+    INSTALLED_APPS.push(candidate);
+  }
+}
+if (INSTALLED_APPS.length > 1) {
+  console.log(`  trace-mcp: ${INSTALLED_APPS.length} installed bundles — updating each`);
+}
 
 // Reclaim staging aimed at a bundle we are not going to swap. Both appliers
 // only ever look beside the bundle they resolved themselves, so a zip left in
-// any other directory is ~110 MB that nothing will apply and nothing will
-// delete — one was found sitting beside a `/Applications` copy two releases
-// behind while the marker and the running app both named `~/Applications`.
+// a directory holding no install is ~110 MB that nothing will apply and
+// nothing will delete — one was found sitting beside a `/Applications` copy
+// two releases behind while the marker and the running app both named
+// `~/Applications`.
+const TARGET_DIRS = new Set(INSTALLED_APPS.map((p) => path.dirname(p)));
 for (const dir of new Set(
   [...CONVENTIONAL_APP_DIRS, located ? path.dirname(located.appPath) : null].filter(
-    (d) => d && d !== INSTALL_DIR,
+    (d) => d && !TARGET_DIRS.has(d),
   ),
 )) {
   for (const name of [
@@ -320,6 +334,79 @@ function trustNotDowngraded(stagedApp, currentApp) {
   return gatekeeperOk(stagedApp);
 }
 
+/**
+ * Bring one installed bundle to the verified release.
+ *
+ * Running app → stage the zip beside it and let
+ * `scripts/apply-pending-update.mjs` swap on the next restart. Not running →
+ * extract to a staging dir, Gatekeeper-check, and swap in place with rollback.
+ *
+ * @param {string} appPath
+ * @param {{ zipPath: string, digest: string, tagName: string, appRunning: boolean, tmpDir: string }} ctx
+ */
+function applyTo(appPath, { zipPath, digest, tagName, appRunning, tmpDir }) {
+  const dir = path.dirname(appPath);
+  const pendingZip = path.join(dir, '.trace-mcp-pending.zip');
+  const pendingChecksum = path.join(dir, '.trace-mcp-pending.sha256');
+  const pendingVersion = path.join(dir, '.trace-mcp-pending-version');
+  const versionMarker = path.join(dir, '.trace-mcp-version');
+
+  // If the app is running, do NOT touch the bundle — replacing a running .app
+  // can crash lazily-spawned helper processes and break the on-disk code
+  // signature that the OS verifies for the running binary. Stage the verified
+  // zip + checksum + version so the app can apply it on its own restart via
+  // scripts/apply-pending-update.mjs.
+  if (appRunning) {
+    // Atomic-ish: write to .partial then rename so the app never sees a half-written zip.
+    const partial = `${pendingZip}.partial`;
+    fs.copyFileSync(zipPath, partial);
+    fs.renameSync(partial, pendingZip);
+    fs.writeFileSync(pendingChecksum, digest, 'utf-8');
+    // Normalize — renderer prepends its own `v`, so `tag_name` raw would
+    // display as `vv1.28.0`.
+    fs.writeFileSync(pendingVersion, tagName.replace(/^v/, ''), 'utf-8');
+    console.log(`  trace-mcp ${tagName} downloaded — restart the app to install`);
+    return;
+  }
+
+  // App is not running — safe to swap immediately. Extract to staging first
+  // and only swap if Gatekeeper approves.
+  //
+  // Say which signal decided, on the destructive branch only: the TRA-431
+  // incident was a `pgrep` false negative that left no trace of itself, so
+  // the log could not tell "the app really was closed" from "we failed to
+  // notice it". Every future swap now records which of the two this was.
+  console.log('  trace-mcp: app not running (pgrep) — replacing the bundle in place');
+  const stagingDir = fs.mkdtempSync(path.join(tmpDir, 'staging-'));
+  execFileSync('/usr/bin/unzip', ['-q', '-o', zipPath, '-d', stagingDir], { stdio: 'pipe' });
+
+  const stagedApp = path.join(stagingDir, APP_NAME);
+  if (!fs.existsSync(stagedApp)) return;
+  if (!trustNotDowngraded(stagedApp, appPath)) return;
+
+  const backupPath = `${appPath}.bak-${process.pid}`;
+  fs.renameSync(appPath, backupPath);
+  try {
+    fs.renameSync(stagedApp, appPath);
+  } catch (err) {
+    try {
+      fs.renameSync(backupPath, appPath);
+    } catch {}
+    throw err;
+  }
+  fs.rmSync(backupPath, { recursive: true, force: true });
+  fs.writeFileSync(versionMarker, tagName, 'utf-8');
+
+  // Clear any stale pending markers from a previous deferred update.
+  for (const p of [pendingZip, pendingChecksum, pendingVersion]) {
+    try {
+      fs.unlinkSync(p);
+    } catch {}
+  }
+
+  console.log(`  trace-mcp app updated to ${tagName}`);
+}
+
 async function main() {
   // macOS release naming: `trace-mcp-<ver>-arm64-mac.zip` (Apple silicon) or
   // `trace-mcp-<ver>-mac.zip` (Intel, no arch marker). The x64 matcher must
@@ -358,9 +445,13 @@ async function main() {
   // offering the update, and every attempt lands `npm-only`: the exact
   // TRA-357 shape, with no way out but a manual reinstall (TRA-443).
   const stripV = (v) => v.replace(/^v/, '');
-  const markerPath = path.join(INSTALL_DIR, '.trace-mcp-version');
-  const installed = readBundleVersion(APP_PATH) ?? readMarkerVersion(markerPath);
-  if (installed && stripV(installed) === stripV(release.tag_name)) return;
+  const stale = INSTALLED_APPS.filter((appPath) => {
+    const installed =
+      readBundleVersion(appPath) ??
+      readMarkerVersion(path.join(path.dirname(appPath), '.trace-mcp-version'));
+    return !installed || stripV(installed) !== stripV(release.tag_name);
+  });
+  if (stale.length === 0) return;
 
   // Require a sibling checksum asset — no checksum, no update.
   const checksumAsset =
@@ -390,68 +481,21 @@ async function main() {
       return;
     }
 
-    // If the app is running, do NOT touch the bundle — replacing a running .app
-    // can crash lazily-spawned helper processes and break the on-disk code
-    // signature that the OS verifies for the running binary. Stage the verified
-    // zip + checksum + version so the app can apply it on its own restart via
-    // scripts/apply-pending-update.mjs.
-    if (appIsRunning()) {
-      // Atomic-ish: write to .partial then rename so the app never sees a half-written zip.
-      const partial = `${PENDING_ZIP}.partial`;
-      fs.copyFileSync(zipPath, partial);
-      fs.renameSync(partial, PENDING_ZIP);
-      fs.writeFileSync(PENDING_CHECKSUM, expectedDigest, 'utf-8');
-      // Normalize — renderer prepends its own `v`, so `tag_name` raw would
-      // display as `vv1.28.0`.
-      fs.writeFileSync(PENDING_VERSION, release.tag_name.replace(/^v/, ''), 'utf-8');
-      cleanup();
-      console.log(`  trace-mcp ${release.tag_name} downloaded — restart the app to install`);
-      return;
-    }
-
-    // App is not running — safe to swap immediately. Extract to staging first
-    // and only swap if Gatekeeper approves.
-    //
-    // Say which signal decided, on the destructive branch only: the TRA-431
-    // incident was a `pgrep` false negative that left no trace of itself, so
-    // the log could not tell "the app really was closed" from "we failed to
-    // notice it". Every future swap now records which of the two this was.
-    console.log('  trace-mcp: app not running (pgrep) — replacing the bundle in place');
-    const stagingDir = path.join(tmpDir, 'staging');
-    fs.mkdirSync(stagingDir, { recursive: true });
-    execFileSync('/usr/bin/unzip', ['-q', '-o', zipPath, '-d', stagingDir], { stdio: 'pipe' });
-
-    const stagedApp = path.join(stagingDir, APP_NAME);
-    if (!fs.existsSync(stagedApp)) {
-      cleanup();
-      return;
-    }
-    if (!trustNotDowngraded(stagedApp, APP_PATH)) {
-      cleanup();
-      return;
-    }
-
-    const backupPath = `${APP_PATH}.bak-${process.pid}`;
-    fs.renameSync(APP_PATH, backupPath);
-    try {
-      fs.renameSync(stagedApp, APP_PATH);
-    } catch (err) {
+    const appRunning = appIsRunning();
+    for (const appPath of stale) {
       try {
-        fs.renameSync(backupPath, APP_PATH);
-      } catch {}
-      throw err;
+        applyTo(appPath, {
+          zipPath,
+          digest: expectedDigest,
+          tagName: release.tag_name,
+          appRunning,
+          tmpDir,
+        });
+      } catch {
+        // One unwritable install (a `/Applications` copy owned by another
+        // account) must not stop the others from being updated.
+      }
     }
-    fs.rmSync(backupPath, { recursive: true, force: true });
-    fs.writeFileSync(markerPath, release.tag_name, 'utf-8');
-
-    // Clear any stale pending markers from a previous deferred update.
-    for (const p of [PENDING_ZIP, PENDING_CHECKSUM, PENDING_VERSION]) {
-      try {
-        fs.unlinkSync(p);
-      } catch {}
-    }
-
-    console.log(`  trace-mcp app updated to ${release.tag_name}`);
   } finally {
     cleanup();
   }

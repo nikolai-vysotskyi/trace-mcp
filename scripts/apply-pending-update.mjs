@@ -41,6 +41,18 @@ let PENDING_ZIP = '';
 let PENDING_VERSION = '';
 let PENDING_CHECKSUM = '';
 let VERSION_MARKER = '';
+// Test seams, same shape as scripts/postinstall-app.mjs. All three default to
+// the production binaries. Without them this script cannot be exercised
+// end-to-end at all: `pgrep` answers differently depending on whether the
+// developer happens to have trace-mcp.app open, `launchctl` would bounce the
+// real daemon, and `open -a` would launch the throwaway sandbox bundle through
+// LaunchServices — which then records *that* path as the user's install
+// location. So the swap half of the update never got a real run, only unit
+// tests over its helpers; the staging half (postinstall-app.mjs) did.
+const PGREP_BIN = process.env.TRACE_MCP_PGREP_BIN || '/usr/bin/pgrep';
+const LAUNCHCTL_BIN = process.env.TRACE_MCP_LAUNCHCTL_BIN || '/bin/launchctl';
+const OPEN_BIN = process.env.TRACE_MCP_OPEN_BIN || '/usr/bin/open';
+
 const LAUNCHER_ENV = path.join(os.homedir(), '.trace-mcp', 'launcher.env');
 const DAEMON_PLIST = path.join(
   os.homedir(),
@@ -76,7 +88,7 @@ async function waitForExit(pid, maxMs = 60_000) {
 
 function appIsRunning() {
   try {
-    const out = execFileSync('/usr/bin/pgrep', ['-f', `${APP_NAME}/Contents/MacOS/`], {
+    const out = execFileSync(PGREP_BIN, ['-f', `${APP_NAME}/Contents/MacOS/`], {
       stdio: ['ignore', 'pipe', 'ignore'],
     });
     return out.toString().trim().length > 0;
@@ -231,10 +243,10 @@ function refreshCliPackage(version) {
 function restartDaemon() {
   if (!fs.existsSync(DAEMON_PLIST)) return;
   try {
-    execFileSync('/bin/launchctl', ['unload', DAEMON_PLIST], { stdio: 'pipe' });
+    execFileSync(LAUNCHCTL_BIN, ['unload', DAEMON_PLIST], { stdio: 'pipe' });
   } catch {}
   try {
-    execFileSync('/bin/launchctl', ['load', DAEMON_PLIST], { stdio: 'pipe' });
+    execFileSync(LAUNCHCTL_BIN, ['load', DAEMON_PLIST], { stdio: 'pipe' });
   } catch {}
 }
 
@@ -380,7 +392,7 @@ async function main() {
 
     // Relaunch the new bundle so the user does not have to click anything.
     try {
-      const child = spawn('/usr/bin/open', ['-a', APP_PATH], { detached: true, stdio: 'ignore' });
+      const child = spawn(OPEN_BIN, ['-a', APP_PATH], { detached: true, stdio: 'ignore' });
       child.unref();
       log(`relaunch spawned`);
     } catch (err) {
