@@ -125,8 +125,11 @@ export function KpiTile({
           : 'flex flex-col items-start gap-1 text-left transition-colors'
       }
       style={{
-        minWidth: 132,
-        flex: '1 1 132px',
+        // No `flex` basis: the strip is a grid whose track count already
+        // guarantees at least 132px per tile, and a flex-grow here is what let
+        // a last-row tile stretch to 5.5x its siblings (TRA-467). `minWidth: 0`
+        // so a long footnote sizes to its track instead of widening it.
+        minWidth: 0,
         padding: dense ? '8px 12px' : 16,
         borderRadius: 12,
         // A card is content: it stays opaque --surface in BOTH states. Tinting
