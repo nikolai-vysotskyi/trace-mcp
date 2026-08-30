@@ -18,6 +18,14 @@ export interface FloatingLayerProps {
       document-level mousedown against the floating layer for outside-press
       dismissal — the layer still keeps its own internal ref for clamping. */
   ref?: React.Ref<HTMLDivElement>;
+  /**
+   * Element the layer must stay horizontally inside. Without it the layer
+   * clamps to the window, so a wide popover opened from a content pane slides
+   * left over the sidebar — navigation chrome a content overlay must never
+   * cross (TRA-524). The element is also observed for resize, so the layer
+   * re-clamps live while the sidebar divider is dragged.
+   */
+  boundsRef?: React.RefObject<HTMLElement | null>;
 }
 
 /**
@@ -37,6 +45,7 @@ export function FloatingLayer({
   role,
   children,
   ref: forwardedRef,
+  boundsRef,
 }: FloatingLayerProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   // Expose the root element to callers without giving up our internal ref
@@ -54,15 +63,22 @@ export function FloatingLayer({
 
     const clamp = (): void => {
       const m = VIEWPORT_MARGIN;
+      const b = boundsRef?.current?.getBoundingClientRect();
+      // Cap the layer to the pane before measuring, so a panel whose natural
+      // width exceeds the pane shrinks instead of spilling out of it.
+      el.style.maxWidth = b ? `${Math.max(0, b.width - m * 2)}px` : '';
       const w = el.offsetWidth;
       const h = el.offsetHeight;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
 
-      // Horizontal — honor the requested anchoring, then pull fully in-window.
+      // Horizontal — honor the requested anchoring, then pull fully inside the
+      // bounding element when one is given, otherwise inside the window.
+      const minX = b ? Math.max(m, b.left + m) : m;
+      const maxX = b ? Math.min(vw - m, b.right - m) : vw - m;
       let left = align === 'end' ? x - w : x;
-      if (left + w + m > vw) left = vw - w - m;
-      if (left < m) left = m;
+      if (left + w > maxX) left = maxX - w;
+      if (left < minX) left = minX;
 
       // Vertical — flip above the anchor when it would overflow the bottom.
       let top = y;
@@ -85,11 +101,17 @@ export function FloatingLayer({
       });
     };
     window.addEventListener('resize', onResize);
+    // Dragging the sidebar divider resizes the pane without resizing the
+    // window, so the bounds element needs its own observer.
+    const bounds = boundsRef?.current;
+    const ro = bounds ? new ResizeObserver(onResize) : null;
+    if (bounds && ro) ro.observe(bounds);
     return () => {
       if (raf) cancelAnimationFrame(raf);
       window.removeEventListener('resize', onResize);
+      ro?.disconnect();
     };
-  }, [x, y, align]);
+  }, [x, y, align, boundsRef]);
 
   return (
     <div ref={ref} role={role} className={className} style={{ ...style, left: pos.left, top: pos.top }}>
