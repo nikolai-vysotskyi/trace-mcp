@@ -67,6 +67,12 @@ export function SearchField({
         <button
           type="button"
           className="lx-btn v-icon sz-regular"
+          /* Not a tab stop, like NSSearchField's cancel button. The capsule
+             rings as one control on `:focus-within`, so a focused clear button
+             drew a second ring inside — and bulging past — the first
+             (TRA-521). Esc from the field clears, which is the keyboard path;
+             this stays clickable and in the accessibility tree. */
+          tabIndex={-1}
           aria-label={t('clearSearch')}
           title={t('clearSearch')}
           onClick={() => {
