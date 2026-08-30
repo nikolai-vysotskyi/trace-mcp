@@ -254,14 +254,19 @@ export function ProjectOverview({
      `deriveDaemonState` rather than a fresh `!connected`: `connected` is false
      for the first moments of every mount, and a naive test would flash a
      daemon-down pane on every project open. Reusing the reducer is also what
-     keeps the two surfaces from drifting into two definitions of "down". */
+     keeps the two surfaces from drifting into two definitions of "down".
+
+     Anything but `ok`, not just `unreachable` (TRA-489). Workspace can afford
+     `stale` because it has cached KPI numbers to keep on screen under a banner
+     that qualifies them; this surface caches nothing, so `stale` here is not
+     "last known values" — it is five sections failing at once. */
   const daemonDown =
     deriveDaemonState({
       loading: daemonLoading,
       connected,
       liveProjects: projects.length,
       metricsErrorKind: null,
-    }) === 'unreachable';
+    }) !== 'ok';
 
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [statsLoad, setStatsLoad] = useState<Load>('loading');
@@ -345,11 +350,27 @@ export function ProjectOverview({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: status is an intentional trigger — refetches after the project leaves 'indexing' so the panel reflects the new totals.
   useEffect(() => {
+    /* Not before the daemon has answered (TRA-489). `deriveDaemonState` reduces
+       `loading` to 'ok', so the sections render during that window — and four
+       fetches against a refused local socket fail in milliseconds, well before
+       `useDaemon` concedes. That painted the four section errors the pane above
+       exists to replace, which is why the bug looked intermittent: whether you
+       saw it depended on which finished first. There is nothing to ask a daemon
+       that has not answered yet; the sections stay on their skeletons. */
+    if (daemonLoading) return;
     fetchStats();
     fetchCoverage();
     fetchServices();
     fetchSmells(smellsCategory);
-  }, [fetchStats, fetchCoverage, fetchServices, fetchSmells, smellsCategory, status]);
+  }, [
+    daemonLoading,
+    fetchStats,
+    fetchCoverage,
+    fetchServices,
+    fetchSmells,
+    smellsCategory,
+    status,
+  ]);
 
   const handleAddService = async () => {
     const api = window.electronAPI;
@@ -405,8 +426,13 @@ export function ProjectOverview({
 
   const projectName = root.split(/[/\\]/).filter(Boolean).pop() ?? root;
 
-  const statusTone: Tone =
-    status === 'indexing'
+  /* Neutral once the daemon has stopped talking, whatever the last snapshot
+     said. A 'stale' daemon still has 'ready' cached from its last answer, and
+     a green dot over a pane reading "The daemon isn't running" is a second
+     statement about the same condition — and the wrong one (TRA-489). */
+  const statusTone: Tone = daemonDown
+    ? 'neutral'
+    : status === 'indexing'
       ? 'orange'
       : status === 'error'
         ? 'red'
