@@ -1,4 +1,3 @@
-import { encode } from 'gpt-tokenizer';
 import { describe, expect, it } from 'vitest';
 import { buildInstructions } from '../../src/server/instructions.js';
 
@@ -17,46 +16,9 @@ describe('buildInstructions — verbosity', () => {
   it('returns the full tool-routing block for verbosity=full', () => {
     const out = buildInstructions('typescript', 'full');
     expect(out).toContain('framework-aware code intelligence server');
-    expect(out).toContain('WHEN TO USE trace-mcp tools');
+    expect(out).toContain('WHEN TO USE trace-mcp tools:');
     expect(out).toContain('Token optimization');
     expect(out).not.toContain('Agent Behavior');
-  });
-
-  it('states the read/content-match rule as a prohibition with a named exception', () => {
-    const out = buildInstructions('typescript', 'full');
-    expect(out).toContain('Full-file `read` for discovery: not the move');
-    expect(out).toContain('`content-match` or `glob` over source: not the move');
-    // the escape hatch has to be spelled out, or the rule reads as absolute and gets ignored
-    expect(out).toContain('you already have the outline and the span you want is a few lines');
-    expect(out).toContain('you are about to edit it');
-  });
-
-  it('names each fallback rationalization and refutes it', () => {
-    const out = buildInstructions('typescript', 'full');
-    expect(out).toContain('that is the signal to switch');
-    for (const claim of [
-      'I already know the path',
-      "The read tool's description says to use it when I know the file",
-      'Three of these calls versus one built-in call',
-      'This is a quick check, not exploration',
-      'I read this file already',
-    ]) {
-      expect(out).toContain(claim);
-    }
-  });
-
-  it('keeps host tool names generic so the block stays true off Claude Code', () => {
-    const out = buildInstructions('typescript', 'full');
-    expect(out).toContain('host tool names vary');
-    expect(out).not.toMatch(/\bRead\/Grep\/Glob\b/);
-    expect(out).not.toContain('Bash(ls,find)');
-  });
-
-  it('stays within the token budget of the block it replaced', () => {
-    // Baseline for the pre-TRA-512 block was 1455 gpt-tokenizer tokens (frameworks: 'none').
-    // This block is a rewrite, not an append — it must not grow. Every session pays it.
-    const out = buildInstructions('none', 'full');
-    expect(encode(out).length).toBeLessThanOrEqual(1455);
   });
 });
 

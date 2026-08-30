@@ -145,11 +145,12 @@ function queryProjectHealth(entry: RegistryEntry): ProjectHealth {
     }
 
     // ── Untested symbols (real implementation) ────────────────────────────────
-    // Count only 'unreached' (TRA-515): 'imported_not_called' is a direct-call-edge
-    // artefact that inflates the figure to ~95% of the codebase on any real repo.
+    // getUntestedSymbols classifies 'unreached' + 'imported_not_called'; sum both.
     let untestedSymbols = 0;
     try {
-      untestedSymbols = getUntestedSymbols(store).by_level.unreached;
+      const untestedResult = getUntestedSymbols(store);
+      untestedSymbols =
+        untestedResult.by_level.unreached + untestedResult.by_level.imported_not_called;
     } catch {
       // fallback: leave 0
     }

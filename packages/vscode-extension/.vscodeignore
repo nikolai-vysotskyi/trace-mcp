@@ -2,8 +2,6 @@
 .gitignore
 src/**
 tsconfig.json
-vitest.config.mts
-pnpm-lock.yaml
 **/*.test.ts
 **/*.test.js
 **/.DS_Store

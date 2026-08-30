@@ -14,6 +14,12 @@ export const clients = {
   detecting: 'Detecting clients',
   loadingSessions: 'Loading sessions',
 
+  daemonDownTitle: 'Daemon not reachable',
+  daemonDownSubtitle:
+    'trace-mcp clients connect through the local daemon. Start it to see and configure them.',
+  startDaemon: 'Start daemon',
+  starting: 'Starting…',
+
   noSessionsTitle: 'No active sessions',
   noSessionsSubtitle: 'A session appears here when a client connects to the daemon.',
   unnamedSession: 'Unnamed session',
@@ -28,9 +34,6 @@ export const clients = {
   updateAvailable: 'Update available',
   update: 'Update',
   updating: 'Updating…',
-  updateAll: 'Update all',
-  updatingProgress: 'Updating {{done}} of {{total}}',
-  writeFailed: 'The config could not be written.',
   driftedField: 'Drifted field: {{field}}',
   setUpManually: 'Set up manually…',
   hideSteps: 'Hide steps',
