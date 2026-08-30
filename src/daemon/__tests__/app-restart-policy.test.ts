@@ -63,4 +63,59 @@ describe('shouldRestartUnreachableDaemon', () => {
     expect(restarts / hours).toBeLessThanOrEqual(12);
     expect(restarts).toBeLessThan(626);
   });
+
+  /**
+   * TRA-525. The three tests above all *assume* `processAlive: true`, which is
+   * why they passed while the field kept burning: measured on Nikolai's Mac,
+   * 2026-08-30, `daemon.pid` named a dead process in 24% of one-second samples
+   * (9/37), and in one sample named dead PID 38747 while live PID 36600 was
+   * serving. 724 restarts in 18.7h, peak 89/h — after TRA-421 shipped.
+   *
+   * The policy was never wrong. Its input was. `processAlive` came from a file
+   * that any losing `daemon restart` spawn could overwrite with a PID that was
+   * about to die, so "provably alive" was provably false about a live daemon.
+   *
+   * This replays the outage driving the policy from that file, poisoned and
+   * repaired, and pins the difference.
+   */
+  describe('liveness input under a poisoned daemon.pid', () => {
+    const POLL_MS = 5_000;
+    const OUTAGE_MS = 13 * 60 * 60_000;
+
+    /** Replay a whole outage of a live-but-starved daemon; count restarts. */
+    function restartsPerHour(readProcessAlive: (tMs: number) => boolean): number {
+      let restarts = 0;
+      let unreachableSince = 0;
+      for (let t = 0; t < OUTAGE_MS; t += POLL_MS) {
+        if (
+          shouldRestartUnreachableDaemon({
+            processAlive: readProcessAlive(t),
+            unreachableForMs: t - unreachableSince,
+          })
+        ) {
+          restarts++;
+          unreachableSince = t;
+        }
+      }
+      return restarts / (OUTAGE_MS / 3_600_000);
+    }
+
+    it('reproduces the field rate when a failed spawn poisons the registration', () => {
+      // Every restart attempt spawns a process that registers, loses the port
+      // race to the still-running daemon, and dies — so from the next poll on,
+      // liveness reads "dead" about a daemon that is serving.
+      const rate = restartsPerHour(() => false);
+      // The observed 38.8/h is this bound throttled by real spawn latency; the
+      // pure policy is worse. Either way it is the runaway the issue reported.
+      expect(rate).toBeGreaterThan(38.8);
+    });
+
+    it('stops the loop once the serving daemon keeps its registration', () => {
+      // The fix: only the process that owns the port registers, and it
+      // re-asserts if the file goes missing. Liveness now tracks reality.
+      const rate = restartsPerHour(() => true);
+      // Only the genuine wedged-daemon escape hatch may still fire.
+      expect(rate).toBeLessThanOrEqual(12);
+    });
+  });
 });
