@@ -706,10 +706,10 @@ function ProjectContent({
       )}
       {/* Ask — chat interface, needs flex layout */}
       {tab === 'ask' && (
-                  <Suspense fallback={null}>
-                    <AskTab root={root} />
-                  </Suspense>
-                )}
+        <Suspense fallback={null}>
+          <AskTab root={root} />
+        </Suspense>
+      )}
       {/* Activity — live MCP tool-call feed for this project */}
       {tab === 'activity' && <Activity root={root} onOpenFileInGraph={onOpenFileInGraph} />}
       {/* Memory — decisions / corpora / sessions explorer */}

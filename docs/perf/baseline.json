@@ -104,9 +104,9 @@
     {
       "date": "2026-08-30T13:21:30.832Z",
       "app_version": "3.6.0",
-      "commit": "ccc3b45b",
+      "commit": "39026ebd",
       "env": {
-        "os": "macOS 25.5.0",
+        "os": "darwin 25.5.0",
         "arch": "arm64",
         "node": "22.22.3"
       },
@@ -152,7 +152,7 @@
           "main_cpu_idle_pct": 0
         }
       ],
-      "notes": "Startup pass on the AskTab code-split branch (this run's own change). renderer_bundle_kb 1700 -> 2272 (+34%) is a real regression against run 3 and is what this run went after: the entry chunk alone had grown 740 -> 1316 KB since 3.2.0. react-markdown + remark-gfm (the Ask tab's only dependency, ~24% of the entry chunk's source) were eagerly bundled; putting AskTab behind React.lazy moved 168 KB out of the startup path (entry 1316 -> 1148 KB). renderer_bundle_kb is unchanged by that fix by construction \u2014 it sums every file on disk \u2014 so this run adds renderer_eager_kb (entry + everything index.html preloads): 2270 -> 2102 KB. Trend renderer_eager_kb from here; renderer_bundle_kb stays as the total-weight check. renderer_fcp_ms 216 vs run 3's 220 and vs 168 measured on the same machine an hour earlier pre-fix: the split does not move FCP, it only removes bytes \u2014 same shape as the 2026-08-28 cosmos.gl negative result. Machine load 6-22 throughout (a dozen sibling agent checkouts), so cold_start_ms/window_interactive_ms are sanity checks against the 3 s ceiling only. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour still null: a foreign daemon held 3741 for this whole run. Process-tree snapshot (uncontrolled, ambient machine, do not trend): the installed app idles at 315 MB across 3 processes, fine; a `serve-http` daemon serving only /tmp/tmcpchk/demo held 884 MB RSS, past the 500 MB idle ceiling. Not filed as an issue because that daemon's history is unknown on a machine running a dozen agents - next run should reproduce it in a controlled scenario before filing."
+      "notes": "Measured with this run's own AskTab code split applied, so it is recorded against the split commit (39026ebd), not its pre-split parent ccc3b45b \u2014 re-measuring at ccc3b45b gives ~2270 KB eager and would read as a regression. renderer_bundle_kb 1700 -> 2272 (+34%) is a real regression against run 3 and is what this run went after: the entry chunk alone had grown 740 -> 1316 KB since 3.2.0. react-markdown + remark-gfm (the Ask tab's only dependency, ~24% of the entry chunk's source) were eagerly bundled; putting AskTab behind React.lazy moved 168 KB out of the startup path (entry 1316 -> 1148 KB). renderer_bundle_kb is unchanged by that fix by construction \u2014 it sums every file on disk \u2014 so this run adds renderer_eager_kb (entry + everything index.html preloads): 2270 -> 2102 KB. Trend renderer_eager_kb from here; renderer_bundle_kb stays as the total-weight check. renderer_fcp_ms 216 vs run 3's 220 and vs 168 measured on the same machine an hour earlier pre-fix: the split does not move FCP, it only removes bytes \u2014 same shape as the 2026-08-28 cosmos.gl negative result. Machine load 6-22 throughout (a dozen sibling agent checkouts), so cold_start_ms/window_interactive_ms are sanity checks against the 3 s ceiling only. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour still null: a foreign daemon held 3741 for this whole run. Process-tree snapshot (uncontrolled, ambient machine, do not trend): the installed app idles at 315 MB across 3 processes, fine; a `serve-http` daemon serving only /tmp/tmcpchk/demo held 884 MB RSS, past the 500 MB idle ceiling. Not filed as an issue because that daemon's history is unknown on a machine running a dozen agents - next run should reproduce it in a controlled scenario before filing."
     }
   ]
 }

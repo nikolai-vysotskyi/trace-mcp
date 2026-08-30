@@ -252,7 +252,10 @@ function bundleSizes() {
 function eagerKb() {
   const dir = path.join(appDir, 'dist', 'renderer');
   const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
-  const refs = [...html.matchAll(/(?:src|href)="\.\/([^"]+)"/g)].map((m) => m[1]);
+  const refs = [...html.matchAll(/(?:src|href)="\.?\/?([^"]+)"/g)].map((m) => m[1]);
+  // A Vite `base` change that stops the refs matching must fail the run: silently
+  // recording 0 KB would read as the largest win this metric has ever shown.
+  if (!refs.length) throw new Error('index.html referenced no assets — check Vite `base`');
   const bytes = refs.reduce((a, r) => a + fs.statSync(path.join(dir, r)).size, 0);
   return round(bytes / 1024, 0);
 }
@@ -658,7 +661,10 @@ const entry = {
   date: new Date().toISOString(),
   app_version: JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8')).version,
   commit: process.env.PERF_COMMIT ?? null,
-  env: { os: `macOS ${os.release()}`, arch: os.arch(), node: process.version.slice(1) },
+  // `os.release()` is the Darwin release (25.x), not the marketing macOS version
+  // (26.x) — labelling it "macOS" made entries look like they came from different
+  // machines when they did not.
+  env: { os: `darwin ${os.release()}`, arch: os.arch(), node: process.version.slice(1) },
   samples: SAMPLES,
   metrics: {
     cold_start_ms: median(samples.map((s) => s.cold_start_ms)),

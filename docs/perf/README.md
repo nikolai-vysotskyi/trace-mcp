@@ -14,7 +14,7 @@ noindex: true
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
-## Current numbers (3.6.0, `ccc3b45b`, macOS 26.5 / arm64, median of 3)
+## Current numbers (3.6.0, `39026ebd` — the AskTab split, macOS 26.5 / arm64, median of 3)
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
