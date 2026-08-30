@@ -4,7 +4,9 @@ What the Test & Quality Health runs have actually covered, so the next run
 starts where the last one stopped instead of re-deriving the same list.
 
 Candidates come from dogfooding `get_untested_symbols` against this repo's own
-index, filtered to `src/**`, `level: "unreached"`, functions and classes only.
+index, filtered to `src/**`, functions and classes only. Since TRA-515 the tool
+defaults to `level: "unreached"`, so no manual level filtering is needed —
+`level: "all"` restores the old combined output.
 Priority is not the headline percentage — it is the surface that can damage a
 user's machine or break the tool contract: disk paths, shell, DB/schema,
 parsing, the MCP tool surface.
