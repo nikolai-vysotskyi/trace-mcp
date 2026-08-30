@@ -151,9 +151,16 @@ describe('shouldRestartUnreachableDaemon', () => {
    *
    * TRA-543's escalation bounds the loop but does not repair the input, and the
    * two branches are not interchangeable: a poisoned reading sends a healthy
-   * daemon down the *dead* branch, whose base threshold is 30x tighter. So the
-   * bound asserted above ("<= 4 restarts in the first hour") is a guarantee
-   * about a truthful pid file, and holds only once TRA-525 keeps it truthful.
+   * daemon down the *dead* branch, whose base threshold is 30x tighter (10 s vs
+   * 5 min). Escalation caps the damage either way, so what is left is modest —
+   * 8 kills in the first hour instead of 3, not the 38.8-89/h the field saw
+   * before TRA-543 — but it is still past the "<= 4 restarts in the first hour"
+   * bound asserted above. That bound is a guarantee about a truthful pid file,
+   * and it holds only once TRA-525 keeps the file truthful.
+   *
+   * These counts are a property of the pure policy. The shipped app also gates
+   * every restart behind tray.ts's 60 s DAEMON_STARTUP_GRACE_MS, so wall-clock
+   * cadence is looser than this; the ratio between the branches is the point.
    */
   it('a poisoned daemon.pid escalates a healthy daemon down the dead-process branch', () => {
     const POLL_MS = 5_000;
