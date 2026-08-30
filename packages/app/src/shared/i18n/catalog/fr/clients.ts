@@ -7,12 +7,6 @@ export const clients = {
   detecting: 'Détection des clients',
   loadingSessions: 'Chargement des sessions',
 
-  daemonDownTitle: 'Démon injoignable',
-  daemonDownSubtitle:
-    'Les clients trace-mcp se connectent via le démon local. Démarrez-le pour les voir et les configurer.',
-  startDaemon: 'Démarrer le démon',
-  starting: 'Démarrage…',
-
   noSessionsTitle: 'Aucune session active',
   noSessionsSubtitle: 'Une session apparaît ici quand un client se connecte au démon.',
   unnamedSession: 'Session sans nom',
@@ -27,6 +21,9 @@ export const clients = {
   updateAvailable: 'Mise à jour disponible',
   update: 'Mettre à jour',
   updating: 'Mise à jour…',
+  updateAll: 'Tout mettre à jour',
+  updatingProgress: 'Mise à jour de {{done}} sur {{total}}',
+  writeFailed: 'La configuration n’a pas pu être écrite.',
   driftedField: 'Champ modifié : {{field}}',
   setUpManually: 'Configurer manuellement…',
   hideSteps: 'Masquer les étapes',

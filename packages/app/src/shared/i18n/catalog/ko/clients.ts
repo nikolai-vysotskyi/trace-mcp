@@ -7,12 +7,6 @@ export const clients = {
   detecting: '클라이언트 탐지 중',
   loadingSessions: '세션 불러오는 중',
 
-  daemonDownTitle: '데몬에 연결할 수 없음',
-  daemonDownSubtitle:
-    'trace-mcp 클라이언트는 로컬 데몬을 통해 연결됩니다. 데몬을 시작하면 확인하고 설정할 수 있습니다.',
-  startDaemon: '데몬 시작',
-  starting: '시작하는 중…',
-
   noSessionsTitle: '활성 세션 없음',
   noSessionsSubtitle: '클라이언트가 데몬에 연결하면 세션이 여기에 표시됩니다.',
   unnamedSession: '이름 없는 세션',
@@ -27,6 +21,9 @@ export const clients = {
   updateAvailable: '업데이트 있음',
   update: '업데이트',
   updating: '업데이트 중…',
+  updateAll: '모두 업데이트',
+  updatingProgress: '{{total}}개 중 {{done}}개 업데이트 중',
+  writeFailed: '설정을 저장하지 못했습니다.',
   driftedField: '어긋난 필드: {{field}}',
   setUpManually: '수동으로 설정…',
   hideSteps: '단계 숨기기',

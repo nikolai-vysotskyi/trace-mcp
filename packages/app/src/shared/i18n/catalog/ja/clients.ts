@@ -7,12 +7,6 @@ export const clients = {
   detecting: 'クライアントを検出中',
   loadingSessions: 'セッションを読み込み中',
 
-  daemonDownTitle: 'デーモンに接続できません',
-  daemonDownSubtitle:
-    'trace-mcp のクライアントはローカルのデーモン経由で接続します。デーモンを起動すると表示・設定できます。',
-  startDaemon: 'デーモンを起動',
-  starting: '起動中…',
-
   noSessionsTitle: 'アクティブなセッションはありません',
   noSessionsSubtitle: 'クライアントがデーモンに接続すると、ここにセッションが表示されます。',
   unnamedSession: '名前のないセッション',
@@ -27,6 +21,9 @@ export const clients = {
   updateAvailable: 'アップデートあり',
   update: 'アップデート',
   updating: 'アップデート中…',
+  updateAll: 'すべて更新',
+  updatingProgress: '{{total}} 件中 {{done}} 件を更新中',
+  writeFailed: '設定を書き込めませんでした。',
   driftedField: '差異のある項目: {{field}}',
   setUpManually: '手動で設定…',
   hideSteps: '手順を隠す',
