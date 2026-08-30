@@ -828,6 +828,24 @@ elaboration.
 3. **A toggle whose alternatives are unusable is hidden, not disabled.** A disabled
    segment is a control with nothing to choose; it returns with the width.
 
+### A content overlay is clamped by its pane, never by the window
+
+An overlay opened from inside the content pane — popover, dropdown, HUD — belongs to that
+pane. `position: fixed` puts it in window coordinates, so anything that clamps it against
+`window.innerWidth` will happily park it on top of the sidebar: navigation chrome that a
+content overlay must never cross (§1). TRA-524 shipped exactly that — the Graph filter
+panel is 571px wide, hangs off a Filter button 860px in with `align="end"`, and landed at
+`left: 8` over 251px of sidebar.
+
+`FloatingLayer` takes `boundsRef` for this. Pass the pane's element and the layer clamps
+its left/right edge — **and caps its width** — to that pane's box instead of the window's,
+re-clamping through a `ResizeObserver` when the pane changes size under it. A layer wider
+than its pane shrinks; it does not spill. Omit `boundsRef` only for a layer that genuinely
+belongs to the window: the application menu, a context menu at the cursor.
+
+Sidebar collapsed, sidebar at 180 and at 320, and the 640px window minimum are four
+different pane boxes. Check the overlay in all of them, not just the one you developed in.
+
 ---
 
 ## 7. Accessibility
