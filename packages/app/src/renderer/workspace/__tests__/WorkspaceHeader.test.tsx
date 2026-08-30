@@ -5,6 +5,7 @@ import { render } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { WorkspaceHeader, activeFilterCount } from '../WorkspaceHeader';
 import { EMPTY_FILTER, type WorkspaceFilter, type WorkspaceKpis } from '../types';
+import { type KpiBaseline, LS_BASELINE_KEY } from '../kpiBaseline';
 
 const ZERO_KPIS: WorkspaceKpis = {
   totalProjects: 78,
@@ -113,6 +114,46 @@ describe('WorkspaceHeader KPI strip', () => {
     renderHeader(false, { listFailed: true });
     expect(kpiValue('Projects')).toBe('—');
     expect(kpiTile('Projects').textContent).not.toMatch(/[↑↓]/);
+  });
+
+  /* The baseline is what every delta chip is measured against, so a reading
+     taken while the daemon is silent becomes tomorrow's fabricated growth:
+     one launch with the daemon down stored all zeros, and the dashboard then
+     reported "↑ +656.2k symbols vs 5 hours ago" on a workspace that had not
+     changed in days (TRA-458). `metricsLoading` alone does not catch it —
+     Workspace.tsx passes it as false the moment the request FAILS. */
+  it.each([
+    ['metrics are still loading', true, {}],
+    ['the metrics request failed', false, { metricsFailed: true }],
+    ['the project list is still loading', false, { listLoading: true }],
+    ['the daemon is down', false, { listFailed: true }],
+  ])('stores no baseline while %s', (_case, metricsLoading, extra) => {
+    renderHeader(metricsLoading, extra);
+    expect(localStorage.getItem(LS_BASELINE_KEY)).toBeNull();
+  });
+
+  it('starts tracking once it has a reading of a non-empty workspace', () => {
+    renderHeader(false);
+    const stored = JSON.parse(localStorage.getItem(LS_BASELINE_KEY)!) as KpiBaseline;
+    expect(stored.kpis.totalProjects).toBe(78);
+    // First reading, so there is nothing to compare against yet — and a
+    // number is never dressed up as growth it did not have.
+    expect(kpiTile('Projects').textContent).not.toMatch(/[↑↓]/);
+  });
+
+  it('shows no delta when the stored baseline is an empty workspace', () => {
+    localStorage.setItem(
+      LS_BASELINE_KEY,
+      JSON.stringify({
+        at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+        kpis: { ...ZERO_KPIS, totalProjects: 0 },
+      }),
+    );
+    renderHeader(false);
+    expect(kpiTile('Projects').textContent).not.toMatch(/[↑↓]/);
+    // Not "+78 vs 5 hours ago" — a delta equal to the value restates the
+    // number instead of comparing it.
+    expect(kpiTile('Projects').textContent).not.toContain('+78');
   });
 
   it('gives every tile a comparison, never a bare number', () => {
