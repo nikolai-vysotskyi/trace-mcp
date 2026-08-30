@@ -143,6 +143,42 @@
         }
       });
 
+      // A scroll region with nothing left to see is indistinguishable from a
+      // table clipped mid-word. macOS hides the overlay scrollbar at rest and
+      // a phone never draws one, so the last column just ends. Label the
+      // region when — and only when — it actually has more to the right.
+      (function () {
+        var regions = [].slice.call(document.querySelectorAll('.table-scroll'));
+        if (!regions.length) return;
+        regions.forEach(function (region) {
+          var hint = document.createElement('div');
+          hint.className = 'table-hint';
+          hint.setAttribute('aria-hidden', 'true');
+          hint.textContent = 'scroll →';
+          region.parentNode.insertBefore(hint, region);
+          region.addEventListener('scroll', function () {
+            measure(region, hint);
+          });
+        });
+        function measure(region, hint) {
+          var more = region.scrollWidth - region.clientWidth - region.scrollLeft > 1;
+          hint.classList.toggle('is-visible', more);
+        }
+        function measureAll() {
+          regions.forEach(function (region) {
+            measure(region, region.previousElementSibling);
+          });
+        }
+        measureAll();
+        // Fonts land after first paint and change every column width with them.
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(measureAll);
+        var pending = 0;
+        window.addEventListener('resize', function () {
+          cancelAnimationFrame(pending);
+          pending = requestAnimationFrame(measureAll);
+        });
+      })();
+
       // Theme toggle — mirrors the landing page control and shares its key.
       (function () {
         var root = document.documentElement;
