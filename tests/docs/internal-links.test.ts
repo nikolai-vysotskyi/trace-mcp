@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -74,6 +74,66 @@ describe('docs footer nav covers every indexed page', () => {
       `sitemap lastmod older than the page's last commit — run \`pnpm docs:sitemap\`: ${stale
         .map((e) => `${e.path} (${e.lastmod} < ${e.git})`)
         .join(', ')}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * The two checks above only compare sitemap.xml against the nav, so a page
+   * absent from *both* was invisible to them. On 2026-08-30 four such pages
+   * were live on trace-mcp.com — /language-matrix.html, /daemon-memory.html,
+   * /ROADMAP.html and /DESIGN-WEB.html — each a fully rendered 200 with a
+   * <title>, each with no inbound link anywhere on the site, and all four
+   * reported "URL is unknown to Google" by the Search Console API.
+   *
+   * Every .md under docs/ becomes a public URL, so the source of truth is the
+   * directory, not the sitemap. A page is either indexed (in the sitemap) or
+   * deliberately not (`noindex: true` in its front matter) — never neither.
+   * Underscore directories (_layouts, _includes, _data) are Jekyll internals
+   * that never get a URL, so they are not pages and are skipped.
+   */
+  it('every published docs page is in the sitemap or marked noindex', () => {
+    const pages = readdirSync(DOCS, { recursive: true, encoding: 'utf-8' })
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => f.replace(/\\/g, '/'))
+      .filter((f) => !f.startsWith('_'));
+    const indexed = new Set(
+      sitemapPaths().map((p) => p.replace(/^\//, '').replace(/\.html$/, '.md')),
+    );
+    const orphans = pages.filter((f) => {
+      if (indexed.has(f)) return false;
+      return !/^---\n[\s\S]*?^noindex:\s*true\s*$[\s\S]*?^---$/m.test(
+        readFileSync(join(DOCS, f), 'utf-8'),
+      );
+    });
+    expect(
+      orphans,
+      `docs pages that are neither in sitemap.xml nor marked \`noindex: true\`: ${orphans.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  /**
+   * GitHub Pages serves a directory's README as its index, so docs/perf/README.md
+   * was reachable at /perf/ with no front matter at all. Adding front matter hands
+   * the file to Jekyll, which publishes it at /perf/README.html instead — and /perf/
+   * then falls through to the "Page not found" body served under a 200, a soft 404
+   * on a URL that had been working. Shipped exactly that way in #635 and caught on
+   * the live site afterwards, not by CI.
+   *
+   * `permalink` pins the output URL back to the directory, so the two cannot diverge.
+   */
+  it('every README under docs/ pins its URL with a permalink', () => {
+    const readmes = readdirSync(DOCS, { recursive: true, encoding: 'utf-8' })
+      .map((f) => f.replace(/\\/g, '/'))
+      .filter((f) => !f.startsWith('_') && /(^|\/)README\.md$/.test(f));
+    const unpinned = readmes.filter((f) => {
+      const raw = readFileSync(join(DOCS, f), 'utf-8');
+      if (!raw.startsWith('---\n')) return false; // no front matter: Jekyll leaves the URL alone
+      const expected = `/${f.replace(/README\.md$/, '')}`;
+      return !new RegExp(`^permalink:\\s*${expected}/?\\s*$`, 'm').test(raw);
+    });
+    expect(
+      unpinned,
+      `READMEs with front matter but no \`permalink:\` pinning them to their directory URL: ${unpinned.join(', ')}`,
     ).toEqual([]);
   });
 

@@ -1,3 +1,10 @@
+---
+layout: default
+title: Product Roadmap
+description: Internal working document. Strategic view of trace-mcp, revised roughly weekly.
+noindex: true
+---
+
 # Product Roadmap
 
 Strategic view of trace-mcp, revisited roughly weekly by the Product Roadmap
