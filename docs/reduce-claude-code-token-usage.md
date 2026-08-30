@@ -106,14 +106,14 @@ This is the tactic most people never check, and it can dominate everything else.
 
 Every MCP server you connect injects its tool schemas into the context **at session start, before you ask anything**. Three servers with large surfaces can cost tens of thousands of tokens on every single session, whether or not you call any of them.
 
-Measured on our own server, August 2026: trace-mcp's default `tools/list` is {{ site.data.counts.tools }} tools and roughly 50K tokens, plus ~2.1K tokens of server instructions. That is genuinely expensive, and we say so on our own [comparisons page](/comparisons.html) — the leanest peers in this category advertise ~1.9K and ~7K tokens by shipping a small default surface with the rest opt-in.
+Measured on our own server, August 29, 2026: trace-mcp's shipped default is the `minimal` (28 tools) preset — ~9.8K tokens of `tools/list` plus ~1.75K tokens of server instructions, **~11.6K in total**, which is the number to budget against because a client pays both. (`full` ({{ site.data.counts.tools }} tools) is ~49.9K + ~2.1K if you opt into it.) That is still not cheap, and we say so on our own [comparisons page](/comparisons.html) — the leanest peers in this category advertise ~1.9K and ~7K tokens by shipping a small default surface with the rest opt-in.
 
 What to do about it:
 
 - Run `tools/list` against each server you have connected and count the tokens. Most people have never looked.
 - Disconnect servers you are not using in this project. A server connected "just in case" is a fixed tax.
 - Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (28 tools), `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config.
-- **Previously noted here as broken, now fixed:** presets used to take effect only when the daemon was bypassed (`TRACE_MCP_NO_DAEMON=1`) and were silently ignored on the default daemon-backed path. That bug is shipped and closed — the preset is honoured on both paths, and `TRACE_MCP_NO_DAEMON=1` is no longer needed as a workaround. Measured on the default path: `standard` serves ~18.8K tokens of `tools/list` plus ~1.75K of server instructions, against ~50K for `full`.
+- **Previously noted here as broken, now fixed:** presets used to take effect only when the daemon was bypassed (`TRACE_MCP_NO_DAEMON=1`) and were silently ignored on the default daemon-backed path. That bug is shipped and closed — the preset is honoured on both paths, and `TRACE_MCP_NO_DAEMON=1` is no longer needed as a workaround. Measured on the default path: `standard` serves ~18.8K tokens of `tools/list` plus ~1.75K of server instructions (~20.5K), against ~49.9K + ~2.1K for `full`.
 - **One caveat that is still live:** set these in the global `~/.trace-mcp/.config.json`. `tools.preset` is honoured from a project-local `.trace-mcp/.config.json` too, but `tools.description_verbosity` / `tools.instructions_verbosity` are not — set those globally until that is fixed.
 
 ## 4. Pick the output format per tool, not globally

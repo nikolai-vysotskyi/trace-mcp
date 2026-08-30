@@ -123,7 +123,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Languages | {{ site.data.counts.languages }} | 40+ (via LSP) | 23 + Jupyter | 161 | 19 | 32 | 28 |
 | Framework integrations | {{ site.data.counts.frameworks }} | ✗ | ✗ (Python entry points only) | ✗ | ✗ | ✗ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✓ | ✗ | ✗ | ✓ cross-service HTTP | ✓ polyglot dep graph | ✗ | ✓ PHP↔TS API drift |
-| MCP tools advertised (default) | 28 `minimal` (~9.8K tok, default); 54 `standard` (~19K); {{ site.data.counts.tools }} `full` (~50K) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok) | 21 | 90 | 224 |
+| MCP tools advertised (default) | 28 `minimal` (~11.6K tok², default); 54 `standard` (~20.5K); {{ site.data.counts.tools }} `full` (~52K) | ~55 | ~28 | 15 all / 11 `analysis` / 7 `scout` (~7K tok, schema only) | 21 | 90 | 224 |
 | Session memory | ✓ | ✓ (manual notes) | ✗ | ✓ | ✗ | ✗ | ✗ |
 | CI/PR reports | ✓ | ✗ | ✓ blast-radius GitHub Action | ✗ | ✗ | ✗ | ✓ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✓ | ✗ | ✓ multi-repo daemon | ✓ cross-service | ✓ cross-project search | ✗ | ✗ |
@@ -139,6 +139,8 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Architecture governance | ✓ | ✗ | ✓ Leiden communities | ✓ Louvain communities | ✗ | ✗ | ✓ change-safety gates |
 | Token savings tracking | ✓ | ✗ | ✓ (6.8×–49×) | ✓ | ✓ (~61% claimed) | ✗ | ✓ (~92% claimed) |
 | Written in | TypeScript | Python | Python | C | TypeScript | Rust | Python |
+
+_² Our token figures are the **whole session-start cost**: `tools/list` schema plus the server-instructions block, because that is what a client actually pays before asking anything. The schema-only split is in the measurement table under "Deep dive" below (`minimal` is ~9.8K schema + ~1.75K instructions). Peer figures are quoted on whatever basis their own source supports and labelled where it differs._
 
 _¹ `apply_codemod` now rewrites on `@ast-grep/napi` (true AST pattern matching, metavariable substitution, no false matches in strings/comments) with automatic regex fallback for non-AST languages; the native binding loads lazily and degrades to regex instead of crashing if missing. `extract_function` is re-enabled with AST free-variable analysis — it detects genuine multi-return-value slices and rejects them with a structured error rather than silently dropping a binding, and lowers `confidence` on shadowed-variable cases instead of misreporting them as clean (see "where competitors lead" below for what deep validation found)._
 
