@@ -26,6 +26,7 @@ import { t } from '../i18n';
 import { formatNumber } from '../i18n/format';
 import { Button, EmptyState } from '../lattice/ui';
 import { addRecentProject, removeRecentProject } from '../recent-projects';
+import { DaemonDownPane } from '../components/DaemonDownPane';
 import { AddProjectControl } from './AddProjectControl';
 import { BulkActionsBar } from './BulkActionsBar';
 import { WorkspaceCompactView } from './WorkspaceCompactView';
@@ -196,24 +197,6 @@ export function busyMessage(o: {
     });
   }
   return t(o.haveNumbers ? 'workspace:busyStale' : 'workspace:busyFresh');
-}
-
-/** The pane shown when the daemon is not answering at all. */
-function DaemonDownPane({ restarting, onRestart }: { restarting: boolean; onRestart: () => void }) {
-  const { t } = useTranslation('workspace');
-  return (
-    <EmptyState
-      icon="cable"
-      iconSize={32}
-      title={t('daemonDownTitle')}
-      subtitle={t('daemonDownSubtitle')}
-      action={
-        <Button variant="prominent" size="large" onClick={onRestart} disabled={restarting}>
-          {restarting ? t('startingDaemon') : t('startDaemon')}
-        </Button>
-      }
-    />
-  );
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────
