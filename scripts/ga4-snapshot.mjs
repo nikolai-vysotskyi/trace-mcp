@@ -15,7 +15,8 @@ import fs from 'node:fs';
 const OUT = 'docs/_data/adoption.yml';
 
 function accessToken(key) {
-  const b64 = (o) => Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url');
+  const b64 = (o) =>
+    Buffer.from(typeof o === 'string' ? o : JSON.stringify(o)).toString('base64url');
   const now = Math.floor(Date.now() / 1000);
   const unsigned = `${b64({ alg: 'RS256', typ: 'JWT' })}.${b64({
     iss: key.client_email,
@@ -24,7 +25,9 @@ function accessToken(key) {
     iat: now,
     exp: now + 3600,
   })}`;
-  const sig = crypto.sign('RSA-SHA256', Buffer.from(unsigned), key.private_key).toString('base64url');
+  const sig = crypto
+    .sign('RSA-SHA256', Buffer.from(unsigned), key.private_key)
+    .toString('base64url');
   return fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
