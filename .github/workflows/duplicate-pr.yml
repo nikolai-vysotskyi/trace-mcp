@@ -1,0 +1,57 @@
+name: Duplicate PR Check
+
+# TRA-476: #598 duplicated #597 (TRA-448) and #613 duplicated #611 (TRA-469).
+# In both cases the duplicating run was working a *different* issue, so each
+# issue had exactly one run — no dispatcher lock or issue-level claim protocol
+# would have fired. The PR list is the only place both pieces of work are
+# visible at once, so the guard lives here and fails the check rather than
+# asking every run to remember to look.
+#
+# Security: no checkout, no build, no code from the PR is executed. The job
+# reads PR titles and bodies through the GitHub API and skips fork PRs, whose
+# token cannot comment anyway.
+
+on:
+  pull_request:
+    types: [opened, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # base ref, not the PR head: the guard must not run a version of
+          # itself that the PR being checked is allowed to edit.
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: scripts/check-duplicate-pr.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Check for an open PR on the same issue
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node scripts/check-duplicate-pr.mjs "$PR_NUMBER" report.md
+
+      - name: Report duplicates
+        if: failure() && steps.check.outcome == 'failure'
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: duplicate-pr
+          path: report.md
+
+      - name: Clear a stale report
+        if: success()
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          header: duplicate-pr
+          delete: true
