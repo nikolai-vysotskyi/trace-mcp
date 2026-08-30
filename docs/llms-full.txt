@@ -326,7 +326,7 @@ _¹ mcp-local-rag and knowledge-rag are document RAG tools (PDF, DOCX, Markdown)
 | Framework integrations | {{ site.data.counts.frameworks }} | ❌ | ❌ (Python entry points only) | ❌ | ❌ | ❌ | ~15 (ORM N+1 / API drift only) |
 | Cross-language edges | ✅ | ❌ | ❌ | ✅ cross-service HTTP | ✅ polyglot dep graph | ❌ | ✅ PHP↔TS API drift |
 | MCP tools | {{ site.data.counts.tools }} | ~55 | ~28 | 14 | 21 | 90 | 224 |
-| Session memory | ✅ | ✅ (manual notes) | ❌ | ✅ | ❌ | ❌ | ❌ |
+| Session memory | ✅ | ✅ (notes, not code-linked) | ❌ | ✅ | ❌ | ❌ | ❌ |
 | CI/PR reports | ✅ | ❌ | ✅ blast-radius GitHub Action | ❌ | ❌ | ❌ | ✅ SARIF 2.1.0 + GH/GL/Azure |
 | Multi-repo subprojects | ✅ | ❌ | ✅ multi-repo daemon | ✅ cross-service | ✅ cross-project search | ❌ | ❌ |
 | Control-flow / data-flow | ✅ CFG w/ basic blocks + loop back-edges + dataflow | ❌ | ❌ | ❌ | ❌ | ✅ CFG w/ basic blocks + loop edges; type-aware taint | ❌ |
@@ -377,7 +377,7 @@ Which entries above got a real read of their architecture/code and a concrete ta
 
 **Profiled deep (architecture/code read, explicit take-or-pass with reasoning):** Graphify, Headroom, Kage, mem0/OpenMemory, MemPalace.
 
-**Tracked, still surface-level only (README + stars, no code/architecture read yet):** Serena, code-review-graph, codebase-memory-mcp, SocratiCode, Narsil-MCP, Roam-Code, Repomix, tokensave, jCodeMunch, Context Mode, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, codegraph, repo-context-mcp, grafel, GitNexus, Code Pathfinder, CodeGraphContext/CGC.
+**Tracked, still surface-level only (README + stars, no code/architecture read yet):** code-review-graph, codebase-memory-mcp, SocratiCode, Narsil-MCP, Roam-Code, Repomix, tokensave, jCodeMunch, Context Mode, cymbal, DeepContext, smart-coding-mcp, mcp-local-rag, knowledge-rag, ConPort, engram, claude-mem, codegraph, repo-context-mcp, grafel, GitNexus, Code Pathfinder, CodeGraphContext/CGC.
 
 Priority for next deep-dive: **codebase-memory-mcp** (largest peer by stars — 40.7K — with a published benchmark preprint we haven't independently verified) and **codegraph** (68.2K stars, unverified self-reported benchmark claims) are the two highest-value surface-level entries left to profile properly.
 
@@ -399,11 +399,11 @@ Full page: https://trace-mcp.com/vs/repomix.html
 
 # trace-mcp vs Serena
 
-Serena is a live LSP proxy: it forwards questions to a real language server, so references and renames are compiler-grade across 40+ languages, and it ships ~55 MCP tools plus a live debugger. trace-mcp is a precomputed graph with LSP and offline SCIP ingestion as an *optional* precision upgrade rather than a hard dependency.
+Serena is a live LSP proxy: it forwards questions to a real language server, so references and renames are compiler-grade across 40+ languages (73 language-server backends). Its registry defines 52 tools, 29 of them enabled by default; the "live debugger" is one of 13 optional tools that proxy to a running JetBrains IDE, not something Serena implements. trace-mcp is a precomputed graph with LSP and offline SCIP ingestion as an *optional* precision upgrade rather than a hard dependency.
 
 Pick Serena when you work in one language with a first-class language server, want zero index state, or need runtime inspection. Pick trace-mcp for polyglot or unusual stacks, framework edges no language server models (route → handler, controller → template, model → table), graph impact analysis rather than plain references, and everything past navigation — security scanning with type-aware taint pruning, SARIF 2.1.0, quality gates, AST codemods, and code-linked decision memory that is verified non-stale at recall time.
 
-Honest caveats: trace-mcp's AST resolution is less precise than live LSP by default, we have not yet read Serena's source (it is the priority for our next competitor deep-dive), and Serena's ~55-tool surface is now in the same range as our 28-tool default rather than an order of magnitude cheaper.
+Honest caveats: trace-mcp's AST resolution is less precise than live LSP by default, and Serena's 29-tool default surface is level with our 28 rather than an order of magnitude more expensive. Reading Serena's source (commit `43ae021`) also corrected four rows in its favour: it persists per-file document-symbol caches rather than being stateless, it can query other registered projects, its memories are topic-namespaced and cross-referenced, and its default tool count is 29 rather than the ~55 we had carried from its README.
 
 Full page: https://trace-mcp.com/vs/serena.html
 
