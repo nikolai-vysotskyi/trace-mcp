@@ -1,7 +1,7 @@
 ---
 title: "Repomix Alternative: trace-mcp vs Repomix for AI code context"
 description: "Repomix packs your repository into one prompt. trace-mcp indexes it into a queryable graph. Head-to-head on token cost, freshness, search, and refactoring — plus when Repomix is still the right pick."
-updated: 2026-08-30
+updated: 2026-08-29
 ---
 
 # Repomix alternative: trace-mcp vs Repomix
