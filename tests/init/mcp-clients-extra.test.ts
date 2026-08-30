@@ -180,7 +180,15 @@ describe('Factory Droid writer', () => {
     const entry = parsed.mcpServers['trace-mcp'];
     expect(entry.type).toBe('stdio');
     expect(entry.args).toEqual(['serve']);
-    expect(entry.cwd).toBe(projectRoot);
+    // Global scope carries no cwd — see TRA-501.
+    expect(entry.cwd).toBeUndefined();
+  });
+
+  it('writes cwd only for a project-scoped entry', () => {
+    configureMcpClients(['factory-droid'], projectRoot, { scope: 'project' });
+    const file = path.join(projectRoot, '.factory', 'mcp.json');
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace-mcp'].cwd).toBe(projectRoot);
   });
 
   it('preserves existing servers when adding trace-mcp', () => {
@@ -299,7 +307,8 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
     const entry = parsed.mcpServers['trace-mcp'];
     expect(entry.args).toEqual(['serve']);
-    expect(entry.cwd).toBe(projectRoot);
+    // Cline's config is global-only, so it never carries a project cwd (TRA-501).
+    expect(entry.cwd).toBeUndefined();
     // Standard shape clients must not carry the Claude-only alwaysLoad flag.
     expect(entry.alwaysLoad).toBeUndefined();
   });

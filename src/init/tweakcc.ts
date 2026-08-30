@@ -70,6 +70,18 @@ export function isTweakccInstalled(): boolean {
   }
 }
 
+/**
+ * Are our tweakcc prompts on disk right now? Pure filesystem — unlike
+ * detectTweakccPrompts() it never shells out to `npx tweakcc --version`, which
+ * costs up to 10s. That makes it safe on the `clients status` path, where it is
+ * the signal separating the Max enforcement level from Standard.
+ */
+export function hasTweakccPrompts(): boolean {
+  const promptsDir = getTweakccSystemPromptsDir();
+  if (!promptsDir) return false;
+  return PROMPT_FILES.some((pf) => fs.existsSync(path.join(promptsDir, pf.filename)));
+}
+
 export function detectTweakccPrompts(): {
   installed: boolean;
   promptsDir: string | null;
@@ -80,10 +92,7 @@ export function detectTweakccPrompts(): {
     return { installed: isTweakccInstalled(), promptsDir, hasOurPrompts: false };
   }
 
-  // Check if any of our prompt files already exist
-  const hasOurs = PROMPT_FILES.some((pf) => fs.existsSync(path.join(promptsDir, pf.filename)));
-
-  return { installed: true, promptsDir, hasOurPrompts: hasOurs };
+  return { installed: true, promptsDir, hasOurPrompts: hasTweakccPrompts() };
 }
 
 // ---------------------------------------------------------------------------

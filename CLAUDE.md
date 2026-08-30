@@ -177,7 +177,7 @@ Other tools are NOT TOON-enabled — they regressed in measurements (heterogeneo
   - `src/lsp/mappers.ts` — symbol ↔ LSP position mapping
   - `src/lsp/config.ts` — auto-detection of available servers (tsserver, pyright, gopls, rust-analyzer)
   - `src/lsp/protocol.ts` — hand-written LSP type definitions (zero external deps)
-- Edges have a `resolution_tier` column (a field value, not a tool) with possible values ranked `lsp_resolved` > `ast_resolved` > `ast_inferred` > `text_matched`
+- Edges have a `resolution_tier` column (a field value, not a tool) with possible values ranked `scip_resolved` > `lsp_resolved` > `ast_resolved` > `ast_inferred` > `text_matched`
 - Config schema: `lsp` section in `TraceMcpConfigSchema` (`src/config.ts`)
 
 ## Workflow Checklists — MANDATORY

@@ -79,7 +79,7 @@ describe('get_untested_symbols — behavioural contract', () => {
     // testFileSymbolNames map for "covered" gets populated.
     store.insertEdge(testFileNid, srcFileNid, 'imports', true, undefined, false, 'ast_resolved');
 
-    const result = getUntestedSymbols(store);
+    const result = getUntestedSymbols(store, undefined, undefined, false, 'all');
     const item = result.untested.find((u) => u.name === 'neverCalled');
     expect(item).toBeDefined();
     expect(item!.level).toBe('imported_not_called');
@@ -284,7 +284,7 @@ describe('get_untested_symbols — behavioural contract', () => {
       byteEnd: 40,
     });
 
-    const result = getUntestedSymbols(store);
+    const result = getUntestedSymbols(store, undefined, undefined, false, 'all');
     const orphan = result.untested.find((u) => u.name === 'orphanFn');
     const covered = result.untested.find((u) => u.name === 'neverCalled');
     expect(orphan?.level).toBe('unreached');
@@ -293,5 +293,73 @@ describe('get_untested_symbols — behavioural contract', () => {
     expect(result.by_level.unreached).toBeGreaterThanOrEqual(1);
     expect(result.by_level.imported_not_called).toBeGreaterThanOrEqual(1);
     expect(result.untested.some((u) => u.name === '[1.10.0]')).toBe(false);
+  });
+  // ─── TRA-515: default headline is the actionable `unreached` set ──────────
+  // `imported_not_called` is a direct-call-edge artefact and dominated the raw
+  // count (4558 of 5209 on this repo), making `total_untested` read as "95% of
+  // the codebase is untested". It is now opt-in.
+
+  it('defaults to level="unreached" and omits imported_not_called from the count', () => {
+    const orphanId = store.insertFile('src/orphan.ts', 'typescript', 'h1', 100);
+    store.insertSymbol(orphanId, {
+      symbolId: 'src/orphan.ts::orphanFn#function',
+      name: 'orphanFn',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+
+    const srcFileId = store.insertFile('src/covered.ts', 'typescript', 'h2', 100);
+    const symId = store.insertSymbol(srcFileId, {
+      symbolId: 'src/covered.ts::neverCalled#function',
+      name: 'neverCalled',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 40,
+    });
+    const testFileId = store.insertFile('tests/covered.test.ts', 'typescript', 'h3', 100);
+    store.insertSymbol(testFileId, {
+      symbolId: 'tests/covered.test.ts::otherTest#function',
+      name: 'otherTest',
+      kind: 'function',
+      byteStart: 0,
+      byteEnd: 30,
+    });
+    const testFileNid = store.getNodeId('file', testFileId)!;
+    store.insertEdge(
+      testFileNid,
+      store.getNodeId('symbol', symId)!,
+      'test_covers',
+      true,
+      undefined,
+      false,
+      'ast_resolved',
+    );
+    store.insertEdge(
+      testFileNid,
+      store.getNodeId('file', srcFileId)!,
+      'imports',
+      true,
+      undefined,
+      false,
+      'ast_resolved',
+    );
+
+    const def = getUntestedSymbols(store);
+    expect(def.level).toBe('unreached');
+    expect(def.untested.map((u) => u.name)).toEqual(['orphanFn']);
+    expect(def.total_untested).toBe(1);
+    // by_level still reports both tiers, so the fuller picture is not lost.
+    expect(def.by_level.unreached).toBe(1);
+    expect(def.by_level.imported_not_called).toBe(1);
+
+    // Opt-in tiers.
+    const all = getUntestedSymbols(store, undefined, undefined, false, 'all');
+    expect(all.total_untested).toBe(2);
+    expect(all.untested.map((u) => u.name).sort()).toEqual(['neverCalled', 'orphanFn']);
+
+    const weak = getUntestedSymbols(store, undefined, undefined, false, 'imported_not_called');
+    expect(weak.total_untested).toBe(1);
+    expect(weak.untested.map((u) => u.name)).toEqual(['neverCalled']);
   });
 });

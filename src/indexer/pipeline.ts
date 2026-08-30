@@ -182,6 +182,60 @@ export function canSkipFullPostprocess(args: {
   return currentHead === storedHead;
 }
 
+/** Content hashes that mark synthetic `files` rows minted by edge resolution
+ *  for external packages. They have no path on disk, so a scope reconcile must
+ *  never mistake them for stale rows. */
+const PHANTOM_CONTENT_HASHES = new Set(['__phantom__', '__phantom_pkg__']);
+
+/** The subset of a `FileRow` the scope reconcile needs to judge a row. */
+export interface ReconcilableFileRow {
+  id: number;
+  path: string;
+  language: string | null;
+  content_hash: string | null;
+}
+
+/**
+ * Pick the `files` rows a full reindex must delete: those the current walk no
+ * longer considers in scope.
+ *
+ * Indexing is otherwise upsert-only — `insertFile` does `ON CONFLICT DO UPDATE`
+ * and nothing ever removes what a previous run wrote. So every path any past
+ * version once walked stays in the index and in search results forever, even
+ * after the walker stopped visiting it: excluded dirs, vendored trees, a
+ * `.gitignore` rule added later. TRA-468 found a project where 93% of the
+ * symbol index came from git-ignored vendored code the current indexer walks
+ * right past, with a `lastIndexed` timestamp from the run that touched 10% of
+ * the rows.
+ *
+ * Rows kept regardless of scope:
+ *   - phantom/external package rows (no on-disk path by construction);
+ *   - `.env` rows, which `EnvIndexer` writes on its own pass after this one.
+ *
+ * Refuses to act on a scope it cannot trust — an empty walk (glob failure,
+ * unreadable root) or one truncated at `security.max_files`, where "not in
+ * scope" only means "past the cap".
+ */
+export function selectOutOfScopeFiles(args: {
+  files: ReconcilableFileRow[];
+  /** Repo-relative POSIX paths the current walk found. */
+  inScope: string[];
+  /** True when the walk hit `security.max_files` and was cut short. */
+  truncated: boolean;
+}): number[] {
+  const { files, inScope, truncated } = args;
+  if (truncated || inScope.length === 0) return [];
+  const keep = new Set(inScope.map((p) => p.split(path.sep).join('/')));
+  return files
+    .filter(
+      (f) =>
+        !keep.has(f.path.split(path.sep).join('/')) &&
+        f.language !== 'env' &&
+        !PHANTOM_CONTENT_HASHES.has(f.content_hash ?? ''),
+    )
+    .map((f) => f.id);
+}
+
 export interface IndexingPipelineDeps {
   /** Inject a daemon-shared ExtractPool. When provided, the pipeline never
    *  creates its own pool and dispose() does NOT terminate the shared one. */
@@ -341,7 +395,6 @@ export class IndexingPipeline {
       //     would be a false positive that automated quality gates would
       //     misinterpret as a regression.
       const skipShrinkCheck = force === true || this._postprocessLevel === 'none';
-      const before = skipShrinkCheck ? null : this.captureSizeSnapshot();
       if (this.config.children?.length) {
         this.workspaces = buildMultiRootWorkspaces(this.rootPath, this.config.children);
         logger.info({ workspaces: this.workspaces.map((w) => w.name) }, 'Multi-root workspaces');
@@ -359,6 +412,8 @@ export class IndexingPipeline {
       // The "from-scratch" signal is `totalSymbols === 0` — this works even
       // when `force=true` is passed (which would otherwise skip the shrink
       // check signal).
+      // Read BEFORE reconcileScope: an index whose every row went out of scope
+      // is still a live DB other connections may be reading, not a fresh one.
       const isFromScratch = (() => {
         try {
           return this.store.getStats().totalSymbols === 0;
@@ -366,6 +421,12 @@ export class IndexingPipeline {
           return false;
         }
       })();
+      // Reconcile before snapshotting: dropping rows the walk no longer owns is
+      // the intended outcome here, not the parser regression `checkShrink`
+      // hunts for. Repairing an index that was 93% stale would otherwise raise
+      // a shrink warning on the very run that fixed it.
+      this.reconcileScope(filePaths);
+      const before = skipShrinkCheck ? null : this.captureSizeSnapshot();
       if (isFromScratch) {
         logger.info('Engaging bulk-load mode for from-scratch index');
         enableBulkMode(this.store.db);
@@ -449,6 +510,39 @@ export class IndexingPipeline {
     }
   }
 
+  /** Rows dropped by the last `reconcileScope` — see its use in `runPipeline`. */
+  private _scopeRowsRemoved = 0;
+
+  /**
+   * Delete `files` rows (and their symbols/edges/entities) that the current
+   * walk no longer owns. Full reindex only — the incremental path is handed a
+   * few paths and knows nothing about the rest of the tree.
+   *
+   * This is also the repair path for an index poisoned by an older version:
+   * the daemon runs `indexAll` per project on start, so a stale index converges
+   * without any explicit `trace-mcp doctor --fix` step.
+   */
+  private reconcileScope(inScope: string[]): number {
+    const maxFiles = this.config.security?.max_files ?? IndexingPipeline.DEFAULT_MAX_FILES;
+    const staleIds = selectOutOfScopeFiles({
+      files: this.store.getAllFiles(),
+      inScope,
+      // ponytail: collectFiles truncates silently, so infer it from the count
+      // rather than widening its return type for one boolean.
+      truncated: inScope.length >= maxFiles,
+    });
+    this._scopeRowsRemoved = staleIds.length;
+    if (staleIds.length === 0) return 0;
+    this.store.db.transaction(() => {
+      for (const id of staleIds) this.store.deleteFile(id);
+    })();
+    logger.info(
+      { root: this.rootPath, removed: staleIds.length, inScope: inScope.length },
+      'Dropped index rows for files no longer in scope',
+    );
+    return staleIds.length;
+  }
+
   deleteFiles(filePaths: string[]): void {
     if (filePaths.length === 0) return;
     this.store.db.transaction(() => {
@@ -469,6 +563,9 @@ export class IndexingPipeline {
   ): Promise<IndexingResult> {
     const result = this._lock.then(async () => {
       this._isIncremental = true;
+      // Incremental runs never reconcile scope; clear the flag a prior
+      // indexAll left behind so it can't force a postprocess here.
+      this._scopeRowsRemoved = 0;
       // Default to 'minimal' for incremental runs. Watcher/hook/register_edit
       // callers don't override; full postprocess (LSP + env + snapshots) was
       // the source of 3-11s outliers visible in daemon.log on single-file
@@ -488,6 +585,11 @@ export class IndexingPipeline {
       const ownedByDescendant = descendantGlobs.length
         ? picomatch(descendantGlobs, { dot: true })
         : undefined;
+      // Same gate collectFiles() now applies. The watcher already dropped
+      // git-ignored events, but hooks, `register_edit` and the HTTP reindex
+      // endpoint reach here directly and would otherwise re-add rows the full
+      // walk excludes — putting the index straight back out of sync (TRA-468).
+      const gitignore = this.gitignoreMatcher();
       const relPaths: string[] = [];
       for (const fp of filePaths) {
         const rel = path.isAbsolute(fp) ? path.relative(this.rootPath, fp) : fp;
@@ -503,6 +605,10 @@ export class IndexingPipeline {
         }
         if (ownedByDescendant?.(relPosix)) {
           logger.debug({ file: rel }, 'Skipped: owned by a more-specific registered project');
+          continue;
+        }
+        if (gitignore?.isIgnored(relPosix)) {
+          logger.debug({ file: rel }, 'Git-ignored path skipped in indexFiles');
           continue;
         }
         relPaths.push(rel);
@@ -558,6 +664,9 @@ export class IndexingPipeline {
     this.registry.clearCaches();
     this._changedFileIds.clear();
     this._gitignore = new GitignoreMatcher(this.rootPath);
+    // Note: `_scopeRowsRemoved` is deliberately NOT reset here — indexAll sets
+    // it just before calling us and the postprocess gate below reads it. It is
+    // reset by `indexFiles`, which never reconciles.
     this._traceignore = new TraceignoreMatcher(this.rootPath, this.config.ignore);
     this.registerFrameworkEdgeTypes();
 
@@ -578,7 +687,10 @@ export class IndexingPipeline {
       const skipPostprocess =
         this._postprocessLevel !== 'none' &&
         canSkipFullPostprocess({
-          force,
+          // A scope reconcile just deleted files (and their edges): HEAD may be
+          // unchanged and extraction may have hash-skipped everything, but the
+          // graph is not the one we stamped. Re-resolve.
+          force: force || this._scopeRowsRemoved > 0,
           indexed: result.indexed,
           errors: result.errors,
           totalEdges: this.store.getStats().totalEdges,
@@ -784,6 +896,8 @@ export class IndexingPipeline {
       () => edgeResolver.resolveEsmImportEdges(scope),
       () => edgeResolver.resolvePythonImportEdges(scope),
       () => edgeResolver.resolvePhpImportEdges(scope),
+      () => edgeResolver.resolveGoImportEdges(scope),
+      () => edgeResolver.resolveJavaImportEdges(scope),
       () => edgeResolver.resolvePhpCallEdges(scope),
       () => edgeResolver.resolveTypeScriptCallEdges(scope),
       () => edgeResolver.resolveTypeScriptTypeEdges(scope),
@@ -1174,12 +1288,29 @@ export class IndexingPipeline {
     }
   }
 
+  /** The active `.gitignore` matcher, or undefined when `ignore.gitignore` is
+   *  off. Built on demand — `collectFiles()` runs before `runPipeline()`
+   *  refreshes the matchers, and on a first index there is nothing to refresh. */
+  private gitignoreMatcher(): GitignoreMatcher | undefined {
+    if (this.config.ignore?.gitignore === false) return undefined;
+    this._gitignore ??= new GitignoreMatcher(this.rootPath);
+    return this._gitignore;
+  }
+
   private async collectFiles(): Promise<string[]> {
+    // Built here rather than read from the field: on a first index
+    // `runPipeline` has not run yet, so `_traceignore` was undefined and the
+    // opening walk silently ignored .traceignore entirely.
+    this._traceignore = new TraceignoreMatcher(this.rootPath, this.config.ignore);
+    // Rebuilt per walk so an edit to .gitignore takes effect on this run, not
+    // the next one.
+    this._gitignore = new GitignoreMatcher(this.rootPath);
     return collectFilesImpl({
       config: this.config,
       rootPath: this.rootPath,
       workspaces: this.workspaces,
       traceignore: this._traceignore,
+      gitignore: this.gitignoreMatcher(),
       maxFiles: this.config.security?.max_files ?? IndexingPipeline.DEFAULT_MAX_FILES,
     });
   }

@@ -16,6 +16,7 @@ import path from 'node:path';
 import { isDangerousProjectRoot } from '../dangerous-root.js';
 import { getDbPath } from '../global.js';
 import { logger } from '../logger.js';
+import { isEphemeralProjectRoot } from '../registry.js';
 import {
   extractRoutesFromDb,
   parseContracts,
@@ -266,6 +267,14 @@ export class SubprojectManager {
    * and register each as a subproject bound to this project.
    * Unlike add(), this doesn't add the project itself — it discovers
    * sub-services (from docker-compose, workspace structure, or root markers).
+   *
+   * TRA-527: skipped for one-shot agent-run checkouts. topology.db is global
+   * and nothing ever deletes a row for a workdir that was never in
+   * registry.json, so every run left permanent services/subprojects rows for a
+   * scratch copy of a repo the canonical project already covers — 260 of 320
+   * distinct project roots on the reported machine, all of it fan-out that
+   * every scoped topology query pays for (TRA-470). Explicit `subproject add`
+   * still works on such a root; only the automatic sweep backs off.
    */
   async autoDiscoverSubprojects(
     projectRoot: string,
@@ -274,6 +283,7 @@ export class SubprojectManager {
     },
   ): Promise<{ services: SubprojectAddResult[] }> {
     const absProjectRoot = path.resolve(projectRoot);
+    if (isEphemeralProjectRoot(absProjectRoot)) return { services: [] };
     if (!fs.existsSync(absProjectRoot)) {
       throw new Error(`Project path does not exist: ${absProjectRoot}`);
     }
@@ -817,14 +827,18 @@ export class SubprojectManager {
     return _detectBreakingChanges(this.topoStore, ep);
   }
 
-  /** Search across all subprojects — delegates to subproject-search module. */
+  /**
+   * Search subprojects reachable from `projectRoot` (the project's own
+   * subprojects plus its siblings when it is one itself), excluding
+   * `projectRoot` itself. Delegates to the subproject-search module.
+   */
   subprojectSearch(
     query: string,
     filters?: { kind?: string; language?: string; filePattern?: string },
     limit = 20,
-    excludeRoot?: string,
+    projectRoot?: string,
   ): SubprojectSearchResult {
-    return _subprojectSearch(this.topoStore, query, filters, limit, excludeRoot);
+    return _subprojectSearch(this.topoStore, query, filters, limit, projectRoot);
   }
 
   /**

@@ -303,9 +303,21 @@ in the app.
 
 | Size | Height | Use |
 |---|---|---|
-| `small` | 20px | dense toolbars, inline controls |
+| `small` | 20px | dense toolbars, inline controls — **buttons only** |
 | `regular` | 24px | **the default** |
 | `large` | 28px | the single prominent action on a surface |
+
+**A size tier is only offered where the control can survive it (TRA-522).** The tiers
+are heights, not permissions: a control that spends part of its height on its own
+chrome has less left over than the number suggests. The segmented control pays a 2px
+inset at each edge, so a 20px track holds a 16px segment holding a 13px label — 2px of
+air, which is not a small control, it is a crushed one. `SegmentedControl` therefore has
+no `small`; its smallest size is 24px. A button at 20px is fine, because a button pays
+no inset.
+
+Consequence for the toolbar: **every control on one toolbar row is the same height.**
+The Workspace toolbar runs a 24px search field and two 24px buttons; a 20px view toggle
+beside them was two defects at once — a squeezed label and a broken baseline.
 
 ### Hit targets: ≥ 24×24, always
 
@@ -319,6 +331,10 @@ The two techniques in use, both worth copying:
   without moving a single painted pixel. Small buttons get all four sides; segmented
   items get vertical only, because they already clear 24px wide and the 2px inter-segment
   gap is not wide enough to share.
+
+A hit-target hack that has to reach further than `-2px` is a warning, not a fix: it says
+the painted control is too small for what it is. The segmented control's `-4px` variant
+was that warning, and it went away with the 20px tier it propped up (TRA-522).
 
 ### Radii — concentric, from the scale
 
@@ -412,12 +428,48 @@ unreachable") is not an inert control. Dimming it to `opacity: 0.4` put the only
 progress text on Project Overview at 2.3:1. `is-status` keeps it unpressable and keeps
 the sentence readable (4.76:1 on surface). Use it whenever the label is information.
 
+It applies on `v-prominent` too, and there it also has to keep `--on-accent`:
+`--label-secondary` is a label colour for an untinted surface, and on the accent fill
+it is dark-on-blue.
+
+### Work in progress has to move
+
+A control that is unpressable **because its own action is running** is the app's only
+report on that action, and a still frame of it is indistinguishable from a hung app.
+The sidebar's update card dimmed `Updating…` to `opacity: 0.4` — measured 1.37:1 light
+and 2.77:1 dark on the running window — and drew nothing else for the several minutes
+a download takes. Two things are required, not one: the label stays legible
+(`is-status`, 5.22:1 / 4.77:1 after), and something on screen moves.
+
+**Indeterminate when the work is indeterminate.** `apply-update` is a single opaque
+`execFile` of `npm install -g`; there is no byte count, so there is no percentage, and
+inventing one is worse than admitting it. A 4px capsule track with a travelling accent
+segment says "running" without claiming a position. Check what the source actually
+reports before designing around its absence.
+
+**Motion is not the message, so reduced motion still has to say it.** The global
+`prefers-reduced-motion` rule in `tokens.css` stills every animation, which parks a
+travelling segment off the end of its own track and leaves the state with no signal at
+all. Give the reduced-motion path its own resting form — the bar fills at 55% accent
+— rather than letting the global rule silently erase the state.
+
+**Loop with `linear`.** An eased loop decelerates into its turnaround, which is
+precisely where an indeterminate segment is least visible. This is the one place in
+the app where `linear` is correct (§4 *Motion*).
+
 ### The row system — `.ws-sb-row`
 
 A **row** is the sidebar's unit of content: 28px tall, 6px radius, inset 6px from the
 sidebar edges, `8px` internal padding, 8px gap, a 16px icon slot, a 13px label that
 truncates, and an optional trailing count in tabular figures. Label text starts at
 x=38 in every row.
+
+**A file row leads with the filename, not the path.** The name is what identifies
+the row, so it gets `--label` and the front of the line; the *leaf* directory follows
+it in `--label-secondary` and is the only part allowed to shorten. Never the reverse —
+a path-first row spends its width on `src/renderer/tabs/` and then eats the filename's
+extension, which is the one token the reader was looking for (TRA-503). Everything
+above the leaf belongs in the row's tooltip.
 
 **Anything that lives in the sidebar is a row.** Nav items are rows. Settings is a row.
 The idle update banner is a row. The footer was the last strip running its own
@@ -441,6 +493,92 @@ whole indicator; the open menu is the rest of it
 (`.ws-sb-row[aria-expanded='true']:focus-visible { box-shadow: none }`). The ring
 stays for the case it is actually for: the row focused with the menu closed.
 
+### A pinned column shades what it covers, or it is lying about the table
+
+A table wider than its pane freezes its identity columns left and its actions right, and
+the rows then slide *underneath* them. That is only legible if the pinned column casts a
+shade over what it covers. Without one the covered content simply stops, and a table
+whose last visible column is Symbols reads as a table that ends at Symbols — at the
+default 960×700 window the workspace table is 1025px in a 707px pane, so four of its ten
+columns sat under the Actions pin with nothing to say so, and a right-aligned `1,043`
+painted down to `1,0`, which reads as the value rather than as half of it.
+
+The shade is `±10px 0 12px -10px var(--scroll-edge-shade)` alongside the hairline, and it
+is **directional**: only the side that still hides content is coloured, so a table
+scrolled to its end shows a plain seam. Toggle it by writing the colour, not the shadow —
+`--edge-shade-left` / `--edge-shade-right` on the scroll container is one style write per
+scroll event instead of a boolean threaded through every cell.
+
+**`box-shadow` does not paint on a cell in a collapsed table.** Chromium drops it, so a
+seam declared on a `td` under `border-collapse: collapse` is a seam that does not exist —
+this one was declared in TRA-265 and never rendered a pixel. Tables that pin columns use
+`border-collapse: separate` with `border-spacing: 0`, which also moves the row hairline
+from the `<tr>` (ignored in the separated model) onto the cells.
+
+### A card is a control or it is a readout, and the resting screen shows no selection
+
+Three rules for any strip that mixes numbers with filters — the workspace KPI grid is
+the one we have, and it broke all three at once (TRA-475).
+
+**A mark that means "on" never sits on a tile that is off.** The accent border on the
+KPI strip means "this tile's filter is narrowing the list below". Projects carried it
+whenever *no* filter was on, which is the state every launch opens to: one tile ringed
+in accent, `aria-pressed="true"`, directly above a list showing everything. "Nothing is
+filtered" is drawn by six identical `--separator` hairlines, not by electing a tile to
+stand for *all*. A chip row may have an explicit **All** chip; a row of counts may not,
+because there the mark is the only thing distinguishing a control from a number.
+
+**A readout is content, so it is a `<div>`.** `<button disabled>` puts a number into the
+accessibility tree as a control the user is told they may not operate, when there was
+never a control. Dimming is for an action that exists and is unavailable now.
+
+**A card that is a control answers the pointer.** `cursor: pointer` — a `<button>` in
+Chromium defaults to `default` — plus a `--fill-quaternary` hover, applied as a second
+background *layer* so the card stays opaque `--surface`. That keeps `--label-secondary`
+on the footnote at 4.64:1 light / 5.37:1 dark; `--fill-tertiary`, which is what a chip
+hovers to, puts it at 4.45:1, and that measurement is why the *selected* tile is a
+border rather than a tint. The background therefore lives in `controls.css`, not in the
+component's `style` prop: an inline `background:` shorthand also writes
+`background-image: none` inline, which no stylesheet rule can outrank.
+
+### A row action reports its own result, and the same click is not asked N times
+
+Three rules, all broken at once on MCP clients (TRA-497), all about a list whose rows
+carry an action.
+
+**A control that ran reports what happened, on the row.** Connect and Update spawned
+`trace-mcp init` with `--mcp-client cursor` as one argv entry — `execFile` takes an
+array, so that is a single unknown option, and commander exits 1 before doing anything.
+The renderer read `result?.ok` and, when it was false, *did nothing*: no refresh, no
+sentence, no changed state. So every action on that screen had been inert since the
+screen shipped in April, and looked exactly like an action with nothing to do. Four
+months of nobody noticing is what a swallowed result buys. A write that failed says so
+in the row's caption slot, in `--status-red`, with a glyph beside it — the failure
+outranks whatever the caption held before, because it is the only thing on the row the
+user can act on. The row keeps its button: a report is not a dead end.
+
+**An action offered on N rows that are one bucket is offered once for the bucket.** If
+the list already sorts those rows together — MCP clients ranks `stale` to the top —
+then the screen has already decided they are one thing, and making the user click N
+times is the screen refusing to act on what it knows. The action goes in the **section
+header**, not the toolbar: the toolbar speaks for the surface, and a surface with two
+lists has no business putting one list's action there. `Section` takes an `action` slot
+for exactly this. It appears from **two** rows up; at one row the row's own button is
+the shorter path and a second control is only more to read. Its label carries the size
+of what it will do (`Update all · 6`), it runs the items one at a time so a row that
+fails names itself, and it counts up while it works. Its right edge lines up with the
+column of row buttons under it (12px in), not with the caption beside it (4px) — the
+edge the eye compares is the one directly below.
+
+**Setup asks; repair does not.** The same handler drove Connect and Update, so
+repairing a config that had drifted re-opened the enforcement-level menu — a setup
+question, asked about a config whose answer was already on disk, with no indication of
+which level it was on. Whatever the user picked silently became the new level. A repair
+reconciles what drifted and touches nothing else; if the only available call cannot
+promise that, the call is wrong, not the rule. `trace-mcp clients update` exists because
+`init` could not make that promise: every flag combination it has either installs hooks
+and tweakcc or writes `tools.agent_behavior = "off"`.
+
 ### States are part of the component, not an afterthought
 
 Every data surface owes four states, and each has a house form:
@@ -453,8 +591,12 @@ Every data surface owes four states, and each has a house form:
   tall, 20px glyph, 13px title). An empty section is not a hero.
 - **Error** — the chrome stays put; the sentence and its Retry action sit together.
   Each section tracks its own load state. A failed fetch must not pulse a skeleton
-  forever promising data that is never coming — settle on an em dash and
-  "Couldn't be measured".
+  forever promising data that is never coming — settle on an em dash, and leave the
+  sentence to the surface that knows why (see the next section). A fetch only
+  *fails* if it can: every request to the
+  daemon carries `AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS)`, because a wedged
+  daemon still holds its port open and a connect that never completes leaves the
+  loading state with nothing to leave it (TRA-478).
 - **Unknown ≠ empty ≠ zero.** "The daemon has not answered yet" and "this project was
   never indexed" are different sentences. "0 of 0 dependencies covered" is an empty
   state, not a full green meter.
@@ -473,12 +615,115 @@ does not blink a banner with it, while recovery publishes immediately. Escalatin
 makes a working app look broken. Keep apart only what the user would act on differently —
 "busy" and "not running" are two states because one is a wait and the other is a button.
 
+**A surface whose every section reads one source states its failure once, at
+surface level.** Five sections that each fetch from the daemon do not produce five
+pieces of information when the daemon is down — they produce one, said five times.
+Project Overview said it six: the toolbar chip, Guard's own line, and four
+`SectionError`s that each claimed "the daemon may still be indexing", the *wait*
+diagnosis, about a process that was not running, each with a Retry aimed at a
+socket that was refusing (TRA-469). The pane takes the one statement and the one
+button; whatever else was going to say it steps aside, the same way the Workspace
+banner steps aside for `DaemonDownPane`.
+
+The corollary, and the reason this is a rule rather than a fix: **the shared error
+primitive must not name a cause it cannot know.** `SectionError` renders one
+catalogue string in all ten locales; a section that cannot tell "busy" from "not
+running" must not pick one. Deciding that is the surface's job, because the
+surface is what holds the daemon state.
+
+**The test for "down" is a shared reducer, not a fresh `!connected`.**
+`deriveDaemonState()` already encodes that a daemon which has not answered *yet*
+is not one that is failing to. `connected` is false for the first moments of every
+mount, so a surface that invents its own check flashes a daemon-down pane on every
+open.
+
+**Reading one of the reducer's three values is not reading the reducer, and `stale`
+means nothing on a surface that caches nothing.** `deriveDaemonState()` returns
+`ok`, `stale` and `unreachable`; a surface that tests `=== 'unreachable'` has left
+the other two rendering as if the daemon were fine. Workspace can afford `stale`
+because it has the last KPI numbers to keep on screen under a line that qualifies
+them. Project Overview has no cached section data, so `stale` there is not "last
+known values" — it is every section failing at once, which is the state the pane
+exists to replace. A surface with nothing to keep on screen has two states, not
+three (TRA-489).
+
+Two corollaries, both of which shipped broken behind the first version of that test:
+
+- **`ok` is also returned while the daemon is still loading, and a surface that
+  fires its own fetches under that answer will render their failures before the
+  reducer concedes.** Four local fetches against a refused socket fail in
+  milliseconds; `useDaemon` takes up to `DAEMON_FETCH_TIMEOUT_MS`. Don't ask a
+  daemon that has not answered yet — hold the fetches, and the sections stay on
+  their skeletons instead of racing to an error. This is what makes such a bug look
+  intermittent: whether you see it depends on which finished first, so a harness
+  that samples once, late, will report it fixed.
+- **A cached status indicator has to step aside too.** A `stale` daemon still holds
+  `status: 'ready'` from its last answer, and a green dot over a pane reading "The
+  daemon isn't running" is the second statement the rule above forbids — and the
+  wrong one. Whatever renders the last snapshot goes neutral when the surface has
+  declared the source gone.
+
+**An empty list and no list are two different facts, and a `catch` that writes `[]`
+destroys the difference.** The empty state is then free to explain a result that
+was never received: the sidebar's file list told the user "No indexed files match
+this scope" about a fetch that had been refused by a socket, four inches from the
+pane that was correctly saying the daemon was not running (TRA-471). A list keeps
+whether it was answered, and asserts a cause only for the empty answer it actually
+got. What it does when it was not answered is *nothing* — the surface holding the
+daemon state has already said it once, and a second sentence would only compete.
+Its refresh affordance stays, though: a control that re-fetches is the list's own
+way back when the daemon returns, and hiding it would trade a wrong sentence for a
+dead end.
+
 **Values that were true a minute ago outrank no values at all.** A refresh that fails must
 leave the last good ones on screen, cache them across launches, and say once — above them,
-where they are read before the numbers are — that they are the last indexed ones. Em dashes
-and "Couldn't be measured" are for a number nobody has ever had, not for one that is a few
-minutes old. The corollary: that line has to match the screen. Saying "these are the last
-indexed numbers" over a row of em dashes is the same lie in the other direction.
+where they are read before the numbers are — that they are the last indexed ones. An em dash
+is for a number nobody has ever had, not for one that is a few minutes old. The corollary:
+that line has to match the screen. Saying "these are the last indexed numbers" over a row of
+em dashes is the same lie in the other direction.
+
+**The placeholder is the whole statement. A card with no number explains nothing.**
+The em dash *is* the sentence "we don't have this" — give it an accessible name
+(`aria-label="Not available"`) and stop. The comparison slot underneath answers
+"compared to what?", and a failure message is not a comparison; putting one there
+multiplies the diagnosis by the number of cards on the strip. Six KPI tiles each
+captioned "Couldn't be measured" said it four times *under a banner promising the
+numbers were on their way*, and six times *over a pane already headed "The daemon
+isn't running"* — the two states in which the caption could appear at all (TRA-488).
+This is the same rule as the paragraph above, applied one level down: the surface
+holding the daemon state says it; the cards inside it go quiet. A tooltip repeating
+the sentence when the tile is too short for a caption is the same defect with a
+smaller audience.
+
+**One source gets one verdict on whether it is knowable.** Two readings off the same
+array must not disagree about whether the array is there. The Workspace strip is a
+single `deriveKpis(projects)` call — `totalProjects` is that array's length,
+`totalFiles` a sum over its elements — but Projects and Indexing were gated on
+`listFailed` while Files, Symbols, Healthy and Needs attention were gated on
+`metricsFailed`. The split was true when the two halves had two upstreams; they merge
+in `mergeIntoViewModel` before either flag is read. So with the daemon down the tile
+that *counts* the array printed an em dash beside four tiles that *summed* it, over a
+pane promising "nothing was lost" — and the strip disproved itself two tiles along,
+where Healthy's comparison line ("grade A or B, no security findings" rather than "no
+projects yet") is chosen by `totalProjects > 0` (TRA-495). When flags multiply,
+re-derive them from what the values actually read, not from what they used to read.
+
+**A delta is a statement about now; a snapshot has no now.** Stale values stay
+(paragraph above), but every comparison that asserts *change* goes: `↑ +21.4k vs 3
+hours ago` in `--status-green` is a claim to have measured 21,400 new files, made by
+an app whose next paragraph is that it cannot reach the thing that measures. Not
+storing a baseline in that state is not enough — the baseline that was already rolled
+gets displayed on the frame *after* the connection drops, which is the frame every
+user sees. Fall back to the comparisons that survive a snapshot: a criterion ("grade
+A or B, no security findings") or a ratio ("1,787 per project"). The slot is never
+left empty.
+
+**A stock survives the source dying; an activity reading does not.** Files, symbols
+and project counts sit on disk whether or not the daemon answers, so they go stale.
+"Indexing" is a count of what is happening right now, and nothing is: it keeps its em
+dash while the tiles beside it keep their numbers. That is not the inconsistency the
+paragraph above forbids — it is the one distinction on the strip that is real, and
+each tile follows from what it measures.
 
 ---
 
@@ -598,19 +843,37 @@ Opening a project opens a native macOS **tab**, so the normal state of this app 
 tabbed window — not an edge case. AppKit then draws a tab bar, and because the window is
 `titleBarStyle: 'hiddenInset'` (full-size content view) it draws it **over** the web
 contents: `innerHeight` stays equal to `outerHeight`, nothing reflows, and the tab bar
-simply covers the top 36px of whatever the renderer painted. That is the whole of the
+simply covers the top 20px of whatever the renderer painted. That is most of the
 band above, so the surface toolbar and the sidebar toggle went from "misaligned" to
 "gone" (TRA-399).
 
 The rule that follows: **a band we do not draw still has to be reserved.** The tab bar is
 AppKit's, we cannot restyle it and we cannot ask whether it is up — so:
 
-- `MAC_TAB_BAR_H` (36px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
+- `MAC_TAB_BAR_H` (20px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
   number, exactly like `TOP_BAND_H`. The stage reserves it with `padding-top` while
   `data-tabbar="on"`, and the app's own band starts below it. Never draw into it.
+- **A geometry we do not draw is measured from two independent landmarks, never one.**
+  This constant shipped wrong twice off a single reading — 36 (TRA-370), then 28
+  (TRA-432) — because each time one landmark was found, believed, and shipped. Take
+  both: where the bar's own plate stops (the same row at every x across the window),
+  and where the control it carries is centred (the selected tab's pill). They have to
+  agree; when they do not, neither is the answer yet. Measured on macOS 26.5 /
+  Electron 41.10.6 at 2x: plate ends at 20.0, tab pill spans 0.5–17.5, centre 9.0.
+- **Every pixel of surplus in a reserved band is visible twice.** It renders as a dead
+  strip of window backdrop under the bar, and it drops the traffic lights by half its
+  height, because they are centred in what this number says. 36 put them 8px below the
+  tabs; 28 put them 4px below (TRA-523, reported twice before it was measured right).
+- **Assert chrome geometry against something outside the constant.** 28 went back to 36
+  on its own when an unrelated PR was squashed from a stale base (#659), and the suite
+  stayed green: the only assertion compared `MAC_TAB_BAR_H` with itself. A test written
+  against a measured AppKit landmark fails on both a bad re-measurement and a silent
+  revert; a test written against the constant fails on neither.
 - **The traffic lights belong to whichever band holds the top line**, not to a constant.
-  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 36px tab bar
-  (centre 18). `trafficLightYFor(tabBarVisible)` is the only place that chooses.
+  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 20px tab bar
+  (centre 10, the tab pill's own centre line). `trafficLightYFor(tabBarVisible)` is the
+  only place that chooses, and `tab-chrome.test.ts` asserts the result against the
+  measured tab centre — not against `MAC_TAB_BAR_H`, which is the number under suspicion.
 - **`trafficLightPosition` is applied once, at window creation, and AppKit re-lays the
   title bar out under it.** So every event that can change the tab count re-applies it —
   `show`, `focus`, `closed`, `did-finish-load` — synchronously and again a frame later,
@@ -705,6 +968,9 @@ What the row has to get right, all of it enforced by
   the segment, little outside the pill*: the default 24px track, 24×20 segments, a
   12px glyph — 6px beside the icon, 4px above it, and 3px between pill and row.
   A segment never goes under the 24px hit-target floor to look squarer.
+  *Follow-up (TRA-522): dropping `sz-small` here fixed this row and left the tier
+  standing, so the identical squeeze shipped again on the Workspace toolbar. The tier
+  is now deleted — the segmented control has no size below 24px.*
 
 ### Every string comes from the catalogue, and the length is not yours to assume
 
@@ -731,33 +997,27 @@ Three consequences for layout, all of them the usual way a translated UI breaks:
   not offered: it gives English "2h ago" and Russian "-2 ч".
 
 **The Language control** follows "a choice in a menu is one row" above, and the option
-count decides the shape: a segmented pill while there are two to four languages, a
-pop-up button on the same row shape once there are more — language names are words,
-not glyphs, and the list is only going to grow. Language names are written in their
-own language ("Русский", not "Russian"): someone hunting for their language is
-looking for what they call it.
+count decides the shape: a segmented pill for two to four values, a pop-up button on
+the same row shape once there are more. Language names are words, not glyphs, and the
+list only grows — so the pop-up is where this lands and stays.
 
-As shipped (TRA-388), with two languages, that is a pill — and the first **word**
-segments the row has carried, which is a mode of `MenuChoiceRow`, not a second
-control: a `MenuChoice` gives `text` instead of `icon` and the track takes `is-text`.
-Two things come back off the icon geometry, and both are the same rule seen twice —
-*a word is its own fallback, a glyph is not*:
+As shipped, that is `MenuPopUpRow` (#594): a native pop-up in the Theme row's shape,
+one up/down stop, and changing it still does not close the menu. The word-segment mode
+`MenuChoiceRow` briefly grew for a two-language pill is **deleted**, along with its
+CSS — a pill segment is a glyph again. The pill's measurements are gone with it; the
+numbers this section used to carry described that control and are not carried forward,
+because a measurement quoted for a control that no longer exists is worse than none.
 
-- **The visible text is the two-letter form, the full name is the accessible name.**
-  A segment has room for "EN", not for "Русский"; `aria-label` and `title` carry the
-  name in full, exactly as the icon segments carry theirs. The pop-up button in
-  Settings has the width, so there it is the full name.
-- **A word segment keeps its padding and its colour.** `0 8px` puts the segment at
-  34px against the icon square's 24px — measured 73.9px for the two-language track,
-  right-aligned with the Theme pill and an item's shortcut so the rows share a column.
-  *The column is 8px in from the item's right edge, not a fixed x*: the menu is sized
-  by its longest label, so it is 220px wide in English and 283.9px in Russian, and the
-  two tracks end at 214.5 and 278.4 respectively. Measure the inset, not the
-  coordinate — a number read off an English build looks like a regression in any other
-  language. And unselected stays at `--label` (13.11:1 light, 8.88:1 dark)
-  rather than dropping to `--label-secondary`: the dimming exists because an
-  unselected icon has only the 1.19:1 thumb to go on, and dimming a readable word
-  would say "disabled" instead of "not chosen".
+Two rules survive the change of shape:
+
+- **Both names, one line, own name first.** The picker prints `简体中文 — Chinese
+  (Simplified)`: the own name is what a reader of that language scans for, the English
+  name is the only handle everyone else has for telling four unfamiliar scripts apart.
+  English, whose two names are the same word, is not printed twice.
+- **Measure the inset, not the coordinate.** The menu is sized by its longest label, so
+  it is one width in English and another in Russian. A right-edge x read off an English
+  build looks like a regression in every other language; the invariant is the 8px inset
+  from the item's right edge, shared with the Theme row and an item's shortcut.
 
 **Both surfaces read `LOCALES`**, through `localeOptions()` in `renderer/i18n/`, the
 same way Theme's two surfaces read `appearanceOptions()`. And unlike Theme, Language
@@ -813,7 +1073,45 @@ the pane with one `ResizeObserver` and derive from it. `Workspace.tsx` is the pa
 `TABLE_MIN_PANE_W` is *computed* from the table's own frozen columns plus a minimum
 scroll window, and `isDensePane()` compares the pane's height against
 `kpiStripHeight(paneW)` rather than against a guessed breakpoint — which is why it
-reproduces the measured 357px exactly instead of drifting from it.
+reproduces the strip's measured height exactly instead of drifting from it.
+
+**A pane-derived layout number is measured before the first paint.** A
+`ResizeObserver` first reports on the frame *after* the initial commit, so anything
+read off `pane.w` in that commit is read off zero — and zero is a real answer to
+these functions, not a no-op. Take the first measurement synchronously in a
+`useLayoutEffect` (`getBoundingClientRect()` on the same ref), and leave the observer
+for everything after it. Sampled every animation frame in the Electron window at
+1000×800 with only the observer: the first painted frame of the KPI strip was one
+column of 748px tiles in a 780px strip, settling to three 239px tiles in a 268px
+strip ~5ms later — the exact geometry TRA-467 had just removed, plus a 512px jump
+that starts the project list below the window edge on every launch. The danger grows
+the more layout the number decides: it was invisible while `pane.w` only chose
+between a table and a list, and became a full-strip reflow the day it also chose the
+column count.
+
+**A card grid responds by changing its column count, never its card width.** Cards
+in a dashboard are one size at any given width — the reader compares them, and a
+card that is wider than its neighbour is making a claim the data is not making.
+So the KPI strip is a `grid` of equal `minmax(0, 1fr)` tracks, and only the number
+of tracks reads the pane.
+
+Do not build it out of `flex-wrap` plus `flex: 1 1 <basis>`. That packs as many
+cards as fit and then hands the whole leftover width to whichever cards landed in
+the last row. Measured in the Electron window at a 1000px window: five tiles at
+137px and a sixth at **748px**, all six carrying the same three lines (TRA-467).
+The stretch is not a fallback that only fires at odd sizes — it fires at every
+width where the count does not divide evenly, which included the app's own
+default.
+
+**Pick a column count that divides the number of cards** (six cards → 6 / 3 / 2 / 1).
+Then every row is full, so there is no ragged tail to stretch and no trailing dead
+space either — the two things a card grid can get wrong, removed by the same
+constraint.
+
+**The count and the strip's height are one number.** `kpiColumns(paneW)` in
+`workspace/Workspace.tsx` is the single source; `kpiStripHeight()` divides by it
+rather than re-deriving the packing rule, and `isDensePane()` reads that. Two
+copies of a layout rule is the failure recorded under "The top band".
 
 **What gives way, in order.** Never the identity of the screen; always the
 elaboration.
@@ -827,6 +1125,24 @@ elaboration.
    own choice back.
 3. **A toggle whose alternatives are unusable is hidden, not disabled.** A disabled
    segment is a control with nothing to choose; it returns with the width.
+
+### A content overlay is clamped by its pane, never by the window
+
+An overlay opened from inside the content pane — popover, dropdown, HUD — belongs to that
+pane. `position: fixed` puts it in window coordinates, so anything that clamps it against
+`window.innerWidth` will happily park it on top of the sidebar: navigation chrome that a
+content overlay must never cross (§1). TRA-524 shipped exactly that — the Graph filter
+panel is 571px wide, hangs off a Filter button 860px in with `align="end"`, and landed at
+`left: 8` over 251px of sidebar.
+
+`FloatingLayer` takes `boundsRef` for this. Pass the pane's element and the layer clamps
+its left/right edge — **and caps its width** — to that pane's box instead of the window's,
+re-clamping through a `ResizeObserver` when the pane changes size under it. A layer wider
+than its pane shrinks; it does not spill. Omit `boundsRef` only for a layer that genuinely
+belongs to the window: the application menu, a context menu at the cursor.
+
+Sidebar collapsed, sidebar at 180 and at 320, and the 640px window minimum are four
+different pane boxes. Check the overlay in all of them, not just the one you developed in.
 
 ---
 
@@ -903,7 +1219,12 @@ Not a pass at the end. These are floors.
     opacity only.
 18. Never make `<main>` a drag region.
 19. Never report "unknown" as "zero", or a lost connection as lost data.
-20. Never hand-roll a control that exists in `lattice/ui`.
+20. Never hand-roll a control that exists in `lattice/ui`. This includes hand-rolling
+    a *container*: a tile is `Card`, not `--fill-tertiary` plus a radius you picked.
+21. Never a status-coloured button. The one default action is the accent capsule; the
+    status is carried by the title, its glyph and the card's border.
+22. Never show work in progress as a dimmed control and nothing else. Something moves,
+    and reduced motion gets its own resting form.
 
 ---
 
@@ -983,6 +1304,18 @@ care whether the window is visible — and the person at the keyboard does (TRA-
 CDP client can attach to `http://127.0.0.1:9222` once it is up, including `chrome-devtools`
 MCP via `--browser-url`.
 
+**`launch` is isolated from the screen, not from the daemon — isolate that yourself.**
+The app supervises whatever is on `:3741`, and a dev build's version is almost never the
+installed daemon's: on the run that produced TRA-503 it logged `version mismatch —
+daemon=3.5.1 app=3.5.2, restarting daemon`, the restart failed, and the developer's daemon
+was left dead until it was kicked back by hand. Before `launch`, do what
+`capture-screenshots.mjs` does: point `TRACE_MCP_BIN` at a no-op shim so `ensureDaemon()`
+and `restartDaemon()` cannot reach launchd, start your own daemon on another port under its
+own `TRACE_MCP_DATA_DIR`, and rewrite the renderer's calls onto it from the same CDP session
+(`Fetch.enable` on `http://127.0.0.1:3741/*`, `Fetch.continueRequest` with the port
+swapped). A review then reads a seeded index instead of whatever the developer happens to be
+indexing, which is also the only way two runs a month apart compare.
+
 `launch --visible` puts it on screen for the one case that needs eyes on the running app,
 and then also sets `TRACE_MCP_DEV_ALWAYS_ON_TOP=1`: Chromium stops compositing a fully
 *occluded* window, and a CDP screenshot of one hands back the frame it painted minutes ago
@@ -1001,6 +1334,43 @@ fixed set of images `docs/` and trace-mcp.com ship, from a seeded sandbox, and c
 whether the committed ones are stale. Use that one for anything committed to the repo; use
 `electron-cdp.mjs` when you need to point a debugger at the app you are running right now
 and shoot a surface it has no manifest entry for.
+
+### One settled screenshot is not evidence either: sample the first frame, and sample twice
+
+A CDP shot after `--settle` shows the state a surface *converges to*. Two whole classes of
+defect live outside that frame, and TRA-467 shipped one of each.
+
+**The first painted frame.** A `ResizeObserver` reports on the frame after the initial
+commit, so any layout number read off a measured pane is read off zero in the frame the user
+actually sees first. TRA-467 made the KPI column count read `pane.w` and asserted in a code
+comment that "the first frame is unchanged" — reasoning from the height math, which was
+genuinely unchanged, while the *render* now had a new input. The first painted frame was one
+748px tile in a 780px strip: the exact geometry that PR removed, flashing on every launch,
+plus a 512px reflow (#612). A width sweep of settled sizes cannot see this. Sample
+`requestAnimationFrame` from a reload and diff the distinct geometries; there should be one.
+
+**The intermittent frame.** A state that depends on a race renders correctly often enough to
+pass one check. The TRA-471 fix left the sidebar file list stuck in `aria-busy` with six
+skeletons on 2 of 3 navigations, and a clean reload — the obvious way to check — is one of
+the paths that comes back clean (TRA-478). Anything touching async state gets sampled on
+repeated loads, and the pass condition is *every* trial, not the one you looked at.
+
+The general rule behind both: **verify the property you changed, not the property you
+reasoned about.** "Row counts are identical" was true and irrelevant; what changed was what
+decides the columns.
+
+### A Tailwind class next to `${…}` is not a Tailwind class
+
+`` className={`text-[11px] leading-[13px]${err ? ' truncate' : ''}`} `` compiles, ships,
+and silently drops `leading-[13px]`: the scanner reads the source as text, and the
+utility that runs straight into the interpolation is not extracted. The line-height
+then falls through to whatever `body` sets, which is close enough to look deliberate.
+Build class lists as arrays — `{['text-[11px]', 'leading-[13px]', err && 'truncate']
+.filter(Boolean).join(' ')}` — so every utility is its own literal.
+
+The check that catches it is not a screenshot: `getComputedStyle` on the running
+element, or `grep` for the utility in `dist/renderer/assets/*.css` after a build. A
+class that does not appear there does not exist.
 
 ### A review run never takes the screen from the person using the machine
 
@@ -1112,13 +1482,16 @@ new evidence.
 | Prominent buttons are a flat accent capsule | macOS 26 dropped the gradient + bezel entirely. |
 | Segmented selection is the thumb, and unselected labels stay at `--label` | macOS draws unselected segments at full strength; `--label-secondary` on the recessed track measured 4.45:1. |
 | An icon-only segment gets the 24px track, not `sz-small` (TRA-376) | At 20px the track leaves 1px above a 14px glyph, and `sz-small`'s `padding: 0 8px` wins the cascade over the menu's own `padding: 0` — squeezed vertically, loose horizontally. |
+| There is no 20px segmented control at all (TRA-522) | TRA-376 fixed the tier's victim, not the tier, so the same squeeze shipped again on the Workspace toolbar: track 122×20, segments 16px, a 13px label with 2px of air, beside a 24px search field and two 24px buttons. **A defect found in a shared primitive is fixed in the primitive.** Opting one component out is a fix with a return date. |
+| A size tier is offered only where the control can survive it (TRA-522) | The tiers are heights, not permissions. A segmented control spends 4px of its height on its own inset; a button spends none, so `small` is right for one and wrong for the other. |
 | A menu trigger with its menu open draws no focus ring (TRA-376) | The house ring carries a 1px **inset** accent border. On a full-width row, held for as long as the menu is up, that is a blue rectangle that reads as a focused text field. |
 | Badge tint at 18% with a per-tone `--badge-*-fg` label | White-on-a-light-fill was 1.6:1. The tone's own hue, darkened until it clears AA over its own tint, is legible in both appearances. |
 | Badges/chips/headers are sentence case | ALL CAPS is reserved for the 10px group header and nowhere else. |
 | Cards are opaque with a hairline, no shadow, no glass | Cards are content. The active KPI tile painted on accent measured 3.28:1 and pushed its footnote to 4.45:1. |
 | `.lx-btn.is-status:disabled` keeps full opacity | A disabled button whose label is the status readout is information, not an inert control; dimming put it at 2.3:1. |
 | Skeletons at final geometry instead of spinners or "Loading…" | Nothing shifts when the data lands, and the loading state shows the shape of what is coming. |
-| A failed fetch settles on an em dash + "Couldn't be measured" | A skeleton that pulses forever promises data that is never coming. |
+| A failed fetch settles on an em dash | A skeleton that pulses forever promises data that is never coming. |
+| The em dash is the whole statement — no caption, no tooltip repeating it (TRA-488) | The tile's caption slot is a comparison line, and a failure sentence there is multiplied by the number of cards: six tiles said "Couldn't be measured" under a banner promising the numbers were on their way, and over a pane already headed "The daemon isn't running". |
 | `listPending` separates "daemon hasn't answered" from "never indexed" | `status ?? 'unknown'` blamed the project for the daemon's silence. |
 | Sidebar footer is `.ws-sb-row`, not its own geometry | One row system for the whole sidebar; the footer's labels started 26px left of every other label. |
 | Appearance is Auto / Light / Dark, with Auto clearing the key | The old `toggle` only ever wrote `light` or `dark`, so one click pinned the app forever and the system listener stopped mattering. |
@@ -1127,7 +1500,7 @@ new evidence.
 | A choice in a menu is one row with the control inline, not a header plus one item per value | Appearance first shipped as an `APPEARANCE` caps header over three checked items: four rows for one three-state preference, in the menu built to stop the footer spending a row per thing. A header over a single control is weight without information. One row, name left, pill right, on the shared centre line — and the rule is written for every future choice, not solved for Theme (TRA-363). |
 | A choice row is `group` + `menuitemradio`, one keyboard stop, and does not close the menu | `radiogroup` is not a legal child of `role="menu"`, and the shared `SegmentedControl`'s `aria-pressed` says "toggled" rather than "chosen". The row is one Up/Down stop resolved to the checked segment, Left/Right move inside it, and picking a value leaves the menu open — an inline switcher exists so you can watch the app change under it. |
 | Icon-only segments dim when unselected; word segments do not | The selected thumb is 1.19:1 light / 1.63:1 dark against the track. On a word that is enough because the word stays readable (TRA-292); an icon has no fallback, so the only cue would be a sub-3:1 fill. Unselected icons drop to `--label-secondary` (4.5:1 on the track). |
-| A choice row's segments carry words when no glyph names the value, and keep their colour | Language is the case: "EN" is not a symbol anyone drew. `MenuChoiceRow` grew a `text` mode rather than a second control, and `is-text` gives the segment its `0 8px` back (34px, against the icon square's 24px) and leaves it at `--label` — 13.11:1 light, 8.88:1 dark. Dimming a word that stays perfectly readable reads as disabled, not as unchosen (TRA-388). |
+| A choice row's segments carry words when no glyph names the value, and keep their colour | Language is the case: "EN" is not a symbol anyone drew. `MenuChoiceRow` grew a `text` mode rather than a second control, and `is-text` gives the segment its `0 8px` back (34px, against the icon square's 24px) and leaves it at `--label` — 13.11:1 light, 8.88:1 dark. Dimming a word that stays perfectly readable reads as disabled, not as unchosen (TRA-388). **Superseded by #594**: at ten languages Language became a pop-up row, and the `text` mode and `is-text` were deleted. Kept here because the reasoning still applies the next time a row needs word segments — but do not go looking for the code. |
 | Language names are never translated, and the short form is only what is *visible* | Someone hunting for their language is looking for "Русский", not for whatever the current language calls it — so `LOCALES` is `i18n-exempt` by design. The menu row shows "RU" because a segment has no room for the word; the full name is its `aria-label` and `title`, and Settings' pop-up button, which has the width, shows the name itself. |
 | The app's own preferences are one group, headed "App" against the "Daemon" card above it | The group was headed "Appearance" while Theme was the only thing in it. Adding Language made that heading a lie, and "Language" over a row labelled "Language" would have been a header over a single control — the thing this file bans in menus for the same reason. "General" was already the first schema group on the same screen (TRA-388). |
 | A preference with no second owner is read where it is used, not passed down | `appearance` is a prop because App.tsx also mirrors it to the main process for the sidebar's vibrancy view. `setLocale` already persists, mirrors and syncs across windows itself, so `useLocale()` at the point of use is the whole wiring — a prop would have been plumbing with a second copy of the state at the end of it. |
@@ -1141,6 +1514,7 @@ new evidence.
 | A surface that draws its own toolbar owns its whole pane | Wrapping it in the pane's `p-4` doubles every inset the surface already declares — the workspace KPI row started at x=32 with its first card at y=76. |
 | Paths truncate at the **head**, keeping the tail | The tail is the part that distinguishes siblings; tail-truncation hid the only useful segment. |
 | Sidebar file paths use a `dir`/`name` flex split, not `direction: rtl` | The rtl hack mangled any path containing `.` or `_` runs (`.idea/workspace.xml` → `idea/workspace.xml.`). |
+| A file row is **name first, location second** — and the location is the leaf directory, not the path (TRA-503) | A 180–320px row fits one of the two. Location-first spent up to 45% of the row on `src/renderer/tabs/` and truncated the filename anyway: `Settings.tsx` rendered as `src/render…Settings.t…`, losing the extension on every row that overflowed. Quick open already listed a file as name-then-directory; the sidebar and Ask now match it. |
 | Whitespace separates sidebar groups, not rules | Fewer lines, clearer grouping; matches the platform sidebar. |
 | Rows are windowed past 100 items | A thousand projects costs what a hundred does. |
 | A surface with extra columns collapses them with a **container query**, trailing column first | At the 640px window minimum the app sidebar already takes 220. Ask's chat rail + inspector left the conversation at zero width and painted the inspector over its own toolbar. The rules must be last in the file — a container query adds no specificity. |
@@ -1155,7 +1529,14 @@ new evidence.
 | An unshrinkable control gets a narrow form; wrapping alone does not save it | `flex-wrap` gives a segmented control its own line but cannot narrow it. Insights' 371px picker in a 262px band ran 96.6px past a 640px window and left "Risk hotspots" 14 of its 108px — unreachable. Below the width where the segments fit it is a `PopUpButton`. |
 | A collapse threshold reads a width the collapsing thing cannot change | Measured against its own slot, the Insights picker was bistable: the slot is narrower beside the title and full-width once the picker wraps, so both controls were self-consistent at one window size and the render depended on which way the user had resized. The toolbar's width is the honest input. |
 | A shrinkable control declares a length `flex-basis`, never `auto` | A wrapping flex line breaks on hypothetical sizes, so `flex-basis: auto` spends none of the control's slack first. `.lx-search` on `auto` wrapped Memory's toolbar at the default 960px window; on `1 1 140px` capped at `max-content` it renders identically and holds one row to a 740px pane. |
-| Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` reproduces the measured 357px; a guessed number drifts the first time a tile changes. |
+| Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` is derived from the tile's own geometry; a guessed number drifts the first time a tile changes — as it did when the comparison line went from one reserved line to two (TRA-459). |
+| A share of a total is only for a set that really is a **part of that total** | Healthy and Needs attention are overlapping predicates — a grade-B project with 15 dead exports is in both — so "57% of 53 projects" beside "83% of 53 projects" is the grammar of a partition on numbers that do not partition anything. Two shares of one denominator get added by every reader who sees them side by side. A comparison line for an overlapping set names its criterion instead. |
+| A comparison line reserves its height, it does not measure it | The catalogue runs +30% longer in German and Russian and a tile is 132–214px wide, so whether the line wraps is not a property of the design. `KpiTile` reserves two 13px lines whatever the string does, which is what lets one `TILE_H` constant hold: measured on the running renderer, every tile is 112px in en/de/ja and both criterion lines are 26px in ru. The reservation is a floor, not a cap — Russian's delta caption (`↑+105.6k по сравнению с: 9 минут назад`) still runs to four lines and takes its row to 138px, which is a separate defect and not something `TILE_H` can absorb. |
+| A settled screenshot is not the only frame; sample the first one and sample repeatedly | TRA-467 verified a width sweep of settled sizes and asserted in a comment that the first frame was unchanged — reasoning from the height math, which was unchanged, while the render had gained a new input. The first painted frame was one 748px tile in a 780px strip, the exact geometry that PR removed, on every launch (#612). TRA-471 then left the sidebar file list stuck in `aria-busy` on 2 of 3 navigations, where a clean reload is one of the clean paths (TRA-478). Verify the property you changed, not the one you reasoned about. |
+| A card grid responds by changing its column count, never its card width | `flex-wrap` + `flex: 1 1 132px` hands the leftover width to whichever cards landed in the last row: at a 1000px window five KPI tiles rendered at 137px and the sixth at 748px, all six carrying the same three lines. A card wider than its neighbour makes a claim the data is not making. Equal `minmax(0, 1fr)` tracks, and a count that **divides** the number of cards so no row is ever short (TRA-467). |
+| A surface whose every section reads one source states its failure once, at surface level | Project Overview said one dead daemon six times — the toolbar chip, Guard's line, and four `SectionError`s each claiming "the daemon may still be indexing" with a Retry aimed at a refusing socket. "Busy" is a wait, "not running" is a button; the app knew which one it was and printed the other four times. `DaemonDownPane` is now shared, and the test for down is `deriveDaemonState()` rather than a fresh `!connected` that would flash on every mount (TRA-469). |
+| An empty list and no list are two different facts | A `.catch(() => setFiles([]))` makes a refused socket indistinguishable from a filter that matched nothing, and the empty state then explains a result it never received — the sidebar's file list blamed the scope filter while the pane beside it correctly said the daemon was not running (TRA-471). Keep whether the list was answered; assert a cause only for the empty answer you actually got, render nothing for the one you did not, and leave the re-fetching control in place as the way back. |
+| A request with no deadline has no failure state, so the skeleton wins forever | "Daemon down" is not always a refused socket: a wedged daemon still holds :3741 open, the connect sits in `SYN_SENT`, and `fetch` neither resolves nor rejects. The sidebar's file list was the one daemon fetch in the app without `AbortSignal.timeout` — measured on the running renderer, 2 of 6 navigations left six skeletons pulsing and `aria-busy="true"` set indefinitely, four inches from a pane correctly saying the daemon was not running (TRA-478). Give every request a deadline, and derive the render from the request's own terminal state (`'loading' | 'answered' | 'failed'`), never from a boolean a cancelled run can strand. A fixture that rejects immediately — which is every daemon-down test we had — cannot see this class of bug. |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
 | A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
@@ -1172,7 +1553,10 @@ new evidence.
 | A contrast number describes an element, never a selector | TRA-355 measured `rgba(255,255,255,.85)` on `--accent-fill` at 3.89:1 and called it an AA failure "for the count". The count is styled and rendered by nothing; the rule's only live target was a glyph, floor 3:1, already passing. Before quoting a ratio as a failure, confirm the thing it describes is on screen — `document.querySelectorAll` in the running app, not a reading of the stylesheet. |
 | Verify in the Electron window, not in Chrome | `navigator.userAgent` says "Mac" in Chrome on macOS too, so the renderer draws the 44px traffic-light reservation with no traffic lights in it — a band that does not exist in the real app. A screenshot off `vite dev` in a browser is a different product. (Nikolai, 2026-08-29; the rule itself lands with TRA-354.) |
 | A rule the enforcement cannot see is a comment | §8 rule 1 named `rgb()` from day one and `tokenGuard()` never counted it, so the ban held for hex and lapsed for `rgb()` — which is how a 3.89:1 label sat on the sidebar with a green build. When a rule goes into §8, check the script actually implements all of it. |
+| The last tile still hand-rolling its material is the one nobody looks at | The sidebar's update card kept `--fill-tertiary` at an 8px radius and a private `.btn-prominent` through the whole TRA-290 migration, because it only appears when there is an update — so every review of the sidebar was a review of a sidebar without it. When a migration says "every surface", enumerate the surfaces that are conditionally rendered too. |
+| A seam you cannot see is a seam you do not have | The workspace table's frozen columns declared a `-1px 0 0 var(--separator)` hairline on the pinned cells from the day they landed, and Chromium had been discarding it the whole time — `box-shadow` does not paint on cells under `border-collapse: collapse`. Nobody noticed, because the failure mode of a missing seam is a table that looks finished. Check a decorative declaration renders; only a screenshot or `getComputedStyle` on the running renderer can tell you it did. |
 | A row label never repeats its own control's verb | "Temporary pause" beside a "Pause for 10 minutes" button wrapped to two lines at the 640px minimum and added no meaning. The label names the subject ("Enforcement"), the control names the action. |
+| A baseline is taken from a reading the app **has**, and never from an empty one | The KPI effect guarded on `metricsLoading` alone, which `Workspace.tsx` passes as `false` the moment the request *fails* and which says nothing about the project list two tiles are derived from. One launch with the daemon down stored all zeros, and the dashboard then reported the whole workspace — "↑ +53 projects, ↑ +656.2k symbols vs 5 hours ago" — as this afternoon's growth for the next 24 hours. A comparison drawn against zero is the value repeated with an arrow on it, which is the bare number §7 asks a comparison line to replace — so an empty snapshot is refused on the way in *and* on the way out, which is also what heals the users already carrying one. When a component distinguishes four data states, a side effect that writes persistent state has to respect all four. |
 
 ---
 

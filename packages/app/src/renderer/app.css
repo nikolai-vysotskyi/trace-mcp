@@ -106,68 +106,22 @@ body {
   }
 }
 
-/* ── Prominent button (UpdateBanner) ─────────────────────────────── */
-/* macOS 26 prominent buttons are a FLAT accent capsule — the gradient + triple
-   box-shadow bezel that used to live here is gone (TRA-290). Full-width and
-   24px tall for the narrow sidebar. */
-.btn-prominent {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 24px;
-  padding: 0 12px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 590;
-  letter-spacing: -0.005em;
-  color: var(--on-accent);
-  background: var(--accent-fill);
-  border: none;
-  border-radius: 999px;
-  cursor: default;
-  user-select: none;
-  transition: background 120ms ease;
-}
-.btn-prominent:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--accent) 88%, black);
-}
-.btn-prominent:active:not(:disabled) {
-  background: color-mix(in oklab, var(--accent) 78%, black);
-}
-.btn-prominent:disabled {
-  opacity: 0.4;
-}
-.btn-prominent.success {
-  background: var(--status-green);
-}
-.btn-prominent.success:hover:not(:disabled) {
-  background: color-mix(in oklab, var(--status-green) 88%, black);
-}
-
 /* ── Update card ─────────────────────────────────────────────────── */
 /* The idle "● Up to date · v3.1.1 ⟳" row and its inline refresh button are
    gone (TRA-363): a permanent 28px strip whose only message was "nothing is
    wrong" is the most expensive way to say it. The state moved into the app
    menu's header, where "Check for updates" sits beside it. What is left here
-   is the card — and a card only appears when there is something to do. */
-@media (prefers-reduced-motion: reduce) {
-  .update-card {
-    animation: none;
-  }
-}
+   is the card — and a card only appears when there is something to do.
 
-/* Card: a translucent elevated tile that appears when there's something */
-/* the user can act on. Spring-in for native feel. */
+   The card itself is a Lattice `Card` now, and its button is the Lattice
+   prominent `Button` (TRA-429): material, radius, type and the capsule all
+   come from the primitives every other tile in the window uses. The private
+   `.btn-prominent` that lived here — a duplicate of `Button variant="prominent"`
+   with the update card as its only consumer — is gone with them. What is left
+   is what a primitive cannot own: where the card sits, how it arrives, and the
+   indeterminate bar for a download nobody can measure. */
 .update-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   margin: 4px 6px 6px;
-  padding: 10px;
-  background: var(--fill-tertiary);
-  border: 0.5px solid var(--separator);
-  border-radius: 8px;
   animation: update-card-in 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes update-card-in {
@@ -180,76 +134,55 @@ body {
     transform: translateY(0) scale(1);
   }
 }
-.update-card .title {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 590;
-  letter-spacing: -0.01em;
-  color: var(--label);
-}
-.update-card .subtitle {
-  font-size: 10.5px;
-  color: var(--label-secondary);
-  line-height: 1.25;
-  letter-spacing: -0.005em;
-}
-.update-card .subtitle.error {
-  color: var(--status-orange);
-  white-space: nowrap;
+
+/* `npm install -g` is one opaque `execFile` in the main process, so there is no
+   byte count to draw and a percentage would be invented. An indeterminate bar
+   is the honest shape: it says "running", it does not say "60% done". */
+.update-progress {
+  position: relative;
   overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Stuck: the CLI updated but the bundle could not be replaced. Warm border so
-   it reads as "needs attention", not as the routine update card (TRA-357). */
-.update-card.stuck {
-  border-color: var(--status-orange);
-}
-.update-card.stuck .title {
-  color: var(--status-orange);
-}
-/* A command the user runs in Terminal. Selectable against the global
-   `user-select: none`, because copying it is the whole point. */
-.update-card-command {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 6px;
-  background: var(--fill-quaternary, var(--fill-tertiary));
-  border-radius: 5px;
-}
-.update-card-command code {
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  white-space: nowrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  color: var(--label-secondary);
-  user-select: text;
-}
-.update-card-command button {
-  flex: none;
-  display: inline-flex;
-  padding: 2px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--label-secondary);
-  cursor: pointer;
-}
-.update-card-command button:hover {
-  color: var(--label);
+  height: 4px;
+  border-radius: 999px;
   background: var(--fill-tertiary);
 }
-.update-card .ready-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  height: 12px;
-  color: var(--status-green);
+/* `linear`, and the one place in the app that gets it: an eased loop
+   decelerates into the turnaround, which parks the segment at the end of the
+   track — the exact frames where the bar looks empty and therefore stalled.
+   Uniform motion is also what an indeterminate bar means. The travel stops at
+   250%, where the segment's leading edge reaches the end of the track: past
+   that it is wholly outside and the bar goes blank mid-loop. */
+.update-progress::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: update-progress-slide 1.4s linear infinite;
+}
+@keyframes update-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-card {
+    animation: none;
+  }
+  /* The global rule in tokens.css stills every animation, which would park the
+     travelling segment off the end of its own track and leave the state with no
+     visible signal at all. A filled bar at 55% accent is what an unmoving
+     indeterminate bar has to be: still there, still saying "running", just not
+     pretending to know how far along it is. */
+  .update-progress::after {
+    width: 100%;
+    transform: none;
+    background: color-mix(in oklab, var(--accent) 55%, transparent);
+  }
 }
 
 /* The sidebar footer lives in styles/sidebar.css now, with the row system it

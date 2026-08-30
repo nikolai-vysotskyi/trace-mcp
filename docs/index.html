@@ -1185,6 +1185,11 @@ layout: null
       color: var(--text-disabled);
     }
     .terminal-header .right { display: flex; align-items: center; gap: 6px; }
+    /* Instrument label for a region that has more to the right. The header is
+       already a mono caps row, so the label lives there instead of adding a
+       bar. Shown only while the body is scrollable and not yet at its end. */
+    .terminal-header .scroll-hint { display: none; margin-right: 6px; } /* 6px + the row's 6px gap: two separate labels, not a dot and its word */
+    .terminal-header .scroll-hint.is-visible { display: inline; }
     .terminal-body {
       padding: 24px;
       font-family: var(--font-mono);
@@ -1929,10 +1934,12 @@ layout: null
     /* The UA ring is rgb(153,200,255) — a second accent colour, which the
        design system forbids. :where() keeps specificity at 0 so any component
        that needs its own ring still wins without !important. */
-    :where(a, button, summary):focus-visible {
+    :where(a, button, summary, .terminal-body):focus-visible {
       outline: 1px solid var(--text-display);
       outline-offset: 2px;
     }
+    /* .terminal clips its children, so this ring has to sit inside the body. */
+    .terminal-body:focus-visible { outline-offset: -3px; }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
       *,
@@ -2620,9 +2627,9 @@ layout: null
         <div class="terminal reveal">
           <div class="terminal-header">
             <span>~/projects/my-app</span>
-            <span class="right"><span class="status-dot" style="background: var(--success); box-shadow: none;"></span> ready</span>
+            <span class="right"><span class="scroll-hint" aria-hidden="true">scroll &rarr;</span><span class="status-dot" style="background: var(--success); box-shadow: none;"></span> ready</span>
           </div>
-          <div class="terminal-body"><span class="cmt"># 1. install the CLI globally (~30 seconds)</span>
+          <div class="terminal-body" role="group" aria-label="Quickstart terminal"><span class="cmt"># 1. install the CLI globally (~30 seconds)</span>
 <span class="pmt">$</span> npm install -g trace-mcp
 <span class="ok">[OK]</span> trace-mcp@latest installed
 
@@ -2815,6 +2822,33 @@ layout: null
   // keyframes, but not motion driven from JS — the rAF count-up and the
   // staggered segment fill run regardless. Both check this flag.
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // The quickstart terminal scrolls sideways on every phone — the payoff line
+  // ("# done — your agent now reuses the graph…") ends mid-word at 390px and
+  // nothing says so: macOS hides the overlay scrollbar at rest, a phone never
+  // draws one. Same mechanism as the doc pages (_layouts/default.html); the
+  // landing page carries its own inline copy of the stylesheet and script.
+  (function () {
+    const body = document.querySelector('.terminal-body');
+    const hint = document.querySelector('.terminal-header .scroll-hint');
+    if (!body || !hint) return;
+    function measure() {
+      hint.classList.toggle('is-visible', body.scrollWidth - body.clientWidth - body.scrollLeft > 1);
+      // Only a region that actually overflows is a tab stop — at 1440px it
+      // does not overflow and would be a dead stop.
+      if (body.scrollWidth - body.clientWidth > 1) body.setAttribute('tabindex', '0');
+      else if (body !== document.activeElement) body.removeAttribute('tabindex');
+    }
+    body.addEventListener('scroll', measure);
+    measure();
+    // Fonts land after first paint and change the line widths with them.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+    let pending = 0;
+    window.addEventListener('resize', () => {
+      cancelAnimationFrame(pending);
+      pending = requestAnimationFrame(measure);
+    });
+  })();
 
   // Reveal on scroll
   const observer = new IntersectionObserver((entries) => {

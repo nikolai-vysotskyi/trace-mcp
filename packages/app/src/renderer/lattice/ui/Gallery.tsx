@@ -142,7 +142,7 @@ export function Gallery(): ReactNode {
       </Section>
 
       <Section title="SegmentedControl">
-        {(['small', 'regular', 'large'] as const).map((size) => (
+        {(['regular', 'large'] as const).map((size) => (
           <Row key={size} title={size}>
             <SegmentedControl
               size={size}

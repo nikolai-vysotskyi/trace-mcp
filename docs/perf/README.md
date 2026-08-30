@@ -1,20 +1,40 @@
+---
+layout: default
+title: Desktop app performance baseline
+# Without this, Jekyll publishes this file at /perf/README.html and GitHub
+# Pages stops serving it as the directory index, so /perf/ — the URL that
+# already existed — starts returning the "Page not found" body under a 200.
+permalink: /perf/
+description: Internal working document. Measured performance history for the trace-mcp desktop app.
+noindex: true
+---
+
 # Desktop app performance baseline
 
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
-## Current numbers (3.2.0, `6ebbbd56`, macOS 26.5 / arm64, median of 3)
+## Current numbers (3.6.0, `39026ebd` — the AskTab split, macOS 26.5 / arm64, median of 3)
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
-| `renderer_fcp_ms` | 220 | — | ok — **the startup metric of record** |
-| `cold_start_ms` | 1005 | 3000 | ok, but load-sensitive (see below) |
-| `window_interactive_ms` | 612 | — | load-sensitive, do not trend it |
+| `renderer_fcp_ms` | 216 | — | ok — **the startup metric of record** |
+| `cold_start_ms` | 801 | 3000 | ok, but load-sensitive (see below) |
+| `window_interactive_ms` | 506 | — | load-sensitive, do not trend it |
 | `heap_idle_mb` (5 min idle) | 9.5 | — | ok |
 | `main_cpu_idle_pct` | 0 | 2 | ok |
-| `renderer_bundle_kb` | 1700 | — | +16% vs 1461 — warning, noted not filed |
-| `artifact_mb.mac_asar` | 4.85 | ×1.5 growth | was 5.8, fixed this run (see below) |
-| `artifact_mb.mac_app_unpacked` | 268.1 | ×1.5 growth | ok (Electron framework is ~263 MB of it) |
+| `renderer_eager_kb` | 2102 | — | **the size metric of record** (see below) |
+| `renderer_bundle_kb` | 2272 | — | +34% vs 1700 — regression, addressed this run |
+| `artifact_mb` | not re-packed | ×1.5 growth | last measured 4.85 / 268.1 at `6ebbbd56` |
+
+### Which size number to trend
+
+`renderer_bundle_kb` is every byte in `dist/renderer`. Splitting a tab behind
+`React.lazy` moves bytes out of the startup path but leaves that total untouched, so on
+its own it scores code-splitting as a no-op. `renderer_eager_kb` — the entry script plus
+everything `index.html` preloads — is what the window actually downloads before it can
+render. **Trend `renderer_eager_kb`**; keep `renderer_bundle_kb` as the total-weight check
+(it still catches a dependency that grew, wherever it landed).
 
 ### Which startup number to trend
 
@@ -112,6 +132,18 @@ Compare against the median of the last 5 runs: >+10% is a warning to note, >+25%
 
 ## Changes worth remembering
 
+**2026-08-30 — the Ask tab was carrying the markdown stack into startup.**
+`renderer_bundle_kb` had gone 1461 → 1700 → 2272 KB, with the entry chunk alone at
+1316 KB. Attributing the entry chunk's source map by module: 24% of it was
+`react-markdown` + `remark-gfm` and their micromark/mdast/unified trees, imported by
+exactly one file, `tabs/AskTab.tsx`. `React.lazy` on that tab moved 168 KB out of the
+eager payload (entry 1316 → 1148 KB, `renderer_eager_kb` 2270 → 2102). FCP did not move
+— 216 ms after vs 168 ms measured pre-fix on the same machine an hour earlier, both
+inside the run-to-run spread — which is the same result the cosmos.gl experiment got:
+on this app, bytes off the entry chunk buy bytes, not milliseconds. Worth doing anyway
+because the metric it improves is the one the user pays on every window open, and
+`renderer_eager_kb` exists so the next run can see it.
+
 **2026-08-28 — artifact 286 MB → 265 MB, `app.asar` 21.8 MB → 1.6 MB.**
 `electron-builder` auto-includes the production `node_modules` tree even when `files`
 doesn't list it. That shipped 27.5 MB of `@luma.gl`, `@cosmos.gl`, `d3-*`, `micromark`
@@ -142,3 +174,43 @@ of `App.tsx`, so Vite hoists the chunk into the entry graph with a `modulepreloa
 Replacing the built chunk with a stub moved cold start 439 → 417 ms (~5%, ~22 ms) and
 the renderer share 154 → 144 ms. Not enough to justify splitting the ref-carrying
 component behind `React.lazy`. Revisit only if cold start approaches the 3 s ceiling.
+
+## Tab scaling
+
+`packages/app/scripts/tabs-scale.mjs` answers one question: does the app get slower the
+more project tabs are open? A project tab on macOS is a whole `BrowserWindow` in a native
+tab group, so N tabs means N renderer processes against one daemon.
+
+```bash
+pnpm run build && pnpm -C packages/app run build
+node packages/app/scripts/tabs-scale.mjs --idle 30 --steps 1,3,6 --json out.json
+```
+
+It runs the daemon under test on a private port with a throwaway `TRACE_MCP_DATA_DIR` and
+rewrites every renderer request to `:3741` onto it over CDP. That is not fussiness: the
+renderer hardcodes `http://127.0.0.1:3741` in six files, and on a working machine that
+port is held by whichever daemon got there first, usually mid-reindex over a large
+registry. Measuring against it measures the machine, not the variable under test.
+
+**2026-08-30 — the fifth project tab could not load at all (TRA-526).**
+`useDaemon` opened an `EventSource` per window and held it forever. Chromium allows six
+connections per host and the daemon is one host, so the streams alone exhausted the pool:
+from the sixth window on, every fetch to the daemon queued behind them and timed out after
+`DAEMON_FETCH_TIMEOUT_MS`. Measured, 1→7 project tabs, time from "open this project" to
+its Overview showing real data:
+
+| project tabs | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+|---|---|---|---|---|---|---|---|
+| before | 1828 ms | 589 | 580 | 589 | **never** | **never** | **never** |
+| after | 1828 ms | 589 | 590 | 587 | 598 | 601 | 594 |
+
+"never" is a 60 s give-up, with the daemon answering a Node client on the same box in 1 ms
+throughout — the stall was entirely client-side. The fix gates both `EventSource`
+subscriptions on `document.visibilityState`; on macOS only the selected tab is on screen,
+so the socket count is one regardless of tab count. Guard:
+`packages/app/src/renderer/__tests__/daemon-sockets.test.tsx`.
+
+What still scales with tab count, and always will: ~5.7 MB JS heap and ~150 MB RSS per
+tab, because each tab is a renderer process. Idle CPU, idle daemon requests and
+interaction latency in the front tab are flat, and closing tabs returns heap, RSS, timers
+and streams to the one-tab baseline — there is no leak.
