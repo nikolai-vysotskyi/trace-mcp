@@ -1115,6 +1115,24 @@ elaboration.
 3. **A toggle whose alternatives are unusable is hidden, not disabled.** A disabled
    segment is a control with nothing to choose; it returns with the width.
 
+### A content overlay is clamped by its pane, never by the window
+
+An overlay opened from inside the content pane — popover, dropdown, HUD — belongs to that
+pane. `position: fixed` puts it in window coordinates, so anything that clamps it against
+`window.innerWidth` will happily park it on top of the sidebar: navigation chrome that a
+content overlay must never cross (§1). TRA-524 shipped exactly that — the Graph filter
+panel is 571px wide, hangs off a Filter button 860px in with `align="end"`, and landed at
+`left: 8` over 251px of sidebar.
+
+`FloatingLayer` takes `boundsRef` for this. Pass the pane's element and the layer clamps
+its left/right edge — **and caps its width** — to that pane's box instead of the window's,
+re-clamping through a `ResizeObserver` when the pane changes size under it. A layer wider
+than its pane shrinks; it does not spill. Omit `boundsRef` only for a layer that genuinely
+belongs to the window: the application menu, a context menu at the cursor.
+
+Sidebar collapsed, sidebar at 180 and at 320, and the 640px window minimum are four
+different pane boxes. Check the overlay in all of them, not just the one you developed in.
+
 ---
 
 ## 7. Accessibility
@@ -1126,6 +1144,20 @@ Not a pass at the end. These are floors.
 - **Focus ring**: one ring, house-wide. `--focus-ring` on `:focus-visible` globally;
   primitives use `outline: 2px solid var(--accent); outline-offset: 2px`. Keyboard
   only — `*:focus { outline: none }`. Every focusable element must show it.
+- **One control, one ring.** A composite control — a search capsule, a composer card, a
+  segmented track — rings its whole outer box on `:focus-within`. The thing inside it
+  that actually takes DOM focus is a *part*, not a control, so it must be silenced:
+  the shared `:where(.lx-search, .ask-input) :is(input, textarea):focus-visible
+  { box-shadow: none }` rule in `app.css`, or a local one for parts that are buttons.
+  Skip it and the universal `*:focus-visible` rule draws a second ring inside the
+  first — sized to the part and, because that rule also sets `border-radius: inherit`,
+  shaped like the parent: a blue pill struck through the placeholder and across the
+  field's own boundary (TRA-521). Every new `:focus-within` ring adds a wrapper to
+  that list; `tokens.test.ts` fails if one is missed.
+- **A part of a control is not a tab stop.** The clear button inside a search field
+  follows `NSSearchField`'s cancel button: `tabIndex={-1}`, clickable, in the
+  accessibility tree, out of the Tab order. Esc from the field is the keyboard path.
+  The alternative is a stop whose ring can only duplicate the wrapper's.
 - **Hit targets**: ≥24×24 for anything focusable (§4).
 - **Icon-only controls carry a label and a tooltip.** The `Button` type enforces both
   for the `icon` variant.

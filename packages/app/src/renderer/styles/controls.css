@@ -263,11 +263,15 @@
 .lx-search:hover {
   background: var(--fill-quaternary);
 }
+/* The house ring, not a hand-rolled copy of half of it. The copy dropped the
+   token's `inset 0 0 0 1px var(--accent)`, so the only crisp edge on a focused
+   field was the second ring the universal `*:focus-visible` rule drew on the
+   <input> — inset, text-sized, and across the capsule's own boundary
+   (TRA-521) — and the field ignored the Increase Contrast variant of the
+   token (4px at 60%) entirely. */
 .lx-search:focus-within {
   background: var(--surface);
-  box-shadow:
-    inset 0 0 0 0.5px var(--separator),
-    0 0 0 3px color-mix(in oklab, var(--accent) 35%, transparent);
+  box-shadow: var(--focus-ring);
 }
 .lx-search .lx-search-glyph {
   flex: none;
