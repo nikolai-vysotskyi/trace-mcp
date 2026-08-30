@@ -433,6 +433,20 @@ Full page: https://trace-mcp.com/vs/codegraph.html
 
 ---
 
+# trace-mcp vs Context Mode
+
+mksglu/context-mode (20,245 stars, TypeScript, Elastic License 2.0 — source-available, not OSI) is the adjacent lane rather than a competitor, and the page says so. Verified on August 30, 2026 against its source at commit 8a35367, matching package.json version 1.0.169. It attacks the cost of what tool calls *return*: agent-written scripts run in a subprocess and only what they print enters the conversation, and long output is indexed into SQLite FTS5 for BM25 retrieval. It registers eleven MCP tools and advertises all of them (ctx_execute, ctx_execute_file, ctx_index, ctx_search, ctx_fetch_and_index, ctx_batch_execute, ctx_stats, ctx_doctor, ctx_upgrade, ctx_purge, ctx_insight). It does not parse code: its eight runtime dependencies contain no tree-sitter or other parser, and no tool resolves a symbol, an import edge or a call edge. Its "12 languages" are subprocess runtimes for executing scripts, not grammars for parsing a repository — the easiest mistake to make about these two tools.
+
+Where it leads: a lane trace-mcp does nothing about (browser snapshots, log files, large API responses, CI output); a published measurement with committed fixtures and harness (BENCHMARK.md — 21 scenarios, 315 KB raw to 5.5 KB on the ctx_execute_file path = 98%, 96% overall, and it states its FTS5 retrieval path saves only 44-93%); session snapshots replayed after context compaction on supported hosts; and a smaller always-loaded surface (11 tools against trace-mcp's 28 / ~11.6K tokens).
+
+Where trace-mcp leads: everything structural. Context Mode has no symbol index, no dependency graph, no call graph, no impact analysis, no framework-aware edges, no refactoring and no security scanning. trace-mcp's memory binds decisions to symbol IDs and checks staleness before recall, where Context Mode's session store is a conversation event journal wiped on a fresh start unless --continue is passed. trace-mcp is MIT, which decides the question before any feature table at companies that filter by licence class.
+
+Its "sandbox" is hardening, not isolation — a scratch temp directory, a timeout and a ~50-entry environment denylist, with no container, seccomp or VM. Its own README states that the execution tools "run arbitrary code and still inherit the process's filesystem access" and that approving one means approving arbitrary code; its MCP annotations mark ctx_execute destructiveHint and openWorldHint true. Running both servers together is the honest recommendation for a codebase-heavy agent that also drives browsers or CI, at the cost of both tool surfaces at session start.
+
+Full page: https://trace-mcp.com/vs/context-mode.html
+
+---
+
 # How to reduce Claude Code token usage
 
 Seven tactics, ordered by measured impact. (1) Stop paying for exploration twice — name the file when you know it, ask for structure before content. (2) Read symbols, not files: outline → one symbol → edit, instead of 500 lines to change five. (3) Audit your MCP tool surface, including ours: every connected server injects its schemas at session start whether or not you call it — trace-mcp defaults to its `minimal` (28 tools) preset, roughly 11.6K tokens at session start (~9.8K of `tools/list` schema plus ~1.75K of server instructions), with `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools) available as opt-ins, and `load_tools` to pull in anything the preset deferred. (4) Pick the output format per tool: measured with cl100k_base, TOON beat JSON by +31.4% on `query_decisions` and +28.8% on `get_outline`, and lost by −17.5% on `find_usages` and −25.5% on `search_text`. (5) Prefer one structural query over many reads. (6) Compact, don't clear — clearing forces re-derivation that costs more than the transcript. (7) Index once, query many times; packing pays its full cost on every refresh.
