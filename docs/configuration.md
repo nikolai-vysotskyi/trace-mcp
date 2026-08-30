@@ -518,7 +518,8 @@ Every edge in the call graph carries a `resolution_tier` indicating how it was r
 
 | Tier | Source | Confidence |
 |---|---|---|
-| `lsp_resolved` | LSP call hierarchy | Compiler-grade (highest) |
+| `scip_resolved` | Offline SCIP index ingestion (opt-in) | Compiler-grade (highest) |
+| `lsp_resolved` | LSP call hierarchy | Compiler-grade |
 | `ast_resolved` | Tree-sitter + module resolution | Static AST (default) |
 | `ast_inferred` | Heuristic inference from imports | Medium |
 | `text_matched` | Name/text similarity matching | Lowest |
