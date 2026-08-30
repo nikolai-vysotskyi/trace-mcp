@@ -34,6 +34,52 @@ describe('translation catalogues', () => {
     });
   }
 
+  /* The check above compares BASE keys, so it is blind to the form that
+     matters: a Spanish catalogue with only `_one`/`_other` passes it, and then
+     renders the English string at exactly 1 000 000 because i18next asked for
+     `_many`, missed, and fell through to fallbackLng. Every language must carry
+     precisely the plural categories CLDR gives it — no fewer, so nothing falls
+     back, and no more, so a form that can never be selected does not sit there
+     looking translated (TRA-450). */
+  const PLURAL_ONLY = /_(zero|one|two|few|many|other)$/;
+  for (const locale of LOCALES) {
+    it(`${locale.code} carries exactly its CLDR plural forms`, () => {
+      const expected = [...new Intl.PluralRules(locale.code).resolvedOptions().pluralCategories];
+      const theirs = CATALOGS[locale.code];
+      for (const [ns, strings] of Object.entries(en)) {
+        const bases = new Set(
+          Object.keys(strings)
+            .filter((k) => PLURAL_ONLY.test(k))
+            .map((k) => k.replace(PLURAL_SUFFIX, '')),
+        );
+        for (const base of bases) {
+          const forms = Object.keys(theirs[ns] ?? {})
+            .filter((k) => PLURAL_ONLY.test(k) && k.replace(PLURAL_SUFFIX, '') === base)
+            .map((k) => (PLURAL_ONLY.exec(k) as RegExpExecArray)[1]);
+          expect([...forms].sort(), `${locale.code}/${ns}:${base}`).toEqual([...expected].sort());
+        }
+      }
+    });
+  }
+
+  /* `kpiDeltaCaption` shares one 26px, two-line box with the arrow and the
+     value ("↑+105.6k ") and with whatever `relativeTime` returns ("59 минут
+     назад"), in a tile 145–225px wide. Only the wording around `{{when}}` is
+     ours to spend, and Russian spent 16 characters of it on "по сравнению с: "
+     — four lines of caption under a one-line number, and a 138px tile where
+     `TILE_H` says 112 (TRA-464).
+
+     ponytail: a character budget, not a rendered measurement — jsdom cannot
+     wrap text. Measured on the running Electron window at 1280×800, where the
+     tile is 158px: 22 characters of caption fit two lines, 38 need three. */
+  it('keeps the KPI delta caption short enough for two lines', () => {
+    for (const [code, catalog] of Object.entries(CATALOGS)) {
+      const affix = catalog.workspace.kpiDeltaCaption.replace('{{when}}', '');
+      const label = `${code}/workspace:kpiDeltaCaption ${JSON.stringify(affix)}`;
+      expect([...affix].length, label).toBeLessThanOrEqual(14);
+    }
+  });
+
   it('leaves no string empty', () => {
     for (const [code, catalog] of Object.entries(CATALOGS)) {
       for (const [ns, strings] of Object.entries(catalog)) {

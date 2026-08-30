@@ -43,6 +43,22 @@ describe('rollBaseline', () => {
       expect(next?.kpis.totalProjects).toBe(10);
     }
   });
+
+  /* An empty snapshot is what a failed reading leaves behind, and the two are
+     indistinguishable once stored. It is also useless when it is genuine: the
+     only delta it can produce is the value itself (TRA-458). */
+  it('never compares against an empty snapshot', () => {
+    const stored = { at: at(NOW - 60_000), kpis: kpis(0) };
+    const { previous, next } = rollBaseline(NOW, stored, kpis(53));
+    expect(previous).toBeNull();
+    expect(next?.kpis.totalProjects).toBe(53);
+  });
+
+  it('never stores an empty snapshot', () => {
+    const { previous, next } = rollBaseline(NOW, null, kpis(0));
+    expect(previous).toBeNull();
+    expect(next).toBeNull();
+  });
 });
 
 /* The baseline's age is the caption on a delta chip; it comes from Intl now

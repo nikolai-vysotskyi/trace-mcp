@@ -92,6 +92,10 @@
   --badge-purple-fg: #8643a8;
 
   --shadow-panel: 0 8px 24px rgb(0 0 0 / 0.16), 0 0 0 0.5px rgb(0 0 0 / 0.08);
+  /* The shade a pinned table column casts over the rows sliding under it.
+     Only the colour is a token — the offset and blur belong to the seam
+     that draws it, and it is set to transparent when nothing is hidden. */
+  --scroll-edge-shade: rgb(0 0 0 / 0.18);
 
   /* ---- Type scale — macOS text styles. Nothing at 9, 12.5, 13.5, 14, 16, 18. */
   --text-large-title: 26px;
@@ -154,7 +158,7 @@
      shrinks, because the window is full-size content view. Reserve it or it
      covers the whole top band above. Same owner, same guard:
      src/shared/chrome-metrics.ts (MAC_TAB_BAR_H) and tokens.test.ts. */
-  --mac-tabbar-h: 36px;
+  --mac-tabbar-h: 28px;
 
   /* ---- Motion */
   --dur-micro: 120ms;
@@ -213,6 +217,7 @@
     --badge-blue-fg: #3d9eff;
     --badge-purple-fg: #cb79f4;
     --shadow-panel: 0 8px 24px rgb(0 0 0 / 0.45), 0 0 0 0.5px rgb(255 255 255 / 0.08);
+    --scroll-edge-shade: rgb(0 0 0 / 0.5);
   }
 }
 
@@ -250,6 +255,7 @@
   --badge-blue-fg: #3d9eff;
   --badge-purple-fg: #cb79f4;
   --shadow-panel: 0 8px 24px rgb(0 0 0 / 0.45), 0 0 0 0.5px rgb(255 255 255 / 0.08);
+  --scroll-edge-shade: rgb(0 0 0 / 0.5);
 }
 
 /* A light stage inside a dark root has to walk the palette back. */
@@ -291,6 +297,7 @@
   --badge-blue-fg: #0059cf;
   --badge-purple-fg: #8643a8;
   --shadow-panel: 0 8px 24px rgb(0 0 0 / 0.16), 0 0 0 0.5px rgb(0 0 0 / 0.08);
+  --scroll-edge-shade: rgb(0 0 0 / 0.18);
 }
 
 /* ============================================================================

@@ -57,6 +57,13 @@
   opacity: 1;
   color: var(--label-secondary);
 }
+/* --label-secondary is a label colour for an UNTINTED surface; on the accent
+   fill it is dark-on-blue and fails contrast outright. A prominent button
+   running its own action ("Updating…" in the sidebar's update card) keeps
+   --on-accent (TRA-429). */
+.lx-btn.v-prominent.is-status:disabled {
+  color: var(--on-accent);
+}
 
 /* sizes ------------------------------------------------------------------- */
 .lx-btn.sz-small {
@@ -163,9 +170,19 @@
   background: var(--fill-tertiary);
   border-radius: 999px;
 }
-.lx-seg.sz-small {
-  height: 20px;
-}
+/* There is no `small` segmented control (TRA-522). A 20px track spends 2px on
+   its own inset at each edge, so the segment is 16px and the label is a 12px
+   box inside it — 2px of air above and below the glyph. Measured on the running
+   Workspace toolbar: track 122x20, segments 47.6x16 and 68.3x16, beside a 24px
+   search field and two 24px buttons on the same row.
+
+   That is the same squeeze as the Theme pill in the app menu, and the fix there
+   (TRA-376) was to stop opting into this tier — locally, in one component, which
+   is why it came back here. The tier itself is the defect: a track that pays a
+   fixed 4px inset cannot also be 20px tall and hold a legible label. Deleting it
+   is the shared fix; it also retires the `-4px` hit-target hack this size needed
+   to reach the 24px floor (TRA-293). Small controls in the app are `Button`'s
+   `sz-small`, which paints 20px WITHOUT an inset to pay for. */
 .lx-seg.sz-large {
   height: 28px;
 }
@@ -195,10 +212,6 @@
   transition:
     background 120ms ease,
     color 120ms ease;
-}
-.lx-seg.sz-small .lx-seg-item {
-  font-size: 12px;
-  padding: 0 8px;
 }
 .lx-seg .lx-seg-item:hover:not(:disabled):not(.is-active) {
   color: var(--label);
@@ -596,13 +609,27 @@ input[type='checkbox']:focus-visible {
   position: absolute;
   inset: -2px 0;
 }
-.lx-seg.sz-small .lx-seg-item::after {
-  /* The SMALL track is 20px, so its segments are painted 16px and -2px only
-     reaches 20. Measured on the running app: Graph's Files/Symbols at 43x20
-     and 66x20, the workspace's Table/Compact at 48x20 and 68x20. -4px puts all
-     four on the 24px floor; the overflow is invisible and the track has room
-     for it inside a 52px toolbar. */
-  inset: -4px 0;
+
+/* ── KPI tile (workspace/components/KpiTile.tsx) ──────────────────────────
+   The card's opaque background lives here rather than inline, because the
+   hover tint has to compose with it: an inline `background:` shorthand also
+   writes `background-image: none` inline, and no stylesheet rule outranks an
+   inline declaration.
+
+   A tile that filters the list answers the pointer; a tile that only reports a
+   number (a `<div>`, not a `<button>`) does not. Before TRA-475 neither did,
+   and the accent border was the only thing on the strip that said "clickable"
+   — which is the same mark that means "selected".
+
+   The tint is a second background LAYER, so the card stays opaque --surface
+   and its footnote keeps --label-secondary at 4.64:1 in light and 5.37:1 in
+   dark. --fill-tertiary, which is what a chip hovers to, would put it at
+   4.45:1 — the measurement that already ruled a tint out for the ACTIVE tile. */
+[data-kpi] {
+  background: var(--surface);
+}
+button[data-kpi]:hover {
+  background-image: linear-gradient(var(--fill-quaternary), var(--fill-quaternary));
 }
 
 @media (prefers-reduced-motion: reduce) {
