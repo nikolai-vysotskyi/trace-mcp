@@ -269,6 +269,15 @@ with whatever release-please picks, and this cannot drift.
 Once no legacy bundle is left in the field, everything in that script below
 `stopRunningDaemon()` can be deleted.
 
+That script keeps one invariant worth knowing before touching it: **only an
+installed bundle may become the update target.** An `electron-builder` output
+under `release/mac-arm64/` is a real, correctly signed-looking bundle, so plist
+validation alone accepts it; `isPlausibleInstallPath` (duplicated in
+`scripts/locate-app.mjs` and `packages/app/src/main/install-path.ts`, kept honest
+by `install-path.test.ts`) is what rejects build trees and checkouts. Recording
+one in `~/.trace-mcp/app-location.json` froze a user's install for three major
+versions.
+
 ---
 
 ## Adding a new integration plugin
@@ -353,41 +362,6 @@ const harness = createTestHarness(MyPlugin);
 const result = await harness.indexFile('test.ts', sourceCode);
 expect(result.symbols).toContainEqual(expect.objectContaining({ name: 'myFunction' }));
 ```
-
----
-
-## Desktop app updates — the staged-zip path is the only one
-
-**Decision (TRA-357):** the desktop app updates through our own staged-zip flow.
-`electron-updater` is not a fallback and is not planned. Releases publish
-`*-mac.zip` / `*-arm64-mac.zip` / `Setup.exe` plus `.sha256` siblings — there is
-no `latest-mac.yml` and no DMG, so `electron-updater` has no feed to read. We
-either commit to one path or maintain two half-working ones; this is the commit.
-
-The flow, and where each part lives:
-
-1. `npm install -g trace-mcp` runs `scripts/postinstall-app.mjs`. It locates the
-   installed bundle via `scripts/locate-app.mjs`, downloads the release zip,
-   verifies its SHA-256 against the release's checksum asset, and — because the
-   app is usually running — stages `.trace-mcp-pending.zip` next to the `.app`.
-2. On quit or restart, `scripts/apply-pending-update.mjs` swaps the bundle.
-3. `packages/app/src/main/index.ts` owns the in-app side: the `apply-update` IPC
-   runs the npm install, and `repairStaleBundle()` re-runs the postinstall
-   out-of-band when the CLI moved but the bundle did not.
-
-Two invariants this path depends on:
-
-- **Only an installed bundle may become the update target.** An
-  `electron-builder` output under `release/mac-arm64/` is a real, correctly
-  signed-looking bundle, so plist validation alone accepts it;
-  `isPlausibleInstallPath` (duplicated in `scripts/locate-app.mjs` and
-  `packages/app/src/main/install-path.ts`, kept honest by
-  `install-path.test.ts`) is what rejects build trees and checkouts. Recording
-  one in `~/.trace-mcp/app-location.json` froze a user's install for three
-  major versions.
-- **A bundle that could not be replaced is never reported as up to date.** The
-  suppression marker in `update-state.ts` stops re-prompting, and the sidebar
-  renders that state as "needs a manual install" with a release link.
 
 ## Screenshots — one script, one seeded state
 
