@@ -235,6 +235,56 @@ describe('design tokens', () => {
     });
   });
 
+  /* TRA-521. A composite control rings its whole outer box on `:focus-within`,
+     and the universal `*:focus-visible` rule in app.css then rings the part
+     inside it a second time — sized to the part, and shaped like the parent
+     because that rule also sets `border-radius: inherit`. On the Workspace
+     toolbar that painted a blue pill straight through the "Search projects"
+     placeholder and across the capsule's own boundary; the Ask composer had
+     the same double ring on its textarea.
+
+     Two wrappers had already been patched one at a time (quick open's field,
+     the context row's segmented track) without anyone noticing it was one bug
+     with three sites, which is exactly how the next wrapper acquires it. So
+     assert the invariant instead of the fix: every wrapper that paints the
+     ring on itself must also silence the ring on the parts inside it —
+     either through the shared `:where(...)` rule in app.css, or with a local
+     `:focus-visible { box-shadow: none }` of its own. */
+  it('never rings a composite control twice', () => {
+    const dir = fileURLToPath(new URL('..', import.meta.url));
+    const sheets: Array<[string, string]> = [
+      ['app.css', appCss],
+      ...readdirSync(dir)
+        .filter((f) => f.endsWith('.css'))
+        .map((f) => [f, readFileSync(`${dir}/${f}`, 'utf8')] as [string, string]),
+    ];
+    const all = sheets.map(([, css]) => css).join('\n');
+
+    // Wrappers that paint the focus ring on themselves: the ring rule must sit
+    // ON the `:focus-within` element, not on a descendant of it (which is how
+    // the sidebar styles its selected row and is not a focus ring at all).
+    const wrappers = new Set<string>();
+    for (const [, selector, body] of all.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!/box-shadow:[^;]*(--focus-ring|--accent)/.test(body)) continue;
+      for (const part of selector.split(',')) {
+        const m = /\.([\w-]+):focus-within\s*$/.exec(part.trim());
+        if (m) wrappers.add(m[1]);
+      }
+    }
+    // If this ever empties, the regex above stopped matching and the guard
+    // silently passes on everything.
+    expect(wrappers.size).toBeGreaterThanOrEqual(3);
+
+    const unguarded = [...wrappers].filter((cls) => {
+      const escaped = cls.replace(/[-]/g, '\\-');
+      const silenced = new RegExp(
+        `\\.${escaped}\\b[^{}]*:focus-visible[^{}]*\\{[^{}]*box-shadow:\\s*none`,
+      );
+      return !silenced.test(all);
+    });
+    expect(unguarded).toEqual([]);
+  });
+
   /* TRA-297: `user-select: none` on body used to be the last word, so no path,
      id, metric or error message anywhere in the app could be selected — let
      alone copied. Content opts back in; chrome inside it opts back out. */
