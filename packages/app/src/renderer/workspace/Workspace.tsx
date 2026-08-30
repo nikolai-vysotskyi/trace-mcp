@@ -20,7 +20,7 @@
  * because the sidebar is resizable: below `TABLE_MIN_PANE_W` the table gives
  * way to Compact, and below `DENSE_PANE_H` the KPI tiles collapse to one line.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { t } from '../i18n';
 import { formatNumber } from '../i18n/format';
@@ -272,6 +272,22 @@ export function Workspace() {
   // ── Pane size ────────────────────────────────────────────────────────
   const paneRef = useRef<HTMLDivElement>(null);
   const [pane, setPane] = useState({ w: 0, h: 0 });
+  /* Measured before the browser paints, not after. A ResizeObserver first
+     reports on the frame AFTER the initial commit, so the first frame would be
+     laid out at `pane.w = 0` — and now that the KPI strip's column count is
+     read off the pane, zero means one column. Sampled every rAF in the Electron
+     window at 1000×800: the first painted frame was 1 column of 748px tiles in
+     a 780px strip, settling to 3 × 239px in a 268px strip ~5ms later. That is
+     the exact geometry TRA-467 removed, plus a 512px jump that starts the
+     project list below the window edge, on every launch. */
+  useLayoutEffect(() => {
+    const el = paneRef.current;
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    const w = Math.round(box.width);
+    const h = Math.round(box.height);
+    setPane((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
+  }, []);
   useEffect(() => {
     const el = paneRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
