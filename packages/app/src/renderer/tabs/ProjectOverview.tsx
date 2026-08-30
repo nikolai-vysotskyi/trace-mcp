@@ -602,8 +602,16 @@ export function ProjectOverview({
              down all five render the same failure. Five broken cards is not
              five pieces of information — it is one, said five times, and four
              of those said "may still be indexing" about a process that is not
-             running (TRA-469). One statement, one button. */
-          <DaemonDownPane restarting={restarting} onRestart={() => void restartDaemon()} />
+             running (TRA-469). One statement, one button.
+
+             The flex column is load-bearing: `.ws-center-empty` centres itself
+             with `flex: 1`, which does nothing inside this scroll container's
+             block formatting context. Without it the pane hugged the top edge
+             and left ~900px of empty content below it, while the same component
+             on Workspace — which does have a flex parent — sat centred. */
+          <div className="h-full flex flex-col">
+            <DaemonDownPane restarting={restarting} onRestart={() => void restartDaemon()} />
+          </div>
         ) : (
         <div className="flex flex-col gap-6 px-4 py-4 mx-auto w-full" style={{ maxWidth: 720 }}>
           {/* Indexing caption — the phase in words, next to the bar above. */}
