@@ -455,3 +455,40 @@ describe.skipIf(process.platform === 'win32')('runningBundlePath', () => {
     expect(runRunningBundlePath({ homeDir: home, pgrepBin, psBin, platform: 'linux' })).toBeNull();
   });
 });
+
+// isInstalledApp is pure — no env, no marker, no subprocess of its own — so it
+// is imported directly instead of going through the harnesses above.
+describe.skipIf(process.platform === 'win32')('isInstalledApp', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-installed-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it('accepts a valid bundle in a plausible install directory', async () => {
+    const { isInstalledApp } = await import(MODULE_PATH);
+    expect(isInstalledApp(createFakeBundle(path.join(home, 'Applications')))).toBe(true);
+  });
+
+  it('rejects a valid bundle sitting in a build tree', async () => {
+    const { isInstalledApp } = await import(MODULE_PATH);
+    const dir = path.join(home, 'checkout', 'packages', 'app', 'release', 'mac-arm64');
+    fs.mkdirSync(dir, { recursive: true });
+    expect(isInstalledApp(createFakeBundle(dir))).toBe(false);
+  });
+
+  it('rejects a plausible path whose bundle id is not ours', async () => {
+    const { isInstalledApp } = await import(MODULE_PATH);
+    const foreign = createFakeBundle(path.join(home, 'Applications'), 'com.someone-else.app');
+    expect(isInstalledApp(foreign)).toBe(false);
+  });
+
+  it('rejects a plausible path with no bundle at all', async () => {
+    const { isInstalledApp } = await import(MODULE_PATH);
+    expect(isInstalledApp(path.join(home, 'Applications', 'trace-mcp.app'))).toBe(false);
+  });
+});
