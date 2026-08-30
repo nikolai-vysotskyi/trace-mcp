@@ -3,7 +3,8 @@
    architecture into a bundle for another — that produces a DMG that looks fine
    and whose daemon dies with ERR_DLOPEN_FAILED on first launch. */
 
-import { existsSync, readFileSync } from 'node:fs';
+import fs, { existsSync, readFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -11,16 +12,33 @@ import { describe, expect, it } from 'vitest';
    (tsconfig.main.json, `module: Node16`) and cannot `require` an ES module. */
 const stageServer = () => import('../../../scripts/stage-server.mjs');
 
-describe('assertNativeArch', () => {
-  it('allows a same-architecture build', async () => {
-    const { assertNativeArch } = await stageServer();
-    expect(() => assertNativeArch('arm64', 'arm64')).not.toThrow();
-    expect(() => assertNativeArch(undefined, 'arm64')).not.toThrow();
+describe('assertStagedArch', () => {
+  /* A payload shaped like the real one: one package with a single
+     architecture's binary, one that ships every platform's and picks at
+     runtime (better-sqlite3's `prebuilds/` layout). */
+  function payload(layout: Record<string, string[]>): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tm-arch-'));
+    for (const [sub, files] of Object.entries(layout)) {
+      fs.mkdirSync(path.join(dir, sub), { recursive: true });
+      for (const f of files) fs.writeFileSync(path.join(dir, sub, f), '');
+    }
+    return dir;
+  }
+  const inspect = (f: string) => (f.includes('x64') ? 'x64' : f.includes('arm64') ? 'arm64' : null);
+
+  it('passes when every native directory covers the target', async () => {
+    const { assertStagedArch } = await stageServer();
+    const dir = payload({
+      'napi-darwin-x64': ['binding.x64.node'],
+      'better-sqlite3/prebuilds': ['darwin-x64.node', 'darwin-arm64.node'],
+    });
+    expect(() => assertStagedArch(dir, 'x64', inspect)).not.toThrow();
   });
 
-  it('refuses a cross-architecture build rather than shipping a dead daemon', async () => {
-    const { assertNativeArch } = await stageServer();
-    expect(() => assertNativeArch('x64', 'arm64')).toThrow(/refusing to stage/);
+  it('refuses a payload whose natives are all the other architecture', async () => {
+    const { assertStagedArch } = await stageServer();
+    const dir = payload({ 'napi-darwin-arm64': ['binding.arm64.node'] });
+    expect(() => assertStagedArch(dir, 'x64', inspect)).toThrow(/nothing loadable on x64/);
   });
 });
 
@@ -45,11 +63,9 @@ describe('PAYLOAD_ROOTS', () => {
 describe('collectClosure', () => {
   it('reports a required dependency it cannot resolve instead of staging a hole', async () => {
     const { collectClosure } = await stageServer();
-    const { found, missing } = collectClosure(
-      ['definitely-not-a-real-package'],
-      process.cwd(),
-      () => null,
-    );
+    const { found, missing } = collectClosure(['definitely-not-a-real-package'], process.cwd(), {
+      resolve: () => null,
+    });
     expect(found.size).toBe(0);
     expect(missing).toEqual(['definitely-not-a-real-package']);
   });
@@ -59,15 +75,25 @@ describe('collectClosure', () => {
      asserting where it exists — locally, and in the release job that actually
      stages the payload — and is not worth faking where it does not. */
   const repoRoot = path.resolve(process.cwd(), '../..');
-  const rootInstalled = existsSync(path.join(repoRoot, 'node_modules', 'better-sqlite3'));
+  const rootInstalled = existsSync(path.join(repoRoot, 'node_modules', '@ast-grep', 'napi'));
 
-  it.runIf(rootInstalled)('reaches the transitive closure of the real installed tree', async () => {
+  it.runIf(rootInstalled)('picks the target architecture out of the real tree', async () => {
     const { collectClosure } = await stageServer();
-    const { found, missing } = collectClosure(['better-sqlite3'], repoRoot);
-    expect(missing).toEqual([]);
-    expect(found.has('better-sqlite3')).toBe(true);
-    // better-sqlite3's own runtime require — the reason a naive one-level copy
-    // produces a daemon that cannot open its database.
-    expect(found.has('bindings')).toBe(true);
+    // `pnpm.supportedArchitectures` installs both; exactly one must ship, or
+    // the DMG for that architecture carries a binary it cannot load.
+    const x64 = collectClosure(['@ast-grep/napi'], repoRoot, {
+      targetOs: 'darwin',
+      targetCpu: 'x64',
+    });
+    expect(x64.missing).toEqual([]);
+    expect(x64.found.has('@ast-grep/napi-darwin-x64')).toBe(true);
+    expect(x64.found.has('@ast-grep/napi-darwin-arm64')).toBe(false);
+
+    const arm64 = collectClosure(['@ast-grep/napi'], repoRoot, {
+      targetOs: 'darwin',
+      targetCpu: 'arm64',
+    });
+    expect(arm64.found.has('@ast-grep/napi-darwin-arm64')).toBe(true);
+    expect(arm64.found.has('@ast-grep/napi-darwin-x64')).toBe(false);
   });
 });

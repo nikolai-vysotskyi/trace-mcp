@@ -158,25 +158,16 @@ jobs:
   build-app-mac:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
-    # Each architecture builds on a runner of that architecture (TRA-438). The
-    # app now ships the server, and the server's native modules (better-sqlite3,
-    # @ast-grep/napi, @parcel/watcher, oxc-resolver) are whatever `pnpm install`
-    # produced for the build machine — they cannot be cross-staged. Before the
-    # payload existed there was nothing arch-specific outside Electron itself,
-    # which electron-builder downloads per target, so one runner sufficed.
-    # `scripts/stage-server.mjs` fails the build rather than let this drift.
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-latest
     permissions:
       contents: write
       id-token: write
       attestations: write
-    strategy:
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-latest
-          - arch: x64
-            runner: macos-15-intel
+    # Both architectures in ONE job, not a matrix leg each. electron-builder
+    # writes a single `latest-mac.yml` per invocation, listing only the files
+    # that invocation produced, and both legs upload to the same release — so a
+    # matrix would have one arch clobber the other's feed and leave that arch
+    # polling for a build it can never be offered (TRA-437).
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -217,13 +208,12 @@ jobs:
       - name: Package with electron-builder
         working-directory: packages/app
         env:
-          ARCH: ${{ matrix.arch }}
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm exec electron-builder --mac --${{ matrix.arch }} --publish never
+        run: pnpm exec electron-builder --mac --arm64 --x64 --publish never
 
       # electron-builder reports a skipped signature as a warning and exits 0,
       # so a missing or expired certificate would publish an ad-hoc build that
@@ -234,19 +224,40 @@ jobs:
       - name: Assert the app is signed and notarized
         working-directory: packages/app
         run: |
-          APP=$(find release/mac* -maxdepth 1 -name '*.app' -print -quit)
-          if [ -z "$APP" ]; then echo "::error::no .app produced"; exit 1; fi
-          codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Authority|TeamIdentifier'
-          if codesign -dv "$APP" 2>&1 | grep -q 'TeamIdentifier=not set'; then
-            echo "::error::$APP is ad-hoc signed — CSC_LINK/CSC_KEY_PASSWORD did not reach electron-builder"
+          # Both arches, each asserted: one leg silently ad-hoc signed would
+          # leave that architecture unable to install any update at all.
+          APPS=$(find release/mac* -maxdepth 1 -name '*.app')
+          if [ -z "$APPS" ]; then echo "::error::no .app produced"; exit 1; fi
+          echo "$APPS" | while read -r APP; do
+            codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Authority|TeamIdentifier'
+            if codesign -dv "$APP" 2>&1 | grep -q 'TeamIdentifier=not set'; then
+              echo "::error::$APP is ad-hoc signed — CSC_LINK/CSC_KEY_PASSWORD did not reach electron-builder"
+              exit 1
+            fi
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            xcrun stapler validate "$APP"
+            spctl -a -vvv -t install "$APP"
+          done
+
+      # electron-updater reads `latest-mac.yml` and nothing else. A build that
+      # ships the zips without it is silently un-updatable for every macOS
+      # install in the field, so a missing feed is a failed release — the same
+      # gate the Windows leg has had since TRA-360.
+      - name: Assert latest-mac.yml was generated and covers both arches
+        working-directory: packages/app
+        run: |
+          FEED=release/latest-mac.yml
+          if [ ! -f "$FEED" ]; then
+            echo "::error::packages/app/$FEED missing — check the top-level publish block in packages/app/electron-builder.yml"
             exit 1
           fi
-          codesign --verify --deep --strict --verbose=2 "$APP"
-          xcrun stapler validate "$APP"
-          spctl -a -vvv -t install "$APP"
+          cat "$FEED"
+          COUNT=$(grep -cE 'url: .*-mac\.zip$' "$FEED")
+          if [ "$COUNT" -ne 2 ] || ! grep -qE 'url: .*-arm64-mac\.zip$' "$FEED"; then
+            echo "::error::$FEED lists $COUNT mac zips — expected both arm64 and x64, or one architecture polls a feed that never offers it a build"
+            exit 1
+          fi
 
-      # Per-asset .sha256 files only (no combined manifest) because matrix
-      # jobs run in parallel and would clobber each other's SHASUMS256.txt.
       - name: Generate SHA-256 per-asset checksums
         run: node scripts/generate-shasums.mjs packages/app/release .zip .dmg
 
@@ -266,6 +277,7 @@ jobs:
             packages/app/release/*.zip.sha256 \
             packages/app/release/*.dmg \
             packages/app/release/*.dmg.sha256 \
+            packages/app/release/latest-mac.yml \
             --clobber
 
   build-app-win:

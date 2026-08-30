@@ -80,10 +80,13 @@ the server's dependencies:
   `tsup.config.ts` AND to `PAYLOAD_ROOTS` in that script.** A test fails if the
   two drift, because a package missing from the payload is a daemon that starts
   fine from npm and dies inside the DMG.
-- **The `.node` binaries are built for the machine that packages the app**, so
-  each architecture builds on a runner of that architecture. The stage script
-  refuses a cross-architecture build rather than shipping a bundle whose daemon
-  cannot load its own database.
+- **Both macOS architectures are packaged from one runner**, because
+  electron-updater needs a single `latest-mac.yml` listing both. That works
+  because `pnpm.supportedArchitectures` in the root `package.json` installs
+  every platform package for both architectures and the stage script picks the
+  target's. A new native dependency that resolves its binary any other way
+  needs its own answer here — `assertStagedArch` fails the build if the payload
+  ends up with nothing loadable on the target.
 
 ## License
 

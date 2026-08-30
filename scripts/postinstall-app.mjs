@@ -2,9 +2,21 @@
 
 /**
  * postinstall hook for `npm install -g trace-mcp`.
- * If the Electron menu bar app is already installed in ~/Applications/,
- * re-download the latest release zip and replace it — so `npm update -g`
- * automatically keeps the GUI app in sync.
+ *
+ * This is the one-way bridge off the old macOS updater, and nothing else
+ * (TRA-437). Builds up to and including 3.8.0 could not update themselves:
+ * Squirrel.Mac validates the replacement bundle's code signature and those
+ * builds were ad-hoc signed, so the app relied on this hook to download the
+ * release zip and swap its `.app`. Builds after that are Developer ID signed
+ * and run electron-updater, which owns their bundle completely — a second
+ * mechanism writing the same bundle is the failure mode the rewrite deleted.
+ *
+ * So the hook updates a bundle only when that bundle still ships
+ * `Contents/Resources/scripts/apply-pending-update.mjs`. That file is what a
+ * legacy build uses to apply a staged zip, so its presence *is* the question
+ * "can this bundle only be updated from outside?" — no version constant to
+ * keep in sync with whatever release-please picks. Once no legacy bundle is
+ * left in the field, everything below the daemon stop can go.
  *
  * Hardening:
  *  - TRACE_MCP_NO_AUTO_UPDATE=1 skips the update entirely.
@@ -111,6 +123,17 @@ function stopRunningDaemon() {
 
 stopRunningDaemon();
 
+// The staged-zip updater's state file. Nothing reads it since TRA-437, but an
+// upgrading user still has one on disk holding a "you are stuck on 3.3.0"
+// marker, and a file that outlives its only reader is a trap for the next thing
+// that goes looking for state. Deleted here because this hook is the one piece
+// of code every upgrading install runs.
+try {
+  fs.unlinkSync(path.join(os.homedir(), '.trace-mcp', 'app-update-state.json'));
+} catch {
+  /* absent on a clean machine — the normal case */
+}
+
 if (process.platform !== 'darwin') process.exit(0);
 
 // Settle any swap that a reboot or kill interrupted before we try to resolve
@@ -147,6 +170,13 @@ if (running && located && running !== located.appPath) {
 // so no later install ever resolves to it. Found in the wild at three releases
 // behind (`/Applications` on 3.3.0, `~/Applications` on 3.6.0) with npm
 // reporting success every time. One download, applied to all of them.
+//
+// Scope, deliberately: the running bundle, the marker's bundle, and the two
+// conventional directories. A copy installed somewhere else that is neither
+// running nor the marker target stays invisible here — `mdfind` by bundle id
+// would find it, but Spotlight also indexes build trees and external volumes,
+// and no user has yet been seen installing outside those directories. Revisit
+// if one is.
 INSTALLED_APPS = [target];
 for (const candidate of [
   ...CONVENTIONAL_APP_DIRS.map((dir) => path.join(dir, APP_NAME)),
@@ -156,16 +186,37 @@ for (const candidate of [
     INSTALLED_APPS.push(candidate);
   }
 }
+// Bundles that update themselves are not ours to touch. See the header: a
+// legacy build carries the apply-pending helper in its Resources, a
+// self-updating one does not.
+for (const appPath of INSTALLED_APPS.filter((p) => !isLegacyBundle(p))) {
+  console.log(`  trace-mcp: ${appPath} updates itself — leaving it alone`);
+}
+INSTALLED_APPS = INSTALLED_APPS.filter(isLegacyBundle);
 if (INSTALLED_APPS.length > 1) {
-  console.log(`  trace-mcp: ${INSTALLED_APPS.length} installed bundles — updating each`);
+  console.log(`  trace-mcp: ${INSTALLED_APPS.length} legacy bundles — updating each`);
 }
 
-// Reclaim staging aimed at a bundle we are not going to swap. Both appliers
-// only ever look beside the bundle they resolved themselves, so a zip left in
-// a directory holding no install is ~110 MB that nothing will apply and
-// nothing will delete — one was found sitting beside a `/Applications` copy
-// two releases behind while the marker and the running app both named
-// `~/Applications`.
+/**
+ * True when this bundle can only be updated from outside — i.e. it predates the
+ * electron-updater switch (TRA-437).
+ *
+ * `Contents/Resources/scripts/apply-pending-update.mjs` shipped as an
+ * `extraResources` entry for exactly as long as the staged-zip updater existed,
+ * and was deleted with it. Keying off the mechanism rather than a version
+ * number means nothing here has to be bumped when the next release cuts.
+ */
+function isLegacyBundle(appPath) {
+  return fs.existsSync(
+    path.join(appPath, 'Contents', 'Resources', 'scripts', 'apply-pending-update.mjs'),
+  );
+}
+
+// Reclaim staging aimed at a bundle we are not going to swap: a directory
+// holding no legacy install has ~110 MB that nothing will apply and nothing
+// will delete. Post-TRA-437 that now includes every directory holding a
+// self-updating bundle, which is how a machine that has finished migrating
+// gets its last staged zip cleaned up.
 const TARGET_DIRS = new Set(INSTALLED_APPS.map((p) => path.dirname(p)));
 for (const dir of new Set(
   [...CONVENTIONAL_APP_DIRS, located ? path.dirname(located.appPath) : null].filter(
@@ -185,6 +236,9 @@ for (const dir of new Set(
     }
   }
 }
+
+// Every bundle on this machine is self-updating: the bridge has nothing to do.
+if (INSTALLED_APPS.length === 0) process.exit(0);
 
 /**
  * Returns true if the installed trace-mcp.app is currently running.
@@ -481,14 +535,17 @@ async function main() {
       return;
     }
 
-    const appRunning = appIsRunning();
     for (const appPath of stale) {
       try {
         applyTo(appPath, {
           zipPath,
           digest: expectedDigest,
           tagName: release.tag_name,
-          appRunning,
+          // Asked per bundle, not once for the whole sweep: swapping a ~100 MB
+          // bundle takes seconds, and a user who launches the app during that
+          // window would otherwise have the next bundle swapped against a
+          // stale "not running" answer — the TRA-431 failure, once per copy.
+          appRunning: appIsRunning(),
           tmpDir,
         });
       } catch {

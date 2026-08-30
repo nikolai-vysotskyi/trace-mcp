@@ -29,9 +29,17 @@
  * 60 MB of the 65 MB `dist/` and nothing reads at runtime.
  *
  * Native modules ship as installed for Node, not rebuilt for Electron: all of
- * them are N-API, so the same `.node` loads under both ABIs. They are, however,
- * built for the *host* architecture, which is why this refuses to stage a
- * cross-architecture build — see assertNativeArch below.
+ * them are N-API, so the same `.node` loads under both ABIs.
+ *
+ * They are, however, per-architecture, and both macOS architectures are
+ * packaged from a single electron-builder invocation so electron-updater gets
+ * one `latest-mac.yml` listing both (TRA-437). Two mechanisms cover that: the
+ * root `package.json` asks pnpm for both architectures of every platform
+ * package (`pnpm.supportedArchitectures`) and the closure below picks the
+ * target's; and `better-sqlite3` ships every platform's binary in its own
+ * `prebuilds/` and resolves at runtime, so it needs nothing. `assertStagedArch`
+ * then reads the `.node` headers, because getting this wrong is invisible until
+ * someone on the other architecture opens the DMG.
  *
  * Wired to electron-builder's `beforePack` hook, never a separate CI step, so
  * a build cannot forget it.
@@ -75,15 +83,33 @@ function resolvePackageDir(name, from) {
 }
 
 /**
+ * Does this manifest's `os`/`cpu` allow the architecture we are packaging for?
+ *
+ * The platform-specific halves of an N-API package (`@ast-grep/napi-darwin-x64`
+ * and friends) declare exactly one each. The root `package.json` asks pnpm for
+ * both macOS architectures (`pnpm.supportedArchitectures`), so both are on disk
+ * and this is what decides which one ships.
+ */
+function matchesTarget(pkg, targetOs, targetCpu) {
+  if (Array.isArray(pkg.os) && pkg.os.length > 0 && !pkg.os.includes(targetOs)) return false;
+  if (Array.isArray(pkg.cpu) && pkg.cpu.length > 0 && !pkg.cpu.includes(targetCpu)) return false;
+  return true;
+}
+
+/**
  * Transitive closure of `roots` over dependencies + optionalDependencies,
  * resolved against the already-installed tree so versions match the lockfile
  * exactly and nothing is fetched at build time.
  *
- * An uninstalled *optional* dependency is not an error — pnpm skips the ones
- * whose `os`/`cpu` don't match this machine, and those are exactly the ones a
- * build for this machine must not ship. A missing *required* dependency is.
+ * Optional dependencies are filtered by the TARGET architecture, not the host:
+ * both macOS architectures are installed, and shipping the wrong one produces a
+ * bundle whose daemon dies with ERR_DLOPEN_FAILED. A missing optional package
+ * is not an error; a missing required one is.
  */
-export function collectClosure(roots, from, resolve = resolvePackageDir) {
+export function collectClosure(roots, from, opts = {}) {
+  const resolve = opts.resolve ?? resolvePackageDir;
+  const targetOs = opts.targetOs ?? process.platform;
+  const targetCpu = opts.targetCpu ?? process.arch;
   const found = new Map(); // name -> real directory
   const missing = [];
   const visit = (name, base) => {
@@ -94,11 +120,14 @@ export function collectClosure(roots, from, resolve = resolvePackageDir) {
       return;
     }
     const real = fs.realpathSync(dir);
-    found.set(name, real);
     const pkg = JSON.parse(fs.readFileSync(path.join(real, 'package.json'), 'utf-8'));
+    found.set(name, real);
     for (const dep of Object.keys(pkg.dependencies ?? {})) visit(dep, real);
     for (const dep of Object.keys(pkg.optionalDependencies ?? {})) {
-      if (resolve(dep, real)) visit(dep, real);
+      const optDir = resolve(dep, real);
+      if (!optDir) continue;
+      const optPkg = JSON.parse(fs.readFileSync(path.join(optDir, 'package.json'), 'utf-8'));
+      if (matchesTarget(optPkg, targetOs, targetCpu)) visit(dep, real);
     }
   };
   for (const root of roots) visit(root, from);
@@ -106,20 +135,54 @@ export function collectClosure(roots, from, resolve = resolvePackageDir) {
 }
 
 /**
- * The staged `.node` binaries are whatever `pnpm install` compiled or fetched
- * for the machine running this. electron-builder will happily package them
- * into a bundle for another architecture, and the result is a DMG whose daemon
- * dies on first launch with ERR_DLOPEN_FAILED — invisible until a user on that
- * architecture downloads it. Refuse instead.
+ * Every package that carries native code must carry something loadable for the
+ * architecture we are packaging for.
+ *
+ * Stated per directory rather than per file, because the two layouts differ:
+ * `@ast-grep/napi` and friends ship one `.node` per architecture in separate
+ * npm packages and the closure above picks one, while `better-sqlite3` ships
+ * every platform's binary in `prebuilds/` and chooses at runtime. A directory
+ * of `.node` files with none for the target is the failure both can produce,
+ * and it is invisible until a user on that architecture opens the DMG.
  */
-export function assertNativeArch(targetArch, hostArch = process.arch) {
-  if (!targetArch || targetArch === hostArch) return;
-  throw new Error(
-    `refusing to stage the server payload for ${targetArch} on a ${hostArch} host: ` +
-      `the bundled native modules (better-sqlite3, @ast-grep/napi, @parcel/watcher, oxc-resolver) ` +
-      `are built for ${hostArch} and would fail to load. Build each architecture on a runner of ` +
-      `that architecture.`,
-  );
+export function assertStagedArch(payloadDir, targetCpu, inspect = machOArch) {
+  const bad = [];
+  const walk = (dir) => {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const natives = entries.filter((e) => e.isFile() && e.name.endsWith('.node'));
+    if (natives.length > 0) {
+      const arches = natives.map((e) => inspect(path.join(dir, e.name))).filter(Boolean);
+      if (arches.length > 0 && !arches.includes(targetCpu)) {
+        bad.push(`${dir} (has ${[...new Set(arches)].join(', ')})`);
+      }
+    }
+    for (const e of entries) if (e.isDirectory()) walk(path.join(dir, e.name));
+  };
+  walk(payloadDir);
+  if (bad.length > 0) {
+    throw new Error(
+      `staged native binaries carry nothing loadable on ${targetCpu}:\n  ${bad.join('\n  ')}`,
+    );
+  }
+}
+
+/** Read a Mach-O header's CPU type. Returns null for anything else (ELF, PE). */
+function machOArch(file) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const head = Buffer.alloc(8);
+    fs.readSync(fd, head, 0, 8, 0);
+    const magic = head.readUInt32LE(0);
+    // 0xfeedfacf little-endian 64-bit Mach-O; the fat/universal magics and any
+    // non-Mach-O format read as "not our problem".
+    if (magic !== 0xfeedfacf) return null;
+    const cpuType = head.readUInt32LE(4);
+    if (cpuType === 0x0100000c) return 'arm64';
+    if (cpuType === 0x01000007) return 'x64';
+    return null;
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 /** Copy a tree, dereferencing symlinks (pnpm's store is all symlinks). */
@@ -127,8 +190,9 @@ function copyTree(src, dest, filter) {
   fs.cpSync(src, dest, { recursive: true, dereference: true, filter });
 }
 
-export function stageServer({ targetArch } = {}) {
-  assertNativeArch(targetArch);
+export function stageServer({ targetArch, targetOs } = {}) {
+  const cpu = targetArch ?? process.arch;
+  const os = targetOs ?? process.platform;
 
   const distDir = path.join(REPO_ROOT, 'dist');
   if (!fs.existsSync(path.join(distDir, 'cli.js'))) {
@@ -176,7 +240,10 @@ export function stageServer({ targetArch } = {}) {
     'This copy of trace-mcp ships inside the desktop app. The app updates it.\n',
   );
 
-  const { found, missing } = collectClosure(PAYLOAD_ROOTS, REPO_ROOT);
+  const { found, missing } = collectClosure(PAYLOAD_ROOTS, REPO_ROOT, {
+    targetOs: os,
+    targetCpu: cpu,
+  });
   if (missing.length > 0) {
     throw new Error(
       `native payload dependencies not installed: ${missing.join(', ')} — run \`pnpm install\` at the repo root`,
@@ -186,14 +253,25 @@ export function stageServer({ targetArch } = {}) {
     copyTree(dir, path.join(PAYLOAD, 'node_modules', name));
   }
 
+  if (os === 'darwin') assertStagedArch(PAYLOAD, cpu);
+
   const { version } = JSON.parse(fs.readFileSync(path.join(PAYLOAD, 'package.json'), 'utf-8'));
-  console.log(`[stage-server] staged trace-mcp ${version} + ${found.size} packages → ${PAYLOAD}`);
+  console.log(
+    `[stage-server] staged trace-mcp ${version} + ${found.size} packages for ${os}-${cpu} → ${PAYLOAD}`,
+  );
   return { version, packages: found.size };
 }
 
-/** electron-builder `beforePack` entry point. */
+/**
+ * electron-builder `beforePack` entry point. Called once per platform/arch
+ * pack, which is what lets one invocation produce a correct payload for both
+ * macOS architectures.
+ */
 export default function beforePack(context) {
-  stageServer({ targetArch: context?.arch === undefined ? undefined : archName(context.arch) });
+  stageServer({
+    targetArch: context?.arch === undefined ? undefined : archName(context.arch),
+    targetOs: context?.electronPlatformName,
+  });
 }
 
 /** electron-builder passes `Arch` enum values, not strings. */

@@ -44,9 +44,22 @@ interface Fixture {
   releaseBody: unknown;
 }
 
-function writeBundle(appPath: string, version: string): void {
+/**
+ * @param selfUpdating  Omits the apply-pending helper from `Contents/Resources`,
+ *   which is how the postinstall recognises a build that owns its own updates
+ *   and must not be touched from outside (TRA-437). Defaults to a legacy bundle
+ *   because that is what every swap test here is about.
+ */
+function writeBundle(appPath: string, version: string, selfUpdating = false): void {
   const contents = path.join(appPath, 'Contents');
   fs.mkdirSync(path.join(contents, 'MacOS'), { recursive: true });
+  if (!selfUpdating) {
+    fs.mkdirSync(path.join(contents, 'Resources', 'scripts'), { recursive: true });
+    fs.writeFileSync(
+      path.join(contents, 'Resources', 'scripts', 'apply-pending-update.mjs'),
+      '// legacy staged-swap helper\n',
+    );
+  }
   fs.writeFileSync(
     path.join(contents, 'Info.plist'),
     `<?xml version="1.0" encoding="UTF-8"?>
@@ -88,6 +101,29 @@ function writePgrepStub(dir: string, running: boolean): string {
   fs.writeFileSync(stub, running ? '#!/bin/sh\necho 4242\n' : '#!/bin/sh\nexit 1\n', {
     mode: 0o755,
   });
+  return stub;
+}
+
+/**
+ * A pgrep stub that answers "not running" until its `runningFromCall`-th
+ * invocation and "running" from then on — the user launching the app midway
+ * through a multi-bundle sweep.
+ */
+function writeFlippingPgrepStub(dir: string, runningFromCall: number): string {
+  const stub = path.join(dir, 'pgrep-flip-stub.sh');
+  const counter = path.join(dir, 'pgrep-calls');
+  fs.rmSync(counter, { force: true });
+  fs.writeFileSync(
+    stub,
+    `#!/bin/sh
+n=$(cat '${counter}' 2>/dev/null || echo 0)
+n=$((n+1))
+echo "$n" > '${counter}'
+[ "$n" -ge ${runningFromCall} ] && { echo 4242; exit 0; }
+exit 1
+`,
+    { mode: 0o755 },
+  );
   return stub;
 }
 
@@ -204,7 +240,12 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
    * the child's own HTTP request.
    */
   function runPostinstall(
-    opts: { appRunning?: boolean; appRunningEnv?: boolean; runningBundle?: string } = {},
+    opts: {
+      appRunning?: boolean;
+      appRunningEnv?: boolean;
+      runningBundle?: string;
+      pgrepRunningFromCall?: number;
+    } = {},
   ): Promise<string> {
     const child = spawn(process.execPath, [SCRIPT_PATH], {
       env: {
@@ -213,7 +254,9 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
         TRACE_MCP_APP_DIST_REPO: DIST_REPO,
         TRACE_MCP_UPDATE_API_BASE: fx.baseUrl,
         TRACE_MCP_APP_RUNNING: opts.appRunningEnv ? '1' : '',
-        TRACE_MCP_PGREP_BIN: writePgrepStub(tmp, opts.appRunning ?? false),
+        TRACE_MCP_PGREP_BIN: opts.pgrepRunningFromCall
+          ? writeFlippingPgrepStub(tmp, opts.pgrepRunningFromCall)
+          : writePgrepStub(tmp, opts.appRunning ?? false),
         // Left at a binary that reports no such pid unless a test names the
         // bundle it wants "running"; that keeps every other case on the
         // marker-resolved path they were written against.
@@ -240,6 +283,64 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
       child.on('close', () => resolve(stdout));
     });
   }
+
+  /* TRA-437. This hook is now the bridge off the old updater and nothing else:
+     a build that owns its own updates via electron-updater must never have its
+     bundle written from outside, or the two mechanisms race over the same
+     `.app` — the failure the rewrite existed to make impossible. */
+  describe('electron-updater bundles', () => {
+    it('leaves a self-updating bundle alone even when it is behind', async () => {
+      writeBundle(fx.appPath, '3.3.0', true);
+      publishRelease('3.9.0');
+
+      const stdout = await runPostinstall();
+
+      expect(readBundleVersion(fx.appPath)).toBe('3.3.0');
+      expect(stdout).toContain('updates itself');
+      // Not staged either: staging is the other half of the swap, and the app
+      // that would apply it no longer exists.
+      expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.zip'))).toBe(false);
+    });
+
+    it('reclaims staging left beside a bundle that has finished migrating', async () => {
+      writeBundle(fx.appPath, '3.9.0', true);
+      for (const [name, body] of [
+        ['.trace-mcp-pending.zip', 'leftover'],
+        ['.trace-mcp-pending.sha256', 'f'.repeat(64)],
+        ['.trace-mcp-pending-version', '3.5.2'],
+      ] as const) {
+        fs.writeFileSync(path.join(fx.installDir, name), body);
+      }
+      publishRelease('3.9.0');
+
+      await runPostinstall();
+
+      for (const name of [
+        '.trace-mcp-pending.zip',
+        '.trace-mcp-pending.sha256',
+        '.trace-mcp-pending-version',
+      ]) {
+        expect(fs.existsSync(path.join(fx.installDir, name))).toBe(false);
+      }
+    });
+
+    /* The staged-zip updater's state file. Nothing reads it any more, but a
+       stale "stuck on 3.3.0" marker on an upgrading user's disk must not be
+       able to influence anything ever again — so it is removed, not orphaned. */
+    it('deletes the old app-update-state.json', async () => {
+      const statePath = path.join(fx.home, '.trace-mcp', 'app-update-state.json');
+      fs.writeFileSync(
+        statePath,
+        JSON.stringify({ lastNpmOnlyAttempt: { bundle: '3.3.0', target: '3.9.0', at: 1 } }),
+      );
+      writeBundle(fx.appPath, '3.9.0', true);
+      publishRelease('3.9.0');
+
+      await runPostinstall();
+
+      expect(fs.existsSync(statePath)).toBe(false);
+    });
+  });
 
   it('replaces a bundle that is several majors behind', async () => {
     // The exact shape of the incident: installed 1.50.0, released 3.1.1.
@@ -324,10 +425,36 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
 
     expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
     expect(readBundleVersion(systemApp)).toBe('3.5.2');
-    expect(stdout).toContain('2 installed bundles');
+    expect(stdout).toContain('2 legacy bundles');
     // Each swap records its own version marker, and leaves no backup behind.
     expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-version'), 'utf-8')).toBe('v3.5.2');
     expect(fs.readdirSync(systemDir).filter((f) => f.includes('.bak-'))).toEqual([]);
+  });
+
+  /* TRA-555: swapping a ~100 MB bundle takes seconds, so the user can launch
+     the app while the sweep is between bundles. A single hoisted "is it
+     running" answer would then swap a live bundle out from under a running
+     process — TRA-431, once per install. pgrep here says "not running" for the
+     first bundle and "running" for the second. */
+  it('re-checks whether the app is running between bundles', async () => {
+    installBundle('3.4.0');
+    const systemDir = path.join(tmp, 'Applications');
+    fs.mkdirSync(systemDir, { recursive: true });
+    const systemApp = path.join(systemDir, 'trace-mcp.app');
+    writeBundle(systemApp, '3.3.0');
+
+    publishRelease('3.5.2');
+
+    // Call 1 is the startup runningBundlePath() probe, calls 2 and 3 are the
+    // per-bundle checks — so the app "launches" just before the second swap.
+    await runPostinstall({ pgrepRunningFromCall: 3 });
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
+    // Second bundle was left alone and got a staged update instead.
+    expect(readBundleVersion(systemApp)).toBe('3.3.0');
+    expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
+      '3.5.2',
+    );
   });
 
   it('leaves an already-current sibling bundle untouched', async () => {

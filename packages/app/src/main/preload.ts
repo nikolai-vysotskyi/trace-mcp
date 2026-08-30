@@ -100,25 +100,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
     latest?: string;
     lastChecked?: number;
     error?: string;
-    /** True when the user already attempted this transition via npm-only and nothing on disk has moved since. */
-    stuck?: boolean;
     /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
     staleRoots?: { root: string; version: string }[];
-    /** Absolute path to the running `.app`, so copyable commands name the real install. */
-    installPath?: string;
   }> => ipcRenderer.invoke('check-for-update'),
-  checkPendingUpdate: (): Promise<{ pending: boolean; version?: string }> =>
+  /** `percent` is only present while a download is still in flight. */
+  checkPendingUpdate: (): Promise<{ pending: boolean; version?: string; percent?: number }> =>
     ipcRenderer.invoke('check-pending-update'),
   applyUpdate: (): Promise<{
     ok: boolean;
     pending?: boolean;
     error?: string;
-    /** "bundle-pending" — restart will swap the .app; "npm-only" — CLI moved but bundle is stuck; "already-current" — nothing to do. */
-    outcome?: 'bundle-pending' | 'npm-only' | 'already-current';
     version?: string;
     /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
     staleRoots?: { root: string; version: string }[];
   }> => ipcRenderer.invoke('apply-update'),
+  /* electron-updater's own `download-progress`, forwarded verbatim. The
+     download runs for minutes on a slow link, so the card needs a real number
+     rather than an indeterminate bar that cannot distinguish slow from hung. */
+  onUpdateProgress: (
+    callback: (p: {
+      percent: number;
+      bytesPerSecond: number;
+      transferred: number;
+      total: number;
+    }) => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      p: { percent: number; bytesPerSecond: number; transferred: number; total: number },
+    ) => callback(p);
+    ipcRenderer.on('update-progress', handler);
+    return () => {
+      ipcRenderer.removeListener('update-progress', handler);
+    };
+  },
   restartApp: (): Promise<void> => ipcRenderer.invoke('restart-app'),
   openSettings: (section?: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('open-settings', section),

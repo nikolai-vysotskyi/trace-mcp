@@ -7,15 +7,23 @@ export declare const PAYLOAD_ROOTS: string[];
 export declare function collectClosure(
   roots: string[],
   from: string,
-  resolve?: (name: string, base: string) => string | null,
+  opts?: {
+    resolve?: (name: string, base: string) => string | null;
+    targetOs?: string;
+    targetCpu?: string;
+  },
 ): { found: Map<string, string>; missing: string[] };
 
-export declare function assertNativeArch(targetArch?: string, hostArch?: string): void;
+export declare function assertStagedArch(
+  payloadDir: string,
+  targetCpu: string,
+  inspect?: (file: string) => string | null,
+): void;
 
-export declare function stageServer(opts?: { targetArch?: string }): {
+export declare function stageServer(opts?: { targetArch?: string; targetOs?: string }): {
   version: string;
   packages: number;
 };
 
-declare function beforePack(context?: { arch?: number }): void;
+declare function beforePack(context?: { arch?: number; electronPlatformName?: string }): void;
 export default beforePack;
