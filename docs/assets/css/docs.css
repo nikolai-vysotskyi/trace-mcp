@@ -88,11 +88,11 @@
   --surface-raised: #f0f0f0;
   --border: #e8e8e8;
   --border-visible: #cccccc;
-  --text-disabled: #767676; /* 4.54:1 on #F5F5F5 — Primer's #999 was 2.8:1 */
+  --text-disabled: #6d6d6d; /* 4.75:1 on #F5F5F5, 4.54:1 on #F0F0F0 — #767676 was 4.17:1 */
   --text-secondary: #595959;
   --text-primary: #1a1a1a;
   --text-display: #000000;
-  --accent: #b3151c; /* 6.1:1 on #F5F5F5; #D71921 is only 4.3:1 for body-size link text */
+  --accent: #b3151c; /* 6.3:1 on #F5F5F5, 6.9:1 on #FFFFFF — the landing keeps #D71921 */
   --accent-subtle: rgba(215, 25, 33, 0.12);
 
   --nav-bg: rgba(245, 245, 245, 0.85);
