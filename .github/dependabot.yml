@@ -27,6 +27,21 @@ updates:
       - dependency-name: "@types/node"
         update-types:
           - version-update:semver-major
+      # commander@15 declares `engines.node >=22.12.0`; our `engines.node` is
+      # >=22.0.0, so taking it would silently break installs on Node 22.0-22.11
+      # without a support-policy change we have no reason to make — commander 14
+      # is doing the job. Removed in #482 on the assumption that the >=22 floor
+      # already covered it (TRA-329); restored in TRA-463 with the exact gap
+      # written down. Lift this together with the `engines.node` floor.
+      #
+      # Note for whoever lifts it: this YAML entry is not the only thing holding
+      # commander 15 back. PR #197 was closed with `@dependabot ignore this
+      # major version`, which lives in Dependabot's own per-repo state — deleting
+      # the entry here does NOT clear it. Comment `@dependabot unignore
+      # commander` on any Dependabot PR (or reopen #197) as well.
+      - dependency-name: "commander"
+        update-types:
+          - version-update:semver-major
     groups:
       production-minor-patch:
         dependency-type: production
