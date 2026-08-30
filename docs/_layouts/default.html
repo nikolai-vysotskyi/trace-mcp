@@ -9,6 +9,16 @@
 
     {% seo %}
 
+    {%- comment -%}
+      Internal working documents (ROADMAP, DESIGN-WEB) render at a public URL
+      because they live under docs/, but they are notes for the team, not
+      search results. `noindex: true` in their front matter keeps them off the
+      index without hiding them from anyone following a direct link.
+    {%- endcomment -%}
+    {%- if page.noindex %}
+    <meta name="robots" content="noindex, follow">
+    {%- endif %}
+
     <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" media="(prefers-color-scheme: light)">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" media="(prefers-color-scheme: light)">

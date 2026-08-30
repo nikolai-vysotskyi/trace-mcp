@@ -705,6 +705,8 @@ Each developer's session spawns its own per-repo process; nothing is shared or h
 http://127.0.0.1:3741/mcp?project=/absolute/path/to/repo
 ```
 
+Holding several indexes warm is what the daemon costs you in RAM: [daemon memory](daemon-memory.md) breaks the resident set down region by region and names the knob that bounds each one.
+
 The daemon multiplexes projects — one process serves all of them — but each MCP registration is bound to a single project via `?project=` (or, for clients that cannot append a query string, the `X-Trace-Project` header or `params._meta["traceMcp/projectRoot"]`). Pick this when you want one warm index reused across sessions and tools and you're comfortable managing the per-registration URL. For one-session-per-repo workflows, stdio is simpler.
 
 > **The daemon's trust boundary is loopback.** `serve-http` has no authentication: every `/api` route and `/mcp` itself trust the caller, and `?project=` / `X-Trace-Project` / `params._meta["traceMcp/projectRoot"]` can name any directory on the machine — the daemon will index and serve it. On `127.0.0.1` that grants nothing extra, because anything able to reach the port already runs as you and can read those files directly. Binding elsewhere hands that power to the network, so a non-loopback `--host` is refused unless you also pass `--allow-remote`, and even then you are expected to put your own authentication (SSH tunnel, reverse proxy, VPN) in front of the port.

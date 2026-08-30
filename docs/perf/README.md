@@ -1,3 +1,10 @@
+---
+layout: default
+title: Desktop app performance baseline
+description: Internal working document. Measured performance history for the trace-mcp desktop app.
+noindex: true
+---
+
 # Desktop app performance baseline
 
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`

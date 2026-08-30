@@ -17,6 +17,8 @@
   url: /reduce-claude-code-token-usage.html
 - title: Supported frameworks
   url: /supported-frameworks.html
+- title: Language matrix
+  url: /language-matrix.html
 - title: Architecture
   url: /architecture.html
 - title: Configuration
@@ -31,6 +33,8 @@
   url: /toon-savings.html
 - title: Telemetry
   url: /telemetry.html
+- title: Daemon memory
+  url: /daemon-memory.html
 - title: tweakcc routing
   url: /tweakcc.html
 - title: Development
