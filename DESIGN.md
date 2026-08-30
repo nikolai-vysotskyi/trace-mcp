@@ -524,6 +524,28 @@ does not blink a banner with it, while recovery publishes immediately. Escalatin
 makes a working app look broken. Keep apart only what the user would act on differently —
 "busy" and "not running" are two states because one is a wait and the other is a button.
 
+**A surface whose every section reads one source states its failure once, at
+surface level.** Five sections that each fetch from the daemon do not produce five
+pieces of information when the daemon is down — they produce one, said five times.
+Project Overview said it six: the toolbar chip, Guard's own line, and four
+`SectionError`s that each claimed "the daemon may still be indexing", the *wait*
+diagnosis, about a process that was not running, each with a Retry aimed at a
+socket that was refusing (TRA-469). The pane takes the one statement and the one
+button; whatever else was going to say it steps aside, the same way the Workspace
+banner steps aside for `DaemonDownPane`.
+
+The corollary, and the reason this is a rule rather than a fix: **the shared error
+primitive must not name a cause it cannot know.** `SectionError` renders one
+catalogue string in all ten locales; a section that cannot tell "busy" from "not
+running" must not pick one. Deciding that is the surface's job, because the
+surface is what holds the daemon state.
+
+**The test for "down" is a shared reducer, not a fresh `!connected`.**
+`deriveDaemonState()` already encodes that a daemon which has not answered *yet*
+is not one that is failing to. `connected` is false for the first moments of every
+mount, so a surface that invents its own check flashes a daemon-down pane on every
+open.
+
 **Values that were true a minute ago outrank no values at all.** A refresh that fails must
 leave the last good ones on screen, cache them across launches, and say once — above them,
 where they are read before the numbers are — that they are the last indexed ones. Em dashes
@@ -1239,6 +1261,7 @@ new evidence.
 | A share of a total is only for a set that really is a **part of that total** | Healthy and Needs attention are overlapping predicates — a grade-B project with 15 dead exports is in both — so "57% of 53 projects" beside "83% of 53 projects" is the grammar of a partition on numbers that do not partition anything. Two shares of one denominator get added by every reader who sees them side by side. A comparison line for an overlapping set names its criterion instead. |
 | A comparison line reserves its height, it does not measure it | The catalogue runs +30% longer in German and Russian and a tile is 132–214px wide, so whether the line wraps is not a property of the design. `KpiTile` reserves two 13px lines whatever the string does, which is what lets one `TILE_H` constant hold: measured on the running renderer, every tile is 112px in en/de/ja and both criterion lines are 26px in ru. The reservation is a floor, not a cap — Russian's delta caption (`↑+105.6k по сравнению с: 9 минут назад`) still runs to four lines and takes its row to 138px, which is a separate defect and not something `TILE_H` can absorb. |
 | A card grid responds by changing its column count, never its card width | `flex-wrap` + `flex: 1 1 132px` hands the leftover width to whichever cards landed in the last row: at a 1000px window five KPI tiles rendered at 137px and the sixth at 748px, all six carrying the same three lines. A card wider than its neighbour makes a claim the data is not making. Equal `minmax(0, 1fr)` tracks, and a count that **divides** the number of cards so no row is ever short (TRA-467). |
+| A surface whose every section reads one source states its failure once, at surface level | Project Overview said one dead daemon six times — the toolbar chip, Guard's line, and four `SectionError`s each claiming "the daemon may still be indexing" with a Retry aimed at a refusing socket. "Busy" is a wait, "not running" is a button; the app knew which one it was and printed the other four times. `DaemonDownPane` is now shared, and the test for down is `deriveDaemonState()` rather than a fresh `!connected` that would flash on every mount (TRA-469). |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
 | A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
