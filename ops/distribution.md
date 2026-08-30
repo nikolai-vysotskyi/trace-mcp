@@ -41,7 +41,8 @@ Rules for keeping it honest:
 
 Community channels (Hacker News, Reddit) are not in this table because they are
 not listings — nothing there is maintained, only posted once. The drafted
-material lives in `ops/launch-hn.md`, and posting it is Nikolai's call.
+material lives in `ops/launch-hn.md` and `ops/launch-reddit.md`, and posting it
+is Nikolai's call.
 
 ## Findings that should not be re-derived
 

@@ -121,4 +121,7 @@ Each answer must be checkable in one click. Do not improvise these.
 - Do not post a second time if the first sinks. A Show HN that flops is allowed
   one repost months later, with a materially different product behind it.
 - Reddit (r/ClaudeAI and neighbours) is a **separate** draft with a different
-  voice — do not cross-post this text verbatim. That draft does not exist yet.
+  voice — do not cross-post this text verbatim. It lives in
+  `ops/launch-reddit.md`, and it carries rule quotes this file does not need:
+  r/mcp bans AI-written promo copy outright, and r/ClaudeAI gates feed posts on
+  OP karma.
