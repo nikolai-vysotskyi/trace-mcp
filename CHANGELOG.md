@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.7.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.6.0...v3.7.0) (2026-08-30)
+
+
+### Features
+
+* **ops:** daily GA4 adoption snapshot into docs/_data/adoption.yml ([#673](https://github.com/nikolai-vysotskyi/trace-mcp/issues/673)) ([ecbf963](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ecbf9636f69b465e966318610b2f0db4a81b7452))
+* **telemetry:** add client and timezone dimensions to the daily ping ([#659](https://github.com/nikolai-vysotskyi/trace-mcp/issues/659)) ([db7e288](https://github.com/nikolai-vysotskyi/trace-mcp/commit/db7e2884f2fbd83969910835c1a1123ee4aa2264))
+* **telemetry:** country, model and indexed-repo count; drop raw timezone ([#667](https://github.com/nikolai-vysotskyi/trace-mcp/issues/667)) ([984b264](https://github.com/nikolai-vysotskyi/trace-mcp/commit/984b264b57c7d9c13b4838fc82f1a50bdb38350b))
+* **telemetry:** install type, previous version and machine class ([#671](https://github.com/nikolai-vysotskyi/trace-mcp/issues/671)) ([549765e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/549765ee9ab32d23992a82412fc72403b031021a))
+
+
+### Bug Fixes
+
+* **app:** a project tab must not hold a daemon socket while it is off screen ([#670](https://github.com/nikolai-vysotskyi/trace-mcp/issues/670)) ([8d5d88f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8d5d88fdfe754ea5b6697df39e5908c95e217bf2))
+* **app:** delete the 20px segmented control, not its latest victim (TRA-522) ([#658](https://github.com/nikolai-vysotskyi/trace-mcp/issues/658)) ([242d5d6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/242d5d64a3999ffe08f140791b3df36a8b4c8519))
+* **app:** one focus ring per control, on the control's own boundary (TRA-521) ([#662](https://github.com/nikolai-vysotskyi/trace-mcp/issues/662)) ([acb4dd1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/acb4dd1e9d19507a98c8fc25f7359ad4547270ee))
+* **app:** stop the daemon restart loop the wedged guard was meant to stop (TRA-543) ([#681](https://github.com/nikolai-vysotskyi/trace-mcp/issues/681)) ([13e6aa7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/13e6aa7e601ed04afe419b80a60ab9c0df0dd2e6))
+* **app:** the graph filter popover stays inside the graph pane ([#661](https://github.com/nikolai-vysotskyi/trace-mcp/issues/661)) ([e6a398d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e6a398d6cf022d1bfe44739c2a543425c5184fe1))
+* **app:** the tab bar is 20px, not 36 — lights back on the tab centre line (TRA-523) ([#664](https://github.com/nikolai-vysotskyi/trace-mcp/issues/664)) ([00e4c0f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/00e4c0f8b12834a8aac4dddd6606035116ab46ce))
+* **ci:** publish the adoption snapshot to a data branch, not a PR ([#678](https://github.com/nikolai-vysotskyi/trace-mcp/issues/678)) ([d6a937f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d6a937ff1e940eaa93e09fd575ef18d4e77a85c3))
+* **ci:** route the adoption snapshot through a PR, not a push to master ([#674](https://github.com/nikolai-vysotskyi/trace-mcp/issues/674)) ([7dd1b63](https://github.com/nikolai-vysotskyi/trace-mcp/commit/7dd1b638f861962a298cd22163583aef149a2150))
+* **daemon:** decision rows survived project removal in every build (TRA-542) ([#680](https://github.com/nikolai-vysotskyi/trace-mcp/issues/680)) ([a0c251d](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a0c251d2b9b4efbee07cfe6d941163a0b0cec1bc))
+* **docs:** the sitemap generator stops revising published dates backwards ([#652](https://github.com/nikolai-vysotskyi/trace-mcp/issues/652)) ([2d2b577](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2d2b5775870c4f7f01174491efa4bc082fa4eb2f))
+* **registry:** stop agent workdirs leaking into the registry and topology store (TRA-527) ([#660](https://github.com/nikolai-vysotskyi/trace-mcp/issues/660)) ([15bce03](https://github.com/nikolai-vysotskyi/trace-mcp/commit/15bce031f0f4bb60edd187492dbdca534f4a146c))
+* restore what [#659](https://github.com/nikolai-vysotskyi/trace-mcp/issues/659) reverted, gate the shape that let it through (TRA-528) ([#665](https://github.com/nikolai-vysotskyi/trace-mcp/issues/665)) ([ccc3b45](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ccc3b45b5a38cb6635e2149e33b8bc392710aeb5))
+* **svelte:** extract $props() destructuring as component props ([#668](https://github.com/nikolai-vysotskyi/trace-mcp/issues/668)) ([67ac07c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/67ac07c3dfd126b4b5f8d77c0ecb211e5f81bcbb))
+* **web:** label, focus and keyboard-reach the landing quickstart terminal ([#676](https://github.com/nikolai-vysotskyi/trace-mcp/issues/676)) ([0ee5cb2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0ee5cb22119aa3062e1f59d86c71eeea7c410b07))
+
+
+### Performance
+
+* **app:** load the Ask tab's markdown stack with the tab (TRA-532) ([#669](https://github.com/nikolai-vysotskyi/trace-mcp/issues/669)) ([e503c66](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e503c664aac853c7a0c1bdec0461797bcb527c9a))
+
+
+### Documentation
+
+* **ops:** add user-signal ledger; exclude git clones from the adoption metric ([#679](https://github.com/nikolai-vysotskyi/trace-mcp/issues/679)) ([f777bd6](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f777bd604905606e02e2c56dea1f66b7a4ffeee5))
+
+
+### CI/CD
+
+* **codeql:** exclude the filesystem-taint rule family (TRA-518) ([#653](https://github.com/nikolai-vysotskyi/trace-mcp/issues/653)) ([2cb8656](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2cb86564f649bb025be4301d669dcf94f658490c))
+* lockfile, Dependabot and CI coverage for packages/vscode-extension ([#654](https://github.com/nikolai-vysotskyi/trace-mcp/issues/654)) ([c892ada](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c892adae6a60fc2ae9329baceb53a182f94f7f4a))
+
 ## [3.6.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.5.2...v3.6.0) (2026-08-30)
 
 
