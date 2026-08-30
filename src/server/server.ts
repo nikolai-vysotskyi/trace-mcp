@@ -33,7 +33,7 @@ import {
   getGlobalTelemetrySink,
   setGlobalTelemetrySink,
 } from '../telemetry/index.js';
-import { sendUsagePing } from '../telemetry/usage-ping.js';
+import { recordUsagePingClient, sendUsagePing } from '../telemetry/usage-ping.js';
 import { SessionJournal, type StructuralLandmark } from '../session/journal.js';
 import { CodexSessionProvider } from '../session/providers/codex.js';
 import { HermesSessionProvider } from '../session/providers/hermes.js';
@@ -327,6 +327,13 @@ export function createServer(
   void sendUsagePing({ version: PKG_VERSION }).catch((err) => {
     logger.debug({ err }, 'telemetry.usage_ping_unexpected_error');
   });
+
+  // The ping above fires before any client has spoken, so the client name is
+  // recorded here and reported by the *next* day's ping.
+  server.server.oninitialized = () => {
+    const name = server.server.getClientVersion()?.name;
+    if (name) recordUsagePingClient(name);
+  };
 
   // Structural landmarks provider: PageRank top-20 symbols + recently edited symbols
   journal.setLandmarkProvider(() => {

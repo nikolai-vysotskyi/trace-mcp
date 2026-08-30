@@ -303,9 +303,21 @@ in the app.
 
 | Size | Height | Use |
 |---|---|---|
-| `small` | 20px | dense toolbars, inline controls |
+| `small` | 20px | dense toolbars, inline controls — **buttons only** |
 | `regular` | 24px | **the default** |
 | `large` | 28px | the single prominent action on a surface |
+
+**A size tier is only offered where the control can survive it (TRA-522).** The tiers
+are heights, not permissions: a control that spends part of its height on its own
+chrome has less left over than the number suggests. The segmented control pays a 2px
+inset at each edge, so a 20px track holds a 16px segment holding a 13px label — 2px of
+air, which is not a small control, it is a crushed one. `SegmentedControl` therefore has
+no `small`; its smallest size is 24px. A button at 20px is fine, because a button pays
+no inset.
+
+Consequence for the toolbar: **every control on one toolbar row is the same height.**
+The Workspace toolbar runs a 24px search field and two 24px buttons; a 20px view toggle
+beside them was two defects at once — a squeezed label and a broken baseline.
 
 ### Hit targets: ≥ 24×24, always
 
@@ -319,6 +331,10 @@ The two techniques in use, both worth copying:
   without moving a single painted pixel. Small buttons get all four sides; segmented
   items get vertical only, because they already clear 24px wide and the 2px inter-segment
   gap is not wide enough to share.
+
+A hit-target hack that has to reach further than `-2px` is a warning, not a fix: it says
+the painted control is too small for what it is. The segmented control's `-4px` variant
+was that warning, and it went away with the 20px tier it propped up (TRA-522).
 
 ### Radii — concentric, from the scale
 
@@ -827,26 +843,37 @@ Opening a project opens a native macOS **tab**, so the normal state of this app 
 tabbed window — not an edge case. AppKit then draws a tab bar, and because the window is
 `titleBarStyle: 'hiddenInset'` (full-size content view) it draws it **over** the web
 contents: `innerHeight` stays equal to `outerHeight`, nothing reflows, and the tab bar
-simply covers the top 28px of whatever the renderer painted. That is most of the
+simply covers the top 20px of whatever the renderer painted. That is most of the
 band above, so the surface toolbar and the sidebar toggle went from "misaligned" to
 "gone" (TRA-399).
 
 The rule that follows: **a band we do not draw still has to be reserved.** The tab bar is
 AppKit's, we cannot restyle it and we cannot ask whether it is up — so:
 
-- `MAC_TAB_BAR_H` (28px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
+- `MAC_TAB_BAR_H` (20px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
   number, exactly like `TOP_BAND_H`. The stage reserves it with `padding-top` while
   `data-tabbar="on"`, and the app's own band starts below it. Never draw into it.
-- **Measure a band we do not draw with a marker, never by eye.** Paint the renderer a
-  colour macOS chrome never uses, photograph the window, and read the first row where
-  that colour survives — that row is the band's bottom edge and nothing else can be
-  mistaken for it. Asking "where does the sidebar's material resume?" instead is how
-  this constant shipped as 36 for a release (TRA-432): 36 is where our own reserved
-  band ended, and an over-reserved band looks exactly like a taller bar.
+- **A geometry we do not draw is measured from two independent landmarks, never one.**
+  This constant shipped wrong twice off a single reading — 36 (TRA-370), then 28
+  (TRA-432) — because each time one landmark was found, believed, and shipped. Take
+  both: where the bar's own plate stops (the same row at every x across the window),
+  and where the control it carries is centred (the selected tab's pill). They have to
+  agree; when they do not, neither is the answer yet. Measured on macOS 26.5 /
+  Electron 41.10.6 at 2x: plate ends at 20.0, tab pill spans 0.5–17.5, centre 9.0.
+- **Every pixel of surplus in a reserved band is visible twice.** It renders as a dead
+  strip of window backdrop under the bar, and it drops the traffic lights by half its
+  height, because they are centred in what this number says. 36 put them 8px below the
+  tabs; 28 put them 4px below (TRA-523, reported twice before it was measured right).
+- **Assert chrome geometry against something outside the constant.** 28 went back to 36
+  on its own when an unrelated PR was squashed from a stale base (#659), and the suite
+  stayed green: the only assertion compared `MAC_TAB_BAR_H` with itself. A test written
+  against a measured AppKit landmark fails on both a bad re-measurement and a silent
+  revert; a test written against the constant fails on neither.
 - **The traffic lights belong to whichever band holds the top line**, not to a constant.
-  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 28px tab bar
-  (centre 14, the tab pill's own centre line). `trafficLightYFor(tabBarVisible)` is the
-  only place that chooses.
+  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 20px tab bar
+  (centre 10, the tab pill's own centre line). `trafficLightYFor(tabBarVisible)` is the
+  only place that chooses, and `tab-chrome.test.ts` asserts the result against the
+  measured tab centre — not against `MAC_TAB_BAR_H`, which is the number under suspicion.
 - **`trafficLightPosition` is applied once, at window creation, and AppKit re-lays the
   title bar out under it.** So every event that can change the tab count re-applies it —
   `show`, `focus`, `closed`, `did-finish-load` — synchronously and again a frame later,
@@ -941,6 +968,9 @@ What the row has to get right, all of it enforced by
   the segment, little outside the pill*: the default 24px track, 24×20 segments, a
   12px glyph — 6px beside the icon, 4px above it, and 3px between pill and row.
   A segment never goes under the 24px hit-target floor to look squarer.
+  *Follow-up (TRA-522): dropping `sz-small` here fixed this row and left the tier
+  standing, so the identical squeeze shipped again on the Workspace toolbar. The tier
+  is now deleted — the segmented control has no size below 24px.*
 
 ### Every string comes from the catalogue, and the length is not yours to assume
 
@@ -1096,6 +1126,24 @@ elaboration.
 3. **A toggle whose alternatives are unusable is hidden, not disabled.** A disabled
    segment is a control with nothing to choose; it returns with the width.
 
+### A content overlay is clamped by its pane, never by the window
+
+An overlay opened from inside the content pane — popover, dropdown, HUD — belongs to that
+pane. `position: fixed` puts it in window coordinates, so anything that clamps it against
+`window.innerWidth` will happily park it on top of the sidebar: navigation chrome that a
+content overlay must never cross (§1). TRA-524 shipped exactly that — the Graph filter
+panel is 571px wide, hangs off a Filter button 860px in with `align="end"`, and landed at
+`left: 8` over 251px of sidebar.
+
+`FloatingLayer` takes `boundsRef` for this. Pass the pane's element and the layer clamps
+its left/right edge — **and caps its width** — to that pane's box instead of the window's,
+re-clamping through a `ResizeObserver` when the pane changes size under it. A layer wider
+than its pane shrinks; it does not spill. Omit `boundsRef` only for a layer that genuinely
+belongs to the window: the application menu, a context menu at the cursor.
+
+Sidebar collapsed, sidebar at 180 and at 320, and the 640px window minimum are four
+different pane boxes. Check the overlay in all of them, not just the one you developed in.
+
 ---
 
 ## 7. Accessibility
@@ -1107,6 +1155,20 @@ Not a pass at the end. These are floors.
 - **Focus ring**: one ring, house-wide. `--focus-ring` on `:focus-visible` globally;
   primitives use `outline: 2px solid var(--accent); outline-offset: 2px`. Keyboard
   only — `*:focus { outline: none }`. Every focusable element must show it.
+- **One control, one ring.** A composite control — a search capsule, a composer card, a
+  segmented track — rings its whole outer box on `:focus-within`. The thing inside it
+  that actually takes DOM focus is a *part*, not a control, so it must be silenced:
+  the shared `:where(.lx-search, .ask-input) :is(input, textarea):focus-visible
+  { box-shadow: none }` rule in `app.css`, or a local one for parts that are buttons.
+  Skip it and the universal `*:focus-visible` rule draws a second ring inside the
+  first — sized to the part and, because that rule also sets `border-radius: inherit`,
+  shaped like the parent: a blue pill struck through the placeholder and across the
+  field's own boundary (TRA-521). Every new `:focus-within` ring adds a wrapper to
+  that list; `tokens.test.ts` fails if one is missed.
+- **A part of a control is not a tab stop.** The clear button inside a search field
+  follows `NSSearchField`'s cancel button: `tabIndex={-1}`, clickable, in the
+  accessibility tree, out of the Tab order. Esc from the field is the keyboard path.
+  The alternative is a stop whose ring can only duplicate the wrapper's.
 - **Hit targets**: ≥24×24 for anything focusable (§4).
 - **Icon-only controls carry a label and a tooltip.** The `Button` type enforces both
   for the `icon` variant.
@@ -1420,6 +1482,8 @@ new evidence.
 | Prominent buttons are a flat accent capsule | macOS 26 dropped the gradient + bezel entirely. |
 | Segmented selection is the thumb, and unselected labels stay at `--label` | macOS draws unselected segments at full strength; `--label-secondary` on the recessed track measured 4.45:1. |
 | An icon-only segment gets the 24px track, not `sz-small` (TRA-376) | At 20px the track leaves 1px above a 14px glyph, and `sz-small`'s `padding: 0 8px` wins the cascade over the menu's own `padding: 0` — squeezed vertically, loose horizontally. |
+| There is no 20px segmented control at all (TRA-522) | TRA-376 fixed the tier's victim, not the tier, so the same squeeze shipped again on the Workspace toolbar: track 122×20, segments 16px, a 13px label with 2px of air, beside a 24px search field and two 24px buttons. **A defect found in a shared primitive is fixed in the primitive.** Opting one component out is a fix with a return date. |
+| A size tier is offered only where the control can survive it (TRA-522) | The tiers are heights, not permissions. A segmented control spends 4px of its height on its own inset; a button spends none, so `small` is right for one and wrong for the other. |
 | A menu trigger with its menu open draws no focus ring (TRA-376) | The house ring carries a 1px **inset** accent border. On a full-width row, held for as long as the menu is up, that is a blue rectangle that reads as a focused text field. |
 | Badge tint at 18% with a per-tone `--badge-*-fg` label | White-on-a-light-fill was 1.6:1. The tone's own hue, darkened until it clears AA over its own tint, is legible in both appearances. |
 | Badges/chips/headers are sentence case | ALL CAPS is reserved for the 10px group header and nowhere else. |

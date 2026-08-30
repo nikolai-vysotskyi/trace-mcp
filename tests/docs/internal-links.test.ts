@@ -78,6 +78,28 @@ describe('docs footer nav covers every indexed page', () => {
   });
 
   /**
+   * `%cs` renders each commit's date in *its own* timezone, so a GitHub squash
+   * commit (-07:00) and the same commit read from Dubai (+04:00) disagree by a
+   * day. Re-running the generator therefore revised ten untouched pages from
+   * 2026-08-30 back to 2026-08-29 — a published date moving backwards, which is
+   * what page-dates.test.ts exists to catch. A regenerate now has to be a no-op
+   * on pages nobody edited.
+   */
+  it('regenerating never moves a committed date backwards', async () => {
+    const { keepLater, rewrite, isShallow } = await import('../../scripts/gen-sitemap.mjs');
+    expect(keepLater('2026-08-30', '2026-08-29')).toBe('2026-08-30');
+    expect(keepLater('2026-08-29', '2026-08-30')).toBe('2026-08-30');
+    expect(keepLater(undefined, '2026-08-30')).toBe('2026-08-30');
+
+    if (isShallow()) return; // gitDate is meaningless on one fetched commit
+    const xml = readFileSync(join(DOCS, 'sitemap.xml'), 'utf-8');
+    expect(
+      rewrite(xml),
+      'run `pnpm docs:sitemap` — the committed sitemap is not a fixed point',
+    ).toBe(xml);
+  });
+
+  /**
    * The two checks above only compare sitemap.xml against the nav, so a page
    * absent from *both* was invisible to them. On 2026-08-30 four such pages
    * were live on trace-mcp.com — /language-matrix.html, /daemon-memory.html,

@@ -5,10 +5,14 @@
  * that bridge exports a *user's own* spans to a backend *they* configure. This
  * module reports back to the maintainer instead — a single daily event with
  * an anonymous install id, the trace-mcp version, Node major version,
- * platform, and two aggregate counters since the previous ping (tool calls
- * and estimated tokens saved). No project paths, file names, query content,
- * per-tool or per-project breakdown, or anything else that could identify a
- * user or their code.
+ * platform, the country its timezone belongs to, the MCP client name (e.g.
+ * "claude-code"), the model that client mostly drove, how many repositories
+ * are indexed, whether this run is a new install or a version change, the
+ * machine's class (arch, core count, whole GB of RAM, OS version), and two
+ * aggregate counters since the previous ping (tool calls and estimated tokens
+ * saved). Counts and names only: no IP, no project paths,
+ * file names, query content, per-tool or per-project breakdown, and nothing
+ * that could identify a user or their code.
  *
  * Transport is GA4's Measurement Protocol (a plain HTTP POST to a Google
  * endpoint) rather than a self-hosted collector, so there's no backend to
@@ -23,9 +27,12 @@
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { logger } from '../logger.js';
 import { loadPersistentSavings } from '../savings.js';
+import { topModelLastDay } from './top-model.js';
+import { countryForTimezone } from './tz-country.js';
 import { TELEMETRY_STATE_PATH } from '../shared/paths.js';
 
 declare const GA_MEASUREMENT_ID_INJECTED: string;
@@ -42,11 +49,19 @@ interface TelemetryState {
   /** Cumulative totals at the last ping — the next ping reports the delta. */
   lastTokensSaved?: number;
   lastCalls?: number;
+  /** MCP client name from the most recent `initialize` (e.g. "claude-code"). */
+  client?: string;
+  /** Version that sent the previous ping — the difference is the upgrade signal. */
+  lastVersion?: string;
 }
 
 function isDisabled(env: NodeJS.ProcessEnv): boolean {
   const v = env.TRACE_MCP_TELEMETRY?.trim().toLowerCase();
-  return v === 'off' || v === '0' || v === 'false';
+  if (v === 'off' || v === '0' || v === 'false') return true;
+  // A fresh container per job means a fresh install id: counting CI would
+  // inflate "new installs" without adding a single user. Opt CI out entirely
+  // rather than pay for a correction factor later.
+  return env.CI === 'true' || env.CI === '1';
 }
 
 function utcDate(nowMs: number): string {
@@ -64,6 +79,8 @@ function loadOrCreateState(): TelemetryState {
         lastPingDate: parsed.lastPingDate,
         lastTokensSaved: parsed.lastTokensSaved,
         lastCalls: parsed.lastCalls,
+        client: parsed.client,
+        lastVersion: parsed.lastVersion,
       };
   } catch {
     // No state file yet (first run) or it's unreadable — start fresh below.
@@ -83,6 +100,81 @@ export interface UsagePingOptions {
   nowMs?: number;
   /** Injectable for tests; defaults to the on-disk cumulative savings file. */
   loadSavings?: typeof loadPersistentSavings;
+}
+
+/**
+ * Remember which MCP client connected, for the next ping's `client` dimension.
+ * Called from the `initialize` handler — the ping itself fires before any
+ * client has spoken, so this lands one session later. Name only, no version,
+ * no arguments: enough to tell Claude Code from Cursor, nothing more.
+ */
+export function recordUsagePingClient(name: string, env: NodeJS.ProcessEnv = process.env): void {
+  if (isDisabled(env)) return;
+  try {
+    const state = loadOrCreateState();
+    if (state.client === name) return;
+    saveState({ ...state, client: name });
+  } catch (err) {
+    logger.debug({ err }, 'telemetry.usage_ping_client_record_failed');
+  }
+}
+
+/**
+ * ISO country of the machine, derived from its timezone setting — this is what
+ * fills GA4's map. Deliberately *not* from an IP: `ip_override` and a geo-IP
+ * lookup would both put a network address in scope, and country granularity
+ * answers "which regions use this" just as well.
+ */
+function country(): string | undefined {
+  try {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return zone ? countryForTimezone(zone) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** -1 / 0 / 1 on the numeric prefix of two semver strings; prerelease tags are ignored. */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const pb = b.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0) ? 1 : -1;
+  }
+  return 0;
+}
+
+/**
+ * What this ping represents for the install: its first ever run, a move to a
+ * different version, or another day on the same one. Reported alongside
+ * `previous_version` so an upgrade funnel reads directly off the events —
+ * GA4 alone cannot derive per-install version transitions.
+ */
+function installType(state: TelemetryState, version: string): string {
+  if (!state.lastVersion) return state.lastPingDate ? 'unknown' : 'new';
+  const cmp = compareVersions(version, state.lastVersion);
+  if (cmp > 0) return 'upgrade';
+  if (cmp < 0) return 'downgrade';
+  return 'active';
+}
+
+/**
+ * Machine class, not machine identity: CPU architecture, core count, memory
+ * rounded to whole gigabytes, and the OS kernel version. Enough to answer
+ * "do our users run arm64" and "is 8GB the floor we must index within";
+ * too coarse to single out a device.
+ */
+function device(): Record<string, string | number> {
+  try {
+    return {
+      arch: process.arch,
+      cpu_count: os.cpus().length,
+      ram_gb: Math.round(os.totalmem() / 1024 ** 3),
+      os_version: os.release(),
+    };
+  } catch {
+    return {};
+  }
 }
 
 /** Delta since the last ping, floored at 0 so a reset savings file can't send a negative. */
@@ -107,6 +199,7 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
   const today = utcDate(opts.nowMs ?? Date.now());
   if (state.lastPingDate === today) return;
 
+  const countryId = country();
   const savings = (opts.loadSavings ?? loadPersistentSavings)();
   const tokensSaved = delta(savings?.total_tokens_saved, state.lastTokensSaved);
   const calls = delta(savings?.total_calls, state.lastCalls);
@@ -119,6 +212,9 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
       method: 'POST',
       body: JSON.stringify({
         client_id: state.installId,
+        // Country only, from the machine's own timezone. `ip_override` stays
+        // unset — Google derives nothing about the network from this request.
+        ...(countryId ? { user_location: { country_id: countryId } } : {}),
         events: [
           {
             name: 'app_open',
@@ -128,6 +224,12 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
               node_major: process.versions.node.split('.')[0],
               tokens_saved: tokensSaved,
               calls,
+              client: state.client ?? 'unknown',
+              install_type: installType(state, opts.version),
+              previous_version: state.lastVersion ?? 'none',
+              ...device(),
+              model: topModelLastDay() ?? 'unknown',
+              repos_indexed: Object.keys(savings?.per_project ?? {}).length,
               // Without these two GA4 keeps the event but doesn't count the
               // install as an active user — reports read 0 while the raw event
               // count is non-zero. See the "Tip" under `session_id` /
@@ -150,6 +252,8 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
       lastPingDate: today,
       lastTokensSaved: savings?.total_tokens_saved ?? state.lastTokensSaved,
       lastCalls: savings?.total_calls ?? state.lastCalls,
+      client: state.client,
+      lastVersion: opts.version,
     });
   } catch (err) {
     logger.debug({ err }, 'telemetry.usage_ping_state_save_failed');

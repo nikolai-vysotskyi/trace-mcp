@@ -170,9 +170,19 @@
   background: var(--fill-tertiary);
   border-radius: 999px;
 }
-.lx-seg.sz-small {
-  height: 20px;
-}
+/* There is no `small` segmented control (TRA-522). A 20px track spends 2px on
+   its own inset at each edge, so the segment is 16px and the label is a 12px
+   box inside it — 2px of air above and below the glyph. Measured on the running
+   Workspace toolbar: track 122x20, segments 47.6x16 and 68.3x16, beside a 24px
+   search field and two 24px buttons on the same row.
+
+   That is the same squeeze as the Theme pill in the app menu, and the fix there
+   (TRA-376) was to stop opting into this tier — locally, in one component, which
+   is why it came back here. The tier itself is the defect: a track that pays a
+   fixed 4px inset cannot also be 20px tall and hold a legible label. Deleting it
+   is the shared fix; it also retires the `-4px` hit-target hack this size needed
+   to reach the 24px floor (TRA-293). Small controls in the app are `Button`'s
+   `sz-small`, which paints 20px WITHOUT an inset to pay for. */
 .lx-seg.sz-large {
   height: 28px;
 }
@@ -202,10 +212,6 @@
   transition:
     background 120ms ease,
     color 120ms ease;
-}
-.lx-seg.sz-small .lx-seg-item {
-  font-size: 12px;
-  padding: 0 8px;
 }
 .lx-seg .lx-seg-item:hover:not(:disabled):not(.is-active) {
   color: var(--label);
@@ -257,11 +263,15 @@
 .lx-search:hover {
   background: var(--fill-quaternary);
 }
+/* The house ring, not a hand-rolled copy of half of it. The copy dropped the
+   token's `inset 0 0 0 1px var(--accent)`, so the only crisp edge on a focused
+   field was the second ring the universal `*:focus-visible` rule drew on the
+   <input> — inset, text-sized, and across the capsule's own boundary
+   (TRA-521) — and the field ignored the Increase Contrast variant of the
+   token (4px at 60%) entirely. */
 .lx-search:focus-within {
   background: var(--surface);
-  box-shadow:
-    inset 0 0 0 0.5px var(--separator),
-    0 0 0 3px color-mix(in oklab, var(--accent) 35%, transparent);
+  box-shadow: var(--focus-ring);
 }
 .lx-search .lx-search-glyph {
   flex: none;
@@ -602,14 +612,6 @@ input[type='checkbox']:focus-visible {
   content: '';
   position: absolute;
   inset: -2px 0;
-}
-.lx-seg.sz-small .lx-seg-item::after {
-  /* The SMALL track is 20px, so its segments are painted 16px and -2px only
-     reaches 20. Measured on the running app: Graph's Files/Symbols at 43x20
-     and 66x20, the workspace's Table/Compact at 48x20 and 68x20. -4px puts all
-     four on the 24px floor; the overflow is invisible and the track has room
-     for it inside a 52px toolbar. */
-  inset: -4px 0;
 }
 
 /* ── KPI tile (workspace/components/KpiTile.tsx) ──────────────────────────

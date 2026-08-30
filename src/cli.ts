@@ -100,6 +100,7 @@ import { checkBindHost, isLoopbackHost } from './daemon/bind-host.js';
 import { PluginRegistry } from './plugin-api/registry.js';
 import { detectGitWorktree, findProjectRoot, hasRootMarkers } from './project-root.js';
 import { isDangerousProjectRoot, setupProject } from './project-setup.js';
+import { sweepEphemeralTopology } from './daemon/project-artifacts.js';
 import {
   getProject,
   listProjects,
@@ -3143,6 +3144,16 @@ program
             }
           } catch (err) {
             logger.warn({ err }, 'sweepEphemeralDbs failed (non-fatal)');
+          }
+          // TRA-527: same story one store over — subproject auto-sync wrote a
+          // permanent row into the *global* topology DB per run workdir, and no
+          // removeProject ever ran for a root that was never registered.
+          const droppedTopology = await sweepEphemeralTopology();
+          if (droppedTopology.length > 0) {
+            logger.info(
+              { droppedTopology },
+              `Dropped topology rows for ${droppedTopology.length} one-shot workdir(s)`,
+            );
           }
         };
         await ephemeralSweep();

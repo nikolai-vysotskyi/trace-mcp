@@ -152,6 +152,20 @@ describe('the traffic lights follow whichever band owns the top line', () => {
     expect(trafficLightYFor(true)).toBe(TRAFFIC_LIGHT_Y_TABBED);
   });
 
+  /* The one assertion the earlier attempts could not have passed. They compared
+     the lights against MAC_TAB_BAR_H, which is the number that was wrong, so
+     they agreed with themselves and shipped lights 8px (TRA-370) then 4px
+     (TRA-432) below the tabs — and stayed green when #659 silently put the
+     first value back. MAC_TAB_CENTRE_Y is measured off AppKit
+     instead: the selected tab's pill spans y=0.5..17.5 on a 2x capture of a
+     real two-tab window (macOS 26.5 / Electron 41.10.6), and the plate it sits
+     on ends at y=20.0 — 10 is the line the user sees the tabs on. Re-measure
+     it, do not derive it from MAC_TAB_BAR_H (TRA-523). */
+  it('puts them on the line the tabs are actually drawn on', () => {
+    const MAC_TAB_CENTRE_Y = 10;
+    expect(trafficLightCentreY(trafficLightYFor(true))).toBe(MAC_TAB_CENTRE_Y);
+  });
+
   it('does not reuse one offset for both bands', () => {
     expect(TRAFFIC_LIGHT_Y_TABBED).not.toBe(TRAFFIC_LIGHT_Y);
   });
