@@ -7,12 +7,6 @@ export const clients = {
   detecting: 'Detectando clientes',
   loadingSessions: 'Cargando las sesiones',
 
-  daemonDownTitle: 'Daemon inaccesible',
-  daemonDownSubtitle:
-    'Los clientes de trace-mcp se conectan a través del daemon local. Arráncalo para verlos y configurarlos.',
-  startDaemon: 'Arrancar el daemon',
-  starting: 'Arrancando…',
-
   noSessionsTitle: 'No hay sesiones activas',
   noSessionsSubtitle: 'Aquí aparece una sesión cuando un cliente se conecta al daemon.',
   unnamedSession: 'Sesión sin nombre',
@@ -27,6 +21,9 @@ export const clients = {
   updateAvailable: 'Actualización disponible',
   update: 'Actualizar',
   updating: 'Actualizando…',
+  updateAll: 'Actualizar todo',
+  updatingProgress: 'Actualizando {{done}} de {{total}}',
+  writeFailed: 'No se pudo escribir la configuración.',
   driftedField: 'Campo desviado: {{field}}',
   setUpManually: 'Configurar a mano…',
   hideSteps: 'Ocultar los pasos',

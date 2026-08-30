@@ -33,6 +33,8 @@ declare global {
         clientName: string,
         level: string,
       ) => Promise<{ ok: boolean; error?: string }>;
+      /** Repair drifted entries. Setup asks for an enforcement level; this never does. */
+      updateMcpClients: (clientNames: string[]) => Promise<{ ok: boolean; error?: string }>;
       openProjectTab: (root: string) => Promise<{ ok: boolean }>;
       closeCurrentTab: () => Promise<{ ok: boolean }>;
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;

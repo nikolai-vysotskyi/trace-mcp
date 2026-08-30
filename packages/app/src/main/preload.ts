@@ -40,6 +40,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     level: string,
   ): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('configure-mcp-client', clientName, level),
+  /** Repair drifted entries. Setup asks for an enforcement level; this never does. */
+  updateMcpClients: (clientNames: string[]): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('update-mcp-clients', clientNames),
   openProjectTab: (root: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('open-project-tab', root),
   closeCurrentTab: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('close-current-tab'),

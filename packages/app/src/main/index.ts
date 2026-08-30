@@ -428,19 +428,20 @@ ipcMain.handle(
       return { ok: false, error: 'JetBrains AI Assistant must be configured manually in the IDE.' };
     }
 
-    // Compose CLI flags based on enforcement level
-    const flags = [`--mcp-client ${clientName}`, '--yes'];
+    // Compose CLI flags based on enforcement level.
+    // `--mcp-client` and its value are two argv entries: execFile passes the
+    // array straight to the process without a shell, so a single
+    // `--mcp-client cursor` string is one unknown option and commander exits 1
+    // before doing anything. That shipped with this screen (2026-04) and left
+    // every Connect and Update button on it silently inert (TRA-497).
+    const flags = ['--mcp-client', clientName, '--yes'];
 
-    if (level === 'base') {
-      flags.push('--skip-hooks');
-    }
     // 'standard' and 'max' both install hooks (no --skip-hooks)
     // 'max' also installs tweakcc, but that's handled automatically by init
-    // when no --skip-hooks is passed and tweakcc prompts are available
-
-    // Non-Claude clients don't use hooks/tweakcc, always skip
+    // when no --skip-hooks is passed and tweakcc prompts are available.
+    // Non-Claude clients don't use hooks/tweakcc, so they always skip.
     const claudeClients = new Set(['claude-code', 'claw-code', 'claude-desktop']);
-    if (!claudeClients.has(clientName)) {
+    if (level === 'base' || !claudeClients.has(clientName)) {
       flags.push('--skip-hooks');
     }
 
@@ -464,6 +465,57 @@ ipcMain.handle(
     });
   },
 );
+
+// IPC: repair the trace-mcp entry in one or more client configs.
+//
+// Not `init`: what drifts after an upgrade is the MCP entry, and reconciling it
+// is not setup. `init` asks — or, with --yes, decides — which enforcement level
+// to run at, so routing Update through it would answer a question the user has
+// already answered, in whichever direction the flags happened to fall
+// (`--skip-hooks` writes agent_behavior "off"; omitting it installs hooks and
+// tweakcc). `clients update` writes the entry and nothing else, which is what
+// the button says it does.
+ipcMain.handle('update-mcp-clients', async (_event, clientNames: string[]) => {
+  return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+    execFile(
+      'trace-mcp',
+      ['clients', 'update', ...clientNames, '--json'],
+      { timeout: 60_000, maxBuffer: 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          resolve({ ok: false, error: describeCliFailure(error.message, stdout, stderr) });
+          return;
+        }
+        resolve({ ok: true });
+      },
+    );
+  });
+});
+
+/**
+ * The one write that failed, rather than the exit code that followed it.
+ *
+ * The app can self-update ahead of the CLI it shells out to (TRA-180), so
+ * "this CLI predates the command" is a state a user can reach, and
+ * `unknown command 'update'` is not a sentence to show them.
+ *
+ * Deliberately not in the catalogue: it lands in the row's caption slot beside
+ * the CLI's own error text, which is English wherever it comes from. Half a
+ * translated sentence next to an untranslated one reads worse than neither.
+ */
+function describeCliFailure(message: string, stdout: string, stderr: string): string {
+  if (/unknown command|unknown option/.test(stderr + message)) {
+    return 'The installed trace-mcp CLI is older than this app. Run `npm i -g trace-mcp` to update it.';
+  }
+  try {
+    const steps: { action: string; detail?: string }[] = JSON.parse(stdout).steps ?? [];
+    const failed = steps.find((s) => s.detail?.startsWith('Error:'));
+    if (failed?.detail) return failed.detail;
+  } catch {
+    /* not JSON — fall through to the raw message */
+  }
+  return message;
+}
 
 // IPC: check for app update.
 // Primary source is the npm registry (no auth, no practical rate limit — the package

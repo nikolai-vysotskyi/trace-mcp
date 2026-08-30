@@ -7,12 +7,6 @@ export const clients = {
   detecting: 'क्लाइंट खोजे जा रहे हैं',
   loadingSessions: 'सेशन लोड हो रहे हैं',
 
-  daemonDownTitle: 'डेमन उपलब्ध नहीं',
-  daemonDownSubtitle:
-    'trace-mcp क्लाइंट लोकल डेमन से जुड़ते हैं। उन्हें देखने और सेट करने के लिए इसे चालू करें।',
-  startDaemon: 'डेमन चालू करें',
-  starting: 'शुरू हो रहा है…',
-
   noSessionsTitle: 'कोई सक्रिय सेशन नहीं',
   noSessionsSubtitle: 'जब कोई क्लाइंट डेमन से जुड़ता है, सेशन यहाँ दिखता है।',
   unnamedSession: 'बिना नाम का सेशन',
@@ -27,6 +21,9 @@ export const clients = {
   updateAvailable: 'अपडेट उपलब्ध',
   update: 'अपडेट',
   updating: 'अपडेट हो रहा है…',
+  updateAll: 'सभी अपडेट करें',
+  updatingProgress: '{{total}} में से {{done}} अपडेट हो रहे हैं',
+  writeFailed: 'कॉन्फ़िगरेशन नहीं लिखा जा सका।',
   driftedField: 'बदला हुआ फ़ील्ड: {{field}}',
   setUpManually: 'खुद सेट करें…',
   hideSteps: 'चरण छिपाएँ',
