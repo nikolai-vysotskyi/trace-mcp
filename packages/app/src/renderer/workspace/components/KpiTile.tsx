@@ -107,40 +107,37 @@ export function KpiTile({
   const { t } = useTranslation('workspace');
   const interactive = onClick !== undefined;
   const valueColor = unavailable ? 'var(--label-secondary)' : tone ? TONE_COLOR[tone] : 'var(--label)';
+  // Same card either way — only the wrapper differs.
+  const shell = {
+    'data-kpi': label,
+    'data-dense': dense ? '' : undefined,
+    // Dense drops the comparison line, so the one sentence that explains an
+    // em dash has to survive somewhere the user can still reach it.
+    title: dense && unavailable ? t('kpiUnavailable') : undefined,
+    className: dense
+      ? 'flex flex-row items-baseline justify-between gap-2 text-left transition-colors'
+      : 'flex flex-col items-start gap-1 text-left transition-colors',
+    style: {
+      // No `flex` basis: the strip is a grid whose track count already
+      // guarantees at least 132px per tile, and a flex-grow here is what let
+      // a last-row tile stretch to 5.5x its siblings (TRA-467). `minWidth: 0`
+      // so a long footnote sizes to its track instead of widening it.
+      minWidth: 0,
+      padding: dense ? '8px 12px' : 16,
+      borderRadius: 12,
+      // `background` and the hover tint live in controls.css (`[data-kpi]`):
+      // an inline shorthand here would set `background-image: none` inline,
+      // which no stylesheet rule can then override. A card is content and
+      // stays opaque --surface in both states — tinting the ACTIVE tile
+      // pushed --label-secondary to 4.45:1 on its footnote, and that token
+      // only clears 4.5 over an untinted surface. Selection is the accent
+      // border + aria-pressed, which as a UI boundary needs only 3:1.
+      border: `0.5px solid ${active ? 'var(--accent)' : 'var(--separator)'}`,
+    },
+  };
 
-  return (
-    <button
-      type="button"
-      disabled={!interactive}
-      aria-pressed={interactive ? active : undefined}
-      data-kpi={label}
-      data-dense={dense ? '' : undefined}
-      // Dense drops the comparison line, so the one sentence that explains an
-      // em dash has to survive somewhere the user can still reach it.
-      title={dense && unavailable ? t('kpiUnavailable') : undefined}
-      onClick={onClick}
-      className={
-        dense
-          ? 'flex flex-row items-baseline justify-between gap-2 text-left transition-colors'
-          : 'flex flex-col items-start gap-1 text-left transition-colors'
-      }
-      style={{
-        // No `flex` basis: the strip is a grid whose track count already
-        // guarantees at least 132px per tile, and a flex-grow here is what let
-        // a last-row tile stretch to 5.5x its siblings (TRA-467). `minWidth: 0`
-        // so a long footnote sizes to its track instead of widening it.
-        minWidth: 0,
-        padding: dense ? '8px 12px' : 16,
-        borderRadius: 12,
-        // A card is content: it stays opaque --surface in BOTH states. Tinting
-        // the active tile pushed --label-secondary to 4.45:1 on its footnote —
-        // that token only clears 4.5 over an untinted surface. Selection is the
-        // accent border + aria-pressed, which as a UI boundary needs only 3:1.
-        background: 'var(--surface)',
-        border: `0.5px solid ${active ? 'var(--accent)' : 'var(--separator)'}`,
-        cursor: interactive ? 'pointer' : 'default',
-      }}
-    >
+  const content = (
+    <>
       {/* Active is signalled by the accent BORDER + aria-pressed, not by an
           accent label: --accent on the active tile's --fill-tertiary tint
           measures 3.28:1, and --badge-accent-fg only reaches 4.29:1. Promoting
@@ -212,6 +209,27 @@ export function KpiTile({
           )}
         </span>
       )}
+    </>
+  );
+
+  /* A tile with no filter behind it is a readout, and a readout is content. It
+     rendered as `<button disabled>` until TRA-475, which puts a number in the
+     accessibility tree as a control the user is told they may not operate —
+     there was never a control. Only a tile that filters the list is a button;
+     everything else is a `<div>` and leaves the tree entirely. */
+  return interactive ? (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      {...shell}
+      // A `<button>` in Chromium is `cursor: default`; a card the size of this
+      // one has to say it is clickable before the pointer is over it.
+      className={`${shell.className} cursor-pointer`}
+    >
+      {content}
     </button>
+  ) : (
+    <div {...shell}>{content}</div>
   );
 }
