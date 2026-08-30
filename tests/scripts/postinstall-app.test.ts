@@ -301,9 +301,9 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
     expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending.zip')).toString()).not.toBe(
       'orphan',
     );
-    expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending.sha256'), 'utf-8')).not.toBe(
-      'f'.repeat(64),
-    );
+    expect(
+      fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending.sha256'), 'utf-8'),
+    ).not.toBe('f'.repeat(64));
   });
 
   /* Found on the founder's machine: `/Applications/trace-mcp.app` sat on 3.3.0
