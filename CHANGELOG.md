@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.6.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.5.2...v3.6.0) (2026-08-30)
+
+
+### Features
+
+* **clients:** report each client's current enforcement level (TRA-498) ([#637](https://github.com/nikolai-vysotskyi/trace-mcp/issues/637)) ([b99f2eb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b99f2eb1c61239bb10dd099fe2eb5e9e72736fa0))
+* **server:** tailor the advertised surface to the connected MCP client (TRA-513) ([#648](https://github.com/nikolai-vysotskyi/trace-mcp/issues/648)) ([a43f5d4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a43f5d40ca9a97e0733b09599daea33210b78fd2))
+
+
+### Bug Fixes
+
+* **app:** MCP clients — the row actions never ran, and six drifted rows took six clicks (TRA-497) ([#638](https://github.com/nikolai-vysotskyi/trace-mcp/issues/638)) ([ce47652](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ce47652c95c14a8b00fdd58807feb6ecc04f0898))
+* **app:** Project Overview reads all three daemon states, not one (TRA-489) ([#632](https://github.com/nikolai-vysotskyi/trace-mcp/issues/632)) ([fc20f58](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fc20f584e112a653e92b023d64d19c507542c610))
+* **app:** shorten the Russian KPI delta caption to one line (TRA-464) ([#630](https://github.com/nikolai-vysotskyi/trace-mcp/issues/630)) ([4bb6bbd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4bb6bbdaca90649292bf10f97394046a8d082805))
+* **app:** the KPI strip stops arguing with the banner above it (TRA-488) ([#627](https://github.com/nikolai-vysotskyi/trace-mcp/issues/627)) ([1ab017e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1ab017e411b1a5eff587ba1f58602ff4c99faa49))
+* **app:** the sidebar file row leads with the filename, not the path (TRA-503) ([#640](https://github.com/nikolai-vysotskyi/trace-mcp/issues/640)) ([ed369ec](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ed369ec25ed1cec48339c989375efe0834661f07))
+* **clients:** a global MCP registration no longer carries the caller's cwd (TRA-501) ([#639](https://github.com/nikolai-vysotskyi/trace-mcp/issues/639)) ([a107d87](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a107d87056b4401b3647260a9cbbf36eb93f12dd))
+* **indexer:** resolve Java imports, the next language after Go (TRA-483) ([#623](https://github.com/nikolai-vysotskyi/trace-mcp/issues/623)) ([934b2ee](https://github.com/nikolai-vysotskyi/trace-mcp/commit/934b2ee7f8322e239784b49132a616fce0480787))
+* **search:** scope the subproject fan-out to the requested project (TRA-470) ([#626](https://github.com/nikolai-vysotskyi/trace-mcp/issues/626)) ([724697f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/724697fd128292b521241c6c57024ab19abc4f88))
+* **site:** a code block that scrolls says so, and every scroll region has a ring (TRA-508) ([#645](https://github.com/nikolai-vysotskyi/trace-mcp/issues/645)) ([cfd77ad](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cfd77ad2e3e74eb6f037d5e95086ca1b52e0b4f7))
+* **tools:** get_untested_symbols reports the actionable tier by default (TRA-515) ([#650](https://github.com/nikolai-vysotskyi/trace-mcp/issues/650)) ([8f849f7](https://github.com/nikolai-vysotskyi/trace-mcp/commit/8f849f79c3e0408bfa97116219ee791e17a040a5))
+* **update:** target the running bundle, reclaim orphaned staging ([#644](https://github.com/nikolai-vysotskyi/trace-mcp/issues/644)) ([33d716e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/33d716e116a04e278c737d58fa367808327d28cb))
+* **workspace:** a dead daemon gets one verdict from the KPI strip, not two (TRA-495) ([#633](https://github.com/nikolai-vysotskyi/trace-mcp/issues/633)) ([267c2f4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/267c2f47c0eedb54fc7827bba9df1bc6dd4cde91))
+
+
+### Documentation
+
+* add the scip_resolved tier to the stale resolution-tier tables ([#628](https://github.com/nikolai-vysotskyi/trace-mcp/issues/628)) ([4b44a31](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4b44a318d8eeef02f5a2a89c56eb022cebf4fdc6))
+* **comparisons:** profile the largest LSP-native peer, correct its debugger claim (TRA-511) ([#646](https://github.com/nikolai-vysotskyi/trace-mcp/issues/646)) ([dc13beb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/dc13beb4948091fb2210538bd59c2eb672fa357a))
+* **design:** a review run must isolate the daemon, not just the screen (TRA-502) ([#641](https://github.com/nikolai-vysotskyi/trace-mcp/issues/641)) ([3a1c30c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3a1c30c33be8faf3a499cad5c28e22341c78a398))
+* fifth head-to-head page — trace-mcp vs Context Mode ([#629](https://github.com/nikolai-vysotskyi/trace-mcp/issues/629)) ([1932c80](https://github.com/nikolai-vysotskyi/trace-mcp/commit/1932c80d773cc64fff68b662ed56ea6959a804cc))
+* **ops:** draft the Show HN material (TRA-393) ([#625](https://github.com/nikolai-vysotskyi/trace-mcp/issues/625)) ([56da9b0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/56da9b04c2314252a3f1f073d7fbfb04b77b544b))
+* **ops:** keep a ledger of what has actually been audited (TRA-505) ([#643](https://github.com/nikolai-vysotskyi/trace-mcp/issues/643)) ([6324c10](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6324c10e3369e0ccf4dbbf38546736f7ac322917))
+* pin /perf/ with a permalink, undoing a soft 404 from [#635](https://github.com/nikolai-vysotskyi/trace-mcp/issues/635) ([#636](https://github.com/nikolai-vysotskyi/trace-mcp/issues/636)) ([af61b3a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/af61b3ade5adbd7f8b06c30c0825e2aeb3e65ed3))
+* publish the tool index — 101 registered tools had no entry anywhere (TRA-505) ([#642](https://github.com/nikolai-vysotskyi/trace-mcp/issues/642)) ([c1b9b7f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c1b9b7f145cfe19a3fcf404af8ba7fed43515ddf))
+* publish two orphan pages, noindex three internal ones ([#635](https://github.com/nikolai-vysotskyi/trace-mcp/issues/635)) ([fb4e037](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fb4e037ed809ef5547800cd2c6e4832d1aca6ea7))
+
+
+### Tests
+
+* **init:** cover the Hermes guard-hook installer (TRA-514) ([#649](https://github.com/nikolai-vysotskyi/trace-mcp/issues/649)) ([63e92af](https://github.com/nikolai-vysotskyi/trace-mcp/commit/63e92afc3fa0cc9d4215cfa9adc35129808036e2))
+* skip POSIX exec-bit assertion on Windows in hermes-hooks ([#651](https://github.com/nikolai-vysotskyi/trace-mcp/issues/651)) ([f5f2e3c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f5f2e3cf97e09d5c3336c2772982800e055000d3))
+
 ## [3.5.2](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.5.1...v3.5.2) (2026-08-30)
 
 
