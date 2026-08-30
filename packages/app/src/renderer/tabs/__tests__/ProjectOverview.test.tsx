@@ -258,6 +258,48 @@ describe('ProjectOverview surface', () => {
     expect(screen.queryByText("The daemon isn't running")).toBeNull();
   });
 
+  /* TRA-489. `deriveDaemonState` returns three values and the pane above only
+     tested one of them. 'stale' — a feed that dropped after the daemon had
+     already named some projects — left all five sections rendering, and with
+     nothing behind them all five failed: the six-statement pane, back in full.
+     Workspace can afford 'stale' because it has cached KPI numbers to keep on
+     screen; this surface caches nothing, so 'stale' here IS down. */
+  it('says a stale daemon once too, not five times', async () => {
+    daemon.projects = [{ root: ROOT, status: 'ready' }];
+    daemon.loading = false;
+    daemon.connected = false;
+    mockApi({ '/stats': null, '/coverage': null, '/subprojects': null, '/smells': null });
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByText("The daemon isn't running")).toBeTruthy();
+    expect(screen.queryByText(/may still be indexing/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+
+    /* And the toolbar dot does not keep the last snapshot's green over a pane
+       that says the daemon is gone — measured on the render, where 'stale'
+       still had `status: 'ready'` cached and showed one. */
+    expect(document.querySelector('.ws-statusdot.t-green')).toBeNull();
+    expect(document.querySelector('.ws-statusdot.t-neutral')).toBeTruthy();
+  });
+
+  /* The other uncovered branch, and the one that made the bug intermittent:
+     `loading` reduces to 'ok', so the sections render — and four local fetches
+     against a refused socket lose to no one. They finished failing before the
+     daemon conceded, painting the same four errors under a toolbar that said
+     "Checking…". Until the daemon has answered there is nothing to fetch. */
+  it('does not paint section failures before the daemon has answered', async () => {
+    daemon.projects = [];
+    daemon.loading = true;
+    daemon.connected = false;
+    mockApi({ '/stats': null, '/coverage': null, '/subprojects': null, '/smells': null });
+    render(<ProjectOverview root={ROOT} />);
+
+    expect(await screen.findByRole('button', { name: 'Checking…' })).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/may still be indexing/)).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    expect(screen.queryByText("The daemon isn't running")).toBeNull();
+  });
+
   it('keeps the chrome and offers a retry when a section fails', async () => {
     mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': NO_SMELLS });
     render(<ProjectOverview root={ROOT} />);

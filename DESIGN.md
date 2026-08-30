@@ -576,6 +576,32 @@ is not one that is failing to. `connected` is false for the first moments of eve
 mount, so a surface that invents its own check flashes a daemon-down pane on every
 open.
 
+**Reading one of the reducer's three values is not reading the reducer, and `stale`
+means nothing on a surface that caches nothing.** `deriveDaemonState()` returns
+`ok`, `stale` and `unreachable`; a surface that tests `=== 'unreachable'` has left
+the other two rendering as if the daemon were fine. Workspace can afford `stale`
+because it has the last KPI numbers to keep on screen under a line that qualifies
+them. Project Overview has no cached section data, so `stale` there is not "last
+known values" — it is every section failing at once, which is the state the pane
+exists to replace. A surface with nothing to keep on screen has two states, not
+three (TRA-489).
+
+Two corollaries, both of which shipped broken behind the first version of that test:
+
+- **`ok` is also returned while the daemon is still loading, and a surface that
+  fires its own fetches under that answer will render their failures before the
+  reducer concedes.** Four local fetches against a refused socket fail in
+  milliseconds; `useDaemon` takes up to `DAEMON_FETCH_TIMEOUT_MS`. Don't ask a
+  daemon that has not answered yet — hold the fetches, and the sections stay on
+  their skeletons instead of racing to an error. This is what makes such a bug look
+  intermittent: whether you see it depends on which finished first, so a harness
+  that samples once, late, will report it fixed.
+- **A cached status indicator has to step aside too.** A `stale` daemon still holds
+  `status: 'ready'` from its last answer, and a green dot over a pane reading "The
+  daemon isn't running" is the second statement the rule above forbids — and the
+  wrong one. Whatever renders the last snapshot goes neutral when the surface has
+  declared the source gone.
+
 **An empty list and no list are two different facts, and a `catch` that writes `[]`
 destroys the difference.** The empty state is then free to explain a result that
 was never received: the sidebar's file list told the user "No indexed files match
