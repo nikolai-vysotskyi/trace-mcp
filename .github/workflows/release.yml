@@ -197,21 +197,54 @@ jobs:
           ROOT_VERSION=$(node -p "require('../../package.json').version")
           npm pkg set version="$ROOT_VERSION"
 
+      # Sign + notarize (TRA-436). The certificate never leaves this step's
+      # environment, and this workflow only ever runs on `push: master` or
+      # workflow_dispatch — neither is reachable from a fork — so a fork PR
+      # cannot obtain the signing material. electron-builder reads CSC_* for
+      # the Developer ID identity and APPLE_* for notarytool; it prints neither.
+      # Do not add `--debug` here: it dumps the resolved env.
       - name: Package with electron-builder
         working-directory: packages/app
         env:
           ARCH: ${{ matrix.arch }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm exec electron-builder --mac --${{ matrix.arch }} --publish never
+
+      # electron-builder reports a skipped signature as a warning and exits 0,
+      # so a missing or expired certificate would publish an ad-hoc build that
+      # Gatekeeper rejects — the exact TRA-436 symptom — with a green release.
+      # Assert the real properties instead: a Developer ID team identifier, and
+      # a stapled notarization ticket. `spctl` is checked on the unzipped app
+      # rather than the DMG because the ticket is stapled to the .app.
+      - name: Assert the app is signed and notarized
+        working-directory: packages/app
+        run: |
+          APP=$(find release/mac* -maxdepth 1 -name '*.app' -print -quit)
+          if [ -z "$APP" ]; then echo "::error::no .app produced"; exit 1; fi
+          codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Authority|TeamIdentifier'
+          if codesign -dv "$APP" 2>&1 | grep -q 'TeamIdentifier=not set'; then
+            echo "::error::$APP is ad-hoc signed — CSC_LINK/CSC_KEY_PASSWORD did not reach electron-builder"
+            exit 1
+          fi
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          xcrun stapler validate "$APP"
+          spctl -a -vvv -t install "$APP"
 
       # Per-asset .sha256 files only (no combined manifest) because matrix
       # jobs run in parallel and would clobber each other's SHASUMS256.txt.
       - name: Generate SHA-256 per-asset checksums
-        run: node scripts/generate-shasums.mjs packages/app/release .zip
+        run: node scripts/generate-shasums.mjs packages/app/release .zip .dmg
 
       - name: Generate SLSA build provenance attestation
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: 'packages/app/release/*.zip'
+          subject-path: |
+            packages/app/release/*.zip
+            packages/app/release/*.dmg
 
       - name: Upload to release
         env:
@@ -220,6 +253,8 @@ jobs:
           gh release upload "${{ needs.release-please.outputs.tag_name }}" \
             packages/app/release/*.zip \
             packages/app/release/*.zip.sha256 \
+            packages/app/release/*.dmg \
+            packages/app/release/*.dmg.sha256 \
             --clobber
 
   build-app-win:

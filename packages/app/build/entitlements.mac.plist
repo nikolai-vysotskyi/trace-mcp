@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- V8 compiles JavaScript to machine code at runtime. Without this the
+       renderer dies on first script under hardened runtime. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+
+  <!-- V8's code pages are written before they are mapped executable, which
+       hardened runtime blocks on its own; allow-jit alone is not enough for
+       Electron. -->
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+
+  <!-- Electron sets DYLD_* when launching its own helper processes (and
+       ELECTRON_RUN_AS_NODE paths do the same for the Node runtime we reuse
+       for scripts/apply-pending-update.mjs). Hardened runtime strips DYLD_*
+       from a signed process unless this is granted. -->
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+
+  <!-- Deliberately NOT granted: com.apple.security.cs.disable-library-validation.
+       The bundle ships no third-party native code — packages/app's only runtime
+       dependencies are electron-updater and i18next, both pure JS, and the
+       indexer's native modules (tree-sitter, ONNX) live in the separately
+       installed npm CLI, which we spawn as a child process rather than load
+       into this address space. Spawning an unsigned binary is unaffected by
+       library validation. If a future release vendors a native module signed by
+       someone else, add it back here with that reason written down. -->
+</dict>
+</plist>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Applied to the Electron helper bundles (Renderer, GPU, Plugin). They must
+       inherit the parent's entitlements rather than declare their own; without
+       this key a signed helper launches with none of the keys below. -->
+  <key>com.apple.security.inherit</key>
+  <true/>
+
+  <!-- Same three as entitlements.mac.plist, for the same reasons: the renderer
+       helper is the process that actually runs V8, and Electron sets DYLD_* on
+       the helpers it spawns. -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+</dict>
+</plist>
