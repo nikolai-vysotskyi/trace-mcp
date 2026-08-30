@@ -27,6 +27,7 @@ import {
 } from './update-check.js';
 import {
   clampSidebarWidth,
+  parentDir,
   readSidebarCollapsed,
   readSidebarWidth,
   SIDEBAR_MAX,
@@ -416,7 +417,8 @@ function ProjectFileExplorer({
         <div role="tree" aria-label={t('projectFiles')} ref={listRef}>
           {files.map((f, i) => {
             const display = shortPath(f.path);
-            const { dir, name } = splitPath(display);
+            const { name } = splitPath(display);
+            const parent = parentDir(display);
             return (
               <SidebarRow
                 key={f.path}
@@ -425,9 +427,11 @@ function ProjectFileExplorer({
                 selected={selected === f.path}
                 glyph={<FileTypeGlyph ftype={fileKind(f.path).ftype} size={16} />}
                 label={
+                  /* Filename first, location after it — the row is 180–320px
+                     wide and only one of the two can survive that (TRA-503). */
                   <span className="ws-sb-path">
-                    {dir && <span className="dir">{dir}</span>}
                     <span className="name">{name}</span>
+                    {parent && <span className="dir">{parent}</span>}
                   </span>
                 }
                 count={sort === 'edges' ? f.edges : f.symbols}
