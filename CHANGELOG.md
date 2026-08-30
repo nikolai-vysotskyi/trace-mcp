@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.9.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.8.0...v3.9.0) (2026-08-30)
+
+
+### Features
+
+* **app:** move macOS to electron-updater and delete the staged-zip updater (TRA-437) ([#689](https://github.com/nikolai-vysotskyi/trace-mcp/issues/689)) ([b525048](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b5250484842085d0e08d481c56d13d2e894df72a))
+
+
+### Documentation
+
+* **ops:** rebalance the GitHub repo topics; note the Reddit referrer (TRA-393) ([#691](https://github.com/nikolai-vysotskyi/trace-mcp/issues/691)) ([d747bf9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d747bf913e3a18cc0d402a4e2df7bfa201d01fb6))
+
+
+### Tests
+
+* **app:** cover the restart-budget guard where checkHealth calls it (TRA-558) ([#688](https://github.com/nikolai-vysotskyi/trace-mcp/issues/688)) ([eb94851](https://github.com/nikolai-vysotskyi/trace-mcp/commit/eb94851bf02f1b20a9e705966e32ea58304f50d9))
+
 ## [3.8.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.7.0...v3.8.0) (2026-08-30)
 
 
