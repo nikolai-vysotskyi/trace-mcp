@@ -231,6 +231,16 @@ const ToolsConfigSchema = z
     description_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
     /** Server instructions verbosity: full (default ~2K tokens), minimal (~200 tokens), none (empty) */
     instructions_verbosity: z.enum(['full', 'minimal', 'none']).default('full'),
+    /**
+     * Per-client tailoring of the advertised surface (TRA-513). "auto" resolves
+     * the profile from the `initialize` handshake's `clientInfo.name`; a profile
+     * name pins it for a host we guessed wrong about; "off" disables the layer
+     * and advertises the full preset surface to every client. Env override:
+     * TRACE_MCP_CLIENT_PROFILE.
+     */
+    client_profile: z
+      .enum(['auto', 'off', 'claude-code', 'codex', 'cursor', 'vscode', 'generic'])
+      .default('auto'),
     /** Agent behavior rules appended to server instructions. strict = full discipline rules (anti-sycophancy, goal-driven execution, 2-strike rule), minimal = anti-fabrication only, off = no behavior rules. Auto-set to "strict" by Max-tier init. */
     agent_behavior: z.enum(['strict', 'minimal', 'off']).default('off'),
     /** Control which meta fields appear in responses. true = all (default), false = none, or list specific fields to include */
