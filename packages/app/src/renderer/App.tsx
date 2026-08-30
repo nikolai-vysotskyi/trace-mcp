@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppMenu } from './components/AppMenu';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -37,7 +37,6 @@ import {
   writeSidebarWidth,
 } from './sidebar-prefs.js';
 import { Activity } from './tabs/Activity';
-import { AskTab } from './tabs/AskTab';
 import { Clients } from './tabs/Clients';
 import {
   DEFAULT_GRAPH_GPU_SETTINGS,
@@ -52,6 +51,11 @@ import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
 import { type Appearance, useTheme } from './theme.js';
 import { Workspace } from './workspace/Workspace';
+
+// The Ask tab is the only thing that pulls react-markdown + remark-gfm in, and
+// that stack is ~24% of the renderer entry chunk. Loading it with the tab keeps
+// it out of startup for every window that never opens Ask.
+const AskTab = lazy(() => import('./tabs/AskTab').then((m) => ({ default: m.AskTab })));
 
 // ── URL params determine window type ──────────────────────────
 // ?view=menu&tab=workspace → Menu window (sidebar + Workspace/Clients/Settings)
@@ -701,7 +705,11 @@ function ProjectContent({
         <ProjectOverview root={root} onNavigateToService={onNavigateToService} />
       )}
       {/* Ask — chat interface, needs flex layout */}
-      {tab === 'ask' && <AskTab root={root} />}
+      {tab === 'ask' && (
+        <Suspense fallback={null}>
+          <AskTab root={root} />
+        </Suspense>
+      )}
       {/* Activity — live MCP tool-call feed for this project */}
       {tab === 'activity' && <Activity root={root} onOpenFileInGraph={onOpenFileInGraph} />}
       {/* Memory — decisions / corpora / sessions explorer */}

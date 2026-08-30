@@ -243,6 +243,23 @@ function bundleSizes() {
   return round(bytes / 1024, 0);
 }
 
+/**
+ * What the window actually downloads before it can render: the entry script plus
+ * whatever `index.html` preloads. Splitting a tab behind `React.lazy` moves bytes
+ * out of this number but leaves `renderer_bundle_kb` — the total on disk —
+ * unchanged, so trending only the total hides every code-splitting win.
+ */
+function eagerKb() {
+  const dir = path.join(appDir, 'dist', 'renderer');
+  const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+  const refs = [...html.matchAll(/(?:src|href)="\.?\/?([^"]+)"/g)].map((m) => m[1]);
+  // A Vite `base` change that stops the refs matching must fail the run: silently
+  // recording 0 KB would read as the largest win this metric has ever shown.
+  if (!refs.length) throw new Error('index.html referenced no assets — check Vite `base`');
+  const bytes = refs.reduce((a, r) => a + fs.statSync(path.join(dir, r)).size, 0);
+  return round(bytes / 1024, 0);
+}
+
 /** Packaged-bundle sizes, if `pnpm run pack` has been run. Null otherwise. */
 function artifactMb() {
   const dir = path.join(appDir, 'release', 'mac-arm64');
@@ -644,7 +661,10 @@ const entry = {
   date: new Date().toISOString(),
   app_version: JSON.parse(fs.readFileSync(path.join(appDir, 'package.json'), 'utf8')).version,
   commit: process.env.PERF_COMMIT ?? null,
-  env: { os: `macOS ${os.release()}`, arch: os.arch(), node: process.version.slice(1) },
+  // `os.release()` is the Darwin release (25.x), not the marketing macOS version
+  // (26.x) — labelling it "macOS" made entries look like they came from different
+  // machines when they did not.
+  env: { os: `darwin ${os.release()}`, arch: os.arch(), node: process.version.slice(1) },
   samples: SAMPLES,
   metrics: {
     cold_start_ms: median(samples.map((s) => s.cold_start_ms)),
@@ -656,6 +676,7 @@ const entry = {
     heap_growth_mb_per_hour: workload.heap_growth_mb_per_hour,
     main_cpu_idle_pct: last.main_cpu_idle_pct ?? null,
     renderer_bundle_kb: bundleSizes(),
+    renderer_eager_kb: eagerKb(),
     artifact_mb: artifactMb(),
   },
   raw_samples: samples,

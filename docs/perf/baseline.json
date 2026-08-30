@@ -100,6 +100,59 @@
         }
       },
       "notes": "MACHINE WAS LOADED \u2014 load average 11-22 throughout (a dozen sibling agent checkouts running their own Electron builds). cold_start_ms and window_interactive_ms are NOT comparable to run 1's 349/121: both are wall-clock across this harness's 20 ms poll loop and CDP round-trips, which a loaded machine inflates by hundreds of ms. Do not read the 349 -> 1005 as a regression. This run adds renderer_fcp_ms, read off the renderer's own clock after the fact and so free of harness latency; use it as the startup metric of record from now on. Interleaved A/B on this same loaded machine, 7 rounds, one sample each, alternating builds: 9459d4ce (run 1's commit) median FCP 288 ms, 9cdccf9b (pre-i18n) 300 ms, 6ebbbd56 (HEAD) 284 ms. Renderer boot is flat-to-slightly-better across the whole range \u2014 the macOS 26 redesign and the i18n runtime cost nothing measurable at startup. The same interleave on window_interactive_ms said 176 -> 507 ms (+188%), which was entirely the harness; that is what motivated the new metric. renderer_bundle_kb 1461 -> 1700 (+16%, warning zone, no issue): i18next+react-i18next runtime +48 KB (e0ec6cc2), the en/ru catalogues +65 KB (TRA-384/385/386), rest CSS/app. REGRESSION FOUND AND FIXED THIS RUN: mac_asar 1.6 -> 5.8 MB (3.6x, past the 1.5x ceiling). TRA-257's blanket !node_modules/** had to be replaced by an explicit node_modules/** include so the main process keeps electron-updater; that re-admitted every production dependency, and the i18n PR made react-i18next (1.0 MB) plus its @babel/runtime tree (1.1 MB) production dependencies even though Vite already bundles them into dist/renderer. Moving react-i18next to devDependencies: 5.8 -> 4.85 MB. The remaining 4.85 is genuine main-process runtime (electron-updater + js-yaml + i18next, which the app menu/tray need). Guarded by packages/app/src/main/__tests__/packaged-deps.test.ts. Process-tree RSS (tree_rss_*) deliberately not taken: a dozen unrelated agent Electron trees were resident, so any ps-based tree number would have been noise. Take those on a quiet machine; run 2's daemon numbers still stand."
+    },
+    {
+      "date": "2026-08-30T13:21:30.832Z",
+      "app_version": "3.6.0",
+      "commit": "39026ebd",
+      "env": {
+        "os": "darwin 25.5.0",
+        "arch": "arm64",
+        "node": "22.22.3"
+      },
+      "samples": 3,
+      "metrics": {
+        "cold_start_ms": 801,
+        "window_interactive_ms": 506,
+        "renderer_fcp_ms": 216,
+        "ui_p95_ms": null,
+        "heap_idle_mb": 9.5,
+        "heap_after_workload_mb": null,
+        "heap_growth_mb_per_hour": null,
+        "main_cpu_idle_pct": 0,
+        "renderer_bundle_kb": 2272,
+        "renderer_eager_kb": 2102,
+        "artifact_mb": {
+          "mac_app_unpacked": null,
+          "mac_asar": null
+        },
+        "rss_by_role_mb": {
+          "installed_app_idle_total": 315,
+          "installed_app_main": 179,
+          "installed_app_helpers": 136,
+          "mcp_server_http_demo_project": 884
+        }
+      },
+      "raw_samples": [
+        {
+          "cold_start_ms": 1155,
+          "window_interactive_ms": 626,
+          "renderer_fcp_ms": 236
+        },
+        {
+          "cold_start_ms": 737,
+          "window_interactive_ms": 440,
+          "renderer_fcp_ms": 160
+        },
+        {
+          "cold_start_ms": 801,
+          "window_interactive_ms": 506,
+          "renderer_fcp_ms": 216,
+          "heap_idle_mb": 9.5,
+          "main_cpu_idle_pct": 0
+        }
+      ],
+      "notes": "Measured with this run's own AskTab code split applied, so it is recorded against the split commit (39026ebd), not its pre-split parent ccc3b45b \u2014 re-measuring at ccc3b45b gives ~2270 KB eager and would read as a regression. renderer_bundle_kb 1700 -> 2272 (+34%) is a real regression against run 3 and is what this run went after: the entry chunk alone had grown 740 -> 1316 KB since 3.2.0. react-markdown + remark-gfm (the Ask tab's only dependency, ~24% of the entry chunk's source) were eagerly bundled; putting AskTab behind React.lazy moved 168 KB out of the startup path (entry 1316 -> 1148 KB). renderer_bundle_kb is unchanged by that fix by construction \u2014 it sums every file on disk \u2014 so this run adds renderer_eager_kb (entry + everything index.html preloads): 2270 -> 2102 KB. Trend renderer_eager_kb from here; renderer_bundle_kb stays as the total-weight check. renderer_fcp_ms 216 vs run 3's 220 and vs 168 measured on the same machine an hour earlier pre-fix: the split does not move FCP, it only removes bytes \u2014 same shape as the 2026-08-28 cosmos.gl negative result. Machine load 6-22 throughout (a dozen sibling agent checkouts), so cold_start_ms/window_interactive_ms are sanity checks against the 3 s ceiling only. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour still null: a foreign daemon held 3741 for this whole run. Process-tree snapshot (uncontrolled, ambient machine, do not trend): the installed app idles at 315 MB across 3 processes, fine; a `serve-http` daemon serving only /tmp/tmcpchk/demo held 884 MB RSS, past the 500 MB idle ceiling. Not filed as an issue because that daemon's history is unknown on a machine running a dozen agents - next run should reproduce it in a controlled scenario before filing."
     }
   ]
 }
