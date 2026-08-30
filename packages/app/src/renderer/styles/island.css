@@ -957,3 +957,28 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   font-size: 11px;
   opacity: 0.8;
 }
+
+/* ============================================================================
+   WORKSPACE TABLE — .ws-table (TRA-452)
+
+   Separated borders, not collapsed. Chromium drops `box-shadow` on table cells
+   in the collapsed model, so the seam the pinned columns have declared since
+   TRA-265 never painted a pixel — and with it went the only sign that four of
+   the ten columns sit under the Actions pin at the default window width.
+   The separated model draws borders on cells rather than rows, so the row
+   hairline moves here from the `<tr>`; the windowing spacers carry a colspan
+   and get none.
+   ============================================================================ */
+.ws-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.ws-table th,
+.ws-table td {
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.ws-table td[colspan] {
+  border-bottom: 0;
+}
