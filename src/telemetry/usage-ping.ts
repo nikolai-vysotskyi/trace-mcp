@@ -5,11 +5,12 @@
  * that bridge exports a *user's own* spans to a backend *they* configure. This
  * module reports back to the maintainer instead — a single daily event with
  * an anonymous install id, the trace-mcp version, Node major version,
- * platform, IANA timezone, the MCP client name (e.g. "claude-code"), and two
- * aggregate counters since the previous ping (tool calls and estimated tokens
- * saved). No IP override, no project paths, file names, query content,
- * per-tool or per-project breakdown, or anything else that could identify a
- * user or their code.
+ * platform, the country its timezone belongs to, the MCP client name (e.g.
+ * "claude-code"), the model that client mostly drove, how many repositories
+ * are indexed, and two aggregate counters since the previous ping (tool calls
+ * and estimated tokens saved). Counts and names only: no IP, no project paths,
+ * file names, query content, per-tool or per-project breakdown, and nothing
+ * that could identify a user or their code.
  *
  * Transport is GA4's Measurement Protocol (a plain HTTP POST to a Google
  * endpoint) rather than a self-hosted collector, so there's no backend to
@@ -27,6 +28,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { logger } from '../logger.js';
 import { loadPersistentSavings } from '../savings.js';
+import { topModelLastDay } from './top-model.js';
+import { countryForTimezone } from './tz-country.js';
 import { TELEMETRY_STATE_PATH } from '../shared/paths.js';
 
 declare const GA_MEASUREMENT_ID_INJECTED: string;
@@ -106,12 +109,18 @@ export function recordUsagePingClient(name: string, env: NodeJS.ProcessEnv = pro
   }
 }
 
-/** IANA zone of the machine, e.g. "Europe/Berlin". Coarse "where" without an IP lookup. */
-function timezone(): string {
+/**
+ * ISO country of the machine, derived from its timezone setting — this is what
+ * fills GA4's map. Deliberately *not* from an IP: `ip_override` and a geo-IP
+ * lookup would both put a network address in scope, and country granularity
+ * answers "which regions use this" just as well.
+ */
+function country(): string | undefined {
   try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown';
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return zone ? countryForTimezone(zone) : undefined;
   } catch {
-    return 'unknown';
+    return undefined;
   }
 }
 
@@ -137,6 +146,7 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
   const today = utcDate(opts.nowMs ?? Date.now());
   if (state.lastPingDate === today) return;
 
+  const countryId = country();
   const savings = (opts.loadSavings ?? loadPersistentSavings)();
   const tokensSaved = delta(savings?.total_tokens_saved, state.lastTokensSaved);
   const calls = delta(savings?.total_calls, state.lastCalls);
@@ -149,6 +159,9 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
       method: 'POST',
       body: JSON.stringify({
         client_id: state.installId,
+        // Country only, from the machine's own timezone. `ip_override` stays
+        // unset — Google derives nothing about the network from this request.
+        ...(countryId ? { user_location: { country_id: countryId } } : {}),
         events: [
           {
             name: 'app_open',
@@ -159,7 +172,8 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
               tokens_saved: tokensSaved,
               calls,
               client: state.client ?? 'unknown',
-              timezone: timezone(),
+              model: topModelLastDay() ?? 'unknown',
+              repos_indexed: Object.keys(savings?.per_project ?? {}).length,
               // Without these two GA4 keeps the event but doesn't count the
               // install as an active user — reports read 0 while the raw event
               // count is non-zero. See the "Tip" under `session_id` /
