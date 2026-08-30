@@ -20,7 +20,7 @@ import {
 } from './lattice/ui';
 import {
   formatAgo,
-  QUARANTINE_COMMAND,
+  quarantineCommand,
   type UpdateCheck,
   useUpdateCheck,
 } from './update-check.js';
@@ -580,7 +580,10 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
             escape hatch that ends in an error dialog is not an escape hatch —
             the card carries the command that clears it (TRA-431). */}
         <CardSubtitle>{t('cardStuckQuarantine')}</CardSubtitle>
-        <CommandLine command={QUARANTINE_COMMAND} label={t('copyQuarantineCommand')} />
+        <CommandLine
+          command={quarantineCommand(state.installPath)}
+          label={t('copyQuarantineCommand')}
+        />
       </CardShell>
     );
   }

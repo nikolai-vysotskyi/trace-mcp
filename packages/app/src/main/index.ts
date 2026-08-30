@@ -642,7 +642,12 @@ ipcMain.handle('check-for-update', async () => {
   // in because the user's own npm may own a root the static scan never guesses.
   const { configRoot, binRoot } = await resolveNpmRoots();
   const staleRoots = staleRootClientsUse(configRoot, binRoot);
-  return staleRoots.length > 0 ? { ...result, staleRoots } : result;
+  // The manual-install card's `xattr` command has to name the bundle the user
+  // actually has. Hard-coding `/Applications` missed every install under
+  // `~/Applications` — which is the locator's *first* fallback directory, so
+  // far from an exotic case (TRA-460).
+  const withPath = BUNDLE_PATH ? { ...result, installPath: BUNDLE_PATH } : result;
+  return staleRoots.length > 0 ? { ...withPath, staleRoots } : withPath;
 });
 
 async function checkForUpdate() {
