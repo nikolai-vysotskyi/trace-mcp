@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.5.1](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.5.0...v3.5.1) (2026-08-30)
+
+
+### Bug Fixes
+
+* **app:** a baseline taken while the daemon was silent is not a baseline ([#602](https://github.com/nikolai-vysotskyi/trace-mcp/issues/602)) ([8319504](https://github.com/nikolai-vysotskyi/trace-mcp/commit/83195041baaa5db58a821baf00067865b8b739df))
+* **app:** centre the daemon-down pane on Project Overview (TRA-469) ([#614](https://github.com/nikolai-vysotskyi/trace-mcp/issues/614)) ([14313a4](https://github.com/nikolai-vysotskyi/trace-mcp/commit/14313a4a7eb4cc2b8ad12074125ecb5e3bc1be9b))
+* **app:** point the quarantine command at the real install path ([#604](https://github.com/nikolai-vysotskyi/trace-mcp/issues/604)) ([c416638](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c416638f7da812b2fae4bdf472c7b9b58a09d65d))
+* **app:** Project Overview says a dead daemon once, not six times (TRA-469) ([#611](https://github.com/nikolai-vysotskyi/trace-mcp/issues/611)) ([c5340ca](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c5340ca7d0ba15b661f91a4e0a02c903007189d3))
+* **app:** the KPI strip is a grid of equal tracks, not a wrapping flexbox (TRA-467) ([#608](https://github.com/nikolai-vysotskyi/trace-mcp/issues/608)) ([f992cb5](https://github.com/nikolai-vysotskyi/trace-mcp/commit/f992cb5465d198ac2f59ac0940f65ba98ba1bca0))
+* **app:** the projects table shades what its pinned column covers ([#596](https://github.com/nikolai-vysotskyi/trace-mcp/issues/596)) ([421c157](https://github.com/nikolai-vysotskyi/trace-mcp/commit/421c1576a1bda8639d0027ed849af927ee813144))
+* **app:** the sidebar file list stops blaming the scope for a dead daemon (TRA-471) ([#615](https://github.com/nikolai-vysotskyi/trace-mcp/issues/615)) ([84ae30c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/84ae30cc6837833965c3ab4dce565e61bd8b99fc))
+* **indexer:** reconcile scope on full reindex, keep git-ignored files out ([#610](https://github.com/nikolai-vysotskyi/trace-mcp/issues/610)) ([13d26bd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/13d26bd6263ee4aa08c1806de5b33b38c195d59a))
+* **site:** a scrollable table says so (TRA-461) ([#606](https://github.com/nikolai-vysotskyi/trace-mcp/issues/606)) ([fb9c5ee](https://github.com/nikolai-vysotskyi/trace-mcp/commit/fb9c5ee95f89c7b0699e458984c415457ee25795))
+* **workspace:** measure the pane before the first paint, not after it ([#612](https://github.com/nikolai-vysotskyi/trace-mcp/issues/612)) ([5fdc586](https://github.com/nikolai-vysotskyi/trace-mcp/commit/5fdc5865d2a4774d2e74b010c1efadab10f335c6))
+* **workspace:** two overlapping KPI sets stop wearing the grammar of a partition (TRA-459) ([#605](https://github.com/nikolai-vysotskyi/trace-mcp/issues/605)) ([6079be2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6079be2942a4ec7159abb0e6d452f94ce0c651bb))
+
+
+### Documentation
+
+* **ops:** Cline is not an agent-alone submission after all (TRA-393) ([#599](https://github.com/nikolai-vysotskyi/trace-mcp/issues/599)) ([ad54c57](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ad54c578d8d5b164bfa08c1c971f26a441313933))
+* price the default tool surface on one basis everywhere (TRA-448) ([#597](https://github.com/nikolai-vysotskyi/trace-mcp/issues/597)) ([4cbd69f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4cbd69f7f03e17bff77a7e7d77b9bb1376bcb383))
+* re-measure the standard tool surface on comparisons.md (TRA-455) ([#601](https://github.com/nikolai-vysotskyi/trace-mcp/issues/601)) ([94f69ef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/94f69effc65c1be1b0fc6e1676e24417bf715f3b))
+* **workspace:** two comments in Workspace.tsx that TRA-467 left behind ([#616](https://github.com/nikolai-vysotskyi/trace-mcp/issues/616)) ([ece028f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ece028fd16c3033e9c83ca9eac44155527790cdd))
+
+
+### Chores
+
+* **deps:** unblock i18next 26 + react-i18next 17, restore the commander hold ([#607](https://github.com/nikolai-vysotskyi/trace-mcp/issues/607)) ([af2985f](https://github.com/nikolai-vysotskyi/trace-mcp/commit/af2985fe5bf7021ffc5b2e587399db733578dd31))
+
 ## [3.5.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.4.0...v3.5.0) (2026-08-29)
 
 
