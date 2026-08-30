@@ -54,6 +54,8 @@ export const workspace = {
   kpiNoProjectsYet: 'プロジェクトなし',
   kpiNothingIndexedYet: '未インデックス',
   kpiNothingRunning: '実行中なし',
+  kpiHealthyCriteria: '評価 A か B、セキュリティの検出なし',
+  kpiNeedsAttentionCriteria: '低い評価または検出あり',
   kpiShare_other: '{{total}} 件中 {{percent}}%',
   kpiDeltaCaption: '{{when}}との比較',
   kpiNoChange: '変化なし',

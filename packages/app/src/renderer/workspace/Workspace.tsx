@@ -82,7 +82,11 @@ function loadFilter(): WorkspaceFilter {
 // Pane and strip geometry, all read off the rendered surface rather than guessed.
 const TILE_MIN_W = 132; // KpiTile's flex basis
 const TILE_GAP = 16; // gap-4
-const TILE_H = 99; // a full-height tile: 16 + 13 + 4 + 32 + 4 + 13 + 16 + hairlines
+// A full-height tile: 16 + 13 + 4 + 32 + 4 + 26 + 16 + hairlines. The comparison
+// line reserves two 13px lines rather than one, because at 132–214px of tile a
+// criterion or a long translation wraps and a one-line constant would then
+// under-report the strip by 13px a row (TRA-459).
+const TILE_H = 112;
 const STRIP_PAD = 28; // pt-4 + pb-3
 const TOOLBAR_H = 52;
 const PANE_PAD = 32; // px-4, both sides
@@ -103,8 +107,8 @@ export const TABLE_MIN_PANE_W = PANE_PAD + FROZEN_COLS_W + MIN_SCROLL_WINDOW;
 
 /**
  * How tall the full-height KPI strip would be in a pane this wide. The tiles
- * flex-wrap, so width decides how many rows of 99px there are — at the app's
- * 640px minimum window this returns 357, which is what the strip measured.
+ * flex-wrap, so width decides how many rows of 112px there are — at the app's
+ * 640px minimum window that is three rows, 396px.
  */
 export function kpiStripHeight(paneW: number): number {
   const inner = Math.max(0, paneW - PANE_PAD);

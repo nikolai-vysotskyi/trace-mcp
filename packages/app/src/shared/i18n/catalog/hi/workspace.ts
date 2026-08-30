@@ -58,6 +58,8 @@ export const workspace = {
   kpiNoProjectsYet: 'अभी कोई प्रोजेक्ट नहीं',
   kpiNothingIndexedYet: 'अभी कुछ इंडेक्स नहीं हुआ',
   kpiNothingRunning: 'कुछ नहीं चल रहा',
+  kpiHealthyCriteria: 'ग्रेड A या B, कोई सिक्योरिटी findings नहीं',
+  kpiNeedsAttentionCriteria: 'कम ग्रेड या कोई findings',
   kpiShare_one: '{{total}} प्रोजेक्ट का {{percent}}%',
   kpiShare_other: '{{total}} प्रोजेक्ट का {{percent}}%',
   kpiDeltaCaption: '{{when}} की तुलना में',

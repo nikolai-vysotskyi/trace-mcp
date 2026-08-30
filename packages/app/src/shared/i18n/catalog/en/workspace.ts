@@ -73,6 +73,13 @@ export const workspace = {
   kpiNoProjectsYet: 'no projects yet',
   kpiNothingIndexedYet: 'nothing indexed yet',
   kpiNothingRunning: 'nothing running',
+  /**
+   * What each preset tile counts. Healthy and Needs attention are
+   * overlapping predicates, not two halves of the workspace, so their
+   * comparison line names the criterion instead of a share of a total.
+   */
+  kpiHealthyCriteria: 'grade A or B, no security findings',
+  kpiNeedsAttentionCriteria: 'low grade or any findings',
   kpiShare_one: '{{percent}}% of {{total}} project',
   kpiShare_other: '{{percent}}% of {{total}} projects',
   /** `when` is a relative time from i18n/format.ts, e.g. "3 days ago". */

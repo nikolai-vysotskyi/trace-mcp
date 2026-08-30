@@ -865,7 +865,7 @@ the pane with one `ResizeObserver` and derive from it. `Workspace.tsx` is the pa
 `TABLE_MIN_PANE_W` is *computed* from the table's own frozen columns plus a minimum
 scroll window, and `isDensePane()` compares the pane's height against
 `kpiStripHeight(paneW)` rather than against a guessed breakpoint — which is why it
-reproduces the measured 357px exactly instead of drifting from it.
+reproduces the strip's measured height exactly instead of drifting from it.
 
 **What gives way, in order.** Never the identity of the screen; always the
 elaboration.
@@ -1211,7 +1211,9 @@ new evidence.
 | An unshrinkable control gets a narrow form; wrapping alone does not save it | `flex-wrap` gives a segmented control its own line but cannot narrow it. Insights' 371px picker in a 262px band ran 96.6px past a 640px window and left "Risk hotspots" 14 of its 108px — unreachable. Below the width where the segments fit it is a `PopUpButton`. |
 | A collapse threshold reads a width the collapsing thing cannot change | Measured against its own slot, the Insights picker was bistable: the slot is narrower beside the title and full-width once the picker wraps, so both controls were self-consistent at one window size and the render depended on which way the user had resized. The toolbar's width is the honest input. |
 | A shrinkable control declares a length `flex-basis`, never `auto` | A wrapping flex line breaks on hypothetical sizes, so `flex-basis: auto` spends none of the control's slack first. `.lx-search` on `auto` wrapped Memory's toolbar at the default 960px window; on `1 1 140px` capped at `max-content` it renders identically and holds one row to a 740px pane. |
-| Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` reproduces the measured 357px; a guessed number drifts the first time a tile changes. |
+| Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` is derived from the tile's own geometry; a guessed number drifts the first time a tile changes — as it did when the comparison line went from one reserved line to two (TRA-459). |
+| A share of a total is only for a set that really is a **part of that total** | Healthy and Needs attention are overlapping predicates — a grade-B project with 15 dead exports is in both — so "57% of 53 projects" beside "83% of 53 projects" is the grammar of a partition on numbers that do not partition anything. Two shares of one denominator get added by every reader who sees them side by side. A comparison line for an overlapping set names its criterion instead. |
+| A comparison line reserves its height, it does not measure it | The catalogue runs +30% longer in German and Russian and a tile is 132–214px wide, so whether the line wraps is not a property of the design. `KpiTile` reserves two 13px lines whatever the string does, which is what lets one `TILE_H` constant hold: measured on the running renderer, every tile is 112px in en/de/ja and both criterion lines are 26px in ru. The reservation is a floor, not a cap — Russian's delta caption (`↑+105.6k по сравнению с: 9 минут назад`) still runs to four lines and takes its row to 138px, which is a separate defect and not something `TILE_H` can absorb. |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
 | A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
