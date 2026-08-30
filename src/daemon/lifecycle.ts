@@ -659,6 +659,33 @@ export function writeOwnDaemonPidFile(): void {
   }
 }
 
+/** How often a serving daemon re-asserts its own daemon.pid (TRA-525). */
+export const PID_REASSERT_INTERVAL_MS = 30_000;
+
+/**
+ * Re-assert this process's daemon.pid registration if it went missing or was
+ * overwritten by another process (TRA-525).
+ *
+ * `readDaemonPid()` unlinks the file whenever it names a dead process. That is
+ * right for a stale file, but it meant one poisoning event — a losing spawn
+ * writing its PID and then dying — permanently deleted the live daemon's
+ * registration, and nothing ever rewrote it. `isDaemonProcessAlive()` then
+ * answered "dead" for the rest of the daemon's life, so every /health miss
+ * became a restart.
+ *
+ * Idempotent: reads first and only writes when the file does not already name
+ * this process. Best-effort; never throws.
+ */
+export function reassertOwnDaemonPidFile(): void {
+  try {
+    const raw = readIfExists(getPidFilePath());
+    if (raw !== null && parsePidFile(raw)?.pid === process.pid) return;
+    writeOwnDaemonPidFile();
+  } catch {
+    /* best-effort — a missed re-assert costs one watchdog cycle, not a crash */
+  }
+}
+
 /** Remove daemon.pid on graceful shutdown. Best-effort; never throws. */
 export function clearOwnDaemonPidFile(): void {
   try {
