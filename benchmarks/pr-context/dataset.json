@@ -1,0 +1,650 @@
+[
+  {
+    "repo": "honojs/hono",
+    "number": 5291,
+    "title": "fix(client): normalize root WebSocket URLs",
+    "base_sha": "5e5b83d6ed963a2bc7d8384002e1c953648253b1",
+    "head_sha": "564adb92df4c6ad2f539b58cfcdbcc427a180193",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5291"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5283,
+    "title": "fix(client): omit empty query delimiter",
+    "base_sha": "28a9c128912de19f3fb28b00ae289c9b93f6f392",
+    "head_sha": "a963538f508822e5e040dc1e108b5ea7d1429de6",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5283"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5239,
+    "title": "fix(etag): copy pending stream bytes",
+    "base_sha": "41bdc4288ed7023c24d35f32bd065bd963435e3e",
+    "head_sha": "62c815f5924dcf42f62a3d464fdbcb895fe760d8",
+    "changed_files": 3,
+    "url": "https://github.com/honojs/hono/pull/5239"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5288,
+    "title": "fix(request): serialize cached JSON body in cloneRawRequest",
+    "base_sha": "612b59c0227b421090d46721cd5a98243ad8c6ec",
+    "head_sha": "e5690dd579200a0e004afb040191ffa439589ebc",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5288"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5268,
+    "title": "fix(request): handle params on unmatched requests",
+    "base_sha": "0293343dbf8f0bca52b210a98bcef31cc61395ee",
+    "head_sha": "31bfbab97d8426c8a0a5353e931b44811f0ff7b4",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5268"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5215,
+    "title": "fix(client): send falsy JSON bodies",
+    "base_sha": "26de73133b8552f56ba72e025ecd82b08900d796",
+    "head_sha": "7f0ee5765333dcbb58f39cb9cd87963f571f3110",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5215"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5236,
+    "title": "fix(trie-router): match suffix wildcard routes",
+    "base_sha": "41bdc4288ed7023c24d35f32bd065bd963435e3e",
+    "head_sha": "7c7958f015f8206128aa28550f809fdd03623767",
+    "changed_files": 4,
+    "url": "https://github.com/honojs/hono/pull/5236"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5282,
+    "title": "fix(request): drop stale content length for cloned FormData",
+    "base_sha": "28a9c128912de19f3fb28b00ae289c9b93f6f392",
+    "head_sha": "7a8d6d7372a336af233e0ee0788d88e9df545603",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5282"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5244,
+    "title": "fix(client): skip undefined header and cookie values",
+    "base_sha": "41bdc4288ed7023c24d35f32bd065bd963435e3e",
+    "head_sha": "f372b33b859c96bab20e3c5cc216c4867d375dd6",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5244"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5202,
+    "title": "fix(client): serialize multiple cookies correctly",
+    "base_sha": "cf785287b5ab41496a333c9c4b53b0f98ac731b9",
+    "head_sha": "58776f87ba107eb2f8be55b11535b279d63d4af2",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5202"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5250,
+    "title": "fix(csrf): exempt OPTIONS request from CSRF validation",
+    "base_sha": "8bf03c377a39226b3dbcbcadf3b342532e1dd0a8",
+    "head_sha": "2505a1f7e4180a9298bcd33283e0c8fe9eb77f36",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5250"
+  },
+  {
+    "repo": "honojs/hono",
+    "number": 5280,
+    "title": "fix(client): skip an undefined entry inside a form array",
+    "base_sha": "2059584f84187a688354956e0647269834ccf3a6",
+    "head_sha": "8de5803c81055f87f7086d7e1ce82f423acc87aa",
+    "changed_files": 2,
+    "url": "https://github.com/honojs/hono/pull/5280"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11172,
+    "title": "fix: harden request option resolution and no_proxy matching",
+    "base_sha": "a930f390d8ecd262bb91c25bf22840f6ed6ec204",
+    "head_sha": "4d247cf9dc2ed69ecce2988dc8b30cba7ac234ca",
+    "changed_files": 8,
+    "url": "https://github.com/axios/axios/pull/11172"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11118,
+    "title": "fix(interceptors): tolerate nullish handlers in syncHandlerEntries",
+    "base_sha": "d19040bda7a8be2f82c3c6e1a5bc03917daee39a",
+    "head_sha": "a56dd3c4674754f594ac4f138845003ea88283e9",
+    "changed_files": 2,
+    "url": "https://github.com/axios/axios/pull/11118"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11119,
+    "title": "docs(readme): fix broken interceptor test link",
+    "base_sha": "f64e4586e9a6a6458af9364bc0b5839ce8cac571",
+    "head_sha": "02af6dfc9439b4420b7ced6a5f481b21b0e47e8c",
+    "changed_files": 1,
+    "url": "https://github.com/axios/axios/pull/11119"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11096,
+    "title": "fix: core methodList, HTTP adapter errors, and add tests",
+    "base_sha": "2d2a21af8a433089474a2149781799c93acbcf3c",
+    "head_sha": "615ae66922da73999c3cc35aeab491ec83af44ba",
+    "changed_files": 8,
+    "url": "https://github.com/axios/axios/pull/11096"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11087,
+    "title": "fix(interceptors): trim trailing ejected handlers",
+    "base_sha": "609dacd8cce089adc7720e11cd62405adf3b6867",
+    "head_sha": "a4cc01856d6ad2bfc8b8a6a1576134230d97e70d",
+    "changed_files": 5,
+    "url": "https://github.com/axios/axios/pull/11087"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11121,
+    "title": "fix(xhr): flush final progress during the live loadend dispatch",
+    "base_sha": "d19040bda7a8be2f82c3c6e1a5bc03917daee39a",
+    "head_sha": "3866a64b2901732ce2869c565796bb5077d2a33c",
+    "changed_files": 8,
+    "url": "https://github.com/axios/axios/pull/11121"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11094,
+    "title": "fix(xhr): reject navigation-canceled requests as ECONNABORTED",
+    "base_sha": "529ce70296334a0397f9e45e7dfa5658f6b6fdba",
+    "head_sha": "27b9d9761cba6fe477dfa6104527523ba2450ad4",
+    "changed_files": 6,
+    "url": "https://github.com/axios/axios/pull/11094"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11109,
+    "title": "fix(core): tolerate non-string stack when decorating request errors",
+    "base_sha": "712e02373f1c5ac72fdf5da16f04838338ba817e",
+    "head_sha": "e02bd93def49bfc17520379fe8c7cb08cb5f6ce3",
+    "changed_files": 3,
+    "url": "https://github.com/axios/axios/pull/11109"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11078,
+    "title": "docs: fix typo in Config defaults documentation",
+    "base_sha": "a93b1c90d919542987cc38591d10eed949a345d0",
+    "head_sha": "bfb654ae53b42c881b7c9b48b98933e6f1d111b2",
+    "changed_files": 1,
+    "url": "https://github.com/axios/axios/pull/11078"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11039,
+    "title": "fix: clamp negative progress values",
+    "base_sha": "02c2c4f891d76b15712a9edd149a2d9f7978774f",
+    "head_sha": "8695de84698639bece8eaa4eda1cc018327f94e5",
+    "changed_files": 2,
+    "url": "https://github.com/axios/axios/pull/11039"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11035,
+    "title": "fix: abort composed signals immediately",
+    "base_sha": "9e5c894ef7a07666b38973cd3031bc51e9924c6a",
+    "head_sha": "377d08d15f8cb734f0f142443fc4d046fa874d35",
+    "changed_files": 3,
+    "url": "https://github.com/axios/axios/pull/11035"
+  },
+  {
+    "repo": "axios/axios",
+    "number": 11073,
+    "title": "fix(sandbox): resolve TypeError on constant variable path assignment",
+    "base_sha": "a092bae50d1884782151b2fcea12974d6da6e376",
+    "head_sha": "555fdce8d4733a267c1b2ed49906fa6d70627c5c",
+    "changed_files": 1,
+    "url": "https://github.com/axios/axios/pull/11073"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 7390,
+    "title": "deps: bump body-parser to ^2.3.0 to fix CVE-2026-12590",
+    "base_sha": "ae6dd37680e3a00618d6c8a3e522f0ee4eeba1a4",
+    "head_sha": "7f6c30742e4209062f48472bdd442c84b5893f55",
+    "changed_files": 2,
+    "url": "https://github.com/expressjs/express/pull/7390"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 7305,
+    "title": "fix: bump qs minimum to 6.15.2",
+    "base_sha": "dae209ae6559c29cfca2a1f4414c51d89ea643d5",
+    "head_sha": "3233065ebc1102fd191591a3e6d7d034e2f9df3d",
+    "changed_files": 1,
+    "url": "https://github.com/expressjs/express/pull/7305"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 7265,
+    "title": "fix: replace deprecated trimRight() with trimEnd()",
+    "base_sha": "dae209ae6559c29cfca2a1f4414c51d89ea643d5",
+    "head_sha": "bf6754c69c2676fe4acbab0ffd59c3c27c06bea3",
+    "changed_files": 1,
+    "url": "https://github.com/expressjs/express/pull/7265"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 5555,
+    "title": "fix #5554 passing URL instances with new location encoding",
+    "base_sha": "a1fa90fcea7d8e844e1c9938ad095d62669c3abd",
+    "head_sha": "813e78971cbb56c14c507323cb812b572cb42532",
+    "changed_files": 3,
+    "url": "https://github.com/expressjs/express/pull/5555"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 7135,
+    "title": "Update path-to-regexp to 0.1.13 to fix CVE-2026-4867",
+    "base_sha": "f472e5fe28d7a4c1ec8b6832d504c46f8a056d1c",
+    "head_sha": "45dfa345ead2992da4ffea403a5bb43148a29096",
+    "changed_files": 1,
+    "url": "https://github.com/expressjs/express/pull/7135"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 4893,
+    "title": "fix(res.send): add Content-Length header only if Transfer-Encoding is not present",
+    "base_sha": "912893c07cac79cc0b761f3a0c1061b8e8cde87e",
+    "head_sha": "dddae1894b8cca5f3b8f8f429def8ecf6bb98ab8",
+    "changed_files": 3,
+    "url": "https://github.com/expressjs/express/pull/4893"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 7159,
+    "title": "fix: update deprecated npm install docs URL in Readme.md",
+    "base_sha": "e5099198b292a565f8583d70caf12d7afed3607f",
+    "head_sha": "6df9c2cfe022aa11fff88ff93ca11c4834232149",
+    "changed_files": 1,
+    "url": "https://github.com/expressjs/express/pull/7159"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 7029,
+    "title": "docs: fix README security policy",
+    "base_sha": "1140301f6a0ed5a05bc1ef38d48294f75a49580c",
+    "head_sha": "0db6a9128d80f836f7cbce9868f8d9cbeb7df1e8",
+    "changed_files": 1,
+    "url": "https://github.com/expressjs/express/pull/7029"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 7057,
+    "title": "fix: bump qs minimum to ^6.14.2 for CVE-2026-2391",
+    "base_sha": "9c85a25c02e83ad16e1561d02c8ede652f0ef15b",
+    "head_sha": "cefc1f50d20735a5ebf02a170373c1a0c45c4a10",
+    "changed_files": 1,
+    "url": "https://github.com/expressjs/express/pull/7057"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 6969,
+    "title": "fix(deps): update version lib qs",
+    "base_sha": "c2fb76e99f7379b706a5510b4b2dd08a1b710b7b",
+    "head_sha": "5c563591186d3a8c57404b019f352e71c71e2e06",
+    "changed_files": 1,
+    "url": "https://github.com/expressjs/express/pull/6969"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 6088,
+    "title": "fix: enhance req.acceptsCharsets method",
+    "base_sha": "b5aae87594502d543e8ac393847a6f091e9b8321",
+    "head_sha": "e41fb1403f830bb349262b2135a8426e333ed67a",
+    "changed_files": 2,
+    "url": "https://github.com/expressjs/express/pull/6088"
+  },
+  {
+    "repo": "expressjs/express",
+    "number": 6274,
+    "title": "fix: search example to support Redis v4+ and Express 4/5",
+    "base_sha": "6b7ccfcf120e77f20aa22ff96ccf98a994c7d35b",
+    "head_sha": "32c7adab64e08a60eda77663495ea1328487af73",
+    "changed_files": 1,
+    "url": "https://github.com/expressjs/express/pull/6274"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 7576,
+    "title": "Fix link to AI Policy in CONTRIBUTING.md",
+    "base_sha": "4c800e9aea2059660b8306b0fc8f9e9a4232cb3e",
+    "head_sha": "8051baa8cea20b8d57a94c32f57317eeb4b9af2e",
+    "changed_files": 1,
+    "url": "https://github.com/psf/requests/pull/7576"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 6806,
+    "title": "Fix typo in documentation for verify",
+    "base_sha": "e57b5bf05c4e39281b5547b1bd05a5074dc96df3",
+    "head_sha": "2f9591c56fb98fc3afbab71611e928003199f7e5",
+    "changed_files": 1,
+    "url": "https://github.com/psf/requests/pull/6806"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 6951,
+    "title": "docs: fix dead links to kenreitz.org",
+    "base_sha": "c65c780849563c891f35ffc98d3198b71011c012",
+    "head_sha": "6716d7c9f29df636643fa2489f98890216525cb0",
+    "changed_files": 3,
+    "url": "https://github.com/psf/requests/pull/6951"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 7431,
+    "title": "Fix mutability issues with headers input types",
+    "base_sha": "0b401c76b6e80a4eecf3c690085b2553f6e261ca",
+    "head_sha": "0a074cadfaccfbdd2f841d567a4c1a9132a72cd4",
+    "changed_files": 3,
+    "url": "https://github.com/psf/requests/pull/7431"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 6963,
+    "title": "fix CVE 2024 47081: manual url parsing leads to netloc credentials leak",
+    "base_sha": "7bc45877a86192af77645e156eb3744f95b47dae",
+    "head_sha": "92bab7d1142db0c807060577233568e5f7734c9b",
+    "changed_files": 2,
+    "url": "https://github.com/psf/requests/pull/6963"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 7502,
+    "title": "Fix `_encode_files` detection for `__getattr__`-based file wrappers",
+    "base_sha": "661970d171d9c3e12e4c789c4768db647d8c4da0",
+    "head_sha": "be53ff13b12df758cba1220f48fca0be31bcf03c",
+    "changed_files": 2,
+    "url": "https://github.com/psf/requests/pull/7502"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 7425,
+    "title": "sessions: fix hooks type",
+    "base_sha": "dc9dbdfb3434c6e58d48fd102f93e5342308817e",
+    "head_sha": "48884c8fb2afbf8ee3ca14e3982ccf72d284c104",
+    "changed_files": 2,
+    "url": "https://github.com/psf/requests/pull/7425"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 7395,
+    "title": "Fix typos",
+    "base_sha": "f43f750ee10addbaa13901c1017631b4d70fd6e3",
+    "head_sha": "3ed1cdc1bf9cc6365ba9be68bd4c039234051723",
+    "changed_files": 2,
+    "url": "https://github.com/psf/requests/pull/7395"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 7421,
+    "title": "docs: Fix missing hook output in hook example",
+    "base_sha": "eb173bc819c72580deed2d54190d340cc769e529",
+    "head_sha": "39931d17d1e62e97597a82d54be714359db76eb3",
+    "changed_files": 1,
+    "url": "https://github.com/psf/requests/pull/7421"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 7371,
+    "title": "Fix typo discovered by codespell",
+    "base_sha": "514c1623fefff760bfa15a693aa38e474aba8560",
+    "head_sha": "06cc52fe881e5a0f2c78fdbeea53ea8ed8a144ad",
+    "changed_files": 1,
+    "url": "https://github.com/psf/requests/pull/7371"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 7433,
+    "title": "Fix `prepare_body` stream detection for `__getattr__`-based file wrappers",
+    "base_sha": "0b401c76b6e80a4eecf3c690085b2553f6e261ca",
+    "head_sha": "ea1c36c1b1a8364e234b6ad49ea05e3261636f8a",
+    "changed_files": 2,
+    "url": "https://github.com/psf/requests/pull/7433"
+  },
+  {
+    "repo": "psf/requests",
+    "number": 7306,
+    "title": "Fix unintended \"test\" extra",
+    "base_sha": "7407309c8a8a73aa2f4337184025d440bbedab7a",
+    "head_sha": "d239efdd29918070446efaefd81a5d9dfa4eb522",
+    "changed_files": 1,
+    "url": "https://github.com/psf/requests/pull/7306"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 6096,
+    "title": "Fix `.partition(\":\")` usage on potential IPv6 addresses",
+    "base_sha": "514fc6b3e8402e4c646d5284e97a4f0ab50a7c4b",
+    "head_sha": "7203feabf723edae0286ae5dc64fec8ac4c91735",
+    "changed_files": 4,
+    "url": "https://github.com/pallets/flask/pull/6096"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5917,
+    "title": "fix provide_automatic_options override",
+    "base_sha": "d3b78fd18a8d9e224cb9ef58a23cec9b1ffc9ce9",
+    "head_sha": "e82db2ca3a22c9614c1987392c9cfaa8c6ce99ad",
+    "changed_files": 7,
+    "url": "https://github.com/pallets/flask/pull/5917"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5808,
+    "title": "fix annotation for select_jinja_autoescape",
+    "base_sha": "85793d6c223dd845e8f218403a5ced83041d37e1",
+    "head_sha": "dbd4c2882593f6118103120aa96fa9acdf7deedb",
+    "changed_files": 1,
+    "url": "https://github.com/pallets/flask/pull/5808"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5829,
+    "title": "Docs typo/markup fixes",
+    "base_sha": "adf363679da2d9a5ddc564bb2da563c7ca083916",
+    "head_sha": "5a174abe08a63175d0b7f6c555f93de30afb0661",
+    "changed_files": 2,
+    "url": "https://github.com/pallets/flask/pull/5829"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5742,
+    "title": "Docs: Fix escaping in HTML escaping example",
+    "base_sha": "7fea7cf15688b2a2712b01c45c9e3385ea382e67",
+    "head_sha": "0f83958247e9eab1c7f62903601dfd5fe10c640f",
+    "changed_files": 1,
+    "url": "https://github.com/pallets/flask/pull/5742"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5737,
+    "title": "Fix global CONTRIBUTING link",
+    "base_sha": "bbaf13333fd00644313488243cfe547b13dcae78",
+    "head_sha": "184ec3c5453e1156372085df35e8d922ce7e3559",
+    "changed_files": 1,
+    "url": "https://github.com/pallets/flask/pull/5737"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5650,
+    "title": "Fix typo in the docs",
+    "base_sha": "165af0a090e229e94ccd93896efc15b9fe0488da",
+    "head_sha": "75a8327cfd6eb912e469a8a613151d7ee50a1c1c",
+    "changed_files": 1,
+    "url": "https://github.com/pallets/flask/pull/5650"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5647,
+    "title": "fix type hint for `cli_runner.invoke`",
+    "base_sha": "ea08f155d8d37d515559534bbe0f80ef5185466c",
+    "head_sha": "54c3f87af9f6c0d6622cec2c3d9695b0229fb8fa",
+    "changed_files": 2,
+    "url": "https://github.com/pallets/flask/pull/5647"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5620,
+    "title": "fix pyright type errors",
+    "base_sha": "5e8cb740187c0561b36323dfc8510e58c3066838",
+    "head_sha": "9e831e915fa875423af0c0de8f53a3780055919e",
+    "changed_files": 10,
+    "url": "https://github.com/pallets/flask/pull/5620"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5609,
+    "title": "Fix typo in the changelog",
+    "base_sha": "c77b099cbb979269d45df06753cadd8abc662e23",
+    "head_sha": "e63ead4208c1e56723532878728ef9c2eb197b01",
+    "changed_files": 1,
+    "url": "https://github.com/pallets/flask/pull/5609"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5627,
+    "title": "fix example and tutorial compatibility and update metadata",
+    "base_sha": "96800fb673cb7b2d75476096798e701e3e6d26bc",
+    "head_sha": "a9b99b3489cc24b5bed99fbadbd91f598a5a1420",
+    "changed_files": 8,
+    "url": "https://github.com/pallets/flask/pull/5627"
+  },
+  {
+    "repo": "pallets/flask",
+    "number": 5618,
+    "title": "Fix the issue link in the Flask 3.0.1 Changelog in the send_file argu…",
+    "base_sha": "d273f87a41e72db8ef1387f469ffa1c6eed39730",
+    "head_sha": "74721b48f0347f19f134f386fab3421e5132fb53",
+    "changed_files": 1,
+    "url": "https://github.com/pallets/flask/pull/5618"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2470,
+    "title": "Fix retries on connection errors",
+    "base_sha": "1d233ba093a588b90acd647384bd709a278aecae",
+    "head_sha": "abdb1ee1202e24c4c011c4d6f64eb24119305f64",
+    "changed_files": 2,
+    "url": "https://github.com/sindresorhus/got/pull/2470"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2471,
+    "title": "Fix HTTP/2 socket timeout handling",
+    "base_sha": "c6bbb8ada1eeb82dc612ba4a0a9a0851f78b880c",
+    "head_sha": "6855ff16e08ff62a8ad636aef8ef3e9b3ec392d8",
+    "changed_files": 2,
+    "url": "https://github.com/sindresorhus/got/pull/2471"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2458,
+    "title": "docs: fix Response class anchor links (#response-1 -> #response-2)",
+    "base_sha": "4cc6f566eadaca4ab4a3064e94ee16072cac839b",
+    "head_sha": "ce0ba4fa5d71eb44be1074d41a74a69074253a7b",
+    "changed_files": 4,
+    "url": "https://github.com/sindresorhus/got/pull/2458"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2454,
+    "title": "Fix `searchParams` setter dropping the value when a URL is set",
+    "base_sha": "a5b76bffb33d5fa8b0d1393cce410b88e7c2b848",
+    "head_sha": "66b870f503057c2f21936fa3a0b64f9d05bad211",
+    "changed_files": 3,
+    "url": "https://github.com/sindresorhus/got/pull/2454"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2399,
+    "title": "Fix timeout error firing even though it's cancelled",
+    "base_sha": "f997bcb385d4b35ff581333e6bc9360d5ee10e71",
+    "head_sha": "a4bb11c243bded78fbabd9f108b072924416c1f0",
+    "changed_files": 3,
+    "url": "https://github.com/sindresorhus/got/pull/2399"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2388,
+    "title": "fix: correct support for AbortSignal:timeout()",
+    "base_sha": "f4f3ba88e4db2270792385e7d32a694d7432d232",
+    "head_sha": "0f49611aa7c148c1ef6d2be3147404b03c726366",
+    "changed_files": 2,
+    "url": "https://github.com/sindresorhus/got/pull/2388"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2391,
+    "title": "Fix a crash with Got accessing a non-existent request",
+    "base_sha": "3034c2fdcebdff94907a6e015a8b154e851fc343",
+    "head_sha": "5f53a04ec3bfde4a35fc45a1c74fe3d2e819483b",
+    "changed_files": 1,
+    "url": "https://github.com/sindresorhus/got/pull/2391"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2380,
+    "title": "Fix \"Unknown HTTP2 promise event\"",
+    "base_sha": "9ab4cf991fd598e326f9750cf30d2e3407683ae0",
+    "head_sha": "dd39ee20653942f1b0a3fb1107a4ce58ce26354e",
+    "changed_files": 2,
+    "url": "https://github.com/sindresorhus/got/pull/2380"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2379,
+    "title": "Fix 404 links related to cacheable-request",
+    "base_sha": "89b7fdfd4e7ea4e76258f50b70ae8a1d2aea8125",
+    "head_sha": "070d425c1b7427d516ae5491d5444fa915961da8",
+    "changed_files": 2,
+    "url": "https://github.com/sindresorhus/got/pull/2379"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2362,
+    "title": "fix: remove unnecessary type assertions",
+    "base_sha": "eccfcce064fd879581d75777720a55409bd6be35",
+    "head_sha": "9c5ed2b4fad342985d7f6c283a23e916f8adf0d8",
+    "changed_files": 2,
+    "url": "https://github.com/sindresorhus/got/pull/2362"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2367,
+    "title": "Fix: allow invalid arguments to throw appropriate Error message",
+    "base_sha": "bc17e8120b527bb54352474300b5c71cf465ee7f",
+    "head_sha": "a090a92d23962607618c9345eeb92bb9b0815b99",
+    "changed_files": 2,
+    "url": "https://github.com/sindresorhus/got/pull/2367"
+  },
+  {
+    "repo": "sindresorhus/got",
+    "number": 2266,
+    "title": "fix: adjust `get-stream` import for commonjs",
+    "base_sha": "469a45554ff29ca13050a2714eabaaec9f7160f7",
+    "head_sha": "4a1f03ec338a143575823f3e1c6254db1837d5a7",
+    "changed_files": 1,
+    "url": "https://github.com/sindresorhus/got/pull/2266"
+  }
+]

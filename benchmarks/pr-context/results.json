@@ -1,0 +1,1480 @@
+{
+  "generated_at": "2026-08-30T21:08:37.167Z",
+  "model_for_pricing": "claude-sonnet-4-5",
+  "input_usd_per_mtok": 3,
+  "context_window": 200000,
+  "node": "v22.22.3",
+  "platform": "darwin-arm64",
+  "pr_count": 60,
+  "skipped": [
+    {
+      "repo": "expressjs/express",
+      "number": 7305,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7135,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7057,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6969,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7576,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7421,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5829,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5742,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5737,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5650,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5609,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5618,
+      "reason": "no indexed symbol changed (docs/config/lockfile-only diff)"
+    }
+  ],
+  "aggregates": {
+    "baseline_tokens": {
+      "median": 13595,
+      "p90": 44246,
+      "max": 70417
+    },
+    "trace_tokens": {
+      "median": 1326,
+      "p90": 3667,
+      "max": 10738
+    },
+    "median_savings_pct": 90.61295479651397,
+    "baseline_cost_usd": {
+      "median": 0.040785,
+      "p90": 0.132738
+    },
+    "trace_cost_usd": {
+      "median": 0.003978,
+      "p90": 0.011001
+    },
+    "baseline_overflow_rate": 0,
+    "trace_overflow_rate": 0,
+    "baseline_changed_symbol_readable": 1,
+    "trace_changed_symbol_readable": 1,
+    "baseline_dependent_readable": 0.2,
+    "trace_dependent_readable": 0.6,
+    "baseline_dependent_pointed": 0.2,
+    "trace_dependent_pointed": 1,
+    "median_index_ms": 269
+  },
+  "losses": [
+    {
+      "reason": "marginal",
+      "url": "https://github.com/sindresorhus/got/pull/2379",
+      "changed_files": 2,
+      "changed_symbols": 3,
+      "baseline_tokens": 2808,
+      "trace_tokens": 2735,
+      "savings_pct": 2.5997150997151,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 1
+    },
+    {
+      "reason": "marginal",
+      "url": "https://github.com/expressjs/express/pull/6274",
+      "changed_files": 1,
+      "changed_symbols": 2,
+      "baseline_tokens": 1071,
+      "trace_tokens": 727,
+      "savings_pct": 32.11951447245565,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 1
+    },
+    {
+      "reason": "marginal",
+      "url": "https://github.com/axios/axios/pull/11078",
+      "changed_files": 1,
+      "changed_symbols": 2,
+      "baseline_tokens": 803,
+      "trace_tokens": 449,
+      "savings_pct": 44.08468244084682,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 1
+    },
+    {
+      "reason": "marginal",
+      "url": "https://github.com/axios/axios/pull/11035",
+      "changed_files": 3,
+      "changed_symbols": 4,
+      "baseline_tokens": 2764,
+      "trace_tokens": 1519,
+      "savings_pct": 45.04341534008683,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 1
+    },
+    {
+      "reason": "marginal",
+      "url": "https://github.com/axios/axios/pull/11039",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "baseline_tokens": 1708,
+      "trace_tokens": 930,
+      "savings_pct": 45.550351288056206,
+      "baseline_changed_symbol_readable": 1,
+      "trace_changed_symbol_readable": 1
+    }
+  ],
+  "rows": [
+    {
+      "repo": "honojs/hono",
+      "number": 5291,
+      "url": "https://github.com/honojs/hono/pull/5291",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 8,
+      "baseline": {
+        "tokens": 19866,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0,
+        "dependent_pointed": 0
+      },
+      "trace": {
+        "tokens": 1753,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.875,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 91.17587838518071,
+      "index_ms": 1327
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5283,
+      "url": "https://github.com/honojs/hono/pull/5283",
+      "changed_files": 2,
+      "changed_symbols": 4,
+      "dependents": 9,
+      "baseline": {
+        "tokens": 19517,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.1111111111111111,
+        "dependent_pointed": 0.1111111111111111
+      },
+      "trace": {
+        "tokens": 1583,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.8888888888888888,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 91.88912230363273,
+      "index_ms": 292
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5239,
+      "url": "https://github.com/honojs/hono/pull/5239",
+      "changed_files": 3,
+      "changed_symbols": 4,
+      "dependents": 1,
+      "baseline": {
+        "tokens": 6209,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0,
+        "dependent_pointed": 0
+      },
+      "trace": {
+        "tokens": 1428,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 77.0011273957159,
+      "index_ms": 427
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5288,
+      "url": "https://github.com/honojs/hono/pull/5288",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 4,
+      "baseline": {
+        "tokens": 9886,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0,
+        "dependent_pointed": 0
+      },
+      "trace": {
+        "tokens": 742,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 92.49443657697755,
+      "index_ms": 397
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5268,
+      "url": "https://github.com/honojs/hono/pull/5268",
+      "changed_files": 2,
+      "changed_symbols": 4,
+      "dependents": 38,
+      "baseline": {
+        "tokens": 9572,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.07894736842105263,
+        "dependent_pointed": 0.07894736842105263
+      },
+      "trace": {
+        "tokens": 1647,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2894736842105263,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 82.79356456330966,
+      "index_ms": 268
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5215,
+      "url": "https://github.com/honojs/hono/pull/5215",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 10,
+      "baseline": {
+        "tokens": 17101,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2,
+        "dependent_pointed": 0.2
+      },
+      "trace": {
+        "tokens": 713,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 95.83065317817672,
+      "index_ms": 297
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5236,
+      "url": "https://github.com/honojs/hono/pull/5236",
+      "changed_files": 4,
+      "changed_symbols": 9,
+      "dependents": 10,
+      "baseline": {
+        "tokens": 44246,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.1,
+        "dependent_pointed": 0.1
+      },
+      "trace": {
+        "tokens": 3813,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.8,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 91.38227184378249,
+      "index_ms": 245
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5282,
+      "url": "https://github.com/honojs/hono/pull/5282",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 4,
+      "baseline": {
+        "tokens": 9829,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0,
+        "dependent_pointed": 0
+      },
+      "trace": {
+        "tokens": 803,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 91.83029809746668,
+      "index_ms": 310
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5244,
+      "url": "https://github.com/honojs/hono/pull/5244",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 10,
+      "baseline": {
+        "tokens": 18133,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2,
+        "dependent_pointed": 0.2
+      },
+      "trace": {
+        "tokens": 1279,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 92.94656151767495,
+      "index_ms": 341
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5202,
+      "url": "https://github.com/honojs/hono/pull/5202",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 10,
+      "baseline": {
+        "tokens": 17078,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2,
+        "dependent_pointed": 0.2
+      },
+      "trace": {
+        "tokens": 818,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 95.21021196861459,
+      "index_ms": 236
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5250,
+      "url": "https://github.com/honojs/hono/pull/5250",
+      "changed_files": 2,
+      "changed_symbols": 1,
+      "dependents": 0,
+      "baseline": {
+        "tokens": 5846,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "trace": {
+        "tokens": 561,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "savings_pct": 90.40369483407457,
+      "index_ms": 243
+    },
+    {
+      "repo": "honojs/hono",
+      "number": 5280,
+      "url": "https://github.com/honojs/hono/pull/5280",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 10,
+      "baseline": {
+        "tokens": 18190,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2,
+        "dependent_pointed": 0.2
+      },
+      "trace": {
+        "tokens": 846,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 95.34909290819131,
+      "index_ms": 333
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11172,
+      "url": "https://github.com/axios/axios/pull/11172",
+      "changed_files": 8,
+      "changed_symbols": 20,
+      "dependents": 8,
+      "baseline": {
+        "tokens": 31348,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.25,
+        "dependent_pointed": 0.25
+      },
+      "trace": {
+        "tokens": 10738,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.75,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 65.74582110501468,
+      "index_ms": 270
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11118,
+      "url": "https://github.com/axios/axios/pull/11118",
+      "changed_files": 2,
+      "changed_symbols": 8,
+      "dependents": 4,
+      "baseline": {
+        "tokens": 3551,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.75,
+        "dependent_pointed": 0.75
+      },
+      "trace": {
+        "tokens": 1502,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 57.70205575894114,
+      "index_ms": 814
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11119,
+      "url": "https://github.com/axios/axios/pull/11119",
+      "changed_files": 1,
+      "changed_symbols": 2,
+      "dependents": 4,
+      "baseline": {
+        "tokens": 24348,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "trace": {
+        "tokens": 368,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 98.48858222441268,
+      "index_ms": 339
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11096,
+      "url": "https://github.com/axios/axios/pull/11096",
+      "changed_files": 8,
+      "changed_symbols": 13,
+      "dependents": 19,
+      "baseline": {
+        "tokens": 70417,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.3684210526315789,
+        "dependent_pointed": 0.3684210526315789
+      },
+      "trace": {
+        "tokens": 4323,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5789473684210527,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 93.86085746339661,
+      "index_ms": 322
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11087,
+      "url": "https://github.com/axios/axios/pull/11087",
+      "changed_files": 5,
+      "changed_symbols": 15,
+      "dependents": 2,
+      "baseline": {
+        "tokens": 10748,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5,
+        "dependent_pointed": 0.5
+      },
+      "trace": {
+        "tokens": 3281,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 69.47339039821362,
+      "index_ms": 325
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11121,
+      "url": "https://github.com/axios/axios/pull/11121",
+      "changed_files": 8,
+      "changed_symbols": 21,
+      "dependents": 15,
+      "baseline": {
+        "tokens": 17965,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.6666666666666666,
+        "dependent_pointed": 0.6666666666666666
+      },
+      "trace": {
+        "tokens": 6860,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.8,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 61.81463957695519,
+      "index_ms": 344
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11094,
+      "url": "https://github.com/axios/axios/pull/11094",
+      "changed_files": 6,
+      "changed_symbols": 14,
+      "dependents": 8,
+      "baseline": {
+        "tokens": 10960,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5,
+        "dependent_pointed": 0.5
+      },
+      "trace": {
+        "tokens": 3667,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.375,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 66.5419708029197,
+      "index_ms": 319
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11109,
+      "url": "https://github.com/axios/axios/pull/11109",
+      "changed_files": 3,
+      "changed_symbols": 6,
+      "dependents": 10,
+      "baseline": {
+        "tokens": 3497,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5,
+        "dependent_pointed": 0.5
+      },
+      "trace": {
+        "tokens": 1501,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.7,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 57.07749499571061,
+      "index_ms": 156
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11078,
+      "url": "https://github.com/axios/axios/pull/11078",
+      "changed_files": 1,
+      "changed_symbols": 2,
+      "dependents": 7,
+      "baseline": {
+        "tokens": 803,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.42857142857142855,
+        "dependent_pointed": 0.42857142857142855
+      },
+      "trace": {
+        "tokens": 449,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.42857142857142855,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 44.08468244084682,
+      "index_ms": 374
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11039,
+      "url": "https://github.com/axios/axios/pull/11039",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 6,
+      "baseline": {
+        "tokens": 1708,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0,
+        "dependent_pointed": 0
+      },
+      "trace": {
+        "tokens": 930,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 45.550351288056206,
+      "index_ms": 278
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11035,
+      "url": "https://github.com/axios/axios/pull/11035",
+      "changed_files": 3,
+      "changed_symbols": 4,
+      "dependents": 8,
+      "baseline": {
+        "tokens": 2764,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.375,
+        "dependent_pointed": 0.375
+      },
+      "trace": {
+        "tokens": 1519,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.625,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 45.04341534008683,
+      "index_ms": 174
+    },
+    {
+      "repo": "axios/axios",
+      "number": 11073,
+      "url": "https://github.com/axios/axios/pull/11073",
+      "changed_files": 1,
+      "changed_symbols": 2,
+      "dependents": 0,
+      "baseline": {
+        "tokens": 960,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "trace": {
+        "tokens": 227,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "savings_pct": 76.35416666666667,
+      "index_ms": 374
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7390,
+      "url": "https://github.com/expressjs/express/pull/7390",
+      "changed_files": 2,
+      "changed_symbols": 3,
+      "dependents": 2,
+      "baseline": {
+        "tokens": 43097,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "trace": {
+        "tokens": 585,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 98.6425969325011,
+      "index_ms": 266
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7265,
+      "url": "https://github.com/expressjs/express/pull/7265",
+      "changed_files": 1,
+      "changed_symbols": 1,
+      "dependents": 0,
+      "baseline": {
+        "tokens": 3514,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "trace": {
+        "tokens": 237,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "savings_pct": 93.25554923164485,
+      "index_ms": 66
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 5555,
+      "url": "https://github.com/expressjs/express/pull/5555",
+      "changed_files": 3,
+      "changed_symbols": 3,
+      "dependents": 0,
+      "baseline": {
+        "tokens": 46454,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "trace": {
+        "tokens": 524,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "savings_pct": 98.87200241098722,
+      "index_ms": 224
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 4893,
+      "url": "https://github.com/expressjs/express/pull/4893",
+      "changed_files": 3,
+      "changed_symbols": 6,
+      "dependents": 0,
+      "baseline": {
+        "tokens": 51767,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "trace": {
+        "tokens": 946,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "savings_pct": 98.17258098788804,
+      "index_ms": 231
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7159,
+      "url": "https://github.com/expressjs/express/pull/7159",
+      "changed_files": 1,
+      "changed_symbols": 2,
+      "dependents": 3,
+      "baseline": {
+        "tokens": 3221,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "trace": {
+        "tokens": 362,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 88.7612542688606,
+      "index_ms": 118
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 7029,
+      "url": "https://github.com/expressjs/express/pull/7029",
+      "changed_files": 1,
+      "changed_symbols": 2,
+      "dependents": 4,
+      "baseline": {
+        "tokens": 3204,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "trace": {
+        "tokens": 342,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 89.32584269662921,
+      "index_ms": 71
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6088,
+      "url": "https://github.com/expressjs/express/pull/6088",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 0,
+      "baseline": {
+        "tokens": 4478,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "trace": {
+        "tokens": 788,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "savings_pct": 82.40285841893703,
+      "index_ms": 67
+    },
+    {
+      "repo": "expressjs/express",
+      "number": 6274,
+      "url": "https://github.com/expressjs/express/pull/6274",
+      "changed_files": 1,
+      "changed_symbols": 2,
+      "dependents": 0,
+      "baseline": {
+        "tokens": 1071,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "trace": {
+        "tokens": 727,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "savings_pct": 32.11951447245565,
+      "index_ms": 121
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6806,
+      "url": "https://github.com/psf/requests/pull/6806",
+      "changed_files": 1,
+      "changed_symbols": 3,
+      "dependents": 15,
+      "baseline": {
+        "tokens": 6017,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.4,
+        "dependent_pointed": 0.4
+      },
+      "trace": {
+        "tokens": 995,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.7333333333333333,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 83.46352002659133,
+      "index_ms": 239
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6951,
+      "url": "https://github.com/psf/requests/pull/6951",
+      "changed_files": 3,
+      "changed_symbols": 3,
+      "dependents": 0,
+      "baseline": {
+        "tokens": 15133,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "trace": {
+        "tokens": 985,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "savings_pct": 93.49104605828322,
+      "index_ms": 175
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7431,
+      "url": "https://github.com/psf/requests/pull/7431",
+      "changed_files": 3,
+      "changed_symbols": 7,
+      "dependents": 33,
+      "baseline": {
+        "tokens": 18827,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.3333333333333333,
+        "dependent_pointed": 0.3333333333333333
+      },
+      "trace": {
+        "tokens": 1897,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5454545454545454,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 89.92404525415625,
+      "index_ms": 255
+    },
+    {
+      "repo": "psf/requests",
+      "number": 6963,
+      "url": "https://github.com/psf/requests/pull/6963",
+      "changed_files": 2,
+      "changed_symbols": 9,
+      "dependents": 10,
+      "baseline": {
+        "tokens": 16057,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2,
+        "dependent_pointed": 0.2
+      },
+      "trace": {
+        "tokens": 1177,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.4,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 92.66986361088621,
+      "index_ms": 302
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7502,
+      "url": "https://github.com/psf/requests/pull/7502",
+      "changed_files": 2,
+      "changed_symbols": 8,
+      "dependents": 38,
+      "baseline": {
+        "tokens": 34807,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.3684210526315789,
+        "dependent_pointed": 0.3684210526315789
+      },
+      "trace": {
+        "tokens": 1335,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.3157894736842105,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 96.1645645990749,
+      "index_ms": 263
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7425,
+      "url": "https://github.com/psf/requests/pull/7425",
+      "changed_files": 2,
+      "changed_symbols": 3,
+      "dependents": 16,
+      "baseline": {
+        "tokens": 9160,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5,
+        "dependent_pointed": 0.5
+      },
+      "trace": {
+        "tokens": 1061,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.625,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 88.4170305676856,
+      "index_ms": 216
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7395,
+      "url": "https://github.com/psf/requests/pull/7395",
+      "changed_files": 2,
+      "changed_symbols": 6,
+      "dependents": 19,
+      "baseline": {
+        "tokens": 30835,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.7368421052631579,
+        "dependent_pointed": 0.7368421052631579
+      },
+      "trace": {
+        "tokens": 1187,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.7894736842105263,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 96.15047835252149,
+      "index_ms": 305
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7371,
+      "url": "https://github.com/psf/requests/pull/7371",
+      "changed_files": 1,
+      "changed_symbols": 4,
+      "dependents": 4,
+      "baseline": {
+        "tokens": 25197,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "trace": {
+        "tokens": 370,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 98.53157121879589,
+      "index_ms": 219
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7433,
+      "url": "https://github.com/psf/requests/pull/7433",
+      "changed_files": 2,
+      "changed_symbols": 7,
+      "dependents": 40,
+      "baseline": {
+        "tokens": 34845,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.325,
+        "dependent_pointed": 0.325
+      },
+      "trace": {
+        "tokens": 1776,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.6,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 94.90314248816186,
+      "index_ms": 364
+    },
+    {
+      "repo": "psf/requests",
+      "number": 7306,
+      "url": "https://github.com/psf/requests/pull/7306",
+      "changed_files": 1,
+      "changed_symbols": 3,
+      "dependents": 3,
+      "baseline": {
+        "tokens": 1119,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "trace": {
+        "tokens": 332,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 70.33065236818588,
+      "index_ms": 244
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 6096,
+      "url": "https://github.com/pallets/flask/pull/6096",
+      "changed_files": 4,
+      "changed_symbols": 10,
+      "dependents": 52,
+      "baseline": {
+        "tokens": 32753,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.15384615384615385,
+        "dependent_pointed": 0.15384615384615385
+      },
+      "trace": {
+        "tokens": 3006,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.7115384615384616,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 90.82221475895338,
+      "index_ms": 462
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5917,
+      "url": "https://github.com/pallets/flask/pull/5917",
+      "changed_files": 7,
+      "changed_symbols": 26,
+      "dependents": 55,
+      "baseline": {
+        "tokens": 64258,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.23636363636363636,
+        "dependent_pointed": 0.23636363636363636
+      },
+      "trace": {
+        "tokens": 4863,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.34545454545454546,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 92.43207071493043,
+      "index_ms": 413
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5808,
+      "url": "https://github.com/pallets/flask/pull/5808",
+      "changed_files": 1,
+      "changed_symbols": 3,
+      "dependents": 47,
+      "baseline": {
+        "tokens": 8617,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.0851063829787234,
+        "dependent_pointed": 0.0851063829787234
+      },
+      "trace": {
+        "tokens": 1331,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.1276595744680851,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 84.55378902170129,
+      "index_ms": 477
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5647,
+      "url": "https://github.com/pallets/flask/pull/5647",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 42,
+      "baseline": {
+        "tokens": 20341,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.07142857142857142,
+        "dependent_pointed": 0.07142857142857142
+      },
+      "trace": {
+        "tokens": 1321,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.14285714285714285,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 93.50572734870458,
+      "index_ms": 262
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5620,
+      "url": "https://github.com/pallets/flask/pull/5620",
+      "changed_files": 10,
+      "changed_symbols": 27,
+      "dependents": 115,
+      "baseline": {
+        "tokens": 44519,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.3391304347826087,
+        "dependent_pointed": 0.3391304347826087
+      },
+      "trace": {
+        "tokens": 6620,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.7478260869565218,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 85.12994451807093,
+      "index_ms": 724
+    },
+    {
+      "repo": "pallets/flask",
+      "number": 5627,
+      "url": "https://github.com/pallets/flask/pull/5627",
+      "changed_files": 8,
+      "changed_symbols": 3,
+      "dependents": 1,
+      "baseline": {
+        "tokens": 4537,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "trace": {
+        "tokens": 1368,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 69.84791712585408,
+      "index_ms": 195
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2470,
+      "url": "https://github.com/sindresorhus/got/pull/2470",
+      "changed_files": 2,
+      "changed_symbols": 6,
+      "dependents": 38,
+      "baseline": {
+        "tokens": 32118,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.10526315789473684,
+        "dependent_pointed": 0.10526315789473684
+      },
+      "trace": {
+        "tokens": 2873,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.39473684210526316,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 91.05486020300143,
+      "index_ms": 1658
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2471,
+      "url": "https://github.com/sindresorhus/got/pull/2471",
+      "changed_files": 2,
+      "changed_symbols": 4,
+      "dependents": 41,
+      "baseline": {
+        "tokens": 31642,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.17073170731707318,
+        "dependent_pointed": 0.17073170731707318
+      },
+      "trace": {
+        "tokens": 2222,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.43902439024390244,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 92.97768788319323,
+      "index_ms": 1255
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2458,
+      "url": "https://github.com/sindresorhus/got/pull/2458",
+      "changed_files": 4,
+      "changed_symbols": 8,
+      "dependents": 76,
+      "baseline": {
+        "tokens": 13226,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.19736842105263158,
+        "dependent_pointed": 0.19736842105263158
+      },
+      "trace": {
+        "tokens": 2947,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.6710526315789473,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 77.71813095418116,
+      "index_ms": 1881
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2454,
+      "url": "https://github.com/sindresorhus/got/pull/2454",
+      "changed_files": 3,
+      "changed_symbols": 5,
+      "dependents": 37,
+      "baseline": {
+        "tokens": 55721,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.10810810810810811,
+        "dependent_pointed": 0.10810810810810811
+      },
+      "trace": {
+        "tokens": 2502,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5405405405405406,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 95.50977189928393,
+      "index_ms": 210
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2399,
+      "url": "https://github.com/sindresorhus/got/pull/2399",
+      "changed_files": 3,
+      "changed_symbols": 5,
+      "dependents": 4,
+      "baseline": {
+        "tokens": 11384,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0,
+        "dependent_pointed": 0
+      },
+      "trace": {
+        "tokens": 1572,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.25,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 86.19114546732256,
+      "index_ms": 433
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2388,
+      "url": "https://github.com/sindresorhus/got/pull/2388",
+      "changed_files": 2,
+      "changed_symbols": 4,
+      "dependents": 34,
+      "baseline": {
+        "tokens": 12598,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.08823529411764706,
+        "dependent_pointed": 0.08823529411764706
+      },
+      "trace": {
+        "tokens": 1960,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 84.44197491665344,
+      "index_ms": 132
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2391,
+      "url": "https://github.com/sindresorhus/got/pull/2391",
+      "changed_files": 1,
+      "changed_symbols": 3,
+      "dependents": 35,
+      "baseline": {
+        "tokens": 9670,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.11428571428571428,
+        "dependent_pointed": 0.11428571428571428
+      },
+      "trace": {
+        "tokens": 1461,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5142857142857142,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 84.89141675284385,
+      "index_ms": 97
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2380,
+      "url": "https://github.com/sindresorhus/got/pull/2380",
+      "changed_files": 2,
+      "changed_symbols": 4,
+      "dependents": 37,
+      "baseline": {
+        "tokens": 13964,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.16216216216216217,
+        "dependent_pointed": 0.16216216216216217
+      },
+      "trace": {
+        "tokens": 1719,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.5405405405405406,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 87.68977370380979,
+      "index_ms": 113
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2379,
+      "url": "https://github.com/sindresorhus/got/pull/2379",
+      "changed_files": 2,
+      "changed_symbols": 3,
+      "dependents": 94,
+      "baseline": {
+        "tokens": 2808,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.05319148936170213,
+        "dependent_pointed": 0.05319148936170213
+      },
+      "trace": {
+        "tokens": 2735,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0.2978723404255319,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 2.5997150997151,
+      "index_ms": 106
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2362,
+      "url": "https://github.com/sindresorhus/got/pull/2362",
+      "changed_files": 2,
+      "changed_symbols": 3,
+      "dependents": 1,
+      "baseline": {
+        "tokens": 18777,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "trace": {
+        "tokens": 526,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 97.19870053789211,
+      "index_ms": 171
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2367,
+      "url": "https://github.com/sindresorhus/got/pull/2367",
+      "changed_files": 2,
+      "changed_symbols": 2,
+      "dependents": 1,
+      "baseline": {
+        "tokens": 6604,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 0,
+        "dependent_pointed": 0
+      },
+      "trace": {
+        "tokens": 604,
+        "changed_symbol_readable": 1,
+        "dependent_readable": 1,
+        "dependent_pointed": 1
+      },
+      "savings_pct": 90.85402786190187,
+      "index_ms": 210
+    },
+    {
+      "repo": "sindresorhus/got",
+      "number": 2266,
+      "url": "https://github.com/sindresorhus/got/pull/2266",
+      "changed_files": 1,
+      "changed_symbols": 1,
+      "dependents": 0,
+      "baseline": {
+        "tokens": 9655,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "trace": {
+        "tokens": 329,
+        "changed_symbol_readable": 1,
+        "dependent_readable": null,
+        "dependent_pointed": null
+      },
+      "savings_pct": 96.59243915069912,
+      "index_ms": 315
+    }
+  ]
+}
