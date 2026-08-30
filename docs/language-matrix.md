@@ -14,7 +14,7 @@ extraction; call graphs and type edges are a much smaller set.
 
 - **indexed with the default config:** 78 (the rest need an `include` entry — see below)
 - **tree-sitter parser:** 29 · **regex parser:** 46 · **custom parser:** 6
-- **import edges:** 11
+- **import edges:** 12
 - **call edges (`get_call_graph`, call-aware `find_usages`):** 3
 - **type / inheritance edges:** 2
 - **covered by a plugin test:** 65
@@ -100,7 +100,7 @@ second thing, so it is much shorter than the language list — see
 | hcl | .tf .hcl .tfvars | custom | yes | yes | — | — | yes |
 | html | .html .htm | tree-sitter | yes | yes | — | — | yes |
 | ini | .ini .cfg .conf .properties | regex | — | — | — | — | — |
-| java | .java | tree-sitter | yes | — | — | — | yes |
+| java | .java | tree-sitter | yes | yes | — | — | yes |
 | json | .json .jsonc .json5 | tree-sitter | — | — | — | — | yes |
 | julia | .jl | regex | yes | — | — | — | yes |
 | kotlin | .kt .kts | tree-sitter | yes | — | — | — | yes |
