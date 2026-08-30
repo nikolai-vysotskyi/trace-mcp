@@ -6,28 +6,18 @@ import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding'
 import { QuickOpen, type QuickOpenItem } from './components/QuickOpen';
 import { SidebarRow } from './components/SidebarRow';
 import { WindowTabBar } from './components/WindowTabBar';
-import { DAEMON_FETCH_TIMEOUT_MS } from './hooks/useDaemon';
 import { t } from './i18n';
 import { formatNumber } from './i18n/format';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
-import {
-  Button,
-  Card,
-  HeaderSlotProvider,
-  Menu,
-  MenuItem,
-  MenuSeparator,
-  PopUpButton,
-} from './lattice/ui';
+import { HeaderSlotProvider, Menu, MenuItem, MenuSeparator, PopUpButton } from './lattice/ui';
 import {
   formatAgo,
-  quarantineCommand,
+  QUARANTINE_COMMAND,
   type UpdateCheck,
   useUpdateCheck,
 } from './update-check.js';
 import {
   clampSidebarWidth,
-  parentDir,
   readSidebarCollapsed,
   readSidebarWidth,
   SIDEBAR_MAX,
@@ -272,14 +262,7 @@ function ProjectFileExplorer({
   const { t } = useTranslation('shell');
   const [sort, setSort] = useState<FileSort>('symbols');
   const [files, setFiles] = useState<FileEntry[]>([]);
-  /* One state, three terminal facts, written only by the request that owns it.
-     It was two booleans — `loading`, cleared in a `.finally` any cancelled run
-     could skip, and `answered`, because an empty list and no list at all are
-     different facts (TRA-471). A skeleton then outranked both, so a request
-     that never settled pulsed six rows forever (TRA-478). `unavailable`
-     outranks `pending` here for the same reason it does in `KpiTile`: a fetch
-     that finished and failed is not still loading. */
-  const [status, setStatus] = useState<'loading' | 'answered' | 'failed'>('loading');
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; path: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -296,32 +279,23 @@ function ProjectFileExplorer({
 
   useEffect(() => {
     let cancelled = false;
-    setStatus('loading');
+    setLoading(true);
     const params = new URLSearchParams({ project: root, sort, limit: String(LIMIT) });
     // Pass scope to API if it's a custom path filter (not 'project' or empty)
     const effectiveScope = debouncedScope?.trim();
     if (effectiveScope && effectiveScope !== 'project') {
       params.set('scope', effectiveScope);
     }
-    /* The deadline every other daemon fetch already carries (`useDaemon`), and
-       the one this list was missing. A daemon that is down is not always a
-       refused socket: a wedged process still holds :3741 open, so the connect
-       sits in SYN_SENT and `fetch` neither resolves nor rejects — which is how
-       the skeletons outlived the request (TRA-478). Without a deadline there is
-       no terminal state to render. */
-    fetch(`${BASE}/api/projects/files?${params}`, {
-      signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS),
-    })
+    fetch(`${BASE}/api/projects/files?${params}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => {
-        if (cancelled) return;
-        setFiles(data.files ?? []);
-        setStatus('answered');
+        if (!cancelled) setFiles(data.files ?? []);
       })
       .catch(() => {
-        if (cancelled) return;
-        setFiles([]);
-        setStatus('failed');
+        if (!cancelled) setFiles([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -392,7 +366,7 @@ function ProjectFileExplorer({
         aria-label={t('sortFilesBy')}
       />
 
-      {status === 'loading' ? (
+      {loading ? (
         // Skeletons at the final 28px geometry — nothing shifts on load.
         <div aria-busy="true" aria-label={t('loadingFiles')}>
           {Array.from({ length: 6 }, (_, i) => (
@@ -401,24 +375,15 @@ function ProjectFileExplorer({
           ))}
         </div>
       ) : files.length === 0 ? (
-        /* Only a list that came back empty can be blamed on the scope. With the
-           daemon down nothing was ever fetched, and the content pane already
-           carries that diagnosis and its Start daemon button — the sidebar does
-           not name a cause it cannot know, and does not say the same thing twice
-           (DESIGN.md §5). The sort pop-up above stays: changing it re-fetches,
-           which is the sidebar's own way back once the daemon answers again. */
-        status === 'answered' ? (
-          <div className="ws-sb-empty">
-            <Icon name="description" size={20} className="gi" />
-            <span>{t('noFilesMatchScope')}</span>
-          </div>
-        ) : null
+        <div className="ws-sb-empty">
+          <Icon name="description" size={20} className="gi" />
+          <span>{t('noFilesMatchScope')}</span>
+        </div>
       ) : (
         <div role="tree" aria-label={t('projectFiles')} ref={listRef}>
           {files.map((f, i) => {
             const display = shortPath(f.path);
-            const { name } = splitPath(display);
-            const parent = parentDir(display);
+            const { dir, name } = splitPath(display);
             return (
               <SidebarRow
                 key={f.path}
@@ -427,11 +392,9 @@ function ProjectFileExplorer({
                 selected={selected === f.path}
                 glyph={<FileTypeGlyph ftype={fileKind(f.path).ftype} size={16} />}
                 label={
-                  /* Filename first, location after it — the row is 180–320px
-                     wide and only one of the two can survive that (TRA-503). */
                   <span className="ws-sb-path">
+                    {dir && <span className="dir">{dir}</span>}
                     <span className="name">{name}</span>
-                    {parent && <span className="dir">{parent}</span>}
                   </span>
                 }
                 count={sort === 'edges' ? f.edges : f.symbols}
@@ -468,94 +431,21 @@ const RELEASES_URL = 'https://github.com/nikolai-vysotskyi/trace-mcp/releases/la
 // downloaded and waiting on a restart, and a bundle that could not replace
 // itself. "Up to date" used to be a permanent 28px strip above the footer whose
 // whole job was to say nothing was wrong; it says that in the app menu's
-// header now, next to Check for updates (TRA-363). Its four parts — title,
-// caption, command line, shell — are below; `UpdateCard` itself follows them.
-
-/** Card title — 13/16/590, the window's Body semibold, not a 12px one-off. */
-function CardTitle({ children, tone }: { children: React.ReactNode; tone?: 'warn' }) {
-  return (
-    <div
-      className="flex items-center gap-1.5 text-[13px] leading-4 font-[590] tracking-[-0.005em]"
-      style={{ color: tone === 'warn' ? 'var(--status-orange)' : 'var(--label)' }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** Caption line — 11/13, --label-secondary. The old 10.5px was off the scale.
-    Each utility is its own literal: Tailwind's scanner does not extract a class
-    that a `${…}` interpolation runs straight into, and the missing one is
-    silent — measured on the built CSS. */
-function CardSubtitle({ children, error }: { children: React.ReactNode; error?: string }) {
-  return (
-    <div
-      className={['text-[11px]', 'leading-[13px]', error ? 'truncate' : ''].join(' ')}
-      style={{ color: error ? 'var(--status-orange)' : 'var(--label-secondary)' }}
-      title={error}
-    >
-      {children}
-    </div>
-  );
-}
-
-/* The card's shell. Material, radius and hairline come from Lattice `Card` —
-   the same opaque --surface tile at --radius-card the rest of the window is
-   built from. It used to hand-roll --fill-tertiary at an 8px radius, which is
-   why it read as a flat grey rectangle next to tiles it sat 200px away from
-   (TRA-429). `.update-card` survives only as the animation + margin hook. */
-function CardShell({
-  children,
-  warn = false,
-  live = false,
-}: {
-  children: React.ReactNode;
-  warn?: boolean;
-  live?: boolean;
-}) {
-  return (
-    <Card
-      className="update-card"
-      style={
-        {
-          WebkitAppRegion: 'no-drag',
-          ...(warn ? { borderColor: 'var(--status-orange)' } : null),
-        } as React.CSSProperties
-      }
-    >
-      {/* The live region is the body, not the Card: `Card` owns the material
-          and takes no ARIA. It appears without the user asking, so assistive
-          tech has to hear it. */}
-      <div
-        className="flex flex-col gap-2 p-3"
-        {...(live ? ({ role: 'status', 'aria-live': 'polite' } as const) : null)}
-      >
-        {children}
-      </div>
-    </Card>
-  );
-}
-
+// header now, next to Check for updates (TRA-363).
 /** A command the user has to run themselves: selectable, and copyable in one
-    click — a command you cannot copy is a screenshot, not an instruction.
-    `.lx-sheet-command` is the app's command field (surface-sunken well,
-    hairline, --radius-input, mono at the caption size) and the copy control is
-    the icon `Button`; the card had grown its own 5px-radius box with a 10px
-    mono and a hand-rolled button, which is the geometry this card was on
-    before TRA-429. */
+    click — a command you cannot copy is a screenshot, not an instruction. */
 function CommandLine({ command, label }: { command: string; label: string }) {
   return (
-    <div className="lx-sheet-command">
+    <div className="update-card-command">
       <code>{command}</code>
-      <Button
-        variant="icon"
-        size="small"
-        icon="content_copy"
-        iconSize={13}
+      <button
+        type="button"
         onClick={() => void navigator.clipboard?.writeText(command)}
         aria-label={label}
         title={label}
-      />
+      >
+        <Icon name="content_copy" size={12} />
+      </button>
     </div>
   );
 }
@@ -567,22 +457,26 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
   // Pending swap takes precedence — the user's next click should restart, not redownload.
   if (pendingVersion) {
     return (
-      <CardShell>
-        <CardTitle>
-          <span className="flex" style={{ color: 'var(--status-green)' }} aria-hidden="true">
-            <Icon name="check" size={13} />
+      <div className="update-card" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div className="title">
+          <span className="ready-icon" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path
+                d="M2.5 6.2l2.4 2.4 4.6-4.6"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </span>
           {t('cardReadyTitle', { version: pendingVersion })}
-        </CardTitle>
-        <CardSubtitle>{t('cardReadySubtitle', { current: state.current })}</CardSubtitle>
-        {/* Accent, not green: macOS paints the one default action in the accent
-            colour, and the green here is the state (the check above), not the
-            button. The old `.btn-prominent.success` was the only green button
-            in the app. */}
-        <Button variant="prominent" className="w-full" onClick={update.restart}>
+        </div>
+        <div className="subtitle">{t('cardReadySubtitle', { current: state.current })}</div>
+        <button type="button" className="btn-prominent success" onClick={update.restart}>
           {t('cardRestart')}
-        </Button>
-      </CardShell>
+        </button>
+      </div>
     );
   }
 
@@ -593,65 +487,57 @@ export function UpdateCard({ update }: { update: UpdateCheck }) {
   // own honest card with the one action that does work: download the release.
   if (state.stuck && state.latest) {
     return (
-      <CardShell warn live>
-        <CardTitle tone="warn">{t('cardStuckTitle', { version: state.latest })}</CardTitle>
-        <CardSubtitle>{t('cardStuckSubtitle', { current: state.current })}</CardSubtitle>
-        <Button
-          variant="prominent"
-          icon="download"
-          className="w-full"
+      <div
+        className="update-card stuck"
+        role="status"
+        aria-live="polite"
+        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      >
+        <div className="title">{t('cardStuckTitle', { version: state.latest })}</div>
+        <div className="subtitle">{t('cardStuckSubtitle', { current: state.current })}</div>
+        <button
+          type="button"
+          className="btn-prominent"
           onClick={() => void window.electronAPI?.openExternal?.(RELEASES_URL)}
         >
           {t('cardDownload', { version: state.latest })}
-        </Button>
+        </button>
         {/* The download alone dead-ends: our macOS builds are ad-hoc signed, so
             Gatekeeper calls the file the browser just fetched "damaged". An
             escape hatch that ends in an error dialog is not an escape hatch —
             the card carries the command that clears it (TRA-431). */}
-        <CardSubtitle>{t('cardStuckQuarantine')}</CardSubtitle>
-        <CommandLine
-          command={quarantineCommand(state.installPath)}
-          label={t('copyQuarantineCommand')}
-        />
-      </CardShell>
+        <div className="subtitle">{t('cardStuckQuarantine')}</div>
+        <CommandLine command={QUARANTINE_COMMAND} label={t('copyQuarantineCommand')} />
+      </div>
     );
   }
 
   if (!state.available) return null;
 
   return (
-    <CardShell live>
-      <CardTitle>{t('cardAvailableTitle', { version: state.latest })}</CardTitle>
-      <CardSubtitle>
+    <div
+      className="update-card"
+      style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+      // It appears without the user asking, so assistive tech has to hear it.
+      role="status"
+      aria-live="polite"
+    >
+      <div className="title">{t('cardAvailableTitle', { version: state.latest })}</div>
+      <div className="subtitle">
         {t('cardAvailableSubtitle', {
           current: state.current,
           when: formatAgo(state.lastChecked),
         })}
-      </CardSubtitle>
-      {state.error && <CardSubtitle error={state.error}>{state.error}</CardSubtitle>}
-      {/* `is-status`, not a plain disabled button: the download takes minutes,
-          and 0.4 opacity on the one thing that says it is running reads as a
-          hung app. The capsule keeps its accent fill and its label; the bar
-          below is what carries "still going" (TRA-429). npm gives us no byte
-          count — `npm install -g` is one opaque execFile in the main process —
-          so the honest shape is indeterminate, never a fake percentage. */}
-      <Button
-        variant="prominent"
-        className={['w-full', updating ? 'is-status' : ''].join(' ')}
-        onClick={update.apply}
-        disabled={updating}
-      >
-        {updating ? t('cardUpdating') : t('cardUpdate')}
-      </Button>
-      {updating && (
-        <div
-          className="update-progress"
-          role="progressbar"
-          aria-label={t('cardUpdating')}
-          aria-valuetext={t('cardUpdating')}
-        />
+      </div>
+      {state.error && (
+        <div className="subtitle error" title={state.error}>
+          {state.error}
+        </div>
       )}
-    </CardShell>
+      <button type="button" className="btn-prominent" onClick={update.apply} disabled={updating}>
+        {updating ? t('cardUpdating') : t('cardUpdate')}
+      </button>
+    </div>
   );
 }
 

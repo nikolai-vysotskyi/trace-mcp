@@ -458,33 +458,6 @@ export function uninstallGuardHook(opts: { global?: boolean }): InitStepResult {
 }
 
 /**
- * Is the guard hook currently wired into a Claude-family client's global
- * settings? Base installs CLAUDE.md only; Standard and Max also install hooks —
- * so this is what lets `clients status` report the enforcement level a config
- * is already on instead of asking the user to pick it again.
- *
- * @param configDir '.claude' (Claude Code / Desktop) or '.claw' (Claw Code).
- */
-export function isGuardHookInstalled(configDir: string): boolean {
-  const client = CLIENTS.find((c) => c.configDir === configDir);
-  if (!client) return false;
-  let settings: Record<string, unknown>;
-  try {
-    settings = readSettings(settingsPath(client, true));
-  } catch {
-    return false; // malformed settings.json — treat as "no hook"
-  }
-  const hooks = settings.hooks as Record<string, unknown[]> | undefined;
-  const entries = hooks?.[GUARD_HOOK.settingsKey];
-  if (!Array.isArray(entries)) return false;
-  return entries.some((h) =>
-    (h as { hooks?: { command?: string }[] }).hooks?.some((hh) =>
-      hh.command?.includes(GUARD_HOOK.scriptName),
-    ),
-  );
-}
-
-/**
  * Check if the installed hook is outdated compared to shipped version.
  */
 export function isHookOutdated(installedVersion: string | null): boolean {

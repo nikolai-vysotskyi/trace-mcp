@@ -1,7 +1,7 @@
 ---
 title: "CodeGraph MCP Alternative: trace-mcp vs codegraph for AI coding agents"
 description: "codegraph advertises one tool and optimises for orienting an agent in an unfamiliar repo; trace-mcp ships a broad graph with refactoring, security scanning and code-linked memory. Head-to-head on tool surface, language and framework coverage, benchmarks — plus where codegraph is clearly ahead."
-updated: 2026-08-30
+updated: 2026-08-29
 ---
 
 # CodeGraph MCP alternative: trace-mcp vs codegraph
@@ -94,24 +94,24 @@ Pick codegraph if the job is *orient an agent in a repository it has never seen*
 | **GitHub stars** | 102 | ~68.6K |
 | License | MIT | MIT |
 | Languages | {{ site.data.counts.languages }} (tree-sitter) | 34 (tree-sitter, Rust kernel + WASM fallback) |
-| Framework integrations | ✓ {{ site.data.counts.frameworks }} | ✓ 17 (route → handler) |
-| Framework edges beyond routing | ✓ controller → template, model → table, component → component | partial — route → handler, plus React Native `component`/`property` nodes |
-| Cross-language edges | ✓ | ✓ Swift ↔ ObjC, RN bridge / TurboModules / Expo / Fabric |
+| Framework integrations | ✅ {{ site.data.counts.frameworks }} | ✅ 17 (route → handler) |
+| Framework edges beyond routing | ✅ controller → template, model → table, component → component | partial — route → handler, plus React Native `component`/`property` nodes |
+| Cross-language edges | ✅ | ✅ Swift ↔ ObjC, RN bridge / TurboModules / Expo / Fabric |
 | MCP tools defined | {{ site.data.counts.tools }} | 8 |
 | MCP tools advertised by default | 28 (~11.6K tok) | **1** (`codegraph_explore`) |
-| Rest of the surface reachable | ✓ `load_tools`, one call | ✓ `CODEGRAPH_MCP_TOOLS` env allowlist, restart |
-| Persistent graph across restarts | ✓ SQLite + FTS5 | ✓ SQLite |
-| Runs fully local, no API key | ✓ | ✓ |
-| Incremental re-index on save | ✓ | ✓ debounced file watcher |
-| Impact analysis | ✓ reverse traversal + decorator filter | ✓ `codegraph_impact` (behind the allowlist) |
-| Refactoring tools | ✓ rename, move, signature, AST codemod, extract | ✗ |
-| Security scanning | ✓ OWASP Top-10, type-aware taint | ✗ |
-| Control-flow / data-flow | ✓ CFG with basic blocks and loop back-edges | ✗ |
-| SARIF / CI output | ✓ 2.1.0, schema-validated | ✗ |
-| Session memory | ✓ code-linked decision graph | ✗ |
-| Multi-repo | ✓ cross-repo API linking into one graph | partial — queries other separately-indexed projects by path |
-| Graph visualization | ✓ desktop app | ✗ |
-| Published A/B token benchmark | ✗ per-repo `get_real_savings` instead | ✓ 7 repos, methodology disclosed |
+| Rest of the surface reachable | ✅ `load_tools`, one call | ✅ `CODEGRAPH_MCP_TOOLS` env allowlist, restart |
+| Persistent graph across restarts | ✅ SQLite + FTS5 | ✅ SQLite |
+| Runs fully local, no API key | ✅ | ✅ |
+| Incremental re-index on save | ✅ | ✅ debounced file watcher |
+| Impact analysis | ✅ reverse traversal + decorator filter | ✅ `codegraph_impact` (behind the allowlist) |
+| Refactoring tools | ✅ rename, move, signature, AST codemod, extract | ❌ |
+| Security scanning | ✅ OWASP Top-10, type-aware taint | ❌ |
+| Control-flow / data-flow | ✅ CFG with basic blocks and loop back-edges | ❌ |
+| SARIF / CI output | ✅ 2.1.0, schema-validated | ❌ |
+| Session memory | ✅ code-linked decision graph | ❌ |
+| Multi-repo | ✅ cross-repo API linking into one graph | partial — queries other separately-indexed projects by path |
+| Graph visualization | ✅ desktop app | ❌ |
+| Published A/B token benchmark | ❌ per-repo `get_real_savings` instead | ✅ 7 repos, methodology disclosed |
 | Written in | TypeScript | TypeScript + Rust kernel |
 
 Verified on August 29, 2026 against codegraph's source and README at commit `6a056ec` — the `main` head, shipped after the `v1.6.0` tag. Tool-surface claims come from the source; language, framework and bridging counts come from the README's own tables, which the source directory layout corroborates.
@@ -164,6 +164,6 @@ No. Both index locally into SQLite, need no API key, and survive restarts.
 ## Next steps
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs Context Mode](/vs/context-mode.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html)
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.

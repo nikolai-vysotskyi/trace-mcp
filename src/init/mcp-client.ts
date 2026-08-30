@@ -11,9 +11,7 @@ import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 
 import YAML from 'yaml';
 import { atomicWriteJson } from '../utils/atomic-write.js';
 import { readIfExists } from '../utils/safe-fs.js';
-import { isGuardHookInstalled } from './hooks.js';
 import { getLauncherPath } from './launcher.js';
-import { hasTweakccPrompts } from './tweakcc.js';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 
 const HOME = os.homedir();
@@ -125,12 +123,9 @@ export function configureMcpClients(
     if (name === 'warp') {
       const hasClaudeCode = clientNames.includes('claude-code');
       const launcher = getLauncherPath();
-      // No working_directory: Warp's MCP config is cloud-synced and user-level,
-      // so pinning it to the directory `init` ran in would be wrong everywhere
-      // else (TRA-501). Warp launches the server in the session's own directory.
       const snippet = JSON.stringify({
         mcpServers: {
-          'trace-mcp': { command: launcher, args: ['serve'] },
+          'trace-mcp': { command: launcher, args: ['serve'], working_directory: projectRoot },
         },
       });
       results.push({
@@ -153,7 +148,7 @@ export function configureMcpClients(
         results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
         continue;
       }
-      const entry = buildExpectedEntry(name, projectRoot, opts.scope);
+      const entry = { ...buildMcpEntry(), args: ['serve'], cwd: projectRoot };
 
       if (fs.existsSync(configPath) && ampEntryMatches(configPath, entry)) {
         results.push({ target: configPath, action: 'already_configured', detail: name });
@@ -187,8 +182,11 @@ export function configureMcpClients(
         results.push({ target: name, action: 'skipped', detail: 'Unknown client' });
         continue;
       }
-      const entry = buildExpectedEntry(name, projectRoot, opts.scope) as McpServerEntry & {
-        type: 'stdio';
+      const entry: McpServerEntry & { type: 'stdio' } = {
+        type: 'stdio',
+        ...buildMcpEntry(),
+        args: ['serve'],
+        cwd: projectRoot,
       };
 
       if (fs.existsSync(configPath) && factoryEntryMatches(configPath, entry)) {
@@ -224,7 +222,7 @@ export function configureMcpClients(
         continue;
       }
 
-      const entry = buildExpectedEntry(name, projectRoot, opts.scope);
+      const entry = { ...buildMcpEntry(), args: ['serve'], cwd: projectRoot };
 
       if (fs.existsSync(configPath) && hermesEntryMatches(configPath, entry)) {
         results.push({ target: configPath, action: 'already_configured', detail: name });
@@ -284,10 +282,11 @@ export function configureMcpClients(
       }
 
       try {
-        const action = writeCodexTomlEntry(
-          configPath,
-          buildExpectedEntry(name, projectRoot, opts.scope),
-        );
+        const action = writeCodexTomlEntry(configPath, {
+          ...buildMcpEntry(),
+          args: ['serve'],
+          cwd: projectRoot,
+        });
         results.push({ target: configPath, action, detail: `${name} (${opts.scope})` });
       } catch (err) {
         results.push({
@@ -664,46 +663,12 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
  */
 export type ClientConfigStatus = 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
 
-/**
- * Enforcement level a Claude-family config is on, as `init` installs it:
- * - `base`     — CLAUDE.md only, no hooks.
- * - `standard` — CLAUDE.md + hooks.
- * - `max`      — CLAUDE.md + hooks + tweakcc system prompts.
- */
-export type EnforcementLevel = 'base' | 'standard' | 'max';
-
 export interface McpClientStatus {
   client: DetectedMcpClient['name'];
   configPath: string | null;
   status: ClientConfigStatus;
   /** Short machine-friendly reason when `status === 'stale'` (e.g. "alwaysLoad"). */
   staleReason?: string;
-  /**
-   * Enforcement level the config on disk is currently on, so "Update" can
-   * refresh a client without re-asking a setup question the user already
-   * answered. `null` whenever the notion doesn't apply or can't be read: a
-   * non-Claude client (no hooks/tweakcc to grade), or nothing configured yet
-   * (`missing` / `unmanageable`) — where picking a level is a real choice.
-   */
-  level: EnforcementLevel | null;
-}
-
-/**
- * Where each Claude-family client keeps the settings.json that hooks are wired
- * into. Other clients don't run hooks, so they have no level.
- */
-const CLAUDE_FAMILY_CONFIG_DIR: Partial<Record<DetectedMcpClient['name'], string>> = {
-  'claude-code': '.claude',
-  'claude-desktop': '.claude',
-  'claw-code': '.claw',
-};
-
-/** Read back the level from the artifacts each level installs. */
-function detectEnforcementLevel(name: DetectedMcpClient['name']): EnforcementLevel | null {
-  const configDir = CLAUDE_FAMILY_CONFIG_DIR[name];
-  if (!configDir) return null;
-  if (!isGuardHookInstalled(configDir)) return 'base';
-  return hasTweakccPrompts() ? 'max' : 'standard';
 }
 
 /** Every client we know how to surface in `clients status`. */
@@ -728,33 +693,9 @@ const ALL_MCP_CLIENT_NAMES: ReadonlyArray<DetectedMcpClient['name']> = [
 ];
 
 /**
- * Clients whose config file is user-level no matter which scope was asked
- * for — `getConfigPath` ignores `projectRoot` for these, so a project-scoped
- * run would otherwise pin one project's path into a shared global file.
- */
-const ALWAYS_GLOBAL_CLIENTS: ReadonlySet<DetectedMcpClient['name']> = new Set([
-  'claude-desktop',
-  'hermes',
-  'cline',
-  'kilocode',
-  'antigravity',
-  'kimi',
-]);
-
-/**
  * Build the entry we'd write for `name` right now. Single source of truth
  * shared by configureMcpClients() and getMcpClientStatuses() so drift
  * detection can never disagree with what init actually writes.
- *
- * A global registration deliberately carries NO `cwd` (TRA-501). `cwd` is the
- * working directory the client spawns `trace-mcp serve` in, and `serve` takes
- * whatever it is handed — so pinning it to `findProjectRoot(process.cwd())`
- * made the "correct" contents of a user-level entry depend on the directory
- * the CLI happened to run in: `clients status` reported `drift: cwd` from any
- * other directory, and a repair driven by the desktop app (which shells out
- * from the Electron bundle) wrote the app's own package directory into every
- * client. Without it the client's own working directory wins, which for an
- * editor is the project the user actually has open.
  */
 function buildExpectedEntry(
   name: DetectedMcpClient['name'],
@@ -762,10 +703,7 @@ function buildExpectedEntry(
   scope: McpScope,
 ): McpServerEntry & { type?: 'stdio' } {
   const base: McpServerEntry = { ...buildMcpEntry(), args: ['serve'] };
-  const effectiveScope: McpScope = ALWAYS_GLOBAL_CLIENTS.has(name) ? 'global' : scope;
-  // claude-code/claw-code read a project-scoped config from the project root
-  // itself, so they already run there — no cwd needed.
-  if (effectiveScope === 'project' && name !== 'claude-code' && name !== 'claw-code') {
+  if (scope === 'global' || (name !== 'claude-code' && name !== 'claw-code')) {
     base.cwd = projectRoot;
   }
   // alwaysLoad is intentionally never set here — see McpServerEntry.alwaysLoad.
@@ -785,7 +723,7 @@ function detectClientStatus(
   name: DetectedMcpClient['name'],
   projectRoot: string,
   scope: McpScope,
-): Omit<McpClientStatus, 'level'> {
+): McpClientStatus {
   if (name === 'jetbrains-ai' || name === 'warp') {
     return { client: name, configPath: null, status: 'unmanageable' };
   }
@@ -914,13 +852,7 @@ export function getMcpClientStatuses(
   clientNames?: DetectedMcpClient['name'][],
 ): McpClientStatus[] {
   const targets = clientNames ?? ALL_MCP_CLIENT_NAMES;
-  return targets.map((name) => {
-    const status = detectClientStatus(name, projectRoot, scope);
-    // Nothing on disk yet means the level is still an open choice, not a fact
-    // to report — only a configured client has one.
-    const configured = status.status !== 'missing' && status.status !== 'unmanageable';
-    return { ...status, level: configured ? detectEnforcementLevel(name) : null };
-  });
+  return targets.map((name) => detectClientStatus(name, projectRoot, scope));
 }
 
 function getConfigPath(

@@ -26,15 +26,12 @@ declare global {
           configPath: string | null;
           status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
           staleReason?: string;
-          level?: 'base' | 'standard' | 'max' | null;
         }>;
       }>;
       configureMcpClient: (
         clientName: string,
         level: string,
       ) => Promise<{ ok: boolean; error?: string }>;
-      /** Repair drifted entries. Setup asks for an enforcement level; this never does. */
-      updateMcpClients: (clientNames: string[]) => Promise<{ ok: boolean; error?: string }>;
       openProjectTab: (root: string) => Promise<{ ok: boolean }>;
       closeCurrentTab: () => Promise<{ ok: boolean }>;
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
@@ -52,8 +49,6 @@ declare global {
         stuck?: boolean;
         /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
         staleRoots?: { root: string; version: string }[];
-        /** Absolute path to the running `.app`, so copyable commands name the real install. */
-        installPath?: string;
       }>;
       checkPendingUpdate: () => Promise<{ pending: boolean; version?: string }>;
       applyUpdate: () => Promise<{

@@ -5,7 +5,6 @@ import type { TraceMcpConfig } from '../../config.js';
 import { logger } from '../../logger.js';
 import { checkVersionDrift, versionDriftMessage } from '../../init/version-stamp.js';
 import { stripRedundantSchemaKeyword } from '../../server/schema-shim.js';
-import { ClientProfileGate } from '../../server/client-profile.js';
 import { createToolFilter } from '../../server/tool-filter.js';
 import { disarmStdoutGuard } from '../../server/transport-hardening.js';
 import { tryAutoSpawnDaemon } from '../lifecycle.js';
@@ -85,21 +84,12 @@ export class StdioSession {
    * session-less and surfaces "Session expired, reinitialize required" (#209).
    */
   private cachedInitialize: JSONRPCMessage | null = null;
-  /**
-   * Tailors the advertised surface to the connected host (TRA-513). Applied on
-   * the wire because both backends build their tool surface and their
-   * instructions before `initialize` has been read — this is the only layer that
-   * sees the handshake and every frame going back to the client.
-   */
-  private readonly clientProfile: ClientProfileGate;
 
   constructor(opts: StdioSessionOptions) {
     this.opts = opts;
-    this.clientProfile = new ClientProfileGate(opts.config);
     this.stdio = stripRedundantSchemaKeyword(new StdioServerTransport());
     this.router = new MessageRouter({
-      sendToClient: (msg) =>
-        this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage),
+      sendToClient: (msg) => this.stdio.send(msg),
       drainTimeoutMs: opts.drainTimeoutMs ?? 5_000,
     });
     this.watcher = new PollingDaemonWatcher({
@@ -123,10 +113,6 @@ export class StdioSession {
       // Cache the handshake so a later swapped-in proxy backend can re-establish
       // the daemon session (the client only sends `initialize` once).
       if (isInitializeRequest(msg as JSONRPCMessage)) this.cachedInitialize = msg as JSONRPCMessage;
-      this.clientProfile.observeFromClient(msg);
-      if (isInitializeRequest(msg as JSONRPCMessage)) {
-        logger.info({ profile: this.clientProfile.name }, 'StdioSession: resolved client profile');
-      }
       void this.router.ingestFromClient(msg as JSONRPCMessage);
     };
     this.stdio.onerror = (err) => {
