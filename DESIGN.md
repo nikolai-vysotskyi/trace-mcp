@@ -1242,6 +1242,18 @@ care whether the window is visible — and the person at the keyboard does (TRA-
 CDP client can attach to `http://127.0.0.1:9222` once it is up, including `chrome-devtools`
 MCP via `--browser-url`.
 
+**`launch` is isolated from the screen, not from the daemon — isolate that yourself.**
+The app supervises whatever is on `:3741`, and a dev build's version is almost never the
+installed daemon's: on the run that produced TRA-503 it logged `version mismatch —
+daemon=3.5.1 app=3.5.2, restarting daemon`, the restart failed, and the developer's daemon
+was left dead until it was kicked back by hand. Before `launch`, do what
+`capture-screenshots.mjs` does: point `TRACE_MCP_BIN` at a no-op shim so `ensureDaemon()`
+and `restartDaemon()` cannot reach launchd, start your own daemon on another port under its
+own `TRACE_MCP_DATA_DIR`, and rewrite the renderer's calls onto it from the same CDP session
+(`Fetch.enable` on `http://127.0.0.1:3741/*`, `Fetch.continueRequest` with the port
+swapped). A review then reads a seeded index instead of whatever the developer happens to be
+indexing, which is also the only way two runs a month apart compare.
+
 `launch --visible` puts it on screen for the one case that needs eyes on the running app,
 and then also sets `TRACE_MCP_DEV_ALWAYS_ON_TOP=1`: Chromium stops compositing a fully
 *occluded* window, and a CDP screenshot of one hands back the frame it painted minutes ago
