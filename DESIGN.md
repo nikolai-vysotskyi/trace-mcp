@@ -531,7 +531,10 @@ Every data surface owes four states, and each has a house form:
 - **Error** — the chrome stays put; the sentence and its Retry action sit together.
   Each section tracks its own load state. A failed fetch must not pulse a skeleton
   forever promising data that is never coming — settle on an em dash and
-  "Couldn't be measured".
+  "Couldn't be measured". A fetch only *fails* if it can: every request to the
+  daemon carries `AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS)`, because a wedged
+  daemon still holds its port open and a connect that never completes leaves the
+  loading state with nothing to leave it (TRA-478).
 - **Unknown ≠ empty ≠ zero.** "The daemon has not answered yet" and "this project was
   never indexed" are different sentences. "0 of 0 dependencies covered" is an empty
   state, not a full green meter.
@@ -1340,6 +1343,7 @@ new evidence.
 | A card grid responds by changing its column count, never its card width | `flex-wrap` + `flex: 1 1 132px` hands the leftover width to whichever cards landed in the last row: at a 1000px window five KPI tiles rendered at 137px and the sixth at 748px, all six carrying the same three lines. A card wider than its neighbour makes a claim the data is not making. Equal `minmax(0, 1fr)` tracks, and a count that **divides** the number of cards so no row is ever short (TRA-467). |
 | A surface whose every section reads one source states its failure once, at surface level | Project Overview said one dead daemon six times — the toolbar chip, Guard's line, and four `SectionError`s each claiming "the daemon may still be indexing" with a Retry aimed at a refusing socket. "Busy" is a wait, "not running" is a button; the app knew which one it was and printed the other four times. `DaemonDownPane` is now shared, and the test for down is `deriveDaemonState()` rather than a fresh `!connected` that would flash on every mount (TRA-469). |
 | An empty list and no list are two different facts | A `.catch(() => setFiles([]))` makes a refused socket indistinguishable from a filter that matched nothing, and the empty state then explains a result it never received — the sidebar's file list blamed the scope filter while the pane beside it correctly said the daemon was not running (TRA-471). Keep whether the list was answered; assert a cause only for the empty answer you actually got, render nothing for the one you did not, and leave the re-fetching control in place as the way back. |
+| A request with no deadline has no failure state, so the skeleton wins forever | "Daemon down" is not always a refused socket: a wedged daemon still holds :3741 open, the connect sits in `SYN_SENT`, and `fetch` neither resolves nor rejects. The sidebar's file list was the one daemon fetch in the app without `AbortSignal.timeout` — measured on the running renderer, 2 of 6 navigations left six skeletons pulsing and `aria-busy="true"` set indefinitely, four inches from a pane correctly saying the daemon was not running (TRA-478). Give every request a deadline, and derive the render from the request's own terminal state (`'loading' | 'answered' | 'failed'`), never from a boolean a cancelled run can strand. A fixture that rejects immediately — which is every daemon-down test we had — cannot see this class of bug. |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
 | A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
