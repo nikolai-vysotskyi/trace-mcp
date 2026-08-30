@@ -867,6 +867,20 @@ scroll window, and `isDensePane()` compares the pane's height against
 `kpiStripHeight(paneW)` rather than against a guessed breakpoint — which is why it
 reproduces the strip's measured height exactly instead of drifting from it.
 
+**A pane-derived layout number is measured before the first paint.** A
+`ResizeObserver` first reports on the frame *after* the initial commit, so anything
+read off `pane.w` in that commit is read off zero — and zero is a real answer to
+these functions, not a no-op. Take the first measurement synchronously in a
+`useLayoutEffect` (`getBoundingClientRect()` on the same ref), and leave the observer
+for everything after it. Sampled every animation frame in the Electron window at
+1000×800 with only the observer: the first painted frame of the KPI strip was one
+column of 748px tiles in a 780px strip, settling to three 239px tiles in a 268px
+strip ~5ms later — the exact geometry TRA-467 had just removed, plus a 512px jump
+that starts the project list below the window edge on every launch. The danger grows
+the more layout the number decides: it was invisible while `pane.w` only chose
+between a table and a list, and became a full-strip reflow the day it also chose the
+column count.
+
 **A card grid responds by changing its column count, never its card width.** Cards
 in a dashboard are one size at any given width — the reader compares them, and a
 card that is wider than its neighbour is making a claim the data is not making.
