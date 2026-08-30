@@ -95,7 +95,11 @@ You can place a config file at `.trace-mcp/.config.json` in your project root to
   "exclude": ["node_modules/**", "dist/**", "coverage/**"],
   "ignore": {
     "directories": ["generated", "proto"],
-    "patterns": ["**/fixtures/**", "**/*.generated.ts"]
+    "patterns": ["**/fixtures/**", "**/*.generated.ts"],
+    // Respect the project's root .gitignore when walking (default: true).
+    // Set false to index git-ignored trees too — vendored and generated code
+    // then competes with your own in every search result.
+    "gitignore": true
   }
 }
 ```
