@@ -40,10 +40,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: node scripts/check-duplicate-pr.mjs "$PR_NUMBER" report.md
+        run: |
+          # The base ref predates the guard on the PR that introduces it, and
+          # on any PR branched before it landed. Nothing to check yet.
+          if [ ! -f scripts/check-duplicate-pr.mjs ]; then
+            echo "Guard not present on the base ref; skipping."
+            exit 0
+          fi
+          node scripts/check-duplicate-pr.mjs "$PR_NUMBER" report.md
 
       - name: Report duplicates
-        if: failure() && steps.check.outcome == 'failure'
+        if: failure() && hashFiles('report.md') != ''
         uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: duplicate-pr
