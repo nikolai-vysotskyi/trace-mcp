@@ -179,6 +179,29 @@ export function locateInstalledApp(options = {}) {
 }
 
 /**
+ * True when `appPath` is a real installed bundle of ours: a plausible install
+ * location (not a build tree) holding an `Info.plist` with our bundle id.
+ *
+ * `locateInstalledApp()` answers "which one bundle do we act on"; this answers
+ * "is this particular path one of ours", which is what a caller sweeping every
+ * conventional directory needs. A machine can hold more than one installed
+ * copy, and updating only the resolved one leaves the others frozen at
+ * whatever version they were dragged in at, forever.
+ *
+ * @param {string} appPath
+ * @param {LocateOptions} [options]
+ * @returns {boolean}
+ */
+export function isInstalledApp(appPath, options = {}) {
+  if (!isPlausibleInstallPath(appPath)) return false;
+  return isValidAppBundle(
+    appPath,
+    options.bundleId ?? BUNDLE_ID,
+    options.plistBuddyBin ?? '/usr/libexec/PlistBuddy',
+  );
+}
+
+/**
  * The `.app` bundle a running trace-mcp process was launched from, or null.
  *
  * A machine can hold more than one installed bundle — dragged into
