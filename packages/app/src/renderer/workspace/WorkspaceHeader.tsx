@@ -175,17 +175,25 @@ export function WorkspaceHeader({
     return () => clearTimeout(t);
   }, [queryDraft, filter, onFilterChange]);
 
-  // Baseline for the delta chips. Rolled once, after the first real metrics
-  // land — snapshotting the zeros of a cold cache would invent a huge delta.
+  // Baseline for the delta chips. Rolled once, after a reading somebody
+  // actually has — snapshotting zeros would invent a huge delta.
+  //
+  // All four states, not just `metricsLoading` (TRA-458). That one is false the
+  // moment the request FAILS (`Workspace.tsx` passes `metricsLoading &&
+  // errorKind === null`), and it says nothing about the project LIST that
+  // Projects and Indexing are derived from. One launch with the daemon down
+  // stored all zeros and the dashboard then reported the entire workspace —
+  // "↑ +53 projects, ↑ +656.2k symbols vs 5 hours ago" — as this afternoon's
+  // growth, for the next 24 hours.
   const [baseline, setBaseline] = useState<KpiBaseline | null>(null);
   const rolled = useRef(false);
   useEffect(() => {
-    if (metricsLoading || rolled.current) return;
+    if (metricsLoading || listLoading || metricsFailed || listFailed || rolled.current) return;
     rolled.current = true;
     const { previous, next } = rollBaseline(Date.now(), loadBaseline(), kpis);
     setBaseline(previous);
     if (next) saveBaseline(next);
-  }, [metricsLoading, kpis]);
+  }, [metricsLoading, listLoading, metricsFailed, listFailed, kpis]);
 
   const deltaCaption = useMemo(
     () =>
