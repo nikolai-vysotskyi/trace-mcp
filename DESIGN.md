@@ -839,6 +839,20 @@ Not a pass at the end. These are floors.
 - **Focus ring**: one ring, house-wide. `--focus-ring` on `:focus-visible` globally;
   primitives use `outline: 2px solid var(--accent); outline-offset: 2px`. Keyboard
   only — `*:focus { outline: none }`. Every focusable element must show it.
+- **One control, one ring.** A composite control — a search capsule, a composer card, a
+  segmented track — rings its whole outer box on `:focus-within`. The thing inside it
+  that actually takes DOM focus is a *part*, not a control, so it must be silenced:
+  the shared `:where(.lx-search, .ask-input) :is(input, textarea):focus-visible
+  { box-shadow: none }` rule in `app.css`, or a local one for parts that are buttons.
+  Skip it and the universal `*:focus-visible` rule draws a second ring inside the
+  first — sized to the part and, because that rule also sets `border-radius: inherit`,
+  shaped like the parent: a blue pill struck through the placeholder and across the
+  field's own boundary (TRA-521). Every new `:focus-within` ring adds a wrapper to
+  that list; `tokens.test.ts` fails if one is missed.
+- **A part of a control is not a tab stop.** The clear button inside a search field
+  follows `NSSearchField`'s cancel button: `tabIndex={-1}`, clickable, in the
+  accessibility tree, out of the Tab order. Esc from the field is the keyboard path.
+  The alternative is a stop whose ring can only duplicate the wrapper's.
 - **Hit targets**: ≥24×24 for anything focusable (§4).
 - **Icon-only controls carry a label and a tooltip.** The `Button` type enforces both
   for the `icon` variant.

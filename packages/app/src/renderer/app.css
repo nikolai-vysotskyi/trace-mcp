@@ -72,6 +72,20 @@ body {
   box-shadow: var(--focus-ring);
   border-radius: inherit;
 }
+/* …except the text field inside a composite control, which already rings its
+   whole outer box on `:focus-within` — the search field's capsule, the
+   composer's card. That box IS the control; its <input> is a part of it, so
+   the rule above drew a second ring inside the first, sized to the part and
+   (via `border-radius: inherit`) shaped like the parent — the blue pill
+   struck through "Search projects" and across the field's own boundary
+   (TRA-521). One control, one ring.
+   Buttons nested in these wrappers (the clear button, the composer's send)
+   keep theirs: they are separate controls, and the wrapper's ring cannot say
+   which of them holds focus. Keep this list in step with every
+   `:focus-within { box-shadow: var(--focus-ring) }` rule in styles/. */
+:where(.lx-search, .ask-input) :is(input, textarea):focus-visible {
+  box-shadow: none;
+}
 
 /* ── Loading skeletons ──────────────────────────────────────────── */
 /* Blocks at the exact geometry of the value they stand in for, so nothing
