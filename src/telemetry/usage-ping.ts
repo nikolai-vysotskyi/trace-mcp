@@ -7,8 +7,10 @@
  * an anonymous install id, the trace-mcp version, Node major version,
  * platform, the country its timezone belongs to, the MCP client name (e.g.
  * "claude-code"), the model that client mostly drove, how many repositories
- * are indexed, and two aggregate counters since the previous ping (tool calls
- * and estimated tokens saved). Counts and names only: no IP, no project paths,
+ * are indexed, whether this run is a new install or a version change, the
+ * machine's class (arch, core count, whole GB of RAM, OS version), and two
+ * aggregate counters since the previous ping (tool calls and estimated tokens
+ * saved). Counts and names only: no IP, no project paths,
  * file names, query content, per-tool or per-project breakdown, and nothing
  * that could identify a user or their code.
  *
@@ -25,6 +27,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { logger } from '../logger.js';
 import { loadPersistentSavings } from '../savings.js';
@@ -48,11 +51,17 @@ interface TelemetryState {
   lastCalls?: number;
   /** MCP client name from the most recent `initialize` (e.g. "claude-code"). */
   client?: string;
+  /** Version that sent the previous ping — the difference is the upgrade signal. */
+  lastVersion?: string;
 }
 
 function isDisabled(env: NodeJS.ProcessEnv): boolean {
   const v = env.TRACE_MCP_TELEMETRY?.trim().toLowerCase();
-  return v === 'off' || v === '0' || v === 'false';
+  if (v === 'off' || v === '0' || v === 'false') return true;
+  // A fresh container per job means a fresh install id: counting CI would
+  // inflate "new installs" without adding a single user. Opt CI out entirely
+  // rather than pay for a correction factor later.
+  return env.CI === 'true' || env.CI === '1';
 }
 
 function utcDate(nowMs: number): string {
@@ -71,6 +80,7 @@ function loadOrCreateState(): TelemetryState {
         lastTokensSaved: parsed.lastTokensSaved,
         lastCalls: parsed.lastCalls,
         client: parsed.client,
+        lastVersion: parsed.lastVersion,
       };
   } catch {
     // No state file yet (first run) or it's unreadable — start fresh below.
@@ -124,6 +134,49 @@ function country(): string | undefined {
   }
 }
 
+/** -1 / 0 / 1 on the numeric prefix of two semver strings; prerelease tags are ignored. */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const pb = b.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0) ? 1 : -1;
+  }
+  return 0;
+}
+
+/**
+ * What this ping represents for the install: its first ever run, a move to a
+ * different version, or another day on the same one. Reported alongside
+ * `previous_version` so an upgrade funnel reads directly off the events —
+ * GA4 alone cannot derive per-install version transitions.
+ */
+function installType(state: TelemetryState, version: string): string {
+  if (!state.lastVersion) return state.lastPingDate ? 'unknown' : 'new';
+  const cmp = compareVersions(version, state.lastVersion);
+  if (cmp > 0) return 'upgrade';
+  if (cmp < 0) return 'downgrade';
+  return 'active';
+}
+
+/**
+ * Machine class, not machine identity: CPU architecture, core count, memory
+ * rounded to whole gigabytes, and the OS kernel version. Enough to answer
+ * "do our users run arm64" and "is 8GB the floor we must index within";
+ * too coarse to single out a device.
+ */
+function device(): Record<string, string | number> {
+  try {
+    return {
+      arch: process.arch,
+      cpu_count: os.cpus().length,
+      ram_gb: Math.round(os.totalmem() / 1024 ** 3),
+      os_version: os.release(),
+    };
+  } catch {
+    return {};
+  }
+}
+
 /** Delta since the last ping, floored at 0 so a reset savings file can't send a negative. */
 function delta(total: number | undefined, last: number | undefined): number {
   if (typeof total !== 'number' || !Number.isFinite(total) || total < 0) return 0;
@@ -172,6 +225,9 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
               tokens_saved: tokensSaved,
               calls,
               client: state.client ?? 'unknown',
+              install_type: installType(state, opts.version),
+              previous_version: state.lastVersion ?? 'none',
+              ...device(),
               model: topModelLastDay() ?? 'unknown',
               repos_indexed: Object.keys(savings?.per_project ?? {}).length,
               // Without these two GA4 keeps the event but doesn't count the
@@ -197,6 +253,7 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
       lastTokensSaved: savings?.total_tokens_saved ?? state.lastTokensSaved,
       lastCalls: savings?.total_calls ?? state.lastCalls,
       client: state.client,
+      lastVersion: opts.version,
     });
   } catch (err) {
     logger.debug({ err }, 'telemetry.usage_ping_state_save_failed');

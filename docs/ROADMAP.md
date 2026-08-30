@@ -49,8 +49,17 @@ needs to change shape.**
 The adoption metric of record is **active installs**, from the anonymous
 daily ping in `src/telemetry/usage-ping.ts` (one event per install per UTC
 day, opt-out via `TRACE_MCP_TELEMETRY=off`). Read it in the GA4 property
-`G-WSYYT2WZJV`. Refresh the line below monthly so future revisions see a
-trend instead of re-deriving one.
+`G-WSYYT2WZJV` (account `Nikolai`, property `551114458` — note the login also
+holds unrelated properties; do not write to those).
+
+**Do not refresh this by hand.** `.github/workflows/ga4-snapshot.yml` pulls the
+numbers daily via the GA4 Data API — active users by day/week/month, and the
+breakdown by version, country and MCP client — and publishes them to the
+[`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml)
+branch, plus each run's job summary. That branch is the durable record: GA4
+keeps event data for 14 months at most, so anything older survives only there.
+It is deliberately not on `master`: a PR opened by `GITHUB_TOKEN` never
+triggers CI, so it could never satisfy the required checks.
 
 Caveat when citing it: the ping's credentials ship in plaintext inside the
 published npm package (public by design — see SECURITY.md "Telemetry
@@ -77,6 +86,15 @@ measure. Decision: the npm-downloads badge is removed from the homepage
 trust strip and no download figure is cited on any public surface. Adoption
 metric of record is GitHub stars + traffic uniques. Re-check the per-version
 flatness quarterly, not per run.
+
+The same caveat now covers **git clones** (measured 2026-08-30, TRA-540):
+16,006 clones / 928 uniques in 14 days, ramping 166 → 8,736 per day across
+08-24…08-29 while human page views stayed flat at ~20/day. Unique *cloners*
+inflated along with the raw count (62 → 300), so clone uniques are no safer
+than clone totals. Whatever swept the npm version history swept git too. The
+metric of record is therefore GitHub stars plus traffic **views** uniques only
+— clones are excluded from it. Channel-by-channel state now lives in
+`ops/user-signal.md`.
 
 GitHub stars, same date: 101 total (April 58, May 23, June 8, July 5,
 August 6), 14 forks — a launch burst that decayed ~10× and stayed flat.
