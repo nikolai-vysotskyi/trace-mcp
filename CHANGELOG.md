@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.5.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.4.0...v3.5.0) (2026-08-29)
+
+
+### Features
+
+* **app:** a pop-up language picker with ten languages ([#594](https://github.com/nikolai-vysotskyi/trace-mcp/issues/594)) ([080f369](https://github.com/nikolai-vysotskyi/trace-mcp/commit/080f3698b3598e643b7e9a80cda0a977c400c5c3))
+* **app:** ship Spanish and Simplified Chinese (TRA-389) ([#592](https://github.com/nikolai-vysotskyi/trace-mcp/issues/592)) ([3f76ab2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3f76ab20fcd0b9ed626e20bd827b12ef253d63a0))
+
+
+### Bug Fixes
+
+* **indexer:** resolve Go imports, stop the matrix overclaiming import edges (TRA-449) ([#593](https://github.com/nikolai-vysotskyi/trace-mcp/issues/593)) ([b32b5e0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b32b5e06f027b651985984e53da6c018234128bb))
+* **site:** capability marks are monochrome text, not emoji (TRA-447) ([#591](https://github.com/nikolai-vysotskyi/trace-mcp/issues/591)) ([3ee72f1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/3ee72f1e9caaa1474f8f56706b835f7c0b998622))
+* **telemetry:** make GA4 count installs as active users, report tokens saved ([#585](https://github.com/nikolai-vysotskyi/trace-mcp/issues/585)) ([b0f7bab](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b0f7babb396e96385cf994f393c7bef0858bf2eb))
+* **update:** trust the bundle's Info.plist over the version marker ([#589](https://github.com/nikolai-vysotskyi/trace-mcp/issues/589)) ([e2d4cdb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e2d4cdb7460bed4549b6170e3808a8512298e2cd))
+
+
+### Documentation
+
+* bring the i18n docs back in line with what ships (TRA-379) ([#595](https://github.com/nikolai-vysotskyi/trace-mcp/issues/595)) ([6a5e412](https://github.com/nikolai-vysotskyi/trace-mcp/commit/6a5e412ad0a975205020c2fb1a60e4674d5c1bd2))
+* **ops:** verify the last four directories in the distribution ledger (TRA-393) ([#588](https://github.com/nikolai-vysotskyi/trace-mcp/issues/588)) ([0292de8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0292de871fdbbb40e70c0283f50b3e2580b64360))
+
+
+### Tests
+
+* **docs:** guard the default-surface claims on the vs/ comparison pages (TRA-427) ([#586](https://github.com/nikolai-vysotskyi/trace-mcp/issues/586)) ([05dc3dd](https://github.com/nikolai-vysotskyi/trace-mcp/commit/05dc3ddac67438f853b3f99662cb829cb09b7454))
+
 ## [3.4.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.3.0...v3.4.0) (2026-08-29)
 
 
