@@ -419,6 +419,27 @@ main {
 .prose .table-scroll {
   overflow-x: auto;
 }
+/* Instrument label for a region that has more to the right — same voice as
+   the thead label it sits above. The script adds .is-visible only while the
+   region is actually scrollable and not yet at its end. */
+.prose .table-hint {
+  display: none;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+  text-align: right;
+  margin-bottom: 10px;
+}
+.prose .table-hint.is-visible {
+  display: block;
+}
+/* The label belongs to the table under it: 10px, not the 20px paragraph gap.
+   Hidden, it contributes no margin and the table keeps its own 20px. */
+.prose .table-hint.is-visible + .table-scroll {
+  margin-top: 0;
+}
 .prose table {
   width: 100%;
   border-collapse: collapse;
