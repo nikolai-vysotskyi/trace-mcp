@@ -3,7 +3,7 @@
    architecture into a bundle for another — that produces a DMG that looks fine
    and whose daemon dies with ERR_DLOPEN_FAILED on first launch. */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -54,9 +54,16 @@ describe('collectClosure', () => {
     expect(missing).toEqual(['definitely-not-a-real-package']);
   });
 
-  it('reaches the transitive closure of the real installed tree', async () => {
+  /* CI's app job installs only `packages/app`, so the server's own
+     node_modules is not there to walk. The closure over the real tree is worth
+     asserting where it exists — locally, and in the release job that actually
+     stages the payload — and is not worth faking where it does not. */
+  const repoRoot = path.resolve(process.cwd(), '../..');
+  const rootInstalled = existsSync(path.join(repoRoot, 'node_modules', 'better-sqlite3'));
+
+  it.runIf(rootInstalled)('reaches the transitive closure of the real installed tree', async () => {
     const { collectClosure } = await stageServer();
-    const { found, missing } = collectClosure(['better-sqlite3'], path.resolve(process.cwd(), '../..'));
+    const { found, missing } = collectClosure(['better-sqlite3'], repoRoot);
     expect(missing).toEqual([]);
     expect(found.has('better-sqlite3')).toBe(true);
     // better-sqlite3's own runtime require — the reason a naive one-level copy
