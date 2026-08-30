@@ -106,14 +106,38 @@ const MIN_SCROLL_WINDOW = 160;
 export const TABLE_MIN_PANE_W = PANE_PAD + FROZEN_COLS_W + MIN_SCROLL_WINDOW;
 
 /**
- * How tall the full-height KPI strip would be in a pane this wide. The tiles
- * flex-wrap, so width decides how many rows of 112px there are — at the app's
- * 640px minimum window that is three rows, 396px.
+ * How many tiles go in a row at this pane width — always a divisor of
+ * `KPI_COUNT`, so every row is full.
+ *
+ * The strip used to be a wrapping flexbox of `flex: 1 1 132px` tiles, which
+ * packs as many as fit and then stretches whatever landed in the last row
+ * across the leftover width. Measured in the Electron window at a 1000px window:
+ * five tiles at 137px and the sixth at 748px, carrying the same three lines of
+ * content (TRA-467). A dashboard card is one size; only the column count
+ * responds to width. Restricting the count to a divisor of six is what removes
+ * the ragged last row that the stretching existed to hide.
+ *
+ * `0` is an unmeasured pane on first paint. It falls through to one column —
+ * the same six-row answer the old `Math.max(1, …)` gave — so the first frame is
+ * unchanged.
+ */
+export function kpiColumns(paneW: number): number {
+  const inner = Math.max(0, paneW - PANE_PAD);
+  const fits = (n: number) => n * TILE_MIN_W + (n - 1) * TILE_GAP <= inner;
+  return [6, 3, 2].find(fits) ?? 1;
+}
+
+/**
+ * How tall the full-height KPI strip would be in a pane this wide. Width decides
+ * the column count and so how many rows of 112px there are — at the app's 640px
+ * minimum window that is three rows, 396px.
+ *
+ * This reads `kpiColumns()` rather than repeating the packing rule: a layout
+ * number written twice is how the top band ended up 3px out of true (DESIGN.md,
+ * "The top band").
  */
 export function kpiStripHeight(paneW: number): number {
-  const inner = Math.max(0, paneW - PANE_PAD);
-  const perRow = Math.max(1, Math.floor((inner + TILE_GAP) / (TILE_MIN_W + TILE_GAP)));
-  const rows = Math.ceil(KPI_COUNT / perRow);
+  const rows = KPI_COUNT / kpiColumns(paneW);
   return rows * TILE_H + (rows - 1) * TILE_GAP + STRIP_PAD;
 }
 
@@ -281,6 +305,7 @@ export function Workspace() {
 
   const narrow = isNarrowPane(pane.w);
   const dense = isDensePane(pane.w, pane.h);
+  const kpiCols = kpiColumns(pane.w);
   // The stored preference is never rewritten: widening the window has to bring
   // the user's own choice back, not whatever the narrow layout fell back to.
   const effectiveView: ViewMode = narrow ? 'compact' : view;
@@ -346,6 +371,7 @@ export function Workspace() {
         refreshing={data.refreshing}
         scrolled={scrolled}
         dense={dense}
+        kpiColumns={kpiCols}
         hideViewToggle={narrow}
         rightExtra={<AddProjectControl onAdd={(root) => data.addProject(root)} />}
         // Above the tiles, not below them: the line that says these numbers

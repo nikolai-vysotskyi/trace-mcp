@@ -74,6 +74,12 @@ export interface WorkspaceHeaderProps {
   scrolled?: boolean;
   /** Collapse the KPI tiles to one line each — see {@link KpiTileProps.dense}. */
   dense?: boolean;
+  /**
+   * How many tiles per row, from `kpiColumns()` in Workspace.tsx — always a
+   * divisor of six, so every row is full and every tile is the same width.
+   * Defaults to three for a standalone render with no pane to measure.
+   */
+  kpiColumns?: number;
   /** The pane is too narrow for the table, so Compact is the only view. */
   hideViewToggle?: boolean;
   /** Slot rendered at the end of the toolbar row (typically AddProjectControl). */
@@ -168,6 +174,7 @@ export function WorkspaceHeader({
   refreshing,
   scrolled = false,
   dense = false,
+  kpiColumns = 3,
   hideViewToggle = false,
   rightExtra,
   banner,
@@ -279,7 +286,14 @@ export function WorkspaceHeader({
       {banner}
 
       {/* ── KPI grid ───────────────────────────────────────────────── */}
-      <div className="flex items-stretch gap-4 px-4 pt-4 pb-3 flex-wrap">
+      {/* A grid, not a wrapping flexbox. Flex-wrap stretches the last row's
+          survivors across the leftover width, which at a 1000px window put one
+          748px tile next to five 137px ones (TRA-467). Equal tracks, and a
+          column count that divides six so no row is ever short. */}
+      <div
+        className="grid items-stretch gap-4 px-4 pt-4 pb-3"
+        style={{ gridTemplateColumns: `repeat(${kpiColumns}, minmax(0, 1fr))` }}
+      >
         <KpiTile
           label={t('kpiProjects')}
           value={kpis.totalProjects}

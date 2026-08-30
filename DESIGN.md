@@ -867,6 +867,30 @@ scroll window, and `isDensePane()` compares the pane's height against
 `kpiStripHeight(paneW)` rather than against a guessed breakpoint — which is why it
 reproduces the strip's measured height exactly instead of drifting from it.
 
+**A card grid responds by changing its column count, never its card width.** Cards
+in a dashboard are one size at any given width — the reader compares them, and a
+card that is wider than its neighbour is making a claim the data is not making.
+So the KPI strip is a `grid` of equal `minmax(0, 1fr)` tracks, and only the number
+of tracks reads the pane.
+
+Do not build it out of `flex-wrap` plus `flex: 1 1 <basis>`. That packs as many
+cards as fit and then hands the whole leftover width to whichever cards landed in
+the last row. Measured in the Electron window at a 1000px window: five tiles at
+137px and a sixth at **748px**, all six carrying the same three lines (TRA-467).
+The stretch is not a fallback that only fires at odd sizes — it fires at every
+width where the count does not divide evenly, which included the app's own
+default.
+
+**Pick a column count that divides the number of cards** (six cards → 6 / 3 / 2 / 1).
+Then every row is full, so there is no ragged tail to stretch and no trailing dead
+space either — the two things a card grid can get wrong, removed by the same
+constraint.
+
+**The count and the strip's height are one number.** `kpiColumns(paneW)` in
+`workspace/Workspace.tsx` is the single source; `kpiStripHeight()` divides by it
+rather than re-deriving the packing rule, and `isDensePane()` reads that. Two
+copies of a layout rule is the failure recorded under "The top band".
+
 **What gives way, in order.** Never the identity of the screen; always the
 elaboration.
 
@@ -1214,6 +1238,7 @@ new evidence.
 | Breakpoints are read off the **pane**, and computed rather than picked | The sidebar is resizable 180–320px, so window width is not a proxy for room. `kpiStripHeight()` is derived from the tile's own geometry; a guessed number drifts the first time a tile changes — as it did when the comparison line went from one reserved line to two (TRA-459). |
 | A share of a total is only for a set that really is a **part of that total** | Healthy and Needs attention are overlapping predicates — a grade-B project with 15 dead exports is in both — so "57% of 53 projects" beside "83% of 53 projects" is the grammar of a partition on numbers that do not partition anything. Two shares of one denominator get added by every reader who sees them side by side. A comparison line for an overlapping set names its criterion instead. |
 | A comparison line reserves its height, it does not measure it | The catalogue runs +30% longer in German and Russian and a tile is 132–214px wide, so whether the line wraps is not a property of the design. `KpiTile` reserves two 13px lines whatever the string does, which is what lets one `TILE_H` constant hold: measured on the running renderer, every tile is 112px in en/de/ja and both criterion lines are 26px in ru. The reservation is a floor, not a cap — Russian's delta caption (`↑+105.6k по сравнению с: 9 минут назад`) still runs to four lines and takes its row to 138px, which is a separate defect and not something `TILE_H` can absorb. |
+| A card grid responds by changing its column count, never its card width | `flex-wrap` + `flex: 1 1 132px` hands the leftover width to whichever cards landed in the last row: at a 1000px window five KPI tiles rendered at 137px and the sixth at 748px, all six carrying the same three lines. A card wider than its neighbour makes a claim the data is not making. Equal `minmax(0, 1fr)` tracks, and a count that **divides** the number of cards so no row is ever short (TRA-467). |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
 | A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
