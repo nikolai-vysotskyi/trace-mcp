@@ -982,3 +982,38 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-table td[colspan] {
   border-bottom: 0;
 }
+
+/* ============================================================================
+   KPI TILE — .ws-kpi  (workspace/components/KpiTile.tsx, TRA-475)
+
+   Geometry, type and the selection border stay inline in the component; this
+   file owns the FILL, because that is the one property that has to change on
+   hover and an inline background outranks any rule here.
+
+   Only the tiles that carry a filter render as `<button>`, so `button.ws-kpi`
+   is exactly the set that should respond to the pointer. Before this there was
+   no `[data-kpi]` rule anywhere in the renderer: a clickable card and a static
+   one were indistinguishable under the cursor.
+
+   --fill-quaternary, not --fill-tertiary: the footnote is --label-secondary,
+   which measures 4.64:1 in light and 5.37:1 in dark over this fill, and 4.45:1
+   over --fill-tertiary. A card's own hover must not push its text under AA.
+
+   The tint is a background-IMAGE layered on the opaque surface, not a
+   background-color replacing it. Every fill token is translucent, so setting
+   `background: var(--fill-quaternary)` drops the card's own --surface and
+   composites the tint against whatever is behind the card instead: measured on
+   the rendered frame, the hovered card came back (234,234,236) — the tint over
+   the --surface-sunken pane — where an opaque card is (244,244,244). A card
+   is content and stays opaque in every state. Leaving `box-shadow` alone also keeps the
+   `*:focus-visible` ring intact on a tile that is hovered and focused at once.
+
+   No `:active` rule — --fill-pressed takes that footnote to 4.37:1, and the
+   press already has feedback: the accent border arrives on release.
+   ============================================================================ */
+.ws-kpi {
+  background: var(--surface);
+}
+button.ws-kpi:hover {
+  background-image: linear-gradient(var(--fill-quaternary), var(--fill-quaternary));
+}

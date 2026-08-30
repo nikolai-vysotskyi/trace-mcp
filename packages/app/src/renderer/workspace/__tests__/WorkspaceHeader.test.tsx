@@ -27,6 +27,7 @@ function renderHeader(
     dense: boolean;
     hideViewToggle: boolean;
     kpis: WorkspaceKpis;
+    filter: WorkspaceFilter;
   }> = {},
 ) {
   const { container } = render(
@@ -183,6 +184,58 @@ describe('WorkspaceHeader KPI strip', () => {
     }
     // Indexing really is a subset of the workspace, so it keeps its share.
     expect(kpiTile('Indexing').children[2]!.textContent).toBe('8% of 53 projects');
+  });
+});
+
+describe('WorkspaceHeader KPI tiles: which of them are controls', () => {
+  beforeEach(() => localStorage.clear());
+
+  const READOUTS = ['Projects', 'Files', 'Symbols'];
+  const FILTERS = ['Healthy', 'Needs attention', 'Indexing'];
+
+  it('marks nothing selected while nothing is filtered', () => {
+    // Projects used to light when NO filter was on, so the one mark meaning
+    // "this filter is active" sat, on every launch, above a list showing
+    // everything (TRA-475).
+    renderHeader(false);
+    for (const label of [...READOUTS, ...FILTERS]) {
+      const tile = kpiTile(label);
+      expect(tile.getAttribute('aria-pressed')).not.toBe('true');
+      expect(tile.style.border).toContain('var(--separator)');
+    }
+  });
+
+  it('renders a tile with no filter behind it as content, not a dead control', () => {
+    // `<button disabled>` told VoiceOver there was a control here and that the
+    // user may not use it — a broken control where there was never one.
+    renderHeader(false);
+    for (const label of READOUTS) {
+      const tile = kpiTile(label);
+      expect(tile.tagName).toBe('DIV');
+      expect(tile.getAttribute('aria-pressed')).toBeNull();
+      // Still a card: same anatomy, same hook, same class.
+      expect(tile.children).toHaveLength(3);
+      expect(tile.className).toContain('ws-kpi');
+    }
+  });
+
+  it('keeps the three filter presets as real buttons', () => {
+    renderHeader(false);
+    for (const label of FILTERS) {
+      const tile = kpiTile(label);
+      expect(tile.tagName).toBe('BUTTON');
+      expect(tile).not.toHaveProperty('disabled', true);
+      expect(tile.getAttribute('aria-pressed')).toBe('false');
+    }
+  });
+
+  it('lights exactly the tile whose filter is on', () => {
+    renderHeader(false, { filter: { ...EMPTY_FILTER, preset: 'healthy' } });
+    expect(kpiTile('Healthy').getAttribute('aria-pressed')).toBe('true');
+    expect(kpiTile('Healthy').style.border).toContain('var(--accent)');
+    for (const label of ['Projects', 'Files', 'Symbols', 'Needs attention', 'Indexing']) {
+      expect(kpiTile(label).style.border).toContain('var(--separator)');
+    }
   });
 });
 

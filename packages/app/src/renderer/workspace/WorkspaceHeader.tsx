@@ -303,8 +303,11 @@ export function WorkspaceHeader({
           delta={delta((k) => k.totalProjects)}
           deltaCaption={deltaCaption}
           footnote={t('kpiTrackingFromToday')}
-          active={isDefaultFilter(filter)}
-          onClick={() => onFilterChange(EMPTY_FILTER)}
+          /* No `active`, no `onClick`. Projects is the workspace total, not a
+             filter: lighting it when NO filter is on put the one mark that
+             means "this filter is active" on a tile whose filter is not, above
+             a list showing everything (TRA-475). Clearing stays reachable from
+             the Filter menu, the overflow menu, and the lit preset tile. */
         />
         <KpiTile
           label={t('kpiFiles')}

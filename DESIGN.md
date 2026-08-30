@@ -492,6 +492,40 @@ this one was declared in TRA-265 and never rendered a pixel. Tables that pin col
 `border-collapse: separate` with `border-spacing: 0`, which also moves the row hairline
 from the `<tr>` (ignored in the separated model) onto the cells.
 
+### A readout is content. A selection mark belongs to the thing selected.
+
+Two rules for any strip where some cards act and some only report, broken together on
+the Workspace dashboard's opening frame (TRA-475).
+
+**A card with no action renders as a `<div>`, never as a disabled `<button>`.** A
+component that wraps every card in a `<button>` and switches off the ones without an
+`onClick` is not being defensive — it is announcing a control to VoiceOver and then
+telling the user they may not use it, where there was never a control. Three of the six
+KPI tiles shipped that way. Whatever the card needs to keep — the test hook, the
+anatomy, the `title` — it keeps on a `<div>`, and it leaves the accessibility tree.
+
+**A tile lights when its own filter is on, and at no other time.** `Projects` lit when
+*no* filter was on, so the accent border — the app's one mark for "this filter is
+active" — sat on a tile whose filter was not, directly above a list showing everything,
+on every launch. An affordance for clearing belongs where clearing belongs (the Filter
+menu, the overflow menu, clicking the lit tile again), not on a neighbour whose lit
+state then means the opposite of everyone else's. The resting dashboard has no accent
+in it.
+
+The corollary that closes the loop: **the cards that ARE controls have to look like it
+under the pointer.** With the disabled `<button>` gone, `button.ws-kpi:hover` is exactly
+the clickable set. Use `--fill-quaternary` for a card's hover, not `--fill-tertiary`:
+the footnote is `--label-secondary`, which measures 4.64:1 (light) / 5.37:1 (dark) over
+the former and 4.45:1 over the latter. A card's own hover must not push its text under
+AA.
+
+And layer that tint, do not swap the fill for it. Every `--fill-*` token is
+translucent, so `background: var(--fill-quaternary)` on a card throws away the card's
+own `--surface` and composites the tint against the pane behind it — the hovered tile
+measured (234,234,236) on the rendered frame instead of an opaque (244,244,244). A
+`background-image: linear-gradient(var(--fill-quaternary), var(--fill-quaternary))`
+paints the tint *on* the surface, and leaves `box-shadow` free for the focus ring.
+
 ### States are part of the component, not an afterthought
 
 Every data surface owes four states, and each has a house form:

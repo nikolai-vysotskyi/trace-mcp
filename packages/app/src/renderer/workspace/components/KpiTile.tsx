@@ -108,39 +108,38 @@ export function KpiTile({
   const interactive = onClick !== undefined;
   const valueColor = unavailable ? 'var(--label-secondary)' : tone ? TONE_COLOR[tone] : 'var(--label)';
 
-  return (
-    <button
-      type="button"
-      disabled={!interactive}
-      aria-pressed={interactive ? active : undefined}
-      data-kpi={label}
-      data-dense={dense ? '' : undefined}
-      // Dense drops the comparison line, so the one sentence that explains an
-      // em dash has to survive somewhere the user can still reach it.
-      title={dense && unavailable ? t('kpiUnavailable') : undefined}
-      onClick={onClick}
-      className={
-        dense
-          ? 'flex flex-row items-baseline justify-between gap-2 text-left transition-colors'
-          : 'flex flex-col items-start gap-1 text-left transition-colors'
-      }
-      style={{
-        // No `flex` basis: the strip is a grid whose track count already
-        // guarantees at least 132px per tile, and a flex-grow here is what let
-        // a last-row tile stretch to 5.5x its siblings (TRA-467). `minWidth: 0`
-        // so a long footnote sizes to its track instead of widening it.
-        minWidth: 0,
-        padding: dense ? '8px 12px' : 16,
-        borderRadius: 12,
-        // A card is content: it stays opaque --surface in BOTH states. Tinting
-        // the active tile pushed --label-secondary to 4.45:1 on its footnote —
-        // that token only clears 4.5 over an untinted surface. Selection is the
-        // accent border + aria-pressed, which as a UI boundary needs only 3:1.
-        background: 'var(--surface)',
-        border: `0.5px solid ${active ? 'var(--accent)' : 'var(--separator)'}`,
-        cursor: interactive ? 'pointer' : 'default',
-      }}
-    >
+  const shared = {
+    'data-kpi': label,
+    'data-dense': dense ? '' : undefined,
+    // Dense drops the comparison line, so the one sentence that explains an
+    // em dash has to survive somewhere the user can still reach it.
+    title: dense && unavailable ? t('kpiUnavailable') : undefined,
+    className: `ws-kpi ${
+      dense
+        ? 'flex flex-row items-baseline justify-between gap-2 text-left transition-colors'
+        : 'flex flex-col items-start gap-1 text-left transition-colors'
+    }`,
+    style: {
+      // No `flex` basis: the strip is a grid whose track count already
+      // guarantees at least 132px per tile, and a flex-grow here is what let
+      // a last-row tile stretch to 5.5x its siblings (TRA-467). `minWidth: 0`
+      // so a long footnote sizes to its track instead of widening it.
+      minWidth: 0,
+      padding: dense ? '8px 12px' : 16,
+      borderRadius: 12,
+      // The resting fill lives in island.css (`.ws-kpi`), not here: an inline
+      // background outranks every stylesheet rule, and the hover response the
+      // clickable tiles need is a stylesheet rule. A card is content, so it
+      // stays opaque in BOTH states — tinting the active tile pushed
+      // --label-secondary to 4.45:1 on its footnote, and that token only clears
+      // 4.5 over an untinted surface. Selection is the accent border +
+      // aria-pressed, which as a UI boundary needs only 3:1.
+      border: `0.5px solid ${active ? 'var(--accent)' : 'var(--separator)'}`,
+    },
+  } as const;
+
+  const body = (
+    <>
       {/* Active is signalled by the accent BORDER + aria-pressed, not by an
           accent label: --accent on the active tile's --fill-tertiary tint
           measures 3.28:1, and --badge-accent-fg only reaches 4.29:1. Promoting
@@ -212,6 +211,19 @@ export function KpiTile({
           )}
         </span>
       )}
+    </>
+  );
+
+  // A tile with no `onClick` is a readout, and a readout is content. Rendering
+  // it as `<button disabled>` told VoiceOver there was a control here and that
+  // the user may not use it — a broken control where there was never one
+  // (TRA-475). A `<div>` keeps the anatomy, the hook and the dense `title`, and
+  // leaves the accessibility tree.
+  if (!interactive) return <div {...shared}>{body}</div>;
+
+  return (
+    <button type="button" aria-pressed={active} onClick={onClick} {...shared}>
+      {body}
     </button>
   );
 }
