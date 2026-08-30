@@ -6,6 +6,7 @@ import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding'
 import { QuickOpen, type QuickOpenItem } from './components/QuickOpen';
 import { SidebarRow } from './components/SidebarRow';
 import { WindowTabBar } from './components/WindowTabBar';
+import { DAEMON_FETCH_TIMEOUT_MS } from './hooks/useDaemon';
 import { t } from './i18n';
 import { formatNumber } from './i18n/format';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
@@ -270,11 +271,14 @@ function ProjectFileExplorer({
   const { t } = useTranslation('shell');
   const [sort, setSort] = useState<FileSort>('symbols');
   const [files, setFiles] = useState<FileEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  /* Did a list actually come back? An empty list and no list at all are two
-     different facts, and `setFiles([])` on failure collapsed them into one —
-     which is how a refused socket ended up blaming the scope filter (TRA-471). */
-  const [answered, setAnswered] = useState(false);
+  /* One state, three terminal facts, written only by the request that owns it.
+     It was two booleans — `loading`, cleared in a `.finally` any cancelled run
+     could skip, and `answered`, because an empty list and no list at all are
+     different facts (TRA-471). A skeleton then outranked both, so a request
+     that never settled pulsed six rows forever (TRA-478). `unavailable`
+     outranks `pending` here for the same reason it does in `KpiTile`: a fetch
+     that finished and failed is not still loading. */
+  const [status, setStatus] = useState<'loading' | 'answered' | 'failed'>('loading');
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; path: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -291,27 +295,32 @@ function ProjectFileExplorer({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    setStatus('loading');
     const params = new URLSearchParams({ project: root, sort, limit: String(LIMIT) });
     // Pass scope to API if it's a custom path filter (not 'project' or empty)
     const effectiveScope = debouncedScope?.trim();
     if (effectiveScope && effectiveScope !== 'project') {
       params.set('scope', effectiveScope);
     }
-    fetch(`${BASE}/api/projects/files?${params}`)
+    /* The deadline every other daemon fetch already carries (`useDaemon`), and
+       the one this list was missing. A daemon that is down is not always a
+       refused socket: a wedged process still holds :3741 open, so the connect
+       sits in SYN_SENT and `fetch` neither resolves nor rejects — which is how
+       the skeletons outlived the request (TRA-478). Without a deadline there is
+       no terminal state to render. */
+    fetch(`${BASE}/api/projects/files?${params}`, {
+      signal: AbortSignal.timeout(DAEMON_FETCH_TIMEOUT_MS),
+    })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => {
         if (cancelled) return;
         setFiles(data.files ?? []);
-        setAnswered(true);
+        setStatus('answered');
       })
       .catch(() => {
         if (cancelled) return;
         setFiles([]);
-        setAnswered(false);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        setStatus('failed');
       });
     return () => {
       cancelled = true;
@@ -382,7 +391,7 @@ function ProjectFileExplorer({
         aria-label={t('sortFilesBy')}
       />
 
-      {loading ? (
+      {status === 'loading' ? (
         // Skeletons at the final 28px geometry — nothing shifts on load.
         <div aria-busy="true" aria-label={t('loadingFiles')}>
           {Array.from({ length: 6 }, (_, i) => (
@@ -397,7 +406,7 @@ function ProjectFileExplorer({
            not name a cause it cannot know, and does not say the same thing twice
            (DESIGN.md §5). The sort pop-up above stays: changing it re-fetches,
            which is the sidebar's own way back once the daemon answers again. */
-        answered ? (
+        status === 'answered' ? (
           <div className="ws-sb-empty">
             <Icon name="description" size={20} className="gi" />
             <span>{t('noFilesMatchScope')}</span>
