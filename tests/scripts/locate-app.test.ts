@@ -337,3 +337,121 @@ describe.skipIf(process.platform === 'win32')('locateInstalledApp', () => {
     expect(result?.appPath).toBe(target);
   });
 });
+
+/**
+ * A `pgrep -f` stub printing the pids we hand it, and a `ps -p <pid> -o comm=`
+ * stub mapping each pid to an executable path. Together they stand in for a
+ * running Electron bundle without launching one.
+ */
+function createProcStubs(
+  home: string,
+  procs: Record<string, string>,
+): { pgrepBin: string; psBin: string } {
+  const pids = Object.keys(procs);
+  const pgrepBin = path.join(home, 'pgrep-stub.sh');
+  // pgrep exits 1 when nothing matches; the caller must treat that as "none".
+  fs.writeFileSync(
+    pgrepBin,
+    pids.length === 0
+      ? '#!/usr/bin/env bash\nexit 1\n'
+      : `#!/usr/bin/env bash\ncat <<'EOF'\n${pids.join('\n')}\nEOF\n`,
+    { mode: 0o755 },
+  );
+
+  const psBin = path.join(home, 'ps-stub.sh');
+  const cases = pids.map((pid) => `  ${pid}) echo ${JSON.stringify(procs[pid])} ;;`).join('\n');
+  // Args arrive as `-p <pid> -o comm=`, so $2 is the pid.
+  fs.writeFileSync(psBin, `#!/usr/bin/env bash\ncase "$2" in\n${cases}\n  *) exit 1 ;;\nesac\n`, {
+    mode: 0o755,
+  });
+  return { pgrepBin, psBin };
+}
+
+function runRunningBundlePath(opts: {
+  homeDir: string;
+  pgrepBin: string;
+  psBin: string;
+  platform?: NodeJS.Platform;
+}): string | null {
+  const harness = `
+import { runningBundlePath } from ${JSON.stringify(MODULE_PATH)};
+const opts = JSON.parse(process.argv[2]);
+process.stdout.write(JSON.stringify(runningBundlePath(opts)));
+`;
+  const harnessPath = path.join(opts.homeDir, 'running-harness.mjs');
+  fs.writeFileSync(harnessPath, harness);
+  const stdout = execFileSync(process.execPath, [harnessPath, JSON.stringify(opts)], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf-8',
+    timeout: 15_000,
+  });
+  return JSON.parse(stdout) as string | null;
+}
+
+// TRA-506: with a bundle in /Applications and another in ~/Applications, the
+// location marker and the running app named different copies. postinstall
+// staged the pending zip beside the marker's bundle, the running one never saw
+// it, and the machine sat two releases behind while npm reported success — the
+// state this was written against had a 112 MB orphan zip to prove it.
+describe.skipIf(process.platform === 'win32')('runningBundlePath', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-running-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it('resolves the .app of a running process', () => {
+    const dragged = createFakeBundle(path.join(home, 'Applications-system'));
+    const { pgrepBin, psBin } = createProcStubs(home, {
+      '4242': path.join(dragged, 'Contents', 'MacOS', 'trace-mcp'),
+    });
+
+    expect(runRunningBundlePath({ homeDir: home, pgrepBin, psBin, platform: 'darwin' })).toBe(
+      dragged,
+    );
+  });
+
+  it('returns null when nothing is running', () => {
+    const { pgrepBin, psBin } = createProcStubs(home, {});
+    expect(runRunningBundlePath({ homeDir: home, pgrepBin, psBin, platform: 'darwin' })).toBeNull();
+  });
+
+  it('ignores a bundle running out of a build tree', () => {
+    const built = createFakeBundle(
+      (() => {
+        const d = path.join(home, 'checkout', 'packages', 'app', 'release', 'mac-arm64');
+        fs.mkdirSync(d, { recursive: true });
+        return d;
+      })(),
+    );
+    const { pgrepBin, psBin } = createProcStubs(home, {
+      '77': path.join(built, 'Contents', 'MacOS', 'trace-mcp'),
+    });
+
+    expect(runRunningBundlePath({ homeDir: home, pgrepBin, psBin, platform: 'darwin' })).toBeNull();
+  });
+
+  it('skips a process whose bundle id does not match and takes the next one', () => {
+    const foreign = createFakeBundle(path.join(home, 'Other'), 'com.someone-else.app');
+    const real = createFakeBundle(path.join(home, 'Applications'));
+    const { pgrepBin, psBin } = createProcStubs(home, {
+      '1': path.join(foreign, 'Contents', 'MacOS', 'trace-mcp'),
+      '2': path.join(real, 'Contents', 'MacOS', 'trace-mcp'),
+    });
+
+    expect(runRunningBundlePath({ homeDir: home, pgrepBin, psBin, platform: 'darwin' })).toBe(real);
+  });
+
+  it('returns null on non-darwin platforms', () => {
+    const app = createFakeBundle(path.join(home, 'Applications'));
+    const { pgrepBin, psBin } = createProcStubs(home, {
+      '9': path.join(app, 'Contents', 'MacOS', 'trace-mcp'),
+    });
+
+    expect(runRunningBundlePath({ homeDir: home, pgrepBin, psBin, platform: 'linux' })).toBeNull();
+  });
+});
