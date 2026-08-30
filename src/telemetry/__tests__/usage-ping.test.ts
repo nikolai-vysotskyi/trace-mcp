@@ -184,6 +184,53 @@ describe('sendUsagePing', () => {
     expect(params.calls).toBe(0);
   });
 
+  it('marks the very first run as a new install', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.install_type).toBe('new');
+    expect(params.previous_version).toBe('none');
+    expect(JSON.parse(String(vi.mocked(fs.writeFileSync).mock.calls[0]![1])).lastVersion).toBe(
+      '1.2.3',
+    );
+  });
+
+  it.each([
+    ['1.2.3', '2.0.0', 'upgrade'],
+    ['2.0.0', '1.9.9', 'downgrade'],
+    ['1.2.3', '1.2.3', 'active'],
+  ])('reports %s -> %s as %s', async (from, to, expected) => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ installId: 'fixed-id', lastPingDate: '2000-01-01', lastVersion: from }),
+    );
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: to, env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.install_type).toBe(expected);
+    expect(params.previous_version).toBe(from);
+  });
+
+  it('reports the machine class without anything identifying it', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.arch).toBe(process.arch);
+    expect(typeof params.cpu_count).toBe('number');
+    expect(typeof params.ram_gb).toBe('number');
+    expect(typeof params.os_version).toBe('string');
+    const serialised = JSON.stringify(calls[0]!.body);
+    expect(serialised).not.toContain(process.env.USER ?? '\u0000never');
+  });
+
+  it('stays silent in CI, where every job is a fresh install id', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: { ...CONFIGURED_ENV, CI: 'true' }, fetchImpl });
+    expect(calls).toHaveLength(0);
+  });
+
   it('does not send a second ping the same UTC day', async () => {
     const today = new Date().toISOString().slice(0, 10);
     vi.mocked(fs.readFileSync).mockReturnValue(
