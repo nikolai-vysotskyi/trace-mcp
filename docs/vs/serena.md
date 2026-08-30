@@ -153,6 +153,6 @@ Serena on a cold repo — no index build, though the language server still has t
 ## Next steps
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
