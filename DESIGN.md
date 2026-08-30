@@ -843,26 +843,37 @@ Opening a project opens a native macOS **tab**, so the normal state of this app 
 tabbed window — not an edge case. AppKit then draws a tab bar, and because the window is
 `titleBarStyle: 'hiddenInset'` (full-size content view) it draws it **over** the web
 contents: `innerHeight` stays equal to `outerHeight`, nothing reflows, and the tab bar
-simply covers the top 28px of whatever the renderer painted. That is most of the
+simply covers the top 20px of whatever the renderer painted. That is most of the
 band above, so the surface toolbar and the sidebar toggle went from "misaligned" to
 "gone" (TRA-399).
 
 The rule that follows: **a band we do not draw still has to be reserved.** The tab bar is
 AppKit's, we cannot restyle it and we cannot ask whether it is up — so:
 
-- `MAC_TAB_BAR_H` (28px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
+- `MAC_TAB_BAR_H` (20px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
   number, exactly like `TOP_BAND_H`. The stage reserves it with `padding-top` while
   `data-tabbar="on"`, and the app's own band starts below it. Never draw into it.
-- **Measure a band we do not draw with a marker, never by eye.** Paint the renderer a
-  colour macOS chrome never uses, photograph the window, and read the first row where
-  that colour survives — that row is the band's bottom edge and nothing else can be
-  mistaken for it. Asking "where does the sidebar's material resume?" instead is how
-  this constant shipped as 36 for a release (TRA-432): 36 is where our own reserved
-  band ended, and an over-reserved band looks exactly like a taller bar.
+- **A geometry we do not draw is measured from two independent landmarks, never one.**
+  This constant shipped wrong twice off a single reading — 36 (TRA-370), then 28
+  (TRA-432) — because each time one landmark was found, believed, and shipped. Take
+  both: where the bar's own plate stops (the same row at every x across the window),
+  and where the control it carries is centred (the selected tab's pill). They have to
+  agree; when they do not, neither is the answer yet. Measured on macOS 26.5 /
+  Electron 41.10.6 at 2x: plate ends at 20.0, tab pill spans 0.5–17.5, centre 9.0.
+- **Every pixel of surplus in a reserved band is visible twice.** It renders as a dead
+  strip of window backdrop under the bar, and it drops the traffic lights by half its
+  height, because they are centred in what this number says. 36 put them 8px below the
+  tabs; 28 put them 4px below (TRA-523, reported twice before it was measured right).
+- **Assert chrome geometry against something outside the constant.** 28 went back to 36
+  on its own when an unrelated PR was squashed from a stale base (#659), and the suite
+  stayed green: the only assertion compared `MAC_TAB_BAR_H` with itself. A test written
+  against a measured AppKit landmark fails on both a bad re-measurement and a silent
+  revert; a test written against the constant fails on neither.
 - **The traffic lights belong to whichever band holds the top line**, not to a constant.
-  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 28px tab bar
-  (centre 14, the tab pill's own centre line). `trafficLightYFor(tabBarVisible)` is the
-  only place that chooses.
+  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 20px tab bar
+  (centre 10, the tab pill's own centre line). `trafficLightYFor(tabBarVisible)` is the
+  only place that chooses, and `tab-chrome.test.ts` asserts the result against the
+  measured tab centre — not against `MAC_TAB_BAR_H`, which is the number under suspicion.
 - **`trafficLightPosition` is applied once, at window creation, and AppKit re-lays the
   title bar out under it.** So every event that can change the tab count re-applies it —
   `show`, `focus`, `closed`, `did-finish-load` — synchronously and again a frame later,

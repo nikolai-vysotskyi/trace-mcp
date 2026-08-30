@@ -20,7 +20,7 @@ import path from 'node:path';
 import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
 import { DECISIONS_DB_PATH, projectHash, projectName, TOPOLOGY_DB_PATH } from '../global.js';
 import { logger } from '../logger.js';
-import { getProject, listProjects } from '../registry.js';
+import { getProject, isEphemeralProjectRoot, listProjects } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
 
 /** Result of a project artifact cleanup pass. */
@@ -102,6 +102,38 @@ function dropTopologyRows(root: string): { subprojects: number; services: number
     logger.warn({ err, root }, 'project-artifacts: topology cleanup failed (non-fatal)');
     return { subprojects: 0, services: 0 };
   }
+}
+
+/**
+ * Drop topology rows left behind by one-shot agent-run checkouts (TRA-527).
+ *
+ * These have no registry row and no owner, so `removeProjectArtifacts` is never
+ * called for them — the rows just accumulate in the global topology DB (260 of
+ * 320 distinct project roots on the reported machine) and widen the fan-out of
+ * every scoped topology query. Auto-discovery now skips such roots, so this
+ * only has to drain what earlier versions wrote. Returns the repo roots dropped.
+ */
+export async function sweepEphemeralTopology(): Promise<string[]> {
+  if (!fs.existsSync(TOPOLOGY_DB_PATH)) return [];
+  const dropped: string[] = [];
+  try {
+    // Lazy import for the same reason as dropTopologyRows(): don't pull
+    // better-sqlite3 in unless there is a topology DB to open.
+    const { TopologyStore } = await import('../topology/topology-db.js');
+    const store = new TopologyStore(TOPOLOGY_DB_PATH);
+    try {
+      for (const sub of store.getAllSubprojects()) {
+        if (!isEphemeralProjectRoot(sub.project_root || sub.repo_root)) continue;
+        store.removeByRepoRoot(sub.repo_root);
+        dropped.push(sub.repo_root);
+      }
+    } finally {
+      store.close();
+    }
+  } catch (err) {
+    logger.warn({ err }, 'project-artifacts: ephemeral topology sweep failed (non-fatal)');
+  }
+  return dropped;
 }
 
 interface DecisionDeleteCounts {
