@@ -11,7 +11,9 @@ import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 
 import YAML from 'yaml';
 import { atomicWriteJson } from '../utils/atomic-write.js';
 import { readIfExists } from '../utils/safe-fs.js';
+import { isGuardHookInstalled } from './hooks.js';
 import { getLauncherPath } from './launcher.js';
+import { hasTweakccPrompts } from './tweakcc.js';
 import type { DetectedMcpClient, InitStepResult } from './types.js';
 
 const HOME = os.homedir();
@@ -663,12 +665,46 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
  */
 export type ClientConfigStatus = 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
 
+/**
+ * Enforcement level a Claude-family config is on, as `init` installs it:
+ * - `base`     — CLAUDE.md only, no hooks.
+ * - `standard` — CLAUDE.md + hooks.
+ * - `max`      — CLAUDE.md + hooks + tweakcc system prompts.
+ */
+export type EnforcementLevel = 'base' | 'standard' | 'max';
+
 export interface McpClientStatus {
   client: DetectedMcpClient['name'];
   configPath: string | null;
   status: ClientConfigStatus;
   /** Short machine-friendly reason when `status === 'stale'` (e.g. "alwaysLoad"). */
   staleReason?: string;
+  /**
+   * Enforcement level the config on disk is currently on, so "Update" can
+   * refresh a client without re-asking a setup question the user already
+   * answered. `null` whenever the notion doesn't apply or can't be read: a
+   * non-Claude client (no hooks/tweakcc to grade), or nothing configured yet
+   * (`missing` / `unmanageable`) — where picking a level is a real choice.
+   */
+  level: EnforcementLevel | null;
+}
+
+/**
+ * Where each Claude-family client keeps the settings.json that hooks are wired
+ * into. Other clients don't run hooks, so they have no level.
+ */
+const CLAUDE_FAMILY_CONFIG_DIR: Partial<Record<DetectedMcpClient['name'], string>> = {
+  'claude-code': '.claude',
+  'claude-desktop': '.claude',
+  'claw-code': '.claw',
+};
+
+/** Read back the level from the artifacts each level installs. */
+function detectEnforcementLevel(name: DetectedMcpClient['name']): EnforcementLevel | null {
+  const configDir = CLAUDE_FAMILY_CONFIG_DIR[name];
+  if (!configDir) return null;
+  if (!isGuardHookInstalled(configDir)) return 'base';
+  return hasTweakccPrompts() ? 'max' : 'standard';
 }
 
 /** Every client we know how to surface in `clients status`. */
@@ -723,7 +759,7 @@ function detectClientStatus(
   name: DetectedMcpClient['name'],
   projectRoot: string,
   scope: McpScope,
-): McpClientStatus {
+): Omit<McpClientStatus, 'level'> {
   if (name === 'jetbrains-ai' || name === 'warp') {
     return { client: name, configPath: null, status: 'unmanageable' };
   }
@@ -852,7 +888,13 @@ export function getMcpClientStatuses(
   clientNames?: DetectedMcpClient['name'][],
 ): McpClientStatus[] {
   const targets = clientNames ?? ALL_MCP_CLIENT_NAMES;
-  return targets.map((name) => detectClientStatus(name, projectRoot, scope));
+  return targets.map((name) => {
+    const status = detectClientStatus(name, projectRoot, scope);
+    // Nothing on disk yet means the level is still an open choice, not a fact
+    // to report — only a configured client has one.
+    const configured = status.status !== 'missing' && status.status !== 'unmanageable';
+    return { ...status, level: configured ? detectEnforcementLevel(name) : null };
+  });
 }
 
 function getConfigPath(

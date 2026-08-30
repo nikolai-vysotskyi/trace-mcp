@@ -54,8 +54,8 @@ describe('getMcpClientStatuses', () => {
   it('reports `unmanageable` for warp and jetbrains-ai (UI-only configs)', () => {
     const result = getMcpClientStatuses(projectRoot, 'global', ['warp', 'jetbrains-ai']);
     expect(result).toEqual([
-      { client: 'warp', configPath: null, status: 'unmanageable' },
-      { client: 'jetbrains-ai', configPath: null, status: 'unmanageable' },
+      { client: 'warp', configPath: null, status: 'unmanageable', level: null },
+      { client: 'jetbrains-ai', configPath: null, status: 'unmanageable', level: null },
     ]);
   });
 
@@ -205,6 +205,94 @@ describe('getMcpClientStatuses', () => {
     const [s] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
     expect(s.status).toBe('unknown');
     expect(s.configPath).toBe(configPath);
+  });
+});
+
+// TRA-498: the level a client's config is already on, so the app's "Update"
+// can refresh a drifted field without re-asking a setup question.
+describe('getMcpClientStatuses — enforcement level', () => {
+  /** Write the guard-hook entry `init` installs at Standard and above. */
+  function installGuardHook(configDir: string): void {
+    const settingsPath = path.join(fakeHome, configDir, 'settings.json');
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: 'Read|Grep|Glob|Bash|Agent',
+              hooks: [
+                {
+                  type: 'command',
+                  command: path.join(fakeHome, configDir, 'hooks', 'trace-mcp-guard.sh'),
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+  }
+
+  /** Write the tweakcc system prompts `init` installs at Max only. */
+  function installTweakccPrompts(): void {
+    const dir = path.join(sandbox, 'tweakcc', 'system-prompts');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'tool-description-readfile.md'), 'x');
+    vi.stubEnv('TWEAKCC_CONFIG_DIR', path.join(sandbox, 'tweakcc'));
+  }
+
+  it('is null when nothing is configured yet — the level is still a choice', () => {
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.status).toBe('missing');
+    expect(s.level).toBeNull();
+  });
+
+  it('reports `base` for a configured client with no hooks', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.level).toBe('base');
+  });
+
+  it('reports `standard` once the guard hook is installed', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    installGuardHook('.claude');
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.level).toBe('standard');
+  });
+
+  it('reports `max` once the tweakcc prompts are there too', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    installGuardHook('.claude');
+    installTweakccPrompts();
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.level).toBe('max');
+  });
+
+  it('reads claw-code from its own ~/.claw settings, not Claude Code’s', () => {
+    configureMcpClients(['claude-code', 'claw-code'], projectRoot, { scope: 'global' });
+    installGuardHook('.claude');
+    const [cc, claw] = getMcpClientStatuses(projectRoot, 'global', ['claude-code', 'claw-code']);
+    expect(cc.level).toBe('standard');
+    expect(claw.level).toBe('base');
+  });
+
+  it('is null for non-Claude clients — they have no hooks or tweakcc to grade', () => {
+    configureMcpClients(['cursor'], projectRoot, { scope: 'global' });
+    installGuardHook('.claude');
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['cursor']);
+    expect(s.status).toBe('up_to_date');
+    expect(s.level).toBeNull();
+  });
+
+  it('survives a malformed settings.json instead of throwing', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const settingsPath = path.join(fakeHome, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, '{ not json');
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.level).toBe('base');
   });
 });
 
