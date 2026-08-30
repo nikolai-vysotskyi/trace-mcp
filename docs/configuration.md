@@ -439,6 +439,7 @@ The `tools.*` section controls what the MCP server injects into every session �
     "preset": "standard",                // "full" | "standard" | "minimal" | "review" | "architecture"
     "description_verbosity": "full",     // "full" | "minimal" | "none"
     "instructions_verbosity": "full",    // "full" | "minimal" | "none" — controls the tool-routing block
+    "client_profile": "auto",            // "auto" | "off" | "claude-code" | "codex" | "cursor" | "vscode" | "generic"
     "agent_behavior": "off",             // "strict" | "minimal" | "off" — see below
     "meta_fields": true,                 // true | false | ["_hints", "_budget_warning", ...]
     "compact_schemas": false             // strip advanced params from tool schemas (saves tokens)
@@ -453,6 +454,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
 | `tools.instructions_verbosity` | `"full"` | Server-level instructions (the tool-routing block). `full` ~2K tokens, `minimal` ~200 |
+| `tools.client_profile` | `"auto"` | Tailors the advertised surface to the connected host — see [Client profiles](#client-profiles). `auto` detects it from the `initialize` handshake, a profile name pins it, `off` disables the layer. Env override: `TRACE_MCP_CLIENT_PROFILE` |
 | `tools.agent_behavior` | `"off"` | Behavior rules appended to instructions — see [Agent behavior rules](#agent-behavior-rules) |
 | `tools.meta_fields` | `true` | Meta fields in responses (`_hints`, `_budget_warning`, etc.). Set `false` or list to narrow |
 | `tools.compact_schemas` | `false` | Strip advanced/optional params from tool schemas. Cuts schema size ~42% (measured 2026-08-29) |
@@ -490,6 +492,47 @@ Measured `tools/list` cost of each preset on this repo (serialized chars,
 2026-08-29): `minimal` 34.0k, `review` 28.9k, `architecture` 33.6k, `standard`
 64.6k, `full` 157.1k. `load_tools` itself is 0.9k of that — the price of making
 the other 123k optional.
+
+### Client profiles
+
+The preset decides *how much* capability a session advertises. The client
+profile decides what that particular host does not need to be told about.
+
+The connected client names itself in the `initialize` handshake, so trace-mcp
+knows whether it is talking to Claude Code, Codex, Cursor, VS Code, or something
+it has never seen. Two things follow from that:
+
+- **Tools the host already has are not advertised.** A CLI coding agent arrives
+  with its own content search; offering ours alongside it costs schema tokens
+  and gives the model two ways to do one thing. Suppression lists are short and
+  deliberately conservative — `search_text` and `discover_hermes_sessions` today.
+- **The instructions name the host's own tools.** The routing block is written
+  for a host it cannot see, so it says "`read`, `content-match`, `glob` mean
+  whatever yours are called". Once the handshake identifies the host it says
+  `Read`/`Grep`/`Glob` on Claude Code and `shell` (cat/rg/find) with
+  `apply_patch` on Codex.
+
+The profile composes *after* the preset — it only removes names from whatever
+the preset already advertised — and it never removes capability. A suppressed
+tool stays callable by name, `load_tools({ tools: ["search_text"] })` puts it
+back on `tools/list`, and `"client_profile": "off"` (or
+`TRACE_MCP_CLIENT_PROFILE=off`) disables the layer entirely. An unrecognised
+host resolves to `generic`, which suppresses nothing.
+
+Measured on a live `initialize` + `tools/list` round-trip against the built
+server, default `minimal` preset (serialized chars, 2026-08-30):
+
+| Client | instructions | `tools/list` | advertised | handshake total |
+|---|---|---|---|---|
+| `generic` (or `client_profile: "off"`) | 7,669 | 36,523 | 28 | 44,192 |
+| `claude-code` | 7,933 | 34,621 | 27 | 42,554 (−3.7%) |
+| `codex` | 7,927 | 34,621 | 27 | 42,548 (−3.7%) |
+| `cursor` | 7,928 | 34,621 | 27 | 42,549 (−3.7%) |
+
+The instructions grow slightly because the profile appends one line naming what
+it hid and how to get it back — without it a suppressed tool is invisible, since
+`load_tools()` lists what the *preset* deferred and a suppressed tool is inside
+the preset.
 
 Every `tools.*` option works from a project-local config file (`.trace-mcp/.config.json`) as well as the global one — none of them are global-only. The tool surface is built once per MCP session, so a change takes effect on the next session (restart the MCP client); the daemon does not need restarting.
 

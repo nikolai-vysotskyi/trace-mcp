@@ -38,6 +38,50 @@ query-filters:
   - exclude:
       id: js/path-injection
 
+  # The filesystem-taint rule family: excluded (TRA-518). Same shape as
+  # js/path-injection above, same yield — 35 alerts across four rules, 0 true
+  # positives — and for the same structural reason: trace-mcp *is* a filesystem
+  # reader served over a loopback bind, so every rule whose taint model is "a
+  # path from outside reaches an fs call" fires across the whole codebase and
+  # always will. The trust boundary was settled in TRA-301 and is quoted above.
+  #
+  #   js/insecure-temporary-file — 13 alerts (6 dismissed "used in tests",
+  #     7 open on shipped code since 2026-04-27), 0 TPs. Not one creates a temp
+  #     file. Four are `fs.openSync(p, 'r')`, which cannot create anything —
+  #     the rule does not model the flags argument (src/utils/source-reader.ts,
+  #     src/memory/conversation-miner.ts, src/tools/shared/intra-file-usage.ts).
+  #     The other three write the project file the caller asked to edit
+  #     (src/tools/refactoring/). The taint source is the project root, which
+  #     legitimately sits under os.tmpdir() in tests and agent workdirs, so
+  #     every fs call downstream of a project root inherits it.
+  #   js/file-system-race — 9 alerts, 0 TPs. All are existsSync-then-open on
+  #     local files (indexing, daemon pid/lock handling, project-root probing).
+  #     A racing local edit yields a stale index entry or a retry, not a
+  #     privilege boundary crossing — the racing party is the same local user.
+  #   js/file-access-to-http — 8 alerts, 0 TPs. Six are the `ask` tools sending
+  #     source context to the AI provider the user configured (src/ai/*), which
+  #     is what those tools are for; one is the documented, opt-out usage ping
+  #     (src/telemetry/usage-ping.ts), one is a dev perf script.
+  #   js/http-to-file-access — 5 alerts, 0 TPs. The inverse: an MCP request
+  #     naming a project path to open or write is the entire tool contract
+  #     (src/db-holders.ts, src/utils/atomic-write.ts, refactoring/shared.ts).
+  #
+  # Cost of this exclusion, stated plainly: a genuinely untrusted path source,
+  # or a real predictable-name temp file, would now be silenced. REVERT THIS
+  # BLOCK if any of these become true:
+  #   - the daemon gains a remote or shared (non-loopback) bind
+  #   - `/mcp` or `/api` gain authentication, making them a real trust boundary
+  #   - a path source appears that is not the registered project root
+  #   - a code path creates a file with a predictable name in the OS temp dir
+  - exclude:
+      id: js/insecure-temporary-file
+  - exclude:
+      id: js/file-system-race
+  - exclude:
+      id: js/file-access-to-http
+  - exclude:
+      id: js/http-to-file-access
+
 paths-ignore:
   # Test code is not attack surface: it runs on developer machines against
   # fixtures we author. Temp-file and path handling here is deliberate.

@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('node:fs');
+vi.mock('../top-model.js', () => ({ topModelLastDay: () => 'claude-opus-4-6' }));
 
 import fs from 'node:fs';
-import { sendUsagePing } from '../usage-ping.js';
+import { recordUsagePingClient, sendUsagePing } from '../usage-ping.js';
 
 function makeFetchSpy(): {
   fetchImpl: typeof fetch;
@@ -81,6 +82,69 @@ describe('sendUsagePing', () => {
     expect(params.engagement_time_msec).toBe(1);
   });
 
+  it('reports the MCP client name recorded by a previous session, and the model it drove', async () => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ installId: 'fixed-id', lastPingDate: '2000-01-01', client: 'claude-code' }),
+    );
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.client).toBe('claude-code');
+    expect(params.model).toBe('claude-opus-4-6');
+  });
+
+  it('sends the country as user_location and never an ip_override', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const body = calls[0]!.body as Record<string, unknown> & {
+      user_location?: { country_id: string };
+      events: Array<{ params: Record<string, unknown> }>;
+    };
+    expect(body).not.toHaveProperty('ip_override');
+    expect(body.events[0]!.params).not.toHaveProperty('timezone');
+    // The test machine has a real zone, so a country resolves; assert the shape.
+    if (body.user_location) expect(body.user_location.country_id).toMatch(/^[A-Z]{2}$/);
+  });
+
+  it('reports how many repositories are indexed, without their paths', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({
+      version: '1.2.3',
+      env: CONFIGURED_ENV,
+      fetchImpl,
+      loadSavings: () =>
+        ({
+          total_tokens_saved: 10,
+          total_calls: 2,
+          per_project: { '/home/me/secret-repo': {}, '/work/other': {} },
+        }) as never,
+    });
+    const serialised = JSON.stringify(calls[0]!.body);
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.repos_indexed).toBe(2);
+    expect(serialised).not.toContain('secret-repo');
+  });
+
+  it('falls back to an unknown client when nothing has connected yet', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.client).toBe('unknown');
+  });
+
+  it('records the client name for the next ping, and honours the opt-out', () => {
+    recordUsagePingClient('cursor', {});
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(vi.mocked(fs.writeFileSync).mock.calls[0]![1])).client).toBe('cursor');
+
+    vi.mocked(fs.writeFileSync).mockClear();
+    recordUsagePingClient('cursor', { TRACE_MCP_TELEMETRY: 'off' });
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
   it('reports savings as a delta since the previous ping and remembers the new totals', async () => {
     vi.mocked(fs.readFileSync).mockReturnValue(
       JSON.stringify({
@@ -118,6 +182,53 @@ describe('sendUsagePing', () => {
       .events[0]!.params;
     expect(params.tokens_saved).toBe(0);
     expect(params.calls).toBe(0);
+  });
+
+  it('marks the very first run as a new install', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.install_type).toBe('new');
+    expect(params.previous_version).toBe('none');
+    expect(JSON.parse(String(vi.mocked(fs.writeFileSync).mock.calls[0]![1])).lastVersion).toBe(
+      '1.2.3',
+    );
+  });
+
+  it.each([
+    ['1.2.3', '2.0.0', 'upgrade'],
+    ['2.0.0', '1.9.9', 'downgrade'],
+    ['1.2.3', '1.2.3', 'active'],
+  ])('reports %s -> %s as %s', async (from, to, expected) => {
+    vi.mocked(fs.readFileSync).mockReturnValue(
+      JSON.stringify({ installId: 'fixed-id', lastPingDate: '2000-01-01', lastVersion: from }),
+    );
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: to, env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.install_type).toBe(expected);
+    expect(params.previous_version).toBe(from);
+  });
+
+  it('reports the machine class without anything identifying it', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.arch).toBe(process.arch);
+    expect(typeof params.cpu_count).toBe('number');
+    expect(typeof params.ram_gb).toBe('number');
+    expect(typeof params.os_version).toBe('string');
+    const serialised = JSON.stringify(calls[0]!.body);
+    expect(serialised).not.toContain(process.env.USER ?? '\u0000never');
+  });
+
+  it('stays silent in CI, where every job is a fresh install id', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: { ...CONFIGURED_ENV, CI: 'true' }, fetchImpl });
+    expect(calls).toHaveLength(0);
   });
 
   it('does not send a second ping the same UTC day', async () => {

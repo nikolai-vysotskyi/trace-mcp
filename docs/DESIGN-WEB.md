@@ -249,8 +249,9 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] Every region where `scrollWidth > clientWidth` shows the `scroll →`
       label, and every region that fits does not — count both, at 1440px and
       at 390px. A region is any element that scrolls itself: the table
-      wrapper *and* every `pre`. Code blocks were read out of this line once
-      and shipped clipped and unlabelled for months.
+      wrapper *and* every `pre` *and* the landing page's `.terminal-body`.
+      Code blocks and the landing terminal were each read out of this line
+      once and shipped clipped and unlabelled for months.
 
 **Type & spacing**
 - [ ] Within the 2 families / 3 sizes / 2 weights budget.
@@ -300,11 +301,23 @@ Section 1 are the contract — change one, change both files in the same PR.
 The same duplication applies to the accessibility layer, and it is easier to
 forget than a token because nothing looks wrong until you press Tab. The
 landing page must carry its own copy of the skip link, the
-`:where(a, button, summary):focus-visible` ring, and the
+`:where(a, button, summary, …):focus-visible` ring, and the
 `prefers-reduced-motion` block. It shipped without all three while every doc
 page had them, so the busiest page on the site was the only one handing
 readers Chrome's blue ring and playing its count-up animation at people who
 asked the OS for less motion.
+
+The scroll-region rule (§2) counts the landing page too: **`.terminal-body`
+in `docs/index.html` is a scroll region** and carries its own copy of the
+mechanism — the `scroll →` label, the conditional `tabindex`, and a place in
+the focus-ring list. It sat there for months with `overflow-x: auto` and
+nothing else, clipping the quickstart's payoff line mid-word on every phone,
+purely because the fix landed in `_layouts/default.html` and the landing page
+does not use that layout. Its label lives in the terminal header rather than
+above the block — the header is already a mono caps row — and its focus ring
+is `outline-offset: -3px`, because `.terminal` clips its children and an
+outside ring would be cut off. Anything else on this page that scrolls
+sideways needs the same three parts wired by hand.
 
 The CSS `prefers-reduced-motion` block stops transitions and keyframes, not
 motion driven from JavaScript. The landing page animates a stat count-up over

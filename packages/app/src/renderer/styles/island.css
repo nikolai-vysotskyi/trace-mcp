@@ -698,11 +698,13 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
    segment is 78% of the track, the icon 57% of the segment, and every gap
    around the icon is equal.
 
-   The first cut inverted that. `sz-small` made the track 20px, which left 1px
-   above and below a 14px glyph, while `padding: 0` here lost the cascade to
-   `.lx-seg.sz-small .lx-seg-item { padding: 0 8px }` (same specificity, later
-   file) and ran the segments 30px wide. Crushed vertically, loose horizontally
-   — 5px of air outside the pill and 1px inside it (TRA-376).
+   The first cut inverted that. The old `sz-small` tier made the track 20px,
+   which left 1px above and below a 14px glyph, while `padding: 0` here lost the
+   cascade to that tier's own `padding: 0 8px` (same specificity, later file) and
+   ran the segments 30px wide. Crushed vertically, loose horizontally — 5px of
+   air outside the pill and 1px inside it (TRA-376). Dropping the tier here fixed
+   this row only; it came back on the Workspace toolbar, and TRA-522 deleted the
+   tier itself.
 
    Now: the default 24px track, 24×20 segments, a 12px icon — 83% and 55%, so
    6px of air beside the glyph and 4px above it, and 3px between the pill and

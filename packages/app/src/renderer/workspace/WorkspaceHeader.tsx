@@ -284,7 +284,6 @@ export function WorkspaceHeader({
           {!hideViewToggle && (
             <SegmentedControl
               aria-label={t('viewMode')}
-              size="small"
               value={view === 'compact' ? 'compact' : 'table'}
               onChange={(v) => onViewChange(v as ViewMode)}
               options={viewOptions()}

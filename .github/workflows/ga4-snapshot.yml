@@ -1,0 +1,71 @@
+# Daily adoption snapshot from GA4, published to the `adoption-data` branch
+# (and to each run's job summary).
+#
+# GA4 keeps event data for 14 months at most, so this file is the only durable
+# record of the trend (TRA-273). Daily rather than hourly on purpose: the ping
+# itself is one event per install per UTC day, and GA4 needs up to 48h to
+# finish processing — polling faster would only re-read the same numbers.
+name: GA4 adoption snapshot
+
+on:
+  schedule:
+    - cron: '17 6 * * *' # daily, after the UTC day the ping counts against has closed
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Fetch snapshot
+        env:
+          GA4_SA_KEY: ${{ secrets.GA4_SA_KEY }}
+          GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+        run: node scripts/ga4-snapshot.mjs
+
+      - name: Publish to the adoption-data branch
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain -- docs/_data/adoption.yml)" ]; then
+            echo "unchanged; nothing to publish"
+            exit 0
+          fi
+          # Not master: a PR opened by GITHUB_TOKEN never triggers CI, so its
+          # required checks can never report and it would sit BLOCKED forever.
+          # An orphan data branch keeps the history in the repo without asking
+          # anything of branch protection.
+          cp docs/_data/adoption.yml /tmp/adoption.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin adoption-data >/dev/null 2>&1; then
+            git fetch origin adoption-data
+            git checkout -B adoption-data origin/adoption-data
+          else
+            git checkout --orphan adoption-data
+            git rm -rf --cached . >/dev/null 2>&1 || true
+          fi
+          find . -mindepth 1 -maxdepth 1 -not -name .git -exec rm -rf {} +
+          cp /tmp/adoption.yml adoption.yml
+          git add adoption.yml
+          git commit -m "chore(adoption): snapshot $(date -u +%Y-%m-%d)"
+          git push origin adoption-data
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo '## GA4 adoption snapshot'
+            echo
+            echo '```yaml'
+            cat docs/_data/adoption.yml 2>/dev/null || echo '(no data)'
+            echo '```'
+            echo
+            echo 'History: [adoption-data branch](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml)'
+          } >> "$GITHUB_STEP_SUMMARY"
