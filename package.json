@@ -1,6 +1,6 @@
 {
   "name": "trace-mcp",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "mcpName": "io.github.nikolai-vysotskyi/trace-mcp",
   "description": "Framework-aware code intelligence MCP server — 87 framework integrations, 81 languages, 40–50% fewer tokens on average",
   "type": "module",
@@ -163,6 +163,15 @@
       "better-sqlite3",
       "esbuild",
       "simple-git-hooks"
-    ]
+    ],
+    "supportedArchitectures": {
+      "os": [
+        "current"
+      ],
+      "cpu": [
+        "x64",
+        "arm64"
+      ]
+    }
   }
 }

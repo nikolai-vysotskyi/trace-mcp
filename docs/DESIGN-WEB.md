@@ -33,18 +33,27 @@ Two surfaces implement these: `docs/index.html` (landing, inline `<style>`) and
 | `--surface-raised` | `#1A1A1A` | `#F0F0F0` |
 | `--border` | `#222222` | `#E8E8E8` |
 | `--border-visible` | `#333333` | `#CCCCCC` |
-| `--text-disabled` | `#666666` | `#767676` |
+| `--text-disabled` | `#666666` | `#6D6D6D` |
 | `--text-secondary` | `#999999` | `#595959` |
 | `--text-primary` | `#E8E8E8` | `#1A1A1A` |
 | `--text-display` | `#FFFFFF` | `#000000` |
 | `--accent` | `#D71921` | `#B3151C` |
 
-Two light-mode values intentionally diverge from the landing page's inline
-copy, both for contrast on `#F5F5F5`:
+**Compute a light-mode ratio against the surface the text actually sits on.**
+Light mode has three of them — the page is `#F5F5F5`, a card or table or code
+block is `#FFFFFF`, and a raised cell is `#F0F0F0`. `#FFFFFF` is the most
+forgiving of the three and the one a colour picker defaults to, so a value
+checked only against white lands ~0.4 short on the page it ships on. That is
+how `--text-disabled` shipped at `#767676`: recorded here as "4.54:1", which
+is its ratio on `#FFFFFF` — on the `#F5F5F5` page it is 4.166:1, and every
+`scroll →` and `SEE ALSO` label on all 17 doc pages sat under AA for months
+while this file said they passed. `#6D6D6D` clears 4.5:1 on all three
+(4.75 / 5.17 / 4.54). Quote the worst of the three, not the best.
 
-- `--text-disabled` is `#767676` (4.54:1), not `#999999` (2.8:1).
-- `--accent` is `#B3151C` (6.1:1) for body-size link text; `#D71921` is 4.3:1,
-  which passes for large text but not for a 16px inline link.
+One light value still diverges on purpose: `--accent` is `#B3151C` on doc
+pages and `#D71921` on the landing. Both pass at body size (6.3:1 and 4.76:1
+on `#F5F5F5`); the docs run the darker one because a doc page is a wall of
+inline links, the landing runs the brand red because it is the brand.
 
 Dark mode is the default. Light is opt-in and equally first-class — never
 ship a change checked in one mode only.
@@ -239,7 +248,12 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] Exactly one image of a light/dark pair has computed `display: block` —
       read it off the element, in each theme.
 - [ ] Theme choice survives landing → doc page navigation.
-- [ ] Body text ≥ 4.5:1, large text ≥ 3:1, in both.
+- [ ] Body text ≥ 4.5:1, large text ≥ 3:1, in both — measured by walking the
+      rendered page and reading each element's own computed `color` against
+      its nearest opaque ancestor background, not by checking the token table
+      against one assumed surface. The token table has been wrong twice; the
+      DOM has not. Sweep the landing separately from a doc page: it carries
+      its own copy of the tokens (§7) and has drifted from this table before.
 
 **Widths**
 - [ ] Desktop (1440px) and narrow (≤500px) both screenshotted.

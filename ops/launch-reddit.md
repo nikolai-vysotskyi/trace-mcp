@@ -10,6 +10,21 @@ Numbers verified 2026-08-30 against `docs/_data/counts.yml` (81 languages /
 87 frameworks / 169 tools). Nothing enforces this file — `readme-claims.test.ts`
 guards `README.md` only — so re-read the source before posting.
 
+## We are already on Reddit and cannot read it
+
+`ops/user-signal.md` (2026-08-30) puts **reddit.com as the repo's #1 referrer** —
+90 views / 35 uniques in 14 days, ahead of Google on views (Google still
+leads on uniques, 39 to 35). Somebody has already posted or
+recommended trace-mcp there, the thread is driving more traffic than any other
+source, and the login wall means no run can find it.
+
+Two consequences for anything written here. First, a post is not an introduction
+to a cold audience; some of that sub has met the project already. Second, and
+more useful: **find the existing thread before posting a new one.** Replying as
+the maintainer in a thread that already has traction beats a fresh post that
+starts at zero, and it costs no karma and no rule risk. That is a browser job,
+not an agent one.
+
 ## The rule that decides everything
 
 Every relevant subreddit has a self-promotion rule, and they differ enough that

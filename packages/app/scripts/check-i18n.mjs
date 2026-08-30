@@ -33,6 +33,9 @@ const EXCLUDED = [
   'src/renderer/lattice/ui/Gallery.tsx',
   // Generated colour data; every "string" in it is a hex pair.
   'src/renderer/lattice/fileIcons.generated.ts',
+  // A launchd property list: markup, not prose. `<key>Label</key>` reads to
+  // the JSX-text rule as a rendered string. Nothing here reaches a user.
+  'src/main/daemon-plist.ts',
 ];
 
 const PROSE_ATTRS = /\b(?:title|label|placeholder|aria-label)=(["'])([^"'{}]+)\1/g;
