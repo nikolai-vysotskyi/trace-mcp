@@ -29,6 +29,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useDocumentVisible } from '../hooks/useDocumentVisible';
 import { t } from '../i18n';
 import { formatDate, formatNumber, relativeTime } from '../i18n/format';
 import { Icon } from '../lattice/icons';
@@ -1873,7 +1874,13 @@ export function ToolActivity({
 
   // ── SSE subscription ─────────────────────────────────────────────────
 
+  /* Held only while this window is on screen — the same rule as useDaemon, and
+     for the same reason: one permanently-open socket per tab exhausts
+     Chromium's six-per-host budget and starves every other daemon call
+     (TRA-526). `fetchHistory` above already refills the feed on remount. */
+  const visible = useDocumentVisible();
   useEffect(() => {
+    if (!visible) return;
     let es: EventSource | null = null;
     let closed = false;
 
@@ -1954,7 +1961,7 @@ export function ToolActivity({
       es?.close();
       setConnected(false);
     };
-  }, [root, t]);
+  }, [visible, root, t]);
 
   // ── Scroll tracking ──────────────────────────────────────────────────
 
