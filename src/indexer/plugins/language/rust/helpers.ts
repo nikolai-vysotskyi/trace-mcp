@@ -45,19 +45,36 @@ export function isPublic(node: TSNode): boolean {
   return false;
 }
 
-/** Extract use/extern crate import edges from root. */
-export function extractImportEdges(root: TSNode): RawEdge[] {
+/**
+ * Extract use / extern crate / `mod foo;` import edges from root.
+ *
+ * A bodyless `mod foo;` is what actually pulls a second file into the crate, so
+ * it is the edge that matters most in a Rust repo; it is emitted as `self::foo`
+ * because that is exactly what it means. Inline `mod foo { ... }` bodies are
+ * walked for their own `use` statements, minus the `self`/`super` ones — those
+ * are relative to the inline module, which has no file of its own to anchor to.
+ */
+export function extractImportEdges(root: TSNode, nested = false): RawEdge[] {
   const edges: RawEdge[] = [];
   for (const child of root.namedChildren) {
     if (child.type === 'use_declaration') {
       const arg = child.childForFieldName('argument');
-      if (arg) {
-        edges.push({ edgeType: 'imports', metadata: { module: arg.text } });
-      }
+      if (!arg) continue;
+      const module = arg.text;
+      if (nested && /^\s*(self|super)\b/.test(module)) continue;
+      edges.push({ edgeType: 'imports', metadata: { module } });
     } else if (child.type === 'extern_crate_declaration') {
       const name = getNodeName(child);
       if (name) {
         edges.push({ edgeType: 'imports', metadata: { module: name, extern_crate: true } });
+      }
+    } else if (child.type === 'mod_item') {
+      const body = child.childForFieldName('body');
+      const name = getNodeName(child);
+      if (body) {
+        edges.push(...extractImportEdges(body, true));
+      } else if (name && !nested) {
+        edges.push({ edgeType: 'imports', metadata: { module: `self::${name}`, mod_decl: true } });
       }
     }
   }

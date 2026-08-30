@@ -898,6 +898,7 @@ export class IndexingPipeline {
       () => edgeResolver.resolvePhpImportEdges(scope),
       () => edgeResolver.resolveGoImportEdges(scope),
       () => edgeResolver.resolveJavaImportEdges(scope),
+      () => edgeResolver.resolveRustImportEdges(scope),
       () => edgeResolver.resolvePhpCallEdges(scope),
       () => edgeResolver.resolveTypeScriptCallEdges(scope),
       () => edgeResolver.resolveTypeScriptTypeEdges(scope),

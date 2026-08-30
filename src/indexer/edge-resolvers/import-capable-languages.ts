@@ -43,6 +43,7 @@ export const IMPORT_EDGE_LANGUAGES: ReadonlySet<string> = new Set([
   'php', // resolvePhpImportEdges
   'go', // resolveGoImportEdges
   'java', // resolveJavaImportEdges
+  'rust', // resolveRustImportEdges
   'yaml', // resolveIacImportEdges — kustomize / docker-compose refs
   'hcl', // resolveIacImportEdges — local terraform module sources
   'markdown', // resolveMarkdownWikilinkEdges
