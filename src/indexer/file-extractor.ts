@@ -222,9 +222,14 @@ export class FileExtractor {
           !edge.sourceNodeType &&
           !edge.sourceSymbolId;
         if (isImportEdge) {
+          const meta = edge.metadata as Record<string, unknown> | undefined;
+          // Plugins are split on the metadata key: the JS/TS/Python/Ruby family
+          // writes `from`, the compiled-language family (Go, Java, C#, Kotlin,
+          // C/C++) writes `module`. Reading only `from` left the latter with an
+          // empty specifier, which every downstream resolver drops (TRA-449).
           importEdges.push({
-            from: ((edge.metadata as Record<string, unknown>)?.from as string) ?? '',
-            specifiers: ((edge.metadata as Record<string, unknown>)?.specifiers as string[]) ?? [],
+            from: ((meta?.from ?? meta?.module) as string) ?? '',
+            specifiers: (meta?.specifiers as string[]) ?? [],
             relPath,
           });
         } else {

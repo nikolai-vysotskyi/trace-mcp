@@ -42,6 +42,7 @@ export {
   Menu,
   MenuChoiceRow,
   MenuItem,
+  MenuPopUpRow,
   MenuSection,
   MenuSeparator,
   useMenuAnchor,
@@ -51,6 +52,7 @@ export type {
   MenuChoice,
   MenuChoiceRowProps,
   MenuItemProps,
+  MenuPopUpRowProps,
   MenuProps,
 } from './Menu';
 

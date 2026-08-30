@@ -827,14 +827,18 @@ export class SubprojectManager {
     return _detectBreakingChanges(this.topoStore, ep);
   }
 
-  /** Search across all subprojects — delegates to subproject-search module. */
+  /**
+   * Search subprojects reachable from `projectRoot` (the project's own
+   * subprojects plus its siblings when it is one itself), excluding
+   * `projectRoot` itself. Delegates to the subproject-search module.
+   */
   subprojectSearch(
     query: string,
     filters?: { kind?: string; language?: string; filePattern?: string },
     limit = 20,
-    excludeRoot?: string,
+    projectRoot?: string,
   ): SubprojectSearchResult {
-    return _subprojectSearch(this.topoStore, query, filters, limit, excludeRoot);
+    return _subprojectSearch(this.topoStore, query, filters, limit, projectRoot);
   }
 
   /**

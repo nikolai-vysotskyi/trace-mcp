@@ -20,7 +20,9 @@ export interface SegmentedControlProps<T extends string> {
   options: ReadonlyArray<SegmentedOption<T>>;
   value: T;
   onChange: (value: T) => void;
-  size?: 'small' | 'regular' | 'large';
+  /** No `small`: a 20px track pays a 4px inset and crushes its label (TRA-522,
+      and TRA-376 before it). 24px is the smallest segmented control there is. */
+  size?: 'regular' | 'large';
   className?: string;
   'aria-label'?: string;
 }

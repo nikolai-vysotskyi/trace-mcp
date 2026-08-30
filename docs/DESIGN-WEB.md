@@ -1,3 +1,10 @@
+---
+layout: default
+title: DESIGN-WEB.md — the trace-mcp.com visual standard
+description: Internal working document. The visual standard for trace-mcp.com.
+noindex: true
+---
+
 # DESIGN-WEB.md — the trace-mcp.com visual standard
 
 This file governs **the website only**: `docs/index.html`, `docs/_layouts/`,
@@ -110,6 +117,26 @@ Order: sticky header (brand + theme toggle) → `h1` → prose → `Last updated
   head is a Space Mono 10px caps label, not a bold band. Every table is
   wrapped in a focusable `.table-scroll` region by the layout script, so a
   wide tool table scrolls itself instead of the page.
+- **A scroll region says so.** A region with more to the right carries a
+  `scroll →` label — Space Mono 10px caps at `--text-disabled`, right-aligned
+  10px above the head row, the same instrument-label voice as the `thead`.
+  The script adds it only while the region is genuinely scrollable and not
+  yet at its end, and re-measures on resize and after the webfonts land.
+  Without it the last column simply ends mid-word: macOS hides the overlay
+  scrollbar at rest and a phone never draws one, so nothing on screen
+  distinguishes "scrolls" from "clipped". This is not a mobile-only case —
+  three of the five tables on `comparisons.html` overflow the 880px prose
+  column at 1440px. No fade or gradient mask: gradients in chrome are out
+  (§4), and a fade states less than a word does.
+- Capability marks in a comparison table are **`✓` and `✗` text, never `✅`
+  and `❌`**. The emoji pair is a filled multi-colour icon and a second and
+  third accent colour — 305 of them on `comparisons.html` alone painted the
+  page green and red, which is the one thing red is reserved for. Yes and no
+  separate on **opacity**: `✓` at `--text-display`, `✗` at `--text-disabled`.
+  The layout script wraps each mark in `.mark-yes` / `.mark-no` with
+  `role="img"` and an `aria-label`, so a screen reader reads "Yes" / "No"
+  rather than "check mark" — the emoji's one advantage, kept. Markdown source
+  stays the bare glyph so the table is still scannable in a diff.
 - Code: `--surface` fill, `--border` outline, 4px radius inline / 8px block.
   Syntax highlighting differentiates by **weight and opacity**, not hue.
 - The `See also` footer is a **grid, one cell per link**
@@ -187,7 +214,8 @@ WebP conversion.
 - Zebra-striped tables.
 - Skeleton loaders — use `[LOADING...]`.
 - Toast popups — use inline `[SAVED]` / `[ERROR: …]`.
-- Filled or multi-colour icons, emoji as UI.
+- Filled or multi-colour icons, emoji as UI — including `✅` / `❌` / `⚠️`
+  as capability marks in a table.
 - A second accent colour. Red is the only one.
 - `border-radius` over 16px on a card.
 - Spring or bounce easing. Only `cubic-bezier(0.25, 0.1, 0.25, 1)`.
@@ -218,10 +246,17 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] `document.documentElement.scrollWidth === window.innerWidth` at the
       narrow width — no sideways page scroll.
 - [ ] Wide tables scroll themselves, not the page.
+- [ ] Every region where `scrollWidth > clientWidth` shows the `scroll →`
+      label, and every region that fits does not — count both, at 1440px and
+      at 390px. A region is any element that scrolls itself: the table
+      wrapper *and* every `pre`. Code blocks were read out of this line once
+      and shipped clipped and unlabelled for months.
 
 **Type & spacing**
 - [ ] Within the 2 families / 3 sizes / 2 weights budget.
 - [ ] Service labels are Space Mono caps; nothing else is.
+- [ ] No emoji in any rendered page — `grep -c '✅\|❌\|⚠️' docs/*.md
+      docs/vs/*.md` returns 0 for every file.
 - [ ] Exactly one h1; section breaks are 80px, not ad hoc.
 - [ ] Exactly one deliberate pattern break on the page.
 
@@ -230,7 +265,11 @@ appearance without a screenshot or a measurement is not a finding.
       `outlineColor` off a focused element, in both themes. It must be
       `--text-display`. Chrome's default is `rgb(153, 200, 255)`; a blue ring
       means no author rule matched, which is a second accent colour and a
-      finding.
+      finding. The rule is a `:where()` list, so a new kind of tab stop is
+      invisible to it until its selector is added — check the ring on every
+      element that takes a `tabindex`, not only the ones that look clickable.
+- [ ] Only a region that actually overflows is a tab stop. 27 focusable code
+      blocks on a desktop where 4 of them scroll is 23 dead stops.
 - [ ] Skip link present and reachable.
 - [ ] `prefers-reduced-motion` honoured.
 - [ ] Tables carry `scope`; images carry `alt`.

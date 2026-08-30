@@ -1,7 +1,7 @@
 ---
 title: "Supported Languages & Frameworks — 81 languages, 87 framework integrations"
 description: "Full list of languages and frameworks trace-mcp understands out of the box — web frameworks, ORMs, UI libraries, and tooling, across 81 languages."
-updated: 2026-08-29
+updated: 2026-08-30
 ---
 
 # Supported frameworks & languages
@@ -32,6 +32,12 @@ updated: 2026-08-29
 }
 </script>
 ## Languages ({{ site.data.counts.languages }})
+
+The list below says which languages are supported. It does not say how deep
+each one goes, and the spread is wide — some get a full AST and a call graph,
+others get symbol extraction only. The [language capability
+matrix](language-matrix.md) has the per-language breakdown: parser, import
+edges, call edges, type edges, and whether a test covers the plugin.
 
 ### Tree-sitter (full AST parsing)
 

@@ -92,13 +92,36 @@ const SELECT_COL_W = 32;
 const overPane = (tint: string) => `linear-gradient(${tint}, ${tint}), var(--surface)`;
 const STICKY_HEADER_BG = overPane('var(--fill-quaternary)');
 
-/** Sticky cells need their own background — rows slide underneath them. */
+/**
+ * Whether the table still hides content on each side of its pinned columns.
+ * Exported for the unit test: the shade is the only thing that says four of the
+ * ten columns are under the Actions pin, so getting it backwards is silent.
+ */
+export function scrollEdges(scrollLeft: number, scrollWidth: number, clientWidth: number) {
+  return {
+    left: scrollLeft > 0,
+    right: scrollLeft < scrollWidth - clientWidth - 1,
+  };
+}
+
+/**
+ * Sticky cells need their own background — rows slide underneath them.
+ *
+ * The seam also carries a soft shade, coloured by `--edge-shade-{side}` on the
+ * scroll container, so a pinned column reads as floating over the rows it
+ * covers. Without it the default 960×700 window showed Files → Symbols →
+ * Actions and looked finished, while Dead exports, Untested, Grade and Security
+ * sat under the Actions pin — 318 px of a 1025 px table, with a right-aligned
+ * `1,043` painted down to `1,0` (TRA-452).
+ */
 function stickyCell(side: 'left' | 'right', offset: number, bg: string, seam = true): CSSProperties {
+  const dir = side === 'left' ? 1 : -1;
+  const shade = `${dir * 10}px 0 12px -10px var(--edge-shade-${side})`;
   return {
     position: 'sticky',
     [side]: offset,
     background: bg,
-    boxShadow: seam ? (side === 'left' ? '1px 0 0 var(--separator)' : '-1px 0 0 var(--separator)') : undefined,
+    boxShadow: seam ? `${dir}px 0 0 var(--separator), ${shade}` : undefined,
   };
 }
 
@@ -203,7 +226,6 @@ function Row({
       className="cursor-pointer transition-colors"
       style={{
         height: ROW_H,
-        borderBottom: '0.5px solid var(--separator)',
         background: highlighted ? bg : undefined,
         outline: cursored ? '2px solid var(--accent)' : undefined,
         outlineOffset: -2,
@@ -239,7 +261,14 @@ function Row({
       <td className="px-3 max-w-[200px]">
         <div className="flex items-center gap-1.5">
           <StatusDot tone={dotTone} pulse={dotTone === 'green'} />
-          <span style={{ color: 'var(--label-secondary)' }}>{statusLabel(project.displayStatus)}</span>
+          {/* Chinese "正常" is two characters, and auto table layout will break
+              between them the moment the column is squeezed — one glyph per
+              line, 8px tall. Nothing stops it in a language with no spaces but
+              refusing the break, which also gives the column a min-content
+              width the layout has to honour. */}
+          <span className="whitespace-nowrap" style={{ color: 'var(--label-secondary)' }}>
+            {statusLabel(project.displayStatus)}
+          </span>
         </div>
         {project.error && (
           <div className="text-[11px] truncate" style={{ color: 'var(--status-red)' }} title={project.error}>
@@ -352,19 +381,34 @@ export function WorkspaceTableView({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportH, setViewportH] = useState(0);
+  const [edges, setEdges] = useState({ left: false, right: false });
   const [cursor, setCursor] = useState(-1);
   const [confirmRoot, setConfirmRoot] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; project: ProjectViewModel } | null>(null);
 
+  /* Measured on mount and on every resize, not only on scroll: whether the
+     table overflows is a function of the pane's width, and narrowing the window
+     never fires a scroll event. */
   useEffect(() => {
-    setViewportH(scrollRef.current?.clientHeight ?? 0);
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => {
+      setViewportH(el.clientHeight);
+      setEdges(scrollEdges(el.scrollLeft, el.scrollWidth, el.clientWidth));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   const handleScroll = (e: UIEvent<HTMLDivElement>) => {
-    const top = e.currentTarget.scrollTop;
-    setScrollTop(top);
-    setViewportH(e.currentTarget.clientHeight);
-    onScroll?.(top);
+    const el = e.currentTarget;
+    setScrollTop(el.scrollTop);
+    setViewportH(el.clientHeight);
+    setEdges(scrollEdges(el.scrollLeft, el.scrollWidth, el.clientWidth));
+    onScroll?.(el.scrollTop);
   };
 
   const { start, end } = visibleRange(projects.length, scrollTop, viewportH);
@@ -392,11 +436,18 @@ export function WorkspaceTableView({
       aria-label={t('projectsGrid')}
       aria-rowcount={projects.length}
       className="flex-1 overflow-auto"
-      style={{
-        borderRadius: 12,
-        border: '0.5px solid var(--separator)',
-        background: 'var(--surface)',
-      }}
+      style={
+        {
+          borderRadius: 12,
+          border: '0.5px solid var(--separator)',
+          background: 'var(--surface)',
+          /* One write here instead of threading two booleans through every row:
+             the pinned cells always declare the shade, this decides whether it
+             has a colour. */
+          '--edge-shade-left': edges.left ? 'var(--scroll-edge-shade)' : 'transparent',
+          '--edge-shade-right': edges.right ? 'var(--scroll-edge-shade)' : 'transparent',
+        } as CSSProperties
+      }
       onScroll={handleScroll}
       onKeyDown={(e) => {
         if (e.key === 'ArrowDown') {
@@ -414,13 +465,17 @@ export function WorkspaceTableView({
         }
       }}
     >
-      <table className="w-full border-collapse text-[13px]">
+      {/* `.ws-table` is separated borders, not collapsed: Chromium drops
+          box-shadow on cells in the collapsed model, which is why the pinned
+          seams below have declared a hairline since TRA-265 and never drawn
+          one. The row hairline lives on the cells there. */}
+      <table className="ws-table w-full text-[13px]">
         {/* STICKY_HEADER_BG, not a bare --fill-quaternary: that token is
             translucent, so rows scrolling under a sticky header showed
             straight through the column labels. Same reason the pinned cells
             below stack their tint over --surface. */}
         <thead className="sticky top-0 z-10" style={{ background: STICKY_HEADER_BG }}>
-          <tr style={{ borderBottom: '0.5px solid var(--separator)' }}>
+          <tr>
             <th
               className="px-1 w-8"
               style={{ ...stickyCell('left', 0, STICKY_HEADER_BG, false), zIndex: 1 }}

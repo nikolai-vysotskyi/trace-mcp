@@ -1,7 +1,7 @@
 ---
 title: "Serena MCP Alternative: trace-mcp vs Serena for agent code navigation"
 description: "Serena drives a live language server; trace-mcp precomputes a framework-aware code graph. Head-to-head on precision, startup cost, refactoring, security and memory — plus where Serena is clearly ahead."
-updated: 2026-08-29
+updated: 2026-08-30
 ---
 
 # Serena MCP alternative: trace-mcp vs Serena
@@ -89,24 +89,24 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 
 | Capability | trace-mcp | Serena |
 |---|:---:|:---:|
-| **GitHub stars** | 100 | ~28.5K |
-| Languages | {{ site.data.counts.languages }} (tree-sitter) | 40+ (via LSP) |
-| Requires a language server | ❌ optional enrichment | ✅ core premise |
+| **GitHub stars** | 102 | ~28.6K |
+| Languages | {{ site.data.counts.languages }} (tree-sitter) | 40+ (73 LSP backends) |
+| Requires a language server | ✗ optional enrichment | ✓ core premise |
 | Reference precision by default | AST-resolved (tiered) | compiler-grade (LSP) |
-| Compiler-grade path | ✅ opt-in LSP + offline SCIP ingestion | ✅ live LSP |
-| Framework integrations | ✅ {{ site.data.counts.frameworks }} | ❌ |
-| Cross-language edges | ✅ | ❌ |
-| Persistent graph across restarts | ✅ SQLite + FTS5 | ❌ per-session |
-| Impact analysis | ✅ reverse dependency traversal + decorator filter | ❌ |
-| Call graph | ✅ bidirectional, graph-based | partial (LSP call hierarchy) |
-| Refactoring tools | ✅ rename, move, signature, AST codemod, extract | ✅ rename, move, inline, safe-delete |
-| Live debugger | ❌ deliberately out of lane | ✅ breakpoints, variable inspection |
-| Session memory | ✅ code-linked decision graph | ✅ manual notes |
-| Security scanning | ✅ OWASP Top-10, type-aware taint | ❌ |
-| Control-flow / data-flow | ✅ CFG with basic blocks and loop back-edges | ❌ |
-| SARIF / CI output | ✅ 2.1.0, schema-validated | ❌ |
-| Multi-repo subprojects | ✅ cross-repo API linking | ❌ |
-| Graph visualization | ✅ desktop app | ❌ |
+| Compiler-grade path | ✓ opt-in LSP + offline SCIP ingestion | ✓ live LSP |
+| Framework integrations | ✓ {{ site.data.counts.frameworks }} | ✗ |
+| Cross-language edges | ✓ | ✗ |
+| Persistent graph across restarts | ✓ SQLite + FTS5 | ✗ per-session |
+| Impact analysis | ✓ reverse dependency traversal + decorator filter | ✗ |
+| Call graph | ✓ bidirectional, graph-based | partial (LSP call hierarchy) |
+| Refactoring tools | ✓ rename, move, signature, AST codemod, extract | ✓ rename, move, inline, safe-delete |
+| Live debugger | ✗ deliberately out of lane | ✓ via a JetBrains IDE bridge (optional, beta) |
+| Session memory | ✓ code-linked decision graph | ✓ manual notes |
+| Security scanning | ✓ OWASP Top-10, type-aware taint | ✗ |
+| Control-flow / data-flow | ✓ CFG with basic blocks and loop back-edges | ✗ |
+| SARIF / CI output | ✓ 2.1.0, schema-validated | ✗ |
+| Multi-repo subprojects | ✓ cross-repo API linking | ✗ |
+| Graph visualization | ✓ desktop app | ✗ |
 | MCP tools advertised (default) | 28 (~11.6K tok); {{ site.data.counts.tools }} on `full` | ~55 |
 | Written in | TypeScript | Python |
 
@@ -114,8 +114,8 @@ Pick Serena if precision on one well-supported language is the whole job. Pick t
 
 - **You work in one language with a first-class language server.** For Python or TypeScript, "find all references" and "rename symbol" from a real language server are correct in cases AST heuristics get wrong: overloads, re-exports, generics, dynamic dispatch through interfaces. That is a genuine precision lead, and it is on by default for Serena while it is opt-in for us.
 - **You want zero index state.** Nothing to build, nothing to invalidate, nothing on disk to go stale.
-- **You need runtime inspection.** Serena shipped a live debugger in v1.5.x — breakpoints and variable inspection driven by the agent. trace-mcp deliberately does not do this; a static graph is not the right tool for a running process, and we are not planning to chase it.
-- **Popularity.** Serena is roughly 285× larger by stars, with correspondingly more community answers and integrations.
+- **You already work inside a JetBrains IDE.** Serena can bridge into it for debugging — breakpoints, stepping and variable inspection driven by the agent (an optional beta tool, and it needs the IDE plus their plugin running). trace-mcp deliberately does not do this; a static graph is not the right tool for a running process, and we are not planning to chase it.
+- **Popularity.** Serena is roughly 280× larger by stars, with correspondingly more community answers and integrations.
 
 ## When to pick trace-mcp
 
@@ -153,6 +153,6 @@ Serena on a cold repo — no index build, though the language server still has t
 ## Next steps
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
-- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html)
+- The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.

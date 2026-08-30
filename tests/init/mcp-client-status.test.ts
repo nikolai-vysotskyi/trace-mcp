@@ -54,8 +54,8 @@ describe('getMcpClientStatuses', () => {
   it('reports `unmanageable` for warp and jetbrains-ai (UI-only configs)', () => {
     const result = getMcpClientStatuses(projectRoot, 'global', ['warp', 'jetbrains-ai']);
     expect(result).toEqual([
-      { client: 'warp', configPath: null, status: 'unmanageable' },
-      { client: 'jetbrains-ai', configPath: null, status: 'unmanageable' },
+      { client: 'warp', configPath: null, status: 'unmanageable', level: null },
+      { client: 'jetbrains-ai', configPath: null, status: 'unmanageable', level: null },
     ]);
   });
 
@@ -64,6 +64,45 @@ describe('getMcpClientStatuses', () => {
     const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
     expect(s.status).toBe('up_to_date');
     expect(s.staleReason).toBeUndefined();
+  });
+
+  // TRA-501: a global registration must not depend on the directory the CLI
+  // ran in. Before the fix, writing from one directory and asking for status
+  // from another reported `drift: cwd` forever — and a repair run from the
+  // wrong directory (the desktop app always is) wrote that directory back.
+  it('keeps a global entry directory-independent across writer and status', () => {
+    const otherRoot = path.join(sandbox, 'somewhere-else');
+    fs.mkdirSync(otherRoot, { recursive: true });
+
+    configureMcpClients(['cursor', 'factory-droid', 'amp'], projectRoot, { scope: 'global' });
+
+    // Written from projectRoot, asked about from an unrelated root.
+    const statuses = getMcpClientStatuses(otherRoot, 'global', ['cursor', 'factory-droid', 'amp']);
+    expect(statuses.map((s) => s.status)).toEqual(['up_to_date', 'up_to_date', 'up_to_date']);
+
+    const cursorEntry = JSON.parse(
+      fs.readFileSync(path.join(fakeHome, '.cursor', 'mcp.json'), 'utf-8'),
+    ).mcpServers['trace-mcp'];
+    expect(cursorEntry.cwd).toBeUndefined();
+  });
+
+  it('flags an existing global entry that still carries a cwd as stale, and repairs it (TRA-501)', () => {
+    configureMcpClients(['cursor'], projectRoot, { scope: 'global' });
+    const configPath = path.join(fakeHome, '.cursor', 'mcp.json');
+    const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    c.mcpServers['trace-mcp'].cwd = '/some/stale/path';
+    fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
+
+    const [before] = getMcpClientStatuses(projectRoot, 'global', ['cursor']);
+    expect(before.status).toBe('stale');
+    expect(before.staleReason).toBe('cwd');
+
+    configureMcpClients(['cursor'], projectRoot, { scope: 'global' });
+    const [after] = getMcpClientStatuses(projectRoot, 'global', ['cursor']);
+    expect(after.status).toBe('up_to_date');
+    expect(
+      JSON.parse(fs.readFileSync(configPath, 'utf-8')).mcpServers['trace-mcp'].cwd,
+    ).toBeUndefined();
   });
 
   it('flags `stale` with reason="alwaysLoad" when the on-disk entry carries a stale flag (GH #354)', () => {
@@ -205,6 +244,94 @@ describe('getMcpClientStatuses', () => {
     const [s] = getMcpClientStatuses(projectRoot, 'global', ['codex']);
     expect(s.status).toBe('unknown');
     expect(s.configPath).toBe(configPath);
+  });
+});
+
+// TRA-498: the level a client's config is already on, so the app's "Update"
+// can refresh a drifted field without re-asking a setup question.
+describe('getMcpClientStatuses — enforcement level', () => {
+  /** Write the guard-hook entry `init` installs at Standard and above. */
+  function installGuardHook(configDir: string): void {
+    const settingsPath = path.join(fakeHome, configDir, 'settings.json');
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: 'Read|Grep|Glob|Bash|Agent',
+              hooks: [
+                {
+                  type: 'command',
+                  command: path.join(fakeHome, configDir, 'hooks', 'trace-mcp-guard.sh'),
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+  }
+
+  /** Write the tweakcc system prompts `init` installs at Max only. */
+  function installTweakccPrompts(): void {
+    const dir = path.join(sandbox, 'tweakcc', 'system-prompts');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'tool-description-readfile.md'), 'x');
+    vi.stubEnv('TWEAKCC_CONFIG_DIR', path.join(sandbox, 'tweakcc'));
+  }
+
+  it('is null when nothing is configured yet — the level is still a choice', () => {
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.status).toBe('missing');
+    expect(s.level).toBeNull();
+  });
+
+  it('reports `base` for a configured client with no hooks', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.level).toBe('base');
+  });
+
+  it('reports `standard` once the guard hook is installed', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    installGuardHook('.claude');
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.level).toBe('standard');
+  });
+
+  it('reports `max` once the tweakcc prompts are there too', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    installGuardHook('.claude');
+    installTweakccPrompts();
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.level).toBe('max');
+  });
+
+  it('reads claw-code from its own ~/.claw settings, not Claude Code’s', () => {
+    configureMcpClients(['claude-code', 'claw-code'], projectRoot, { scope: 'global' });
+    installGuardHook('.claude');
+    const [cc, claw] = getMcpClientStatuses(projectRoot, 'global', ['claude-code', 'claw-code']);
+    expect(cc.level).toBe('standard');
+    expect(claw.level).toBe('base');
+  });
+
+  it('is null for non-Claude clients — they have no hooks or tweakcc to grade', () => {
+    configureMcpClients(['cursor'], projectRoot, { scope: 'global' });
+    installGuardHook('.claude');
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['cursor']);
+    expect(s.status).toBe('up_to_date');
+    expect(s.level).toBeNull();
+  });
+
+  it('survives a malformed settings.json instead of throwing', () => {
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const settingsPath = path.join(fakeHome, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, '{ not json');
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.level).toBe('base');
   });
 });
 
