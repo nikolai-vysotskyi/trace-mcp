@@ -13,7 +13,8 @@ guards `README.md` only — so re-read the source before posting.
 ## We are already on Reddit and cannot read it
 
 `ops/user-signal.md` (2026-08-30) puts **reddit.com as the repo's #1 referrer** —
-90 views / 35 uniques in 14 days, ahead of Google. Somebody has already posted or
+90 views / 35 uniques in 14 days, ahead of Google on views (Google still
+leads on uniques, 39 to 35). Somebody has already posted or
 recommended trace-mcp there, the thread is driving more traffic than any other
 source, and the login wall means no run can find it.
 
