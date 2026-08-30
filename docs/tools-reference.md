@@ -101,7 +101,7 @@ Tools are registered dynamically based on detected frameworks — you only see t
 | `get_implementations` | Find all classes that implement or extend a given interface/base class |
 | `get_type_hierarchy` | Walk TypeScript class/interface hierarchy: ancestors and descendants |
 | `get_api_surface` | List all exported symbols (public API) of a file or matching files |
-| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Classifies as "unreached" (no test imports the source) or "imported_not_called" (test imports file but never references symbol). Pass `scope: "exports_only"` for the fast exports-only scan |
+| `get_untested_symbols` | Find ALL symbols (not just exports) lacking test coverage. Returns the "unreached" tier (no test imports the source) by default; `level: "imported_not_called"` / `"all"` opt into the weaker tier, where transitively-exercised symbols also land. Pass `scope: "exports_only"` for the fast exports-only scan |
 | `self_audit` | One-shot project health: dead exports, untested code, dependency hotspots, heritage metrics |
 
 ## Quality & security

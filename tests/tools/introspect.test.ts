@@ -393,7 +393,7 @@ describe('getUntestedExports', () => {
 
 describe('getUntestedSymbols', () => {
   it('returns untested symbol analysis with level classification', () => {
-    const result = getUntestedSymbols(store);
+    const result = getUntestedSymbols(store, undefined, undefined, false, 'all');
     expect(result.total_symbols).toBeGreaterThan(0);
     expect(typeof result.total_untested).toBe('number');
     expect(Array.isArray(result.untested)).toBe(true);
@@ -433,7 +433,7 @@ describe('getUntestedSymbols', () => {
   });
 
   it('sorts unreached before imported_not_called', () => {
-    const result = getUntestedSymbols(store);
+    const result = getUntestedSymbols(store, undefined, undefined, false, 'all');
     const levels = result.untested.map((u) => u.level);
     const firstImported = levels.indexOf('imported_not_called');
     const lastUnreached = levels.lastIndexOf('unreached');
