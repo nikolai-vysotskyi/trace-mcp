@@ -79,7 +79,12 @@ export const workspace = {
   kpiShare_few: '{{percent}}% из {{total}} проектов',
   kpiShare_many: '{{percent}}% из {{total}} проектов',
   kpiShare_other: '{{percent}}% из {{total}} проектов',
-  kpiDeltaCaption: 'по сравнению с: {{when}}',
+  /* Bare timestamp, no preposition: `{{when}}` is already a full clause
+     ("9 минут назад"), and every Russian way of prefixing it — "по сравнению
+     с: 9 минут назад" — is 16 characters that wrapped the caption to four
+     lines in a 158px tile and pushed the card past TILE_H (TRA-464). The
+     arrow carries the comparison. */
+  kpiDeltaCaption: '{{when}}',
   kpiNoChange: 'Без изменений',
   kpiNoChangeVs: 'Без изменений {{caption}}',
   kpiNotAvailable: 'Нет данных',
