@@ -5,6 +5,11 @@ export const workspace = {
     'trace-mcp indexiert deine Projekte in einem lokalen Hintergrunddienst. Starte ihn, um sie wieder zu sehen — es ist nichts verloren gegangen.',
   startDaemon: 'Daemon starten',
   startingDaemon: 'Wird gestartet…',
+  daemonInstallingTitle: 'trace-mcp wird eingerichtet',
+  daemonInstallingSubtitle: 'Der Hintergrunddienst, der Ihre Projekte indiziert, wird installiert. Das passiert einmal und dauert ein paar Sekunden.',
+  daemonInstallFailedTitle: 'Einrichtung nicht abgeschlossen',
+  daemonInstallRetry: 'Erneut versuchen',
+  daemonInstallRetrying: 'Wird eingerichtet…',
 
   busyIndexingStale_one:
     '{{indexing}} von {{total}} Projekt wird indexiert. Dies sind die zuletzt indexierten Zahlen.',

@@ -4,6 +4,11 @@ export const workspace = {
     'trace-mcp 在本地后台服务里索引你的项目。启动它就能重新看到——什么都没丢。',
   startDaemon: '启动守护进程',
   startingDaemon: '启动中…',
+  daemonInstallingTitle: '正在设置 trace-mcp',
+  daemonInstallingSubtitle: '正在安装为项目建立索引的后台服务。只会进行一次，需要几秒钟。',
+  daemonInstallFailedTitle: '设置未完成',
+  daemonInstallRetry: '重试',
+  daemonInstallRetrying: '设置中…',
 
   busyIndexingStale_other:
     '正在索引 {{total}} 个项目中的 {{indexing}} 个。以下是上次索引的数字。',
