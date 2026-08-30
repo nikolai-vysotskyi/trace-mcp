@@ -24,6 +24,8 @@ export type UpdateState = {
   error?: string;
   stuck?: boolean;
   staleRoots?: { root: string; version: string }[];
+  /** Absolute path to the running `.app`, so copyable commands name the real install. */
+  installPath?: string;
 };
 
 /**
@@ -59,14 +61,29 @@ export function describeStaleRoots(staleRoots: { root: string; version: string }
   };
 }
 
+/** Quote a path for copy-paste into a shell, only when it needs it. */
+function shellQuote(p: string): string {
+  return /^[A-Za-z0-9._/-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`;
+}
+
 /**
  * macOS builds are ad-hoc signed and not notarized, so a browser-downloaded
  * copy carries `com.apple.quarantine` and Gatekeeper refuses it with "trace-mcp
  * is damaged and can't be opened" — the dead end the manual-install card sent a
  * user into (TRA-431). Until releases are notarized, the card ships the one
  * command that clears the flag.
+ *
+ * It has to name the path the user actually installs into. `/Applications` was
+ * hard-coded, but `locateInstalledApp` prefers `~/Applications` — its first
+ * fallback directory — so an install that lives there got a command pointing at
+ * a path that does not exist. `xattr` then fails with "No such file or
+ * directory" and the escape hatch dead-ends exactly like the download it was
+ * added to rescue. The main process sends the running bundle's path; the
+ * hard-coded default only applies when it could not be derived (dev mode).
  */
-export const QUARANTINE_COMMAND = 'xattr -dr com.apple.quarantine /Applications/trace-mcp.app';
+export function quarantineCommand(bundlePath?: string): string {
+  return `xattr -dr com.apple.quarantine ${shellQuote(bundlePath || '/Applications/trace-mcp.app')}`;
+}
 
 export function formatAgo(ts?: number, now: number = Date.now()): string {
   if (!ts) return t('common:never');
