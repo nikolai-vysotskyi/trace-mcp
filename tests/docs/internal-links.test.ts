@@ -88,15 +88,22 @@ describe('docs footer nav covers every indexed page', () => {
    * Every .md under docs/ becomes a public URL, so the source of truth is the
    * directory, not the sitemap. A page is either indexed (in the sitemap) or
    * deliberately not (`noindex: true` in its front matter) — never neither.
+   * Underscore directories (_layouts, _includes, _data) are Jekyll internals
+   * that never get a URL, so they are not pages and are skipped.
    */
   it('every published docs page is in the sitemap or marked noindex', () => {
     const pages = readdirSync(DOCS, { recursive: true, encoding: 'utf-8' })
       .filter((f) => f.endsWith('.md'))
-      .map((f) => f.replace(/\\/g, '/'));
-    const indexed = new Set(sitemapPaths().map((p) => p.replace(/^\//, '').replace(/\.html$/, '.md')));
+      .map((f) => f.replace(/\\/g, '/'))
+      .filter((f) => !f.startsWith('_'));
+    const indexed = new Set(
+      sitemapPaths().map((p) => p.replace(/^\//, '').replace(/\.html$/, '.md')),
+    );
     const orphans = pages.filter((f) => {
       if (indexed.has(f)) return false;
-      return !/^---\n[\s\S]*?^noindex:\s*true\s*$[\s\S]*?^---$/m.test(readFileSync(join(DOCS, f), 'utf-8'));
+      return !/^---\n[\s\S]*?^noindex:\s*true\s*$[\s\S]*?^---$/m.test(
+        readFileSync(join(DOCS, f), 'utf-8'),
+      );
     });
     expect(
       orphans,
