@@ -12,6 +12,7 @@
  *   node scripts/electron-cdp.mjs shot out.png      # screenshot the current page
  *   node scripts/electron-cdp.mjs shot out.png --view=project --tab=graph --dark
  *   node scripts/electron-cdp.mjs shot out.png --locale=zh --size=640x420
+ *   node scripts/electron-cdp.mjs shot out.png --offline   # daemon-down states
  *
  * `launch` uses its own --user-data-dir so it does not fight the installed
  * trace-mcp.app for Electron's single-instance lock. Once it is up, an external
@@ -114,6 +115,19 @@ function launch(visible) {
 async function shot(outFile, opts) {
   const page = await waitForPage();
   const cdp = await connect(page.webSocketDebuggerUrl);
+  /* `--offline` reviews the daemon-down states without stopping the daemon —
+     which, on a machine somebody else is working on, is not ours to stop. The
+     renderer's fetches are refused at the network layer, so it sees exactly what
+     a dead socket gives it; nothing is monkey-patched and nothing survives the
+     run. Blocked before the first paint, so a mount-time fetch is caught too. */
+  if (opts.offline) {
+    await cdp.send('Network.enable');
+    await cdp.send('Network.setBlockedURLs', { urls: ['*127.0.0.1:3741*'] });
+    if (!opts.url) {
+      await cdp.send('Runtime.evaluate', { expression: 'location.reload()' });
+      await sleep(opts.settleMs);
+    }
+  }
   if (opts.url) {
     await cdp.send('Page.enable');
     await cdp.send('Page.navigate', { url: opts.url });
@@ -204,10 +218,11 @@ if (cmd === 'launch') {
     settleMs: Number(flag('settle') ?? 1500),
     click: flag('click'),
     evaluate: flag('eval'),
+    offline: rest.includes('--offline'),
   });
 } else {
   console.error(
-    'usage: electron-cdp.mjs launch [--visible] | shot <out.png> [--url=…] [--dark|--light]',
+    'usage: electron-cdp.mjs launch [--visible] | shot <out.png> [--url=…] [--dark|--light] [--offline]',
   );
   process.exit(1);
 }

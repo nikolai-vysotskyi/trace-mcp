@@ -546,6 +546,18 @@ is not one that is failing to. `connected` is false for the first moments of eve
 mount, so a surface that invents its own check flashes a daemon-down pane on every
 open.
 
+**An empty list and no list are two different facts, and a `catch` that writes `[]`
+destroys the difference.** The empty state is then free to explain a result that
+was never received: the sidebar's file list told the user "No indexed files match
+this scope" about a fetch that had been refused by a socket, four inches from the
+pane that was correctly saying the daemon was not running (TRA-471). A list keeps
+whether it was answered, and asserts a cause only for the empty answer it actually
+got. What it does when it was not answered is *nothing* — the surface holding the
+daemon state has already said it once, and a second sentence would only compete.
+Its refresh affordance stays, though: a control that re-fetches is the list's own
+way back when the daemon returns, and hiding it would trade a wrong sentence for a
+dead end.
+
 **Values that were true a minute ago outrank no values at all.** A refresh that fails must
 leave the last good ones on screen, cache them across launches, and say once — above them,
 where they are read before the numbers are — that they are the last indexed ones. Em dashes
@@ -1276,6 +1288,7 @@ new evidence.
 | A comparison line reserves its height, it does not measure it | The catalogue runs +30% longer in German and Russian and a tile is 132–214px wide, so whether the line wraps is not a property of the design. `KpiTile` reserves two 13px lines whatever the string does, which is what lets one `TILE_H` constant hold: measured on the running renderer, every tile is 112px in en/de/ja and both criterion lines are 26px in ru. The reservation is a floor, not a cap — Russian's delta caption (`↑+105.6k по сравнению с: 9 минут назад`) still runs to four lines and takes its row to 138px, which is a separate defect and not something `TILE_H` can absorb. |
 | A card grid responds by changing its column count, never its card width | `flex-wrap` + `flex: 1 1 132px` hands the leftover width to whichever cards landed in the last row: at a 1000px window five KPI tiles rendered at 137px and the sixth at 748px, all six carrying the same three lines. A card wider than its neighbour makes a claim the data is not making. Equal `minmax(0, 1fr)` tracks, and a count that **divides** the number of cards so no row is ever short (TRA-467). |
 | A surface whose every section reads one source states its failure once, at surface level | Project Overview said one dead daemon six times — the toolbar chip, Guard's line, and four `SectionError`s each claiming "the daemon may still be indexing" with a Retry aimed at a refusing socket. "Busy" is a wait, "not running" is a button; the app knew which one it was and printed the other four times. `DaemonDownPane` is now shared, and the test for down is `deriveDaemonState()` rather than a fresh `!connected` that would flash on every mount (TRA-469). |
+| An empty list and no list are two different facts | A `.catch(() => setFiles([]))` makes a refused socket indistinguishable from a filter that matched nothing, and the empty state then explains a result it never received — the sidebar's file list blamed the scope filter while the pane beside it correctly said the daemon was not running (TRA-471). Keep whether the list was answered; assert a cause only for the empty answer you actually got, render nothing for the one you did not, and leave the re-fetching control in place as the way back. |
 | Narrow gives up the comparison, then the table, never the value | The number and the project name are the screen; the footnote and the metric columns are elaboration. Compact already renders a legible row at 420px. |
 | A view toggle with one usable option is hidden, not disabled | A disabled segment is a control with nothing to choose. The stored preference is untouched and returns with the width. |
 | Migrate a screen **whole**, one screen per PR | A half-migrated screen looks worse than the un-migrated one; a big-bang redesign PR never lands. |
