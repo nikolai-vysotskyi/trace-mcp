@@ -880,6 +880,30 @@ elaboration.
 3. **A toggle whose alternatives are unusable is hidden, not disabled.** A disabled
    segment is a control with nothing to choose; it returns with the width.
 
+### A dashboard card is one size. Only the column count responds to width.
+
+Card width is not a channel. Two cards side by side with the same anatomy and
+different widths tell the reader the wider one carries more, and in a wrapping
+flexbox it carries nothing — it is just what landed last.
+
+- **A strip of cards is a `grid`, never `flex-wrap`.** `flex-wrap` stretches whatever
+  ends up in the short last row across all the leftover width. The Workspace KPI strip
+  was `flex-wrap` with `flex: 1 1 132px` per tile: at a 1000px window five tiles fit on
+  the first row and Indexing rendered **748px wide holding one digit**, 5.5x its five
+  137px siblings (TRA-467). Nothing about the number was different — only the wrap
+  boundary.
+- **The column count divides the card count.** Six cards go 6 / 3 / 2 / 1, never 4 or 5.
+  A full last row is what makes the stretch impossible in the first place, and it also
+  removes the trailing dead space a partial row leaves behind.
+- **One function decides it, and the height helper reads the same one.**
+  `kpiColumns(paneW)` in `Workspace.tsx` is what the strip renders with *and* what
+  `kpiStripHeight()` counts rows from. A second copy of the breakpoints is how the two
+  drift and the pane reserves a height the strip does not occupy — the same failure
+  §6's top band records.
+- **Cards declare no width of their own.** No `flex`, no `min-width` fighting the
+  column. `grid-template-columns: repeat(n, minmax(0, 1fr))` and nothing else; the
+  minimum card width lives in the breakpoints, not on the card.
+
 ---
 
 ## 7. Accessibility

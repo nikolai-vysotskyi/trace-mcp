@@ -80,7 +80,7 @@ function loadFilter(): WorkspaceFilter {
 // thresholds are read off the pane itself.
 
 // Pane and strip geometry, all read off the rendered surface rather than guessed.
-const TILE_MIN_W = 132; // KpiTile's flex basis
+const TILE_MIN_W = 132; // narrowest a KpiTile may be before the column count drops
 const TILE_GAP = 16; // gap-4
 // A full-height tile: 16 + 13 + 4 + 32 + 4 + 26 + 16 + hairlines. The comparison
 // line reserves two 13px lines rather than one, because at 132–214px of tile a
@@ -106,14 +106,32 @@ const MIN_SCROLL_WINDOW = 160;
 export const TABLE_MIN_PANE_W = PANE_PAD + FROZEN_COLS_W + MIN_SCROLL_WINDOW;
 
 /**
- * How tall the full-height KPI strip would be in a pane this wide. The tiles
- * flex-wrap, so width decides how many rows of 112px there are — at the app's
- * 640px minimum window that is three rows, 396px.
+ * How many KPI tiles sit on one row in a pane this wide.
+ *
+ * Always a divisor of six, so every row is full. A wrapping flexbox instead
+ * packs what fits and then stretches the remainder across the leftover width:
+ * at a 1000px window that rendered Indexing as a 748px card holding one digit
+ * next to five 137px siblings, 5.5x wide for no reason a reader can see
+ * (TRA-467). Card width is not a channel — only the column count responds to
+ * the pane (DESIGN.md §7).
+ *
+ * `0` means "not measured yet"; callers that paint decide what to assume.
+ */
+export function kpiColumns(paneW: number): number {
+  const inner = paneW - PANE_PAD;
+  for (const n of [6, 3, 2]) {
+    if (inner >= n * TILE_MIN_W + (n - 1) * TILE_GAP) return n;
+  }
+  return 1;
+}
+
+/**
+ * How tall the full-height KPI strip would be in a pane this wide — the same
+ * column count the strip actually renders with, never a second copy of the
+ * rule. At the app's 640px minimum window that is three rows, 396px.
  */
 export function kpiStripHeight(paneW: number): number {
-  const inner = Math.max(0, paneW - PANE_PAD);
-  const perRow = Math.max(1, Math.floor((inner + TILE_GAP) / (TILE_MIN_W + TILE_GAP)));
-  const rows = Math.ceil(KPI_COUNT / perRow);
+  const rows = Math.ceil(KPI_COUNT / kpiColumns(paneW));
   return rows * TILE_H + (rows - 1) * TILE_GAP + STRIP_PAD;
 }
 
@@ -281,6 +299,10 @@ export function Workspace() {
 
   const narrow = isNarrowPane(pane.w);
   const dense = isDensePane(pane.w, pane.h);
+  // Unmeasured means wide, as it does for `narrow`: the first paint runs before
+  // ResizeObserver reports, and guessing one column there would stack all six
+  // tiles for a frame on every launch of a full-size window.
+  const kpiCols = pane.w > 0 ? kpiColumns(pane.w) : KPI_COUNT;
   // The stored preference is never rewritten: widening the window has to bring
   // the user's own choice back, not whatever the narrow layout fell back to.
   const effectiveView: ViewMode = narrow ? 'compact' : view;
@@ -346,6 +368,7 @@ export function Workspace() {
         refreshing={data.refreshing}
         scrolled={scrolled}
         dense={dense}
+        kpiColumns={kpiCols}
         hideViewToggle={narrow}
         rightExtra={<AddProjectControl onAdd={(root) => data.addProject(root)} />}
         // Above the tiles, not below them: the line that says these numbers

@@ -11,10 +11,38 @@
  * much room this surface actually has.
  */
 import { describe, expect, it } from 'vitest';
-import { TABLE_MIN_PANE_W, isDensePane, isNarrowPane, kpiStripHeight } from '../Workspace';
+import { TABLE_MIN_PANE_W, isDensePane, isNarrowPane, kpiColumns, kpiStripHeight } from '../Workspace';
 
 /** Pane geometry for a window, with the default 220px sidebar and 44px header. */
 const pane = (winW: number, winH: number) => ({ w: winW - 220, h: winH - 44 });
+
+describe('kpiColumns', () => {
+  it('is always a divisor of six, so no row is ever short', () => {
+    // A short last row is what the old flex-wrap stretched: at a 1000px window
+    // five tiles fit above and the sixth took all 748px left over (TRA-467).
+    for (let paneW = 0; paneW <= 2000; paneW += 4) {
+      expect([1, 2, 3, 6]).toContain(kpiColumns(paneW));
+    }
+  });
+
+  it('never asks a column to be narrower than a tile can be', () => {
+    for (let paneW = 320; paneW <= 2000; paneW += 4) {
+      const n = kpiColumns(paneW);
+      if (n === 1) continue; // below 280px of inner width there is no choice
+      expect(paneW - 32).toBeGreaterThanOrEqual(n * 132 + (n - 1) * 16);
+    }
+  });
+
+  it('keeps the row count the flex-wrap layout produced at every width', () => {
+    // kpiStripHeight() and isDensePane() are sized off these rows, so the fix
+    // must not move a single pane from three rows to four.
+    for (let paneW = 0; paneW <= 2000; paneW += 4) {
+      const inner = Math.max(0, paneW - 32);
+      const perRow = Math.max(1, Math.floor((inner + 16) / (132 + 16)));
+      expect(Math.ceil(6 / kpiColumns(paneW))).toBe(Math.ceil(6 / perRow));
+    }
+  });
+});
 
 describe('kpiStripHeight', () => {
   it('reproduces the strip measured at the minimum window', () => {

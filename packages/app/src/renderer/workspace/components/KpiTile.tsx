@@ -125,8 +125,10 @@ export function KpiTile({
           : 'flex flex-col items-start gap-1 text-left transition-colors'
       }
       style={{
-        minWidth: 132,
-        flex: '1 1 132px',
+        // No width of its own: the strip is a grid whose column count comes
+        // from `kpiColumns()`, and a tile that also declared a flex basis was
+        // what let the last row stretch its survivors to 5.5x the rest
+        // (TRA-467). Every tile is one column wide, always.
         padding: dense ? '8px 12px' : 16,
         borderRadius: 12,
         // A card is content: it stays opaque --surface in BOTH states. Tinting
