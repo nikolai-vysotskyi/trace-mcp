@@ -243,6 +243,20 @@ function bundleSizes() {
   return round(bytes / 1024, 0);
 }
 
+/**
+ * What the window actually downloads before it can render: the entry script plus
+ * whatever `index.html` preloads. Splitting a tab behind `React.lazy` moves bytes
+ * out of this number but leaves `renderer_bundle_kb` — the total on disk —
+ * unchanged, so trending only the total hides every code-splitting win.
+ */
+function eagerKb() {
+  const dir = path.join(appDir, 'dist', 'renderer');
+  const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+  const refs = [...html.matchAll(/(?:src|href)="\.\/([^"]+)"/g)].map((m) => m[1]);
+  const bytes = refs.reduce((a, r) => a + fs.statSync(path.join(dir, r)).size, 0);
+  return round(bytes / 1024, 0);
+}
+
 /** Packaged-bundle sizes, if `pnpm run pack` has been run. Null otherwise. */
 function artifactMb() {
   const dir = path.join(appDir, 'release', 'mac-arm64');
@@ -656,6 +670,7 @@ const entry = {
     heap_growth_mb_per_hour: workload.heap_growth_mb_per_hour,
     main_cpu_idle_pct: last.main_cpu_idle_pct ?? null,
     renderer_bundle_kb: bundleSizes(),
+    renderer_eager_kb: eagerKb(),
     artifact_mb: artifactMb(),
   },
   raw_samples: samples,

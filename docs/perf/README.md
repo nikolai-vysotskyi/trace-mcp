@@ -14,18 +14,27 @@ noindex: true
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
-## Current numbers (3.2.0, `6ebbbd56`, macOS 26.5 / arm64, median of 3)
+## Current numbers (3.6.0, `ccc3b45b`, macOS 26.5 / arm64, median of 3)
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
-| `renderer_fcp_ms` | 220 | — | ok — **the startup metric of record** |
-| `cold_start_ms` | 1005 | 3000 | ok, but load-sensitive (see below) |
-| `window_interactive_ms` | 612 | — | load-sensitive, do not trend it |
+| `renderer_fcp_ms` | 216 | — | ok — **the startup metric of record** |
+| `cold_start_ms` | 801 | 3000 | ok, but load-sensitive (see below) |
+| `window_interactive_ms` | 506 | — | load-sensitive, do not trend it |
 | `heap_idle_mb` (5 min idle) | 9.5 | — | ok |
 | `main_cpu_idle_pct` | 0 | 2 | ok |
-| `renderer_bundle_kb` | 1700 | — | +16% vs 1461 — warning, noted not filed |
-| `artifact_mb.mac_asar` | 4.85 | ×1.5 growth | was 5.8, fixed this run (see below) |
-| `artifact_mb.mac_app_unpacked` | 268.1 | ×1.5 growth | ok (Electron framework is ~263 MB of it) |
+| `renderer_eager_kb` | 2102 | — | **the size metric of record** (see below) |
+| `renderer_bundle_kb` | 2272 | — | +34% vs 1700 — regression, addressed this run |
+| `artifact_mb` | not re-packed | ×1.5 growth | last measured 4.85 / 268.1 at `6ebbbd56` |
+
+### Which size number to trend
+
+`renderer_bundle_kb` is every byte in `dist/renderer`. Splitting a tab behind
+`React.lazy` moves bytes out of the startup path but leaves that total untouched, so on
+its own it scores code-splitting as a no-op. `renderer_eager_kb` — the entry script plus
+everything `index.html` preloads — is what the window actually downloads before it can
+render. **Trend `renderer_eager_kb`**; keep `renderer_bundle_kb` as the total-weight check
+(it still catches a dependency that grew, wherever it landed).
 
 ### Which startup number to trend
 
@@ -122,6 +131,18 @@ Compare against the median of the last 5 runs: >+10% is a warning to note, >+25%
 (or two consecutive warnings) is a regression worth an issue.
 
 ## Changes worth remembering
+
+**2026-08-30 — the Ask tab was carrying the markdown stack into startup.**
+`renderer_bundle_kb` had gone 1461 → 1700 → 2272 KB, with the entry chunk alone at
+1316 KB. Attributing the entry chunk's source map by module: 24% of it was
+`react-markdown` + `remark-gfm` and their micromark/mdast/unified trees, imported by
+exactly one file, `tabs/AskTab.tsx`. `React.lazy` on that tab moved 168 KB out of the
+eager payload (entry 1316 → 1148 KB, `renderer_eager_kb` 2270 → 2102). FCP did not move
+— 216 ms after vs 168 ms measured pre-fix on the same machine an hour earlier, both
+inside the run-to-run spread — which is the same result the cosmos.gl experiment got:
+on this app, bytes off the entry chunk buy bytes, not milliseconds. Worth doing anyway
+because the metric it improves is the one the user pays on every window open, and
+`renderer_eager_kb` exists so the next run can see it.
 
 **2026-08-28 — artifact 286 MB → 265 MB, `app.asar` 21.8 MB → 1.6 MB.**
 `electron-builder` auto-includes the production `node_modules` tree even when `files`
