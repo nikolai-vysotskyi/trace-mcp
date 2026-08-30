@@ -91,6 +91,19 @@ function writePgrepStub(dir: string, running: boolean): string {
   return stub;
 }
 
+/** A stub for `/bin/ps -p <pid> -o comm=`, reporting `appPath`'s main binary. */
+function writePsStub(dir: string, appPath: string): string {
+  const stub = path.join(dir, 'ps-stub.sh');
+  fs.writeFileSync(
+    stub,
+    `#!/bin/sh\necho '${path.join(appPath, 'Contents', 'MacOS', 'trace-mcp')}'\n`,
+    {
+      mode: 0o755,
+    },
+  );
+  return stub;
+}
+
 describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap', () => {
   let fx: Fixture;
   let tmp: string;
@@ -191,7 +204,7 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
    * the child's own HTTP request.
    */
   function runPostinstall(
-    opts: { appRunning?: boolean; appRunningEnv?: boolean } = {},
+    opts: { appRunning?: boolean; appRunningEnv?: boolean; runningBundle?: string } = {},
   ): Promise<string> {
     const child = spawn(process.execPath, [SCRIPT_PATH], {
       env: {
@@ -201,6 +214,16 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
         TRACE_MCP_UPDATE_API_BASE: fx.baseUrl,
         TRACE_MCP_APP_RUNNING: opts.appRunningEnv ? '1' : '',
         TRACE_MCP_PGREP_BIN: writePgrepStub(tmp, opts.appRunning ?? false),
+        // Left at a binary that reports no such pid unless a test names the
+        // bundle it wants "running"; that keeps every other case on the
+        // marker-resolved path they were written against.
+        TRACE_MCP_PS_BIN: opts.runningBundle
+          ? writePsStub(tmp, opts.runningBundle)
+          : '/usr/bin/false',
+        // Confine the orphan-staging sweep to this fixture. Without it the
+        // script would reach into the real /Applications of whatever machine
+        // runs the suite.
+        TRACE_MCP_APP_DIRS: [fx.installDir, path.join(tmp, 'Applications')].join(':'),
         // Never bounce the developer's real launchd daemon from a test run.
         TRACE_MCP_LAUNCHCTL_BIN: '/usr/bin/true',
         TRACE_MCP_NO_AUTO_UPDATE: '',
@@ -230,6 +253,69 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
     expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-version'), 'utf-8')).toBe('v3.1.1');
     // No half-finished swap left behind.
     expect(fs.readdirSync(fx.installDir).filter((f) => f.includes('.bak-'))).toEqual([]);
+  });
+
+  /* TRA-506: one machine, two installed bundles — one dragged into
+     /Applications, one re-installed into ~/Applications. The location marker
+     named the second, the user was running the first, and postinstall staged
+     the pending zip beside the bundle nobody had open. The running copy never
+     offered "restart to install" and sat two releases behind while every npm
+     install reported success; the orphan zip (110 MB) was never applied and
+     never reclaimed, because both appliers only look beside the bundle they
+     resolved themselves. Electron main targets `process.execPath`, so the
+     running bundle is the one postinstall has to agree with. */
+  it('targets the running bundle over the marker and reclaims the orphan staging', async () => {
+    // Marker + fx.appPath point at the ~/Applications copy...
+    installBundle('3.4.0');
+    // ...but the user is running the one in the system-wide directory.
+    const systemDir = path.join(tmp, 'Applications');
+    fs.mkdirSync(systemDir, { recursive: true });
+    const systemApp = path.join(systemDir, 'trace-mcp.app');
+    writeBundle(systemApp, '3.3.0');
+
+    // A previous run staged 3.5.2 next to the marker's bundle; nothing can
+    // ever apply it there once the running copy is the target.
+    for (const [name, body] of [
+      ['.trace-mcp-pending.zip', 'orphan'],
+      ['.trace-mcp-pending.sha256', 'f'.repeat(64)],
+      ['.trace-mcp-pending-version', '3.5.2'],
+    ] as const) {
+      fs.writeFileSync(path.join(fx.installDir, name), body);
+    }
+
+    publishRelease('3.5.2');
+
+    const stdout = await runPostinstall({ appRunning: true, runningBundle: systemApp });
+
+    expect(stdout).toContain(systemApp);
+    // Staged beside the bundle the user actually has open.
+    expect(fs.existsSync(path.join(systemDir, '.trace-mcp-pending.zip'))).toBe(true);
+    expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
+      '3.5.2',
+    );
+    // ...and the unreachable copy is gone rather than left on disk forever.
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.zip'))).toBe(false);
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.sha256'))).toBe(false);
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending-version'))).toBe(false);
+  });
+
+  /* The state this was found in: marker and running app agreed on
+     ~/Applications, while a complete 112 MB staging for the current release sat
+     beside a /Applications copy left over from an earlier drag-install. Neither
+     applier looks there, so it was permanent. */
+  it('reclaims staging left in a conventional dir that is not the target', async () => {
+    installBundle('3.4.0');
+    const otherDir = path.join(tmp, 'Applications');
+    fs.mkdirSync(otherDir, { recursive: true });
+    fs.writeFileSync(path.join(otherDir, '.trace-mcp-pending.zip'), 'orphan');
+    fs.writeFileSync(path.join(otherDir, '.trace-mcp-pending-version'), '3.5.2');
+    publishRelease('3.5.2');
+
+    await runPostinstall();
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
+    expect(fs.existsSync(path.join(otherDir, '.trace-mcp-pending.zip'))).toBe(false);
+    expect(fs.existsSync(path.join(otherDir, '.trace-mcp-pending-version'))).toBe(false);
   });
 
   it('stages a pending zip instead of swapping while the app is running', async () => {
@@ -315,6 +401,22 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
 
     expect(fs.statSync(fx.appPath).mtimeMs).toBe(before);
     expect(stdout).not.toContain('updated to');
+  });
+
+  /* TRA-443: the marker file only records what the last swap intended. Replace
+     the bundle out-of-band — drag an older .app in, restore one from a backup —
+     and the marker runs ahead of what is installed. Gating on it alone made
+     this script exit 0 silently on every later install while the app, which
+     reads Info.plist, kept offering an update that could never land. */
+  it('updates a bundle whose version marker runs ahead of the real bundle', async () => {
+    installBundle('3.1.1');
+    publishRelease('3.3.0');
+    fs.writeFileSync(path.join(fx.installDir, '.trace-mcp-version'), 'v3.3.0');
+
+    const stdout = await runPostinstall();
+
+    expect(readBundleVersion(fx.appPath)).toBe('3.3.0');
+    expect(stdout).toContain('updated to v3.3.0');
   });
 
   it('does not stage a phantom pending update for the running version', async () => {

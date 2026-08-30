@@ -11,23 +11,59 @@
  * much room this surface actually has.
  */
 import { describe, expect, it } from 'vitest';
-import { TABLE_MIN_PANE_W, isDensePane, isNarrowPane, kpiStripHeight } from '../Workspace';
+import {
+  TABLE_MIN_PANE_W,
+  isDensePane,
+  isNarrowPane,
+  kpiColumns,
+  kpiStripHeight,
+} from '../Workspace';
 
 /** Pane geometry for a window, with the default 220px sidebar and 44px header. */
 const pane = (winW: number, winH: number) => ({ w: winW - 220, h: winH - 44 });
 
+/**
+ * TRA-467: the strip was a wrapping flexbox of `flex: 1 1 132px` tiles, so the
+ * last row's survivors absorbed the leftover width. Measured in the Electron
+ * window at 1000px: five tiles at 137px and one at 748px. Uniform tile width is
+ * a property of the column count being a divisor of six, which is what these
+ * assert.
+ */
+describe('kpiColumns', () => {
+  it('only ever returns a divisor of six, so no row is short', () => {
+    for (let paneW = 0; paneW <= 2000; paneW += 1) {
+      expect([1, 2, 3, 6]).toContain(kpiColumns(paneW));
+    }
+  });
+
+  it('never packs a tile below its 132px minimum', () => {
+    for (let paneW = 280 + 32; paneW <= 2000; paneW += 1) {
+      const cols = kpiColumns(paneW);
+      const tileW = (paneW - 32 - (cols - 1) * 16) / cols;
+      expect(tileW).toBeGreaterThanOrEqual(132);
+    }
+  });
+
+  it('widens by whole columns rather than by stretching a tile', () => {
+    expect(kpiColumns(0)).toBe(1); // unmeasured first paint
+    expect(kpiColumns(420)).toBe(2); // 640px window, the app minimum
+    expect(kpiColumns(780)).toBe(3); // 1000px window — was 5 tiles + one 748px
+    expect(kpiColumns(904)).toBe(6);
+  });
+});
+
 describe('kpiStripHeight', () => {
   it('reproduces the strip measured at the minimum window', () => {
-    // 640 − 220 = a 420px pane: two tiles per row, three rows of 99px.
-    expect(kpiStripHeight(420)).toBe(357);
+    // 640 − 220 = a 420px pane: two tiles per row, three rows of 112px.
+    expect(kpiStripHeight(420)).toBe(396);
   });
 
   it('is one row of tiles once the pane fits all six', () => {
-    expect(kpiStripHeight(1060)).toBe(99 + 28);
+    expect(kpiStripHeight(1060)).toBe(112 + 28);
   });
 
   it('never divides by a zero-width pane', () => {
-    expect(kpiStripHeight(0)).toBe(6 * 99 + 5 * 16 + 28);
+    expect(kpiStripHeight(0)).toBe(6 * 112 + 5 * 16 + 28);
   });
 });
 
@@ -67,7 +103,7 @@ describe('isNarrowPane', () => {
 describe('isDensePane', () => {
   it('is dense at the app minimum window', () => {
     const p = pane(640, 420);
-    // 376 − 52 toolbar − 357 strip is negative: the list had nowhere to be.
+    // 376 − 52 toolbar − 396 strip is negative: the list had nowhere to be.
     expect(isDensePane(p.w, p.h)).toBe(true);
   });
 

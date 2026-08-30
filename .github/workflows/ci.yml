@@ -77,6 +77,7 @@ jobs:
       app: ${{ steps.filter.outputs.app }}
       core: ${{ steps.filter.outputs.core }}
       platform: ${{ steps.filter.outputs.platform }}
+      vscode: ${{ steps.filter.outputs.vscode }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: filter
@@ -85,6 +86,9 @@ jobs:
           filters: |
             app:
               - 'packages/app/**'
+              - '.github/workflows/ci.yml'
+            vscode:
+              - 'packages/vscode-extension/**'
               - '.github/workflows/ci.yml'
             # Path/OS-sensitive code. TRA-236: the dangerous-root guard shipped
             # a Windows-shaped hole because cross-platform-test only ran on
@@ -133,6 +137,10 @@ jobs:
               # an admin override to merge (TRA-257). Cheaper to pay one build
               # than to hand-merge past branch protection.
               - 'packages/app/**'
+              # And the VS Code extension, for the same reason (TRA-519): its
+              # Dependabot PRs touch nothing but that directory, so without
+              # this they'd leave `impact-report` skipped forever.
+              - 'packages/vscode-extension/**'
               - 'docs/**'
               # And once more for the root markdown (README, CONTRIBUTING,
               # DESIGN, SECURITY…): a PR that touches only those hit the exact
@@ -602,6 +610,41 @@ jobs:
         run: pnpm run build
 
   # ───────────────────────────────────────────────────────────────────────────
+  # VS Code extension — build + tests. Own lockfile, own install, like the app.
+  # Before TRA-519 nothing installed or ran this package at all, so its two
+  # test files were coverage that never executed.
+  # ───────────────────────────────────────────────────────────────────────────
+  vscode-extension:
+    needs: changes
+    if: needs.changes.outputs.vscode == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: packages/vscode-extension/pnpm-lock.yaml
+
+      - name: Install
+        working-directory: packages/vscode-extension
+        run: pnpm install --frozen-lockfile --ignore-scripts --prefer-offline
+
+      - name: Build (tsc)
+        working-directory: packages/vscode-extension
+        run: pnpm run build
+
+      - name: Test
+        working-directory: packages/vscode-extension
+        run: pnpm run test
+
+  # ───────────────────────────────────────────────────────────────────────────
   # Cross-platform test — macOS + Windows.
   #
   # Trigger logic (any one fires it):
@@ -668,3 +711,56 @@ jobs:
 
       - name: Smoke-test CLI
         run: node dist/cli.js --version
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # TRA-528: #659 was authored in a stale worktree and then committed with
+  # master's tip as its parent. GitHub therefore saw an up-to-date branch —
+  # branch protection's "strict" flag, the merge queue and every status check
+  # passed — while the squashed tree silently reverted 40+ files, a CI
+  # workflow and the 3.6.0 release manifest. No content-blind gate can catch
+  # that, so these two look at the content instead.
+  # ───────────────────────────────────────────────────────────────────────────
+  scope-guard:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # Needed for git diff base..head.
+
+      - name: The version never goes backwards
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          base=$(git show "$BASE:package.json" | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')
+          head=$(node -p 'require("./package.json").version')
+          if [ "$(printf '%s\n%s\n' "$base" "$head" | sort -V | head -1)" != "$base" ]; then
+            echo "::error::package.json version went backwards: $base -> $head. A stale base overwrote the release manifest." >&2
+            exit 1
+          fi
+          echo "version ok: $base -> $head"
+
+      - name: A PR does not silently rewrite the repo
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+          # ponytail: a size threshold, not a revert detector. It catches the
+          # shape of the failure (a small PR carrying a repo-wide diff) rather
+          # than proving intent. Escape hatch: the "large-diff" label.
+          files=$(git diff --name-only "$BASE...HEAD" | wc -l)
+          deleted=$(git diff --numstat "$BASE...HEAD" | awk '$2 ~ /^[0-9]+$/ { d += $2 } END { print d + 0 }')
+          echo "changed files: $files, deleted lines: $deleted"
+          if [ "$files" -gt 150 ] || [ "$deleted" -gt 5000 ]; then
+            case ",$LABELS," in
+              *,large-diff,*) echo "large-diff label present — allowed." ;;
+              *)
+                echo "::error::$files files / $deleted deleted lines. If this is deliberate, add the 'large-diff' label; otherwise your base is stale." >&2
+                exit 1 ;;
+            esac
+          fi

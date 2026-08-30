@@ -32,7 +32,13 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { getAppDistRepo } from './app-dist-repo.mjs';
-import { APP_NAME, locateInstalledApp, recoverInterruptedSwap } from './locate-app.mjs';
+import {
+  APP_NAME,
+  locateInstalledApp,
+  readBundleVersion,
+  recoverInterruptedSwap,
+  runningBundlePath,
+} from './locate-app.mjs';
 
 // Resolved at top-level after the platform/no-update gates run. `null` means
 // no install was found — the script then exits 0 like the old hardcoded
@@ -49,13 +55,23 @@ let PENDING_CHECKSUM = '';
 // scripts/app-dist-repo.mjs. Overridable via env.
 const GITHUB_REPO = getAppDistRepo();
 
-// Test seams. All three default to production values and are only ever set by
+// Test seams. All default to production values and are only ever set by
 // tests/scripts/postinstall-app.test.ts, which needs to point the release
 // lookup at a local HTTP server, make "is the app running" deterministic (the
 // real pgrep answers differently depending on whether the developer happens to
 // have trace-mcp.app open), and avoid bouncing the developer's real daemon.
 const API_BASE = process.env.TRACE_MCP_UPDATE_API_BASE || 'https://api.github.com';
 const PGREP_BIN = process.env.TRACE_MCP_PGREP_BIN || '/usr/bin/pgrep';
+const PS_BIN = process.env.TRACE_MCP_PS_BIN || '/bin/ps';
+// The directories a bundle conventionally lives in — same defaults as
+// locate-app.mjs. Only the orphan sweep below reads them, and only tests
+// override them: a test must never be able to delete files out of the real
+// /Applications on the machine running it.
+const CONVENTIONAL_APP_DIRS = (
+  process.env.TRACE_MCP_APP_DIRS || `${path.join(os.homedir(), 'Applications')}:/Applications`
+)
+  .split(':')
+  .filter(Boolean);
 const LAUNCHCTL_BIN = process.env.TRACE_MCP_LAUNCHCTL_BIN || '/bin/launchctl';
 
 if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
@@ -109,14 +125,52 @@ for (const { action, path: target } of recoverInterruptedSwap()) {
   console.log(`  trace-mcp: ${action} ${target} (interrupted update)`);
 }
 
+// A running bundle outranks the marker. With two installed copies on one
+// machine the marker and the running app can name different bundles, and then
+// the pending zip is staged beside a bundle nobody launched: the running copy
+// never offers "restart to install" and silently stays behind while npm keeps
+// reporting success. Electron main already derives its install dir from
+// `process.execPath`, so targeting the running bundle is what makes the two
+// sides agree by construction. See runningBundlePath() in locate-app.mjs.
 const located = locateInstalledApp();
-if (!located) process.exit(0);
+const running = runningBundlePath({ pgrepBin: PGREP_BIN, psBin: PS_BIN });
+const target = running ?? located?.appPath;
+if (!target) process.exit(0);
+if (running && located && running !== located.appPath) {
+  console.log(
+    `  trace-mcp: updating the running bundle ${running} (location marker points at ${located.appPath})`,
+  );
+}
 
-APP_PATH = located.appPath;
+APP_PATH = target;
 INSTALL_DIR = path.dirname(APP_PATH);
 PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
 PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
 PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
+
+// Reclaim staging aimed at a bundle we are not going to swap. Both appliers
+// only ever look beside the bundle they resolved themselves, so a zip left in
+// any other directory is ~110 MB that nothing will apply and nothing will
+// delete — one was found sitting beside a `/Applications` copy two releases
+// behind while the marker and the running app both named `~/Applications`.
+for (const dir of new Set(
+  [...CONVENTIONAL_APP_DIRS, located ? path.dirname(located.appPath) : null].filter(
+    (d) => d && d !== INSTALL_DIR,
+  ),
+)) {
+  for (const name of [
+    '.trace-mcp-pending.zip',
+    '.trace-mcp-pending.sha256',
+    '.trace-mcp-pending-version',
+  ]) {
+    try {
+      fs.unlinkSync(path.join(dir, name));
+      console.log(`  trace-mcp: removed orphaned ${name} in ${dir}`);
+    } catch {
+      /* absent, or not ours to delete — best-effort like every path here */
+    }
+  }
+}
 
 /**
  * Returns true if the installed trace-mcp.app is currently running.
@@ -233,6 +287,17 @@ function parseSha256Manifest(text, assetName) {
   return null;
 }
 
+// Fallback for a bundle whose Info.plist we cannot read (binary plist, damaged
+// bundle). Both swap sites write this file, in disagreeing formats — the
+// caller strips the leading `v`.
+function readMarkerVersion(markerPath) {
+  try {
+    return fs.readFileSync(markerPath, 'utf-8').trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function gatekeeperOk(appPath) {
   try {
     execFileSync('/usr/sbin/spctl', ['-a', '-t', 'exec', appPath], { stdio: 'pipe' });
@@ -283,12 +348,19 @@ async function main() {
   // because the apply path rewrites the marker in the same stripped form, the
   // loop never settles: the app shows a permanent "restart to install" banner
   // for the build it is already running.
+  //
+  // The bundle's own Info.plist wins over the marker file whenever it can be
+  // read: the marker says what the last swap intended, the plist says what is
+  // actually installed. They diverge whenever a bundle is replaced
+  // out-of-band — a hand-dragged older `.app`, a restore from backup — and a
+  // marker running ahead of the bundle made this script return 0 silently on
+  // every later install, forever. The app meanwhile reads the plist, keeps
+  // offering the update, and every attempt lands `npm-only`: the exact
+  // TRA-357 shape, with no way out but a manual reinstall (TRA-443).
   const stripV = (v) => v.replace(/^v/, '');
   const markerPath = path.join(INSTALL_DIR, '.trace-mcp-version');
-  if (fs.existsSync(markerPath)) {
-    const installed = fs.readFileSync(markerPath, 'utf-8').trim();
-    if (stripV(installed) === stripV(release.tag_name)) return;
-  }
+  const installed = readBundleVersion(APP_PATH) ?? readMarkerVersion(markerPath);
+  if (installed && stripV(installed) === stripV(release.tag_name)) return;
 
   // Require a sibling checksum asset — no checksum, no update.
   const checksumAsset =

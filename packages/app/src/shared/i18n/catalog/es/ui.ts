@@ -1,0 +1,22 @@
+export const ui = {
+  search: 'Buscar',
+  clearSearch: 'Borrar la búsqueda',
+  gradeBadge: 'Nota de deuda técnica {{grade}}',
+  loading: 'Cargando',
+  retry: 'Reintentar',
+  sectionError: 'No se pudo cargar {{what}}. Puede que el daemon siga indexando.',
+
+  filterMatch: 'Coincide',
+  filterExclude: 'Excluir',
+  filterPattern: 'subcadena o /regex/i',
+  filterDepth: 'Profundidad',
+  regex: 'regex',
+  regexMode: 'Modo regex',
+  regexInvalid: 'Regex no válida (se busca por subcadena)',
+  decreaseDepth: 'Reducir la profundidad',
+  decreaseDepthTitle: 'Reducir la profundidad (o ponerla en ∞)',
+  increaseDepth: 'Aumentar la profundidad',
+  unlimitedDepth: 'Profundidad ilimitada',
+  depthLimit: 'Límite de profundidad: {{n}}',
+  resetToUnlimited: 'Volver a ilimitada',
+} as const;

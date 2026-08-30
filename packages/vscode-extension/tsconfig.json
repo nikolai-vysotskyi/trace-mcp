@@ -4,6 +4,10 @@
     "module": "Node16",
     "moduleResolution": "Node16",
     "lib": ["ES2022"],
+    // TypeScript 6 no longer pulls every node_modules/@types package in
+    // implicitly, so without this the build fails on `node:child_process`,
+    // `setTimeout` and `Buffer`. List them explicitly.
+    "types": ["node", "vscode"],
     "outDir": "dist",
     "rootDir": "src",
     "strict": true,

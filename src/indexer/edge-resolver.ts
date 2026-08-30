@@ -14,6 +14,8 @@ import {
 } from './edge-resolvers/file-projection.js';
 import { resolveTypeScriptHeritageEdges as _resolveHeritage } from './edge-resolvers/heritage.js';
 import { resolveIacImportEdges as _resolveIacImports } from './edge-resolvers/iac-imports.js';
+import { resolveGoImportEdges as _resolveGoImports } from './edge-resolvers/go-imports.js';
+import { resolveJavaImportEdges as _resolveJavaImports } from './edge-resolvers/java-imports.js';
 import { resolveEsmImportEdges as _resolveImports } from './edge-resolvers/imports.js';
 import { resolveMarkdownTagEdges as _resolveMarkdownTags } from './edge-resolvers/markdown-tags.js';
 import { resolveMarkdownWikilinkEdges as _resolveMarkdownLinks } from './edge-resolvers/markdown-wikilinks.js';
@@ -134,6 +136,16 @@ export class EdgeResolver {
   /** Pass 2e: Python import edges (dotted paths, relative imports). */
   resolvePythonImportEdges(scope?: ChangeScope): void {
     timed('py-imports', () => _resolvePyImports(this.state, scope));
+  }
+
+  /** Pass 2e3: Go import edges (module path → package directory). */
+  resolveGoImportEdges(scope?: ChangeScope): void {
+    timed('go-imports', () => _resolveGoImports(this.state, scope));
+  }
+
+  /** Pass 2e4: Java import edges (package name → source directory). */
+  resolveJavaImportEdges(scope?: ChangeScope): void {
+    timed('java-imports', () => _resolveJavaImports(this.state, scope));
   }
 
   /** Pass 2e2: PHP import edges (PSR-4 use statements). */

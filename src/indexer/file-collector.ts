@@ -3,6 +3,7 @@ import picomatch from 'picomatch';
 import type { TraceMcpConfig } from '../config.js';
 import { logger } from '../logger.js';
 import { descendantExcludeGlobs } from '../registry.js';
+import type { GitignoreMatcher } from '../utils/gitignore.js';
 import type { TraceignoreMatcher } from '../utils/traceignore.js';
 import type { WorkspaceInfo } from './monorepo.js';
 
@@ -14,6 +15,13 @@ export interface FileCollectorParams {
   rootPath: string;
   workspaces: WorkspaceInfo[];
   traceignore: TraceignoreMatcher | undefined;
+  /**
+   * Root `.gitignore` matcher, or undefined when `ignore.gitignore` is off.
+   * The watcher has always dropped git-ignored events; the full walk did not,
+   * so vendored/generated trees landed in the index and in search results
+   * (TRA-468). Same matcher, same stack, one behavior.
+   */
+  gitignore?: GitignoreMatcher | undefined;
   /** Overridable for tests; defaults to 10_000 (IndexingPipeline.DEFAULT_MAX_FILES). */
   maxFiles: number;
 }
@@ -27,7 +35,7 @@ export interface FileCollectorParams {
  * private method; only `this.*` field reads became explicit parameters.
  */
 export async function collectFiles(params: FileCollectorParams): Promise<string[]> {
-  const { config, rootPath, workspaces, traceignore, maxFiles } = params;
+  const { config, rootPath, workspaces, traceignore, gitignore, maxFiles } = params;
   const traceignoreIgnore = traceignore?.toFastGlobIgnore() ?? [];
   // Most-specific registered project owns a path: skip files that live under a
   // registered descendant so an umbrella root doesn't index its child repos
@@ -116,6 +124,14 @@ export async function collectFiles(params: FileCollectorParams): Promise<string[
 
   if (traceignore) {
     entries = entries.filter((e) => !traceignore.isIgnored(e));
+  }
+
+  // Applied after the deep/workspace fallbacks so those can't smuggle a
+  // git-ignored tree back in. ponytail: root .gitignore only — nested
+  // .gitignore files are not read, matching GitignoreMatcher's existing
+  // contract and the watcher's. Upgrade both together if it ever matters.
+  if (gitignore) {
+    entries = entries.filter((e) => !gitignore.isIgnored(e));
   }
 
   if (entries.length > maxFiles) {

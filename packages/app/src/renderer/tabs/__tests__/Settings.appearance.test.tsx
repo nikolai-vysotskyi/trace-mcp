@@ -7,7 +7,7 @@
 // nothing to do with the daemon.
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LOCALE_KEY } from '../../../shared/i18n/locales.js';
+import { LOCALES, LOCALE_KEY } from '../../../shared/i18n/locales.js';
 import { setLocale } from '../../i18n';
 import { Settings } from '../Settings';
 
@@ -52,14 +52,18 @@ describe('Settings — app preferences', () => {
     expect(onChange).toHaveBeenCalledWith('dark');
   });
 
-  /* TRA-388. The same choice as the app menu's Language row, on the surface
-     people go to looking for settings — and with the room for the full names
-     rather than the row's two letters. Written in their own language: someone
-     hunting for Russian is looking for "Русский". */
+  /* TRA-388, widened by TRA-450. The same choice as the app menu's Language
+     row, on the surface people go to looking for settings — one list, two
+     surfaces, so this asserts against LOCALES rather than a copy of it.
+     Written in their own language: someone hunting for Russian is looking for
+     "Русский", with the English name after it for everyone else. */
   it('offers Language beside Theme, in the languages own names', () => {
     render(<Settings appearance="auto" onAppearanceChange={() => {}} />);
     const select = screen.getByLabelText('Language') as HTMLSelectElement;
-    expect([...select.options].map((o) => o.text)).toEqual(['English', 'Русский']);
+    expect([...select.options].map((o) => o.value)).toEqual(LOCALES.map((l) => l.code));
+    expect([...select.options].map((o) => o.text)).toEqual(
+      LOCALES.map((l) => (l.label === l.englishLabel ? l.label : `${l.label} — ${l.englishLabel}`)),
+    );
     expect(select.value).toBe('en');
   });
 

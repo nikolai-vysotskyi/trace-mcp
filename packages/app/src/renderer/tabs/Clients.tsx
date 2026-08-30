@@ -23,10 +23,24 @@
  *     discloses the actual steps.
  *   - `401b97c5 http` as a session's primary label: a raw id where the name
  *     goes. The project leads, the id is a monospace caption.
+ *
+ * TRA-497 then found what the rewrite had not: the row actions did not work.
+ * Every Connect and Update button spawned `trace-mcp init` with
+ * `--mcp-client cursor` as ONE argv entry, which commander rejects as an
+ * unknown option, and the renderer discarded the failed result — so the button
+ * that had shipped with this screen in April had never configured anything, and
+ * looked no different from one that had. Three rules came out of it and are
+ * enforced below: a write reports its failure on the row; Update repairs the
+ * entry (`clients update`) rather than re-running setup, so it never re-asks
+ * the enforcement level; and the drifted rows, which after any upgrade are
+ * every configured client at once, get one action for the bucket the list
+ * already sorts them into.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { relativeTime } from '../i18n/format';
+import { DaemonDownPane } from '../components/DaemonDownPane';
+import { Icon } from '../lattice/icons';
 import {
   Badge,
   Button,
@@ -100,6 +114,12 @@ interface RichClientStatus {
   configPath: string | null;
   status: ClientConfigStatus;
   staleReason?: string;
+  /**
+   * Enforcement level the config on disk is already on. `null` — or absent, on
+   * a daemon older than the field — means "we don't know", which is the cue to
+   * ask the user rather than reuse a level.
+   */
+  level?: EnforcementLevel | null;
 }
 
 // ── Enforcement levels ────────────────────────────────────────────
@@ -137,25 +157,37 @@ function shortPath(p: string): string {
 
 // ── Section scaffolding (same idiom as Project Overview) ──────────
 
-/** A titled group. Grouping is whitespace and a caption, never a rule. */
+/** A titled group. Grouping is whitespace and a caption, never a rule.
+ *
+ *  The header carries the list's own action, if it has one. An action that
+ *  operates on every row of ONE list belongs to that list, not to the surface:
+ *  the toolbar speaks for the screen, and this screen holds two lists. */
 function Section({
   title,
   count,
+  action,
   children,
 }: {
   title: string;
   count?: number;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-2">
-      <h3
-        className="flex items-baseline gap-1.5 px-1 min-h-6 text-[11px] leading-[13px] font-semibold"
-        style={{ color: 'var(--label-secondary)' }}
-      >
-        {title}
-        {count !== undefined && count > 0 && <span className="tabular-nums">{count}</span>}
-      </h3>
+      {/* The caption keeps the 4px inset a group caption has; the action takes
+          the rows' 12px, because the edge the eye compares it to is the column
+          of row buttons underneath, not the caption beside it. */}
+      <div className="flex items-center gap-1.5 pl-1 pr-3 min-h-6">
+        <h3
+          className="flex items-baseline gap-1.5 flex-1 min-w-0 text-[11px] leading-[13px] font-semibold"
+          style={{ color: 'var(--label-secondary)' }}
+        >
+          {title}
+          {count !== undefined && count > 0 && <span className="tabular-nums">{count}</span>}
+        </h3>
+        {action}
+      </div>
       {children}
     </section>
   );
@@ -252,10 +284,12 @@ function SupportedClientRow({
   status,
   configPath,
   staleReason,
+  error,
   configuring,
   last,
   onConnect,
   onConnectWithLevel,
+  onUpdate,
 }: {
   name: ClientName;
   label: string;
@@ -270,10 +304,13 @@ function SupportedClientRow({
   status: ClientConfigStatus;
   configPath?: string | null;
   staleReason?: string;
+  /** What the last write for this row said when it failed. */
+  error?: string;
   configuring: boolean;
   last: boolean;
   onConnect: () => void;
   onConnectWithLevel: (level: EnforcementLevel) => void;
+  onUpdate: () => void;
 }) {
   const { t } = useTranslation('clients');
   const isManual = MANUAL_CLIENTS.has(name) || status === 'unmanageable';
@@ -282,15 +319,21 @@ function SupportedClientRow({
   const [showSteps, setShowSteps] = useState(false);
 
   const connected = status === 'up_to_date' || status === 'unknown';
+  /* Connect asks; Update does not. Setting trace-mcp up for the first time is
+     the moment the enforcement level is chosen — repairing a config that
+     drifted on the next upgrade is not, and re-asking could only overwrite the
+     answer already in the file with a fresh guess. */
   const handleConnect = () => {
     if (hasLevels) levelMenu.open();
     else onConnect();
   };
 
-  /* One caption slot, and only when there is something to say: where the entry
-     lives, or the manual steps the user asked to see. */
-  const caption =
-    isManual && showSteps
+  /* One caption slot, and only when there is something to say. A failed write
+     outranks the path: the path is where the entry lives, which the row also
+     implies, and the error is the only thing here the user can act on. */
+  const caption = error
+    ? error
+    : isManual && showSteps
       ? MANUAL_HINTS[name]
       : (connected || status === 'stale') && configPath
         ? shortPath(configPath)
@@ -311,12 +354,16 @@ function SupportedClientRow({
           {label}
         </div>
         {caption && (
+          /* Never colour alone: the failure carries a glyph and reads as a
+             sentence, so Increase Contrast and a colour-blind reader both get
+             the same information as everyone else. */
           <div
-            className="text-[11px] leading-[13px] truncate"
-            style={{ color: 'var(--label-secondary)' }}
+            className="flex items-center gap-1 text-[11px] leading-[13px] min-w-0"
+            style={{ color: error ? 'var(--status-red)' : 'var(--label-secondary)' }}
             title={caption}
           >
-            {caption}
+            {error && <Icon name="warning" size={12} className="shrink-0" />}
+            <span className="truncate">{caption}</span>
           </div>
         )}
       </div>
@@ -338,7 +385,7 @@ function SupportedClientRow({
           >
             {t('updateAvailable')}
           </Badge>
-          <Button disabled={configuring} onClick={handleConnect}>
+          <Button disabled={configuring} onClick={onUpdate}>
             {configuring ? t('updating') : t('update')}
           </Button>
         </>
@@ -391,6 +438,9 @@ export function Clients() {
   const [statuses, setStatuses] = useState<RichClientStatus[]>([]);
   const [detecting, setDetecting] = useState(true);
   const [configuringClient, setConfiguringClient] = useState<string | null>(null);
+  /** Client name → what its last write said when it failed. */
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   const [scrolled, setScrolled] = useState(false);
 
   const detectClients = useCallback(async () => {
@@ -430,15 +480,52 @@ export function Clients() {
     detectClients();
   }, [detectClients]);
 
+  /* A write that failed says so on its row until the next attempt clears it.
+     Swallowing the result is how a Connect button that could not run for four
+     months looked exactly like one that had nothing to do (TRA-497). */
+  const recordResult = (clientName: string, result?: { ok: boolean; error?: string }) => {
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (result?.ok) delete next[clientName];
+      else next[clientName] = result?.error ?? t('writeFailed');
+      return next;
+    });
+    return result?.ok === true;
+  };
+
   const handleConnect = async (clientName: string, level: EnforcementLevel = 'max') => {
     setConfiguringClient(clientName);
     try {
       const result = await window.electronAPI?.configureMcpClient(clientName, level);
-      if (result?.ok) {
-        await detectClients();
-      }
+      if (recordResult(clientName, result)) await detectClients();
     } finally {
       setConfiguringClient(null);
+    }
+  };
+
+  const handleUpdate = async (clientName: string) => {
+    setConfiguringClient(clientName);
+    try {
+      const result = await window.electronAPI?.updateMcpClients?.([clientName]);
+      if (recordResult(clientName, result)) await detectClients();
+    } finally {
+      setConfiguringClient(null);
+    }
+  };
+
+  /* One config at a time, so a row that cannot be written names itself instead
+     of failing the whole batch anonymously — and so the count moves while the
+     work happens. */
+  const handleUpdateAll = async (names: string[]) => {
+    setBulk({ done: 0, total: names.length });
+    try {
+      for (const [i, name] of names.entries()) {
+        setBulk({ done: i, total: names.length });
+        recordResult(name, await window.electronAPI?.updateMcpClients?.([name]));
+      }
+    } finally {
+      setBulk(null);
+      await detectClients();
     }
   };
 
@@ -501,6 +588,14 @@ export function Clients() {
     (a, b) => sortRank(resolveStatus(a.name).status) - sortRank(resolveStatus(b.name).status),
   );
 
+  /* The list already knows the drifted rows are one bucket — it sorts them to
+     the top. After an upgrade they are every configured client at once, because
+     what drifted is the entry trace-mcp writes, so the common path through this
+     screen is N identical clicks. */
+  const stale = sortedClients
+    .filter((c) => resolveStatus(c.name).status === 'stale')
+    .map((c) => c.name);
+
   const sessions = [...clients].sort(
     (a, b) => new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime(),
   );
@@ -530,21 +625,30 @@ export function Clients() {
         onScroll={(e) => setScrolled((e.target as HTMLElement).scrollTop > 0)}
       >
         {daemonDown ? (
+          /* Three surfaces now depend on the daemon, and one condition gets one
+             sentence (DESIGN.md §5) — this screen had been saying it in its own
+             words two tabs away from Workspace saying it in Workspace's. */
           <div className="flex items-center justify-center h-full">
-            <EmptyState
-              icon="cable"
-              title={t('daemonDownTitle')}
-              subtitle={t('daemonDownSubtitle')}
-              action={
-                <Button variant="prominent" disabled={restarting} onClick={() => restartDaemon()}>
-                  {restarting ? t('starting') : t('startDaemon')}
-                </Button>
-              }
-            />
+            <DaemonDownPane restarting={restarting} onRestart={() => restartDaemon()} />
           </div>
         ) : (
         <div className="flex flex-col gap-6 px-4 py-4 mx-auto w-full" style={{ maxWidth: 720 }}>
-          <Section title={t('supported')}>
+          <Section
+            title={t('supported')}
+            action={
+              stale.length > 1 && (
+                <Button
+                  size="small"
+                  disabled={bulk !== null || configuringClient !== null}
+                  onClick={() => handleUpdateAll(stale)}
+                >
+                  {bulk
+                    ? t('updatingProgress', { done: bulk.done + 1, total: bulk.total })
+                    : `${t('updateAll')} · ${stale.length}`}
+                </Button>
+              )
+            }
+          >
             <Card>
               {detecting && !statuses.length && !detected.length ? (
                 <SkeletonRows rows={6} label={t('detecting')} />
@@ -559,10 +663,14 @@ export function Clients() {
                       status={s.status}
                       configPath={s.configPath}
                       staleReason={s.staleReason}
-                      configuring={configuringClient === c.name}
+                      error={errors[c.name]}
+                      configuring={
+                        configuringClient === c.name || (bulk !== null && stale.includes(c.name))
+                      }
                       last={i === sortedClients.length - 1}
                       onConnect={() => handleConnect(c.name)}
                       onConnectWithLevel={(level) => handleConnect(c.name, level)}
+                      onUpdate={() => handleUpdate(c.name)}
                     />
                   );
                 })

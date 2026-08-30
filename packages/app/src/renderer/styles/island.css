@@ -698,11 +698,13 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
    segment is 78% of the track, the icon 57% of the segment, and every gap
    around the icon is equal.
 
-   The first cut inverted that. `sz-small` made the track 20px, which left 1px
-   above and below a 14px glyph, while `padding: 0` here lost the cascade to
-   `.lx-seg.sz-small .lx-seg-item { padding: 0 8px }` (same specificity, later
-   file) and ran the segments 30px wide. Crushed vertically, loose horizontally
-   — 5px of air outside the pill and 1px inside it (TRA-376).
+   The first cut inverted that. The old `sz-small` tier made the track 20px,
+   which left 1px above and below a 14px glyph, while `padding: 0` here lost the
+   cascade to that tier's own `padding: 0 8px` (same specificity, later file) and
+   ran the segments 30px wide. Crushed vertically, loose horizontally — 5px of
+   air outside the pill and 1px inside it (TRA-376). Dropping the tier here fixed
+   this row only; it came back on the Workspace toolbar, and TRA-522 deleted the
+   tier itself.
 
    Now: the default 24px track, 24×20 segments, a 12px icon — 83% and 55%, so
    6px of air beside the glyph and 4px above it, and 3px between the pill and
@@ -725,21 +727,8 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 .ws-ctx-row .ws-ctx-seg .lx-seg-item:not(.is-active) {
   color: var(--label-secondary);
 }
-/* A WORD segment, for a value no glyph can name — the Language row (TRA-388).
-   Two things come back off the icon geometry above. The padding, because "EN"
-   is 18px of type and the icon square's 24px min-width would leave 3px a side:
-   0 8px puts the segment at 34px, so the two-language track measures 76px and
-   still lands well inside the row's 214.5px. And full-strength colour when
-   unselected — the dimming above exists because an icon has nothing but the
-   1.19:1 thumb to fall back on, whereas controls.css deliberately keeps
-   unselected WORDS at --label (TRA-292): "RU" stays readable either way, and
-   dimming it would read as disabled. */
-.ws-ctx-row .ws-ctx-seg.is-text .lx-seg-item {
-  padding: 0 8px;
-}
-.ws-ctx-row .ws-ctx-seg.is-text .lx-seg-item:not(.is-active) {
-  color: var(--label);
-}
+/* The word-segment variant this row grew for the two-language pill is gone with
+   it: Language is a pop-up now (TRA-450), and a pill segment is a glyph again. */
 /* macOS rings the whole TRACK, never one segment — the thumb already says
    which segment is selected, so a second ring inside it is two answers to one
    question. */
@@ -748,6 +737,18 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 }
 .ws-ctx-row .ws-ctx-seg .lx-seg-item:focus-visible {
   box-shadow: none;
+}
+/* A pop-up row (Language, TRA-450). A native <select> sizes itself to its
+   widest option, and "Português (Brasil) — Portuguese (Brazil)" is wider than
+   the menu it sits in; cap the closed button and let it ellipsise. The OPEN
+   list is the platform's own and is not constrained by any of this. */
+.ws-ctx-row .lx-popup {
+  min-width: 0;
+  max-width: 150px;
+}
+.ws-ctx-row .lx-popup select {
+  padding-left: 8px;
+  text-overflow: ellipsis;
 }
 
 /* Menu header (TRA-363) — what the menu is ABOUT, not something you can pick.
@@ -957,4 +958,29 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   margin-left: 5px;
   font-size: 11px;
   opacity: 0.8;
+}
+
+/* ============================================================================
+   WORKSPACE TABLE — .ws-table (TRA-452)
+
+   Separated borders, not collapsed. Chromium drops `box-shadow` on table cells
+   in the collapsed model, so the seam the pinned columns have declared since
+   TRA-265 never painted a pixel — and with it went the only sign that four of
+   the ten columns sit under the Actions pin at the default window width.
+   The separated model draws borders on cells rather than rows, so the row
+   hairline moves here from the `<tr>`; the windowing spacers carry a colspan
+   and get none.
+   ============================================================================ */
+.ws-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.ws-table th,
+.ws-table td {
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.ws-table td[colspan] {
+  border-bottom: 0;
 }

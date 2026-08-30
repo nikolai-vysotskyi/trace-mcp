@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clampSidebarWidth,
+  parentDir,
   readSidebarCollapsed,
   readSidebarWidth,
   SIDEBAR_DEFAULT,
@@ -62,5 +63,20 @@ describe('splitPath', () => {
   it('handles a bare filename and Windows separators', () => {
     expect(splitPath('README.md')).toEqual({ dir: '', name: 'README.md' });
     expect(splitPath('src\\main\\tray.ts')).toEqual({ dir: 'src\\main\\', name: 'tray.ts' });
+  });
+});
+
+describe('parentDir', () => {
+  // The row is 180–320px wide. `src/renderer/tabs/` ate 45% of it and the
+  // filename lost its extension anyway; the leaf is the segment that actually
+  // tells two siblings apart (TRA-503).
+  it('keeps only the leaf segment, without separators', () => {
+    expect(parentDir('src/renderer/tabs/Settings.tsx')).toBe('tabs');
+    expect(parentDir('src/renderer/lattice/ui/__tests__/primitives.test.tsx')).toBe('__tests__');
+    expect(parentDir('src\\main\\tray.ts')).toBe('main');
+  });
+
+  it('is empty for a file at the project root, so the row renders no location', () => {
+    expect(parentDir('README.md')).toBe('');
   });
 });

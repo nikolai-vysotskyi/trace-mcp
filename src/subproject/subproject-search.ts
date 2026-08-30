@@ -3,6 +3,7 @@
  * Extracted from SubprojectManager to reduce class complexity.
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import Database from 'better-sqlite3';
 import { searchFts } from '../db/fts.js';
 import { logger } from '../logger.js';
@@ -92,27 +93,55 @@ function searchRepoDb(
 }
 
 /**
- * Search across all subprojects. Opens each per-repo DB readonly,
- * runs FTS search, normalizes scores within the repo, and merges results.
+ * Canonical form for comparing two repo roots. `path.resolve` collapses
+ * trailing and duplicated separators the same way `upsertSubproject` does when
+ * it writes the row — and unlike a `/\/+$/` strip it carries no ReDoS risk on
+ * a path that ultimately comes from a tool caller.
+ */
+const normRoot = (root: string): string => path.resolve(root);
+
+/**
+ * Subprojects reachable from `projectRoot`: those registered under it, plus —
+ * when `projectRoot` is itself a registered subproject — its siblings under the
+ * same parent project. The topology DB is global (one row per repo ever
+ * registered on the machine), so without this filter a scoped search fanned out
+ * across every unrelated repo: wrong results, wasted tokens (TRA-470).
+ */
+export function reachableSubprojects<T extends { repo_root: string; project_root: string }>(
+  repos: T[],
+  projectRoot: string,
+): T[] {
+  const scope = normRoot(projectRoot);
+  const parents = new Set([scope]);
+  for (const repo of repos) {
+    if (normRoot(repo.repo_root) === scope) parents.add(normRoot(repo.project_root));
+  }
+  return repos.filter((repo) => parents.has(normRoot(repo.project_root)));
+}
+
+/**
+ * Search subprojects reachable from `projectRoot`. Opens each per-repo DB
+ * readonly, runs FTS search, normalizes scores within the repo, and merges
+ * results. Omitting `projectRoot` searches every registered subproject.
  */
 export function subprojectSearch(
   topoStore: TopologyStore,
   query: string,
   filters?: { kind?: string; language?: string; filePattern?: string },
   limit = 20,
-  excludeRoot?: string,
+  projectRoot?: string,
 ): SubprojectSearchResult {
-  const repos = topoStore.getAllSubprojects();
+  const allRepos = topoStore.getAllSubprojects();
+  const repos = projectRoot ? reachableSubprojects(allRepos, projectRoot) : allRepos;
   const allItems: SubprojectSearchItem[] = [];
   let reposSearched = 0;
 
-  // Normalize excludeRoot for comparison (strip trailing slash)
-  const normalizedExclude = excludeRoot?.replace(/\/+$/, '');
+  const normalizedExclude = projectRoot ? normRoot(projectRoot) : undefined;
 
   for (const repo of repos) {
     if (!repo.db_path || !fs.existsSync(repo.db_path)) continue;
     // Skip the local repo — its results are already in the primary search
-    if (normalizedExclude && repo.repo_root.replace(/\/+$/, '') === normalizedExclude) continue;
+    if (normalizedExclude && normRoot(repo.repo_root) === normalizedExclude) continue;
 
     let db: Database.Database | null = null;
     try {
