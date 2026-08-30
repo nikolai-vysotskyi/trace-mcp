@@ -29,7 +29,6 @@ export function startI18n(locale: Locale = DEFAULT_LOCALE): void {
       defaultNS: 'common',
       interpolation: { escapeValue: false },
       returnNull: false,
-      initImmediate: false,
     });
   } else if (instance.language !== locale) {
     void instance.changeLanguage(locale);
