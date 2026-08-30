@@ -12,6 +12,7 @@ import {
 } from './appearance';
 import {
   ensureDaemon,
+  healthClearsRestartBudget,
   isDaemonProcessAlive,
   MAX_VERSION_MISMATCH_RESTARTS,
   nextVersionMismatchAction,
@@ -663,12 +664,14 @@ async function checkHealth(): Promise<void> {
     daemonReachable = true;
     consecutiveFailures = 0;
     _lastRestartAttempt = 0;
-    // The outage is over: clear its clock and its restart budget. Leaving
-    // `firstUnreachableAt` set (as this path did until TRA-543) makes the very
-    // first miss of the *next* outage look older than the wedged threshold,
-    // which disarms the TRA-421 guard permanently after one slow start.
+    // The outage is over: clear its clock. Leaving `firstUnreachableAt` set
+    // (as this path did until TRA-543) makes the very first miss of the *next*
+    // outage look older than the wedged threshold, which disarms the TRA-421
+    // guard permanently after one slow start.
     firstUnreachableAt = 0;
-    restartsThisOutage = 0;
+    // The restart budget is a different question, and only a daemon that
+    // finished starting answers it — see healthClearsRestartBudget.
+    if (healthClearsRestartBudget(health.status)) restartsThisOutage = 0;
     setTrayIcon(true);
 
     // Version mismatch — npm swapped the binary on disk but the running daemon

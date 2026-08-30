@@ -18,6 +18,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEAD_DAEMON_MS,
+  healthClearsRestartBudget,
   MAX_VERSION_MISMATCH_RESTARTS,
   nextVersionMismatchAction,
   shouldRestartUnreachableDaemon,
@@ -190,5 +191,75 @@ describe('nextVersionMismatchAction', () => {
     const d = nextVersionMismatchAction('3.5.5', '3.6.0', state);
     expect(d.action).toBe('restart');
     expect(d.state).toEqual({ seenVersion: '3.5.5', restarts: 1 });
+  });
+});
+
+/**
+ * TRA-543 follow-up, found in post-merge review of #681.
+ *
+ * The escalation ladder is only bounded if the budget survives a daemon that
+ * never finished starting. `/health` answers 200 with `status: "starting"` from
+ * listener bind onwards, so a daemon that binds, answers one poll and then dies
+ * inside its startup index used to clear `restartsThisOutage` on every boot and
+ * re-enter at the 10-second rung — an unbounded loop the "never answers" test
+ * above cannot see, because that daemon never answers at all.
+ */
+describe('healthClearsRestartBudget', () => {
+  it('only a finished start clears the budget', () => {
+    expect(healthClearsRestartBudget('ok')).toBe(true);
+    expect(healthClearsRestartBudget('starting')).toBe(false);
+    // Daemons older than the field never say "starting".
+    expect(healthClearsRestartBudget(undefined)).toBe(true);
+  });
+
+  it('bounds a daemon that answers "starting" and then dies before readiness', () => {
+    // Replay of the reviewed scenario at the shipped cadence: 5s polls, a
+    // 60s startup grace, and a replacement that always binds (one "starting"
+    // answer) and then dies during loadAllRegistered().
+    const POLL_MS = 5_000;
+    const GRACE_MS = 60_000;
+    const DAY_MS = 24 * 60 * 60_000;
+
+    const run = (clearsOnStarting: boolean): number => {
+      let restartsThisOutage = 0;
+      let restarts = 0;
+      let now = 0;
+      let firstUnreachableAt = 0;
+      let lastStart = 0;
+      let answeredThisBoot = false;
+
+      while (now < DAY_MS) {
+        now += POLL_MS;
+        // The replacement answers one poll as "starting", then is dead.
+        if (!answeredThisBoot && now - lastStart <= POLL_MS * 2) {
+          answeredThisBoot = true;
+          firstUnreachableAt = 0;
+          if (clearsOnStarting || healthClearsRestartBudget('starting')) restartsThisOutage = 0;
+          continue;
+        }
+        if (firstUnreachableAt === 0) firstUnreachableAt = now;
+        if (now - lastStart < GRACE_MS) continue;
+        if (
+          shouldRestartUnreachableDaemon({
+            processAlive: false,
+            unreachableForMs: now - firstUnreachableAt,
+            restartsThisOutage,
+          })
+        ) {
+          restarts++;
+          restartsThisOutage++;
+          lastStart = now;
+          firstUnreachableAt = 0;
+          answeredThisBoot = false;
+        }
+      }
+      return restarts;
+    };
+
+    // What the merged code did: every boot got a fresh ladder.
+    expect(run(true)).toBeGreaterThan(1_000);
+    // What it does now: the ladder escalates to the one-hour cap and holds —
+    // 31 restarts a day, i.e. the cap plus the handful of cheap early rungs.
+    expect(run(false)).toBeLessThan(40);
   });
 });

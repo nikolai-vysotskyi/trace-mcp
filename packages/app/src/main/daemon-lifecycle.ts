@@ -264,3 +264,21 @@ export function nextVersionMismatchAction(
   }
   return { action: 'restart', state: { ...next, restarts: next.restarts + 1 } };
 }
+
+/**
+ * Does this `/health` answer end the outage's restart budget? (TRA-543 follow-up)
+ *
+ * `/health` returns 200 from listener bind, with `status: "starting"` until
+ * startup indexing finishes — alive, but not yet warmed. Clearing
+ * `restartsThisOutage` on that answer hands every boot a fresh escalation
+ * ladder: a daemon that binds, answers one poll and then dies inside
+ * `loadAllRegistered()` starts again at the 10-second rung, which replays as
+ * ~59 restarts an hour and ~1,439 a day. Only a daemon that finished starting
+ * has proved a restart helped.
+ *
+ * Daemons older than the field send no status; those never say `starting`, so
+ * an absent value reads as `ok`.
+ */
+export function healthClearsRestartBudget(status: string | undefined): boolean {
+  return (status ?? 'ok') === 'ok';
+}
