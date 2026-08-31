@@ -17,9 +17,10 @@ const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 
 import { loadConfig } from '../config.js';
+import { migrateGlobalConfig } from '../config-jsonc.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
-import { ensureGlobalDirs, getDbPath } from '../global.js';
+import { ensureGlobalDirs, getDbPath, GLOBAL_CONFIG_PATH } from '../global.js';
 import { IndexingPipeline } from '../indexer/pipeline.js';
 import type { InitStepResult } from '../init/types.js';
 import { logger } from '../logger.js';
@@ -145,6 +146,26 @@ export const upgradeCommand = new Command('upgrade')
       } else {
         globalSteps = [];
         allSteps.push({ projectRoot: '(global)', steps: globalSteps });
+      }
+
+      // Global: bring the config file itself forward (new keys, and the TRA-538
+      // `tools.preset` default rewrite). `init` already did this; an upgrade
+      // that skipped it left every pre-existing install on its old defaults.
+      if (opts.dryRun) {
+        globalSteps.push({
+          target: GLOBAL_CONFIG_PATH,
+          action: 'skipped',
+          detail: 'Would migrate global config',
+        });
+      } else {
+        const migration = migrateGlobalConfig();
+        if (migration.changed) {
+          globalSteps.push({
+            target: GLOBAL_CONFIG_PATH,
+            action: 'updated',
+            detail: `Config migrated — ${migration.added.join(', ')}`,
+          });
+        }
       }
 
       // Refresh the stable launcher shim + config. Must run on every upgrade —
