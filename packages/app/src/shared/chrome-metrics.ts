@@ -72,7 +72,7 @@ export const TRAFFIC_LIGHT_Y = centreLightsIn(TOP_BAND_H);
    of one alone is what went wrong twice. */
 
 /** Height of the AppKit tab bar on a tabbed window, in CSS px. */
-export const MAC_TAB_BAR_H = 20;
+export const MAC_TAB_BAR_H = 28;
 
 /** Offset that centres the lights in the TAB BAR, which owns the top band then. */
 export const TRAFFIC_LIGHT_Y_TABBED = centreLightsIn(MAC_TAB_BAR_H);

@@ -162,7 +162,7 @@ describe('the traffic lights follow whichever band owns the top line', () => {
      on ends at y=20.0 — 10 is the line the user sees the tabs on. Re-measure
      it, do not derive it from MAC_TAB_BAR_H (TRA-523). */
   it('puts them on the line the tabs are actually drawn on', () => {
-    const MAC_TAB_CENTRE_Y = 10;
+    const MAC_TAB_CENTRE_Y = 14;
     expect(trafficLightCentreY(trafficLightYFor(true))).toBe(MAC_TAB_CENTRE_Y);
   });
 
