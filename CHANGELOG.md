@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.10.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.9.0...v3.10.0) (2026-08-31)
+
+
+### Features
+
+* **app:** the app installs and repairs its own daemon (TRA-438) ([#692](https://github.com/nikolai-vysotskyi/trace-mcp/issues/692)) ([b8dd908](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b8dd9086838aa882f110668fab974ff92f9e3202))
+* **bench:** measure PR-review context cost on 60 real merged PRs (TRA-534) ([#699](https://github.com/nikolai-vysotskyi/trace-mcp/issues/699)) ([aeb5080](https://github.com/nikolai-vysotskyi/trace-mcp/commit/aeb5080f58164f75ddff4bf193074991077d6563))
+* **docs:** lead with the signed DMG on the site and in the README ([#697](https://github.com/nikolai-vysotskyi/trace-mcp/issues/697)) ([219dc3b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/219dc3be6d3935c410f30a43c1efc6bd431e653f))
+
+
+### Bug Fixes
+
+* **ci:** stop compiling better-sqlite3 — use its bundled prebuilds (TRA-567) ([#700](https://github.com/nikolai-vysotskyi/trace-mcp/issues/700)) ([d9f2a1e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d9f2a1ecd1d0c67b64da59f6bae9faf775bd82ea))
+* **config:** rewrite the pre-v3.3 `tools.preset: "full"` default on upgrade (TRA-538) ([#693](https://github.com/nikolai-vysotskyi/trace-mcp/issues/693)) ([e8cc9dc](https://github.com/nikolai-vysotskyi/trace-mcp/commit/e8cc9dc4a7d0353799c367d5fcabe5d85bd777f0))
+* **indexer:** resolve Rust imports, the next language after Java (TRA-565) ([#698](https://github.com/nikolai-vysotskyi/trace-mcp/issues/698)) ([98ef908](https://github.com/nikolai-vysotskyi/trace-mcp/commit/98ef9086200e3b222f320bb829848ca3f73645a6))
+* **release:** demote an unverified release out of `latest` (TRA-566) ([#701](https://github.com/nikolai-vysotskyi/trace-mcp/issues/701)) ([cf3afd1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/cf3afd1421f8d2db30ebce9425306a2cc954b209))
+* **site:** light-mode disabled text was measured against the wrong background ([#695](https://github.com/nikolai-vysotskyi/trace-mcp/issues/695)) ([90aaaa1](https://github.com/nikolai-vysotskyi/trace-mcp/commit/90aaaa1b1e8445565bc2633b1f45e025b868bca3))
+
+
+### Tests
+
+* **update:** verify the upgrade path against real releases (TRA-562) ([#694](https://github.com/nikolai-vysotskyi/trace-mcp/issues/694)) ([a7de2d2](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a7de2d26ce01d1d3718905d195757d80641aab03))
+
 ## [3.9.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.8.0...v3.9.0) (2026-08-30)
 
 
