@@ -8,18 +8,49 @@
 # Caveat: the ping's credentials ship in the published bundle (SECURITY.md
 # "Telemetry Credentials"), so events are unauthenticated and inflatable.
 # Read as a trend; treat a step change as suspect until corroborated.
-updated: "2026-08-30T14:59:28.777Z"
+updated: "2026-08-31T06:50:02.940Z"
 active_users:
-  day: 21
-  week: 21
-  month: 21
-events_28d: 211
-tokens_saved_28d: 0
+  day: 35
+  week: 35
+  month: 35
+events_28d: 243
+
+# Tokens the indexed answers saved against reading the same code raw, summed
+# across every install that has not opted out, since 2025-01-01.
+#
+# `tokens_saved` is the sanitized figure and the only one to quote: days whose
+# per-user rate ran away from the median are capped, because the ping's
+# credentials are public and the counter is inflatable by anyone. `tokens_saved_raw` is
+# kept beside it so the gap between them stays visible — a widening gap is the
+# signal that someone is flooding the endpoint.
+#
+# Dollars are derived here, not sent by the client, so a price change re-prices
+# the whole history: claude-haiku-4-5 input at $1.00/Mtok.
+# That is the cheapest model we price, so `usd_saved` is a floor — quote it as
+# "at least", never as a typical or best case. Pricing at Opus would multiply it
+# by five and need a caveat carried alongside the number forever.
+savings:
+  tokens_saved: 58140
+  tokens_saved_raw: 58140
+  usd_saved: 0.06
+  price_model: "claude-haiku-4-5"
+  price_usd_per_mtok: 1.00
+  since: "2025-01-01"
+  days: 2
+  capped_days: 0
 installs_28d:
-  {}
+  "unknown": 4
+  "new": 3
+  "upgrade": 1
 by_version:
-  {}
+  "3.8.0": 5
+  "3.7.0": 2
+  "3.6.0": 1
 by_country:
-  {}
+  "Brazil": 1
+  "Indonesia": 1
+  "United States": 1
 by_client:
-  {}
+  "unknown": 5
+  "claude-code": 1
+  "grok-shell-trace-mcp": 1
