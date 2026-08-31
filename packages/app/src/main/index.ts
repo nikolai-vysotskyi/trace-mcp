@@ -710,7 +710,11 @@ async function getAutoUpdater() {
   if (UPDATE_CHANNEL !== 'electron-updater') {
     throw new Error(`electron-updater is not the update channel on ${process.platform}`);
   }
-  const { autoUpdater } = await import('electron-updater');
+  const mod = await import('electron-updater');
+  const autoUpdater = mod.autoUpdater ?? mod.default?.autoUpdater;
+  if (!autoUpdater) {
+    throw new Error('electron-updater did not export autoUpdater');
+  }
   // Download only when the user asks: the renderer's Update button drives the
   // whole flow, so a silent background download would fight the UI's state.
   autoUpdater.autoDownload = false;

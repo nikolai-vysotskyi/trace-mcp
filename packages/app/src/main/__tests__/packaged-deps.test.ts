@@ -30,4 +30,10 @@ describe('packaged production dependencies', () => {
     expect(pkg.dependencies?.['react-i18next']).toBeUndefined();
     expect(pkg.devDependencies?.['react-i18next']).toBeDefined();
   });
+
+  it('exports autoUpdater on default namespace for dynamic import interop', async () => {
+    const mod = await import('electron-updater');
+    const hasAutoUpdater = 'autoUpdater' in (mod.default ?? mod) || 'autoUpdater' in mod;
+    expect(hasAutoUpdater).toBe(true);
+  });
 });
