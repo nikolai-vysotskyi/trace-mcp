@@ -322,4 +322,8 @@ export const settings = {
   'schema.logging.max_size.label': '최대 로그 크기 (MB)',
 
   'schema.watch.debounce.label': '디바운스 (ms)',
+
+  /* ── Setup wizard ── */
+  'app.setupWizard': "초기 설정 마법사",
+  'app.runSetupWizard': "마법사 실행…",
 } as const;

@@ -321,4 +321,8 @@ export const settings = {
   'schema.logging.max_size.label': 'अधिकतम लॉग आकार (MB)',
 
   'schema.watch.debounce.label': 'Debounce (ms)',
+
+  /* ── Setup wizard ── */
+  'app.setupWizard': "प्रारंभिक सेटअप विज़ार्ड",
+  'app.runSetupWizard': "विज़ार्ड चलाएं…",
 } as const;

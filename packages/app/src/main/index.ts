@@ -7,6 +7,8 @@ import { t } from './i18n';
 import { registerAppMenu } from './menu';
 import { ACCESSORY_APP, createTray, restoreAppearance, showMenuWindow } from './tray';
 import { updateChannelFor } from './update-channel';
+import { detectMcpClients } from '../shared/mcp-detector';
+import { guessFirstProject } from '../shared/project-guess';
 
 // One update mechanism, or none — see update-channel.ts. Every update code path
 // below branches on this constant and nothing else.
@@ -300,110 +302,16 @@ ipcMain.handle('ollama:delete', async (_e, name: string, baseUrl?: string) =>
 ipcMain.handle('ollama:start', async (_e, baseUrl?: string) => ollamaStart(baseUrl));
 ipcMain.handle('ollama:stop', async (_e, baseUrl?: string) => ollamaStop(baseUrl));
 
-// IPC: detect which MCP clients have trace-mcp configured
+// IPC: detect which MCP clients are installed and configured
 ipcMain.handle('detect-mcp-clients', async () => {
-  const home = os.homedir();
-  const platform = process.platform;
-
-  type ClientName =
-    | 'claude-code'
-    | 'claw-code'
-    | 'claude-desktop'
-    | 'cursor'
-    | 'windsurf'
-    | 'continue'
-    | 'junie'
-    | 'jetbrains-ai'
-    | 'codex';
-  interface DetectedClient {
-    name: ClientName;
-    configPath: string;
-    hasTraceMcp: boolean;
-  }
-  const clients: DetectedClient[] = [];
-
-  const checkJson = (name: ClientName, configPath: string) => {
-    if (!fs.existsSync(configPath)) return;
-    try {
-      const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      const hasTraceMcp = !!content?.mcpServers?.['trace-mcp'];
-      clients.push({ name, configPath, hasTraceMcp });
-    } catch {
-      clients.push({ name, configPath, hasTraceMcp: false });
-    }
-  };
-
-  // Claude Code
-  checkJson('claude-code', path.join(home, '.claude.json'));
-  checkJson('claude-code', path.join(home, '.claude', 'settings.json'));
-
-  // Claw Code
-  checkJson('claw-code', path.join(home, '.claw', 'settings.json'));
-
-  // Claude Desktop
-  if (platform === 'darwin') {
-    checkJson(
-      'claude-desktop',
-      path.join(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
-    );
-  } else if (platform === 'win32') {
-    const appData = process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming');
-    checkJson('claude-desktop', path.join(appData, 'Claude', 'claude_desktop_config.json'));
-  }
-
-  // Cursor
-  checkJson('cursor', path.join(home, '.cursor', 'mcp.json'));
-
-  // Windsurf
-  checkJson('windsurf', path.join(home, '.windsurf', 'mcp.json'));
-
-  // Continue
-  checkJson('continue', path.join(home, '.continue', 'mcpServers', 'mcp.json'));
-
-  // Junie
-  checkJson('junie', path.join(home, '.junie', 'mcp', 'mcp.json'));
-
-  // JetBrains AI Assistant
-  {
-    const jbConfigBase =
-      platform === 'darwin'
-        ? path.join(home, 'Library', 'Application Support', 'JetBrains')
-        : platform === 'win32'
-          ? path.join(process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming'), 'JetBrains')
-          : path.join(home, '.config', 'JetBrains');
-    if (fs.existsSync(jbConfigBase)) {
-      try {
-        const dirs = fs.readdirSync(jbConfigBase);
-        for (const dir of dirs) {
-          const mcpXml = path.join(jbConfigBase, dir, 'options', 'mcpServer.xml');
-          if (fs.existsSync(mcpXml)) {
-            clients.push({ name: 'jetbrains-ai', configPath: mcpXml, hasTraceMcp: false });
-            break;
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  // Codex
-  {
-    const checkToml = (name: ClientName, tomlPath: string) => {
-      if (!fs.existsSync(tomlPath)) return;
-      try {
-        const content = fs.readFileSync(tomlPath, 'utf-8');
-        const hasTraceMcp = /\[mcp_servers\s*\.\s*["']?trace-mcp["']?\s*\]/.test(content);
-        clients.push({ name, configPath: tomlPath, hasTraceMcp });
-      } catch {
-        clients.push({ name, configPath: tomlPath, hasTraceMcp: false });
-      }
-    };
-    checkToml('codex', path.join(home, '.codex', 'config.toml'));
-  }
-
-  return clients;
+  return detectMcpClients();
 });
+
+// IPC: guess a sensible first project to index for the setup wizard
+ipcMain.handle('guess-first-project', async () => {
+  return guessFirstProject();
+});
+
 
 // IPC: report the per-client config status (missing | up_to_date | stale | ...)
 // produced by the CLI's `clients status --json` command. The renderer uses
