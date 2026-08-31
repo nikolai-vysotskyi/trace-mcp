@@ -53,7 +53,6 @@ declare global {
       openProjectTab: (root: string) => Promise<{ ok: boolean }>;
       closeCurrentTab: () => Promise<{ ok: boolean }>;
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
-      onTabBarChanged: (callback: (visible: boolean) => void) => () => void;
       setAppearance: (appearance: 'auto' | 'light' | 'dark') => void;
       setLocale: (locale: string) => void;
       syncSidebarWidth: (width: number) => void;
