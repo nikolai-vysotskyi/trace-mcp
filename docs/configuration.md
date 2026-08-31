@@ -477,6 +477,13 @@ load_tools({ preset: "architecture" })        # load a preset's worth
 load_tools({ preset: "full" })                # load everything deferred
 ```
 
+Configs written before v3.3 pinned `"preset": "full"` — that was the default at
+the time, not a choice, and it kept those installs paying for the whole surface
+long after the default moved. Upgrading rewrites that one value to the shipped
+default, once and without asking, and records that it did so; set `full` (or any
+other preset) yourself afterwards and no later upgrade will touch it. To go back
+to the old behaviour, set `"preset": "full"` or run `load_tools({ preset: "full" })`.
+
 Loading emits `notifications/tools/list_changed`, and clients that honour it
 (Claude Code among them) re-read the larger surface and can call the new tools
 directly. Clients that ignore the notification are not stuck: `load_tools`
