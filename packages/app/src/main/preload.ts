@@ -67,13 +67,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('fullscreen-changed', handler);
     };
   },
-  onTabBarChanged: (callback: (visible: boolean) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, visible: boolean) => callback(visible);
-    ipcRenderer.on('tabbar-changed', handler);
-    return () => {
-      ipcRenderer.removeListener('tabbar-changed', handler);
-    };
-  },
   /** Mirror the renderer's appearance choice onto `nativeTheme`, so the
       sidebar's native vibrancy matches the theme the DOM is painting. */
   setAppearance: (appearance: 'auto' | 'light' | 'dark'): void => {
