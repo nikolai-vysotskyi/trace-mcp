@@ -1,5 +1,14 @@
 export {};
 
+/** Mirror of `DaemonSetupState` in main/daemon-install.ts. The renderer is
+    compiled separately from Electron main, so the shape is restated rather
+    than imported across that boundary. */
+type DaemonSetupState =
+  | { phase: 'idle' }
+  | { phase: 'installing' }
+  | { phase: 'ready' }
+  | { phase: 'failed'; message: string };
+
 declare global {
   interface Window {
     /** Window chrome facts from the main process. Undefined in a browser. */
@@ -17,6 +26,10 @@ declare global {
       restartDaemon: () => Promise<{ ok: boolean }>;
       /** TRA-525: OS-level daemon liveness, independent of /health. */
       daemonProcessAlive?: () => Promise<boolean>;
+      /** TRA-438: progress of the app's own daemon install. */
+      daemonSetupState?: () => Promise<DaemonSetupState>;
+      retryDaemonSetup?: () => Promise<DaemonSetupState>;
+      onDaemonSetupState?: (cb: (state: DaemonSetupState) => void) => () => void;
       detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
       getMcpClientStatuses: (
         scope?: 'global' | 'project',
@@ -51,22 +64,28 @@ declare global {
         latest?: string;
         lastChecked?: number;
         error?: string;
-        stuck?: boolean;
         /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
         staleRoots?: { root: string; version: string }[];
-        /** Absolute path to the running `.app`, so copyable commands name the real install. */
-        installPath?: string;
       }>;
-      checkPendingUpdate: () => Promise<{ pending: boolean; version?: string }>;
+      /** `percent` is only present while a download is still in flight. */
+      checkPendingUpdate: () => Promise<{ pending: boolean; version?: string; percent?: number }>;
       applyUpdate: () => Promise<{
         ok: boolean;
         pending?: boolean;
         error?: string;
-        outcome?: 'bundle-pending' | 'npm-only' | 'already-current';
         version?: string;
         /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
         staleRoots?: { root: string; version: string }[];
       }>;
+      /** electron-updater's `download-progress`, forwarded verbatim. */
+      onUpdateProgress: (
+        callback: (p: {
+          percent: number;
+          bytesPerSecond: number;
+          transferred: number;
+          total: number;
+        }) => void,
+      ) => () => void;
       restartApp: () => Promise<void>;
       openSettings: (section?: string) => Promise<{ ok: boolean }>;
       openClients: () => Promise<{ ok: boolean }>;

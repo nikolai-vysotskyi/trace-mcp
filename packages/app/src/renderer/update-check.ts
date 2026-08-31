@@ -22,10 +22,7 @@ export type UpdateState = {
   latest?: string;
   lastChecked?: number;
   error?: string;
-  stuck?: boolean;
   staleRoots?: { root: string; version: string }[];
-  /** Absolute path to the running `.app`, so copyable commands name the real install. */
-  installPath?: string;
 };
 
 /**
@@ -61,30 +58,6 @@ export function describeStaleRoots(staleRoots: { root: string; version: string }
   };
 }
 
-/** Quote a path for copy-paste into a shell, only when it needs it. */
-function shellQuote(p: string): string {
-  return /^[A-Za-z0-9._/-]+$/.test(p) ? p : `'${p.replace(/'/g, `'\\''`)}'`;
-}
-
-/**
- * macOS builds are ad-hoc signed and not notarized, so a browser-downloaded
- * copy carries `com.apple.quarantine` and Gatekeeper refuses it with "trace-mcp
- * is damaged and can't be opened" — the dead end the manual-install card sent a
- * user into (TRA-431). Until releases are notarized, the card ships the one
- * command that clears the flag.
- *
- * It has to name the path the user actually installs into. `/Applications` was
- * hard-coded, but `locateInstalledApp` prefers `~/Applications` — its first
- * fallback directory — so an install that lives there got a command pointing at
- * a path that does not exist. `xattr` then fails with "No such file or
- * directory" and the escape hatch dead-ends exactly like the download it was
- * added to rescue. The main process sends the running bundle's path; the
- * hard-coded default only applies when it could not be derived (dev mode).
- */
-export function quarantineCommand(bundlePath?: string): string {
-  return `xattr -dr com.apple.quarantine ${shellQuote(bundlePath || '/Applications/trace-mcp.app')}`;
-}
-
 export function formatAgo(ts?: number, now: number = Date.now()): string {
   if (!ts) return t('common:never');
   return relativeTime(ts, now, 'short');
@@ -96,6 +69,8 @@ export interface UpdateCheck {
   pendingVersion: string | null;
   checking: boolean;
   updating: boolean;
+  /** 0-100 while the update is downloading, null when nothing is in flight. */
+  progress: number | null;
   check: () => void;
   apply: () => void;
   restart: () => void;
@@ -106,7 +81,18 @@ export function useUpdateCheck(): UpdateCheck {
   const [updating, setUpdating] = useState(false);
   const [checking, setChecking] = useState(false);
   const [pendingVersion, setPendingVersion] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
   const cancelledRef = useRef(false);
+
+  /* electron-updater reports bytes as they land. Subscribed for the window's
+     lifetime rather than only while `updating` is true: a download started from
+     one window's Update button has to move the bar in every window showing the
+     card, and only this event knows it is still going. */
+  useEffect(() => {
+    return window.electronAPI?.onUpdateProgress?.((p) => {
+      setProgress(Math.max(0, Math.min(100, p.percent)));
+    });
+  }, []);
 
   const check = useCallback(async () => {
     const api = window.electronAPI;
@@ -117,12 +103,18 @@ export function useUpdateCheck(): UpdateCheck {
         api.checkForUpdate(),
         api.checkPendingUpdate
           ? api.checkPendingUpdate()
-          : Promise.resolve<{ pending: boolean; version?: string }>({ pending: false }),
+          : Promise.resolve<{ pending: boolean; version?: string; percent?: number }>({
+              pending: false,
+            }),
       ]);
       if (cancelledRef.current) return;
       if (upd) setState(upd);
       if (pend?.pending) setPendingVersion(pend.version || (upd?.latest ?? null));
       else setPendingVersion(null);
+      /* A download already in flight when this window opened: the main process
+         carries the percentage, so a second window joins the bar mid-way
+         instead of showing 0 until the next event. */
+      if (pend?.percent !== undefined) setProgress(pend.percent);
     } catch (err) {
       if (!cancelledRef.current) setState((s) => ({ ...s, error: (err as Error).message }));
     } finally {
@@ -149,6 +141,7 @@ export function useUpdateCheck(): UpdateCheck {
     const api = window.electronAPI;
     if (!api) return;
     setUpdating(true);
+    setProgress(0);
     setState((s) => ({ ...s, error: undefined }));
     try {
       const result = await api.applyUpdate();
@@ -158,16 +151,12 @@ export function useUpdateCheck(): UpdateCheck {
       }
       if (!result?.ok) {
         setState((s) => ({ ...s, error: result?.error || 'update failed' }));
-      } else if (result.outcome === 'npm-only') {
-        // The npm package moved but the .app bundle stayed put. Re-run the
-        // availability check now — the main process just wrote the sticky
-        // marker, so this call returns { available: false, stuck: true } and
-        // the card switches to "needs a manual install" instead of looping the
-        // user through the same prompt on the next poll.
-        void checkRef.current();
       }
     } finally {
       setUpdating(false);
+      // Whether it landed or failed, nothing is in flight any more — a bar left
+      // at 87% after a failed download is the shape of a wedged state.
+      setProgress(null);
     }
   }, []);
 
@@ -180,6 +169,7 @@ export function useUpdateCheck(): UpdateCheck {
     pendingVersion,
     checking,
     updating,
+    progress,
     check: useCallback(() => void checkRef.current(), []),
     apply: useCallback(() => void apply(), [apply]),
     restart,

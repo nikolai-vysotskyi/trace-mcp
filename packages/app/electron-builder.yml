@@ -18,13 +18,40 @@ files:
   # node_modules has to be named explicitly to be packaged at all.)
   - node_modules/**
   - '!dist/main/__tests__/**'
+# Stages the server into `server-payload/` right before packaging (TRA-438).
+# A hook rather than a CI step on purpose: `pnpm exec electron-builder` is
+# invoked directly by .github/workflows/release.yml, and a build that forgot
+# to stage the payload would ship a DMG whose daemon cannot be installed.
+beforePack: scripts/stage-server.mjs
 extraResources:
+  # The trace-mcp server itself. Someone who installs the DMG never runs npm,
+  # so the app has to be able to install the daemon out of its own bundle —
+  # see packages/app/src/main/daemon-install.ts.
+  - from: server-payload
+    to: server
+  # Named separately because electron-builder's file matcher drops a
+  # `node_modules` directory found *inside* a copied tree; addressing it as the
+  # `from` root is what gets it copied. Without this the app ships a daemon
+  # that cannot load better-sqlite3 or a single tree-sitter grammar.
+  - from: server-payload/node_modules
+    to: server/node_modules
   - from: ../../scripts/apply-pending-update.mjs
     to: scripts/apply-pending-update.mjs
   # locate-app.mjs is imported by apply-pending-update.mjs at runtime, so it
   # must ship alongside it inside the bundle's Resources/scripts/.
   - from: ../../scripts/locate-app.mjs
     to: scripts/locate-app.mjs
+# electron-updater's feed, for both platforms: `latest-mac.yml` next to the
+# macOS zips and `latest.yml` next to the Windows installer. macOS was held
+# back from this while its builds were ad-hoc signed — Squirrel.Mac validates
+# the replacement bundle's signature and would have rejected every one. Signing
+# landed in TRA-436 and the fallback updater was deleted in TRA-437, so the feed
+# is published for both.
+publish:
+  - provider: github
+    owner: nikolai-vysotskyi
+    repo: trace-mcp
+
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.png
@@ -47,8 +74,9 @@ mac:
   # APPLE_APP_SPECIFIC_PASSWORD, which notarytool needs anyway.
   notarize: true
   target:
-    # Both shipped on purpose: the zip is what the staged-zip updater consumes
-    # (scripts/postinstall-app.mjs), the DMG is what a human downloads.
+    # Both shipped on purpose: the zip is what Squirrel.Mac swaps in (and the
+    # only thing `latest-mac.yml` can point at), the DMG is what a human
+    # downloads for a first install.
     - target: dmg
     - target: zip
 # Fixed name per arch so the release-asset gate (scripts/verify-release-assets.mjs)
@@ -59,18 +87,6 @@ dmg:
 
 win:
   icon: build/icon.ico
-  # Windows-only on purpose. This block is what makes electron-builder emit
-  # `latest.yml` next to the installer, which is the file electron-updater
-  # reads. It must NOT be hoisted to the top level: macOS is still on the
-  # staged-zip channel (packages/app/src/main/update-channel.ts), and every
-  # copy already installed in the field is an unsigned build. Signing removes
-  # the *reason* macOS could not use Squirrel.Mac, but flipping the channel —
-  # and with it publishing latest-mac.yml — is a separate step that must wait
-  # until no unsigned build is still out there looking for it.
-  publish:
-    - provider: github
-      owner: nikolai-vysotskyi
-      repo: trace-mcp
   target:
     - target: nsis
       arch:

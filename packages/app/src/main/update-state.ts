@@ -1,114 +1,23 @@
 /**
- * Persistent state and pure decisions for the in-app updater.
+ * Global-install inspection for the app's update surface.
  *
- * The Electron app has two update channels:
- *   1. **Zip-staged** — npm postinstall drops a verified zip into
- *      ~/Applications/.trace-mcp-pending.zip; a helper swaps the .app
- *      bundle on restart. Detected via `hasPendingUpdate()` in index.ts.
- *   2. **npm-only** — `apply-update` runs `npm install -g trace-mcp@latest`
- *      which only updates the CLI/MCP server on disk. The Electron bundle
- *      stays at whatever `app.getVersion()` reports.
+ * `npm install -g` only ever writes into the global root its own npm binary
+ * owns, so a machine with several (nvm, Herd, Homebrew, system node) keeps
+ * every other root frozen at whatever version it last received — silently,
+ * because the install that did happen reports success. These helpers find that
+ * state and narrow it to the one root the user actually pays for.
  *
- * Before this module, `apply-update` returned `pending: true` whenever
- * the on-disk npm package was newer than the running Electron process —
- * even when no zip was staged. The UI then showed "Restart to install",
- * the user restarted, the bundle had not been swapped, `check-for-update`
- * saw the same mismatch, and the prompt returned. The cycle.
- *
- * Two pure decisions break the cycle:
- *
- *   - `computeUpdateOutcome` is the source of truth for what just
- *     happened. The IPC handler returns `pending: true` only for
- *     "bundle-pending"; "npm-only" is honest about the half-update.
- *
- *   - `isStuckOnVersion` reads the persisted "I last npm-installed X
- *     while bundled at Y" marker. While the latest npm version equals
- *     the stuck target and the bundle has not moved, `check-for-update`
- *     suppresses the banner so the user is not asked to do something
- *     they have already done. A real new release breaks the marker
- *     automatically: `cmpSemver(latest, stuck.target) > 0` falsifies it.
+ * Everything else that used to live here — the persisted "I last npm-installed
+ * X while bundled at Y" marker, the stuck-on-version suppression, the
+ * bundle-pending / npm-only outcome split, the on-disk bundle version — existed
+ * only because the macOS staged-zip updater could half-update a machine.
+ * macOS is on electron-updater now, so there is no half-update to remember and
+ * no state to persist (TRA-437).
  */
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-
-export interface NpmOnlyAttempt {
-  /** `app.getVersion()` at the time of the attempt — the bundle that stayed put. */
-  bundle: string;
-  /** Version that landed in the global npm package directory. */
-  target: string;
-  /** Epoch ms — diagnostic only, not used in decisions. */
-  at: number;
-  /** Consecutive npm-only outcomes for this bundle — diagnostic only. */
-  attempts?: number;
-}
-
-export interface AppUpdateState {
-  lastNpmOnlyAttempt?: NpmOnlyAttempt;
-}
-
-export type UpdateOutcome = 'bundle-pending' | 'npm-only' | 'already-current';
-
-export const APP_UPDATE_STATE_PATH = path.join(
-  os.homedir(),
-  '.trace-mcp',
-  'app-update-state.json',
-);
-
-/**
- * Reads the persisted state. Returns an empty object on any failure
- * (file missing, malformed JSON, permission error). Persistence is
- * best-effort: a missing file just means the user gets the banner once
- * more, which is far better than crashing the updater on disk hiccups.
- */
-export function readAppUpdateState(
-  filePath: string = APP_UPDATE_STATE_PATH,
-): AppUpdateState {
-  try {
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === 'object') return parsed as AppUpdateState;
-  } catch {
-    /* fall through */
-  }
-  return {};
-}
-
-/** Writes the state. Failures are swallowed for the same best-effort reasons. */
-export function writeAppUpdateState(
-  next: AppUpdateState,
-  filePath: string = APP_UPDATE_STATE_PATH,
-): void {
-  try {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(next, null, 2));
-  } catch {
-    /* persistence is best-effort */
-  }
-}
-
-/**
- * Decide what `apply-update` should report based on observable facts:
- * the version that landed in the npm package directory, the version
- * currently running inside Electron, and whether the legacy zip-staged
- * path placed a swap-ready bundle on disk.
- *
- * `cmpSemver` is injected so the helper stays pure and testable without
- * pulling the Electron-side helper into a test bundle.
- */
-export function computeUpdateOutcome(
-  installedVersion: string | undefined,
-  runningVersion: string,
-  hasPendingZip: boolean,
-  cmpSemver: (a: string, b: string) => number,
-): UpdateOutcome {
-  if (hasPendingZip) return 'bundle-pending';
-  if (installedVersion && cmpSemver(installedVersion, runningVersion) > 0) {
-    return 'npm-only';
-  }
-  return 'already-current';
-}
 
 /** A global npm root that currently holds a `trace-mcp` install. */
 export interface GlobalInstall {
@@ -239,100 +148,4 @@ export function staleRootInUse(
     }
   }
   return null;
-}
-
-/**
- * Should we try to stage the bundle swap ourselves?
- *
- * Yes exactly when the package on disk is ahead of the running bundle and
- * nothing is staged yet — the state five consecutive updates left one user in,
- * with no retry, no warning and no telemetry (TRA-357). A staged zip means the
- * swap is already waiting for a restart, so there is nothing to repair.
- */
-export function shouldAttemptRepair(
-  installedVersion: string | undefined,
-  runningVersion: string,
-  hasPendingZip: boolean,
-  cmpSemver: (a: string, b: string) => number,
-): boolean {
-  if (hasPendingZip) return false;
-  if (!installedVersion) return false;
-  return cmpSemver(installedVersion, runningVersion) > 0;
-}
-
-/**
- * Returns true when the user previously hit the npm-only outcome for
- * exactly this `(bundle, latest)` pair and nothing has moved since.
- * In that state, `check-for-update` should report `available: false`
- * with a sticky flag: there is nothing further the in-app flow can do.
- *
- * The marker auto-clears the moment the registry advances past
- * `stuck.target` (a genuinely new release appears) or the bundle moves
- * (the user manually reinstalled the .app).
- */
-export function isStuckOnVersion(
-  currentBundle: string,
-  latestNpm: string,
-  state: AppUpdateState,
-  cmpSemver: (a: string, b: string) => number,
-  bundleOnDisk?: string,
-): boolean {
-  // A bundle on disk ahead of this process is never stuck: the swap already
-  // happened and a restart is the whole remaining task. Telling that user to
-  // download and install by hand — as the app did on 2026-08-29 (TRA-431) —
-  // sends them into Gatekeeper for an update they already have.
-  if (isRestartPending(bundleOnDisk, currentBundle, cmpSemver)) return false;
-  const stuck = state.lastNpmOnlyAttempt;
-  if (!stuck) return false;
-  return (
-    cmpSemver(currentBundle, stuck.bundle) === 0 &&
-    cmpSemver(latestNpm, stuck.target) <= 0
-  );
-}
-
-/**
- * True when the `.app` on disk is newer than the process reading this.
- *
- * `app.getVersion()` is frozen at launch — it answers "which build is running",
- * never "which build is installed". The npm postinstall can replace the bundle
- * underneath a live process, and every updater decision that only ever consulted
- * the running version then read that state as "the update failed" (TRA-431).
- */
-export function isRestartPending(
-  bundleOnDisk: string | undefined,
-  runningVersion: string,
-  cmpSemver: (a: string, b: string) => number,
-): boolean {
-  if (!bundleOnDisk) return false;
-  return cmpSemver(bundleOnDisk, runningVersion) > 0;
-}
-
-/**
- * The version of the `.app` bundle currently on disk, or undefined when we
- * cannot tell.
- *
- * `Contents/Info.plist` is the bundle's own answer and covers a hand-installed
- * copy too; `.trace-mcp-version`, written by both swap sites
- * (`postinstall-app.mjs`, `apply-pending-update.mjs`), is the fallback for a
- * plist we cannot parse.
- */
-export function readBundleVersionOnDisk(
-  bundlePath: string | null,
-  installDir: string,
-): string | undefined {
-  const strip = (v: string): string | undefined => v.trim().replace(/^v/, '') || undefined;
-  if (bundlePath) {
-    try {
-      const plist = fs.readFileSync(path.join(bundlePath, 'Contents', 'Info.plist'), 'utf-8');
-      const m = plist.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/);
-      if (m) return strip(m[1]);
-    } catch {
-      /* unreadable or binary plist — the marker below is the fallback */
-    }
-  }
-  try {
-    return strip(fs.readFileSync(path.join(installDir, '.trace-mcp-version'), 'utf-8'));
-  } catch {
-    return undefined;
-  }
 }

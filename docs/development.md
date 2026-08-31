@@ -225,24 +225,58 @@ is how a menu ends up half in each language.
 
 ## Desktop app update channels
 
-The Electron app updates itself differently per platform, and the split is
-deliberate. `packages/app/src/main/update-channel.ts` is the single place that
-decides which one a platform gets; no platform ever runs both.
+`packages/app/src/main/update-channel.ts` is the single place that decides which
+mechanism a platform gets. There is one mechanism now; there used to be two.
 
-| Platform | Mechanism | Why |
+| Platform | Mechanism | Notes |
 | --- | --- | --- |
-| macOS | Staged zip (`scripts/postinstall-app.mjs` + `scripts/apply-pending-update.mjs`) | Squirrel.Mac, which electron-updater uses on macOS, validates the replacement bundle's code signature. We ship ad-hoc signed (`Signature=adhoc`, `TeamIdentifier=not set`), so it would need a paid Apple Developer ID — ruled out. The npm postinstall drops a verified zip next to the `.app` and a detached helper swaps the bundle on exit. |
-| Windows | `electron-updater` + NSIS | Windows imposes no signature requirement on the swap, so the standard mechanism works unsigned. Driven by `latest.yml`, generated from the `win.publish` block in `packages/app/electron-builder.yml` and uploaded to the GitHub release by `.github/workflows/release.yml`. A missing `latest.yml` fails the release. |
+| macOS | `electron-updater` + Squirrel.Mac | Driven by `latest-mac.yml`. Squirrel.Mac validates the replacement bundle's code signature, so this only became possible once builds were Developer ID signed and notarized (TRA-436). |
+| Windows | `electron-updater` + NSIS | Driven by `latest.yml`. |
 | Linux | none | No packaged target today (`linux.target: []`). |
+
+Both channel files come from the top-level `publish` block in
+`packages/app/electron-builder.yml` and are uploaded to the GitHub release by
+`.github/workflows/release.yml`, which fails the release if either is missing —
+an install polling a 404 is never offered another update and says nothing.
 
 Consequences worth knowing before touching this:
 
-- `publish` lives under `win:`, not at the top level. Hoisting it would make
-  electron-builder emit `latest-mac.yml` and point macOS installs at an update
-  path that cannot succeed.
+- The macOS build packages **both architectures in one job**. electron-builder
+  writes one `latest-mac.yml` per invocation listing only that invocation's
+  files, so a build matrix would have each leg clobber the other's feed and
+  strand one architecture.
 - `electron-updater` is the app's only production `dependency`. Everything the
   renderer imports is bundled by Vite and therefore belongs in
   `devDependencies` — that is what keeps the packaged `node_modules` small.
+
+### The staged-zip updater, and the bridge off it (TRA-437)
+
+macOS used to run a second mechanism: the npm postinstall downloaded the release
+zip and replaced the `.app` itself, staging the zip beside the bundle when the
+app was running so a helper could swap it on exit. It failed fourteen
+consecutive times without a single success (TRA-431) and is gone — along with
+`scripts/apply-pending-update.mjs`, the pending marker files, and
+`~/.trace-mcp/app-update-state.json`.
+
+Builds up to and including 3.8.0 are ad-hoc signed and cannot self-update, so
+`scripts/postinstall-app.mjs` still swaps **those** bundles — and only those. It
+recognises them by the presence of
+`Contents/Resources/scripts/apply-pending-update.mjs`, which shipped for exactly
+as long as the old updater existed. A bundle without it owns its own updates and
+is never written from outside; a version constant would have to be kept in sync
+with whatever release-please picks, and this cannot drift.
+
+Once no legacy bundle is left in the field, everything in that script below
+`stopRunningDaemon()` can be deleted.
+
+That script keeps one invariant worth knowing before touching it: **only an
+installed bundle may become the update target.** An `electron-builder` output
+under `release/mac-arm64/` is a real, correctly signed-looking bundle, so plist
+validation alone accepts it; `isPlausibleInstallPath` (duplicated in
+`scripts/locate-app.mjs` and `packages/app/src/main/install-path.ts`, kept honest
+by `install-path.test.ts`) is what rejects build trees and checkouts. Recording
+one in `~/.trace-mcp/app-location.json` froze a user's install for three major
+versions.
 
 ---
 
@@ -328,41 +362,6 @@ const harness = createTestHarness(MyPlugin);
 const result = await harness.indexFile('test.ts', sourceCode);
 expect(result.symbols).toContainEqual(expect.objectContaining({ name: 'myFunction' }));
 ```
-
----
-
-## Desktop app updates — the staged-zip path is the only one
-
-**Decision (TRA-357):** the desktop app updates through our own staged-zip flow.
-`electron-updater` is not a fallback and is not planned. Releases publish
-`*-mac.zip` / `*-arm64-mac.zip` / `Setup.exe` plus `.sha256` siblings — there is
-no `latest-mac.yml` and no DMG, so `electron-updater` has no feed to read. We
-either commit to one path or maintain two half-working ones; this is the commit.
-
-The flow, and where each part lives:
-
-1. `npm install -g trace-mcp` runs `scripts/postinstall-app.mjs`. It locates the
-   installed bundle via `scripts/locate-app.mjs`, downloads the release zip,
-   verifies its SHA-256 against the release's checksum asset, and — because the
-   app is usually running — stages `.trace-mcp-pending.zip` next to the `.app`.
-2. On quit or restart, `scripts/apply-pending-update.mjs` swaps the bundle.
-3. `packages/app/src/main/index.ts` owns the in-app side: the `apply-update` IPC
-   runs the npm install, and `repairStaleBundle()` re-runs the postinstall
-   out-of-band when the CLI moved but the bundle did not.
-
-Two invariants this path depends on:
-
-- **Only an installed bundle may become the update target.** An
-  `electron-builder` output under `release/mac-arm64/` is a real, correctly
-  signed-looking bundle, so plist validation alone accepts it;
-  `isPlausibleInstallPath` (duplicated in `scripts/locate-app.mjs` and
-  `packages/app/src/main/install-path.ts`, kept honest by
-  `install-path.test.ts`) is what rejects build trees and checkouts. Recording
-  one in `~/.trace-mcp/app-location.json` froze a user's install for three
-  major versions.
-- **A bundle that could not be replaced is never reported as up to date.** The
-  suppression marker in `update-state.ts` stops re-prompting, and the sidebar
-  renders that state as "needs a manual install" with a release link.
 
 ## Screenshots — one script, one seeded state
 

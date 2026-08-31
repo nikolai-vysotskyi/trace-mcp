@@ -135,9 +135,10 @@ body {
   }
 }
 
-/* `npm install -g` is one opaque `execFile` in the main process, so there is no
-   byte count to draw and a percentage would be invented. An indeterminate bar
-   is the honest shape: it says "running", it does not say "60% done". */
+/* electron-updater reports transferred bytes, so this is a determinate bar:
+   `--update-progress` is set inline from the latest `download-progress` event.
+   A determinate bar is worth the extra plumbing precisely because it can look
+   stalled — an indeterminate one animates cheerfully through a dead download. */
 .update-progress {
   position: relative;
   overflow: hidden;
@@ -145,43 +146,21 @@ body {
   border-radius: 999px;
   background: var(--fill-tertiary);
 }
-/* `linear`, and the one place in the app that gets it: an eased loop
-   decelerates into the turnaround, which parks the segment at the end of the
-   track — the exact frames where the bar looks empty and therefore stalled.
-   Uniform motion is also what an indeterminate bar means. The travel stops at
-   250%, where the segment's leading edge reaches the end of the track: past
-   that it is wholly outside and the bar goes blank mid-loop. */
 .update-progress::after {
   content: '';
   position: absolute;
   inset: 0 auto 0 0;
-  width: 40%;
+  width: var(--update-progress, 0%);
   border-radius: inherit;
   background: var(--accent);
-  animation: update-progress-slide 1.4s linear infinite;
-}
-@keyframes update-progress-slide {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(250%);
-  }
+  /* Bytes arrive in bursts; without this the bar jumps. Width only, so the
+     global reduced-motion rule stills it without hiding the fill. */
+  transition: width 200ms linear;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .update-card {
     animation: none;
-  }
-  /* The global rule in tokens.css stills every animation, which would park the
-     travelling segment off the end of its own track and leave the state with no
-     visible signal at all. A filled bar at 55% accent is what an unmoving
-     indeterminate bar has to be: still there, still saying "running", just not
-     pretending to know how far along it is. */
-  .update-progress::after {
-    width: 100%;
-    transform: none;
-    background: color-mix(in oklab, var(--accent) 55%, transparent);
   }
 }
 

@@ -1,4 +1,4 @@
-import { app, ipcMain, dialog, shell, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } from 'electron';
 import { execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
@@ -6,14 +6,9 @@ import fs from 'fs';
 import { t } from './i18n';
 import { registerAppMenu } from './menu';
 import { ACCESSORY_APP, createTray, restoreAppearance, showMenuWindow } from './tray';
-import {
-  hasPendingUpdate as hasPendingUpdateImpl,
-  trySpawnApplyHelper as trySpawnApplyHelperImpl,
-} from './apply-pending-helper';
 import { updateChannelFor } from './update-channel';
 
-// Exactly one update mechanism per platform — see update-channel.ts for why
-// macOS cannot use electron-updater and Windows can. Every update code path
+// One update mechanism, or none — see update-channel.ts. Every update code path
 // below branches on this constant and nothing else.
 const UPDATE_CHANNEL = updateChannelFor(process.platform);
 
@@ -166,8 +161,8 @@ ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: strin
   });
 });
 
+import { type DaemonSetupState, ensureDaemonInstalled } from './daemon-install';
 import { isDaemonProcessAlive, restartDaemon } from './daemon-lifecycle';
-import { isPlausibleInstallPath } from './install-path';
 import {
   deleteModel as ollamaDelete,
   listInstalled as ollamaListInstalled,
@@ -178,25 +173,47 @@ import {
   unloadModel as ollamaUnload,
 } from './ollama-control';
 import {
-  computeUpdateOutcome,
   findStaleRoots,
   type GlobalInstall,
-  isRestartPending,
-  isStuckOnVersion,
-  readAppUpdateState,
-  readBundleVersionOnDisk,
   readLauncherCliPath,
   scanGlobalInstalls,
-  shouldAttemptRepair,
   staleRootInUse,
-  type UpdateOutcome,
-  writeAppUpdateState,
 } from './update-state';
 
 // IPC: restart daemon (kill old, create plist if needed, start new via launchd)
 ipcMain.handle('restart-daemon', async () => {
   return restartDaemon();
 });
+
+// Daemon setup (TRA-438). The app installs its own daemon on first launch and
+// repairs it after a version change, so the DMG needs no npm and no Node. The
+// renderer reads this to say "Setting up…" rather than "The daemon isn't
+// running" — the second is true but useless when nothing has been installed yet.
+let daemonSetupState: DaemonSetupState = { phase: 'idle' };
+
+function setDaemonSetupState(next: DaemonSetupState): void {
+  daemonSetupState = next;
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('daemon:setup-state', next);
+  }
+}
+
+ipcMain.handle('daemon:setup-state', () => daemonSetupState);
+ipcMain.handle('daemon:setup-retry', async () => {
+  await runDaemonSetup();
+  return daemonSetupState;
+});
+
+/** Install or repair the bundled daemon. Idempotent; safe on every launch. */
+async function runDaemonSetup(): Promise<void> {
+  setDaemonSetupState({ phase: 'installing' });
+  try {
+    const result = await ensureDaemonInstalled({ appVersion: app.getVersion() });
+    setDaemonSetupState(result.state);
+  } catch (err) {
+    setDaemonSetupState({ phase: 'failed', message: (err as Error).message });
+  }
+}
 
 // IPC: is the daemon's OS process provably alive, independent of /health?
 // TRA-525: the renderer only has HTTP, so a starved daemon (event loop blocked
@@ -673,12 +690,21 @@ function fetchLatestRelease(): Promise<{
   });
 }
 
-// --- Windows: electron-updater ---------------------------------------------
+// --- electron-updater (macOS + Windows) -------------------------------------
 //
-// NSIS + `latest.yml` on the GitHub release. Loaded lazily and only on the
-// electron-updater channel so macOS never pulls the module in at all — the
-// two mechanisms must never both be live in one process.
-let winUpdateDownloaded = false;
+// macOS: the signed+notarized `-mac.zip` described by `latest-mac.yml`, applied
+// by Squirrel.Mac. Windows: NSIS + `latest.yml`. Loaded lazily so a platform
+// with no update channel never pulls the module in at all.
+//
+// A downloaded update is the app's only pending state now. It lives in this
+// process, not on disk: nothing survives a quit except what electron-updater
+// itself cached, so there is no marker file that can outlive the truth
+// (TRA-437).
+let updateDownloaded = false;
+let downloadedVersion: string | undefined;
+
+/** Latest `download-progress`, mirrored to the renderer so "Updating…" moves. */
+let downloadPercent: number | undefined;
 
 async function getAutoUpdater() {
   if (UPDATE_CHANNEL !== 'electron-updater') {
@@ -689,8 +715,24 @@ async function getAutoUpdater() {
   // whole flow, so a silent background download would fight the UI's state.
   autoUpdater.autoDownload = false;
   // A downloaded update still installs if the user quits instead of pressing
-  // Restart — same self-healing property the macOS before-quit hook gives us.
+  // Restart, so closing the app is never a way to lose the download.
   autoUpdater.autoInstallOnAppQuit = true;
+  // `once`, not `on`: getAutoUpdater() is called per IPC invocation and the
+  // module instance is a singleton, so `on` would stack a listener per check
+  // and eventually trip the MaxListenersExceededWarning.
+  if (autoUpdater.listenerCount('download-progress') === 0) {
+    autoUpdater.on('download-progress', (p) => {
+      downloadPercent = p.percent;
+      for (const w of BrowserWindow.getAllWindows()) {
+        w.webContents.send('update-progress', {
+          percent: p.percent,
+          bytesPerSecond: p.bytesPerSecond,
+          transferred: p.transferred,
+          total: p.total,
+        });
+      }
+    });
+  }
   return autoUpdater;
 }
 
@@ -702,12 +744,7 @@ ipcMain.handle('check-for-update', async () => {
   // in because the user's own npm may own a root the static scan never guesses.
   const { configRoot, binRoot } = await resolveNpmRoots();
   const staleRoots = staleRootClientsUse(configRoot, binRoot);
-  // The manual-install card's `xattr` command has to name the bundle the user
-  // actually has. Hard-coding `/Applications` missed every install under
-  // `~/Applications` — which is the locator's *first* fallback directory, so
-  // far from an exotic case (TRA-460).
-  const withPath = BUNDLE_PATH ? { ...result, installPath: BUNDLE_PATH } : result;
-  return staleRoots.length > 0 ? { ...withPath, staleRoots } : withPath;
+  return staleRoots.length > 0 ? { ...result, staleRoots } : result;
 });
 
 async function checkForUpdate() {
@@ -730,31 +767,12 @@ async function checkForUpdate() {
     }
   }
 
-  // Read the persisted "I tried npm-only" marker once. If the user already
-  // clicked Update for exactly this (bundle, latest) pair and nothing on
-  // disk has moved, we suppress the banner — clicking Update again will
-  // produce the same npm-only outcome. The marker self-clears when the
-  // registry advances or the bundle is manually reinstalled.
-  const appUpdateState = readAppUpdateState();
-  // What is on disk, not what is running: the postinstall can replace the
-  // bundle under a live process, and then the only thing left to do is restart
-  // — never the manual install the stuck card asks for (TRA-431).
-  const bundleOnDisk = bundleVersionOnDisk();
-  const suppressIfStuck = (latest: string | undefined) => {
-    if (!latest) return false;
-    return isStuckOnVersion(current, latest, appUpdateState, cmpSemver, bundleOnDisk);
-  };
-
   // Try npm registry first — unauthenticated, no practical rate limit.
   try {
     const npm = await fetchLatestFromNpm();
     if (npm.status === 200 && npm.version) {
       updateCache.lastChecked = now;
-      const available = cmpSemver(npm.version, current) > 0;
-      if (available && suppressIfStuck(npm.version)) {
-        return { available: false, current, latest: npm.version, lastChecked: now, stuck: true };
-      }
-      return { available, current, latest: npm.version, lastChecked: now };
+      return { available: cmpSemver(npm.version, current) > 0, current, latest: npm.version, lastChecked: now };
     }
   } catch {
     // Fall through to GitHub fallback below.
@@ -778,11 +796,12 @@ async function checkForUpdate() {
       updateCache.lastChecked = now;
       const release = JSON.parse(updateCache.lastBody);
       const latest = String(release.tag_name || '').replace(/^v/, '');
-      const available = Boolean(latest) && cmpSemver(latest, current) > 0;
-      if (available && suppressIfStuck(latest)) {
-        return { available: false, current, latest, lastChecked: now, stuck: true };
-      }
-      return { available, current, latest, lastChecked: now };
+      return {
+        available: Boolean(latest) && cmpSemver(latest, current) > 0,
+        current,
+        latest,
+        lastChecked: now,
+      };
     }
 
     if (res.status === 403) {
@@ -813,11 +832,7 @@ async function checkForUpdate() {
       return { available: false, current, lastChecked: now, error: 'no release tag' };
 
     const latest = String(release.tag_name).replace(/^v/, '');
-    const available = cmpSemver(latest, current) > 0;
-    if (available && suppressIfStuck(latest)) {
-      return { available: false, current, latest, lastChecked: now, stuck: true };
-    }
-    return { available, current, latest, lastChecked: now };
+    return { available: cmpSemver(latest, current) > 0, current, latest, lastChecked: now };
   } catch (err) {
     return {
       available: false,
@@ -1070,82 +1085,6 @@ function appendUpdateLog(entry: Record<string, unknown>): void {
   }
 }
 
-// --- Bundle self-location ---------------------------------------------------
-//
-// The updater scripts (postinstall-app.mjs, apply-pending-update.mjs) used to
-// hard-code `~/Applications` and silently no-op for users whose .app lived in
-// `/Applications` — the more common drag-install target. We now have a shared
-// `scripts/locate-app.mjs` helper with a marker-file → mdfind → known-dirs
-// chain, but it cannot be imported here directly (this file is compiled by
-// tsc with `rootDir: src/main`, and scripts/ lives outside that root). So we
-// reimplement the writer inline. Constants below intentionally mirror the
-// helper's so a single grep across the repo finds all producers + consumers.
-
-const APP_BUNDLE_ID = 'com.trace-mcp.app';
-const APP_LOCATION_MARKER = path.join(
-  os.homedir(),
-  '.trace-mcp',
-  'app-location.json',
-);
-
-/**
- * Walk up from `process.execPath` to the enclosing `.app` directory. Returns
- * null in development (electron's own Electron.app is not our bundle) and on
- * non-darwin. Caller is expected to fall back to the legacy `~/Applications`
- * convention only when this returns null AND we're forced into the packaged
- * code path — otherwise the legacy guess is the bug we're fixing.
- */
-function deriveBundlePath(): string | null {
-  if (process.platform !== 'darwin') return null;
-  // `isPackaged` only rejects `dev:electron`. An electron-builder output under
-  // `release/mac-arm64/` IS packaged, so a locally built bundle passed this
-  // gate and got recorded as the install location (TRA-357) — the plausibility
-  // filter below is what actually rejects it.
-  if (!app.isPackaged) return null;
-  let dir = path.dirname(process.execPath);
-  for (let i = 0; i < 10 && dir && dir !== '/'; i++) {
-    if (dir.endsWith('.app')) return isPlausibleInstallPath(dir) ? dir : null;
-    dir = path.dirname(dir);
-  }
-  return null;
-}
-
-/**
- * Persist the running bundle's path so the next npm-side postinstall picks
- * the right `INSTALL_DIR`. Written every startup (cheap, ~150 bytes) so a
- * user who moves the .app between launches self-heals on first run. Atomic
- * via rename — concurrent readers never see a half-written file.
- */
-function writeAppLocationMarker(bundlePath: string): void {
-  try {
-    fs.mkdirSync(path.dirname(APP_LOCATION_MARKER), { recursive: true });
-    const payload = {
-      appPath: bundlePath,
-      bundleId: APP_BUNDLE_ID,
-      version: app.getVersion().replace(/^v/, ''),
-      writtenAt: Date.now(),
-    };
-    const tmp = `${APP_LOCATION_MARKER}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2));
-    fs.renameSync(tmp, APP_LOCATION_MARKER);
-    appendUpdateLog({ event: 'app-location:written', appPath: bundlePath });
-  } catch (err) {
-    appendUpdateLog({
-      event: 'app-location:write-failed',
-      error: (err as Error)?.message ?? String(err),
-    });
-  }
-}
-
-function readAppLocationMarker(): string | null {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(APP_LOCATION_MARKER, 'utf-8'));
-    return typeof parsed?.appPath === 'string' ? parsed.appPath : null;
-  } catch {
-    return null;
-  }
-}
-
 function readVersionFromRoot(npmRoot: string | null): string | undefined {
   if (!npmRoot) return undefined;
   try {
@@ -1184,145 +1123,28 @@ function readInstalledVersion(roots: {
   return fromConfig ?? fromBin;
 }
 
-/**
- * Self-heal a bundle that the npm update could not replace.
- *
- * The only code path that downloads and stages the `.app` zip is the npm
- * package's own postinstall. When it runs during `npm install -g` it can fail
- * to find the real install (a poisoned location marker, an unwritable install
- * dir) and exits silently — the user's evidence for TRA-357 was five
- * consecutive `npm-only` outcomes across three major versions with
- * `pending:false` every time, and nothing ever retried.
- *
- * So we retry, deliberately: discard a marker that points at a build tree,
- * re-record the running bundle, check the install directory is writable, then
- * run the postinstall again out-of-band. Returns true when a swap-ready zip is
- * staged afterwards.
- */
-let repairInFlight: Promise<boolean> | null = null;
-
-async function repairStaleBundle(reason: string, roots?: {
-  configRoot: string | null;
-  binRoot: string | null;
-}): Promise<boolean> {
-  if (repairInFlight) return repairInFlight;
-  repairInFlight = (async () => {
-    try {
-      if (process.platform !== 'darwin' || !app.isPackaged) return false;
-      if (hasPendingUpdate()) return true;
-
-      const resolved = roots ?? (await resolveNpmRoots());
-      const installed = readInstalledVersion(resolved);
-      const running = app.getVersion().replace(/^v/, '');
-      // Nothing to repair when the new bundle is already on disk waiting for a
-      // restart — re-running the postinstall would only re-check the release.
-      if (isRestartPending(bundleVersionOnDisk(), running, cmpSemver)) return true;
-      if (!shouldAttemptRepair(installed, running, false, cmpSemver)) return false;
-
-      // A marker pointing into a build tree makes the postinstall stage its
-      // zip next to a throwaway bundle. Drop it and re-record the truth: the
-      // bundle this process is running from.
-      const marker = readAppLocationMarker();
-      if (marker && !isPlausibleInstallPath(marker)) {
-        try {
-          fs.unlinkSync(APP_LOCATION_MARKER);
-          appendUpdateLog({ event: 'app-location:discarded', appPath: marker });
-        } catch {
-          /* best-effort */
-        }
-      }
-      if (BUNDLE_PATH) writeAppLocationMarker(BUNDLE_PATH);
-
-      let writable = true;
-      try {
-        fs.accessSync(INSTALL_DIR, fs.constants.W_OK);
-      } catch {
-        writable = false;
-      }
-      if (!writable) {
-        appendUpdateLog({ event: 'repair-bundle:not-writable', reason, installDir: INSTALL_DIR });
-        return false;
-      }
-
-      const postinstall = resolved.configRoot
-        ? path.join(resolved.configRoot, 'trace-mcp', 'scripts', 'postinstall-app.mjs')
-        : null;
-      const fallback = resolved.binRoot
-        ? path.join(resolved.binRoot, 'trace-mcp', 'scripts', 'postinstall-app.mjs')
-        : null;
-      const script = [postinstall, fallback].find((p) => p && fs.existsSync(p)) ?? null;
-      if (!script) {
-        appendUpdateLog({ event: 'repair-bundle:no-postinstall', reason, roots: resolved });
-        return false;
-      }
-
-      appendUpdateLog({ event: 'repair-bundle:start', reason, script, installed, running });
-      await new Promise<void>((resolve) => {
-        // ELECTRON_RUN_AS_NODE turns our own binary into a plain Node runtime,
-        // so the helper runs without depending on a `node` being on PATH.
-        execFile(
-          process.execPath,
-          [script],
-          {
-            encoding: 'utf-8',
-            timeout: 600_000,
-            maxBuffer: 8 * 1024 * 1024,
-            // Same certainty as the apply-update spawn: this process is the app.
-            env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', TRACE_MCP_APP_RUNNING: '1' },
-          },
-          (err, stdout, stderr) => {
-            appendUpdateLog({
-              event: 'repair-bundle:postinstall-done',
-              errMessage: err?.message ?? null,
-              stdout: (stdout ?? '').slice(-2000),
-              stderr: (stderr ?? '').slice(-2000),
-            });
-            resolve();
-          },
-        );
-      });
-
-      const staged = hasPendingUpdate();
-      appendUpdateLog({ event: 'repair-bundle:result', reason, staged });
-      if (staged) {
-        // The half-update is over — stop suppressing the banner.
-        const state = readAppUpdateState();
-        if (state.lastNpmOnlyAttempt) {
-          delete state.lastNpmOnlyAttempt;
-          writeAppUpdateState(state);
-        }
-      }
-      return staged;
-    } catch (err) {
-      appendUpdateLog({
-        event: 'repair-bundle:error',
-        reason,
-        error: (err as Error)?.message ?? String(err),
-      });
-      return false;
-    } finally {
-      repairInFlight = null;
-    }
-  })();
-  return repairInFlight;
-}
-
 ipcMain.handle('apply-update', async () => {
   if (UPDATE_CHANNEL === 'electron-updater') {
-    // No npm involvement at all on Windows: electron-updater downloads the
-    // NSIS installer described by latest.yml and runs it on quit/restart.
+    // No npm involvement: electron-updater downloads the artifact described by
+    // the channel file (latest-mac.yml / latest.yml) and installs it on
+    // quit/restart. Progress reaches the renderer over `update-progress`.
     try {
       const updater = await getAutoUpdater();
       // downloadUpdate() requires a check in this same process first.
       const check = await updater.checkForUpdates();
       const version = check?.updateInfo?.version?.replace(/^v/, '');
+      downloadPercent = 0;
       await updater.downloadUpdate();
-      winUpdateDownloaded = true;
-      appendUpdateLog({ event: 'apply-update:electron-updater-downloaded', version });
-      return { ok: true, pending: true, outcome: 'bundle-pending' as UpdateOutcome, version };
+      updateDownloaded = true;
+      downloadedVersion = version;
+      appendUpdateLog({ event: 'apply-update:downloaded', version });
+      return { ok: true, pending: true, version };
     } catch (err) {
       const summary = (err as Error)?.message ?? String(err);
-      appendUpdateLog({ event: 'apply-update:electron-updater-failed', summary });
+      // A failed download leaves nothing behind: the next check starts clean
+      // rather than parking the user in a state they cannot leave (TRA-431).
+      downloadPercent = undefined;
+      appendUpdateLog({ event: 'apply-update:failed', summary });
       return { ok: false, error: `${summary}\n\nFull log: ${UPDATE_LOG}` };
     }
   }
@@ -1433,50 +1255,6 @@ ipcMain.handle('apply-update', async () => {
   }
   const installedVersion = readInstalledVersion(npmRoots);
   const running = app.getVersion().replace(/^v/, '');
-  // A bundle on disk already ahead of us is a pending swap too, just one that
-  // needs no zip — the postinstall replaced it while we ran. Reporting that as
-  // `npm-only` is what armed the stuck marker and the manual-install card for a
-  // version the user already had (TRA-431).
-  const restartPending = isRestartPending(bundleVersionOnDisk(), running, cmpSemver);
-  let outcome: UpdateOutcome = computeUpdateOutcome(
-    installedVersion,
-    running,
-    hasPendingUpdate() || restartPending,
-    cmpSemver,
-  );
-
-  // The CLI moved but the bundle did not. Before telling the user that, try to
-  // stage the bundle swap ourselves — the npm-side postinstall may have missed
-  // the real install location entirely (TRA-357).
-  if (outcome === 'npm-only' && (await repairStaleBundle('apply-update', npmRoots))) {
-    outcome = 'bundle-pending';
-  }
-
-  const pending = outcome === 'bundle-pending';
-
-  if (outcome === 'npm-only' && installedVersion) {
-    // The CLI moved but the Electron bundle did not — npm install can't
-    // swap /Applications/trace-mcp.app. Record the attempt so
-    // check-for-update stops re-asking until the registry advances past
-    // this target or the user manually reinstalls the .app.
-    const state = readAppUpdateState();
-    const previous = state.lastNpmOnlyAttempt;
-    const repeat = previous?.bundle === running ? (previous.attempts ?? 1) + 1 : 1;
-    state.lastNpmOnlyAttempt = {
-      bundle: running,
-      target: installedVersion,
-      at: Date.now(),
-      attempts: repeat,
-    };
-    writeAppUpdateState(state);
-    appendUpdateLog({
-      event: 'apply-update:npm-only-unresolved',
-      bundle: running,
-      target: installedVersion,
-      attempts: repeat,
-      installDir: INSTALL_DIR,
-    });
-  }
 
   // `npm install -g` writes into exactly one global root. On a machine with
   // several (nvm + Herd + a bundled runtime), the rest keep whatever version
@@ -1488,147 +1266,61 @@ ipcMain.handle('apply-update', async () => {
 
   appendUpdateLog({
     event: 'apply-update:ok',
-    outcome,
-    pending,
     installedVersion: installedVersion ?? null,
     runningVersion: running,
     staleRoots: allStaleRoots,
   });
+  // `pending: false` on purpose: this channel has no packaged app to restart
+  // into, so `npm install -g` moved the CLI and nothing else.
   return {
     ok: true,
-    pending,
-    outcome,
-    version: pending ? installedVersion : undefined,
+    pending: false,
     ...(staleRoots ? { staleRoots: [staleRoots] } : {}),
   };
 });
 
-// Pending update plumbing — postinstall stages a verified zip next to the
-// installed .app so the swap can be deferred until exit. The install dir is
-// derived from the running bundle (`process.execPath`-walked-to-.app) instead
-// of the previously-hardcoded `~/Applications`, which silently missed users
-// with the .app dragged into `/Applications`. Dev-mode falls back to
-// `~/Applications` — the pending flow is unreachable there anyway because
-// extraResources are only present in packaged builds.
-const BUNDLE_PATH = deriveBundlePath();
-const INSTALL_DIR = BUNDLE_PATH
-  ? path.dirname(BUNDLE_PATH)
-  : path.join(os.homedir(), 'Applications');
-const PENDING_ZIP = path.join(INSTALL_DIR, '.trace-mcp-pending.zip');
-const PENDING_VERSION = path.join(INSTALL_DIR, '.trace-mcp-pending-version');
-// Bundled via electron-builder `extraResources` in production; falls back to the
-// repo-root scripts dir when running from `npm run dev:electron`.
-const APPLY_HELPER = app.isPackaged
-  ? path.join(process.resourcesPath, 'scripts', 'apply-pending-update.mjs')
-  : path.join(__dirname, '..', '..', '..', '..', 'scripts', 'apply-pending-update.mjs');
-
 /**
- * The installed bundle's version, re-read every time — it changes while we run.
- * Declared here because it depends on BUNDLE_PATH / INSTALL_DIR above; callers
- * higher in the file only run after module evaluation.
+ * What the renderer needs to know between "the download finished" and "the user
+ * restarted": whether one is waiting, which version it is, and how far along a
+ * download in flight is.
+ *
+ * All three live in this process. The staged-zip updater kept the same answer
+ * in three files next to the `.app` (`.trace-mcp-pending.zip`, `-version`,
+ * `.sha256`) plus a state file in `~/.trace-mcp`, and every one of them could
+ * outlive the thing it described — a marker for a version already installed
+ * produced a "Restart to install" banner that a restart could not clear
+ * (TRA-431). Process state cannot go stale: a quit ends it, and
+ * `autoInstallOnAppQuit` means the download the user paid for is applied by
+ * that same quit.
  */
-function bundleVersionOnDisk(): string | undefined {
-  if (UPDATE_CHANNEL !== 'zip-staged') return undefined;
-  return readBundleVersionOnDisk(BUNDLE_PATH, INSTALL_DIR);
-}
-
-function hasPendingUpdate(): boolean {
-  if (UPDATE_CHANNEL !== 'zip-staged') return false;
-  return hasPendingUpdateImpl({ pendingZip: PENDING_ZIP, pendingVersion: PENDING_VERSION });
-}
-
-const PENDING_CHECKSUM = path.join(INSTALL_DIR, '.trace-mcp-pending.sha256');
-
-function clearPendingFiles(): void {
-  for (const p of [PENDING_ZIP, PENDING_CHECKSUM, PENDING_VERSION]) {
-    try {
-      fs.unlinkSync(p);
-    } catch {}
-  }
-}
-
 ipcMain.handle('check-pending-update', () => {
-  // Windows: the pending state is whatever electron-updater has downloaded.
-  if (UPDATE_CHANNEL === 'electron-updater') {
-    return { pending: winUpdateDownloaded };
-  }
-  // Only the zip-staged path can actually swap the Electron bundle on
-  // restart. The previous "npm-install path" branch claimed pending=true
-  // whenever the on-disk package was ahead of the running process, but
-  // relaunch cannot move the .app, so it produced an "Update to restart"
-  // banner that did nothing and re-armed the update cycle on next start.
-  const current = app.getVersion().replace(/^v/, '');
-  if (hasPendingUpdate()) {
-    let version: string | undefined;
-    try {
-      version = fs.readFileSync(PENDING_VERSION, 'utf-8').trim().replace(/^v/, '');
-    } catch {}
-    // Drop stale pending artefacts: when the bundle has already been swapped
-    // (e.g. postinstall ran while the app wasn't running) the marker files
-    // stick around and produce a zombie "Restart to install" banner for a
-    // version we are already on.
-    if (!version || cmpSemver(version, current) > 0) {
-      return { pending: true, version };
-    }
-    clearPendingFiles();
-  }
-  // Nothing staged, but the bundle on disk may already be ahead of this
-  // process — the postinstall can swap it while the app runs. A restart is
-  // then all that is left, which is exactly what this card says (TRA-431).
-  const onDisk = bundleVersionOnDisk();
-  if (isRestartPending(onDisk, current, cmpSemver)) {
-    return { pending: true, version: onDisk };
-  }
-  return { pending: false };
+  if (UPDATE_CHANNEL !== 'electron-updater') return { pending: false };
+  return {
+    pending: updateDownloaded,
+    version: downloadedVersion,
+    ...(downloadPercent !== undefined && !updateDownloaded ? { percent: downloadPercent } : {}),
+  };
 });
 
-function trySpawnApplyHelper(): boolean {
-  return trySpawnApplyHelperImpl(
-    { pendingZip: PENDING_ZIP, pendingVersion: PENDING_VERSION, applyHelper: APPLY_HELPER },
-    process.pid,
-    UPDATE_CHANNEL,
-  );
-}
-
-// IPC: restart the app. If a staged update is waiting, apply it; otherwise
-// just relaunch.
+// IPC: restart the app — into the downloaded update when there is one.
 ipcMain.handle('restart-app', async () => {
-  // Windows: hand the exit to electron-updater, which runs the downloaded
-  // NSIS installer and relaunches the new build itself.
-  if (UPDATE_CHANNEL === 'electron-updater' && winUpdateDownloaded) {
+  if (UPDATE_CHANNEL === 'electron-updater' && updateDownloaded) {
     const updater = await getAutoUpdater();
+    // Installs the downloaded artifact and relaunches the new build itself.
     updater.quitAndInstall();
-    return;
-  }
-  if (trySpawnApplyHelper()) {
-    app.exit(0);
     return;
   }
   app.relaunch();
   app.exit(0);
 });
 
-// This is a tray app that keeps running when its window is closed, so the
-// only ways users actually exit are the tray's "Quit" item and Cmd+Q — both
-// call app.quit() directly, never the restart-app IPC above. Without this
-// hook, a staged update sits on disk forever because nothing ever applies
-// it: the bundle stays stale no matter how many times "Update" is clicked.
-// Apply on any quit path too, so quitting also self-heals a stale bundle.
-app.on('before-quit', () => {
-  trySpawnApplyHelper();
-});
+// This is a tray app that keeps running when its window is closed, so the only
+// ways users actually exit are the tray's "Quit" item and Cmd+Q — neither goes
+// through the restart-app IPC above. `autoUpdater.autoInstallOnAppQuit` is what
+// covers them: a download the user already paid for is applied by whichever
+// exit happens first, with no before-quit hook of ours in the way.
 
 app.whenReady().then(() => {
-  // Refresh the bundle-location marker so the npm-side postinstall + the
-  // detached apply-pending-update helper read the actual install location
-  // instead of guessing `~/Applications`. Cheap (~150 byte JSON write) and
-  // best-effort — failures are logged to update.log but never surface.
-  if (BUNDLE_PATH) writeAppLocationMarker(BUNDLE_PATH);
-  // Users already trapped by TRA-357 cannot see it — the sidebar told them
-  // they were up to date while the bundle sat months behind the CLI. Nothing
-  // they can click fixes that, so recovery has to happen without being asked.
-  // No-ops (one cheap version comparison) unless the bundle is actually stale.
-  void repairStaleBundle('startup');
   // macOS: set custom dock icon so it's ready when the window shows.
   if (process.platform === 'darwin' && fs.existsSync(dockIconPath)) {
     app.dock?.setIcon(nativeImage.createFromPath(dockIconPath));
@@ -1640,6 +1332,11 @@ app.whenReady().then(() => {
   // both read from nativeTheme at construction, so the app's Appearance choice
   // has to reach the native layer first or the window opens in the wrong one.
   restoreAppearance();
+  // Install/repair the daemon before the tray's watchdog starts poking at it:
+  // on a DMG-only machine there is nothing to poke yet, and the watchdog's
+  // "restart" would have nothing to restart (TRA-438). Not awaited — the
+  // window opens while setup runs, and the renderer follows `daemon:setup-state`.
+  void runDaemonSetup();
   createTray();
   // Open the main window straight away — the tray remains for background control.
   // Users who close the window still have the tray; users who quit via ⌘Q shut down.

@@ -295,8 +295,8 @@ layout: null
       --surface-raised: #F0F0F0;
       --border: #E8E8E8;
       --border-visible: #CCCCCC;
-      --text-disabled: #999999;
-      --text-secondary: #666666;
+      --text-disabled: #6D6D6D; /* 4.75:1 on #F5F5F5, 4.54:1 on #F0F0F0 — #999999 was 2.6:1 */
+      --text-secondary: #595959;
       --text-primary: #1A1A1A;
       --text-display: #000000;
       --accent: #D71921;
@@ -593,6 +593,20 @@ layout: null
       text-transform: uppercase;
       color: var(--text-disabled);
     }
+    .hero-alt-arch {
+      margin-top: 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .hero-alt-arch a {
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-visible);
+      transition: color 200ms ease-out, border-color 200ms ease-out;
+    }
+    .hero-alt-arch a:hover { color: var(--text-display); border-color: var(--text-display); }
     .hero-trust {
       margin-top: 18px;
       font-family: var(--font-mono);
@@ -620,6 +634,7 @@ layout: null
       .hero-cta { margin-top: 24px; gap: 8px; }
       .hero-cta .btn { padding: 12px 22px; font-size: 11px; }
       .hero-install { display: none; }
+      .hero-alt-arch { font-size: 11px; margin-top: 12px; }
       .hero-trust { font-size: 11px; gap: 8px; margin-top: 14px; }
     }
 
@@ -2010,7 +2025,15 @@ layout: null
       </ul>
 
       <div class="hero-cta">
-        <a href="#install" class="btn btn-primary">
+        <!-- Rendered for everyone and pointed at the releases page, not hidden behind
+             JS (TRA-440): a visitor without JavaScript gets a button that works, one
+             click further from the file. detectMac() below removes it off macOS and
+             rewrites the href to the DMG for the architecture it detects. -->
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"
+           rel="noopener" class="btn btn-primary" data-dmg>
+          Download for macOS <span class="arrow">&darr;</span>
+        </a>
+        <a href="#install" class="btn btn-secondary" data-analyze-cta>
           Analyze your AI system <span class="arrow">&rarr;</span>
         </a>
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" rel="noopener" class="btn btn-secondary">
@@ -2021,6 +2044,12 @@ layout: null
           <span class="copy">copy</span>
         </span>
       </div>
+
+      <!-- The other architecture stays a quiet link, never a question the visitor has
+           to answer before downloading (TRA-440). Shown only once JS knows the Mac. -->
+      <p class="hero-alt-arch" data-dmg-alt hidden>
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener" data-dmg-other></a>
+      </p>
 
       <p class="hero-trust">
         <span class="ok">Open source</span>
@@ -2944,6 +2973,78 @@ layout: null
           if (el.textContent === '…' || el.textContent === '') el.textContent = 'latest';
         });
       });
+  })();
+
+  // Resolve the macOS download (TRA-440). The button ships pointing at the
+  // releases page so it works without JS; everything here only ever narrows it
+  // to one file, or removes it on a machine that cannot run a .dmg.
+  (function macDownload() {
+    const btn = document.querySelector('[data-dmg]');
+    const altBox = document.querySelector('[data-dmg-alt]');
+    const altLink = document.querySelector('[data-dmg-other]');
+    if (!btn) return;
+
+    // iPadOS reports "MacIntel" too, and has no use for a .dmg — the touch-point
+    // count is what separates it from a real Mac.
+    const isMac = /Mac/i.test(navigator.platform || navigator.userAgent) && navigator.maxTouchPoints <= 1;
+    if (!isMac) {
+      btn.remove();
+      // Leaves the hero without a primary action otherwise.
+      const analyze = document.querySelector('[data-analyze-cta]');
+      if (analyze) analyze.classList.replace('btn-secondary', 'btn-primary');
+      return;
+    }
+
+    // ponytail: arm64 unless something positively says Intel. Apple stopped
+    // selling Intel Macs in 2023, and an inconclusive guess that sends an Apple
+    // Silicon user to the x64 build still runs — under Rosetta, slowly — while
+    // asking the visitor to classify their own CPU loses them outright.
+    const detectArch = async () => {
+      try {
+        const uad = navigator.userAgentData;
+        if (uad && uad.getHighEntropyValues) {
+          const { architecture } = await uad.getHighEntropyValues(['architecture']);
+          if (architecture === 'x86') return 'x64';
+          if (architecture === 'arm') return 'arm64';
+        }
+      } catch (e) {}
+      try {
+        // The GPU string is the only other honest signal left in the browser:
+        // Intel Macs report an Intel/AMD renderer, Apple Silicon reports "Apple".
+        const gl = document.createElement('canvas').getContext('webgl');
+        const dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
+        const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+        if (/Intel|AMD|Radeon/i.test(renderer)) return 'x64';
+      } catch (e) {}
+      return 'arm64';
+    };
+
+    const label = { arm64: 'Apple Silicon', x64: 'Intel' };
+
+    Promise.all([
+      detectArch(),
+      fetch('https://api.github.com/repos/nikolai-vysotskyi/trace-mcp/releases/latest')
+        .then(r => r.ok ? r.json() : Promise.reject())
+    ]).then(([arch, release]) => {
+      // Asset names carry the version (trace-mcp-<version>-arm64.dmg), so there is no
+      // version-free permalink to hardcode — match on the suffix instead and let
+      // the release be the only place a version number exists.
+      const dmg = (a) => (release.assets || []).find(x => x.name.endsWith('-' + a + '.dmg'));
+      const mine = dmg(arch);
+      const other = arch === 'arm64' ? 'x64' : 'arm64';
+      const theirs = dmg(other);
+      if (!mine) return; // No DMG in the latest release: leave the releases-page fallback.
+
+      btn.href = mine.browser_download_url;
+      btn.setAttribute('download', '');
+      btn.title = mine.name;
+      if (theirs && altLink && altBox) {
+        altLink.href = theirs.browser_download_url;
+        altLink.setAttribute('download', '');
+        altLink.textContent = label[other] + ' Mac?';
+        altBox.hidden = false;
+      }
+    }).catch(() => {}); // Rate-limited or offline: the releases-page href still works.
   })();
 
   // Copy install

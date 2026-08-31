@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { DaemonSetupState } from './daemon-install';
 
 /* Window chrome the renderer has to lay out around, answered synchronously
    because it gates first paint. `titleBarStyle: 'hiddenInset'` is set for
@@ -22,6 +23,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restartDaemon: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('restart-daemon'),
   /** TRA-525: OS-level daemon liveness, so "busy" can be told from "not running". */
   daemonProcessAlive: (): Promise<boolean> => ipcRenderer.invoke('daemon:process-alive'),
+  /* TRA-438: the app installs its own daemon on first launch. Until that
+     finishes there is no daemon to be down, so the surfaces say "Setting up…"
+     instead of offering a Start button for something not installed yet. */
+  daemonSetupState: (): Promise<DaemonSetupState> => ipcRenderer.invoke('daemon:setup-state'),
+  retryDaemonSetup: (): Promise<DaemonSetupState> => ipcRenderer.invoke('daemon:setup-retry'),
+  onDaemonSetupState: (cb: (state: DaemonSetupState) => void): (() => void) => {
+    const handler = (_e: unknown, state: DaemonSetupState) => cb(state);
+    ipcRenderer.on('daemon:setup-state', handler);
+    return () => ipcRenderer.removeListener('daemon:setup-state', handler);
+  },
   detectMcpClients: (): Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]> =>
     ipcRenderer.invoke('detect-mcp-clients'),
   getMcpClientStatuses: (
@@ -89,25 +100,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
     latest?: string;
     lastChecked?: number;
     error?: string;
-    /** True when the user already attempted this transition via npm-only and nothing on disk has moved since. */
-    stuck?: boolean;
     /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
     staleRoots?: { root: string; version: string }[];
-    /** Absolute path to the running `.app`, so copyable commands name the real install. */
-    installPath?: string;
   }> => ipcRenderer.invoke('check-for-update'),
-  checkPendingUpdate: (): Promise<{ pending: boolean; version?: string }> =>
+  /** `percent` is only present while a download is still in flight. */
+  checkPendingUpdate: (): Promise<{ pending: boolean; version?: string; percent?: number }> =>
     ipcRenderer.invoke('check-pending-update'),
   applyUpdate: (): Promise<{
     ok: boolean;
     pending?: boolean;
     error?: string;
-    /** "bundle-pending" — restart will swap the .app; "npm-only" — CLI moved but bundle is stuck; "already-current" — nothing to do. */
-    outcome?: 'bundle-pending' | 'npm-only' | 'already-current';
     version?: string;
     /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
     staleRoots?: { root: string; version: string }[];
   }> => ipcRenderer.invoke('apply-update'),
+  /* electron-updater's own `download-progress`, forwarded verbatim. The
+     download runs for minutes on a slow link, so the card needs a real number
+     rather than an indeterminate bar that cannot distinguish slow from hung. */
+  onUpdateProgress: (
+    callback: (p: {
+      percent: number;
+      bytesPerSecond: number;
+      transferred: number;
+      total: number;
+    }) => void,
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      p: { percent: number; bytesPerSecond: number; transferred: number; total: number },
+    ) => callback(p);
+    ipcRenderer.on('update-progress', handler);
+    return () => {
+      ipcRenderer.removeListener('update-progress', handler);
+    };
+  },
   restartApp: (): Promise<void> => ipcRenderer.invoke('restart-app'),
   openSettings: (section?: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('open-settings', section),
