@@ -21,19 +21,19 @@ Same three rules as the distribution ledger:
 
 ## Channels
 
-| Channel | Signal as of 2026-08-30 | How to read it | Verified |
+| Channel | Signal as of 2026-08-31 | How to read it | Verified |
 |---|---|---|---|
-| GitHub issues | 1 open (#199), everything else closed. Last external reporters: `drguptavivek` (#381/#382, plugin requests, shipped same day), `cerebrotecnologico` (#199/#334, repeat power user), `zerocodefast` (#536, directory invite) | `gh issue list --state all` | 2026-08-30 |
-| GitHub discussions | **Not enabled on the repo** — the GraphQL `discussions` node returns nothing. Don't keep "checking discussions"; there is no such surface | — | 2026-08-30 |
-| GitHub traffic — views | Flat and honest: 568 views / 175 uniques over 14 days, 13–23 uniques/day, no trend. This is the one adoption number that survived scrutiny | `gh api repos/:r/traffic/views` (owner-only) | 2026-08-30 |
-| GitHub traffic — referrers | **reddit.com is #1** (90 views / 35 uniques / 14 days), Google #2 (84/39), trace-mcp.com #3, then github.com, `l.threads.com` (7/2), Bing, yandex | `gh api repos/:r/traffic/popular/referrers` | 2026-08-30 |
-| GitHub traffic — clones | **Not a metric.** 16,006 clones / 928 uniques in 14 days, ramping 166 → 619 → 1,251 → 3,888 → 8,736/day over 08-24…08-29 while human views stayed at ~20/day. Unique cloners inflate too (62 → 300), so clone *uniques* are no safer than clone counts | same API, `/traffic/clones` | 2026-08-30 |
-| npm downloads | **Dead as an adoption metric** — settled twice, don't re-derive. See `docs/ROADMAP.md` and the note in `docs/comparisons.md`. Re-confirmed 2026-08-30: 5,033 weekly downloads, of which 4,420 sit in 23 versions inside a 152–228 band, while the two newest releases (3.5.2, 3.6.0) show **zero**. Peer control over the same days: `codebase-memory-mcp` puts 50% of its volume on one version, we put 4.5% | `api.npmjs.org/versions/<pkg>/last-week` | 2026-08-30 |
-| Reddit | Our largest referrer, and **we cannot read it** — see the dead-end note below | Human with a browser | 2026-08-30 |
-| Threads (`l.threads.com`) | Small but real referral (7 views / 2 uniques). Source post never identified; Threads search is login-walled the same way Reddit is | Human with an account | 2026-08-30 |
-| Hacker News | No mention. `ops/launch-hn.md` is drafted and unposted — posting is Nikolai's call | WebSearch / hn.algolia.com | 2026-08-30 |
-| Blogs / dev.to / Zenn / Qiita | No mention of trace-mcp found on any of them | WebSearch | 2026-08-30 |
-| Desktop app (`packages/app`) | **Zero public feedback, ever** — no issue, review or mention has been about the Electron app specifically. Every reported bug to date is server/daemon/indexing. Read "no complaints" here as "no observed users", not as "it works" | — | 2026-08-30 |
+| GitHub issues | 1 open (#199, dormant), everything else closed. No new external issues in last 24h. Last external reporters: `drguptavivek` (#381/#382, plugin requests, shipped same day), `cerebrotecnologico` (#199/#334, repeat power user), `zerocodefast` (#536, directory invite) | `gh issue list --state all` | 2026-08-31 |
+| GitHub discussions | **Not enabled on the repo** — the GraphQL `discussions` node returns nothing. Don't keep "checking discussions"; there is no such surface | — | 2026-08-31 |
+| GitHub traffic — views | Flat and honest: ~20 uniques/day, no trend. This is the one adoption number that survived scrutiny | `gh api repos/:r/traffic/views` (owner-only) | 2026-08-31 |
+| GitHub traffic — referrers | **reddit.com is #1** (90 views / 35 uniques / 14 days), Google #2 (84/39), trace-mcp.com #3, then github.com, `l.threads.com` (7/2), Bing, yandex | `gh api repos/:r/traffic/popular/referrers` | 2026-08-31 |
+| GitHub traffic — clones | **Not a metric.** 16,006 clones / 928 uniques in 14 days, ramping 166 → 619 → 1,251 → 3,888 → 8,736/day over 08-24…08-29 while human views stayed at ~20/day. Unique cloners inflate too (62 → 300), so clone *uniques* are no safer than clone counts | same API, `/traffic/clones` | 2026-08-31 |
+| npm downloads | **Dead as an adoption metric** — settled twice, don't re-derive. See `docs/ROADMAP.md` and `docs/comparisons.md`. Re-confirmed 2026-08-31: Aug 27–30 scrape ran ~1,300–2,000/day (Aug 30: 1,583, 7-day total ~6,460), distributed uniformly across ~25 versions in narrow bands. Latest npm dist-tag is 3.10.0 | `api.npmjs.org/versions/<pkg>/last-week` | 2026-08-31 |
+| Reddit | Our largest referrer, and **we cannot read it** — see the dead-end note below | Human with a browser | 2026-08-31 |
+| Threads (`l.threads.com`) | Small but real referral (7 views / 2 uniques). Source post never identified; Threads search is login-walled the same way Reddit is | Human with an account | 2026-08-31 |
+| Hacker News | No mention (0 hits on `hn.algolia.com` for exact `"trace-mcp"`). `ops/launch-hn.md` is drafted and unposted — posting is Nikolai's call | WebSearch / hn.algolia.com | 2026-08-31 |
+| Blogs / dev.to / Zenn / Qiita | No mention of trace-mcp found on any of them. Directory scrapers (Enterprise DNA, Bowora) picked up older registry copy | WebSearch | 2026-08-31 |
+| Desktop app (`packages/app`) | **Zero public feedback, ever** — no issue, review or mention has been about the Electron app specifically. Signed & notarized DMG shipped with v3.10.0. Read "no complaints" here as "no observed users", not as "it works" | — | 2026-08-31 |
 | Directory listings | Tracked in `ops/distribution.md`, not here | — | — |
 
 ## Findings that should not be re-derived
