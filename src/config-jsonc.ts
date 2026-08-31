@@ -152,6 +152,14 @@ export interface MigrateResult {
 }
 
 /**
+ * Marker recording that the one-shot `tools.preset` default rewrite below has
+ * already run for this config. Without it the rewrite could not tell our own
+ * former default apart from a deliberate `full`, and every upgrade would undo
+ * a user who re-selected it.
+ */
+const PRESET_MIGRATED_KEY = 'preset_default_migrated';
+
+/**
  * Migrate global config: for every top-level key present in DEFAULT_CONFIG_JSONC
  * but missing in the existing config, insert it (with comments from the template).
  *
@@ -169,6 +177,30 @@ export function migrateGlobalConfig(): MigrateResult {
   if (!existing || !defaults) return result;
 
   let text = existingText;
+
+  // TRA-538: configs written before TRA-402 carry `tools.preset: "full"` — our
+  // old default, not a choice. Adding keys was never going to fix those: the
+  // key is present, just stale, so every such install keeps paying for the full
+  // tool surface on every turn. Rewrite it once to whatever the template ships
+  // (a single source of truth, so this stays right when the default moves
+  // again), silently, then mark the config so a user who later re-selects
+  // `full` is never reverted by a later upgrade.
+  const existingTools = existing.tools as Record<string, unknown> | undefined;
+  const shippedPreset = (defaults.tools as Record<string, unknown> | undefined)?.preset;
+  const alreadyMigrated = existingTools?.[PRESET_MIGRATED_KEY] === true;
+
+  if (
+    !alreadyMigrated &&
+    existingTools?.preset === 'full' &&
+    typeof shippedPreset === 'string' &&
+    shippedPreset !== 'full'
+  ) {
+    const edits = modify(text, ['tools', 'preset'], shippedPreset, FORMAT_OPTS);
+    if (edits.length > 0) {
+      text = applyEdits(text, edits);
+      result.added.push(`tools.preset: full → ${shippedPreset}`);
+    }
+  }
 
   for (const key of Object.keys(defaults)) {
     if (key in existing) {
@@ -202,6 +234,13 @@ export function migrateGlobalConfig(): MigrateResult {
       text = applyEdits(text, edits);
       result.added.push(key);
     }
+  }
+
+  // Set after the loop above: on a config with no `tools` section at all, that
+  // loop is what creates it, and writing the marker first would get clobbered.
+  if (!alreadyMigrated) {
+    const edits = modify(text, ['tools', PRESET_MIGRATED_KEY], true, FORMAT_OPTS);
+    if (edits.length > 0) text = applyEdits(text, edits);
   }
 
   if (text !== existingText) {
