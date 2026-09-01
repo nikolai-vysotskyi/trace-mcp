@@ -1,10 +1,14 @@
 /**
- * Global paths and helpers for ~/.trace-mcp/ directory structure.
+ * Global paths and helpers for ~/.trace/ directory structure.
  *
- * All trace-mcp state lives here:
- *   ~/.trace-mcp/.config.json          — global config
- *   ~/.trace-mcp/registry.json         — project registry
- *   ~/.trace-mcp/index/<name>-<hash>.db — per-project databases
+ * All trace state lives here:
+ *   ~/.trace/.config.json          — global config
+ *   ~/.trace/registry.json         — project registry
+ *   ~/.trace/index/<name>-<hash>.db — per-project databases
+ *
+ * Machines that still have `~/.trace-mcp/` (pre-rename installs) get it
+ * renamed to `~/.trace/` the first time this module loads — see
+ * `migrateLegacyHomeDir` below.
  */
 
 import crypto from 'node:crypto';
@@ -12,25 +16,87 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+// Inlined rather than importing ./utils/path-migration.js — this module must
+// stay free of cross-module imports (see ensureGlobalDirs() below for why:
+// tests/cli/env-overrides.test.ts runs global.ts under
+// `node --experimental-strip-types`, which can't resolve .js -> .ts imports
+// of sibling modules).
+function isSymlink(targetPath: string): boolean {
+  try {
+    return fs.lstatSync(targetPath).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One-time rename `~/.trace-mcp` -> `~/.trace` (TRA-611). A same-volume
+ * `renameSync` is atomic and instant regardless of DB size, unlike a
+ * copy-based migration which would leave a stale, disk-doubling duplicate
+ * behind (nothing then ever deletes the old copy). Runs at most once per
+ * machine: once `target` exists this — and every future call, since
+ * TRACE_MCP_HOME below only calls it when `target` is still missing —
+ * short-circuits immediately.
+ *
+ * Skipped under Vitest (`process.env.VITEST`, set by the runner itself and
+ * inherited by any subprocess a test spawns): this runs at *import* time, so
+ * without the guard, any test that imports this module with no
+ * TRACE_MCP_DATA_DIR override — e.g. tests/cli/env-overrides.test.ts's
+ * "falls back to default" case, which deliberately clears the override to
+ * exercise real os.homedir() resolution in a spawned subprocess — would
+ * silently rename a real developer's `~/.trace-mcp` on disk. In-process tests
+ * are already protected by tests/setup/isolate-home.ts pinning
+ * TRACE_MCP_DATA_DIR before any project module loads; this guard covers the
+ * one path that pins the var away on purpose.
+ */
+function migrateLegacyHomeDir(target: string, legacy: string): boolean {
+  if (process.env.VITEST) return false;
+  try {
+    if (fs.existsSync(target)) return false;
+    if (isSymlink(target) || isSymlink(legacy)) return false;
+    if (!fs.statSync(legacy).isDirectory()) return false;
+    fs.renameSync(legacy, target);
+    return true;
+  } catch {
+    // No legacy dir (ENOENT) or a rename failure (cross-device, permissions)
+    // — fall through and let ensureGlobalDirs() create `target` fresh.
+    return false;
+  }
+}
+
 /**
  * Root of all trace-mcp global state.
  *
- * Default: `~/.trace-mcp/`. Override with `TRACE_MCP_DATA_DIR=<path>` for
+ * Default: `~/.trace/`. Override with `TRACE_MCP_DATA_DIR=<path>` for
  * Docker volumes, ephemeral CI workspaces, multi-repo orchestrators, or
  * shared cache locations. CRG v2.3.0 (#155) introduced the same knob — the
  * env var replaces the default verbatim, with `~` expansion. Resolved at
  * import time so a user-facing change requires a process restart.
  */
-export const TRACE_MCP_HOME = (() => {
+const { home: TRACE_MCP_HOME_RESOLVED, migrated: TRACE_MCP_HOME_MIGRATED_RESOLVED } = (() => {
   const override = process.env.TRACE_MCP_DATA_DIR;
   if (override && override.length > 0) {
     const expanded = override.startsWith('~')
       ? path.join(os.homedir(), override.slice(1))
       : override;
-    return path.resolve(expanded);
+    return { home: path.resolve(expanded), migrated: false };
   }
-  return path.join(os.homedir(), '.trace-mcp');
+  const homedir = os.homedir();
+  const target = path.join(homedir, '.trace');
+  const legacy = path.join(homedir, '.trace-mcp');
+  return { home: target, migrated: migrateLegacyHomeDir(target, legacy) };
 })();
+
+export const TRACE_MCP_HOME = TRACE_MCP_HOME_RESOLVED;
+
+/**
+ * True only for the single run that performed the `~/.trace-mcp` -> `~/.trace`
+ * rename above. Consumed by `src/init/launcher.ts` to know when a compat
+ * symlink for scripts hardcoded to the old `bin/trace-mcp` path needs to be
+ * (re)created — that symlink then persists on disk, so later runs (where this
+ * is always `false`) don't need to touch it again.
+ */
+export const TRACE_MCP_HOME_MIGRATED = TRACE_MCP_HOME_MIGRATED_RESOLVED;
 
 /** Global config file (replaces per-project .trace-mcp.json). */
 export const GLOBAL_CONFIG_PATH = path.join(TRACE_MCP_HOME, '.config.json');

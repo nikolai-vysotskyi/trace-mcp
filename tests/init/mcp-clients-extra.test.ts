@@ -149,7 +149,7 @@ describe('AMP writer round-trip', () => {
     const after = fs.readFileSync(file, 'utf-8');
     expect(after).toContain('// User-managed AMP settings');
     expect(after).toContain('// existing servers');
-    expect(after).toContain('"trace-mcp"');
+    expect(after).toContain('"trace"');
     expect(after).toContain('"linear"');
   });
 
@@ -160,13 +160,29 @@ describe('AMP writer round-trip', () => {
     const file = path.join(fakeHome, '.config', 'amp', 'settings.json');
     expect(fs.existsSync(file)).toBe(true);
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    expect(parsed['amp.mcpServers']?.['trace-mcp']?.args).toEqual(['serve']);
+    expect(parsed['amp.mcpServers']?.['trace']?.args).toEqual(['serve']);
   });
 
   it('reports already_configured when entry matches', () => {
     configureMcpClients(['amp'], projectRoot, { scope: 'global' });
     const second = configureMcpClients(['amp'], projectRoot, { scope: 'global' });
     expect(second[0].action).toBe('already_configured');
+  });
+
+  it('migrates a legacy "trace-mcp" entry to "trace" in place', () => {
+    const dir = path.join(fakeHome, '.config', 'amp');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, 'settings.json');
+    fs.writeFileSync(
+      file,
+      JSON.stringify({ 'amp.mcpServers': { 'trace-mcp': { command: '/old/launcher', args: ['serve'] } } }),
+    );
+
+    configureMcpClients(['amp'], projectRoot, { scope: 'global' });
+
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed['amp.mcpServers']['trace-mcp']).toBeUndefined();
+    expect(parsed['amp.mcpServers'].trace.args).toEqual(['serve']);
   });
 });
 
@@ -177,7 +193,7 @@ describe('Factory Droid writer', () => {
     expect(step.action).toBe('created');
     const file = path.join(fakeHome, '.factory', 'mcp.json');
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    const entry = parsed.mcpServers['trace-mcp'];
+    const entry = parsed.mcpServers['trace'];
     expect(entry.type).toBe('stdio');
     expect(entry.args).toEqual(['serve']);
     // Global scope carries no cwd — see TRA-501.
@@ -188,10 +204,10 @@ describe('Factory Droid writer', () => {
     configureMcpClients(['factory-droid'], projectRoot, { scope: 'project' });
     const file = path.join(projectRoot, '.factory', 'mcp.json');
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    expect(parsed.mcpServers['trace-mcp'].cwd).toBe(projectRoot);
+    expect(parsed.mcpServers['trace'].cwd).toBe(projectRoot);
   });
 
-  it('preserves existing servers when adding trace-mcp', () => {
+  it('preserves existing servers when adding trace', () => {
     const file = path.join(fakeHome, '.factory', 'mcp.json');
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(
@@ -203,7 +219,22 @@ describe('Factory Droid writer', () => {
     configureMcpClients(['factory-droid'], projectRoot, { scope: 'global' });
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
     expect(parsed.mcpServers.linear).toBeDefined();
-    expect(parsed.mcpServers['trace-mcp']).toBeDefined();
+    expect(parsed.mcpServers['trace']).toBeDefined();
+  });
+
+  it('migrates a legacy "trace-mcp" entry to "trace" in place', () => {
+    const file = path.join(fakeHome, '.factory', 'mcp.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        mcpServers: { 'trace-mcp': { type: 'stdio', command: '/old/launcher', args: ['serve'] } },
+      }),
+    );
+    configureMcpClients(['factory-droid'], projectRoot, { scope: 'global' });
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace-mcp']).toBeUndefined();
+    expect(parsed.mcpServers.trace.type).toBe('stdio');
   });
 });
 
@@ -294,7 +325,7 @@ describe('Kimi detection', () => {
 });
 
 describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', () => {
-  it('Cline: creates cline_mcp_settings.json with trace-mcp serve entry', () => {
+  it('Cline: creates cline_mcp_settings.json with trace serve entry', () => {
     const results = configureMcpClients(['cline'], projectRoot, { scope: 'global' });
     expect(results[0].action).toBe('created');
     const file = path.join(
@@ -305,7 +336,7 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
       'cline_mcp_settings.json',
     );
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    const entry = parsed.mcpServers['trace-mcp'];
+    const entry = parsed.mcpServers['trace'];
     expect(entry.args).toEqual(['serve']);
     // Cline's config is global-only, so it never carries a project cwd (TRA-501).
     expect(entry.cwd).toBeUndefined();
@@ -329,7 +360,7 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
     configureMcpClients(['kilocode'], projectRoot, { scope: 'global' });
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
     expect(parsed.mcpServers.linear).toBeDefined();
-    expect(parsed.mcpServers['trace-mcp'].args).toEqual(['serve']);
+    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
   });
 
   it('Antigravity: writes ~/.gemini/config/mcp_config.json', () => {
@@ -337,7 +368,7 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
     expect(results[0].action).toBe('created');
     const file = path.join(fakeHome, '.gemini', 'config', 'mcp_config.json');
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    expect(parsed.mcpServers['trace-mcp'].args).toEqual(['serve']);
+    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
   });
 
   it('Kimi: writes ~/.kimi/mcp.json and reports already_configured on re-run', () => {
@@ -350,12 +381,80 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
   });
 });
 
+describe('Hermes YAML writer', () => {
+  function configPath(): string {
+    return path.join(fakeHome, '.hermes', 'config.yaml');
+  }
+
+  it('writes a new config.yaml with a trace mcp_servers entry', () => {
+    const results = configureMcpClients(['hermes'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('created');
+    const content = fs.readFileSync(configPath(), 'utf-8');
+    expect(content).toMatch(/mcp_servers:\s*\n\s+trace:/);
+    expect(content).not.toContain('trace-mcp:');
+  });
+
+  it('migrates a legacy "trace-mcp" entry to "trace", preserving comments', () => {
+    const file = configPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      ['# user comment', 'mcp_servers:', '  trace-mcp:', '    command: /old/launcher', '    args:', '      - serve', ''].join(
+        '\n',
+      ),
+    );
+    configureMcpClients(['hermes'], projectRoot, { scope: 'global' });
+    const content = fs.readFileSync(file, 'utf-8');
+    expect(content).toContain('# user comment');
+    expect(content).not.toContain('trace-mcp:');
+    expect(content).toMatch(/mcp_servers:\s*\n\s+trace:/);
+  });
+});
+
+describe('Codex TOML writer', () => {
+  function configPath(): string {
+    return path.join(fakeHome, '.codex', 'config.toml');
+  }
+
+  it('appends a [mcp_servers.trace] section to a new file', () => {
+    const results = configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    expect(results[0].action).toBe('created');
+    const content = fs.readFileSync(configPath(), 'utf-8');
+    expect(content).toContain('[mcp_servers.trace]');
+    expect(content).not.toContain('[mcp_servers.trace-mcp]');
+  });
+
+  it('migrates a legacy [mcp_servers.trace-mcp] section (with .env sub-table) in place', () => {
+    const file = configPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      [
+        '[some_other_tool]',
+        'command = "keep-me"',
+        '',
+        '[mcp_servers.trace-mcp]',
+        'command = "/old/launcher"',
+        'args = ["serve"]',
+        '[mcp_servers.trace-mcp.env]',
+        'FOO = "bar"',
+        '',
+      ].join('\n'),
+    );
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    const content = fs.readFileSync(file, 'utf-8');
+    expect(content).toContain('[some_other_tool]'); // untouched, unrelated section survives
+    expect(content).not.toContain('[mcp_servers.trace-mcp]');
+    expect(content).toContain('[mcp_servers.trace]');
+  });
+});
+
 describe('Warp configuration', () => {
   it('always returns skipped with paste-snippet detail', () => {
     const results = configureMcpClients(['warp'], projectRoot, { scope: 'global' });
     expect(results[0].action).toBe('skipped');
     expect(results[0].detail).toContain('Settings');
-    expect(results[0].detail).toContain('"trace-mcp"');
+    expect(results[0].detail).toContain('"trace"');
   });
 
   it('includes claude-code inheritance hint when both selected', () => {

@@ -4,10 +4,13 @@
  * from a config file written here, with a probe fallback — so node upgrades
  * (nvm/Herd/Volta/fnm) don't break MCP registration.
  *
- * Layout under $TRACE_MCP_HOME (default ~/.trace-mcp):
- *   bin/trace-mcp     — bash shim, copied from hooks/trace-mcp-launcher.sh
+ * Layout under $TRACE_MCP_HOME (default ~/.trace):
+ *   bin/trace         — bash shim, copied from hooks/trace-mcp-launcher.sh
  *   launcher.env      — KV config (TRACE_MCP_NODE, TRACE_MCP_CLI, TRACE_MCP_VERSION)
  *   launcher.log      — rolling resolution diagnostics written by the shim
+ *
+ * A pre-TRA-611 install also gets `~/.trace-mcp/bin/trace-mcp` preserved as a
+ * symlink to the above — see installLegacyBinCompat().
  */
 
 import fs from 'node:fs';
@@ -15,7 +18,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { withPs1Bom } from './ps1-bom.js';
 import { atomicWriteString } from '../utils/atomic-write.js';
+import { isSymlink } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
+import { TRACE_MCP_HOME_MIGRATED } from '../global.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
 
@@ -34,7 +39,7 @@ interface LauncherArtifact {
 
 const ARTIFACTS: LauncherArtifact[] = IS_WINDOWS
   ? [
-      { src: 'trace-mcp-launcher.cmd', dest: 'trace-mcp.cmd', mode: 0o755, isPrimaryShim: true },
+      { src: 'trace-mcp-launcher.cmd', dest: 'trace.cmd', mode: 0o755, isPrimaryShim: true },
       {
         src: 'trace-mcp-launcher.ps1',
         dest: 'trace-mcp-launcher.ps1',
@@ -42,12 +47,18 @@ const ARTIFACTS: LauncherArtifact[] = IS_WINDOWS
         isPrimaryShim: false,
       },
     ]
-  : [{ src: 'trace-mcp-launcher.sh', dest: 'trace-mcp', mode: 0o755, isPrimaryShim: true }];
+  : [{ src: 'trace-mcp-launcher.sh', dest: 'trace', mode: 0o755, isPrimaryShim: true }];
+
+// Legacy (pre-TRA-611) destination basenames, kept only to install the
+// `~/.trace-mcp/bin/`-legacy compat symlinks — see installLegacyBinCompat().
+const LEGACY_PRIMARY_DEST = IS_WINDOWS ? 'trace-mcp.cmd' : 'trace-mcp';
 
 export function getLauncherDir(): string {
+  // Distinct from TRACE_MCP_DATA_DIR (src/global.ts) — the Electron main
+  // process resolves the same directory via this env var; keep it as-is.
   const envDir = process.env.TRACE_MCP_HOME?.trim();
   if (envDir) return envDir;
-  return path.join(os.homedir(), '.trace-mcp');
+  return path.join(os.homedir(), '.trace');
 }
 
 export function getLauncherPath(): string {
@@ -190,6 +201,30 @@ export interface InstallLauncherOpts {
 }
 
 /**
+ * Preserve `~/.trace-mcp/bin/trace-mcp` (`trace-mcp.cmd` on Windows) as a
+ * symlink to the new `~/.trace/bin/trace` shim, so a client or script still
+ * pointed at the pre-TRA-611 absolute path keeps working after the rename.
+ * Only acts the one run that actually performed the `~/.trace-mcp` ->
+ * `~/.trace` rename (a fresh install never had a legacy path to preserve);
+ * once created the symlink lives on disk, so later runs skip this.
+ * ponytail: a dry-run on that exact first post-migration run skips creating
+ * the symlink and there's no retry — narrow edge case, `trace init` again
+ * (non-dry-run) recovers it.
+ */
+function installLegacyBinCompat(): void {
+  if (!TRACE_MCP_HOME_MIGRATED) return;
+  const legacyDir = path.join(os.homedir(), '.trace-mcp', 'bin');
+  const legacyPath = path.join(legacyDir, LEGACY_PRIMARY_DEST);
+  try {
+    if (isSymlink(legacyPath) || fs.existsSync(legacyPath)) return;
+    ensureDir(legacyDir);
+    fs.symlinkSync(getLauncherPath(), legacyPath);
+  } catch {
+    /* best-effort — a legacy script can still recover via `trace init` */
+  }
+}
+
+/**
  * Install the shim script at $TRACE_MCP_HOME/bin/trace-mcp, skipping if the
  * installed version matches the shipped one (unless force=true).
  * Does NOT write launcher.env — call writeLauncherConfig() separately with
@@ -242,6 +277,8 @@ export function installLauncher(opts: InstallLauncherOpts): InitStepResult {
       }
     }
   }
+
+  installLegacyBinCompat();
 
   return {
     target: dest,
