@@ -447,3 +447,81 @@ memoryCommand
       }
     },
   );
+
+// ── memory prune ────────────────────────────────────────────────────
+
+memoryCommand
+  .command('prune')
+  .description(
+    'Prune decisions, chunks, clusters, and memos belonging to deleted project roots (dry-run by default; use --apply to delete)',
+  )
+  .option('--apply', 'Actually delete orphaned decisions and session data')
+  .option('--include-sessions', 'Also prune mined session log references for deleted files')
+  .option('--json', 'Output as JSON')
+  .action((opts: { apply?: boolean; includeSessions?: boolean; json?: boolean }) => {
+    const store = openStore();
+    try {
+      const stale = store.findStale();
+      const apply = !!opts.apply;
+
+      if (opts.json) {
+        if (apply) {
+          const result = store.pruneStale({ includeMinedSessions: opts.includeSessions });
+          console.log(JSON.stringify({ apply: true, ...result }, null, 2));
+        } else {
+          console.log(JSON.stringify({ apply: false, ...stale }, null, 2));
+        }
+        return;
+      }
+
+      console.log('Decision Store Hygiene Check:\n');
+      if (
+        stale.staleRoots.length === 0 &&
+        (!opts.includeSessions || stale.staleMinedSessionsCount === 0)
+      ) {
+        console.log(
+          '  All decision store project roots are healthy — no orphaned decisions found.\n',
+        );
+        return;
+      }
+
+      if (!apply) {
+        console.log(
+          `  Found ${stale.decisionsCount} decision(s) across ${stale.staleRoots.length} deleted project root(s):`,
+        );
+        for (const root of stale.staleRoots) {
+          console.log(`    - ${root}`);
+        }
+        if (stale.chunksCount > 0 || stale.clustersCount > 0 || stale.memosCount > 0) {
+          console.log(
+            `  Also found: ${stale.chunksCount} session chunk(s), ${stale.clustersCount} cluster(s), ${stale.memosCount} memo(s).`,
+          );
+        }
+        if (opts.includeSessions && stale.staleMinedSessionsCount > 0) {
+          console.log(
+            `  Found ${stale.staleMinedSessionsCount} stale mined session file reference(s).`,
+          );
+        }
+        console.log('\n  Dry-run only — re-run with `trace-mcp memory prune --apply` to delete.\n');
+      } else {
+        const result = store.pruneStale({ includeMinedSessions: opts.includeSessions });
+        console.log(
+          `  Pruned ${result.decisions} decision(s) across ${result.staleRoots.length} deleted project root(s):`,
+        );
+        for (const root of result.staleRoots) {
+          console.log(`    - ${root}`);
+        }
+        if (result.chunks > 0 || result.clusters > 0 || result.memos > 0) {
+          console.log(
+            `  Also pruned: ${result.chunks} chunk(s), ${result.clusters} cluster(s), ${result.memos} memo(s).`,
+          );
+        }
+        if (result.minedSessions > 0) {
+          console.log(`  Pruned ${result.minedSessions} stale mined session reference(s).`);
+        }
+        console.log('\n  Prune complete.\n');
+      }
+    } finally {
+      store.close();
+    }
+  });

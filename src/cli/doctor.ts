@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import * as p from '@clack/prompts';
 import Database from 'better-sqlite3';
 import { Command } from 'commander';
-import { REGISTRY_PATH } from '../global.js';
+import { DECISIONS_DB_PATH, REGISTRY_PATH, TOPOLOGY_DB_PATH } from '../global.js';
 import { type ConflictSeverity, detectConflicts } from '../init/conflict-detector.js';
 import { type FixResult, fixAllConflicts, fixConflict } from '../init/conflict-resolver.js';
 import {
@@ -30,6 +30,8 @@ import {
   pruneStaleProjects,
   unregisterProject,
 } from '../registry.js';
+import { TopologyStore } from '../topology/topology-db.js';
+import { DecisionStore } from '../memory/decision-store.js';
 
 const _SEVERITY_ICON: Record<ConflictSeverity, string> = {
   critical: 'X',
@@ -73,12 +75,29 @@ export const doctorCommand = new Command('doctor')
         registry.unregisteredNestedRepos.length > 0 ||
         registry.ephemeralProjects.length > 0;
 
+      // Topology & Decisions hygiene — dead services/subprojects and orphaned decisions
+      const topology = diagnoseTopology();
+      const hasTopologyIssues = topology.staleCount > 0;
+
+      const decisions = diagnoseDecisions();
+      const hasDecisionsIssues = decisions.staleRoots.length > 0;
+
       // --fix / --dry-run also clean up the registry itself (TRA-18): missing-root
       // entries and overlap containers have one unambiguous remediation each, so
       // (unlike project conflicts) they don't need an interactive per-item prompt.
       const registryFix: RegistryFixResult | null =
         hasRegistryIssues && (opts.fix || opts.dryRun)
           ? fixRegistryIssues(registry, { dryRun: opts.dryRun })
+          : null;
+
+      let topologyFix: TopologyFixResult | null =
+        hasTopologyIssues && (opts.fix || opts.dryRun)
+          ? fixTopologyIssues(topology, { dryRun: opts.dryRun })
+          : null;
+
+      let decisionsFix: DecisionsFixResult | null =
+        hasDecisionsIssues && (opts.fix || opts.dryRun)
+          ? fixDecisionsIssues(decisions, { dryRun: opts.dryRun })
           : null;
 
       // Detect project root (optional — doctor works without it)
@@ -97,19 +116,61 @@ export const doctorCommand = new Command('doctor')
         if (opts.fix || opts.dryRun) {
           const results = fixAllConflicts(conflicts, { dryRun: opts.dryRun });
           console.log(
-            JSON.stringify({ registry, registryFix, conflicts, fixes: results }, null, 2),
+            JSON.stringify(
+              {
+                registry,
+                registryFix,
+                topology,
+                topologyFix,
+                decisions,
+                decisionsFix,
+                conflicts,
+                fixes: results,
+              },
+              null,
+              2,
+            ),
           );
         } else {
-          console.log(JSON.stringify({ registry, ...report }, null, 2));
+          console.log(JSON.stringify({ registry, topology, decisions, ...report }, null, 2));
         }
         return;
       }
 
       printRegistryReport(registry);
+      printTopologyReport(topology);
+      printDecisionsReport(decisions);
+
       if (registryFix) {
         printRegistryFixResult(registryFix, { dryRun: !!opts.dryRun });
       } else if (opts.fixInteractive && hasRegistryIssues) {
         printRegistryFixResult(await fixRegistryIssuesInteractive(registry), { dryRun: false });
+      }
+
+      if (topologyFix) {
+        printTopologyFixResult(topologyFix, { dryRun: !!opts.dryRun });
+      } else if (opts.fixInteractive && hasTopologyIssues) {
+        const answer = await p.confirm({
+          message: `Remove ${topology.staleServices.length} dead service(s) and ${topology.staleSubprojects.length} dead subproject(s) from topology.db (folders deleted)?`,
+          initialValue: true,
+        });
+        if (!p.isCancel(answer) && answer) {
+          topologyFix = fixTopologyIssues(topology, { dryRun: false });
+          printTopologyFixResult(topologyFix, { dryRun: false });
+        }
+      }
+
+      if (decisionsFix) {
+        printDecisionsFixResult(decisionsFix, { dryRun: !!opts.dryRun });
+      } else if (opts.fixInteractive && hasDecisionsIssues) {
+        const answer = await p.confirm({
+          message: `Remove ${decisions.staleDecisionsCount} orphaned decision(s) across ${decisions.staleRoots.length} deleted project root(s) from decisions.db?`,
+          initialValue: true,
+        });
+        if (!p.isCancel(answer) && answer) {
+          decisionsFix = fixDecisionsIssues(decisions, { dryRun: false });
+          printDecisionsFixResult(decisionsFix, { dryRun: false });
+        }
       }
 
       // --- No conflicts ---
@@ -320,6 +381,181 @@ export function diagnoseRegistry(): RegistryHealthReport {
     unregisteredNestedRepos: findUnregisteredNestedRepos(),
     ephemeralProjects: findEphemeralProjects(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Topology DB integrity
+// ---------------------------------------------------------------------------
+
+export interface TopologyHealthReport {
+  topologyPath: string;
+  topologyExists: boolean;
+  staleServices: Array<{ id: number; name: string; repoRoot: string }>;
+  staleSubprojects: Array<{ id: number; name: string; repoRoot: string; projectRoot: string }>;
+  staleCount: number;
+}
+
+export function diagnoseTopology(): TopologyHealthReport {
+  if (!fs.existsSync(TOPOLOGY_DB_PATH)) {
+    return {
+      topologyPath: TOPOLOGY_DB_PATH,
+      topologyExists: false,
+      staleServices: [],
+      staleSubprojects: [],
+      staleCount: 0,
+    };
+  }
+  try {
+    const topoStore = new TopologyStore(TOPOLOGY_DB_PATH, { readonly: true });
+    try {
+      const stale = topoStore.findStale();
+      return {
+        topologyPath: TOPOLOGY_DB_PATH,
+        topologyExists: true,
+        staleServices: stale.staleServices.map((s) => ({
+          id: s.id,
+          name: s.name,
+          repoRoot: s.repo_root,
+        })),
+        staleSubprojects: stale.staleSubprojects.map((s) => ({
+          id: s.id,
+          name: s.name,
+          repoRoot: s.repo_root,
+          projectRoot: s.project_root,
+        })),
+        staleCount: stale.staleServices.length + stale.staleSubprojects.length,
+      };
+    } finally {
+      topoStore.close();
+    }
+  } catch {
+    return {
+      topologyPath: TOPOLOGY_DB_PATH,
+      topologyExists: true,
+      staleServices: [],
+      staleSubprojects: [],
+      staleCount: 0,
+    };
+  }
+}
+
+export interface TopologyFixResult {
+  removedServices: string[];
+  removedSubprojects: string[];
+}
+
+export function fixTopologyIssues(
+  t: TopologyHealthReport,
+  opts: { dryRun?: boolean },
+): TopologyFixResult {
+  if (opts.dryRun) {
+    return {
+      removedServices: t.staleServices.map((s) => s.name),
+      removedSubprojects: t.staleSubprojects.map((s) => s.name),
+    };
+  }
+  if (!fs.existsSync(TOPOLOGY_DB_PATH)) {
+    return { removedServices: [], removedSubprojects: [] };
+  }
+  try {
+    const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+    try {
+      const res = topoStore.pruneStale();
+      return {
+        removedServices: res.removedServices.map((s) => s.name),
+        removedSubprojects: res.removedSubprojects.map((s) => s.name),
+      };
+    } finally {
+      topoStore.close();
+    }
+  } catch {
+    return { removedServices: [], removedSubprojects: [] };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Decision Memory DB integrity
+// ---------------------------------------------------------------------------
+
+export interface DecisionsHealthReport {
+  decisionsPath: string;
+  decisionsExists: boolean;
+  staleRoots: string[];
+  staleDecisionsCount: number;
+  staleDecisions: Array<{ id: number; title: string; projectRoot: string }>;
+}
+
+export function diagnoseDecisions(): DecisionsHealthReport {
+  if (!fs.existsSync(DECISIONS_DB_PATH)) {
+    return {
+      decisionsPath: DECISIONS_DB_PATH,
+      decisionsExists: false,
+      staleRoots: [],
+      staleDecisionsCount: 0,
+      staleDecisions: [],
+    };
+  }
+  try {
+    const store = new DecisionStore(DECISIONS_DB_PATH, { readonly: true });
+    try {
+      const stale = store.findStale();
+      return {
+        decisionsPath: DECISIONS_DB_PATH,
+        decisionsExists: true,
+        staleRoots: stale.staleRoots,
+        staleDecisionsCount: stale.decisionsCount,
+        staleDecisions: stale.staleDecisions.map((d) => ({
+          id: d.id,
+          title: d.title,
+          projectRoot: d.project_root,
+        })),
+      };
+    } finally {
+      store.close();
+    }
+  } catch {
+    return {
+      decisionsPath: DECISIONS_DB_PATH,
+      decisionsExists: true,
+      staleRoots: [],
+      staleDecisionsCount: 0,
+      staleDecisions: [],
+    };
+  }
+}
+
+export interface DecisionsFixResult {
+  removedRoots: string[];
+  removedDecisions: number;
+}
+
+export function fixDecisionsIssues(
+  d: DecisionsHealthReport,
+  opts: { dryRun?: boolean },
+): DecisionsFixResult {
+  if (opts.dryRun) {
+    return {
+      removedRoots: d.staleRoots,
+      removedDecisions: d.staleDecisionsCount,
+    };
+  }
+  if (!fs.existsSync(DECISIONS_DB_PATH)) {
+    return { removedRoots: [], removedDecisions: 0 };
+  }
+  try {
+    const store = new DecisionStore(DECISIONS_DB_PATH);
+    try {
+      const res = store.pruneStale({ staleRoots: d.staleRoots, includeMinedSessions: true });
+      return {
+        removedRoots: res.staleRoots,
+        removedDecisions: res.decisions,
+      };
+    } finally {
+      store.close();
+    }
+  } catch {
+    return { removedRoots: [], removedDecisions: 0 };
+  }
 }
 
 export interface BlockedOverlapContainer {
@@ -589,6 +825,59 @@ function printRegistryReport(r: RegistryHealthReport): void {
         'then `trace-mcp prune --apply`.',
     );
   }
+  console.log('');
+}
+
+function printTopologyReport(t: TopologyHealthReport): void {
+  if (!t.topologyExists || t.staleCount === 0) return;
+  console.log(
+    `Topology: ${t.staleCount} dead entr${t.staleCount === 1 ? 'y' : 'ies'} in topology.db (folder deleted):`,
+  );
+  for (const s of t.staleServices) {
+    console.log(`  [service] ${s.name}  ${shortPath(s.repoRoot)}`);
+  }
+  for (const sub of t.staleSubprojects) {
+    console.log(`  [subproject] ${sub.name}  ${shortPath(sub.repoRoot)}`);
+  }
+  console.log(
+    "  Clean up dead topology entries with 'trace-mcp prune --apply' or 'trace-mcp doctor --fix'.\n",
+  );
+}
+
+function printDecisionsReport(d: DecisionsHealthReport): void {
+  if (!d.decisionsExists || d.staleRoots.length === 0) return;
+  console.log(
+    `Decision Memory: ${d.staleDecisionsCount} orphaned decision(s) across ${d.staleRoots.length} deleted project root(s) in decisions.db:`,
+  );
+  for (const root of d.staleRoots) {
+    console.log(`  ${shortPath(root)}`);
+  }
+  console.log(
+    "  Clean up orphaned decisions with 'trace-mcp memory prune --apply', 'trace-mcp prune --apply', or 'trace-mcp doctor --fix'.\n",
+  );
+}
+
+function printTopologyFixResult(fix: TopologyFixResult, opts: { dryRun: boolean }): void {
+  const verb = opts.dryRun ? 'Would remove' : 'Removed';
+  const total = fix.removedServices.length + fix.removedSubprojects.length;
+  if (total === 0) return;
+  const lines = [
+    `${verb} ${total} dead topology entr${total === 1 ? 'y' : 'ies'} (folder deleted):`,
+  ];
+  for (const s of fix.removedServices) lines.push(`  [service] ${s}`);
+  for (const sub of fix.removedSubprojects) lines.push(`  [subproject] ${sub}`);
+  console.log(lines.join('\n'));
+  console.log('');
+}
+
+function printDecisionsFixResult(fix: DecisionsFixResult, opts: { dryRun: boolean }): void {
+  const verb = opts.dryRun ? 'Would remove' : 'Removed';
+  if (fix.removedRoots.length === 0 && fix.removedDecisions === 0) return;
+  const lines = [
+    `${verb} ${fix.removedDecisions} orphaned decision(s) across ${fix.removedRoots.length} deleted project root(s):`,
+  ];
+  for (const r of fix.removedRoots) lines.push(`  ${shortPath(r)}`);
+  console.log(lines.join('\n'));
   console.log('');
 }
 

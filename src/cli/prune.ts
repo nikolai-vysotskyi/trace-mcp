@@ -21,11 +21,19 @@ import path from 'node:path';
 import * as p from '@clack/prompts';
 import Database from 'better-sqlite3';
 import { Command } from 'commander';
-import { ensureGlobalDirs, projectHash, projectName } from '../global.js';
+import {
+  DECISIONS_DB_PATH,
+  ensureGlobalDirs,
+  projectHash,
+  projectName,
+  TOPOLOGY_DB_PATH,
+} from '../global.js';
 import { logger } from '../logger.js';
 import { hasLiveHolderOrUnknown, removeHoldersDir } from '../db-holders.js';
 import { listProjects, pruneStaleProjects } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
+import { TopologyStore } from '../topology/topology-db.js';
+import { DecisionStore } from '../memory/decision-store.js';
 
 /** Categories assigned to each DB candidate. */
 export type PruneCategory =
@@ -422,6 +430,112 @@ function toJson(
   };
 }
 
+export interface TopologyPruneSummary {
+  staleServices: Array<{ id: number; name: string; repo_root: string }>;
+  staleSubprojects: Array<{ id: number; name: string; repo_root: string; project_root: string }>;
+  removedServices: number;
+  removedSubprojects: number;
+}
+
+export interface DecisionsPruneSummary {
+  staleRoots: string[];
+  staleDecisionsCount: number;
+  removedDecisions: number;
+  removedChunks: number;
+  removedClusters: number;
+  removedMemos: number;
+}
+
+export function scanOrPruneTopology(apply = false): TopologyPruneSummary {
+  if (!fs.existsSync(TOPOLOGY_DB_PATH)) {
+    return {
+      staleServices: [],
+      staleSubprojects: [],
+      removedServices: 0,
+      removedSubprojects: 0,
+    };
+  }
+  try {
+    const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+    try {
+      const stale = topoStore.findStale();
+      let removedServices = 0;
+      let removedSubprojects = 0;
+      if (apply && (stale.staleServices.length > 0 || stale.staleSubprojects.length > 0)) {
+        const res = topoStore.pruneStale();
+        removedServices = res.services;
+        removedSubprojects = res.subprojects;
+      }
+      return {
+        staleServices: stale.staleServices,
+        staleSubprojects: stale.staleSubprojects,
+        removedServices,
+        removedSubprojects,
+      };
+    } finally {
+      topoStore.close();
+    }
+  } catch (err) {
+    logger.warn({ err }, 'prune: topology scan/prune failed');
+    return {
+      staleServices: [],
+      staleSubprojects: [],
+      removedServices: 0,
+      removedSubprojects: 0,
+    };
+  }
+}
+
+export function scanOrPruneDecisions(apply = false): DecisionsPruneSummary {
+  if (!fs.existsSync(DECISIONS_DB_PATH)) {
+    return {
+      staleRoots: [],
+      staleDecisionsCount: 0,
+      removedDecisions: 0,
+      removedChunks: 0,
+      removedClusters: 0,
+      removedMemos: 0,
+    };
+  }
+  try {
+    const store = new DecisionStore(DECISIONS_DB_PATH);
+    try {
+      const stale = store.findStale();
+      let removedDecisions = 0;
+      let removedChunks = 0;
+      let removedClusters = 0;
+      let removedMemos = 0;
+      if (apply && stale.staleRoots.length > 0) {
+        const res = store.pruneStale({ staleRoots: stale.staleRoots, includeMinedSessions: true });
+        removedDecisions = res.decisions;
+        removedChunks = res.chunks;
+        removedClusters = res.clusters;
+        removedMemos = res.memos;
+      }
+      return {
+        staleRoots: stale.staleRoots,
+        staleDecisionsCount: stale.decisionsCount,
+        removedDecisions,
+        removedChunks,
+        removedClusters,
+        removedMemos,
+      };
+    } finally {
+      store.close();
+    }
+  } catch (err) {
+    logger.warn({ err }, 'prune: decisions scan/prune failed');
+    return {
+      staleRoots: [],
+      staleDecisionsCount: 0,
+      removedDecisions: 0,
+      removedChunks: 0,
+      removedClusters: 0,
+      removedMemos: 0,
+    };
+  }
+}
+
 export const pruneCommand = new Command('prune')
   .description(
     'Audit ~/.trace-mcp/index for orphan/expired DBs (dry-run by default; use --apply to delete)',
@@ -453,6 +567,12 @@ export const pruneCommand = new Command('prune')
         .map((e) => e.root);
       const removedRegistryRoots = apply ? pruneStaleProjects() : [];
 
+      // Stale topology rows (services/subprojects pointing to deleted folders)
+      const topoSummary = scanOrPruneTopology(apply);
+
+      // Stale decisions / memory rows belonging to deleted project roots
+      const decisionsSummary = scanOrPruneDecisions(apply);
+
       if (opts.json) {
         console.log(
           JSON.stringify(
@@ -460,6 +580,20 @@ export const pruneCommand = new Command('prune')
               ...(toJson(summary, { apply, aggressive, sessionTtlDays }) as object),
               staleRegistryRoots,
               removedRegistryRoots,
+              topology: {
+                staleServices: topoSummary.staleServices,
+                staleSubprojects: topoSummary.staleSubprojects,
+                removedServices: topoSummary.removedServices,
+                removedSubprojects: topoSummary.removedSubprojects,
+              },
+              decisions: {
+                staleRoots: decisionsSummary.staleRoots,
+                staleDecisionsCount: decisionsSummary.staleDecisionsCount,
+                removedDecisions: decisionsSummary.removedDecisions,
+                removedChunks: decisionsSummary.removedChunks,
+                removedClusters: decisionsSummary.removedClusters,
+                removedMemos: decisionsSummary.removedMemos,
+              },
             },
             null,
             2,
@@ -477,6 +611,34 @@ export const pruneCommand = new Command('prune')
           [heading, ...staleRegistryRoots.map((r) => `  ${shortPath(r)}`)].join('\n'),
           'Registry',
         );
+      }
+      if (
+        topoSummary.staleServices.length > 0 ||
+        topoSummary.staleSubprojects.length > 0 ||
+        topoSummary.removedServices > 0 ||
+        topoSummary.removedSubprojects > 0
+      ) {
+        const heading = apply
+          ? `Removed ${topoSummary.removedServices} stale service(s) and ${topoSummary.removedSubprojects} stale subproject(s) from topology.db:`
+          : `${topoSummary.staleServices.length} stale service(s) and ${topoSummary.staleSubprojects.length} stale subproject(s) in topology.db (folder deleted) — would remove:`;
+        const lines = [heading];
+        for (const s of topoSummary.staleServices) {
+          lines.push(`  [service] ${s.name} (${shortPath(s.repo_root)})`);
+        }
+        for (const sub of topoSummary.staleSubprojects) {
+          lines.push(`  [subproject] ${sub.name} (${shortPath(sub.repo_root)})`);
+        }
+        p.note(lines.join('\n'), 'Topology');
+      }
+      if (decisionsSummary.staleRoots.length > 0 || decisionsSummary.removedDecisions > 0) {
+        const heading = apply
+          ? `Removed ${decisionsSummary.removedDecisions} orphaned decision(s) across ${decisionsSummary.staleRoots.length} deleted project root(s) from decisions.db:`
+          : `${decisionsSummary.staleDecisionsCount} orphaned decision(s) across ${decisionsSummary.staleRoots.length} deleted project root(s) in decisions.db (folder deleted) — would remove:`;
+        const lines = [heading];
+        for (const r of decisionsSummary.staleRoots) {
+          lines.push(`  ${shortPath(r)}`);
+        }
+        p.note(lines.join('\n'), 'Decision Memory');
       }
       if (!apply) {
         p.outro('Dry-run only — re-run with --apply to delete.');
