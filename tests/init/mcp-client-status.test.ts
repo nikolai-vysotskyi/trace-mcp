@@ -82,7 +82,7 @@ describe('getMcpClientStatuses', () => {
 
     const cursorEntry = JSON.parse(
       fs.readFileSync(path.join(fakeHome, '.cursor', 'mcp.json'), 'utf-8'),
-    ).mcpServers['trace-mcp'];
+    ).mcpServers['trace'];
     expect(cursorEntry.cwd).toBeUndefined();
   });
 
@@ -90,7 +90,7 @@ describe('getMcpClientStatuses', () => {
     configureMcpClients(['cursor'], projectRoot, { scope: 'global' });
     const configPath = path.join(fakeHome, '.cursor', 'mcp.json');
     const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    c.mcpServers['trace-mcp'].cwd = '/some/stale/path';
+    c.mcpServers['trace'].cwd = '/some/stale/path';
     fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
 
     const [before] = getMcpClientStatuses(projectRoot, 'global', ['cursor']);
@@ -101,7 +101,7 @@ describe('getMcpClientStatuses', () => {
     const [after] = getMcpClientStatuses(projectRoot, 'global', ['cursor']);
     expect(after.status).toBe('up_to_date');
     expect(
-      JSON.parse(fs.readFileSync(configPath, 'utf-8')).mcpServers['trace-mcp'].cwd,
+      JSON.parse(fs.readFileSync(configPath, 'utf-8')).mcpServers['trace'].cwd,
     ).toBeUndefined();
   });
 
@@ -112,7 +112,7 @@ describe('getMcpClientStatuses', () => {
     configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
     const configPath = path.join(fakeHome, '.claude.json');
     const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    c.mcpServers['trace-mcp'].alwaysLoad = true;
+    c.mcpServers['trace'].alwaysLoad = true;
     fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
 
     const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
@@ -127,7 +127,7 @@ describe('getMcpClientStatuses', () => {
       JSON.stringify(
         {
           mcpServers: {
-            'trace-mcp': {
+            trace: {
               command: '/old/path/that/no/longer/matches',
               args: ['serve'],
               alwaysLoad: true,
@@ -143,18 +143,62 @@ describe('getMcpClientStatuses', () => {
     expect(s.staleReason).toBe('command');
   });
 
+  it('flags `stale` reason="legacy-key" when only the pre-TRA-611 trace-mcp key is present', () => {
+    const configPath = path.join(fakeHome, '.claude.json');
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify(
+        { mcpServers: { 'trace-mcp': { command: '/some/launcher', args: ['serve'] } } },
+        null,
+        2,
+      ),
+    );
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.status).toBe('stale');
+    expect(s.staleReason).toBe('legacy-key');
+
+    // Re-running configureMcpClients migrates it: legacy key gone, new key written.
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(c.mcpServers['trace-mcp']).toBeUndefined();
+    expect(c.mcpServers.trace.command).toBeDefined();
+    const [after] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(after.status).toBe('up_to_date');
+  });
+
+  it('flags `stale` reason="legacy-key" — not `up_to_date` — when both trace and a stale trace-mcp key are present', () => {
+    // A correct `trace` entry sitting next to a leftover `trace-mcp` one (a
+    // previous migration run interrupted partway, or a hand-edited config)
+    // must not read as already_configured: the client would keep spawning
+    // two copies of the same server until the stale key is actually removed.
+    const configPath = path.join(fakeHome, '.claude.json');
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    c.mcpServers['trace-mcp'] = { command: '/stale/launcher', args: ['serve'] };
+    fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
+
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.status).toBe('stale');
+    expect(s.staleReason).toBe('legacy-key');
+
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const after = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(after.mcpServers['trace-mcp']).toBeUndefined();
+    expect(after.mcpServers.trace.command).toBeDefined();
+  });
+
   it('flags `stale` reason="args" when args change', () => {
     configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
     const configPath = path.join(fakeHome, '.claude.json');
     const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    c.mcpServers['trace-mcp'].args = ['serve', '--legacy'];
+    c.mcpServers['trace'].args = ['serve', '--legacy'];
     fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
     const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
     expect(s.status).toBe('stale');
     expect(s.staleReason).toBe('args');
   });
 
-  it('reports `missing` when mcpServers exists but trace-mcp entry is absent', () => {
+  it('reports `missing` when mcpServers exists but no trace entry is present', () => {
     const configPath = path.join(fakeHome, '.claude.json');
     fs.writeFileSync(
       configPath,
@@ -170,7 +214,7 @@ describe('getMcpClientStatuses', () => {
     expect(s.status).toBe('up_to_date');
     // Sanity: ensure the entry on disk indeed has no alwaysLoad field.
     const onDisk = JSON.parse(fs.readFileSync(s.configPath as string, 'utf-8'));
-    expect(onDisk.mcpServers['trace-mcp'].alwaysLoad).toBeUndefined();
+    expect(onDisk.mcpServers['trace'].alwaysLoad).toBeUndefined();
   });
 
   it('does not set alwaysLoad on claude-code either (GH #354)', () => {
@@ -179,7 +223,7 @@ describe('getMcpClientStatuses', () => {
     expect(s.status).toBe('up_to_date');
     const configPath = path.join(fakeHome, '.claude.json');
     const onDisk = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    expect(onDisk.mcpServers['trace-mcp'].alwaysLoad).toBeUndefined();
+    expect(onDisk.mcpServers['trace'].alwaysLoad).toBeUndefined();
   });
 
   it('returns a status for every client when called with no name filter', () => {
@@ -230,7 +274,7 @@ describe('getMcpClientStatuses', () => {
     const [s] = getMcpClientStatuses(projectRoot, 'global', ['cline']);
     const configPath = s.configPath as string;
     const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    c.mcpServers['trace-mcp'].command = '/old/launcher/path';
+    c.mcpServers['trace'].command = '/old/launcher/path';
     fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
     const [drifted] = getMcpClientStatuses(projectRoot, 'global', ['cline']);
     expect(drifted.status).toBe('stale');
