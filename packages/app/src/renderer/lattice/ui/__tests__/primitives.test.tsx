@@ -65,9 +65,10 @@ function hex(c: string): RGB {
   ];
 }
 
-/** `color-mix(in oklab, HUE 18%, transparent)` painted over `bg`. Mixing with
-    `transparent` yields the hue at 18% alpha; compositing that over an opaque
-    backing is a plain source-over blend, so the oklab detour cancels out. */
+/** `color-mix(in srgb, HUE 18%, SURFACE)` — the tinted fill a badge paints. An
+    sRGB mix at 18% is the same arithmetic as compositing the hue at 18% alpha
+    over the same backing, which is what the fill used to be (see the opacity
+    test below for why it no longer is). */
 function over(fg: RGB, bg: RGB, alpha: number): RGB {
   return [0, 1, 2].map((i) => fg[i] * alpha + bg[i] * (1 - alpha)) as RGB;
 }
@@ -206,6 +207,26 @@ describe('badge contrast', () => {
       });
     }
   }
+
+  /* TRA-635. The ratios above are measured against the tint over --surface, and
+     that is only the ratio the user sees if the tint is opaque. The margin here
+     is ~0.3, which any darker backing eats: a translucent tint measured 4.37–4.49
+     over --surface-sunken, 4.37–4.45 over a hovered row and 1.0–1.9 over an
+     accent selection fill. Mixing into --surface instead of into `transparent`
+     paints the identical pixels on --surface and pins the ratio everywhere else.
+     Neutral is excluded on purpose: darkening its own backing is what that tone
+     is for, and its label carries 2.4 of margin rather than 0.3. */
+  it('mixes every tinted fill into --surface, not into transparent', () => {
+    const tinted = rules().filter(
+      (r) => /^\.lx-badge\.t-/.test(r.selector) && r.selector !== '.lx-badge.t-neutral',
+    );
+    expect(tinted.length).toBe(TONES.length - 1);
+    for (const r of tinted) {
+      expect(decl(r.body, 'background'), r.selector).toMatch(
+        /^color-mix\(in srgb, var\(--[\w-]+\) 18%, var\(--surface\)\)$/,
+      );
+    }
+  });
 
   it('never paints a badge label white', () => {
     for (const { scope } of APPEARANCES) {
