@@ -44,15 +44,20 @@ const _plugin = createRegexLanguagePlugin({
 function extractPhonyTargets(filePath: string, source: string, existingIds: Set<string>): RawSymbol[] {
   const symbols: RawSymbol[] = [];
   const seen = new Set<string>();
-  const lineRe = /^\.PHONY:\s*(.+)$/gm;
+  const lineRe = /^\.PHONY:\s*([^#\r\n]+)/gm;
   let lineMatch: RegExpExecArray | null;
   while ((lineMatch = lineRe.exec(source)) !== null) {
     const list = lineMatch[1];
-    const listStart = lineMatch.index + lineMatch[0].indexOf(list);
+    // `list` is always the tail of `lineMatch[0]` (everything after ".PHONY:"
+    // and its leading whitespace) — measure from the end, not indexOf, or a
+    // target that happens to be a substring of ".PHONY:" itself (e.g. "O")
+    // matches inside the keyword instead of inside the list.
+    const listStart = lineMatch.index + (lineMatch[0].length - list.length);
     const tokenRe = /\S+/g;
     let tokenMatch: RegExpExecArray | null;
     while ((tokenMatch = tokenRe.exec(list)) !== null) {
       const name = tokenMatch[0];
+      if (name === '\\') continue; // line-continuation marker, not a target
       const symbolId = makeSymbolId(filePath, name, 'function');
       if (seen.has(symbolId) || existingIds.has(symbolId)) continue;
       seen.add(symbolId);

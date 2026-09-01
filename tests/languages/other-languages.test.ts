@@ -735,4 +735,24 @@ describe('Makefile', () => {
       1,
     );
   });
+
+  it('offsets a .PHONY target correctly even when the name is a substring of the keyword', async () => {
+    // ".PHONY:" itself contains "O", "N", "H", "P", "Y" — a naive
+    // list.indexOf() lookup can match inside the keyword instead of the list.
+    const source = '.PHONY: O\n';
+    const r = await p(source);
+    const sym = r.symbols.find((s: any) => s.name === 'O' && s.kind === 'function');
+    expect(sym).toBeDefined();
+    expect(sym.byteStart).toBe(source.indexOf('O', 7)); // the target, not the "O" inside ".PHONY"
+    expect(source.slice(sym.byteStart, sym.byteEnd)).toBe('O');
+  });
+
+  it('ignores a trailing comment and a line-continuation backslash on a .PHONY line', async () => {
+    const r = await p('.PHONY: test spec # run mocha\n');
+    expect(r.symbols.some((s: any) => s.name === 'test' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'spec' && s.kind === 'function')).toBe(true);
+    for (const bogus of ['#', 'run', 'mocha', '\\']) {
+      expect(r.symbols.some((s: any) => s.name === bogus)).toBe(false);
+    }
+  });
 });
