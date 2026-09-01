@@ -555,6 +555,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   position: fixed;
   z-index: 91;
   min-width: 220px;
+  max-width: 280px;
   padding: 5px;
   border-radius: var(--radius-popover);
   background: var(--surface-raised);
@@ -768,17 +769,18 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
 }
 .ws-ctx-header .status {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
   margin-top: 1px;
   font-size: 11px;
+  line-height: 14px;
   color: var(--label-secondary);
 }
 .ws-ctx-header .status .text {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
 }
 /* Never colour alone: the dot repeats what the sentence beside it already
    says, it does not replace it. */
@@ -786,6 +788,7 @@ body.ws-resizing [data-lattice-claude] { pointer-events: none !important; }
   width: 6px;
   height: 6px;
   flex: none;
+  margin-top: 4px;
   border-radius: 50%;
   background: var(--label-secondary);
   box-shadow: 0 0 0 0.5px color-mix(in srgb, var(--label-secondary) 60%, black 40%);
