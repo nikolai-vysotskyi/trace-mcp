@@ -7,6 +7,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
+    "trace": "dist/cli.js",
     "trace-mcp": "dist/cli.js"
   },
   "scripts": {

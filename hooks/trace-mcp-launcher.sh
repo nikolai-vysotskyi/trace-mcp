@@ -8,7 +8,7 @@
 
 set -u
 
-TRACE_HOME="${TRACE_MCP_HOME:-$HOME/.trace-mcp}"
+TRACE_HOME="${TRACE_MCP_HOME:-$HOME/.trace}"
 CONFIG="$TRACE_HOME/launcher.env"
 LOG="$TRACE_HOME/launcher.log"
 
