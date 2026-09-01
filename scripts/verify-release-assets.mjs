@@ -64,7 +64,29 @@ export function auditChannelManifest(manifestName, manifestContent, bySize, vers
     return [`${manifestName} is empty or unreadable`];
   }
 
-  const matches = Array.from(manifestContent.matchAll(/(?:url|path):\s*([^\s#\r\n]+)/g));
+  const stripped = manifestContent
+    .split('\n')
+    .map((line) => {
+      const commentIdx = line.indexOf('#');
+      return commentIdx >= 0 ? line.slice(0, commentIdx) : line;
+    })
+    .join('\n');
+
+  if (version) {
+    const versionMatch = stripped.match(/^\s*version:\s*['"]?([^\s'"]+)['"]?/m);
+    const manifestVersion = versionMatch ? versionMatch[1] : null;
+    if (!manifestVersion) {
+      problems.push(`${manifestName} is missing a top-level 'version' field`);
+    } else if (manifestVersion !== version) {
+      problems.push(
+        `${manifestName} version '${manifestVersion}' does not match release version '${version}'`,
+      );
+    }
+  }
+
+  const matches = Array.from(
+    stripped.matchAll(/^\s*(?:-\s*)?(?:url|path):\s*['"]?([^\s'"]+)['"]?/gm),
+  );
   const filenames = matches
     .map((m) => m[1].trim())
     .filter((f) => !f.startsWith('http://') && !f.startsWith('https://'));
