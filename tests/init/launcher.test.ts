@@ -34,15 +34,15 @@ describe('launcher config paths', () => {
 
   it('honors $TRACE_MCP_HOME override', () => {
     // On Windows the launcher is a .cmd shim; on POSIX it's a bare bash script.
-    const launcherName = process.platform === 'win32' ? 'trace-mcp.cmd' : 'trace-mcp';
+    const launcherName = process.platform === 'win32' ? 'trace.cmd' : 'trace';
     expect(getLauncherDir()).toBe(tmp);
     expect(getLauncherPath()).toBe(path.join(tmp, 'bin', launcherName));
     expect(getLauncherConfigPath()).toBe(path.join(tmp, 'launcher.env'));
   });
 
-  it('falls back to ~/.trace-mcp when env var absent', () => {
+  it('falls back to ~/.trace when env var absent', () => {
     delete process.env.TRACE_MCP_HOME;
-    expect(getLauncherDir()).toBe(path.join(os.homedir(), '.trace-mcp'));
+    expect(getLauncherDir()).toBe(path.join(os.homedir(), '.trace'));
   });
 });
 

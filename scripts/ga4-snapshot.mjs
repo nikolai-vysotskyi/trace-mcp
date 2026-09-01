@@ -85,7 +85,7 @@ async function report(token, propertyId, body) {
 }
 
 const range = (days) => [{ startDate: `${days}daysAgo`, endDate: 'today' }];
-const num = (r, i = 0) => Number(r.rows?.[0]?.metricValues?.[i]?.value ?? 0);
+const num = (r, i = 0) => Number(r?.rows?.[0]?.metricValues?.[i]?.value ?? 0);
 
 /** YAML-safe one-liner for an error we want visible instead of a silent 0. */
 const why = (e) =>
@@ -134,12 +134,22 @@ async function traffic(repo, token) {
   }
 }
 
-/** `dimension -> value` breakdown, largest first, as a plain object. */
+/**
+ * `dimension -> value` breakdown, largest first, as a plain object.
+ *
+ * `(not set)` is kept, not dropped (TRA-643). It means something different from
+ * every other key: our own `"unknown"` is a value the install sent, while
+ * `(not set)` is GA4 having no value for that dimension at all — an event that
+ * predates the custom dimension's registration, or one GA4 generated itself.
+ * Dropping it made every breakdown sum to less than `active_users` with nothing
+ * in the file to explain the gap, which is how "41% of installs report no
+ * client" got read off a denominator that was never the right one.
+ */
 function breakdown(res) {
   const out = {};
-  for (const row of res.rows ?? []) {
+  for (const row of res?.rows ?? []) {
     const k = row.dimensionValues?.[0]?.value;
-    if (k && k !== '(not set)') out[k] = Number(row.metricValues?.[0]?.value ?? 0);
+    if (k) out[k] = Number(row.metricValues?.[0]?.value ?? 0);
   }
   return out;
 }
@@ -149,69 +159,97 @@ const propertyId = process.env.GA4_PROPERTY_ID;
 if (!propertyId) throw new Error('GA4_PROPERTY_ID is not set');
 const token = await accessToken(key);
 
-const [d1, d7, d28, versions, countries, clients, saved, installs, indexed, arrivals] =
-  await Promise.all([
-    report(token, propertyId, { dateRanges: range(1), metrics: [{ name: 'activeUsers' }] }),
-    report(token, propertyId, { dateRanges: range(7), metrics: [{ name: 'activeUsers' }] }),
-    report(token, propertyId, {
-      dateRanges: range(28),
-      metrics: [{ name: 'activeUsers' }, { name: 'eventCount' }],
-    }),
-    report(token, propertyId, {
-      dateRanges: range(28),
-      dimensions: [{ name: 'customEvent:version' }],
-      metrics: [{ name: 'activeUsers' }],
-      limit: 25,
-    }),
-    report(token, propertyId, {
-      dateRanges: range(28),
-      dimensions: [{ name: 'country' }],
-      metrics: [{ name: 'activeUsers' }],
-      limit: 25,
-    }),
-    report(token, propertyId, {
-      dateRanges: range(28),
-      dimensions: [{ name: 'customEvent:client' }],
-      metrics: [{ name: 'activeUsers' }],
-      limit: 25,
-    }),
-    // Daily rather than one total: the sanitizer needs the series to find the
-    // median day, and a raw sum of an unauthenticated counter is not publishable.
-    //
-    // Filtered to the ping event, because the cap divides tokens by `activeUsers`
-    // to get a per-user rate. Unfiltered, that denominator is the property's
-    // whole daily audience; if any of it ever stops carrying `tokens_saved`, the
-    // rate tracks traffic instead of usage and the cap drifts in both directions.
-    // Today the ping is the property's only event, so this filter changes no
-    // number — it keeps the denominator pinned to the population the numerator
-    // comes from if that stops being true.
-    report(token, propertyId, {
-      dateRanges: [{ startDate: SINCE, endDate: 'today' }],
-      dimensions: [{ name: 'date' }],
-      metrics: [{ name: 'customEvent:tokens_saved' }, { name: 'activeUsers' }],
-      dimensionFilter: {
-        filter: { fieldName: 'eventName', stringFilter: { value: PING_EVENT } },
-      },
-      limit: 100000,
-    }).catch(() => null),
-    report(token, propertyId, {
-      dateRanges: range(28),
-      dimensions: [{ name: 'customEvent:install_type' }],
-      metrics: [{ name: 'eventCount' }],
-      limit: 10,
-    }).catch(() => null),
-    // Activation (TRA-645). Resolved rather than caught to null: if the custom
-    // dimension is not registered in the property, GA4 says so by name, and that
-    // message is worth publishing — an empty block with no reason reads as "every
-    // install activated" to the next person who looks at it.
-    report(token, propertyId, {
-      dateRanges: range(28),
-      dimensions: [{ name: 'customEvent:repos_indexed' }],
-      metrics: [{ name: 'activeUsers' }],
-      limit: 250,
-    }).catch((e) => ({ error: why(e) })),
-    traffic(process.env.GITHUB_REPOSITORY, process.env.GH_TRAFFIC_TOKEN),
-  ]);
+/**
+ * A dimension the ping only started sending in TRA-643. GA4 rejects a report on
+ * a custom dimension that is not registered in the property, and this workflow
+ * is the only durable record of the trend — so a missing registration must cost
+ * one empty section, not the whole daily snapshot.
+ */
+const optionalBreakdown = (dimension, metric = 'activeUsers') =>
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: dimension }],
+    metrics: [{ name: metric }],
+    limit: 25,
+  }).catch(() => null);
+
+const [
+  d1,
+  d7,
+  d28,
+  versions,
+  countries,
+  clients,
+  saved,
+  installs,
+  presets,
+  surfaces,
+  indexed,
+  arrivals,
+] = await Promise.all([
+  report(token, propertyId, { dateRanges: range(1), metrics: [{ name: 'activeUsers' }] }),
+  report(token, propertyId, { dateRanges: range(7), metrics: [{ name: 'activeUsers' }] }),
+  report(token, propertyId, {
+    dateRanges: range(28),
+    metrics: [{ name: 'activeUsers' }, { name: 'eventCount' }],
+  }),
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: 'customEvent:version' }],
+    metrics: [{ name: 'activeUsers' }],
+    limit: 25,
+  }),
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: 'country' }],
+    metrics: [{ name: 'activeUsers' }],
+    limit: 25,
+  }),
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: 'customEvent:client' }],
+    metrics: [{ name: 'activeUsers' }],
+    limit: 25,
+  }),
+  // Daily rather than one total: the sanitizer needs the series to find the
+  // median day, and a raw sum of an unauthenticated counter is not publishable.
+  //
+  // Filtered to the ping event, because the cap divides tokens by `activeUsers`
+  // to get a per-user rate. Unfiltered, that denominator is the property's
+  // whole daily audience; if any of it ever stops carrying `tokens_saved`, the
+  // rate tracks traffic instead of usage and the cap drifts in both directions.
+  // Today the ping is the property's only event, so this filter changes no
+  // number — it keeps the denominator pinned to the population the numerator
+  // comes from if that stops being true.
+  report(token, propertyId, {
+    dateRanges: [{ startDate: SINCE, endDate: 'today' }],
+    dimensions: [{ name: 'date' }],
+    metrics: [{ name: 'customEvent:tokens_saved' }, { name: 'activeUsers' }],
+    dimensionFilter: {
+      filter: { fieldName: 'eventName', stringFilter: { value: PING_EVENT } },
+    },
+    limit: 100000,
+  }).catch(() => null),
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: 'customEvent:install_type' }],
+    metrics: [{ name: 'eventCount' }],
+    limit: 10,
+  }).catch(() => null),
+  optionalBreakdown('customEvent:preset'),
+  optionalBreakdown('customEvent:tools_advertised'),
+  // Activation (TRA-645). Resolved rather than caught to null: if the custom
+  // dimension is not registered in the property, GA4 says so by name, and that
+  // message is worth publishing — an empty block with no reason reads as "every
+  // install activated" to the next person who looks at it.
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: 'customEvent:repos_indexed' }],
+    metrics: [{ name: 'activeUsers' }],
+    limit: 250,
+  }).catch((e) => ({ error: why(e) })),
+  traffic(process.env.GITHUB_REPOSITORY, process.env.GH_TRAFFIC_TOKEN),
+]);
 
 const savings = sanitizedTokens(
   (saved?.rows ?? []).map((row) => ({
@@ -326,6 +364,20 @@ installs_28d:
 ${yaml(installs ? breakdown(installs) : {})}
 by_version:
 ${yaml(breakdown(versions))}
+
+# Which tool preset installs actually run, and how many tools that surface
+# advertises (TRA-643). \`preset-surface-budget.test.ts\` measures the same basis
+# — preset members plus the ungated meta-tools — so these two are the field
+# check on its 67-86% claim. \`tools_advertised\` runs higher than the bench on
+# any repo with a detected framework: those tools are registration-gated and the
+# bench never registers them.
+#
+# Both are empty until the dimensions are registered in the GA4 property; GA4
+# does not backfill, so values only start at registration.
+by_preset:
+${yaml(presets ? breakdown(presets) : {})}
+by_tools_advertised:
+${yaml(surfaces ? breakdown(surfaces) : {})}
 by_country:
 ${yaml(breakdown(countries))}
 by_client:
