@@ -270,12 +270,13 @@ layout: null
       --surface-raised: #1A1A1A;
       --border: #222222;
       --border-visible: #333333;
-      --text-disabled: #666666;
+      --text-disabled: #848484; /* 5.63:1 on #000000, 5.07:1 on #111111, 4.66:1 on #1A1A1A — #666666 was 3.29:1 */
       --text-secondary: #999999;
       --text-primary: #E8E8E8;
       --text-display: #FFFFFF;
-      --accent: #D71921;
-      --accent-subtle: rgba(215, 25, 33, 0.15);
+      --accent: #E54047; /* 5.16:1 on #000000, 4.64:1 on #111111 — #D71921 was 4.05:1 */
+      --accent-subtle: rgba(229, 64, 71, 0.15);
+      --accent-solid: #D71921; /* fill under white text: 5.38:1 with #FFFFFF */
       --success: #4A9E5C;
       --warning: #D4A843;
 
@@ -299,8 +300,9 @@ layout: null
       --text-secondary: #595959;
       --text-primary: #1A1A1A;
       --text-display: #000000;
-      --accent: #D71921;
-      --accent-subtle: rgba(215, 25, 33, 0.12);
+      --accent: #B3151C; /* 6.33:1 on #F5F5F5, 6.91:1 on #FFFFFF */
+      --accent-subtle: rgba(179, 21, 28, 0.12);
+      --accent-solid: #D71921; /* fill under white text: 5.38:1 with #FFFFFF */
       --success: #2E7D3E;
       --warning: #A8822E;
 
@@ -490,7 +492,7 @@ layout: null
       white-space: nowrap;
     }
     .btn-primary {
-      background: var(--accent);
+      background: var(--accent-solid);
       color: #FFFFFF;
       box-shadow: 0 0 0 0 rgba(215, 25, 33, 0.4);
       transition: background-color 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
@@ -1538,7 +1540,7 @@ layout: null
       width: 8px; height: 8px;
       background: var(--accent);
       border-radius: 50%;
-      box-shadow: 0 0 12px rgba(215, 25, 33, 0.45);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
       flex-shrink: 0;
     }
     .pain-text {

@@ -65,12 +65,12 @@
   --surface-raised: #1a1a1a;
   --border: #222222;
   --border-visible: #333333;
-  --text-disabled: #666666;
+  --text-disabled: #848484; /* 5.63:1 on #000000, 5.07:1 on #111111, 4.66:1 on #1A1A1A — #666666 was 3.29:1 */
   --text-secondary: #999999;
   --text-primary: #e8e8e8;
   --text-display: #ffffff;
-  --accent: #d71921;
-  --accent-subtle: rgba(215, 25, 33, 0.15);
+  --accent: #e54047; /* 5.16:1 on #000000, 4.64:1 on #111111 — #D71921 was 4.05:1 */
+  --accent-subtle: rgba(229, 64, 71, 0.15);
 
   --nav-bg: rgba(0, 0, 0, 0.85);
   --dot-color: var(--border);
@@ -92,8 +92,8 @@
   --text-secondary: #595959;
   --text-primary: #1a1a1a;
   --text-display: #000000;
-  --accent: #b3151c; /* 6.3:1 on #F5F5F5, 6.9:1 on #FFFFFF — the landing keeps #D71921 */
-  --accent-subtle: rgba(215, 25, 33, 0.12);
+  --accent: #b3151c; /* 6.33:1 on #F5F5F5, 6.91:1 on #FFFFFF */
+  --accent-subtle: rgba(179, 21, 28, 0.12);
 
   --nav-bg: rgba(245, 245, 245, 0.85);
   --dot-color: var(--border-visible);
