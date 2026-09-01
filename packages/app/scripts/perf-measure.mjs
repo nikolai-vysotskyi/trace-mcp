@@ -94,14 +94,17 @@ class Cdp {
     this.id = 0;
     this.pending = new Map();
     this.waiters = new Map();
-    this.listeners = new Map();
+    // One named handler rather than a method-name-keyed map: the key would come
+    // straight off the wire, which is a dynamic dispatch on an attacker-shaped
+    // string as far as CodeQL is concerned, and only one event ever needed it.
+    this.onFetchPaused = null;
     ws.addEventListener('message', (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.method) {
         const w = this.waiters.get(msg.method) ?? [];
         this.waiters.delete(msg.method);
         for (const resolve of w) resolve(msg.params);
-        this.listeners.get(msg.method)?.(msg.params);
+        if (msg.method === 'Fetch.requestPaused') this.onFetchPaused?.(msg.params);
         return;
       }
       const p = this.pending.get(msg.id);
@@ -176,7 +179,7 @@ class Cdp {
    * before it could write any of it out.
    */
   dispose() {
-    this.listeners.clear();
+    this.onFetchPaused = null;
     // Resolved, not rejected and not merely dropped: dropping them would leave
     // their timeout timers to reject into the same void a few seconds later.
     for (const p of this.pending.values()) p.resolve(null);
@@ -651,14 +654,14 @@ async function runWorkload({ minutes, opens, settleMinutes }) {
     await cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: DRIVER });
     // Point the renderer's hardcoded :3741 at the daemon under test. Only daemon
     // requests match the pattern; assets and the file:// document are untouched.
-    cdp.listeners.set('Fetch.requestPaused', ({ requestId, request }) => {
+    cdp.onFetchPaused = ({ requestId, request }) => {
       cdp
         .send('Fetch.continueRequest', {
           requestId,
           url: request.url.replace('127.0.0.1:3741', `127.0.0.1:${DAEMON_PORT}`),
         })
         .catch(() => {});
-    });
+    };
     await cdp.send('Fetch.enable', { patterns: [{ urlPattern: 'http://127.0.0.1:3741/*' }] });
 
     // Idle reference for the process-tree metrics: app up, fixture indexed and
