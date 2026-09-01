@@ -344,4 +344,8 @@ export const settings = {
   'schema.logging.max_size.label': 'Максимальный размер журнала (МБ)',
 
   'schema.watch.debounce.label': 'Задержка (мс)',
+
+  /* ── Setup wizard ── */
+  'app.setupWizard': "Мастер первоначальной настройки",
+  'app.runSetupWizard': "Запустить мастер…",
 } as const;

@@ -349,4 +349,8 @@ export const settings = {
 
   /* ── Schema: File watcher ──────────────────────────────────────────── */
   'schema.watch.debounce.label': 'Entprellung (ms)',
+
+  /* ── Setup wizard ── */
+  'app.setupWizard': "Einrichtungsassistent",
+  'app.runSetupWizard': "Assistent starten…",
 } as const;

@@ -343,4 +343,8 @@ export const settings = {
   'schema.logging.max_size.label': 'Taille max du journal (Mo)',
 
   'schema.watch.debounce.label': 'Anti-rebond (ms)',
+
+  /* ── Setup wizard ── */
+  'app.setupWizard': "Assistant de configuration initiale",
+  'app.runSetupWizard': "Lancer l'assistant…",
 } as const;

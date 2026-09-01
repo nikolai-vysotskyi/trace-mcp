@@ -362,4 +362,8 @@ export const settings = {
 
   /* ── Schema: File watcher ──────────────────────────────────────────── */
   'schema.watch.debounce.label': 'Debounce (ms)',
+
+  /* ── Setup wizard ── */
+  'app.setupWizard': "First-run setup wizard",
+  'app.runSetupWizard': "Run setup…",
 } as const;

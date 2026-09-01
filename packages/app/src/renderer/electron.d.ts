@@ -31,6 +31,7 @@ declare global {
       retryDaemonSetup?: () => Promise<DaemonSetupState>;
       onDaemonSetupState?: (cb: (state: DaemonSetupState) => void) => () => void;
       detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
+      guessFirstProject: () => Promise<{ path: string; name: string } | null>;
       getMcpClientStatuses: (
         scope?: 'global' | 'project',
       ) => Promise<{
