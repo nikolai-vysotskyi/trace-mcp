@@ -5,8 +5,19 @@ import { describe, expect, it } from 'vitest';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MODULE_PATH = path.join(__dirname, '..', '..', 'scripts', 'verify-release-assets.mjs');
 
-const { auditReleaseAssets, expectedAssets } = (await import(MODULE_PATH)) as {
-  auditReleaseAssets: (version: string, assets: { name: string; size?: number }[]) => string[];
+const { auditReleaseAssets, auditChannelManifest, expectedAssets } = (await import(
+  MODULE_PATH
+)) as {
+  auditReleaseAssets: (
+    version: string,
+    assets: { name: string; size?: number }[],
+    manifestContents?: Record<string, string>,
+  ) => string[];
+  auditChannelManifest: (
+    manifestName: string,
+    manifestContent: string,
+    bySize: Map<string, number>,
+  ) => string[];
   expectedAssets: (version: string) => string[];
 };
 
@@ -99,5 +110,32 @@ describe('verify-release-assets', () => {
   // the tag through unstripped would report every asset as missing.
   it('reports everything missing when handed a tag instead of a version', () => {
     expect(auditReleaseAssets('v3.1.1', completeRelease('3.1.1'))).toHaveLength(12);
+  });
+
+  it('verifies that latest.yml referenced installer matches release assets', () => {
+    const validYml = `
+version: 3.1.1
+files:
+  - url: trace-mcp.Setup.3.1.1.exe
+    sha512: abc123
+path: trace-mcp.Setup.3.1.1.exe
+`;
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': validYml }),
+    ).toEqual([]);
+
+    const mismatchedYml = `
+version: 3.1.1
+files:
+  - url: trace-mcp-Setup-3.1.1.exe
+    sha512: abc123
+path: trace-mcp-Setup-3.1.1.exe
+`;
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': mismatchedYml }),
+    ).toEqual([
+      "latest.yml references 'trace-mcp-Setup-3.1.1.exe', but it is missing from release assets",
+      "latest.yml references 'trace-mcp-Setup-3.1.1.exe', but it is missing from release assets",
+    ]);
   });
 });

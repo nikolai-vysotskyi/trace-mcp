@@ -49,11 +49,40 @@ export function expectedAssets(version) {
 }
 
 /**
+ * Verifies that every file target referenced in a channel manifest (latest.yml or
+ * latest-mac.yml) exists in the release assets and has non-zero size.
+ *
+ * @param {string} manifestName
+ * @param {string} manifestContent
+ * @param {Map<string, number>} bySize
+ * @returns {string[]}
+ */
+export function auditChannelManifest(manifestName, manifestContent, bySize) {
+  const problems = [];
+  const matches = manifestContent.matchAll(/(?:url|path):\s*([^\s#\r\n]+)/g);
+  for (const match of matches) {
+    const filename = match[1].trim();
+    if (filename.startsWith('http://') || filename.startsWith('https://')) continue;
+    if (!bySize.has(filename)) {
+      problems.push(
+        `${manifestName} references '${filename}', but it is missing from release assets`,
+      );
+    } else if ((bySize.get(filename) ?? 0) <= 0) {
+      problems.push(
+        `${manifestName} references '${filename}', but the release asset is empty (0 bytes)`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
  * @param {string} version
  * @param {Array<{name: string, size?: number}>} assets  `gh release view --json assets`
+ * @param {Record<string, string>} [manifestContents] Optional map of channel filename -> raw yaml content
  * @returns {string[]} human-readable problems; empty means the release is complete
  */
-export function auditReleaseAssets(version, assets) {
+export function auditReleaseAssets(version, assets, manifestContents = {}) {
   const bySize = new Map(assets.map((a) => [a.name, a.size ?? 0]));
   const problems = [];
   for (const name of expectedAssets(version)) {
@@ -68,6 +97,13 @@ export function auditReleaseAssets(version, assets) {
       problems.push(`empty or truncated: ${name} (${bySize.get(name)} bytes)`);
     }
   }
+
+  for (const [manifestName, content] of Object.entries(manifestContents)) {
+    if (content) {
+      problems.push(...auditChannelManifest(manifestName, content, bySize));
+    }
+  }
+
   return problems;
 }
 
@@ -82,7 +118,21 @@ async function main() {
   for await (const chunk of process.stdin) raw += chunk;
   const assets = JSON.parse(raw);
 
-  const problems = auditReleaseAssets(version, assets);
+  const manifestContents = {};
+  for (const manifestName of ['latest.yml', 'latest-mac.yml']) {
+    const asset = Array.isArray(assets) ? assets.find((a) => a.name === manifestName) : null;
+    const url = asset?.browser_download_url || asset?.url;
+    if (url) {
+      try {
+        const res = await fetch(url, { headers: { 'User-Agent': 'trace-mcp' } });
+        if (res.ok) {
+          manifestContents[manifestName] = await res.text();
+        }
+      } catch {}
+    }
+  }
+
+  const problems = auditReleaseAssets(version, assets, manifestContents);
   if (problems.length > 0) {
     console.error(`Release ${version} is incomplete — updates would silently no-op:`);
     for (const p of problems) console.error(`  ${p}`);
