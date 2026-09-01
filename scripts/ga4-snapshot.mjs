@@ -220,9 +220,14 @@ const savings = sanitizedTokens(
   })),
 );
 
+// Keys via JSON.stringify, not `"${k}"`: every one of these comes from outside
+// — an MCP client name the client chooses for itself, a referrer host GitHub
+// reports — and a `"` or `\` in one would otherwise emit a broken file and take
+// the whole snapshot down with it. A YAML double-quoted scalar escapes exactly
+// like a JSON string, so this is the escaping, not an approximation of it.
 const yaml = (obj, indent = 2) =>
   Object.entries(obj)
-    .map(([k, v]) => `${' '.repeat(indent)}"${k}": ${v}`)
+    .map(([k, v]) => `${' '.repeat(indent)}${JSON.stringify(String(k))}: ${v}`)
     .join('\n') || `${' '.repeat(indent)}{}`;
 
 const act = activation(indexed?.rows);
