@@ -107,7 +107,21 @@ interface DetectedClient {
   hasTraceMcp: boolean;
 }
 
-type ClientConfigStatus = 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+/**
+ * `legacy` (TRA-614): the entry on disk is registered under the old
+ * `trace-mcp` server key while the CLI now writes `trace`. The client still
+ * works — the old key resolves to the same binary — so this is not drift and
+ * not a failure. It is one rename away from current, which is why it reads as
+ * information rather than a warning, and why the row's action is the same
+ * `clients update` that repairs a drifted entry.
+ */
+type ClientConfigStatus =
+  | 'missing'
+  | 'up_to_date'
+  | 'stale'
+  | 'legacy'
+  | 'unmanageable'
+  | 'unknown';
 
 interface RichClientStatus {
   client: string;
@@ -298,6 +312,7 @@ function SupportedClientRow({
    *   missing       → "Connect" (level menu for the Claude family)
    *   up_to_date    → a green dot + the word "Connected"
    *   stale         → "Update available" badge + "Update"
+   *   legacy        → "Legacy" badge + "Migrate"
    *   unmanageable  → "Set up manually…", which discloses the steps
    *   unknown       → "Connected" (presence-only — Codex TOML, can't compare)
    */
@@ -335,7 +350,7 @@ function SupportedClientRow({
     ? error
     : isManual && showSteps
       ? MANUAL_HINTS[name]
-      : (connected || status === 'stale') && configPath
+      : (connected || status === 'stale' || status === 'legacy') && configPath
         ? shortPath(configPath)
         : null;
 
@@ -377,6 +392,19 @@ function SupportedClientRow({
           <StatusDot tone="green" />
           {t('connected')}
         </span>
+      ) : status === 'legacy' ? (
+        /* Blue, not orange: nothing is broken or drifted here — the entry names
+           the server `trace-mcp` where init now writes `trace`, and both reach
+           the same binary. The word carries the state; the tone only sorts it
+           away from the amber "something needs repairing" rows above. */
+        <>
+          <Badge tone="blue" title={t('legacyHint')}>
+            {t('legacyEntry')}
+          </Badge>
+          <Button disabled={configuring} onClick={onUpdate}>
+            {configuring ? t('migrating') : t('migrate')}
+          </Button>
+        </>
       ) : status === 'stale' ? (
         <>
           <Badge
@@ -456,7 +484,13 @@ export function Clients() {
         // Synthesize the legacy "detected" shape so we don't have to
         // refactor every consumer in this file at once.
         const synth: DetectedClient[] = richResult.statuses
-          .filter((s) => s.status === 'up_to_date' || s.status === 'stale' || s.status === 'unknown')
+          .filter(
+            (s) =>
+              s.status === 'up_to_date' ||
+              s.status === 'stale' ||
+              s.status === 'legacy' ||
+              s.status === 'unknown',
+          )
           .map((s) => ({
             name: s.client,
             configPath: s.configPath ?? '',
@@ -569,19 +603,22 @@ export function Clients() {
     };
   };
 
-  // Sort: actionable rows first (stale → update available), then configured,
-  // then missing/manual. Inside each bucket preserve declaration order.
+  // Sort: actionable rows first (stale → update available, legacy → migrate),
+  // then configured, then missing/manual. Inside each bucket preserve
+  // declaration order.
   const sortRank = (s: ClientConfigStatus): number => {
     switch (s) {
       case 'stale':
         return 0;
+      case 'legacy':
+        return 1;
       case 'up_to_date':
       case 'unknown':
-        return 1;
-      case 'missing':
         return 2;
-      case 'unmanageable':
+      case 'missing':
         return 3;
+      case 'unmanageable':
+        return 4;
     }
   };
   const sortedClients = [...ALL_CLIENTS].sort(
@@ -595,6 +632,19 @@ export function Clients() {
   const stale = sortedClients
     .filter((c) => resolveStatus(c.name).status === 'stale')
     .map((c) => c.name);
+
+  /* The rename to `trace` (TRA-610) puts every configured client into the same
+     bucket at once, for the same reason an upgrade does — what changed is the
+     entry trace-mcp writes. So it gets the same one-click-for-the-bucket
+     treatment, under the verb the rows themselves use. `clients update`
+     rewrites the entry either way, so both buckets share one code path and
+     differ only in what the button is called. */
+  const legacy = sortedClients
+    .filter((c) => resolveStatus(c.name).status === 'legacy')
+    .map((c) => c.name);
+  const bucket = stale.length ? stale : legacy;
+  const bucketLabel = stale.length ? t('updateAll') : t('migrateAll');
+  const bucketProgressKey = stale.length ? 'updatingProgress' : 'migratingProgress';
 
   const sessions = [...clients].sort(
     (a, b) => new Date(b.connectedAt).getTime() - new Date(a.connectedAt).getTime(),
@@ -636,15 +686,15 @@ export function Clients() {
           <Section
             title={t('supported')}
             action={
-              stale.length > 1 && (
+              bucket.length > 1 && (
                 <Button
                   size="small"
                   disabled={bulk !== null || configuringClient !== null}
-                  onClick={() => handleUpdateAll(stale)}
+                  onClick={() => handleUpdateAll(bucket)}
                 >
                   {bulk
-                    ? t('updatingProgress', { done: bulk.done + 1, total: bulk.total })
-                    : `${t('updateAll')} · ${stale.length}`}
+                    ? t(bucketProgressKey, { done: bulk.done + 1, total: bulk.total })
+                    : `${bucketLabel} · ${bucket.length}`}
                 </Button>
               )
             }
@@ -665,7 +715,7 @@ export function Clients() {
                       staleReason={s.staleReason}
                       error={errors[c.name]}
                       configuring={
-                        configuringClient === c.name || (bulk !== null && stale.includes(c.name))
+                        configuringClient === c.name || (bulk !== null && bucket.includes(c.name))
                       }
                       last={i === sortedClients.length - 1}
                       onConnect={() => handleConnect(c.name)}
