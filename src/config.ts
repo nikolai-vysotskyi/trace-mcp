@@ -1225,6 +1225,10 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
     merged = mergeConfigs(merged, localRaw);
 
     // Env var overrides
+    if (process.env.TRACE_MCP_PRESET) {
+      merged.tools = (merged.tools as Record<string, unknown>) ?? {};
+      (merged.tools as Record<string, unknown>).preset = process.env.TRACE_MCP_PRESET;
+    }
     if (process.env.TRACE_MCP_DB_PATH) {
       merged.db = merged.db ?? {};
       (merged.db as Record<string, unknown>).path = process.env.TRACE_MCP_DB_PATH;

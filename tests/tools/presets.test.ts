@@ -32,6 +32,44 @@ describe('Tool Presets', () => {
       expect(review.has('get_change_impact')).toBe(true);
       expect(review.has('get_tests_for')).toBe(true);
       expect(review.has('check_rename')).toBe(true);
+      expect(review.has('check_edit_safe')).toBe(true);
+      expect(review.has('check_quality_gates')).toBe(true);
+    });
+
+    it('dev preset contains implementation and refactoring tools', () => {
+      const dev = resolvePreset('dev') as Set<string>;
+      expect(dev.has('get_implementations')).toBe(true);
+      expect(dev.has('get_type_hierarchy')).toBe(true);
+      expect(dev.has('apply_rename')).toBe(true);
+      expect(dev.has('apply_codemod')).toBe(true);
+      expect(dev.has('extract_function')).toBe(true);
+      expect(dev.has('plan_refactoring')).toBe(true);
+      expect(dev.has('reindex')).toBe(true);
+    });
+
+    it('security preset contains security scanning and audit tools', () => {
+      const sec = resolvePreset('security') as Set<string>;
+      expect(sec.has('scan_security')).toBe(true);
+      expect(sec.has('taint_analysis')).toBe(true);
+      expect(sec.has('export_security_context')).toBe(true);
+      expect(sec.has('generate_sbom')).toBe(true);
+      expect(sec.has('audit_config')).toBe(true);
+    });
+
+    it('design preset contains UI component and screen tools', () => {
+      const design = resolvePreset('design') as Set<string>;
+      expect(design.has('get_component_tree')).toBe(true);
+      expect(design.has('get_screen_context')).toBe(true);
+      expect(design.has('get_navigation_graph')).toBe(true);
+      expect(design.has('get_state_stores')).toBe(true);
+    });
+
+    it('perf preset contains profiling and complexity trend tools', () => {
+      const perf = resolvePreset('perf') as Set<string>;
+      expect(perf.has('analyze_perf')).toBe(true);
+      expect(perf.has('benchmark_project')).toBe(true);
+      expect(perf.has('get_complexity_trend')).toBe(true);
+      expect(perf.has('get_real_savings')).toBe(true);
     });
 
     it('architecture preset contains architecture tools', () => {
@@ -52,6 +90,10 @@ describe('Tool Presets', () => {
       expect(names).toContain('full');
       expect(names).toContain('review');
       expect(names).toContain('architecture');
+      expect(names).toContain('dev');
+      expect(names).toContain('security');
+      expect(names).toContain('design');
+      expect(names).toContain('perf');
     });
 
     it('full preset reports "all" as toolCount', () => {

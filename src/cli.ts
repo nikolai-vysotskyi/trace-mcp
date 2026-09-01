@@ -347,7 +347,14 @@ program
 program
   .command('serve', { isDefault: true })
   .description('Start MCP server (stdio transport)')
-  .action(async () => {
+  .option(
+    '--preset <name>',
+    'Tool preset (e.g. minimal, review, dev, security, design, perf, architecture, standard, full)',
+  )
+  .action(async (opts: { preset?: string } = {}) => {
+    if (opts.preset) {
+      process.env.TRACE_MCP_PRESET = opts.preset;
+    }
     // Keep a stray unhandled rejection / uncaught exception from tearing down
     // the whole MCP session — log it and stay alive instead (see #202-adjacent
     // "disconnects/crashes" reports).
@@ -518,7 +525,14 @@ program
     '--allow-remote',
     'Permit a non-loopback --host. The daemon is unauthenticated — only use behind your own auth.',
   )
-  .action(async (opts: { port: string; host: string; allowRemote?: boolean }) => {
+  .option(
+    '--preset <name>',
+    'Default tool preset for daemon sessions (e.g. minimal, review, dev, security, design, perf, architecture, standard, full)',
+  )
+  .action(async (opts: { port: string; host: string; allowRemote?: boolean; preset?: string }) => {
+    if (opts.preset) {
+      process.env.TRACE_MCP_PRESET = opts.preset;
+    }
     // A single unhandled rejection must not take down the daemon serving every
     // registered project — log and stay alive.
     installProcessSafetyNet('serve-http');

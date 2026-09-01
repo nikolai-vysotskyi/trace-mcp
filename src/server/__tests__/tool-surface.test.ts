@@ -192,6 +192,14 @@ describe('load_tools request resolution (TRA-402)', () => {
     expect(names).toContain('get_call_graph'); // from the review preset
   });
 
+  it('expands all role presets (dev, security, design, perf, architecture, review)', () => {
+    for (const preset of ['dev', 'security', 'design', 'perf', 'architecture', 'review']) {
+      const names = expandLoadRequest({ preset }, deferred);
+      expect(names.length).toBeGreaterThan(0);
+      expect(names).not.toContain(`preset:${preset}`);
+    }
+  });
+
   it('treats "full" as everything currently deferred, not the whole registry', () => {
     expect(expandLoadRequest({ preset: 'full' }, deferred).sort()).toEqual(deferred);
   });

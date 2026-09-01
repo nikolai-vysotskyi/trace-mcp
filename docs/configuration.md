@@ -1,7 +1,7 @@
 ---
 title: "trace-mcp Configuration Reference — all config options (works with none)"
 description: "Every trace-mcp config option in .trace-mcp.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. Configuration is optional; trace-mcp works out of the box for standard projects."
-updated: 2026-08-31
+updated: 2026-09-01
 ---
 
 # Configuration
@@ -436,7 +436,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 ```jsonc
 {
   "tools": {
-    "preset": "standard",                // "full" | "standard" | "minimal" | "review" | "architecture"
+    "preset": "standard",                // "full" | "standard" | "minimal" | "review" | "architecture" | "dev" | "security" | "design" | "perf"
     "description_verbosity": "full",     // "full" | "minimal" | "none"
     "instructions_verbosity": "full",    // "full" | "minimal" | "none" — controls the tool-routing block
     "client_profile": "auto",            // "auto" | "off" | "claude-code" | "codex" | "cursor" | "vscode" | "generic"
@@ -449,7 +449,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (27 tools), `architecture` (35 tools), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (41 tools), `dev` (42 tools), `security` (35 tools), `design` (26 tools), `perf` (31 tools), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -495,10 +495,14 @@ What escalation cannot do is widen `tools.exclude`. Exclusion stays a hard
 restriction; `load_tools` reports those names under `blocked` and leaves them
 off. If you want a tool gone, exclude it — don't rely on the preset.
 
-Measured `tools/list` cost of each preset on this repo (serialized chars,
-2026-08-29): `minimal` 34.0k, `review` 28.9k, `architecture` 33.6k, `standard`
-64.6k, `full` 157.1k. `load_tools` itself is 0.9k of that — the price of making
-the other 123k optional.
+Measured `tools/list` cost of each preset on this repo (serialized chars, then
+o200k tokens, 2026-09-01): `design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
+34.0k / 7.8k, `review` 37.3k / 8.6k, `security` 41.5k / 9.6k, `architecture`
+44.3k / 10.2k, `dev` 51.3k / 11.9k, `standard` 64.6k / 14.9k, `full` 157.7k /
+36.3k. Against `full`, that is a 67% cut on the widest role preset (`dev`) and
+86% on the narrowest (`design`) — framework-gated tools are excluded, so a
+project that detects the matching framework pays more.
+`load_tools` itself is 0.9k of that — the price of making the other 123k optional.
 
 ### Client profiles
 
