@@ -6,11 +6,7 @@
 
 import { ok } from 'neverthrow';
 import type { TraceMcpResult } from '../../../../errors.js';
-import type {
-  FileParseResult,
-  LanguagePlugin,
-  RawSymbol,
-} from '../../../../plugin-api/types.js';
+import type { FileParseResult, LanguagePlugin, RawSymbol } from '../../../../plugin-api/types.js';
 import { createRegexLanguagePlugin, lineAt, makeSymbolId } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
@@ -41,7 +37,11 @@ const _plugin = createRegexLanguagePlugin({
  * can't split a multi-target line into several symbols; handled here instead,
  * deduplicated against whatever the primary rule pattern already found.
  */
-function extractPhonyTargets(filePath: string, source: string, existingIds: Set<string>): RawSymbol[] {
+function extractPhonyTargets(
+  filePath: string,
+  source: string,
+  existingIds: Set<string>,
+): RawSymbol[] {
   const symbols: RawSymbol[] = [];
   const seen = new Set<string>();
   const lineRe = /^\.PHONY:\s*([^#\r\n]+)/gm;
@@ -84,7 +84,10 @@ export const MakefileLanguagePlugin = class implements LanguagePlugin {
   manifest = _plugin.manifest;
   supportedExtensions = _plugin.supportedExtensions;
   supportedVersions = _plugin.supportedVersions;
-  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+  async extractSymbols(
+    filePath: string,
+    content: Buffer,
+  ): Promise<TraceMcpResult<FileParseResult>> {
     const result = await _plugin.extractSymbols(filePath, content);
     if (result.isErr()) return result;
     const parsed = result.value;
