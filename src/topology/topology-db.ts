@@ -19,9 +19,24 @@ import { ContractOperations } from './topology-contracts.js';
 import { EndpointOperations } from './topology-endpoints.js';
 import { EventOperations } from './topology-events.js';
 import { CrossServiceEdgeOperations } from './topology-edges.js';
-import { SubprojectOperations, pruneDangerousSubprojects } from './topology-subprojects.js';
+import {
+  SubprojectOperations,
+  findStaleTopology,
+  pruneDangerousSubprojects,
+  pruneStaleTopology,
+  type StaleTopologyReport,
+  type PruneTopologyResult,
+} from './topology-subprojects.js';
 import { ClientCallOperations } from './topology-client-calls.js';
 import { SnapshotOperations } from './topology-snapshots.js';
+
+export {
+  findStaleTopology,
+  pruneDangerousSubprojects,
+  pruneStaleTopology,
+  type StaleTopologyReport,
+  type PruneTopologyResult,
+};
 
 // ════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -635,6 +650,16 @@ export class TopologyStore {
 
   updateSubprojectSyncTime(id: number): void {
     this.subprojects.updateSubprojectSyncTime(id);
+  }
+
+  /** Scan for stale subprojects and services pointing to missing directories. */
+  findStale(): StaleTopologyReport {
+    return findStaleTopology(this.db);
+  }
+
+  /** Prune stale subprojects and services whose directories no longer exist. */
+  pruneStale(): PruneTopologyResult {
+    return pruneStaleTopology(this.db);
   }
 
   // ── Client Calls ──────────────────────────────────────────────────

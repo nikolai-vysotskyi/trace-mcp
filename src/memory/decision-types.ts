@@ -326,3 +326,24 @@ export interface SchedulerStateRow {
   consecutive_failures: number;
   updated_at: string;
 }
+
+export interface StaleDecisionReport {
+  staleRoots: string[];
+  decisionsCount: number;
+  chunksCount: number;
+  clustersCount: number;
+  memosCount: number;
+  schedulerStatesCount: number;
+  staleMinedSessionsCount: number;
+  staleDecisions: Array<{ id: number; title: string; project_root: string; type: DecisionType }>;
+}
+
+export interface PruneDecisionsResult {
+  staleRoots: string[];
+  decisions: number;
+  chunks: number;
+  clusters: number;
+  memos: number;
+  schedulerStates: number;
+  minedSessions: number;
+}
