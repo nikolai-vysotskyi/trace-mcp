@@ -61,6 +61,10 @@ const MIGRATION_TABLES_REQUIRED_IN_DDL: ReadonlyArray<{
   { table: 'runtime_spans', introducedIn: 12 },
   { table: 'runtime_services', introducedIn: 12 },
   { table: 'runtime_aggregates', introducedIn: 12 },
+  // v32 — Agent Execution State (SKILL.state)
+  { table: 'agent_states', introducedIn: 32 },
+  { table: 'agent_state_revisions', introducedIn: 32 },
+  { table: 'agent_state_checkpoints', introducedIn: 32 },
 ];
 
 describe('DDL/migration parity for fresh DB', () => {

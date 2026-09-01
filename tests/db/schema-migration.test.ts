@@ -38,12 +38,12 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     db = initializeDatabase(':memory:');
   });
 
-  it('SCHEMA_VERSION row is 31 in schema_meta', () => {
+  it('SCHEMA_VERSION row is 32 in schema_meta', () => {
     const row = db.prepare("SELECT value FROM schema_meta WHERE key = 'schema_version'").get() as
       | { value: string }
       | undefined;
     expect(row).toBeDefined();
-    expect(Number(row!.value)).toBe(31);
+    expect(Number(row!.value)).toBe(32);
   });
 
   it('ranking_pins table exists with the expected columns and PK', () => {
@@ -92,6 +92,40 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
     expect(names.has('idx_pass_cache_created')).toBe(true);
   });
 
+  it('agent_states, agent_state_revisions, agent_state_checkpoints exist with expected columns', () => {
+    const tables = getTableNames(db);
+    expect(tables).toContain('agent_states');
+    expect(tables).toContain('agent_state_revisions');
+    expect(tables).toContain('agent_state_checkpoints');
+
+    const stateCols = tableInfo(db, 'agent_states');
+    const stateByName = new Map(stateCols.map((c) => [c.name, c]));
+    for (const col of [
+      'task_id',
+      'goal',
+      'status',
+      'state_json',
+      'version',
+      'created_at',
+      'updated_at',
+    ]) {
+      expect(stateByName.has(col), `agent_states missing column: ${col}`).toBe(true);
+    }
+    expect(stateByName.get('task_id')!.pk).toBeGreaterThan(0);
+
+    const revCols = tableInfo(db, 'agent_state_revisions');
+    const revByName = new Map(revCols.map((c) => [c.name, c]));
+    for (const col of ['id', 'task_id', 'version', 'patch_json', 'created_at']) {
+      expect(revByName.has(col), `agent_state_revisions missing column: ${col}`).toBe(true);
+    }
+
+    const cpCols = tableInfo(db, 'agent_state_checkpoints');
+    const cpByName = new Map(cpCols.map((c) => [c.name, c]));
+    for (const col of ['id', 'task_id', 'label', 'state_json', 'created_at']) {
+      expect(cpByName.has(col), `agent_state_checkpoints missing column: ${col}`).toBe(true);
+    }
+  });
+
   it('core graph tables ship in the same fresh init (regression guard)', () => {
     const tables = getTableNames(db);
     // Smaller required set — the broader contract lives in schema.test.ts.
@@ -107,6 +141,9 @@ describe('schema-migration (fresh DB at v1.36.0)', () => {
       'schema_meta',
       'ranking_pins',
       'pass_cache',
+      'agent_states',
+      'agent_state_revisions',
+      'agent_state_checkpoints',
     ]) {
       expect(tables, `Missing table on fresh DB: ${required}`).toContain(required);
     }

@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { logger } from '../logger.js';
 
-const SCHEMA_VERSION = 31;
+const SCHEMA_VERSION = 32;
 
 /**
  * Canonical column list for the `symbols_fts` virtual table.
@@ -644,6 +644,42 @@ CREATE TABLE IF NOT EXISTS runtime_aggregates (
 );
 CREATE INDEX IF NOT EXISTS idx_ra_node ON runtime_aggregates(node_id);
 CREATE INDEX IF NOT EXISTS idx_ra_bucket ON runtime_aggregates(bucket);
+
+-- ============================================================
+-- AGENT EXECUTION STATE (SKILL.state / arXiv:2608.26263)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS agent_states (
+    task_id     TEXT PRIMARY KEY,
+    goal        TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    state_json  TEXT NOT NULL,
+    version     INTEGER NOT NULL DEFAULT 1,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_agent_states_status ON agent_states(status);
+CREATE INDEX IF NOT EXISTS idx_agent_states_updated ON agent_states(updated_at);
+
+CREATE TABLE IF NOT EXISTS agent_state_revisions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id     TEXT NOT NULL REFERENCES agent_states(task_id) ON DELETE CASCADE,
+    version     INTEGER NOT NULL,
+    patch_json  TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(task_id, version)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_state_revisions_task ON agent_state_revisions(task_id);
+
+CREATE TABLE IF NOT EXISTS agent_state_checkpoints (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id     TEXT NOT NULL REFERENCES agent_states(task_id) ON DELETE CASCADE,
+    label       TEXT NOT NULL,
+    state_json  TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(task_id, label)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_state_checkpoints_task ON agent_state_checkpoints(task_id);
 `;
 
 const SEED_NODE_TYPES = [
@@ -1759,6 +1795,43 @@ const MIGRATIONS: Record<number, (db: Database.Database) => void> = {
     // Backfill is a no-op on existing DBs (no scip_resolved rows exist yet),
     // but kept for symmetry with the per-tier backfill in migration 25.
     db.exec(`UPDATE edges SET confidence = 1.00 WHERE resolution_tier = 'scip_resolved'`);
+  },
+  32: (db) => {
+    // Agent execution state storage (SKILL.state / arXiv:2608.26263).
+    // Tables mirrored in the top-of-file DDL block for fresh-DB parity.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS agent_states (
+          task_id     TEXT PRIMARY KEY,
+          goal        TEXT NOT NULL,
+          status      TEXT NOT NULL,
+          state_json  TEXT NOT NULL,
+          version     INTEGER NOT NULL DEFAULT 1,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_states_status ON agent_states(status);
+      CREATE INDEX IF NOT EXISTS idx_agent_states_updated ON agent_states(updated_at);
+
+      CREATE TABLE IF NOT EXISTS agent_state_revisions (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_id     TEXT NOT NULL REFERENCES agent_states(task_id) ON DELETE CASCADE,
+          version     INTEGER NOT NULL,
+          patch_json  TEXT NOT NULL,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(task_id, version)
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_state_revisions_task ON agent_state_revisions(task_id);
+
+      CREATE TABLE IF NOT EXISTS agent_state_checkpoints (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_id     TEXT NOT NULL REFERENCES agent_states(task_id) ON DELETE CASCADE,
+          label       TEXT NOT NULL,
+          state_json  TEXT NOT NULL,
+          created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+          UNIQUE(task_id, label)
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_state_checkpoints_task ON agent_state_checkpoints(task_id);
+    `);
   },
 };
 
