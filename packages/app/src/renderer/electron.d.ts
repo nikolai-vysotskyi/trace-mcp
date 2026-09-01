@@ -40,7 +40,7 @@ declare global {
         statuses?: Array<{
           client: string;
           configPath: string | null;
-          status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+          status: 'missing' | 'up_to_date' | 'stale' | 'legacy' | 'unmanageable' | 'unknown';
           staleReason?: string;
           level?: 'base' | 'standard' | 'max' | null;
         }>;

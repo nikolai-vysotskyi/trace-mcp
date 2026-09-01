@@ -32,6 +32,15 @@ const ALL_DRIFTED = [
   { client: 'amp', configPath: '/Users/x/.config/amp/settings.json', status: 'stale', staleReason: 'fields' },
 ];
 
+/* TRA-614. What the CLI reports once the server key is renamed `trace-mcp` →
+   `trace` (TRA-610): the entry still works, so it is not `stale`, and it is not
+   `missing` either. Exactly like an upgrade, it lands on every configured
+   client at once. */
+const ALL_LEGACY = [
+  { client: 'claude-code', configPath: '/Users/x/.claude.json', status: 'legacy' },
+  { client: 'cursor', configPath: '/Users/x/.cursor/mcp.json', status: 'legacy' },
+];
+
 const CLIENTS = [
   {
     id: '401b97c5aaaa',
@@ -202,6 +211,65 @@ it('says on the row when a write failed, and keeps the row actionable', async ()
 
   expect(await screen.findByText('Error: EACCES')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Update' })).toBeTruthy();
+});
+
+// ── TRA-614 ──────────────────────────────────────────────────────────────
+
+/* A legacy entry is not a broken one, and the row has to say which it is: the
+   badge names the state in a word, and the button names the verb that ends it.
+   Reusing "Update available" would have called a rename a drift. */
+it('flags a legacy entry as legacy, and offers Migrate rather than Update', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: ALL_LEGACY });
+  render(<Clients />);
+
+  const badges = await screen.findAllByText('Legacy');
+  expect(badges).toHaveLength(2);
+  expect(badges[0].className).toContain('t-blue');
+  expect(screen.queryByText('Update available')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Update' })).toBeNull();
+  expect(screen.getAllByRole('button', { name: 'Migrate' })).toHaveLength(2);
+});
+
+/* Migrate is `clients update` — the entry gets rewritten under the new key.
+   It must not re-run setup, for the same reason Update must not (TRA-497): the
+   enforcement level is already in the file and re-asking can only overwrite it. */
+it('migrates a legacy entry without re-asking for an enforcement level', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: ALL_LEGACY });
+  render(<Clients />);
+  fireEvent.click((await screen.findAllByRole('button', { name: 'Migrate' }))[1]);
+
+  await waitFor(() => expect(api().updateMcpClients).toHaveBeenCalledWith(['cursor']));
+  expect(api().configureMcpClient).not.toHaveBeenCalled();
+  expect(screen.queryByRole('menu')).toBeNull();
+});
+
+/* The rename hits every configured client at once, so the bucket action the
+   drifted rows already have applies here too — under the row's own verb. */
+it('offers one action for the whole legacy bucket, named Migrate all', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({ ok: true, statuses: ALL_LEGACY });
+  render(<Clients />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Migrate all · 2' }));
+
+  await waitFor(() => expect(api().updateMcpClients).toHaveBeenCalledTimes(2));
+  expect(api().updateMcpClients.mock.calls.map(([names]) => names[0])).toEqual([
+    'claude-code',
+    'cursor',
+  ]);
+});
+
+/* Repairing a drifted entry is the more urgent of the two, so when both are on
+   screen the bucket action stays the drifted one rather than silently changing
+   what the button does. */
+it('keeps the bucket action on the drifted rows when both kinds are present', async () => {
+  api().getMcpClientStatuses.mockResolvedValue({
+    ok: true,
+    statuses: [...ALL_DRIFTED, ...ALL_LEGACY.map((s) => ({ ...s, client: 'windsurf' }))],
+  });
+  render(<Clients />);
+
+  expect(await screen.findByRole('button', { name: 'Update all · 3' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Migrate all/ })).toBeNull();
 });
 
 /* One condition gets one sentence (DESIGN.md §5): this screen used to phrase

@@ -38,7 +38,12 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
       const raw = readIfExists(configPath);
       if (raw === null) return;
       const content = JSON.parse(raw);
-      const hasTraceMcp = !!content?.mcpServers?.['trace-mcp'];
+      // Either server key counts as configured. TRA-610 renames the entry
+      // `trace-mcp` → `trace`; which of the two it is drives no UI here, and
+      // the Migrate affordance reads `clients status`, which can tell them
+      // apart. This only answers "is it wired up at all".
+      const servers = content?.mcpServers;
+      const hasTraceMcp = !!(servers?.['trace'] ?? servers?.['trace-mcp']);
       clients.push({ name, configPath, hasTraceMcp });
     } catch {
       // Malformed JSON — still report as detected but without trace-mcp
@@ -128,7 +133,7 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
       try {
         const content = readIfExists(tomlPath);
         if (content === null) return;
-        const hasTraceMcp = /\[mcp_servers\s*\.\s*["']?trace-mcp["']?\s*\]/.test(content);
+        const hasTraceMcp = /\[mcp_servers\s*\.\s*["']?trace(-mcp)?["']?\s*\]/.test(content);
         clients.push({ name, configPath: tomlPath, hasTraceMcp });
       } catch {
         clients.push({ name, configPath: tomlPath, hasTraceMcp: false });
@@ -153,7 +158,7 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
         if (content === null) return;
         const parsed = parseJsonc(content) as Record<string, unknown> | null;
         const servers = parsed?.['amp.mcpServers'] as Record<string, unknown> | undefined;
-        const hasTraceMcp = !!servers?.['trace-mcp'];
+        const hasTraceMcp = !!(servers?.['trace'] ?? servers?.['trace-mcp']);
         clients.push({ name: 'amp', configPath, hasTraceMcp });
       } catch {
         clients.push({ name: 'amp', configPath, hasTraceMcp: false });
@@ -222,7 +227,7 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
     try {
       const content = readIfExists(yamlPath);
       if (content !== null) {
-        const hasTraceMcp = /^mcp_servers\s*:\s*$[\s\S]*?^\s+trace-mcp\s*:/m.test(content);
+        const hasTraceMcp = /^mcp_servers\s*:\s*$[\s\S]*?^\s+trace(-mcp)?\s*:/m.test(content);
         clients.push({ name: 'hermes', configPath: yamlPath, hasTraceMcp });
       }
     } catch {
