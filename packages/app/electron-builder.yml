@@ -84,6 +84,19 @@ mac:
 # suffix on Intel, which would make the two legs indistinguishable by name.
 dmg:
   artifactName: ${productName}-${version}-${arch}.dmg
+  # No `sign: true` here on purpose. dmg-builder signs the image with a bare
+  # `codesign --sign`, without `--timestamp`, and notarization rejects a
+  # signature that carries no secure timestamp — so the container would end up
+  # signed but un-notarizable. `.github/workflows/release.yml` signs, notarizes
+  # and staples the DMG itself after electron-builder finishes (TRA-627).
+  #
+  # Which is also why the DMG must stay out of `latest-mac.yml`: that feed is
+  # written during packaging, and stapling afterwards changes the file, so the
+  # recorded sha512 and size would be wrong the moment they were published.
+  # Nothing reads them — electron-updater takes macOS updates from the zip and
+  # the download button on the landing page resolves the DMG through the GitHub
+  # releases API — so the entries were noise even while they were accurate.
+  writeUpdateInfo: false
 
 win:
   icon: build/icon.ico
