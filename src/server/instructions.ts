@@ -100,7 +100,7 @@ export function buildInstructions(
     '- Tests for a symbol/file → `get_tests_for`',
     '',
     'Architecture & meta-analysis:',
-    '- Implementations of an interface → `get_type_hierarchy`',
+    '- Implementations of an interface → `get_implementations`',
     '- Health, dead exports, hotspots → `self_audit`; untested symbols → `get_untested_symbols`',
     '- Dead code → `get_dead_code` (`mode: "exports_only"` for exports)',
     '- Imports → `get_import_graph` (`get_module_graph` on NestJS); cycles → `get_circular_imports`; coupling → `get_coupling`',

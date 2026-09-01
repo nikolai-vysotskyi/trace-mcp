@@ -302,7 +302,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         content: [
           {
             type: 'text',
-            text: jh('get_dependency_cycles', {
+            text: jh('get_circular_imports', {
               total_cycles: cycles.length,
               cycles,
               ...(cycles.length === 0
@@ -422,7 +422,7 @@ export function registerAnalysisTools(server: McpServer, ctx: ServerContext): vo
         content: [
           {
             type: 'text',
-            text: jh('get_repo_health', { ...result, hotspots: hotspots.slice(0, 10) }),
+            text: jh('get_project_health', { ...result, hotspots: hotspots.slice(0, 10) }),
           },
         ],
       };
