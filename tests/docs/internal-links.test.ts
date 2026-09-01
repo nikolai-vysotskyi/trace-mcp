@@ -1,4 +1,6 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -75,6 +77,48 @@ describe('docs footer nav covers every indexed page', () => {
         .map((e) => `${e.path} (${e.lastmod} < ${e.git})`)
         .join(', ')}`,
     ).toEqual([]);
+  });
+
+  /**
+   * A GitHub squash-merge keeps the author date and re-stamps the committer
+   * date to the merge moment. Dating pages by committer date therefore gave a
+   * different answer on the PR branch than on master for the same change, so a
+   * docs PR authored one day and merged the next passed its own CI and turned
+   * master red on landing — with the repo-wide `test` job failing for everyone
+   * else's unrelated PRs until someone re-ran the generator (TRA-637).
+   */
+  it('dates a page the same before and after a squash-merge re-stamps it', async () => {
+    const { gitDate } = await import('../../scripts/gen-sitemap.mjs');
+    const repo = mkdtempSync(join(tmpdir(), 'sitemap-squash-'));
+    // gpgsign off: a contributor with it on globally would fail here, not in git.
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], { cwd: repo, env });
+    // The author committed their own work, so both dates start out 08-29.
+    const env = {
+      ...process.env,
+      GIT_AUTHOR_DATE: '2026-08-29T12:00:00Z',
+      GIT_COMMITTER_DATE: '2026-08-29T12:00:00Z',
+    };
+
+    git('init', '-q');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'Test');
+    mkdirSync(join(repo, 'docs'));
+    writeFileSync(join(repo, 'docs', 'page.md'), 'body\n');
+    git('add', '-A');
+    git('commit', '-qm', 'authored on the PR branch');
+    const onBranch = gitDate('page.md', repo);
+
+    // What GitHub does on squash-merge: same author date, new committer date.
+    env.GIT_COMMITTER_DATE = '2026-08-30T19:00:00Z';
+    git('commit', '-q', '--amend', '--no-edit');
+    const afterSquash = gitDate('page.md', repo);
+
+    rmSync(repo, { recursive: true, force: true });
+    expect(onBranch).toBe('2026-08-29');
+    expect(afterSquash, 'gitDate must not move when a squash re-stamps the committer date').toBe(
+      onBranch,
+    );
   });
 
   /**

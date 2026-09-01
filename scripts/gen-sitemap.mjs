@@ -25,16 +25,28 @@ export function sourceFor(urlPath) {
 }
 
 /**
- * `%cs` renders the committer date in the *commit's own* timezone, so the same
- * commit dates to 2026-08-29 from a GitHub squash (-07:00) and 2026-08-30 from
- * Dubai (+04:00) — which is what walked ten unrelated pages' dates backwards.
- * Pin the rendering to UTC so the answer is the same on every machine.
+ * Author date (`%ad`), not committer date. A GitHub squash-merge keeps the
+ * author date and re-stamps the committer date to the merge moment, so `%cd`
+ * gives a different answer on the PR branch than on master for the very same
+ * change: a page edited on 08-29 and merged on 08-30 passes the guard on the
+ * PR (sitemap 08-29 == committer 08-29) and fails it the second it lands
+ * (sitemap 08-29 < committer 08-30) — red master for a PR that was green.
+ * `%ad` is identical either side of the squash, so the guard's PR-time answer
+ * is the one master will get.
+ *
+ * The date is also rendered in the *commit's own* timezone, so one commit reads
+ * 2026-08-29 from a GitHub squash (-07:00) and 2026-08-30 from Dubai (+04:00) —
+ * which is what walked ten unrelated pages' dates backwards. Pin the rendering
+ * to UTC so the answer is the same on every machine.
+ *
+ * `cwd` is a seam for the test that pins the squash property; production always
+ * uses the repo root.
  */
-export function gitDate(file) {
+export function gitDate(file, cwd = join(DOCS, '..')) {
   const out = execFileSync(
     'git',
-    ['log', '-1', '--date=format-local:%Y-%m-%d', '--format=%cd', '--', `docs/${file}`],
-    { cwd: join(DOCS, '..'), encoding: 'utf-8', env: { ...process.env, TZ: 'UTC' } },
+    ['log', '-1', '--date=format-local:%Y-%m-%d', '--format=%ad', '--', `docs/${file}`],
+    { cwd, encoding: 'utf-8', env: { ...process.env, TZ: 'UTC' } },
   ).trim();
   // A page added in the working tree has no commit yet — date it today rather
   // than throwing, so `pnpm docs:sitemap` can be run before the first commit.
