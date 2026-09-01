@@ -507,6 +507,11 @@ export async function runContrastSweep(pageUrls) {
 
     for (const urlPath of pageUrls) {
       const fullUrl = `http://127.0.0.1:${serverPort}${urlPath.startsWith('/') ? urlPath : '/' + urlPath}`;
+      // A missing page must fail the run, not get audited as if it were the page:
+      // an error body is a handful of default-coloured words that can pass or fail
+      // on its own and tells you nothing about the page you meant to check.
+      const probe = await fetch(fullUrl);
+      if (!probe.ok) throw new Error(`${urlPath} returned HTTP ${probe.status} — not swept`);
       await send('Page.navigate', { url: fullUrl });
       await new Promise((r) => setTimeout(r, 1000));
 
@@ -566,26 +571,42 @@ export async function runContrastSweep(pageUrls) {
   }
 }
 
-/** Every published doc page, recursively. Jekyll's own `_`-prefixed dirs are not pages. */
-function discoverDocPages(dir = DOCS_DIR, prefix = '') {
+/**
+ * Every page to sweep, recursively. Jekyll's own `_`-prefixed dirs are not pages.
+ *
+ * With a build, walk the generated tree: a source path cannot be mapped to a URL
+ * by hand because front matter can set `permalink` (docs/perf/README.md publishes
+ * as /perf/), and guessing produces a 404 the sweep would then audit as if it
+ * were the page. Without a build, walk the sources — that mapping is the same one
+ * createDocsServer uses to render them, so it is correct by construction.
+ */
+function discoverPages() {
+  if (USE_BUILT_SITE) return walk(SITE_DIR, '', '.html').sort();
+  return ['/', ...walk(DOCS_DIR, '', '.md').sort()];
+}
+
+function walk(dir, prefix, ext) {
   const out = [];
-  for (const entry of fs
-    .readdirSync(dir, { withFileTypes: true })
-    .sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...discoverDocPages(full, `${prefix}/${entry.name}`));
-    else if (entry.name.endsWith('.md'))
-      out.push(`${prefix}/${entry.name.replace(/\.md$/, '.html')}`);
+    if (entry.isDirectory()) {
+      out.push(...walk(full, `${prefix}/${entry.name}`, ext));
+    } else if (entry.name.endsWith(ext)) {
+      // A built index.html *is* its directory's URL; anything else keeps its name.
+      out.push(
+        entry.name === 'index.html'
+          ? `${prefix}/`
+          : `${prefix}/${entry.name.replace(/\.md$/, '.html')}`,
+      );
+    }
   }
   return out;
 }
 
 if (process.argv[1] === __filename) {
   const pages = process.argv.slice(2);
-  // Default: the landing plus every doc page, recursively — docs/vs/*.md are
-  // published pages too and were missed by a flat scan.
-  const targetPages = pages.length > 0 ? pages : ['/', ...discoverDocPages()];
+  const targetPages = pages.length > 0 ? pages : discoverPages();
   runContrastSweep(targetPages)
     .then((report) => {
       console.log('\n=== Contrast Sweep Report ===\n');
@@ -611,7 +632,11 @@ if (process.argv[1] === __filename) {
           }
         }
       }
-      console.log(`\nTotal failing elements: ${totalFailures}`);
+      // Report the count rather than leaving anyone to quote one from memory.
+      console.log(
+        `\nSwept ${targetPages.length} pages x 2 themes from ${USE_BUILT_SITE ? 'the Jekyll build in docs/_site' : 'Markdown sources (fallback renderer — see the header comment)'}.`,
+      );
+      console.log(`Total failing elements: ${totalFailures}`);
       if (totalFailures > 0) process.exitCode = 1;
     })
     .catch((e) => {
