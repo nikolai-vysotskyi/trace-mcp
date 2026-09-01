@@ -157,14 +157,20 @@ export class LaravelPlugin implements FrameworkPlugin {
     let deps: Record<string, string> | undefined;
 
     if (ctx.composerJson) {
-      deps = ctx.composerJson.require as Record<string, string> | undefined;
+      deps = {
+        ...(ctx.composerJson.require as Record<string, string> | undefined),
+        ...(ctx.composerJson['require-dev'] as Record<string, string> | undefined),
+      };
     } else {
       // Fallback: read composer.json from disk
       try {
         const composerPath = path.join(ctx.rootPath, 'composer.json');
         const content = fs.readFileSync(composerPath, 'utf-8');
         const json = JSON.parse(content);
-        deps = json.require as Record<string, string> | undefined;
+        deps = {
+          ...(json.require as Record<string, string> | undefined),
+          ...(json['require-dev'] as Record<string, string> | undefined),
+        };
       } catch {
         return false;
       }

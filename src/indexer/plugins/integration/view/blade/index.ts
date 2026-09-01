@@ -446,16 +446,58 @@ export class BladePlugin implements FrameworkPlugin {
   };
 
   detect(ctx: ProjectContext): boolean {
-    // Check if resources/views/ exists with .blade.php files
+    // Check if resources/views/ exists at root with .blade.php files
     try {
       const viewsDir = path.join(ctx.rootPath, 'resources', 'views');
-      const stat = fs.statSync(viewsDir);
-      if (!stat.isDirectory()) return false;
-      // Quick check: any .blade.php in the directory tree
-      return this.hasBlade(viewsDir);
+      if (
+        fs.existsSync(viewsDir) &&
+        fs.statSync(viewsDir).isDirectory() &&
+        this.hasBlade(viewsDir)
+      ) {
+        return true;
+      }
     } catch {
-      return false;
+      /* ignore */
     }
+
+    // Check subdirectories 1-2 levels deep
+    try {
+      const skipDirs = new Set(['node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__']);
+      const entries = fs.readdirSync(ctx.rootPath, { withFileTypes: true });
+      for (const e of entries) {
+        if (!e.isDirectory() || e.name.startsWith('.') || skipDirs.has(e.name)) continue;
+        const subViews = path.join(ctx.rootPath, e.name, 'resources', 'views');
+        if (
+          fs.existsSync(subViews) &&
+          fs.statSync(subViews).isDirectory() &&
+          this.hasBlade(subViews)
+        ) {
+          return true;
+        }
+        try {
+          const subEntries = fs.readdirSync(path.join(ctx.rootPath, e.name), {
+            withFileTypes: true,
+          });
+          for (const se of subEntries) {
+            if (!se.isDirectory() || se.name.startsWith('.') || skipDirs.has(se.name)) continue;
+            const deepViews = path.join(ctx.rootPath, e.name, se.name, 'resources', 'views');
+            if (
+              fs.existsSync(deepViews) &&
+              fs.statSync(deepViews).isDirectory() &&
+              this.hasBlade(deepViews)
+            ) {
+              return true;
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    return false;
   }
 
   registerSchema() {
