@@ -25,7 +25,12 @@ entry per measurement pass, never rewrite an old one. This file is the human sum
 | `main_cpu_idle_pct` | 0 | 2 | ok |
 | `renderer_eager_kb` | 2012 | — | **the size metric of record** (see below) |
 | `renderer_bundle_kb` | 2271 | — | total size on disk across all lazy chunks |
-| `artifact_mb` | 5.8 / 478.0 | ×1.5 growth | unpacked grew from 268.1 MB (1.783×) due to TRA-438 server-payload (action tracked) |
+| `artifact_mb` | 5.8 / 478.0 | ×1.5 growth | unpacked grew from 268.1 MB (1.783×) due to TRA-438 server-payload (tracked in TRA-605) |
+| `tree_rss_idle_mb` | 351.1 | — | isolated daemon idle baseline |
+| `tree_rss_peak_mb` | 458.0 | — | peak during indexing & embedding pipeline |
+| `tree_cpu_peak_pct` | 314.9% | — | multi-core worker indexing utilization |
+| `rss_after_index_settle_mb` | 621.4 | — | settled RSS with full repo code graph |
+| `ui_p95_ms` | 2.1 | — | 10-query p95 latency (median 0.5 ms) |
 
 ### Which size number to trend
 
@@ -49,13 +54,11 @@ ceiling only.
 When a run has to happen on a loaded machine, an interleaved A/B — alternating one sample
 of each build, several rounds — cancels the drift that a back-to-back A-then-B run does not.
 
-`ui_p95_ms`, `heap_after_workload_mb` and `heap_growth_mb_per_hour` are still unfilled in
-`baseline.json`. The harness that produces them landed with TRA-258 and has been run
-end to end, but a publishable pass needs a daemon on 127.0.0.1:3741 that speaks this
-checkout's API — the renderer's `BASE` is hardcoded, so the workload cannot be pointed
-anywhere else. On a machine where another trace-mcp version owns that port, the fixture
-never gets served and the run aborts with `the daemon on 3741 never served <fixture>`.
-Take the first clean pass on a machine with no competing daemon.
+Controlled workload and daemon process-tree metrics (`tree_rss_idle_mb`, `tree_rss_peak_mb`,
+`tree_cpu_peak_pct`, `rss_after_index_settle_mb`, `ui_p95_ms`) are measured via
+`packages/app/scripts/measure-workload-baseline.mjs` against an isolated daemon instance on a
+dedicated non-conflicting port (3749) with a throwaway `TRACE_MCP_DATA_DIR`, indexing the full
+repository (824 files, 5610 symbols).
 
 ## How to take a measurement
 
@@ -142,7 +145,7 @@ reduced the entry chunk to 1082.74 kB / gzip 314.80 kB (-89.45 kB raw / -22.60 k
 remains fast at 156 ms (median of 3). Multi-tab scaling verified via `tabs-scale.mjs` (1 tab: 571 ms,
 2 tabs: 580 ms, 0 idle daemon reqs/s, 0% CPU, clean memory deallocation upon closing tabs). Unpacked macOS
 artifact growth (268.1 MB → 478.0 MB, 1.783×) caused by the TRA-438 embedded daemon payload in
-`Contents/Resources/server` is documented for audit and pruning follow-up.
+`Contents/Resources/server` is tracked in issue TRA-605 for payload audit and pruning follow-up.
 
 **2026-08-30 — the Ask tab was carrying the markdown stack into startup.**
 `renderer_bundle_kb` had gone 1461 → 1700 → 2272 KB, with the entry chunk alone at
