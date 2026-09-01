@@ -30,7 +30,12 @@ interface ClientRowState {
   client: DetectedMcpClient;
   selected: boolean;
   connected: boolean;
+  /** Why the last Connect attempt failed for this client, if it did. */
+  error?: string;
 }
+
+/** The app's own local daemon, same address every other screen uses. */
+const BASE = 'http://127.0.0.1:3741';
 
 export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
   useTranslation('guard');
@@ -47,6 +52,7 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
   const [guessedProject, setGuessedProject] = useState<{ path: string; name: string } | null>(null);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [indexing, setIndexing] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
 
   const titleId = useId();
   const bodyId = useId();
@@ -183,6 +189,24 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
     };
   }, [step]);
 
+  // ── Focus Restoration ───────────────────────────────────────────────────
+  // The wizard traps focus while it is open, so on dismissal it has to hand
+  // focus back to whatever opened it — the "Run setup wizard" button in
+  // Settings — instead of dropping it on document.body. Captured during the
+  // first render, since by the time effects run the sheet's own autoFocus has
+  // already taken focus away from the opener.
+  const openerRef = useRef<HTMLElement | null>(null);
+  if (openerRef.current === null) {
+    openerRef.current = document.activeElement as HTMLElement | null;
+  }
+  useEffect(
+    () => () => {
+      const opener = openerRef.current;
+      if (opener?.isConnected) opener.focus?.();
+    },
+    [],
+  );
+
   // ── Keyboard Trapping & Escape Dismissal ────────────────────────────────
   const dismissable = !clientsConnecting && !indexing;
 
@@ -238,21 +262,32 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
     }
 
     setClientsConnecting(true);
+    // Per-client outcome. A client the CLI could not configure has to say so
+    // and keep the user on this step — reporting a write that never happened
+    // as "Connected" is the one thing this screen must never do.
+    const outcome = new Map<string, string | undefined>();
     try {
       for (const row of selectedClients) {
         // Skip manual-only clients (warp, jetbrains-ai) from auto-write
         if (row.client.name === 'warp' || row.client.name === 'jetbrains-ai') continue;
         const level = row.client.name.startsWith('claude') ? 'max' : 'base';
-        await window.electronAPI?.configureMcpClient(row.client.name, level);
+        try {
+          const result = await window.electronAPI?.configureMcpClient(row.client.name, level);
+          outcome.set(row.client.name, result?.ok ? undefined : (result?.error ?? 'unknown error'));
+        } catch (err) {
+          outcome.set(row.client.name, String(err));
+        }
       }
-      setClients((prev) =>
-        prev.map((r) => (r.selected ? { ...r, connected: true } : r)),
-      );
-    } catch {
-      /* ignore partial failures */
     } finally {
+      setClients((prev) =>
+        prev.map((r) => {
+          if (!outcome.has(r.client.name)) return r;
+          const error = outcome.get(r.client.name);
+          return { ...r, connected: !error, error };
+        }),
+      );
       setClientsConnecting(false);
-      setStep('project');
+      if (![...outcome.values()].some(Boolean)) setStep('project');
     }
   };
 
@@ -272,15 +307,28 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
       return;
     }
     setIndexing(true);
+    setProjectError(null);
     try {
+      // Registering with the daemon is what actually indexes the directory.
+      // Opening a tab only renders a view of a project the daemon may never
+      // have heard of, which is how the wizard used to finish on a clean DMG
+      // install with nothing indexed.
+      const res = await fetch(`${BASE}/api/projects`, {
+        // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ root: selectedProject }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       addRecentProject(selectedProject);
       await window.electronAPI?.openProjectTab(selectedProject);
-    } catch {
-      /* ignore */
-    } finally {
+    } catch (err) {
+      setProjectError(String(err));
       setIndexing(false);
-      dismissAndPersist();
+      return;
     }
+    setIndexing(false);
+    dismissAndPersist();
   };
 
   const handleRetryDaemon = async () => {
@@ -423,12 +471,27 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
                       <div className="text-[11px] leading-[14px] font-mono truncate" style={{ color: 'var(--label-secondary)' }}>
                         {row.client.configPath}
                       </div>
+                      {row.error && (
+                        <div
+                          className="text-[11px] leading-[14px]"
+                          style={{ color: 'var(--status-red)' }}
+                          role="alert"
+                        >
+                          {row.error}
+                        </div>
+                      )}
                     </div>
                   </label>
                 );
               })}
             </div>
           </Card>
+        )}
+
+        {clients.some((r) => r.error) && (
+          <p className="text-[12px] leading-4" style={{ color: 'var(--status-red)', margin: 0 }}>
+            {t('guard:wizard.clients.failed')}
+          </p>
         )}
 
         <div className="lx-sheet-actions">
@@ -486,6 +549,12 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
               </Button>
             </div>
           </Card>
+        )}
+
+        {projectError && (
+          <p className="text-[12px] leading-4" style={{ color: 'var(--status-red)', margin: 0 }} role="alert">
+            {t('guard:wizard.project.failed')} {projectError}
+          </p>
         )}
 
         <div className="lx-sheet-actions">

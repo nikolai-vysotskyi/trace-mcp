@@ -199,6 +199,17 @@ export function readLauncherEnv(dir = getLauncherDir()): {
 }
 
 /**
+ * The `trace-mcp` command the app should shell out to. A machine that only ever
+ * installed the DMG has no `trace-mcp` on PATH — the shim this module wrote is
+ * the only one there is — so bare `trace-mcp` fails with ENOENT and every
+ * client the setup wizard tries to connect silently does nothing.
+ */
+export function resolveCliCommand(dir = getLauncherDir()): string {
+  const shim = path.join(dir, 'bin', IS_WINDOWS ? 'trace-mcp.cmd' : 'trace-mcp');
+  return isExecutable(shim) ? shim : 'trace-mcp';
+}
+
+/**
  * Where the staged server lives inside the packaged app, or null when running
  * from a checkout (`pnpm dev:electron`), where the developer's own npm install
  * owns the control plane and this module must keep its hands off.

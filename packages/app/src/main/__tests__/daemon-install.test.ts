@@ -15,6 +15,7 @@ import {
   launcherEnvContent,
   PLIST_MARKER,
   readLauncherEnv,
+  resolveCliCommand,
   runtimeShimContent,
 } from '../daemon-install';
 
@@ -27,6 +28,31 @@ describe('compareVersions', () => {
     expect(compareVersions('v3.7.0', '3.7.0')).toBe(0);
     // Prereleases are not ordered against their release; they compare equal.
     expect(compareVersions('3.7.0-rc.1', '3.7.0')).toBe(0);
+  });
+});
+
+describe('resolveCliCommand', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-cli-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it('prefers the installed shim — a DMG-only machine has no trace-mcp on PATH', () => {
+    const bin = path.join(home, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    const shim = path.join(bin, process.platform === 'win32' ? 'trace-mcp.cmd' : 'trace-mcp');
+    fs.writeFileSync(shim, '#!/bin/bash\n', { mode: 0o755 });
+
+    expect(resolveCliCommand(home)).toBe(shim);
+  });
+
+  it('falls back to PATH when no shim was installed', () => {
+    expect(resolveCliCommand(home)).toBe('trace-mcp');
   });
 });
 

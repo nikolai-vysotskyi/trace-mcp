@@ -163,7 +163,7 @@ ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: strin
   });
 });
 
-import { type DaemonSetupState, ensureDaemonInstalled } from './daemon-install';
+import { type DaemonSetupState, ensureDaemonInstalled, resolveCliCommand } from './daemon-install';
 import { isDaemonProcessAlive, restartDaemon } from './daemon-lifecycle';
 import {
   deleteModel as ollamaDelete,
@@ -331,7 +331,7 @@ ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global
     }>;
   }>((resolve) => {
     execFile(
-      'trace-mcp',
+      resolveCliCommand(),
       ['clients', 'status', '--json', '--scope', scope === 'project' ? 'project' : 'global'],
       { timeout: 15_000, maxBuffer: 1024 * 1024 },
       (error, stdout) => {
@@ -381,7 +381,7 @@ ipcMain.handle(
       // Use execFile to avoid shell interpretation: flags like project paths
       // could contain whitespace or special chars and must not be evaluated.
       execFile(
-        'trace-mcp',
+        resolveCliCommand(),
         ['init', ...flags],
         {
           timeout: 30_000,
@@ -410,7 +410,7 @@ ipcMain.handle(
 ipcMain.handle('update-mcp-clients', async (_event, clientNames: string[]) => {
   return new Promise<{ ok: boolean; error?: string }>((resolve) => {
     execFile(
-      'trace-mcp',
+      resolveCliCommand(),
       ['clients', 'update', ...clientNames, '--json'],
       { timeout: 60_000, maxBuffer: 1024 * 1024 },
       (error, stdout, stderr) => {

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { parse as parseJsonc } from 'jsonc-parser';
 import type { DetectedMcpClient } from './mcp-detector-types';
 
 export * from './mcp-detector-types';
@@ -142,12 +143,17 @@ export function detectMcpClients(projectRoot?: string, customHome?: string): Det
 
   // AMP (Sourcegraph): JSON/JSONC at ~/.config/amp/settings.json[c],
   // workspace at .amp/settings.json[c]. Top-level key is `amp.mcpServers`
+  // (note the literal dot in the key name — flat key, not nested under `amp`).
+  // Parsed structurally rather than matched by regex: these files carry
+  // comments, and a commented-out entry is not a configured server.
   {
     const checkAmp = (configPath: string) => {
       try {
         const content = readIfExists(configPath);
         if (content === null) return;
-        const hasTraceMcp = /["'](?:amp\.)?mcpServers["'][\s\S]*?["']trace-mcp["']/.test(content);
+        const parsed = parseJsonc(content) as Record<string, unknown> | null;
+        const servers = parsed?.['amp.mcpServers'] as Record<string, unknown> | undefined;
+        const hasTraceMcp = !!servers?.['trace-mcp'];
         clients.push({ name: 'amp', configPath, hasTraceMcp });
       } catch {
         clients.push({ name: 'amp', configPath, hasTraceMcp: false });

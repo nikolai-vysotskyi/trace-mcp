@@ -41,12 +41,20 @@ function stubElectronApi(stubs: ElectronApiStubs = {}) {
   };
 }
 
+/** The local daemon's POST /api/projects, which is what actually indexes. */
+function stubDaemon(ok = true) {
+  const fetchMock = vi.fn().mockResolvedValue({ ok, status: ok ? 200 : 500 });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
 beforeEach(() => {
   localStorage.clear();
 });
 
 afterEach(() => {
   delete (window as unknown as { electronAPI?: unknown }).electronAPI;
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -122,8 +130,9 @@ it('connects selected clients and advances to project step on confirmation', asy
   expect(screen.getByText('/Users/test/Projects/my-app')).toBeTruthy();
 });
 
-it('indexes the suggested project and closes the wizard on finish', async () => {
+it('registers the project with the daemon, then opens it and closes the wizard', async () => {
   stubElectronApi();
+  const fetchMock = stubDaemon();
   const onClose = vi.fn();
   render(<SetupWizard onClose={onClose} initialStep="project" />);
 
@@ -133,10 +142,66 @@ it('indexes the suggested project and closes the wizard on finish', async () => 
 
   const api = (window as unknown as { electronAPI: { openProjectTab: unknown } }).electronAPI;
   await waitFor(() => {
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3741/api/projects',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ root: '/Users/test/Projects/my-app' }),
+      }),
+    );
     expect(api.openProjectTab).toHaveBeenCalledWith('/Users/test/Projects/my-app');
     expect(onClose).toHaveBeenCalled();
     expect(isOnboardingDone()).toBe(true);
   });
+});
+
+it('keeps the wizard open when the daemon refuses the project', async () => {
+  stubElectronApi();
+  stubDaemon(false);
+  const onClose = vi.fn();
+  render(<SetupWizard onClose={onClose} initialStep="project" />);
+
+  await screen.findByText('Index your first project');
+  fireEvent.click(screen.getByRole('button', { name: 'Index project' }));
+
+  await screen.findByText(/Could not add the project to the background service/);
+  const api = (window as unknown as { electronAPI: { openProjectTab: unknown } }).electronAPI;
+  expect(api.openProjectTab).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(isOnboardingDone()).toBe(false);
+});
+
+it('reports a failed client configuration instead of claiming it connected', async () => {
+  stubElectronApi();
+  const api = (
+    window as unknown as { electronAPI: { configureMcpClient: ReturnType<typeof vi.fn> } }
+  ).electronAPI;
+  api.configureMcpClient.mockImplementation(async (name: string) =>
+    name === 'cursor' ? { ok: false, error: 'spawn trace-mcp ENOENT' } : { ok: true },
+  );
+  render(<SetupWizard onClose={() => {}} initialStep="clients" />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect selected' }));
+
+  await screen.findByText('spawn trace-mcp ENOENT');
+  // Still on the clients step — the project step never rendered.
+  expect(screen.queryByText('Index your first project')).toBeNull();
+  expect(screen.getAllByText('Connected')).toHaveLength(1);
+});
+
+it('returns focus to whatever opened it', async () => {
+  stubElectronApi();
+  const opener = document.createElement('button');
+  document.body.appendChild(opener);
+  opener.focus();
+
+  const { unmount } = render(<SetupWizard onClose={() => {}} initialStep="clients" />);
+  await screen.findByRole('dialog');
+  await act(async () => {});
+  unmount();
+
+  expect(document.activeElement).toBe(opener);
+  opener.remove();
 });
 
 it('allows choosing another folder with selectFolder', async () => {
