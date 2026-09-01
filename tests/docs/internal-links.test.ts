@@ -203,8 +203,17 @@ describe('docs footer nav covers every indexed page', () => {
     ).toEqual([]);
   });
 
-  it('the layout renders the nav from the data file, not a hardcoded list', () => {
-    const layout = readFileSync(join(DOCS, '_layouts', 'default.html'), 'utf-8');
-    expect(layout).toMatch(/site\.data\.docs_nav/);
-  });
+  /**
+   * Both footers, not just the layout's. This check used to read
+   * `_layouts/default.html` alone, so it could not see that `index.html` —
+   * which has `layout: null` and its own hand-written footer — still listed
+   * 12 of the 22 pages by hand. It had drifted past the whole /vs/ cluster,
+   * unlinked from the one page on the site with any external authority.
+   */
+  it.each([['_layouts/default.html'], ['index.html']])(
+    '%s renders the footer nav from the data file, not a hardcoded list',
+    (page) => {
+      expect(readFileSync(join(DOCS, ...page.split('/')), 'utf-8')).toMatch(/site\.data\.docs_nav/);
+    },
+  );
 });
