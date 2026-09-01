@@ -121,6 +121,16 @@ jobs:
               - 'tests/project-setup/dangerous-root.test.ts'
               - 'tests/topology/**'
               - 'tests/registry.test.ts'
+            # TRA-638: fifth Windows-shaped hole. The app's main process spawns
+            # the CLI, and on Windows the launcher it resolves is a `.cmd` that
+            # execFile cannot launch — three MCP-client IPCs were dead there for
+            # months. The app's own test job is ubuntu-only, so the regression
+            # test lives in tests/app/ and this filter is what puts it on a
+            # Windows runner.
+              - 'packages/app/src/main/daemon-install.ts'
+              - 'packages/app/src/main/daemon-lifecycle.ts'
+              - 'packages/app/src/main/trace-home.ts'
+              - 'tests/app/**'
             core:
               - 'src/**'
               - 'scripts/**'
