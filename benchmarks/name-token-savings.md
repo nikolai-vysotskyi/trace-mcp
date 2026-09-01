@@ -1,11 +1,12 @@
 # `trace-mcp` → `trace`: measured token savings (TRA-613)
 
 Measured 2026-09-01 on `trace-mcp@3.10.0` (`b6b02ae4`), macOS 15 / M-series, Node 22.22.3.
-Reproduce with `pnpm run build && node scripts/bench-name-tokens.mjs`.
+Reproduce with `pnpm run build && npx tsx scripts/bench-name-tokens.ts`.
 
 Tool counts and schemas come from a **real `initialize` + `tools/list` round-trip** against the
 built server (one spawn per preset, `client_profile: "off"`, a bare TypeScript project so no
-framework-gated tools register) — not from a hand-written list.
+framework-gated tools register) — not from a hand-written list. The routing-block corpus is the
+`TRACE_MCP_ROUTING_BLOCK` constant the CLAUDE.md / AGENTS.md generators write, imported directly.
 
 Tokenizers: `gpt-tokenizer` for `o200k_base` (GPT-4o) and `cl100k_base` (GPT-4);
 `@anthropic-ai/tokenizer` for Claude; `@lenml/tokenizer-gemini` for Gemini. The last two are
@@ -63,8 +64,11 @@ Names only, one per line.
 
 ## Whole advertised tool surface (`tools/list`: names + descriptions + schemas)
 
-The denominator that matters. Includes the literal `trace-mcp` mentions inside tool descriptions
-(5 in `standard`, 17 in `full`), which the names-only table above misses.
+`JSON.stringify` of the tools array — a reproducible **proxy** for how a client renders tool
+definitions to the model, not the exact provider wire format. It is good enough to answer "is the
+prefix saving a rounding error or a real cut"; do not quote it as an exact prompt size. It does
+include the literal `trace-mcp` mentions inside tool descriptions (5 in `standard`, 17 in `full`),
+which the names-only table above misses.
 
 | preset | tokenizer | before | after | saved | % |
 |---|---|---:|---:|---:|---:|
@@ -81,23 +85,31 @@ The denominator that matters. Includes the literal `trace-mcp` mentions inside t
 | full | Claude | 44468 | 43919 | 549 | 1.23% |
 | full | Gemini | 44595 | 44046 | 549 | 1.23% |
 
+The full-preset o200k delta of 366 decomposes exactly: 332 from the 166 tool names, 34 from the
+17 `trace-mcp` mentions inside descriptions.
+
+`client_profile: "off"` is a host-neutral upper bound, not a typical client. The Codex profile
+serves 27 / 54 / 164 tools against these 28 / 55 / 166 — too small to move the conclusion.
+
 ## Prose mentions
 
 | corpus | mentions | tokenizer | before | after | saved | % |
 |---|---:|---|---:|---:|---:|---:|
 | `initialize` instructions (verbosity=full) | 2 | GPT-4o | 930 | 926 | 4 | 0.43% |
 | `initialize` instructions (verbosity=full) | 2 | Claude | 1051 | 1045 | 6 | 0.57% |
-| CLAUDE.md / AGENTS.md routing block | 11 | GPT-4o | 2212 | 2184 | 28 | 1.27% |
-| CLAUDE.md / AGENTS.md routing block | 11 | Claude | 2424 | 2382 | 42 | 1.73% |
+| CLAUDE.md / AGENTS.md routing block | 5 | GPT-4o | 411 | 401 | 10 | 2.43% |
+| CLAUDE.md / AGENTS.md routing block | 5 | Claude | 480 | 465 | 15 | 3.13% |
 | repo CLAUDE.md | 12 | GPT-4o | 4429 | 4405 | 24 | 0.54% |
 | repo CLAUDE.md | 12 | Claude | 4911 | 4875 | 36 | 0.73% |
 | repo AGENTS.md | 5 | GPT-4o | 492 | 482 | 10 | 2.03% |
 | repo AGENTS.md | 5 | Claude | 574 | 559 | 15 | 2.61% |
 
 The `initialize` instructions block barely moves: it names the server twice. It is already under a
-1455-token budget (`tests/server/instructions.test.ts`), so there is nothing to reclaim there. Its
-absolute counts drift ±1 token between runs because the block embeds the detected-framework string
-of the throwaway project the script spawns against; the delta (4 / 6) is stable.
+1455-token budget (`tests/server/instructions.test.ts`), so there is nothing to reclaim there.
+
+The rewrite measured is `trace-mcp` → `trace` only. TRA-611 keeps the `TRACE_MCP_*` environment
+variables, so those are deliberately left alone — renaming them here would measure a migration that
+is not going to ship.
 
 Full four-tokenizer tables: run the script.
 
@@ -108,12 +120,12 @@ them on every turn — as a *cache read* where prompt caching is on, at full pri
 
 | preset | tokenizer | per turn | 10 turns | 30 turns | 50 turns |
 |---|---|---:|---:|---:|---:|
-| minimal | GPT-4o | 94 | 940 | 2 820 | 4 700 |
-| minimal | Claude | 141 | 1 410 | 4 230 | 7 050 |
-| standard | GPT-4o | 148 | 1 480 | 4 440 | 7 400 |
-| standard | Claude | 222 | 2 220 | 6 660 | 11 100 |
-| full | GPT-4o | 394 | 3 940 | 11 820 | 19 700 |
-| full | Claude | 591 | 5 910 | 17 730 | 29 550 |
+| minimal | GPT-4o | 76 | 760 | 2 280 | 3 800 |
+| minimal | Claude | 114 | 1 140 | 3 420 | 5 700 |
+| standard | GPT-4o | 130 | 1 300 | 3 900 | 6 500 |
+| standard | Claude | 195 | 1 950 | 5 850 | 9 750 |
+| full | GPT-4o | 376 | 3 760 | 11 280 | 18 800 |
+| full | Claude | 564 | 5 640 | 16 920 | 28 200 |
 
 ## Retrieval regression check
 
