@@ -85,7 +85,7 @@ When AI is enabled, a background pipeline runs after indexing to generate summar
 
 ### Storage
 
-All state is centralized in `~/.trace-mcp/`:
+All state is centralized in `~/.trace-mcp/` (see [configuration reference](configuration.html)):
 
 ```
 ~/.trace-mcp/
@@ -110,12 +110,14 @@ The **topology database** (`topology.db`) is shared across all projects. It stor
 
 Each subproject is bound to a project via `project_root`. A project can have multiple subprojects (frontend, backend, etc.), and the same subproject can belong to multiple projects.
 
-The **decision memory database** (`decisions.db`) is also shared across all projects. It stores:
+The **decision memory database** (`decisions.db`, detailed in [Decision Memory](decision-memory.html)) is also shared across all projects. It stores:
 - **Decisions** — architectural decisions, tech choices, bug root causes, preferences, etc., each with temporal validity (`valid_from`/`valid_until`) and optional code linkage (`symbol_id`, `file_path`, `service_name`)
 - **Session chunks** — chunked conversation content from AI session logs, FTS5-indexed for cross-session search
 - **Mined sessions tracker** — prevents re-processing already-mined session files
 
 Decisions are auto-enriched into code intelligence tool responses (`get_change_impact`, `plan_turn`, `get_wake_up`) via the enrichment layer in `src/memory/enrichment.ts`.
+
+Session analytics and wasteful pattern tracking are saved in `analytics.db` (see [Session Analytics](analytics.html)).
 
 ---
 
@@ -125,13 +127,13 @@ Plugins are the core extensibility mechanism. There are two types:
 
 ### Language plugins
 
-Located in `src/indexer/plugins/language/`. Each plugin handles symbol extraction for one language using tree-sitter.
+Located in `src/indexer/plugins/language/`. Each plugin handles symbol extraction for one language using tree-sitter. See the full [Language matrix](language-matrix.html) for per-language AST and grammar support.
 
 Registered plugins: PHP, TypeScript/JavaScript, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS.
 
 ### Integration plugins
 
-Located in `src/indexer/plugins/integration/`, organized by category:
+Located in `src/indexer/plugins/integration/`, organized by category (see [Supported frameworks](supported-frameworks.html) for detailed capabilities):
 
 | Category | Plugins | What they do |
 |---|---|---|
@@ -184,7 +186,7 @@ Three module resolvers handle cross-file imports:
 - **BM25** — full-text relevance via FTS5
 - **PageRank** — symbol importance based on the dependency graph
 - **Hybrid scoring** — combines BM25 + graph signals
-- **Structured assembly** — assembles context within a token budget, maximizing coverage
+- **Structured assembly** — assembles context within a token budget, maximizing coverage (see [PR review context benchmark](pr-context-benchmark.html) and [TOON token savings](toon-savings.html))
 
 ---
 
@@ -238,14 +240,14 @@ src/
 │   ├── pipeline.ts         # Two-pass indexing engine
 │   ├── watcher.ts          # File change watcher
 │   └── monorepo.ts         # Monorepo workspace detection
-├── memory/                 # Decision memory (cross-session knowledge graph)
+├── memory/                 # Decision memory (cross-session knowledge graph; see decision-memory.html)
 │   ├── decision-store.ts   #   SQLite store: decisions + session chunks + FTS5
 │   ├── conversation-miner.ts # Pattern-based decision extraction from JSONL logs
 │   ├── session-indexer.ts  #   Chunked session content indexer for search
 │   ├── wake-up.ts          #   L0/L1/L2 wake-up context assembler
 │   ├── enrichment.ts       #   Decision injection into code intelligence results
 │   └── index.ts            #   Barrel export
-├── analytics/              # Session analytics engine
+├── analytics/              # Session analytics engine (see analytics.html)
 │   ├── log-parser.ts       #   JSONL parser (Claude Code + Claw Code)
 │   ├── analytics-store.ts  #   SQLite storage for parsed sessions
 │   ├── sync.ts             #   Incremental session log sync
@@ -255,16 +257,26 @@ src/
 │   ├── benchmark.ts        #   Synthetic benchmark (5 scenarios)
 │   ├── tech-detector.ts    #   Manifest parser + coverage assessment
 │   └── known-packages.ts   #   Catalog of ~200 known packages
-├── tools/                  # 170 MCP tool implementations
+├── tools/                  # 170 MCP tool implementations (see tools-reference.html and tools-index.html)
 ├── scoring/                # PageRank, BM25, hybrid scoring, structured assembly
 ├── plugin-api/             # Plugin registry, loader, executor, test harness
 ├── init/                   # Setup & detection (Claude Code, Claw Code, Cursor, Windsurf, Continue)
 ├── utils/                  # Env parser, hasher, security, source reader, token counter
 ├── server.ts               # MCP server factory
-├── config.ts               # Cosmiconfig + Zod validation
+├── config.ts               # Cosmiconfig + Zod validation (see configuration.html)
 ├── errors.ts               # Error types (neverthrow)
 ├── logger.ts               # Pino logger setup
 ├── cli.ts                  # Commander CLI (serve, serve-http, index, subproject, analytics)
 ├── cli-analytics.ts        # Analytics CLI subcommands (sync, report, optimize, benchmark, coverage, savings, trends)
 └── cli-subproject.ts       # Subproject CLI subcommands (add --project, list --project, etc.)
 ```
+
+## See also
+
+- [Configuration Reference](configuration.html) — all CLI, daemon, and per-project config options
+- [Tools Reference](tools-reference.html) & [Tool Index](tools-index.html) — categorized and full lists of registered MCP tools
+- [Supported Frameworks](supported-frameworks.html) & [Language Matrix](language-matrix.html) — framework plugins and tree-sitter grammars
+- [Decision Memory](decision-memory.html) — persistent decision knowledge graph
+- [Session Analytics](analytics.html) — token usage parser and optimization rules
+- [Telemetry & Observability](telemetry.html) — OpenTelemetry bridge for tool and AI calls
+- [Contributing & Development](development.html) — local build, test suite, and plugin development

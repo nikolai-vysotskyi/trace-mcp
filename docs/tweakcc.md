@@ -223,3 +223,10 @@ This layered approach gives the strongest enforcement with the least friction.
 ## Rollback
 
 To revert: restore original tweakcc prompt files. No changes to CLAUDE.md, hooks, or settings are needed — the existing Standard setup continues to work independently.
+
+## See also
+
+- [Cut Claude Code token usage](reduce-claude-code-token-usage.html) — 7 measured tactics for reducing token usage
+- [Configuration Reference](configuration.html) — all configuration options and agent behavior rules
+- [Tools Reference](tools-reference.html) — full catalog of MCP tools routed by tweakcc
+- [trace-mcp Architecture](architecture.html) — MCP server lifecycle and hook architecture

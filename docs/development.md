@@ -428,3 +428,12 @@ commit of the last change under `packages/app/src/renderer` / `src/main`.
 `--check` compares that against HEAD and exits non-zero with a reason when the
 UI has moved on — that is the signal the docs and SEO autopilots read, so they
 never have to eyeball an image to know whether it is current.
+
+## See also
+
+- [trace-mcp Architecture](architecture.html) — two-pass indexing engine and plugin system
+- [Configuration Reference](configuration.html) — all configuration keys and defaults
+- [Tools Reference](tools-reference.html) & [Tool Index](tools-index.html) — complete catalog of MCP tools
+- [Supported Frameworks](supported-frameworks.html) & [Language Matrix](language-matrix.html) — framework plugins and tree-sitter grammars
+- [Daemon memory baseline](daemon-memory.html) — memory footprint and eager cache tuning
+- [Quality Gates](quality-gates.html) — complexity, security, and coverage thresholds

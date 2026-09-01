@@ -50,14 +50,14 @@ of RSS, so it cannot attribute the other 72 %.
 
 ## The ceiling
 
-`daemon_eager_load_projects` (default **8**) is the number of projects the
+[`daemon_eager_load_projects`](configuration.html#daemon) (default **8**) is the number of projects the
 daemon keeps resident. 8 × ~100 MB ≈ 800 MB marginal on top of the ~350 MB
 fixed footprint. Raise it on a big machine with few repos; lower it if the
 daemon is competing for memory.
 
 Two rules enforce it, both in the sweep armed by `startIdleUnloadSweep`:
 
-- **TTL** — `project_idle_unload_minutes` (default 30) unloads any project not
+- **TTL** — [`project_idle_unload_minutes`](configuration.html#daemon) (default 30) unloads any project not
   touched in that long.
 - **LRU ceiling** — anything above `daemon_eager_load_projects` is unloaded
   least-recently-accessed first, regardless of TTL.
@@ -99,3 +99,10 @@ until the delay is shown to matter.
 
 The sweep also cannot help a daemon that does not live long enough to run it —
 see TRA-421 on daemon restarts.
+
+## See also
+
+- [Configuration Reference](configuration.html#daemon) — daemon port, host, cache, and unload timeout options
+- [trace-mcp Architecture](architecture.html) — SQLite store, two-pass indexing, and subproject topology
+- [Cut Claude Code token usage](reduce-claude-code-token-usage.html) — practical setup for local AI code intelligence
+- [Tools Reference](tools-reference.html) — MCP tools reference

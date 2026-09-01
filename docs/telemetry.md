@@ -162,3 +162,10 @@ rm .trace-mcp.json   # if you don't want telemetry enabled going forward
 - **Container can't reach trace-mcp.** This direction never happens — the
   SDK is the client; Jaeger is the server. Always `http://localhost:4318`
   from the trace-mcp side.
+
+## See also
+
+- [Configuration Reference](configuration.html#telemetry) — complete `.trace-mcp.json` and global config options
+- [Session Analytics](analytics.html) — log parsing, token tracking, and local optimization rules
+- [trace-mcp Architecture](architecture.html) — system internals, plugin registry, and tool-gate mechanics
+- [Tools reference](tools-reference.html) — full catalog of MCP tools instrumented by telemetry

@@ -76,19 +76,19 @@ Session logs (JSONL)                   Project manifests
 
 | Client | Session log location | Config files |
 |--------|---------------------|--------------|
-| **Claude Code** | `~/.claude/projects/<encoded-path>/<session-id>.jsonl` | `CLAUDE.md`, `.claude/settings.json` |
+| **Claude Code** (see [token reduction guide](reduce-claude-code-token-usage.html)) | `~/.claude/projects/<encoded-path>/<session-id>.jsonl` | `CLAUDE.md`, `.claude/settings.json` |
 | **Claw Code** | `<project>/.claw/sessions/<session-id>.jsonl` | `.claw.json`, `.claw/settings.json` |
 
 Both formats are auto-detected during sync. No configuration needed.
 
 ### Local-machine scoping
 
-`get_session_analytics`, `get_optimization_report`, `get_real_savings`, and `analyze_perf` (for `window` other than `"session"`) only see session logs that physically exist on the machine running the MCP server — they read `~/.claude/projects/<encoded-path>/` and `<project>/.claw/sessions/` directly, they do not fetch data from any other machine. If you invoke them from a fresh checkout, a remote/cloud agent runtime, or a CI sandbox that never ran a local Claude Code / Claw Code session for this project, there is nothing to find and the tools report that. `get_session_analytics`/`get_optimization_report`/`get_real_savings` distinguish this from "checked, nothing to report" by adding a `_warnings` field when both the discoverable log files and the aggregated result are empty. `analyze_perf` with a persistent `window` additionally requires `telemetry.enabled: true` in config (off by default) and returns an explicit `error` when it's off.
+`get_session_analytics`, `get_optimization_report`, `get_real_savings`, and `analyze_perf` (for `window` other than `"session"`) only see session logs that physically exist on the machine running the MCP server — they read `~/.claude/projects/<encoded-path>/` and `<project>/.claw/sessions/` directly, they do not fetch data from any other machine. If you invoke them from a fresh checkout, a remote/cloud agent runtime, or a CI sandbox that never ran a local Claude Code / Claw Code session for this project, there is nothing to find and the tools report that. `get_session_analytics`/`get_optimization_report`/`get_real_savings` distinguish this from "checked, nothing to report" by adding a `_warnings` field when both the discoverable log files and the aggregated result are empty. `analyze_perf` with a persistent `window` additionally requires `telemetry.enabled: true` in [configuration](configuration.html#telemetry) (detailed in [Telemetry](telemetry.html), off by default) and returns an explicit `error` when it's off.
 
 ### JSONL format differences
 
 | | Claude Code | Claw Code |
-|--|-------------|-----------|
+|---|-------------|-----------|
 | Record types | `{type: "assistant"}`, `{type: "user"}` | `{type: "message"}` with `message.role` |
 | Tool result delivery | Embedded in `user` message | Separate `tool` role message |
 | Tool input format | JSON object | JSON string (parsed automatically) |
@@ -96,7 +96,7 @@ Both formats are auto-detected during sync. No configuration needed.
 
 ---
 
-## MCP Tools
+## MCP Tools (see [Tools reference](tools-reference.html#analytics))
 
 ### `get_session_analytics`
 
@@ -120,18 +120,18 @@ get_optimization_report({ period?: "today" | "week" | "month" | "all" })
 
 | Rule | Severity | Detects | Recommends |
 |------|----------|---------|------------|
-| `repeated-file-read` | high | Same file Read 3+ times per session | `get_outline` + `get_symbol` |
-| `bash-grep` | high | `Bash` with grep/rg/ack commands | `search` tool |
-| `bash-cat` | medium | `Bash` with cat/head/tail commands | `get_symbol` or `Read` |
-| `large-file-read` | medium | `Read` with output > 5000 chars | `get_outline` → `get_symbol` |
-| `phpstorm-read-indexed` | medium | PhpStorm file read on indexed files | `get_symbol` |
-| `phpstorm-search-indexed` | medium | PhpStorm text search on indexed project | `search` |
+| `repeated-file-read` | high | Same file Read 3+ times per session | [`get_outline`](tools-reference.html#navigation) + [`get_symbol`](tools-reference.html#navigation) |
+| `bash-grep` | high | `Bash` with grep/rg/ack commands | [`search`](tools-reference.html#navigation) tool |
+| `bash-cat` | medium | `Bash` with cat/head/tail commands | [`get_symbol`](tools-reference.html#navigation) or `Read` |
+| `large-file-read` | medium | `Read` with output > 5000 chars | [`get_outline`](tools-reference.html#navigation) → [`get_symbol`](tools-reference.html#navigation) |
+| `phpstorm-read-indexed` | medium | PhpStorm file read on indexed files | [`get_symbol`](tools-reference.html#navigation) |
+| `phpstorm-search-indexed` | medium | PhpStorm text search on indexed project | [`search`](tools-reference.html#navigation) |
 | `unused-trace-tools` | low | Sessions without trace-mcp but with Read/Grep | Enable trace-mcp tools |
-| `agent-for-indexed` | medium | Agent subagent calls (~50K tokens each) | `get_feature_context` / `get_task_context` |
+| `agent-for-indexed` | medium | Agent subagent calls (~50K tokens each) | [`get_feature_context`](tools-reference.html#context-assembly) / `get_task_context` |
 
 ### `get_real_savings`
 
-Analyzes actual session logs to compute how much could be saved by using trace-mcp instead of raw file reads. For each `Read`/`Bash cat`/PhpStorm read, finds the file in the index and estimates the compact alternative cost.
+Analyzes actual session logs to compute how much could be saved by using trace-mcp instead of raw file reads. For each `Read`/`Bash cat`/PhpStorm read, finds the file in the index and estimates the compact alternative cost (see [TOON savings](toon-savings.html)).
 
 ```
 get_real_savings({ period?: "today" | "week" | "month" | "all" })
@@ -218,7 +218,7 @@ trace-mcp analytics trends [--days 30] [--format text|json]
 
 ## Storage
 
-Analytics data lives in `~/.trace-mcp/analytics.db` (separate from project indexes):
+Analytics data lives in `~/.trace-mcp/analytics.db` (separate from project indexes; see [architecture](architecture.html#storage)):
 
 ```sql
 sessions       — one row per parsed session (tokens, model, timestamps)
@@ -296,3 +296,12 @@ composite_task: 71,076 → 2,033 tokens (97.1% reduction)
 
 Total: 426,891 → 28,457 (93.3% reduction)
 ```
+
+## See also
+
+- [Cut Claude Code token usage](reduce-claude-code-token-usage.html) — practical setup for reducing session token usage
+- [PR Review Context Benchmark](pr-context-benchmark.html) — measured input token reduction on real merged pull requests
+- [TOON measured token savings](toon-savings.html) — table-mode token savings across MCP tools
+- [Telemetry & Observability](telemetry.html) — OpenTelemetry bridge and performance tracing
+- [Tools reference](tools-reference.html#analytics) — full analytics tool signatures and options
+- [trace-mcp Architecture](architecture.html) — system internals and storage architecture

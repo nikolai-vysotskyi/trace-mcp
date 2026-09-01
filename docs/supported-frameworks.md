@@ -230,3 +230,11 @@ edges, call edges, type edges, and whether a test covers the plugin.
 | **n8n** | Workflow nodes, connections, parameters, credentials |
 | **Data fetching** | React Query, SWR — query hooks, mutations, cache config |
 | **Testing** | Playwright, Cypress, Jest, Vitest, Mocha — test suites, fixtures |
+
+## See also
+
+- [Language Capability Matrix](language-matrix.html) — per-language AST, parser type, call edges, and test coverage
+- [Tools Reference](tools-reference.html) & [Tool Index](tools-index.html) — complete catalog of framework-aware MCP tools
+- [trace-mcp Architecture](architecture.html) — plugin loader, indexing pipeline, and topology model
+- [Configuration Reference](configuration.html#options) — framework-specific overrides and configuration
+- [Quality Gates](quality-gates.html) — complexity and quality rules across supported stacks

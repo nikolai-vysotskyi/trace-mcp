@@ -35,7 +35,7 @@ trace-mcp includes a persistent decision knowledge graph that captures architect
 
 ## Why
 
-Every conversation with an AI agent produces decisions that disappear when the session ends. Six months of daily AI use = thousands of decisions lost. General-purpose memory tools (MemPalace, OpenMemory, Mem0) store these as text. trace-mcp stores them **linked to code symbols and files** — so when you ask "what breaks if I change this?", you also see *why it was built that way*.
+Every conversation with an AI agent produces decisions that disappear when the session ends. Six months of daily AI use = thousands of decisions lost. General-purpose memory tools ([MemPalace, OpenMemory, Mem0](comparisons.html#vs-ai-session-memory)) and specialized alternatives like [codebase-memory-mcp](vs/codebase-memory-mcp.html) store these as text. trace-mcp stores them **linked to code symbols and files** — so when you ask "what breaks if I change this?", you also see *why it was built that way*.
 
 ## What "why" actually looks like
 
@@ -47,7 +47,7 @@ The system tries to capture the kinds of reasoning that disappear from the diff 
 - **The thing that was tried first and didn't work** — recovered from session logs by `mine_sessions`, because agents rarely volunteer their own dead ends. This is the highest-value content and the easiest to lose without dedicated capture.
 - **The local convention being established** — "all new endpoints go through `withAuth` even if the route looks public." Stops the next agent from reinventing or violating it.
 
-Each of these is linked to the symbol or file it's about, so the next agent who touches that code sees the reasoning surface automatically through `get_change_impact` or `plan_turn` — they don't have to know the decision exists to find it.
+Each of these is linked to the symbol or file it's about, so the next agent who touches that code sees the reasoning surface automatically through [`get_change_impact`](tools-reference.html#get_change_impact) or [`plan_turn`](tools-reference.html#plan_turn) — they don't have to know the decision exists to find it.
 
 ## Architecture
 
@@ -132,9 +132,9 @@ The score that drives the review queue combines a base prior with multiplicative
 
 For mined decisions, the pattern's intrinsic confidence (see [Extraction patterns](#extraction-patterns)) is additionally multiplied by `1 + 0.05 × n` where `n` is the number of context boosters (`because`, `reason`, `pros and cons`, `alternative`, `architecture`, `design decision`) found in the surrounding turn.
 
-The implementation lives in [`src/memory/decision-confidence.ts`](../src/memory/decision-confidence.ts).
+The implementation lives in [`src/memory/decision-confidence.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/main/src/memory/decision-confidence.ts). For threshold customization, see [configuration](configuration.html#memory).
 
-## MCP tools
+## MCP tools (see [Tools reference](tools-reference.html#decision-memory) and [Tool index](tools-index.html))
 
 ### Capture
 
@@ -259,7 +259,7 @@ The mining pipeline also filters non-user content before it reaches the store. B
 | `<task-notification>…</task-notification>` | Autonomous protocol payloads from background agents |
 | `<local-command-stdout>…</local-command-stdout>` | Captured shell output (may contain secrets) |
 
-`<command-message>` and `<command-name>` are kept — those wrap real user slash-commands and are part of the conversation. Implementation: `stripPrivacyTags` in [`src/memory/conversation-miner.ts`](../src/memory/conversation-miner.ts).
+`<command-message>` and `<command-name>` are kept — those wrap real user slash-commands and are part of the conversation. Implementation: `stripPrivacyTags` in [`src/memory/conversation-miner.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/main/src/memory/conversation-miner.ts).
 
 ## CLI
 
@@ -274,7 +274,7 @@ trace-mcp memory timeline [--project=.] [--file=path] [--symbol=id]
 
 ## Storage
 
-All decision memory is stored in `~/.trace-mcp/decisions.db` (SQLite, WAL mode). Tables:
+All decision memory is stored in `~/.trace-mcp/decisions.db` (SQLite, WAL mode; see [architecture](architecture.html#storage)). Tables:
 
 - `decisions` — decision records with code linkage, temporal validity, service scoping
 - `decisions_fts` — FTS5 virtual table for full-text search over decisions
@@ -296,3 +296,11 @@ Key columns on `decisions`:
 | `confidence` | `0..1` score driving the review queue (always `1.0` for `'manual'`) |
 | `review_status` | `NULL` = auto-approved, `'pending'` = awaiting review, `'approved'`, `'rejected'` |
 | `session_id` | Provenance — which session produced this decision |
+
+## See also
+
+- [Tools reference](tools-reference.html#decision-memory) — full tool signatures and parameters
+- [TOON measured token savings](toon-savings.html) — table-mode token savings on `query_decisions`
+- [trace-mcp Architecture](architecture.html) — storage layout and multi-service topology
+- [trace-mcp vs codebase-memory-mcp](vs/codebase-memory-mcp.html) — comparison against text-only graph memory
+- [trace-mcp vs alternatives](comparisons.html) — head-to-head matrix against 20+ tools

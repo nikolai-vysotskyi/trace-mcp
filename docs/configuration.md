@@ -162,7 +162,7 @@ Two different things can leave a folder out of the index — check which one app
    }
    ```
 
-   `include` in a per-project config file **replaces** the built-in list rather than adding to it (config merge is shallow) — copy the defaults from [`src/config.ts`](../src/config.ts) alongside your addition if you still want the rest of the project indexed.
+   `include` in a per-project config file **replaces** the built-in list rather than adding to it (config merge is shallow) — copy the defaults from [`src/config.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/main/src/config.ts) alongside your addition if you still want the rest of the project indexed.
 
 ---
 

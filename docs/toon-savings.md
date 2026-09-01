@@ -42,11 +42,11 @@ net win on representative payloads:
 
 | tool                  | measured savings | why                                                     |
 |-----------------------|-----------------:|---------------------------------------------------------|
-| `query_decisions`     | **+31.4%**       | Homogeneous row-shaped decisions; pure table mode.      |
-| `get_outline`         | **+28.8%**       | Flat symbol records; pure table mode.                   |
-| `get_changed_symbols` | **+21.5%**       | Flat change records; pure table mode.                   |
-| `search`              | **+16.4%**       | Flat item records; mild table-mode amortization.        |
-| `get_feature_context` |  **+7.9%**       | Mostly flat items; modest gain.                         |
+| [`query_decisions`](decision-memory.html#mcp-tools) | **+31.4%**       | Homogeneous row-shaped decisions; pure table mode.      |
+| [`get_outline`](tools-reference.html#navigation)         | **+28.8%**       | Flat symbol records; pure table mode.                   |
+| [`get_changed_symbols`](tools-reference.html#impact-analysis) | **+21.5%**       | Flat change records; pure table mode.                   |
+| [`search`](tools-reference.html#navigation)              | **+16.4%**       | Flat item records; mild table-mode amortization.        |
+| [`get_feature_context`](tools-reference.html#context-assembly) |  **+7.9%**       | Mostly flat items; modest gain.                         |
 
 For every other tool TOON is off by default and the parameter is not
 accepted in the schema.
@@ -107,8 +107,8 @@ are deeply nested and small.
 
 ## Methodology
 
-- Script: [`scripts/bench-toon.ts`](../scripts/bench-toon.ts) for the
-  per-tool numbers; [`scripts/toon-diagnostic-2.ts`](../scripts/toon-diagnostic-2.ts)
+- Script: [`scripts/bench-toon.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/main/scripts/bench-toon.ts) for the
+  per-tool numbers; [`scripts/toon-diagnostic-2.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/main/scripts/toon-diagnostic-2.ts)
   for the table-vs-list-mode curve.
 - Invocation pattern: each registered MCP tool's closure is captured via a
   fake `server.tool(...)`. This bypasses the MCP transport but exercises the
@@ -275,3 +275,11 @@ cutoff** we established for the original five keepers:
    strongest predicted candidate by a wide margin, despite being seeded with
    synthetic latency stats. A real persistent-telemetry payload (24h/7d
    windows) would benefit even more.
+
+## See also
+
+- [PR Review Context Benchmark](pr-context-benchmark.html) — measured input token reduction on real merged pull requests
+- [Cut Claude Code token usage](reduce-claude-code-token-usage.html) — practical setup for token reduction with MCP
+- [Tools reference](tools-reference.html) — complete reference of all registered MCP tools
+- [Decision memory](decision-memory.html) — persistent decision knowledge graph and `query_decisions`
+- [trace-mcp Architecture](architecture.html) — two-pass indexing engine and storage internals

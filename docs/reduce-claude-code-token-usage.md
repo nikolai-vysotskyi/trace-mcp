@@ -98,7 +98,7 @@ Two cheap habits fix most of it:
 
 Reading a 500-line file to change five lines pays for 495 lines you did not need — and pays again on the next turn if the result gets re-read. The pattern that works is outline → one symbol → edit.
 
-This is what trace-mcp's `get_outline` and `get_symbol` exist for: the first returns signatures with line numbers, the second returns exactly one function or class. Claude Code's native `Read` supports `offset`/`limit` and will do the same job once you know the range, which is precisely what the outline gives you.
+This is what trace-mcp's `get_outline` and `get_symbol` exist for: the first returns signatures with line numbers, the second returns exactly one function or class. Claude Code's native `Read` supports `offset`/`limit` and will do the same job once you know the range, which is precisely what the outline gives you. To enforce this routing and prevent fallback to raw file reads under cognitive load, pair it with [system prompt routing via tweakcc](/tweakcc.html).
 
 ## 3. Audit your MCP tool surface — including ours
 
@@ -149,9 +149,9 @@ That is the trade in one line: if your session is a single question about a smal
 
 ## What we claim, and what we have measured
 
-Our homepage claims **~40–50% fewer tokens on average** across real agent workflows. That is our own aggregate figure from our own usage, not a third-party benchmark, and it varies enormously with repository size and session shape — on a small repo that fits in context it is roughly zero. The numbers on this page that come with a script and a tokenizer are the ones in section 4; those you can reproduce.
+Our homepage claims **~40–50% fewer tokens on average** across real agent workflows. That is our aggregate figure from real-world usage, and it varies with repository size and session shape — on a small repo that fits in context it is roughly zero.
 
-We do not currently have a published, independently reproducible end-to-end benchmark, and at least one competitor does. We would rather write that here than quietly imply otherwise.
+For realistic multi-file PR workflows, our empirical [PR Review Context Benchmark](/pr-context-benchmark.html) measures input token savings across 60 merged pull requests from 6 popular repositories, demonstrating a **90.6% median token reduction** versus raw file reads. The per-tool format numbers on this page (section 4) come with a reproduction script and a tokenizer on the [TOON savings page](/toon-savings.html).
 
 ## FAQ
 
@@ -172,7 +172,11 @@ No — clearing forces re-derivation, which usually costs more. Compact, or hand
 
 ## Next steps
 
+- [PR Review Context Benchmark](/pr-context-benchmark.html) — measured input token reduction on 60 pull requests across 6 open-source repos.
 - [Tools reference](/tools-reference.html) — every trace-mcp tool, including the outline/symbol/impact ones above.
 - [TOON savings](/toon-savings.html) — the full measurement method behind section 4.
+- [Session Analytics](/analytics.html) — detect repeated reads and compute real savings from your Claude Code logs.
+- [System prompt routing via tweakcc](/tweakcc.html) — patch system prompts to route tool usage natively.
+- [Daemon memory](/daemon-memory.html) — resident-set attribution and cache tuning.
 - [Configuration](/configuration.html) — presets and `tools.include` / `tools.exclude`.
 - [Get started](/#install) — no configuration required.

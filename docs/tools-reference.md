@@ -194,7 +194,7 @@ trace-mcp ci-report --base main --head HEAD --format markdown --output report.md
 trace-mcp ci-report --base main --head HEAD --fail-on high
 ```
 
-Generates a change impact report with blast radius, risk scores, test coverage gaps, architecture violations, and dead code. See [README](../README.md#cipr-change-impact-reports) for GitHub Action setup.
+Generates a change impact report with blast radius, risk scores, test coverage gaps, architecture violations, and dead code. See [README](https://github.com/nikolai-vysotskyi/trace-mcp#cipr-change-impact-reports) for GitHub Action setup.
 
 ## Security context export (CLI)
 

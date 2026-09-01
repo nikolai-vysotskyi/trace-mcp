@@ -76,3 +76,11 @@ influenced, re-audit before assuming the finding is still a false positive.
 ## max_circular_import_chains: 0 (error), max_tech_debt_grade: D (warning)
 
 Unchanged from the CLI defaults — no evidence-based reason to relax either.
+
+## See also
+
+- [Configuration Reference](configuration.html#quality-gates) — syntax and defaults for `.trace-mcp.json` quality gate rules
+- [Supported Frameworks](supported-frameworks.html) & [Language Matrix](language-matrix.html) — framework plugins and tree-sitter grammars
+- [trace-mcp Architecture](architecture.html) — two-pass indexing engine and plugin system
+- [Tools reference](tools-reference.html#security) — security and refactoring tool reference
+- [trace-mcp vs alternatives](comparisons.html) — side-by-side comparison matrix
