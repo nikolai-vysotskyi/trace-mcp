@@ -281,13 +281,72 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: pnpm exec electron-builder --mac --arm64 --x64 --publish never
 
+      # electron-builder notarizes the .app in `afterSign` and only then
+      # assembles the DMG around it, so the container a human actually downloads
+      # carried no signature and no ticket of its own through 3.10.0 — Gatekeeper
+      # had nothing to assess when it mounted the image (TRA-627). Sign, notarize
+      # and staple the DMG itself, in that order, before checksums and the
+      # provenance attestation are computed over it.
+      #
+      # `dmg.sign: true` in electron-builder.yml is deliberately not used: it
+      # runs `codesign --sign` with no `--timestamp`, and notarization rejects a
+      # signature without a secure timestamp. Signing here also keeps the whole
+      # container step in one place.
+      - name: Sign, notarize and staple the DMGs
+        working-directory: packages/app
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          # electron-builder signs out of a temp keychain it deletes on exit, so
+          # the certificate has to be imported once more here. Keychain and the
+          # decoded .p12 both live in RUNNER_TEMP, which the runner discards, and
+          # the .p12 is deleted as soon as it is imported.
+          KEYCHAIN="$RUNNER_TEMP/dmg-signing.keychain-db"
+          P12="$RUNNER_TEMP/dmg-signing.p12"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          printenv CSC_LINK | base64 --decode > "$P12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings "$KEYCHAIN"  # no auto-lock mid-notarization
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$P12" -k "$KEYCHAIN" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
+          rm -f "$P12"
+          # Without this, codesign blocks on an "allow access" prompt that no one
+          # can answer on a runner.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+
+          # By hash, not by name: the certificate's common name is not one of the
+          # secrets, and a near-miss name would silently pick the wrong identity.
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/Developer ID Application/ { print $2; exit }')
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::no Developer ID Application identity in the imported certificate"
+            exit 1
+          fi
+
+          for DMG in release/*.dmg; do
+            codesign --sign "$IDENTITY" --timestamp --keychain "$KEYCHAIN" "$DMG"
+            xcrun notarytool submit "$DMG" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --wait
+            xcrun stapler staple "$DMG"
+          done
+
+          security delete-keychain "$KEYCHAIN"
+
       # electron-builder reports a skipped signature as a warning and exits 0,
       # so a missing or expired certificate would publish an ad-hoc build that
       # Gatekeeper rejects — the exact TRA-436 symptom — with a green release.
       # Assert the real properties instead: a Developer ID team identifier, and
-      # a stapled notarization ticket. `spctl` is checked on the unzipped app
-      # rather than the DMG because the ticket is stapled to the .app.
-      - name: Assert the app is signed and notarized
+      # a stapled notarization ticket. Both the .app and the DMG around it are
+      # checked: 3.10.0 shipped a correct app inside a container with neither
+      # (TRA-627), and only an assertion on the container itself notices that.
+      - name: Assert the app and the DMG are signed and notarized
         working-directory: packages/app
         run: |
           # Both arches, each asserted: one leg silently ad-hoc signed would
@@ -303,6 +362,21 @@ jobs:
             codesign --verify --deep --strict --verbose=2 "$APP"
             xcrun stapler validate "$APP"
             spctl -a -vvv -t install "$APP"
+          done
+
+          # The container, assessed the way DiskImageMounter assesses it —
+          # `-t open`, primary signature, which is what 3.10.0's DMG failed.
+          DMGS=$(find release -maxdepth 1 -name '*.dmg')
+          if [ -z "$DMGS" ]; then echo "::error::no DMG produced"; exit 1; fi
+          echo "$DMGS" | while read -r DMG; do
+            # Diagnostics first: on a failure below, this is the line that says why.
+            codesign -dv --verbose=4 "$DMG" 2>&1 || true
+            if ! codesign --verify --strict "$DMG" 2> /dev/null; then
+              echo "::error::$DMG carries no valid signature — the DMG signing step did not sign this image"
+              exit 1
+            fi
+            xcrun stapler validate "$DMG"
+            spctl -a -vvv -t open --context context:primary-signature "$DMG"
           done
 
       # electron-updater reads `latest-mac.yml` and nothing else. A build that
