@@ -86,10 +86,10 @@ All trace state lives in `~/.trace/` (with automatic backwards compatibility and
 
 ### Per-project config file (optional)
 
-You can place a config file at `.trace/.config.json` (or `.trace.json`) in your project root to override settings without editing the global config:
+You can place a config file at `.trace-mcp/.config.json` in your project root to override settings without editing the global config:
 
 ```jsonc
-// /path/to/project/.trace/.config.json
+// /path/to/project/.trace-mcp/.config.json
 {
   "include": ["src/**/*.ts", "lib/**/*.ts"],
   "exclude": ["node_modules/**", "dist/**", "coverage/**"],
@@ -104,20 +104,26 @@ You can place a config file at `.trace/.config.json` (or `.trace.json`) in your 
 }
 ```
 
-Alternative locations (checked in order): `.trace/.config.json`, `.trace.json`, `.trace`, `.config/trace.json`, `.trace-mcp/.config.json`, `.trace-mcp.json`, `.trace-mcp`, `.config/trace-mcp.json`, `package.json` (under `"trace"` or `"trace-mcp"` key).
+Alternative locations (checked in order): `.trace-mcp/.config.json`, `.trace-mcp.json`, `.trace-mcp`, `.config/trace-mcp.json`, `package.json` (under `"trace-mcp"` key). Once the `trace` rename lands, each of these gains a `trace`-spelled twin (`.trace/.config.json`, `.trace.json`, …) that is checked first; the `trace-mcp` names above stay in the list permanently.
 
 ---
 
-## Migration from trace-mcp
+## Migration from trace-mcp to trace
 
-trace introduces the `trace` binary name, `trace` MCP server identifier, `.trace.json` config resolution, and `~/.trace/` data directory. This reduces MCP client tool schema overhead (e.g. `mcp__trace__<tool>` instead of `mcp__trace-mcp__<tool>`) and saves BPE tokens across prompt contexts while maintaining **100% backwards compatibility**.
+The command, the MCP server key written into client configs, and the state directory are shortening from `trace-mcp` to `trace`. The motivation is token cost: MCP clients prefix every tool name with the server key, so the whole tool list is re-sent as `mcp__trace__<tool>` rather than `mcp__trace-mcp__<tool>` on every turn — a per-turn saving multiplied by every advertised tool.
 
-### Key backwards-compatibility guarantees:
-- **Zero Breaking Changes**: All existing `.trace-mcp.json` configs, `~/.trace-mcp/` directories, and `trace-mcp` commands continue to work without modification.
-- **Dual Binary Aliases**: Both `trace` and `trace-mcp` CLI commands are available and share identical implementations.
-- **Client Auto-Migration**: Running `trace init` detects existing `trace-mcp` MCP server configurations in Claude Code, Cursor, Windsurf, Codex, etc., and upgrades them to `trace` while preserving all custom settings.
-- **Config & State Precedence**: `~/.trace/` and `.trace.json` take precedence if present; if absent, `~/.trace-mcp/` and `.trace-mcp.json` are loaded automatically.
-- **Dual MCP Server Identifier**: Clients can connect using either `trace` or `trace-mcp` server names.
+**The npm package keeps its name.** It is `trace-mcp` and stays `trace-mcp`: `trace` on npm is an unrelated package by another author, so `npm install -g trace` would install someone else's code. Install with `npm install -g trace-mcp` or `npx -y trace-mcp@latest`.
+
+| | Before | After |
+|---|---|---|
+| npm package | `trace-mcp` | `trace-mcp` (unchanged) |
+| Command | `trace-mcp <cmd>` | `trace <cmd>` — `trace-mcp` kept as an alias |
+| MCP server key in client configs | `trace-mcp` | `trace` |
+| State directory | `~/.trace-mcp/` | `~/.trace/`, falling back to `~/.trace-mcp/` |
+| Project config | `.trace-mcp.json` | `.trace.json`, then `.trace-mcp.json` |
+| Plugin / registry ids | `trace-mcp` | `trace-mcp` (unchanged) |
+
+`trace init` and `trace upgrade` rename an existing `mcpServers["trace-mcp"]` entry to `mcpServers["trace"]` in every client they can write to, preserving whatever else you configured on that entry. Nothing is deleted, and an entry you leave spelled `trace-mcp` keeps connecting — it just costs the longer tool prefix. Existing indexes are not rebuilt.
 
 ---
 
@@ -709,7 +715,7 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 | Continue | `~/.continue/mcpServers/mcp.json` | JSON | `mcpServers` | |
 | Junie | `~/.junie/mcp/mcp.json` | JSON | `mcpServers` | |
 | JetBrains AI Assistant | IDE-internal XML | — | — | Manual: Settings → Tools → AI Assistant → MCP. Use "Import from Claude" if Claude Desktop is configured |
-| Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.trace]` | Supports `[mcp_servers.trace-mcp]` alias |
+| Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.trace]` | A legacy `[mcp_servers.trace-mcp]` table is detected and renamed on `init` |
 | Hermes Agent | `$HERMES_HOME/config.yaml` (default `~/.hermes/config.yaml`) | YAML | `mcp_servers` | Always global; also writes `AGENTS.md` and pre-allowlists hooks |
 | **AMP** (Sourcegraph) | `~/.config/amp/settings.json[c]`, `<project>/.amp/settings.json[c]` | JSON / JSONC | `amp.mcpServers` (literal dot in key) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
 | **Warp** | Cloud-synced storage (no writable file) | — | — | Manual: Settings → Agents → MCP servers → + Add → paste JSON. If Claude Code is also configured, enable "File-based MCP servers" so Warp inherits trace from `~/.claude.json`. Also writes `AGENTS.md` |
@@ -742,10 +748,10 @@ Wire it up without touching a committed file:
 
 ```bash
 # Across all your projects (stored in ~/.claude.json, not committed):
-claude mcp add --scope user trace -- npx -y trace@latest serve
+claude mcp add --scope user trace -- npx -y trace-mcp@latest serve
 
 # Just one project, not committed (local scope):
-claude mcp add --scope local trace -- npx -y trace@latest serve
+claude mcp add --scope local trace -- npx -y trace-mcp@latest serve
 ```
 
 To share one config with the whole team, commit a portable stdio entry to `.mcp.json` — it carries no machine-specific URL or path:
@@ -753,7 +759,7 @@ To share one config with the whole team, commit a portable stdio entry to `.mcp.
 ```json
 {
   "mcpServers": {
-    "trace": { "command": "npx", "args": ["-y", "trace@latest", "serve"] }
+    "trace": { "command": "npx", "args": ["-y", "trace-mcp@latest", "serve"] }
   }
 }
 ```

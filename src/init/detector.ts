@@ -428,7 +428,11 @@ function detectExistingDb(
 ): { path: string; schemaVersion: number; fileCount: number } | null {
   // Check global location first, then local locations
   const candidates = globalDbPath
-    ? [globalDbPath, path.join(root, '.trace', 'index.db'), path.join(root, '.trace-mcp', 'index.db')]
+    ? [
+        globalDbPath,
+        path.join(root, '.trace', 'index.db'),
+        path.join(root, '.trace-mcp', 'index.db'),
+      ]
     : [path.join(root, '.trace', 'index.db'), path.join(root, '.trace-mcp', 'index.db')];
   const dbPath = candidates.find((p) => fs.existsSync(p));
   if (!dbPath) return null;

@@ -61,14 +61,19 @@ export function installCursorRules(
   const filePath = path.join(rulesDir, 'trace.mdc');
   const legacyFilePath = path.join(rulesDir, 'trace-mcp.mdc');
   const existing = readIfExists(filePath) ?? readIfExists(legacyFilePath);
-  const targetPath = fs.existsSync(legacyFilePath) && !fs.existsSync(filePath) ? legacyFilePath : filePath;
+  const targetPath =
+    fs.existsSync(legacyFilePath) && !fs.existsSync(filePath) ? legacyFilePath : filePath;
 
   if (opts.dryRun) {
     if (existing !== null) {
       if (existing === CURSOR_RULE) {
         return { target: targetPath, action: 'skipped', detail: 'Already up to date' };
       }
-      return { target: targetPath, action: 'skipped', detail: `Would update ${path.basename(targetPath)}` };
+      return {
+        target: targetPath,
+        action: 'skipped',
+        detail: `Would update ${path.basename(targetPath)}`,
+      };
     }
     return { target: filePath, action: 'skipped', detail: 'Would create trace.mdc' };
   }

@@ -269,7 +269,7 @@ benchmark_project  # runs against the current project
 **See your waste first — 5 minutes, no setup, no signup:**
 
 ```bash
-npx trace benchmark .
+npx trace-mcp benchmark .
 ```
 
 Indexes the project, runs 11 structured task benchmarks (symbol lookup, impact analysis, call graph, type hierarchy, …), and prints per-task token cost — without trace vs. with. You'll see exactly where your agent recomputes work it could reuse.
@@ -277,7 +277,7 @@ Indexes the project, runs 11 structured task benchmarks (symbol lookup, impact a
 **Then wire it into your AI agent:**
 
 ```bash
-npm install -g trace
+npm install -g trace-mcp
 trace init        # one-time global setup (MCP clients, hooks, CLAUDE.md)
 trace add         # register current project for indexing
 ```
@@ -285,22 +285,22 @@ trace add         # register current project for indexing
 - `init` — configures your MCP client (Claude Code, Cursor, Windsurf, Claude Desktop, …), installs the guard hook, adds routing rules to `~/.claude/CLAUDE.md`.
 - `add` — detects frameworks, creates the per-project index, registers the project. Re-run in every project you want trace to understand.
 
-*(Note: `npm install -g trace-mcp` and `trace-mcp` CLI commands remain 100% supported as backwards-compatible aliases.)*
+*(The npm package is still called `trace-mcp` — only the command it installs is shortened. `trace-mcp init`, `trace-mcp add`, and every other `trace-mcp …` invocation keep working.)*
 
-All state lives in `~/.trace/` (with automatic fallback from `~/.trace-mcp/`) — your project directory stays clean unless you opt into `.traceignore` or `.trace/.config.json`.
+All state lives in `~/.trace/` (with automatic fallback from `~/.trace-mcp/`) — your project directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
 
-**Using Claude Code or Codex CLI?** After `npm install -g trace`, skip `trace init`'s client-wiring step and install the plugin directly instead — no `git clone` needed either way:
+**Using Claude Code or Codex CLI?** After `npm install -g trace-mcp`, skip `trace init`'s client-wiring step and install the plugin directly instead — no `git clone` needed either way:
 
 ```bash
 # Claude Code
-claude plugin install @nikolai-vysotskyi/trace
+claude plugin install @nikolai-vysotskyi/trace-mcp
 
 # Codex CLI
-codex plugin marketplace add nikolai-vysotskyi/trace
-codex plugin install trace@nikolai-vysotskyi-trace
+codex plugin marketplace add nikolai-vysotskyi/trace-mcp
+codex plugin install trace-mcp@nikolai-vysotskyi-trace-mcp
 ```
 
-Both register the `trace` MCP server plus the Bash guard hook in one step. Details: [`.claude-plugin/README.md`](.claude-plugin/README.md) · [`.codex-plugin/README.md`](.codex-plugin/README.md).
+Both register the `trace-mcp` MCP server plus the Bash guard hook in one step. Details: [`.claude-plugin/README.md`](.claude-plugin/README.md) · [`.codex-plugin/README.md`](.codex-plugin/README.md).
 
 Then in your MCP client:
 
@@ -325,16 +325,21 @@ Then in your MCP client:
 
 ---
 
-## Migration from trace-mcp (zero breaking changes)
+## Migration from trace-mcp to trace
 
-The CLI command, MCP server identifier, configuration files, and state directory are transitioning from `trace-mcp` to `trace`. This change reduces MCP client tool schema overhead (e.g. `mcp__trace__<tool>` instead of `mcp__trace-mcp__<tool>`) and saves BPE tokens across prompt contexts while maintaining **100% backwards compatibility**.
+The CLI command, the MCP server key written into client configs, and the state directory are shortening from `trace-mcp` to `trace`. The reason is token cost, not branding: MCP clients prefix every tool name with the server key, so the whole tool list is re-sent as `mcp__trace__<tool>` rather than `mcp__trace-mcp__<tool>` on every turn — a per-turn saving multiplied by every advertised tool.
 
-- **Zero Breaking Changes**: Existing configs, automation scripts, and workflows continue to work unchanged.
-- **Dual Binary Aliases**: Both `trace` and `trace-mcp` commands are provided by the package and behave identically.
-- **MCP Client Auto-Migration**: Running `trace init` automatically discovers existing `mcpServers["trace-mcp"]` configurations and upgrades them to `mcpServers["trace"]`. Legacy `trace-mcp` entries continue to connect seamlessly.
-- **Config File Resolution**: Config loaders check `.trace.json` first, falling back to `.trace-mcp.json` if present.
-- **Runtime Storage Paths**: Runtime state defaults to `~/.trace/` with automatic migration/fallback from legacy `~/.trace-mcp/`.
-- **Package Compatibility**: Both `npm install -g trace` and `npm install -g trace-mcp` (or `npx trace` / `npx trace-mcp`) are fully supported.
+**The npm package name does not change.** It is still `trace-mcp`, and it always will be — `trace` on npm is an unrelated package by another author. Install with `npm install -g trace-mcp` or `npx -y trace-mcp@latest`.
+
+What does change, and what stays:
+
+- **Command name** — `trace <cmd>` is the new spelling. `trace-mcp <cmd>` stays as an alias, with no removal planned; scripts and CI that call it need no edit.
+- **MCP client entries** — `trace init` and `trace upgrade` rename an existing `mcpServers["trace-mcp"]` entry to `mcpServers["trace"]` and point it at the new command. Nothing is deleted; an entry left as `trace-mcp` keeps working, it just costs more tokens.
+- **State directory** — `~/.trace/`, falling back to `~/.trace-mcp/` when the old one exists and the new one does not. Indexes are not rebuilt.
+- **Project config** — `.trace.json` is read first, `.trace-mcp.json` after it. Existing files keep working where they are.
+- **Plugin and registry identifiers** — unchanged: `@nikolai-vysotskyi/trace-mcp` for the Claude Code plugin, `io.github.nikolai-vysotskyi/trace-mcp` in the MCP registry.
+
+Nothing here requires action from you. If you never run `init` again, your existing setup keeps working exactly as it does today.
 
 ---
 
