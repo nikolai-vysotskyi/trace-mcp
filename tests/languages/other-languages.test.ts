@@ -7,6 +7,7 @@ import { AssemblyLanguagePlugin } from '../../src/indexer/plugins/language/assem
 import { AutoHotkeyLanguagePlugin } from '../../src/indexer/plugins/language/autohotkey/index.js';
 import { BashLanguagePlugin } from '../../src/indexer/plugins/language/bash/index.js';
 import { BladeLanguagePlugin } from '../../src/indexer/plugins/language/blade/index.js';
+import { CMakeLanguagePlugin } from '../../src/indexer/plugins/language/cmake/index.js';
 import { EjsLanguagePlugin } from '../../src/indexer/plugins/language/ejs/index.js';
 import { ElixirLanguagePlugin } from '../../src/indexer/plugins/language/elixir/index.js';
 import { ErlangLanguagePlugin } from '../../src/indexer/plugins/language/erlang/index.js';
@@ -662,5 +663,112 @@ describe('EJS', () => {
   it('extracts const inside <% %>', () => {
     const r = p('<% const title = "Hello" %>');
     expect(r.symbols.some((s: any) => s.name === 'title' && s.kind === 'variable')).toBe(true);
+  });
+});
+
+// ==============================
+// 27. CMake
+// ==============================
+describe('CMake', () => {
+  const plugin = new CMakeLanguagePlugin();
+  const p = (s: string) => parse(plugin, s, 'CMakeLists.txt');
+
+  it('extracts function', () => {
+    const r = p('function (join result_var)\nendfunction ()');
+    expect(r.symbols.some((s: any) => s.name === 'join' && s.kind === 'function')).toBe(true);
+  });
+
+  it('extracts macro', () => {
+    const r = p('macro(my_macro)\nendmacro()');
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'my_macro' && s.kind === 'function' && s.metadata?.macro,
+      ),
+    ).toBe(true);
+  });
+
+  it('extracts project name', () => {
+    const r = p('project(FMT CXX)');
+    expect(r.symbols.some((s: any) => s.name === 'FMT' && s.kind === 'module')).toBe(true);
+  });
+
+  it('extracts add_executable target with a hyphenated name', () => {
+    const r = p('add_executable(my-tool main.cpp)');
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'my-tool' && s.kind === 'function' && s.metadata?.target === 'executable',
+      ),
+    ).toBe(true);
+  });
+
+  // Real-world repro from fmtlib/fmt's CMakeLists.txt: hyphenated add_library
+  // target names used to truncate at the hyphen (`\w+` doesn't match `-`),
+  // so `fmt-header-only` and `fmt-c` both collapsed into the wrong name `fmt`.
+  it('extracts hyphenated add_library target names distinctly', () => {
+    const r = p(
+      'add_library(fmt src/format.cc)\nadd_library(fmt-header-only INTERFACE)\nadd_library(fmt-c src/fmt-c.cc)',
+    );
+    const names = r.symbols
+      .filter((s: any) => s.metadata?.target === 'library')
+      .map((s: any) => s.name);
+    expect(names).toEqual(['fmt', 'fmt-header-only', 'fmt-c']);
+  });
+
+  // Real-world repro: `add_library(fmt::${target} ALIAS ${target})` inside a
+  // helper function. The old regex partial-matched "fmt" out of "fmt::..."
+  // and recorded it as a real library target, colliding with the actual
+  // `fmt` target defined elsewhere in the same file. Skipping an
+  // unparseable alias/generator-expression target is correct; fabricating
+  // a wrong one is not.
+  it('does not fabricate a target from an ALIAS with a namespaced/variable name', () => {
+    const r = p('add_library(fmt::${target} ALIAS ${target})\nadd_library(fmt src/format.cc)');
+    const libraryTargets = r.symbols.filter((s: any) => s.metadata?.target === 'library');
+    expect(libraryTargets.map((s: any) => s.name)).toEqual(['fmt']);
+  });
+
+  it('extracts add_custom_target with a hyphenated name', () => {
+    const r = p('add_custom_target(format-check COMMAND clang-format --check)');
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'format-check' && s.kind === 'function' && s.metadata?.target === 'custom',
+      ),
+    ).toBe(true);
+  });
+
+  it('extracts set variable', () => {
+    const r = p('set(MAIN_PROJECT OFF)');
+    expect(r.symbols.some((s: any) => s.name === 'MAIN_PROJECT' && s.kind === 'variable')).toBe(
+      true,
+    );
+  });
+
+  it('extracts option variable', () => {
+    const r = p('option(FMT_INSTALL "Generate the install target." ON)');
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'FMT_INSTALL' && s.kind === 'variable' && s.metadata?.option,
+      ),
+    ).toBe(true);
+  });
+
+  it('extracts include edge', () => {
+    const r = p('include(GNUInstallDirs)');
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'GNUInstallDirs')).toBe(true);
+  });
+
+  it('extracts find_package edge', () => {
+    const r = p('find_package(Threads REQUIRED)');
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'Threads')).toBe(true);
+  });
+
+  // Real-world repro from nlohmann/json and fmtlib/fmt: every real
+  // add_subdirectory() call in both files hit this bug, because `\S+` is
+  // greedy and swallows the closing paren too.
+  it('extracts add_subdirectory edge without the trailing paren', () => {
+    const r = p('add_subdirectory(src/modules)\nadd_subdirectory(test/fuzzing)');
+    const modules = r.edges?.map((e: any) => e.metadata?.module) ?? [];
+    expect(modules).toEqual(['src/modules', 'test/fuzzing']);
   });
 });

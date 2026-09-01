@@ -18,18 +18,26 @@ const _plugin = createRegexLanguagePlugin({
     { kind: 'function', pattern: /^\s*macro\s*\(\s*(\w+)/gim, meta: { macro: true } },
     // project(name ...)
     { kind: 'module', pattern: /^\s*project\s*\(\s*(\w+)/gim },
-    // add_executable(name ...)
+    // add_executable(name ...). Target names commonly use hyphens
+    // (my-tool); the lookahead skips ALIAS/generator-expression targets
+    // (fmt::${target}) instead of truncating them into a wrong name.
     {
       kind: 'function',
-      pattern: /^\s*add_executable\s*\(\s*(\w+)/gim,
+      pattern: /^\s*add_executable\s*\(\s*([\w-]+)(?=[\s)])/gim,
       meta: { target: 'executable' },
     },
-    // add_library(name ...)
-    { kind: 'function', pattern: /^\s*add_library\s*\(\s*(\w+)/gim, meta: { target: 'library' } },
-    // add_custom_target(name ...)
+    // add_library(name ...). Same hyphenated-name / alias-skip reasoning
+    // as add_executable above.
     {
       kind: 'function',
-      pattern: /^\s*add_custom_target\s*\(\s*(\w+)/gim,
+      pattern: /^\s*add_library\s*\(\s*([\w-]+)(?=[\s)])/gim,
+      meta: { target: 'library' },
+    },
+    // add_custom_target(name ...). Custom target names are hyphenated even
+    // more often than library/executable ones (format-check, run-tests).
+    {
+      kind: 'function',
+      pattern: /^\s*add_custom_target\s*\(\s*([\w-]+)(?=[\s)])/gim,
       meta: { target: 'custom' },
     },
     // set(NAME value)
@@ -42,8 +50,9 @@ const _plugin = createRegexLanguagePlugin({
     { pattern: /^\s*include\s*\(\s*(\w+)/gim },
     // find_package(Name ...)
     { pattern: /^\s*find_package\s*\(\s*(\w+)/gim },
-    // add_subdirectory(dir)
-    { pattern: /^\s*add_subdirectory\s*\(\s*(\S+)/gim },
+    // add_subdirectory(dir). \S+ would swallow the closing paren
+    // (add_subdirectory(tests) -> "tests)"); stop before it.
+    { pattern: /^\s*add_subdirectory\s*\(\s*([^\s)]+)/gim },
   ],
 });
 
