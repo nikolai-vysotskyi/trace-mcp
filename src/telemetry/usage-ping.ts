@@ -8,7 +8,8 @@
  * platform, the country its timezone belongs to, the MCP client name (e.g.
  * "claude-code"), the model that client mostly drove, how many repositories
  * are indexed, whether this run is a new install or a version change, the
- * machine's class (arch, core count, whole GB of RAM, OS version), and two
+ * machine's class (arch, core count, whole GB of RAM, OS version), the tool
+ * preset the session ran with and how many tools it advertised, and two
  * aggregate counters since the previous ping (tool calls and estimated tokens
  * saved). Counts and names only: no IP, no project paths,
  * file names, query content, per-tool or per-project breakdown, and nothing
@@ -95,6 +96,29 @@ function saveState(state: TelemetryState): void {
 
 export interface UsagePingOptions {
   version: string;
+  /**
+   * Tool preset this session resolved to (`minimal`, `dev`, `full`, …).
+   * A preset name and a tool count are categorical and non-identifying, like
+   * `version` and `client` beside them — but without them the 67-86% saving
+   * measured in preset-surface-budget.test.ts stays a bench number, and the
+   * silent `full` → `standard` default migration (TRA-538) is unobservable.
+   */
+  preset?: string;
+  /**
+   * Tools this session advertises in `tools/list` after preset filtering —
+   * gated tools plus the ungated meta-tools, the same basis the budget test
+   * measures. Not the same as the count the client finally sees: the
+   * client-profile layer hides up to two more on the wire (TRA-513), and it
+   * runs at the session boundary, after the handshake this ping precedes.
+   *
+   * Both fields are resolved where the surface is built, which on the daemon
+   * path is the daemon — it re-reads `tools.preset` from the project config per
+   * session, so a config-set preset is reported exactly, while a per-session
+   * `TRACE_MCP_PRESET` override lives in the client's environment and is
+   * invisible from there. `get_preset_info` already reports the same
+   * server-side value, so this adds no new divergence.
+   */
+  toolsAdvertised?: number;
   env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   nowMs?: number;
@@ -230,6 +254,8 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
               ...device(),
               model: topModelLastDay() ?? 'unknown',
               repos_indexed: Object.keys(savings?.per_project ?? {}).length,
+              preset: opts.preset ?? 'unknown',
+              tools_advertised: opts.toolsAdvertised ?? 0,
               // Without these two GA4 keeps the event but doesn't count the
               // install as an active user — reports read 0 while the raw event
               // count is non-zero. See the "Tip" under `session_id` /
@@ -247,12 +273,19 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
   }
 
   try {
+    // Re-read rather than saving the snapshot taken before the fetch: the
+    // client's `initialize` routinely lands while that request is in flight,
+    // and `recordUsagePingClient` writes the name straight to disk. Persisting
+    // the stale snapshot erased it every time — so an install whose only
+    // session of the day was the one that pinged never recorded a client, and
+    // reported `unknown` again the next day, forever (TRA-643).
+    const latest = loadOrCreateState();
     saveState({
+      ...latest,
       installId: state.installId,
       lastPingDate: today,
       lastTokensSaved: savings?.total_tokens_saved ?? state.lastTokensSaved,
       lastCalls: savings?.total_calls ?? state.lastCalls,
-      client: state.client,
       lastVersion: opts.version,
     });
   } catch (err) {
