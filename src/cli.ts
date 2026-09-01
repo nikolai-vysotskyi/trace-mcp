@@ -340,7 +340,7 @@ async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig
 const program = new Command();
 
 program
-  .name('trace-mcp')
+  .name('trace')
   .description('Framework-Aware Code Intelligence for Laravel/Vue/Inertia/Nuxt')
   .version(PKG_VERSION, '-v, --version');
 

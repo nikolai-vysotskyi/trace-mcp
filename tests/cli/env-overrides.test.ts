@@ -35,7 +35,7 @@ function runWithEnv(script: string, env: Record<string, string>): string {
 }
 
 describe('TRACE_MCP_DATA_DIR', () => {
-  it('overrides ~/.trace-mcp/ when set to an absolute path', () => {
+  it('overrides ~/.trace/ when set to an absolute path', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'trace-data-'));
     const out = runWithEnv(
       `import { TRACE_MCP_HOME } from './src/global.ts'; console.log(TRACE_MCP_HOME);`,
@@ -53,12 +53,12 @@ describe('TRACE_MCP_DATA_DIR', () => {
     expect(out).not.toBe('~/custom-trace-mcp'); // expansion must have happened
   });
 
-  it('falls back to ~/.trace-mcp when env var is empty', () => {
+  it('falls back to ~/.trace when env var is empty', () => {
     const out = runWithEnv(
       `import { TRACE_MCP_HOME } from './src/global.ts'; console.log(TRACE_MCP_HOME);`,
       { TRACE_MCP_DATA_DIR: '' },
     );
-    expect(fwd(out).endsWith('/.trace-mcp')).toBe(true);
+    expect(fwd(out).endsWith('/.trace')).toBe(true);
   });
 });
 

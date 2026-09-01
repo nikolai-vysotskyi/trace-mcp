@@ -75,7 +75,7 @@ describe('updateClaudeMd', () => {
     const content = String(mockFs.writeFileSync.mock.calls[0][1]);
     expect(content).toContain(START_MARKER);
     expect(content).toContain(END_MARKER);
-    expect(content).toContain('trace-mcp Tool Routing');
+    expect(content).toContain('trace Tool Routing');
   });
 
   it('uses global path when scope is global', () => {

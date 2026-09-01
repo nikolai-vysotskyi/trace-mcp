@@ -103,7 +103,7 @@ export const initCommand = new Command('init')
         const migration = migrateGlobalConfig();
         if (migration.changed) {
           migrationStep = {
-            target: '~/.trace-mcp/.config.json',
+            target: '~/.trace/.config.json',
             action: 'updated',
             detail: `Config migrated — added: ${migration.added.join(', ')}`,
           };

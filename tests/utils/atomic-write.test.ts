@@ -78,6 +78,18 @@ describe('atomicWriteString', () => {
     expect(st.mode & 0o777).toBe(0o600);
   });
 
+  it('preserves existing file permissions when opts.mode is omitted', () => {
+    if (process.platform === 'win32') return;
+    const target = join(dir, 'secret2.txt');
+    atomicWriteString(target, 'initial', { mode: 0o600 });
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+
+    // Rewrite without mode option
+    atomicWriteString(target, 'rewritten');
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+    expect(readFileSync(target, 'utf8')).toBe('rewritten\n');
+  });
+
   it('does not leave tmp files behind on success', () => {
     const target = join(dir, 'clean.txt');
     atomicWriteString(target, 'x');

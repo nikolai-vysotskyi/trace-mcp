@@ -1,9 +1,9 @@
 <!-- trace-mcp:start -->
-## trace-mcp Tool Routing
+## trace Tool Routing
 
-IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVER use Read/Grep/Glob/Bash(ls,find) for navigating source code.
+IMPORTANT: For ANY code exploration task, ALWAYS use trace tools first. NEVER use Read/Grep/Glob/Bash(ls,find) for navigating source code.
 
-| Task | trace-mcp tool | Instead of |
+| Task | trace tool | Instead of |
 |------|---------------|------------|
 | Find a function/class/method | `search` | Grep |
 | Understand a file before editing | `get_outline` | Read (full file) |
@@ -17,18 +17,11 @@ IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVE
 | Context for a task | `get_feature_context` | reading 15 files |
 | Tests for a symbol | `get_tests_for` | Glob + Grep |
 | Untested symbols (deep) | `get_untested_symbols` (deferred — load via `load_tools`) | manual audit |
+| HTTP request flow | `get_request_flow` (framework-gated) | reading route files |
+| DB model relationships | `get_model_context` (framework-gated) | reading model + migrations |
+| Component tree | `get_component_tree` (framework-gated) | reading component files |
 | Circular dependencies | `get_circular_imports` | manual tracing |
 
 Use Read/Grep/Glob ONLY for non-code files (.md, .json, .yaml, config) or before Edit.
 Start sessions with `get_project_map` (summary_only=true).
-
-### Not yet implemented (planned / roadmap only — do not call these)
-
-The following tool names have appeared in earlier drafts of this guidance but are **not registered** in this project (confirmed via `get_plugin_registry` / tool search). Do not call them; fall back to reading route/model/component files directly until they land:
-
-| Planned capability | Planned tool name | Current fallback |
-|------|---------------|------------|
-| HTTP request flow | `get_request_flow` (not implemented) | reading route files |
-| DB model relationships | `get_model_context` (not implemented) | reading model + migrations |
-| Component tree | `get_component_tree` (not implemented) | reading component files |
 <!-- trace-mcp:end -->

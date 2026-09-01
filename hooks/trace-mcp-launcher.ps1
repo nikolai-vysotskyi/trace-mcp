@@ -7,7 +7,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$TraceHome = if ($env:TRACE_MCP_HOME) { $env:TRACE_MCP_HOME } else { Join-Path $env:USERPROFILE '.trace-mcp' }
+$TraceHome = if ($env:TRACE_MCP_HOME) { $env:TRACE_MCP_HOME } else { Join-Path $env:USERPROFILE '.trace' }
 $ConfigPath = Join-Path $TraceHome 'launcher.env'
 $LogPath    = Join-Path $TraceHome 'launcher.log'
 

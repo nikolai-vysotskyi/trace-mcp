@@ -48,22 +48,30 @@ export function atomicWriteString(
   payload: string,
   opts: AtomicWriteOptions = {},
 ): void {
-  const mode = opts.mode ?? 0o644;
   const trailingNewline = opts.trailingNewline ?? true;
   const rejectSymlinks = opts.rejectSymlinks ?? true;
 
-  if (rejectSymlinks) {
-    let linkStat: fs.Stats | null = null;
-    try {
-      linkStat = fs.lstatSync(targetPath);
-    } catch {
-      // ENOENT — fine, target doesn't exist yet
-    }
-    if (linkStat && linkStat.isSymbolicLink()) {
-      throw new Error(
-        `atomic-write: refusing to overwrite symlink at ${targetPath}. ` +
-          'Pass rejectSymlinks:false to allow writing through symlinks.',
-      );
+  let linkStat: fs.Stats | null = null;
+  try {
+    linkStat = fs.lstatSync(targetPath);
+  } catch {
+    // ENOENT — fine, target doesn't exist yet
+  }
+
+  if (rejectSymlinks && linkStat && linkStat.isSymbolicLink()) {
+    throw new Error(
+      `atomic-write: refusing to overwrite symlink at ${targetPath}. ` +
+        'Pass rejectSymlinks:false to allow writing through symlinks.',
+    );
+  }
+
+  // Preserve existing permissions on rewrite if no explicit mode was requested
+  let mode = opts.mode;
+  if (mode === undefined) {
+    if (linkStat && linkStat.isFile()) {
+      mode = linkStat.mode & 0o777;
+    } else {
+      mode = 0o644;
     }
   }
 
