@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { withPs1Bom } from './ps1-bom.js';
+import { atomicWriteString } from '../utils/atomic-write.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
@@ -107,14 +108,16 @@ export function readInstalledLauncherVersion(): string | null {
 }
 
 function ensureDir(dir: string): void {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-function atomicWrite(filePath: string, content: string, mode: number): void {
-  ensureDir(path.dirname(filePath));
-  const tmp = `${filePath}.tmp.${process.pid}.${Date.now()}`;
-  fs.writeFileSync(tmp, content, { mode });
-  fs.renameSync(tmp, filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    if (!IS_WINDOWS) {
+      try {
+        fs.chmodSync(dir, 0o700);
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
 }
 
 /**
@@ -149,7 +152,10 @@ export function writeLauncherConfig(cfg: LauncherConfig): void {
     `TRACE_MCP_VERSION=${quoteEnvValue(cfg.version)}`,
     '',
   ];
-  atomicWrite(getLauncherConfigPath(), lines.join('\n'), 0o600);
+  atomicWriteString(getLauncherConfigPath(), lines.join('\n'), {
+    mode: 0o600,
+    rejectSymlinks: true,
+  });
 }
 
 /**
@@ -223,10 +229,18 @@ export function installLauncher(opts: InstallLauncherOpts): InitStepResult {
     // Prepend a UTF-8 BOM for .ps1 artifacts so Windows PowerShell 5.1 decodes
     // them as UTF-8 regardless of the machine's system codepage (cp1251 etc.).
     const content = withPs1Bom(artifactDest, fs.readFileSync(src));
-    const tmp = `${artifactDest}.tmp.${process.pid}.${Date.now()}`;
-    fs.writeFileSync(tmp, content, { mode: a.mode });
-    fs.renameSync(tmp, artifactDest);
-    if (!IS_WINDOWS) fs.chmodSync(artifactDest, a.mode);
+    atomicWriteString(artifactDest, content.toString('utf-8'), {
+      mode: a.mode,
+      rejectSymlinks: true,
+      trailingNewline: false,
+    });
+    if (!IS_WINDOWS) {
+      try {
+        fs.chmodSync(artifactDest, a.mode);
+      } catch {
+        /* best-effort */
+      }
+    }
   }
 
   return {
