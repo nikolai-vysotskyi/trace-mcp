@@ -42,7 +42,7 @@
           "main_cpu_idle_pct": 0
         }
       ],
-      "notes": "Installation run \u2014 first entry in the series, no regression comparison possible. Harness: packages/app/scripts/perf-measure.mjs (CDP against a production build, throwaway --user-data-dir per sample). Startup, idle heap and idle CPU are all far inside the absolute ceilings (349 ms vs 3000, 0% vs 2%). Artifact fix landed in this same run: app.asar 21.8 MB -> 1.6 MB and the .app 286 MB -> 265 MB by excluding node_modules from the electron-builder file set (the main process imports only Node builtins + electron; Vite already bundles every renderer dep) and dropping the unused `menubar` dependency. Startup timings are unaffected by that change \u2014 the dev launch path never touches the asar; the 439 ms measured earlier in the same session vs 349 ms here is machine warm-up, not a code delta. Measured negative result: stubbing out the 702 KB cosmos.gl chunk (eagerly loaded via a static import in the entry chunk) moved cold start only 439 -> 417 ms (~5%), so lazy-loading the graph view is not worth the refactor at this size. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour not measured this run \u2014 they need a fixed indexed project fixture, which the next run should add."
+      "notes": "Installation run — first entry in the series, no regression comparison possible. Harness: packages/app/scripts/perf-measure.mjs (CDP against a production build, throwaway --user-data-dir per sample). Startup, idle heap and idle CPU are all far inside the absolute ceilings (349 ms vs 3000, 0% vs 2%). Artifact fix landed in this same run: app.asar 21.8 MB -> 1.6 MB and the .app 286 MB -> 265 MB by excluding node_modules from the electron-builder file set (the main process imports only Node builtins + electron; Vite already bundles every renderer dep) and dropping the unused `menubar` dependency. Startup timings are unaffected by that change — the dev launch path never touches the asar; the 439 ms measured earlier in the same session vs 349 ms here is machine warm-up, not a code delta. Measured negative result: stubbing out the 702 KB cosmos.gl chunk (eagerly loaded via a static import in the entry chunk) moved cold start only 439 -> 417 ms (~5%), so lazy-loading the graph view is not worth the refactor at this size. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour not measured this run — they need a fixed indexed project fixture, which the next run should add."
     },
     {
       "date": "2026-08-28T17:15:00Z",
@@ -71,7 +71,7 @@
           "app_network_utility": 19
         }
       },
-      "notes": "Daemon memory, not the Electron app (GPU out of scope). Source of the 3.34 GB `node` process in the Activity Monitor screenshot: `serve-http`. Identified from the daemon's own vitals heartbeat in ~/.trace-mcp/daemon.log \u2014 peak sample was rss 3619 MB / heap_used 2758 MB at uptime 66 s with projects_loaded=107, against a 166 MB idle baseline with 0 projects. Cause is startup fan-out, not a leak: loadAllRegistered() eagerly added all 110 registered projects. Controlled measurement in an isolated TRACE_MCP_DATA_DIR with 40 *empty* two-file projects: 212 MB (n=1) -> 381 MB (n=10) -> 1198 MB (n=40), i.e. ~9 MB of LIVE JS heap per loaded project (423 MB heapUsed after a forced CDP GC) before the project holds any code. Not a leak \u2014 after the idle-unload sweep dropped all 40 projects a forced GC returned heapUsed to 62 MB and RSS to 198 MB; the flat `heap_used_mb` seen in vitals on an idle daemon is stale-since-last-GC reporting, and macOS holds RSS pages well past the heap shrinking, so both Activity Monitor and vitals rss overstate. Fix: `daemon_eager_load_projects` (default 8) caps startup loading to the most recently indexed projects; the rest lazily load on first MCP connect via the existing idle-unload reload path. Same 40-project fixture after the fix: peak 378 MB (-67%), settled 253 MB, and a deferred project still serves (initialize -> 200, project reaches ready). Single real repo (this one, ~900 files) on the fixed daemon: peak 442 MB, 312 MB after a 10-minute settle. Harness: scale-probe.mjs / lazy-check.mjs / mem-probe.mjs from the TRA-278 workdir (not committed \u2014 they drive a real daemon against throwaway data dirs)."
+      "notes": "Daemon memory, not the Electron app (GPU out of scope). Source of the 3.34 GB `node` process in the Activity Monitor screenshot: `serve-http`. Identified from the daemon's own vitals heartbeat in ~/.trace-mcp/daemon.log — peak sample was rss 3619 MB / heap_used 2758 MB at uptime 66 s with projects_loaded=107, against a 166 MB idle baseline with 0 projects. Cause is startup fan-out, not a leak: loadAllRegistered() eagerly added all 110 registered projects. Controlled measurement in an isolated TRACE_MCP_DATA_DIR with 40 *empty* two-file projects: 212 MB (n=1) -> 381 MB (n=10) -> 1198 MB (n=40), i.e. ~9 MB of LIVE JS heap per loaded project (423 MB heapUsed after a forced CDP GC) before the project holds any code. Not a leak — after the idle-unload sweep dropped all 40 projects a forced GC returned heapUsed to 62 MB and RSS to 198 MB; the flat `heap_used_mb` seen in vitals on an idle daemon is stale-since-last-GC reporting, and macOS holds RSS pages well past the heap shrinking, so both Activity Monitor and vitals rss overstate. Fix: `daemon_eager_load_projects` (default 8) caps startup loading to the most recently indexed projects; the rest lazily load on first MCP connect via the existing idle-unload reload path. Same 40-project fixture after the fix: peak 378 MB (-67%), settled 253 MB, and a deferred project still serves (initialize -> 200, project reaches ready). Single real repo (this one, ~900 files) on the fixed daemon: peak 442 MB, 312 MB after a 10-minute settle. Harness: scale-probe.mjs / lazy-check.mjs / mem-probe.mjs from the TRA-278 workdir (not committed — they drive a real daemon against throwaway data dirs)."
     },
     {
       "date": "2026-08-29T13:35:00Z",
@@ -99,7 +99,7 @@
           "win": null
         }
       },
-      "notes": "MACHINE WAS LOADED \u2014 load average 11-22 throughout (a dozen sibling agent checkouts running their own Electron builds). cold_start_ms and window_interactive_ms are NOT comparable to run 1's 349/121: both are wall-clock across this harness's 20 ms poll loop and CDP round-trips, which a loaded machine inflates by hundreds of ms. Do not read the 349 -> 1005 as a regression. This run adds renderer_fcp_ms, read off the renderer's own clock after the fact and so free of harness latency; use it as the startup metric of record from now on. Interleaved A/B on this same loaded machine, 7 rounds, one sample each, alternating builds: 9459d4ce (run 1's commit) median FCP 288 ms, 9cdccf9b (pre-i18n) 300 ms, 6ebbbd56 (HEAD) 284 ms. Renderer boot is flat-to-slightly-better across the whole range \u2014 the macOS 26 redesign and the i18n runtime cost nothing measurable at startup. The same interleave on window_interactive_ms said 176 -> 507 ms (+188%), which was entirely the harness; that is what motivated the new metric. renderer_bundle_kb 1461 -> 1700 (+16%, warning zone, no issue): i18next+react-i18next runtime +48 KB (e0ec6cc2), the en/ru catalogues +65 KB (TRA-384/385/386), rest CSS/app. REGRESSION FOUND AND FIXED THIS RUN: mac_asar 1.6 -> 5.8 MB (3.6x, past the 1.5x ceiling). TRA-257's blanket !node_modules/** had to be replaced by an explicit node_modules/** include so the main process keeps electron-updater; that re-admitted every production dependency, and the i18n PR made react-i18next (1.0 MB) plus its @babel/runtime tree (1.1 MB) production dependencies even though Vite already bundles them into dist/renderer. Moving react-i18next to devDependencies: 5.8 -> 4.85 MB. The remaining 4.85 is genuine main-process runtime (electron-updater + js-yaml + i18next, which the app menu/tray need). Guarded by packages/app/src/main/__tests__/packaged-deps.test.ts. Process-tree RSS (tree_rss_*) deliberately not taken: a dozen unrelated agent Electron trees were resident, so any ps-based tree number would have been noise. Take those on a quiet machine; run 2's daemon numbers still stand."
+      "notes": "MACHINE WAS LOADED — load average 11-22 throughout (a dozen sibling agent checkouts running their own Electron builds). cold_start_ms and window_interactive_ms are NOT comparable to run 1's 349/121: both are wall-clock across this harness's 20 ms poll loop and CDP round-trips, which a loaded machine inflates by hundreds of ms. Do not read the 349 -> 1005 as a regression. This run adds renderer_fcp_ms, read off the renderer's own clock after the fact and so free of harness latency; use it as the startup metric of record from now on. Interleaved A/B on this same loaded machine, 7 rounds, one sample each, alternating builds: 9459d4ce (run 1's commit) median FCP 288 ms, 9cdccf9b (pre-i18n) 300 ms, 6ebbbd56 (HEAD) 284 ms. Renderer boot is flat-to-slightly-better across the whole range — the macOS 26 redesign and the i18n runtime cost nothing measurable at startup. The same interleave on window_interactive_ms said 176 -> 507 ms (+188%), which was entirely the harness; that is what motivated the new metric. renderer_bundle_kb 1461 -> 1700 (+16%, warning zone, no issue): i18next+react-i18next runtime +48 KB (e0ec6cc2), the en/ru catalogues +65 KB (TRA-384/385/386), rest CSS/app. REGRESSION FOUND AND FIXED THIS RUN: mac_asar 1.6 -> 5.8 MB (3.6x, past the 1.5x ceiling). TRA-257's blanket !node_modules/** had to be replaced by an explicit node_modules/** include so the main process keeps electron-updater; that re-admitted every production dependency, and the i18n PR made react-i18next (1.0 MB) plus its @babel/runtime tree (1.1 MB) production dependencies even though Vite already bundles them into dist/renderer. Moving react-i18next to devDependencies: 5.8 -> 4.85 MB. The remaining 4.85 is genuine main-process runtime (electron-updater + js-yaml + i18next, which the app menu/tray need). Guarded by packages/app/src/main/__tests__/packaged-deps.test.ts. Process-tree RSS (tree_rss_*) deliberately not taken: a dozen unrelated agent Electron trees were resident, so any ps-based tree number would have been noise. Take those on a quiet machine; run 2's daemon numbers still stand."
     },
     {
       "date": "2026-08-30T13:21:30.832Z",
@@ -152,7 +152,959 @@
           "main_cpu_idle_pct": 0
         }
       ],
-      "notes": "Measured with this run's own AskTab code split applied, so it is recorded against the split commit (39026ebd), not its pre-split parent ccc3b45b \u2014 re-measuring at ccc3b45b gives ~2270 KB eager and would read as a regression. renderer_bundle_kb 1700 -> 2272 (+34%) is a real regression against run 3 and is what this run went after: the entry chunk alone had grown 740 -> 1316 KB since 3.2.0. react-markdown + remark-gfm (the Ask tab's only dependency, ~24% of the entry chunk's source) were eagerly bundled; putting AskTab behind React.lazy moved 168 KB out of the startup path (entry 1316 -> 1148 KB). renderer_bundle_kb is unchanged by that fix by construction \u2014 it sums every file on disk \u2014 so this run adds renderer_eager_kb (entry + everything index.html preloads): 2270 -> 2102 KB. Trend renderer_eager_kb from here; renderer_bundle_kb stays as the total-weight check. renderer_fcp_ms 216 vs run 3's 220 and vs 168 measured on the same machine an hour earlier pre-fix: the split does not move FCP, it only removes bytes \u2014 same shape as the 2026-08-28 cosmos.gl negative result. Machine load 6-22 throughout (a dozen sibling agent checkouts), so cold_start_ms/window_interactive_ms are sanity checks against the 3 s ceiling only. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour still null: a foreign daemon held 3741 for this whole run. Process-tree snapshot (uncontrolled, ambient machine, do not trend): the installed app idles at 315 MB across 3 processes, fine; a `serve-http` daemon serving only /tmp/tmcpchk/demo held 884 MB RSS, past the 500 MB idle ceiling. Not filed as an issue because that daemon's history is unknown on a machine running a dozen agents - next run should reproduce it in a controlled scenario before filing."
+      "notes": "Measured with this run's own AskTab code split applied, so it is recorded against the split commit (39026ebd), not its pre-split parent ccc3b45b — re-measuring at ccc3b45b gives ~2270 KB eager and would read as a regression. renderer_bundle_kb 1700 -> 2272 (+34%) is a real regression against run 3 and is what this run went after: the entry chunk alone had grown 740 -> 1316 KB since 3.2.0. react-markdown + remark-gfm (the Ask tab's only dependency, ~24% of the entry chunk's source) were eagerly bundled; putting AskTab behind React.lazy moved 168 KB out of the startup path (entry 1316 -> 1148 KB). renderer_bundle_kb is unchanged by that fix by construction — it sums every file on disk — so this run adds renderer_eager_kb (entry + everything index.html preloads): 2270 -> 2102 KB. Trend renderer_eager_kb from here; renderer_bundle_kb stays as the total-weight check. renderer_fcp_ms 216 vs run 3's 220 and vs 168 measured on the same machine an hour earlier pre-fix: the split does not move FCP, it only removes bytes — same shape as the 2026-08-28 cosmos.gl negative result. Machine load 6-22 throughout (a dozen sibling agent checkouts), so cold_start_ms/window_interactive_ms are sanity checks against the 3 s ceiling only. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour still null: a foreign daemon held 3741 for this whole run. Process-tree snapshot (uncontrolled, ambient machine, do not trend): the installed app idles at 315 MB across 3 processes, fine; a `serve-http` daemon serving only /tmp/tmcpchk/demo held 884 MB RSS, past the 500 MB idle ceiling. Not filed as an issue because that daemon's history is unknown on a machine running a dozen agents - next run should reproduce it in a controlled scenario before filing."
+    },
+    {
+      "date": "2026-09-01T20:40:17.691Z",
+      "app_version": "3.10.0",
+      "commit": "b6b02ae4",
+      "env": {
+        "os": "darwin 25.5.0",
+        "arch": "arm64",
+        "node": "22.22.3"
+      },
+      "samples": 3,
+      "metrics": {
+        "cold_start_ms": 629,
+        "window_interactive_ms": 362,
+        "renderer_fcp_ms": 136,
+        "ui_p95_ms": 668,
+        "heap_idle_mb": 10.7,
+        "heap_after_workload_mb": 11.62,
+        "heap_growth_mb_per_hour": 1.39,
+        "tree_rss_peak_mb": 1691,
+        "tree_rss_idle_mb": 955,
+        "tree_cpu_peak_pct": 155.7,
+        "rss_after_index_settle_mb": 383,
+        "main_cpu_idle_pct": 0,
+        "renderer_bundle_kb": 2270,
+        "renderer_eager_kb": 2100,
+        "artifact_mb": {
+          "mac_app_unpacked": null,
+          "mac_asar": null
+        }
+      },
+      "raw_samples": [
+        {
+          "cold_start_ms": 629,
+          "window_interactive_ms": 362,
+          "renderer_fcp_ms": 132
+        },
+        {
+          "cold_start_ms": 604,
+          "window_interactive_ms": 338,
+          "renderer_fcp_ms": 140
+        },
+        {
+          "cold_start_ms": 637,
+          "window_interactive_ms": 363,
+          "renderer_fcp_ms": 136,
+          "heap_idle_mb": 10.7,
+          "main_cpu_idle_pct": 0
+        }
+      ],
+      "workload": {
+        "fixture": {
+          "commit": "fc47c10f44eb539cbb01b0bb2e4ff633c59b7151",
+          "revision": 2,
+          "files": 1817,
+          "symbols": 9698
+        },
+        "minutes": 30,
+        "index_s": 7,
+        "settle_minutes": 10,
+        "cycles": 572,
+        "cycle_errors": 0,
+        "open_warmup_ms": 74,
+        "open_retries": 0,
+        "open_project_ms": [
+          45,
+          45,
+          62,
+          46,
+          47,
+          45,
+          46,
+          45,
+          43,
+          46,
+          44
+        ],
+        "actions": {
+          "open_project": {
+            "n": 11,
+            "median_ms": 45,
+            "p95_ms": 62
+          },
+          "search": {
+            "n": 5720,
+            "median_ms": 0,
+            "p95_ms": 668
+          },
+          "switch_view": {
+            "n": 1717,
+            "median_ms": 10,
+            "p95_ms": 175
+          }
+        },
+        "heap_series": [
+          {
+            "t_min": 0.05,
+            "heap_mb": 11.62
+          },
+          {
+            "t_min": 0.61,
+            "heap_mb": 11.63
+          },
+          {
+            "t_min": 1.17,
+            "heap_mb": 11.67
+          },
+          {
+            "t_min": 1.77,
+            "heap_mb": 10.61
+          },
+          {
+            "t_min": 2.39,
+            "heap_mb": 9.3
+          },
+          {
+            "t_min": 3,
+            "heap_mb": 9.31
+          },
+          {
+            "t_min": 3.6,
+            "heap_mb": 9.35
+          },
+          {
+            "t_min": 4.17,
+            "heap_mb": 9.38
+          },
+          {
+            "t_min": 4.73,
+            "heap_mb": 9.54
+          },
+          {
+            "t_min": 5.31,
+            "heap_mb": 9.42
+          },
+          {
+            "t_min": 5.9,
+            "heap_mb": 9.4
+          },
+          {
+            "t_min": 6.52,
+            "heap_mb": 9.41
+          },
+          {
+            "t_min": 7.14,
+            "heap_mb": 9.42
+          },
+          {
+            "t_min": 7.77,
+            "heap_mb": 9.43
+          },
+          {
+            "t_min": 8.35,
+            "heap_mb": 9.58
+          },
+          {
+            "t_min": 8.92,
+            "heap_mb": 9.46
+          },
+          {
+            "t_min": 9.47,
+            "heap_mb": 9.59
+          },
+          {
+            "t_min": 10.1,
+            "heap_mb": 12.13
+          },
+          {
+            "t_min": 10.7,
+            "heap_mb": 9.67
+          },
+          {
+            "t_min": 11.31,
+            "heap_mb": 9.7
+          },
+          {
+            "t_min": 11.92,
+            "heap_mb": 9.7
+          },
+          {
+            "t_min": 12.38,
+            "heap_mb": 9.74
+          },
+          {
+            "t_min": 12.71,
+            "heap_mb": 9.74
+          },
+          {
+            "t_min": 13.02,
+            "heap_mb": 9.77
+          },
+          {
+            "t_min": 13.34,
+            "heap_mb": 9.77
+          },
+          {
+            "t_min": 13.77,
+            "heap_mb": 9.86
+          },
+          {
+            "t_min": 14.22,
+            "heap_mb": 9.77
+          },
+          {
+            "t_min": 14.61,
+            "heap_mb": 9.77
+          },
+          {
+            "t_min": 14.97,
+            "heap_mb": 9.75
+          },
+          {
+            "t_min": 15.52,
+            "heap_mb": 9.75
+          },
+          {
+            "t_min": 16.16,
+            "heap_mb": 11.09
+          },
+          {
+            "t_min": 16.77,
+            "heap_mb": 11.09
+          },
+          {
+            "t_min": 17.39,
+            "heap_mb": 9.77
+          },
+          {
+            "t_min": 17.94,
+            "heap_mb": 12.24
+          },
+          {
+            "t_min": 18.52,
+            "heap_mb": 9.79
+          },
+          {
+            "t_min": 19.1,
+            "heap_mb": 9.81
+          },
+          {
+            "t_min": 19.59,
+            "heap_mb": 9.78
+          },
+          {
+            "t_min": 20.18,
+            "heap_mb": 9.77
+          },
+          {
+            "t_min": 20.7,
+            "heap_mb": 9.8
+          },
+          {
+            "t_min": 21.19,
+            "heap_mb": 12.32
+          },
+          {
+            "t_min": 21.79,
+            "heap_mb": 9.9
+          },
+          {
+            "t_min": 22.37,
+            "heap_mb": 9.78
+          },
+          {
+            "t_min": 22.84,
+            "heap_mb": 9.9
+          },
+          {
+            "t_min": 23.33,
+            "heap_mb": 9.83
+          },
+          {
+            "t_min": 23.67,
+            "heap_mb": 9.83
+          },
+          {
+            "t_min": 24.06,
+            "heap_mb": 9.82
+          },
+          {
+            "t_min": 24.41,
+            "heap_mb": 9.81
+          },
+          {
+            "t_min": 24.77,
+            "heap_mb": 9.81
+          },
+          {
+            "t_min": 25.2,
+            "heap_mb": 9.81
+          },
+          {
+            "t_min": 25.8,
+            "heap_mb": 9.81
+          },
+          {
+            "t_min": 26.4,
+            "heap_mb": 9.81
+          },
+          {
+            "t_min": 27,
+            "heap_mb": 9.82
+          },
+          {
+            "t_min": 27.54,
+            "heap_mb": 9.85
+          },
+          {
+            "t_min": 27.93,
+            "heap_mb": 9.85
+          },
+          {
+            "t_min": 28.25,
+            "heap_mb": 12.32
+          },
+          {
+            "t_min": 28.81,
+            "heap_mb": 9.82
+          },
+          {
+            "t_min": 29.41,
+            "heap_mb": 9.83
+          },
+          {
+            "t_min": 29.99,
+            "heap_mb": 9.87
+          },
+          {
+            "t_min": 30.01,
+            "heap_mb": 9.87
+          }
+        ],
+        "tree_series": [
+          {
+            "t": 1788292743314,
+            "app_rss_mb": 509,
+            "app_cpu_pct": 0.1,
+            "app_procs": 4,
+            "daemon_rss_mb": 727,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1236,
+            "cpu_pct": 0.1
+          },
+          {
+            "t": 1788292788325,
+            "app_rss_mb": 511,
+            "app_cpu_pct": 0,
+            "app_procs": 4,
+            "daemon_rss_mb": 444,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 955,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788292833335,
+            "app_rss_mb": 621,
+            "app_cpu_pct": 60.8,
+            "app_procs": 4,
+            "daemon_rss_mb": 808,
+            "daemon_cpu_pct": 44.7,
+            "daemon_procs": 1,
+            "rss_mb": 1429,
+            "cpu_pct": 105.5
+          },
+          {
+            "t": 1788292878355,
+            "app_rss_mb": 627,
+            "app_cpu_pct": 65.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 915,
+            "daemon_cpu_pct": 0.2,
+            "daemon_procs": 1,
+            "rss_mb": 1542,
+            "cpu_pct": 66.1
+          },
+          {
+            "t": 1788292923364,
+            "app_rss_mb": 626,
+            "app_cpu_pct": 60.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 932,
+            "daemon_cpu_pct": 17.2,
+            "daemon_procs": 1,
+            "rss_mb": 1558,
+            "cpu_pct": 77.7
+          },
+          {
+            "t": 1788292968369,
+            "app_rss_mb": 632,
+            "app_cpu_pct": 59.8,
+            "app_procs": 4,
+            "daemon_rss_mb": 932,
+            "daemon_cpu_pct": 3.3,
+            "daemon_procs": 1,
+            "rss_mb": 1564,
+            "cpu_pct": 63.1
+          },
+          {
+            "t": 1788293013392,
+            "app_rss_mb": 639,
+            "app_cpu_pct": 73,
+            "app_procs": 4,
+            "daemon_rss_mb": 934,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1573,
+            "cpu_pct": 73
+          },
+          {
+            "t": 1788293058440,
+            "app_rss_mb": 640,
+            "app_cpu_pct": 101.1,
+            "app_procs": 4,
+            "daemon_rss_mb": 937,
+            "daemon_cpu_pct": 0.1,
+            "daemon_procs": 1,
+            "rss_mb": 1577,
+            "cpu_pct": 101.2
+          },
+          {
+            "t": 1788293103417,
+            "app_rss_mb": 643,
+            "app_cpu_pct": 71.1,
+            "app_procs": 4,
+            "daemon_rss_mb": 965,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1608,
+            "cpu_pct": 71.1
+          },
+          {
+            "t": 1788293148444,
+            "app_rss_mb": 643,
+            "app_cpu_pct": 60.4,
+            "app_procs": 4,
+            "daemon_rss_mb": 949,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1592,
+            "cpu_pct": 60.4
+          },
+          {
+            "t": 1788293193431,
+            "app_rss_mb": 643,
+            "app_cpu_pct": 29.4,
+            "app_procs": 4,
+            "daemon_rss_mb": 970,
+            "daemon_cpu_pct": 22.3,
+            "daemon_procs": 1,
+            "rss_mb": 1613,
+            "cpu_pct": 51.7
+          },
+          {
+            "t": 1788293238451,
+            "app_rss_mb": 642,
+            "app_cpu_pct": 35.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 969,
+            "daemon_cpu_pct": 58.2,
+            "daemon_procs": 1,
+            "rss_mb": 1611,
+            "cpu_pct": 94.1
+          },
+          {
+            "t": 1788293283455,
+            "app_rss_mb": 650,
+            "app_cpu_pct": 61.1,
+            "app_procs": 4,
+            "daemon_rss_mb": 979,
+            "daemon_cpu_pct": 0.2,
+            "daemon_procs": 1,
+            "rss_mb": 1628,
+            "cpu_pct": 61.3
+          },
+          {
+            "t": 1788293328464,
+            "app_rss_mb": 650,
+            "app_cpu_pct": 63.6,
+            "app_procs": 4,
+            "daemon_rss_mb": 993,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1644,
+            "cpu_pct": 63.6
+          },
+          {
+            "t": 1788293373556,
+            "app_rss_mb": 651,
+            "app_cpu_pct": 102.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 986,
+            "daemon_cpu_pct": 1,
+            "daemon_procs": 1,
+            "rss_mb": 1637,
+            "cpu_pct": 103.2
+          },
+          {
+            "t": 1788293418498,
+            "app_rss_mb": 654,
+            "app_cpu_pct": 73.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 979,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1633,
+            "cpu_pct": 73.5
+          },
+          {
+            "t": 1788293463509,
+            "app_rss_mb": 654,
+            "app_cpu_pct": 62.3,
+            "app_procs": 4,
+            "daemon_rss_mb": 969,
+            "daemon_cpu_pct": 7.3,
+            "daemon_procs": 1,
+            "rss_mb": 1623,
+            "cpu_pct": 69.6
+          },
+          {
+            "t": 1788293508532,
+            "app_rss_mb": 657,
+            "app_cpu_pct": 65.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 971,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1628,
+            "cpu_pct": 65.2
+          },
+          {
+            "t": 1788293553638,
+            "app_rss_mb": 640,
+            "app_cpu_pct": 28.4,
+            "app_procs": 4,
+            "daemon_rss_mb": 1001,
+            "daemon_cpu_pct": 35.5,
+            "daemon_procs": 1,
+            "rss_mb": 1640,
+            "cpu_pct": 63.9
+          },
+          {
+            "t": 1788293598632,
+            "app_rss_mb": 646,
+            "app_cpu_pct": 27.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 984,
+            "daemon_cpu_pct": 19.8,
+            "daemon_procs": 1,
+            "rss_mb": 1630,
+            "cpu_pct": 47.7
+          },
+          {
+            "t": 1788293643633,
+            "app_rss_mb": 657,
+            "app_cpu_pct": 99.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 975,
+            "daemon_cpu_pct": 10.4,
+            "daemon_procs": 1,
+            "rss_mb": 1632,
+            "cpu_pct": 110.3
+          },
+          {
+            "t": 1788293688751,
+            "app_rss_mb": 645,
+            "app_cpu_pct": 45.5,
+            "app_procs": 4,
+            "daemon_rss_mb": 989,
+            "daemon_cpu_pct": 26.4,
+            "daemon_procs": 1,
+            "rss_mb": 1635,
+            "cpu_pct": 71.9
+          },
+          {
+            "t": 1788293733657,
+            "app_rss_mb": 661,
+            "app_cpu_pct": 66.1,
+            "app_procs": 4,
+            "daemon_rss_mb": 988,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1649,
+            "cpu_pct": 66.1
+          },
+          {
+            "t": 1788293778653,
+            "app_rss_mb": 661,
+            "app_cpu_pct": 49.3,
+            "app_procs": 4,
+            "daemon_rss_mb": 970,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1631,
+            "cpu_pct": 49.3
+          },
+          {
+            "t": 1788293823676,
+            "app_rss_mb": 665,
+            "app_cpu_pct": 37.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 972,
+            "daemon_cpu_pct": 25.2,
+            "daemon_procs": 1,
+            "rss_mb": 1636,
+            "cpu_pct": 63.1
+          },
+          {
+            "t": 1788293868685,
+            "app_rss_mb": 666,
+            "app_cpu_pct": 58.8,
+            "app_procs": 4,
+            "daemon_rss_mb": 980,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1646,
+            "cpu_pct": 58.8
+          },
+          {
+            "t": 1788293913704,
+            "app_rss_mb": 667,
+            "app_cpu_pct": 63.7,
+            "app_procs": 4,
+            "daemon_rss_mb": 978,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1645,
+            "cpu_pct": 63.7
+          },
+          {
+            "t": 1788293958755,
+            "app_rss_mb": 663,
+            "app_cpu_pct": 93.4,
+            "app_procs": 4,
+            "daemon_rss_mb": 1000,
+            "daemon_cpu_pct": 10.7,
+            "daemon_procs": 1,
+            "rss_mb": 1663,
+            "cpu_pct": 104.1
+          },
+          {
+            "t": 1788294003746,
+            "app_rss_mb": 670,
+            "app_cpu_pct": 83.2,
+            "app_procs": 4,
+            "daemon_rss_mb": 976,
+            "daemon_cpu_pct": 15.2,
+            "daemon_procs": 1,
+            "rss_mb": 1646,
+            "cpu_pct": 98.4
+          },
+          {
+            "t": 1788294048841,
+            "app_rss_mb": 648,
+            "app_cpu_pct": 48.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 977,
+            "daemon_cpu_pct": 28.9,
+            "daemon_procs": 1,
+            "rss_mb": 1625,
+            "cpu_pct": 77.8
+          },
+          {
+            "t": 1788294093793,
+            "app_rss_mb": 668,
+            "app_cpu_pct": 85.8,
+            "app_procs": 4,
+            "daemon_rss_mb": 997,
+            "daemon_cpu_pct": 1,
+            "daemon_procs": 1,
+            "rss_mb": 1665,
+            "cpu_pct": 86.8
+          },
+          {
+            "t": 1788294138824,
+            "app_rss_mb": 668,
+            "app_cpu_pct": 92,
+            "app_procs": 4,
+            "daemon_rss_mb": 999,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1667,
+            "cpu_pct": 92
+          },
+          {
+            "t": 1788294183953,
+            "app_rss_mb": 660,
+            "app_cpu_pct": 29.6,
+            "app_procs": 4,
+            "daemon_rss_mb": 982,
+            "daemon_cpu_pct": 28.9,
+            "daemon_procs": 1,
+            "rss_mb": 1641,
+            "cpu_pct": 58.5
+          },
+          {
+            "t": 1788294228848,
+            "app_rss_mb": 670,
+            "app_cpu_pct": 92.3,
+            "app_procs": 4,
+            "daemon_rss_mb": 988,
+            "daemon_cpu_pct": 0.6,
+            "daemon_procs": 1,
+            "rss_mb": 1658,
+            "cpu_pct": 92.9
+          },
+          {
+            "t": 1788294273878,
+            "app_rss_mb": 665,
+            "app_cpu_pct": 73.8,
+            "app_procs": 4,
+            "daemon_rss_mb": 992,
+            "daemon_cpu_pct": 29.6,
+            "daemon_procs": 1,
+            "rss_mb": 1657,
+            "cpu_pct": 103.4
+          },
+          {
+            "t": 1788294318879,
+            "app_rss_mb": 668,
+            "app_cpu_pct": 108.3,
+            "app_procs": 4,
+            "daemon_rss_mb": 974,
+            "daemon_cpu_pct": 39,
+            "daemon_procs": 1,
+            "rss_mb": 1641,
+            "cpu_pct": 147.3
+          },
+          {
+            "t": 1788294363877,
+            "app_rss_mb": 674,
+            "app_cpu_pct": 88,
+            "app_procs": 4,
+            "daemon_rss_mb": 994,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1668,
+            "cpu_pct": 88
+          },
+          {
+            "t": 1788294408880,
+            "app_rss_mb": 673,
+            "app_cpu_pct": 81.9,
+            "app_procs": 4,
+            "daemon_rss_mb": 992,
+            "daemon_cpu_pct": 8.3,
+            "daemon_procs": 1,
+            "rss_mb": 1664,
+            "cpu_pct": 90.2
+          },
+          {
+            "t": 1788294453983,
+            "app_rss_mb": 673,
+            "app_cpu_pct": 100.4,
+            "app_procs": 4,
+            "daemon_rss_mb": 1006,
+            "daemon_cpu_pct": 0.1,
+            "daemon_procs": 1,
+            "rss_mb": 1679,
+            "cpu_pct": 100.5
+          },
+          {
+            "t": 1788294498963,
+            "app_rss_mb": 654,
+            "app_cpu_pct": 36.7,
+            "app_procs": 4,
+            "daemon_rss_mb": 1014,
+            "daemon_cpu_pct": 29.2,
+            "daemon_procs": 1,
+            "rss_mb": 1668,
+            "cpu_pct": 65.9
+          },
+          {
+            "t": 1788294543892,
+            "app_rss_mb": 676,
+            "app_cpu_pct": 77.6,
+            "app_procs": 4,
+            "daemon_rss_mb": 998,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1674,
+            "cpu_pct": 77.6
+          },
+          {
+            "t": 1788294588907,
+            "app_rss_mb": 674,
+            "app_cpu_pct": 58.3,
+            "app_procs": 4,
+            "daemon_rss_mb": 991,
+            "daemon_cpu_pct": 43.6,
+            "daemon_procs": 1,
+            "rss_mb": 1666,
+            "cpu_pct": 101.9
+          },
+          {
+            "t": 1788294634007,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 1018,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 1018,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788294679964,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 500,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 500,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788294725490,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 500,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 500,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788294771183,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 500,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 500,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788294816812,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 500,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 500,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788294862410,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 454,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 454,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788294907780,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 383,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 383,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788294953468,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 383,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 383,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788294999135,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 383,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 383,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788295045128,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 383,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 383,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788295090787,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 383,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 383,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788295136419,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 383,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 383,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788295181958,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 383,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 383,
+            "cpu_pct": 0
+          },
+          {
+            "t": 1788295212283,
+            "app_rss_mb": 0,
+            "app_cpu_pct": 0,
+            "app_procs": 1,
+            "daemon_rss_mb": 383,
+            "daemon_cpu_pct": 0,
+            "daemon_procs": 1,
+            "rss_mb": 383,
+            "cpu_pct": 0
+          }
+        ]
+      },
+      "notes": "First run to fill ui_p95_ms, heap_after_workload_mb, heap_growth_mb_per_hour and the process-tree set — they had been null in four consecutive entries (TRA-617). The stated blocker each time was \"a foreign daemon held 3741 for the whole run\", and the plan was to wait for an uncontended host. That host does not exist here: this machine permanently runs a dozen sibling agent checkouts, and the ambient daemon held 3741 with 22 registered projects and one mid-index throughout this run too. The blocker was never contention, it was port ownership. The harness now runs its own daemon on 37412 against a throwaway TRACE_MCP_DATA_DIR and rewrites the renderer's hardcoded 127.0.0.1:3741 onto it over CDP (Fetch.requestPaused -> continueRequest with a swapped port) — the technique scripts/tabs-scale.mjs already used. HARNESS DEFECT FOUND AND FIXED, and it invalidates nothing earlier only because nothing earlier ever produced these numbers: ui_p95_ms first came out as exactly 5000 with a search median of 4987, which is the harness's own 5 s settle cap, not the app. Cause, measured: the GPU graph repaints its .cosmos-gpu-label overlay every animation frame — 3810-5863 mutations per 8 s window with no input at all, ~730/s — so the whole-document MutationObserver never saw the 120 ms of quiet that ends an action, and every Graph-tab action ran to the cap. Mutations inside that layer no longer count (pin revision 1 -> 2); the same cycle then takes ~3 s instead of ~85 s and ui_p95_ms reads 668 ms. SECOND HARNESS DEFECT, same shape one layer up: the CDP port was hardcoded to 9333, and a Chrome started by chrome-devtools-mcp already owned it, so a run attached to a Chrome tab instead of the app it had just spawned and reported cold_start_ms 23 / window_interactive_ms 16327 without complaining. Each launch now takes a free port from 9333-9353 and fails outright unless the process listening on it is inside its own child's process tree. A third fix earned the hard way: a run that reached cycle 299 of 30 minutes threw \"Inspected target navigated or closed\" and discarded every measurement it had taken, so a failed cycle now reopens the project and continues, and the entry is written even if the workload dies. MACHINE WAS LOADED throughout — load average mean 21.9, peak 50.8 on 18 cores, from sibling agents. cold_start_ms and window_interactive_ms carry that (see the run-3 note); renderer_fcp_ms 136 does not and is flat against 216/220 from the last two runs. Workload: 572 cycles over 30.0 min, 0 cycle errors, 0 open retries, fixture indexed cold in 7.0 s (1817 files, 9698 symbols). Per-action p95: open_project 62 ms (n=11), switch_view 175 ms (n=1717), search 668 ms (n=5720) — ui_p95_ms is the worst of the three, so it is the search figure. The search MEDIAN is 0 ms and that is not a broken measurement: the graph typeahead filters nodes the renderer already holds, and the probe timed the results list settling 0-3 ms after the keystroke. No leak: post-GC heap moved 11.62 -> 9.87 MB across 572 cycles, range 9.3-12.32, least-squares slope +1.39 MB/h against a 50 MB/h ceiling. Process tree, sampled every 5 s across both trees: the app holds 509 MB idle and 654 MB median under load across 4 processes; the DAEMON holds 727 MB at idle and 1014 MB peak while serving exactly ONE 1817-file project, and 383 MB ten minutes after the app exits. That reproduces, in a controlled single-project scenario with a fresh data dir, the 884 MB the 2026-08-30 run saw on an ambient daemon and declined to file — it is not that daemon's history, one small project genuinely costs ~700 MB resident, past the 500 MB idle ceiling. Filed separately; not fixed here, because this run's job was to produce the numbers, and a fix measured against a baseline that did not exist yet would have been a guess. tree_cpu_peak_pct 155.7 is the combined tree and sums over cores; the app alone peaked at 108% during the graph workload, which is the same label-overlay repaint the settle fix exposed. artifact_mb not taken: pnpm run pack sat in codesign for ~25 minutes on the loaded machine and was abandoned rather than delay the run; it is guarded by packages/app/src/main/__tests__/packaged-deps.test.ts and last read 4.85 / 268.1 at 6ebbbd56."
     }
   ]
 }

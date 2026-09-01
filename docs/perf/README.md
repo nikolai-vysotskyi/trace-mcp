@@ -14,18 +14,33 @@ noindex: true
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
-## Current numbers (3.6.0, `39026ebd` — the AskTab split, macOS 26.5 / arm64, median of 3)
+## Current numbers (3.10.0, `b6b02ae4`, darwin 25.5.0 / arm64, median of 3)
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
-| `renderer_fcp_ms` | 216 | — | ok — **the startup metric of record** |
-| `cold_start_ms` | 801 | 3000 | ok, but load-sensitive (see below) |
-| `window_interactive_ms` | 506 | — | load-sensitive, do not trend it |
-| `heap_idle_mb` (5 min idle) | 9.5 | — | ok |
+| `renderer_fcp_ms` | 136 | — | ok — **the startup metric of record** |
+| `cold_start_ms` | 629 | 3000 | ok, but load-sensitive (see below) |
+| `window_interactive_ms` | 362 | — | load-sensitive, do not trend it |
+| `heap_idle_mb` (5 min idle) | 10.7 | — | ok |
 | `main_cpu_idle_pct` | 0 | 2 | ok |
-| `renderer_eager_kb` | 2102 | — | **the size metric of record** (see below) |
-| `renderer_bundle_kb` | 2272 | — | +34% vs 1700 — regression, addressed this run |
+| `ui_p95_ms` | 668 | — | **first real value** — was null in the four runs before |
+| `heap_after_workload_mb` | 11.6 | — | first real value |
+| `heap_growth_mb_per_hour` | +1.39 | 50 | ok — no leak over 572 cycles |
+| `tree_rss_idle_mb` (app + daemon) | 955 | — | first real value |
+| `tree_rss_peak_mb` (app + daemon) | 1691 | — | first real value |
+| `tree_cpu_peak_pct` (combined, sums cores) | 156 | — | first real value |
+| `rss_after_index_settle_mb` (daemon only) | 383 | 500 | ok settled — **but 727 MB while serving, see below** |
+| `renderer_eager_kb` | 2100 | — | **the size metric of record**, flat vs 2102 |
+| `renderer_bundle_kb` | 2270 | — | flat vs 2272 |
 | `artifact_mb` | not re-packed | ×1.5 growth | last measured 4.85 / 268.1 at `6ebbbd56` |
+
+**Open finding — the daemon costs ~700 MB to serve one small project.** With a fresh data
+dir, a private port and exactly one registered project (this repo at the pinned fixture
+commit, 1817 files / 9698 symbols), `serve-http` sat at 727 MB RSS idle and peaked at
+1014 MB, dropping to 383 MB only after the app disconnected and ten minutes passed. That
+reproduces, under control, the 884 MB the 2026-08-30 run saw on an ambient daemon and did
+not file because that daemon's history was unknown. It is not history: one small project
+really does cost that much resident while it is being served.
 
 ### Which size number to trend
 
@@ -49,27 +64,69 @@ ceiling only.
 When a run has to happen on a loaded machine, an interleaved A/B — alternating one sample
 of each build, several rounds — cancels the drift that a back-to-back A-then-B run does not.
 
-`ui_p95_ms`, `heap_after_workload_mb` and `heap_growth_mb_per_hour` are still unfilled in
-`baseline.json`. The harness that produces them landed with TRA-258 and has been run
-end to end, but a publishable pass needs a daemon on 127.0.0.1:3741 that speaks this
-checkout's API — the renderer's `BASE` is hardcoded, so the workload cannot be pointed
-anywhere else. On a machine where another trace-mcp version owns that port, the fixture
-never gets served and the run aborts with `the daemon on 3741 never served <fixture>`.
-Take the first clean pass on a machine with no competing daemon.
+### The workload no longer needs port 3741 (TRA-617)
+
+For four consecutive runs `ui_p95_ms`, `heap_after_workload_mb` and
+`heap_growth_mb_per_hour` were recorded as `null` with the same reason: a foreign daemon
+owned 127.0.0.1:3741 for the whole run. The renderer's `BASE` is hardcoded to that port in
+six files, so the harness used to wait up to four minutes for the port to come free and
+then measure against whatever daemon held it — on a machine that runs a dozen agent
+checkouts and a 20-project registry, that port is never free, and "wait for an
+uncontended host" is a precondition that never arrives.
+
+The harness now does what `tabs-scale.mjs` already did: it runs **its own daemon on a
+private port (37412) against a throwaway `TRACE_MCP_DATA_DIR`**, and rewrites every
+renderer request to `:3741` onto it over CDP (`Fetch.requestPaused` →
+`Fetch.continueRequest` with a swapped port). Only daemon requests are intercepted;
+assets and the `file://` document are untouched. The app's own watchdog still polls the
+real 3741, so `TRACE_MCP_BIN` points at a no-op shim to stop it starting anything.
+
+The consequence for reading the numbers: the daemon under test serves **one** project, the
+pinned fixture, and nothing else. That is the point — it isolates the app from the
+machine's registry — but it means `tree_rss_*` here are not comparable to the 2026-08-28
+daemon-memory entry, which measured a daemon holding 40 to 110 real projects.
+
+**The same trap, one layer up: the CDP port.** The harness used to hardcode
+`--remote-debugging-port=9333` and attach to the first page target it found there. A Chrome
+started by `chrome-devtools-mcp` with the same debugging port already owned it, so the run
+attached to a *Chrome tab*, drove that, and reported `cold_start_ms: 23` and
+`window_interactive_ms: 16327` without complaining once. Each launch now takes a free port
+from 9333–9353 and then checks that the process listening on it is inside its own child's
+process tree, failing the run outright if it is not. A perf harness that silently measures
+the wrong process is worse than one that does not run.
 
 ## How to take a measurement
 
 ```bash
 pnpm run build                          # repo root — the workload indexes the fixture with this CLI
+pnpm -C packages/app install            # packages/app is a separate package, not a pnpm workspace
 pnpm -C packages/app run build          # required — the harness measures the prod bundle
 pnpm -C packages/app run pack           # optional — needed for artifact_mb
 PERF_COMMIT=$(git rev-parse --short HEAD) \
   pnpm -C packages/app run perf -- --samples 3 --idle-seconds 300 \
-                                     --workload --workload-minutes 30 --opens 20
+                                     --workload --workload-minutes 30 --opens 10
 ```
 
-Drop `--workload` for a startup-only pass (~6 min). With it the run takes ~40 min and
-adds `ui_p95_ms`, `heap_after_workload_mb` and `heap_growth_mb_per_hour`.
+Drop `--workload` for a startup-only pass (~6 min). With it the run takes ~55 min
+(30 min of cycles plus a 10-minute daemon settle, `--settle-minutes`) and adds
+`ui_p95_ms`, `heap_after_workload_mb`, `heap_growth_mb_per_hour` and the process-tree
+set below.
+
+### The process-tree metrics
+
+Sampled every 5 s for the whole workload, across both trees under test — the Electron app
+(main + renderer + GPU/network helpers) and the daemon (`serve-http` plus its index worker
+processes; worker *threads* are counted inside their host process's RSS by `ps`).
+
+| Metric | What it is |
+|---|---|
+| `tree_rss_idle_mb` | app + daemon RSS with the fixture indexed and served and nothing driven — a 60 s hold taken before the first project open |
+| `tree_rss_peak_mb` | highest app + daemon RSS seen at any point in the run |
+| `tree_cpu_peak_pct` | highest combined `%cpu` (sums over cores, so >100 is normal) |
+| `rss_after_index_settle_mb` | daemon RSS after the app is gone and it has sat idle for `--settle-minutes`, still holding the fixture's index |
+
+`workload.tree_series` keeps every fifth sample, so the shape over the run survives in
+`baseline.json` without carrying 500 rows.
 
 The harness ([`packages/app/scripts/perf-measure.mjs`](../../packages/app/scripts/perf-measure.mjs))
 launches the built app against a throwaway `--user-data-dir`, drives it over CDP, and
@@ -117,6 +174,21 @@ How each number is derived:
   the first paint. Switching to the Graph tab paints an empty canvas within a few
   milliseconds and then does the real work; first-paint timing reports single-digit
   milliseconds for every action and would never catch a regression.
+- **Mutations inside `.cosmos-gpu-label` do not count** (pin `revision` 2, TRA-617). The
+  GPU graph repaints its HTML label overlay every animation frame — measured at ~730
+  mutations/second, unbroken, with no input at all — so the whole-document observer never
+  saw 120 ms of quiet and every Graph-tab action ran to the cap. The first run to reach
+  this code reported `ui_p95_ms` as exactly 5000 with a search median of 4987: the
+  harness's ceiling, not the app. Scoping the observer past a permanent animation is not
+  a leniency — an animation that never stops cannot signal that anything finished.
+  The limit this leaves: WebGL drawing is invisible to a `MutationObserver` either way, so
+  `switch_view` into Graph times the surrounding DOM, not the graph's own render. "The
+  graph has actually loaded" is enforced separately, by the `matchCount() > 0` gate before
+  the cycle loop starts.
+- The **search median reads near zero and that is not a bug**: the graph typeahead filters
+  nodes the renderer already holds, so the list updates within a few milliseconds of the
+  keystroke. `ui_p95_ms` takes the worst per-action p95 precisely so a cheap action cannot
+  hide an expensive one.
 - **`heap_after_workload_mb`** — the post-GC heap after the first complete cycle.
 - **`heap_growth_mb_per_hour`** — least-squares slope of the post-GC heap series over the
   whole run. Over 50 is an issue on its own, whatever the delta to the previous run.
@@ -131,6 +203,20 @@ Compare against the median of the last 5 runs: >+10% is a warning to note, >+25%
 (or two consecutive warnings) is a regression worth an issue.
 
 ## Changes worth remembering
+
+**2026-09-01 — the three workload metrics were never blocked on a quiet machine.**
+Four entries in a row recorded `ui_p95_ms` / `heap_after_workload_mb` /
+`heap_growth_mb_per_hour` as null, each blaming a foreign daemon on 3741 and each deferring
+to a future uncontended host. That host does not exist on this machine and the wait was the
+wrong fix: the harness needed to stop asking for a port it does not own. Giving it a private
+daemon port plus a CDP request rewrite filled all three, and the process-tree set with them,
+on a machine at load average 21.9 with the ambient 22-project daemon still holding 3741
+throughout. Two harness defects fell out of finally running it end to end: `ui_p95_ms` read
+exactly 5000 (the settle cap — see the `.cosmos-gpu-label` note above), and a hardcoded CDP
+port let the harness attach to somebody else's Chrome and report a 23 ms cold start. Both
+had been latent since TRA-258. The lesson is not about ports: a metric that has never once
+produced a value is not a measurement, it is a plan, and it should be treated as untested
+code until it prints a number.
 
 **2026-08-30 — the Ask tab was carrying the markdown stack into startup.**
 `renderer_bundle_kb` had gone 1461 → 1700 → 2272 KB, with the entry chunk alone at
