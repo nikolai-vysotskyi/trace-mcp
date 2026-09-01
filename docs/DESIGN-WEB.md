@@ -338,3 +338,47 @@ motion driven from JavaScript. The landing page animates a stat count-up over
 1400ms and staggers a segmented bar at 30ms per cell from `setTimeout`; both
 read a `reduceMotion` flag off `matchMedia`. Any new JS-driven motion has to
 read it too — the media query alone will not catch it.
+
+---
+
+## 8. The landing hero
+
+Numbered last because §1–§7 were written before this section existed; renumbering
+would break the `§` references inside this file and the one in `docs/index.html`.
+Read it as the landing-page counterpart to §2.
+
+**Two actions. Never three** (TRA-609). The hero carries the DMG button and the
+install command, and nothing else. It shipped with four competing elements —
+`Download for macOS`, `Analyze your AI system`, `View on GitHub`, and the install
+line — which is not a hierarchy, it is a row. Both of the removed buttons already
+had a home: the header links to the repo and to `#install`, on desktop and on a
+phone. Check that before adding a fifth thing back.
+
+**The two actions do not look alike.** The DMG is `.btn .btn-primary .btn-lg` — a
+red pill, the one red on the screen. The install line is `.hero-install` — a
+technical 8px box on `--surface` with a `$` prompt, the command, and a `COPY`
+label behind a hairline. A pill next to a pill reads as two buttons of equal
+weight; that is what the dashed pill it replaced did.
+
+**`.hero-install` is a `<button>`.** It was a `<span onclick>`, so the only way to
+copy the command was a mouse — no tab stop, no focus ring, nothing for a screen
+reader. The `$` is `aria-hidden`; the `copy` label is `aria-live="polite"` so the
+`copied` state is announced.
+
+**It is visible on a phone.** It used to be `display: none` under 700px, which
+left a phone visitor with a DMG button and no copyable command at all. Below
+700px the row becomes one column, both actions go full width, and `.copy` pins
+right on `margin-left: auto`.
+
+**Off macOS the DMG button is removed** (TRA-440) and `.hero-install` gains
+`.is-primary`, which raises its border to `--text-display`. Without that the
+hero has no primary action anywhere outside a Mac. When you read that border
+back in the browser, wait out the 200ms `border-color` transition — a
+`getComputedStyle` fired in the same tick as the `classList.add` returns the
+*start* colour and looks like the rule never matched.
+
+**The headline is measured, not guessed.** `clamp(36px, 5.2vw, 60px)` over
+`max-width: 900px` is the pair that breaks the current wording after
+"intelligence" and nowhere else; at `72px/820px` it ran to three lines and split
+"AI coding agents" across two of them. Change the wording, re-measure the line
+count at 1440px and at 390px.
