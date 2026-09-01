@@ -34,6 +34,13 @@ Rules for keeping it honest:
 | [smithery.ai](https://smithery.ai) | **No** | None | — | Two blockers, not one: the account needs GitHub OAuth (an agent must not authorize that on Nikolai's behalf), **and** a stdio server is published as an MCPB bundle — `smithery mcp publish ./server.mcpb -n <org>/<name>`, per `smithery.ai/docs/build/publish.md`. There is **no `smithery.yaml`** in their current docs; older writeups describing one are stale. They also ingest the official registry | 2026-08-29 |
 | [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers) | **Yes** | None | Listed under `Developer Tools`, alphabetical, with the Glama badge and an accurate description | PR to README. Their CONTRIBUTING asks automated agents to append `🤖🤖🤖` to the PR title. Nothing to submit — only re-read the entry when the product's shape changes | 2026-09-01 |
 | [hashgraph-online/awesome-ai-plugins](https://github.com/hashgraph-online/awesome-ai-plugins) | **Yes** | None | Listed under `Community Plugins → Development & Workflow` | PR to README. PR #182 merged 2026-08-31 by `kantorcodes` without requiring third-party scanner action | 2026-09-01 |
+| [aaif-goose/goose](https://github.com/aaif-goose/goose) extension directory | **No — submitted** | None | — | The directory is a plain file, `documentation/static/servers.json`, and third-party entries land by PR to it (#10650 pngmeta, #10638 Glif, both single-file, merged 2026-07-29). But CONTRIBUTING runs an **issues-first** process: "Pull requests that do not implement a Ready issue will be closed", and the exemptions are dependency bots, security fixes and core-team work, not directory additions. So the entry sits finished on `nikolai-vysotskyi/goose:add-trace-mcp` (11 lines, alphabetical between `tom` and `tutorial-mcp`) and [issue #11763](https://github.com/aaif-goose/goose/issues/11763) asks for Ready. Open the PR when it gets there; don't open it before | 2026-09-01 |
+| [QuesmaOrg/awesome-ai-tokenomics](https://github.com/QuesmaOrg/awesome-ai-tokenomics) | **No — submitted** | None | — | [PR #53](https://github.com/QuesmaOrg/awesome-ai-tokenomics/pull/53), Optimize → Context Engineering, beside Serena and Repomix. An entry is three files: the README line, the same line in `research/optimize.md`, and a record in `research/manifest.json` carrying `verified_on` / `stale_after`. Their `scripts/lint_readme.sh` **fails the build on any em-dash in tracked markdown** and on a list of superlatives (`de facto`, `go-to`, `widely used`, `the leading`, …) — write entries accordingly. Self-submission is allowed but needs a disclosure, checkable primary sources, and an independent adoption signal that is not stars | 2026-09-01 |
+| [hesreallyhim/awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) | **No** | None | — | **Gate met, door still human-only.** Their bar is ≥100 stars *or* 14 days of active development; we passed the star half on 2026-09-01 (102). But CONTRIBUTING is explicit: "ALL RECOMMENDATIONS MUST BE MADE USING THE WEB UI ISSUE FORM TEMPLATE, OR YOU RISK BEING RESTRICTED FROM INTERACTING WITH THIS REPOSITORY", "It is **not** possible to submit a resource recommendation using the `gh` CLI", and "recommendations must be created by human beings". Three of the form's required checkboxes are personal attestations. An agent must not fill this in; the ready-to-paste field values are in TRA-633 | 2026-09-01 |
+| [hashgraph-online/awesome-codex-plugins](https://github.com/hashgraph-online/awesome-codex-plugins) | **No — declined by us** | None | — | Same org that merged us into `awesome-ai-plugins`, and we do ship a Codex plugin, so this looks like the obvious next door. It is not. There the scanner action was *advisory* and we were merged without it; here CONTRIBUTING step 1 is "Set up scanner CI in your plugin repo (required) … This is not optional. We verify this during review" — `hashgraph-online/ai-plugin-scanner-action@v1` committed into our workflows, plus `pipx install plugin-scanner` run locally. Both are the thing we already refused. **Closed unless their gate changes** | 2026-09-01 |
+| [cursor.directory](https://cursor.directory) (`pontusab/directories`) | **No** | None | — | Repo holds no listing data ("All content is submitted through the website"); submission is `cursor.directory/plugins/new` behind GitHub or Google sign-in, so it is human-only like Smithery. Worth knowing anyway: they auto-detect components from a repo following the [Open Plugins](https://open-plugins.com) spec, and the MCP hook is a **`.mcp.json` at the repo root**. Ours lives at `.claude-plugin/.mcp.json`, so we are currently undetectable there — see TRA-634 | 2026-09-01 |
+| [appcypher/awesome-mcp-servers](https://github.com/appcypher/awesome-mcp-servers) | **No — dead** | None | — | **The repo is archived** (last push 2026-05-06; 5,764 stars). GitHub refuses pull requests against an archived repo, which is what "does not have the correct permissions to execute `CreatePullRequest`" actually means — TRA-482 read that error as a token-scope problem and parked the submission on Nikolai. It was never his to unblock. The prepared fork branch `nikolai-vysotskyi/awesome-mcp-servers-appcypher:add-trace-mcp` is dead weight | 2026-09-01 |
+| [modelcontextprotocol/servers](https://github.com/modelcontextprotocol/servers) | — | None | — | **Not a door any more.** The README is now reference servers only and says so in a banner: "If you are looking for a list of MCP servers, you can browse published servers on the MCP Registry." No community-servers section survives to be added to. We are in the registry it points at, so this is already covered | 2026-09-01 |
 | [wong2/awesome-mcp-servers](https://github.com/wong2/awesome-mcp-servers) | **No** | None | — | **Not a separate door.** Its README refuses PRs outright and redirects to `mcpservers.org/submit` — the same form as the mcpservers.org row above. Treat the two as one channel | 2026-08-29 |
 | [Cline MCP Marketplace](https://github.com/cline/mcp-marketplace) | **No** — checked their live catalog API (`api.cline.bot/v1/mcp/marketplace`, 199 entries), not a web search | None | — | Closest thing to an open door left. Open an issue on `cline/mcp-marketplace` with their `mcp-server-submission` template: repo URL, a **400×400 PNG** logo, reason for addition. `llms-install.md` is optional — their FAQ says a well-written README is usually enough (there is no crawler; Cline itself reads the README at install time). Their step 3 also asks the submitter to confirm they have watched Cline set the server up from the README alone. The logo is now in-repo at `docs/icon-400x400.png`. No account or payment — but that step-3 checkbox is **required**, so this is not an agent-alone submission; see "Next door to try" | 2026-08-29 |
 | [Docker MCP Catalog](https://github.com/docker/mcp-registry) | **No** — listed all 328 entries of `servers/` via the GitHub contents API | None | — | **Blocked on an artifact we don't have.** Both paths need something trace-mcp isn't: "Local" wants a Dockerfile in our repo, "Remote" wants a reachable streamable-http/SSE endpoint. A plain npm/stdio package qualifies for neither. Adding a Dockerfile is a product decision, not a listings one — don't smuggle it in as distribution work | 2026-08-29 |
@@ -233,11 +240,32 @@ question and is not a competing count.
 **`subinium/awesome-claude-code` has a strict 1,000+ star gate** (verified 2026-09-01).
 Do not submit PRs there until trace-mcp meets the 1,000 star requirement.
 
-**`hesreallyhim/awesome-claude-code` requires web UI issue form submission** (verified 2026-09-01).
-Requires ≥14 days active development or ≥100 stars; accepts only web issue templates.
-
 **`korchasa/awesome-mcp` is an automatically compiled list** (verified 2026-09-01).
-Compiles automatically from GitHub `mcp` topic and indexed repositories.
+Compiles automatically from GitHub `mcp` topic and indexed repositories, so there is
+nothing to submit — the repo topics row above is the lever that reaches it.
+
+**A PR that will not open is not always a permissions problem.** GitHub returns
+`does not have the correct permissions to execute CreatePullRequest` when the
+*target repo is archived*, with no mention of archiving anywhere in the message.
+TRA-482 read it as a missing token scope, wrote "needs manual PR creation" and
+parked the work on Nikolai for two days; `appcypher/awesome-mcp-servers` had been
+archived since 2026-05-06 and nobody could have opened that PR. Check
+`gh api repos/<owner>/<repo> --jq .archived` before blaming credentials.
+
+**Competitors' listings are the cheapest source of new addresses.** A code search
+for `oraios/serena` across README files returned ~40 repos, and four of them were
+real, active lists we were absent from — including `QuesmaOrg/awesome-ai-tokenomics`,
+which is the closest fit to our actual claim that has been found so far. Repeat the
+search with a competitor's repo path when the known doors run out.
+
+**Nearest neighbours on the token-economics list, worth reading before we quote
+our own numbers** (verified 2026-09-01): `yvgude/lean-ctx` (Rust MCP server
+mediating agent reads, self-measured 60-90% headline), `rtk-ai/rtk`,
+`headroomlabs-ai/headroom`, `mksglu/context-mode`, `fkiene/llmtrim`. The datapoint
+that matters: **JetBrains A/B-tested rtk and measured it +7.6% *more* expensive at
+low effort against its claimed 60-90% cut.** That list tracks the gap between
+claimed and measured, so our "40-50%" is a liability there and
+`npx trace-mcp benchmark .` is the asset. PR #53 was written on that basis.
 
 
 ## Channels that need a human
@@ -255,7 +283,18 @@ Not blockers to route around — genuinely outside what an agent may do alone:
 
 ## Next door to try
 
-Every directory in the table has now been checked at least once, and **none of
+**That sentence was true of MCP catalogues, and false of the wider list
+ecosystem** (2026-09-01). Two doors an agent can finish were found in one pass by
+searching README files for a competitor's repo path (`oraios/serena`) instead of
+for MCP directories: `aaif-goose/goose`'s extension directory (issue #11763 open,
+PR written and waiting on their Ready gate — TRA-631) and
+`QuesmaOrg/awesome-ai-tokenomics` (PR #53 open — TRA-632). Both are plain files
+in public repos with no account, payment or attestation anywhere. The exhausted
+list was the list of *MCP directories*, not the list of places our audience reads.
+
+The paragraph below still holds for the MCP directories themselves:
+
+Every MCP directory in the table has now been checked at least once, and **none of
 the ones we are absent from can be finished by an agent alone.** The previous
 revision of this section said Cline could be; that was wrong, and the correction
 is the useful part:
@@ -274,9 +313,13 @@ README, and watching it wire the server up — after that the issue is a two-min
 fill-in, logo included:
 `https://raw.githubusercontent.com/nikolai-vysotskyi/trace-mcp/master/docs/icon-400x400.png`.
 
-So the remaining doors sort into: needs a browser login (Smithery, LobeHub),
-needs money (mcp.so, mcpmarket), needs a product decision (Docker's Dockerfile),
-or needs someone to witness an install (Cline). The last is by far the cheapest.
+So the remaining MCP-directory doors sort into: needs a browser login (Smithery,
+LobeHub, cursor.directory), needs money (mcp.so, mcpmarket), needs a product
+decision (Docker's Dockerfile, the Agent Plugins layout in TRA-634), or needs
+someone to witness an install (Cline). Two of them are now one click of Nikolai's
+rather than a project: the Cline attestation, and the
+`hesreallyhim/awesome-claude-code` form whose 100-star gate we passed on
+2026-09-01 (TRA-633).
 
 **Do not run `trace-mcp daemon stop` while testing on a developer machine.** It
 does not just stop the daemon — it writes `~/.trace-mcp/daemon.disabled`, which
