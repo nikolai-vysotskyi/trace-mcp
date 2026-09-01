@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.11.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.10.0...v3.11.0) (2026-09-01)
+
+
+### Features
+
+* **topology,memory:** add stale root pruning to topology.db and decisions.db (TRA-595) ([#714](https://github.com/nikolai-vysotskyi/trace-mcp/issues/714)) ([edb2fc8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/edb2fc88a79a6fc45ec413b5e1f11b5458cc8792))
+
+
+### Bug Fixes
+
+* **app:** clamp KpiTile label and comparison spans to preserve TILE_H (TRA-492) ([#713](https://github.com/nikolai-vysotskyi/trace-mcp/issues/713)) ([b4549ac](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b4549acd2900d2867ccd1fea7318d27d1881b875))
+* **app:** remove broken native macOS tab bar under hiddenInset (TRA-587) ([#708](https://github.com/nikolai-vysotskyi/trace-mcp/issues/708)) ([891b1d8](https://github.com/nikolai-vysotskyi/trace-mcp/commit/891b1d8efbe3d7f94809a3742388ae2887ae6c8b))
+* **app:** resolve autoUpdater dynamic export and wrap long menu header status text ([#707](https://github.com/nikolai-vysotskyi/trace-mcp/issues/707)) ([c0b3083](https://github.com/nikolai-vysotskyi/trace-mcp/commit/c0b3083074805488137fd63e6c6abdfa87277711))
+* **init:** update tool routing table and stale hint references (TRA-579) ([#712](https://github.com/nikolai-vysotskyi/trace-mcp/issues/712)) ([b6b02ae](https://github.com/nikolai-vysotskyi/trace-mcp/commit/b6b02ae49362aa8b3e74ee072a2144524ea33b2b))
+
 ## [3.10.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.9.0...v3.10.0) (2026-08-31)
 
 
