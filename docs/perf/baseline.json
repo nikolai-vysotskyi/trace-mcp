@@ -157,7 +157,7 @@
     {
       "date": "2026-09-01T10:10:44.186Z",
       "app_version": "3.10.0",
-      "commit": "b4549acd",
+      "commit": "d0633c51",
       "env": {
         "os": "darwin 25.5.0",
         "arch": "arm64",
@@ -206,7 +206,7 @@
           "main_cpu_idle_pct": 0
         }
       ],
-      "notes": "Measured on 3.10.0. Further code-split secondary project tabs (Activity, Insights, MemoryExplorer, Notebook) behind React.lazy, reducing the main renderer entry chunk from 1172 KB down to 1013 KB (gzip 337 -> 299 KB) and moving 88 KB out of startup (renderer_eager_kb 2100 -> 2012 KB). Startup metric renderer_fcp_ms is 156 ms (median of 3, vs 216 ms in run 4). Cold start (613 ms), idle heap (9.5 MB) and idle CPU (0%) remain well within ceilings. Unpacked macOS app artifact size grew to 478 MB due to TRA-438 embedding server-payload (241 MB standalone Node daemon runtime) in Contents/Resources/server so DMG users do not need Node/npm installed. Multi-tab scaling verified via tabs-scale.mjs (1 tab: 571 ms, 2 tabs: 580 ms, 0 reqs/s idle, 0% CPU, clean memory deallocation on tab close)."
+      "notes": "Measured on 3.10.0 at split commit d0633c51. Further code-split secondary project tabs (Activity, Insights, MemoryExplorer, Notebook) behind React.lazy, reducing the main renderer entry chunk from 1172.19 kB (gzip 337.40 kB) to 1082.74 kB (gzip 314.80 kB) — saving 89.45 kB raw / 22.60 kB gzip — and moving 90 KB out of startup (renderer_eager_kb 2102 -> 2012 KB). Startup metric renderer_fcp_ms is 156 ms (median of 3, vs 216 ms in run 4). Cold start (613 ms), idle heap (9.5 MB) and idle CPU (0%) remain well within ceilings. Unpacked macOS app artifact size grew from 268.1 MB to 478.0 MB (1.783x, crossing the 1.5x threshold) due to TRA-438 embedding server-payload (241 MB standalone Node daemon runtime + 33 dependencies) in Contents/Resources/server so DMG users do not need Node/npm installed; tracked for payload audit/pruning and ceiling update in follow-up work. Multi-tab scaling verified via tabs-scale.mjs (1 tab: 571 ms, 2 tabs: 580 ms, 0 reqs/s idle, 0% CPU, clean memory deallocation on tab close). ui_p95_ms, heap_after_workload_mb, and heap_growth_mb_per_hour remain null pending a dedicated single-daemon host run (same as runs 1-4)."
     }
   ]
 }

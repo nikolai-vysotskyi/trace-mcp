@@ -14,7 +14,7 @@ noindex: true
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
-## Current numbers (3.10.0, `b4549acd` — secondary tabs split, macOS 26.5 / arm64, median of 3)
+## Current numbers (3.10.0, `d0633c51` — secondary tabs split, macOS 26.5 / arm64, median of 3)
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
@@ -25,7 +25,7 @@ entry per measurement pass, never rewrite an old one. This file is the human sum
 | `main_cpu_idle_pct` | 0 | 2 | ok |
 | `renderer_eager_kb` | 2012 | — | **the size metric of record** (see below) |
 | `renderer_bundle_kb` | 2271 | — | total size on disk across all lazy chunks |
-| `artifact_mb` | 5.8 / 478.0 | ×1.5 growth | unpacked grew due to TRA-438 server-payload |
+| `artifact_mb` | 5.8 / 478.0 | ×1.5 growth | unpacked grew from 268.1 MB (1.783×) due to TRA-438 server-payload (action tracked) |
 
 ### Which size number to trend
 
@@ -135,12 +135,14 @@ Compare against the median of the last 5 runs: >+10% is a warning to note, >+25%
 **2026-09-01 — code-splitting secondary project tabs (Activity, Insights, Memory, Notebook).**
 Following the Ask tab split in 3.6.0, non-default project views (`Activity`, `Insights`,
 `MemoryExplorer`, `Notebook`) were still statically imported into `App.tsx` and bundled into
-the main renderer entry chunk (1172 KB). Splitting them behind `React.lazy` while keeping the
-primary default views (`Workspace`, `Clients`, `Settings`, `ProjectOverview`) eager moved 88 KB
-out of the initial startup payload (`renderer_eager_kb` 2100 → 2012 KB, entry chunk 1172 → 1013 KB,
-gzip 337 → 299 KB). Startup FCP remains fast at 156 ms (median of 3). Multi-tab scaling verified
-via `tabs-scale.mjs` (1 tab: 571 ms, 2 tabs: 580 ms, 0 idle daemon reqs/s, 0% CPU, clean memory
-deallocation upon closing tabs).
+the main renderer entry chunk (1172.19 kB / gzip 337.40 kB). Splitting them behind `React.lazy` while
+keeping the primary default views (`Workspace`, `Clients`, `Settings`, `ProjectOverview`) eager
+reduced the entry chunk to 1082.74 kB / gzip 314.80 kB (-89.45 kB raw / -22.60 kB gzip) and moved
+90 KB out of the initial startup payload (`renderer_eager_kb` 2102 → 2012 KB). Startup FCP
+remains fast at 156 ms (median of 3). Multi-tab scaling verified via `tabs-scale.mjs` (1 tab: 571 ms,
+2 tabs: 580 ms, 0 idle daemon reqs/s, 0% CPU, clean memory deallocation upon closing tabs). Unpacked macOS
+artifact growth (268.1 MB → 478.0 MB, 1.783×) caused by the TRA-438 embedded daemon payload in
+`Contents/Resources/server` is documented for audit and pruning follow-up.
 
 **2026-08-30 — the Ask tab was carrying the markdown stack into startup.**
 `renderer_bundle_kb` had gone 1461 → 1700 → 2272 KB, with the entry chunk alone at
