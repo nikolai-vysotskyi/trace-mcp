@@ -248,7 +248,10 @@ export function registerStateTools(server: McpServer, ctx: ServerContext): void 
     {
       task_id: z.string().describe('Task identifier'),
       reason: z.string().describe('Why this approach failed or should not be retried'),
-      approach: z.string().optional().describe('The attempted approach (defaults to current next_action)'),
+      approach: z
+        .string()
+        .optional()
+        .describe('The attempted approach (defaults to current next_action)'),
     },
     async ({ task_id, reason, approach }) => {
       try {

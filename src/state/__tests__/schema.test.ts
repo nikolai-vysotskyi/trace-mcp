@@ -73,6 +73,8 @@ describe('AgentExecutionState Schema validation', () => {
 
     const parsed = AgentExecutionStateSchema.parse(custom);
     expect((parsed.facts as Record<string, unknown>).custom_domain_knowledge).toBe('Special rule');
-    expect((parsed.working_context as Record<string, unknown>).branch_name).toBe('feature/skill-state');
+    expect((parsed.working_context as Record<string, unknown>).branch_name).toBe(
+      'feature/skill-state',
+    );
   });
 });

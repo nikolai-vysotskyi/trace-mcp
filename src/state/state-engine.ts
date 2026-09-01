@@ -232,7 +232,9 @@ export class StateEngine {
   patchState(taskId: string, patch: Record<string, unknown> | string): PatchStateResult {
     const current = this.getState(taskId);
     if (!current) {
-      throw new Error(`Task state not found for task_id: "${taskId}". Call trace_state_init first.`);
+      throw new Error(
+        `Task state not found for task_id: "${taskId}". Call trace_state_init first.`,
+      );
     }
 
     const patchObj = typeof patch === 'string' ? JSON.parse(patch) : patch;
@@ -241,7 +243,9 @@ export class StateEngine {
     // Validate merged state strictly against schema
     const parseResult = AgentExecutionStateSchema.safeParse(merged);
     if (!parseResult.success) {
-      const issues = parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join(', ');
+      const issues = parseResult.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join(', ');
       throw new Error(`Invalid state after applying patch: ${issues}`);
     }
 
@@ -339,9 +343,7 @@ export class StateEngine {
     }
 
     if (!row) {
-      throw new Error(
-        `Checkpoint "${checkpointIdOrLabel}" not found for task_id: "${taskId}".`,
-      );
+      throw new Error(`Checkpoint "${checkpointIdOrLabel}" not found for task_id: "${taskId}".`);
     }
 
     const restoredState = AgentExecutionStateSchema.parse(JSON.parse(row.state_json));
@@ -358,7 +360,14 @@ export class StateEngine {
         WHERE task_id = ?
       `,
         )
-        .run(restoredState.goal, restoredState.status, JSON.stringify(restoredState), nextVersion, now, taskId);
+        .run(
+          restoredState.goal,
+          restoredState.status,
+          JSON.stringify(restoredState),
+          nextVersion,
+          now,
+          taskId,
+        );
 
       this.db
         .prepare(

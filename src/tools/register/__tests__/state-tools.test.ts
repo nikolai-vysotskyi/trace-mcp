@@ -7,14 +7,19 @@ interface RegisteredToolInfo {
   name: string;
   description: string;
   schema: unknown;
-  handler: (args: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+  handler: (
+    args: Record<string, unknown>,
+  ) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
 }
 
 interface RegisteredResourceInfo {
   name: string;
   templateOrUri: unknown;
   metadata: unknown;
-  handler: (uri: { href: string }, params: Record<string, unknown>) => Promise<{ contents: Array<{ uri: string; mimeType: string; text: string }> }>;
+  handler: (
+    uri: { href: string },
+    params: Record<string, unknown>,
+  ) => Promise<{ contents: Array<{ uri: string; mimeType: string; text: string }> }>;
 }
 
 describe('SKILL.state MCP Tools and Resources (TRA-598, TRA-599)', () => {
@@ -211,7 +216,10 @@ describe('SKILL.state MCP Tools and Resources (TRA-598, TRA-599)', () => {
     });
 
     const stateResource = resources.get('agent-state')!;
-    const readRes = await stateResource.handler({ href: 'trace://state/TRA-599' }, { task_id: 'TRA-599' });
+    const readRes = await stateResource.handler(
+      { href: 'trace://state/TRA-599' },
+      { task_id: 'TRA-599' },
+    );
 
     expect(readRes.contents.length).toBe(1);
     expect(readRes.contents[0]?.mimeType).toBe('text/markdown');
@@ -219,6 +227,8 @@ describe('SKILL.state MCP Tools and Resources (TRA-598, TRA-599)', () => {
 
     // Check notifications triggered
     expect(notifications.length).toBeGreaterThan(0);
-    expect(notifications.some((n) => (n.params as { uri: string }).uri === 'trace://state/TRA-599')).toBe(true);
+    expect(
+      notifications.some((n) => (n.params as { uri: string }).uri === 'trace://state/TRA-599'),
+    ).toBe(true);
   });
 });

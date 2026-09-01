@@ -6,7 +6,11 @@
  * token savings metrics table.
  */
 
-import { BENCHMARK_SCENARIOS, evaluateScenario, runSimulation } from '../src/eval/state-benchmark.js';
+import {
+  BENCHMARK_SCENARIOS,
+  evaluateScenario,
+  runSimulation,
+} from '../src/eval/state-benchmark.js';
 
 console.log('='.repeat(80));
 console.log('SKILL.state A/B TOKEN REDUCTION BENCHMARK REPORT');
@@ -68,7 +72,11 @@ for (const stepNum of milestones) {
 console.log('-'.repeat(80));
 console.log('');
 console.log('Conclusions:');
-console.log('• StateEngine maintains O(1) bounded per-step prompt size (~3.5k tokens vs >100k tokens).');
+console.log(
+  '• StateEngine maintains O(1) bounded per-step prompt size (~3.5k tokens vs >100k tokens).',
+);
 console.log('• Cumulative token consumption drops from quadratic O(T^2) to linear O(T).');
-console.log('• 50-step workflows achieve ~78% token savings; 100-step workflows achieve ~89% token savings.');
+console.log(
+  '• 50-step workflows achieve ~78% token savings; 100-step workflows achieve ~89% token savings.',
+);
 console.log('='.repeat(80));

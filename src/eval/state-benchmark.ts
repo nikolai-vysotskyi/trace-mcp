@@ -22,10 +22,30 @@ export interface TaskScenario {
 }
 
 export const BENCHMARK_SCENARIOS: TaskScenario[] = [
-  { name: 'Symbol refactoring & usages fix', stepsCount: 15, avgToolOutputTokens: 650, avgToolCallTokens: 80 },
-  { name: 'New feature addition with tests', stepsCount: 25, avgToolOutputTokens: 800, avgToolCallTokens: 90 },
-  { name: 'Architecture migration & edge resolvers', stepsCount: 50, avgToolOutputTokens: 950, avgToolCallTokens: 100 },
-  { name: 'Multi-service dependency graph audit', stepsCount: 100, avgToolOutputTokens: 1100, avgToolCallTokens: 120 },
+  {
+    name: 'Symbol refactoring & usages fix',
+    stepsCount: 15,
+    avgToolOutputTokens: 650,
+    avgToolCallTokens: 80,
+  },
+  {
+    name: 'New feature addition with tests',
+    stepsCount: 25,
+    avgToolOutputTokens: 800,
+    avgToolCallTokens: 90,
+  },
+  {
+    name: 'Architecture migration & edge resolvers',
+    stepsCount: 50,
+    avgToolOutputTokens: 950,
+    avgToolCallTokens: 100,
+  },
+  {
+    name: 'Multi-service dependency graph audit',
+    stepsCount: 100,
+    avgToolOutputTokens: 1100,
+    avgToolCallTokens: 120,
+  },
 ];
 
 export interface BenchmarkResult {
@@ -72,7 +92,8 @@ export function runSimulation(
     // StateEngine:
     // Prompt at turn t = baseSystemPrompt + stateMarkdown + min(t - 1, slidingWindowCalls) * perStepToolTokens
     const recentCalls = Math.min(t - 1, slidingWindowCalls);
-    const statePrompt = baseSystemPromptTokens + stateMarkdownTokens + recentCalls * perStepToolTokens;
+    const statePrompt =
+      baseSystemPromptTokens + stateMarkdownTokens + recentCalls * perStepToolTokens;
     stateCum += statePrompt;
 
     const savings = ((reactCum - stateCum) / reactCum) * 100;

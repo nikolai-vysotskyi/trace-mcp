@@ -105,12 +105,18 @@ describe('StateEngine SQLite Storage and Lifecycle', () => {
   it('records dead ends using addDeadEnd', () => {
     engine.initState('TRA-596', 'Build State Engine');
 
-    const res = engine.addDeadEnd('TRA-596', 'Out of memory during bulk parse', 'Pure in-memory map');
+    const res = engine.addDeadEnd(
+      'TRA-596',
+      'Out of memory during bulk parse',
+      'Pure in-memory map',
+    );
     expect(res.success).toBe(true);
     expect(res.version).toBe(2);
     expect(res.state.blockers_and_dead_ends.dead_ends?.length).toBe(1);
     expect(res.state.blockers_and_dead_ends.dead_ends?.[0]?.approach).toBe('Pure in-memory map');
-    expect(res.state.blockers_and_dead_ends.dead_ends?.[0]?.reason).toBe('Out of memory during bulk parse');
+    expect(res.state.blockers_and_dead_ends.dead_ends?.[0]?.reason).toBe(
+      'Out of memory during bulk parse',
+    );
   });
 
   it('notifies listeners on state changes', () => {
