@@ -1,7 +1,7 @@
 ---
 title: "trace-mcp Configuration Reference — all config options (works with none)"
 description: "Every trace-mcp config option in .trace-mcp.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. Configuration is optional; trace-mcp works out of the box for standard projects."
-updated: 2026-08-31
+updated: 2026-09-01
 ---
 
 # Configuration
@@ -495,9 +495,13 @@ What escalation cannot do is widen `tools.exclude`. Exclusion stays a hard
 restriction; `load_tools` reports those names under `blocked` and leaves them
 off. If you want a tool gone, exclude it — don't rely on the preset.
 
-Measured `tools/list` cost of each preset on this repo (serialized chars,
-2026-08-29): `minimal` 34.0k, `review` 37.3k, `architecture` 44.3k, `dev` 51.3k,
-`security` 41.5k, `design` 24.8k, `perf` 32.3k, `standard` 64.6k, `full` 157.1k.
+Measured `tools/list` cost of each preset on this repo (serialized chars, then
+o200k tokens, 2026-09-01): `design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
+34.0k / 7.8k, `review` 37.3k / 8.6k, `security` 41.5k / 9.6k, `architecture`
+44.3k / 10.2k, `dev` 51.3k / 11.9k, `standard` 64.6k / 14.9k, `full` 157.7k /
+36.3k. Against `full`, that is a 67% cut on the widest role preset (`dev`) and
+86% on the narrowest (`design`) — framework-gated tools are excluded, so a
+project that detects the matching framework pays more.
 `load_tools` itself is 0.9k of that — the price of making the other 123k optional.
 
 ### Client profiles
