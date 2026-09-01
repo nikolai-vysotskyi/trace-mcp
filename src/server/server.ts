@@ -40,7 +40,6 @@ import { HermesSessionProvider } from '../session/providers/hermes.js';
 import { getSessionProviderRegistry } from '../session/providers/registry.js';
 import { flushSessionSummary } from '../session/resume.js';
 import { SessionTracker } from '../session/tracker.js';
-import { resolvePreset } from '../tools/project/presets.js';
 import { registerAdvancedTools } from '../tools/register/advanced.js';
 import { registerAnalysisTools } from '../tools/register/analysis.js';
 import { registerCoreTools } from '../tools/register/core.js';
@@ -61,7 +60,7 @@ import { createExploredTracker } from './explored-tracker.js';
 import { startHeartbeat } from './heartbeat.js';
 import { buildInstructions } from './instructions.js';
 import { installRetiredToolHints } from './retired-tools.js';
-import { resolvePresetName } from './tool-filter.js';
+import { resolveSessionPreset } from './tool-filter.js';
 import { installToolGate } from './tool-gate.js';
 import type { MetaContext, ProjectRelay, ServerContext, ToolHandlerMap } from './types.js';
 
@@ -526,9 +525,9 @@ export function createServer(
   // Install tool gate (preset filtering, description overrides, savings/journal wrapping)
   // Single source of truth for the default, shared with the daemon proxy's
   // per-session filter — the two used to spell it out separately.
-  const presetName = resolvePresetName(config);
-  const presetResult = resolvePreset(presetName);
-  const activePreset = presetResult ?? 'all';
+  // Unknown names fall back to the default surface and warn (TRA-648) — never
+  // to `full`, which silently made the cheap-by-request session the expensive one.
+  const { name: presetName, tools: activePreset } = resolveSessionPreset(config);
 
   // Status sentinel — guard hook uses this to detect a live, healthy trace-mcp.
   // Records tool-call counters + last successful call timestamp so the v0.8+
