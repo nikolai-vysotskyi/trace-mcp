@@ -13,7 +13,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run",
+    "test": "node scripts/test-quiet.mjs",
+    "test:verbose": "vitest run",
     "test:watch": "vitest",
     "test:recall": "vitest run tests/recall-harness/recall.test.ts",
     "test:recall:report": "tsx tests/recall-harness/runner.ts",
