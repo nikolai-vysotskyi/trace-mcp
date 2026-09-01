@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-09-01T11:54:29.829Z",
+  "task_count": 18,
+  "categories": {
+    "bugfix": 5,
+    "refactoring": 4,
+    "feature": 5,
+    "test": 4
+  },
+  "model": "claude-sonnet-4-5",
+  "prompt_usd_per_mtok": 3,
+  "completion_usd_per_mtok": 15,
+  "group_a_prompt_tokens": 2525044,
+  "group_b_prompt_tokens": 837962,
+  "group_a_completion_tokens": 35098,
+  "group_b_completion_tokens": 207122,
+  "prompt_savings_pct": 66.8,
+  "group_a_total_tokens": 2560142,
+  "group_b_total_tokens": 1045084,
+  "overall_token_savings_pct": 59.2,
+  "group_a_mean_tokens_per_task": 142230,
+  "group_b_mean_tokens_per_task": 58060,
+  "group_a_median_tokens": 98489,
+  "group_b_median_tokens": 51559,
+  "group_a_p90_tokens": 299365,
+  "group_b_p90_tokens": 94887,
+  "group_a_mean_cost_usd": 0.4501,
+  "group_b_mean_cost_usd": 0.3123,
+  "group_a_pass_at_1_pct": 100,
+  "group_b_pass_at_1_pct": 100,
+  "group_a_loop_rate_pct": 2.7,
+  "group_b_loop_rate_pct": 0,
+  "group_a_mean_latency_ms": 290,
+  "group_b_mean_latency_ms": 804,
+  "mean_engine_overhead_ms": 0.081,
+  "milestone_profiles": [
+    {
+      "step": 10,
+      "group_a_prompt_mean": 1449,
+      "group_b_prompt_mean": 1039,
+      "savings_pct": 28.3
+    },
+    {
+      "step": 25,
+      "group_a_prompt_mean": 2943,
+      "group_b_prompt_mean": 1041,
+      "savings_pct": 64.6
+    },
+    {
+      "step": 50,
+      "group_a_prompt_mean": 5285,
+      "group_b_prompt_mean": 1067,
+      "savings_pct": 79.8
+    },
+    {
+      "step": 100,
+      "group_a_prompt_mean": 10053,
+      "group_b_prompt_mean": 1036,
+      "savings_pct": 89.7
+    }
+  ]
+}

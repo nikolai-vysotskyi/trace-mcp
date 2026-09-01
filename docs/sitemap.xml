@@ -91,6 +91,12 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://trace-mcp.com/state-context-benchmark.html</loc>
+    <lastmod>2026-09-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://trace-mcp.com/toon-savings.html</loc>
     <lastmod>2026-08-30</lastmod>
     <changefreq>monthly</changefreq>

@@ -23,6 +23,8 @@
     "biome:ci": "biome ci",
     "serve": "tsx src/cli.ts serve",
     "count:tools": "node scripts/count-advertised-tools.mjs",
+    "bench:state": "tsx scripts/bench-state-context.ts",
+    "bench:pr-context": "tsx scripts/bench-pr-context.ts",
     "replay:check": "tsx scripts/replay-eval.ts",
     "replay:update-baseline": "tsx scripts/replay-eval.ts --update-baseline",
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs && node scripts/postinstall-control-plane.mjs",

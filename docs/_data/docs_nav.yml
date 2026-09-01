@@ -19,6 +19,8 @@
   url: /vs/context-mode.html
 - title: PR review context benchmark
   url: /pr-context-benchmark.html
+- title: State context benchmark
+  url: /state-context-benchmark.html
 - title: Cut Claude Code token usage
   url: /reduce-claude-code-token-usage.html
 - title: Supported frameworks
