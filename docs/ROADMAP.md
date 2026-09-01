@@ -103,6 +103,47 @@ August 6), 14 forks — a launch burst that decayed ~10× and stayed flat.
 | --- | --- | --- |
 | 2026-08-28 | _pending GA4 read access_ | Ping verified end to end: published `trace-mcp@2.0.0` carries baked credentials, payload validates against the Measurement Protocol debug endpoint. |
 
+### The funnel — four numbers around that denominator (TRA-645)
+
+Active installs is a denominator with nothing on either side of it. Without
+that, every listing rewrite, hero redesign, README restructure and outreach PR
+is graded on taste. Four numbers fix it, one per stage:
+
+| Stage | Number | Source | Window |
+| --- | --- | --- | --- |
+| Arrivals | unique visitors to the GitHub repo | `acquisition.views_uniques_14d` | rolling 14 d |
+| Installs | first-ever pings | `installs_28d.new` | 28 d |
+| Activation | % of active installs with ≥1 indexed repository | `activation.activated_pct` | 28 d |
+| Retention | day ÷ month active installs | `funnel.retention_dau_mau_pct` | 1 d over 28 d |
+
+**Do not refresh these by hand either.** All four are computed by the same
+daily `ga4-snapshot.yml` run and published under `funnel:` in
+[`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml) —
+that file is where a weekly run reads them, not this page. As of **2026-09-02**
+the first two read 178 arrivals and 15 new installs; activation waits on the
+`repos_indexed` custom dimension being registered in GA4, and retention on the
+first snapshot carrying the new block.
+
+Three things to keep attached to them. The windows differ, so arrivals →
+installs is a direction and not a conversion rate. The ping's credentials are
+public, so all four are inflatable and are a trend, not an audit. And
+`activated_pct` is taken against its own buckets rather than against
+`active_users.month`, because GA4 deduplicates active users within a dimension
+value and not across them — an install that indexes its first repository
+mid-window is counted on both sides.
+
+Activation is the one to watch. It is the only one of the four that measures
+whether an install ever reached the product's value, and it is the ceiling on
+everything downstream of install: if a meaningful share of installs ping day
+after day with zero indexed repositories, that number outranks every capability
+item below.
+
+Acquisition already has a finding. Over two independent 14-day windows
+(2026-08-30 and 2026-09-02) **not one of the twelve directory listings in
+`ops/distribution.md` appears as a referrer** — arrivals come from search,
+Reddit and our own site. New distribution effort belongs where those arrivals
+are; see that file's "Arrivals" column for the limits on that conclusion.
+
 ## Ready to start
 
 ### 1. Scope tool-consolidation candidates into per-tool migration issues (follow-up to TRA-186)
