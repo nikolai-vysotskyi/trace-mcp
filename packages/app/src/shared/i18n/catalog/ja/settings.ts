@@ -323,4 +323,8 @@ export const settings = {
   'schema.logging.max_size.label': 'ログサイズの上限（MB）',
 
   'schema.watch.debounce.label': 'デバウンス（ミリ秒）',
+
+  /* ── Setup wizard ── */
+  'app.setupWizard': "初期セットアップウィザード",
+  'app.runSetupWizard': "ウィザードを実行…",
 } as const;

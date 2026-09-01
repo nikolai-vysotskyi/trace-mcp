@@ -636,21 +636,28 @@ function MenuContent({
   tab,
   appearance,
   onAppearanceChange,
+  onOpenSetupWizard,
 }: {
   tab: GlobalTab;
   appearance: Appearance;
   onAppearanceChange: (next: Appearance) => void;
+  onOpenSetupWizard?: () => void;
 }) {
   return (
     <>
       {tab === 'workspace' && <Workspace />}
       {tab === 'clients' && <Clients />}
       {tab === 'settings' && (
-        <Settings appearance={appearance} onAppearanceChange={onAppearanceChange} />
+        <Settings
+          appearance={appearance}
+          onAppearanceChange={onAppearanceChange}
+          onOpenSetupWizard={onOpenSetupWizard}
+        />
       )}
     </>
   );
 }
+
 
 // ── Project content ───────────────────────────────────────────
 function ProjectContent({
@@ -1167,6 +1174,7 @@ export function App() {
                   tab={globalTab}
                   appearance={appearance}
                   onAppearanceChange={setAppearance}
+                  onOpenSetupWizard={() => setShowOnboarding(true)}
                 />
               </ErrorBoundary>
             )}

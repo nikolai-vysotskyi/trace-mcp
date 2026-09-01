@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   detectMcpClients: (): Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]> =>
     ipcRenderer.invoke('detect-mcp-clients'),
+  guessFirstProject: (): Promise<{ path: string; name: string } | null> =>
+    ipcRenderer.invoke('guess-first-project'),
   getMcpClientStatuses: (
     scope?: 'global' | 'project',
   ): Promise<{

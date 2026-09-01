@@ -341,4 +341,8 @@ export const settings = {
   'schema.logging.max_size.label': 'Tamaño máximo del log (MB)',
 
   'schema.watch.debounce.label': 'Debounce (ms)',
+
+  /* ── Setup wizard ── */
+  'app.setupWizard': "Asistente de configuración inicial",
+  'app.runSetupWizard': "Ejecutar asistente…",
 } as const;
