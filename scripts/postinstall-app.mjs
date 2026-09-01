@@ -241,23 +241,53 @@ for (const dir of new Set(
 if (INSTALLED_APPS.length === 0) process.exit(0);
 
 /**
- * Returns true if the installed trace-mcp.app is currently running.
+ * Returns true if the specific installed trace-mcp.app is currently running.
  *
- * `TRACE_MCP_APP_RUNNING=1` is not a hint but a fact: the Electron app sets it
- * on the npm install it spawns itself, so on that path being alive is known
- * rather than inferred. pgrep stays for `npm i -g trace-mcp` typed in a
- * terminal, where nobody can tell us. It false-negatived once — while the app
- * was the very process driving the install — and this script then renamed a
- * live bundle aside and moved a new one into its place (TRA-431).
+ * `TRACE_MCP_APP_RUNNING=1` is set by the app on the install it spawns itself.
+ * On that path, the running bundle is identified via runningBundlePath().
+ * For terminal installs (`npm i -g trace-mcp`), pgrep finds all active PIDs and
+ * ps resolves their executable path to check if this specific bundle is active.
+ *
+ * Scoped per bundle: when two installed copies exist (e.g. ~/Applications and
+ * /Applications), a running instance of one must not block the other non-running
+ * legacy bundle from being swapped in place.
  */
-function appIsRunning() {
-  if (process.env.TRACE_MCP_APP_RUNNING === '1') return true;
+function isAppPathRunning(appPath) {
+  if (process.env.TRACE_MCP_APP_RUNNING === '1') {
+    const running = runningBundlePath({ pgrepBin: PGREP_BIN, psBin: PS_BIN });
+    if (running) return path.resolve(running) === path.resolve(appPath);
+    return true;
+  }
   try {
-    // pgrep -f matches the full command line; the main binary path is unique enough.
-    const out = execFileSync(PGREP_BIN, ['-f', `${APP_NAME}/Contents/MacOS/`], {
+    const pids = execFileSync(PGREP_BIN, ['-f', `${APP_NAME}/Contents/MacOS/`], {
       stdio: ['ignore', 'pipe', 'ignore'],
-    });
-    return out.toString().trim().length > 0;
+      encoding: 'utf-8',
+      timeout: 5_000,
+    })
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => /^\d+$/.test(line));
+
+    if (pids.length === 0) return false;
+
+    const targetPrefix = path.resolve(appPath) + path.sep;
+    let anyCommResolved = false;
+    for (const pid of pids) {
+      try {
+        const comm = execFileSync(PS_BIN, ['-p', pid, '-o', 'comm='], {
+          stdio: ['ignore', 'pipe', 'ignore'],
+          encoding: 'utf-8',
+          timeout: 5_000,
+        }).trim();
+        if (comm) {
+          anyCommResolved = true;
+          if (comm.startsWith(targetPrefix)) return true;
+        }
+      } catch {}
+    }
+    // If ps answered for any pid and none matched this appPath, it is not running.
+    // If ps failed on all pids (e.g. test stub with only pgrep), fall back to safe true.
+    return !anyCommResolved;
   } catch {
     return false; // pgrep exits 1 when no match
   }
@@ -545,7 +575,7 @@ async function main() {
           // bundle takes seconds, and a user who launches the app during that
           // window would otherwise have the next bundle swapped against a
           // stale "not running" answer — the TRA-431 failure, once per copy.
-          appRunning: appIsRunning(),
+          appRunning: isAppPathRunning(appPath),
           tmpDir,
         });
       } catch {

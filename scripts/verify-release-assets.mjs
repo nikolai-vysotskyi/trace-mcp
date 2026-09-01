@@ -49,11 +49,109 @@ export function expectedAssets(version) {
 }
 
 /**
+ * Verifies that every file target referenced in a channel manifest (latest.yml or
+ * latest-mac.yml) exists in the release assets and has non-zero size.
+ *
+ * @param {string} manifestName
+ * @param {string} manifestContent
+ * @param {Map<string, number>} bySize
+ * @param {string} [version]
+ * @returns {string[]}
+ */
+export function auditChannelManifest(manifestName, manifestContent, bySize, version) {
+  const problems = [];
+  if (!manifestContent || manifestContent.trim().length === 0) {
+    return [`${manifestName} is empty or unreadable`];
+  }
+
+  const stripped = manifestContent
+    .split('\n')
+    .map((line) => {
+      const commentIdx = line.indexOf('#');
+      return commentIdx >= 0 ? line.slice(0, commentIdx) : line;
+    })
+    .join('\n');
+
+  if (version) {
+    const versionMatch = stripped.match(/^\s*version:\s*['"]?([^\s'"]+)['"]?/m);
+    const manifestVersion = versionMatch ? versionMatch[1] : null;
+    if (!manifestVersion) {
+      problems.push(`${manifestName} is missing a top-level 'version' field`);
+    } else if (manifestVersion !== version) {
+      problems.push(
+        `${manifestName} version '${manifestVersion}' does not match release version '${version}'`,
+      );
+    }
+  }
+
+  const matches = Array.from(
+    stripped.matchAll(/^\s*(?:-\s*)?(?:url|path):\s*['"]?([^\s'"]+)['"]?/gm),
+  );
+  const filenames = matches
+    .map((m) => m[1].trim())
+    .filter((f) => !f.startsWith('http://') && !f.startsWith('https://'));
+
+  if (filenames.length === 0) {
+    return [`${manifestName} contains no valid file targets (url or path)`];
+  }
+
+  if (version) {
+    if (manifestName === 'latest.yml') {
+      const expectedExe = `trace-mcp.Setup.${version}.exe`;
+      if (!filenames.includes(expectedExe)) {
+        problems.push(
+          `${manifestName} does not reference the expected Windows installer '${expectedExe}'`,
+        );
+      }
+    } else if (manifestName === 'latest-mac.yml') {
+      const expectedIntel = `trace-mcp-${version}-mac.zip`;
+      const expectedArm = `trace-mcp-${version}-arm64-mac.zip`;
+      if (!filenames.includes(expectedIntel)) {
+        problems.push(
+          `${manifestName} does not reference the expected Intel macOS update '${expectedIntel}'`,
+        );
+      }
+      if (!filenames.includes(expectedArm)) {
+        problems.push(
+          `${manifestName} does not reference the expected Apple Silicon macOS update '${expectedArm}'`,
+        );
+      }
+    }
+  } else {
+    if (manifestName === 'latest.yml') {
+      const hasExe = filenames.some((f) => f.endsWith('.exe'));
+      if (!hasExe) {
+        problems.push(`${manifestName} contains no Windows installer (.exe) target`);
+      }
+    } else if (manifestName === 'latest-mac.yml') {
+      const hasZip = filenames.some((f) => f.endsWith('-mac.zip'));
+      if (!hasZip) {
+        problems.push(`${manifestName} contains no macOS update (-mac.zip) target`);
+      }
+    }
+  }
+
+  for (const filename of filenames) {
+    if (!bySize.has(filename)) {
+      problems.push(
+        `${manifestName} references '${filename}', but it is missing from release assets`,
+      );
+    } else if ((bySize.get(filename) ?? 0) <= 0) {
+      problems.push(
+        `${manifestName} references '${filename}', but the release asset is empty (0 bytes)`,
+      );
+    }
+  }
+  return problems;
+}
+
+/**
  * @param {string} version
  * @param {Array<{name: string, size?: number}>} assets  `gh release view --json assets`
+ * @param {Record<string, string>} [manifestContents] Optional map of channel filename -> raw yaml content
  * @returns {string[]} human-readable problems; empty means the release is complete
  */
-export function auditReleaseAssets(version, assets) {
+export function auditReleaseAssets(version, assets, manifestContents = {}) {
   const bySize = new Map(assets.map((a) => [a.name, a.size ?? 0]));
   const problems = [];
   for (const name of expectedAssets(version)) {
@@ -68,6 +166,13 @@ export function auditReleaseAssets(version, assets) {
       problems.push(`empty or truncated: ${name} (${bySize.get(name)} bytes)`);
     }
   }
+
+  for (const [manifestName, content] of Object.entries(manifestContents)) {
+    if (content !== undefined) {
+      problems.push(...auditChannelManifest(manifestName, content, bySize, version));
+    }
+  }
+
   return problems;
 }
 
@@ -82,7 +187,34 @@ async function main() {
   for await (const chunk of process.stdin) raw += chunk;
   const assets = JSON.parse(raw);
 
-  const problems = auditReleaseAssets(version, assets);
+  const manifestContents = {};
+  const fetchErrors = [];
+
+  for (const manifestName of ['latest.yml', 'latest-mac.yml']) {
+    const asset = Array.isArray(assets) ? assets.find((a) => a.name === manifestName) : null;
+    if (!asset) continue; // Will be reported as missing by auditReleaseAssets
+    const url = asset.browser_download_url || asset.url;
+    if (!url) {
+      fetchErrors.push(`cannot download ${manifestName}: no download URL in asset record`);
+      continue;
+    }
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': 'trace-mcp' } });
+      if (!res.ok) {
+        fetchErrors.push(
+          `failed to download ${manifestName} (${url}): HTTP ${res.status} ${res.statusText}`,
+        );
+      } else {
+        manifestContents[manifestName] = await res.text();
+      }
+    } catch (err) {
+      fetchErrors.push(
+        `failed to download ${manifestName} (${url}): ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  const problems = [...fetchErrors, ...auditReleaseAssets(version, assets, manifestContents)];
   if (problems.length > 0) {
     console.error(`Release ${version} is incomplete — updates would silently no-op:`);
     for (const p of problems) console.error(`  ${p}`);
