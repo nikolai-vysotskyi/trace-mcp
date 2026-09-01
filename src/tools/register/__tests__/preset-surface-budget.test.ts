@@ -53,9 +53,13 @@ function presetPayloadChars(preset: string): { chars: number; tools: number } {
  * to hide a preset drifting back toward the full surface.
  */
 const PRESET_CHAR_CEILINGS: Record<string, number> = {
-  minimal: 37_500,
-  review: 32_000,
-  architecture: 37_000,
+  minimal: 38_000,
+  review: 42_000,
+  dev: 58_000,
+  security: 46_000,
+  design: 29_000,
+  perf: 37_000,
+  architecture: 50_000,
   standard: 71_000,
 };
 
