@@ -138,4 +138,26 @@ path: trace-mcp-Setup-3.1.1.exe
       "latest.yml references 'trace-mcp-Setup-3.1.1.exe', but it is missing from release assets",
     ]);
   });
+
+  it('rejects empty, unreadable, or targetless channel manifests', () => {
+    expect(auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': '' })).toEqual([
+      'latest.yml is empty or unreadable',
+    ]);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': 'foo: bar\nbaz: 123' }),
+    ).toEqual(['latest.yml contains no valid file targets (url or path)']);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
+        'latest.yml': 'path: trace-mcp-3.1.1-arm64.dmg',
+      }),
+    ).toEqual(['latest.yml contains no Windows installer (.exe/.zip) target']);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
+        'latest-mac.yml': 'path: trace-mcp-3.1.1-arm64.dmg',
+      }),
+    ).toEqual(['latest-mac.yml contains no macOS zip target']);
+  });
 });
