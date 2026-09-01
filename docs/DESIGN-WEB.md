@@ -25,35 +25,72 @@ no shadows.
 
 Two surfaces implement these: `docs/index.html` (landing, inline `<style>`) and
 `docs/assets/css/docs.css` (every documentation page). The values must match.
+A token that exists in only one of them is a component token and must say so
+here — otherwise it reads as drift. There is exactly one: `--accent-solid`.
 
-| Token | Dark | Light |
-|---|---|---|
-| `--black` (page) | `#000000` | `#F5F5F5` |
-| `--surface` | `#111111` | `#FFFFFF` |
-| `--surface-raised` | `#1A1A1A` | `#F0F0F0` |
-| `--border` | `#222222` | `#E8E8E8` |
-| `--border-visible` | `#333333` | `#CCCCCC` |
-| `--text-disabled` | `#666666` | `#6D6D6D` |
-| `--text-secondary` | `#999999` | `#595959` |
-| `--text-primary` | `#E8E8E8` | `#1A1A1A` |
-| `--text-display` | `#FFFFFF` | `#000000` |
-| `--accent` | `#D71921` | `#B3151C` |
+Surfaces — a text token has to clear its ratio against **every** one of these
+it is painted on, because all three are in use on the same page:
 
-**Compute a light-mode ratio against the surface the text actually sits on.**
-Light mode has three of them — the page is `#F5F5F5`, a card or table or code
-block is `#FFFFFF`, and a raised cell is `#F0F0F0`. `#FFFFFF` is the most
-forgiving of the three and the one a colour picker defaults to, so a value
-checked only against white lands ~0.4 short on the page it ships on. That is
-how `--text-disabled` shipped at `#767676`: recorded here as "4.54:1", which
-is its ratio on `#FFFFFF` — on the `#F5F5F5` page it is 4.166:1, and every
-`scroll →` and `SEE ALSO` label on all 17 doc pages sat under AA for months
-while this file said they passed. `#6D6D6D` clears 4.5:1 on all three
-(4.75 / 5.17 / 4.54). Quote the worst of the three, not the best.
+| | Page | Surface | Raised |
+|---|---|---|---|
+| Dark | `--black` `#000000` | `--surface` `#111111` | `--surface-raised` `#1A1A1A` |
+| Light | `--black` `#F5F5F5` | `--surface` `#FFFFFF` | `--surface-raised` `#F0F0F0` |
 
-One light value still diverges on purpose: `--accent` is `#B3151C` on doc
-pages and `#D71921` on the landing. Both pass at body size (6.3:1 and 4.76:1
-on `#F5F5F5`); the docs run the darker one because a doc page is a wall of
-inline links, the landing runs the brand red because it is the brand.
+Borders: `--border` `#222222` / `#E8E8E8`, `--border-visible` `#333333` /
+`#CCCCCC`. Not text — no ratio applies.
+
+Text and accent tokens, with the ratio against each of the three surfaces of
+their own theme, **in the column order of the surface table above — page,
+surface, raised.** The governing number is bold.
+
+| Token | Dark | page / surface / raised | Light | page / surface / raised |
+|---|---|---|---|---|
+| `--text-disabled` | `#848484` | 5.61 / 5.05 / **4.65** | `#6D6D6D` | 4.75 / 5.17 / **4.54** |
+| `--text-secondary` | `#999999` | 7.37 / 6.63 / **6.11** | `#595959` | 6.42 / 7.00 / **6.15** |
+| `--text-primary` | `#E8E8E8` | 17.14 / 15.41 / **14.20** | `#1A1A1A` | 15.96 / 17.40 / **15.27** |
+| `--text-display` | `#FFFFFF` | 21.00 / 18.88 / **17.40** | `#000000` | 19.26 / 21.00 / **18.43** |
+| `--accent` | `#E54047` | 5.16 / 4.64 / **4.27** | `#B3151C` | 6.33 / 6.91 / **6.06** |
+
+**`--surface-raised` is always the worst of the three,** in both themes — it is
+the lightest surface in dark and the darkest in light, so it is the one every
+foreground has the least room against. Never quote a token's ratio from `page`
+because it is the biggest number.
+
+`--accent` in dark is the one token that does **not** clear 4.5:1 everywhere:
+`#E54047` on `--surface-raised` is 4.27. Red text is therefore not allowed on
+`--surface-raised` in dark. It is not currently used there anywhere; the
+contrast sweep below is what keeps it that way. Raising the red further to
+clear `#1A1A1A` too would push it to roughly `#EA5057`, which reads pink
+rather than red, and red being *this* red is not negotiable.
+
+**`--accent-solid` `#D71921` is not in the table above and is not a shared
+token.** It is the brand red as a **fill** — the landing's primary button —
+so it is never a foreground and has no ratio against a surface. The only
+ratio it has is white text on it: **5.18**. It lives in `docs/index.html`
+alone and is deliberately absent from `docs/assets/css/docs.css`, which has
+no filled-red component; adding it there would be a dead token. If a doc page
+ever grows one, define it there in the same PR.
+
+`--accent` (link/glyph red) is lighter in dark and darker in light because a
+foreground has to fight its background; a fill does not. Never use
+`--accent-solid` as a text colour, and never use `--accent` as a fill under
+white text — `#E54047` behind white is 4.07 and fails.
+
+**Compute a ratio against the surface the text actually sits on, in both
+themes.** `#FFFFFF` in light and `#000000` in dark are the most forgiving
+backgrounds of their theme and the ones a colour picker defaults to, so a
+value checked only against them lands short on the surfaces it ships on. That
+error has now shipped twice:
+
+- `--text-disabled` light shipped at `#767676`, recorded here as "4.54:1" —
+  its ratio on `#FFFFFF`. On the `#F5F5F5` page it is 4.17, and every
+  `scroll →` and `SEE ALSO` label on all 17 doc pages sat under AA for months
+  while this file said they passed.
+- `--text-disabled` dark shipped at `#666666` with **no ratio recorded at
+  all**: 3.66 on `#000000`, 3.29 on `#111111`. That is the `✗` capability
+  mark — 161 of them on `comparisons.html` alone — plus every `[OK]` bracket,
+  `SCROLL →`, `LICENSE`, and the terminal's comment lines. The "no" answer in
+  our own comparison table was the least readable text on the site.
 
 Dark mode is the default. Light is opt-in and equally first-class — never
 ship a change checked in one mode only.
@@ -225,7 +262,12 @@ WebP conversion.
 - Toast popups — use inline `[SAVED]` / `[ERROR: …]`.
 - Filled or multi-colour icons, emoji as UI — including `✅` / `❌` / `⚠️`
   as capability marks in a table.
-- A second accent colour. Red is the only one.
+- A second accent colour. Red is the only one. `--accent` and `--accent-solid`
+  are two lightnesses of the same red for two jobs (§1), not two accents.
+- `--accent` as a fill under white text, or `--accent-solid` as a text colour.
+- Red text on `--surface-raised` in dark — 4.27:1, the one gap in §1.
+- A colour value recorded with a ratio against a background it is not painted
+  on. Quote the worst of the three surfaces, in both themes.
 - `border-radius` over 16px on a card.
 - Spring or bounce easing. Only `cubic-bezier(0.25, 0.1, 0.25, 1)`.
 - Parallax or scroll-jacking.
@@ -248,12 +290,39 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] Exactly one image of a light/dark pair has computed `display: block` —
       read it off the element, in each theme.
 - [ ] Theme choice survives landing → doc page navigation.
-- [ ] Body text ≥ 4.5:1, large text ≥ 3:1, in both — measured by walking the
-      rendered page and reading each element's own computed `color` against
-      its nearest opaque ancestor background, not by checking the token table
-      against one assumed surface. The token table has been wrong twice; the
-      DOM has not. Sweep the landing separately from a doc page: it carries
-      its own copy of the tokens (§7) and has drifted from this table before.
+- [ ] Contrast sweep is green. Not a claim — a command:
+
+      ```
+      node scripts/contrast-sweep.mjs
+      ```
+
+      It serves `docs/` locally, renders the landing and every doc page —
+      recursively, so `docs/vs/*` is included — in headless Chrome in both
+      themes, and for every element carrying its own text reads the computed
+      `color` against its nearest opaque ancestor background, the real
+      painted background rather than an assumed surface. Body text needs
+      4.5:1, large text (≥24px, or ≥18.66px bold) 3:1, with no tolerance:
+      4.49 fails. `aria-hidden="true"` subtrees are skipped as decoration.
+      Exit code is non-zero on any failure; pass paths
+      (`node scripts/contrast-sweep.mjs / /comparisons.html`) for a subset.
+
+      **Know what it does not cover.** Without a Jekyll build it re-renders
+      Markdown with its own small converter, so a construct that converter
+      does not implement paints no element and any selector styling that
+      construct goes untested. It is a regression gate on the token ladder,
+      not proof of full coverage. For the real published DOM, build the site
+      first — the sweep serves `docs/_site` verbatim when it exists. Run it
+      that way before changing anything structural, not just a token.
+
+      This bullet used to say "measure it, don't check the token table" and
+      the table was still wrong in both themes at the time. Eyeballing a grey
+      is exactly what failed here, twice — so the check is a command that
+      fails, not a sentence that asks you to be careful. The landing is swept
+      alongside the doc pages because it carries its own copy of the tokens
+      (§7) and has drifted from this table before.
+- [ ] A new `aria-hidden` on anything the sweep now skips is deliberate
+      decoration, not a way to silence a failure. Only two exist: the YC badge
+      mark and the landing's 400px ghost `94%`.
 
 **Widths**
 - [ ] Desktop (1440px) and narrow (≤500px) both screenshotted.
@@ -338,3 +407,47 @@ motion driven from JavaScript. The landing page animates a stat count-up over
 1400ms and staggers a segmented bar at 30ms per cell from `setTimeout`; both
 read a `reduceMotion` flag off `matchMedia`. Any new JS-driven motion has to
 read it too — the media query alone will not catch it.
+
+---
+
+## 8. The landing hero
+
+Numbered last because §1–§7 were written before this section existed; renumbering
+would break the `§` references inside this file and the one in `docs/index.html`.
+Read it as the landing-page counterpart to §2.
+
+**Two actions. Never three** (TRA-609). The hero carries the DMG button and the
+install command, and nothing else. It shipped with four competing elements —
+`Download for macOS`, `Analyze your AI system`, `View on GitHub`, and the install
+line — which is not a hierarchy, it is a row. Both of the removed buttons already
+had a home: the header links to the repo and to `#install`, on desktop and on a
+phone. Check that before adding a fifth thing back.
+
+**The two actions do not look alike.** The DMG is `.btn .btn-primary .btn-lg` — a
+red pill, the one red on the screen. The install line is `.hero-install` — a
+technical 8px box on `--surface` with a `$` prompt, the command, and a `COPY`
+label behind a hairline. A pill next to a pill reads as two buttons of equal
+weight; that is what the dashed pill it replaced did.
+
+**`.hero-install` is a `<button>`.** It was a `<span onclick>`, so the only way to
+copy the command was a mouse — no tab stop, no focus ring, nothing for a screen
+reader. The `$` is `aria-hidden`; the `copy` label is `aria-live="polite"` so the
+`copied` state is announced.
+
+**It is visible on a phone.** It used to be `display: none` under 700px, which
+left a phone visitor with a DMG button and no copyable command at all. Below
+700px the row becomes one column, both actions go full width, and `.copy` pins
+right on `margin-left: auto`.
+
+**Off macOS the DMG button is removed** (TRA-440) and `.hero-install` gains
+`.is-primary`, which raises its border to `--text-display`. Without that the
+hero has no primary action anywhere outside a Mac. When you read that border
+back in the browser, wait out the 200ms `border-color` transition — a
+`getComputedStyle` fired in the same tick as the `classList.add` returns the
+*start* colour and looks like the rule never matched.
+
+**The headline is measured, not guessed.** `clamp(36px, 5.2vw, 60px)` over
+`max-width: 900px` is the pair that breaks the current wording after
+"intelligence" and nowhere else; at `72px/820px` it ran to three lines and split
+"AI coding agents" across two of them. Change the wording, re-measure the line
+count at 1440px and at 390px.
