@@ -6,7 +6,7 @@ export const workspace = {
   startDaemon: 'Daemon starten',
   startingDaemon: 'Wird gestartet…',
   daemonInstallingTitle: 'trace-mcp wird eingerichtet',
-  daemonInstallingSubtitle: 'Der Hintergrunddienst, der Ihre Projekte indiziert, wird installiert. Das passiert einmal und dauert ein paar Sekunden.',
+  daemonInstallingSubtitle: 'Der Hintergrunddienst, der deine Projekte indexiert, wird installiert. Das passiert einmal und dauert ein paar Sekunden.',
   daemonInstallFailedTitle: 'Einrichtung nicht abgeschlossen',
   daemonInstallRetry: 'Erneut versuchen',
   daemonInstallRetrying: 'Wird eingerichtet…',
@@ -28,7 +28,7 @@ export const workspace = {
   noMatchSubtitle: 'Setze den Filter zurück, um wieder alle Projekte zu sehen.',
 
   // ── Toolbar ─────────────────────────────────────────────────────────────
-  searchProjects: 'Projekte durchsuchen',
+  searchProjects: 'Projekte suchen',
   filter: 'Filter',
   viewMode: 'Ansicht',
   viewTable: 'Tabelle',

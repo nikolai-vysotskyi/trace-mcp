@@ -55,8 +55,8 @@ export const guard = {
 
   'bypass.resumes': 'Wird {{when}} fortgesetzt',
   'bypass.resumeNow': 'Jetzt fortsetzen',
-  'bypass.pause_one': 'Für {{count}} Minute pausieren',
-  'bypass.pause_other': 'Für {{count}} Minuten pausieren',
+  'bypass.pause_one': '{{count}} Min. pausieren',
+  'bypass.pause_other': '{{count}} Min. pausieren',
 
   'until.underMinute': 'in weniger als einer Minute',
   'until.minutes_one': 'in {{count}} Minute',

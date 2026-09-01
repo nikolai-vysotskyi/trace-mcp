@@ -44,7 +44,7 @@ export const stats = {
   total: '合計',
   byType: '種類別',
   confidenceHistogram: '確信度の分布',
-  topLinked: 'リンクの多い決定事項 上位 5 件',
+  topLinked: 'リンクの多い決定事項 上位5件',
   noLinkedDecisions: 'リンクされた決定事項はまだありません。',
   colTitle: 'タイトル',
   colType: '種類',
@@ -67,7 +67,7 @@ export const stats = {
 
   deadExports: '未使用のエクスポート',
   untestedSymbols: '未テストのシンボル',
-  complexityHotspots: '複雑度の高い箇所 上位 10 件',
+  complexityHotspots: '複雑度の高い箇所 上位10件',
   noComplexityData: '複雑度のデータは記録されていません。',
   colSymbol: 'シンボル',
   colLocation: '場所',
@@ -75,7 +75,7 @@ export const stats = {
 
   languageDistribution: '言語の内訳',
   frameworkDistribution: 'フレームワークの内訳',
-  largestFiles: '大きいファイル 上位 10 件（シンボル数順）',
+  largestFiles: '大きいファイル 上位10件（シンボル数順）',
   colPath: 'パス',
   colSymbols: 'シンボル',
 } as const;

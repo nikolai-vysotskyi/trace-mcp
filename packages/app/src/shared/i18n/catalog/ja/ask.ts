@@ -1,9 +1,9 @@
 export const ask = {
-  title: 'Ask',
+  title: '質問',
 
   noProviderTitle: 'AI プロバイダを接続',
   noProviderSubtitle:
-    'Ask は、あなたが用意したモデルを使ってこのプロジェクトに関する質問に答えます。設定でプロバイダを追加すると有効になります。',
+    '「質問」機能は、設定したモデルを使ってこのプロジェクトに関する質問に答えます。設定でプロバイダを追加すると有効になります。',
   openAiSettings: 'AI の設定を開く',
 
   chats: 'チャット',
@@ -48,9 +48,9 @@ export const ask = {
   noContextTitle: 'コンテキストはまだありません',
   noContextSubtitle:
     'メッセージを送信すると、モデルが読んだファイル・シンボル・決定事項がここに表示されます。スラッシュコマンドはコンテキストを取得しません。',
-  filesRead: '読んだファイル',
-  noFilesRead: 'ファイルは読まれませんでした。',
-  symbolsRead: '読んだシンボル',
+  filesRead: '読み取ったファイル',
+  noFilesRead: 'ファイルは読み取られませんでした。',
+  symbolsRead: '読み取ったシンボル',
   decisionsConsulted: '参照した決定事項',
 
   loadSessionFailed: 'セッションを読み込めませんでした',

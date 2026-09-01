@@ -103,8 +103,8 @@ export const workspace = {
 
   bulkSelected_other: '{{n}} 件を選択中',
   bulkRemove: '削除',
-  bulkReindexFailed: '少なくとも 1 件のプロジェクトで再インデックスが失敗しました',
-  bulkRemoveFailed: '少なくとも 1 件のプロジェクトで削除が失敗しました',
+  bulkReindexFailed: '少なくとも1件のプロジェクトで再インデックスに失敗しました',
+  bulkRemoveFailed: '少なくとも1件のプロジェクトで削除に失敗しました',
   bulkExportJson: 'JSON で書き出す',
   bulkExportCsv: 'CSV で書き出す',
   bulkClear: '選択を解除',
