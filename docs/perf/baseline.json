@@ -152,7 +152,61 @@
           "main_cpu_idle_pct": 0
         }
       ],
-      "notes": "Measured with this run's own AskTab code split applied, so it is recorded against the split commit (39026ebd), not its pre-split parent ccc3b45b \u2014 re-measuring at ccc3b45b gives ~2270 KB eager and would read as a regression. renderer_bundle_kb 1700 -> 2272 (+34%) is a real regression against run 3 and is what this run went after: the entry chunk alone had grown 740 -> 1316 KB since 3.2.0. react-markdown + remark-gfm (the Ask tab's only dependency, ~24% of the entry chunk's source) were eagerly bundled; putting AskTab behind React.lazy moved 168 KB out of the startup path (entry 1316 -> 1148 KB). renderer_bundle_kb is unchanged by that fix by construction \u2014 it sums every file on disk \u2014 so this run adds renderer_eager_kb (entry + everything index.html preloads): 2270 -> 2102 KB. Trend renderer_eager_kb from here; renderer_bundle_kb stays as the total-weight check. renderer_fcp_ms 216 vs run 3's 220 and vs 168 measured on the same machine an hour earlier pre-fix: the split does not move FCP, it only removes bytes \u2014 same shape as the 2026-08-28 cosmos.gl negative result. Machine load 6-22 throughout (a dozen sibling agent checkouts), so cold_start_ms/window_interactive_ms are sanity checks against the 3 s ceiling only. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour still null: a foreign daemon held 3741 for this whole run. Process-tree snapshot (uncontrolled, ambient machine, do not trend): the installed app idles at 315 MB across 3 processes, fine; a `serve-http` daemon serving only /tmp/tmcpchk/demo held 884 MB RSS, past the 500 MB idle ceiling. Not filed as an issue because that daemon's history is unknown on a machine running a dozen agents - next run should reproduce it in a controlled scenario before filing."
+      "notes": "Measured with this run's own AskTab code split applied, so it is recorded against the split commit (39026ebd), not its pre-split parent ccc3b45b — re-measuring at ccc3b45b gives ~2270 KB eager and would read as a regression. renderer_bundle_kb 1700 -> 2272 (+34%) is a real regression against run 3 and is what this run went after: the entry chunk alone had grown 740 -> 1316 KB since 3.2.0. react-markdown + remark-gfm (the Ask tab's only dependency, ~24% of the entry chunk's source) were eagerly bundled; putting AskTab behind React.lazy moved 168 KB out of the startup path (entry 1316 -> 1148 KB). renderer_bundle_kb is unchanged by that fix by construction — it sums every file on disk — so this run adds renderer_eager_kb (entry + everything index.html preloads): 2270 -> 2102 KB. Trend renderer_eager_kb from here; renderer_bundle_kb stays as the total-weight check. renderer_fcp_ms 216 vs run 3's 220 and vs 168 measured on the same machine an hour earlier pre-fix: the split does not move FCP, it only removes bytes — same shape as the 2026-08-28 cosmos.gl negative result. Machine load 6-22 throughout (a dozen sibling agent checkouts), so cold_start_ms/window_interactive_ms are sanity checks against the 3 s ceiling only. ui_p95_ms / heap_after_workload_mb / heap_growth_mb_per_hour still null: a foreign daemon held 3741 for this whole run. Process-tree snapshot (uncontrolled, ambient machine, do not trend): the installed app idles at 315 MB across 3 processes, fine; a `serve-http` daemon serving only /tmp/tmcpchk/demo held 884 MB RSS, past the 500 MB idle ceiling. Not filed as an issue because that daemon's history is unknown on a machine running a dozen agents - next run should reproduce it in a controlled scenario before filing."
+    },
+    {
+      "date": "2026-09-01T10:10:44.186Z",
+      "app_version": "3.10.0",
+      "commit": "b4549acd",
+      "env": {
+        "os": "darwin 25.5.0",
+        "arch": "arm64",
+        "node": "22.22.3"
+      },
+      "samples": 3,
+      "metrics": {
+        "cold_start_ms": 613,
+        "window_interactive_ms": 330,
+        "renderer_fcp_ms": 156,
+        "ui_p95_ms": null,
+        "heap_idle_mb": 9.5,
+        "heap_after_workload_mb": null,
+        "heap_growth_mb_per_hour": null,
+        "main_cpu_idle_pct": 0,
+        "renderer_bundle_kb": 2271,
+        "renderer_eager_kb": 2012,
+        "artifact_mb": {
+          "mac_app_unpacked": 478.0,
+          "mac_asar": 5.8,
+          "win": null
+        },
+        "rss_by_role_mb": {
+          "installed_app_idle_total": 380,
+          "installed_app_main": 131,
+          "installed_app_helpers": 249,
+          "mcp_server_http_idle": 765
+        }
+      },
+      "raw_samples": [
+        {
+          "cold_start_ms": 613,
+          "window_interactive_ms": 330,
+          "renderer_fcp_ms": 156
+        },
+        {
+          "cold_start_ms": 602,
+          "window_interactive_ms": 326,
+          "renderer_fcp_ms": 164
+        },
+        {
+          "cold_start_ms": 626,
+          "window_interactive_ms": 330,
+          "renderer_fcp_ms": 156,
+          "heap_idle_mb": 9.5,
+          "main_cpu_idle_pct": 0
+        }
+      ],
+      "notes": "Measured on 3.10.0. Further code-split secondary project tabs (Activity, Insights, MemoryExplorer, Notebook) behind React.lazy, reducing the main renderer entry chunk from 1172 KB down to 1013 KB (gzip 337 -> 299 KB) and moving 88 KB out of startup (renderer_eager_kb 2100 -> 2012 KB). Startup metric renderer_fcp_ms is 156 ms (median of 3, vs 216 ms in run 4). Cold start (613 ms), idle heap (9.5 MB) and idle CPU (0%) remain well within ceilings. Unpacked macOS app artifact size grew to 478 MB due to TRA-438 embedding server-payload (241 MB standalone Node daemon runtime) in Contents/Resources/server so DMG users do not need Node/npm installed. Multi-tab scaling verified via tabs-scale.mjs (1 tab: 571 ms, 2 tabs: 580 ms, 0 reqs/s idle, 0% CPU, clean memory deallocation on tab close)."
     }
   ]
 }

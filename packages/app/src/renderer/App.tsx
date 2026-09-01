@@ -35,7 +35,6 @@ import {
   writeSidebarCollapsed,
   writeSidebarWidth,
 } from './sidebar-prefs.js';
-import { Activity } from './tabs/Activity';
 import { Clients } from './tabs/Clients';
 import {
   DEFAULT_GRAPH_GPU_SETTINGS,
@@ -43,18 +42,20 @@ import {
   type GraphExplorerGPUHandle,
   type GraphGPUSettings,
 } from './tabs/GraphExplorerGPU';
-import { Insights } from './tabs/Insights';
-import { MemoryExplorer } from './tabs/MemoryExplorer';
-import { Notebook } from './tabs/Notebook';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
 import { type Appearance, useTheme } from './theme.js';
 import { Workspace } from './workspace/Workspace';
 
-// The Ask tab is the only thing that pulls react-markdown + remark-gfm in, and
-// that stack is ~24% of the renderer entry chunk. Loading it with the tab keeps
-// it out of startup for every window that never opens Ask.
+// Secondary project tabs are code-split behind React.lazy so their component trees and
+// tool feeds are not loaded during window cold start.
+const Activity = lazy(() => import('./tabs/Activity').then((m) => ({ default: m.Activity })));
 const AskTab = lazy(() => import('./tabs/AskTab').then((m) => ({ default: m.AskTab })));
+const Insights = lazy(() => import('./tabs/Insights').then((m) => ({ default: m.Insights })));
+const MemoryExplorer = lazy(() =>
+  import('./tabs/MemoryExplorer').then((m) => ({ default: m.MemoryExplorer })),
+);
+const Notebook = lazy(() => import('./tabs/Notebook').then((m) => ({ default: m.Notebook })));
 
 // ── URL params determine window type ──────────────────────────
 // ?view=menu&tab=workspace → Menu window (sidebar + Workspace/Clients/Settings)
@@ -671,17 +672,13 @@ function ProjectContent({
   onOpenFileInGraph: (filePath: string) => void;
 }) {
   return (
-    <>
+    <Suspense fallback={null}>
       {/* Overview — mount/unmount normally */}
       {tab === 'overview' && (
         <ProjectOverview root={root} onNavigateToService={onNavigateToService} />
       )}
       {/* Ask — chat interface, needs flex layout */}
-      {tab === 'ask' && (
-        <Suspense fallback={null}>
-          <AskTab root={root} />
-        </Suspense>
-      )}
+      {tab === 'ask' && <AskTab root={root} />}
       {/* Activity — live MCP tool-call feed for this project */}
       {tab === 'activity' && <Activity root={root} onOpenFileInGraph={onOpenFileInGraph} />}
       {/* Memory — decisions / corpora / sessions explorer */}
@@ -701,7 +698,7 @@ function ProjectContent({
           />
         </div>
       )}
-    </>
+    </Suspense>
   );
 }
 
