@@ -17,24 +17,22 @@ function sRGBtoLin(c) {
 }
 
 function parseRgb(colorStr) {
-  const match = colorStr.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/);
+  const match = colorStr.match(
+    /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*([\d.]+))?\s*\)/,
+  );
   if (!match) return [0, 0, 0, 1];
   return [
     parseFloat(match[1]),
     parseFloat(match[2]),
     parseFloat(match[3]),
-    match[4] !== undefined ? parseFloat(match[4]) : 1
+    match[4] !== undefined ? parseFloat(match[4]) : 1,
   ];
 }
 
 function blend(fg, bg) {
   const [fr, fgCol, fb, fa] = fg;
   const [br, bgCol, bb] = bg;
-  return [
-    fr * fa + br * (1 - fa),
-    fgCol * fa + bgCol * (1 - fa),
-    fb * fa + bb * (1 - fa)
-  ];
+  return [fr * fa + br * (1 - fa), fgCol * fa + bgCol * (1 - fa), fb * fa + bb * (1 - fa)];
 }
 
 function luminance(rgb) {
@@ -117,8 +115,12 @@ function renderMarkdownToHtml(mdContent) {
     }
 
     if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
-      const cells = line.trim().slice(1, -1).split('|').map(c => c.trim());
-      if (cells.every(c => /^:?-+:?$/.test(c))) {
+      const cells = line
+        .trim()
+        .slice(1, -1)
+        .split('|')
+        .map((c) => c.trim());
+      if (cells.every((c) => /^:?-+:?$/.test(c))) {
         continue;
       }
       inTable = true;
@@ -143,7 +145,12 @@ function renderMarkdownToHtml(mdContent) {
     } else if (/^\d+\.\s/.test(line)) {
       out.push(`<ol><li>${formatInline(line.replace(/^\d+\.\s+/, ''))}</li></ol>`);
     } else if (line.trim().length > 0) {
-      if (line.trim().startsWith('<script') || line.trim().startsWith('</script>') || line.trim().startsWith('{') || line.trim().startsWith('}')) {
+      if (
+        line.trim().startsWith('<script') ||
+        line.trim().startsWith('</script>') ||
+        line.trim().startsWith('{') ||
+        line.trim().startsWith('}')
+      ) {
         out.push(line);
       } else {
         out.push(`<p>${formatInline(line)}</p>`);
@@ -163,8 +170,8 @@ function buildDocHtml(mdFilePath) {
   let navItems = [];
   try {
     const navYaml = fs.readFileSync(path.join(DOCS_DIR, '_data/docs_nav.yml'), 'utf8');
-    const titles = [...navYaml.matchAll(/title:\s*([^\n]+)/g)].map(m => m[1].trim());
-    const urls = [...navYaml.matchAll(/url:\s*([^\n]+)/g)].map(m => m[1].trim());
+    const titles = [...navYaml.matchAll(/title:\s*([^\n]+)/g)].map((m) => m[1].trim());
+    const urls = [...navYaml.matchAll(/url:\s*([^\n]+)/g)].map((m) => m[1].trim());
     navItems = titles.map((t, i) => ({ title: t, url: urls[i] || '#' }));
   } catch (e) {}
 
@@ -175,13 +182,25 @@ function buildDocHtml(mdFilePath) {
 
   let html = layout
     .replace('{{ content }}', renderedContent)
-    .replace(/\{\{\s*'\/fonts\/[^']+'\s*\|\s*relative_url\s*\}\}/g, '/fonts/space-grotesk-variable-latin.woff2')
-    .replace(/\{\{\s*'\/assets\/css\/docs\.css'\s*\|\s*relative_url\s*\}\}/g, '/assets/css/docs.css')
+    .replace(
+      /\{\{\s*'\/fonts\/[^']+'\s*\|\s*relative_url\s*\}\}/g,
+      '/fonts/space-grotesk-variable-latin.woff2',
+    )
+    .replace(
+      /\{\{\s*'\/assets\/css\/docs\.css'\s*\|\s*relative_url\s*\}\}/g,
+      '/assets/css/docs.css',
+    )
     .replace(/\{\{\s*'\/'\s*\|\s*relative_url\s*\}\}/g, '/')
     .replace(/\{%\s*seo\s*%\}/g, '<title>Docs</title>')
     .replace(/\{%-?\s*if page\.noindex\s*-?%\}[\s\S]*?\{%-?\s*endif\s*-?%\}/g, '')
-    .replace(/\{%-?\s*if page\.updated\s*-?%\}[\s\S]*?\{%-?\s*endif\s*-?%\}/g, '<p class="page-updated">Last updated: August 30, 2026</p>')
-    .replace(/\{%-?\s*for item in site\.data\.docs_nav\s*-?%\}[\s\S]*?\{%-?\s*endfor\s*-?%\}/g, navHtml)
+    .replace(
+      /\{%-?\s*if page\.updated\s*-?%\}[\s\S]*?\{%-?\s*endif\s*-?%\}/g,
+      '<p class="page-updated">Last updated: August 30, 2026</p>',
+    )
+    .replace(
+      /\{%-?\s*for item in site\.data\.docs_nav\s*-?%\}[\s\S]*?\{%-?\s*endfor\s*-?%\}/g,
+      navHtml,
+    )
     .replace(/\{%-?[\s\S]*?-?%\}/g, '');
 
   return html;
@@ -319,10 +338,12 @@ export function createDocsServer() {
   return http.createServer((req, res) => {
     let reqPath = req.url.split('?')[0];
     if (reqPath === '/') reqPath = '/index.html';
-    
+
     // Check if markdown page requested
     const directPath = path.join(DOCS_DIR, reqPath);
-    const mdPath = reqPath.endsWith('.html') ? path.join(DOCS_DIR, reqPath.replace(/\.html$/, '.md')) : null;
+    const mdPath = reqPath.endsWith('.html')
+      ? path.join(DOCS_DIR, reqPath.replace(/\.html$/, '.md'))
+      : null;
 
     if (mdPath && fs.existsSync(mdPath) && fs.statSync(mdPath).isFile()) {
       const html = buildDocHtml(mdPath);
@@ -346,14 +367,15 @@ export function createDocsServer() {
         return;
       }
       const ext = path.extname(directPath);
-      const mime = {
-        '.css': 'text/css',
-        '.js': 'text/javascript',
-        '.woff2': 'font/woff2',
-        '.png': 'image/png',
-        '.webp': 'image/webp',
-        '.svg': 'image/svg+xml'
-      }[ext] || 'application/octet-stream';
+      const mime =
+        {
+          '.css': 'text/css',
+          '.js': 'text/javascript',
+          '.woff2': 'font/woff2',
+          '.png': 'image/png',
+          '.webp': 'image/webp',
+          '.svg': 'image/svg+xml',
+        }[ext] || 'application/octet-stream';
       res.writeHead(200, { 'Content-Type': mime });
       res.end(data);
       return;
@@ -366,7 +388,7 @@ export function createDocsServer() {
 
 export async function runContrastSweep(pageUrls) {
   const server = createDocsServer();
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const serverPort = server.address().port;
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-sweep-'));
@@ -378,7 +400,7 @@ export async function runContrastSweep(pageUrls) {
     `--user-data-dir=${tmpDir}`,
     '--disable-gpu',
     '--no-first-run',
-    'about:blank'
+    'about:blank',
   ]);
 
   try {
@@ -386,14 +408,16 @@ export async function runContrastSweep(pageUrls) {
     for (let i = 0; i < 100; i++) {
       try {
         const listData = await new Promise((resolve, reject) => {
-          http.get(`http://127.0.0.1:${chromePort}/json/list`, res => {
-            let buf = '';
-            res.on('data', d => buf += d);
-            res.on('end', () => resolve(buf));
-          }).on('error', reject);
+          http
+            .get(`http://127.0.0.1:${chromePort}/json/list`, (res) => {
+              let buf = '';
+              res.on('data', (d) => (buf += d));
+              res.on('end', () => resolve(buf));
+            })
+            .on('error', reject);
         });
         // Chrome also exposes browser_ui targets (omnibox popup) — only a real page can navigate.
-        const page = JSON.parse(listData).find(t => t.type === 'page' && t.webSocketDebuggerUrl);
+        const page = JSON.parse(listData).find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
         if (page) {
           pageWsUrl = page.webSocketDebuggerUrl;
           break;
@@ -401,7 +425,7 @@ export async function runContrastSweep(pageUrls) {
       } catch (e) {
         // Chrome not listening yet.
       }
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 200));
     }
 
     if (!pageWsUrl) throw new Error('Could not connect to Chrome CDP page target');
@@ -413,18 +437,19 @@ export async function runContrastSweep(pageUrls) {
     });
 
     let msgId = 1;
-    const send = (method, params = {}) => new Promise((resolve) => {
-      const id = msgId++;
-      const handler = (e) => {
-        const res = JSON.parse(e.data);
-        if (res.id === id) {
-          ws.removeEventListener('message', handler);
-          resolve(res.result);
-        }
-      };
-      ws.addEventListener('message', handler);
-      ws.send(JSON.stringify({ id, method, params }));
-    });
+    const send = (method, params = {}) =>
+      new Promise((resolve) => {
+        const id = msgId++;
+        const handler = (e) => {
+          const res = JSON.parse(e.data);
+          if (res.id === id) {
+            ws.removeEventListener('message', handler);
+            resolve(res.result);
+          }
+        };
+        ws.addEventListener('message', handler);
+        ws.send(JSON.stringify({ id, method, params }));
+      });
 
     await send('Page.enable');
     await send('Runtime.enable');
@@ -432,7 +457,7 @@ export async function runContrastSweep(pageUrls) {
       width: 1440,
       height: 900,
       deviceScaleFactor: 1,
-      mobile: false
+      mobile: false,
     });
 
     const report = [];
@@ -440,7 +465,7 @@ export async function runContrastSweep(pageUrls) {
     for (const urlPath of pageUrls) {
       const fullUrl = `http://127.0.0.1:${serverPort}${urlPath.startsWith('/') ? urlPath : '/' + urlPath}`;
       await send('Page.navigate', { url: fullUrl });
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 1000));
 
       for (const theme of ['dark', 'light']) {
         await send('Runtime.evaluate', {
@@ -456,39 +481,43 @@ export async function runContrastSweep(pageUrls) {
               document.documentElement.setAttribute('data-theme', '${theme}');
               if (window.__sweepMeasure) window.__sweepMeasure();
             })()
-          `
+          `,
         });
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 400));
 
         const evalRes = await send('Runtime.evaluate', {
           expression: EVAL_SCRIPT,
-          returnByValue: true
+          returnByValue: true,
         });
         if (evalRes?.exceptionDetails) {
           throw new Error(`${urlPath} (${theme}): ${evalRes.exceptionDetails.text}`);
         }
 
         const elements = evalRes?.result?.value || [];
-        const failures = elements.filter(e => !e.pass);
+        const failures = elements.filter((e) => !e.pass);
         report.push({
           page: urlPath,
           theme,
           total: elements.length,
-          failures
+          failures,
         });
       }
     }
 
     ws.close();
     chrome.kill('SIGTERM');
-    await new Promise(r => chrome.on('close', r));
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) {}
+    await new Promise((r) => chrome.on('close', r));
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {}
     server.close();
     return report;
   } catch (err) {
     chrome.kill('SIGTERM');
-    await new Promise(r => chrome.on('close', r));
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) {}
+    await new Promise((r) => chrome.on('close', r));
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {}
     server.close();
     throw err;
   }
@@ -497,37 +526,47 @@ export async function runContrastSweep(pageUrls) {
 if (process.argv[1] === __filename) {
   const pages = process.argv.slice(2);
   // Default: the landing plus every doc page, so a new page cannot ship unswept.
-  const targetPages = pages.length > 0 ? pages : [
-    '/',
-    ...fs.readdirSync(DOCS_DIR)
-      .filter(f => f.endsWith('.md'))
-      .sort()
-      .map(f => '/' + f.replace(/\.md$/, '.html'))
-  ];
-  runContrastSweep(targetPages).then(report => {
-    console.log('\n=== Contrast Sweep Report ===\n');
-    let totalFailures = 0;
-    for (const r of report) {
-      console.log(`Page: ${r.page} | Theme: ${r.theme} | Checked: ${r.total} elements | Failures: ${r.failures.length}`);
-      if (r.failures.length > 0) {
-        totalFailures += r.failures.length;
-        const worst = [...r.failures].sort((a, b) => a.ratio - b.ratio)[0];
-        console.log(`  Worst ratio: ${worst.ratio}:1 (required: ${worst.required}:1) on "${worst.text}" (fg: ${worst.fgHex}, bg: ${worst.bgHex})`);
-        console.log(`  Failing elements summary:`);
-        const byHex = {};
-        for (const f of r.failures) {
-          const key = `${f.fgHex} on ${f.bgHex} (${f.selector})`;
-          byHex[key] = (byHex[key] || 0) + 1;
-        }
-        for (const [k, count] of Object.entries(byHex)) {
-          console.log(`    - ${count}x: ${k}`);
+  const targetPages =
+    pages.length > 0
+      ? pages
+      : [
+          '/',
+          ...fs
+            .readdirSync(DOCS_DIR)
+            .filter((f) => f.endsWith('.md'))
+            .sort()
+            .map((f) => '/' + f.replace(/\.md$/, '.html')),
+        ];
+  runContrastSweep(targetPages)
+    .then((report) => {
+      console.log('\n=== Contrast Sweep Report ===\n');
+      let totalFailures = 0;
+      for (const r of report) {
+        console.log(
+          `Page: ${r.page} | Theme: ${r.theme} | Checked: ${r.total} elements | Failures: ${r.failures.length}`,
+        );
+        if (r.failures.length > 0) {
+          totalFailures += r.failures.length;
+          const worst = [...r.failures].sort((a, b) => a.ratio - b.ratio)[0];
+          console.log(
+            `  Worst ratio: ${worst.ratio}:1 (required: ${worst.required}:1) on "${worst.text}" (fg: ${worst.fgHex}, bg: ${worst.bgHex})`,
+          );
+          console.log(`  Failing elements summary:`);
+          const byHex = {};
+          for (const f of r.failures) {
+            const key = `${f.fgHex} on ${f.bgHex} (${f.selector})`;
+            byHex[key] = (byHex[key] || 0) + 1;
+          }
+          for (const [k, count] of Object.entries(byHex)) {
+            console.log(`    - ${count}x: ${k}`);
+          }
         }
       }
-    }
-    console.log(`\nTotal failing elements: ${totalFailures}`);
-    if (totalFailures > 0) process.exitCode = 1;
-  }).catch(e => {
-    console.error('Sweep error:', e);
-    process.exit(1);
-  });
+      console.log(`\nTotal failing elements: ${totalFailures}`);
+      if (totalFailures > 0) process.exitCode = 1;
+    })
+    .catch((e) => {
+      console.error('Sweep error:', e);
+      process.exit(1);
+    });
 }
