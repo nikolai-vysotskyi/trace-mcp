@@ -24,6 +24,7 @@ import {
   Toolbar,
 } from '../lattice/ui';
 import { parentDir, splitPath } from '../sidebar-prefs.js';
+import { useSidebarPathClipping } from '../hooks/useSidebarPathClipping.js';
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -862,6 +863,7 @@ function ContextInspector({
   onClose: () => void;
 }) {
   const { t } = useTranslation('ask');
+  const filesListRef = useSidebarPathClipping<HTMLDivElement>([envelope?.files]);
   return (
     <aside className="ask-inspector" aria-label={t('context')}>
       <IslandHeader
@@ -890,7 +892,7 @@ function ContextInspector({
               {envelope.files.length === 0 ? (
                 <EmptyState compact>{t('noFilesRead')}</EmptyState>
               ) : (
-                <div className="ask-rows">
+                <div className="ask-rows" ref={filesListRef}>
                   {envelope.files.map((f) => (
                     <PathRow
                       key={f}

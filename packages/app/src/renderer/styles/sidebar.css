@@ -275,6 +275,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* When the filename alone fills the row, hide the location completely instead
+   of letting it shrink to a single-glyph sliver (TRA-504). */
+.ws-sb-path.is-name-clipped .dir {
+  display: none;
+}
 
 /* Sidebar empty / loading states. */
 .ws-sb-empty {

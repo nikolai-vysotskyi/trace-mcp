@@ -7,6 +7,7 @@ import { QuickOpen, type QuickOpenItem } from './components/QuickOpen';
 import { SidebarRow } from './components/SidebarRow';
 import { WindowTabBar } from './components/WindowTabBar';
 import { DAEMON_FETCH_TIMEOUT_MS } from './hooks/useDaemon';
+import { useSidebarPathClipping } from './hooks/useSidebarPathClipping.js';
 import { t } from './i18n';
 import { formatNumber } from './i18n/format';
 import { fileKind, FileTypeGlyph, Icon } from './lattice/icons';
@@ -267,10 +268,12 @@ function ProjectFileExplorer({
   root,
   scope,
   onFileClick,
+  sidebarWidth,
 }: {
   root: string;
   scope?: string;
   onFileClick: (filePath: string) => void;
+  sidebarWidth?: number;
 }) {
   const { t } = useTranslation('shell');
   const [sort, setSort] = useState<FileSort>('symbols');
@@ -285,7 +288,12 @@ function ProjectFileExplorer({
   const [status, setStatus] = useState<'loading' | 'answered' | 'failed'>('loading');
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; path: string } | null>(null);
-  const listRef = useRef<HTMLDivElement | null>(null);
+  const listRef = useSidebarPathClipping<HTMLDivElement>([
+    files,
+    sort,
+    status,
+    sidebarWidth,
+  ]);
   const LIMIT = 30;
 
   // Debounce scope to avoid fetching on every keystroke
@@ -1067,6 +1075,7 @@ export function App() {
                     root={root!}
                     scope={graphGpuSettings.scope}
                     onFileClick={openFileInGraph}
+                    sidebarWidth={sidebarWidth}
                   />
                 </>
               ) : (

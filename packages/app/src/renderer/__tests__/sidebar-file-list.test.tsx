@@ -108,6 +108,50 @@ describe('sidebar file row', () => {
     expect(readme.querySelector('.name')?.textContent).toBe('README.md');
     expect(readme.querySelector('.dir')).toBeNull();
   });
+
+  /* TRA-504. When the filename fills the row width, the location (.dir)
+     shrinks to a 1-glyph sliver under flexbox shrink instead of disappearing.
+     The layout effect marks .ws-sb-path with `is-name-clipped` to hide .dir completely. */
+  it('hides location under is-name-clipped when filename alone fills the row', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              files: [
+                { path: 'src/renderer/tabs/GraphExplorerGPU.tsx', symbols: 47, edges: 12 },
+              ],
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+
+    // Stub name element's scrollWidth/clientWidth to simulate overflow
+    const origCreateElement = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      const el = origCreateElement(tagName);
+      return el;
+    });
+
+    await renderProjectWindow();
+
+    const [graphRow] = [...document.querySelectorAll('.ws-sb-path')];
+    const nameEl = graphRow.querySelector('.name');
+    if (nameEl) {
+      Object.defineProperty(nameEl, 'scrollWidth', { configurable: true, get: () => 160 });
+      Object.defineProperty(nameEl, 'clientWidth', { configurable: true, get: () => 110 });
+    }
+
+    // Trigger update / layout effect
+    const { updateSidebarPathClipping } = await import('../hooks/useSidebarPathClipping.js');
+    act(() => {
+      updateSidebarPathClipping(graphRow as HTMLElement);
+    });
+
+    expect(graphRow.classList.contains('is-name-clipped')).toBe(true);
+  });
 });
 
 /* TRA-478. Every case above rejects immediately, which is the one shape of
