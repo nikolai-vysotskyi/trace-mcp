@@ -323,7 +323,10 @@ const EVAL_SCRIPT = String.raw`
         bgHex: '#' + bg.map(x => Math.round(x).toString(16).padStart(2, '0')).join(''),
         ratio: Math.round(ratio * 100) / 100,
         required,
-        pass: ratio >= required - 0.05
+        // No epsilon: the ratio is computed at full precision, so 4.45 is a real
+        // AA failure, not a rounding artefact. A tolerance here would hide the
+        // near-misses this sweep exists to catch.
+        pass: ratio >= required
       });
     }
     return results;
