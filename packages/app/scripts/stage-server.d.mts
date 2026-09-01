@@ -4,6 +4,8 @@
 
 export declare const PAYLOAD_ROOTS: string[];
 
+export declare const PAYLOAD_GRAMMARS: string[];
+
 export declare function collectClosure(
   roots: string[],
   from: string,

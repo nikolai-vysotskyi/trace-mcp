@@ -43,6 +43,11 @@ const parserCache = new Map<string, TSParser>();
  * This codebase's language name → the tree-sitter grammar that parses it.
  * Typed against tree-sitter-wasm, so a grammar that the package stops shipping
  * fails the build instead of throwing on first parse.
+ *
+ * Adding one here also adds it to the desktop app's server payload — see
+ * PAYLOAD_GRAMMARS in `packages/app/scripts/stage-server.mjs`, which ships only
+ * these and drops the other 92 MB the package carries. Its test fails if the
+ * two drift apart.
  */
 export const LANG_GRAMMARS: Record<string, SupportedLanguage> = {
   bash: 'bash',

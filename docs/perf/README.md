@@ -16,6 +16,10 @@ entry per measurement pass, never rewrite an old one. This file is the human sum
 
 ## Current numbers (3.6.0, `39026ebd` — the AskTab split, macOS 26.5 / arm64, median of 3)
 
+The `artifact_mb` rows are newer than the rest of the table: 3.11.0, `64b14a12`, a
+single artifact-only pack on the same machine. Sizes are deterministic, so they do not
+need a median.
+
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
 | `renderer_fcp_ms` | 216 | — | ok — **the startup metric of record** |
@@ -25,7 +29,19 @@ entry per measurement pass, never rewrite an old one. This file is the human sum
 | `main_cpu_idle_pct` | 0 | 2 | ok |
 | `renderer_eager_kb` | 2102 | — | **the size metric of record** (see below) |
 | `renderer_bundle_kb` | 2272 | — | +34% vs 1700 — regression, addressed this run |
-| `artifact_mb` | not re-packed | ×1.5 growth | last measured 4.85 / 268.1 at `6ebbbd56` |
+| `artifact_mb.mac_app_unpacked` | 346.2 | ×1.5 growth | re-anchored 2026-09-02, was 478.2 |
+| `artifact_mb.mac_server_payload` | 77 | **100 MB, absolute** | ok — see below |
+| `artifact_mb.mac_asar` | 6 | ×1.5 growth | ok |
+
+### Which artifact number to trend
+
+`mac_app_unpacked` is 76% Electron: `Contents/Frameworks` alone is 262.9 MB and no change
+in this repo moves it. A ×1.5 rule on that total tolerates the embedded daemon roughly
+doubling before it fires, which is exactly what it did — TRA-438's server payload went in
+at 209 MB and the growth only registered as "the app got 1.78× bigger". So
+**`mac_server_payload` carries an absolute ceiling instead: 100 MB.** It is the only large
+part of the bundle the repo controls, it is measured directly by the harness, and it is
+the number to look at first when the total moves.
 
 ### Which size number to trend
 
@@ -131,6 +147,31 @@ Compare against the median of the last 5 runs: >+10% is a warning to note, >+25%
 (or two consecutive warnings) is a regression worth an issue.
 
 ## Changes worth remembering
+
+**2026-09-02 — the embedded daemon was 209 MB, two thirds of it unreachable (TRA-605).**
+`stage-server.mjs` staged whole npm packages, and npm packages carry things a packaged app
+never runs. 92 MB were tree-sitter grammars the daemon cannot load: `tree-sitter-wasm`
+ships 112, `LANG_GRAMMARS` in `src/parser/tree-sitter.ts` names 32, and systemverilog alone
+— a language trace-mcp does not support — was 21 MB. 24 MB were better-sqlite3's sqlite3
+amalgamation, its C++ sources and seven other platforms' prebuilds; unlike the
+`@ast-grep/napi-*` packages, which the closure already narrows by `os`/`cpu`,
+better-sqlite3 keeps all eight in one package and picks at runtime, so nothing was cutting
+them. 10.3 MB were `dist/index.js`, which tsup emits as a second self-contained bundle for
+the npm library entry and which nothing inside the payload can reach — the app enters it
+only through `dist/cli.js`. Payload 209 → 77 MB, bundle 478.2 → 346.2 MB (−27.6%).
+`PAYLOAD_GRAMMARS` in `stage-server.mjs` is the list, and `stage-server.test.ts` fails if
+`LANG_GRAMMARS` grows past it — shipping a DMG with a grammar missing is invisible, because
+every file in that language indexes as zero symbols rather than erroring (TRA-330).
+
+**2026-09-02 — compressing the grammars is not worth it (negative result).**
+The remaining 43 MB of `.wasm` brotli to 3.2% — 133 MB of the original set went to 4.3 MB —
+because 98% of a grammar is its parse-table data section, which is enormously repetitive.
+Spending that needs a decompressing shim around `getWasmPath` and a decision about where
+the decompressed bytes live. Not taken: after pruning, the whole set is 43 MB against
+262.9 MB of Electron, so the shim would buy ~11% of the bundle for a permanent runtime
+indirection on every parser load. Reconsider only if the grammar set grows several times
+over. `wasm-opt` is a separate dead end on the same files: there is no debug info to strip
+and only 7.4 MB of the 133 was code section at all.
 
 **2026-08-30 — the Ask tab was carrying the markdown stack into startup.**
 `renderer_bundle_kb` had gone 1461 → 1700 → 2272 KB, with the entry chunk alone at
