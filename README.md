@@ -5,58 +5,95 @@
 <h1 align="center">trace-mcp</h1>
 
 <p align="center">
+  Precomputed code intelligence for AI coding agents. Cut token usage by 40–50% and navigate codebases instantly.
+</p>
+
+<p align="center">
   <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/ci.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a>
   <a href="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp"><img src="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp/badges/score.svg" alt="Glama score" /></a>
   <a href="https://www.npmjs.com/package/trace-mcp"><img src="https://img.shields.io/npm/v/trace-mcp" alt="npm version" /></a>
-  <img src="https://img.shields.io/node/v/trace-mcp" alt="Node.js version" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
-  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml/badge.svg" alt="Semgrep" /></a>
-  <a href="https://securityscorecards.dev/viewer/?uri=github.com/nikolai-vysotskyi/trace-mcp"><img src="https://api.securityscorecards.dev/projects/github.com/nikolai-vysotskyi/trace-mcp/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security"><img src="https://img.shields.io/badge/security-policy-blue" alt="Security policy" /></a>
-  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security/dependabot"><img src="https://img.shields.io/badge/Dependabot-enabled-success" alt="Dependabot enabled" /></a>
-</p>
+---
 
-<p align="center">
-  <strong>AI agents recompute the same work. trace-mcp makes them reuse instead.</strong><br>
-  The recomputation → reuse layer for AI systems.
-</p>
+## Install
 
-<p align="center">
-  <strong>40–50% fewer tokens</strong> on average &nbsp;·&nbsp; <strong>up to 2× effective capacity</strong> &nbsp;·&nbsp; <strong>up to 99% less redundant processing</strong>
-  <br>
-  <sub>Based on early benchmarks across agent workflows with repeated context and dependency traversal.</sub>
-</p>
+### CLI & MCP Server
 
-> AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
->
-> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 169 tools.
->
-> **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP server covers both code and knowledge; there is no second tool to plug in.
+```bash
+npm install -g trace-mcp
+```
 
-<p align="center">
-  <img src="docs/images/app-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance" width="820" height="512" loading="lazy" />
-  <br/>
-  <sub>Also ships a <a href="#desktop-app">desktop app</a> with a GPU graph explorer over the same index.</sub>
-</p>
+### Desktop App (macOS & Windows)
+
+- **macOS:** [Download DMG](https://trace-mcp.com/) (Apple Silicon & Intel)
+- **Windows:** [Download Installer (.exe)](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest)
+
+## Quick Start
+
+```bash
+# 1. Index your project
+trace-mcp index .
+
+# 2. 1-click configuration for AI coding agents (Claude Code, Cursor, Windsurf, Codex)
+trace-mcp init
+
+# 3. Launch with your agent
+trace-mcp launch claude
+```
+
+Then in your MCP client:
+
+```
+> get_project_map to see what frameworks are detected
+> get_task_context("fix the login bug") to get full execution context for a task
+> get_change_impact on app/Models/User.php to see what depends on it
+```
+
+**Direct plugin install (Claude Code & Codex CLI):**
+
+```bash
+# Claude Code
+claude plugin install @nikolai-vysotskyi/trace-mcp
+
+# Codex CLI
+codex plugin marketplace add nikolai-vysotskyi/trace-mcp
+codex plugin install trace-mcp@nikolai-vysotskyi-trace-mcp
+```
+
+**Indexing a markdown vault (Obsidian / Logseq / plain MD):**
+
+Point `trace-mcp index` at the vault root — `.md`/`.mdx`/`.markdown` are picked up by default:
+
+```
+> find_usages on note:my-concept     // backlinks across the vault
+> find_usages on tag:sgr             // every note tagged #sgr
+> get_change_impact on note:legacy   // what breaks if I rename or delete it
+> search "schema-guided reasoning"   // PageRank + embeddings over the vault
+```
 
 ---
 
 ## The problem
 
-The binding constraint is **recomputation**, not model capability. Agents treat the context window like a database — they re-read the same files, re-traverse the same dependencies, and re-inflate context every turn with structure they already computed five steps ago. Token bills, latency, and hallucinations all grow with project size instead of with task complexity.
+The binding constraint for AI coding agents is **recomputation**, not model capability. Agents treat the context window like a scratchpad database — they re-read the same files, re-traverse the same dependencies, and re-inflate context every turn with structure they computed five steps ago. Furthermore, they are **framework-blind**: they don't know that `Inertia::render('Users/Show', $data)` connects a Laravel controller to `resources/js/Pages/Users/Show.vue`, or that `$user->posts()` means the `posts` table defined three migrations ago.
 
-trace-mcp closes the recomputation leak. The graph is built once, kept incrementally fresh, and served to every agent that asks — so the same work isn't paid for over and over.
+The result: 5–15× repeated reads of hot files in a single task, ballooning token costs, increased latency, and hallucinations that scale with repository size rather than task complexity.
 
-- **Lower cost** — fewer tokens per successful answer, on average and at peak
-- **Lower latency** — fewer sequential tool calls, fewer round-trips to the model
-- **Higher accuracy** — less noise in context means fewer hallucinations and stronger first-response correctness
-- **Production stability** — context growth tracks task complexity rather than repository size
+## The solution
 
-We started with code intelligence, where the repetition is most expensive, and the same engine now indexes markdown knowledge vaults (Obsidian, Logseq, plain MD) as a peer domain. Wikilinks, tags, frontmatter, and embeds become graph edges and symbol metadata; `search`, `find_usages`, `get_change_impact`, and `apply_rename` work identically over both.
+trace-mcp builds a **cross-language dependency graph** from your codebase once, keeps it incrementally fresh, and serves it through the [Model Context Protocol](https://modelcontextprotocol.io). Instead of brute-reading files with `Read`/`Grep`/`Glob`, your AI agent reasons over precomputed architecture. 87 framework integrations across 81 languages, 169 tools.
+
+| Without trace-mcp | With trace-mcp |
+|---|---|
+| Agent reads 15 files to understand a feature | `get_task_context` — optimal code subgraph in one shot |
+| Agent doesn't know which Vue page a controller renders | `routes_to → renders_component → uses_prop` edges |
+| "What breaks if I change this model?" — agent guesses | `get_change_impact` traverses reverse dependencies across languages |
+| Schema? Agent needs a running database | Migrations parsed — schema reconstructed from code |
+| Prop mismatch between PHP and Vue? Discovered in production | Detected at index time — PHP data vs. `defineProps` |
+
+The same engine also indexes markdown knowledge vaults (Obsidian, Logseq, plain MD) as a peer domain: wikilinks, tags, frontmatter, and embeds become graph edges and symbol metadata, so code and notes live in one unified graph.
 
 ---
 
@@ -86,57 +123,38 @@ We started with code intelligence, where the repetition is most expensive, and t
 
 ---
 
-## The problem
+## Key capabilities
 
-AI coding agents recompute the same work every turn — and they're **framework-blind** while doing it.
+- **Request flow tracing** — URL → Route → Middleware → Controller → Service, across backend frameworks
+- **Component trees** — render hierarchy with props / emits / slots (Vue, React, Blade)
+- **Schema from migrations** — no DB connection needed
+- **Event chains** — Event → Listener → Job fan-out (Laravel, Django, NestJS, Celery, Socket.io)
+- **Change impact analysis** — reverse dependency traversal across languages, enriched with linked architectural decisions
+- **Graph-aware task context** — describe a dev task → get the optimal code subgraph (execution paths, tests, types) + relevant past decisions, adapted to bugfix/feature/refactor intent
+- **Call graph & DI tree** — bidirectional call graphs with 4-tier resolution confidence, optional LSP enrichment for compiler-grade accuracy, NestJS dependency injection
+- **ORM model context** — relationships, schema, metadata for 7 ORMs
+- **Dead code & test gap detection** — find untested exports/symbols (with "unreached" vs "imported_not_called" classification), dead code, per-symbol test reach in impact analysis
+- **Security scanning** — OWASP Top-10 pattern scanning and taint analysis (source→sink data flow). Exportable MCP-server security context for [skill-scan](https://github.com/kkdub/skill-scan)
+- **Semantic search, offline by default** — bundled ONNX embeddings work out of the box, no API keys; switch to Ollama/OpenAI for LLM-powered summarisation
+- **[Decision memory](#decision-memory)** — mine sessions for decisions, link them to symbols/files, auto-surface in impact analysis
+- **[Multi-service subprojects](#subprojects)** — link graphs across services via API contracts; cross-service impact + service-scoped decisions
+- **[CI/PR change impact reports](#cipr-change-impact-reports)** — automated blast radius, risk scoring, test-gap detection, architecture violations on every PR
 
-They re-read `UserController.php`, then re-read it again next turn. They don't know that `Inertia::render('Users/Show', $data)` connects a Laravel controller to `resources/js/Pages/Users/Show.vue`. They don't know that `$user->posts()` means the `posts` table defined three migrations ago. They can't trace a request from URL to rendered pixel — so they trace it again, and again, every session.
+### Supported stack
 
-The result: 5–15× repeated reads of hot files in a single task, context windows used as scratch databases, and agents that get more expensive the bigger the project gets — instead of more capable.
+**Languages (81):** PHP, TypeScript, JavaScript, Python, Go, Java, Kotlin, Ruby, Rust, C, C++, C#, Swift, Objective-C, Objective-C++, Dart, Scala, Groovy, Elixir, Erlang, Haskell, Gleam, Bash, Lua, Perl, GDScript, R, Julia, Nix, SQL, PL/SQL, HCL/Terraform, Protocol Buffers, GraphQL, Prisma, Vue SFC, HTML, CSS/SCSS/SASS/LESS, XML/XUL/XSD, YAML, JSON, TOML, Assembly, Fortran, AutoHotkey, Verse, AL, Blade, EJS, Zig, OCaml, Clojure, F#, Elm, CUDA, COBOL, Verilog/SystemVerilog, GLSL, Meson, Vim Script, Common Lisp, Emacs Lisp, Dockerfile, Makefile, CMake, INI, Svelte, Astro, Markdown, MATLAB, Lean 4, FORM, Magma, Wolfram/Mathematica, Ada, Apex, D, Nim, Pascal, PowerShell, Solidity, Tcl
 
-## The solution
+**Frameworks (87 framework integrations):** Laravel (+ Livewire, Nova, Filament, Pennant), Django (+ DRF), FastAPI, Flask, Express, NestJS, Fastify, Hono, Next.js, Nuxt, Rails, Spring, tRPC
 
-trace-mcp builds a **cross-language dependency graph** from your source code and exposes it through the [Model Context Protocol](https://modelcontextprotocol.io) — the plugin format Claude Code, Cursor, Windsurf and other AI coding agents speak. Any MCP-compatible agent gets framework-level understanding out of the box.
+**ORMs:** Eloquent, Prisma, TypeORM, Drizzle, Sequelize, Mongoose, SQLAlchemy
 
-| Without trace-mcp | With trace-mcp |
-|---|---|
-| Agent reads 15 files to understand a feature | `get_task_context` — optimal code subgraph in one shot |
-| Agent doesn't know which Vue page a controller renders | `routes_to → renders_component → uses_prop` edges |
-| "What breaks if I change this model?" — agent guesses | `get_change_impact` traverses reverse dependencies across languages |
-| Schema? Agent needs a running database | Migrations parsed — schema reconstructed from code |
-| Prop mismatch between PHP and Vue? Discovered in production | Detected at index time — PHP data vs. `defineProps` |
+**Frontend:** Vue, React, React Native, Blade, Inertia, shadcn/ui, Nuxt UI, MUI, Ant Design, Headless UI
 
----
+**Other:** GraphQL, Socket.io, Celery, Zustand, Pydantic, Zod, n8n, React Query/SWR, Playwright/Cypress/Jest/Vitest/Mocha
 
-<a id="desktop-app"></a>
+**Knowledge vaults:** Obsidian, Logseq, plain markdown — `[[wikilinks]]`, `![[embeds]]`, `[text](path.md)`, frontmatter (YAML), `#tags`, ATX headings. Each note becomes a `note:<basename>` symbol with sections nested inside; wikilinks resolve to `references` / `embeds` edges between notes. Mix vault and code in one project — point `root` at a directory that contains both and run a single `find_usages` across them.
 
-## Desktop app
-
-trace-mcp ships with an optional Electron desktop app (`packages/app`) that gives you a visual surface over the same index the MCP server uses. It manages multiple projects, wires up MCP clients, and provides a GPU-accelerated graph explorer — all without opening a terminal.
-
-<p align="center">
-  <img src="docs/images/app-projects.webp" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics" width="820" height="512" loading="lazy" />
-</p>
-
-**Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex, AMP, Warp, Factory Droid) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc & agent-behavior rules; Max-tier features are Claude Code–specific). Warp and JetBrains AI require manual paste in the IDE because their config storage is GUI-only.
-
-<p align="center">
-  <img src="docs/images/app-overview.webp" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage" width="820" height="512" loading="lazy" />
-</p>
-
-**Per-project overview.** Each project opens in its own tabbed window: **Overview** (files, symbols, edges, coverage, linked services, re-index), **Ask** (natural-language query over the index), and **Graph**. Overview also surfaces `Most Symbols` files, last-indexed timestamp, and the dependency coverage meter.
-
-**GPU graph explorer.** The Graph tab renders the full dependency graph on the GPU via [cosmos.gl](https://cosmos.gl) — tens of thousands of nodes/edges at interactive frame rates. Filter by Files / Symbols, overlay detected communities, highlight groups, toggle labels/FPS, and step through graph depth. Good for getting a feel for coupling, hotspots, and how a codebase is actually shaped before you dive into tools.
-
-<p align="center">
-  <img src="docs/images/app-dark-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, dark appearance" width="820" height="512" loading="lazy" />
-</p>
-
-**Install on macOS:** [**Download the .dmg**](https://trace-mcp.com/) — open it and drag trace-mcp to Applications. The button on the site picks Apple Silicon or Intel for you; if you would rather choose yourself, both builds are on the [Releases page](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest). The app is signed with a Developer ID and notarized by Apple, so it opens without a warning — if macOS ever does warn you about a trace-mcp build, that warning is real and the download should not be trusted.
-
-**Install on Windows:** run `trace-mcp.Setup.<version>.exe` from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest).
-
-The app talks to the same `trace-mcp` daemon (`http://127.0.0.1:3741`) that MCP clients use, so anything you index from the app is immediately available to Claude Code / Cursor / etc. If you only want the MCP server and the CLI, you do not need the app at all — [`npm install -g trace-mcp`](#quick-start) is the whole install.
+> Full details: [Supported frameworks](https://trace-mcp.com/supported-frameworks.html) · [All tools](https://trace-mcp.com/tools-reference.html)
 
 ---
 
@@ -229,229 +247,39 @@ benchmark_project  # runs against the current project
 
 ---
 
-## Key capabilities
+<a id="desktop-app"></a>
 
-- **Request flow tracing** — URL → Route → Middleware → Controller → Service, across backend frameworks
-- **Component trees** — render hierarchy with props / emits / slots (Vue, React, Blade)
-- **Schema from migrations** — no DB connection needed
-- **Event chains** — Event → Listener → Job fan-out (Laravel, Django, NestJS, Celery, Socket.io)
-- **Change impact analysis** — reverse dependency traversal across languages, enriched with linked architectural decisions
-- **Graph-aware task context** — describe a dev task → get the optimal code subgraph (execution paths, tests, types) + relevant past decisions, adapted to bugfix/feature/refactor intent
-- **Call graph & DI tree** — bidirectional call graphs with 4-tier resolution confidence, optional LSP enrichment for compiler-grade accuracy, NestJS dependency injection
-- **ORM model context** — relationships, schema, metadata for 7 ORMs
-- **Dead code & test gap detection** — find untested exports/symbols (with "unreached" vs "imported_not_called" classification), dead code, per-symbol test reach in impact analysis
-- **Security scanning** — OWASP Top-10 pattern scanning and taint analysis (source→sink data flow). Exportable MCP-server security context for [skill-scan](https://github.com/kkdub/skill-scan)
-- **Semantic search, offline by default** — bundled ONNX embeddings work out of the box, no API keys; switch to Ollama/OpenAI for LLM-powered summarisation
-- **[Decision memory](#decision-memory)** — mine sessions for decisions, link them to symbols/files, auto-surface in impact analysis
-- **[Multi-service subprojects](#subprojects)** — link graphs across services via API contracts; cross-service impact + service-scoped decisions
-- **[CI/PR change impact reports](#cipr-change-impact-reports)** — automated blast radius, risk scoring, test-gap detection, architecture violations on every PR
+## Desktop app
 
-### Supported stack
+trace-mcp ships with an optional Electron desktop app (`packages/app`) that gives you a visual surface over the same index the MCP server uses. It manages multiple projects, wires up MCP clients, and provides a GPU-accelerated graph explorer — all without opening a terminal.
 
-**Languages:** PHP, TypeScript, JavaScript, Python, Go, Java, Kotlin, Ruby, Rust, C, C++, C#, Swift, Objective-C, Objective-C++, Dart, Scala, Groovy, Elixir, Erlang, Haskell, Gleam, Bash, Lua, Perl, GDScript, R, Julia, Nix, SQL, PL/SQL, HCL/Terraform, Protocol Buffers, GraphQL, Prisma, Vue SFC, HTML, CSS/SCSS/SASS/LESS, XML/XUL/XSD, YAML, JSON, TOML, Assembly, Fortran, AutoHotkey, Verse, AL, Blade, EJS, Zig, OCaml, Clojure, F#, Elm, CUDA, COBOL, Verilog/SystemVerilog, GLSL, Meson, Vim Script, Common Lisp, Emacs Lisp, Dockerfile, Makefile, CMake, INI, Svelte, Astro, Markdown, MATLAB, Lean 4, FORM, Magma, Wolfram/Mathematica, Ada, Apex, D, Nim, Pascal, PowerShell, Solidity, Tcl
+<p align="center">
+  <img src="docs/images/app-projects.webp" alt="trace-mcp app — Workspace dashboard listing indexed projects with their file, symbol and coverage metrics" width="820" height="512" loading="lazy" />
+</p>
 
-**Frameworks:** Laravel (+ Livewire, Nova, Filament, Pennant), Django (+ DRF), FastAPI, Flask, Express, NestJS, Fastify, Hono, Next.js, Nuxt, Rails, Spring, tRPC
+**Projects & clients.** The menu window lists indexed projects with live status (`Ready` / indexing / error) and re-index / remove controls. The **MCP Clients** tab detects installed clients (Claude Code, Claw Code, Claude Desktop, Cursor, Windsurf, Continue, Junie, JetBrains AI, Codex, AMP, Warp, Factory Droid) and wires trace-mcp into them with one click, including enforcement level (Base / Standard / Max — CLAUDE.md only, + hooks, + tweakcc & agent-behavior rules; Max-tier features are Claude Code–specific). Warp and JetBrains AI require manual paste in the IDE because their config storage is GUI-only.
 
-**ORMs:** Eloquent, Prisma, TypeORM, Drizzle, Sequelize, Mongoose, SQLAlchemy
+<p align="center">
+  <img src="docs/images/app-overview.webp" alt="trace-mcp app — project Overview with index status, file and symbol counts, and dependency coverage" width="820" height="512" loading="lazy" />
+</p>
 
-**Frontend:** Vue, React, React Native, Blade, Inertia, shadcn/ui, Nuxt UI, MUI, Ant Design, Headless UI
+**Per-project overview.** Each project opens in its own tabbed window: **Overview** (files, symbols, edges, coverage, linked services, re-index), **Ask** (natural-language query over the index), and **Graph**. Overview also surfaces `Most Symbols` files, last-indexed timestamp, and the dependency coverage meter.
 
-**Other:** GraphQL, Socket.io, Celery, Zustand, Pydantic, Zod, n8n, React Query/SWR, Playwright/Cypress/Jest/Vitest/Mocha
+**GPU graph explorer.** The Graph tab renders the full dependency graph on the GPU via [cosmos.gl](https://cosmos.gl) — tens of thousands of nodes/edges at interactive frame rates. Filter by Files / Symbols, overlay detected communities, highlight groups, toggle labels/FPS, and step through graph depth. Good for getting a feel for coupling, hotspots, and how a codebase is actually shaped before you dive into tools.
 
-**Knowledge vaults:** Obsidian, Logseq, plain markdown — `[[wikilinks]]`, `![[embeds]]`, `[text](path.md)`, frontmatter (YAML), `#tags`, ATX headings. Each note becomes a `note:<basename>` symbol with sections nested inside; wikilinks resolve to `references` / `embeds` edges between notes. Mix vault and code in one project — point `root` at a directory that contains both and run a single `find_usages` across them.
+<p align="center">
+  <img src="docs/images/app-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance" width="820" height="512" loading="lazy" />
+</p>
 
-> Full details: [Supported frameworks](https://trace-mcp.com/supported-frameworks.html) · [All tools](https://trace-mcp.com/tools-reference.html)
+<p align="center">
+  <img src="docs/images/app-dark-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, dark appearance" width="820" height="512" loading="lazy" />
+</p>
 
----
+**Install on macOS:** [**Download the .dmg**](https://trace-mcp.com/) — open it and drag trace-mcp to Applications. The button on the site picks Apple Silicon or Intel for you; if you would rather choose yourself, both builds are on the [Releases page](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest). The app is signed with a Developer ID and notarized by Apple, so it opens without a warning — if macOS ever does warn you about a trace-mcp build, that warning is real and the download should not be trusted.
 
-## Quick start
+**Install on Windows:** run `trace-mcp.Setup.<version>.exe` from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest).
 
-**See your waste first — 5 minutes, no setup, no signup:**
-
-```bash
-npx trace-mcp benchmark .
-```
-
-Indexes the project, runs 11 structured task benchmarks (symbol lookup, impact analysis, call graph, type hierarchy, …), and prints per-task token cost — without trace-mcp vs. with. You'll see exactly where your agent recomputes work it could reuse.
-
-**Then wire it into your AI agent:**
-
-```bash
-npm install -g trace-mcp
-trace-mcp init        # one-time global setup (MCP clients, hooks, CLAUDE.md)
-trace-mcp add         # register current project for indexing
-```
-
-- `init` — configures your MCP client (Claude Code, Cursor, Windsurf, Claude Desktop, …), installs the guard hook, adds routing rules to `~/.claude/CLAUDE.md`.
-- `add` — detects frameworks, creates the per-project index, registers the project. Re-run in every project you want trace-mcp to understand.
-
-All state lives in `~/.trace-mcp/` — your project directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
-
-**Using Claude Code or Codex CLI?** After `npm install -g trace-mcp`, skip `trace-mcp init`'s client-wiring step and install the plugin directly instead — no `git clone` needed either way:
-
-```bash
-# Claude Code
-claude plugin install @nikolai-vysotskyi/trace-mcp
-
-# Codex CLI
-codex plugin marketplace add nikolai-vysotskyi/trace-mcp
-codex plugin install trace-mcp@nikolai-vysotskyi-trace-mcp
-```
-
-Both register the `trace-mcp` MCP server plus the Bash guard hook in one step. Details: [`.claude-plugin/README.md`](.claude-plugin/README.md) · [`.codex-plugin/README.md`](.codex-plugin/README.md).
-
-Then in your MCP client:
-
-```
-> get_project_map to see what frameworks are detected
-> get_task_context("fix the login bug") to get full execution context for a task
-> get_change_impact on app/Models/User.php to see what depends on it
-```
-
-**Indexing a markdown vault (Obsidian / Logseq / plain MD).** Point `trace-mcp add` at the vault root — `.md`/`.mdx`/`.markdown` are picked up by default. Each note becomes a `note:<basename>` symbol, headings nest as sections, `[[wikilinks]]` and `![[embeds]]` resolve to graph edges, frontmatter `aliases:` make alternate names resolvable, and `#tags` aggregate so every note carrying `#sgr` is one `find_usages` away.
-
-```
-> find_usages on note:my-concept     // backlinks across the vault
-> find_usages on tag:sgr             // every note tagged #sgr
-> get_change_impact on note:legacy   // what breaks if I rename or delete it
-> search "schema-guided reasoning"   // PageRank + embeddings over the vault
-```
-
-> Prefer a GUI? The [desktop app](#desktop-app) handles install, indexing, MCP-client wiring, and re-indexing without touching a terminal.
-
-**Going further:** [adding more projects / upgrading / manual setup](https://trace-mcp.com/configuration.html#cli) · [stdio vs HTTP setup (per-repo or team)](https://trace-mcp.com/configuration.html#stdio-vs-http--choosing-your-setup) · [semantic search (local ONNX)](https://trace-mcp.com/configuration.html#ai-configuration) · [indexing & file watcher](https://trace-mcp.com/configuration.html#how-config-works) · [`.traceignore`](https://trace-mcp.com/configuration.html#traceignore).
-
----
-
-## Local-first by design
-
-trace-mcp runs entirely on your machine. Nothing about your source code is uploaded, and there is no account to create.
-
-- **Indexing happens locally.** The MCP server is a Node process you run yourself — stdio or `http://127.0.0.1:3741`.
-- **Index lives in `~/.trace-mcp/`**, never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
-- **Semantic search is offline by default** — bundled ONNX embeddings, no API keys, no outbound calls. Switch to Ollama (local) or OpenAI (opt-in) via config.
-- **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below — nothing else is phoned home.
-- **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
-- **The daemon trusts loopback and nothing else.** `serve-http` is unauthenticated by design: a caller on `127.0.0.1` is already you. A non-loopback `--host` is therefore refused unless you pass `--allow-remote` and front the port with your own auth — see [Configuration](https://trace-mcp.com/configuration.html#http-daemon--one-warm-index-shared-across-many-projects).
-- **To wipe everything**, delete `~/.trace-mcp/` — that directory is the whole footprint.
-
-### Usage telemetry
-
-trace-mcp sends at most one anonymous ping per day, per install, to help us count active installs. It is:
-
-- **Anonymous** — a random install id (`~/.trace-mcp/telemetry-state.json`), the trace-mcp version, Node major version, OS platform, the country your machine's timezone belongs to (`DE`, not a city and not an IP), the name of the MCP client that connected (`claude-code`), the model it mostly drove (`claude-opus-4-6`), how many repositories you have indexed (the number, never their names or paths), whether this run is a first install or a version change (and which version you came from), your machine's class (CPU architecture, core count, RAM in whole gigabytes, OS version), and two aggregate counters since the previous ping: how many tool calls you made and the estimated tokens they saved (the same totals `trace-mcp savings` prints).
-- **Not sent from CI** — the ping is suppressed when `CI` is set, so build jobs don't count as installs.
-- **Never collected** — no IP address (`ip_override` is left unset, so Google derives nothing from the connection), no device fingerprint, no demographics, no account, email, hostname, username, repository name or file path, no query content and no code. The only per-install identifier is a UUID generated locally on your machine.
-- **Opt-out** — set `TRACE_MCP_TELEMETRY=off` to disable it entirely.
-- **Small blast radius by construction** — transport is [GA4's Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4), a single HTTP POST, not a custom backend or SDK.
-- **Its credentials are public by design** — the GA4 measurement id and write-only `api_secret` are compiled into the published bundle, so you can read exactly where the ping goes. See [SECURITY.md](SECURITY.md#telemetry-credentials--public-by-design).
-
-Source: [`src/telemetry/usage-ping.ts`](src/telemetry/usage-ping.ts).
-
-For security-sensitive environments, review [SECURITY.md](SECURITY.md) before use.
-
----
-
-## Getting the most out of trace-mcp
-
-trace-mcp works on three levels to make AI agents use its tools instead of raw file reading:
-
-### Level 1: Automatic (works out of the box)
-
-The MCP server provides **instructions** and **tool descriptions** with routing hints that tell AI agents when to prefer trace-mcp over native Read/Grep/Glob. This works with any MCP-compatible client — no configuration needed.
-
-### Level 2: CLAUDE.md (recommended)
-
-`trace-mcp init` adds a Code Navigation Policy block to `~/.claude/CLAUDE.md` (or your project's `CLAUDE.md`) that tells the agent which trace-mcp tool to prefer over Read/Grep/Glob for each kind of task. If you skipped init, see [System prompt routing](https://trace-mcp.com/tweakcc.html) for the full block and how to tune enforcement.
-
-### Level 3: Hook enforcement (Claude Code only)
-
-For hard enforcement, `trace-mcp init` installs a **PreToolUse guard hook** that blocks Read/Grep/Glob on source files and redirects the agent to trace-mcp tools (non-code files, Read-before-Edit, and safe Bash commands pass through). Manage manually with `trace-mcp setup-hooks --global` / `--uninstall`. Details: [System prompt routing](https://trace-mcp.com/tweakcc.html).
-
-### Level 4: Max tier — system prompt rewrites + agent behavior rules
-
-Picking **Max** during `trace-mcp init` (the default) layers on two more amplifiers:
-
-- **tweakcc system-prompt rewrites** patch Claude Code's core tool descriptions so the model internalizes "use trace-mcp search" instead of "use Grep" from the start. Claude Code only.
-- **`agent_behavior: "strict"`** ships a compact set of discipline rules via MCP instructions — no flattery, disagree on wrong premises, never fabricate, goal-driven execution, 2-strike session hygiene, no drive-by refactors. Cross-client (Claude Code, Cursor, Codex, Windsurf) and auto-updates on `npm upgrade trace-mcp` without re-running `init`.
-
-This is the setup for making the same discipline rules apply to every teammate's agent without asking anyone to configure it. Tune or disable via `tools.agent_behavior` in `~/.trace-mcp/.config.json` — see [Tool exposure & agent behavior](https://trace-mcp.com/configuration.html#tool-exposure--agent-behavior).
-
----
-
-<a id="decision-memory"></a>
-
-## Decision memory
-
-Decisions, tradeoffs, and discoveries from AI-agent conversations usually vanish when the session ends. trace-mcp captures them and **links each decision to the code it's about** — so when someone later runs `get_change_impact` on `src/db/connection.ts::Pool#class`, the "we chose PostgreSQL for JSONB" decision surfaces automatically.
-
-- **Mine** — `mine_sessions` scans Claude Code / Claw Code JSONL logs and extracts decisions via pattern matching (0 LLM calls). Types: architecture, tech choice, bug root cause, tradeoff, convention.
-- **Link** — each decision attaches to a symbol or file; supports service-scoped decisions for subprojects.
-- **Surface** — decisions auto-enrich `get_change_impact`, `plan_turn`, and `get_wake_up`. Temporal validity (`valid_from`/`valid_until`) makes "what was true on 2025-01-15?" queries possible.
-- **Search** — `query_decisions` (FTS5 + filters) for decisions; `search_sessions` for raw conversation content across all past sessions.
-
-```bash
-trace-mcp memory mine                           # extract decisions from sessions
-trace-mcp memory search "GraphQL migration"     # search past conversations
-trace-mcp memory timeline --file src/auth.ts    # decision history for a file
-```
-
-> Full tool list, CLI, temporal validity, service scoping: [Decision memory](https://trace-mcp.com/decision-memory.html).
-
----
-
-<a id="subprojects"></a>
-
-## Subprojects
-
-A **subproject** is any repo in your project's ecosystem — microservice, frontend, shared lib, CLI tool. trace-mcp **links dependency graphs across subprojects**: if service A calls an endpoint in service B, changing the endpoint in B shows up as a breaking change for A.
-
-Discovery is automatic. On each index, trace-mcp detects subprojects (Docker Compose, flat/grouped workspaces, monolith fallback), parses API contracts (OpenAPI, GraphQL SDL, Protobuf/gRPC), scans code for HTTP client calls (fetch, axios, `Http::`, `requests`, `http.Get`, gRPC stubs, GraphQL ops), and links the calls to known endpoints.
-
-```bash
-cd ~/projects/my-app && trace-mcp add
-# → auto-detects user-service (openapi.yaml) and order-service
-# → links order-service → user-service via /api/users/{id}
-
-trace-mcp subproject impact --endpoint=/api/users
-# → [order-service] src/services/user-client.ts:42 (axios, confidence: 85%)
-```
-
-External subprojects can be added manually with `trace-mcp subproject add --repo=... --project=...`. MCP tools: `get_subproject_graph`, `get_subproject_impact`, `get_subproject_clients`, `subproject_add_repo`, `subproject_sync`.
-
-> Full CLI, detection modes, MCP-tool reference, topology config: [Configuration — topology & subprojects](https://trace-mcp.com/configuration.html#topology--subprojects).
-
----
-
-<a id="cipr-change-impact-reports"></a>
-
-## CI/PR change impact reports
-
-`trace-mcp ci-report --base main --head HEAD` produces a markdown or JSON report per pull request: **summary, blast radius** (depth-2 reverse dep traversal), **test coverage gaps** (per-symbol `hasTestReach`), **risk analysis** (30% complexity + 25% churn + 25% coupling + 20% blast radius), **architecture violations** (auto-detects clean / hexagonal presets), and **new dead exports**.
-
-Use `--fail-on high` to block merges on high-risk changes. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for a ready-to-use GitHub Action that runs `build → test → impact-report` and posts a sticky PR comment on every push.
-
----
-
-## Pilot program — for teams running LLM in production
-
-If you're shipping AI features in production — internal copilots, customer-facing assistants, RAG over a code or knowledge base — and you're hitting cost, latency, or quality ceilings, we'll run a focused pilot with you.
-
-**Format:** 2–4 weeks. Minimal integration. One or two real production use cases — not a demo.
-
-**What we measure (before / after):**
-
-- Tokens per successful answer
-- First-response accuracy (% of queries resolved without retry)
-- Retries and fallback calls
-- End-to-end latency
-- User success rate on a fixed evaluation set
-
-**What you get:** a clear, before/after report on whether context optimization moves the metrics that matter for your stack — and a path to scale usage with confidence instead of throttling it on cost.
-
-The target is a system that stays predictable as usage grows, not a one-off cost cut: teams usually want to reach reliable production first and expand their LLM footprint after.
-
-**Get in touch:** open an issue at [github.com/nikolai-vysotskyi/trace-mcp/issues](https://github.com/nikolai-vysotskyi/trace-mcp/issues) tagged `pilot`, or reach out to [@nikolai-vysotskyi](https://github.com/nikolai-vysotskyi).
+The app talks to the same `trace-mcp` daemon (`http://127.0.0.1:3741`) that MCP clients use, so anything you index from the app is immediately available to Claude Code / Cursor / etc. If you only want the MCP server and the CLI, you do not need the app at all — [`npm install -g trace-mcp`](#install) is the whole install.
 
 ---
 
@@ -512,6 +340,138 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
 **Plugin architecture** — language plugins (symbol extraction) and integration plugins (semantic edges) are loaded based on project detection, organized into categories: framework, ORM, view, API, validation, state, realtime, testing, tooling.
 
 > Details: [Architecture & plugin system — how indexing works](https://trace-mcp.com/architecture.html)
+
+---
+
+<a id="decision-memory"></a>
+
+## Decision memory
+
+Decisions, tradeoffs, and discoveries from AI-agent conversations usually vanish when the session ends. trace-mcp captures them and **links each decision to the code it's about** — so when someone later runs `get_change_impact` on `src/db/connection.ts::Pool#class`, the "we chose PostgreSQL for JSONB" decision surfaces automatically.
+
+- **Mine** — `mine_sessions` scans Claude Code / Claw Code JSONL logs and extracts decisions via pattern matching (0 LLM calls). Types: architecture, tech choice, bug root cause, tradeoff, convention.
+- **Link** — each decision attaches to a symbol or file; supports service-scoped decisions for subprojects.
+- **Surface** — decisions auto-enrich `get_change_impact`, `plan_turn`, and `get_wake_up`. Temporal validity (`valid_from`/`valid_until`) makes "what was true on 2025-01-15?" queries possible.
+- **Search** — `query_decisions` (FTS5 + filters) for decisions; `search_sessions` for raw conversation content across all past sessions.
+
+```bash
+trace-mcp memory mine                           # extract decisions from sessions
+trace-mcp memory search "GraphQL migration"     # search past conversations
+trace-mcp memory timeline --file src/auth.ts    # decision history for a file
+```
+
+> Full tool list, CLI, temporal validity, service scoping: [Decision memory](https://trace-mcp.com/decision-memory.html).
+
+---
+
+<a id="subprojects"></a>
+
+## Subprojects
+
+A **subproject** is any repo in your project's ecosystem — microservice, frontend, shared lib, CLI tool. trace-mcp **links dependency graphs across subprojects**: if service A calls an endpoint in service B, changing the endpoint in B shows up as a breaking change for A.
+
+Discovery is automatic. On each index, trace-mcp detects subprojects (Docker Compose, flat/grouped workspaces, monolith fallback), parses API contracts (OpenAPI, GraphQL SDL, Protobuf/gRPC), scans code for HTTP client calls (fetch, axios, `Http::`, `requests`, `http.Get`, gRPC stubs, GraphQL ops), and links the calls to known endpoints.
+
+```bash
+cd ~/projects/my-app && trace-mcp add
+# → auto-detects user-service (openapi.yaml) and order-service
+# → links order-service → user-service via /api/users/{id}
+
+trace-mcp subproject impact --endpoint=/api/users
+# → [order-service] src/services/user-client.ts:42 (axios, confidence: 85%)
+```
+
+External subprojects can be added manually with `trace-mcp subproject add --repo=... --project=...`. MCP tools: `get_subproject_graph`, `get_subproject_impact`, `get_subproject_clients`, `subproject_add_repo`, `subproject_sync`.
+
+> Full CLI, detection modes, MCP-tool reference, topology config: [Configuration — topology & subprojects](https://trace-mcp.com/configuration.html#topology--subprojects).
+
+---
+
+<a id="cipr-change-impact-reports"></a>
+
+## CI/PR change impact reports
+
+`trace-mcp ci-report --base main --head HEAD` produces a markdown or JSON report per pull request: **summary, blast radius** (depth-2 reverse dep traversal), **test coverage gaps** (per-symbol `hasTestReach`), **risk analysis** (30% complexity + 25% churn + 25% coupling + 20% blast radius), **architecture violations** (auto-detects clean / hexagonal presets), and **new dead exports**.
+
+Use `--fail-on high` to block merges on high-risk changes. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for a ready-to-use GitHub Action that runs `build → test → impact-report` and posts a sticky PR comment on every push.
+
+---
+
+## Local-first by design
+
+trace-mcp runs entirely on your machine. Nothing about your source code is uploaded, and there is no account to create.
+
+- **Indexing happens locally.** The MCP server is a Node process you run yourself — stdio or `http://127.0.0.1:3741`.
+- **Index lives in `~/.trace-mcp/`**, never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
+- **Semantic search is offline by default** — bundled ONNX embeddings, no API keys, no outbound calls. Switch to Ollama (local) or OpenAI (opt-in) via config.
+- **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below — nothing else is phoned home.
+- **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
+- **The daemon trusts loopback and nothing else.** `serve-http` is unauthenticated by design: a caller on `127.0.0.1` is already you. A non-loopback `--host` is therefore refused unless you pass `--allow-remote` and front the port with your own auth — see [Configuration](https://trace-mcp.com/configuration.html#http-daemon--one-warm-index-shared-across-many-projects).
+- **To wipe everything**, delete `~/.trace-mcp/` — that directory is the whole footprint.
+
+### Usage telemetry
+
+trace-mcp sends at most one anonymous ping per day, per install, to help us count active installs. It is:
+
+- **Anonymous** — a random install id (`~/.trace-mcp/telemetry-state.json`), the trace-mcp version, Node major version, OS platform, the country your machine's timezone belongs to (`DE`, not a city and not an IP), the name of the MCP client that connected (`claude-code`), the model it mostly drove (`claude-opus-4-6`), how many repositories you have indexed (the number, never their names or paths), whether this run is a first install or a version change (and which version you came from), your machine's class (CPU architecture, core count, RAM in whole gigabytes, OS version), and two aggregate counters since the previous ping: how many tool calls you made and the estimated tokens they saved (the same totals `trace-mcp savings` prints).
+- **Not sent from CI** — the ping is suppressed when `CI` is set, so build jobs don't count as installs.
+- **Never collected** — no IP address (`ip_override` is left unset, so Google derives nothing from the connection), no device fingerprint, no demographics, no account, email, hostname, username, repository name or file path, no query content and no code. The only per-install identifier is a UUID generated locally on your machine.
+- **Opt-out** — set `TRACE_MCP_TELEMETRY=off` to disable it entirely.
+- **Small blast radius by construction** — transport is [GA4's Measurement Protocol](https://developers.google.com/analytics/devguides/collection/protocol/ga4), a single HTTP POST, not a custom backend or SDK.
+- **Its credentials are public by design** — the GA4 measurement id and write-only `api_secret` are compiled into the published bundle, so you can read exactly where the ping goes. See [SECURITY.md](SECURITY.md#telemetry-credentials--public-by-design).
+
+Source: [`src/telemetry/usage-ping.ts`](src/telemetry/usage-ping.ts).
+
+For security-sensitive environments, review [SECURITY.md](SECURITY.md) before use.
+
+---
+
+## Getting the most out of trace-mcp
+
+trace-mcp works on three levels to make AI agents use its tools instead of raw file reading:
+
+### Level 1: Automatic (works out of the box)
+
+The MCP server provides **instructions** and **tool descriptions** with routing hints that tell AI agents when to prefer trace-mcp over native Read/Grep/Glob. This works with any MCP-compatible client — no configuration needed.
+
+### Level 2: CLAUDE.md (recommended)
+
+`trace-mcp init` adds a Code Navigation Policy block to `~/.claude/CLAUDE.md` (or your project's `CLAUDE.md`) that tells the agent which trace-mcp tool to prefer over Read/Grep/Glob for each kind of task. If you skipped init, see [System prompt routing](https://trace-mcp.com/tweakcc.html) for the full block and how to tune enforcement.
+
+### Level 3: Hook enforcement (Claude Code only)
+
+For hard enforcement, `trace-mcp init` installs a **PreToolUse guard hook** that blocks Read/Grep/Glob on source files and redirects the agent to trace-mcp tools (non-code files, Read-before-Edit, and safe Bash commands pass through). Manage manually with `trace-mcp setup-hooks --global` / `--uninstall`. Details: [System prompt routing](https://trace-mcp.com/tweakcc.html).
+
+### Level 4: Max tier — system prompt rewrites + agent behavior rules
+
+Picking **Max** during `trace-mcp init` (the default) layers on two more amplifiers:
+
+- **tweakcc system-prompt rewrites** patch Claude Code's core tool descriptions so the model internalizes "use trace-mcp search" instead of "use Grep" from the start. Claude Code only.
+- **`agent_behavior: "strict"`** ships a compact set of discipline rules via MCP instructions — no flattery, disagree on wrong premises, never fabricate, goal-driven execution, 2-strike session hygiene, no drive-by refactors. Cross-client (Claude Code, Cursor, Codex, Windsurf) and auto-updates on `npm upgrade trace-mcp` without re-running `init`.
+
+This is the setup for making the same discipline rules apply to every teammate's agent without asking anyone to configure it. Tune or disable via `tools.agent_behavior` in `~/.trace-mcp/.config.json` — see [Tool exposure & agent behavior](https://trace-mcp.com/configuration.html#tool-exposure--agent-behavior).
+
+---
+
+## Pilot program — for teams running LLM in production
+
+If you're shipping AI features in production — internal copilots, customer-facing assistants, RAG over a code or knowledge base — and you're hitting cost, latency, or quality ceilings, we'll run a focused pilot with you.
+
+**Format:** 2–4 weeks. Minimal integration. One or two real production use cases — not a demo.
+
+**What we measure (before / after):**
+
+- Tokens per successful answer
+- First-response accuracy (% of queries resolved without retry)
+- Retries and fallback calls
+- End-to-end latency
+- User success rate on a fixed evaluation set
+
+**What you get:** a clear, before/after report on whether context optimization moves the metrics that matter for your stack — and a path to scale usage with confidence instead of throttling it on cost.
+
+The target is a system that stays predictable as usage grows, not a one-off cost cut: teams usually want to reach reliable production first and expand their LLM footprint after.
+
+**Get in touch:** open an issue at [github.com/nikolai-vysotskyi/trace-mcp/issues](https://github.com/nikolai-vysotskyi/trace-mcp/issues) tagged `pilot`, or reach out to [@nikolai-vysotskyi](https://github.com/nikolai-vysotskyi).
 
 ---
 
