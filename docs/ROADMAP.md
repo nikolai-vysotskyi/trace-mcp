@@ -149,24 +149,34 @@ ping, read them back in `adoption.yml`, and separately find out why `client`
 is unknown 41% of the time — an MCP client that does not identify itself is
 also a client we cannot write install docs for.
 
-### 2. Own the rename cutover end to end, or don't do it (TRA-644)
-The rename to `trace` is being implemented across code, config paths, app
-branding and docs (TRA-610/611/614/615/636/641). What has no owner is the
-**ordering across the surfaces that are not code**: the npm package
-identity, `trace-mcp.com` and every indexed URL on it, ~10 external
-directory listings that carry the old name and stale counts, the official
-MCP registry entry, GitHub topics, and the configs on 61 live installs.
-Each of those is a different autopilot's territory, and a rename is exactly
-the change that fails at the seams between them.
+### 2. Execute the rename in the order the decision fixed (TRA-644 — decided)
+**Decided 2026-09-02: `trace` is the command, `trace-mcp` is the project.**
+Thesis, per-surface table and reopen condition in
+[`ops/rename-to-trace.md`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/ops/rename-to-trace.md).
+The short name takes only what sits on a developer's own disk and is
+migrated by code we control — the CLI binary, the MCP server key, `~/.trace`.
+The npm package, `trace-mcp.com` and its indexed URLs, the `server.json`
+registry identity, the repo name and topics, the ~10 external listings and
+the Electron bundle (TRA-636, cancelled) all keep `trace-mcp`.
 
-**Why now:** the token case is measured at ~1% (TRA-613), so the entire
-justification is positioning — and positioning is precisely what breaks if
-the cutover is partial. Half-renamed, we are a project whose site, registry
-entry, directory listings and package name disagree with its binary, under
-a word (`trace`) generic enough that search will not disambiguate for us,
-on a surface that gets ~20 human views a day. This item is a written
-thesis plus a single sequenced cutover checklist with one owner — not more
-code.
+Two verified facts closed the full-rename option. **`trace` has been taken
+on npm since 2024**, so `npx trace` was never available and the install
+command — the most-copied string we have — could not be renamed under any
+plan; the question was only where the boundary between two names sits. And
+**the whole prize is 0.74–1.23%** (TRA-613), all of it in the server key and
+the CLI verb, none of it in the package name, the domain, the registry entry
+or the bundle. So the boundary goes where the tokens are, which also makes
+this an ordinary two-name split (`ripgrep`/`rg`, `neovim`/`nvim`) rather
+than a partial cutover, and leaves nothing in the program irreversible and
+no door that needs a human.
+
+**What is left is execution, in one order.** TRA-641 first: analytics still
+classify our calls as `tool_server === 'trace-mcp'`, and TRA-614's Migrate
+button is merged but not in v3.11.0 — once the release carrying it ships,
+`get_real_savings` reports zero, silently. Then TRA-611 (#730), then TRA-615
+(#717) rewritten to state the boundary rather than announce a rename. TRA-650
+covers the one real breakage: the tool prefix in allowlists, hook matchers
+and prose that users wrote themselves, which `init` cannot reach.
 
 ### 3. Put a funnel behind the 61, not just a number (TRA-645)
 We now have a denominator, and no funnel. Reach → install → **activation**
