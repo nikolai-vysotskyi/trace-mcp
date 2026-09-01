@@ -60,6 +60,17 @@ Nikolai's machine. The macOS release now ships a **DMG per architecture** for
 humans plus the zip the staged-zip updater consumes, both built from a
 Developer ID Application-signed, notarized, stapled `.app`.
 
+**The DMG container is signed and notarized too, from the first release after
+2026-09-01** (TRA-627). Through 3.10.0 only the `.app` inside carried a ticket:
+`codesign -dvvv` on the published `trace-mcp-3.10.0-arm64.dmg` said "code object
+is not signed at all" and `spctl -a -t open` rejected it for "no usable
+signature", because electron-builder notarizes in `afterSign` and assembles the
+image afterwards. Signing, notarizing and stapling the image is now an explicit
+release step, and the release fails if either the app or the container comes out
+without a ticket. Do **not** replace that step with `dmg.sign: true` in
+`electron-builder.yml`: dmg-builder signs without `--timestamp`, and Apple
+refuses to notarize a signature that has no secure timestamp.
+
 Where it lives: `mac:` block in `packages/app/electron-builder.yml`,
 entitlements in `packages/app/build/entitlements.mac*.plist` (one comment per
 key saying why it is there — keep it that way, an unjustified entitlement list
@@ -94,6 +105,36 @@ access and process execution. Getting through review would mean shipping a
 different, less useful product. Developer ID + notarization gives the same
 Gatekeeper outcome with none of that. Don't reopen without a concrete reason
 this changed on Apple's side.
+
+## The `trace` rename does not touch any surface in this table
+
+Decided 2026-09-02 (TRA-644), full reasoning in [`ops/rename-to-trace.md`](rename-to-trace.md):
+**`trace` is the command, `trace-mcp` is the project.** The short name applies
+only to things on a developer's own disk — the CLI binary, the MCP server key
+in their client config, `~/.trace`. Every surface listed above keeps
+`trace-mcp`.
+
+What that means for listings work, so nobody re-opens it:
+
+- **The npm package name is `trace-mcp` permanently.** `trace` on npm is taken
+  (`AndreasMadsen/trace`, "Creates super long stack traces", latest 3.2.0,
+  published 2024-10-23 — verified 2026-09-02). There is no rename to announce.
+- **`server.json` keeps `io.github.nikolai-vysotskyi/trace-mcp`.** It is the
+  identity mcp.so, Smithery and PulseMCP ingest, and it republishes on every
+  release. Renaming it would buy zero tokens and risk the free pickup the whole
+  registry strategy depends on.
+- **No rename submissions to any directory.** The count corrections already in
+  flight stand; nothing else needs to be re-sent.
+- **mcpmarket.com's "Trace" entry is not a defect any more.** It was listed as
+  a mismatch to fix; under this decision it is accurate. Do not spend the $29
+  paid edit or the support email on it.
+- **The repo name, description, topics and `trace-mcp.com` are unchanged.** No
+  redirects, no canonical changes, no re-indexing cost. The site has 5 of 13
+  pages unindexed already (TRA-350) — there is no index coverage to spend.
+
+The measured case for the whole rename was **0.74–1.23%** of the advertised
+tool surface (TRA-613, #720). Anything that would cost this table a listing is
+not worth that, and this row exists so the next run does not re-derive it.
 
 ## Findings that should not be re-derived
 

@@ -15,6 +15,7 @@ import {
   launcherEnvContent,
   PLIST_MARKER,
   readLauncherEnv,
+  resolveCliCommand,
   runtimeShimContent,
 } from '../daemon-install';
 
@@ -27,6 +28,31 @@ describe('compareVersions', () => {
     expect(compareVersions('v3.7.0', '3.7.0')).toBe(0);
     // Prereleases are not ordered against their release; they compare equal.
     expect(compareVersions('3.7.0-rc.1', '3.7.0')).toBe(0);
+  });
+});
+
+describe('resolveCliCommand', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-cli-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it('prefers the installed shim — a DMG-only machine has no trace-mcp on PATH', () => {
+    const bin = path.join(home, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    const shim = path.join(bin, process.platform === 'win32' ? 'trace-mcp.cmd' : 'trace-mcp');
+    fs.writeFileSync(shim, '#!/bin/bash\n', { mode: 0o755 });
+
+    expect(resolveCliCommand(home)).toBe(shim);
+  });
+
+  it('falls back to PATH when no shim was installed', () => {
+    expect(resolveCliCommand(home)).toBe('trace-mcp');
   });
 });
 
@@ -117,6 +143,45 @@ describe('generated control-plane files', () => {
       node: '/bin/runtime',
       cli: '/srv/dist/cli.js',
       version: '3.7.0',
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  /* TRA-614. The app rewrites launcher.env wholesale on takeover, but `init`
+     owns the shim that reads it, and the two ship on their own schedules. Once
+     TRA-610 renames the shim to read TRACE_*, an app still writing only
+     TRACE_MCP_* would erase exactly the keys the shim it just selected needs,
+     and launchd would start a shim with no Node and no CLI to exec. Writing
+     both families removes the ordering dependency; a shim ignores keys it does
+     not know. Found in review of PR #724. */
+  it('writes both the TRACE_* and TRACE_MCP_* key families', () => {
+    const content = launcherEnvContent('/bin/runtime', '/srv/dist/cli.js', '3.7.0');
+    for (const key of ['TRACE_NODE', 'TRACE_CLI', 'TRACE_VERSION']) {
+      expect(content, `${key} missing`).toContain(`${key}=`);
+      expect(content, `${key.replace('TRACE_', 'TRACE_MCP_')} missing`).toContain(
+        `${key.replace('TRACE_', 'TRACE_MCP_')}=`,
+      );
+    }
+    // Same values in both, so whichever family a shim reads, it gets the same
+    // runtime — the failure this guards against is a half-written file.
+    const parse = (k: string) => content.match(new RegExp(`^${k}="(.*)"$`, 'm'))?.[1];
+    expect(parse('TRACE_NODE')).toBe(parse('TRACE_MCP_NODE'));
+    expect(parse('TRACE_CLI')).toBe(parse('TRACE_MCP_CLI'));
+    expect(parse('TRACE_VERSION')).toBe(parse('TRACE_MCP_VERSION'));
+  });
+
+  it('reads a launcher.env that carries only the renamed TRACE_* keys', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tm-env-new-'));
+    fs.writeFileSync(
+      path.join(dir, 'launcher.env'),
+      ['TRACE_NODE="/bin/runtime"', 'TRACE_CLI="/srv/dist/cli.js"', 'TRACE_VERSION="4.0.0"', ''].join(
+        '\n',
+      ),
+    );
+    expect(readLauncherEnv(dir)).toEqual({
+      node: '/bin/runtime',
+      cli: '/srv/dist/cli.js',
+      version: '4.0.0',
     });
     fs.rmSync(dir, { recursive: true, force: true });
   });

@@ -270,12 +270,13 @@ layout: null
       --surface-raised: #1A1A1A;
       --border: #222222;
       --border-visible: #333333;
-      --text-disabled: #666666;
+      --text-disabled: #848484; /* 5.61 page / 5.05 surface / 4.65 raised (governs) — #666666 was 3.29 on surface */
       --text-secondary: #999999;
       --text-primary: #E8E8E8;
       --text-display: #FFFFFF;
-      --accent: #D71921;
-      --accent-subtle: rgba(215, 25, 33, 0.15);
+      --accent: #E54047; /* 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see DESIGN-WEB.md #1 */
+      --accent-subtle: rgba(229, 64, 71, 0.15);
+      --accent-solid: #D71921; /* landing-only fill under white text: 5.18:1 with #FFFFFF */
       --success: #4A9E5C;
       --warning: #D4A843;
 
@@ -295,12 +296,13 @@ layout: null
       --surface-raised: #F0F0F0;
       --border: #E8E8E8;
       --border-visible: #CCCCCC;
-      --text-disabled: #6D6D6D; /* 4.75:1 on #F5F5F5, 4.54:1 on #F0F0F0 — #999999 was 2.6:1 */
+      --text-disabled: #6D6D6D; /* 4.75 page / 5.17 surface / 4.54 raised (governs) — #999999 was 2.61 on page */
       --text-secondary: #595959;
       --text-primary: #1A1A1A;
       --text-display: #000000;
-      --accent: #D71921;
-      --accent-subtle: rgba(215, 25, 33, 0.12);
+      --accent: #B3151C; /* 6.33 page / 6.91 surface / 6.06 raised (governs) */
+      --accent-subtle: rgba(179, 21, 28, 0.12);
+      --accent-solid: #D71921; /* landing-only fill under white text: 5.18:1 with #FFFFFF */
       --success: #2E7D3E;
       --warning: #A8822E;
 
@@ -490,7 +492,7 @@ layout: null
       white-space: nowrap;
     }
     .btn-primary {
-      background: var(--accent);
+      background: var(--accent-solid);
       color: #FFFFFF;
       box-shadow: 0 0 0 0 rgba(215, 25, 33, 0.4);
       transition: background-color 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
@@ -507,6 +509,9 @@ layout: null
       border: 1px solid var(--border-visible);
     }
     .btn-secondary:hover { border-color: var(--text-display); }
+    /* The hero's single primary action. Bigger box, same type scale — a new
+       font size would cost the page a slot in the 3-size budget for nothing. */
+    .btn-lg { padding: 18px 34px; min-height: 56px; }
     .btn .arrow { display: inline-block; transition: transform 200ms ease-out; }
     .btn:hover .arrow { transform: translateX(3px); }
 
@@ -522,77 +527,69 @@ layout: null
     .hero-meta .divider { flex: 1; height: 1px; background: var(--border-visible); }
     .hero-headline {
       font-family: var(--font-body);
-      font-size: clamp(36px, 6vw, 72px);
+      /* 60/900 is the pair that breaks this headline after "intelligence" and
+         nowhere else. At 72/820 it ran to three lines and split "AI coding
+         agents" across two of them; measure again if the wording changes. */
+      font-size: clamp(36px, 5.2vw, 60px);
       font-weight: 400;
       line-height: 1.05;
       letter-spacing: -0.025em;
       color: var(--text-display);
-      max-width: 820px;
+      max-width: 900px;
       overflow-wrap: break-word;
     }
-    .hero-headline .em { font-weight: 700; }
     .hero-desc {
-      margin-top: 48px;
-      max-width: 720px;
+      margin-top: 28px;
+      max-width: 660px;
       font-size: 19px;
       line-height: 1.55;
       color: var(--text-primary);
       font-weight: 400;
     }
-    .hero-desc .accent-text { color: var(--text-display); font-weight: 500; }
-    .hero-bullets {
-      list-style: none;
-      margin-top: 28px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      font-size: 17px;
-      color: var(--text-primary);
-      font-weight: 400;
-    }
-    .hero-bullets li {
-      display: flex;
-      align-items: baseline;
-      gap: 10px;
-    }
-    .hero-bullets li::before {
-      content: '●';
-      font-size: 9px;
-      color: var(--success);
-      flex-shrink: 0;
-      line-height: 1.9;
-    }
-    .bullet-accent {
-      color: var(--text-display);
-      font-weight: 600;
-    }
-    @media (max-width: 700px) {
-      .hero-bullets { font-size: 15px; margin-top: 20px; gap: 8px; }
-    }
+    /* The payoff half of the subtitle separates on colour, not weight — a second
+       weight here would spend a budget slot on what one shade already says. */
+    .hero-desc .accent-text { color: var(--text-display); }
     .hero-cta {
       margin-top: 56px;
       display: flex; gap: 12px; flex-wrap: wrap;
       align-items: center;
     }
+    /* The second install path, and the only one off macOS. A technical 8px box,
+       not a pill: it reads as a terminal line, and the pill next to it is the
+       one thing on this row that should read as a button. */
     .hero-install {
-      display: inline-flex; align-items: center; gap: 12px;
-      padding: 14px 24px;
-      border: 1px dashed var(--border-visible);
-      border-radius: 999px;
+      display: inline-flex; align-items: center; gap: 14px;
+      min-height: 56px;
+      padding: 0 20px;
+      background: var(--surface);
+      border: 1px solid var(--border-visible);
+      border-radius: 8px;
       font-family: var(--font-mono);
       font-size: 13px;
-      color: var(--text-secondary);
+      color: var(--text-display);
+      text-align: left;
       cursor: pointer;
-      transition: all 200ms ease-out;
+      transition: border-color 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
     }
-    .hero-install:hover { border-color: var(--text-display); color: var(--text-display); border-style: solid; }
-    .hero-install code { color: var(--text-display); }
+    .hero-install:hover { border-color: var(--text-display); }
+    /* Off macOS the DMG button is removed and this is the hero's only action. */
+    .hero-install.is-primary { border-color: var(--text-display); }
+    .hero-install .prompt { color: var(--text-secondary); }
+    .hero-install code { color: var(--text-display); font-size: inherit; }
     .hero-install .copy {
+      align-self: stretch;
+      display: flex; align-items: center;
+      /* Pins the label to the right edge once the box goes full-width on a phone;
+         no effect while the box sizes to its content on desktop. */
+      margin-left: auto;
+      padding-left: 14px;
+      border-left: 1px solid var(--border);
       font-size: 10px;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--text-disabled);
+      color: var(--text-secondary);
     }
+    .hero-install:hover .copy { color: var(--text-display); }
     .hero-alt-arch {
       margin-top: 14px;
       font-family: var(--font-mono);
@@ -608,7 +605,9 @@ layout: null
     }
     .hero-alt-arch a:hover { color: var(--text-display); border-color: var(--text-display); }
     .hero-trust {
-      margin-top: 18px;
+      /* Far enough from the architecture link above that the two mono caps rows
+         do not read as one paragraph. */
+      margin-top: 28px;
       font-family: var(--font-mono);
       font-size: 12px;
       letter-spacing: 0.08em;
@@ -630,10 +629,13 @@ layout: null
       .hero { padding: 88px 0 40px; }
       .hero-meta { margin-bottom: 28px; }
       .hero-headline { font-size: clamp(30px, 8vw, 44px); max-width: 100%; }
-      .hero-desc { margin-top: 24px; font-size: 16px; }
-      .hero-cta { margin-top: 24px; gap: 8px; }
-      .hero-cta .btn { padding: 12px 22px; font-size: 11px; }
-      .hero-install { display: none; }
+      .hero-desc { margin-top: 20px; font-size: 16px; }
+      /* One column, both full width: on a phone the two actions stack rather
+         than compete for a row 390px wide. The install line used to be
+         display:none here, which left a phone with no copyable command at all. */
+      .hero-cta { margin-top: 28px; gap: 10px; flex-direction: column; align-items: stretch; }
+      .hero-cta .btn { padding: 14px 22px; font-size: 11px; justify-content: center; }
+      .hero-install { font-size: 12px; min-height: 52px; padding: 0 14px; gap: 10px; }
       .hero-alt-arch { font-size: 11px; margin-top: 12px; }
       .hero-trust { font-size: 11px; gap: 8px; margin-top: 14px; }
     }
@@ -1350,6 +1352,17 @@ layout: null
       transition: color 200ms ease-out;
     }
     .footer-col a:hover { color: var(--text-display); }
+    /* 22 doc links stacked single-file would run 22 rows deep against a
+       4-row Product column. Two grid tracks wide with an auto-fill inner
+       grid, it settles at 3 × 8 — the same `repeat(auto-fill, minmax(...))`
+       rule the doc-page footer uses (DESIGN-WEB.md §2), one cell per link so
+       a wrapped label still reads as one target. */
+    .footer-col-docs { grid-column: span 2; }
+    .footer-doc-links {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      column-gap: 32px;
+    }
     .footer-bottom {
       display: flex; justify-content: space-between; align-items: center;
       padding-top: 24px;
@@ -1538,7 +1551,7 @@ layout: null
       width: 8px; height: 8px;
       background: var(--accent);
       border-radius: 50%;
-      box-shadow: 0 0 12px rgba(215, 25, 33, 0.45);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
       flex-shrink: 0;
     }
     .pain-text {
@@ -2011,38 +2024,34 @@ layout: null
       </div>
 
       <h1 class="hero-headline">
-        Your agent re-reads the same code every turn. <span class="em">trace-mcp indexes it once.</span>
+        Precomputed code intelligence for AI coding agents
       </h1>
 
       <p class="hero-desc">
-        trace-mcp is a framework-aware MCP server that serves precomputed code intelligence &mdash; a dependency graph, full-text search, impact analysis, and decision memory &mdash; to cut token usage for AI coding agents. It indexes your repo once and serves it through MCP, so agents query a precomputed graph instead of re-reading the same files on every turn.
+        trace-mcp indexes your repository once so agents stop re-reading the same files every turn.
+        <span class="accent-text">40&ndash;50% fewer tokens, 100% local.</span>
       </p>
 
-      <ul class="hero-bullets">
-        <li><span class="bullet-accent">~40&ndash;50%</span> fewer tokens on average</li>
-        <li><span class="bullet-accent">Faster responses</span> as the codebase grows</li>
-        <li><span class="bullet-accent">More reliable</span> results at scale</li>
-      </ul>
-
+      <!-- Two actions, no more (TRA-609): the DMG and the command that installs the
+           same thing without one. The two buttons that used to sit here both had a
+           second home already — the header links to the repo and to #install, which
+           is where "Analyze your AI system" pointed. Both survive on a phone. -->
       <div class="hero-cta">
         <!-- Rendered for everyone and pointed at the releases page, not hidden behind
              JS (TRA-440): a visitor without JavaScript gets a button that works, one
              click further from the file. detectMac() below removes it off macOS and
              rewrites the href to the DMG for the architecture it detects. -->
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"
-           rel="noopener" class="btn btn-primary" data-dmg>
+           rel="noopener" class="btn btn-primary btn-lg" data-dmg>
           Download for macOS <span class="arrow">&darr;</span>
         </a>
-        <a href="#install" class="btn btn-secondary" data-analyze-cta>
-          Analyze your AI system <span class="arrow">&rarr;</span>
-        </a>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp" target="_blank" rel="noopener" class="btn btn-secondary">
-          View on GitHub
-        </a>
-        <span class="hero-install" onclick="copyInstall(this)">
+        <!-- A real <button>, not the <span onclick> this used to be: the only way to
+             copy the install command was a mouse click, and it took no focus ring. -->
+        <button type="button" class="hero-install" onclick="copyInstall(this)">
+          <span class="prompt" aria-hidden="true">$</span>
           <code>npm install -g trace-mcp</code>
-          <span class="copy">copy</span>
-        </span>
+          <span class="copy" aria-live="polite">copy</span>
+        </button>
       </div>
 
       <!-- The other architecture stays a quiet link, never a question the visitor has
@@ -2052,13 +2061,11 @@ layout: null
       </p>
 
       <p class="hero-trust">
-        <span class="ok">Open source</span>
+        <span class="ok">Open source (MIT)</span>
         <span class="dot"></span>
-        <span>MIT licensed</span>
+        <span>Local-first</span>
         <span class="dot"></span>
-        <span>Works with Claude Code, Cursor, Windsurf</span>
-        <span class="dot"></span>
-        <span>Runs locally &middot; no data leaves your machine</span>
+        <span>Works with Claude Code, Cursor, Windsurf, Codex</span>
       </p>
 
     </div>
@@ -2804,23 +2811,26 @@ layout: null
         <a href="#capabilities">Capabilities</a>
         <a href="#install">Install</a>
       </div>
-      <div class="footer-col">
-        <h5>/ Resources</h5>
-        <a href="/tools-reference.html">Tool reference</a>
-        <a href="/configuration.html">Configuration</a>
-        <a href="/architecture.html">Architecture</a>
-        <a href="/supported-frameworks.html">Supported stack</a>
-        <a href="/comparisons.html">Comparisons</a>
-        <a href="/analytics.html">Analytics</a>
-      </div>
-      <div class="footer-col">
-        <h5>/ More docs</h5>
-        <a href="/decision-memory.html">Decision memory</a>
-        <a href="/toon-savings.html">TOON savings</a>
-        <a href="/telemetry.html">Telemetry</a>
-        <a href="/quality-gates.html">Quality gates</a>
-        <a href="/tweakcc.html">tweakcc</a>
-        <a href="/development.html">Development</a>
+      {%- comment -%}
+        Same list as the doc-page footer, from the same data file. The two
+        hand-written columns this replaced named 12 of the 22 pages and never
+        picked up the ones added after them — the whole /vs/ cluster launched
+        with no link from the one page on this site with any external
+        authority. Same failure mode as the accessibility layer in
+        DESIGN-WEB.md §7: the fix landed in _layouts/default.html and this
+        page does not use that layout.
+
+        Which pages are listed, their labels and their order belong to
+        docs_nav.yml and the SEO agent (DESIGN-WEB.md §2); the column split
+        is the only decision made here.
+      {%- endcomment -%}
+      <div class="footer-col footer-col-docs">
+        <h5>/ Docs</h5>
+        <div class="footer-doc-links">
+        {%- for item in site.data.docs_nav -%}
+          <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
+        {%- endfor -%}
+        </div>
       </div>
       <div class="footer-col">
         <h5>/ Source</h5>
@@ -2989,9 +2999,10 @@ layout: null
     const isMac = /Mac/i.test(navigator.platform || navigator.userAgent) && navigator.maxTouchPoints <= 1;
     if (!isMac) {
       btn.remove();
-      // Leaves the hero without a primary action otherwise.
-      const analyze = document.querySelector('[data-analyze-cta]');
-      if (analyze) analyze.classList.replace('btn-secondary', 'btn-primary');
+      // Leaves the hero without a primary action otherwise. The install command
+      // is the right one to promote here: it is the only path that works off a Mac.
+      const install = document.querySelector('.hero-install');
+      if (install) install.classList.add('is-primary');
       return;
     }
 

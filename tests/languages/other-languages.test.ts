@@ -19,6 +19,7 @@ import { HclLanguagePlugin } from '../../src/indexer/plugins/language/hcl/index.
 import { JsonLanguagePlugin } from '../../src/indexer/plugins/language/json-lang/index.js';
 import { JuliaLanguagePlugin } from '../../src/indexer/plugins/language/julia/index.js';
 import { LuaLanguagePlugin } from '../../src/indexer/plugins/language/lua/index.js';
+import { MakefileLanguagePlugin } from '../../src/indexer/plugins/language/makefile/index.js';
 import { NixLanguagePlugin } from '../../src/indexer/plugins/language/nix/index.js';
 import { PerlLanguagePlugin } from '../../src/indexer/plugins/language/perl/index.js';
 import { ProtobufLanguagePlugin } from '../../src/indexer/plugins/language/protobuf/index.js';
@@ -662,5 +663,96 @@ describe('EJS', () => {
   it('extracts const inside <% %>', () => {
     const r = p('<% const title = "Hello" %>');
     expect(r.symbols.some((s: any) => s.name === 'title' && s.kind === 'variable')).toBe(true);
+  });
+});
+
+// ==============================
+// 27. Makefile
+// ==============================
+describe('Makefile', () => {
+  const plugin = new MakefileLanguagePlugin();
+  const p = (s: string) => parse(plugin, s, 'Makefile');
+
+  it('extracts a target', async () => {
+    const r = await p('build:\n\ttsc\n');
+    expect(r.symbols.some((s: any) => s.name === 'build' && s.kind === 'function')).toBe(true);
+  });
+
+  it('extracts a variable assignment (=, :=, ?=, +=)', async () => {
+    const r = await p('CFLAGS = -Wall\nSRC := main.c\nDEBUG ?= 0\nLIBS += -lm\n');
+    for (const name of ['CFLAGS', 'SRC', 'DEBUG', 'LIBS']) {
+      expect(r.symbols.some((s: any) => s.name === name && s.kind === 'variable')).toBe(true);
+    }
+  });
+
+  it('extracts a define block', async () => {
+    const r = await p('define HELP\nUsage: make [target]\nendef\n');
+    expect(
+      r.symbols.some((s: any) => s.name === 'HELP' && s.kind === 'function' && s.metadata?.define),
+    ).toBe(true);
+  });
+
+  it('extracts an include edge', async () => {
+    const r = await p('include config.mk\n-include local.mk\n');
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'config.mk')).toBe(true);
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'local.mk')).toBe(true);
+  });
+
+  // Real-world case (node_modules/.pnpm/json-stringify-safe@5.0.1's Makefile):
+  // a single .PHONY line naming several targets used to be captured as one
+  // symbol literally named "test spec autotest autospec" instead of one
+  // symbol per real target.
+  it('splits a multi-target .PHONY line into one symbol per target', async () => {
+    const r = await p(
+      [
+        'test:',
+        '\t@node ./node_modules/.bin/_mocha -R dot',
+        '',
+        'spec:',
+        '\t@node ./node_modules/.bin/_mocha -R spec',
+        '',
+        '.PHONY: test spec autotest autospec',
+      ].join('\n'),
+    );
+    expect(r.symbols.some((s: any) => s.name === 'test spec autotest autospec')).toBe(false);
+    for (const name of ['test', 'spec', 'autotest', 'autospec']) {
+      expect(r.symbols.some((s: any) => s.name === name && s.kind === 'function')).toBe(true);
+    }
+  });
+
+  it('declares a phony target that has no rule of its own', async () => {
+    // .PHONY is a valid declaration on its own — a matching rule elsewhere
+    // isn't required (generated, pattern-rule-only, or include-supplied
+    // targets have none).
+    const r = await p('.PHONY: clean deploy\n');
+    expect(r.symbols.some((s: any) => s.name === 'clean' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'deploy' && s.kind === 'function')).toBe(true);
+  });
+
+  it('does not duplicate a target already declared by its own rule', async () => {
+    const r = await p('.PHONY: clean\nclean:\n\trm -rf dist\n');
+    expect(r.symbols.filter((s: any) => s.name === 'clean' && s.kind === 'function')).toHaveLength(
+      1,
+    );
+  });
+
+  it('offsets a .PHONY target correctly even when the name is a substring of the keyword', async () => {
+    // ".PHONY:" itself contains "O", "N", "H", "P", "Y" — a naive
+    // list.indexOf() lookup can match inside the keyword instead of the list.
+    const source = '.PHONY: O\n';
+    const r = await p(source);
+    const sym = r.symbols.find((s: any) => s.name === 'O' && s.kind === 'function');
+    expect(sym).toBeDefined();
+    expect(sym.byteStart).toBe(source.indexOf('O', 7)); // the target, not the "O" inside ".PHONY"
+    expect(source.slice(sym.byteStart, sym.byteEnd)).toBe('O');
+  });
+
+  it('ignores a trailing comment and a line-continuation backslash on a .PHONY line', async () => {
+    const r = await p('.PHONY: test spec # run mocha\n');
+    expect(r.symbols.some((s: any) => s.name === 'test' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'spec' && s.kind === 'function')).toBe(true);
+    for (const bogus of ['#', 'run', 'mocha', '\\']) {
+      expect(r.symbols.some((s: any) => s.name === bogus)).toBe(false);
+    }
   });
 });

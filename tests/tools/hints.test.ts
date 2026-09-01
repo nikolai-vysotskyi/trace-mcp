@@ -94,18 +94,18 @@ describe('Next-step hints', () => {
       const hints = getHints('get_call_graph', {
         callers: Array(6).fill({ symbol_id: 'x' }),
       });
-      const extractHint = hints.find((h) => h.tool === 'get_extraction_candidates');
+      const extractHint = hints.find((h) => h.tool === 'get_refactor_candidates');
       expect(extractHint).toBeDefined();
     });
 
-    test('check_rename_safe suggests apply_rename when safe', () => {
-      const hints = getHints('check_rename_safe', { safe: true, conflicts: [] });
+    test('check_rename suggests apply_rename when safe', () => {
+      const hints = getHints('check_rename', { safe: true, conflicts: [] });
       const applyHint = hints.find((h) => h.tool === 'apply_rename');
       expect(applyHint).toBeDefined();
     });
 
-    test('check_rename_safe returns empty when not safe', () => {
-      const hints = getHints('check_rename_safe', { safe: false, conflicts: ['x'] });
+    test('check_rename returns empty when not safe', () => {
+      const hints = getHints('check_rename', { safe: false, conflicts: ['x'] });
       const applyHint = hints.find((h) => h.tool === 'apply_rename');
       expect(applyHint).toBeUndefined();
     });
@@ -116,16 +116,16 @@ describe('Next-step hints', () => {
       expect(removeHint).toBeDefined();
     });
 
-    test('get_coupling_metrics suggests dependency_cycles', () => {
-      const hints = getHints('get_coupling_metrics', []);
+    test('get_coupling suggests circular_imports', () => {
+      const hints = getHints('get_coupling', []);
       const toolNames = hints.map((h) => h.tool);
-      expect(toolNames).toContain('get_dependency_cycles');
+      expect(toolNames).toContain('get_circular_imports');
     });
 
-    test('get_dependency_cycles suggests layer_violations', () => {
-      const hints = getHints('get_dependency_cycles', {});
+    test('get_circular_imports suggests check_architecture', () => {
+      const hints = getHints('get_circular_imports', {});
       const toolNames = hints.map((h) => h.tool);
-      expect(toolNames).toContain('get_layer_violations');
+      expect(toolNames).toContain('check_architecture');
     });
 
     test('get_schema suggests model_context', () => {
@@ -134,10 +134,10 @@ describe('Next-step hints', () => {
       expect(toolNames).toContain('get_model_context');
     });
 
-    test('get_repo_health suggests hotspots and dead_code', () => {
-      const hints = getHints('get_repo_health', {});
+    test('get_project_health suggests risk_hotspots and dead_code', () => {
+      const hints = getHints('get_project_health', {});
       const toolNames = hints.map((h) => h.tool);
-      expect(toolNames).toContain('get_hotspots');
+      expect(toolNames).toContain('get_risk_hotspots');
       expect(toolNames).toContain('get_dead_code');
     });
 

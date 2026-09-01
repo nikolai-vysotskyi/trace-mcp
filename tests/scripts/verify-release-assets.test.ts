@@ -5,8 +5,19 @@ import { describe, expect, it } from 'vitest';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MODULE_PATH = path.join(__dirname, '..', '..', 'scripts', 'verify-release-assets.mjs');
 
-const { auditReleaseAssets, expectedAssets } = (await import(MODULE_PATH)) as {
-  auditReleaseAssets: (version: string, assets: { name: string; size?: number }[]) => string[];
+const { auditReleaseAssets, auditChannelManifest, expectedAssets } = (await import(
+  MODULE_PATH
+)) as {
+  auditReleaseAssets: (
+    version: string,
+    assets: { name: string; size?: number }[],
+    manifestContents?: Record<string, string>,
+  ) => string[];
+  auditChannelManifest: (
+    manifestName: string,
+    manifestContent: string,
+    bySize: Map<string, number>,
+  ) => string[];
   expectedAssets: (version: string) => string[];
 };
 
@@ -99,5 +110,125 @@ describe('verify-release-assets', () => {
   // the tag through unstripped would report every asset as missing.
   it('reports everything missing when handed a tag instead of a version', () => {
     expect(auditReleaseAssets('v3.1.1', completeRelease('3.1.1'))).toHaveLength(12);
+  });
+
+  it('verifies that latest.yml referenced installer matches release assets', () => {
+    const validYml = `
+version: 3.1.1
+files:
+  - url: trace-mcp.Setup.3.1.1.exe
+    sha512: abc123
+path: trace-mcp.Setup.3.1.1.exe
+`;
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': validYml }),
+    ).toEqual([]);
+
+    const mismatchedYml = `
+version: 3.1.1
+files:
+  - url: trace-mcp-Setup-3.1.1.exe
+    sha512: abc123
+path: trace-mcp-Setup-3.1.1.exe
+`;
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': mismatchedYml }),
+    ).toEqual([
+      "latest.yml does not reference the expected Windows installer 'trace-mcp.Setup.3.1.1.exe'",
+      "latest.yml references 'trace-mcp-Setup-3.1.1.exe', but it is missing from release assets",
+      "latest.yml references 'trace-mcp-Setup-3.1.1.exe', but it is missing from release assets",
+    ]);
+  });
+
+  it('rejects empty, unreadable, or targetless channel manifests', () => {
+    expect(auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': '' })).toEqual([
+      'latest.yml is empty or unreadable',
+    ]);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': 'foo: bar\nbaz: 123' }),
+    ).toEqual(['latest.yml contains no valid file targets (url or path)']);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
+        'latest.yml': 'version: 3.1.1\npath: trace-mcp-3.1.1-arm64.dmg',
+      }),
+    ).toEqual([
+      "latest.yml does not reference the expected Windows installer 'trace-mcp.Setup.3.1.1.exe'",
+    ]);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
+        'latest.yml': 'version: 3.1.1\npath: trace-mcp-3.1.1-win.zip',
+      }),
+    ).toEqual([
+      "latest.yml does not reference the expected Windows installer 'trace-mcp.Setup.3.1.1.exe'",
+    ]);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
+        'latest-mac.yml': 'version: 3.1.1\npath: trace-mcp-3.1.1-win.zip',
+      }),
+    ).toEqual([
+      "latest-mac.yml does not reference the expected Intel macOS update 'trace-mcp-3.1.1-mac.zip'",
+      "latest-mac.yml does not reference the expected Apple Silicon macOS update 'trace-mcp-3.1.1-arm64-mac.zip'",
+    ]);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
+        'latest-mac.yml': 'version: 3.1.1\npath: trace-mcp-3.1.1-mac.zip',
+      }),
+    ).toEqual([
+      "latest-mac.yml does not reference the expected Apple Silicon macOS update 'trace-mcp-3.1.1-arm64-mac.zip'",
+    ]);
+  });
+
+  it('rejects targets appearing only in comments', () => {
+    const commentedYml = `
+version: 3.1.1
+# path: trace-mcp.Setup.3.1.1.exe
+# url: trace-mcp.Setup.3.1.1.exe
+`;
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': commentedYml }),
+    ).toEqual(['latest.yml contains no valid file targets (url or path)']);
+  });
+
+  it('rejects manifests with mismatched or missing top-level version', () => {
+    const staleVersionYml = `
+version: 0.0.1
+files:
+  - url: trace-mcp.Setup.3.1.1.exe
+    sha512: abc123
+path: trace-mcp.Setup.3.1.1.exe
+`;
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': staleVersionYml }),
+    ).toEqual(["latest.yml version '0.0.1' does not match release version '3.1.1'"]);
+
+    const missingVersionYml = `
+files:
+  - url: trace-mcp.Setup.3.1.1.exe
+    sha512: abc123
+path: trace-mcp.Setup.3.1.1.exe
+`;
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': missingVersionYml }),
+    ).toEqual(["latest.yml is missing a top-level 'version' field"]);
+  });
+
+  it('accepts valid latest-mac.yml referencing both macOS architectures', () => {
+    const validMacYml = `
+version: 3.1.1
+files:
+  - url: trace-mcp-3.1.1-mac.zip
+    sha512: abc123
+  - url: trace-mcp-3.1.1-arm64-mac.zip
+    sha512: def456
+path: trace-mcp-3.1.1-mac.zip
+`;
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest-mac.yml': validMacYml }),
+    ).toEqual([]);
   });
 });

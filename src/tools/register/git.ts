@@ -656,7 +656,7 @@ export function registerGitTools(server: McpServer, ctx: ServerContext): void {
     },
     async ({ symbol_id, target_name }) => {
       const result = checkRenameSafe(store, symbol_id, target_name);
-      return { content: [{ type: 'text', text: jh('check_rename_safe', result) }] };
+      return { content: [{ type: 'text', text: jh('check_rename', result) }] };
     },
   );
 }

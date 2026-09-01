@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   detectMcpClients: (): Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]> =>
     ipcRenderer.invoke('detect-mcp-clients'),
+  guessFirstProject: (): Promise<{ path: string; name: string } | null> =>
+    ipcRenderer.invoke('guess-first-project'),
   getMcpClientStatuses: (
     scope?: 'global' | 'project',
   ): Promise<{
@@ -43,7 +45,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     statuses?: Array<{
       client: string;
       configPath: string | null;
-      status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+      status: 'missing' | 'up_to_date' | 'stale' | 'legacy' | 'unmanageable' | 'unknown';
       staleReason?: string;
       level?: 'base' | 'standard' | 'max' | null;
     }>;

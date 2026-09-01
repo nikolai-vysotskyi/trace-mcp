@@ -16,8 +16,8 @@
  */
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { getLauncherDir } from './trace-home';
 
 /** A global npm root that currently holds a `trace-mcp` install. */
 export interface GlobalInstall {
@@ -83,16 +83,14 @@ export function findStaleRoots(
   return installs.filter((i) => cmpSemver(i.version, newest.version) < 0);
 }
 
-export const LAUNCHER_ENV_PATH = path.join(
-  process.env.TRACE_MCP_HOME?.trim() || path.join(os.homedir(), '.trace-mcp'),
-  'launcher.env',
-);
+export const LAUNCHER_ENV_PATH = path.join(getLauncherDir(), 'launcher.env');
 
 /**
  * The CLI path the launcher shim hands to MCP clients, or null if `trace-mcp
  * init` has never run.
  *
- * `trace-mcp init` writes `TRACE_MCP_CLI` into launcher.env, and every client
+ * init writes `TRACE_CLI` — or `TRACE_MCP_CLI`, before the TRA-610 rename —
+ * into launcher.env, and every client
  * registration points at the shim rather than at a version-specific bin — so
  * this file, not `$PATH`, is the honest answer to "which install is actually
  * being run". A GUI-launched Electron inherits PATH from launchd, not from the
@@ -104,7 +102,8 @@ export function readLauncherCliPath(launcherEnv: string = LAUNCHER_ENV_PATH): st
     for (const line of fs.readFileSync(launcherEnv, 'utf-8').split(/\r?\n/)) {
       const eq = line.indexOf('=');
       if (eq <= 0 || line.trimStart().startsWith('#')) continue;
-      if (line.slice(0, eq).trim() !== 'TRACE_MCP_CLI') continue;
+      const key = line.slice(0, eq).trim();
+      if (key !== 'TRACE_CLI' && key !== 'TRACE_MCP_CLI') continue;
       let value = line.slice(eq + 1).trim();
       if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
         value = value.slice(1, -1);

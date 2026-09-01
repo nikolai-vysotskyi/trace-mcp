@@ -34,7 +34,7 @@ Activate this skill whenever you need to:
 | What breaks if I change X | `get_change_impact` | guessing |
 | Who calls this / what does it call | `get_call_graph` | Grep |
 | All usages of a symbol | `find_usages` | Grep |
-| Implementations of an interface | `get_type_hierarchy` | Grep / ls |
+| Implementations of an interface | `get_implementations` | Grep / ls |
 | Classes implementing X | `search` with `implements` filter | Grep |
 | Tests for a symbol or file | `get_tests_for` | Glob + Grep |
 | Project overview | `get_project_map` (summary_only) | Bash ls/find |
