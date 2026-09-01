@@ -1,3 +1,16 @@
+// Contrast sweep for trace-mcp.com — see docs/DESIGN-WEB.md §5.
+//
+// Renders every page in headless Chrome in both themes and checks each element
+// carrying its own text against its real painted background.
+//
+// Two source modes. If a Jekyll build exists at docs/_site, it is served as-is
+// and the DOM under test is exactly what Pages publishes — run `jekyll build`
+// first and you get the real thing. Without one, doc pages are re-rendered here
+// by a small Markdown converter that covers what the site's own pages use.
+// That fallback approximates the DOM: a construct it does not implement paints
+// no element, so a selector styling that construct goes untested. It is a
+// regression gate for the token ladder, not a proof of full coverage. Extend
+// the converter when a page starts using something new.
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -9,6 +22,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 const DOCS_DIR = path.join(REPO_ROOT, 'docs');
+const SITE_DIR = path.join(DOCS_DIR, '_site');
+const USE_BUILT_SITE = fs.existsSync(SITE_DIR) && fs.statSync(SITE_DIR).isDirectory();
 
 // Helper to calculate relative luminance & contrast ratio
 function sRGBtoLin(c) {
@@ -140,6 +155,8 @@ function renderMarkdownToHtml(mdContent) {
       out.push(`<h4>${formatInline(line.slice(5))}</h4>`);
     } else if (line.startsWith('---')) {
       out.push('<hr>');
+    } else if (line.startsWith('> ') || line.trim() === '>') {
+      out.push(`<blockquote><p>${formatInline(line.replace(/^>\s?/, ''))}</p></blockquote>`);
     } else if (line.startsWith('- ')) {
       out.push(`<ul><li>${formatInline(line.slice(2))}</li></ul>`);
     } else if (/^\d+\.\s/.test(line)) {
@@ -336,11 +353,44 @@ const EVAL_SCRIPT = String.raw`
 })()
 `;
 
-/** Serves docs/ the way Pages does: .md rendered through the layout, everything else verbatim. */
+function mimeFor(filePath) {
+  return (
+    {
+      '.html': 'text/html; charset=utf-8',
+      '.css': 'text/css',
+      '.js': 'text/javascript',
+      '.woff2': 'font/woff2',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon',
+      '.json': 'application/json',
+    }[path.extname(filePath)] || 'application/octet-stream'
+  );
+}
+
+/**
+ * Serves the site. With a Jekyll build at docs/_site, serves that verbatim —
+ * the real published DOM. Otherwise re-renders .md through the layout locally.
+ */
 export function createDocsServer() {
+  const root = USE_BUILT_SITE ? SITE_DIR : DOCS_DIR;
   return http.createServer((req, res) => {
     let reqPath = req.url.split('?')[0];
     if (reqPath === '/') reqPath = '/index.html';
+
+    if (USE_BUILT_SITE) {
+      let p = path.join(root, reqPath);
+      if (fs.existsSync(p) && fs.statSync(p).isDirectory()) p = path.join(p, 'index.html');
+      if (!fs.existsSync(p) || !fs.statSync(p).isFile()) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': mimeFor(p) });
+      res.end(fs.readFileSync(p));
+      return;
+    }
 
     // Check if markdown page requested
     const directPath = path.join(DOCS_DIR, reqPath);
@@ -369,17 +419,7 @@ export function createDocsServer() {
         res.end(str);
         return;
       }
-      const ext = path.extname(directPath);
-      const mime =
-        {
-          '.css': 'text/css',
-          '.js': 'text/javascript',
-          '.woff2': 'font/woff2',
-          '.png': 'image/png',
-          '.webp': 'image/webp',
-          '.svg': 'image/svg+xml',
-        }[ext] || 'application/octet-stream';
-      res.writeHead(200, { 'Content-Type': mime });
+      res.writeHead(200, { 'Content-Type': mimeFor(directPath) });
       res.end(data);
       return;
     }
@@ -526,20 +566,26 @@ export async function runContrastSweep(pageUrls) {
   }
 }
 
+/** Every published doc page, recursively. Jekyll's own `_`-prefixed dirs are not pages. */
+function discoverDocPages(dir = DOCS_DIR, prefix = '') {
+  const out = [];
+  for (const entry of fs
+    .readdirSync(dir, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...discoverDocPages(full, `${prefix}/${entry.name}`));
+    else if (entry.name.endsWith('.md'))
+      out.push(`${prefix}/${entry.name.replace(/\.md$/, '.html')}`);
+  }
+  return out;
+}
+
 if (process.argv[1] === __filename) {
   const pages = process.argv.slice(2);
-  // Default: the landing plus every doc page, so a new page cannot ship unswept.
-  const targetPages =
-    pages.length > 0
-      ? pages
-      : [
-          '/',
-          ...fs
-            .readdirSync(DOCS_DIR)
-            .filter((f) => f.endsWith('.md'))
-            .sort()
-            .map((f) => '/' + f.replace(/\.md$/, '.html')),
-        ];
+  // Default: the landing plus every doc page, recursively — docs/vs/*.md are
+  // published pages too and were missed by a flat scan.
+  const targetPages = pages.length > 0 ? pages : ['/', ...discoverDocPages()];
   runContrastSweep(targetPages)
     .then((report) => {
       console.log('\n=== Contrast Sweep Report ===\n');

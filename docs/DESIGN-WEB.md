@@ -25,6 +25,8 @@ no shadows.
 
 Two surfaces implement these: `docs/index.html` (landing, inline `<style>`) and
 `docs/assets/css/docs.css` (every documentation page). The values must match.
+A token that exists in only one of them is a component token and must say so
+here — otherwise it reads as drift. There is exactly one: `--accent-solid`.
 
 Surfaces — a text token has to clear its ratio against **every** one of these
 it is painted on, because all three are in use on the same page:
@@ -38,16 +40,21 @@ Borders: `--border` `#222222` / `#E8E8E8`, `--border-visible` `#333333` /
 `#CCCCCC`. Not text — no ratio applies.
 
 Text and accent tokens, with the ratio against each of the three surfaces of
-their own theme, worst first. **The worst number is the one that governs.**
+their own theme, **in the column order of the surface table above — page,
+surface, raised.** The governing number is bold.
 
 | Token | Dark | page / surface / raised | Light | page / surface / raised |
 |---|---|---|---|---|
-| `--text-disabled` | `#848484` | **4.65** / 5.05 / 5.61 | `#6D6D6D` | **4.54** / 4.75 / 5.17 |
-| `--text-secondary` | `#999999` | **6.11** / 6.63 / 7.37 | `#595959` | **6.15** / 6.42 / 7.00 |
-| `--text-primary` | `#E8E8E8` | **14.20** / 15.41 / 17.14 | `#1A1A1A` | **15.27** / 15.96 / 17.40 |
-| `--text-display` | `#FFFFFF` | **17.40** / 18.88 / 21.00 | `#000000` | **18.43** / 19.26 / 21.00 |
-| `--accent` | `#E54047` | 4.27 / **4.64** / 5.16 | `#B3151C` | **6.06** / 6.33 / 6.91 |
-| `--accent-solid` | `#D71921` | fill only — white text on it is 5.18 | `#D71921` | same |
+| `--text-disabled` | `#848484` | 5.61 / 5.05 / **4.65** | `#6D6D6D` | 4.75 / 5.17 / **4.54** |
+| `--text-secondary` | `#999999` | 7.37 / 6.63 / **6.11** | `#595959` | 6.42 / 7.00 / **6.15** |
+| `--text-primary` | `#E8E8E8` | 17.14 / 15.41 / **14.20** | `#1A1A1A` | 15.96 / 17.40 / **15.27** |
+| `--text-display` | `#FFFFFF` | 21.00 / 18.88 / **17.40** | `#000000` | 19.26 / 21.00 / **18.43** |
+| `--accent` | `#E54047` | 5.16 / 4.64 / **4.27** | `#B3151C` | 6.33 / 6.91 / **6.06** |
+
+**`--surface-raised` is always the worst of the three,** in both themes — it is
+the lightest surface in dark and the darkest in light, so it is the one every
+foreground has the least room against. Never quote a token's ratio from `page`
+because it is the biggest number.
 
 `--accent` in dark is the one token that does **not** clear 4.5:1 everywhere:
 `#E54047` on `--surface-raised` is 4.27. Red text is therefore not allowed on
@@ -56,12 +63,18 @@ contrast sweep below is what keeps it that way. Raising the red further to
 clear `#1A1A1A` too would push it to roughly `#EA5057`, which reads pink
 rather than red, and red being *this* red is not negotiable.
 
-`--accent-solid` `#D71921` is the brand red as a **fill** — the landing's
-primary button, where the ratio that matters is white text on the red, not the
-red on a page. `--accent` (link/glyph red) is lighter in dark and darker in
-light because a foreground has to fight the background; a fill does not.
-Never use `--accent-solid` as a text colour, and never use `--accent` as a
-fill under white text (`#E54047` behind white is 4.07 and fails).
+**`--accent-solid` `#D71921` is not in the table above and is not a shared
+token.** It is the brand red as a **fill** — the landing's primary button —
+so it is never a foreground and has no ratio against a surface. The only
+ratio it has is white text on it: **5.18**. It lives in `docs/index.html`
+alone and is deliberately absent from `docs/assets/css/docs.css`, which has
+no filled-red component; adding it there would be a dead token. If a doc page
+ever grows one, define it there in the same PR.
+
+`--accent` (link/glyph red) is lighter in dark and darker in light because a
+foreground has to fight its background; a fill does not. Never use
+`--accent-solid` as a text colour, and never use `--accent` as a fill under
+white text — `#E54047` behind white is 4.07 and fails.
 
 **Compute a ratio against the surface the text actually sits on, in both
 themes.** `#FFFFFF` in light and `#000000` in dark are the most forgiving
@@ -283,14 +296,23 @@ appearance without a screenshot or a measurement is not a finding.
       node scripts/contrast-sweep.mjs
       ```
 
-      It serves `docs/` locally, renders the landing and every doc page in
-      headless Chrome in both themes, and for every element carrying its own
-      text reads the computed `color` against its nearest opaque ancestor
-      background — the real painted background, not an assumed surface.
-      Body text needs 4.5:1, large text (≥24px, or ≥18.66px bold) 3:1.
-      `aria-hidden="true"` subtrees are skipped as decoration. Exit code is
-      non-zero on any failure; pass paths (`node scripts/contrast-sweep.mjs /
-      /comparisons.html`) to sweep a subset.
+      It serves `docs/` locally, renders the landing and every doc page —
+      recursively, so `docs/vs/*` is included — in headless Chrome in both
+      themes, and for every element carrying its own text reads the computed
+      `color` against its nearest opaque ancestor background, the real
+      painted background rather than an assumed surface. Body text needs
+      4.5:1, large text (≥24px, or ≥18.66px bold) 3:1, with no tolerance:
+      4.49 fails. `aria-hidden="true"` subtrees are skipped as decoration.
+      Exit code is non-zero on any failure; pass paths
+      (`node scripts/contrast-sweep.mjs / /comparisons.html`) for a subset.
+
+      **Know what it does not cover.** Without a Jekyll build it re-renders
+      Markdown with its own small converter, so a construct that converter
+      does not implement paints no element and any selector styling that
+      construct goes untested. It is a regression gate on the token ladder,
+      not proof of full coverage. For the real published DOM, build the site
+      first — the sweep serves `docs/_site` verbatim when it exists. Run it
+      that way before changing anything structural, not just a token.
 
       This bullet used to say "measure it, don't check the token table" and
       the table was still wrong in both themes at the time. Eyeballing a grey
