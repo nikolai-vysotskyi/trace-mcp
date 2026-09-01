@@ -60,6 +60,17 @@ Nikolai's machine. The macOS release now ships a **DMG per architecture** for
 humans plus the zip the staged-zip updater consumes, both built from a
 Developer ID Application-signed, notarized, stapled `.app`.
 
+**The DMG container is signed and notarized too, from the first release after
+2026-09-01** (TRA-627). Through 3.10.0 only the `.app` inside carried a ticket:
+`codesign -dvvv` on the published `trace-mcp-3.10.0-arm64.dmg` said "code object
+is not signed at all" and `spctl -a -t open` rejected it for "no usable
+signature", because electron-builder notarizes in `afterSign` and assembles the
+image afterwards. Signing, notarizing and stapling the image is now an explicit
+release step, and the release fails if either the app or the container comes out
+without a ticket. Do **not** replace that step with `dmg.sign: true` in
+`electron-builder.yml`: dmg-builder signs without `--timestamp`, and Apple
+refuses to notarize a signature that has no secure timestamp.
+
 Where it lives: `mac:` block in `packages/app/electron-builder.yml`,
 entitlements in `packages/app/build/entitlements.mac*.plist` (one comment per
 key saying why it is there — keep it that way, an unjustified entitlement list
