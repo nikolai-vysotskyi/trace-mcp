@@ -72,8 +72,8 @@ cannot even attribute to a client.
 This is not an argument to slow the engine room down. It is an argument
 that the next several weeks of *strategic* work — the items below, and the
 weekly focus derived from them — should be measured in users reaching first
-value, not in capability shipped. The three "ready to start" items are all
-of that shape.
+value, not in capability shipped. All four "ready to start" items are of
+that shape.
 
 ## Adoption — metric of record
 
@@ -193,9 +193,35 @@ acquisition-channel signal plus one activation number would let the
 distribution, SEO, outreach and web-design autopilots stop arguing from
 aesthetics.
 
+### 4. Put the one measurement made on other people's code where people arrive (TRA-647)
+TRA-534 measured input-token cost across 60 merged bug-fix PRs from six OSS
+repositories: median **13,595 → 1,326 tokens, 90.6% saved**, p90 44,246 →
+3,667, affected call sites readable 20% → 60% with 100% at least located. It
+is pinned (`benchmarks/pr-context/dataset.json`), reproducible
+(`scripts/bench-pr-context.ts`) and rendered from generated data
+(`docs/_data/pr_context_bench.json`), never hand-typed. It is the only
+number this project has that was not produced by the tool measuring itself
+on its own repository.
+
+Measured on `origin/master`, 2026-09-01: `pr-context-benchmark` appears
+**zero times in `docs/index.html` and zero times in `README.md`**. The page
+is reachable from one place, `docs/_data/docs_nav.yml`. Every figure a
+visitor actually sees still comes from our own estimators.
+
+**Why now:** items 1-3 all say the binding gap is reach and first value, and
+this is the cheapest credibility we will ever have — the work is already
+done and published, it just is not on the door. Both doors are being
+rebuilt this week (TRA-607/608/609 on the above-the-fold of the site and the
+README), so it lands inside those rewrites or costs a second redesign later.
+Its honest boundary ships with it: quality on that dataset is *structural*
+coverage, not a model's judgement, and the page already names the 5 PRs of
+60 where the index did not pay off. The quality arm is **TRA-568**, promoted
+out of backlog — a token number without a quality number is an efficiency
+claim, not a value claim, which is exactly the move we criticise peers for.
+
 ## Big bets — design pass before any code
 
-### 4. One door instead of 169 — a router preset (new, TRA-646)
+### 5. One door instead of 169 — a router preset (new, TRA-646)
 Presets took the advertised surface down by hiding tools behind
 `load_tools`. That worked, it broke nothing, and it has an obvious limit:
 even `minimal` still advertises 28 full JSON Schemas, and TRA-186 already
@@ -233,7 +259,7 @@ this is a new mode beside presets or a replacement for `full`. Not a
 contract break if it ships as a preset (`router`), which is the shape to
 design toward.
 
-### 5. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
+### 6. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
 trace-mcp's whole pitch is "reuse instead of recompute", but reuse only
 happens within one developer's laptop, across turns. A team of five on the
 same repo each index it separately and never see each other's decisions —
@@ -253,7 +279,7 @@ no demand-side reason to unpark it either.
   67–86% without a contract break. Do not reopen it for efficiency reasons;
   only merge two tools if they are genuinely the same tool.
 - **Chasing competitor feature/tool-count parity for its own sake** — see
-  `comparisons.md`'s "deliberately NOT chasing" list. Item 4 is the sharper
+  `comparisons.md`'s "deliberately NOT chasing" list. Item 5 is the sharper
   version of why: count was never the metric, in either direction, and the
   two largest peers are competing in the opposite direction anyway.
 - **Rewriting CFG/taint analysis onto a real AST/dataflow engine** — a real
