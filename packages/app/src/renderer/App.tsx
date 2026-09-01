@@ -49,6 +49,7 @@ import { Notebook } from './tabs/Notebook';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
 import { type Appearance, useTheme } from './theme.js';
+import { useWholeLocation } from './whole-location.js';
 import { Workspace } from './workspace/Workspace';
 
 // The Ask tab is the only thing that pulls react-markdown + remark-gfm in, and
@@ -286,6 +287,9 @@ function ProjectFileExplorer({
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; path: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  // A row drops its location rather than shrink it to a sliver (TRA-504). The
+  // sidebar is drag-resizable, so this re-measures on every width change too.
+  useWholeLocation(listRef);
   const LIMIT = 30;
 
   // Debounce scope to avoid fetching on every keystroke
