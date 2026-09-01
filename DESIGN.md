@@ -241,6 +241,16 @@ is what `.lx-badge` paints. Badge foreground and status text are not interchange
 **Status is never carried by colour alone.** A tone always arrives with a glyph and a
 written label (`KpiTile.tsx`, the workspace KPI strip).
 
+**A measured pair has to stay the pair that renders — so a tint is opaque, never an
+alpha.** The rule generalises past badges: when a fill is translucent, the ratio you
+measured is only the ratio on the one backing you measured it against, and every other
+backing silently produces a different, unmeasured pair. The `--badge-*-fg` labels clear
+their tint by about 0.3, so as an 18% alpha they measured 4.37–4.49 in a content well,
+4.37–4.45 on a hovered row and 1.0–1.9 on a selection fill. Mix the hue **into
+`--surface`** — `color-mix(in srgb, var(--status-red) 18%, var(--surface))` — which
+paints the identical pixel on `--surface` and pins the ratio everywhere else. Content
+does not composite with what is behind it; only glass does, and a badge is content.
+
 ### Measured contrast
 
 Run `node packages/app/scripts/design-tokens.mjs` for the current table. As of this
