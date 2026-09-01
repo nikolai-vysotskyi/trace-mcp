@@ -2,7 +2,7 @@ export const shell = {
   navWorkspace: 'ワークスペース',
   navClients: 'MCP クライアント',
   navOverview: '概要',
-  navAsk: 'Ask',
+  navAsk: '質問',
   navGraph: 'グラフ',
   navActivity: 'アクティビティ',
   navMemory: 'メモリ',

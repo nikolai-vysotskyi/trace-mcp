@@ -31,7 +31,7 @@ export const guard = {
   'row.promotion': 'ストリクトへの切り替え',
   'row.promoted': 'ストリクトに切り替え済み',
   'row.promotedValue': 'コーチ期間が終了しました',
-  'row.enforcement': '強制',
+  'row.enforcement': '適用',
   statusErrorWhat: 'ガードの状態',
 
   'health.ok': '有効',
@@ -49,12 +49,12 @@ export const guard = {
 
   'bypass.resumes': '{{when}}に再開',
   'bypass.resumeNow': '今すぐ再開',
-  'bypass.pause_other': '{{count}} 分間停止',
+  'bypass.pause_other': '{{count}}分間一時停止',
 
-  'until.underMinute': '1 分以内',
-  'until.minutes_other': '{{count}} 分後',
-  'until.hours_other': '{{count}} 時間後',
-  'until.days_other': '{{count}} 日後',
+  'until.underMinute': '1分以内',
+  'until.minutes_other': '{{count}}分後',
+  'until.hours_other': '{{count}}時間後',
+  'until.days_other': '{{count}}日後',
 
   'ollama.title': 'Ollama',
   'ollama.unavailable': 'Ollama の操作は trace-mcp アプリ内でのみ利用できます。',

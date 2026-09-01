@@ -153,7 +153,7 @@ export const settings = {
     'セマンティック検索とリランクのためにベクトル埋め込みを生成します。オフにすると、推論は残したままセマンティック検索を無効にできます。',
   'schema.ai.inference.label': '推論を使う',
   'schema.ai.inference.description':
-    '要約、意図分類、Ask のために LLM を呼び出します。オフにすると、埋め込みは残したまま LLM の呼び出しをすべて省略します。',
+    '要約、意図分類、「質問」機能のために LLM を呼び出します。オフにすると、埋め込みは残したまま LLM の呼び出しをすべて省略します。',
   'schema.ai.fast_inference.label': '高速推論を使う',
   'schema.ai.fast_inference.description':
     '低レイテンシの処理に高速モデルを使います。オフにすると高速パスの呼び出し元は空の応答を受け取ります。デバッグ時以外はオンのままにしてください。',

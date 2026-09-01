@@ -13,7 +13,7 @@ export const clients = {
 
   sessionActive: 'アクティブ',
   sessionIdle: '待機中',
-  sessionStale: '古い',
+  sessionStale: '期限切れ',
 
   connected: '接続済み',
   connect: '接続',
@@ -28,7 +28,7 @@ export const clients = {
   setUpManually: '手動で設定…',
   hideSteps: '手順を隠す',
 
-  enforcementLevel: '強制レベル',
+  enforcementLevel: '適用レベル',
   levelBase: 'ベース',
   levelBaseHint: 'CLAUDE.md のみ — 緩やかなルーティング規則',
   levelStandard: '標準',
