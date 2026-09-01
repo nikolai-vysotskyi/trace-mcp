@@ -9,15 +9,17 @@ import path from 'node:path';
 import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 
-const START_MARKER = '<!-- trace-mcp:start -->';
-const END_MARKER = '<!-- trace-mcp:end -->';
+const START_MARKER = '<!-- trace:start -->';
+const LEGACY_START_MARKER = '<!-- trace-mcp:start -->';
+const END_MARKER = '<!-- trace:end -->';
+const LEGACY_END_MARKER = '<!-- trace-mcp:end -->';
 
-const TOOL_ROUTING_POLICY = `IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVER use built-in search/grep/file listing for navigating source code.
+const TOOL_ROUTING_POLICY = `IMPORTANT: For ANY code exploration task, ALWAYS use trace tools first. NEVER use built-in search/grep/file listing for navigating source code.
 
 ## Tool Routing
 
-| Task | trace-mcp tool | Instead of |
-|------|---------------|------------|
+| Task | trace tool | Instead of |
+|------|------------|------------|
 | Find a function/class/method | \`search\` | built-in search / grep |
 | Understand a file before editing | \`get_outline\` | reading full file |
 | Read one symbol's source | \`get_symbol\` | reading full file |
@@ -40,7 +42,7 @@ Use built-in file reading ONLY for non-code files (.md, .json, .yaml, config) or
 // --- Cursor ---
 
 const CURSOR_RULE = `---
-description: trace-mcp tool routing — prefer trace-mcp MCP tools over built-in search for code intelligence
+description: trace tool routing — prefer trace MCP tools over built-in search for code intelligence
 globs:
 alwaysApply: true
 ---
@@ -56,25 +58,27 @@ export function installCursorRules(
     ? path.join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.cursor')
     : path.join(projectRoot, '.cursor');
   const rulesDir = path.join(base, 'rules');
-  const filePath = path.join(rulesDir, 'trace-mcp.mdc');
-  const existing = readIfExists(filePath);
+  const filePath = path.join(rulesDir, 'trace.mdc');
+  const legacyFilePath = path.join(rulesDir, 'trace-mcp.mdc');
+  const existing = readIfExists(filePath) ?? readIfExists(legacyFilePath);
+  const targetPath = fs.existsSync(legacyFilePath) && !fs.existsSync(filePath) ? legacyFilePath : filePath;
 
   if (opts.dryRun) {
     if (existing !== null) {
       if (existing === CURSOR_RULE) {
-        return { target: filePath, action: 'skipped', detail: 'Already up to date' };
+        return { target: targetPath, action: 'skipped', detail: 'Already up to date' };
       }
-      return { target: filePath, action: 'skipped', detail: 'Would update trace-mcp.mdc' };
+      return { target: targetPath, action: 'skipped', detail: `Would update ${path.basename(targetPath)}` };
     }
-    return { target: filePath, action: 'skipped', detail: 'Would create trace-mcp.mdc' };
+    return { target: filePath, action: 'skipped', detail: 'Would create trace.mdc' };
   }
 
   if (existing !== null) {
     if (existing === CURSOR_RULE) {
-      return { target: filePath, action: 'already_configured' };
+      return { target: targetPath, action: 'already_configured' };
     }
-    fs.writeFileSync(filePath, CURSOR_RULE);
-    return { target: filePath, action: 'updated' };
+    fs.writeFileSync(targetPath, CURSOR_RULE);
+    return { target: targetPath, action: 'updated' };
   }
 
   fs.mkdirSync(rulesDir, { recursive: true });
@@ -85,7 +89,7 @@ export function installCursorRules(
 // --- Windsurf ---
 
 const WINDSURF_BLOCK = `${START_MARKER}
-## trace-mcp Tool Routing
+## trace Tool Routing
 
 ${TOOL_ROUTING_POLICY}
 ${END_MARKER}`;
@@ -99,14 +103,18 @@ export function installWindsurfRules(
     : path.join(projectRoot, '.windsurfrules');
   const existing = readIfExists(filePath);
 
+  const hasAnyMarker =
+    existing !== null &&
+    (existing.includes(START_MARKER) || existing.includes(LEGACY_START_MARKER));
+
   if (opts.dryRun) {
     if (existing === null) {
       return { target: filePath, action: 'skipped', detail: 'Would create .windsurfrules' };
     }
-    if (existing.includes(START_MARKER)) {
-      return { target: filePath, action: 'skipped', detail: 'Would update trace-mcp block' };
+    if (hasAnyMarker) {
+      return { target: filePath, action: 'skipped', detail: 'Would update trace block' };
     }
-    return { target: filePath, action: 'skipped', detail: 'Would append trace-mcp block' };
+    return { target: filePath, action: 'skipped', detail: 'Would append trace block' };
   }
 
   if (existing === null) {
@@ -114,9 +122,13 @@ export function installWindsurfRules(
     return { target: filePath, action: 'created' };
   }
 
-  if (existing.includes(START_MARKER)) {
-    const re = new RegExp(`${escapeRegex(START_MARKER)}[\\s\\S]*?${escapeRegex(END_MARKER)}`, 'm');
-    const updated = existing.replace(re, WINDSURF_BLOCK);
+  const markerRe = new RegExp(
+    `(?:${escapeRegex(START_MARKER)}|${escapeRegex(LEGACY_START_MARKER)})[\\s\\S]*?(?:${escapeRegex(END_MARKER)}|${escapeRegex(LEGACY_END_MARKER)})`,
+    'm',
+  );
+
+  if (markerRe.test(existing)) {
+    const updated = existing.replace(markerRe, WINDSURF_BLOCK);
     if (updated === existing) {
       return { target: filePath, action: 'already_configured' };
     }
@@ -127,7 +139,7 @@ export function installWindsurfRules(
   // Append
   const separator = existing.endsWith('\n') ? '\n' : '\n\n';
   fs.writeFileSync(filePath, `${existing + separator + WINDSURF_BLOCK}\n`);
-  return { target: filePath, action: 'updated', detail: 'Appended trace-mcp block' };
+  return { target: filePath, action: 'updated', detail: 'Appended trace block' };
 }
 
 function escapeRegex(s: string): string {

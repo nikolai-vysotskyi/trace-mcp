@@ -43,18 +43,18 @@ pnpm run test               # Vitest (all tests)
 pnpm run test --run <pattern> # Run specific test
 ```
 
-## trace-mcp Tool Routing — MANDATORY (for AI agents working ON this codebase)
+## trace Tool Routing — MANDATORY (for AI agents working ON this codebase)
 
-**HARD RULE: NEVER use Read, Grep, Glob, or Bash (ls, find, cat, head, tail) to explore or navigate source code (.ts, .js, .py, etc.). ALWAYS use trace-mcp tools instead. This is not a suggestion — it is a requirement. Violations waste tokens and produce worse results.**
+**HARD RULE: NEVER use Read, Grep, Glob, or Bash (ls, find, cat, head, tail) to explore or navigate source code (.ts, .js, .py, etc.). ALWAYS use trace tools instead. This is not a suggestion — it is a requirement. Violations waste tokens and produce worse results.**
 
-Since trace-mcp is its own MCP server, when developing it you MUST use trace-mcp tools to navigate the codebase. This guidance is split into focused subsections below: Navigation & Search, Refactoring & Codemods, Token & Output Optimization, and Plugin & LSP Architecture.
+Since trace is its own MCP server, when developing it you MUST use trace tools to navigate the codebase. This guidance is split into focused subsections below: Navigation & Search, Refactoring & Codemods, Token & Output Optimization, and Plugin & LSP Architecture.
 
 ## Navigation & Search
 
 ### Decision Matrix — USE THESE, NOT native tools
 
-| Task | trace-mcp tool | NEVER use |
-|------|---------------|-----------|
+| Task | trace tool | NEVER use |
+|------|------------|-----------|
 | Find a function/class/method | `search` | ~~Grep~~ ~~Glob~~ |
 | Understand a file before editing | `get_outline` | ~~Read (full file)~~ |
 | Read one symbol's source | `get_symbol` | ~~Read (full file)~~ |

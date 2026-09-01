@@ -37,8 +37,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const START_MARKER = '<!-- trace-mcp:start -->';
-const END_MARKER = '<!-- trace-mcp:end -->';
+const START_MARKER = '<!-- trace:start -->';
+const END_MARKER = '<!-- trace:end -->';
+const LEGACY_START_MARKER = '<!-- trace-mcp:start -->';
+const LEGACY_END_MARKER = '<!-- trace-mcp:end -->';
 
 describe('updateClaudeMd', () => {
   it('returns skipped on dry run when file does not exist', () => {
@@ -75,7 +77,7 @@ describe('updateClaudeMd', () => {
     const content = String(mockFs.writeFileSync.mock.calls[0][1]);
     expect(content).toContain(START_MARKER);
     expect(content).toContain(END_MARKER);
-    expect(content).toContain('trace-mcp Tool Routing');
+    expect(content).toContain('trace Tool Routing');
   });
 
   it('uses global path when scope is global', () => {
@@ -109,6 +111,22 @@ describe('updateClaudeMd', () => {
     expect(written).toContain(START_MARKER);
     expect(written).toContain(END_MARKER);
     expect(written).not.toContain('old content');
+    expect(written).toContain('## Other stuff');
+  });
+
+  it('migrates legacy trace-mcp markers to trace markers', () => {
+    const existing = `# My Project\n\n${LEGACY_START_MARKER}\nlegacy content\n${LEGACY_END_MARKER}\n\n## Other stuff\n\nKeep this content.\n`;
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readFileSync.mockReturnValue(existing);
+
+    const result = updateClaudeMd('/project', {});
+    expect(result.action).toBe('updated');
+
+    const written = String(mockFs.writeFileSync.mock.calls[0][1]);
+    expect(written).toContain(START_MARKER);
+    expect(written).toContain(END_MARKER);
+    expect(written).not.toContain('legacy content');
+    expect(written).toContain('trace Tool Routing');
     expect(written).toContain('## Other stuff');
   });
 

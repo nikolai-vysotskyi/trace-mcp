@@ -1,10 +1,10 @@
-<!-- trace-mcp:start -->
-## trace-mcp Tool Routing
+<!-- trace:start -->
+## trace Tool Routing
 
-IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVER use Read/Grep/Glob/Bash(ls,find) for navigating source code.
+IMPORTANT: For ANY code exploration task, ALWAYS use trace tools first. NEVER use Read/Grep/Glob/Bash(ls,find) for navigating source code.
 
-| Task | trace-mcp tool | Instead of |
-|------|---------------|------------|
+| Task | trace tool | Instead of |
+|------|------------|------------|
 | Find a function/class/method | `search` | Grep |
 | Understand a file before editing | `get_outline` | Read (full file) |
 | Read one symbol's source | `get_symbol` | Read (full file) |
@@ -31,4 +31,4 @@ The following tool names have appeared in earlier drafts of this guidance but ar
 | HTTP request flow | `get_request_flow` (not implemented) | reading route files |
 | DB model relationships | `get_model_context` (not implemented) | reading model + migrations |
 | Component tree | `get_component_tree` (not implemented) | reading component files |
-<!-- trace-mcp:end -->
+<!-- trace:end -->

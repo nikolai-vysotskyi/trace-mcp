@@ -68,7 +68,9 @@ export function detectProject(dir: string): DetectionResult {
   const claudeMdContent = readIfExists(claudeMdPath);
   const hasClaudeMd = claudeMdContent !== null;
   const claudeMdHasTraceMcpBlock =
-    claudeMdContent !== null && claudeMdContent.includes('<!-- trace-mcp:start -->');
+    claudeMdContent !== null &&
+    (claudeMdContent.includes('<!-- trace:start -->') ||
+      claudeMdContent.includes('<!-- trace-mcp:start -->'));
 
   const { hasGuardHook, guardHookVersion } = detectGuardHook();
 
@@ -137,7 +139,7 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
       const raw = readIfExists(configPath);
       if (raw === null) return;
       const content = JSON.parse(raw);
-      const hasTraceMcp = !!content?.mcpServers?.['trace-mcp'];
+      const hasTraceMcp = !!(content?.mcpServers?.trace || content?.mcpServers?.['trace-mcp']);
       clients.push({ name, configPath, hasTraceMcp });
     } catch {
       // Malformed JSON — still report as detected but without trace-mcp
@@ -228,7 +230,7 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
       try {
         const content = readIfExists(tomlPath);
         if (content === null) return;
-        const hasTraceMcp = /\[mcp_servers\s*\.\s*["']?trace-mcp["']?\s*\]/.test(content);
+        const hasTraceMcp = /\[mcp_servers\s*\.\s*["']?trace(?:-mcp)?["']?\s*\]/.test(content);
         clients.push({ name, configPath: tomlPath, hasTraceMcp });
       } catch {
         clients.push({ name, configPath: tomlPath, hasTraceMcp: false });
@@ -251,7 +253,7 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
         if (content === null) return;
         const parsed = parseJsonc(content) as Record<string, unknown> | null;
         const servers = parsed?.['amp.mcpServers'] as Record<string, unknown> | undefined;
-        const hasTraceMcp = !!servers?.['trace-mcp'];
+        const hasTraceMcp = !!(servers?.trace || servers?.['trace-mcp']);
         clients.push({ name: 'amp', configPath, hasTraceMcp });
       } catch {
         clients.push({ name: 'amp', configPath, hasTraceMcp: false });
@@ -316,7 +318,7 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
   }
 
   // Hermes Agent: always-global YAML config at ~/.hermes/config.yaml (or $HERMES_HOME).
-  // Detect by looking for an `mcp_servers:` mapping with a `trace-mcp:` child.
+  // Detect by looking for an `mcp_servers:` mapping with a `trace:` or `trace-mcp:` child.
   // Use regex rather than a full YAML parse so detection doesn't bring a parser
   // onto the hot path.
   {
@@ -325,8 +327,8 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
     try {
       const content = readIfExists(yamlPath);
       if (content !== null) {
-        // Match: `mcp_servers:` (top level) then indented `trace-mcp:` entry
-        const hasTraceMcp = /^mcp_servers\s*:\s*$[\s\S]*?^\s+trace-mcp\s*:/m.test(content);
+        // Match: `mcp_servers:` (top level) then indented `trace:` or `trace-mcp:` entry
+        const hasTraceMcp = /^mcp_servers\s*:\s*$[\s\S]*?^\s+trace(?:-mcp)?\s*:/m.test(content);
         clients.push({ name: 'hermes', configPath: yamlPath, hasTraceMcp });
       }
     } catch {
@@ -396,21 +398,23 @@ export function detectMcpClients(projectRoot?: string): DetectedMcpClient[] {
 }
 
 function detectExistingConfig(root: string): { path: string } | null {
-  // Check dedicated config files
+  // Check dedicated config files (.trace.json takes precedence over legacy .trace-mcp.json)
   const candidates = [
+    path.join(root, '.trace.json'),
     path.join(root, '.trace-mcp.json'),
+    path.join(root, '.config', 'trace.json'),
     path.join(root, '.config', 'trace-mcp.json'),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return { path: p };
   }
-  // Check package.json "trace-mcp" field (cosmiconfig searches here too)
+  // Check package.json "trace" or "trace-mcp" field (cosmiconfig searches here too)
   const pkgPath = path.join(root, 'package.json');
   const pkgRaw = readIfExists(pkgPath);
   if (pkgRaw !== null) {
     try {
       const pkg = JSON.parse(pkgRaw);
-      if (pkg['trace-mcp']) return { path: pkgPath };
+      if (pkg.trace || pkg['trace-mcp']) return { path: pkgPath };
     } catch {
       /* ignore malformed package.json */
     }
@@ -422,10 +426,10 @@ function detectExistingDb(
   root: string,
   globalDbPath?: string,
 ): { path: string; schemaVersion: number; fileCount: number } | null {
-  // Check global location first, then legacy local location
+  // Check global location first, then local locations
   const candidates = globalDbPath
-    ? [globalDbPath, path.join(root, '.trace-mcp', 'index.db')]
-    : [path.join(root, '.trace-mcp', 'index.db')];
+    ? [globalDbPath, path.join(root, '.trace', 'index.db'), path.join(root, '.trace-mcp', 'index.db')]
+    : [path.join(root, '.trace', 'index.db'), path.join(root, '.trace-mcp', 'index.db')];
   const dbPath = candidates.find((p) => fs.existsSync(p));
   if (!dbPath) return null;
   try {

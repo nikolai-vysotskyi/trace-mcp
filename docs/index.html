@@ -2631,24 +2631,24 @@ layout: null
             <div class="qs-step-num">01</div>
             <div class="qs-step-body">
               <h3>/ Install Globally</h3>
-              <div class="qs-cmd">npm install -g trace-mcp</div>
-              <p>Installs the <code>trace-mcp</code> CLI from npm. ~30 seconds. Requires Node.js 20 or newer. Prefer pnpm or yarn? <code>pnpm add -g trace-mcp</code> / <code>yarn global add trace-mcp</code> work too.</p>
+              <div class="qs-cmd">npm install -g trace</div>
+              <p>Installs the <code>trace</code> CLI from npm (also provides backwards-compatible <code>trace-mcp</code> alias). ~30 seconds. Requires Node.js 20 or newer. Prefer pnpm or yarn? <code>pnpm add -g trace</code> / <code>yarn global add trace</code> work too.</p>
             </div>
           </div>
           <div class="qs-step reveal">
             <div class="qs-step-num">02</div>
             <div class="qs-step-body">
               <h3>/ Wire Into Your Agent</h3>
-              <div class="qs-cmd">trace-mcp init</div>
-              <p>One-time global setup. Auto-detects installed MCP clients (Claude Code, Cursor, Windsurf, Claude Desktop, Codex, JetBrains AI, &hellip;), wires trace-mcp into each, installs the guard hook, and adds routing rules to <code>~/.claude/CLAUDE.md</code>. Run once per machine.</p>
+              <div class="qs-cmd">trace init</div>
+              <p>One-time global setup. Auto-detects installed MCP clients (Claude Code, Cursor, Windsurf, Claude Desktop, Codex, JetBrains AI, &hellip;), wires trace into each, installs the guard hook, and adds routing rules to <code>~/.claude/CLAUDE.md</code>. Run once per machine.</p>
             </div>
           </div>
           <div class="qs-step reveal">
             <div class="qs-step-num">03</div>
             <div class="qs-step-body">
               <h3>/ Register Each Project</h3>
-              <div class="qs-cmd">cd ~/projects/my-app &amp;&amp; trace-mcp add</div>
-              <p>Detects frameworks, builds the per-project index, registers the project. The file watcher keeps the graph incrementally fresh from here on. Re-run in every repo you want trace-mcp to understand.</p>
+              <div class="qs-cmd">cd ~/projects/my-app &amp;&amp; trace add</div>
+              <p>Detects frameworks, builds the per-project index, registers the project. The file watcher keeps the graph incrementally fresh from here on. Re-run in every repo you want trace to understand.</p>
             </div>
           </div>
         </div>
@@ -2659,17 +2659,17 @@ layout: null
             <span class="right"><span class="scroll-hint" aria-hidden="true">scroll &rarr;</span><span class="status-dot" style="background: var(--success); box-shadow: none;"></span> ready</span>
           </div>
           <div class="terminal-body" role="group" aria-label="Quickstart terminal"><span class="cmt"># 1. install the CLI globally (~30 seconds)</span>
-<span class="pmt">$</span> npm install -g trace-mcp
-<span class="ok">[OK]</span> trace-mcp@latest installed
+<span class="pmt">$</span> npm install -g trace
+<span class="ok">[OK]</span> trace@latest installed (aliases: trace, trace-mcp)
 
-<span class="cmt"># 2. one-time setup &mdash; wire trace-mcp into your AI agent</span>
-<span class="pmt">$</span> trace-mcp init
+<span class="cmt"># 2. one-time setup &mdash; wire trace into your AI agent</span>
+<span class="pmt">$</span> trace init
 <span class="ok">[OK]</span> claude code / cursor / windsurf configured
 <span class="ok">[OK]</span> guard hook installed
 <span class="ok">[OK]</span> claude.md updated
 
 <span class="cmt"># 3. register the current project for indexing</span>
-<span class="pmt">$</span> trace-mcp add
+<span class="pmt">$</span> trace add
 <span class="ok">[OK]</span> detected frameworks: typescript, vue, vitest
 <span class="ok">[OK]</span> indexed 1,247 files / 8,392 symbols
 <span class="ok">[READY]</span> file watcher armed &mdash; graph stays fresh
