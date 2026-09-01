@@ -270,13 +270,19 @@ export function configureMcpClients(
         continue;
       }
 
-      // Check if already configured under the current key — a legacy-only
-      // `[mcp_servers.trace-mcp]` section falls through to the write path
-      // below, which migrates it (see writeCodexTomlEntry).
+      // Check if already configured under the current key AND the legacy
+      // section is gone — a legacy-only or both-present `[mcp_servers.*]`
+      // section falls through to the write path below, which migrates it
+      // (see writeCodexTomlEntry). Requiring legacy absence here matters:
+      // otherwise a file with both sections short-circuits to
+      // already_configured and Codex spawns two copies of the server.
       if (fs.existsSync(configPath)) {
         try {
           const content = fs.readFileSync(configPath, 'utf-8');
-          if (codexSectionHeaderPattern(MCP_KEY).test(content)) {
+          if (
+            codexSectionHeaderPattern(MCP_KEY).test(content) &&
+            !codexSectionHeaderPattern(LEGACY_MCP_KEY).test(content)
+          ) {
             results.push({ target: configPath, action: 'already_configured', detail: name });
             continue;
           }
@@ -403,7 +409,13 @@ function verifyTraceMcpEntry(configPath: string): boolean {
 function entryMatches(configPath: string, expected: McpServerEntry): boolean {
   try {
     const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const current = content?.mcpServers?.[MCP_KEY];
+    const servers = content?.mcpServers;
+    // A lingering legacy key must always force the write path (which deletes
+    // it) — otherwise a config with both `trace` (already correct) and a
+    // stale `trace-mcp` short-circuits to already_configured, and the client
+    // keeps spawning two copies of the same server forever.
+    if (servers && typeof servers === 'object' && LEGACY_MCP_KEY in servers) return false;
+    const current = servers?.[MCP_KEY];
     if (!current || typeof current !== 'object') return false;
     if (current.command !== expected.command) return false;
     if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
@@ -464,6 +476,9 @@ function hermesEntryMatches(configPath: string, expected: HermesYamlEntry): bool
   try {
     const doc = YAML.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> | null;
     const servers = doc?.mcp_servers as Record<string, unknown> | undefined;
+    // A lingering legacy key must force the write path (which deletes it) —
+    // see entryMatches() above for why.
+    if (servers && LEGACY_MCP_KEY in servers) return false;
     const current = servers?.[MCP_KEY] as Record<string, unknown> | undefined;
     if (!current) return false;
     if (current.command !== expected.command) return false;
@@ -526,6 +541,9 @@ function ampEntryMatches(configPath: string, expected: McpServerEntry): boolean 
     const content = fs.readFileSync(configPath, 'utf-8');
     const parsed = parseJsonc(content) as Record<string, unknown> | null;
     const servers = parsed?.['amp.mcpServers'] as Record<string, unknown> | undefined;
+    // A lingering legacy key must force the write path (which deletes it) —
+    // see entryMatches() above for why.
+    if (servers && LEGACY_MCP_KEY in servers) return false;
     const current = servers?.[MCP_KEY] as Record<string, unknown> | undefined;
     if (!current) return false;
     if (current.command !== expected.command) return false;
@@ -590,7 +608,11 @@ function factoryEntryMatches(
 ): boolean {
   try {
     const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const current = content?.mcpServers?.[MCP_KEY];
+    const servers = content?.mcpServers;
+    // A lingering legacy key must force the write path (which deletes it) —
+    // see entryMatches() above for why.
+    if (servers && typeof servers === 'object' && LEGACY_MCP_KEY in servers) return false;
+    const current = servers?.[MCP_KEY];
     if (!current || typeof current !== 'object') return false;
     if (current.type !== expected.type) return false;
     if (current.command !== expected.command) return false;
@@ -955,10 +977,15 @@ function detectClientStatus(
 function pinpointEntryDrift(configPath: string, expected: McpServerEntry): string {
   try {
     const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const current = content?.mcpServers?.[MCP_KEY];
+    const servers = content?.mcpServers;
+    const current = servers?.[MCP_KEY];
     if (!current || typeof current !== 'object') {
-      return content?.mcpServers?.[LEGACY_MCP_KEY] ? 'legacy-key' : 'entry-missing';
+      return servers?.[LEGACY_MCP_KEY] ? 'legacy-key' : 'entry-missing';
     }
+    // The new key can be entirely correct on its own while a legacy key still
+    // lingers alongside it (a previous run failed partway, or a config was
+    // hand-edited) — that's still the reason to re-run, not a field mismatch.
+    if (servers && typeof servers === 'object' && LEGACY_MCP_KEY in servers) return 'legacy-key';
     if (current.command !== expected.command) return 'command';
     if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return 'args';
     if ((current.cwd ?? undefined) !== (expected.cwd ?? undefined)) return 'cwd';

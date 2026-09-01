@@ -166,6 +166,27 @@ describe('getMcpClientStatuses', () => {
     expect(after.status).toBe('up_to_date');
   });
 
+  it('flags `stale` reason="legacy-key" — not `up_to_date` — when both trace and a stale trace-mcp key are present', () => {
+    // A correct `trace` entry sitting next to a leftover `trace-mcp` one (a
+    // previous migration run interrupted partway, or a hand-edited config)
+    // must not read as already_configured: the client would keep spawning
+    // two copies of the same server until the stale key is actually removed.
+    const configPath = path.join(fakeHome, '.claude.json');
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const c = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    c.mcpServers['trace-mcp'] = { command: '/stale/launcher', args: ['serve'] };
+    fs.writeFileSync(configPath, JSON.stringify(c, null, 2));
+
+    const [s] = getMcpClientStatuses(projectRoot, 'global', ['claude-code']);
+    expect(s.status).toBe('stale');
+    expect(s.staleReason).toBe('legacy-key');
+
+    configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+    const after = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    expect(after.mcpServers['trace-mcp']).toBeUndefined();
+    expect(after.mcpServers.trace.command).toBeDefined();
+  });
+
   it('flags `stale` reason="args" when args change', () => {
     configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
     const configPath = path.join(fakeHome, '.claude.json');

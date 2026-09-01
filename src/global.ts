@@ -49,6 +49,17 @@ function isSymlink(targetPath: string): boolean {
  * TRACE_MCP_DATA_DIR before any project module loads; this guard covers the
  * one path that pins the var away on purpose.
  */
+/**
+ * Durable marker left inside the new home the moment the rename succeeds.
+ * `TRACE_MCP_HOME_MIGRATED` below is only `true` for the single process that
+ * performed the rename — too narrow a signal for `installLegacyBinCompat()`
+ * (src/init/launcher.ts), which needs to retry creating the legacy compat
+ * symlink on a *later* `trace init`/`upgrade` run if it failed (or was
+ * skipped by a dry-run) the first time. This file existing is the durable
+ * "a migration happened here at some point" fact that survives restarts.
+ */
+export const LEGACY_MIGRATION_MARKER = '.migrated-from-trace-mcp';
+
 function migrateLegacyHomeDir(target: string, legacy: string): boolean {
   if (process.env.VITEST) return false;
   try {
@@ -56,6 +67,11 @@ function migrateLegacyHomeDir(target: string, legacy: string): boolean {
     if (isSymlink(target) || isSymlink(legacy)) return false;
     if (!fs.statSync(legacy).isDirectory()) return false;
     fs.renameSync(legacy, target);
+    try {
+      fs.writeFileSync(path.join(target, LEGACY_MIGRATION_MARKER), '');
+    } catch {
+      /* best-effort — worst case a later run just doesn't retry the symlink */
+    }
     return true;
   } catch {
     // No legacy dir (ENOENT) or a rename failure (cross-device, permissions)

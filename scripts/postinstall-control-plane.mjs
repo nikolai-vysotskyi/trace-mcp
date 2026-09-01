@@ -53,6 +53,9 @@ const __dirname = path.dirname(__filename);
 // scripts/postinstall-control-plane.mjs → package root is two levels up.
 const PKG_ROOT = path.resolve(__dirname, '..');
 
+// Mirrors src/global.ts::LEGACY_MIGRATION_MARKER — MUST match (TRA-611).
+const LEGACY_MIGRATION_MARKER = '.migrated-from-trace-mcp';
+
 // Mirrors src/global.ts::migrateLegacyHomeDir — MUST match (TRA-611). A
 // same-volume rename is atomic and, unlike a copy, leaves nothing stale
 // behind. This script runs before the CLI itself does (postinstall fires
@@ -64,24 +67,30 @@ function migrateLegacyHomeDir(target, legacy) {
     if (fs.lstatSync(legacy).isSymbolicLink()) return false;
     if (!fs.statSync(legacy).isDirectory()) return false;
     fs.renameSync(legacy, target);
+    try {
+      fs.writeFileSync(path.join(target, LEGACY_MIGRATION_MARKER), '');
+    } catch {
+      /* best-effort — worst case a later run just doesn't retry the symlink */
+    }
     return true;
   } catch {
     return false;
   }
 }
 
-const { home: TRACE_MCP_HOME, migrated: TRACE_MCP_HOME_MIGRATED } = (() => {
+const TRACE_MCP_HOME = (() => {
   const override = process.env.TRACE_MCP_DATA_DIR || process.env.TRACE_MCP_HOME;
   if (override && override.length > 0) {
     const expanded = override.startsWith('~')
       ? path.join(os.homedir(), override.slice(1))
       : override;
-    return { home: path.resolve(expanded), migrated: false };
+    return path.resolve(expanded);
   }
   const homedir = os.homedir();
   const target = path.join(homedir, '.trace');
   const legacy = path.join(homedir, '.trace-mcp');
-  return { home: target, migrated: migrateLegacyHomeDir(target, legacy) };
+  migrateLegacyHomeDir(target, legacy);
+  return target;
 })();
 
 const LOG_PATH = path.join(TRACE_MCP_HOME, 'postinstall.log');
@@ -212,12 +221,12 @@ function installLauncherShim() {
 /**
  * Preserve `~/.trace-mcp/bin/trace-mcp` as a symlink to the new
  * `~/.trace/bin/trace` shim, mirroring src/init/launcher.ts's
- * installLegacyBinCompat() — only acts the one run that renamed the
- * directory (migrateLegacyHomeDir above); a fresh install has no legacy
- * path to preserve, and once created the symlink lives on disk.
+ * installLegacyBinCompat(). Gated on LEGACY_MIGRATION_MARKER (durable) rather
+ * than TRACE_MCP_HOME_MIGRATED (true only for the one process that performed
+ * the rename) so a failed symlink attempt gets retried on the next install.
  */
 function installLegacyBinCompat(shimPath) {
-  if (!TRACE_MCP_HOME_MIGRATED) return;
+  if (!fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER))) return;
   const legacyDir = path.join(os.homedir(), '.trace-mcp', 'bin');
   const legacyPath = path.join(legacyDir, LEGACY_PRIMARY_DEST);
   try {

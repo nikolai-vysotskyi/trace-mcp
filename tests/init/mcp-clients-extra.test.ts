@@ -175,7 +175,9 @@ describe('AMP writer round-trip', () => {
     const file = path.join(dir, 'settings.json');
     fs.writeFileSync(
       file,
-      JSON.stringify({ 'amp.mcpServers': { 'trace-mcp': { command: '/old/launcher', args: ['serve'] } } }),
+      JSON.stringify({
+        'amp.mcpServers': { 'trace-mcp': { command: '/old/launcher', args: ['serve'] } },
+      }),
     );
 
     configureMcpClients(['amp'], projectRoot, { scope: 'global' });
@@ -399,9 +401,15 @@ describe('Hermes YAML writer', () => {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(
       file,
-      ['# user comment', 'mcp_servers:', '  trace-mcp:', '    command: /old/launcher', '    args:', '      - serve', ''].join(
-        '\n',
-      ),
+      [
+        '# user comment',
+        'mcp_servers:',
+        '  trace-mcp:',
+        '    command: /old/launcher',
+        '    args:',
+        '      - serve',
+        '',
+      ].join('\n'),
     );
     configureMcpClients(['hermes'], projectRoot, { scope: 'global' });
     const content = fs.readFileSync(file, 'utf-8');

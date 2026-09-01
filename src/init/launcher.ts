@@ -20,7 +20,7 @@ import { withPs1Bom } from './ps1-bom.js';
 import { atomicWriteString } from '../utils/atomic-write.js';
 import { isSymlink } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
-import { TRACE_MCP_HOME_MIGRATED } from '../global.js';
+import { LEGACY_MIGRATION_MARKER, TRACE_MCP_HOME } from '../global.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
 
@@ -204,15 +204,15 @@ export interface InstallLauncherOpts {
  * Preserve `~/.trace-mcp/bin/trace-mcp` (`trace-mcp.cmd` on Windows) as a
  * symlink to the new `~/.trace/bin/trace` shim, so a client or script still
  * pointed at the pre-TRA-611 absolute path keeps working after the rename.
- * Only acts the one run that actually performed the `~/.trace-mcp` ->
- * `~/.trace` rename (a fresh install never had a legacy path to preserve);
- * once created the symlink lives on disk, so later runs skip this.
- * ponytail: a dry-run on that exact first post-migration run skips creating
- * the symlink and there's no retry — narrow edge case, `trace init` again
- * (non-dry-run) recovers it.
+ * Gated on LEGACY_MIGRATION_MARKER (a durable file left in the new home the
+ * moment the rename succeeds) rather than the one-shot
+ * TRACE_MCP_HOME_MIGRATED flag: that flag is only true for the single process
+ * that performed the rename, so a symlink failure there (permissions,
+ * dry-run) would otherwise never get a second chance. The marker survives
+ * restarts, so every later `trace init`/`upgrade` retries until it succeeds.
  */
 function installLegacyBinCompat(): void {
-  if (!TRACE_MCP_HOME_MIGRATED) return;
+  if (!fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER))) return;
   const legacyDir = path.join(os.homedir(), '.trace-mcp', 'bin');
   const legacyPath = path.join(legacyDir, LEGACY_PRIMARY_DEST);
   try {
@@ -220,7 +220,7 @@ function installLegacyBinCompat(): void {
     ensureDir(legacyDir);
     fs.symlinkSync(getLauncherPath(), legacyPath);
   } catch {
-    /* best-effort — a legacy script can still recover via `trace init` */
+    /* best-effort — the durable marker means the next `trace init` retries */
   }
 }
 
