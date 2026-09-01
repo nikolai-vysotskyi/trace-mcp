@@ -261,11 +261,24 @@ export function launcherEnvContent(nodePath: string, cliPath: string, version: s
     if (v.includes('"')) throw new Error(`launcher config value contains a double quote: ${v}`);
     return `"${v}"`;
   };
+  const cli = cliPath.replaceAll('\\', '/');
   return [
     '# Managed by the trace-mcp app — do not edit by hand.',
     '# Rewritten whenever the app installs or repairs its bundled daemon.',
+    '#',
+    // Both key families, because this file and the shim that reads it are
+    // versioned independently: the app takes over an existing install and
+    // rewrites launcher.env wholesale, while `init` owns the shim. Once
+    // TRA-610 renames the shim to read TRACE_*, an app that still wrote only
+    // TRACE_MCP_* would erase the keys the newly-selected `trace` shim needs —
+    // launchd would then start a shim with no Node and no CLI to exec. A shim
+    // ignores keys it does not know, so writing both costs three lines and
+    // removes the ordering dependency between the two releases entirely.
+    `TRACE_NODE=${quote(nodePath)}`,
+    `TRACE_CLI=${quote(cli)}`,
+    `TRACE_VERSION=${quote(version)}`,
     `TRACE_MCP_NODE=${quote(nodePath)}`,
-    `TRACE_MCP_CLI=${quote(cliPath.replaceAll('\\', '/'))}`,
+    `TRACE_MCP_CLI=${quote(cli)}`,
     `TRACE_MCP_VERSION=${quote(version)}`,
     '',
   ].join('\n');
