@@ -312,12 +312,17 @@ ipcMain.handle('guess-first-project', async () => {
   return guessFirstProject();
 });
 
-
-// IPC: report the per-client config status (missing | up_to_date | stale | ...)
-// produced by the CLI's `clients status --json` command. The renderer uses
-// this to swap "Install" → "Update" when a managed field on disk drifts
-// from what `trace-mcp init` would write today (e.g. an old entry is missing
-// the `alwaysLoad` flag we now write for Claude Code).
+// IPC: report the per-client config status (missing | up_to_date | stale |
+// legacy | ...) produced by the CLI's `clients status --json` command. The
+// renderer uses this to swap "Install" → "Update" when a managed field on disk
+// drifts from what init would write today (e.g. an old entry is missing the
+// `alwaysLoad` flag we now write for Claude Code), and → "Migrate" when the
+// entry is still filed under the pre-TRA-610 `trace-mcp` server key.
+//
+// `legacy` is passed straight through from the CLI and never inferred here.
+// The app cannot tell a not-yet-migrated entry from a correct one without
+// knowing which key init writes in the version installed on this machine, and
+// a Migrate button whose click cannot clear the badge is worse than no badge.
 ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global') => {
   return new Promise<{
     ok: boolean;
@@ -325,7 +330,7 @@ ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global
     statuses?: Array<{
       client: string;
       configPath: string | null;
-      status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+      status: 'missing' | 'up_to_date' | 'stale' | 'legacy' | 'unmanageable' | 'unknown';
       staleReason?: string;
       level?: 'base' | 'standard' | 'max' | null;
     }>;
