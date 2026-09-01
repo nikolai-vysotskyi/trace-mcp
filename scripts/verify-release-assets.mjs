@@ -55,9 +55,10 @@ export function expectedAssets(version) {
  * @param {string} manifestName
  * @param {string} manifestContent
  * @param {Map<string, number>} bySize
+ * @param {string} [version]
  * @returns {string[]}
  */
-export function auditChannelManifest(manifestName, manifestContent, bySize) {
+export function auditChannelManifest(manifestName, manifestContent, bySize, version) {
   const problems = [];
   if (!manifestContent || manifestContent.trim().length === 0) {
     return [`${manifestName} is empty or unreadable`];
@@ -72,15 +73,39 @@ export function auditChannelManifest(manifestName, manifestContent, bySize) {
     return [`${manifestName} contains no valid file targets (url or path)`];
   }
 
-  if (manifestName === 'latest.yml') {
-    const hasInstaller = filenames.some((f) => f.endsWith('.exe') || f.endsWith('.zip'));
-    if (!hasInstaller) {
-      problems.push(`${manifestName} contains no Windows installer (.exe/.zip) target`);
+  if (version) {
+    if (manifestName === 'latest.yml') {
+      const expectedExe = `trace-mcp.Setup.${version}.exe`;
+      if (!filenames.includes(expectedExe)) {
+        problems.push(
+          `${manifestName} does not reference the expected Windows installer '${expectedExe}'`,
+        );
+      }
+    } else if (manifestName === 'latest-mac.yml') {
+      const expectedIntel = `trace-mcp-${version}-mac.zip`;
+      const expectedArm = `trace-mcp-${version}-arm64-mac.zip`;
+      if (!filenames.includes(expectedIntel)) {
+        problems.push(
+          `${manifestName} does not reference the expected Intel macOS update '${expectedIntel}'`,
+        );
+      }
+      if (!filenames.includes(expectedArm)) {
+        problems.push(
+          `${manifestName} does not reference the expected Apple Silicon macOS update '${expectedArm}'`,
+        );
+      }
     }
-  } else if (manifestName === 'latest-mac.yml') {
-    const hasZip = filenames.some((f) => f.endsWith('.zip'));
-    if (!hasZip) {
-      problems.push(`${manifestName} contains no macOS zip target`);
+  } else {
+    if (manifestName === 'latest.yml') {
+      const hasExe = filenames.some((f) => f.endsWith('.exe'));
+      if (!hasExe) {
+        problems.push(`${manifestName} contains no Windows installer (.exe) target`);
+      }
+    } else if (manifestName === 'latest-mac.yml') {
+      const hasZip = filenames.some((f) => f.endsWith('-mac.zip'));
+      if (!hasZip) {
+        problems.push(`${manifestName} contains no macOS update (-mac.zip) target`);
+      }
     }
   }
 
@@ -122,7 +147,7 @@ export function auditReleaseAssets(version, assets, manifestContents = {}) {
 
   for (const [manifestName, content] of Object.entries(manifestContents)) {
     if (content !== undefined) {
-      problems.push(...auditChannelManifest(manifestName, content, bySize));
+      problems.push(...auditChannelManifest(manifestName, content, bySize, version));
     }
   }
 

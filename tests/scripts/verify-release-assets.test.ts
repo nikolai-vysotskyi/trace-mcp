@@ -134,6 +134,7 @@ path: trace-mcp-Setup-3.1.1.exe
     expect(
       auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest.yml': mismatchedYml }),
     ).toEqual([
+      "latest.yml does not reference the expected Windows installer 'trace-mcp.Setup.3.1.1.exe'",
       "latest.yml references 'trace-mcp-Setup-3.1.1.exe', but it is missing from release assets",
       "latest.yml references 'trace-mcp-Setup-3.1.1.exe', but it is missing from release assets",
     ]);
@@ -152,12 +153,48 @@ path: trace-mcp-Setup-3.1.1.exe
       auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
         'latest.yml': 'path: trace-mcp-3.1.1-arm64.dmg',
       }),
-    ).toEqual(['latest.yml contains no Windows installer (.exe/.zip) target']);
+    ).toEqual([
+      "latest.yml does not reference the expected Windows installer 'trace-mcp.Setup.3.1.1.exe'",
+    ]);
 
     expect(
       auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
-        'latest-mac.yml': 'path: trace-mcp-3.1.1-arm64.dmg',
+        'latest.yml': 'path: trace-mcp-3.1.1-win.zip',
       }),
-    ).toEqual(['latest-mac.yml contains no macOS zip target']);
+    ).toEqual([
+      "latest.yml does not reference the expected Windows installer 'trace-mcp.Setup.3.1.1.exe'",
+    ]);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
+        'latest-mac.yml': 'path: trace-mcp-3.1.1-win.zip',
+      }),
+    ).toEqual([
+      "latest-mac.yml does not reference the expected Intel macOS update 'trace-mcp-3.1.1-mac.zip'",
+      "latest-mac.yml does not reference the expected Apple Silicon macOS update 'trace-mcp-3.1.1-arm64-mac.zip'",
+    ]);
+
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), {
+        'latest-mac.yml': 'path: trace-mcp-3.1.1-mac.zip',
+      }),
+    ).toEqual([
+      "latest-mac.yml does not reference the expected Apple Silicon macOS update 'trace-mcp-3.1.1-arm64-mac.zip'",
+    ]);
+  });
+
+  it('accepts valid latest-mac.yml referencing both macOS architectures', () => {
+    const validMacYml = `
+version: 3.1.1
+files:
+  - url: trace-mcp-3.1.1-mac.zip
+    sha512: abc123
+  - url: trace-mcp-3.1.1-arm64-mac.zip
+    sha512: def456
+path: trace-mcp-3.1.1-mac.zip
+`;
+    expect(
+      auditReleaseAssets('3.1.1', completeRelease('3.1.1'), { 'latest-mac.yml': validMacYml }),
+    ).toEqual([]);
   });
 });
