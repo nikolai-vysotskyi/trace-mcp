@@ -15,6 +15,7 @@ import type { TelemetrySink } from '../runtime/telemetry-sink.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
 import type { TopologyStore } from '../topology/topology-db.js';
+import type { StateEngine } from '../state/state-engine.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
 
@@ -100,6 +101,8 @@ export interface ServerContext {
   telemetrySink: TelemetrySink | null;
   /** Optional persistent ranking ledger for self-tuning (null when disabled) */
   rankingLedger: RankingLedger | null;
+  /** StateEngine instance for agent execution state (SKILL.state) */
+  stateEngine?: StateEngine | null;
   /**
    * R09 v2 — emit a pipeline-lifecycle event onto the daemon's SSE bus.
    * No-op when running outside the daemon (CLI fallback, unit tests).

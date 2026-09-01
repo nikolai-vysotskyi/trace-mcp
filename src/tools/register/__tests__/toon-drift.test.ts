@@ -17,6 +17,7 @@ import { registerNavigationTools } from '../navigation.js';
 import { registerQualityTools } from '../quality.js';
 import { registerRefactoringTools } from '../refactoring.js';
 import { registerSessionTools } from '../session.js';
+import { registerStateTools } from '../state.js';
 
 interface CapturedTool {
   name: string;
@@ -100,6 +101,7 @@ function captureAllTools(): CapturedTool[] {
   registerRefactoringTools(s, ctx);
   registerKnowledgeTools(s, ctx);
   registerSessionTools(s, mctx);
+  registerStateTools(s, ctx);
   return captured;
 }
 

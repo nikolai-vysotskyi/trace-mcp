@@ -2,7 +2,7 @@
 
 Reusable [Agent Skills](https://skills.sh) that teach any MCP-compatible coding agent (Claude Code, Cursor, Windsurf, OpenCode, Codex, etc.) to use [trace-mcp](https://github.com/nikolai-vysotskyi/trace-mcp) effectively.
 
-trace-mcp is a framework-aware code intelligence MCP server that exposes 169 tools over a cross-language dependency graph. These skills encode the routing rules, workflows, and token-efficiency best practices so your agent uses trace-mcp instead of brute-reading files with `Read`/`Grep`/`Glob`.
+trace-mcp is a framework-aware code intelligence MCP server that exposes 176 tools over a cross-language dependency graph. These skills encode the routing rules, workflows, and token-efficiency best practices so your agent uses trace-mcp instead of brute-reading files with `Read`/`Grep`/`Glob`.
 
 ## Install
 

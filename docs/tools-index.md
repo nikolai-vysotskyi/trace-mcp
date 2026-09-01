@@ -208,6 +208,12 @@ which excludes the framework-specific rows.
 | `subproject_sync` | Re-scan all subprojects: re-discover services, re-parse contracts, re-scan client calls, and re-link everything. | opt-in |
 | `suggest_queries` | Onboarding helper: shows top imported files, most connected symbols (PageRank), language stats, and example tool calls. | always |
 | `taint_analysis` | Track flow of untrusted data from sources (HTTP params, env vars, file reads) to dangerous sinks (SQL queries, exec, innerHTML, redirects). | always |
+| `trace_state_add_dead_end` | Record an exploration dead-end or failed hypothesis in the task state without sending a full merge patch. | always |
+| `trace_state_checkpoint` | Save a snapshot checkpoint of the current execution state with a named label for rollback. | always |
+| `trace_state_get` | Retrieve the current agent execution state for a task in full JSON or compact Markdown format. | always |
+| `trace_state_init` | Initialize a new agent execution state in SQLite for tracking task progress, structured plan, working context, and blockers. | always |
+| `trace_state_patch` | Apply an RFC 7396 JSON Merge Patch to update the agent execution state. | always |
+| `trace_state_rollback` | Roll back execution state to a previously saved checkpoint by label or checkpoint ID. | always |
 | `traverse_graph` | Walk the dependency graph from a starting symbol or file using BFS/DFS, with a hard token budget on the response. | always |
 | `tune_decision_weights` | Decision memory, not retrieval ranking (that is `tune_weights`): re-fit decision confidence weights from accumulated review feedback (approve/reject events). | always |
 | `tune_weights` | Retrieval fusion ranking for `search`, not decision memory (that is `tune_decision_weights`): read the persistent ranking ledger and learn per-repo signal-fu… | always |

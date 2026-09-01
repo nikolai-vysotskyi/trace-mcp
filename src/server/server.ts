@@ -53,6 +53,8 @@ import { registerProjectsTools } from '../tools/register/projects.js';
 import { registerQualityTools } from '../tools/register/quality.js';
 import { registerRefactoringTools } from '../tools/register/refactoring.js';
 import { registerSessionTools } from '../tools/register/session.js';
+import { registerStateTools } from '../tools/register/state.js';
+import { StateEngine } from '../state/state-engine.js';
 import { withHints } from '../tools/shared/hints.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { sanitizeValue } from '../utils/mcp-sanitize.js';
@@ -658,6 +660,7 @@ export function createServer(
     decisionStore,
     telemetrySink,
     rankingLedger,
+    stateEngine: store?.db ? new StateEngine(store.db) : null,
     // R09 v2: default to a no-op so non-daemon contexts (CLI fallback,
     // unit tests) can register tools without crashing. cli.ts overrides
     // this with the broadcastEvent-bound callback.
@@ -704,6 +707,7 @@ export function createServer(
   registerMemoryTools(server, ctx);
   registerKnowledgeTools(server, ctx);
   registerSessionTools(server, metaCtx);
+  registerStateTools(server, ctx);
 
   // Must run after the last registration: the SDK installs its `tools/call`
   // handler lazily on the first `server.tool(...)` (TRA-412).

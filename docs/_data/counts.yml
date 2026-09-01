@@ -17,7 +17,7 @@
 # Preset sizes deliberately live NOT here: tests/docs/preset-claims.test.ts
 # (TRA-259) checks those against the real tool filter, which is exact where a
 # hand-maintained number would only be a copy.
-tools: 169
+tools: 176
 
 # TRA-275: `languages` and `frameworks` are derived — PluginRegistry
 # .createWithDefaults() knows them exactly — so readme-claims.test.ts asserts

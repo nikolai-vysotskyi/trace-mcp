@@ -84,9 +84,11 @@ export const COMPACT_CORE_PARAMS: Record<string, string[]> = {
   get_project_health: [],
   benchmark_project: [],
 
-  // Session / Memory
+  // Session / Memory / State
   add_decision: ['title', 'content', 'type', 'symbol_id', 'file_path', 'tags'],
   query_decisions: ['search', 'type', 'symbol_id', 'file_path', 'limit'],
+  trace_state_init: ['task_id', 'goal'],
+  trace_state_get: ['task_id'],
 
   // Graph / topology
   visualize_graph: ['scope', 'granularity', 'output'],
@@ -102,7 +104,7 @@ export const COMPACT_CORE_PARAMS: Record<string, string[]> = {
 
   // Navigation / inspection
   get_outline: ['path', 'detail_level', 'nested'],
-  search_text: ['query', 'file_pattern', 'is_regex', 'grouping'],
+  search_text: ['query', 'file_pattern'],
   get_pagerank: ['limit'],
   get_refactor_candidates: ['limit', 'min_cyclomatic'],
   detect_ast_clones: ['file_pattern', 'min_loc'],

@@ -21,6 +21,7 @@ import { registerProjectsTools } from '../projects.js';
 import { registerQualityTools } from '../quality.js';
 import { registerRefactoringTools } from '../refactoring.js';
 import { registerSessionTools } from '../session.js';
+import { registerStateTools } from '../state.js';
 
 export interface CapturedTool {
   name: string;
@@ -118,5 +119,6 @@ export function captureAllTools(ctxOverrides: Record<string, unknown> = {}): Cap
   registerRefactoringTools(s, ctx);
   registerKnowledgeTools(s, ctx);
   registerSessionTools(s, mctx);
+  registerStateTools(s, ctx);
   return captured;
 }
