@@ -135,6 +135,43 @@ describe('sendUsagePing', () => {
     expect(params.client).toBe('unknown');
   });
 
+  it('reports the active preset and the number of tools it advertised', async () => {
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({
+      version: '1.2.3',
+      env: CONFIGURED_ENV,
+      fetchImpl,
+      preset: 'minimal',
+      toolsAdvertised: 28,
+    });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.preset).toBe('minimal');
+    expect(params.tools_advertised).toBe(28);
+  });
+
+  it('keeps a client name recorded while the ping was in flight (TRA-643)', async () => {
+    // The ping fires before the handshake, so `initialize` routinely lands
+    // mid-fetch. Saving the pre-fetch snapshot used to erase the name that
+    // `recordUsagePingClient` had just written — leaving every install whose
+    // only session of the day was the one that pinged permanently `unknown`.
+    let state = JSON.stringify({ installId: 'fixed-id', lastPingDate: '2000-01-01' });
+    vi.mocked(fs.readFileSync).mockImplementation(() => state);
+    vi.mocked(fs.writeFileSync).mockImplementation((_p, data) => {
+      state = String(data);
+    });
+    const fetchImpl = vi.fn(async () => {
+      recordUsagePingClient('claude-code', CONFIGURED_ENV);
+      return new Response(null, { status: 204 });
+    }) as unknown as typeof fetch;
+
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+
+    expect(JSON.parse(state).client).toBe('claude-code');
+    expect(JSON.parse(state).lastPingDate).toBe(new Date().toISOString().slice(0, 10));
+    expect(JSON.parse(state).installId).toBe('fixed-id');
+  });
+
   it('records the client name for the next ping, and honours the opt-out', () => {
     recordUsagePingClient('cursor', {});
     expect(fs.writeFileSync).toHaveBeenCalledTimes(1);

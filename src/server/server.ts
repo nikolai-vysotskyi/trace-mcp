@@ -321,14 +321,9 @@ export function createServer(
       });
   }
 
-  // Anonymous active-install ping (opt-out via TRACE_MCP_TELEMETRY=off; inert
-  // until TRACE_MCP_GA_MEASUREMENT_ID/TRACE_MCP_GA_API_SECRET are configured).
-  // Fire-and-forget — never blocks startup, never throws.
-  void sendUsagePing({ version: PKG_VERSION }).catch((err) => {
-    logger.debug({ err }, 'telemetry.usage_ping_unexpected_error');
-  });
-
-  // The ping above fires before any client has spoken, so the client name is
+  // The usage ping fires at the end of this function — it reports the preset
+  // and the advertised tool count, neither of which exists until the surface is
+  // built. It still precedes the client's handshake, so the client name is
   // recorded here and reported by the *next* day's ping.
   server.server.oninitialized = () => {
     const name = server.server.getClientVersion()?.name;
@@ -536,21 +531,22 @@ export function createServer(
   // server, and the desktop app can render the project status badge.
   const heartbeat = startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
 
-  const { _originalTool, registeredToolNames, toolHandlers, deferredTools } = installToolGate(
-    server,
-    config,
-    activePreset,
-    savings,
-    journal,
-    j,
-    extractResultCount,
-    extractCompactResult,
-    stripMetaFields,
-    projectRoot,
-    (success) => heartbeat.recordToolCall(success),
-    deps?.onJournalEntry,
-    deps?.sessionId,
-  );
+  const { _originalTool, registeredToolNames, ungatedToolNames, toolHandlers, deferredTools } =
+    installToolGate(
+      server,
+      config,
+      activePreset,
+      savings,
+      journal,
+      j,
+      extractResultCount,
+      extractCompactResult,
+      stripMetaFields,
+      projectRoot,
+      (success) => heartbeat.recordToolCall(success),
+      deps?.onJournalEntry,
+      deps?.sessionId,
+    );
 
   if (presetName !== 'full') {
     logger.info(
@@ -708,6 +704,19 @@ export function createServer(
   // Must run after the last registration: the SDK installs its `tools/call`
   // handler lazily on the first `server.tool(...)` (TRA-412).
   installRetiredToolHints(server);
+
+  // Anonymous active-install ping (opt-out via TRACE_MCP_TELEMETRY=off; inert
+  // until TRACE_MCP_GA_MEASUREMENT_ID/TRACE_MCP_GA_API_SECRET are configured).
+  // Fire-and-forget — never blocks startup, never throws. Last, so it can
+  // report the surface this session actually built: `registeredToolNames` is
+  // only complete once every register*Tools call above has run (TRA-643).
+  void sendUsagePing({
+    version: PKG_VERSION,
+    preset: presetName,
+    toolsAdvertised: registeredToolNames.length + ungatedToolNames.length,
+  }).catch((err) => {
+    logger.debug({ err }, 'telemetry.usage_ping_unexpected_error');
+  });
 
   return { server, journal, dispose, toolHandlers };
 }
