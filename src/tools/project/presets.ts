@@ -33,8 +33,6 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'batch',
     // Live decision-memory quartet on the minimal preset:
     //   remember = remember_decision (live agent write into the decision graph)
-    //   recall   = query_decisions   (FTS search across captured decisions)
-    //   forget   = invalidate_decision (mark a decision no longer valid)
     //   improve  = mine_sessions     (post-hoc extraction from session logs)
     // Keeping the canonical trace-mcp names rather than introducing alias
     // tools — the quartet semantics are documented via this preset only,
@@ -108,6 +106,19 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'query_decisions',
     'invalidate_decision',
     'mine_sessions',
+  ],
+
+  // SKILL.state agent execution state tracking suite (TRA-596, arXiv:2608.26263)
+  state: [
+    'register_edit',
+    'batch',
+    'trace_state_init',
+    'trace_state_patch',
+    'trace_state_get',
+    'trace_state_checkpoint',
+    'trace_state_rollback',
+    'trace_state_add_dead_end',
+    'trace_state_list',
   ],
 
   full: 'all',

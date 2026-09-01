@@ -33,7 +33,7 @@
 
 > AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
 >
-> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 169 tools.
+> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 177 tools.
 >
 > **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP server covers both code and knowledge; there is no second tool to plug in.
 

@@ -80,7 +80,10 @@ describe('MCP tool-schema token budget guardrail (TRA-186)', () => {
   // cut `search` back down. The gated groups already get a full-serialized check
   // (TRA-211) — this gives the always-on set, by far the largest group, the same
   // treatment.
-  const TOTAL_SCHEMA_CHAR_BUDGET = 90_000;
+  // Updated 2026-09-01 (TRA-596): 92,635 chars after adding the 7 SKILL.state tools
+  // (trace_state_init, trace_state_patch, trace_state_get, trace_state_checkpoint,
+  // trace_state_rollback, trace_state_add_dead_end, trace_state_list).
+  const TOTAL_SCHEMA_CHAR_BUDGET = 95_000;
   // No single tool's serialized schema should need more than this. `search` is
   // still the worst case at 3,119 (down from 4,034 — it lost the nested
   // fusion_weights object and its duplicated mode prose), with query_decisions
