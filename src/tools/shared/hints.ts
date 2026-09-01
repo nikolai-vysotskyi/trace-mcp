@@ -117,7 +117,7 @@ const hintGenerators: Record<string, HintGenerator> = {
       });
     }
     hints.push({
-      tool: 'check_rename_safe',
+      tool: 'check_rename',
       args: { symbol_id: '<symbol>' },
       why: 'Verify rename is safe across all usages',
     });
@@ -134,7 +134,7 @@ const hintGenerators: Record<string, HintGenerator> = {
     const callers = arr(dig(r, 'callers'));
     if (callers.length > 5) {
       hints.push({
-        tool: 'get_extraction_candidates',
+        tool: 'get_refactor_candidates',
         args: {},
         why: 'High fan-in — check if this is an extraction candidate',
       });
@@ -249,7 +249,7 @@ const hintGenerators: Record<string, HintGenerator> = {
   get_project_map(r) {
     const hints: Hint[] = [];
     hints.push({ tool: 'suggest_queries', why: 'Get example queries tailored to this project' });
-    hints.push({ tool: 'get_repo_health', why: 'Check code quality metrics and hotspots' });
+    hints.push({ tool: 'get_project_health', why: 'Check code quality metrics and hotspots' });
     return hints;
   },
 
@@ -314,20 +314,20 @@ const hintGenerators: Record<string, HintGenerator> = {
     return hints;
   },
 
-  get_coupling_metrics(r) {
+  get_coupling(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_dependency_cycles', why: 'Find circular dependency chains' });
+    hints.push({ tool: 'get_circular_imports', why: 'Find circular dependency chains' });
     hints.push({
-      tool: 'get_extraction_candidates',
+      tool: 'get_refactor_candidates',
       why: 'Find functions worth extracting to reduce coupling',
     });
     return hints;
   },
 
-  get_dependency_cycles(r) {
+  get_circular_imports(r) {
     const hints: Hint[] = [];
     hints.push({
-      tool: 'get_layer_violations',
+      tool: 'check_architecture',
       why: 'Check if cycles violate architectural layers',
     });
     return hints;
@@ -343,7 +343,7 @@ const hintGenerators: Record<string, HintGenerator> = {
     return hints;
   },
 
-  check_rename_safe(r) {
+  check_rename(r) {
     const hints: Hint[] = [];
     const safe = dig(r, 'safe');
     if (safe === true) {
@@ -420,14 +420,14 @@ const hintGenerators: Record<string, HintGenerator> = {
     return hints;
   },
 
-  get_repo_health(r) {
+  get_project_health(r) {
     const hints: Hint[] = [];
-    hints.push({ tool: 'get_hotspots', why: 'Find files with highest churn + complexity' });
+    hints.push({ tool: 'get_risk_hotspots', why: 'Find files with highest churn + complexity' });
     hints.push({ tool: 'get_dead_code', why: 'Find and clean up unreachable code' });
     return hints;
   },
 
-  get_hotspots(r) {
+  get_risk_hotspots(r) {
     const hints: Hint[] = [];
     const files = arr(r);
     if (files.length > 0) {
@@ -533,7 +533,7 @@ const hintGenerators: Record<string, HintGenerator> = {
     return hints;
   },
 
-  get_page_rank(r) {
+  get_pagerank(r) {
     const hints: Hint[] = [];
     const ranked = arr(r);
     if (ranked.length > 0) {
