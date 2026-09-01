@@ -273,6 +273,31 @@ that item 3 sharpens the trigger condition: with 61 installs across 11
 countries and no evidence of a single multi-seat user, there is currently
 no demand-side reason to unpark it either.
 
+### 7. Decide what the State Engine makes us — waiting on its own numbers (TRA-649)
+`trace_state_*` — init, patch, get, checkpoint, rollback over a SQLite task
+store with RFC 7396 merge patches, plus a `trace://state/{task_id}`
+resource — is a second product pillar, and it arrived through an
+implementation epic rather than a positioning decision. It is not code
+intelligence: it is a bet that re-establishing *what the task is* costs an
+agent as much as re-establishing what the code is. That is the same
+recomputation argument this product was built on, one level up, and it may
+well be right. But nothing states it as a position — not the homepage, not
+`README.md`, not `comparisons.md`, and not this file until now.
+
+**Status: waiting on phase 4, not parked.** Three questions, in order.
+(a) Does the A/B show state cutting tokens *and* holding task success? Two
+numbers, not one — token reduction with flat or worse Pass@1 is a
+compression result, not a pillar, and that is worth knowing before the
+number becomes a headline. (b) Is there one sentence a user repeats that
+covers both halves? If it needs an "also", the surface is two products in
+one binary — a legitimate answer, but then the second one needs its own
+door rather than five more tools inside a 169-tool list. (c) If it is one
+product, the public surfaces are all describing half of it.
+
+**Why it is here and not in "ready to start":** the answer to (a) is being
+measured right now, and guessing at it would produce exactly the kind of
+claim item 4 exists to stop us making.
+
 ## Explicitly not doing right now
 
 - **Tool consolidation as a token play.** Superseded by presets, which got
