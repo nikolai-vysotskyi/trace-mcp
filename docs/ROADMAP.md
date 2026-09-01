@@ -202,6 +202,18 @@ instead of scaling with the tool count, which also decouples our tool
 growth from our context cost permanently, and inverts the one axis every
 peer competes on (more tools = better) into one we can defend with numbers.
 
+**This is not speculative — the market leader already ships it.**
+`comparisons.md`'s own August 2026 source read found that codegraph (68.7K
+stars) implements eight MCP tools and **advertises exactly one of them** by
+default: `DEFAULT_MCP_TOOLS` is the single-element set `{explore}`, with
+the rest re-enablable through an allowlist env var. Their whole advertised
+surface costs roughly **1.9K tokens**. Their stated reason, in a source
+comment, is not token cost at all — it is that *presence itself steers
+mis-picks*. codebase-memory-mcp (41.2K stars) makes a weaker version of the
+same call with tool profiles. So the open question is not whether anyone
+would ship this; it is whether it survives at 169 tools instead of 8, which
+is exactly what a design pass is for.
+
 **Unknowns that a design pass has to answer before any code:** whether a
 model reliably reaches for a tool it cannot see (this is the whole bet, and
 it is an empirical question we can A/B today with `load_tools` as it
@@ -232,7 +244,8 @@ no demand-side reason to unpark it either.
   only merge two tools if they are genuinely the same tool.
 - **Chasing competitor feature/tool-count parity for its own sake** — see
   `comparisons.md`'s "deliberately NOT chasing" list. Item 4 is the sharper
-  version of why: count was never the metric, in either direction.
+  version of why: count was never the metric, in either direction, and the
+  two largest peers are competing in the opposite direction anyway.
 - **Rewriting CFG/taint analysis onto a real AST/dataflow engine** — a real
   gap, correctly filed in `comparisons.md` as a known ceiling, not a
   roadmap item until something forces it (e.g. a security-critical false
