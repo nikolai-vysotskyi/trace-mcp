@@ -168,10 +168,10 @@
         "cold_start_ms": 613,
         "window_interactive_ms": 330,
         "renderer_fcp_ms": 156,
-        "ui_p95_ms": 2.1,
+        "ui_p95_ms": null,
         "heap_idle_mb": 9.5,
-        "heap_after_workload_mb": 10.6,
-        "heap_growth_mb_per_hour": 0.0,
+        "heap_after_workload_mb": null,
+        "heap_growth_mb_per_hour": null,
         "main_cpu_idle_pct": 0,
         "renderer_bundle_kb": 2271,
         "renderer_eager_kb": 2012,
@@ -180,17 +180,11 @@
           "mac_asar": 5.8,
           "win": null
         },
-        "tree_rss_idle_mb": 351.1,
-        "tree_rss_peak_mb": 458.0,
-        "tree_cpu_peak_pct": 314.9,
-        "rss_after_index_settle_mb": 621.4,
         "rss_by_role_mb": {
           "installed_app_idle_total": 380,
           "installed_app_main": 131,
           "installed_app_helpers": 249,
-          "mcp_server_http_idle": 351.1,
-          "mcp_server_http_peak": 458.0,
-          "mcp_server_http_settled": 621.4
+          "mcp_server_http_idle": 765
         }
       },
       "raw_samples": [
@@ -212,7 +206,7 @@
           "main_cpu_idle_pct": 0
         }
       ],
-      "notes": "Measured on 3.10.0 at split commit d0633c51. Further code-split secondary project tabs (Activity, Insights, MemoryExplorer, Notebook) behind React.lazy, reducing the main renderer entry chunk from 1172.19 kB (gzip 337.40 kB) to 1082.74 kB (gzip 314.80 kB) — saving 89.45 kB raw / 22.60 kB gzip — and moving 90 KB out of startup (renderer_eager_kb 2102 -> 2012 KB). Startup metric renderer_fcp_ms is 156 ms (median of 3, vs 216 ms in run 4). Cold start (613 ms), idle heap (9.5 MB) and idle CPU (0%) remain well within ceilings. Controlled full-repo workload pass (packages/app/scripts/measure-workload-baseline.mjs against 824 files / 5610 symbols): tree_rss_idle_mb 351.1 MB, tree_rss_peak_mb 458.0 MB, tree_cpu_peak_pct 314.9% (4 indexing worker threads), rss_after_index_settle_mb 621.4 MB, 10-query latency median 0.5 ms / p95 2.1 ms. Multi-tab scaling verified via tabs-scale.mjs (1 tab: 571 ms, 2 tabs: 580 ms, 0 reqs/s idle, 0% CPU, clean memory teardown on close). Unpacked macOS app artifact size grew from 268.1 MB to 478.0 MB (1.783x, crossing the 1.5x threshold) due to TRA-438 embedding server-payload (241 MB standalone Node daemon runtime + 33 dependencies) in Contents/Resources/server so DMG users do not need Node/npm installed; tracked in TRA-605 for payload audit/pruning and ceiling update in follow-up work."
+      "notes": "Measured on 3.10.0 at split commit d0633c51 using packages/app/scripts/perf-measure.mjs. Further code-split secondary project tabs (Activity, Insights, MemoryExplorer, Notebook) behind React.lazy, reducing the main renderer entry chunk from 1172.19 kB (gzip 337.40 kB) to 1082.74 kB (gzip 314.80 kB) — saving 89.45 kB raw / 22.60 kB gzip — and moving 90 KB out of startup (renderer_eager_kb 2102 -> 2012 KB). Startup metric renderer_fcp_ms is 156 ms (median of 3, vs 216 ms in run 4). Cold start (613 ms), idle heap (9.5 MB) and idle CPU (0%) remain well within ceilings. Unpacked macOS app artifact size grew from 268.1 MB to 478.0 MB (1.783x, crossing the 1.5x threshold) due to TRA-438 embedding server-payload (241 MB standalone Node daemon runtime + 33 dependencies) in Contents/Resources/server so DMG users do not need Node/npm installed; tracked in TRA-605 for payload audit/pruning and ceiling update in follow-up work. Multi-tab scaling verified via tabs-scale.mjs (1 tab: 571 ms, 2 tabs: 580 ms, 0 reqs/s idle, 0% CPU, clean memory deallocation on tab close). ui_p95_ms, heap_after_workload_mb, and heap_growth_mb_per_hour remain null as a foreign daemon on port 3741 held the port throughout this session (same as runs 1, 3, and 4)."
     }
   ]
 }

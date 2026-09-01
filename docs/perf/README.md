@@ -26,11 +26,6 @@ entry per measurement pass, never rewrite an old one. This file is the human sum
 | `renderer_eager_kb` | 2012 | — | **the size metric of record** (see below) |
 | `renderer_bundle_kb` | 2271 | — | total size on disk across all lazy chunks |
 | `artifact_mb` | 5.8 / 478.0 | ×1.5 growth | unpacked grew from 268.1 MB (1.783×) due to TRA-438 server-payload (tracked in TRA-605) |
-| `tree_rss_idle_mb` | 351.1 | — | isolated daemon idle baseline |
-| `tree_rss_peak_mb` | 458.0 | — | peak during indexing & embedding pipeline |
-| `tree_cpu_peak_pct` | 314.9% | — | multi-core worker indexing utilization |
-| `rss_after_index_settle_mb` | 621.4 | — | settled RSS with full repo code graph |
-| `ui_p95_ms` | 2.1 | — | 10-query p95 latency (median 0.5 ms) |
 
 ### Which size number to trend
 
@@ -54,11 +49,13 @@ ceiling only.
 When a run has to happen on a loaded machine, an interleaved A/B — alternating one sample
 of each build, several rounds — cancels the drift that a back-to-back A-then-B run does not.
 
-Controlled workload and daemon process-tree metrics (`tree_rss_idle_mb`, `tree_rss_peak_mb`,
-`tree_cpu_peak_pct`, `rss_after_index_settle_mb`, `ui_p95_ms`) are measured via
-`packages/app/scripts/measure-workload-baseline.mjs` against an isolated daemon instance on a
-dedicated non-conflicting port (3749) with a throwaway `TRACE_MCP_DATA_DIR`, indexing the full
-repository (824 files, 5610 symbols).
+`ui_p95_ms`, `heap_after_workload_mb` and `heap_growth_mb_per_hour` are unfilled in
+`baseline.json`. The harness that produces them landed with TRA-258 and has been run
+end to end, but a publishable pass needs a daemon on 127.0.0.1:3741 that speaks this
+checkout's API — the renderer's `BASE` is hardcoded, so the workload cannot be pointed
+anywhere else. On a machine where another trace-mcp version owns that port, the fixture
+never gets served and the run aborts with `the daemon on 3741 never served <fixture>`.
+Take the first clean pass on an isolated machine with no competing daemon.
 
 ## How to take a measurement
 
