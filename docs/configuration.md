@@ -719,6 +719,34 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 
 For all other clients only the Base tier applies — there is no equivalent of Claude Code hooks or tweakcc in those tools.
 
+### Multica workspace agents
+
+Multica agents don't run `trace-mcp init` — each agent's MCP wiring is set directly with `multica agent update --mcp-config-file <json>` (or `agent create --mcp-config-file` on first setup), scoped to that one agent. Every agent inherits a runtime-provided `trace-mcp` entry that runs the unconfigured default preset (`minimal`); to give a role its own preset, override the `trace-mcp` entry by name — the agent's own `mcp_config` always wins that collision:
+
+```json
+{
+  "mcpServers": {
+    "trace-mcp": { "command": "trace-mcp", "args": ["--preset", "dev"] }
+  }
+}
+```
+
+```bash
+multica agent update <agent-id> --mcp-config-file ./trace-mcp-dev.json
+```
+
+The role → preset matrix used in the trace-mcp workspace itself (adjust to your own roles):
+
+| Agent role | Preset | Why |
+|---|---|---|
+| Independent code review | `review` | rename-safety, quality gates, risk/impact assessment — no refactor or design tools |
+| Security audit | `security` | `scan_security`, `taint_analysis`, SBOM, config audit — no refactor/design tools |
+| Design/UX review | `design` | component tree, screens, navigation, state — no security/perf tools |
+| Implementation & bugfixing | `dev` | refactor + codemod tools (`apply_rename`, `extract_function`, `change_signature`) |
+| Performance analysis | `perf` | `analyze_perf`, complexity/coupling trends, risk hotspots |
+
+`multica agent update --mcp-config*` **replaces** the agent's entire `mcp_config` — it does not merge. If the agent already has other private MCP servers configured, read them back first (only a workspace owner/admin can; `mcp_config` reads redacted for agent actors) and include them in the new payload, or the update will silently remove them.
+
 ---
 
 ## stdio vs HTTP — choosing your setup
