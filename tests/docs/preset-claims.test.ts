@@ -35,7 +35,16 @@ const DOCS = [
   'docs/comparisons.md',
   'docs/reduce-claude-code-token-usage.md',
 ];
-const PRESETS = ['standard', 'minimal', 'review', 'architecture'];
+const PRESETS = [
+  'standard',
+  'minimal',
+  'review',
+  'architecture',
+  'dev',
+  'security',
+  'design',
+  'perf',
+];
 
 describe('documented tool-preset sizes', () => {
   for (const path of DOCS) {
