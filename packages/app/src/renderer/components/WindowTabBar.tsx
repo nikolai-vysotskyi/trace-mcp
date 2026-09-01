@@ -33,8 +33,8 @@ export function WindowTabBar() {
     return api.onTabListChanged((newTabs: TabInfo[]) => setTabs(newTabs));
   }, []);
 
-  // Don't render on macOS (native tabs) or if only 1 tab (no strip needed)
-  if (platform === 'darwin' || tabs.length <= 1) return null;
+  // Don't render if only 1 tab (no strip needed)
+  if (tabs.length <= 1) return null;
 
   const handleTabClick = (tabId: string) => {
     const api = window.electronAPI;
@@ -63,7 +63,7 @@ export function WindowTabBar() {
           background: 'var(--surface-sunken)',
           borderBottom: '1px solid var(--separator)',
           WebkitAppRegion: 'drag',
-          paddingLeft: 4,
+          paddingLeft: platform === 'darwin' ? 78 : 4,
           paddingRight: 4,
           gap: 1,
           flexShrink: 0,
