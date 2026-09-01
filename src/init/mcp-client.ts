@@ -716,8 +716,19 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
   const existing = readIfExists(configPath);
   if (existing !== null) {
     isNew = false;
-    const withoutLegacy = stripCodexTomlSection(existing, LEGACY_MCP_KEY).trimEnd();
-    atomicWriteString(configPath, `${withoutLegacy}\n${block}`, { rejectSymlinks: true });
+    // Strip both keys, not just the legacy one — a file that already has a
+    // [mcp_servers.trace] section (interrupted prior migration, hand edit)
+    // would otherwise keep it untouched and get a second, duplicate header
+    // appended below, which is invalid TOML.
+    const withoutExisting = stripCodexTomlSection(
+      stripCodexTomlSection(existing, LEGACY_MCP_KEY),
+      MCP_KEY,
+    ).trimEnd();
+    atomicWriteString(
+      configPath,
+      withoutExisting.length > 0 ? `${withoutExisting}\n${block}` : block.trimStart(),
+      { rejectSymlinks: true },
+    );
   } else {
     atomicWriteString(configPath, block.trimStart(), { rejectSymlinks: true });
   }

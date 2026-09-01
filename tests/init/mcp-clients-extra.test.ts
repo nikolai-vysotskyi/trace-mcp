@@ -455,6 +455,32 @@ describe('Codex TOML writer', () => {
     expect(content).not.toContain('[mcp_servers.trace-mcp]');
     expect(content).toContain('[mcp_servers.trace]');
   });
+
+  it('does not duplicate [mcp_servers.trace] when both the new and legacy sections already exist', () => {
+    // An interrupted prior migration, or a hand-edited config, can leave both
+    // sections present. Appending a fresh [mcp_servers.trace] block on top of
+    // an existing one produces two headers with the same name, which is
+    // invalid TOML.
+    const file = configPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      [
+        '[mcp_servers.trace]',
+        'command = "/old/launcher"',
+        'args = ["serve"]',
+        '',
+        '[mcp_servers.trace-mcp]',
+        'command = "/old/launcher"',
+        'args = ["serve"]',
+        '',
+      ].join('\n'),
+    );
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+    const content = fs.readFileSync(file, 'utf-8');
+    expect(content.match(/\[mcp_servers\.trace\]/g)).toHaveLength(1);
+    expect(content).not.toContain('[mcp_servers.trace-mcp]');
+  });
 });
 
 describe('Warp configuration', () => {

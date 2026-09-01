@@ -61,10 +61,21 @@ const LEGACY_MIGRATION_MARKER = '.migrated-from-trace-mcp';
 // behind. This script runs before the CLI itself does (postinstall fires
 // immediately after `npm install`), so it has to perform the same rename
 // rather than relying on src/global.ts's own migration to have happened yet.
+function isSymlink(targetPath) {
+  try {
+    return fs.lstatSync(targetPath).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
 function migrateLegacyHomeDir(target, legacy) {
   try {
     if (fs.existsSync(target)) return false;
-    if (fs.lstatSync(legacy).isSymbolicLink()) return false;
+    // A dangling symlink at `target` fails existsSync (it follows the link,
+    // finds nothing) but must still block the rename — isSymlink uses lstat,
+    // which doesn't follow it.
+    if (isSymlink(target) || isSymlink(legacy)) return false;
     if (!fs.statSync(legacy).isDirectory()) return false;
     fs.renameSync(legacy, target);
     try {

@@ -385,12 +385,17 @@ export function migrateClientConfigServers(
     return { migrated: false };
   }
 
-  if (legacyKey in servers && !(newKey in servers)) {
+  // Legacy key alone gets moved to newKey; legacy key alongside an already-
+  // present newKey just gets dropped — either way, presence of the legacy
+  // key is what makes this a migration.
+  if (legacyKey in servers) {
     if (opts.dryRun) {
       return { migrated: true };
     }
 
-    servers[newKey] = servers[legacyKey];
+    if (!(newKey in servers)) {
+      servers[newKey] = servers[legacyKey];
+    }
     delete servers[legacyKey];
 
     atomicWriteString(configPath, JSON.stringify(parsed, null, 2), { rejectSymlinks: true });
