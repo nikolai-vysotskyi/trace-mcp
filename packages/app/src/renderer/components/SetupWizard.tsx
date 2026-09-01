@@ -313,8 +313,7 @@ export function SetupWizard({ onClose, initialStep }: SetupWizardProps) {
       // Opening a tab only renders a view of a project the daemon may never
       // have heard of, which is how the wizard used to finish on a clean DMG
       // install with nothing indexed.
-      const res = await fetch(`${BASE}/api/projects`, {
-        // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
+      const res = await fetch(`${BASE}/api/projects`, { // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request -- BASE is the app's own local daemon (127.0.0.1), not a remote endpoint.
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ root: selectedProject }),
