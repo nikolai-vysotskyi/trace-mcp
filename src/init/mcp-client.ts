@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
 import YAML from 'yaml';
-import { atomicWriteJson } from '../utils/atomic-write.js';
+import { atomicWriteJson, atomicWriteString } from '../utils/atomic-write.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import { isGuardHookInstalled } from './hooks.js';
 import { getLauncherPath } from './launcher.js';
@@ -493,7 +493,7 @@ function writeHermesYamlEntry(configPath: string, entry: HermesYamlEntry): 'crea
   };
 
   doc.setIn(['mcp_servers', 'trace-mcp'], value);
-  fs.writeFileSync(configPath, doc.toString({ lineWidth: 0 }));
+  atomicWriteString(configPath, doc.toString({ lineWidth: 0 }), { rejectSymlinks: true });
   return isNew ? 'created' : 'updated';
 }
 
@@ -545,7 +545,9 @@ function writeAmpJsoncEntry(configPath: string, entry: McpServerEntry): 'created
     formattingOptions: AMP_FORMATTING,
   });
   const updated = applyEdits(content, edits);
-  fs.writeFileSync(configPath, updated.endsWith('\n') ? updated : updated + '\n');
+  atomicWriteString(configPath, updated.endsWith('\n') ? updated : updated + '\n', {
+    rejectSymlinks: true,
+  });
   return isNew ? 'created' : 'updated';
 }
 
@@ -628,9 +630,9 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
   const existing = readIfExists(configPath);
   if (existing !== null) {
     isNew = false;
-    fs.writeFileSync(configPath, `${existing.trimEnd()}\n${block}`);
+    atomicWriteString(configPath, `${existing.trimEnd()}\n${block}`, { rejectSymlinks: true });
   } else {
-    fs.writeFileSync(configPath, block.trimStart());
+    atomicWriteString(configPath, block.trimStart(), { rejectSymlinks: true });
   }
 
   return isNew ? 'created' : 'updated';
