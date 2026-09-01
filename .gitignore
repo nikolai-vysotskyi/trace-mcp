@@ -35,3 +35,6 @@ packages/app/server-payload/
 # Recall harness reports — regenerated on every run
 tests/recall-harness/report.json
 tests/recall-harness/report.md
+
+# Jekyll build output (contrast sweep serves it when present)
+docs/_site/
