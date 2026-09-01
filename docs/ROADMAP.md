@@ -119,10 +119,33 @@ is graded on taste. Four numbers fix it, one per stage:
 **Do not refresh these by hand either.** All four are computed by the same
 daily `ga4-snapshot.yml` run and published under `funnel:` in
 [`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml) —
-that file is where a weekly run reads them, not this page. As of **2026-09-02**
-the first two read 178 arrivals and 15 new installs; activation waits on the
-`repos_indexed` custom dimension being registered in GA4, and retention on the
-first snapshot carrying the new block.
+that file is where a weekly run reads them, not this page. As of **2026-09-02**:
+178 arrivals (14 d), 24 new installs, retention 51% (35 day / 69 month), and
+activation still blocked — see below.
+
+**Two credentials stand between this and all four numbers**, both verified
+against the live property by a `workflow_dispatch` on 2026-09-02
+([run 33556680379](https://github.com/nikolai-vysotskyi/trace-mcp/actions/runs/33556680379)).
+Neither is a design question; do not re-investigate them, and do not read the
+resulting `null`s as zeros.
+
+1. **`repos_indexed` is not a registered GA4 custom dimension.** The ping has
+   been sending it all along and GA4 has been dropping it: `runReport` answers
+   *"Field customEvent:repos_indexed is not a valid dimension"*, and registration
+   is **not retroactive**, so every reading before it is created is
+   unrecoverable — the sooner it exists, the sooner activation has history.
+   Registered today: `version`, `client`, `install_type`, `model`. Creating it
+   is one form in GA4 Admin → Custom definitions (event scope, parameter name
+   `repos_indexed`). Automating it was tried and reverted: the Admin API is not
+   enabled on the credential's GCP project (480706841486), so the script could
+   only have logged a failure once a day.
+2. **`GH_TRAFFIC_TOKEN` is unset.** GitHub's traffic endpoints require
+   `Administration: read`, a permission `GITHUB_TOKEN` cannot be granted, so the
+   workflow gets HTTP 403 and records that in `acquisition.error`. A
+   fine-grained PAT on this repo with that one permission fills it. Until then
+   arrivals must be read by hand with the `gh api` calls in
+   `ops/distribution.md`, and nothing accumulates — GitHub's window is 14 days
+   and drops what falls out of it.
 
 Three things to keep attached to them. The windows differ, so arrivals →
 installs is a direction and not a conversion rate. The ping's credentials are
