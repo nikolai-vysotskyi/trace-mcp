@@ -4,8 +4,14 @@
  * Extracts: targets, variable definitions, define blocks, include directives.
  */
 
-import type { LanguagePlugin } from '../../../../plugin-api/types.js';
-import { createRegexLanguagePlugin } from '../regex-base.js';
+import { ok } from 'neverthrow';
+import type { TraceMcpResult } from '../../../../errors.js';
+import type {
+  FileParseResult,
+  LanguagePlugin,
+  RawSymbol,
+} from '../../../../plugin-api/types.js';
+import { createRegexLanguagePlugin, lineAt, makeSymbolId } from '../regex-base.js';
 
 const _plugin = createRegexLanguagePlugin({
   name: 'makefile',
@@ -14,11 +20,6 @@ const _plugin = createRegexLanguagePlugin({
   symbolPatterns: [
     // target: [deps] (not variable assignments, not comments, not tabs)
     { kind: 'function', pattern: /^([a-zA-Z_][\w.-]*)(?:\s+[a-zA-Z_][\w.-]*)?\s*:[^=]/gm },
-    // .PHONY: target (single-target lines only — the target itself is already
-    // captured by its own rule above; a multi-target line has no single name
-    // to give the symbol, so it's left alone rather than emitted as one
-    // symbol named "test spec autotest autospec")
-    { kind: 'function', pattern: /^\.PHONY:\s+(\S+)\s*$/gm },
     // NAME = value / NAME := value / NAME ?= value / NAME += value
     { kind: 'variable', pattern: /^([A-Za-z_]\w*)\s*(?::=|\?=|\+=|=)/gm },
     // define NAME
@@ -32,9 +33,62 @@ const _plugin = createRegexLanguagePlugin({
   ],
 });
 
+/**
+ * `.PHONY: a b c` declares each of a/b/c as a target in its own right — a
+ * matching rule elsewhere in the file is common but not required (generated,
+ * pattern-rule-only, or include-supplied targets have none). The shared
+ * regex-base engine gives one name per pattern match, so a plain symbolPattern
+ * can't split a multi-target line into several symbols; handled here instead,
+ * deduplicated against whatever the primary rule pattern already found.
+ */
+function extractPhonyTargets(filePath: string, source: string, existingIds: Set<string>): RawSymbol[] {
+  const symbols: RawSymbol[] = [];
+  const seen = new Set<string>();
+  const lineRe = /^\.PHONY:\s*(.+)$/gm;
+  let lineMatch: RegExpExecArray | null;
+  while ((lineMatch = lineRe.exec(source)) !== null) {
+    const list = lineMatch[1];
+    const listStart = lineMatch.index + lineMatch[0].indexOf(list);
+    const tokenRe = /\S+/g;
+    let tokenMatch: RegExpExecArray | null;
+    while ((tokenMatch = tokenRe.exec(list)) !== null) {
+      const name = tokenMatch[0];
+      const symbolId = makeSymbolId(filePath, name, 'function');
+      if (seen.has(symbolId) || existingIds.has(symbolId)) continue;
+      seen.add(symbolId);
+      const byteStart = listStart + tokenMatch.index;
+      const byteEnd = byteStart + name.length;
+      symbols.push({
+        symbolId,
+        name,
+        kind: 'function',
+        fqn: name,
+        signature: `.PHONY: ${name}`,
+        byteStart,
+        byteEnd,
+        lineStart: lineAt(source, byteStart),
+        lineEnd: lineAt(source, byteStart),
+        metadata: { phony: true },
+      });
+    }
+  }
+  return symbols;
+}
+
 export const MakefileLanguagePlugin = class implements LanguagePlugin {
   manifest = _plugin.manifest;
   supportedExtensions = _plugin.supportedExtensions;
   supportedVersions = _plugin.supportedVersions;
-  extractSymbols = _plugin.extractSymbols;
+  async extractSymbols(filePath: string, content: Buffer): Promise<TraceMcpResult<FileParseResult>> {
+    const result = await _plugin.extractSymbols(filePath, content);
+    if (result.isErr()) return result;
+    const parsed = result.value;
+    const existingIds = new Set(
+      parsed.symbols
+        .filter((s): s is RawSymbol & { symbolId: string } => s.kind === 'function' && !!s.symbolId)
+        .map((s) => s.symbolId),
+    );
+    const phonySymbols = extractPhonyTargets(filePath, content.toString('utf-8'), existingIds);
+    return ok({ ...parsed, symbols: [...parsed.symbols, ...phonySymbols] });
+  }
 };

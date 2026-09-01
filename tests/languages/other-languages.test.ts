@@ -673,37 +673,37 @@ describe('Makefile', () => {
   const plugin = new MakefileLanguagePlugin();
   const p = (s: string) => parse(plugin, s, 'Makefile');
 
-  it('extracts a target', () => {
-    const r = p('build:\n\ttsc\n');
+  it('extracts a target', async () => {
+    const r = await p('build:\n\ttsc\n');
     expect(r.symbols.some((s: any) => s.name === 'build' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts a variable assignment (=, :=, ?=, +=)', () => {
-    const r = p('CFLAGS = -Wall\nSRC := main.c\nDEBUG ?= 0\nLIBS += -lm\n');
+  it('extracts a variable assignment (=, :=, ?=, +=)', async () => {
+    const r = await p('CFLAGS = -Wall\nSRC := main.c\nDEBUG ?= 0\nLIBS += -lm\n');
     for (const name of ['CFLAGS', 'SRC', 'DEBUG', 'LIBS']) {
       expect(r.symbols.some((s: any) => s.name === name && s.kind === 'variable')).toBe(true);
     }
   });
 
-  it('extracts a define block', () => {
-    const r = p('define HELP\nUsage: make [target]\nendef\n');
+  it('extracts a define block', async () => {
+    const r = await p('define HELP\nUsage: make [target]\nendef\n');
     expect(
       r.symbols.some((s: any) => s.name === 'HELP' && s.kind === 'function' && s.metadata?.define),
     ).toBe(true);
   });
 
-  it('extracts an include edge', () => {
-    const r = p('include config.mk\n-include local.mk\n');
+  it('extracts an include edge', async () => {
+    const r = await p('include config.mk\n-include local.mk\n');
     expect(r.edges?.some((e: any) => e.metadata?.module === 'config.mk')).toBe(true);
     expect(r.edges?.some((e: any) => e.metadata?.module === 'local.mk')).toBe(true);
   });
 
   // Real-world case (node_modules/.pnpm/json-stringify-safe@5.0.1's Makefile):
   // a single .PHONY line naming several targets used to be captured as one
-  // symbol literally named "test spec autotest autospec" instead of leaving
-  // the four real targets (each already declared by its own rule) alone.
-  it('does not mangle a multi-target .PHONY line into one symbol', () => {
-    const r = p(
+  // symbol literally named "test spec autotest autospec" instead of one
+  // symbol per real target.
+  it('splits a multi-target .PHONY line into one symbol per target', async () => {
+    const r = await p(
       [
         'test:',
         '\t@node ./node_modules/.bin/_mocha -R dot',
@@ -715,12 +715,22 @@ describe('Makefile', () => {
       ].join('\n'),
     );
     expect(r.symbols.some((s: any) => s.name === 'test spec autotest autospec')).toBe(false);
-    expect(r.symbols.some((s: any) => s.name === 'test' && s.kind === 'function')).toBe(true);
-    expect(r.symbols.some((s: any) => s.name === 'spec' && s.kind === 'function')).toBe(true);
+    for (const name of ['test', 'spec', 'autotest', 'autospec']) {
+      expect(r.symbols.some((s: any) => s.name === name && s.kind === 'function')).toBe(true);
+    }
   });
 
-  it('still extracts a single-target .PHONY line', () => {
-    const r = p('.PHONY: clean\nclean:\n\trm -rf dist\n');
+  it('declares a phony target that has no rule of its own', async () => {
+    // .PHONY is a valid declaration on its own — a matching rule elsewhere
+    // isn't required (generated, pattern-rule-only, or include-supplied
+    // targets have none).
+    const r = await p('.PHONY: clean deploy\n');
+    expect(r.symbols.some((s: any) => s.name === 'clean' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'deploy' && s.kind === 'function')).toBe(true);
+  });
+
+  it('does not duplicate a target already declared by its own rule', async () => {
+    const r = await p('.PHONY: clean\nclean:\n\trm -rf dist\n');
     expect(r.symbols.filter((s: any) => s.name === 'clean' && s.kind === 'function')).toHaveLength(
       1,
     );
