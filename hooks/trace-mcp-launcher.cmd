@@ -1,5 +1,5 @@
 @echo off
-REM trace-mcp-launcher v0.3.0 (Windows)
+REM trace-mcp-launcher v0.4.0 (Windows)
 REM Tiny .cmd shim that invokes the PowerShell launcher. MCP clients spawn
 REM this .cmd because they rely on %PATHEXT% resolution which prefers .cmd.
 REM -WindowStyle Hidden keeps the cmd->powershell hop windowless: windowsHide

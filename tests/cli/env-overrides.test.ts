@@ -8,7 +8,7 @@
  * launching trace-mcp must see /foo, full stop.
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -53,12 +53,73 @@ describe('TRACE_MCP_DATA_DIR', () => {
     expect(out).not.toBe('~/custom-trace-mcp'); // expansion must have happened
   });
 
-  it('falls back to ~/.trace-mcp when env var is empty', () => {
+  it('falls back to ~/.trace when env var is empty', () => {
+    // Fake HOME: with no override the fallback also runs the one-time
+    // ~/.trace-mcp → ~/.trace move, which must never touch the real home.
+    const fakeHome = mkdtempSync(join(tmpdir(), 'trace-fake-home-'));
     const out = runWithEnv(
       `import { TRACE_MCP_HOME } from './src/global.ts'; console.log(TRACE_MCP_HOME);`,
-      { TRACE_MCP_DATA_DIR: '' },
+      { TRACE_MCP_DATA_DIR: '', HOME: fakeHome, USERPROFILE: fakeHome },
     );
-    expect(fwd(out).endsWith('/.trace-mcp')).toBe(true);
+    expect(fwd(out).endsWith('/.trace')).toBe(true);
+  });
+
+  it('repairs the compatibility symlink a previous run failed to create (TRA-610)', () => {
+    // Simulates the "renamed, then symlinkSync threw" case: the new home
+    // exists, the legacy path does not. The move is one-shot, so without a
+    // retry every pre-rename client config pointing at ~/.trace-mcp/bin/ would
+    // stay broken forever.
+    const fakeHome = mkdtempSync(join(tmpdir(), 'trace-fake-home-'));
+    mkdirSync(join(fakeHome, '.trace'), { recursive: true });
+    writeFileSync(join(fakeHome, '.trace', 'registry.json'), '{"projects":[]}');
+
+    const out = runWithEnv(
+      `import { TRACE_MCP_HOME } from './src/global.ts'; console.log(TRACE_MCP_HOME);`,
+      { TRACE_MCP_DATA_DIR: '', HOME: fakeHome, USERPROFILE: fakeHome },
+    );
+
+    expect(out).toBe(join(fakeHome, '.trace'));
+    expect(readFileSync(join(fakeHome, '.trace-mcp', 'registry.json'), 'utf-8')).toContain(
+      'projects',
+    );
+  });
+
+  it('leaves a real ~/.trace-mcp directory alone when ~/.trace already exists', () => {
+    // Old and new versions run side by side. Merging two live state dirs is a
+    // data-loss risk, so neither side may be touched.
+    const fakeHome = mkdtempSync(join(tmpdir(), 'trace-fake-home-'));
+    mkdirSync(join(fakeHome, '.trace'), { recursive: true });
+    mkdirSync(join(fakeHome, '.trace-mcp'), { recursive: true });
+    writeFileSync(join(fakeHome, '.trace', 'registry.json'), '{"projects":["new"]}');
+    writeFileSync(join(fakeHome, '.trace-mcp', 'registry.json'), '{"projects":["old"]}');
+
+    runWithEnv(`import { TRACE_MCP_HOME } from './src/global.ts'; console.log(TRACE_MCP_HOME);`, {
+      TRACE_MCP_DATA_DIR: '',
+      HOME: fakeHome,
+      USERPROFILE: fakeHome,
+    });
+
+    expect(readFileSync(join(fakeHome, '.trace', 'registry.json'), 'utf-8')).toContain('new');
+    expect(readFileSync(join(fakeHome, '.trace-mcp', 'registry.json'), 'utf-8')).toContain('old');
+  });
+
+  it('moves a pre-rename ~/.trace-mcp to ~/.trace and symlinks it back (TRA-610)', () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'trace-fake-home-'));
+    const legacy = join(fakeHome, '.trace-mcp');
+    mkdirSync(legacy, { recursive: true });
+    writeFileSync(join(legacy, 'registry.json'), '{"projects":[]}');
+
+    const out = runWithEnv(
+      `import { TRACE_MCP_HOME } from './src/global.ts'; console.log(TRACE_MCP_HOME);`,
+      { TRACE_MCP_DATA_DIR: '', HOME: fakeHome, USERPROFILE: fakeHome },
+    );
+
+    expect(out).toBe(join(fakeHome, '.trace'));
+    // Data moved…
+    expect(readFileSync(join(fakeHome, '.trace', 'registry.json'), 'utf-8')).toContain('projects');
+    // …and the old path still resolves, so launcher paths baked into existing
+    // MCP client configs keep working.
+    expect(readFileSync(join(legacy, 'registry.json'), 'utf-8')).toContain('projects');
   });
 });
 

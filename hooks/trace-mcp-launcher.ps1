@@ -1,4 +1,4 @@
-# trace-mcp-launcher v0.3.0 (Windows)
+# trace-mcp-launcher v0.4.0 (Windows)
 # Stable shim backend: resolves node + cli.js at runtime from launcher.env,
 # with a probe fallback for nvm-windows/nvs/Volta/system installs.
 # Managed by trace-mcp - do not edit by hand. Re-run `trace-mcp init` to refresh.
@@ -7,7 +7,21 @@
 
 $ErrorActionPreference = 'Stop'
 
-$TraceHome = if ($env:TRACE_MCP_HOME) { $env:TRACE_MCP_HOME } else { Join-Path $env:USERPROFILE '.trace-mcp' }
+# Home resolution, in the same precedence order as src/global.ts. The
+# script-relative fallback is the one that always holds: this file is installed
+# under <home>/bin/, so its own location names the home even when the default
+# moved (~/.trace-mcp -> ~/.trace, TRA-610) and no env var is set.
+$TraceHome =
+    if     ($env:TRACE_HOME)          { $env:TRACE_HOME }
+    elseif ($env:TRACE_MCP_HOME)      { $env:TRACE_MCP_HOME }
+    elseif ($env:TRACE_DATA_DIR)      { $env:TRACE_DATA_DIR }
+    elseif ($env:TRACE_MCP_DATA_DIR)  { $env:TRACE_MCP_DATA_DIR }
+    else {
+        $selfHome = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+        if     ($selfHome -and (Test-Path (Join-Path $selfHome 'launcher.env'))) { $selfHome }
+        elseif (Test-Path (Join-Path $env:USERPROFILE '.trace'))                 { Join-Path $env:USERPROFILE '.trace' }
+        else                                                                     { Join-Path $env:USERPROFILE '.trace-mcp' }
+    }
 $ConfigPath = Join-Path $TraceHome 'launcher.env'
 $LogPath    = Join-Path $TraceHome 'launcher.log'
 

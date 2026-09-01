@@ -154,7 +154,7 @@ daemonCommand
         console.log('  Auto-spawn: enabled (a stdio session will start it on demand).');
         console.log(
           '  Disable with `trace-mcp daemon stop`, or set TRACE_MCP_NO_DAEMON=1 / ' +
-            'auto_spawn_daemon=false in ~/.trace-mcp/.config.json for a single session.',
+            'auto_spawn_daemon=false in ~/.trace/.config.json for a single session.',
         );
       }
       process.exit(1);

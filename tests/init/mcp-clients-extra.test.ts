@@ -11,6 +11,7 @@ let projectRoot: string;
 
 let detectMcpClients: typeof import('../../src/init/detector.js').detectMcpClients;
 let configureMcpClients: typeof import('../../src/init/mcp-client.js').configureMcpClients;
+let getMcpClientStatuses: typeof import('../../src/init/mcp-client.js').getMcpClientStatuses;
 
 beforeEach(async () => {
   sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-clients-'));
@@ -35,7 +36,7 @@ beforeEach(async () => {
   // Force re-evaluation of module-level `const HOME = os.homedir()` against the spy.
   vi.resetModules();
   ({ detectMcpClients } = await import('../../src/init/detector.js'));
-  ({ configureMcpClients } = await import('../../src/init/mcp-client.js'));
+  ({ configureMcpClients, getMcpClientStatuses } = await import('../../src/init/mcp-client.js'));
 });
 
 afterEach(() => {
@@ -149,7 +150,7 @@ describe('AMP writer round-trip', () => {
     const after = fs.readFileSync(file, 'utf-8');
     expect(after).toContain('// User-managed AMP settings');
     expect(after).toContain('// existing servers');
-    expect(after).toContain('"trace-mcp"');
+    expect(after).toContain('"trace"');
     expect(after).toContain('"linear"');
   });
 
@@ -160,7 +161,7 @@ describe('AMP writer round-trip', () => {
     const file = path.join(fakeHome, '.config', 'amp', 'settings.json');
     expect(fs.existsSync(file)).toBe(true);
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    expect(parsed['amp.mcpServers']?.['trace-mcp']?.args).toEqual(['serve']);
+    expect(parsed['amp.mcpServers']?.['trace']?.args).toEqual(['serve']);
   });
 
   it('reports already_configured when entry matches', () => {
@@ -177,7 +178,7 @@ describe('Factory Droid writer', () => {
     expect(step.action).toBe('created');
     const file = path.join(fakeHome, '.factory', 'mcp.json');
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    const entry = parsed.mcpServers['trace-mcp'];
+    const entry = parsed.mcpServers['trace'];
     expect(entry.type).toBe('stdio');
     expect(entry.args).toEqual(['serve']);
     // Global scope carries no cwd — see TRA-501.
@@ -188,7 +189,7 @@ describe('Factory Droid writer', () => {
     configureMcpClients(['factory-droid'], projectRoot, { scope: 'project' });
     const file = path.join(projectRoot, '.factory', 'mcp.json');
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    expect(parsed.mcpServers['trace-mcp'].cwd).toBe(projectRoot);
+    expect(parsed.mcpServers['trace'].cwd).toBe(projectRoot);
   });
 
   it('preserves existing servers when adding trace-mcp', () => {
@@ -203,7 +204,7 @@ describe('Factory Droid writer', () => {
     configureMcpClients(['factory-droid'], projectRoot, { scope: 'global' });
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
     expect(parsed.mcpServers.linear).toBeDefined();
-    expect(parsed.mcpServers['trace-mcp']).toBeDefined();
+    expect(parsed.mcpServers['trace']).toBeDefined();
   });
 });
 
@@ -305,7 +306,7 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
       'cline_mcp_settings.json',
     );
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    const entry = parsed.mcpServers['trace-mcp'];
+    const entry = parsed.mcpServers['trace'];
     expect(entry.args).toEqual(['serve']);
     // Cline's config is global-only, so it never carries a project cwd (TRA-501).
     expect(entry.cwd).toBeUndefined();
@@ -329,7 +330,7 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
     configureMcpClients(['kilocode'], projectRoot, { scope: 'global' });
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
     expect(parsed.mcpServers.linear).toBeDefined();
-    expect(parsed.mcpServers['trace-mcp'].args).toEqual(['serve']);
+    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
   });
 
   it('Antigravity: writes ~/.gemini/config/mcp_config.json', () => {
@@ -337,7 +338,7 @@ describe('Cline / KiloCode / Antigravity / Kimi writers (standard mcpServers)', 
     expect(results[0].action).toBe('created');
     const file = path.join(fakeHome, '.gemini', 'config', 'mcp_config.json');
     const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
-    expect(parsed.mcpServers['trace-mcp'].args).toEqual(['serve']);
+    expect(parsed.mcpServers['trace'].args).toEqual(['serve']);
   });
 
   it('Kimi: writes ~/.kimi/mcp.json and reports already_configured on re-run', () => {
@@ -355,12 +356,225 @@ describe('Warp configuration', () => {
     const results = configureMcpClients(['warp'], projectRoot, { scope: 'global' });
     expect(results[0].action).toBe('skipped');
     expect(results[0].detail).toContain('Settings');
-    expect(results[0].detail).toContain('"trace-mcp"');
+    expect(results[0].detail).toContain('"trace"');
   });
 
   it('includes claude-code inheritance hint when both selected', () => {
     const results = configureMcpClients(['warp', 'claude-code'], projectRoot, { scope: 'global' });
     const warp = results.find((r) => r.target === 'Warp');
     expect(warp?.detail).toContain('File-based MCP servers');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// TRA-610: `trace-mcp` → `trace`. A config that still carries the old key must
+// come out with exactly one entry, under the new key — leaving both behind
+// would make the client spawn two copies of the same server, which is the
+// opposite of the token saving the rename is for.
+// ---------------------------------------------------------------------------
+
+describe('legacy server-key migration (TRA-610)', () => {
+  it('JSON: replaces the pre-rename mcpServers key, keeping other servers', () => {
+    const file = path.join(fakeHome, '.gemini', 'config', 'mcp_config.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        mcpServers: {
+          linear: { command: 'linear-mcp' },
+          'trace-mcp': { command: '/old/launcher', args: ['serve'] },
+        },
+      }),
+    );
+
+    configureMcpClients(['antigravity'], projectRoot, { scope: 'global' });
+
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace-mcp']).toBeUndefined();
+    expect(parsed.mcpServers.trace.args).toEqual(['serve']);
+    expect(parsed.mcpServers.linear).toBeDefined();
+  });
+
+  it('Factory Droid JSON: replaces the pre-rename key', () => {
+    const file = path.join(fakeHome, '.factory', 'mcp.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        mcpServers: { 'trace-mcp': { type: 'stdio', command: '/old', args: ['serve'] } },
+      }),
+    );
+
+    configureMcpClients(['factory-droid'], projectRoot, { scope: 'global' });
+
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(parsed.mcpServers['trace-mcp']).toBeUndefined();
+    expect(parsed.mcpServers.trace.type).toBe('stdio');
+  });
+
+  it('AMP JSONC: replaces the pre-rename key and keeps comments', () => {
+    const file = path.join(fakeHome, '.config', 'amp', 'settings.jsonc');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      [
+        '// User-managed AMP settings',
+        '{',
+        '  "amp.mcpServers": {',
+        '    "trace-mcp": { "command": "/old", "args": ["serve"] }',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+    );
+
+    configureMcpClients(['amp'], projectRoot, { scope: 'global' });
+
+    const after = fs.readFileSync(file, 'utf-8');
+    expect(after).toContain('// User-managed AMP settings');
+    expect(after).not.toContain('"trace-mcp"');
+    expect(after).toContain('"trace"');
+  });
+
+  it('Hermes YAML: replaces the pre-rename key', () => {
+    const file = path.join(fakeHome, '.hermes', 'config.yaml');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      'mcp_servers:\n  trace-mcp:\n    command: /old\n    args:\n      - serve\n',
+    );
+
+    configureMcpClients(['hermes'], projectRoot, { scope: 'global' });
+
+    const after = fs.readFileSync(file, 'utf-8');
+    expect(after).not.toMatch(/^\s+trace-mcp:/m);
+    expect(after).toMatch(/^\s+trace:/m);
+  });
+
+  it('Codex TOML: drops the pre-rename table instead of appending a second one', () => {
+    const file = path.join(fakeHome, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      [
+        'model = "gpt-5"',
+        '',
+        '[mcp_servers.trace-mcp]',
+        'command = "/old"',
+        'args = ["serve"]',
+        '',
+        '[mcp_servers.linear]',
+        'command = "linear-mcp"',
+        '',
+      ].join('\n'),
+    );
+
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+
+    const after = fs.readFileSync(file, 'utf-8');
+    expect(after).not.toContain('[mcp_servers.trace-mcp]');
+    expect(after).toContain('[mcp_servers.trace]');
+    expect(after).toContain('[mcp_servers.linear]');
+    expect(after).toContain('model = "gpt-5"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Review findings on the TRA-610 migration. Each of these shipped green once
+// because the original tests asserted on substrings rather than on the parsed
+// result, so they assert on structure here.
+// ---------------------------------------------------------------------------
+
+describe('legacy server-key migration — review regressions (TRA-610)', () => {
+  it('Codex TOML: leaves the rest of the file valid, `args` array intact', () => {
+    const file = path.join(fakeHome, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      [
+        'model = "gpt-5"',
+        '',
+        '[mcp_servers.trace-mcp]',
+        'command = "/old"',
+        'args = ["serve"]',
+        '',
+        '[mcp_servers.trace-mcp.env]',
+        'FOO = "1"',
+        '',
+        '[mcp_servers.linear]',
+        'command = "linear-mcp"',
+        'args = ["run", "--flag"]',
+        '',
+      ].join('\n'),
+    );
+
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+
+    const after = fs.readFileSync(file, 'utf-8');
+    // The bug turned `args = ["serve"]` into an orphan `["serve"]` table header.
+    for (const line of after.split('\n')) {
+      if (/^\s*\[/.test(line)) {
+        expect(line).toMatch(/^\s*\[[A-Za-z_][\w.\-"']*\]\s*$/);
+      }
+    }
+    expect(after).not.toContain('[mcp_servers.trace-mcp]');
+    expect(after).not.toContain('[mcp_servers.trace-mcp.env]');
+    expect(after).toContain('[mcp_servers.trace]');
+    expect(after).toContain('model = "gpt-5"');
+    expect(after).toContain('[mcp_servers.linear]');
+    expect(after).toContain('args = ["run", "--flag"]');
+  });
+
+  it('Codex TOML: a legacy table is rewritten even when a `trace` table exists', () => {
+    const file = path.join(fakeHome, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      '[mcp_servers.trace]\ncommand = "/new"\n\n[mcp_servers.trace-mcp]\ncommand = "/old"\n',
+    );
+
+    configureMcpClients(['codex'], projectRoot, { scope: 'global' });
+
+    const after = fs.readFileSync(file, 'utf-8');
+    expect(after).not.toContain('[mcp_servers.trace-mcp]');
+    expect(after.match(/\[mcp_servers\.trace\]/g)).toHaveLength(1);
+  });
+
+  it('JSON: a config holding BOTH keys is rewritten, not reported already_configured', () => {
+    const file = path.join(projectRoot, '.cursor', 'mcp.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    // Seed a `trace` entry that matches exactly what we would write, so only
+    // the surviving legacy key can force the rewrite.
+    configureMcpClients(['cursor'], projectRoot, { scope: 'project' });
+    const seeded = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    seeded.mcpServers['trace-mcp'] = { command: '/old', args: ['serve'] };
+    seeded.mcpServers.linear = { command: 'linear-mcp' };
+    fs.writeFileSync(file, JSON.stringify(seeded, null, 2));
+
+    const [status] = getMcpClientStatuses(projectRoot, 'project', ['cursor']);
+    expect(status.status).toBe('stale');
+    expect(status.staleReason).toBe('server-key');
+
+    const results = configureMcpClients(['cursor'], projectRoot, { scope: 'project' });
+    expect(results[0].action).not.toBe('already_configured');
+
+    const after = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    expect(after.mcpServers['trace-mcp']).toBeUndefined();
+    expect(after.mcpServers.trace).toBeDefined();
+    expect(after.mcpServers.linear).toBeDefined();
+  });
+
+  it('Hermes YAML: both keys present is reported stale, and the old one is dropped', () => {
+    const file = path.join(fakeHome, '.hermes', 'config.yaml');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    configureMcpClients(['hermes'], projectRoot, { scope: 'global' });
+    fs.appendFileSync(file, '  trace-mcp:\n    command: /old\n');
+
+    const [status] = getMcpClientStatuses(projectRoot, 'global', ['hermes']);
+    expect(status.status).toBe('stale');
+    expect(status.staleReason).toBe('server-key');
+
+    configureMcpClients(['hermes'], projectRoot, { scope: 'global' });
+    expect(fs.readFileSync(file, 'utf-8')).not.toMatch(/^\s+trace-mcp:/m);
   });
 });

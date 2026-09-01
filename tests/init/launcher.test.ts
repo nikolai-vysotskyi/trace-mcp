@@ -40,9 +40,23 @@ describe('launcher config paths', () => {
     expect(getLauncherConfigPath()).toBe(path.join(tmp, 'launcher.env'));
   });
 
-  it('falls back to ~/.trace-mcp when env var absent', () => {
-    delete process.env.TRACE_MCP_HOME;
-    expect(getLauncherDir()).toBe(path.join(os.homedir(), '.trace-mcp'));
+  it('falls back to ~/.trace when no override is set (TRA-610)', () => {
+    // Every spelling has to go, not just TRACE_MCP_HOME — the vitest setup
+    // file sets TRACE_MCP_DATA_DIR for the whole run, and a fake HOME keeps
+    // the ~/.trace-mcp → ~/.trace move off the developer's real home.
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-fake-home-'));
+    const saved = { ...process.env };
+    try {
+      for (const k of ['TRACE_HOME', 'TRACE_MCP_HOME', 'TRACE_DATA_DIR', 'TRACE_MCP_DATA_DIR']) {
+        delete process.env[k];
+      }
+      process.env.HOME = fakeHome;
+      process.env.USERPROFILE = fakeHome;
+      expect(getLauncherDir()).toBe(path.join(os.homedir(), '.trace'));
+    } finally {
+      process.env = saved;
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+    }
   });
 });
 

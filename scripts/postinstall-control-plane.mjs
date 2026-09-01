@@ -52,14 +52,23 @@ const __dirname = path.dirname(__filename);
 const PKG_ROOT = path.resolve(__dirname, '..');
 
 const TRACE_MCP_HOME = (() => {
-  const override = process.env.TRACE_MCP_DATA_DIR || process.env.TRACE_MCP_HOME;
+  const override =
+    process.env.TRACE_HOME ||
+    process.env.TRACE_MCP_HOME ||
+    process.env.TRACE_DATA_DIR ||
+    process.env.TRACE_MCP_DATA_DIR;
   if (override && override.length > 0) {
     const expanded = override.startsWith('~')
       ? path.join(os.homedir(), override.slice(1))
       : override;
     return path.resolve(expanded);
   }
-  return path.join(os.homedir(), '.trace-mcp');
+  // Post-TRA-610 root, falling back to the pre-rename one when postinstall runs
+  // before src/global.ts has had a chance to move it (npm runs us first).
+  const home = path.join(os.homedir(), '.trace');
+  const legacy = path.join(os.homedir(), '.trace-mcp');
+  if (!fs.existsSync(home) && fs.existsSync(legacy)) return legacy;
+  return home;
 })();
 
 const LOG_PATH = path.join(TRACE_MCP_HOME, 'postinstall.log');

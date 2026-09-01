@@ -4,15 +4,16 @@
  * from a config file written here, with a probe fallback — so node upgrades
  * (nvm/Herd/Volta/fnm) don't break MCP registration.
  *
- * Layout under $TRACE_MCP_HOME (default ~/.trace-mcp):
+ * Layout under $TRACE_HOME (default ~/.trace):
  *   bin/trace-mcp     — bash shim, copied from hooks/trace-mcp-launcher.sh
+ *                       (name kept: MCP client configs hold its absolute path)
  *   launcher.env      — KV config (TRACE_MCP_NODE, TRACE_MCP_CLI, TRACE_MCP_VERSION)
  *   launcher.log      — rolling resolution diagnostics written by the shim
  */
 
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+import { resolveTraceHome } from '../global.js';
 import { withPs1Bom } from './ps1-bom.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
@@ -20,13 +21,13 @@ import { LAUNCHER_VERSION } from './types.js';
 
 const IS_WINDOWS = process.platform === 'win32';
 
-// Artifacts shipped from hooks/ and installed under $TRACE_MCP_HOME/bin/.
+// Artifacts shipped from hooks/ and installed under $TRACE_HOME/bin/.
 // On Unix a single shim file carries the resolution logic; on Windows a
 // .cmd shim is what MCP clients spawn, but the actual logic lives in a
 // sibling .ps1 so we can parse JSON/config without bat-script pain.
 interface LauncherArtifact {
   src: string; // basename inside hooks/
-  dest: string; // basename inside $TRACE_MCP_HOME/bin/
+  dest: string; // basename inside $TRACE_HOME/bin/
   mode: number;
   isPrimaryShim: boolean; // the file MCP clients invoke
 }
@@ -44,9 +45,11 @@ const ARTIFACTS: LauncherArtifact[] = IS_WINDOWS
   : [{ src: 'trace-mcp-launcher.sh', dest: 'trace-mcp', mode: 0o755, isPrimaryShim: true }];
 
 export function getLauncherDir(): string {
-  const envDir = process.env.TRACE_MCP_HOME?.trim();
-  if (envDir) return envDir;
-  return path.join(os.homedir(), '.trace-mcp');
+  // Shared with the index/registry/daemon roots: resolveTraceHome() already
+  // folds in TRACE_HOME/TRACE_MCP_HOME/TRACE_DATA_DIR and the one-time
+  // ~/.trace-mcp → ~/.trace move. Re-deriving it here is how the shim used to
+  // end up in a different root than everything else under the same env.
+  return resolveTraceHome();
 }
 
 export function getLauncherPath(): string {
@@ -184,7 +187,7 @@ export interface InstallLauncherOpts {
 }
 
 /**
- * Install the shim script at $TRACE_MCP_HOME/bin/trace-mcp, skipping if the
+ * Install the shim script at $TRACE_HOME/bin/trace-mcp, skipping if the
  * installed version matches the shipped one (unless force=true).
  * Does NOT write launcher.env — call writeLauncherConfig() separately with
  * the current process's node + cli paths.

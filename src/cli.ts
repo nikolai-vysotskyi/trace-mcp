@@ -340,7 +340,7 @@ async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig
 const program = new Command();
 
 program
-  .name('trace-mcp')
+  .name('trace')
   .description('Framework-Aware Code Intelligence for Laravel/Vue/Inertia/Nuxt')
   .version(PKG_VERSION, '-v, --version');
 
@@ -355,7 +355,7 @@ program
     const projectRoot = process.cwd();
 
     // Auto-update: check if a newer trace-mcp version is available and install it.
-    // Controlled by ~/.trace-mcp/.config.json: { "auto_update": true, "auto_update_check_interval_hours": 24 }
+    // Controlled by ~/.trace/.config.json: { "auto_update": true, "auto_update_check_interval_hours": 24 }
     const globalRaw = loadGlobalConfigRaw();
     if (globalRaw.auto_update !== false) {
       const intervalHours =
@@ -436,7 +436,7 @@ program
     if (autoSpawnDaemon) {
       logger.info(
         'Daemon auto-spawn is enabled. To run pure stdio: `trace-mcp daemon stop`, ' +
-          'or set TRACE_MCP_NO_DAEMON=1 / auto_spawn_daemon=false in ~/.trace-mcp/.config.json.',
+          'or set TRACE_MCP_NO_DAEMON=1 / auto_spawn_daemon=false in ~/.trace/.config.json.',
       );
     } else {
       logger.info('Daemon auto-spawn is disabled — running local-only (stdio).');

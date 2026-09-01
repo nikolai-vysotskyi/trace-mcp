@@ -154,3 +154,69 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     expect(stderr).toMatch(/node binary not found|trace-mcp package not found/);
   });
 });
+
+// TRA-610: the shim's own home resolution. It is installed at <home>/bin/, so
+// these run the copy from its installed location rather than from hooks/ —
+// resolving from `hooks/` would land two levels above the repo.
+describe.skipIf(process.platform === 'win32')('launcher shim home resolution (TRA-610)', () => {
+  function installShim(home: string, dirName: string): string {
+    const bin = path.join(home, dirName, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    const dest = path.join(bin, 'trace-mcp');
+    fs.copyFileSync(LAUNCHER_SRC, dest);
+    fs.chmodSync(dest, 0o755);
+    return dest;
+  }
+
+  function runInstalled(shim: string, env: Record<string, string>): RunResult {
+    const result = spawnSync(shim, ['serve'], {
+      env: { ...env, PATH: '/usr/bin:/bin' },
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+    return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+  }
+
+  it('finds launcher.env under ~/.trace on a clean install, with no env vars set', () => {
+    const { home, node, cli } = setupFakeHome();
+    fs.rmSync(path.join(home, '.trace-mcp'), { recursive: true, force: true });
+    const shim = installShim(home, '.trace');
+    writeConfig(path.join(home, '.trace'), node, cli);
+
+    const { status, stdout } = runInstalled(shim, { HOME: home });
+
+    // Before the fix the shim looked under $HOME/.trace-mcp, missed the
+    // config, and fell through to probing with no node on PATH → exit 127.
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+  });
+
+  it('still reads a pre-migration ~/.trace-mcp install', () => {
+    const { home, traceHome, node, cli } = setupFakeHome();
+    const shim = installShim(home, '.trace-mcp');
+    writeConfig(traceHome, node, cli);
+
+    const { status, stdout } = runInstalled(shim, { HOME: home });
+
+    expect(status).toBe(0);
+    expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+  });
+
+  it.each(['TRACE_HOME', 'TRACE_MCP_HOME', 'TRACE_DATA_DIR', 'TRACE_MCP_DATA_DIR'])(
+    '%s overrides the default home',
+    (envName) => {
+      const { home, node, cli } = setupFakeHome();
+      const shim = installShim(home, '.trace');
+      // Config lives only in the override root, so a shim that ignored the
+      // variable would find nothing and exit 127.
+      const alt = path.join(home, 'alt-home');
+      fs.mkdirSync(alt, { recursive: true });
+      writeConfig(alt, node, cli);
+
+      const { status, stdout } = runInstalled(shim, { HOME: home, [envName]: alt });
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    },
+  );
+});

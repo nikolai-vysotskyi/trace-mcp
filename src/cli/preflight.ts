@@ -2,7 +2,7 @@
  * First-run preflight checks (#124).
  *
  * Catches the environment problems that otherwise surface mid-`init` as a raw
- * stack trace — wrong Node version, an unwritable `~/.trace-mcp/`, or no MCP
+ * stack trace — wrong Node version, an unwritable `~/.trace/`, or no MCP
  * client config to write into — and turns each into a short, actionable
  * message. Pure and individually testable: every check takes its input as an
  * argument so the suite never depends on the real machine.
@@ -53,7 +53,7 @@ export function checkNodeVersion(version: string = process.versions.node): Prefl
   return { name: 'node-version', severity: 'ok', message: `Node ${version}` };
 }
 
-/** Verify `~/.trace-mcp/` can be created and written to. */
+/** Verify `~/.trace/` can be created and written to. */
 export function checkHomeWritable(home: string = TRACE_MCP_HOME): PreflightCheck {
   try {
     fs.mkdirSync(home, { recursive: true });
@@ -68,7 +68,7 @@ export function checkHomeWritable(home: string = TRACE_MCP_HOME): PreflightCheck
       severity: 'error',
       message: `Cannot write to ${home}${code ? ` (${code})` : ''}.`,
       hint:
-        'Fix permissions on the directory (e.g. `chmod u+rwx ~/.trace-mcp`) or set ' +
+        'Fix permissions on the directory (e.g. `chmod u+rwx ~/.trace`) or set ' +
         'TRACE_MCP_DATA_DIR to a writable location, then re-run `trace-mcp init`.',
     };
   }

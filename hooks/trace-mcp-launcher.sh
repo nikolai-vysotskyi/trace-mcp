@@ -1,5 +1,5 @@
 #!/bin/bash
-# trace-mcp-launcher v0.3.0
+# trace-mcp-launcher v0.4.0
 # Stable shim: MCP clients invoke this path forever; it resolves node + cli.js
 # at runtime from a config file written by `trace-mcp init`, with a minimal
 # probe fallback for when the config is stale (e.g. Node was reinstalled).
@@ -8,7 +8,29 @@
 
 set -u
 
-TRACE_HOME="${TRACE_MCP_HOME:-$HOME/.trace-mcp}"
+# Home resolution, in the same precedence order as src/global.ts. The
+# script-relative fallback is the one that always holds: this file is
+# installed at <home>/bin/trace-mcp, so its own location names the home even
+# when the default moved (~/.trace-mcp → ~/.trace, TRA-610) and no env var is
+# set. The literal defaults below only matter if the shim is run from a copy.
+if [ -n "${TRACE_HOME:-}" ]; then
+  :
+elif [ -n "${TRACE_MCP_HOME:-}" ]; then
+  TRACE_HOME="$TRACE_MCP_HOME"
+elif [ -n "${TRACE_DATA_DIR:-}" ]; then
+  TRACE_HOME="$TRACE_DATA_DIR"
+elif [ -n "${TRACE_MCP_DATA_DIR:-}" ]; then
+  TRACE_HOME="$TRACE_MCP_DATA_DIR"
+else
+  _self_dir=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
+  if [ -n "$_self_dir" ] && [ -r "$_self_dir/launcher.env" ]; then
+    TRACE_HOME="$_self_dir"
+  elif [ -d "$HOME/.trace" ]; then
+    TRACE_HOME="$HOME/.trace"
+  else
+    TRACE_HOME="$HOME/.trace-mcp"
+  fi
+fi
 CONFIG="$TRACE_HOME/launcher.env"
 LOG="$TRACE_HOME/launcher.log"
 

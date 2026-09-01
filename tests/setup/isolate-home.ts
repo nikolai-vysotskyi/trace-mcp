@@ -33,9 +33,9 @@ import { join } from 'node:path';
 
 if (!process.env.TRACE_MCP_DATA_DIR) {
   // Preserve a pointer to the real home before we redirect it. When the override
-  // is unset the real home is the package default (~/.trace-mcp).
+  // is unset the real home is the package default (~/.trace).
   if (!process.env.TRACE_MCP_REAL_DATA_DIR) {
-    process.env.TRACE_MCP_REAL_DATA_DIR = join(homedir(), '.trace-mcp');
+    process.env.TRACE_MCP_REAL_DATA_DIR = join(homedir(), '.trace');
   }
 
   const isolated = mkdtempSync(join(tmpdir(), 'trace-mcp-test-home-'));

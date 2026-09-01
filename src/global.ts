@@ -1,10 +1,13 @@
 /**
- * Global paths and helpers for ~/.trace-mcp/ directory structure.
+ * Global paths and helpers for the ~/.trace/ directory structure.
  *
- * All trace-mcp state lives here:
- *   ~/.trace-mcp/.config.json          — global config
- *   ~/.trace-mcp/registry.json         — project registry
- *   ~/.trace-mcp/index/<name>-<hash>.db — per-project databases
+ * All trace state lives here:
+ *   ~/.trace/.config.json          — global config
+ *   ~/.trace/registry.json         — project registry
+ *   ~/.trace/index/<name>-<hash>.db — per-project databases
+ *
+ * Installs from before the `trace-mcp` → `trace` rename keep their data in
+ * `~/.trace-mcp/`; `migrateLegacyHome()` below moves it across on first import.
  */
 
 import crypto from 'node:crypto';
@@ -12,31 +15,106 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+const defaultHome = (): string => path.join(os.homedir(), '.trace');
+const legacyHome = (): string => path.join(os.homedir(), '.trace-mcp');
+
 /**
- * Root of all trace-mcp global state.
+ * One-time move of `~/.trace-mcp/` → `~/.trace/`, leaving a symlink behind at
+ * the old location. The symlink is what keeps existing installs working: MCP
+ * client configs written by an older `init` hold an absolute path to the
+ * launcher shim under `~/.trace-mcp/bin/`, and older daemons/desktop-app
+ * builds still read the old root directly.
  *
- * Default: `~/.trace-mcp/`. Override with `TRACE_MCP_DATA_DIR=<path>` for
- * Docker volumes, ephemeral CI workspaces, multi-repo orchestrators, or
- * shared cache locations. CRG v2.3.0 (#155) introduced the same knob — the
- * env var replaces the default verbatim, with `~` expansion. Resolved at
- * import time so a user-facing change requires a process restart.
+ * Runs at import time, before any path constant below is consumed — deferring
+ * it to `ensureGlobalDirs()` would let a reader that never calls it (registry
+ * lookups, `daemon status`) see an empty new home while the data sits in the
+ * old one.
+ *
+ * Deliberately does nothing when both roots already exist as real directories:
+ * merging two live state dirs is a data-loss risk, and that only happens if
+ * old and new versions were run side by side.
  */
-export const TRACE_MCP_HOME = (() => {
-  const override = process.env.TRACE_MCP_DATA_DIR;
+function migrateLegacyHome(): void {
+  const target = defaultHome();
+  const legacy = legacyHome();
+  try {
+    if (fs.existsSync(target)) {
+      // Already moved. Retry the compatibility link if an earlier run created
+      // the directory but failed to link it back — the move is one-shot, so
+      // without this retry every pre-rename client config pointing at
+      // ~/.trace-mcp/bin/ would stay broken forever.
+      linkLegacyHome(target, legacy);
+      return;
+    }
+    // lstat, not stat: an existing symlink means a previous run already moved it.
+    if (!fs.lstatSync(legacy).isDirectory()) return;
+    fs.renameSync(legacy, target);
+    linkLegacyHome(target, legacy);
+  } catch {
+    // Legacy home absent, or an unreadable/unwritable HOME. Nothing to migrate.
+  }
+}
+
+/** Point `legacy` at `target` when nothing occupies it yet. Best-effort. */
+function linkLegacyHome(target: string, legacy: string): void {
+  try {
+    fs.lstatSync(legacy);
+    return; // already a link, or a real dir we must not clobber
+  } catch {
+    // Nothing at the legacy path — fall through and create the link.
+  }
+  try {
+    fs.symlinkSync(target, legacy, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch {
+    // Windows without developer mode / restricted FS — the move still stands.
+  }
+}
+
+/**
+ * Root of all trace global state.
+ *
+ * Default: `~/.trace/`. Override for Docker volumes, ephemeral CI workspaces,
+ * multi-repo orchestrators, or shared cache locations with, in precedence
+ * order, `TRACE_HOME` / `TRACE_MCP_HOME` / `TRACE_DATA_DIR` /
+ * `TRACE_MCP_DATA_DIR` — one root under four names: `*_HOME` is what the
+ * launcher shim has always read, `*_DATA_DIR` what the index side read, and
+ * each has a pre-rename `TRACE_MCP_*` spelling. CRG v2.3.0 (#155) introduced
+ * the same knob — the env var replaces the default verbatim, with `~` expansion.
+ * Resolved at import time so a user-facing change requires a process restart.
+ */
+export const TRACE_HOME = resolveTraceHome();
+
+/**
+ * The same resolution as {@link TRACE_HOME}, re-read on every call.
+ *
+ * Everything that can take the frozen constant should — this exists for the
+ * launcher, which is also reachable from a process that sets the env var after
+ * `global.ts` was already imported.
+ */
+export function resolveTraceHome(): string {
+  const override =
+    process.env.TRACE_HOME ||
+    process.env.TRACE_MCP_HOME ||
+    process.env.TRACE_DATA_DIR ||
+    process.env.TRACE_MCP_DATA_DIR;
   if (override && override.length > 0) {
     const expanded = override.startsWith('~')
       ? path.join(os.homedir(), override.slice(1))
       : override;
     return path.resolve(expanded);
   }
-  return path.join(os.homedir(), '.trace-mcp');
-})();
+  migrateLegacyHome();
+  return defaultHome();
+}
 
-/** Global config file (replaces per-project .trace-mcp.json). */
-export const GLOBAL_CONFIG_PATH = path.join(TRACE_MCP_HOME, '.config.json');
+/** Pre-rename name for {@link TRACE_HOME}. Kept so importers don't all churn. */
+export const TRACE_MCP_HOME = TRACE_HOME;
+
+/** Global config file (replaces per-project .trace.json / .trace-mcp.json). */
+export const GLOBAL_CONFIG_PATH = path.join(TRACE_HOME, '.config.json');
 
 /** Directory for per-project SQLite databases. */
-export const INDEX_DIR = path.join(TRACE_MCP_HOME, 'index');
+export const INDEX_DIR = path.join(TRACE_HOME, 'index');
 
 /**
  * Index DBs for one-shot agent-run checkouts (TRA-396). Kept in their own
@@ -50,31 +128,31 @@ export const INDEX_DIR = path.join(TRACE_MCP_HOME, 'index');
 export const EPHEMERAL_INDEX_DIR = path.join(INDEX_DIR, 'ephemeral');
 
 /** Global project registry. */
-export const REGISTRY_PATH = path.join(TRACE_MCP_HOME, 'registry.json');
+export const REGISTRY_PATH = path.join(TRACE_HOME, 'registry.json');
 
 /** Topology database (cross-service graph). */
-export const TOPOLOGY_DB_PATH = path.join(TRACE_MCP_HOME, 'topology.db');
+export const TOPOLOGY_DB_PATH = path.join(TRACE_HOME, 'topology.db');
 
 /** Decision memory database (cross-session knowledge graph). */
-export const DECISIONS_DB_PATH = path.join(TRACE_MCP_HOME, 'decisions.db');
+export const DECISIONS_DB_PATH = path.join(TRACE_HOME, 'decisions.db');
 
 /** Per-project + per-operation PID lock files (see src/utils/pid-lock.ts). */
-export const LOCKS_DIR = path.join(TRACE_MCP_HOME, 'locks');
+export const LOCKS_DIR = path.join(TRACE_HOME, 'locks');
 
 /** Default port the daemon listens on. */
 export const DEFAULT_DAEMON_PORT = 3741;
 
 /** Daemon log file path. */
-export const DAEMON_LOG_PATH = path.join(TRACE_MCP_HOME, 'daemon.log');
+export const DAEMON_LOG_PATH = path.join(TRACE_HOME, 'daemon.log');
 
 /**
  * Opt-out sentinel for the background daemon (#202). When this file exists,
  * `ensureDaemon`/`tryAutoSpawnDaemon` treat the daemon as explicitly disabled:
  * they do NOT (re)install the launchd plist or spawn a detached process. Written
- * by `trace-mcp daemon stop`, cleared by `trace-mcp daemon start`/`restart`.
+ * by `trace daemon stop`, cleared by `trace daemon start`/`restart`.
  * Lets a user who prefers pure stdio remove the daemon and have it stay gone.
  */
-export const DAEMON_DISABLED_PATH = path.join(TRACE_MCP_HOME, 'daemon.disabled');
+export const DAEMON_DISABLED_PATH = path.join(TRACE_HOME, 'daemon.disabled');
 
 /** launchd plist path for auto-start on macOS. */
 export const LAUNCHD_PLIST_PATH = path.join(
@@ -242,7 +320,7 @@ export const DEFAULT_CONFIG_JSONC = `{
   // ── Logging ───────────────────────────────────────────────────────
   "logging": {
     "file": false,                                 // enable file logging
-    "path": "~/.trace-mcp/run.log",                // log file location
+    "path": "~/.trace/run.log",                    // log file location
     "level": "info",                               // "trace" | "debug" | "info" | "warn" | "error" | "fatal"
     "max_size_mb": 10                              // rotate when log exceeds this size
   },
@@ -267,7 +345,7 @@ export const DEFAULT_CONFIG_JSONC = `{
 }
 `;
 
-/** Ensure ~/.trace-mcp/ and ~/.trace-mcp/index/ exist. */
+/** Ensure ~/.trace/ and ~/.trace/index/ exist. */
 export function ensureGlobalDirs(): void {
   fs.mkdirSync(EPHEMERAL_INDEX_DIR, { recursive: true }); // also creates INDEX_DIR
 
@@ -279,7 +357,7 @@ export function ensureGlobalDirs(): void {
   // global.ts under `node --experimental-strip-types` and can't resolve
   // `.js → .ts` imports of sibling modules.
   if (process.platform !== 'win32') {
-    for (const dir of [TRACE_MCP_HOME, INDEX_DIR, EPHEMERAL_INDEX_DIR]) {
+    for (const dir of [TRACE_HOME, INDEX_DIR, EPHEMERAL_INDEX_DIR]) {
       try {
         fs.chmodSync(dir, 0o700);
       } catch {
@@ -320,7 +398,7 @@ export function projectName(absolutePath: string): string {
 /** Path to the live session snapshot file (read by PreCompact hook). */
 export function getSnapshotPath(projectRoot: string): string {
   const absRoot = path.resolve(projectRoot);
-  return path.join(TRACE_MCP_HOME, 'sessions', `${projectHash(absRoot)}-snapshot.json`);
+  return path.join(TRACE_HOME, 'sessions', `${projectHash(absRoot)}-snapshot.json`);
 }
 
 /**

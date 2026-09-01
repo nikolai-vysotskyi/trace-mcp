@@ -538,7 +538,7 @@ export function scanOrPruneDecisions(apply = false): DecisionsPruneSummary {
 
 export const pruneCommand = new Command('prune')
   .description(
-    'Audit ~/.trace-mcp/index for orphan/expired DBs (dry-run by default; use --apply to delete)',
+    'Audit ~/.trace/index for orphan/expired DBs (dry-run by default; use --apply to delete)',
   )
   .option('--apply', 'Actually delete orphan + expired session DBs')
   .option('--aggressive', 'Also delete stray small (<5 files) DBs older than 30 days')

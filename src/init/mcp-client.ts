@@ -19,6 +19,91 @@ import type { DetectedMcpClient, InitStepResult } from './types.js';
 const HOME = os.homedir();
 
 /**
+ * Key trace registers itself under in every MCP client config.
+ *
+ * Clients prefix each tool name with it (`mcp__trace__search`), so the key is
+ * re-sent to the model on every prompt turn, once per advertised tool — which
+ * is why it is as short as it is (TRA-610).
+ */
+export const MCP_SERVER_KEY = 'trace';
+
+/** Pre-TRA-610 key. Still read for detection; removed whenever we write. */
+export const LEGACY_MCP_SERVER_KEY = 'trace-mcp';
+
+/** An entry as it comes off disk — every field optional until compared. */
+type OnDiskEntry = Partial<McpServerEntry & { type: string }> & Record<string, unknown>;
+
+/** Read our entry from a parsed `mcpServers`-shaped map, new key winning. */
+function pickServerEntry<T>(servers: Record<string, T> | undefined | null): T | undefined {
+  if (!servers) return undefined;
+  return servers[MCP_SERVER_KEY] ?? servers[LEGACY_MCP_SERVER_KEY];
+}
+
+/** Parse a JSON client config and hand back its `mcpServers` map, if any. */
+function readMcpServers(configPath: string): Record<string, unknown> | undefined {
+  try {
+    const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    return content?.mcpServers as Record<string, unknown> | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * True when the pre-rename key is on disk at all.
+ *
+ * Deliberately not "only the legacy key": a config carrying BOTH keys is the
+ * worst state, not a benign one — the client spawns two copies of the server —
+ * so it has to read as needing a rewrite, never as `already_configured`.
+ */
+function hasLegacyKey(servers: Record<string, unknown> | undefined | null): boolean {
+  return Boolean(servers) && servers?.[LEGACY_MCP_SERVER_KEY] !== undefined;
+}
+
+/** A `[mcp_servers.trace-mcp]` / `[mcp_servers.trace-mcp.env]` table header line. */
+const LEGACY_CODEX_HEADER_RE = /^\s*\[mcp_servers\s*\.\s*["']?trace-mcp["']?(\.[^\]]*)?\]\s*$/;
+
+/** Either spelling of our own table, current or pre-rename. */
+const OUR_CODEX_HEADER_RE = /^\s*\[mcp_servers\s*\.\s*["']?trace(-mcp)?["']?(\.[^\]]*)?\]\s*$/;
+
+/** Any TOML table header line — where a preceding table's body ends. */
+const ANY_TOML_HEADER_RE = /^\s*\[/;
+
+/**
+ * Drop every table of ours from a Codex `config.toml` — both the pre-rename
+ * `trace-mcp` spelling and the current `trace` one.
+ *
+ * Scans by line rather than by regex over the whole file: a table's body ends
+ * at the next *header line*, and `[` also opens an array, so a pattern that
+ * consumed up to the next `[` anywhere turned `args = ["serve"]` into an
+ * orphan `["serve"]` table and left the file invalid TOML.
+ *
+ * Removing the current spelling too is what makes the append-based writer
+ * idempotent: without it, rewriting a config that already has
+ * `[mcp_servers.trace]` stacks a second copy of the same table.
+ *
+ * Known ceiling: a multi-line basic string whose continuation line starts with
+ * `[` would end the body early. Real MCP entries are command/args/cwd/env, so
+ * this stays a line scan rather than pulling in a TOML parser.
+ */
+function stripOwnCodexTables(content: string): string {
+  const out: string[] = [];
+  let inOwnTable = false;
+  for (const line of content.split('\n')) {
+    if (OUR_CODEX_HEADER_RE.test(line)) {
+      inOwnTable = true;
+      continue;
+    }
+    if (inOwnTable) {
+      if (!ANY_TOML_HEADER_RE.test(line)) continue;
+      inOwnTable = false;
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
+/**
  * Detect whether Claude Desktop (the unified Claude.app on macOS, or the
  * Claude Desktop binary on Windows/Linux) is currently running.
  *
@@ -130,7 +215,7 @@ export function configureMcpClients(
       // else (TRA-501). Warp launches the server in the session's own directory.
       const snippet = JSON.stringify({
         mcpServers: {
-          'trace-mcp': { command: launcher, args: ['serve'] },
+          [MCP_SERVER_KEY]: { command: launcher, args: ['serve'] },
         },
       });
       results.push({
@@ -265,7 +350,10 @@ export function configureMcpClients(
       if (fs.existsSync(configPath)) {
         try {
           const content = fs.readFileSync(configPath, 'utf-8');
-          if (/\[mcp_servers\s*\.\s*["']?trace-mcp["']?\s*\]/.test(content)) {
+          const hasLegacyTable = content
+            .split('\n')
+            .some((line) => LEGACY_CODEX_HEADER_RE.test(line));
+          if (!hasLegacyTable && /\[mcp_servers\s*\.\s*["']?trace["']?\s*\]/.test(content)) {
             results.push({ target: configPath, action: 'already_configured', detail: name });
             continue;
           }
@@ -377,13 +465,13 @@ export function configureMcpClients(
 // ---------------------------------------------------------------------------
 
 /**
- * Verify that `mcpServers['trace-mcp']` is present on disk. Used after writing
+ * Verify that `mcpServers['trace']` is present on disk. Used after writing
  * Claude Desktop's config to detect the Claude.app overwrite race.
  */
 function verifyTraceMcpEntry(configPath: string): boolean {
   try {
     const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    return Boolean(content?.mcpServers?.['trace-mcp']);
+    return Boolean(content?.mcpServers?.[MCP_SERVER_KEY]);
   } catch {
     return false;
   }
@@ -392,7 +480,8 @@ function verifyTraceMcpEntry(configPath: string): boolean {
 function entryMatches(configPath: string, expected: McpServerEntry): boolean {
   try {
     const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const current = content?.mcpServers?.['trace-mcp'];
+    if (hasLegacyKey(content?.mcpServers)) return false;
+    const current = pickServerEntry(content?.mcpServers) as OnDiskEntry | undefined;
     if (!current || typeof current !== 'object') return false;
     if (current.command !== expected.command) return false;
     if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
@@ -429,7 +518,9 @@ function writeJsonEntry(configPath: string, entry: McpServerEntry): 'created' | 
   if (!config.mcpServers || typeof config.mcpServers !== 'object') {
     config.mcpServers = {};
   }
-  (config.mcpServers as Record<string, unknown>)['trace-mcp'] = entry;
+  const servers = config.mcpServers as Record<string, unknown>;
+  servers[MCP_SERVER_KEY] = entry;
+  delete servers[LEGACY_MCP_SERVER_KEY];
 
   atomicWriteJson(configPath, config);
   return isNew ? 'created' : 'updated';
@@ -446,12 +537,13 @@ interface HermesYamlEntry extends McpServerEntry {
 
 /** Parse existing config.yaml (if any) and check whether our entry already
  *  matches. Uses a real YAML parse so comments and neighbouring keys are not
- *  mistaken for the trace-mcp block. */
+ *  mistaken for our own block. */
 function hermesEntryMatches(configPath: string, expected: HermesYamlEntry): boolean {
   try {
     const doc = YAML.parse(fs.readFileSync(configPath, 'utf-8')) as Record<string, unknown> | null;
     const servers = doc?.mcp_servers as Record<string, unknown> | undefined;
-    const current = servers?.['trace-mcp'] as Record<string, unknown> | undefined;
+    if (hasLegacyKey(servers)) return false;
+    const current = pickServerEntry(servers) as Record<string, unknown> | undefined;
     if (!current) return false;
     if (current.command !== expected.command) return false;
     if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
@@ -462,7 +554,7 @@ function hermesEntryMatches(configPath: string, expected: HermesYamlEntry): bool
   }
 }
 
-/** Update or append the `mcp_servers.trace-mcp` block in `~/.hermes/config.yaml`.
+/** Update or append the `mcp_servers.trace` block in `~/.hermes/config.yaml`.
  *  Preserves existing keys/comments by parsing → mutating via the Document API →
  *  serializing back, which keeps the surrounding document shape intact. */
 function writeHermesYamlEntry(configPath: string, entry: HermesYamlEntry): 'created' | 'updated' {
@@ -492,7 +584,8 @@ function writeHermesYamlEntry(configPath: string, entry: HermesYamlEntry): 'crea
     connect_timeout: entry.connect_timeout ?? 120,
   };
 
-  doc.setIn(['mcp_servers', 'trace-mcp'], value);
+  doc.setIn(['mcp_servers', MCP_SERVER_KEY], value);
+  doc.deleteIn(['mcp_servers', LEGACY_MCP_SERVER_KEY]);
   fs.writeFileSync(configPath, doc.toString({ lineWidth: 0 }));
   return isNew ? 'created' : 'updated';
 }
@@ -508,7 +601,8 @@ function ampEntryMatches(configPath: string, expected: McpServerEntry): boolean 
     const content = fs.readFileSync(configPath, 'utf-8');
     const parsed = parseJsonc(content) as Record<string, unknown> | null;
     const servers = parsed?.['amp.mcpServers'] as Record<string, unknown> | undefined;
-    const current = servers?.['trace-mcp'] as Record<string, unknown> | undefined;
+    if (hasLegacyKey(servers)) return false;
+    const current = pickServerEntry(servers) as Record<string, unknown> | undefined;
     if (!current) return false;
     if (current.command !== expected.command) return false;
     if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return false;
@@ -541,10 +635,18 @@ function writeAmpJsoncEntry(configPath: string, entry: McpServerEntry): 'created
   }
 
   // jsonc-parser preserves comments and formatting around untouched regions.
-  const edits = modify(content, ['amp.mcpServers', 'trace-mcp'], value, {
+  const edits = modify(content, ['amp.mcpServers', MCP_SERVER_KEY], value, {
     formattingOptions: AMP_FORMATTING,
   });
-  const updated = applyEdits(content, edits);
+  let updated = applyEdits(content, edits);
+  // `undefined` is jsonc-parser's remove: drops the pre-rename entry so the
+  // client doesn't end up spawning two copies of the same server.
+  updated = applyEdits(
+    updated,
+    modify(updated, ['amp.mcpServers', LEGACY_MCP_SERVER_KEY], undefined, {
+      formattingOptions: AMP_FORMATTING,
+    }),
+  );
   fs.writeFileSync(configPath, updated.endsWith('\n') ? updated : updated + '\n');
   return isNew ? 'created' : 'updated';
 }
@@ -559,7 +661,8 @@ function factoryEntryMatches(
 ): boolean {
   try {
     const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const current = content?.mcpServers?.['trace-mcp'];
+    if (hasLegacyKey(content?.mcpServers)) return false;
+    const current = pickServerEntry(content?.mcpServers) as OnDiskEntry | undefined;
     if (!current || typeof current !== 'object') return false;
     if (current.type !== expected.type) return false;
     if (current.command !== expected.command) return false;
@@ -593,7 +696,9 @@ function writeFactoryJsonEntry(
   if (!config.mcpServers || typeof config.mcpServers !== 'object') {
     config.mcpServers = {};
   }
-  (config.mcpServers as Record<string, unknown>)['trace-mcp'] = entry;
+  const factoryServers = config.mcpServers as Record<string, unknown>;
+  factoryServers[MCP_SERVER_KEY] = entry;
+  delete factoryServers[LEGACY_MCP_SERVER_KEY];
   atomicWriteJson(configPath, config);
   return isNew ? 'created' : 'updated';
 }
@@ -609,7 +714,7 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
   const argsToml = entry.args.map((a) => `"${a}"`).join(', ');
   const section = [
     '',
-    '[mcp_servers.trace-mcp]',
+    `[mcp_servers.${MCP_SERVER_KEY}]`,
     `command = "${entry.command}"`,
     `args = [${argsToml}]`,
   ];
@@ -617,7 +722,7 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
     section.push(`cwd = "${entry.cwd}"`);
   }
   if (entry.env) {
-    section.push('[mcp_servers.trace-mcp.env]');
+    section.push(`[mcp_servers.${MCP_SERVER_KEY}.env]`);
     for (const [k, v] of Object.entries(entry.env)) {
       section.push(`${k} = "${v}"`);
     }
@@ -628,7 +733,10 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
   const existing = readIfExists(configPath);
   if (existing !== null) {
     isNew = false;
-    fs.writeFileSync(configPath, `${existing.trimEnd()}\n${block}`);
+    // Drop our existing tables first — appending without this leaves the
+    // client with two registrations of the same server.
+    const stripped = stripOwnCodexTables(existing);
+    fs.writeFileSync(configPath, `${stripped.trimEnd()}\n${block}`);
   } else {
     fs.writeFileSync(configPath, block.trimStart());
   }
@@ -656,7 +764,8 @@ function writeCodexTomlEntry(configPath: string, entry: McpServerEntry): 'create
  * - `missing`      — config file or trace-mcp entry not present.
  * - `up_to_date`   — entry on disk equals what we'd write now.
  * - `stale`        — entry exists but a field we manage drifts (command path,
- *                    args, cwd, env, alwaysLoad). UI should show "Update".
+ *                    args, cwd, env, alwaysLoad), or it is still filed under
+ *                    the pre-rename `trace-mcp` key. UI should show "Update".
  * - `unmanageable` — client doesn't expose a writable file (Warp,
  *                    JetBrains AI Assistant — IDE/cloud-managed config).
  * - `unknown`      — config exists but format is too lax to compare safely
@@ -801,44 +910,45 @@ function detectClientStatus(
   switch (name) {
     case 'hermes': {
       const hermesEntry = expected as HermesYamlEntry;
-      const present = (() => {
-        try {
-          const text = fs.readFileSync(configPath, 'utf-8');
-          return /(^|\n)\s*trace-mcp\s*:/.test(text);
-        } catch {
-          return false;
-        }
-      })();
+      const text = readIfExists(configPath) ?? '';
+      const present = /(^|\n)\s*trace(-mcp)?\s*:/.test(text);
       if (!present) return { client: name, configPath, status: 'missing' };
+      if (/(^|\n)\s*trace-mcp\s*:/.test(text) || !/(^|\n)\s*trace\s*:/.test(text)) {
+        return { client: name, configPath, status: 'stale', staleReason: 'server-key' };
+      }
       return hermesEntryMatches(configPath, hermesEntry)
         ? { client: name, configPath, status: 'up_to_date' }
         : { client: name, configPath, status: 'stale', staleReason: 'fields' };
     }
     case 'amp': {
-      const present = (() => {
+      const ampServers = (() => {
         try {
-          const text = fs.readFileSync(configPath, 'utf-8');
-          return /["']trace-mcp["']\s*:/.test(text);
+          const parsed = parseJsonc(fs.readFileSync(configPath, 'utf-8')) as Record<
+            string,
+            unknown
+          > | null;
+          return parsed?.['amp.mcpServers'] as Record<string, unknown> | undefined;
         } catch {
-          return false;
+          return undefined;
         }
       })();
-      if (!present) return { client: name, configPath, status: 'missing' };
+      if (!pickServerEntry(ampServers)) return { client: name, configPath, status: 'missing' };
+      if (hasLegacyKey(ampServers)) {
+        return { client: name, configPath, status: 'stale', staleReason: 'server-key' };
+      }
       return ampEntryMatches(configPath, expected as McpServerEntry)
         ? { client: name, configPath, status: 'up_to_date' }
         : { client: name, configPath, status: 'stale', staleReason: 'fields' };
     }
     case 'factory-droid': {
       const factoryEntry = expected as McpServerEntry & { type: 'stdio' };
-      const present = (() => {
-        try {
-          const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-          return Boolean(content?.mcpServers?.['trace-mcp']);
-        } catch {
-          return false;
-        }
-      })();
-      if (!present) return { client: name, configPath, status: 'missing' };
+      const factoryServers = readMcpServers(configPath);
+      if (!pickServerEntry(factoryServers)) {
+        return { client: name, configPath, status: 'missing' };
+      }
+      if (hasLegacyKey(factoryServers)) {
+        return { client: name, configPath, status: 'stale', staleReason: 'server-key' };
+      }
       return factoryEntryMatches(configPath, factoryEntry)
         ? { client: name, configPath, status: 'up_to_date' }
         : { client: name, configPath, status: 'stale', staleReason: 'fields' };
@@ -848,12 +958,12 @@ function detectClientStatus(
       // section is append-based and we don't parse arbitrary TOML.
       try {
         const content = fs.readFileSync(configPath, 'utf-8');
-        const present = /\[mcp_servers\s*\.\s*["']?trace-mcp["']?\s*\]/.test(content);
-        return {
-          client: name,
-          configPath,
-          status: present ? 'unknown' : 'missing',
-        };
+        const legacy = content.split('\n').some((line) => LEGACY_CODEX_HEADER_RE.test(line));
+        if (legacy) return { client: name, configPath, status: 'stale', staleReason: 'server-key' };
+        const current = /\[mcp_servers\s*\.\s*["']?trace["']?\s*\]/.test(content);
+        return current
+          ? { client: name, configPath, status: 'unknown' }
+          : { client: name, configPath, status: 'missing' };
       } catch {
         return { client: name, configPath, status: 'missing' };
       }
@@ -862,15 +972,11 @@ function detectClientStatus(
       // claude-code, claw-code, claude-desktop, cursor, windsurf, continue, junie,
       // cline, kilocode, antigravity, kimi all use the standard mcpServers JSON
       // shape compared by entryMatches().
-      const present = (() => {
-        try {
-          const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-          return Boolean(content?.mcpServers?.['trace-mcp']);
-        } catch {
-          return false;
-        }
-      })();
-      if (!present) return { client: name, configPath, status: 'missing' };
+      const servers = readMcpServers(configPath);
+      if (!pickServerEntry(servers)) return { client: name, configPath, status: 'missing' };
+      if (hasLegacyKey(servers)) {
+        return { client: name, configPath, status: 'stale', staleReason: 'server-key' };
+      }
       if (entryMatches(configPath, expected as McpServerEntry)) {
         return { client: name, configPath, status: 'up_to_date' };
       }
@@ -884,7 +990,8 @@ function detectClientStatus(
 function pinpointEntryDrift(configPath: string, expected: McpServerEntry): string {
   try {
     const content = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const current = content?.mcpServers?.['trace-mcp'];
+    if (hasLegacyKey(content?.mcpServers)) return 'server-key';
+    const current = pickServerEntry(content?.mcpServers) as OnDiskEntry | undefined;
     if (!current || typeof current !== 'object') return 'entry-missing';
     if (current.command !== expected.command) return 'command';
     if (JSON.stringify(current.args ?? []) !== JSON.stringify(expected.args)) return 'args';

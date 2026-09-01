@@ -4,7 +4,7 @@
  */
 
 import type { Store } from '../db/store.js';
-import type { ToolCallRow } from './analytics-store.js';
+import { TRACE_TOOL_SERVERS, type ToolCallRow } from './analytics-store.js';
 
 interface FileAlternative {
   file: string;
@@ -187,7 +187,7 @@ export function analyzeRealSavings(
     const s = sessionMap.get(tc.session_id) ?? { hasTrace: false, tokens: 0, toolCalls: 0 };
     s.tokens += tc.output_tokens_estimate;
     s.toolCalls++;
-    if (tc.tool_server === 'trace-mcp' || tc.tool_server === 'trace_mcp') {
+    if (TRACE_TOOL_SERVERS.has(tc.tool_server)) {
       s.hasTrace = true;
     }
     sessionMap.set(tc.session_id, s);

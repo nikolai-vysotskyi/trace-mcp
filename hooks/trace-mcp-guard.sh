@@ -461,10 +461,11 @@ if (( HEARTBEAT_DEAD == 0 )) && [[ -f "$STATUS_FILE" ]] && [[ -f "$PROJECT_ROOT/
   STATUS_TRANSPORT=$(jq -r '.transport // empty' "$STATUS_FILE" 2>/dev/null || echo "")
   # trace-mcp entries with a "type"/"url" key are HTTP; entries with a
   # "command" key (no type/url) are stdio. Skip silently on missing/malformed
-  # config or an entry not named trace-mcp/trace-mcp-http rather than guess.
+  # config or an entry not named trace/trace-mcp (or their -http variants)
+  # rather than guess.
   EXPECTED_TRANSPORT=$(jq -r '
     (.mcpServers // {}) as $s
-    | ($s["trace-mcp"] // $s["trace-mcp-http"] // empty) as $e
+    | ($s["trace"] // $s["trace-http"] // $s["trace-mcp"] // $s["trace-mcp-http"] // empty) as $e
     | if ($e | length) == 0 then empty
       elif ($e.type == "http") or ($e.url != null) then "http"
       elif ($e.command != null) then "stdio"

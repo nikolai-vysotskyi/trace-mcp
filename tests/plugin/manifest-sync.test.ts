@@ -27,7 +27,7 @@ describe('Claude Code plugin manifests', () => {
   it('plugin.json mcpServers points at the bin name from package.json', () => {
     const bin = pkg.bin as Record<string, string>;
     const servers = plugin.mcpServers as Record<string, { command: string }>;
-    const command = servers['trace-mcp']?.command;
+    const command = servers['trace']?.command;
     expect(command).toBeDefined();
     // command must be one of the declared bin names so npm install -g exposes it on PATH
     expect(Object.keys(bin)).toContain(command);
@@ -165,7 +165,7 @@ describe('Codex CLI plugin manifests', () => {
     expect(plugin.mcpServers).toBe('./.mcp.json');
     const bin = pkg.bin as Record<string, string>;
     const mcpConfig = readJson('.codex-plugin', '.mcp.json') as Record<string, { command: string }>;
-    const command = mcpConfig['trace-mcp']?.command;
+    const command = mcpConfig['trace']?.command;
     expect(command).toBeDefined();
     expect(Object.keys(bin)).toContain(command);
   });

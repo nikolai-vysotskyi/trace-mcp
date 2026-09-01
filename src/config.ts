@@ -324,7 +324,7 @@ const TelemetryObservabilitySchema = z
 
 const TelemetryConfigSchema = z
   .object({
-    /** When true, persist tool-call latency to ~/.trace-mcp/telemetry.db. Off by default to avoid
+    /** When true, persist tool-call latency to ~/.trace/telemetry.db. Off by default to avoid
      *  unsolicited disk writes — analyze_perf works without the sink (in-memory ring). */
     enabled: z.boolean().default(false),
     /** Maximum rows to retain. Older rows are pruned when exceeded. 0 disables pruning. */
@@ -480,7 +480,7 @@ const TopologyConfigSchema = z
  *   otherwise                      → dropped         (current behaviour)
  *
  * Tunable via `decisions.review_threshold` / `decisions.reject_threshold`
- * in `~/.trace-mcp/.config.json` or `.trace-mcp.json` per project.
+ * in `~/.trace/.config.json` or `.trace.json` per project.
  * Defaults match `DEFAULT_REVIEW_THRESHOLD` / `DEFAULT_REJECT_THRESHOLD`
  * in `src/memory/conversation-miner.ts` (kept in sync).
  */
@@ -676,7 +676,7 @@ const MemoryConfigSchema = z
         dir: z
           .string()
           .optional()
-          .describe('Override audit log directory. Default ~/.trace-mcp/decisions/.'),
+          .describe('Override audit log directory. Default ~/.trace/decisions/.'),
         retentionDays: z
           .number()
           .int()
@@ -953,7 +953,7 @@ export const TraceMcpConfigSchema = z.object({
   logging: z
     .object({
       file: z.boolean().default(false),
-      path: z.string().default('~/.trace-mcp/run.log'),
+      path: z.string().default('~/.trace/run.log'),
       level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
       max_size_mb: z.number().positive().max(500).default(10),
     })
@@ -1153,7 +1153,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
   return errors;
 }
 
-/** Load global config from ~/.trace-mcp/.config.json */
+/** Load global config from ~/.trace/.config.json */
 export function loadGlobalConfigRaw(): Record<string, unknown> {
   try {
     const raw = readIfExists(GLOBAL_CONFIG_PATH);
@@ -1166,8 +1166,13 @@ export function loadGlobalConfigRaw(): Record<string, unknown> {
 
 /** Load per-project config overrides via cosmiconfig (optional, for local overrides). */
 async function loadProjectConfigRaw(searchFrom: string): Promise<Record<string, unknown>> {
+  // `.trace*` first, `.trace-mcp*` after: a project that still carries the
+  // pre-rename file keeps working, and one that has both prefers the new name.
   const explorer = cosmiconfig('trace-mcp', {
     searchPlaces: [
+      '.trace/.config.json',
+      '.trace.json',
+      '.config/trace.json',
       '.trace-mcp/.config.json',
       '.trace-mcp.json',
       '.trace-mcp',
@@ -1217,7 +1222,7 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
     // Remove 'projects' key from global raw — it's not part of TraceMcpConfig
     const { projects: _projects, ...globalDefaults } = globalRaw;
 
-    // Load local cosmiconfig overrides (if any .trace-mcp.json exists in project)
+    // Load local cosmiconfig overrides (if any .trace.json exists in project)
     const localRaw = searchFrom ? await loadProjectConfigRaw(searchFrom) : {};
 
     // Merge: global defaults → per-project section from global config → local overrides

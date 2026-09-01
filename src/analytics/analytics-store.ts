@@ -30,6 +30,15 @@ function buildInputSnippet(tc: ToolCallEvent): string | null {
   return null;
 }
 
+/**
+ * Every `tool_server` value that means "this call went through us".
+ *
+ * `trace` is the current MCP server name (TRA-610); `trace-mcp` is what
+ * pre-rename sessions logged, and `trace_mcp` is the underscore spelling some
+ * clients normalise server keys to. Historical rows keep counting.
+ */
+export const TRACE_TOOL_SERVERS: ReadonlySet<string> = new Set(['trace', 'trace-mcp', 'trace_mcp']);
+
 export interface ToolCallRow {
   tool_name: string;
   tool_server: string;

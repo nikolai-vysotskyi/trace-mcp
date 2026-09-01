@@ -3,7 +3,7 @@
  * and recommends trace-mcp alternatives.
  */
 
-import type { ToolCallRow } from './analytics-store.js';
+import { TRACE_TOOL_SERVERS, type ToolCallRow } from './analytics-store.js';
 
 interface OptimizationHit {
   rule: string;
@@ -241,7 +241,7 @@ const unusedTraceTools: Rule = {
         entry = { hasTrace: false, navTokens: 0, hasNav: false };
         sessions.set(c.session_id, entry);
       }
-      if (c.tool_server === 'trace-mcp' || c.tool_server === 'trace_mcp') {
+      if (TRACE_TOOL_SERVERS.has(c.tool_server)) {
         entry.hasTrace = true;
       }
       const sn = c.tool_short_name;

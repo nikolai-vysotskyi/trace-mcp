@@ -287,7 +287,7 @@ export function createServer(
   const instructionsVerbosity = config.tools?.instructions_verbosity ?? 'full';
   const agentBehavior = config.tools?.agent_behavior ?? 'off';
   const server = new McpServer(
-    { name: 'trace-mcp', version: PKG_VERSION },
+    { name: 'trace', version: PKG_VERSION },
     { instructions: buildInstructions(detectedFrameworks, instructionsVerbosity, agentBehavior) },
   );
 
