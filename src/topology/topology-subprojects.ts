@@ -9,6 +9,7 @@
  * rather than importing `ServiceOperations` back, which would risk a cycle.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 import { isDangerousProjectRoot } from '../dangerous-root.js';
@@ -91,6 +92,123 @@ export function pruneDangerousSubprojects(db: Database.Database): {
   })();
 
   return { subprojects: badIds.length, services };
+}
+
+export interface StaleTopologyReport {
+  staleSubprojects: Array<{
+    id: number;
+    name: string;
+    repo_root: string;
+    project_root: string;
+  }>;
+  staleServices: Array<{
+    id: number;
+    name: string;
+    repo_root: string;
+  }>;
+}
+
+export interface PruneTopologyResult {
+  subprojects: number;
+  services: number;
+  removedSubprojects: Array<{ id: number; name: string; repo_root: string; project_root: string }>;
+  removedServices: Array<{ id: number; name: string; repo_root: string }>;
+}
+
+/**
+ * Scan `topology.db` for subprojects and services whose repo_root or project_root
+ * no longer exists on disk.
+ */
+export function findStaleTopology(db: Database.Database): StaleTopologyReport {
+  let staleSubprojects: Array<{
+    id: number;
+    name: string;
+    repo_root: string;
+    project_root: string;
+  }> = [];
+  try {
+    const subRows = db
+      .prepare('SELECT id, name, repo_root, project_root FROM subprojects')
+      .all() as Array<{
+      id: number;
+      name: string;
+      repo_root: string;
+      project_root: string;
+    }>;
+    staleSubprojects = subRows.filter(
+      (r) => !fs.existsSync(r.repo_root) || !fs.existsSync(r.project_root),
+    );
+  } catch {
+    /* table may not exist */
+  }
+
+  let staleServices: Array<{ id: number; name: string; repo_root: string }> = [];
+  try {
+    const svcRows = db.prepare('SELECT id, name, repo_root FROM services').all() as Array<{
+      id: number;
+      name: string;
+      repo_root: string;
+    }>;
+    staleServices = svcRows.filter((r) => !fs.existsSync(r.repo_root));
+  } catch {
+    /* table may not exist */
+  }
+
+  return { staleSubprojects, staleServices };
+}
+
+/**
+ * Prune stale subprojects and services from `topology.db` whose roots no longer
+ * exist on disk. Detaches foreign keys on `client_calls` before deletion.
+ */
+export function pruneStaleTopology(db: Database.Database): PruneTopologyResult {
+  const { staleSubprojects, staleServices } = findStaleTopology(db);
+
+  if (staleSubprojects.length === 0 && staleServices.length === 0) {
+    return {
+      subprojects: 0,
+      services: 0,
+      removedSubprojects: [],
+      removedServices: [],
+    };
+  }
+
+  db.transaction(() => {
+    if (staleServices.length > 0) {
+      const svcIds = staleServices.map((s) => s.id);
+      const svcPlaceholders = svcIds.map(() => '?').join(',');
+
+      // Detach client_calls.matched_endpoint_id before cascading delete of api_endpoints
+      db.prepare(
+        `UPDATE client_calls SET matched_endpoint_id = NULL
+         WHERE matched_endpoint_id IN (
+           SELECT e.id FROM api_endpoints e
+           WHERE e.service_id IN (${svcPlaceholders})
+         )`,
+      ).run(...svcIds);
+
+      db.prepare(`DELETE FROM services WHERE id IN (${svcPlaceholders})`).run(...svcIds);
+    }
+
+    if (staleSubprojects.length > 0) {
+      const subIds = staleSubprojects.map((s) => s.id);
+      const subPlaceholders = subIds.map(() => '?').join(',');
+
+      // Detach client_calls.target_repo_id before deleting subprojects
+      db.prepare(
+        `UPDATE client_calls SET target_repo_id = NULL WHERE target_repo_id IN (${subPlaceholders})`,
+      ).run(...subIds);
+
+      db.prepare(`DELETE FROM subprojects WHERE id IN (${subPlaceholders})`).run(...subIds);
+    }
+  })();
+
+  return {
+    subprojects: staleSubprojects.length,
+    services: staleServices.length,
+    removedSubprojects: staleSubprojects,
+    removedServices: staleServices,
+  };
 }
 
 export interface SubprojectOperationDeps {
