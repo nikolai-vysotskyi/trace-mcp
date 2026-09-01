@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DetectedVersion, ParsedDependency, ProjectContext } from '../plugin-api/types.js';
+import { validatePath } from '../utils/security.js';
 
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -139,18 +140,34 @@ const CONFIG_FILE_NAMES = [
 ];
 
 function findScanDirectories(rootPath: string): string[] {
-  const dirs: string[] = [rootPath];
+  const normalizedRoot = path.resolve(rootPath);
+  const dirs: string[] = [normalizedRoot];
   try {
-    const level1 = fs.readdirSync(rootPath, { withFileTypes: true });
+    const level1 = fs.readdirSync(normalizedRoot, { withFileTypes: true });
     for (const e1 of level1) {
       if (!e1.isDirectory() || e1.name.startsWith('.') || SKIP_DIRS.has(e1.name)) continue;
-      const d1 = path.join(rootPath, e1.name);
+      const check1 = validatePath(e1.name, normalizedRoot);
+      if (check1.isErr()) continue;
+      const d1 = path.join(normalizedRoot, e1.name);
+      try {
+        if (fs.lstatSync(d1).isSymbolicLink()) continue;
+      } catch {
+        continue;
+      }
       dirs.push(d1);
       try {
         const level2 = fs.readdirSync(d1, { withFileTypes: true });
         for (const e2 of level2) {
           if (!e2.isDirectory() || e2.name.startsWith('.') || SKIP_DIRS.has(e2.name)) continue;
+          const rel2 = path.join(e1.name, e2.name);
+          const check2 = validatePath(rel2, normalizedRoot);
+          if (check2.isErr()) continue;
           const d2 = path.join(d1, e2.name);
+          try {
+            if (fs.lstatSync(d2).isSymbolicLink()) continue;
+          } catch {
+            continue;
+          }
           dirs.push(d2);
         }
       } catch {
@@ -188,7 +205,16 @@ export function buildProjectContext(rootPath: string): ProjectContext {
 
   const readFile = (dir: string, file: string): string | undefined => {
     try {
-      return fs.readFileSync(path.resolve(dir, file), 'utf-8');
+      const fullPath = path.resolve(dir, file);
+      const relToRoot = path.relative(rootPath, fullPath);
+      const check = validatePath(relToRoot, rootPath);
+      if (check.isErr()) return undefined;
+      try {
+        if (fs.lstatSync(fullPath).isSymbolicLink()) return undefined;
+      } catch {
+        return undefined;
+      }
+      return fs.readFileSync(fullPath, 'utf-8');
     } catch {
       return undefined;
     }
@@ -678,7 +704,16 @@ export function buildProjectContext(rootPath: string): ProjectContext {
     // ========== Config files scan ==========
     for (const name of CONFIG_FILE_NAMES) {
       try {
-        fs.accessSync(path.resolve(dir, name));
+        const fullPath = path.resolve(dir, name);
+        const relToRoot = path.relative(rootPath, fullPath);
+        const check = validatePath(relToRoot, rootPath);
+        if (check.isErr()) continue;
+        try {
+          if (fs.lstatSync(fullPath).isSymbolicLink()) continue;
+        } catch {
+          continue;
+        }
+        fs.accessSync(fullPath);
         configFiles.push(getRelPath(name));
       } catch {
         /* not found */
@@ -689,10 +724,22 @@ export function buildProjectContext(rootPath: string): ProjectContext {
   // Scan .github/workflows for CI/CD files
   try {
     const ghWorkflowDir = path.resolve(rootPath, '.github/workflows');
-    const entries = fs.readdirSync(ghWorkflowDir);
-    for (const entry of entries) {
-      if (entry.endsWith('.yml') || entry.endsWith('.yaml')) {
-        configFiles.push(`.github/workflows/${entry}`);
+    const check = validatePath('.github/workflows', rootPath);
+    if (check.isOk()) {
+      try {
+        if (!fs.lstatSync(ghWorkflowDir).isSymbolicLink()) {
+          const entries = fs.readdirSync(ghWorkflowDir);
+          for (const entry of entries) {
+            if (entry.endsWith('.yml') || entry.endsWith('.yaml')) {
+              const rel = `.github/workflows/${entry}`;
+              if (validatePath(rel, rootPath).isOk()) {
+                configFiles.push(rel);
+              }
+            }
+          }
+        }
+      } catch {
+        /* ignore */
       }
     }
   } catch {

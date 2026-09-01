@@ -1,6 +1,8 @@
 /**
  * Tests for buildProjectContext — manifest file parsing and version detection.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildProjectContext } from '../../src/indexer/project-context.js';
 import { createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
@@ -642,6 +644,39 @@ dependencies = ["fastapi>=0.100.0"]
       expect(ctx.allDependencies.map((d) => d.name)).not.toContain('build-dep');
       expect(ctx.packageJson).toBeUndefined();
       expect(ctx.composerJson).toBeUndefined();
+    });
+
+    it('ignores symlinked manifest files and symlinked directories to prevent traversal', () => {
+      const outsideDir = createTmpDir('trace-ctx-outside-');
+      try {
+        writeFixtureFile(
+          outsideDir,
+          'package.json',
+          JSON.stringify({ dependencies: { 'escaped-dep': '1.0.0' } }),
+        );
+
+        // Symlink a file
+        const symlinkFile = path.join(tmpDir, 'package.json');
+        try {
+          fs.symlinkSync(path.join(outsideDir, 'package.json'), symlinkFile);
+        } catch {
+          /* platform support */
+        }
+
+        // Symlink a directory
+        const symlinkDir = path.join(tmpDir, 'symlinked-subproject');
+        try {
+          fs.symlinkSync(outsideDir, symlinkDir, 'dir');
+        } catch {
+          /* platform support */
+        }
+
+        const ctx = buildProjectContext(tmpDir);
+        expect(ctx.allDependencies.map((d) => d.name)).not.toContain('escaped-dep');
+        expect(ctx.packageJson).toBeUndefined();
+      } finally {
+        removeTmpDir(outsideDir);
+      }
     });
   });
 
