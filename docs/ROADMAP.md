@@ -178,6 +178,70 @@ stars, and traffic *views* uniques** — nothing else. Channel-by-channel
 state lives in `ops/user-signal.md`; listing-by-listing state in
 `ops/distribution.md`. GitHub, 2026-09-02: **102 stars, 15 forks.**
 
+### The funnel — four numbers around that denominator (TRA-645)
+
+Active installs is a denominator with nothing on either side of it. Without
+that, every listing rewrite, hero redesign, README restructure and outreach PR
+is graded on taste. Four numbers fix it, one per stage:
+
+| Stage | Number | Source | Window |
+| --- | --- | --- | --- |
+| Arrivals | unique visitors to the GitHub repo | `acquisition.views_uniques_14d` | rolling 14 d |
+| Installs | first-ever pings | `installs_28d.new` | 28 d |
+| Activation | % of active installs with ≥1 indexed repository | `activation.activated_pct` | 28 d |
+| Retention | day ÷ month active installs | `funnel.retention_dau_mau_pct` | 1 d over 28 d |
+
+**Do not refresh these by hand either.** All four are computed by the same
+daily `ga4-snapshot.yml` run and published under `funnel:` in
+[`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml) —
+that file is where a weekly run reads them, not this page. As of **2026-09-02**:
+178 arrivals (14 d), 24 new installs, retention 51% (35 day / 69 month), and
+activation still blocked — see below.
+
+**Two credentials stand between this and all four numbers**, both verified
+against the live property by a `workflow_dispatch` on 2026-09-02
+([run 33556680379](https://github.com/nikolai-vysotskyi/trace-mcp/actions/runs/33556680379)).
+Neither is a design question; do not re-investigate them, and do not read the
+resulting `null`s as zeros.
+
+1. **`repos_indexed` is not a registered GA4 custom dimension.** The ping has
+   been sending it all along and GA4 has been dropping it: `runReport` answers
+   *"Field customEvent:repos_indexed is not a valid dimension"*, and registration
+   is **not retroactive**, so every reading before it is created is
+   unrecoverable — the sooner it exists, the sooner activation has history.
+   Registered today: `version`, `client`, `install_type`, `model`. Creating it
+   is one form in GA4 Admin → Custom definitions (event scope, parameter name
+   `repos_indexed`). Automating it was tried and reverted: the Admin API is not
+   enabled on the credential's GCP project (480706841486), so the script could
+   only have logged a failure once a day.
+2. **`GH_TRAFFIC_TOKEN` is unset.** GitHub's traffic endpoints require
+   `Administration: read`, a permission `GITHUB_TOKEN` cannot be granted, so the
+   workflow gets HTTP 403 and records that in `acquisition.error`. A
+   fine-grained PAT on this repo with that one permission fills it. Until then
+   arrivals must be read by hand with the `gh api` calls in
+   `ops/distribution.md`, and nothing accumulates — GitHub's window is 14 days
+   and drops what falls out of it.
+
+Three things to keep attached to them. The windows differ, so arrivals →
+installs is a direction and not a conversion rate. The ping's credentials are
+public, so all four are inflatable and are a trend, not an audit. And
+`activated_pct` is taken against its own buckets rather than against
+`active_users.month`, because GA4 deduplicates active users within a dimension
+value and not across them — an install that indexes its first repository
+mid-window is counted on both sides.
+
+Activation is the one to watch. It is the only one of the four that measures
+whether an install ever reached the product's value, and it is the ceiling on
+everything downstream of install: if a meaningful share of installs ping day
+after day with zero indexed repositories, that number outranks every capability
+item below.
+
+Acquisition already has a finding. Over two independent 14-day windows
+(2026-08-30 and 2026-09-02) **not one of the twelve directory listings in
+`ops/distribution.md` appears as a referrer** — arrivals come from search,
+Reddit and our own site. New distribution effort belongs where those arrivals
+are; see that file's "Arrivals" column for the limits on that conclusion.
+
 ## Ready to start
 
 ### 1. Field-verify the preset savings, and close the attribution hole in the ping (TRA-643)
