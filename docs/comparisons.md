@@ -33,6 +33,8 @@ updated: 2026-08-30
 </script>
 trace-mcp is not just a code intelligence server — it combines **code graph navigation**, **cross-session memory**, and **real-time code understanding** in a single tool. Other projects solve one of these; trace-mcp unifies all three.
 
+**Before the tables: a capability table is the cheapest kind of evidence.** Every ✓ below, ours included, is a feature claim. The one claim on this page that was measured rather than asserted is the token cost: [a median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context](/pr-context-benchmark.html), over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains. Two peers below publish token benchmarks of their own — codebase-memory-mcp's arXiv preprint (10× fewer tokens across 31 repos, which we have not reproduced) and codegraph's self-run August 2026 measurement (62% fewer tokens across seven repos, the most transparent self-benchmark in this field). What separates ours is not that it exists: it is that the base and head SHAs, the losing cases, and the single command that re-runs the whole thing all ship inside the repository.
+
 ## Head-to-head pages
 
 This page is the whole field. For the five tools people most often evaluate against trace-mcp, there is a dedicated page with a focused table, an honest "when to pick theirs" section, and an FAQ:

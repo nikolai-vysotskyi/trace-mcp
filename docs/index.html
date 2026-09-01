@@ -11,7 +11,7 @@ layout: null
 
   <!-- ── Primary Meta ── -->
   <title>trace-mcp — precomputed code intelligence for AI coding agents</title>
-  <meta name="description" content="A structured map of your codebase for AI agents. trace-mcp indexes your repo once so agents stop re-reading the same files every turn. ~40–50% fewer tokens on average, faster responses, more reliable at scale. Open source, local-first, MCP-native.">
+  <meta name="description" content="A structured map of your codebase for AI agents. trace-mcp indexes your repo once so agents stop re-reading the same files every turn. {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens assembling code-review context, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos. Open source, local-first, MCP-native.">
   <meta name="keywords" content="ai execution layer, recomputation, context bloat, token reduction, ai agents, mcp, model context protocol, code intelligence, code graph, llm developer tools, agent observability, agent optimization, claude code, cursor, windsurf, dependency graph, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
   <meta name="robots" content="index, follow, max-image-preview:large">
@@ -53,7 +53,7 @@ layout: null
   <meta property="og:locale" content="en_US">
   <meta property="og:url" content="https://trace-mcp.com/">
   <meta property="og:title" content="trace-mcp — precomputed code intelligence for AI coding agents">
-  <meta property="og:description" content="A structured map of your codebase for AI agents. Stop paying for the same re-reads every turn. ~40–50% fewer tokens, faster responses, more reliable at scale.">
+  <meta property="og:description" content="A structured map of your codebase for AI agents. Stop paying for the same re-reads every turn. {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged PRs in open-source repos.">
   <meta property="og:image" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:secure_url" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:type" content="image/png">
@@ -64,7 +64,7 @@ layout: null
   <!-- ── Twitter / X Card ── -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="trace-mcp — precomputed code intelligence for AI coding agents">
-  <meta name="twitter:description" content="A structured map of your codebase for AI agents. ~40–50% fewer tokens, faster responses, more reliable at scale. Open source, local-first.">
+  <meta name="twitter:description" content="A structured map of your codebase for AI agents. {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged PRs in open-source repos. Open source, local-first.">
   <meta name="twitter:image" content="https://trace-mcp.com/og-image.png">
   <meta name="twitter:image:alt" content="trace-mcp graph explorer visualizing symbol connections across a codebase">
 
@@ -75,7 +75,7 @@ layout: null
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
     "alternateName": "trace-mcp — Recomputation → Reuse for AI Systems",
-    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 99% less redundant processing. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
+    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. A median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests across {{ site.data.pr_context_bench.repo_count }} open-source repositories. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
     "applicationCategory": "DeveloperApplication",
@@ -105,6 +105,7 @@ layout: null
     },
     "featureList": [
       "Recomputation → reuse layer for AI systems — agents stop re-reading and re-traversing",
+      "{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context, median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories",
       "40–50% fewer tokens on average across real agent workflows",
       "Up to 2× effective capacity at the same context budget",
       "Up to 99% less redundant processing in structured tasks (code navigation, dependency traversal)",
@@ -683,6 +684,15 @@ layout: null
       color: var(--text-disabled);
       line-height: 1.5;
     }
+    /* The page-wide `a { color: inherit; text-decoration: none }` would hide the
+       method link inside this footnote entirely — and a claim whose evidence is
+       not reachable in one click is the whole problem TRA-647 exists to fix. */
+    .metrics-strip-foot a {
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-visible);
+      transition: color 200ms ease-out, border-color 200ms ease-out;
+    }
+    .metrics-strip-foot a:hover { color: var(--text-display); border-color: var(--text-display); }
     @media (max-width: 700px) {
       .metrics-strip { padding: 24px 0 32px; }
       .metrics-strip-grid {
@@ -2029,7 +2039,7 @@ layout: null
 
       <p class="hero-desc">
         trace-mcp indexes your repository once so agents stop re-reading the same files every turn.
-        <span class="accent-text">40&ndash;50% fewer tokens, 100% local.</span>
+        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens on real pull requests, 100% local.</span>
       </p>
 
       <!-- Two actions, no more (TRA-609): the DMG and the command that installs the
@@ -2076,19 +2086,22 @@ layout: null
     <div class="container">
       <div class="metrics-strip-grid">
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">~40&ndash;50%</span>
-          <span class="metrics-strip-label">Average token reduction across mixed agent workloads</span>
+          <span class="metrics-strip-value">{{ site.data.pr_context_bench.median_savings_pct }}%</span>
+          <span class="metrics-strip-label">Fewer input tokens to review a pull request &mdash; median over {{ site.data.pr_context_bench.pr_count }} merged PRs in {{ site.data.pr_context_bench.repo_count }} open-source repositories</span>
         </div>
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">up to 99%</span>
-          <span class="metrics-strip-label">In structured workflows &mdash; repeated navigation, dependency traversal, context re-inflation</span>
+          <span class="metrics-strip-value">~40&ndash;50%</span>
+          <span class="metrics-strip-label">Average token reduction across mixed agent workloads</span>
         </div>
         <div class="metrics-strip-item">
           <span class="metrics-strip-value">up to 2&times;</span>
           <span class="metrics-strip-label">Effective context capacity per session</span>
         </div>
       </div>
-      <p class="metrics-strip-foot">Measured against baseline agent runs that re-read files and re-traverse dependencies on every turn.</p>
+      <!-- TRA-647: the first tile is the only figure here taken on code we do not
+           own, so it leads and it says where it came from. The other two are our
+           own instrumentation and are labelled as such rather than dropped. -->
+      <p class="metrics-strip-foot">The first figure is measured on other people's code &mdash; {{ site.data.pr_context_bench.pr_count }} merged pull requests, SHAs pinned, run script and the {{ site.data.pr_context_bench.loss_count }} cases where it barely paid off all published: <a href="/pr-context-benchmark.html">PR review context benchmark</a>. The other two come from our own instrumentation, measured against baseline agent runs that re-read files and re-traverse dependencies on every turn.</p>
     </div>
   </section>
 

@@ -459,6 +459,91 @@ describe('docs site numeric claims (TRA-174)', () => {
     }
   });
 
+  /**
+   * TRA-647: the PR-context benchmark (TRA-534) is the only measurement we have
+   * that was taken on somebody else's code, and it lived on one page reachable
+   * from the footer nav while every figure a visitor actually met came from our
+   * own estimators. It now leads README.md, the homepage hero and the metrics
+   * strip. Those surfaces split into two kinds and each needs the opposite
+   * check: README.md is not Jekyll-rendered, so its copy is typed by hand and
+   * needs a receipt against the generated data; the Jekyll pages need proof
+   * that they never type it by hand at all — the same discipline
+   * docs/_data/counts.yml gets above.
+   */
+  const BENCH = JSON.parse(
+    readFileSync(join(REPO_ROOT, 'docs/_data/pr_context_bench.json'), 'utf-8'),
+  ) as Record<string, unknown>;
+  const BENCH_TAG = /\{\{\s*site\.data\.pr_context_bench\.([a-z0-9_]+)/gi;
+
+  it('README states the benchmark headline exactly as scripts/bench-pr-context.ts generated it', () => {
+    const readme = readReadme();
+    const fixIt =
+      're-run `npx tsx scripts/bench-pr-context.ts` and update the above-the-fold block in README.md';
+    for (const [label, needle] of [
+      ['median saving', `${BENCH.median_savings_pct}% fewer input tokens`],
+      ['PR count', `${BENCH.pr_count} merged pull requests`],
+      [
+        'median token pair',
+        `${(BENCH.baseline_median_tokens as number).toLocaleString('en-US')} → ${(BENCH.trace_median_tokens as number).toLocaleString('en-US')}`,
+      ],
+      ['method link', 'https://trace-mcp.com/pr-context-benchmark.html'],
+    ] as const) {
+      expect(
+        readme.includes(needle),
+        `README.md no longer states the ${label} ("${needle}") from docs/_data/pr_context_bench.json — ${fixIt}`,
+      ).toBe(true);
+    }
+  });
+
+  it('no percentage README attributes to the PR benchmark has drifted from the data', () => {
+    // The headline is stated twice (above the fold and in "Token reduction —
+    // what we measured"), in different sentences. Checking the exact fragment
+    // above only pins the first one; this pins every line that talks about the
+    // benchmark, whatever wording a later edit gives it.
+    for (const line of readReadme().split('\n')) {
+      if (!/pull requests?/i.test(line)) continue;
+      for (const [, pct] of line.matchAll(/(\d+\.\d+)%/g)) {
+        expect(
+          pct,
+          `README.md line claims ${pct}% about pull requests; docs/_data/pr_context_bench.json ` +
+            `says ${BENCH.median_savings_pct}%. Line: "${line.trim()}"`,
+        ).toBe(BENCH.median_savings_pct);
+      }
+    }
+  });
+
+  it('the Jekyll surfaces read the benchmark from _data instead of hardcoding it (TRA-647)', () => {
+    for (const path of ['docs/index.html', 'docs/comparisons.md', 'docs/pr-context-benchmark.md']) {
+      expect(
+        readFileSync(join(REPO_ROOT, path), 'utf-8').includes('site.data.pr_context_bench.'),
+        `${path} no longer reads {{ site.data.pr_context_bench.* }} — the benchmark numbers are ` +
+          'generated, never typed. Keep them in docs/_data/pr_context_bench.json.',
+      ).toBe(true);
+    }
+  });
+
+  it('every {{ site.data.pr_context_bench.* }} tag in docs/ resolves to a key (TRA-647)', () => {
+    // Jekyll renders an unknown key as the empty string rather than failing the
+    // build, so a typo ships as "a median % fewer input tokens".
+    const broken: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!/\.(md|html|txt)$/.test(entry.name)) continue;
+        for (const m of readFileSync(full, 'utf-8').matchAll(BENCH_TAG)) {
+          if (BENCH[m[1]] === undefined) broken.push(`${entry.name}: ${m[0]}`);
+        }
+      }
+    };
+    walk(join(REPO_ROOT, 'docs'));
+    expect([...new Set(broken)], 'no matching key in docs/_data/pr_context_bench.json').toEqual([]);
+  });
+
   it('llms.txt and tools-reference.md agree on the resource count', () => {
     const llms = readDoc('docs/llms.txt');
     const toolsRef = readDoc('docs/tools-reference.md');
