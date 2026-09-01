@@ -203,8 +203,11 @@ describe('postinstall-control-plane', () => {
         // worker process so the suite never touches the real ~/.trace — this
         // test exercises the *default* (unoverridden) resolution, so clear
         // both env vars the script accepts as an override (see global.ts).
+        // os.homedir() reads USERPROFILE on Windows, not HOME — set both so
+        // the child resolves to the same fake home regardless of platform.
         env: buildEnv({
           HOME: home,
+          USERPROFILE: home,
           CI: 'true',
           TRACE_MCP_DATA_DIR: undefined,
           TRACE_MCP_HOME: undefined,
