@@ -55,7 +55,8 @@ end to end, but a publishable pass needs a daemon on 127.0.0.1:3741 that speaks 
 checkout's API — the renderer's `BASE` is hardcoded, so the workload cannot be pointed
 anywhere else. On a machine where another trace-mcp version owns that port, the fixture
 never gets served and the run aborts with `the daemon on 3741 never served <fixture>`.
-Take the first clean pass on an isolated machine with no competing daemon.
+This controlled pass is tracked in issue TRA-617 to be executed on an isolated host with
+no competing daemon.
 
 ## How to take a measurement
 
