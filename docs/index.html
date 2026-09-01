@@ -1352,6 +1352,17 @@ layout: null
       transition: color 200ms ease-out;
     }
     .footer-col a:hover { color: var(--text-display); }
+    /* 22 doc links stacked single-file would run 22 rows deep against a
+       4-row Product column. Two grid tracks wide with an auto-fill inner
+       grid, it settles at 3 × 8 — the same `repeat(auto-fill, minmax(...))`
+       rule the doc-page footer uses (DESIGN-WEB.md §2), one cell per link so
+       a wrapped label still reads as one target. */
+    .footer-col-docs { grid-column: span 2; }
+    .footer-doc-links {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      column-gap: 32px;
+    }
     .footer-bottom {
       display: flex; justify-content: space-between; align-items: center;
       padding-top: 24px;
@@ -2800,23 +2811,26 @@ layout: null
         <a href="#capabilities">Capabilities</a>
         <a href="#install">Install</a>
       </div>
-      <div class="footer-col">
-        <h5>/ Resources</h5>
-        <a href="/tools-reference.html">Tool reference</a>
-        <a href="/configuration.html">Configuration</a>
-        <a href="/architecture.html">Architecture</a>
-        <a href="/supported-frameworks.html">Supported stack</a>
-        <a href="/comparisons.html">Comparisons</a>
-        <a href="/analytics.html">Analytics</a>
-      </div>
-      <div class="footer-col">
-        <h5>/ More docs</h5>
-        <a href="/decision-memory.html">Decision memory</a>
-        <a href="/toon-savings.html">TOON savings</a>
-        <a href="/telemetry.html">Telemetry</a>
-        <a href="/quality-gates.html">Quality gates</a>
-        <a href="/tweakcc.html">tweakcc</a>
-        <a href="/development.html">Development</a>
+      {%- comment -%}
+        Same list as the doc-page footer, from the same data file. The two
+        hand-written columns this replaced named 12 of the 22 pages and never
+        picked up the ones added after them — the whole /vs/ cluster launched
+        with no link from the one page on this site with any external
+        authority. Same failure mode as the accessibility layer in
+        DESIGN-WEB.md §7: the fix landed in _layouts/default.html and this
+        page does not use that layout.
+
+        Which pages are listed, their labels and their order belong to
+        docs_nav.yml and the SEO agent (DESIGN-WEB.md §2); the column split
+        is the only decision made here.
+      {%- endcomment -%}
+      <div class="footer-col footer-col-docs">
+        <h5>/ Docs</h5>
+        <div class="footer-doc-links">
+        {%- for item in site.data.docs_nav -%}
+          <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
+        {%- endfor -%}
+        </div>
       </div>
       <div class="footer-col">
         <h5>/ Source</h5>
