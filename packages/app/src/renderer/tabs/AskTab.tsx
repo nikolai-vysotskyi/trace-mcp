@@ -24,6 +24,7 @@ import {
   Toolbar,
 } from '../lattice/ui';
 import { parentDir, splitPath } from '../sidebar-prefs.js';
+import { useWholeLocation } from '../whole-location.js';
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -862,6 +863,10 @@ function ContextInspector({
   onClose: () => void;
 }) {
   const { t } = useTranslation('ask');
+  // Same rule as the sidebar's file list: a path row shows its location whole
+  // or not at all (TRA-504). The inspector narrows with the window.
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  useWholeLocation(bodyRef);
   return (
     <aside className="ask-inspector" aria-label={t('context')}>
       <IslandHeader
@@ -876,7 +881,7 @@ function ContextInspector({
           />
         }
       />
-      <div className="ask-inspector-body">
+      <div className="ask-inspector-body" ref={bodyRef}>
         {!envelope ? (
           <EmptyState
             compact
