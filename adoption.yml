@@ -8,12 +8,12 @@
 # Caveat: the ping's credentials ship in the published bundle (SECURITY.md
 # "Telemetry Credentials"), so events are unauthenticated and inflatable.
 # Read as a trend; treat a step change as suspect until corroborated.
-updated: "2026-08-31T06:50:02.940Z"
+updated: "2026-09-01T06:42:43.592Z"
 active_users:
-  day: 35
-  week: 35
-  month: 35
-events_28d: 243
+  day: 54
+  week: 61
+  month: 61
+events_28d: 310
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2025-01-01.
@@ -30,27 +30,39 @@ events_28d: 243
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 58140
-  tokens_saved_raw: 58140
-  usd_saved: 0.06
+  tokens_saved: 42850200
+  tokens_saved_raw: 42850200
+  usd_saved: 42.85
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2025-01-01"
-  days: 2
+  days: 3
   capped_days: 0
 installs_28d:
-  "unknown": 4
-  "new": 3
-  "upgrade": 1
+  "unknown": 31
+  "new": 15
+  "active": 8
+  "upgrade": 5
 by_version:
-  "3.8.0": 5
+  "3.8.0": 17
+  "3.10.0": 13
   "3.7.0": 2
+  "3.5.2": 1
   "3.6.0": 1
 by_country:
-  "Brazil": 1
+  "Sweden": 4
+  "United States": 4
+  "Chile": 3
+  "Brazil": 2
   "Indonesia": 1
-  "United States": 1
+  "Iran": 1
+  "Malta": 1
+  "Poland": 1
+  "Russia": 1
+  "United Arab Emirates": 1
+  "United Kingdom": 1
 by_client:
-  "unknown": 5
-  "claude-code": 1
+  "unknown": 25
+  "claude-code": 8
+  "codex-mcp-client": 2
   "grok-shell-trace-mcp": 1
