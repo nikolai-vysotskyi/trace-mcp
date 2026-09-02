@@ -365,6 +365,27 @@ describe('daemon proxy answers load_tools locally (TRA-402)', () => {
     expect(result.deferred_tools).not.toContain('search');
   });
 
+  it('swallows a prime reply that arrives after its own timeout', async () => {
+    // The prime is answered on a race with a 5s timeout. A reply that loses
+    // that race still arrives eventually, and the client never sent the
+    // request it answers — forwarding it hands the MCP host a response with an
+    // id it cannot match. Recognised by id prefix, not by a live pending entry.
+    const p = await startEscalatingProxy(minimalConfig);
+    await p.loadTools({});
+    const primeId = p.transport.forwarded
+      .map((m) => (m as { id?: unknown }).id)
+      .find((id) => typeof id === 'string' && id.startsWith('__trace_prime_tools_list_'));
+    expect(primeId, 'the proxy should have primed itself').toBeDefined();
+
+    const before = p.toClient.length;
+    p.transport.onmessage?.({
+      jsonrpc: '2.0',
+      id: primeId,
+      result: { tools: [{ name: 'search' }] },
+    } as unknown as JSONRPCMessage);
+    expect(p.toClient.length, 'a late prime reply must not reach the client').toBe(before);
+  });
+
   it('passes toolSurface when constructing ProxyBackend, or escalation is dead on the shipped path', () => {
     const src = readFileSync(fileURLToPath(new URL('../session.ts', import.meta.url)), 'utf8');
     const ctor = src.slice(src.indexOf('new ProxyBackend('));

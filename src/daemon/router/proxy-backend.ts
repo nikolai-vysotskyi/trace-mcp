@@ -77,6 +77,14 @@ const REINIT_TIMEOUT_MS = 10_000;
 const PRIME_TIMEOUT_MS = 5_000;
 
 /**
+ * Id prefix for those internal requests. Recognising a prime by its id rather
+ * than by a live entry in `pendingPrimeIds` is what keeps a *late* reply — one
+ * that lost the timeout race — from falling through to the client as a response
+ * to a request it never made.
+ */
+const PRIME_ID_PREFIX = '__trace_prime_tools_list_';
+
+/**
  * How many reinitialize+retry attempts to make on a lost session before giving
  * up and letting the error propagate (so the watcher can fall back to local
  * mode). Greater than 1 because the daemon can restart *again* in the narrow
@@ -397,7 +405,7 @@ export class ProxyBackend implements Backend {
   private primeDaemonTools(): Promise<void> {
     if (this.daemonTools.length > 0 || !this.httpTransport) return Promise.resolve();
     if (this.priming) return this.priming;
-    const id = `__trace_prime_tools_list_${++this.primeSeq}`;
+    const id = `${PRIME_ID_PREFIX}${++this.primeSeq}`;
     this.priming = (async () => {
       try {
         const done = new Promise<void>((resolve) => {
@@ -530,15 +538,18 @@ export class ProxyBackend implements Backend {
         return;
       }
       // An internal tools/list prime: record the daemon's surface, tell nobody.
+      // Matched on the id prefix, so a reply that arrived after its timeout is
+      // still swallowed instead of reaching the client as a response to a
+      // request the client never sent.
       const primeId = messageId(msg);
-      const resolvePrime =
-        typeof primeId === 'string' ? this.pendingPrimeIds.get(primeId) : undefined;
-      if (resolvePrime) {
+      if (typeof primeId === 'string' && primeId.startsWith(PRIME_ID_PREFIX)) {
         const tools = ((msg as Record<string, unknown>).result as { tools?: unknown })?.tools;
         if (Array.isArray(tools)) {
           this.daemonTools = tools as typeof this.daemonTools;
         }
-        resolvePrime();
+        const resolvePrime = this.pendingPrimeIds.get(primeId);
+        this.pendingPrimeIds.delete(primeId);
+        resolvePrime?.();
         return;
       }
       this.onmessage?.(this.filterToolsListResponse(msg));
