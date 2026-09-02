@@ -146,7 +146,7 @@ We are in codegraph's lane, not Repomix's, and it would be dishonest to pretend 
 
 [trace-mcp](/) is a precomputed graph like codegraph's, with two differences that matter and one that costs us. It ships {{ site.data.counts.frameworks }} framework integrations that model edges beyond routing — controller → template, model → table, component → component — across {{ site.data.counts.languages }} languages. And it has a write path: rename, move, signature change, AST codemod, dead-code removal, plus OWASP taint scanning and SARIF for CI, none of which either tool above has.
 
-What it costs: our default preset advertises 28 tools at roughly 11.6K tokens, against codegraph's one tool at ~1.9K. That is real money paid every session, and everything outside the preset is one `load_tools` call away rather than free. The gap is the honest reason to pick codegraph if orientation is the whole job.
+What it costs: our default preset advertises 28 tools at roughly 11.6K tokens, against codegraph's one tool at ~1.9K. That gap is the honest reason to pick codegraph if orientation is the whole job. It is real money paid every session, and what it buys is the write path above plus everything outside the preset one `load_tools` call away.
 
 On measurement we can offer one thing neither of them does: the [PR review context benchmark](/pr-context-benchmark.html) is a median {{ site.data.pr_context_bench.median_savings_pct }}% input-token reduction over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories nobody here maintains, with the base and head SHAs, the losing cases, and the command that re-runs it all shipped in the repository.
 

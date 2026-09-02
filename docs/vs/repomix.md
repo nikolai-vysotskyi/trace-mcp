@@ -97,10 +97,10 @@ If you are picking between them, the question is not "which is better" — it is
 | Framework-aware edges | ✓ {{ site.data.counts.frameworks }} integrations | ✗ |
 | Call graph | ✓ bidirectional, graph-based | ✗ |
 | Impact analysis | ✓ reverse dependency traversal | ✗ |
-| Search | ✓ FTS5 + embeddings + graph | ✗ no search |
+| Search | ✓ FTS5 + embeddings + graph | ✓ regex over the pack (`grep_repomix_output`) |
 | Refactoring tools | ✓ rename, move, signature, codemod, extract | ✗ |
 | Security scanning | ✓ OWASP Top-10, taint analysis | ✓ Secretlint (secrets only) |
-| Freshness | ✓ incremental, file-watcher, content hash | ✗ snapshot at pack time, full repack |
+| Freshness | ✓ incremental, file-watcher, content hash | ✓ `--watch`, but a full re-pack, local dirs only |
 | Remote repositories | ✓ multi-repo subprojects | ✓ packs remote repos directly |
 | Official MCP server | ✓ core product | ✓ `--mcp` |
 | Setup cost | index build, then instant queries | none, but re-pack on every change |
@@ -124,7 +124,7 @@ Honest version, and it is a real list:
 - **The question is structural.** "What breaks if I change this function", "who calls this", "which route handler renders this component" — a pack contains the bytes that would answer this, but nothing that computes it. trace-mcp resolves it as one tool call over the graph.
 - **Framework semantics matter.** A graph that knows `UserController` exists but not that it renders `Users/Show.vue` via Inertia is missing the edges a developer actually reasons about. trace-mcp ships {{ site.data.counts.frameworks }} framework integrations for exactly those edges.
 - **You want the agent to change code, not just read it.** Rename across files, move a symbol, change a signature, apply an AST codemod, remove verified-dead code — Repomix has no write path.
-- **Freshness.** trace-mcp reindexes incrementally on file change. A pack is stale the moment you edit anything.
+- **Freshness.** trace-mcp reindexes incrementally on file change, per file. Repomix's `--watch` re-packs the whole output after a 300 ms debounce and only works on local directories; without it, a pack is stale from the first edit after it was written.
 
 ## The honest caveat on token cost
 
