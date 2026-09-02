@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import { applyEdits, type ModificationOptions, modify, parse } from 'jsonc-parser';
 import { DEFAULT_CONFIG_JSONC, ensureGlobalDirs, GLOBAL_CONFIG_PATH } from './global.js';
 import { logger } from './logger.js';
+import { isEphemeralProjectRoot, listProjects } from './registry.js';
 import { atomicWriteString } from './utils/atomic-write.js';
 import { readIfExists } from './utils/safe-fs.js';
 
@@ -67,6 +68,55 @@ export function saveProjectConfigJsonc(projectRoot: string, config: Record<strin
 /** Remove a per-project config section from the global config file (JSONC-safe). */
 export function removeProjectConfigJsonc(projectRoot: string): void {
   modifyGlobalConfigJsonc(['projects', projectRoot], undefined);
+}
+
+/**
+ * Drop dead per-project sections from `.config.json` (TRA-702).
+ *
+ * `projects` is the only unbounded map in the global config, and it was the
+ * only registration store with no sweep at all: registry.json has had
+ * `sweepMissingRoots` / `sweepEphemeralProjects` since TRA-36 / TRA-335, but
+ * `setupProject` writes here on a separate path that none of them reach. On
+ * the reported machine that left 593 sections / 785 KB — reparsed on every
+ * server start, i.e. on every agent run.
+ *
+ * Two kinds go, and only these two:
+ *
+ *  - the root no longer exists **and** no registry entry claims it. Both
+ *    halves matter: registry.json is the authority for what the user actually
+ *    registered and already runs a 7-day grace period, so an unmounted volume
+ *    keeps its config here instead of being punished for being offline.
+ *  - the root is a one-shot agent workdir that nothing registered. The Multica
+ *    runtime abandons its checkout *in place*, so these stay on disk forever
+ *    and an existence check alone never reaches them. An explicitly registered
+ *    workdir-shaped root is a deliberate act (`add`/`init`) and is kept.
+ *
+ * One rewrite for the whole set, not one per section — a section-at-a-time
+ * loop would re-serialise a megabyte hundreds of times.
+ */
+export function pruneProjectConfigSections(): string[] {
+  const text = readGlobalConfigText();
+  const parsed = parse(text) as { projects?: Record<string, unknown> } | undefined;
+  const projects = parsed?.projects;
+  if (!projects || typeof projects !== 'object') return [];
+
+  const registered = new Set(listProjects().map((p) => p.root));
+  const kept: Record<string, unknown> = {};
+  const removed: string[] = [];
+
+  for (const [root, section] of Object.entries(projects)) {
+    const claimed = registered.has(root);
+    const dead = !claimed && !fs.existsSync(root);
+    const orphanWorkdir = !claimed && isEphemeralProjectRoot(root);
+    if (dead || orphanWorkdir) removed.push(root);
+    else kept[root] = section;
+  }
+
+  if (removed.length === 0) return []; // don't rewrite a healthy config
+
+  modifyGlobalConfigJsonc(['projects'], kept);
+  logger.debug({ removed: removed.length }, 'Pruned dead project sections from global config');
+  return removed;
 }
 
 // ---------------------------------------------------------------------------

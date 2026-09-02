@@ -16,7 +16,12 @@ import type { DetectionResult } from './init/types.js';
 import { detectProject } from './init/detector.js';
 import { logger } from './logger.js';
 import type { NewRootOverlap, RegistryEntry } from './registry.js';
-import { findOverlapForNewRoot, getProject, registerProject } from './registry.js';
+import {
+  findOverlapForNewRoot,
+  getProject,
+  isEphemeralProjectRoot,
+  registerProject,
+} from './registry.js';
 import { isDangerousProjectRoot } from './dangerous-root.js';
 
 // Re-exported so the many existing `from './project-setup.js'` importers keep working.
@@ -119,11 +124,20 @@ export function setupProject(
 
   // 2. Generate & save config
   const config = generateConfig(detection);
-  saveProjectConfig(absRoot, {
-    root: config.root,
-    include: config.include,
-    exclude: config.exclude,
-  });
+  // TRA-702: mirror registerProject's ephemeral rule here. TRA-396 kept
+  // one-shot agent workdirs out of registry.json, but this write happens
+  // *before* that check ever runs and lands in a different file, so every
+  // agent run still left a permanent section in .config.json — 593 of them,
+  // 785 KB, reparsed on every server start. The section is only ever read
+  // back by a later run against the same path, and no later run visits a
+  // workdir, so for these roots it is write-only state.
+  if (!isEphemeralProjectRoot(absRoot)) {
+    saveProjectConfig(absRoot, {
+      root: config.root,
+      include: config.include,
+      exclude: config.exclude,
+    });
+  }
 
   // 3. Ensure global dirs, then register in the global registry. Registering
   // here (rather than after DB init, as before TRA-38) resolves the actual

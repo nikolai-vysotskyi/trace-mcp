@@ -100,6 +100,8 @@ import {
   uninstallLifecycleHooks,
 } from './init/hooks.js';
 import { attachFileLogging, logger } from './logger.js';
+import { pruneProjectConfigSections } from './config-jsonc.js';
+import { TRACE_MCP_HOME } from './global.js';
 import { ensureInitialized, warmUpGrammars } from './parser/tree-sitter.js';
 import { checkBindHost, isLoopbackHost } from './daemon/bind-host.js';
 import { PluginRegistry } from './plugin-api/registry.js';
@@ -141,7 +143,7 @@ import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { scanCodeSmells } from './tools/quality/code-smells.js';
 import { TopologyStore } from './topology/topology-db.js';
 import { checkAndInstallUpdate, runPostUpdateMigrations } from './updater.js';
-import { atomicWriteJson } from './utils/atomic-write.js';
+import { atomicWriteJson, sweepOrphanTmpFiles } from './utils/atomic-write.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
 
 /**
@@ -3197,6 +3199,38 @@ program
           }
         } catch (err) {
           logger.warn({ err }, 'sweepMissingRoots failed (non-fatal)');
+        }
+
+        // Soft GC (TRA-702): every sweep above works on registry.json, but
+        // `setupProject` also writes a per-project section into .config.json —
+        // a separate file none of them touch. That map had no collector at
+        // all and reached 593 entries / 785 KB, reparsed on every server
+        // start. See pruneProjectConfigSections for what it will and won't drop.
+        try {
+          const removedSections = pruneProjectConfigSections();
+          if (removedSections.length > 0) {
+            logger.info(
+              { removedSections: removedSections.length },
+              `Pruned ${removedSections.length} dead project section(s) from the global config`,
+            );
+          }
+        } catch (err) {
+          logger.warn({ err }, 'pruneProjectConfigSections failed (non-fatal)');
+        }
+
+        // TRA-702: atomic writes unlink their own tmp on error, but a process
+        // killed between open and rename never runs that handler — so every
+        // crash leaked one file into the state dir, permanently.
+        try {
+          const removedTmps = sweepOrphanTmpFiles(TRACE_MCP_HOME);
+          if (removedTmps.length > 0) {
+            logger.info(
+              { removedTmps: removedTmps.length },
+              `Removed ${removedTmps.length} orphaned atomic-write tmp file(s)`,
+            );
+          }
+        } catch (err) {
+          logger.warn({ err }, 'sweepOrphanTmpFiles failed (non-fatal)');
         }
 
         // Soft GC (TRA-335): the sweep above only reaches workdirs that were
