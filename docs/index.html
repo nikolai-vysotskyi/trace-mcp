@@ -2203,10 +2203,16 @@ layout: null
           <div class="stat-value" data-count="{{ site.data.counts.tools }}">0</div>
           <div class="stat-trend">read-only or audited</div>
         </div>
+        <!-- TRA-647: the other three tiles are counted facts, so the fourth was the
+             only estimate rendered in the page's largest type — and it out-shouted
+             the measured figure the hero now leads with. The estimator claim keeps
+             its place in the metrics strip above. -->
         <div class="stat">
-          <div class="stat-label">Avg Token Reduction</div>
-          <div class="stat-value">40&ndash;50<span class="unit">%</span></div>
-          <div class="stat-trend">on real agent workflows</div>
+          <!-- Short enough to stay on one line in the 2-up mobile grid, where a
+               wrapping label pushes this tile's value out of line with its row. -->
+          <div class="stat-label">PR Context</div>
+          <div class="stat-value">{{ site.data.pr_context_bench.median_savings_pct }}<span class="unit">%</span></div>
+          <div class="stat-trend">median over {{ site.data.pr_context_bench.pr_count }} merged PRs, code we don&rsquo;t own</div>
         </div>
       </div>
     </div>
