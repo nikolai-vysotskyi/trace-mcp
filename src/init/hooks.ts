@@ -7,11 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { atomicWriteJson } from '../utils/atomic-write.js';
-import {
-  LEGACY_TOOL_NAME_PREFIX,
-  NEW_TOOL_NAME_PREFIX,
-  migrateToolNamePrefixInFile,
-} from '../utils/path-migration.js';
+import { buildToolPrefixMigrationStep } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import { withPs1Bom } from './ps1-bom.js';
 import type { InitStepResult } from './types.js';
@@ -669,39 +665,24 @@ export function cleanupLegacyHooks(opts: { global?: boolean; dryRun?: boolean })
  * Scans the same two files per client that `installHook` already writes to
  * — the global `settings.json` and the project-scoped `settings.local.json`
  * — so coverage here can never drift from what trace-mcp itself already
- * manages in those files. Surgical string rewrite only (see
- * `migrateToolNamePrefixInFile`): everything else in the file, including
- * content trace-mcp does not own, comes back byte-for-byte unchanged.
+ * manages in those files. Deliberately does NOT gate on `clientExists()`
+ * (unlike `cleanupLegacyHooks`/`installHook`): that only checks the GLOBAL
+ * config dir, so gating both scopes on it wrongly skipped an existing
+ * project-scoped `settings.local.json` on a machine with no `~/.claude` at
+ * all (TRA-650 review). `buildToolPrefixMigrationStep` already treats a
+ * missing file as a no-op, so scanning unconditionally is both correct and
+ * cheap. Surgical string rewrite only (see `migrateToolNamePrefixInFile`):
+ * everything else in the file, including content trace-mcp does not own,
+ * comes back byte-for-byte unchanged.
  */
 export function migrateLegacyToolPrefix(opts: { dryRun?: boolean } = {}): InitStepResult[] {
   const results: InitStepResult[] = [];
 
   for (const client of CLIENTS) {
-    if (!clientExists(client)) continue;
-
     for (const global of [true, false]) {
       const sPath = settingsPath(client, global);
-      const res = migrateToolNamePrefixInFile(
-        sPath,
-        LEGACY_TOOL_NAME_PREFIX,
-        NEW_TOOL_NAME_PREFIX,
-        { dryRun: opts.dryRun },
-      );
-
-      if (res.error) {
-        results.push({ target: sPath, action: 'skipped', detail: res.error });
-        continue;
-      }
-      if (!res.migrated) continue;
-
-      const plural = res.occurrences === 1 ? '' : 's';
-      results.push({
-        target: sPath,
-        action: 'updated',
-        detail: opts.dryRun
-          ? `Would rewrite ${res.occurrences} legacy tool-prefix reference${plural} (mcp__trace-mcp__ → mcp__trace__)`
-          : `Rewrote ${res.occurrences} legacy tool-prefix reference${plural} (mcp__trace-mcp__ → mcp__trace__)`,
-      });
+      const step = buildToolPrefixMigrationStep(sPath, { dryRun: opts.dryRun });
+      if (step) results.push(step);
     }
   }
 

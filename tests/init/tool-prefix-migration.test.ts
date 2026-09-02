@@ -93,8 +93,6 @@ describe('migrateLegacyToolPrefix', () => {
   });
 
   it('rewrites the project-scoped settings.local.json for the current working directory', () => {
-    // .claude must exist under HOME for clientExists() to consider the
-    // client "installed" at all — matches the gate installHook() itself uses.
     mkdirSync(join(tempHome, '.claude'), { recursive: true });
     const projectClaudeDir = join(tempProject, '.claude');
     mkdirSync(projectClaudeDir, { recursive: true });
@@ -108,9 +106,34 @@ describe('migrateLegacyToolPrefix', () => {
   });
 
   it('is a no-op when no Claude-family client is installed on this machine', () => {
-    // Neither ~/.claude nor ~/.claw exists — clientExists() gates both out.
+    // Neither ~/.claude nor ~/.claw exists, and there's no project-scoped
+    // settings.local.json either — nothing to migrate.
     const results = migrateLegacyToolPrefix();
     expect(results).toEqual([]);
+  });
+
+  it('rewrites project-scoped settings.local.json even when the global client directory does not exist', () => {
+    // Regression (TRA-650 review): migrateLegacyToolPrefix used to gate both
+    // the global AND project-scoped candidate files on clientExists(), which
+    // only checks ~/.claude — so `trace init --skip-hooks --scope project` on
+    // a checkout with local settings but no global Claude Code install
+    // silently skipped the rewrite. Deliberately no ~/.claude here.
+    const projectClaudeDir = join(tempProject, '.claude');
+    mkdirSync(projectClaudeDir, { recursive: true });
+    const localSettingsPath = join(projectClaudeDir, 'settings.local.json');
+    writeFileSync(localSettingsPath, '{"permissions":{"allow":["mcp__trace-mcp__search"]}}');
+
+    const results = migrateLegacyToolPrefix();
+
+    const updated = JSON.parse(readFileSync(localSettingsPath, 'utf8'));
+    expect(updated.permissions.allow).toEqual(['mcp__trace__search']);
+    // process.cwd() can resolve through a symlink differently than the
+    // pre-chdir tempProject string (e.g. macOS /var vs /private/var), so
+    // compare the step by basename rather than an exact path match. Normalize
+    // separators too — path.join on win32 emits backslashes.
+    expect(
+      results.some((r) => r.target.replace(/\\/g, '/').endsWith('.claude/settings.local.json')),
+    ).toBe(true);
   });
 
   it('does not touch a settings file with no legacy references', () => {

@@ -24,6 +24,7 @@ import path from 'node:path';
 import { atomicWriteString } from './atomic-write.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { readIfExists } from './safe-fs.js';
+import type { InitStepResult } from '../init/types.js';
 
 const IS_WINDOWS = process.platform === 'win32';
 
@@ -483,4 +484,38 @@ export function migrateToolNamePrefixInFile(
   });
 
   return { migrated: true, occurrences };
+}
+
+/**
+ * Run {@link migrateToolNamePrefixInFile} against `filePath` and translate
+ * the result into the `InitStepResult` shape shared by `init`/`upgrade`/
+ * `clients update` reporting, so every caller renders it the same way.
+ * Returns `null` when there is nothing to report — the file doesn't exist,
+ * or it already carries the new prefix only — so callers can push straight
+ * into a results array without a second `migrated` check.
+ */
+export function buildToolPrefixMigrationStep(
+  filePath: string,
+  opts: { dryRun?: boolean } = {},
+): InitStepResult | null {
+  const res = migrateToolNamePrefixInFile(
+    filePath,
+    LEGACY_TOOL_NAME_PREFIX,
+    NEW_TOOL_NAME_PREFIX,
+    opts,
+  );
+
+  if (res.error) {
+    return { target: filePath, action: 'skipped', detail: res.error };
+  }
+  if (!res.migrated) return null;
+
+  const plural = res.occurrences === 1 ? '' : 's';
+  return {
+    target: filePath,
+    action: 'updated',
+    detail: opts.dryRun
+      ? `Would rewrite ${res.occurrences} legacy tool-prefix reference${plural} (mcp__trace-mcp__ → mcp__trace__)`
+      : `Rewrote ${res.occurrences} legacy tool-prefix reference${plural} (mcp__trace-mcp__ → mcp__trace__)`,
+  };
 }
