@@ -26,6 +26,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { median, p95, pidOnPort, procStats, round } from './perf-lib.mjs';
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(appDir, '..', '..');
@@ -51,15 +52,6 @@ const STEPS = String(flag('steps', '1,3,6')).split(',').map(Number);
 const FIXTURES = Math.max(...STEPS);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const round = (n, d = 1) => (Number.isFinite(n) ? Number(n.toFixed(d)) : null);
-const median = (xs) => {
-  const s = [...xs].sort((a, b) => a - b);
-  return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
-};
-const p95 = (xs) => {
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.min(s.length - 1, Math.ceil(0.95 * s.length) - 1)];
-};
 
 // ── CDP, flattened sessions ─────────────────────────────────────────────────
 // Browser-level so every window this run opens is attached to before it runs a
@@ -319,49 +311,6 @@ async function waitDaemonQuiet(roots) {
     await sleep(3000);
   }
   process.stderr.write('daemon never went quiet — numbers below carry its load\n');
-}
-
-/** %CPU and RSS for a pid and every descendant, via ps. */
-function procStats(rootPid) {
-  const rows = execFileSync('ps', ['-Ao', 'pid=,ppid=,%cpu=,rss='], { encoding: 'utf8' })
-    .trim()
-    .split('\n')
-    .map((l) => l.trim().split(/\s+/).map(Number));
-  const kids = new Map();
-  for (const [pid, ppid, cpu, rss] of rows) {
-    if (!kids.has(ppid)) kids.set(ppid, []);
-    kids.get(ppid).push({ pid, cpu, rss });
-  }
-  let cpu = 0;
-  let rss = 0;
-  let n = 0;
-  const walk = (pid) => {
-    n++;
-    for (const c of kids.get(pid) ?? []) {
-      cpu += c.cpu;
-      rss += c.rss;
-      walk(c.pid);
-    }
-  };
-  const self = rows.find((r) => r[0] === rootPid);
-  if (self) {
-    cpu += self[2];
-    rss += self[3];
-  }
-  walk(rootPid);
-  return { cpu, rss_mb: rss / 1024, procs: n };
-}
-
-function pidOnPort(port) {
-  try {
-    return Number(
-      execFileSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' })
-        .trim()
-        .split('\n')[0],
-    );
-  } catch {
-    return null;
-  }
 }
 
 // ── the run ─────────────────────────────────────────────────────────────────

@@ -18,7 +18,24 @@ if (isGallery && (forcedTheme === 'light' || forcedTheme === 'dark')) {
   document.documentElement.dataset.theme = forcedTheme;
 }
 
-createRoot(document.getElementById('root')!).render(
+// Startup metric of record for the perf harness (docs/perf/README.md). The
+// browser's own `first-contentful-paint` only exists for a frame the compositor
+// presented, and every agent run drives this app with the window unmapped so it
+// never steals the user's screen — so that entry is always absent there. This
+// mark is the same event one step earlier: React has committed the first
+// content under #root, on the renderer's own clock, with no compositor and no
+// CDP round-trip involved. Installed before render because React commits
+// asynchronously — there is no point after this call that is reliably "after
+// the first commit".
+const rootEl = document.getElementById('root')!;
+const firstContent = new MutationObserver(() => {
+  if (!rootEl.firstElementChild) return;
+  performance.mark('app-first-content');
+  firstContent.disconnect();
+});
+firstContent.observe(rootEl, { childList: true });
+
+createRoot(rootEl).render(
   <StrictMode>
     <ErrorBoundary label={t('shell:app')}>{isGallery ? <Gallery /> : <App />}</ErrorBoundary>
   </StrictMode>,
