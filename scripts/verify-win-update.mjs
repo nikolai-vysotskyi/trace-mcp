@@ -299,6 +299,35 @@ function launchApp(exe, traceHome, userDataDir) {
   return child;
 }
 
+/**
+ * The published feed, and the installer it names, once both are actually there.
+ *
+ * Retried, because a release becomes `latest` the moment its tag is cut and its
+ * Windows assets land minutes later — a run that starts inside that window sees
+ * a 404 that is nobody's bug. In `release.yml` this job comes after
+ * verify-release-assets and the window is already closed; on a pull request it
+ * races whatever happens to be publishing. The retry cannot hide a real fault:
+ * a feed naming an installer that does not exist (TRA-592) still names it after
+ * five minutes.
+ */
+async function fetchFeed(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      const text = await (await get(`${LATEST}/latest.yml`)).text();
+      const feed = readFeed(text);
+      // One byte, over the same redirect chain the updater follows — enough to
+      // prove the name in the feed resolves to a real, fetchable asset.
+      await get(`${LATEST}/${feed.file}`, { range: 'bytes=0-0' });
+      return { text, feed };
+    } catch (err) {
+      if (Date.now() > deadline) throw err;
+      console.log(`release assets not settled yet (${err.message}); retrying`);
+      await sleep(15_000);
+    }
+  }
+}
+
 async function main() {
   if (process.platform !== 'win32') die('this check must run on Windows');
 
@@ -328,17 +357,13 @@ async function main() {
     // these two lines are here so that when the FEED is what broke, the failure
     // says so instead of surfacing as an opaque updater error. This is the check
     // that caught TRA-592.
-    const feedText = await (await get(`${LATEST}/latest.yml`)).text();
+    const { text: feedText, feed } = await fetchFeed(5 * 60_000);
     console.log(`--- ${LATEST}/latest.yml\n${feedText}`);
-    const feed = readFeed(feedText);
     if (!isNewer(feed.version, fromVersion)) {
       die(
         `latest.yml offers ${feed.version}, not newer than the installed ${fromVersion} — no update would ever be offered`,
       );
     }
-    // One byte, over the same redirect chain the updater follows — enough to
-    // prove the name in the feed resolves to a real, fetchable asset.
-    await get(`${LATEST}/${feed.file}`, { range: 'bytes=0-0' });
     console.log(`Feed names ${feed.file}, which is on the release.`);
 
     // 3. Hand over to the app: this is `applyUpdate()`, the call the Update
