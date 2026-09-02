@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activation, share } from '../../scripts/ga4-funnel.mjs';
+import { activation, share, usage, usageByClient } from '../../scripts/ga4-funnel.mjs';
 
 /** One GA4 row: a `repos_indexed` value and how many active installs reported it. */
 const row = (value: string, users: number) => ({
@@ -42,6 +42,69 @@ describe('activation', () => {
       activated: 6,
       activated_pct: 100,
     });
+  });
+});
+
+describe('usage', () => {
+  it('splits installs that called a tool from installs that never did', () => {
+    const result = usage([row('0', 12), row('3', 4), row('40', 3), row('900', 1)]);
+
+    expect(result).toMatchObject({
+      not_used: 12,
+      used: 8,
+      used_pct: 40,
+      buckets: { '0': 12, '1-9': 4, '10-99': 3, '100+': 1 },
+      unknown: 0,
+    });
+  });
+
+  it('reports no data as null, not as 0% of installs using the tools', () => {
+    // An unregistered custom dimension returns no rows. Publishing that as
+    // "0% of installs called a tool" would be the most alarming lie in the file.
+    expect(usage([]).used_pct).toBeNull();
+    expect(usage(undefined).used_pct).toBeNull();
+  });
+
+  it('keeps GA4 cardinality overflow and unset values out of both sides', () => {
+    // `(other)` is what GA4 collapses a high-cardinality dimension into, and
+    // `calls` is a raw integer — counting that bucket as zero calls would
+    // manufacture the exact conclusion this measurement exists to test.
+    const result = usage([row('0', 2), row('(other)', 9), row('(not set)', 4), row('', 1)]);
+
+    expect(result.unknown).toBe(14);
+    expect(result.not_used).toBe(2);
+    expect(result.used).toBe(0);
+  });
+
+  it('does not divide by active_users — only by the rows it placed', () => {
+    // 5 installs placed, 3 of them used: 60%, whatever the property's monthly
+    // active count is. Sharing against `active_users` was the TRA-643 bug.
+    expect(usage([row('0', 2), row('7', 3)]).used_pct).toBe(60);
+  });
+});
+
+describe('usageByClient', () => {
+  /** One two-dimension GA4 row: client, `calls` value, active installs. */
+  const clientRow = (client: string, calls: string, users: number) => ({
+    dimensionValues: [{ value: client }, { value: calls }],
+    metricValues: [{ value: String(users) }],
+  });
+
+  it('scores each client against its own installs, not the whole property', () => {
+    const result = usageByClient([
+      clientRow('claude-code', '0', 2),
+      clientRow('claude-code', '25', 6),
+      clientRow('cursor', '0', 3),
+      clientRow('cursor', '4', 1),
+    ]);
+
+    // The hook-capable/hook-less split this measurement exists to answer.
+    expect(result.used_pct).toEqual({ 'claude-code': 75, cursor: 25 });
+    expect(result.installs).toEqual({ 'claude-code': 8, cursor: 4 });
+  });
+
+  it('handles no rows at all', () => {
+    expect(usageByClient(undefined)).toEqual({ used_pct: {}, installs: {} });
   });
 });
 

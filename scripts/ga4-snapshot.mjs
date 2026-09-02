@@ -22,7 +22,7 @@
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { activation, share } from './ga4-funnel.mjs';
+import { activation, share, usage, usageByClient } from './ga4-funnel.mjs';
 import { PRICE_MODEL, PRICE_PER_TOKEN, sanitizedTokens, usd } from './ga4-savings.mjs';
 
 const OUT = 'docs/_data/adoption.yml';
@@ -185,6 +185,8 @@ const [
   presets,
   surfaces,
   indexed,
+  called,
+  calledByClient,
   arrivals,
 ] = await Promise.all([
   report(token, propertyId, { dateRanges: range(1), metrics: [{ name: 'activeUsers' }] }),
@@ -248,6 +250,21 @@ const [
     metrics: [{ name: 'activeUsers' }],
     limit: 250,
   }).catch((e) => ({ error: why(e) })),
+  // Use, not setup (TRA-673). Same resolve-with-the-error treatment as
+  // activation, and for a sharper version of the same reason: an empty `usage`
+  // block with no reason reads as "every install uses the tools".
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: 'customEvent:calls' }],
+    metrics: [{ name: 'activeUsers' }],
+    limit: 500,
+  }).catch((e) => ({ error: why(e) })),
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: 'customEvent:client' }, { name: 'customEvent:calls' }],
+    metrics: [{ name: 'activeUsers' }],
+    limit: 1000,
+  }).catch(() => null),
   traffic(process.env.GITHUB_REPOSITORY, process.env.GH_TRAFFIC_TOKEN),
 ]);
 
@@ -269,6 +286,8 @@ const yaml = (obj, indent = 2) =>
     .join('\n') || `${' '.repeat(indent)}{}`;
 
 const act = activation(indexed?.rows);
+const use = usage(called?.rows);
+const useByClient = usageByClient(calledByClient?.rows);
 const newInstalls = installs ? (breakdown(installs).new ?? 0) : 0;
 const yamlNum = (v) => (v === null || v === undefined ? 'null' : v);
 /** An `error:` line when a source failed, nothing when it did not. */
@@ -322,15 +341,23 @@ savings:
 #   arrivals    unique visitors to the GitHub repo, GitHub's rolling 14 days
 #   installs    first-ever pings in 28 days (\`installs_28d.new\`)
 #   activated   % of active installs reporting at least one indexed repository
+#   used        % of active installs that called a tool at all in the window
 #   retention   day / month active installs — how many of the month ran today
+#
+# \`activated\` and \`used\` are two different stages, not two readings of one
+# (TRA-673). \`activated\` is *setup*: it says an install once registered a
+# project, so an install that indexed a repo in July and has not called a tool
+# since still counts. \`used\` is *use*. When they diverge, the gap between them
+# is the population that reached the product and stopped.
 #
 # Mind the windows: arrivals is 14 days and everything else is 28, so
 # arrivals→installs is a direction, not a conversion rate. The unauthenticated-
-# counter caveat above applies to all four.
+# counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: ${yamlNum(arrivals.views_uniques_14d)}
   new_installs_28d: ${newInstalls}
   activated_pct: ${yamlNum(act.activated_pct)}
+  used_pct: ${yamlNum(use.used_pct)}
   retention_dau_mau_pct: ${yamlNum(share(num(d1), num(d28)))}
 
 # Activation, from the ping's \`repos_indexed\` param. An install that reports
@@ -350,6 +377,39 @@ ${errLine(indexed?.error)}  activated: ${act.activated}
   unknown: ${act.unknown}
   by_repos_indexed:
 ${yaml(act.buckets, 4)}
+
+# Use, from the ping's \`calls\` param — trace-mcp tool calls since the previous
+# ping, counted by the MCP server itself and therefore comparable across
+# clients (TRA-673). This is the number every efficiency claim we publish
+# assumes: an agent that reads files instead of calling the tools saves nothing,
+# whatever the benchmark says.
+#
+# \`used_pct\` is the figure to quote, not a call total. The ping's credentials
+# are public, so a summed counter is inflatable exactly like \`tokens_saved\`;
+# a per-install boolean is bounded above by \`active_users\` and costs one forged
+# install per point. Same denominator rule as activation above — the share is
+# over these buckets' own total, never over \`active_users.month\`.
+#
+# \`by_client_used_pct\` is the one that decides distribution strategy. The
+# mechanism that actually routes an agent to our tools — the PreToolUse guard
+# hook — is Claude Code only, and session mining has providers for two clients.
+# If use holds across clients, reach work goes wide; if it collapses without a
+# hook, our addressable market is clients that can enforce routing. Read it
+# beside \`by_client_installs\`: single-digit denominators conclude nothing.
+#
+# Empty until \`calls\` is registered as an event-scoped custom dimension in the
+# property; GA4 does not backfill, so values start at registration.
+usage:
+${errLine(called?.error)}  used: ${use.used}
+  not_used: ${use.not_used}
+  used_pct: ${yamlNum(use.used_pct)}
+  unknown: ${use.unknown}
+  by_calls:
+${yaml(use.buckets, 4)}
+  by_client_used_pct:
+${yaml(useByClient.used_pct, 4)}
+  by_client_installs:
+${yaml(useByClient.installs, 4)}
 
 # Acquisition — where the repo's visitors came from, over GitHub's rolling
 # 14-day window. This is the only acquisition signal available to us: the docs
