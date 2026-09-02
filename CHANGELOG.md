@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.14.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.13.0...v3.14.0) (2026-09-02)
+
+
+### Features
+
+* **docs:** publish the saved-token counter on the homepage and in the README ([#774](https://github.com/nikolai-vysotskyi/trace-mcp/issues/774)) ([0f56830](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0f56830fc39b1dbc73bfd43aa40f37baf44b3a8e))
+* **tools:** ship the router preset and make batch-as-door deliberate (TRA-675) ([#785](https://github.com/nikolai-vysotskyi/trace-mcp/issues/785)) ([2ce3d20](https://github.com/nikolai-vysotskyi/trace-mcp/commit/2ce3d20ac63960f13c0208a1b74dcf8cc8da62b6))
+
+
+### Bug Fixes
+
+* **search:** honor glob wildcards in search's file_pattern filter (TRA-676) ([#784](https://github.com/nikolai-vysotskyi/trace-mcp/issues/784)) ([4c9a77a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4c9a77a681bad7959a4c27112bfec9f88e629e62))
+
+
+### Documentation
+
+* **app:** warn app builds &lt;=3.10.0 they must reinstall (TRA-687) ([#786](https://github.com/nikolai-vysotskyi/trace-mcp/issues/786)) ([54f97f0](https://github.com/nikolai-vysotskyi/trace-mcp/commit/54f97f0454b581c1785cb1586d49a7810dc82491))
+* correct Multica agent mcp_config semantics ([#789](https://github.com/nikolai-vysotskyi/trace-mcp/issues/789)) ([a5e903a](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a5e903af677e52df0537ab4700218ff093e1dd3d))
+* lead with the benchmark measured on other people's code (TRA-647) ([#752](https://github.com/nikolai-vysotskyi/trace-mcp/issues/752)) ([4ee6b22](https://github.com/nikolai-vysotskyi/trace-mcp/commit/4ee6b2258bc14655143875499881dcd21a2968bc))
+
 ## [3.13.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.12.0...v3.13.0) (2026-09-02)
 
 
