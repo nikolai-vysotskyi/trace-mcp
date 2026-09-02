@@ -253,14 +253,16 @@ describe('scanAppBundles', () => {
 });
 
 describe('runningAppBundle', () => {
+  // Built with path.join so the separator matches the one the helper looks for
+  // on whatever platform a contributor runs the suite from.
+  const bundle = path.join(path.sep, 'Applications', 'trace-mcp.app');
+
   it('walks back from the executable to the bundle', () => {
-    expect(runningAppBundle('/Applications/trace-mcp.app/Contents/MacOS/trace-mcp')).toBe(
-      '/Applications/trace-mcp.app',
-    );
+    expect(runningAppBundle(path.join(bundle, 'Contents', 'MacOS', 'trace-mcp'))).toBe(bundle);
   });
 
   it('returns null for a process not running out of a bundle', () => {
-    expect(runningAppBundle('/usr/local/bin/electron')).toBeNull();
+    expect(runningAppBundle(path.join(path.sep, 'usr', 'local', 'bin', 'electron'))).toBeNull();
   });
 });
 
