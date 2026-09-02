@@ -17,6 +17,8 @@
   url: /vs/codegraph.html
 - title: vs Context Mode
   url: /vs/context-mode.html
+- title: Repomix vs codegraph
+  url: /vs/repomix-vs-codegraph.html
 - title: PR review context benchmark
   url: /pr-context-benchmark.html
 - title: Cut Claude Code token usage
