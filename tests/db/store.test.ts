@@ -264,6 +264,21 @@ describe('Store', () => {
       expect(assocs[0].target_model_name).toBe('Gadget');
       expect(assocs[0].target_model_id).toBeNull();
     });
+
+    it('unresolves cross-file associations when the target model file is deleted', () => {
+      const fileA = store.insertFile('models/user.ts', 'typescript', 'hC', 50);
+      const fileB = store.insertFile('models/post.ts', 'typescript', 'hD', 50);
+      const userModelId = store.insertOrmModel({ name: 'User', orm: 'mongoose' }, fileA);
+      const postModelId = store.insertOrmModel({ name: 'Post', orm: 'mongoose' }, fileB);
+      store.insertOrmAssociation(postModelId, userModelId, 'User', 'belongsTo', undefined, fileB, 5);
+
+      expect(() => store.deleteFile(fileA)).not.toThrow();
+
+      const assocs = store.getOrmAssociationsByModel(postModelId);
+      expect(assocs.length).toBe(1);
+      expect(assocs[0].target_model_id).toBeNull();
+      expect(assocs[0].target_model_name).toBe('User');
+    });
   });
 
   describe('React Native screens', () => {
