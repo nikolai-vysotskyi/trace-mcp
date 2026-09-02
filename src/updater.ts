@@ -537,7 +537,13 @@ export async function runPostUpdateMigrations(): Promise<void> {
   const [
     { migrateGlobalConfig },
     { detectGuardHook },
-    { installGuardHook, installReindexHook, installPrecompactHook, installWorktreeHook },
+    {
+      installGuardHook,
+      installReindexHook,
+      installPrecompactHook,
+      installWorktreeHook,
+      migrateLegacyToolPrefix,
+    },
     { updateClaudeMd },
     { listProjects, markAllProjectsPendingReindex },
   ] = await Promise.all([
@@ -575,6 +581,24 @@ export async function runPostUpdateMigrations(): Promise<void> {
     logger.info('Post-update: CLAUDE.md updated');
   } catch (err) {
     logger.warn({ error: err }, 'Post-update: CLAUDE.md update failed (non-fatal)');
+  }
+
+  // 3b. Migrate the legacy `mcp__trace-mcp__` tool-name prefix in Claude-
+  // family permission allowlists and hook matchers (TRA-650). Deliberately
+  // unconditional (unlike the hook re-install above, which is gated on
+  // `hasGuardHook`): a permission allowlist entry can exist from a user
+  // manually approving a tool call, with no guard hook installed at all —
+  // gating this on `hasGuardHook` would silently miss that case.
+  try {
+    const migrated = migrateLegacyToolPrefix();
+    if (migrated.length > 0) {
+      logger.info(
+        { files: migrated.map((m) => m.target) },
+        `Post-update: rewrote legacy tool-name prefix in ${migrated.length} file(s)`,
+      );
+    }
+  } catch (err) {
+    logger.warn({ error: err }, 'Post-update: tool-prefix migration failed (non-fatal)');
   }
 
   // 4. Mark every project as needing a reindex at the new version. The
