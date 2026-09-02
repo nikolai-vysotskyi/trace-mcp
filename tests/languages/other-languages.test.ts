@@ -20,6 +20,7 @@ import { HclLanguagePlugin } from '../../src/indexer/plugins/language/hcl/index.
 import { JsonLanguagePlugin } from '../../src/indexer/plugins/language/json-lang/index.js';
 import { JuliaLanguagePlugin } from '../../src/indexer/plugins/language/julia/index.js';
 import { LuaLanguagePlugin } from '../../src/indexer/plugins/language/lua/index.js';
+import { MakefileLanguagePlugin } from '../../src/indexer/plugins/language/makefile/index.js';
 import { NixLanguagePlugin } from '../../src/indexer/plugins/language/nix/index.js';
 import { PerlLanguagePlugin } from '../../src/indexer/plugins/language/perl/index.js';
 import { ProtobufLanguagePlugin } from '../../src/indexer/plugins/language/protobuf/index.js';
@@ -667,29 +668,135 @@ describe('EJS', () => {
 });
 
 // ==============================
-// 27. CMake
+// 27. Makefile
+// ==============================
+describe('Makefile', () => {
+  const plugin = new MakefileLanguagePlugin();
+  const p = (s: string) => parse(plugin, s, 'Makefile');
+
+  it('extracts a target', async () => {
+    const r = await p('build:\n\ttsc\n');
+    expect(r.symbols.some((s: any) => s.name === 'build' && s.kind === 'function')).toBe(true);
+  });
+
+  it('extracts a variable assignment (=, :=, ?=, +=)', async () => {
+    const r = await p('CFLAGS = -Wall\nSRC := main.c\nDEBUG ?= 0\nLIBS += -lm\n');
+    for (const name of ['CFLAGS', 'SRC', 'DEBUG', 'LIBS']) {
+      expect(r.symbols.some((s: any) => s.name === name && s.kind === 'variable')).toBe(true);
+    }
+  });
+
+  it('extracts a define block', async () => {
+    const r = await p('define HELP\nUsage: make [target]\nendef\n');
+    expect(
+      r.symbols.some((s: any) => s.name === 'HELP' && s.kind === 'function' && s.metadata?.define),
+    ).toBe(true);
+  });
+
+  it('extracts an include edge', async () => {
+    const r = await p('include config.mk\n-include local.mk\n');
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'config.mk')).toBe(true);
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'local.mk')).toBe(true);
+  });
+
+  // Real-world case (node_modules/.pnpm/json-stringify-safe@5.0.1's Makefile):
+  // a single .PHONY line naming several targets used to be captured as one
+  // symbol literally named "test spec autotest autospec" instead of one
+  // symbol per real target.
+  it('splits a multi-target .PHONY line into one symbol per target', async () => {
+    const r = await p(
+      [
+        'test:',
+        '\t@node ./node_modules/.bin/_mocha -R dot',
+        '',
+        'spec:',
+        '\t@node ./node_modules/.bin/_mocha -R spec',
+        '',
+        '.PHONY: test spec autotest autospec',
+      ].join('\n'),
+    );
+    expect(r.symbols.some((s: any) => s.name === 'test spec autotest autospec')).toBe(false);
+    for (const name of ['test', 'spec', 'autotest', 'autospec']) {
+      expect(r.symbols.some((s: any) => s.name === name && s.kind === 'function')).toBe(true);
+    }
+  });
+
+  it('declares a phony target that has no rule of its own', async () => {
+    // .PHONY is a valid declaration on its own — a matching rule elsewhere
+    // isn't required (generated, pattern-rule-only, or include-supplied
+    // targets have none).
+    const r = await p('.PHONY: clean deploy\n');
+    expect(r.symbols.some((s: any) => s.name === 'clean' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'deploy' && s.kind === 'function')).toBe(true);
+  });
+
+  it('does not duplicate a target already declared by its own rule', async () => {
+    const r = await p('.PHONY: clean\nclean:\n\trm -rf dist\n');
+    expect(r.symbols.filter((s: any) => s.name === 'clean' && s.kind === 'function')).toHaveLength(
+      1,
+    );
+  });
+
+  it('offsets a .PHONY target correctly even when the name is a substring of the keyword', async () => {
+    // ".PHONY:" itself contains "O", "N", "H", "P", "Y" — a naive
+    // list.indexOf() lookup can match inside the keyword instead of the list.
+    const source = '.PHONY: O\n';
+    const r = await p(source);
+    const sym = r.symbols.find((s: any) => s.name === 'O' && s.kind === 'function');
+    expect(sym).toBeDefined();
+    expect(sym.byteStart).toBe(source.indexOf('O', 7)); // the target, not the "O" inside ".PHONY"
+    expect(source.slice(sym.byteStart, sym.byteEnd)).toBe('O');
+  });
+
+  it('ignores a trailing comment and a line-continuation backslash on a .PHONY line', async () => {
+    const r = await p('.PHONY: test spec # run mocha\n');
+    expect(r.symbols.some((s: any) => s.name === 'test' && s.kind === 'function')).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'spec' && s.kind === 'function')).toBe(true);
+    for (const bogus of ['#', 'run', 'mocha', '\\']) {
+      expect(r.symbols.some((s: any) => s.name === bogus)).toBe(false);
+    }
+  });
+});
+
+// ==============================
+// 28. CMake
 // ==============================
 describe('CMake', () => {
   const plugin = new CMakeLanguagePlugin();
   const p = (s: string) => parse(plugin, s, 'CMakeLists.txt');
 
-  it('extracts function', () => {
-    const r = p('function (join result_var)\nendfunction ()');
-    expect(r.symbols.some((s: any) => s.name === 'join' && s.kind === 'function')).toBe(true);
+  it('extracts a function() declaration', async () => {
+    const r = await p('function(greet name)\n  message(STATUS "Hello, ${name}")\nendfunction()\n');
+    expect(r.symbols.some((s: any) => s.name === 'greet' && s.kind === 'function')).toBe(true);
   });
 
-  it('extracts macro', () => {
-    const r = p('macro(my_macro)\nendmacro()');
+  it('extracts a macro() declaration, flagged distinctly from a function', async () => {
+    const r = await p('macro(add_common_flags target)\n  set(x 1)\nendmacro()\n');
     expect(
       r.symbols.some(
-        (s: any) => s.name === 'my_macro' && s.kind === 'function' && s.metadata?.macro,
+        (s: any) => s.name === 'add_common_flags' && s.kind === 'function' && s.metadata?.macro,
       ),
     ).toBe(true);
   });
 
-  it('extracts project name', () => {
-    const r = p('project(FMT CXX)');
-    expect(r.symbols.some((s: any) => s.name === 'FMT' && s.kind === 'module')).toBe(true);
+  it('extracts project() as a module', async () => {
+    const r = await p('project(myapp)\n');
+    expect(r.symbols.some((s: any) => s.name === 'myapp' && s.kind === 'module')).toBe(true);
+  });
+
+  it('extracts add_executable/add_library/add_custom_target, tagged by target kind', async () => {
+    const r = await p(
+      'add_executable(myapp main.cpp)\nadd_library(mylib STATIC lib.cpp)\nadd_custom_target(docs COMMAND doxygen)\n',
+    );
+    expect(
+      r.symbols.some((s: any) => s.name === 'myapp' && s.metadata?.target === 'executable'),
+    ).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'mylib' && s.metadata?.target === 'library')).toBe(
+      true,
+    );
+    expect(r.symbols.some((s: any) => s.name === 'docs' && s.metadata?.target === 'custom')).toBe(
+      true,
+    );
   });
 
   it('extracts add_executable target with a hyphenated name', () => {
@@ -737,35 +844,45 @@ describe('CMake', () => {
     ).toBe(true);
   });
 
-  it('extracts set variable', () => {
-    const r = p('set(MAIN_PROJECT OFF)');
-    expect(r.symbols.some((s: any) => s.name === 'MAIN_PROJECT' && s.kind === 'variable')).toBe(
-      true,
+  it('extracts set() and option() as variables, option flagged distinctly', async () => {
+    const r = await p(
+      'set(CMAKE_CXX_STANDARD 17)\noption(BUILD_TESTS "Build the test suite" ON)\n',
     );
-  });
-
-  it('extracts option variable', () => {
-    const r = p('option(FMT_INSTALL "Generate the install target." ON)');
+    expect(
+      r.symbols.some((s: any) => s.name === 'CMAKE_CXX_STANDARD' && s.kind === 'variable'),
+    ).toBe(true);
     expect(
       r.symbols.some(
-        (s: any) => s.name === 'FMT_INSTALL' && s.kind === 'variable' && s.metadata?.option,
+        (s: any) => s.name === 'BUILD_TESTS' && s.kind === 'variable' && s.metadata?.option,
       ),
     ).toBe(true);
   });
 
-  it('extracts include edge', () => {
-    const r = p('include(GNUInstallDirs)');
-    expect(r.edges?.some((e: any) => e.metadata?.module === 'GNUInstallDirs')).toBe(true);
+  it('extracts include, find_package and add_subdirectory as import edges', async () => {
+    const r = await p(
+      'include(cmake/Utils.cmake)\nfind_package(Threads REQUIRED)\nadd_subdirectory(src)\n',
+    );
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'cmake/Utils.cmake')).toBe(true);
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'Threads')).toBe(true);
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'src')).toBe(true);
   });
 
-  it('extracts find_package edge', () => {
-    const r = p('find_package(Threads REQUIRED)');
-    expect(r.edges?.some((e: any) => e.metadata?.module === 'Threads')).toBe(true);
+  it('does not truncate a path argument at the first "/" or "."', async () => {
+    // A naive `\w+` capture stops at the slash and reports the module as
+    // just "third_party" — the actual vendored directory name is lost.
+    const r = await p('add_subdirectory(third_party/fmt)\n');
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'third_party/fmt')).toBe(true);
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'third_party')).toBe(false);
+  });
+
+  it('strips surrounding quotes from a quoted include path', async () => {
+    const r = await p('include("cmake/Utils.cmake")\n');
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'cmake/Utils.cmake')).toBe(true);
   });
 
   // Real-world repro from nlohmann/json and fmtlib/fmt: every real
-  // add_subdirectory() call in both files hit this bug, because `\S+` is
-  // greedy and swallows the closing paren too.
+  // add_subdirectory() call in both files hit this bug, because a naive
+  // capture is greedy and swallows the closing paren too.
   it('extracts add_subdirectory edge without the trailing paren', () => {
     const r = p('add_subdirectory(src/modules)\nadd_subdirectory(test/fuzzing)');
     const modules = r.edges?.map((e: any) => e.metadata?.module) ?? [];

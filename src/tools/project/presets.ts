@@ -6,6 +6,18 @@
  */
 
 export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
+  // The router surface (TRA-675): membership is deliberately empty, so a
+  // session advertises only UNGATED_META_TOOLS — 10 tools, 1,604 tokens, 95.6%
+  // below `full` and 79.2% below the shipped `minimal` default. It is usable
+  // rather than crippled because `batch` dispatches any non-excluded tool by
+  // name, including ones this preset defers (see the `batch` description), so
+  // there is no escalation round-trip: `load_tools()` names the catalog and
+  // `batch` calls it. Opt-in, never the default — on a host that already defers
+  // tool schemas itself (Claude Code's ToolSearch) it buys ~2.9k tokens while
+  // taking away the first-five-minutes tools `ALWAYS_LOAD_TOOLS` protects; on a
+  // host without one it buys ~6.2k per session.
+  router: [],
+
   // The default surface (TRA-402). Membership is ALWAYS_LOAD_TOOLS — the
   // first-five-minutes set below — plus the decision-memory quartet. Those two
   // lists used to disagree: `minimal` omitted get_task_context, get_call_graph
@@ -33,8 +45,6 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'batch',
     // Live decision-memory quartet on the minimal preset:
     //   remember = remember_decision (live agent write into the decision graph)
-    //   recall   = query_decisions   (FTS search across captured decisions)
-    //   forget   = invalidate_decision (mark a decision no longer valid)
     //   improve  = mine_sessions     (post-hoc extraction from session logs)
     // Keeping the canonical trace-mcp names rather than introducing alias
     // tools — the quartet semantics are documented via this preset only,
@@ -108,6 +118,23 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
     'query_decisions',
     'invalidate_decision',
     'mine_sessions',
+  ],
+
+  // SKILL.state agent execution state tracking suite (TRA-596, arXiv:2608.26263)
+  state: [
+    // Core infra every non-full preset carries: a preset that cannot look a
+    // symbol up is not a usable surface on its own (tool-config.test.ts).
+    'search',
+    'get_symbol',
+    'register_edit',
+    'batch',
+    'trace_state_init',
+    'trace_state_patch',
+    'trace_state_get',
+    'trace_state_checkpoint',
+    'trace_state_rollback',
+    'trace_state_add_dead_end',
+    'trace_state_list',
   ],
 
   full: 'all',

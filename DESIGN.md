@@ -635,6 +635,20 @@ does not blink a banner with it, while recovery publishes immediately. Escalatin
 makes a working app look broken. Keep apart only what the user would act on differently —
 "busy" and "not running" are two states because one is a wait and the other is a button.
 
+**A badge states the condition; the line under it states the cause and the next
+step.** A red `Not running` badge with `trace-mcp server not running` printed 190px
+below it is one fact twice, and the second copy is where the advice should have been
+(TRA-490). If the second line cannot say something the badge does not — why this
+happened, or what the reader does about it — it does not get written at all.
+
+**A cause crosses the IPC boundary as a code, never as a sentence.** The main process
+knows *that* the heartbeat is stale; only the renderer knows the language the app is in
+and how much room the line has. `guard-control.ts` used to hand over
+`Heartbeat stale (412s)`, which the renderer printed verbatim in all ten locales and in
+seconds nobody counts. Main returns `'heartbeat_stale'` plus the number; the renderer
+owns the wording and the time formatting. This applies to every status a surface reads
+over IPC or HTTP, not to the guard alone.
+
 **A surface whose every section reads one source states its failure once, at
 surface level.** Five sections that each fetch from the daemon do not produce five
 pieces of information when the daemon is down — they produce one, said five times.
@@ -650,6 +664,46 @@ primitive must not name a cause it cannot know.** `SectionError` renders one
 catalogue string in all ten locales; a section that cannot tell "busy" from "not
 running" must not pick one. Deciding that is the surface's job, because the
 surface is what holds the daemon state.
+
+That corollary was written and then not applied: `SectionError`'s catalogue string
+kept "The daemon may still be indexing" for another five months, and every case the
+daemon-down pane does *not* cover still printed it. On a project last indexed five
+days ago, with the daemon up and the Indexing KPI reading `0 · nothing running`,
+Index and Quality both failed for some third reason and both asserted the one cause
+that was provably false (TRA-662). **A failure with no known cause is a complete
+statement: what could not be loaded, plus the control that tries again.** Retry is
+the next step and it is already in the row; the invented sentence between them only
+had to be wrong once to cost the reader a diagnosis.
+
+**And "at surface level" is not "when the source is down".** The collapse rule above
+was implemented as a daemon-down branch, so the moment the daemon was up and merely
+answering badly, each section went back to speaking for itself — the same duplication
+the rule forbids, reached by the other door. Count the failures, not the source's
+state: **a second failing section collapses them into one line at the top of the
+surface, naming what is missing and retrying all of it with one button, and the
+sections it speaks for do not render.** A heading over a card that only repeats the
+banner is not information. One failure stays in place, where the reader is already
+looking.
+
+**A list dropped into a sentence written for one thing is not a sentence.**
+`Intl.ListFormat` joins the nouns; it cannot inflect the verb around them. The
+collapsed line above, built from the singular string, would have shipped Spanish
+as `No se **pudo** cargar el resumen del índice y el escaneo de calidad` —
+grammar the English original has no way to show, because English marks neither.
+So a sentence that can take a list gets its own catalogue key, plural in every
+language, chosen by the caller (which is the only place that knows the list has
+two entries) — not an i18next `count`, which would demand `_few`/`_many` forms
+from Russian for a distinction it does not make here.
+
+**And a string that opens on `{{what}}` is a sentence you have not read.** German's
+was `{{what}} konnte nicht geladen werden`, so every German error on this surface
+had opened with a lowercase article for five months, and `errorQuality` was
+accusative (`den Qualitätsscan`) inside a passive that takes the nominative —
+both invisible in English review, and neither survivable in the plural. The
+phrasing that does survive is the one Russian and Portuguese already used: a
+lead-in, a colon, then the noun (`Fehler beim Laden: …`). Where an interpolation
+lands at the start of a sentence, check capitalisation and case in that language
+before checking anything else.
 
 **The test for "down" is a shared reducer, not a fresh `!connected`.**
 `deriveDaemonState()` already encodes that a daemon which has not answered *yet*

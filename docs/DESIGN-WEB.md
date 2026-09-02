@@ -329,6 +329,10 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] `document.documentElement.scrollWidth === window.innerWidth` at the
       narrow width — no sideways page scroll.
 - [ ] Wide tables scroll themselves, not the page.
+- [ ] No footer nav label breaks into fragments — count links taller than one
+      line at 1440px, 1200px and 390px, not at 1440px alone. The landing
+      footer's sub-column width falls by ~13px in the 1184–1262px band and
+      that is where a long label first breaks (§9).
 - [ ] Every region where `scrollWidth > clientWidth` shows the `scroll →`
       label, and every region that fits does not — count both, at 1440px and
       at 390px. A region is any element that scrolls itself: the table
@@ -451,3 +455,82 @@ back in the browser, wait out the 200ms `border-color` transition — a
 "intelligence" and nowhere else; at `72px/820px` it ran to three lines and split
 "AI coding agents" across two of them. Change the wording, re-measure the line
 count at 1440px and at 390px.
+
+**The hero's two mono caps rows stack below 700px, and neither is a wrapped
+flex row on a phone** (TRA-607). `.hero-meta` and `.hero-trust` are single
+rows at desktop widths and both fail small, in the two ways a `flex-wrap` row
+of mono caps always fails:
+
+- `.hero-trust` wraps mid-list and a `.dot` separator ends the line. Measured
+  on the last box of each line, not judged by eye: a dot was the rightmost box
+  at 660, 600, 520, 430, 390, 360 and 320px, and at none of 700, 760, 820,
+  900, 1024 or 1440px. Those are the tested widths — the sweep samples them,
+  it does not walk every integer — so read it as "every tested width below the
+  breakpoint". This is §9's "no label breaks into fragments" rule one section
+  up the page. At 700px and below it is a column, the dots are
+  `display: none`, and `.ok`'s emphasis is dropped: stacked, one highlighted
+  item of three reads as a heading over the other two rather than as the
+  strongest peer.
+- `.hero-meta` is `label / divider / label`, and `flex-wrap` is not set, so it
+  never breaks between its children — instead both labels wrap *inside*
+  themselves into two cramped columns with a divider that has no width left to
+  draw. It stops fitting on one line at 520px (17px → 33px) and takes three
+  lines at 320px. At 700px and below it is a column and the divider is hidden.
+
+`@media (max-width: 700px)` includes 700px itself, so the stacked form starts
+*at* 700px while the defect it fixes starts just below — the rule is applied
+one tested step wider than the failure. Inline behaviour is what you get above
+700px, not at it.
+
+Both are bound to the hero's existing 700px breakpoint rather than to the
+520px where `.hero-meta` actually breaks. That is deliberate — one breakpoint
+for the hero beats a second one 180px away — and it costs 17px of height
+between 520px and 700px. The stack costs `.hero-trust` 20px at 390px (58 →
+78), all of it below the two actions, so the CTA moves 6px and nothing above
+the fold is lost.
+
+---
+
+## 9. The landing footer
+
+The counterpart to §2's `See also` block: the same 22 pages, from the same
+`docs/_data/docs_nav.yml`, on a page that does not use the layout. It used to
+be two hand-written columns naming 12 of them, and it had drifted past the
+whole `/vs/` cluster (TRA-629). **Never hand-write this list.** Which pages
+are in it, what they are called and in what order is the SEO agent's, exactly
+as in §2 — this section governs the layout only.
+
+**`/ Docs` spans two of the four grid tracks, and two rows.** Two tracks
+because 22 links in one track runs 22 rows deep beside a 4-row `/ Product`.
+Two rows because `/ Product` + `/ Docs` + `/ Source` already fill row one, so
+`/ Contact` lands on a row of its own with three empty tracks beside it;
+letting `/ Docs` claim the second row pulls `/ Contact` up under `/ Product`
+and takes 129px of dead space out of the footer. Below 700px the grid is two
+tracks, `/ Docs` takes a full row anyway, and the span is reset to `auto`.
+
+**The sub-columns are `columns`, not a grid** — the one place on the site
+where multi-column beats it. Its sub-columns read top-to-bottom, the same
+direction as the plain `/ Product` and `/ Source` lists either side; a
+row-flow grid puts items 1, 4, 7 down the first sub-column, which scatters
+`docs_nav.yml`'s order — the five `/vs/` pages landed one per row across all
+three. That order is not ours to scatter. It also removes the ragged rows: two
+labels wrap to a second line, and in a grid they set the height of every cell
+in their row, opening 48px gaps that read as group breaks (§1: 32–48px means
+"new group starts here") where nothing begins.
+
+§2's `See also` block keeps its grid. It is a standalone block with no
+vertical list beside it to disagree with, and it skips the current page, so a
+column count is not stable there anyway.
+
+**The floor is 176px, and it is measured.** `vs codebase-memory-mcp` sets on
+one line at 173px. 160px looks fine at 1440px only because the sub-column
+happens to resolve to 176 there; between roughly 1184px and 1262px of viewport
+it resolves to 163 and the label breaks into two fragments. Dropping to two
+sub-columns is the better answer, which is what the floor buys. Re-measure it
+against the longest label whenever `docs_nav.yml` gains one — the intrinsic
+width of a Space Mono 12px label at `0.04em`, not an estimate.
+
+`PR review context benchmark` and `Cut Claude Code token usage` are 212px and
+take two lines in every layout; a sub-column wide enough for them fits two,
+not three. `break-inside: avoid` keeps each one whole so it still reads as a
+single target, the same one-cell-per-link rule as §2.

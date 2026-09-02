@@ -26,14 +26,16 @@
 </p>
 
 <p align="center">
-  <strong>40–50% fewer tokens</strong> on average &nbsp;·&nbsp; <strong>up to 2× effective capacity</strong> &nbsp;·&nbsp; <strong>up to 99% less redundant processing</strong>
+  <strong>90.6% fewer input tokens</strong> to assemble code-review context &nbsp;·&nbsp; median across <strong>60 merged pull requests</strong> in six open-source repositories that are not ours
   <br>
-  <sub>Based on early benchmarks across agent workflows with repeated context and dependency traversal.</sub>
+  <sub>13,595 → 1,326 input tokens per pull request — and <em>more</em> of the code the change can break is visible, not less (20% → 60% of affected call sites readable).<br>
+  That coverage figure is structural, not an LLM quality score, and on 5 of the 60 the index barely paid off — the page names them.<br>
+  <a href="https://trace-mcp.com/pr-context-benchmark.html">Method, pinned dataset, one-command reproduction →</a></sub>
 </p>
 
 > AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
 >
-> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 169 tools.
+> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 177 tools.
 >
 > **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP server covers both code and knowledge; there is no second tool to plug in.
 
@@ -136,6 +138,8 @@ trace-mcp ships with an optional Electron desktop app (`packages/app`) that give
 
 **Install on Windows:** run `trace-mcp.Setup.<version>.exe` from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest).
 
+**In-app updater stuck on an old build?** App versions 3.10.0 and earlier on macOS/Windows can't update themselves — "Check for updates…" shows `Cannot set properties of undefined (setting 'autoDownload')` and does nothing, a bug fixed in 3.11.0 that the affected builds can't fetch their own way out of. Reinstall by hand: [download the .dmg](https://trace-mcp.com/) (macOS) or grab the latest `trace-mcp.Setup.<version>.exe` from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest) (Windows) — or, if you have the CLI installed, run `trace-mcp install-app`.
+
 The app talks to the same `trace-mcp` daemon (`http://127.0.0.1:3741`) that MCP clients use, so anything you index from the app is immediately available to Claude Code / Cursor / etc. If you only want the MCP server and the CLI, you do not need the app at all — [`npm install -g trace-mcp`](#quick-start) is the whole install.
 
 ---
@@ -156,6 +160,8 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 ## Token reduction — what we measured
 
 AI agents burn tokens recomputing what they already discovered last turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp replaces that with **precision context**: only the symbols, edges, and signatures relevant to the query, served from a graph that was computed once.
+
+**Start with the measurement that isn't ours.** Everything else in this section is trace-mcp measured on trace-mcp's own repository by trace-mcp's own estimators. The [PR review context benchmark](https://trace-mcp.com/pr-context-benchmark.html) is the exception: assembling review context for 60 merged pull requests across six open-source repositories — `hono`, `axios`, `express`, `requests`, `flask`, `got` — cost a median 1,326 input tokens against 13,595 for loading the diff plus every file it touches, **90.6% less**, counted with `gpt-tokenizer` rather than estimated. The base and head SHAs are pinned in `benchmarks/pr-context/dataset.json`, `npx tsx scripts/bench-pr-context.ts` re-runs it, and the 5 pull requests where the index barely paid off are published alongside the wins.
 
 **What to expect — by workload:**
 
@@ -339,7 +345,7 @@ trace-mcp runs entirely on your machine. Nothing about your source code is uploa
 
 trace-mcp sends at most one anonymous ping per day, per install, to help us count active installs. It is:
 
-- **Anonymous** — a random install id (`~/.trace-mcp/telemetry-state.json`), the trace-mcp version, Node major version, OS platform, the country your machine's timezone belongs to (`DE`, not a city and not an IP), the name of the MCP client that connected (`claude-code`), the model it mostly drove (`claude-opus-4-6`), how many repositories you have indexed (the number, never their names or paths), whether this run is a first install or a version change (and which version you came from), your machine's class (CPU architecture, core count, RAM in whole gigabytes, OS version), and two aggregate counters since the previous ping: how many tool calls you made and the estimated tokens they saved (the same totals `trace-mcp savings` prints).
+- **Anonymous** — a random install id (`~/.trace/telemetry-state.json`), the trace-mcp version, Node major version, OS platform, the country your machine's timezone belongs to (`DE`, not a city and not an IP), the name of the MCP client that connected (`claude-code`), the model it mostly drove (`claude-opus-4-6`), how many repositories you have indexed (the number, never their names or paths), whether this run is a first install or a version change (and which version you came from), your machine's class (CPU architecture, core count, RAM in whole gigabytes, OS version), the tool preset the session ran with (`minimal`, `dev`, `full`, …) and how many tools that preset advertised (the count, never which ones), two aggregate counters since the previous ping: how many tool calls you made and the estimated tokens they saved (the same totals `trace-mcp analytics savings` prints), and two more for background-daemon reliability: how many times the daemon started and how many of those starts followed a run that died without shutting down (the counts only — no exit codes, no timestamps, no reasons, and nothing about what was running).
 - **Not sent from CI** — the ping is suppressed when `CI` is set, so build jobs don't count as installs.
 - **Never collected** — no IP address (`ip_override` is left unset, so Google derives nothing from the connection), no device fingerprint, no demographics, no account, email, hostname, username, repository name or file path, no query content and no code. The only per-install identifier is a UUID generated locally on your machine.
 - **Opt-out** — set `TRACE_MCP_TELEMETRY=off` to disable it entirely.

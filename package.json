@@ -1,12 +1,13 @@
 {
   "name": "trace-mcp",
-  "version": "3.11.0",
+  "version": "3.14.0",
   "mcpName": "io.github.nikolai-vysotskyi/trace-mcp",
   "description": "Framework-aware code intelligence MCP server — 87 framework integrations, 81 languages, 40–50% fewer tokens on average",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
+    "trace": "dist/cli.js",
     "trace-mcp": "dist/cli.js"
   },
   "scripts": {
@@ -25,10 +26,11 @@
     "count:tools": "node scripts/count-advertised-tools.mjs",
     "replay:check": "tsx scripts/replay-eval.ts",
     "replay:update-baseline": "tsx scripts/replay-eval.ts --update-baseline",
+    "bench:state-replay": "tsx scripts/state-trace-replay.ts",
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs && node scripts/postinstall-control-plane.mjs",
     "prepublishOnly": "pnpm run build",
     "prepare": "simple-git-hooks",
-    "docs:sitemap": "node scripts/gen-sitemap.mjs",
+    "docs:sitemap": "node scripts/gen-sitemap.mjs && node scripts/gen-llms-full.mjs",
     "docs:language-matrix": "tsx scripts/language-matrix.ts",
     "docs:tools-index": "tsx scripts/tools-index.ts",
     "gen:tz-country": "node scripts/gen-tz-country.mjs"
@@ -108,7 +110,7 @@
     "@biomejs/biome": "2.5.10",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
-    "@types/better-sqlite3": "^7.6.13",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.13.0",
     "@types/picomatch": "^4.0.3",
     "fast-check": "^4.6.0",

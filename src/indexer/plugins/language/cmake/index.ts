@@ -46,13 +46,14 @@ const _plugin = createRegexLanguagePlugin({
     { kind: 'variable', pattern: /^\s*option\s*\(\s*(\w+)/gim, meta: { option: true } },
   ],
   importPatterns: [
-    // include(module)
-    { pattern: /^\s*include\s*\(\s*(\w+)/gim },
+    // include(module) or include(path/to/file.cmake) — `\w+` alone stops at
+    // the first `/` or `.`, truncating the common `dir/File.cmake` shape.
+    { pattern: /^\s*include\s*\(\s*"?([^\s()"]+)/gim },
     // find_package(Name ...)
-    { pattern: /^\s*find_package\s*\(\s*(\w+)/gim },
-    // add_subdirectory(dir). \S+ would swallow the closing paren
-    // (add_subdirectory(tests) -> "tests)"); stop before it.
-    { pattern: /^\s*add_subdirectory\s*\(\s*([^\s)]+)/gim },
+    { pattern: /^\s*find_package\s*\(\s*"?([^\s()"]+)/gim },
+    // add_subdirectory(dir) — vendored deps are routinely a path
+    // (`add_subdirectory(third_party/fmt)`), same truncation risk as include.
+    { pattern: /^\s*add_subdirectory\s*\(\s*"?([^\s()"]+)/gim },
   ],
 });
 

@@ -52,8 +52,15 @@ export const PRICE_PER_TOKEN = 1.0 / 1_000_000;
  */
 const OUTLIER_FACTOR = 5;
 
-/** Fewer days than this and there is no median worth trimming against. */
-const MIN_DAYS_FOR_TRIM = 5;
+/**
+ * Fewer days than this and there is no median worth trimming against, so
+ * `sanitizedTokens` returns the raw sum unchanged.
+ *
+ * Exported because that makes the result *unsanitized*, and anything that
+ * publishes the figure has to refuse it rather than call it sanitized —
+ * `scripts/refresh-savings.mjs` gates on this exact constant.
+ */
+export const MIN_DAYS_FOR_TRIM = 5;
 
 function median(values) {
   if (values.length === 0) return 0;

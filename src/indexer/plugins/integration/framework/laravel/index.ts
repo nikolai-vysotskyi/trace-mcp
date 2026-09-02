@@ -20,6 +20,7 @@ import type {
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
+import { validatePath } from '../../../../../utils/security.js';
 import { extractBroadcastingEvent, extractChannelAuthorizations } from './broadcasting.js';
 import { buildBillableModelEdges, extractBillableModel, extractCashierWebhook } from './cashier.js';
 import {
@@ -157,14 +158,27 @@ export class LaravelPlugin implements FrameworkPlugin {
     let deps: Record<string, string> | undefined;
 
     if (ctx.composerJson) {
-      deps = ctx.composerJson.require as Record<string, string> | undefined;
+      deps = {
+        ...(ctx.composerJson.require as Record<string, string> | undefined),
+        ...(ctx.composerJson['require-dev'] as Record<string, string> | undefined),
+      };
     } else {
       // Fallback: read composer.json from disk
       try {
+        const check = validatePath('composer.json', ctx.rootPath);
+        if (check.isErr()) return false;
         const composerPath = path.join(ctx.rootPath, 'composer.json');
+        try {
+          if (fs.lstatSync(composerPath).isSymbolicLink()) return false;
+        } catch {
+          return false;
+        }
         const content = fs.readFileSync(composerPath, 'utf-8');
         const json = JSON.parse(content);
-        deps = json.require as Record<string, string> | undefined;
+        deps = {
+          ...(json.require as Record<string, string> | undefined),
+          ...(json['require-dev'] as Record<string, string> | undefined),
+        };
       } catch {
         return false;
       }

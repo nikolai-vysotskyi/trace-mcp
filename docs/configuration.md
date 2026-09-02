@@ -1,7 +1,7 @@
 ---
-title: "trace-mcp Configuration Reference — all config options (works with none)"
+title: "Configuration Reference — all config options (works with none)"
 description: "Every trace-mcp config option in .trace-mcp.json — indexing, quality gates, LSP enrichment, TOON output, telemetry. Configuration is optional; trace-mcp works out of the box for standard projects."
-updated: 2026-09-01
+updated: 2026-09-02
 ---
 
 # Configuration
@@ -32,6 +32,13 @@ updated: 2026-09-01
 }
 </script>
 Configuration is optional — trace-mcp works out of the box for standard projects.
+
+This page is the reference for the file itself: where it lives, how the layers
+merge, and every key. Several sections of it are big enough to have their own
+page — the [quality gates](quality-gates.md) thresholds, the
+[telemetry](telemetry.md) span exporter, the memory knobs that bound the
+[daemon](daemon-memory.md), and the [tweakcc](tweakcc.md) enforcement tier that
+`trace-mcp init` writes here on your behalf.
 
 ---
 
@@ -176,7 +183,7 @@ Two different things can leave a folder out of the index — check which one app
 | `follow_symlinks` | `boolean` | `false` | Follow directory symlinks during file discovery. Leave off unless you know the tree is free of symlink cycles — enabling it on a tree with a cycle (e.g. Ansible Molecule's `roles/<role>/molecule/<scenario>/roles/<role> -> ../../../` layout) can silently truncate traversal. Symlinked *files* are always skipped regardless of this setting. |
 | `ignore.directories` | `string[]` | `[]` | Extra directory names to skip (added to built-in list) |
 | `ignore.patterns` | `string[]` | `[]` | Extra gitignore-style patterns to exclude from indexing |
-| `plugins` | `string[]` | `[]` | Paths to custom plugins |
+| `plugins` | `string[]` | `[]` | Paths to custom plugins — see [development](development.md#adding-a-new-integration-plugin) for the plugin interface |
 | `security.secret_patterns` | `string[]` | Common patterns | Regex patterns for secret filtering |
 | `security.max_file_size_bytes` | `number` | `524288` | Max file size to index (bytes) |
 
@@ -436,7 +443,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 ```jsonc
 {
   "tools": {
-    "preset": "standard",                // "full" | "standard" | "minimal" | "review" | "architecture" | "dev" | "security" | "design" | "perf"
+    "preset": "standard",                // "full" | "standard" | "minimal" | "review" | "architecture" | "dev" | "security" | "design" | "perf" | "router"
     "description_verbosity": "full",     // "full" | "minimal" | "none"
     "instructions_verbosity": "full",    // "full" | "minimal" | "none" — controls the tool-routing block
     "client_profile": "auto",            // "auto" | "off" | "claude-code" | "codex" | "cursor" | "vscode" | "generic"
@@ -449,7 +456,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (41 tools), `dev` (42 tools), `security` (35 tools), `design` (26 tools), `perf` (31 tools), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (41 tools), `dev` (42 tools), `security` (35 tools), `design` (26 tools), `perf` (31 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -491,18 +498,57 @@ returns each loaded tool's full JSON schema in its response, and the loaded tool
 is immediately reachable through `batch` — `batch({ calls: [{ tool, args }] })`
 — which is in every preset.
 
+`batch` dispatches by name against the whole registry, deferred tools included,
+so a deferred tool is callable through it *without* loading it first. That is
+deliberate (it is what the `router` preset below is built on), and the price is
+one round-trip's worth of schema you never see: you have to know the tool's
+arguments, or read them from `load_tools`. `tools.exclude` is not reachable this
+way — the exclusion is checked on the inner call names too, on both the local
+and the daemon-backed path.
+
 What escalation cannot do is widen `tools.exclude`. Exclusion stays a hard
 restriction; `load_tools` reports those names under `blocked` and leaves them
 off. If you want a tool gone, exclude it — don't rely on the preset.
 
+A preset name that doesn't resolve — a typo, or a preset added in a version
+newer than the one installed — falls back to `minimal` and logs a warning naming
+the available presets. Before v3.12 it fell back to `full`, which turned a typo
+in a flag set to save tokens into a 36.3k-token surface instead of a 7.8k one.
+Failing toward the cheap surface costs at most one `load_tools` round-trip.
+
 Measured `tools/list` cost of each preset on this repo (serialized chars, then
-o200k tokens, 2026-09-01): `design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
+o200k tokens, 2026-09-01; `router` added 2026-09-02): `router` 7.1k / 1.6k,
+`design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
 34.0k / 7.8k, `review` 37.3k / 8.6k, `security` 41.5k / 9.6k, `architecture`
 44.3k / 10.2k, `dev` 51.3k / 11.9k, `standard` 64.6k / 14.9k, `full` 157.7k /
 36.3k. Against `full`, that is a 67% cut on the widest role preset (`dev`) and
 86% on the narrowest (`design`) — framework-gated tools are excluded, so a
 project that detects the matching framework pays more.
 `load_tools` itself is 0.9k of that — the price of making the other 123k optional.
+
+### The router preset
+
+`"preset": "router"` advertises **no** code-intelligence tools at all — only the
+session meta-tools that are never gated, `load_tools` and `batch` among them. Ten
+tools, 1.6k tokens, 95.6% below `full` and 79.2% below the `minimal` default.
+
+It is usable rather than crippled because the two halves cover each other:
+`load_tools()` names the ~150 deferred tools (names only — the schemas are what
+you are not paying for), and `batch` calls any of them directly. So the session
+pays for a catalog instead of a surface, and there is no escalation round-trip
+unless you want the schemas.
+
+```jsonc
+{ "tools": { "preset": "router" } }      // or: trace-mcp --preset router
+```
+
+It is **opt-in and will not become the default.** On a host that already defers
+tool schemas itself — Claude Code's ToolSearch, which keeps only the 15
+`ALWAYS_LOAD_TOOLS` eagerly loaded — `router` saves ~2.9k tokens and takes away
+exactly the first-five-minutes tools that stamp exists to protect. On a host
+without such a mechanism it saves ~6.2k per session, every session. Take it if
+your client has no tool deferral of its own, or if you are running many short
+sessions where the surface is most of what you pay.
 
 ### Client profiles
 
@@ -553,7 +599,7 @@ Every `tools.*` option works from a project-local config file (`.trace-mcp/.conf
 
 | Value | What ships | When to use |
 |---|---|---|
-| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere (CLAUDE.md, tweakcc), or don't want opinionated rules |
+| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere (CLAUDE.md, [tweakcc](tweakcc.md)), or don't want opinionated rules |
 | `"minimal"` | One rule: never fabricate paths/symbols/APIs — call `search`/`get_symbol`/run the command | Minimal nudge tied to trace-mcp tool use, no personality prescription |
 | `"strict"` | 8 rules: no flattery, disagree on wrong premises, never fabricate, stop when confused, goal-driven execution, verify before reporting "done", 2-strike rule, surgical changes only | Max-tier default — aligns agent behavior across a team |
 
@@ -719,6 +765,66 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 
 For all other clients only the Base tier applies — there is no equivalent of Claude Code hooks or tweakcc in those tools.
 
+### Renaming `trace-mcp` → `trace`: what `init` can and can't reach
+
+MCP clients advertise every tool prefixed with the server key, so the rename
+also renames the tool prefix a client-side config may reference in full:
+`mcp__trace-mcp__search` becomes `mcp__trace__search`. `trace init` (and the
+post-update migration that runs automatically when the daemon starts after
+an upgrade) rewrites this everywhere it owns the file:
+
+- The `mcpServers` entry itself, in every supported client above.
+- Claude Code / Claw Code **permission allowlist entries**
+  (`permissions.allow` / `permissions.deny`) and **hook `matcher` strings**,
+  in both the global `settings.json` and the project-scoped
+  `settings.local.json`.
+
+**What stays manual.** Anything you wrote yourself outside those specific
+fields is not touched — most commonly, tool names spelled out in your own
+prose inside `CLAUDE.md` / `AGENTS.md` (`init` only rewrites the routing
+block it generated, not arbitrary text you added), or a permission/hook
+config in a file trace-mcp doesn't manage the shape of. If a tool call stops
+matching a hook, or an allowlisted tool starts re-prompting for approval
+after upgrading, grep your own config for `mcp__trace-mcp__` and replace it
+with `mcp__trace__`.
+
+### Multica workspace agents
+
+Multica agents don't run `trace-mcp init` — each agent's MCP wiring is set directly with `multica agent update --mcp-config-file <json>` (or `agent create --mcp-config-file` on first setup), scoped to that one agent. An agent with no `mcp_config` inherits the machine's own MCP setup, so its preset is whatever `tools.preset` says in `~/.trace-mcp/.config.json` (`standard` unless you changed it).
+
+Setting `mcp_config` does **not** override the inherited `trace-mcp` entry by name — Multica launches that agent with `--strict-mcp-config`, so it gets *only* the servers you list. Everything else the machine provides (user-scope servers, plugin servers, hosted connectors) disappears for that agent. List every server the role still needs, not just `trace-mcp`:
+
+```json
+{
+  "mcpServers": {
+    "trace-mcp": { "command": "trace-mcp", "args": ["serve", "--preset", "dev"] },
+    "context7": { "command": "context7-mcp", "args": [] }
+  }
+}
+```
+
+`--preset` is an option of the `serve` subcommand — `args` without `serve` starts nothing.
+
+```bash
+multica agent update <agent-id> --mcp-config-file ./trace-mcp-dev.json
+```
+
+> **Check that the agent's installed `trace-mcp` supports `--preset` before rolling this out.** The flag shipped after 3.11.0; an older binary exits immediately with `unknown option '--preset'`, and because a dead MCP server is silent, the agent simply runs with **zero** trace-mcp tools instead of a smaller set. Verify with `trace-mcp --help | grep -- --preset` on the machine the agent runs on. Same trap applies to a `command` pointing at a build inside a per-task working directory — those get cleaned up.
+
+The role → preset matrix used in the trace-mcp workspace itself (adjust to your own roles):
+
+| Agent role | Preset | Why |
+|---|---|---|
+| Independent code review | `review` | rename-safety, quality gates, risk/impact assessment — no refactor or design tools |
+| Security audit | `security` | `scan_security`, `taint_analysis`, SBOM, config audit — no refactor/design tools |
+| Design/UX review | `design` | component tree, screens, navigation, state — no security/perf tools |
+| Implementation & bugfixing | `dev` | refactor + codemod tools (`apply_rename`, `extract_function`, `change_signature`) |
+| Performance analysis | `perf` | `analyze_perf`, complexity/coupling trends, risk hotspots |
+
+`multica agent update --mcp-config*` **replaces** the agent's entire `mcp_config` — it does not merge. If the agent already has other private MCP servers configured, read them back first (only a workspace owner/admin can; `mcp_config` reads redacted for agent actors) and include them in the new payload, or the update will silently remove them.
+
+If you can't read it back (agent actors can't), you can still recover the *set* of servers a past run had from Claude Code's own connection logs on the machine that ran it — `~/Library/Caches/claude-cli-nodejs/<encoded-workdir>/mcp-logs-<server>/` has one directory per connected server. Under `--strict-mcp-config` that listing is exactly the config's server set; only each server's argv is still unknown.
+
 ---
 
 ## stdio vs HTTP — choosing your setup
@@ -876,3 +982,7 @@ trace-mcp analytics trends     # Daily usage trends
 - **File size limits** — per-file byte cap prevents OOM on large files
 - **Artisan whitelist** — only safe artisan commands allowed (when Laravel integration is enabled)
 - **HTTP rate limiting** — 60 req/min per IP on HTTP/SSE transport
+
+What counts as a failing security finding *in your own code* is a separate
+setting — `quality_gates.rules.max_security_critical_findings`, documented with
+this project's own calibrated numbers under [quality gates](quality-gates.md).

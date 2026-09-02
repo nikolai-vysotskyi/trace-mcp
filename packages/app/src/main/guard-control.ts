@@ -26,6 +26,13 @@ export const MIN_TRACE_MCP_VERSION = '1.32.7';
 
 export type GuardMode = 'strict' | 'coach' | 'off';
 
+/** Why health is not "ok" — a cause the renderer can turn into a next step.
+    A free-form English sentence used to travel here instead, which a localized
+    app printed verbatim next to a badge that already said the same word
+    (TRA-490). "down" has more than one cause and they need different advice:
+    a server that stopped is not a server that was never started. */
+export type GuardReason = 'heartbeat_stale' | 'channel_quiet' | 'never_started';
+
 export interface GuardStatus {
   /** "ok" | "stalled" | "down" | "unknown" — derived from status JSON. */
   health: 'ok' | 'stalled' | 'down' | 'unknown';
@@ -43,8 +50,10 @@ export interface GuardStatus {
   quietSeconds?: number;
   /** Manual bypass active until (epoch seconds). 0 = no bypass. */
   bypassUntil?: number;
-  /** Free-form reason, useful when health != "ok". */
-  reason?: string;
+  /** Why health != "ok". The renderer owns the wording. */
+  reason?: GuardReason;
+  /** Age in seconds behind `reason`, when it has one. */
+  reasonSeconds?: number;
   /** Epoch seconds when guard was first initialized for this project. */
   initializedAt?: number;
   /** Epoch seconds when coach mode auto-promotes to strict (only set in coach). */
@@ -201,11 +210,13 @@ export function getGuardStatus(projectRoot: string): GuardStatus {
       : Number.POSITIVE_INFINITY;
 
     let health: GuardStatus['health'] = 'ok';
-    let reason: string | undefined;
+    let reason: GuardReason | undefined;
+    let reasonSeconds: number | undefined;
 
     if (heartbeatAge > HEARTBEAT_STALE_SEC) {
       health = 'down';
-      reason = `Heartbeat stale (${heartbeatAge}s)`;
+      reason = 'heartbeat_stale';
+      reasonSeconds = Number.isFinite(heartbeatAge) ? heartbeatAge : undefined;
     } else if (
       typeof parsed.tool_calls_total === 'number' &&
       parsed.tool_calls_total > 0 &&
@@ -216,7 +227,8 @@ export function getGuardStatus(projectRoot: string): GuardStatus {
       );
       if (quiet > STALL_THRESHOLD_SEC) {
         health = 'stalled';
-        reason = `MCP channel quiet for ${quiet}s`;
+        reason = 'channel_quiet';
+        reasonSeconds = quiet;
       }
     }
 
@@ -234,6 +246,7 @@ export function getGuardStatus(projectRoot: string): GuardStatus {
       quietSeconds,
       bypassUntil,
       reason,
+      reasonSeconds,
       initializedAt,
       coachExpiresAt,
       autoPromoted: autoPromoted || undefined,
@@ -252,7 +265,6 @@ export function getGuardStatus(projectRoot: string): GuardStatus {
           health: 'ok',
           mode,
           bypassUntil,
-          reason: 'Legacy heartbeat only — server pre-v0.8',
           initializedAt,
           coachExpiresAt,
           autoPromoted: autoPromoted || undefined,
@@ -262,7 +274,8 @@ export function getGuardStatus(projectRoot: string): GuardStatus {
         health: 'down',
         mode,
         bypassUntil,
-        reason: `Legacy heartbeat stale (${age}s)`,
+        reason: 'heartbeat_stale',
+        reasonSeconds: age,
         initializedAt,
         coachExpiresAt,
         autoPromoted: autoPromoted || undefined,
@@ -276,7 +289,7 @@ export function getGuardStatus(projectRoot: string): GuardStatus {
     health: 'down',
     mode,
     bypassUntil,
-    reason: 'trace-mcp server not running',
+    reason: 'never_started',
     initializedAt,
     coachExpiresAt,
     autoPromoted: autoPromoted || undefined,

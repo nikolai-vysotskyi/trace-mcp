@@ -11,7 +11,11 @@ layout: null
 
   <!-- ── Primary Meta ── -->
   <title>trace-mcp — precomputed code intelligence for AI coding agents</title>
-  <meta name="description" content="A structured map of your codebase for AI agents. trace-mcp indexes your repo once so agents stop re-reading the same files every turn. ~40–50% fewer tokens on average, faster responses, more reliable at scale. Open source, local-first, MCP-native.">
+  <!-- Front-loaded on the SEO Agent's measurement: Google truncates this around
+       155 characters, and the previous wording shared its first 133 with the old
+       one, so the number was cut mid-word in the snippet. The 155-char cut now
+       lands after "we don't own". -->
+  <meta name="description" content="{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context — median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own. trace-mcp indexes your codebase once so AI agents stop re-reading the same files. Open source, local-first, MCP-native.">
   <meta name="keywords" content="ai execution layer, recomputation, context bloat, token reduction, ai agents, mcp, model context protocol, code intelligence, code graph, llm developer tools, agent observability, agent optimization, claude code, cursor, windsurf, dependency graph, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
   <meta name="robots" content="index, follow, max-image-preview:large">
@@ -53,7 +57,7 @@ layout: null
   <meta property="og:locale" content="en_US">
   <meta property="og:url" content="https://trace-mcp.com/">
   <meta property="og:title" content="trace-mcp — precomputed code intelligence for AI coding agents">
-  <meta property="og:description" content="A structured map of your codebase for AI agents. Stop paying for the same re-reads every turn. ~40–50% fewer tokens, faster responses, more reliable at scale.">
+  <meta property="og:description" content="A structured map of your codebase for AI agents. Stop paying for the same re-reads every turn. {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged PRs in open-source repos.">
   <meta property="og:image" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:secure_url" content="https://trace-mcp.com/og-image.png">
   <meta property="og:image:type" content="image/png">
@@ -64,7 +68,7 @@ layout: null
   <!-- ── Twitter / X Card ── -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="trace-mcp — precomputed code intelligence for AI coding agents">
-  <meta name="twitter:description" content="A structured map of your codebase for AI agents. ~40–50% fewer tokens, faster responses, more reliable at scale. Open source, local-first.">
+  <meta name="twitter:description" content="A structured map of your codebase for AI agents. {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged PRs in open-source repos. Open source, local-first.">
   <meta name="twitter:image" content="https://trace-mcp.com/og-image.png">
   <meta name="twitter:image:alt" content="trace-mcp graph explorer visualizing symbol connections across a codebase">
 
@@ -75,7 +79,7 @@ layout: null
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
     "alternateName": "trace-mcp — Recomputation → Reuse for AI Systems",
-    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. 40–50% fewer tokens on average, up to 2× effective capacity, up to 99% less redundant processing. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
+    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. A median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests across {{ site.data.pr_context_bench.repo_count }} open-source repositories. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
     "applicationCategory": "DeveloperApplication",
@@ -105,6 +109,7 @@ layout: null
     },
     "featureList": [
       "Recomputation → reuse layer for AI systems — agents stop re-reading and re-traversing",
+      "{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context, median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories",
       "40–50% fewer tokens on average across real agent workflows",
       "Up to 2× effective capacity at the same context budget",
       "Up to 99% less redundant processing in structured tasks (code navigation, dependency traversal)",
@@ -637,7 +642,35 @@ layout: null
       .hero-cta .btn { padding: 14px 22px; font-size: 11px; justify-content: center; }
       .hero-install { font-size: 12px; min-height: 52px; padding: 0 14px; gap: 10px; }
       .hero-alt-arch { font-size: 11px; margin-top: 12px; }
-      .hero-trust { font-size: 11px; gap: 8px; margin-top: 14px; }
+      /* One item per line, no dots. As a wrapped row a separator ends a line at
+         every tested width from 660px down — measured, not assumed: the last box
+         on the first line is a `.dot` at 660, 600, 520, 430, 390, 360 and 320.
+         Stacking removes that at a cost of 20px at 390px (58px → 78px), all of
+         it below the two actions. */
+      .hero-trust {
+        font-size: 11px;
+        margin-top: 14px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+      .hero-trust .dot { display: none; }
+      /* Stacked, the row's one emphasised item stops reading as the strongest of
+         three peers and starts reading as a heading over the two below it — a
+         hierarchy that is not there. Inline (≥700px) the emphasis still works,
+         so it is dropped here only. */
+      .hero-trust .ok { color: inherit; font-weight: inherit; }
+      /* Both labels on their own line rather than two columns fighting over 390px.
+         The row stops fitting at 520px (17px → 33px) and takes three lines at
+         320px; the divider has no width left to draw by then, so it goes. This
+         reuses the hero's 700px breakpoint instead of adding a second one 180px
+         away — the cost is 17px of height between 520px and 700px. */
+      .hero-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+      .hero-meta .divider { display: none; }
     }
 
     /* ── Metrics strip (proof row under hero) ── */
@@ -683,6 +716,15 @@ layout: null
       color: var(--text-disabled);
       line-height: 1.5;
     }
+    /* The page-wide `a { color: inherit; text-decoration: none }` would hide the
+       method link inside this footnote entirely — and a claim whose evidence is
+       not reachable in one click is the whole problem TRA-647 exists to fix. */
+    .metrics-strip-foot a {
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-visible);
+      transition: color 200ms ease-out, border-color 200ms ease-out;
+    }
+    .metrics-strip-foot a:hover { color: var(--text-display); border-color: var(--text-display); }
     @media (max-width: 700px) {
       .metrics-strip { padding: 24px 0 32px; }
       .metrics-strip-grid {
@@ -752,6 +794,14 @@ layout: null
       border-right: 1px solid var(--border);
     }
     .stat:last-child { border-right: none; }
+    .stats-note {
+      padding: 20px 24px 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .stats-note strong { color: var(--text-display); }
+    .stats-note code { font-family: var(--font-mono); font-size: 13px; }
     .stat-label {
       font-family: var(--font-mono);
       font-size: 10px;
@@ -1353,16 +1403,34 @@ layout: null
     }
     .footer-col a:hover { color: var(--text-display); }
     /* 22 doc links stacked single-file would run 22 rows deep against a
-       4-row Product column. Two grid tracks wide with an auto-fill inner
-       grid, it settles at 3 × 8 — the same `repeat(auto-fill, minmax(...))`
-       rule the doc-page footer uses (DESIGN-WEB.md §2), one cell per link so
-       a wrapped label still reads as one target. */
-    .footer-col-docs { grid-column: span 2; }
+       4-row Product column, so the column is two grid tracks wide and the
+       links flow into three sub-columns of their own.
+
+       Multi-column, not a grid: its sub-columns read top-to-bottom, the same
+       direction as the plain /Product and /Source lists either side of it. A
+       row-flow grid put items 1, 4, 7… down the first sub-column, which
+       scattered docs_nav.yml's order — the five /vs/ pages landed one per row
+       across all three. That order is the SEO agent's (DESIGN-WEB.md §2) and
+       reading down is what preserves it. It also drops the ragged rows: two
+       labels wrap to a second line, and in a grid they set the height of
+       every cell in their row, opening 48px gaps that read as group breaks. */
+    .footer-col-docs { grid-column: span 2; grid-row: span 2; }
     .footer-doc-links {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      columns: 176px 3;
       column-gap: 32px;
     }
+    /* 176px is the floor because `vs codebase-memory-mcp` sets on one line at
+       173px. At 160px it fits only because the sub-column happens to resolve
+       to 176 at 1440 — between roughly 1184px and 1262px of viewport it
+       resolves to 163 and the label breaks into two fragments. Dropping to
+       two sub-columns there is the better answer.
+
+       The two 212px labels (`PR review context benchmark`, `Cut Claude Code
+       token usage`) take two lines in every layout; a sub-column wide enough
+       for them would leave room for two, not three. `break-inside: avoid`
+       keeps each one whole so it still reads as a single target
+       (DESIGN-WEB.md §2). */
+    .footer-doc-links a { break-inside: avoid; }
     .footer-bottom {
       display: flex; justify-content: space-between; align-items: center;
       padding-top: 24px;
@@ -1379,6 +1447,9 @@ layout: null
 
     @media (max-width: 700px) {
       .footer-grid { grid-template-columns: repeat(2, 1fr); gap: 32px; }
+      /* Two tracks: /Docs already takes a full row of its own, so the second
+         row it reserves on desktop would be empty here. */
+      .footer-col-docs { grid-row: auto; }
       .footer-bottom { flex-direction: column; gap: 16px; align-items: flex-start; }
     }
 
@@ -2029,7 +2100,9 @@ layout: null
 
       <p class="hero-desc">
         trace-mcp indexes your repository once so agents stop re-reading the same files every turn.
-        <span class="accent-text">40&ndash;50% fewer tokens, 100% local.</span>
+        <!-- Same verbatim claim wording as the metrics tile below: two paraphrases
+             of one number read as two claims to anything extracting them. -->
+        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, 100% local.</span>
       </p>
 
       <!-- Two actions, no more (TRA-609): the DMG and the command that installs the
@@ -2076,19 +2149,22 @@ layout: null
     <div class="container">
       <div class="metrics-strip-grid">
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">~40&ndash;50%</span>
-          <span class="metrics-strip-label">Average token reduction across mixed agent workloads</span>
+          <span class="metrics-strip-value">{{ site.data.pr_context_bench.median_savings_pct }}%</span>
+          <span class="metrics-strip-label">Fewer input tokens to review a pull request &mdash; median over {{ site.data.pr_context_bench.pr_count }} merged PRs in {{ site.data.pr_context_bench.repo_count }} open-source repositories</span>
         </div>
         <div class="metrics-strip-item">
-          <span class="metrics-strip-value">up to 99%</span>
-          <span class="metrics-strip-label">In structured workflows &mdash; repeated navigation, dependency traversal, context re-inflation</span>
+          <span class="metrics-strip-value">~40&ndash;50%</span>
+          <span class="metrics-strip-label">Average token reduction across mixed agent workloads</span>
         </div>
         <div class="metrics-strip-item">
           <span class="metrics-strip-value">up to 2&times;</span>
           <span class="metrics-strip-label">Effective context capacity per session</span>
         </div>
       </div>
-      <p class="metrics-strip-foot">Measured against baseline agent runs that re-read files and re-traverse dependencies on every turn.</p>
+      <!-- TRA-647: the first tile is the only figure here taken on code we do not
+           own, so it leads and it says where it came from. The other two are our
+           own instrumentation and are labelled as such rather than dropped. -->
+      <p class="metrics-strip-foot">The first figure is measured on other people's code &mdash; {{ site.data.pr_context_bench.pr_count }} merged pull requests, SHAs pinned, run script and the {{ site.data.pr_context_bench.loss_count }} cases where it barely paid off all published: <a href="/pr-context-benchmark.html">PR review context benchmark</a>. The other two come from our own instrumentation, measured against baseline agent runs that re-read files and re-traverse dependencies on every turn.</p>
     </div>
   </section>
 
@@ -2169,12 +2245,33 @@ layout: null
           <div class="stat-value" data-count="{{ site.data.counts.tools }}">0</div>
           <div class="stat-trend">read-only or audited</div>
         </div>
+        <!-- TRA-647: the other three tiles are counted facts, so the fourth was the
+             only estimate rendered in the page's largest type — and it out-shouted
+             the measured figure the hero now leads with. The estimator claim keeps
+             its place in the metrics strip above. -->
         <div class="stat">
-          <div class="stat-label">Avg Token Reduction</div>
-          <div class="stat-value">40&ndash;50<span class="unit">%</span></div>
-          <div class="stat-trend">on real agent workflows</div>
+          <!-- Short enough to stay on one line in the 2-up mobile grid, where a
+               wrapping label pushes this tile's value out of line with its row. -->
+          <div class="stat-label">PR Context</div>
+          <div class="stat-value">{{ site.data.pr_context_bench.median_savings_pct }}<span class="unit">%</span></div>
+          <div class="stat-trend">median over {{ site.data.pr_context_bench.pr_count }} merged PRs, code we don&rsquo;t own</div>
         </div>
       </div>
+      {%- comment -%}
+        Renders only once scripts/refresh-savings.mjs has produced the data file. It
+        refuses to when the window is too short to sanitize, so an absent file means
+        "not publishable yet", not "forgot to run it". Never inline these numbers as
+        literals — they would outlive the next refresh.
+      {%- endcomment -%}
+      {% if site.data.savings %}
+      <p class="stats-note">
+        <strong>{{ site.data.savings.tokens_display }} tokens saved</strong> across installs that
+        share usage, as of {{ site.data.savings.refreshed }} &mdash; {{ site.data.savings.usd_display }}
+        at the <code>{{ site.data.savings.price_model }}</code> input rate
+        (${{ site.data.savings.price_usd_per_mtok }}/Mtok). Self-reported by anonymous, opt-out
+        pings, not audited; <a href="telemetry">how this is measured</a>.
+      </p>
+      {% endif %}
     </div>
   </section>
 

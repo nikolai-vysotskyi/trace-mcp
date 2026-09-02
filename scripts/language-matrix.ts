@@ -161,12 +161,42 @@ updated: ${new Date().toISOString().slice(0, 10)}
 
 # Language capability matrix
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Language capability matrix",
+  "description": "What each of the ${counts.total} supported languages actually extracts — parser, edges, and test coverage.",
+  "url": "https://trace-mcp.com/language-matrix.html",
+  "datePublished": "2026-08-29",
+  "dateModified": "{{ page.updated }}",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/language-matrix.html"
+  }
+}
+</script>
+
 trace-mcp ships ${counts.total} language plugins. They are not equally deep, and this
 page says how deep each one is. Every language in the list gets symbol
 extraction; call graphs and type edges are a much smaller set. For what each
 language's framework integrations understand on top of that, see [supported
 frameworks](supported-frameworks.md); for the \`include\` globs referenced
-below, see [configuration](configuration.md).
+below, see [configuration](configuration.md). The edge columns are what makes
+the graph queryable: a language with call edges answers \`get_call_graph\` and
+call-aware \`find_usages\` ([tools reference](tools-reference.md)), one without
+them still answers \`search\` and \`get_outline\`. How those edges are produced
+is the two-pass pipeline in [architecture](architecture.md#indexing-pipeline).
 
 - **indexed with the default config:** ${counts.indexedByDefault} (the rest need an \`include\` entry — see below)
 - **tree-sitter parser:** ${counts.treeSitter} · **regex parser:** ${counts.regex} · **custom parser:** ${counts.custom}
@@ -180,7 +210,7 @@ below, see [configuration](configuration.md).
 | Column | Meaning |
 | --- | --- |
 | Parser | \`tree-sitter\` — real grammar-based AST. \`regex\` — pattern extraction, no AST. \`custom\` — hand-written parser for a structured format. |
-| Default | The shipped default \`include\` globs reach files with this extension. Where this is empty the plugin only runs once you add the extension to \`include\` in \`.trace-mcp.json\`. |
+| Default | The shipped default \`include\` globs reach files with this extension. Where this is empty the plugin only runs once you add the extension to \`include\` in \`.trace.json\`. |
 | Imports | Import statements are resolved into graph edges. Plugins outside this set still parse imports, but nothing turns them into edges yet. |
 | Calls | A call-graph resolver exists, so "who calls this" is answerable for this language. |
 | Types | Type-annotation or inheritance edges are resolved. |

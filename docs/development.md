@@ -1,7 +1,7 @@
 ---
 title: "Contributing to trace-mcp — local setup, build, and test"
 description: "How to set up trace-mcp for local development: install, build, run the test suite, and the conventions to follow before opening a PR."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # Development
@@ -32,6 +32,10 @@ updated: 2026-08-30
 }
 </script>
 ## Setup
+
+Read [architecture](architecture.md) first — the two-pass pipeline, the plugin
+interface and the storage layout are what most of the code below is arranged
+around.
 
 ```bash
 git clone https://github.com/nikolai-vysotskyi/trace-mcp.git
@@ -101,6 +105,11 @@ pnpm run test                       # All tests (1668 tests, ~2s)
 pnpm run test --run <pattern>  # Run specific test files
 pnpm run test:watch             # Watch mode
 ```
+
+CI additionally runs the repo's own [quality gates](quality-gates.md) against
+this codebase, with thresholds set in `.trace.json` — see
+[configuration](configuration.md) for how that file merges with global
+settings.
 
 Test files live alongside source or in `tests/`:
 
@@ -256,7 +265,7 @@ zip and replaced the `.app` itself, staging the zip beside the bundle when the
 app was running so a helper could swap it on exit. It failed fourteen
 consecutive times without a single success (TRA-431) and is gone — along with
 `scripts/apply-pending-update.mjs`, the pending marker files, and
-`~/.trace-mcp/app-update-state.json`.
+`~/.trace/app-update-state.json`.
 
 Builds up to and including 3.8.0 are ad-hoc signed and cannot self-update, so
 `scripts/postinstall-app.mjs` still swaps **those** bundles — and only those. It
@@ -275,8 +284,17 @@ under `release/mac-arm64/` is a real, correctly signed-looking bundle, so plist
 validation alone accepts it; `isPlausibleInstallPath` (duplicated in
 `scripts/locate-app.mjs` and `packages/app/src/main/install-path.ts`, kept honest
 by `install-path.test.ts`) is what rejects build trees and checkouts. Recording
-one in `~/.trace-mcp/app-location.json` froze a user's install for three major
+one in `~/.trace/app-location.json` froze a user's install for three major
 versions.
+
+`app-location.json` and `app-update-state.json` both live in the CLI state
+directory, which `src/global.ts` renamed from `~/.trace-mcp` to `~/.trace` in
+TRA-611 — by *renaming* the old directory on first import, so on a migrated
+machine the old path is gone. The plain-Node scripts cannot import that module (it is TypeScript, and importing it
+would perform the rename as a side effect), so they resolve the directory
+through `scripts/trace-home.mjs`, which mirrors the app's
+`packages/app/src/main/trace-home.ts::getLauncherDir`: prefer `~/.trace` only
+when it is actually on disk, otherwise stay on `~/.trace-mcp`.
 
 ---
 
@@ -382,7 +400,7 @@ node scripts/capture-screenshots.mjs --check     # are the committed ones stale?
 
 The run launches the real Electron window against a seeded demo state and
 writes WebP files into `docs/images/`. It does not touch the daemon you already
-have running, your `~/.trace-mcp`, or your project registry: the demo daemon
+have running, your `~/.trace`, or your project registry: the demo daemon
 gets its own port and its own `TRACE_MCP_DATA_DIR`, the demo projects are
 `git archive` extracts of this repo at HEAD placed under `/tmp/trace-mcp-demo`,
 and Electron gets a throwaway Chromium profile. Nothing in the frame identifies

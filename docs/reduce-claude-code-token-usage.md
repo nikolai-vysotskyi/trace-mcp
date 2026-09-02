@@ -1,7 +1,7 @@
 ---
 title: "How to Reduce Claude Code Token Usage — 7 measured tactics"
 description: "Seven ways to cut token usage in Claude Code, ordered by measured impact: stop full-file reads, trim your MCP tool surface, pick the right output format. With real numbers and honest caveats."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # How to reduce Claude Code token usage
@@ -114,7 +114,7 @@ What to do about it:
 - Disconnect servers you are not using in this project. A server connected "just in case" is a fixed tax.
 - Use a preset or allowlist where the server offers one. trace-mcp ships `minimal` (28 tools), `standard` (60 tools) and `full` ({{ site.data.counts.tools }} tools), plus `tools.include` / `tools.exclude` in config.
 - **Previously noted here as broken, now fixed:** presets used to take effect only when the daemon was bypassed (`TRACE_MCP_NO_DAEMON=1`) and were silently ignored on the default daemon-backed path. That bug is shipped and closed — the preset is honoured on both paths, and `TRACE_MCP_NO_DAEMON=1` is no longer needed as a workaround. Measured on the default path: `standard` serves ~18.8K tokens of `tools/list` plus ~1.75K of server instructions (~20.5K), against ~49.9K + ~2.1K for `full`.
-- **One caveat that is still live:** set these in the global `~/.trace-mcp/.config.json`. `tools.preset` is honoured from a project-local `.trace-mcp/.config.json` too, but `tools.description_verbosity` / `tools.instructions_verbosity` are not — set those globally until that is fixed.
+- **One caveat that is still live:** set these in the global `~/.trace/.config.json`. `tools.preset` is honoured from a project-local `.trace/.config.json` too, but `tools.description_verbosity` / `tools.instructions_verbosity` are not — set those globally until that is fixed.
 
 ## 4. Pick the output format per tool, not globally
 
@@ -130,6 +130,8 @@ Encoding matters, but not uniformly. Our measurements (`scripts/bench-toon.ts`, 
 | Repeated long paths (`search_text`) | flat → grouped by file | **+20.8%** |
 
 The rule underneath: compact tabular encodings win when every row has the same scalar columns, and lose the moment a row contains a nested object or an inner array. Full method and the breakeven curve are on the [TOON savings page](/toon-savings.html).
+
+Every number in this section is measured by trace-mcp on trace-mcp. The one measurement taken on code we do not own is the [PR review context benchmark](/pr-context-benchmark.html) — {{ site.data.pr_context_bench.pr_count }} merged pull requests across {{ site.data.pr_context_bench.repo_count }} open-source repositories — and to see what any of this is worth on your own sessions rather than on ours, [session analytics](/analytics.html) reports the same figures from your local agent logs.
 
 ## 5. Prefer one structural query over many reads
 

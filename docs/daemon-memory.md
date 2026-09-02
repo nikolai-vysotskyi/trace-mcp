@@ -2,13 +2,41 @@
 layout: default
 title: "Daemon memory: what it costs and what caps it"
 description: Measured resident-set attribution for the trace-mcp daemon — what each region holds and which config knob bounds it.
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # Daemon memory: what it costs and what caps it
 
-The HTTP daemon is a background process. If it outweighs the user's browser it
-has failed regardless of how fast queries are. This page records what the
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Daemon memory: what it costs and what caps it",
+  "description": "Measured resident-set attribution for the trace-mcp daemon — what each region holds and which config knob bounds it.",
+  "url": "https://trace-mcp.com/daemon-memory.html",
+  "datePublished": "2026-08-29",
+  "dateModified": "{{ page.updated }}",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/daemon-memory.html"
+  }
+}
+</script>
+
+The HTTP daemon is a background process — the shared-index deployment described
+under [configuration](configuration.md#stdio-vs-http--choosing-your-setup). If
+it outweighs the user's browser it has failed regardless of how fast queries
+are. This page records what the
 resident set is actually made of, measured rather than estimated, and which
 knob bounds each part.
 
@@ -29,10 +57,10 @@ traffic. `ps -o rss=` reported 1.55 GB; `vmmap -summary` splits it:
 The `mapped file` rows are per-project and worth reading directly:
 
 ```
-64.0M  63.6M  .trace-mcp/index/thewed-2f9565b74fb5.db
-64.0M  63.7M  .trace-mcp/index/general-e8778b435c05.db
-64.0M  63.3M  .trace-mcp/index/assetfeed-76da1a753b39.db
-34.1M  33.4M  .trace-mcp/index/workdir-45190de3e39c.db
+64.0M  63.6M  .trace/index/thewed-2f9565b74fb5.db
+64.0M  63.7M  .trace/index/general-e8778b435c05.db
+64.0M  63.3M  .trace/index/assetfeed-76da1a753b39.db
+34.1M  33.4M  .trace/index/workdir-45190de3e39c.db
 ...
 ```
 
@@ -86,7 +114,7 @@ vmmap -summary "$PID"                # region breakdown
 vmmap "$PID" | grep 'mapped file'    # per-project index.db mmap residency
 ```
 
-`Daemon vitals` lines in `~/.trace-mcp/daemon.log` carry `rss_mb`,
+`Daemon vitals` lines in `~/.trace/daemon.log` carry `rss_mb`,
 `heap_used_mb` and `projects_loaded` every 60 s, which is the cheap way to
 watch the floor over time.
 
@@ -99,3 +127,9 @@ until the delay is shown to matter.
 
 The sweep also cannot help a daemon that does not live long enough to run it —
 see TRA-421 on daemon restarts.
+
+Every knob named above — `daemon_eager_load_projects`,
+`project_idle_unload_minutes`, `index_mmap_mb`, `index_cache_mb` — is a
+[configuration](configuration.md) key, and what the mapped `index.db` files
+actually hold is the storage layer described in
+[architecture](architecture.md#storage).

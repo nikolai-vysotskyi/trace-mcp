@@ -3,8 +3,10 @@ import { execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import { resolveAutoUpdaterExport } from './autoupdater-interop';
 import { t } from './i18n';
 import { registerAppMenu } from './menu';
+import { getLauncherDir } from './trace-home';
 import { ACCESSORY_APP, createTray, restoreAppearance, showMenuWindow } from './tray';
 import { updateChannelFor } from './update-channel';
 import { detectMcpClients } from '../shared/mcp-detector';
@@ -163,7 +165,7 @@ ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: strin
   });
 });
 
-import { type DaemonSetupState, ensureDaemonInstalled, resolveCliCommand } from './daemon-install';
+import { type DaemonSetupState, ensureDaemonInstalled, execCli } from './daemon-install';
 import { isDaemonProcessAlive, restartDaemon } from './daemon-lifecycle';
 import {
   deleteModel as ollamaDelete,
@@ -335,8 +337,7 @@ ipcMain.handle('get-mcp-client-statuses', async (_event, scope: string = 'global
       level?: 'base' | 'standard' | 'max' | null;
     }>;
   }>((resolve) => {
-    execFile(
-      resolveCliCommand(),
+    execCli(
       ['clients', 'status', '--json', '--scope', scope === 'project' ? 'project' : 'global'],
       { timeout: 15_000, maxBuffer: 1024 * 1024 },
       (error, stdout) => {
@@ -385,8 +386,7 @@ ipcMain.handle(
     return new Promise<{ ok: boolean; error?: string }>((resolve) => {
       // Use execFile to avoid shell interpretation: flags like project paths
       // could contain whitespace or special chars and must not be evaluated.
-      execFile(
-        resolveCliCommand(),
+      execCli(
         ['init', ...flags],
         {
           timeout: 30_000,
@@ -414,8 +414,7 @@ ipcMain.handle(
 // the button says it does.
 ipcMain.handle('update-mcp-clients', async (_event, clientNames: string[]) => {
   return new Promise<{ ok: boolean; error?: string }>((resolve) => {
-    execFile(
-      resolveCliCommand(),
+    execCli(
       ['clients', 'update', ...clientNames, '--json'],
       { timeout: 60_000, maxBuffer: 1024 * 1024 },
       (error, stdout, stderr) => {
@@ -624,10 +623,7 @@ async function getAutoUpdater() {
     throw new Error(`electron-updater is not the update channel on ${process.platform}`);
   }
   const mod = await import('electron-updater');
-  const autoUpdater = mod.autoUpdater ?? mod.default?.autoUpdater;
-  if (!autoUpdater) {
-    throw new Error('electron-updater did not export autoUpdater');
-  }
+  const autoUpdater = resolveAutoUpdaterExport(mod);
   // Download only when the user asks: the renderer's Update button drives the
   // whole flow, so a silent background download would fight the UI's state.
   autoUpdater.autoDownload = false;
@@ -984,17 +980,24 @@ function parseNpmRenamePaths(stderr: string): { src?: string; dest?: string } {
   return { src, dest };
 }
 
-// Update flow uses ~/.trace-mcp/update.log for full audit trail — every
+// Update flow uses <CLI state dir>/update.log for full audit trail — every
 // `apply-update` attempt records command, exit code, full stdout/stderr. The
 // renderer only sees a short summary, so the log is the place to look when a
 // user reports "Update failed".
-const UPDATE_LOG = path.join(os.homedir(), '.trace-mcp', 'update.log');
+//
+// Resolved per call, not once at import: the CLI can rename ~/.trace-mcp to
+// ~/.trace (TRA-611) while this app is running, and a cached path would keep
+// recreating the directory the rename just removed.
+function updateLogPath(): string {
+  return path.join(getLauncherDir(), 'update.log');
+}
 
 function appendUpdateLog(entry: Record<string, unknown>): void {
   try {
-    fs.mkdirSync(path.dirname(UPDATE_LOG), { recursive: true });
+    const target = updateLogPath();
+    fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.appendFileSync(
-      UPDATE_LOG,
+      target,
       JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n',
     );
   } catch {
@@ -1062,7 +1065,7 @@ ipcMain.handle('apply-update', async () => {
       // rather than parking the user in a state they cannot leave (TRA-431).
       downloadPercent = undefined;
       appendUpdateLog({ event: 'apply-update:failed', summary });
-      return { ok: false, error: `${summary}\n\nFull log: ${UPDATE_LOG}` };
+      return { ok: false, error: `${summary}\n\nFull log: ${updateLogPath()}` };
     }
   }
 
@@ -1073,7 +1076,7 @@ ipcMain.handle('apply-update', async () => {
   if (!npmBin) {
     const msg = `Could not locate \`npm\`. Looked in: SHELL profile, /opt/homebrew, /usr/local, nvm, Herd. Install Node/npm or add it to your login shell PATH.`;
     appendUpdateLog({ event: 'apply-update:no-npm' });
-    return { ok: false, error: `${msg}\n\nFull log: ${UPDATE_LOG}` };
+    return { ok: false, error: `${msg}\n\nFull log: ${updateLogPath()}` };
   }
   // Execute the resolved npm binary directly with execFile (no shell) so we
   // don't depend on PATH and avoid command-line injection if npmBin contains
@@ -1167,7 +1170,7 @@ ipcMain.handle('apply-update', async () => {
     appendUpdateLog({ event: 'apply-update:fail', summary });
     return {
       ok: false,
-      error: `${summary}\n\nFull log: ${UPDATE_LOG}`,
+      error: `${summary}\n\nFull log: ${updateLogPath()}`,
     };
   }
   const installedVersion = readInstalledVersion(npmRoots);

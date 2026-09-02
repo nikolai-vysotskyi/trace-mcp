@@ -1,4 +1,6 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -34,6 +36,34 @@ function sitemapPaths(): string[] {
 function navPaths(): string[] {
   const yml = readFileSync(join(DOCS, '_data', 'docs_nav.yml'), 'utf-8');
   return [...yml.matchAll(/^\s*url:\s*(\S+)\s*$/gm)].map((m) => m[1]);
+}
+
+/**
+ * Same-site links a reader can actually click, from a page's own body.
+ *
+ * Front matter, the TechArticle JSON-LD, fenced blocks and code spans are
+ * stripped first: none of them renders as an `<a>`, and a link shown as a code
+ * sample connects nothing. Reference-style links (`[x][ref]`) are not
+ * recognised — no docs page uses them, and if one starts to, this under-counts
+ * and the page goes red rather than silently passing.
+ */
+function inTextInternalLinks(markdown: string): string[] {
+  const body = markdown
+    .replace(/^---\n[\s\S]*?\n---\n/, '')
+    .replace(/<script[\s\S]*?<\/script>/g, '')
+    .replace(/^```[\s\S]*?^```/gm, '')
+    .replace(/`[^`\n]*`/g, '');
+  return [...body.matchAll(/\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)]
+    .map(([, href]) => href)
+    .filter(
+      (href) =>
+        // `//host/page.md` is protocol-relative — it leaves the site, so it is
+        // external however much it looks like a sibling path.
+        !href.startsWith('//') &&
+        // Internal = a rooted path or a sibling .md/.html page. A bare fragment
+        // is same-page, so it does not connect anything.
+        (/^\/[^/]/.test(href) || /^[\w./-]+\.(md|html)(#|$)/.test(href)),
+    );
 }
 
 describe('docs footer nav covers every indexed page', () => {
@@ -75,6 +105,48 @@ describe('docs footer nav covers every indexed page', () => {
         .map((e) => `${e.path} (${e.lastmod} < ${e.git})`)
         .join(', ')}`,
     ).toEqual([]);
+  });
+
+  /**
+   * A GitHub squash-merge keeps the author date and re-stamps the committer
+   * date to the merge moment. Dating pages by committer date therefore gave a
+   * different answer on the PR branch than on master for the same change, so a
+   * docs PR authored one day and merged the next passed its own CI and turned
+   * master red on landing — with the repo-wide `test` job failing for everyone
+   * else's unrelated PRs until someone re-ran the generator (TRA-637).
+   */
+  it('dates a page the same before and after a squash-merge re-stamps it', async () => {
+    const { gitDate } = await import('../../scripts/gen-sitemap.mjs');
+    const repo = mkdtempSync(join(tmpdir(), 'sitemap-squash-'));
+    // gpgsign off: a contributor with it on globally would fail here, not in git.
+    const git = (...args: string[]) =>
+      execFileSync('git', ['-c', 'commit.gpgsign=false', ...args], { cwd: repo, env });
+    // The author committed their own work, so both dates start out 08-29.
+    const env = {
+      ...process.env,
+      GIT_AUTHOR_DATE: '2026-08-29T12:00:00Z',
+      GIT_COMMITTER_DATE: '2026-08-29T12:00:00Z',
+    };
+
+    git('init', '-q');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'Test');
+    mkdirSync(join(repo, 'docs'));
+    writeFileSync(join(repo, 'docs', 'page.md'), 'body\n');
+    git('add', '-A');
+    git('commit', '-qm', 'authored on the PR branch');
+    const onBranch = gitDate('page.md', repo);
+
+    // What GitHub does on squash-merge: same author date, new committer date.
+    env.GIT_COMMITTER_DATE = '2026-08-30T19:00:00Z';
+    git('commit', '-q', '--amend', '--no-edit');
+    const afterSquash = gitDate('page.md', repo);
+
+    rmSync(repo, { recursive: true, force: true });
+    expect(onBranch).toBe('2026-08-29');
+    expect(afterSquash, 'gitDate must not move when a squash re-stamps the committer date').toBe(
+      onBranch,
+    );
   });
 
   /**
@@ -157,6 +229,96 @@ describe('docs footer nav covers every indexed page', () => {
       unpinned,
       `READMEs with front matter but no \`permalink:\` pinning them to their directory URL: ${unpinned.join(', ')}`,
     ).toEqual([]);
+  });
+
+  /**
+   * Footer coverage made every page reachable, but it made every page equally
+   * reachable: one flat 22-link ribbon repeated site-wide carries no topical
+   * signal, so no page reads as a hub. In-text links are what group pages into
+   * topics — the /vs/ cluster already does this and was the model copied for
+   * the token-cost, setup and coverage clusters (TRA-658).
+   *
+   * Threshold is 1, not the 3-6 the clusters actually carry: this exists to
+   * stop a NEW page shipping as a dead end, not to freeze the current density.
+   * Links injected by the layout do not count — only what the page's own body
+   * says. Pages excluded from the sitemap (`noindex: true`) are internal
+   * working documents and are not checked.
+   */
+  it('every published page links somewhere in its own body, not just the footer', async () => {
+    const { sourceFor } = await import('../../scripts/gen-sitemap.mjs');
+    const deadEnds = sitemapPaths().filter(
+      (path) =>
+        inTextInternalLinks(readFileSync(join(DOCS, sourceFor(path)), 'utf-8')).length === 0,
+    );
+    expect(
+      deadEnds,
+      `published pages with no in-text internal link — add links in prose where the subject comes up, not a "See also" block: ${deadEnds.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  // The matcher above decides whether a page counts as a dead end, so its two
+  // failure directions are worth pinning down. A false positive is the costly
+  // one — it reports a dead end as linked and the guard goes quiet — so an
+  // external URL and a link that only exists inside a code sample must not
+  // count. A false negative just turns the page red, which announces itself.
+  it.each([
+    ['rooted path', '[config](/configuration.html)', true],
+    ['sibling page', '[config](configuration.md)', true],
+    ['sibling page with anchor', '[storage](architecture.md#storage)', true],
+    ['link with a title attribute', '[config](configuration.md "Config reference")', true],
+    ['absolute external URL', '[repo](https://github.com/x/y/blob/main/a.md)', false],
+    ['protocol-relative external URL', '[outside](//example.com/page.md)', false],
+    ['bare fragment (same page)', '[top](#quickstart)', false],
+    ['inside a code span', 'use `[config](configuration.md)` in prose', false],
+    ['inside a fenced block', '```md\n[config](configuration.md)\n```', false],
+  ])('link detection: %s', (_name, markdown, isInternal) => {
+    expect(inTextInternalLinks(markdown).length > 0).toBe(isInternal);
+  });
+
+  /**
+   * The TechArticle JSON-LD is hand-written into each page's body rather than
+   * emitted by the layout, so it drifts the same way the footer nav did: 19 of
+   * the 22 doc pages carried it and daemon-memory, language-matrix and
+   * tools-index shipped with only the layout's WebPage (TRA-677). The layout
+   * cannot emit it — headline and datePublished are per-page and are not in
+   * front matter — so a guard is what keeps a new page from skipping it.
+   */
+  it('every indexed docs page carries TechArticle schema', async () => {
+    const { sourceFor } = await import('../../scripts/gen-sitemap.mjs');
+    const missing = sitemapPaths().filter(
+      (path) => !readFileSync(join(DOCS, sourceFor(path)), 'utf-8').includes('"TechArticle"'),
+    );
+    expect(missing, `indexed pages without TechArticle JSON-LD: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  /**
+   * llms.txt is the file AI search systems read first, and for a product whose
+   * users are AI agents a stale one is not a missed opportunity — it is a wrong
+   * answer served confidently. It is hand-maintained (the descriptions are
+   * better than the front-matter ones) and had drifted past the same four newest
+   * pages the footer had (TRA-681), so the list needs the same guard the footer
+   * got rather than a generator.
+   */
+  it('llms.txt links every indexed page', () => {
+    const llms = readFileSync(join(DOCS, 'llms.txt'), 'utf-8');
+    const missing = sitemapPaths().filter((p) => !llms.includes(`https://trace-mcp.com${p}`));
+    expect(missing, `indexed pages absent from llms.txt: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  /**
+   * llms-full.txt was 170 KB of hand-copied page text with no generator, so it
+   * drifted in both directions at once: four pages absent, four more serving
+   * copies older than the live page. It is generated now, and presence alone is
+   * not the property worth checking — currency is. This is a fixed-point test
+   * like the sitemap one above: it goes red both when a page is added and when
+   * an existing page's text changes.
+   */
+  it('llms-full.txt is what the generator would produce', async () => {
+    const { build } = await import('../../scripts/gen-llms-full.mjs');
+    expect(
+      readFileSync(join(DOCS, 'llms-full.txt'), 'utf-8'),
+      'docs/llms-full.txt is stale — run `pnpm docs:sitemap`',
+    ).toBe(build());
   });
 
   /**

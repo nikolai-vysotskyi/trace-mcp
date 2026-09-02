@@ -23,7 +23,12 @@
  *    install pointing at itself — see `decideTakeover`.
  */
 
-import { execFileSync } from 'node:child_process';
+import {
+  execFile,
+  execFileSync,
+  type ExecFileException,
+  type ExecFileOptions,
+} from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -217,12 +222,86 @@ export function resolveCliCommand(dir = getLauncherDir()): string {
   return isExecutable(shim) ? shim : SHIM_NAMES[SHIM_NAMES.length - 1];
 }
 
+/** How to spawn the CLI with no shell: `execFile(file, [...prefixArgs, ...argv])`. */
+export interface CliInvocation {
+  file: string;
+  prefixArgs: string[];
+  /** Environment the runner needs, merged over `process.env` by `execCli`. */
+  env?: Record<string, string>;
+}
+
+/**
+ * The shim `resolveCliCommand` returns is a `.cmd` on Windows, and Node cannot
+ * launch a `.bat`/`.cmd` at all without a shell — see
+ * https://nodejs.org/api/child_process.html#spawning-bat-and-cmd-files-on-windows.
+ * Every no-shell `execFile` against it therefore failed, which is why the MCP
+ * clients screen could not read a status, Connect or Update on Windows
+ * (TRA-638). The PATH fallback does not rescue it either: there is no
+ * extensionless `trace-mcp` on Windows.
+ *
+ * `shell: true` is not the fix. The argv these callers pass carries project
+ * paths; it is passed as argv precisely so that spaces and `&` in them are
+ * never interpreted, and turning on a shell would reopen that.
+ *
+ * So run the CLI the way the shim itself runs it: a real executable with
+ * `cli.js` as its first argument. `launcher.env` already records that cli.js,
+ * and our own binary is a Node runtime under `ELECTRON_RUN_AS_NODE` — which is
+ * the whole job of `bin/node-runtime.cmd`. The caller's argv stays argv.
+ */
+export function resolveCliInvocation(
+  opts: { dir?: string; execPath?: string; isWindows?: boolean } = {},
+): CliInvocation {
+  const dir = opts.dir ?? getLauncherDir();
+  const viaShim: CliInvocation = { file: resolveCliCommand(dir), prefixArgs: [] };
+  if (!(opts.isWindows ?? IS_WINDOWS)) return viaShim;
+
+  // Nothing installed to point at: fall through and let the spawn fail with
+  // the same ENOENT it would have anyway, rather than inventing a path.
+  const { cli } = readLauncherEnv(dir);
+  if (!cli || !isFile(cli)) return viaShim;
+
+  return {
+    file: opts.execPath ?? process.execPath,
+    prefixArgs: [cli],
+    env: { ELECTRON_RUN_AS_NODE: '1' },
+  };
+}
+
+/**
+ * `execFile` against the CLI, with the Windows launcher problem solved once.
+ * Callers go through here rather than `resolveCliCommand` so a fourth IPC
+ * cannot quietly reintroduce the spawn that does not work.
+ */
+export function execCli(
+  args: string[],
+  options: Omit<ExecFileOptions, 'encoding'>,
+  callback: (error: ExecFileException | null, stdout: string, stderr: string) => void,
+): void {
+  const { file, prefixArgs, env } = resolveCliInvocation();
+  execFile(
+    file,
+    [...prefixArgs, ...args],
+    {
+      windowsHide: true,
+      ...options,
+      encoding: 'utf-8',
+      env: { ...process.env, ...options.env, ...env },
+    },
+    callback,
+  );
+}
+
 /**
  * Where the staged server lives inside the packaged app, or null when running
  * from a checkout (`pnpm dev:electron`), where the developer's own npm install
  * owns the control plane and this module must keep its hands off.
  */
-export function bundledServerDir(resourcesPath = process.resourcesPath): string | null {
+export function bundledServerDir(
+  // `process.resourcesPath` is Electron's, and since daemon-lifecycle.ts reaches
+  // this module for `resolveCliInvocation`, the root tsconfig compiles this file
+  // too (src/daemon/__tests__ imports daemon-lifecycle) — with plain Node types.
+  resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath,
+): string | null {
   if (!resourcesPath) return null;
   const dir = path.join(resourcesPath, 'server');
   return isFile(path.join(dir, 'dist', 'cli.js')) ? dir : null;
