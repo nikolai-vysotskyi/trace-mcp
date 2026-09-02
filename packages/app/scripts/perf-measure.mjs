@@ -51,6 +51,21 @@ const p95 = (xs) => {
   return s[Math.min(s.length - 1, Math.ceil(0.95 * s.length) - 1)];
 };
 const round = (n, d = 1) => Number(n.toFixed(d));
+/**
+ * A p95 alone cannot tell "everything is slow" from "one action in twenty
+ * stalls" — and those want opposite fixes. Buckets in ms, upper bound exclusive.
+ */
+const HISTOGRAM_EDGES = [10, 50, 200, 1000, 5000];
+const histogram = (xs) => {
+  const out = {};
+  let prev = 0;
+  for (const edge of HISTOGRAM_EDGES) {
+    out[`${prev}-${edge}`] = xs.filter((x) => x >= prev && x < edge).length;
+    prev = edge;
+  }
+  out[`>=${prev}`] = xs.filter((x) => x >= prev).length;
+  return out;
+};
 
 /** Minimal CDP client over the Node 22 global WebSocket. */
 class Cdp {
@@ -152,6 +167,45 @@ function cpuPercent(pid) {
   });
 }
 
+const ps = (args) =>
+  new Promise((resolve) => {
+    const p = spawn('ps', args);
+    let out = '';
+    p.stdout.on('data', (d) => {
+      out += d;
+    });
+    p.on('close', () => resolve(out));
+  });
+
+/**
+ * CPU actually burned over a window, in percent of one core.
+ *
+ * `ps -o %cpu` is a decaying lifetime average, so it cannot answer "is this
+ * process busy *now*" — a renderer that spun for ten minutes still reads high
+ * after it stops, and one that just started spinning reads low. Two `cputime`
+ * readings a fixed interval apart can.
+ */
+async function cpuOverWindow(pid, seconds) {
+  const total = async () => {
+    const raw = (await ps(['-o', 'cputime=', '-p', String(pid)])).trim();
+    const parts = raw.split(/[-:]/).map(Number);
+    return parts.reduce((acc, n) => acc * 60 + n, 0);
+  };
+  const before = await total();
+  await sleep(seconds * 1000);
+  return ((await total()) - before) / seconds * 100;
+}
+
+/** The renderer helper belonging to this app instance. */
+async function rendererPid(mainPid) {
+  const raw = await ps(['-ax', '-o', 'pid=,ppid=,command=']);
+  for (const line of raw.split('\n')) {
+    const m = line.match(/^\s*(\d+)\s+(\d+)\s+(.*)$/);
+    if (m && Number(m[2]) === mainPid && m[3].includes('--type=renderer')) return Number(m[1]);
+  }
+  return null;
+}
+
 /** Spawn the built app against a throwaway profile and attach to its renderer. */
 async function launchApp(extraArgs = []) {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'tracemcp-perf-'));
@@ -159,7 +213,12 @@ async function launchApp(extraArgs = []) {
   const t0 = Date.now();
   const child = spawn(electron, [appDir, `--remote-debugging-port=${PORT}`, `--user-data-dir=${userData}`, ...extraArgs], {
     cwd: appDir,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
+    // A perf pass takes ~50 minutes on a machine somebody is using, and it
+    // relaunches the app several times. `TRACE_MCP_AGENT_RUN=1` keeps every
+    // window unmapped (see HIDDEN_WINDOWS in src/main/tray.ts) so the run never
+    // steals focus or drags the user off their Space. The window still loads
+    // and paints, which is all the metrics read.
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '', TRACE_MCP_AGENT_RUN: '1' },
     stdio: 'ignore',
   });
   const stop = async () => {
@@ -205,10 +264,21 @@ async function runSample({ idleSeconds }) {
       // above — it carries none of this harness's polling and CDP round-trip
       // latency. On a loaded machine those two inflate by hundreds of ms while
       // this one does not, which is what makes it the comparable number.
+      //
+      // `app-first-content` is a mark the renderer sets itself (src/renderer/
+      // main.tsx). `first-contentful-paint` is kept alongside it but is null on
+      // every agent run: the window is unmapped, so no frame is ever presented
+      // and Chromium emits no paint entry. Trend `renderer_first_content_ms`.
+      renderer_first_content_ms: round(
+        (await cdp.evaluate(
+          `performance.getEntriesByName('app-first-content')[0]?.startTime ?? null`,
+        )) ?? NaN,
+        0,
+      ),
       renderer_fcp_ms: round(
-        await cdp.evaluate(
+        (await cdp.evaluate(
           `performance.getEntriesByType('paint').find(e => e.name === 'first-contentful-paint')?.startTime ?? null`,
-        ) ?? NaN,
+        )) ?? NaN,
         0,
       ),
     };
@@ -308,10 +378,42 @@ window.__perf = (() => {
   // switching to the Graph tab paints an empty canvas in a few ms and then
   // spends real time loading the graph. Measuring only the first paint would
   // report single-digit milliseconds for every action and catch no regression.
+  // An action that runs into SETTLE_CAP_MS reports the cap, and a p95 sitting on
+  // the cap says only "something kept mutating" — not what. Keep the last few
+  // mutation targets so a slow action can be attributed to an element instead of
+  // guessed at.
+  const churn = [];
+  // Elements that mutate on their own clock, not because an action is still in
+  // flight. Excluded from the settle detector; see the note in the observer.
+  const LIVE = ['.cosmos-gpu-label'];
+  const closestMatch = (n, sel) => {
+    const el = n && n.nodeType === 1 ? n : n && n.parentElement;
+    return !!(el && el.closest && el.closest(sel));
+  };
+  const describe = (n) => {
+    const el = n && n.nodeType === 1 ? n : n && n.parentElement;
+    if (!el) return String(n && n.nodeName);
+    return el.tagName.toLowerCase() +
+      (el.id ? '#' + el.id : '') +
+      (el.className && typeof el.className === 'string'
+        ? '.' + el.className.trim().split(/\\s+/).slice(0, 3).join('.')
+        : '');
+  };
   const settled = (start) =>
     new Promise((resolve) => {
       let last = start;
-      const obs = new MutationObserver(() => { last = performance.now(); });
+      let lastTargets = [];
+      const obs = new MutationObserver((records) => {
+        // The graph's label layer rewrites transform/textContent on every
+        // animation frame for as long as the simulation runs, which is
+        // indefinitely. Counting it means the DOM never goes quiet and every
+        // action reports the 5 s cap — measured 2026-09-02: search median 4981
+        // ms with it, 0 ms without. It is animation, not the action settling.
+        const real = records.filter((r) => !LIVE.some((sel) => closestMatch(r.target, sel)));
+        if (!real.length) return;
+        last = performance.now();
+        lastTargets = real.slice(-3).map((r) => r.type + ':' + describe(r.target));
+      });
       obs.observe(document.documentElement, {
         subtree: true, childList: true, characterData: true, attributes: true,
       });
@@ -319,6 +421,7 @@ window.__perf = (() => {
         const now = performance.now();
         if (now - last >= QUIET_MS || now - start >= SETTLE_CAP_MS) {
           obs.disconnect();
+          if (now - start >= SETTLE_CAP_MS && churn.length < 20) churn.push(lastTargets);
           return resolve(Math.min(last - start, SETTLE_CAP_MS));
         }
         setTimeout(tick, 16);
@@ -354,6 +457,7 @@ window.__perf = (() => {
   opened.catch(() => {}); // a navigation away before readiness is not a crash
   return {
     opened,
+    churn,
     matchCount: () => document.querySelectorAll('li[role="option"]').length,
     async switchView(label) {
       const btn = sidebarButton(label);
@@ -519,10 +623,11 @@ async function runWorkload({ minutes, opens }) {
   const rendererUrl = `file://${path.join(appDir, 'dist', 'renderer', 'index.html')}?view=project&root=${encodeURIComponent(fixture)}`;
   const durations = { open_project: [], search: [], switch_view: [] };
   let perfDaemon = await grabPort();
+  const idleCpu = {};
   // The workload window is never focused, and Chromium throttles timers and
   // rAF in an occluded renderer — which would stall the driver, not just slow
   // it. Startup samples deliberately do not get these flags.
-  const { cdp, stop } = await launchApp([
+  const { child, cdp, stop } = await launchApp([
     '--disable-background-timer-throttling',
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
@@ -600,19 +705,47 @@ async function runWorkload({ minutes, opens }) {
     const endAt = startedAt + minutes * 60_000;
     let cycles = 0;
     let afterFirstCycle = null;
+    // One hiccup at minute 19 used to throw away all 19 minutes of samples, and
+    // that is how three runs in a row ended with these metrics still unfilled.
+    // A cycle that fails ends the loop and is reported; the samples already
+    // taken are still a measurement, as long as there are enough of them.
+    let aborted = null;
     do {
-      for (const q of pin.queries) {
-        durations.search.push(await evaluateAction(`__perf.search(${JSON.stringify(q)})`));
+      try {
+        for (const q of pin.queries) {
+          durations.search.push(await evaluateAction(`__perf.search(${JSON.stringify(q)})`));
+        }
+        for (const v of pin.views) {
+          durations.switch_view.push(await evaluateAction(`__perf.switchView(${JSON.stringify(v)})`));
+        }
+        cycles++;
+        const heap_mb = await heapMb();
+        series.push({ t_min: round((Date.now() - startedAt) / 60_000, 2), heap_mb });
+        afterFirstCycle ??= heap_mb;
+        process.stderr.write(`cycle ${cycles}: heap ${heap_mb} MB\n`);
+      } catch (e) {
+        aborted = `cycle ${cycles + 1} of ~${minutes} min: ${e.message}`;
+        process.stderr.write(`workload aborted — ${aborted}\n`);
+        break;
       }
-      for (const v of pin.views) {
-        durations.switch_view.push(await evaluateAction(`__perf.switchView(${JSON.stringify(v)})`));
-      }
-      cycles++;
-      const heap_mb = await heapMb();
-      series.push({ t_min: round((Date.now() - startedAt) / 60_000, 2), heap_mb });
-      afterFirstCycle ??= heap_mb;
-      process.stderr.write(`cycle ${cycles}: heap ${heap_mb} MB\n`);
     } while (Date.now() < endAt);
+    // Below this the growth fit is noise and the p95 is one bad cycle.
+    if (cycles < 10) throw new Error(`workload produced only ${cycles} cycles — ${aborted ?? 'unknown'}`);
+
+    // Phase C — what each view costs when the user stops touching it. A tab
+    // that keeps the renderer busy with nobody looking is the whole "the app
+    // spends the user's time without telling them why" defect class, and it is
+    // invisible to every metric above: they only measure while an action runs.
+    try {
+      const rpid = await rendererPid(child.pid);
+      for (const view of ['Overview', 'Graph']) {
+        await evaluateAction(`__perf.switchView(${JSON.stringify(view)})`);
+        idleCpu[view.toLowerCase()] = rpid ? round(await cpuOverWindow(rpid, 60)) : null;
+        process.stderr.write(`renderer idle on ${view}: ${idleCpu[view.toLowerCase()]}% of a core\n`);
+      }
+    } catch (e) {
+      process.stderr.write(`renderer idle CPU not measured: ${e.message}\n`);
+    }
 
     // Worst of the three per-action p95s, not the p95 of everything pooled:
     // there are ~100x more searches than opens, so a pooled percentile would
@@ -620,6 +753,7 @@ async function runWorkload({ minutes, opens }) {
     const byAction = Object.values(durations).map((v) => p95(v));
     return {
       ui_p95_ms: round(Math.max(...byAction), 0),
+      renderer_cpu_idle_pct: idleCpu,
       heap_after_workload_mb: afterFirstCycle,
       heap_growth_mb_per_hour: fitGrowth(series),
       workload: {
@@ -631,8 +765,13 @@ async function runWorkload({ minutes, opens }) {
         },
         minutes: round((Date.now() - startedAt) / 60_000, 1),
         cycles,
+        aborted,
         open_warmup_ms: warmup,
         open_retries: openRetries,
+        // What was still mutating when an action hit the 5 s settle cap. Empty
+        // is the healthy answer; anything here names the element to look at.
+        churn: await cdp.evaluate('__perf.churn').catch(() => null),
+        search_ms_buckets: histogram(durations.search),
         open_project_ms: durations.open_project.map((d) => round(d, 0)),
         actions: Object.fromEntries(
           Object.entries(durations).map(([k, v]) => [
@@ -675,8 +814,10 @@ const entry = {
   metrics: {
     cold_start_ms: median(samples.map((s) => s.cold_start_ms)),
     window_interactive_ms: median(samples.map((s) => s.window_interactive_ms)),
+    renderer_first_content_ms: median(samples.map((s) => s.renderer_first_content_ms)),
     renderer_fcp_ms: median(samples.map((s) => s.renderer_fcp_ms)),
     ui_p95_ms: workload.ui_p95_ms,
+    renderer_cpu_idle_pct: workload.renderer_cpu_idle_pct ?? null,
     heap_idle_mb: last.heap_idle_mb ?? null,
     heap_after_workload_mb: workload.heap_after_workload_mb,
     heap_growth_mb_per_hour: workload.heap_growth_mb_per_hour,

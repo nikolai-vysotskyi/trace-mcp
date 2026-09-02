@@ -14,24 +14,76 @@ noindex: true
 Machine-readable history lives in [`baseline.json`](./baseline.json) — append one `runs[]`
 entry per measurement pass, never rewrite an old one. This file is the human summary.
 
-## Current numbers (3.6.0, `39026ebd` — the AskTab split, macOS 26.5 / arm64, median of 3)
+## Current numbers (3.11.0, `e56f4573`, macOS 26.5 / arm64, median of 3)
 
-The `artifact_mb` rows are newer than the rest of the table: 3.11.0, `64b14a12`, a
-single artifact-only pack on the same machine. Sizes are deterministic, so they do not
-need a median.
+First pass in which the fixed workload ran end to end, so the three workload metrics are
+filled for the first time (TRA-617). `artifact_mb` is still the 3.11.0 artifact-only pack
+from `64b14a12` — this run changed no dependency, so those sizes did not move.
 
 | Metric | Value | Ceiling | Status |
 |---|---|---|---|
-| `renderer_fcp_ms` | 216 | — | ok — **the startup metric of record** |
-| `cold_start_ms` | 801 | 3000 | ok, but load-sensitive (see below) |
-| `window_interactive_ms` | 506 | — | load-sensitive, do not trend it |
+| `renderer_first_content_ms` | 133 | — | ok — **the startup metric of record** (new series) |
+| `renderer_fcp_ms` | null | — | structurally unavailable offscreen — see below |
+| `cold_start_ms` | 483 | 3000 | ok, load-sensitive |
+| `window_interactive_ms` | 169 | — | load-sensitive, do not trend it |
+| `ui_p95_ms` | 529 | — | **first real value** — search p95 529, open p95 278, switch p95 177 |
 | `heap_idle_mb` (5 min idle) | 9.5 | — | ok |
+| `heap_after_workload_mb` | 7.89 | — | first value |
+| `heap_growth_mb_per_hour` | 1.37 | 50 | ok — 30 min, 667 cycles, no leak |
+| `renderer_cpu_idle_pct.overview` | 0.2 | — | ok |
+| `renderer_cpu_idle_pct.graph` | **27.7** | — | **the Graph tab never idles** — see below |
 | `main_cpu_idle_pct` | 0 | 2 | ok |
-| `renderer_eager_kb` | 2102 | — | **the size metric of record** (see below) |
-| `renderer_bundle_kb` | 2272 | — | +34% vs 1700 — regression, addressed this run |
-| `artifact_mb.mac_app_unpacked` | 346.2 | ×1.5 growth | re-anchored 2026-09-02, was 478.2 |
-| `artifact_mb.mac_server_payload` | 77 | **100 MB, absolute** | ok — see below |
-| `artifact_mb.mac_asar` | 6 | ×1.5 growth | ok |
+| `renderer_eager_kb` | 2131 | — | **the size metric of record** |
+| `renderer_bundle_kb` | 2301 | — | +1.3% vs 2272 — noise |
+| `artifact_mb.mac_app_unpacked` | 346.2 | x1.5 growth | 3.11.0 pack, unchanged |
+| `artifact_mb.mac_server_payload` | 77 | **100 MB, absolute** | ok |
+| `artifact_mb.mac_asar` | 6 | x1.5 growth | ok |
+
+### The run never shows a window
+
+Every pass launches the app with `TRACE_MCP_AGENT_RUN=1`, which leaves the window
+unmapped (`HIDDEN_WINDOWS` in `src/main/tray.ts`). A 50-minute pass runs on the machine
+somebody is using and must not steal their screen or their Space.
+
+The cost is that `first-contentful-paint` does not exist: Chromium only emits a paint
+entry for a frame the compositor presented, and an unmapped window presents none. So
+`renderer_fcp_ms` is null on every agent run. The replacement is
+**`renderer_first_content_ms`** — a `performance.mark('app-first-content')` the renderer
+sets itself the moment React commits the first content under `#root`
+(`src/renderer/main.tsx`). Same clock, same absence of CDP round-trip, one step earlier
+in the pipeline. **It starts a new series: 133 ms here is not comparable to run 4's
+216 ms of `renderer_fcp_ms`.**
+
+### `ui_p95_ms` was unmeasurable, not just unmeasured
+
+The settle detector calls an action done when the DOM has been quiet for 120 ms. The
+graph's `.cosmos-gpu-label` layer rewrites `transform` and `textContent` on every
+animation frame, indefinitely, so the DOM was never quiet and every action ran into the
+5 s cap. Measured on this machine, same commit, 110 searches: median **4981 ms** with the
+layer counted, **0 ms** without it, 15 cap hits versus none. The number the old detector
+would have published was a measure of the graph animation.
+
+That layer is now excluded (`LIVE` in `perf-measure.mjs`). `workload.churn` in the JSON
+records what was still mutating whenever an action does hit the cap — empty is the healthy
+answer, and anything in it names the element instead of leaving the next run to guess.
+`workload.search_ms_buckets` separates "everything is slow" from "one action in twenty
+stalls"; they want opposite fixes.
+
+### The Graph tab burns 27.7% of a core with nobody touching it
+
+`renderer_cpu_idle_pct` (new this run) is renderer CPU over a 60 s window with no input,
+per view, taken from `cputime` deltas rather than `ps -o %cpu`, which is a decaying
+lifetime average and cannot answer "busy right now". Overview reads 0.2% of a core;
+Graph reads 27.7% (27.0% on an independent 5-minute run the same day). The label layer
+above is the visible half of it: the simulation is continuously re-heated, so the tab
+keeps rendering forever whether or not anything moved. Tracked as its own issue.
+
+### A workload that fails late still reports
+
+A cycle that throws now ends the loop and publishes the samples already taken, marked
+with `workload.aborted`. The attempt before this one lost 19 minutes and 188 cycles to a
+single CDP timeout at minute 19 — which is how three runs in a row ended with these
+fields still null. Below 10 cycles the run still fails: the growth fit would be noise.
 
 ### Which artifact number to trend
 
@@ -57,21 +109,19 @@ render. **Trend `renderer_eager_kb`**; keep `renderer_bundle_kb` as the total-we
 `cold_start_ms` and `window_interactive_ms` are wall-clock across the harness's 20 ms
 poll loop and its CDP round-trips. On a busy machine that inflates them by hundreds of
 milliseconds while the app itself is unchanged — the 2026-08-29 run measured 349 → 1005 ms
-on a machine at load average 11–22 and none of it was the product. `renderer_fcp_ms` is
+on a machine at load average 11–22 and none of it was the product. `renderer_first_content_ms` is
 read off the renderer's own clock after the fact and carries none of that, so **compare
-`renderer_fcp_ms` across runs**; treat the other two as a sanity check against the 3 s
-ceiling only.
+`renderer_first_content_ms` across runs**; treat the other two as a sanity check against
+the 3 s ceiling only. `renderer_fcp_ms` is kept in the JSON but is null on any run that
+does not show a window, which is every agent run.
 
 When a run has to happen on a loaded machine, an interleaved A/B — alternating one sample
 of each build, several rounds — cancels the drift that a back-to-back A-then-B run does not.
 
-`ui_p95_ms`, `heap_after_workload_mb` and `heap_growth_mb_per_hour` are still unfilled in
-`baseline.json`. The harness that produces them landed with TRA-258 and has been run
-end to end, but a publishable pass needs a daemon on 127.0.0.1:3741 that speaks this
-checkout's API — the renderer's `BASE` is hardcoded, so the workload cannot be pointed
-anywhere else. On a machine where another trace-mcp version owns that port, the fixture
-never gets served and the run aborts with `the daemon on 3741 never served <fixture>`.
-Take the first clean pass on a machine with no competing daemon.
+`ui_p95_ms`, `heap_after_workload_mb` and `heap_growth_mb_per_hour` were unfilled until
+2026-09-02, when the workload first completed. It does not need an exclusive daemon: when
+another trace-mcp already holds 3741 the harness registers the fixture with it and hands
+it back at the end, and when nothing holds the port it starts its own and kills it after.
 
 ## How to take a measurement
 
