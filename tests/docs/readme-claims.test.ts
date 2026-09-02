@@ -473,7 +473,23 @@ describe('docs site numeric claims (TRA-174)', () => {
   const BENCH = JSON.parse(
     readFileSync(join(REPO_ROOT, 'docs/_data/pr_context_bench.json'), 'utf-8'),
   ) as Record<string, unknown>;
-  const BENCH_TAG = /\{\{\s*site\.data\.pr_context_bench\.([a-z0-9_]+)/gi;
+  const BENCH_TAG = /\{\{\s*site\.data\.pr_context_bench\.([a-z0-9_.[\]]+)/gi;
+  /** `losses[0].savings_pct` is a real tag on the benchmark page, so a key path
+   *  has to be walked, not just its first segment. `first` / `last` / `size` are
+   *  Liquid's own array accessors and resolve like Liquid resolves them, so
+   *  `losses.first.savings_pct` is not reported as a typo. */
+  const benchValue = (path: string): unknown =>
+    path
+      .replace(/\[(\d+)\]/g, '.$1')
+      .split('.')
+      .reduce<unknown>((v, key) => {
+        if (Array.isArray(v)) {
+          if (key === 'first') return v[0];
+          if (key === 'last') return v[v.length - 1];
+          if (key === 'size') return v.length;
+        }
+        return (v as Record<string, unknown> | undefined)?.[key];
+      }, BENCH);
 
   it('README states the benchmark headline exactly as scripts/bench-pr-context.ts generated it', () => {
     const readme = readReadme();
@@ -513,12 +529,35 @@ describe('docs site numeric claims (TRA-174)', () => {
   });
 
   it('the Jekyll surfaces read the benchmark from _data instead of hardcoding it (TRA-647)', () => {
+    // Asking only whether the file contains one tag *somewhere* passes as long
+    // as a single tag survives: the hero could drift to a typed-in 90.6% while
+    // the metrics strip keeps its tag, and this test would stay green. So strip
+    // the Liquid out and assert the generated values are absent from what is
+    // left — a typed-in number then has nowhere to hide, in any section.
+    const typedIn = (src: string) => src.replace(/\{\{[^}]*\}\}/g, '').replace(/\{%[^%]*%\}/g, '');
+    const esc = (v: unknown) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const hardcoded: [string, RegExp][] = [
+      // Preceded by no digit or dot, so a CSS `0.6%` or an `1890.6%` is not this.
+      ['median saving', new RegExp(`(?<![\\d.])${esc(BENCH.median_savings_pct)}\\s*%`)],
+      // A bare 60 is a font size; 60 counting pull requests is the benchmark.
+      ['PR count', new RegExp(`\\b${esc(BENCH.pr_count)}\\s+(merged|pull requests?|PRs)`, 'i')],
+      ['repo count', new RegExp(`\\b${esc(BENCH.repo_count)}\\s+open-source`, 'i')],
+    ];
     for (const path of ['docs/index.html', 'docs/comparisons.md', 'docs/pr-context-benchmark.md']) {
+      const src = readFileSync(join(REPO_ROOT, path), 'utf-8');
       expect(
-        readFileSync(join(REPO_ROOT, path), 'utf-8').includes('site.data.pr_context_bench.'),
+        src.includes('site.data.pr_context_bench.'),
         `${path} no longer reads {{ site.data.pr_context_bench.* }} — the benchmark numbers are ` +
           'generated, never typed. Keep them in docs/_data/pr_context_bench.json.',
       ).toBe(true);
+      for (const [label, pattern] of hardcoded) {
+        const hit = typedIn(src).match(pattern);
+        expect(
+          hit?.[0] ?? null,
+          `${path} states the ${label} outside a Liquid tag ("${hit?.[0]}"). Replace it with ` +
+            '{{ site.data.pr_context_bench.* }} so re-running the benchmark updates the page.',
+        ).toBe(null);
+      }
     }
   });
 
@@ -536,7 +575,7 @@ describe('docs site numeric claims (TRA-174)', () => {
         }
         if (!/\.(md|html|txt)$/.test(entry.name)) continue;
         for (const m of readFileSync(full, 'utf-8').matchAll(BENCH_TAG)) {
-          if (BENCH[m[1]] === undefined) broken.push(`${entry.name}: ${m[0]}`);
+          if (benchValue(m[1]) === undefined) broken.push(`${entry.name}: ${m[0]}`);
         }
       }
     };
