@@ -794,6 +794,14 @@ layout: null
       border-right: 1px solid var(--border);
     }
     .stat:last-child { border-right: none; }
+    .stats-note {
+      padding: 20px 24px 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .stats-note strong { color: var(--text-display); }
+    .stats-note code { font-family: var(--font-mono); font-size: 13px; }
     .stat-label {
       font-family: var(--font-mono);
       font-size: 10px;
@@ -2249,6 +2257,21 @@ layout: null
           <div class="stat-trend">median over {{ site.data.pr_context_bench.pr_count }} merged PRs, code we don&rsquo;t own</div>
         </div>
       </div>
+      {%- comment -%}
+        Renders only once scripts/refresh-savings.mjs has produced the data file. It
+        refuses to when the window is too short to sanitize, so an absent file means
+        "not publishable yet", not "forgot to run it". Never inline these numbers as
+        literals — they would outlive the next refresh.
+      {%- endcomment -%}
+      {% if site.data.savings %}
+      <p class="stats-note">
+        <strong>{{ site.data.savings.tokens_display }} tokens saved</strong> across installs that
+        share usage, as of {{ site.data.savings.refreshed }} &mdash; {{ site.data.savings.usd_display }}
+        at the <code>{{ site.data.savings.price_model }}</code> input rate
+        (${{ site.data.savings.price_usd_per_mtok }}/Mtok). Self-reported by anonymous, opt-out
+        pings, not audited; <a href="telemetry">how this is measured</a>.
+      </p>
+      {% endif %}
     </div>
   </section>
 
