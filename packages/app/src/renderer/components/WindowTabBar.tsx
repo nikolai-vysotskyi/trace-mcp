@@ -1,13 +1,20 @@
 /**
- * Custom tab bar for Windows (and Linux).
- * On macOS, native tabs handle this — this component renders nothing.
+ * Custom tab bar for every platform, macOS included (the native AppKit tabs
+ * were removed in PR 708).
  *
  * Displays a horizontal strip of tabs at the top of each window.
  * Each tab represents an open window (Menu + project windows).
  * Clicking a tab sends IPC to focus that window.
+ *
+ * On macOS this strip is the topmost band, so the system traffic lights are
+ * drawn INSIDE it. Its height is therefore TOP_BAND_H — the same number the
+ * main process derives `trafficLightPosition.y` from — and never a literal of
+ * its own. A 36px strip centres at 18 while the lights centre at 22, which is
+ * exactly the drift chrome-metrics.ts exists to prevent (TRA-370).
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { TOP_BAND_H } from '../../shared/chrome-metrics.js';
 
 interface TabInfo {
   id: string;
@@ -58,10 +65,10 @@ export function WindowTabBar() {
       style={
         {
           display: 'flex',
-          alignItems: 'stretch',
-          height: 36,
+          alignItems: 'center',
+          height: TOP_BAND_H,
           background: 'var(--surface-sunken)',
-          borderBottom: '1px solid var(--separator)',
+          borderBottom: '0.5px solid var(--separator)',
           WebkitAppRegion: 'drag',
           paddingLeft: platform === 'darwin' ? 78 : 4,
           paddingRight: 4,
@@ -81,13 +88,14 @@ export function WindowTabBar() {
               display: 'flex',
               alignItems: 'center',
               gap: 6,
+              height: 28,
               padding: '0 12px',
               fontSize: 11,
               fontWeight: tab.active ? 600 : 400,
               color: tab.active ? 'var(--label)' : 'var(--label-secondary)',
               background: tab.active ? 'var(--fill-tertiary)' : 'transparent',
               border: 'none',
-              borderRadius: '6px 6px 0 0',
+              borderRadius: 6,
               cursor: 'pointer',
               maxWidth: 180,
               minWidth: 0,
@@ -95,7 +103,6 @@ export function WindowTabBar() {
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               WebkitAppRegion: 'no-drag',
-              marginTop: 4,
               transition: 'background 0.15s, color 0.15s',
             } as React.CSSProperties
           }

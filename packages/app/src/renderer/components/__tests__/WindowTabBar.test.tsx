@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TOP_BAND_H, trafficLightCentreY } from '../../../shared/chrome-metrics.js';
 import { WindowTabBar } from '../WindowTabBar';
 
 interface TabInfo {
@@ -64,6 +65,26 @@ describe('WindowTabBar', () => {
 
     const bar = container.firstChild as HTMLElement;
     expect(bar.style.paddingLeft).toBe('78px');
+  });
+
+  /* TRA-370 / PR 716. Under `hiddenInset` this strip is the topmost band, so the
+     system draws the traffic lights inside it. The first version hard-coded
+     36px while `trafficLightPosition.y` stayed derived from the 44px
+     TOP_BAND_H — lights centred at 22 in a strip centred at 18. Assert the tie,
+     not the number: if either side moves alone, this fails. */
+  it('sizes the strip so the traffic lights land on its centre line', async () => {
+    const tabs: TabInfo[] = [
+      { id: 'menu', title: 'Workspace', type: 'menu', active: true },
+      { id: '/projects/assetfeed', title: 'assetfeed', type: 'project', active: false },
+    ];
+    stubElectronAPI('darwin', tabs);
+
+    const { container } = render(<WindowTabBar />);
+    await screen.findByText('Workspace');
+
+    const bar = container.firstChild as HTMLElement;
+    expect(bar.style.height).toBe(`${TOP_BAND_H}px`);
+    expect(trafficLightCentreY()).toBe(Number.parseFloat(bar.style.height) / 2);
   });
 
   it('renders tab strip on Windows/Linux with 4px padding', async () => {
