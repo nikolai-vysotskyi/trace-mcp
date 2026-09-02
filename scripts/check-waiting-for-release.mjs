@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Fails when an issue sits in `waiting_for_release` while the PR that claims it
-// is not merged.
+// Fails when an issue sits in `waiting_for_release` while the PR linked to it is
+// not merged.
 //
 // TRA-659: six issues spent 17 hours in that status against an open, red PR.
 // Two runs did it for the same reason — the run armed auto-merge, read that as
@@ -9,8 +9,14 @@
 // the delay was invisible until a human looked at the PR list.
 //
 // Auto-merge is a request. A request a required check will refuse is not a
-// completion: the status may only be set against a PR that is actually MERGED,
+// completion: the status may only be set against a PR that is actually merged,
 // read from the PR, not inferred from having armed the merge.
+//
+// The issue → PR links come from the platform's own link table
+// (`multica issue pull-requests`), not from parsing PR prose. Reconstructing
+// ownership from a body line is what an earlier draft of this check did, and it
+// read "Stage 3 of the TRA-435 epic" as a claim on TRA-435 — a reference bound
+// to an unrelated merged PR passes the very issue the check exists to catch.
 //
 // The Releaser autopilot already walks this exact set of issues to advance them
 // to `done`; this is that walk with one extra assertion.
@@ -18,105 +24,72 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const CLOSING_KEYWORD = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|part of)\b/i;
-
-/** Distinct TRA issue keys in a blob of text, uppercased. */
-export function issueKeys(text) {
-  return [...new Set((text ?? '').match(/\bTRA-\d+\b/gi)?.map((k) => k.toUpperCase()) ?? [])];
-}
-
 /**
- * A release-please PR restates every issue in the changelog it assembles, so it
- * names issues whose work is already merged — the opposite of a claim.
+ * Splits issues by whether a merged PR backs the status.
  *
- * @param {{title?: string}} pr
+ * An issue with no linked PR is reported, not failed: doc-only and ops-only work
+ * legitimately reaches the status without one, and the link table is only as
+ * complete as the PRs that named their issue. Failing on those would bury the
+ * real signal — but they are printed, because an unverifiable claim is not a
+ * verified one.
+ *
+ * @param {Array<{issue: {identifier: string, title: string}, prs: Array<{number: number, state: string, merge_state_status?: string, failed_check_names?: string[]}>}>} entries
  */
-export function isReleasePr(pr) {
-  return /^chore\(.*\): release \d/.test(pr.title ?? '');
-}
-
-/**
- * Issue keys a PR claims to deliver: keys in the title, plus keys on a body line
- * carrying a closing keyword. A key mentioned in passing ("the TRA-476
- * incident") is a reference, not a claim, and must not bind an issue's status to
- * an unrelated PR.
- *
- * @param {{title?: string, body?: string}} pr
- */
-export function claimedKeys(pr) {
-  if (isReleasePr(pr)) return [];
-  const fromBody = (pr.body ?? '')
-    .split('\n')
-    .filter((line) => CLOSING_KEYWORD.test(line))
-    .join('\n');
-  return issueKeys(`${pr.title ?? ''}\n${fromBody}`);
-}
-
-/**
- * Issues in `waiting_for_release` whose claiming PRs exist but none is merged.
- *
- * An issue no PR claims is reported separately, not failed: doc-only and
- * ops-only issues legitimately reach the status without one, and guessing at
- * those would bury the real signal.
- *
- * @param {Array<{identifier: string, id: string, title: string}>} issues
- * @param {Array<{number: number, title: string, body?: string, state: string, mergeStateStatus?: string}>} prs
- */
-export function findUnmergedClaims(issues, prs) {
-  /** @type {Map<string, typeof prs>} */
-  const byKey = new Map();
-  for (const pr of prs) {
-    for (const key of claimedKeys(pr)) {
-      byKey.set(key, [...(byKey.get(key) ?? []), pr]);
-    }
-  }
+export function findUnmergedClaims(entries) {
   const unmerged = [];
   const unlinked = [];
-  for (const issue of issues) {
-    const claiming = byKey.get(issue.identifier.toUpperCase()) ?? [];
-    if (claiming.length === 0) {
+  for (const { issue, prs } of entries) {
+    if (prs.length === 0) {
       unlinked.push(issue);
-    } else if (!claiming.some((pr) => pr.state === 'MERGED')) {
-      unmerged.push({ issue, prs: claiming });
+    } else if (!prs.some((pr) => pr.state === 'merged')) {
+      unmerged.push({ issue, prs });
     }
   }
   return { unmerged, unlinked };
 }
 
+/** `#715 open, BLOCKED, failing: CodeQL` — everything needed to see the claim was wrong. */
+export function describePr(pr) {
+  const parts = [`#${pr.number} ${pr.state}`];
+  if (pr.merge_state_status && pr.merge_state_status !== 'unknown') {
+    parts.push(pr.merge_state_status);
+  }
+  if (pr.failed_check_names?.length) {
+    parts.push(`failing: ${pr.failed_check_names.join(', ')}`);
+  }
+  return parts.join(', ');
+}
+
 export function formatReport({ unmerged, unlinked }) {
   const lines = ['### waiting_for_release check', ''];
   if (unmerged.length === 0) {
-    lines.push('Every issue in `waiting_for_release` has a merged PR.');
+    lines.push('Every issue in `waiting_for_release` with a linked PR has a merged one.');
   } else {
     lines.push('These issues claim to be merged, but their PR is not:', '');
     for (const { issue, prs } of unmerged) {
-      const state = prs
-        .map(
-          (pr) =>
-            `#${pr.number} ${pr.state}${pr.state === 'OPEN' ? `/${pr.mergeStateStatus ?? 'UNKNOWN'}` : ''}`,
-        )
-        .join(', ');
-      lines.push(`- ${issue.identifier} — ${issue.title} → ${state}`);
+      lines.push(`- ${issue.identifier} — ${issue.title} → ${prs.map(describePr).join(' | ')}`);
     }
     lines.push(
       '',
       'Move each back to `in_progress` and comment naming the PR and its real state.',
       'Arming auto-merge is not merging: `waiting_for_release` may only be set once',
-      'the PR reads MERGED.',
+      'the PR reads merged.',
     );
   }
   if (unlinked.length > 0) {
     lines.push(
       '',
-      `Not verifiable — no PR claims them (${unlinked.map((i) => i.identifier).join(', ')}).`,
+      `Not verifiable — no PR is linked to them (${unlinked.map((i) => i.identifier).join(', ')}).`,
+      'Check by hand that each is doc-only or ops-only work rather than a PR that',
+      'never recorded its issue.',
     );
   }
   return lines.join('\n');
 }
 
-function run(cmd, args) {
+function multica(args) {
   return JSON.parse(
-    execFileSync(cmd, args, {
+    execFileSync('multica', args, {
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024,
       stdio: ['ignore', 'pipe', 'inherit'],
@@ -125,7 +98,7 @@ function run(cmd, args) {
 }
 
 function main() {
-  const issues = run('multica', [
+  const { issues } = multica([
     'issue',
     'list',
     '--status',
@@ -134,25 +107,30 @@ function main() {
     '100',
     '--output',
     'json',
-  ]).issues;
-  const prs = run('gh', [
-    'pr',
-    'list',
-    '--state',
-    'all',
-    '--limit',
-    '400',
-    '--json',
-    'number,title,body,state,mergeStateStatus',
   ]);
-  const result = findUnmergedClaims(issues, prs);
-  const report = formatReport(result);
-  if (result.unmerged.length === 0) {
-    console.log(report);
-    return;
+  const entries = [];
+  const unreadable = [];
+  for (const issue of issues) {
+    try {
+      const { pull_requests } = multica(['issue', 'pull-requests', issue.id, '--output', 'json']);
+      entries.push({ issue, prs: pull_requests });
+    } catch {
+      // A failed lookup is not "no PR linked": passing on it would be the exact
+      // false clean bill the check exists to prevent.
+      unreadable.push(issue.identifier);
+    }
   }
-  console.error(report);
-  process.exit(1);
+  if (unreadable.length > 0) {
+    console.error(`Could not read the linked PRs of ${unreadable.join(', ')} — check incomplete.`);
+  }
+  const result = findUnmergedClaims(entries);
+  const report = formatReport(result);
+  if (result.unmerged.length > 0) {
+    console.error(report);
+    process.exit(1);
+  }
+  console.log(report);
+  if (unreadable.length > 0) process.exit(2);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
