@@ -211,7 +211,10 @@ it('allows choosing another folder with selectFolder', async () => {
   render(<SetupWizard onClose={() => {}} initialStep="project" />);
 
   await screen.findByText('Index your first project');
-  const changeButton = screen.getByRole('button', { name: 'Change folder…' });
+  // The project step's title renders synchronously; guessFirstProject() still
+  // needs a tick to resolve and swap the "no folder" card for the guessed one
+  // (TRA-640) — findByRole waits for that instead of racing it.
+  const changeButton = await screen.findByRole('button', { name: 'Change folder…' });
   fireEvent.click(changeButton);
 
   await screen.findByText('custom-repo');
