@@ -55,7 +55,14 @@ export function pageBody(file) {
 export function build() {
   const xml = readFileSync(join(DOCS, 'sitemap.xml'), 'utf-8');
   const pages = sitemapSources(xml).filter((f) => f.endsWith('.md'));
-  return [HEADER, ...pages.map((f) => `\n---\n\n${pageBody(f)}\n`)].join('');
+  const out = [HEADER, ...pages.map((f) => `\n---\n\n${pageBody(f)}\n`)].join('');
+  // Any other `page.*` tag would resolve against llms-full's own front matter
+  // and describe every page as this one — silently, which is the failure mode
+  // this whole file is being generated to stop. Fail loudly instead.
+  const leaked = out.match(/{{-?\s*page\.\w+/g);
+  if (leaked)
+    throw new Error(`unresolved page-scoped Liquid in llms-full.txt: ${leaked.join(', ')}`);
+  return out;
 }
 
 if (process.argv[1] === import.meta.filename) {
