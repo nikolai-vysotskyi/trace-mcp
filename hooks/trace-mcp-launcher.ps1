@@ -11,6 +11,19 @@ $TraceHome = if ($env:TRACE_MCP_HOME) { $env:TRACE_MCP_HOME } else { Join-Path $
 $ConfigPath = Join-Path $TraceHome 'launcher.env'
 $LogPath    = Join-Path $TraceHome 'launcher.log'
 
+# Rotate once per invocation, before the first append (TRA-702). Mirrors
+# rotate_log in trace-mcp-launcher.sh. Bounds the log at 2 x the limit across
+# both generations; without it the file only ever grew.
+$LogMaxBytes = if ($env:TRACE_MCP_LOG_MAX_BYTES) { [int64]$env:TRACE_MCP_LOG_MAX_BYTES } else { 5242880 }
+try {
+    $existing = Get-Item -LiteralPath $LogPath -ErrorAction SilentlyContinue
+    if ($existing -and $existing.Length -gt $LogMaxBytes) {
+        Move-Item -LiteralPath $LogPath -Destination "$LogPath.1" -Force -ErrorAction SilentlyContinue
+    }
+} catch {
+    # Never abort on rotation failure.
+}
+
 function Write-LauncherLog {
     param([string]$Message)
     try {

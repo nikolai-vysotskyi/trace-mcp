@@ -25,6 +25,23 @@ LOG="$TRACE_HOME/launcher.log"
 # One global node_modules root per line, appended by each install.
 PKG_ROOTS_FILE="$TRACE_HOME/pkg-roots"
 
+# Rotate once per invocation, before the first append (TRA-702). The shim runs
+# once per MCP client launch and writes a couple of lines, so a size check here
+# costs one stat and bounds the file at 2 x LOG_MAX_BYTES across both
+# generations. Without it launcher.log only ever grew — 9.7 MB observed.
+LOG_MAX_BYTES=${TRACE_MCP_LOG_MAX_BYTES:-5242880}
+rotate_log() {
+  [ -f "$LOG" ] || return 0
+  # stat is not portable between GNU and BSD; try both, give up quietly.
+  size=$(stat -f %z "$LOG" 2>/dev/null || stat -c %s "$LOG" 2>/dev/null || echo 0)
+  case "$size" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  [ "$size" -gt "$LOG_MAX_BYTES" ] || return 0
+  mv -f "$LOG" "$LOG.1" 2>/dev/null || true
+}
+rotate_log
+
 log() {
   # Best-effort append; never abort on log failure.
   printf '[%s] %s\n' "$(date -u +%FT%TZ 2>/dev/null || echo '-')" "$1" >> "$LOG" 2>/dev/null || true
