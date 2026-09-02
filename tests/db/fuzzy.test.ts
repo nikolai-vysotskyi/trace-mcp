@@ -182,6 +182,25 @@ describe('Fuzzy search', () => {
       expect(results.length).toBe(0);
     });
 
+    it('filePattern glob (*.py) matches only python file symbols', () => {
+      const results = fuzzySearch(db, 'formatCurrencyy', {
+        filePattern: '*.py',
+        threshold: 0.1,
+        maxEditDistance: 5,
+      });
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.every((r) => r.name.startsWith('format'))).toBe(true);
+    });
+
+    it('filePattern glob (*.ts) excludes symbols from non-matching files', () => {
+      const results = fuzzySearch(db, 'formatCurrencyy', {
+        filePattern: '*.ts',
+        threshold: 0.1,
+        maxEditDistance: 5,
+      });
+      expect(results.length).toBe(0);
+    });
+
     it('handles multiple results without N+1', () => {
       // fuzzySearch uses batch SQL — single candidate query + batch metadata
       const results = fuzzySearch(db, 'formatCurrencyy', {

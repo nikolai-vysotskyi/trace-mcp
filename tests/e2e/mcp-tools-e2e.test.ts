@@ -226,9 +226,13 @@ describe('MCP Tools E2E — Search scoring', () => {
   it('search with file pattern filter narrows results', async () => {
     const all = await search(store, 'User', {}, 100, 0, {});
     const filtered = await search(store, 'User', { filePattern: '**/Models/**' }, 100, 0, {});
+    // TRA-676 regression guard: a glob file_pattern must actually filter,
+    // not silently return zero rows (which used to also satisfy the <=
+    // assertion below).
+    expect(filtered.items.length).toBeGreaterThan(0);
     expect(filtered.items.length).toBeLessThanOrEqual(all.items.length);
     for (const item of filtered.items) {
-      expect(item.symbol.file).toContain('Models');
+      expect(item.file.path).toContain('Models');
     }
   });
 });

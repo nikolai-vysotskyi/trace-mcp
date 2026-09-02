@@ -53,7 +53,7 @@ export function searchFts(
   }
   if (filters?.filePattern) {
     conditions.push('f.path LIKE ?');
-    params.push(`%${filters.filePattern}%`);
+    params.push(filePatternToLike(filters.filePattern));
   }
 
   // Default-exclusion guard: drop markdown headings/tags from generic
@@ -98,6 +98,17 @@ export function searchFts(
 
   params.push(limit, offset);
   return db.prepare(sql).all(...params) as FtsResult[];
+}
+
+/**
+ * Convert a `file_pattern` filter into a SQL LIKE pattern. Glob wildcards
+ * (`*`, `?`) map to their LIKE equivalents (`%`, `_`); a pattern with no
+ * wildcards keeps the pre-existing substring-match behavior so plain
+ * filenames like `tool-filter.ts` still match anywhere in the path.
+ */
+export function filePatternToLike(pattern: string): string {
+  if (!/[*?]/.test(pattern)) return `%${pattern}%`;
+  return pattern.replace(/\*/g, '%').replace(/\?/g, '_');
 }
 
 export function escapeFtsQuery(query: string): string {
