@@ -54,6 +54,11 @@ export class Store {
     return this.files.getFile(path);
   }
 
+  /** Read-side path lookup with a unique-suffix fallback. See FileRepository.resolveFile. */
+  resolveFile(path: string): FileRow | undefined {
+    return this.files.resolveFile(path);
+  }
+
   getFileById(id: number): FileRow | undefined {
     return this.files.getFileById(id);
   }
