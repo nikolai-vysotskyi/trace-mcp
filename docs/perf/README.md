@@ -263,6 +263,17 @@ Compare against the median of the last 5 runs: >+10% is a warning to note, >+25%
 
 ## Changes worth remembering
 
+**2026-09-02 — four secondary tabs were sitting in the startup chunk (TRA-593).**
+`Activity`, `Insights`, `MemoryExplorer` and `Notebook` were static imports in `App.tsx`, so
+every window paid for them at cold start even though none of them is a default view. Moving
+them behind `React.lazy` — the same treatment `AskTab` already had — took the entry chunk from
+1,204.25 kB (gzip 345.32) to 1,114.87 kB (gzip 322.64), so 89.4 kB raw / 22.7 kB gzip leaves
+the eager path (`renderer_eager_kb` 2184 to 2095, -4.1%). Both figures come from a clean
+production `vite build` of the parent commit and this one on the same tree. The measurement
+that matters here is the build output, not a trace: this moves bytes off the startup path, and
+the tabs load on click instead. The guard is `lazy-tabs.test.ts` — `lazy()` names the export as
+a string, so a rename type-checks fine and only breaks when a user clicks the tab.
+
 **2026-09-02 — the harness may not take the user's screen, and that cost the startup metric.**
 Two runs of this autopilot overlapped: one landed the private daemon port, the other found
 the same `.cosmos-gpu-label` cause independently and priced it. They are merged rather than
