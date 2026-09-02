@@ -207,6 +207,16 @@ export class MessageRouter {
   }
 
   /**
+   * Drop a pending request id without answering it. For a caller that intends
+   * to re-issue the same frame through another backend: without this, the next
+   * swap would synthesize an error response for it and the client would end up
+   * with two responses for one id.
+   */
+  forgetPending(id: string | number): void {
+    this.clearPending(id);
+  }
+
+  /**
    * Stop the current backend. Idempotent.
    * Does NOT clear the message queue — anything still buffered stays until a
    * new backend is attached (via setInitialBackend + flushPending) or until

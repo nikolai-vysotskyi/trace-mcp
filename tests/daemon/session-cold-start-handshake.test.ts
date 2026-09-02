@@ -1,3 +1,4 @@
+import http from 'node:http';
 import net from 'node:net';
 import { PassThrough } from 'node:stream';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
@@ -66,6 +67,34 @@ async function startBlackHoleServer(): Promise<{ port: number; close: () => Prom
   };
 }
 
+/**
+ * A daemon whose cheap routes answer instantly while /mcp accepts and never
+ * responds — a wedged MCP handler behind a working /health.
+ */
+async function startSplitHealthServer(): Promise<{ port: number; close: () => Promise<void> }> {
+  const held = new Set<http.ServerResponse>();
+  const server = http.createServer((req, res) => {
+    if (req.url?.startsWith('/mcp')) {
+      held.add(res); // accepted, answered never
+      return;
+    }
+    req.resume();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, status: 'healthy' }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as net.AddressInfo).port;
+  return {
+    port,
+    close: () =>
+      new Promise<void>((resolve) => {
+        for (const res of held) res.destroy();
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}
+
 describe('StdioSession cold start (TRA-704)', () => {
   let cleanup: (() => Promise<void>) | null = null;
 
@@ -75,17 +104,20 @@ describe('StdioSession cold start (TRA-704)', () => {
     vi.clearAllMocks();
   });
 
-  it('answers initialize while the daemon is unreachable and auto-spawn is still pending', async () => {
-    const blackHole = await startBlackHoleServer();
+  /**
+   * Drives a real `StdioServerTransport` over in-memory streams against the
+   * given daemon port and returns the first frame the client sees, or throws
+   * if nothing arrives inside the acceptance bound.
+   */
+  async function handshakeAgainst(daemonPort: number): Promise<{ frame: string; ms: number }> {
     const stdin = new PassThrough();
     const stdout = new PassThrough();
-
     const session = new StdioSession({
       projectRoot: process.cwd(),
       indexRoot: process.cwd(),
       config: TraceMcpConfigSchema.parse({}),
       sharedDbPath: '/nonexistent/shared.db',
-      daemonPort: blackHole.port,
+      daemonPort,
       idleTimeoutMs: 0,
       daemonStabilityMs: 60_000,
       autoSpawnDaemon: true,
@@ -94,9 +126,10 @@ describe('StdioSession cold start (TRA-704)', () => {
       stdin,
       stdout,
     });
+    const previous = cleanup;
     cleanup = async () => {
       await session.shutdown('test');
-      await blackHole.close();
+      await previous?.();
     };
 
     const firstFrame = new Promise<string>((resolve) => {
@@ -114,10 +147,30 @@ describe('StdioSession cold start (TRA-704)', () => {
         t.unref?.();
       }),
     ]);
+    return { frame, ms: Date.now() - started };
+  }
+
+  it('answers initialize while the daemon is unreachable and auto-spawn is still pending', async () => {
+    const blackHole = await startBlackHoleServer();
+    cleanup = () => blackHole.close();
+
+    const { frame, ms } = await handshakeAgainst(blackHole.port);
 
     expect(JSON.parse(frame)).toMatchObject({ id: 1, result: { protocolVersion: '2024-11-05' } });
-    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(ms).toBeLessThan(2_000);
     // The spawn attempt still happens — just off the critical path.
     expect(autoSpawnCalled).toHaveBeenCalledWith(blackHole.port, 20_000);
+  });
+
+  it('answers initialize when /health is healthy but the daemon MCP handler is wedged', async () => {
+    const splitHealth = await startSplitHealthServer();
+    cleanup = () => splitHealth.close();
+
+    // /health answers, so bootstrap picks proxy mode — and the daemon then
+    // never answers the handshake it accepted.
+    const { frame, ms } = await handshakeAgainst(splitHealth.port);
+
+    expect(JSON.parse(frame)).toMatchObject({ id: 1, result: { protocolVersion: '2024-11-05' } });
+    expect(ms).toBeLessThan(2_000);
   });
 });

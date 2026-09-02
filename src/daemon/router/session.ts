@@ -25,6 +25,12 @@ declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
 
+/**
+ * How long a daemon-backed session gets to answer `initialize` before we give
+ * up on it and serve the session in-process instead.
+ */
+const PROXY_INITIALIZE_TIMEOUT_MS = 1_000;
+
 function isInitializeRequest(msg: JSONRPCMessage): boolean {
   const m = msg as Record<string, unknown>;
   return m.method === 'initialize' && m.id !== undefined && m.id !== null;
@@ -96,14 +102,27 @@ export class StdioSession {
    * sees the handshake and every frame going back to the client.
    */
   private readonly clientProfile: ClientProfileGate;
+  /** Id of the in-flight `initialize` request the watchdog below is timing. */
+  private initializeId: string | number | null = null;
+  private initializeTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Set once a daemon has failed to answer `initialize` for this session.
+   * Blocks the watcher from swapping us back onto it — a daemon whose /health
+   * works while its MCP handler is wedged would otherwise be re-adopted on the
+   * next poll and hang the session all over again.
+   */
+  private proxyDisabled = false;
 
   constructor(opts: StdioSessionOptions) {
     this.opts = opts;
     this.clientProfile = new ClientProfileGate(opts.config);
     this.stdio = stripRedundantSchemaKeyword(new StdioServerTransport(opts.stdin, opts.stdout));
     this.router = new MessageRouter({
-      sendToClient: (msg) =>
-        this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage),
+      sendToClient: (msg) => {
+        const id = (msg as unknown as { id?: string | number }).id;
+        if (id !== undefined && id === this.initializeId) this.clearInitializeWatchdog();
+        return this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage);
+      },
       drainTimeoutMs: opts.drainTimeoutMs ?? 5_000,
     });
     this.watcher = new PollingDaemonWatcher({
@@ -130,6 +149,7 @@ export class StdioSession {
       this.clientProfile.observeFromClient(msg);
       if (isInitializeRequest(msg as JSONRPCMessage)) {
         logger.info({ profile: this.clientProfile.name }, 'StdioSession: resolved client profile');
+        this.armInitializeWatchdog((msg as unknown as { id: string | number }).id);
       }
       void this.router.ingestFromClient(msg as JSONRPCMessage);
     };
@@ -264,6 +284,7 @@ export class StdioSession {
     this.idleTimer = null;
     this.handshake?.cancel();
     this.handshake = null;
+    this.clearInitializeWatchdog();
 
     const active = this.router.getActiveBackend();
     await this.router.shutdown();
@@ -290,8 +311,47 @@ export class StdioSession {
 
   // ── Internals ───────────────────────────────────────────────────────
 
+  /**
+   * A reachable /health is not proof that the daemon's MCP handler can answer.
+   * Give the proxy a bounded window to complete the handshake; if it misses,
+   * serve the session in-process and replay the frame there, so the client
+   * gets a real `initialize` result instead of a hung connection (TRA-704).
+   */
+  private armInitializeWatchdog(id: string | number): void {
+    this.clearInitializeWatchdog();
+    if (this.router.getActiveKind() !== 'proxy') return;
+    this.initializeId = id;
+    this.initializeTimer = setTimeout(() => {
+      void this.onInitializeTimeout(id);
+    }, PROXY_INITIALIZE_TIMEOUT_MS);
+    this.initializeTimer.unref?.();
+  }
+
+  private clearInitializeWatchdog(): void {
+    if (this.initializeTimer) clearTimeout(this.initializeTimer);
+    this.initializeTimer = null;
+    this.initializeId = null;
+  }
+
+  private async onInitializeTimeout(id: string | number): Promise<void> {
+    this.clearInitializeWatchdog();
+    if (this.shuttingDown || this.router.getActiveKind() !== 'proxy') return;
+    logger.warn(
+      { id, timeoutMs: PROXY_INITIALIZE_TIMEOUT_MS },
+      'StdioSession: daemon did not answer initialize — serving this session in local mode',
+    );
+    this.proxyDisabled = true;
+    // Drop the in-flight id so the swap does not answer it with a synthetic
+    // error; the replay below is the response the client actually receives.
+    this.router.forgetPending(id);
+    await this.swapTo(this.buildLocalBackend(), 'proxy-initialize-timeout');
+    if (this.router.getActiveKind() !== 'local' || !this.cachedInitialize) return;
+    await this.router.ingestFromClient(this.cachedInitialize);
+  }
+
   private async onDaemonStateChange(nowActive: boolean): Promise<void> {
     if (this.shuttingDown) return;
+    if (nowActive && this.proxyDisabled) return;
     const currentKind = this.router.getActiveKind();
     if (nowActive) {
       if (currentKind === 'proxy') return; // already proxying
@@ -367,7 +427,7 @@ export class StdioSession {
     this.wakePromise = (async () => {
       try {
         logger.info('StdioSession: wake up from idle');
-        const daemonActive = this.watcher.getCurrentState();
+        const daemonActive = this.watcher.getCurrentState() && !this.proxyDisabled;
         const next = daemonActive ? this.buildProxyBackend() : this.buildLocalBackend();
         await next.start();
         this.desiredMode = next.kind;
