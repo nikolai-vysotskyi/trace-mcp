@@ -1,6 +1,8 @@
 /**
  * Tests for buildProjectContext — manifest file parsing and version detection.
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildProjectContext } from '../../src/indexer/project-context.js';
 import { createTmpDir, removeTmpDir, writeFixtureFile } from '../test-utils.js';
@@ -493,6 +495,305 @@ golang 1.22.0
       expect(runtimes).toContain('node');
       expect(runtimes).toContain('python');
       expect(ctx.allDependencies.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  // ========== Monorepo / Nested Manifests (1-2 levels deep) ==========
+
+  describe('monorepo & nested subproject manifests', () => {
+    it('discovers and aggregates manifests 1 level deep (e.g. thewed-laravel / thewed-front)', () => {
+      writeFixtureFile(
+        tmpDir,
+        'thewed-laravel/composer.json',
+        JSON.stringify({
+          require: { php: '^8.2', 'laravel/framework': '^11.0' },
+          'require-dev': { 'phpunit/phpunit': '^10.0' },
+        }),
+      );
+      writeFixtureFile(
+        tmpDir,
+        'thewed-front/package.json',
+        JSON.stringify({
+          dependencies: { vue: '^3.4.0', nuxt: '^3.10.0' },
+          devDependencies: { vitest: '^1.0.0' },
+        }),
+      );
+      writeFixtureFile(
+        tmpDir,
+        'thewed-front/nuxt.config.ts',
+        'export default defineNuxtConfig({})',
+      );
+
+      const ctx = buildProjectContext(tmpDir);
+
+      // Manifests populated
+      expect(ctx.composerJson).toBeDefined();
+      expect((ctx.composerJson?.require as Record<string, string>)?.['laravel/framework']).toBe(
+        '^11.0',
+      );
+      expect(ctx.packageJson).toBeDefined();
+      expect((ctx.packageJson?.dependencies as Record<string, string>)?.vue).toBe('^3.4.0');
+      expect((ctx.packageJson?.dependencies as Record<string, string>)?.nuxt).toBe('^3.10.0');
+      expect((ctx.packageJson?.devDependencies as Record<string, string>)?.vitest).toBe('^1.0.0');
+
+      // allDependencies contains both subprojects
+      expect(ctx.allDependencies).toContainEqual(
+        expect.objectContaining({ name: 'laravel/framework', version: '^11.0' }),
+      );
+      expect(ctx.allDependencies).toContainEqual(
+        expect.objectContaining({ name: 'vue', version: '^3.4.0' }),
+      );
+      expect(ctx.allDependencies).toContainEqual(
+        expect.objectContaining({ name: 'nuxt', version: '^3.10.0' }),
+      );
+      expect(ctx.allDependencies).toContainEqual(
+        expect.objectContaining({ name: 'vitest', version: '^1.0.0', dev: true }),
+      );
+
+      // detectedVersions includes runtimes with relative subproject sources
+      expect(ctx.detectedVersions).toContainEqual({
+        runtime: 'php',
+        version: '^8.2',
+        source: 'thewed-laravel/composer.json#require.php',
+      });
+      expect(ctx.detectedVersions).toContainEqual({
+        runtime: 'laravel',
+        version: '^11.0',
+        source: 'thewed-laravel/composer.json#laravel/framework',
+      });
+      expect(ctx.detectedVersions).toContainEqual({
+        runtime: 'vue',
+        version: '^3.4.0',
+        source: 'thewed-front/package.json#vue',
+      });
+      expect(ctx.detectedVersions).toContainEqual({
+        runtime: 'nuxt',
+        version: '^3.10.0',
+        source: 'thewed-front/package.json#nuxt',
+      });
+
+      // configFiles contains subproject config files
+      expect(ctx.configFiles).toContain('thewed-front/nuxt.config.ts');
+    });
+
+    it('discovers manifests 2 levels deep', () => {
+      writeFixtureFile(
+        tmpDir,
+        'services/api/pyproject.toml',
+        `
+[project]
+name = "api-service"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.100.0"]
+`,
+      );
+      writeFixtureFile(tmpDir, 'services/worker/requirements.txt', 'celery>=5.3.0\nredis>=5.0.0\n');
+      writeFixtureFile(
+        tmpDir,
+        'packages/shared/go.mod',
+        'module example.com/shared\n\ngo 1.22\n\nrequire github.com/gin-gonic/gin v1.9.1\n',
+      );
+
+      const ctx = buildProjectContext(tmpDir);
+
+      expect(ctx.pyprojectToml).toBeDefined();
+      expect(ctx.pyprojectToml?._parsedDeps).toContain('fastapi');
+      expect(ctx.requirementsTxt).toContain('celery');
+      expect(ctx.requirementsTxt).toContain('redis');
+      expect(ctx.goMod).toBeDefined();
+      expect(ctx.goMod?.deps).toContainEqual(
+        expect.objectContaining({ name: 'github.com/gin-gonic/gin', version: 'v1.9.1' }),
+      );
+
+      expect(ctx.allDependencies).toContainEqual(expect.objectContaining({ name: 'fastapi' }));
+      expect(ctx.allDependencies).toContainEqual(expect.objectContaining({ name: 'celery' }));
+      expect(ctx.allDependencies).toContainEqual(expect.objectContaining({ name: 'redis' }));
+      expect(ctx.allDependencies).toContainEqual(
+        expect.objectContaining({ name: 'github.com/gin-gonic/gin' }),
+      );
+    });
+
+    /**
+     * The require-block line parser used `([^\s/]+(?:\/[^\s]+)*)`, whose repeated
+     * group could itself consume slashes — so "a/b/c" was matchable 2^n ways and a
+     * go.mod line of many "!/" repetitions backtracked exponentially (js/redos,
+     * flagged by CodeQL on #711). Indexing is pointed at arbitrary checkouts, so
+     * the input is not trusted. 200 repetitions hangs for minutes unfixed.
+     */
+    it('parses a go.mod require block in linear time on a crafted line', () => {
+      writeFixtureFile(
+        tmpDir,
+        'go.mod',
+        `module example.com/m\n\ngo 1.22\n\nrequire (\n\t${'!/'.repeat(200)}\n\tgithub.com/gin-gonic/gin v1.9.1\n)\n`,
+      );
+
+      const start = Date.now();
+      const ctx = buildProjectContext(tmpDir);
+
+      expect(Date.now() - start).toBeLessThan(2000);
+      expect(ctx.goMod?.deps).toContainEqual(
+        expect.objectContaining({ name: 'github.com/gin-gonic/gin', version: 'v1.9.1' }),
+      );
+    });
+
+    it('excludes manifests inside node_modules, vendor, .git, .venv, dist, build', () => {
+      writeFixtureFile(
+        tmpDir,
+        'node_modules/bad-pkg/package.json',
+        JSON.stringify({ dependencies: { 'should-not-exist': '1.0.0' } }),
+      );
+      writeFixtureFile(
+        tmpDir,
+        'vendor/bad-vendor/composer.json',
+        JSON.stringify({ require: { 'should/not-exist': '1.0.0' } }),
+      );
+      writeFixtureFile(tmpDir, '.venv/requirements.txt', 'bad-python-dep==1.0.0\n');
+      writeFixtureFile(
+        tmpDir,
+        'dist/package.json',
+        JSON.stringify({ dependencies: { 'dist-dep': '1.0.0' } }),
+      );
+      writeFixtureFile(
+        tmpDir,
+        'build/package.json',
+        JSON.stringify({ dependencies: { 'build-dep': '1.0.0' } }),
+      );
+
+      const ctx = buildProjectContext(tmpDir);
+      expect(ctx.allDependencies.map((d) => d.name)).not.toContain('should-not-exist');
+      expect(ctx.allDependencies.map((d) => d.name)).not.toContain('should/not-exist');
+      expect(ctx.allDependencies.map((d) => d.name)).not.toContain('bad-python-dep');
+      expect(ctx.allDependencies.map((d) => d.name)).not.toContain('dist-dep');
+      expect(ctx.allDependencies.map((d) => d.name)).not.toContain('build-dep');
+      expect(ctx.packageJson).toBeUndefined();
+      expect(ctx.composerJson).toBeUndefined();
+    });
+
+    it('ignores symlinked manifest files and symlinked directories to prevent traversal', () => {
+      const outsideDir = createTmpDir('trace-ctx-outside-');
+      try {
+        writeFixtureFile(
+          outsideDir,
+          'package.json',
+          JSON.stringify({ dependencies: { 'escaped-dep': '1.0.0' } }),
+        );
+
+        // Symlink a file
+        const symlinkFile = path.join(tmpDir, 'package.json');
+        try {
+          fs.symlinkSync(path.join(outsideDir, 'package.json'), symlinkFile);
+        } catch {
+          /* platform support */
+        }
+
+        // Symlink a directory
+        const symlinkDir = path.join(tmpDir, 'symlinked-subproject');
+        try {
+          fs.symlinkSync(outsideDir, symlinkDir, 'dir');
+        } catch {
+          /* platform support */
+        }
+
+        const ctx = buildProjectContext(tmpDir);
+        expect(ctx.allDependencies.map((d) => d.name)).not.toContain('escaped-dep');
+        expect(ctx.packageJson).toBeUndefined();
+      } finally {
+        removeTmpDir(outsideDir);
+      }
+    });
+  });
+
+  // ========== Plugin Detection in Monorepos ==========
+
+  describe('framework plugins with monorepo project context', () => {
+    it('activates LaravelPlugin, NuxtPlugin, VueFrameworkPlugin on monorepo context', async () => {
+      const { LaravelPlugin } = await import(
+        '../../src/indexer/plugins/integration/framework/laravel/index.js'
+      );
+      const { NuxtPlugin } = await import(
+        '../../src/indexer/plugins/integration/framework/nuxt/index.js'
+      );
+      const { VueFrameworkPlugin } = await import(
+        '../../src/indexer/plugins/integration/view/vue/index.js'
+      );
+
+      writeFixtureFile(
+        tmpDir,
+        'thewed-laravel/composer.json',
+        JSON.stringify({
+          require: { 'laravel/framework': '^11.0' },
+        }),
+      );
+      writeFixtureFile(
+        tmpDir,
+        'thewed-front/package.json',
+        JSON.stringify({
+          dependencies: { nuxt: '^3.10.0', vue: '^3.4.0' },
+        }),
+      );
+
+      const ctx = buildProjectContext(tmpDir);
+
+      const laravel = new LaravelPlugin();
+      expect(laravel.detect(ctx)).toBe(true);
+
+      const nuxt = new NuxtPlugin();
+      expect(nuxt.detect(ctx)).toBe(true);
+
+      const vue = new VueFrameworkPlugin();
+      expect(vue.detect(ctx)).toBe(true);
+    });
+  });
+
+  // ========== get_project_map Diagnostics ==========
+
+  describe('get_project_map diagnostics', () => {
+    it('returns diagnostic warning when frameworks is empty but artifacts exist', async () => {
+      const { getProjectMap } = await import('../../src/tools/project/project.js');
+      const { PluginRegistry } = await import('../../src/plugin-api/registry.js');
+      const { createTestStore } = await import('../test-utils.js');
+
+      const store = createTestStore();
+      const registry = new PluginRegistry();
+
+      const fId = store.insertFile('routes/api.php', 'php', 'h1', 100);
+      store.insertRoute({ method: 'GET', uri: '/api/users', handler: 'UserController@index' }, fId);
+
+      // Empty project context -> no frameworks detected
+      const ctx = buildProjectContext(tmpDir);
+      const result = getProjectMap(store, registry, false, ctx);
+
+      expect(result.frameworks).toEqual([]);
+      expect(result.diagnostics).toBeDefined();
+      expect(result.diagnostics?.[0]).toContain('1 routes');
+      expect(result.diagnostics?.[0]).toContain('no frameworks were detected');
+    });
+
+    it('omits diagnostics when frameworks are detected', async () => {
+      const { getProjectMap } = await import('../../src/tools/project/project.js');
+      const { PluginRegistry } = await import('../../src/plugin-api/registry.js');
+      const { LaravelPlugin } = await import(
+        '../../src/indexer/plugins/integration/framework/laravel/index.js'
+      );
+      const { createTestStore } = await import('../test-utils.js');
+
+      const store = createTestStore();
+      const registry = new PluginRegistry();
+      registry.registerFrameworkPlugin(new LaravelPlugin());
+
+      writeFixtureFile(
+        tmpDir,
+        'composer.json',
+        JSON.stringify({ require: { 'laravel/framework': '^11.0' } }),
+      );
+      const ctx = buildProjectContext(tmpDir);
+
+      const fId = store.insertFile('routes/api.php', 'php', 'h1', 100);
+      store.insertRoute({ method: 'GET', uri: '/api/users', handler: 'UserController@index' }, fId);
+
+      const result = getProjectMap(store, registry, false, ctx);
+      expect(result.frameworks).toContain('laravel');
+      expect(result.diagnostics).toBeUndefined();
     });
   });
 });
