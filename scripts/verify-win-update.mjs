@@ -55,14 +55,19 @@ function die(msg) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function get(url, { accept, method } = {}) {
+async function get(url, { accept, range } = {}) {
   const headers = { 'user-agent': 'trace-mcp-update-check' };
   if (accept) headers.accept = accept;
-  // Unauthenticated works for a public repo, but a runner shares its IP with
-  // the rest of GitHub Actions and hits the 60/h anonymous limit.
-  if (process.env.GH_TOKEN) headers.authorization = `Bearer ${process.env.GH_TOKEN}`;
-  const res = await fetch(url, { headers, method, redirect: 'follow' });
-  if (!res.ok) die(`${method ?? 'GET'} ${url} -> ${res.status} ${res.statusText}`);
+  if (range) headers.range = range;
+  // Only on the API, which a runner shares an IP for and would otherwise hit the
+  // 60/h anonymous limit on. NOT on release downloads: those redirect to signed
+  // object-storage URLs that reject a request carrying an Authorization header
+  // as well, and the assets are public anyway.
+  if (process.env.GH_TOKEN && url.startsWith('https://api.github.com/')) {
+    headers.authorization = `Bearer ${process.env.GH_TOKEN}`;
+  }
+  const res = await fetch(url, { headers, redirect: 'follow' });
+  if (!res.ok) die(`GET ${url} -> ${res.status} ${res.statusText}`);
   return res;
 }
 
@@ -314,7 +319,9 @@ async function main() {
         `latest.yml offers ${feed.version}, not newer than the installed ${fromVersion} — no update would ever be offered`,
       );
     }
-    await get(`${LATEST}/${feed.file}`, { method: 'HEAD' });
+    // One byte, over the same redirect chain the updater follows — enough to
+    // prove the name in the feed resolves to a real, fetchable asset.
+    await get(`${LATEST}/${feed.file}`, { range: 'bytes=0-0' });
     console.log(`Feed names ${feed.file}, which is on the release.`);
 
     // 3. Hand over to the app: this is `applyUpdate()`, the call the Update
