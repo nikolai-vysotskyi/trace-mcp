@@ -131,6 +131,9 @@ function toolCallName(msg: JSONRPCMessage): string | undefined {
   return typeof name === 'string' ? name : undefined;
 }
 
+/** Budget for the best-effort project/client registration POSTs. */
+const REGISTER_TIMEOUT_MS = 1_000;
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const t = setTimeout(resolve, ms);
@@ -622,12 +625,16 @@ export class ProxyBackend implements Backend {
   private async registerWithDaemon(projectRoot: string): Promise<void> {
     const { daemonUrl, clientId } = this.opts;
     // Project registration (daemon returns 409 if already registered).
+    // Bounded: this is on the path to answering `initialize`, and a daemon
+    // whose event loop is starved by indexing would otherwise hold the
+    // handshake open indefinitely (TRA-704).
     await fetch(`${daemonUrl}/api/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: projectRoot }),
+      signal: AbortSignal.timeout(REGISTER_TIMEOUT_MS),
     }).catch(() => {
-      /* daemon may already know */
+      /* daemon may already know, or is too busy to answer right now */
     });
     // Client registration for the menu bar UI.
     fetch(`${daemonUrl}/api/clients`, {
