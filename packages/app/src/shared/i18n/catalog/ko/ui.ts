@@ -4,7 +4,8 @@ export const ui = {
   gradeBadge: '기술 부채 등급 {{grade}}',
   loading: '불러오는 중',
   retry: '다시 시도',
-  sectionError: '{{what}}을(를) 불러오지 못했습니다. 데몬이 아직 인덱싱 중일 수 있습니다.',
+  sectionError: '{{what}}을(를) 불러오지 못했습니다.',
+  sectionsError: '{{what}}을(를) 불러오지 못했습니다.',
 
   filterMatch: '일치',
   filterExclude: '제외',

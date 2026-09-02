@@ -308,6 +308,31 @@ describe('ProjectOverview surface', () => {
     /* The toolbar does not disappear when one section fails. */
     expect(screen.getByRole('button', { name: 'Reindex' })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Retry' }).length).toBeGreaterThan(0);
+    /* And it does not name a cause it cannot know (TRA-662). */
+    expect(screen.queryByText(/still be indexing/)).toBeNull();
+  });
+
+  /* TRA-662. The daemon is UP here — the pane above never fires — and two
+     sections fail anyway. Before this they each stated it separately, which
+     put the same sentence on screen twice, over a project last indexed five
+     days ago and a daemon with nothing running. */
+  it('states a multi-section failure once, with one retry', async () => {
+    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': null });
+    render(<ProjectOverview root={ROOT} />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Couldn't load the index summary and the quality scan."),
+      ).toBeTruthy(),
+    );
+    expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
+    /* The collapsed sections leave no empty heading behind — a title over a
+       card that only repeats the banner is not information. */
+    expect(screen.queryByText('Index')).toBeNull();
+    expect(screen.queryByText('Quality')).toBeNull();
+    /* The sections that answered are untouched. */
+    expect(screen.getByText('Coverage')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reindex' })).toBeTruthy();
   });
 });
 
@@ -329,5 +354,23 @@ describe('the surface reads from the catalogue, not from literals', () => {
     expect(screen.getByText('Индекс')).toBeTruthy();
     expect(screen.getByText('Файлов проиндексировано')).toBeTruthy();
     expect(screen.queryByText('Reindex')).toBeNull();
+  });
+
+  /* A list of nouns dropped into a sentence written for one noun is not a
+     sentence. `Intl.ListFormat` joins the nouns and cannot touch the verb
+     around them: Spanish needs `pudieron`, not `pudo`. German's old wording
+     `{{what}} konnte nicht geladen werden` could not be pluralised into a
+     correct sentence at all — the interpolation was sentence-initial, so it
+     also opened every German error with a lowercase article — and now reads
+     off a colon, where number and case stop mattering. */
+  it.each([
+    ['de', 'Fehler beim Laden: die Index-Übersicht und der Qualitätsscan.'],
+    ['es', 'No se pudieron cargar el resumen del índice y el escaneo de calidad.'],
+  ])('agrees with a plural subject in %s', async (locale, sentence) => {
+    setLocale(locale);
+    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': null });
+    render(<ProjectOverview root={ROOT} />);
+
+    await waitFor(() => expect(screen.getByText(sentence)).toBeTruthy());
   });
 });

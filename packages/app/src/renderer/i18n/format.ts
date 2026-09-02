@@ -41,6 +41,18 @@ export function formatDate(value: number | Date, options?: Intl.DateTimeFormatOp
   ).format(value);
 }
 
+/**
+ * "the index summary and the quality scan" — one sentence naming several
+ * things, in the active language. `conjunction`, not `unit`: the list is prose
+ * inside a sentence, so English wants the "and" and Japanese wants "、".
+ */
+export function formatList(parts: string[]): string {
+  const locale = currentLocale();
+  return memo(`l:${locale}`, () => new Intl.ListFormat(locale, { type: 'conjunction' })).format(
+    parts,
+  );
+}
+
 /* Read top-down as "is it under a minute, under an hour…" — the same order the
    three hand-written helpers use, which is how a reader checks them. */
 const UNITS: ReadonlyArray<

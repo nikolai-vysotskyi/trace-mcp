@@ -4,7 +4,8 @@ export const ui = {
   gradeBadge: '技术债等级 {{grade}}',
   loading: '加载中',
   retry: '重试',
-  sectionError: '无法加载{{what}}。守护进程可能仍在索引。',
+  sectionError: '无法加载{{what}}。',
+  sectionsError: '无法加载{{what}}。',
 
   filterMatch: '匹配',
   filterExclude: '排除',
