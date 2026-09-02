@@ -96,18 +96,52 @@ exit 0
   return stubPath;
 }
 
-function makeFailingCurlStub(stubDir: string): string {
+/**
+ * Real curl under `-w '%{http_code}'` PRINTS "000" and THEN exits non-zero on
+ * a refused connection. The original stub only did the second half, so the
+ * hook's old `|| echo "000"` looked correct in tests while producing "000000"
+ * — and therefore `reason: "other"` — against the real binary. TRA-694 found
+ * `no-daemon` had never once been recorded in 16,440 production lines.
+ */
+function makeFailingCurlStub(stubDir: string, printsCode = true): string {
   fs.mkdirSync(stubDir, { recursive: true });
   const stubPath = path.join(stubDir, 'curl');
-  // Mimics curl's connection-refused behavior: writes nothing useful to
-  // stdout and exits non-zero. The hook's "|| echo 000" branch then
-  // substitutes the missing HTTP code.
   const body = `#!/usr/bin/env bash
+${printsCode ? 'echo "000"' : ':'}
 exit 7
 `;
   fs.writeFileSync(stubPath, body);
   fs.chmodSync(stubPath, 0o755);
   return stubPath;
+}
+
+/** Stub curl that never answers, to prove the hook does not wait on it. */
+function makeHangingCurlStub(stubDir: string, seconds: number): string {
+  fs.mkdirSync(stubDir, { recursive: true });
+  const stubPath = path.join(stubDir, 'curl');
+  fs.writeFileSync(stubPath, `#!/usr/bin/env bash\nsleep ${seconds}\necho "000"\nexit 28\n`);
+  fs.chmodSync(stubPath, 0o755);
+  return stubPath;
+}
+
+/**
+ * The dispatch is detached (TRA-694), so the stats line lands after the hook
+ * has already exited. Poll for it instead of reading once.
+ */
+function readLastStat(traceHome: string, timeoutMs = 10_000): Record<string, unknown> {
+  const statsFile = path.join(traceHome, 'hook-stats.jsonl');
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (fs.existsSync(statsFile)) {
+      const lines = fs
+        .readFileSync(statsFile, 'utf-8')
+        .split('\n')
+        .filter((l) => l.length > 0);
+      if (lines.length > 0) return JSON.parse(lines[lines.length - 1]) as Record<string, unknown>;
+    }
+    if (Date.now() > deadline) throw new Error(`no stats line written to ${statsFile}`);
+    execSync('sleep 0.05');
+  }
 }
 
 function makeTraceMcpStub(stubDir: string): string {
@@ -149,14 +183,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
     const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin });
     expectCleanExit(res);
 
-    const statsFile = path.join(traceHome, 'hook-stats.jsonl');
-    expect(fs.existsSync(statsFile)).toBe(true);
-    const lines = fs
-      .readFileSync(statsFile, 'utf-8')
-      .split('\n')
-      .filter((l) => l.length > 0);
-    expect(lines).toHaveLength(1);
-    const parsed = JSON.parse(lines[0]) as Record<string, unknown>;
+    const parsed = readLastStat(traceHome);
     expect(parsed.path).toBe('daemon');
     expect(parsed.reason).toBe('ok');
     expect(typeof parsed.ts).toBe('number');
@@ -174,10 +201,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
     const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin });
     expectCleanExit(res);
 
-    const statsFile = path.join(traceHome, 'hook-stats.jsonl');
-    const parsed = JSON.parse(
-      fs.readFileSync(statsFile, 'utf-8').trim().split('\n').pop() as string,
-    ) as Record<string, unknown>;
+    const parsed = readLastStat(traceHome);
     expect(parsed.path).toBe('cli');
     expect(parsed.reason).toBe('no-daemon');
   });
@@ -194,10 +218,7 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
     const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin, sanitizePath: true });
     expectCleanExit(res);
 
-    const statsFile = path.join(traceHome, 'hook-stats.jsonl');
-    const parsed = JSON.parse(
-      fs.readFileSync(statsFile, 'utf-8').trim().split('\n').pop() as string,
-    ) as Record<string, unknown>;
+    const parsed = readLastStat(traceHome);
     expect(parsed.path).toBe('skipped');
     expect(parsed.reason).toBe('no-daemon');
   });
@@ -213,12 +234,48 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-reindex.sh stats writer
     const res = runHook({ cwd: projectDir, stubDir, traceHome, stdin });
     expectCleanExit(res);
 
-    const statsFile = path.join(traceHome, 'hook-stats.jsonl');
-    const parsed = JSON.parse(
-      fs.readFileSync(statsFile, 'utf-8').trim().split('\n').pop() as string,
-    ) as Record<string, unknown>;
+    const parsed = readLastStat(traceHome);
     expect(parsed.path).toBe('cli');
     expect(parsed.reason).toBe('404');
+  });
+
+  it('classifies a curl that prints 000 and exits non-zero as no-daemon', () => {
+    // Guards the v0.5 fix: the old `|| echo "000"` turned this — real curl's
+    // actual connection-refused behavior — into "000000" → reason "other".
+    makeFailingCurlStub(stubDir, true);
+    makeTraceMcpStub(stubDir);
+    const filePath = path.join(projectDir, 'src', 'foo.ts');
+    const res = runHook({
+      cwd: projectDir,
+      stubDir,
+      traceHome,
+      stdin: JSON.stringify({ tool_name: 'Edit', tool_input: { file_path: filePath } }),
+    });
+    expectCleanExit(res);
+
+    const parsed = readLastStat(traceHome);
+    expect(parsed.reason).toBe('no-daemon');
+  });
+
+  it('returns without waiting for the daemon round trip', () => {
+    // TRA-694: the dispatch is fire-and-forget. A daemon that accepts the
+    // connection and never answers must cost the agent nothing — that case
+    // alone burned 8,547 s of the 12,215 s measured before this fix.
+    makeHangingCurlStub(stubDir, 10);
+    makeTraceMcpStub(stubDir);
+    const filePath = path.join(projectDir, 'src', 'foo.ts');
+    const started = Date.now();
+    const res = runHook({
+      cwd: projectDir,
+      stubDir,
+      traceHome,
+      stdin: JSON.stringify({ tool_name: 'Edit', tool_input: { file_path: filePath } }),
+    });
+    const elapsed = Date.now() - started;
+    expectCleanExit(res);
+    // Loose bound: the hook itself spawns several subprocesses and CI is slow.
+    // Anything under the stub's 10 s sleep proves it did not block on curl.
+    expect(elapsed, `hook blocked for ${elapsed} ms on a hanging curl`).toBeLessThan(5_000);
   });
 
   it('does not error when stats home is read-only — best-effort write', () => {
