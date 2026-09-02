@@ -463,17 +463,24 @@ of mono caps always fails:
 
 - `.hero-trust` wraps mid-list and a `.dot` separator ends the line. Measured
   on the last box of each line, not judged by eye: a dot was the rightmost box
-  at 660, 600, 520, 430, 390, 360 and 320px — every width below the existing
-  700px breakpoint, and none above it. This is §9's "no label breaks into
-  fragments" rule one section up the page. Below 700px it is a column, the
-  dots are `display: none`, and `.ok`'s emphasis is dropped: stacked, one
-  highlighted item of three reads as a heading over the other two rather than
-  as the strongest peer.
+  at 660, 600, 520, 430, 390, 360 and 320px, and at none of 700, 760, 820,
+  900, 1024 or 1440px. Those are the tested widths — the sweep samples them,
+  it does not walk every integer — so read it as "every tested width below the
+  breakpoint". This is §9's "no label breaks into fragments" rule one section
+  up the page. At 700px and below it is a column, the dots are
+  `display: none`, and `.ok`'s emphasis is dropped: stacked, one highlighted
+  item of three reads as a heading over the other two rather than as the
+  strongest peer.
 - `.hero-meta` is `label / divider / label`, and `flex-wrap` is not set, so it
   never breaks between its children — instead both labels wrap *inside*
   themselves into two cramped columns with a divider that has no width left to
   draw. It stops fitting on one line at 520px (17px → 33px) and takes three
-  lines at 320px. Below 700px it is a column and the divider is hidden.
+  lines at 320px. At 700px and below it is a column and the divider is hidden.
+
+`@media (max-width: 700px)` includes 700px itself, so the stacked form starts
+*at* 700px while the defect it fixes starts just below — the rule is applied
+one tested step wider than the failure. Inline behaviour is what you get above
+700px, not at it.
 
 Both are bound to the hero's existing 700px breakpoint rather than to the
 520px where `.hero-meta` actually breaks. That is deliberate — one breakpoint

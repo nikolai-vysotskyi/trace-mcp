@@ -638,10 +638,10 @@ layout: null
       .hero-install { font-size: 12px; min-height: 52px; padding: 0 14px; gap: 10px; }
       .hero-alt-arch { font-size: 11px; margin-top: 12px; }
       /* One item per line, no dots. As a wrapped row a separator ends a line at
-         every width from 660px down — measured, not assumed: the last box on the
-         first line is a `.dot` at 660, 600, 520, 430, 390, 360 and 320. Stacking
-         costs nothing, because the row already spent two lines there (41px at
-         430px, 58px at 390px) to say the same three things. */
+         every tested width from 660px down — measured, not assumed: the last box
+         on the first line is a `.dot` at 660, 600, 520, 430, 390, 360 and 320.
+         Stacking removes that at a cost of 20px at 390px (58px → 78px), all of
+         it below the two actions. */
       .hero-trust {
         font-size: 11px;
         margin-top: 14px;
