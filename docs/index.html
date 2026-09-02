@@ -780,6 +780,14 @@ layout: null
       border-right: 1px solid var(--border);
     }
     .stat:last-child { border-right: none; }
+    .stats-note {
+      padding: 20px 24px 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+    .stats-note strong { color: var(--text-display); }
+    .stats-note code { font-family: var(--font-mono); font-size: 13px; }
     .stat-label {
       font-family: var(--font-mono);
       font-size: 10px;
@@ -2224,6 +2232,13 @@ layout: null
           <div class="stat-trend">on real agent workflows</div>
         </div>
       </div>
+      <p class="stats-note">
+        <strong>{{ site.data.savings.tokens_display }} tokens saved</strong> so far across installs that
+        share usage &mdash; that is {{ site.data.savings.usd_display }} at
+        <code>{{ site.data.savings.price_model }}</code> input price
+        (${{ site.data.savings.price_usd_per_mtok }}/Mtok), the cheapest model we price, so the real
+        figure is higher. Counted from anonymous, opt-out pings; <a href="telemetry">how this is measured</a>.
+      </p>
     </div>
   </section>
 

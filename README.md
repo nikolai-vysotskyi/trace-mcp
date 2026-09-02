@@ -31,6 +31,13 @@
   <sub>Based on early benchmarks across agent workflows with repeated context and dependency traversal.</sub>
 </p>
 
+<p align="center">
+  <strong>75M+ tokens saved</strong> so far across installs that share usage — that is $75+ at
+  <code>claude-haiku-4-5</code> input price ($1.00/Mtok), the cheapest model we price, so the real figure is higher.
+  <br>
+  <sub>Counted from anonymous, opt-out usage pings; see <a href="docs/telemetry.md">telemetry</a>. Every figure is floored and marked <code>+</code>, so it understates rather than overstates.</sub>
+</p>
+
 > AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
 >
 > trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 177 tools.
