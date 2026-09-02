@@ -1,7 +1,7 @@
 ---
 title: "Code Graph MCP Server Comparison: trace-mcp vs Repomix, Serena & 20+ alternatives"
 description: "Compare trace-mcp against Repomix, Serena, Kage, codebase-memory-mcp and 20+ MCP code-graph tools — capabilities, language support, GitHub stars. Last verified August 2026."
-updated: 2026-08-30
+updated: 2026-09-01
 ---
 
 # How trace-mcp compares
