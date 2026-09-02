@@ -17,6 +17,7 @@ import {
   startDaemonLogRotation,
   writeOwnDaemonPidFile,
 } from './daemon/lifecycle.js';
+import { recordDaemonCleanStop, recordDaemonStart } from './telemetry/usage-ping.js';
 
 if (process.argv.includes('serve') || process.argv.length === 2) {
   hardenStdio();
@@ -543,6 +544,11 @@ program
     // anything else, so a crash loop is visible in daemon.log itself rather
     // than only via `launchctl print` after someone thinks to look.
     logPreviousExit();
+    // TRA-671: the same post-mortem as two counters the daily ping can carry —
+    // launchd's record is mac-only and visible only to whoever runs
+    // `daemon status`, so "how often does a daemon die without shutting down"
+    // has never been answerable outside this machine.
+    recordDaemonStart();
     // TRA-421 registers our PID so clients can tell "busy" from "dead" without
     // /health. TRA-525: that registration happens in the listen() callback, NOT
     // here. Writing it before bind let a process that never becomes the daemon
@@ -2907,6 +2913,8 @@ program
       // process that is already on its way out (TRA-556).
       clearInterval(pidReassert);
       clearOwnDaemonPidFile();
+      // Reaching here at all is what makes this stop "clean" (TRA-671).
+      recordDaemonCleanStop();
       httpServer.close(() => process.exit(0));
     };
     process.on('SIGINT', shutdown);

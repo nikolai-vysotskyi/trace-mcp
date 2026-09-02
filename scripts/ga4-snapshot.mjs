@@ -185,6 +185,7 @@ const [
   presets,
   surfaces,
   indexed,
+  daemon,
   arrivals,
 ] = await Promise.all([
   report(token, propertyId, { dateRanges: range(1), metrics: [{ name: 'activeUsers' }] }),
@@ -247,6 +248,18 @@ const [
     dimensions: [{ name: 'customEvent:repos_indexed' }],
     metrics: [{ name: 'activeUsers' }],
     limit: 250,
+  }).catch((e) => ({ error: why(e) })),
+  // Daemon reliability (TRA-671). Custom *metrics*, not dimensions — we want
+  // the sums, not a breakdown by value. Resolved with the error rather than
+  // nulled for the same reason as `repos_indexed` above: an empty block reads
+  // as "no daemon ever died", which is the opposite of "not registered yet".
+  report(token, propertyId, {
+    dateRanges: range(28),
+    metrics: [
+      { name: 'customEvent:daemon_starts' },
+      { name: 'customEvent:daemon_unclean_stops' },
+      { name: 'activeUsers' },
+    ],
   }).catch((e) => ({ error: why(e) })),
   traffic(process.env.GITHUB_REPOSITORY, process.env.GH_TRAFFIC_TOKEN),
 ]);
@@ -378,6 +391,26 @@ by_preset:
 ${yaml(presets ? breakdown(presets) : {})}
 by_tools_advertised:
 ${yaml(surfaces ? breakdown(surfaces) : {})}
+
+# Daemon reliability in the field (TRA-671). Until this, everything we knew
+# about the background daemon came from one developer's machine — \`daemon
+# status\` and daemon.log say plenty, but only to whoever opens them.
+#
+#   starts_28d          daemon starts reported across all installs
+#   unclean_stops_28d   of those, how many followed a run that ended without
+#                       going through the shutdown handler — SIGKILL, an OS
+#                       memory kill, a native crash, or power loss
+#   unclean_pct         the ratio; this is the number to watch week to week
+#
+# A machine that sleeps, reboots or logs out normally sends SIGTERM and is NOT
+# counted here. Reboot-heavy weeks still lift it, so read the trend and not a
+# single figure. An \`error\` means the custom metrics are not registered in the
+# property yet; GA4 does not backfill, so values only start at registration.
+daemon:
+${errLine(daemon?.error)}  starts_28d: ${num(daemon)}
+  unclean_stops_28d: ${num(daemon, 1)}
+  unclean_pct: ${yamlNum(share(num(daemon, 1), num(daemon)))}
+  reporting_installs_28d: ${num(daemon, 2)}
 by_country:
 ${yaml(breakdown(countries))}
 by_client:

@@ -9,9 +9,11 @@
  * "claude-code"), the model that client mostly drove, how many repositories
  * are indexed, whether this run is a new install or a version change, the
  * machine's class (arch, core count, whole GB of RAM, OS version), the tool
- * preset the session ran with and how many tools it advertised, and two
+ * preset the session ran with and how many tools it advertised, two
  * aggregate counters since the previous ping (tool calls and estimated tokens
- * saved). Counts and names only: no IP, no project paths,
+ * saved), and two more for daemon reliability (starts, and how many of those
+ * followed a run that died without shutting down). Counts and names only: no
+ * IP, no project paths,
  * file names, query content, per-tool or per-project breakdown, and nothing
  * that could identify a user or their code.
  *
@@ -54,6 +56,18 @@ interface TelemetryState {
   client?: string;
   /** Version that sent the previous ping — the difference is the upgrade signal. */
   lastVersion?: string;
+  /**
+   * A daemon start that has not yet been matched by a graceful shutdown. Set
+   * true when the daemon begins serving, false when it shuts down through its
+   * SIGTERM/SIGINT handler. Finding it still true at the next start means the
+   * previous run died without running a handler — SIGKILL, OS memory kill,
+   * native crash, or power loss (TRA-671).
+   */
+  daemonRunning?: boolean;
+  /** Daemon starts since the last ping. */
+  daemonStarts?: number;
+  /** Of those starts, how many found `daemonRunning` still true. */
+  daemonUncleanStops?: number;
 }
 
 function isDisabled(env: NodeJS.ProcessEnv): boolean {
@@ -82,6 +96,9 @@ function loadOrCreateState(): TelemetryState {
         lastCalls: parsed.lastCalls,
         client: parsed.client,
         lastVersion: parsed.lastVersion,
+        daemonRunning: parsed.daemonRunning,
+        daemonStarts: parsed.daemonStarts,
+        daemonUncleanStops: parsed.daemonUncleanStops,
       };
   } catch {
     // No state file yet (first run) or it's unreadable — start fresh below.
@@ -140,6 +157,56 @@ export function recordUsagePingClient(name: string, env: NodeJS.ProcessEnv = pro
     saveState({ ...state, client: name });
   } catch (err) {
     logger.debug({ err }, 'telemetry.usage_ping_client_record_failed');
+  }
+}
+
+/**
+ * Count a daemon start, and the previous run's unclean death if there was one
+ * (TRA-671).
+ *
+ * Everything we know about daemon reliability was measured on one developer's
+ * machine: `daemon status` shows launchd's post-mortem and daemon.log shows the
+ * restart history, but only to whoever opens them. This is the field-observable
+ * half — two counts, no timestamps, no exit codes, no reasons, nothing about
+ * which project or client was running. "How often does a daemon die without
+ * shutting down" is answerable from that pair and from nothing we ship today.
+ *
+ * Deliberately not derived from a stale `daemon.pid`: `readDaemonPid()` unlinks
+ * a file naming a dead process, and on the detached-spawn path (Windows/Linux)
+ * `ensureDaemonGeneric` does exactly that before the new daemon boots — so the
+ * evidence is routinely gone by the time the daemon could read it. This flag
+ * lives in the telemetry state file, which nothing else touches.
+ *
+ * Best-effort: never throws, and a failed write costs one data point.
+ */
+export function recordDaemonStart(env: NodeJS.ProcessEnv = process.env): void {
+  if (isDisabled(env)) return;
+  try {
+    const state = loadOrCreateState();
+    saveState({
+      ...state,
+      daemonStarts: (state.daemonStarts ?? 0) + 1,
+      daemonUncleanStops: (state.daemonUncleanStops ?? 0) + (state.daemonRunning ? 1 : 0),
+      daemonRunning: true,
+    });
+  } catch (err) {
+    logger.debug({ err }, 'telemetry.daemon_start_record_failed');
+  }
+}
+
+/**
+ * Mark the daemon as having shut down through its own handler, so the next
+ * start does not count this run as an unclean stop (TRA-671). Called from the
+ * SIGTERM/SIGINT path; anything that skips that path is what we want counted.
+ */
+export function recordDaemonCleanStop(env: NodeJS.ProcessEnv = process.env): void {
+  if (isDisabled(env)) return;
+  try {
+    const state = loadOrCreateState();
+    if (!state.daemonRunning) return;
+    saveState({ ...state, daemonRunning: false });
+  } catch (err) {
+    logger.debug({ err }, 'telemetry.daemon_stop_record_failed');
   }
 }
 
@@ -227,6 +294,8 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
   const savings = (opts.loadSavings ?? loadPersistentSavings)();
   const tokensSaved = delta(savings?.total_tokens_saved, state.lastTokensSaved);
   const calls = delta(savings?.total_calls, state.lastCalls);
+  const daemonStarts = state.daemonStarts ?? 0;
+  const daemonUncleanStops = state.daemonUncleanStops ?? 0;
 
   const fetchImpl = opts.fetchImpl ?? fetch;
   const url = `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(measurementId)}&api_secret=${encodeURIComponent(apiSecret)}`;
@@ -256,6 +325,10 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
               repos_indexed: Object.keys(savings?.per_project ?? {}).length,
               preset: opts.preset ?? 'unknown',
               tools_advertised: opts.toolsAdvertised ?? 0,
+              // Daemon reliability since the previous ping (TRA-671). Both are
+              // 0 for a stdio-only install, which never starts a daemon.
+              daemon_starts: daemonStarts,
+              daemon_unclean_stops: daemonUncleanStops,
               // Without these two GA4 keeps the event but doesn't count the
               // install as an active user — reports read 0 while the raw event
               // count is non-zero. See the "Tip" under `session_id` /
@@ -287,6 +360,10 @@ export async function sendUsagePing(opts: UsagePingOptions): Promise<void> {
       lastTokensSaved: savings?.total_tokens_saved ?? state.lastTokensSaved,
       lastCalls: savings?.total_calls ?? state.lastCalls,
       lastVersion: opts.version,
+      // Subtract what was reported rather than zeroing: a daemon start can land
+      // between the snapshot above and this write, and zeroing would swallow it.
+      daemonStarts: Math.max(0, (latest.daemonStarts ?? 0) - daemonStarts),
+      daemonUncleanStops: Math.max(0, (latest.daemonUncleanStops ?? 0) - daemonUncleanStops),
     });
   } catch (err) {
     logger.debug({ err }, 'telemetry.usage_ping_state_save_failed');
