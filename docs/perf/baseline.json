@@ -217,19 +217,7 @@
         "cycle_errors": 0,
         "open_warmup_ms": 74,
         "open_retries": 0,
-        "open_project_ms": [
-          45,
-          45,
-          62,
-          46,
-          47,
-          45,
-          46,
-          45,
-          43,
-          46,
-          44
-        ],
+        "open_project_ms": [45, 45, 62, 46, 47, 45, 46, 45, 43, 46, 44],
         "actions": {
           "open_project": {
             "n": 11,
@@ -1175,19 +1163,7 @@
         "cycle_errors": 3,
         "open_warmup_ms": 61,
         "open_retries": 0,
-        "open_project_ms": [
-          43,
-          43,
-          58,
-          41,
-          144,
-          41,
-          42,
-          112,
-          39,
-          42,
-          126
-        ],
+        "open_project_ms": [43, 43, 58, 41, 144, 41, 42, 112, 39, 42, 126],
         "actions": {
           "open_project": {
             "n": 11,
