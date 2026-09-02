@@ -180,9 +180,16 @@ describe('pruneProjectConfigSections (TRA-702)', () => {
     fs.mkdirSync(lockDir, { recursive: true });
     fs.writeFileSync(
       path.join(lockDir, 'global-config.pid'),
-      // pid 1 is always alive and is never this test process, so the lock
-      // reads as genuinely held rather than stale.
-      JSON.stringify({ pid: 1, started_at: Date.now(), hostname: os.hostname(), op: 'peer' }),
+      // The holder must read as *live*, which means a pid `kill(pid, 0)`
+      // succeeds on and a matching hostname. Our own pid is the only value
+      // guaranteed to satisfy that on every platform — pid 1 does not exist on
+      // Windows, so the lock was reclaimed as stale there.
+      JSON.stringify({
+        pid: process.pid,
+        started_at: Date.now(),
+        hostname: os.hostname(),
+        op: 'peer',
+      }),
     );
 
     expect(configJsonc.pruneProjectConfigSections()).toEqual([]);
