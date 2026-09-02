@@ -20,12 +20,43 @@ For a 50-step coding workflow, an agent routinely spends **250,000+ prompt token
 ## The Solution: Linear O(T) State Engine
 
 With `SKILL.state`, the agent maintains an explicit, structured execution state in SQLite. Context is bounded to:
-1. **Compact State Block** (~150–250 tokens in Markdown format).
+1. **Compact State Block** — a serialized state reconstructed from 30 real agent
+   sessions has a median size of **597 tokens**, not the ~150–250 the design
+   assumed. Plans and modified-file lists on real tasks are longer than the
+   examples they were sized against.
 2. **Sliding Window** of the last 1–2 tool interactions (~1,000 tokens).
 
 $$\text{Tokens}_{\text{StateEngine}} = \sum_{t=1}^T \left( C_0 + |S(t)| + W \right) = \mathcal{O}(T)$$
 
-This delivers **60% to 88% prompt token reductions** on long-horizon agent tasks while increasing Pass@1 rates through explicit dead-end avoidance and atomic checkpoints.
+## What is actually measured
+
+`pnpm bench:state-replay` replays local Claude Code session logs: the ReAct arm is
+the prompt size the provider really billed each turn, and the state block is built
+from what each session really did (its TodoWrite plan, the files it really edited,
+the symbols it really looked up) and sized with the shipped serializer.
+
+On 30 real sessions (median 251 turns, window = 2):
+
+| Metric | Median |
+|---|---|
+| State block | 597 tokens |
+| Raw prompt-token reduction | **73.8%** |
+| Reduction priced with prompt caching | **65.3%** |
+
+Two results matter more than the headline:
+
+- **Prompt caching eats roughly a third of the win.** ReAct's history is
+  append-only and therefore almost entirely cache reads at 0.1x. A sliding window
+  rewrites its tail every turn, so those tokens are re-written at 1.25x. Raw token
+  counts overstate the saving.
+- **Short tasks lose.** The shortest session in the set (15 turns) came out at 5%
+  raw and **−55.7%** once caching was priced. Below roughly 30 turns the state
+  block plus lost cache hits costs more than the history it replaces. Use the
+  state engine for long-horizon work, not for every task.
+
+`src/eval/state-benchmark.ts` remains a closed-form model whose output is a
+restatement of its constants; the replay harness is the number to quote. Neither
+measures task success — we have no Pass@1 evidence, only prompt cost.
 
 ---
 
