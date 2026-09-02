@@ -1,7 +1,9 @@
-/* TRA-587. Native macOS tabs with titleBarStyle: 'hiddenInset' resulted in a
-   squashed, broken NSTabBar rendered at the top edge of the window, misaligned
-   traffic lights, and layout distortion. Each window (Workspace + individual
-   projects) opens as a clean independent window on macOS with consistent chrome. */
+/* TRA-587: native macOS tabs with titleBarStyle: 'hiddenInset' produced a
+   squashed, broken NSTabBar and misaligned traffic lights, so tabs moved to a
+   renderer-drawn strip — but each tab was still its own independent
+   BrowserWindow. TRA-699 collapsed that into a single window: a tab is
+   renderer state now, not a window, while this window keeps the same chrome
+   (traffic lights, vibrancy). */
 
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -109,7 +111,7 @@ describe('the traffic lights sit on the top band centre line', () => {
     }
   });
 
-  it('opens project windows independently without attaching native tabs', async () => {
+  it('opens projects as tabs inside the single window, never a second BrowserWindow', async () => {
     FakeWindow.all.length = 0;
     vi.resetModules();
     const platform = process.platform;
@@ -118,24 +120,24 @@ describe('the traffic lights sit on the top band centre line', () => {
     const { ipcMain } = await import('electron');
     try {
       showMenuWindow();
-      const menu = FakeWindow.all[0];
-      menu.emit('ready-to-show');
+      const main = FakeWindow.all[0];
+      main.emit('ready-to-show');
 
       const calls = [...(ipcMain.handle as ReturnType<typeof vi.fn>).mock.calls].reverse();
       const openProject = calls.find((c: unknown[]) => c[0] === 'open-project-tab')?.[1] as (
         event: unknown,
         root: string,
       ) => unknown;
-      openProject({}, '/tmp/demo');
-      const project = FakeWindow.all[1];
-      project.emit('ready-to-show');
 
-      expect(menu.addTabbedWindow).not.toHaveBeenCalled();
-      expect(project.opts.tabbingIdentifier).toBeUndefined();
-      expect(project.opts.trafficLightPosition).toEqual({
-        x: TRAFFIC_LIGHT_X,
-        y: TRAFFIC_LIGHT_Y,
-      });
+      openProject({}, '/tmp/demo');
+      openProject({}, '/tmp/other');
+
+      expect(FakeWindow.all.length).toBe(1);
+      expect(main.addTabbedWindow).not.toHaveBeenCalled();
+      expect(main.sent.filter((s) => s.channel === 'open-tab')).toEqual([
+        { channel: 'open-tab', args: [{ root: '/tmp/demo' }] },
+        { channel: 'open-tab', args: [{ root: '/tmp/other' }] },
+      ]);
     } finally {
       Object.defineProperty(process, 'platform', { value: platform });
     }
