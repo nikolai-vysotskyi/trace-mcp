@@ -13,7 +13,7 @@ import {
 } from '../analytics/benchmark.js';
 import { analyzeRealSavings } from '../analytics/real-savings.js';
 import { getOptimizationReport, getSessionAnalytics } from '../analytics/session-analytics.js';
-import { syncAnalytics } from '../analytics/sync.js';
+import { syncAnalytics, syncProjectAnalytics } from '../analytics/sync.js';
 import { detectCoverage, detectCoverageRecursive } from '../analytics/tech-detector.js';
 import { initializeDatabase } from '../db/schema.js';
 import { Store } from '../db/store.js';
@@ -104,9 +104,15 @@ analyticsCommand
     ensureGlobalDirs();
     const analyticsStore = new AnalyticsStore();
     try {
-      const result = syncAnalytics(analyticsStore, { full: opts.full });
+      const result = opts.project
+        ? syncProjectAnalytics(analyticsStore, opts.project, { full: opts.full })
+        : syncAnalytics(analyticsStore, { full: opts.full });
+      const watermark = analyticsStore.getIngestionWatermark();
       console.log(
         `Scanned: ${result.files_scanned}, Parsed: ${result.files_parsed}, Skipped: ${result.files_skipped}, Errors: ${result.errors}`,
+      );
+      console.log(
+        `Ingested through: ${watermark.parsed_at ?? 'never'} (${watermark.files_tracked} files tracked)`,
       );
     } finally {
       analyticsStore.close();
@@ -133,6 +139,8 @@ analyticsCommand
         console.log(JSON.stringify(result, null, 2));
         return;
       }
+
+      for (const w of result._warnings ?? []) console.log(`⚠️  ${w}`);
 
       console.log(`\n📊 Session Analytics (${result.period})\n`);
       console.log(`Sessions: ${result.sessionsCount}`);
@@ -182,6 +190,8 @@ analyticsCommand
         console.log(JSON.stringify(result, null, 2));
         return;
       }
+
+      for (const w of result._warnings ?? []) console.log(`⚠️  ${w}`);
 
       console.log(`\n🔍 Optimization Report (${result.period})\n`);
       console.log(

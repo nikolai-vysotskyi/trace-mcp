@@ -119,6 +119,9 @@ export class AnalyticsStore {
     this.db = new Database(p);
     restrictDbPerms(p);
     this.db.pragma('journal_mode = WAL');
+    // Concurrent syncs are now routine (the Stop hook fires one per turn), so
+    // wait out a writer instead of failing the read with SQLITE_BUSY.
+    this.db.pragma('busy_timeout = 5000');
 
     this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
     this.db.pragma('foreign_keys = OFF'); // for performance during bulk inserts
@@ -441,6 +444,19 @@ export class AnalyticsStore {
       tool_calls: cnt('SELECT COUNT(*) as cnt FROM tool_calls'),
       files_synced: cnt('SELECT COUNT(*) as cnt FROM sync_state'),
     };
+  }
+
+  /**
+   * Ingestion watermark: when the most recently parsed session log was
+   * absorbed, and how many log files are tracked. Consumers compare
+   * `parsed_at` against the newest session log mtime on disk to tell a
+   * current reading from a stale one — see TRA-695.
+   */
+  getIngestionWatermark(): { parsed_at: string | null; files_tracked: number } {
+    const row = this.db
+      .prepare('SELECT MAX(parsed_at) as parsed_at, COUNT(*) as cnt FROM sync_state')
+      .get() as { parsed_at: string | null; cnt: number } | undefined;
+    return { parsed_at: row?.parsed_at ?? null, files_tracked: row?.cnt ?? 0 };
   }
 
   close(): void {

@@ -4,6 +4,7 @@
  */
 
 import { isTraceToolServer, type ToolCallRow } from './analytics-store.js';
+import type { IngestionStatus } from './sync.js';
 
 interface OptimizationHit {
   rule: string;
@@ -29,6 +30,8 @@ export interface OptimizationReport {
   };
   /** Set when zero session data was found both on disk and in the aggregation — see TRA-76. */
   _warnings?: string[];
+  /** Ingestion watermark of the analytics DB — see TRA-695. */
+  _ingestion?: IngestionStatus;
 }
 
 interface Rule {

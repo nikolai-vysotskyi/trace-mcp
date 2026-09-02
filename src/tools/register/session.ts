@@ -7,7 +7,11 @@ import { formatBenchmarkMarkdown, runBenchmark } from '../../analytics/benchmark
 import { listAllSessions } from '../../analytics/log-parser.js';
 import { analyzeRealSavings } from '../../analytics/real-savings.js';
 import { getOptimizationReport, getSessionAnalytics } from '../../analytics/session-analytics.js';
-import { attachNoSessionDataWarning, syncAnalytics } from '../../analytics/sync.js';
+import {
+  attachIngestionStatus,
+  attachNoSessionDataWarning,
+  syncAnalytics,
+} from '../../analytics/sync.js';
 import { detectCoverage } from '../../analytics/tech-detector.js';
 import { listBundles, loadAllBundles } from '../../bundles.js';
 import { runRetriever } from '../../retrieval/index.js';
@@ -458,7 +462,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       try {
         const analyticsStore = new AnalyticsStore();
         try {
-          syncAnalytics(analyticsStore);
+          const sync = syncAnalytics(analyticsStore);
           const toolCalls = analyticsStore.getToolCallsForOptimization({
             projectPath: projectRoot,
             period: period ?? 'week',
@@ -470,6 +474,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
             listAllSessions(projectRoot).length === 0,
             projectRoot,
           );
+          attachIngestionStatus(result, analyticsStore, sync);
           return { content: [{ type: 'text', text: j(result) }] };
         } finally {
           analyticsStore.close();
@@ -502,7 +507,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
       try {
         const analyticsStore = new AnalyticsStore();
         try {
-          syncAnalytics(analyticsStore);
+          const sync = syncAnalytics(analyticsStore);
           const trends = analyticsStore.getUsageTrends(days ?? 30);
           const total = trends.reduce(
             (s, d) => ({
@@ -513,11 +518,17 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
             }),
             { sessions: 0, tokens: 0, cost_usd: 0, tool_calls: 0 },
           );
-          return {
-            content: [
-              { type: 'text', text: j({ days: days ?? 30, daily: trends, totals: total }) },
-            ],
-          };
+          const payload = attachIngestionStatus(
+            { days: days ?? 30, daily: trends, totals: total } as {
+              days: number;
+              daily: typeof trends;
+              totals: typeof total;
+              _warnings?: string[];
+            },
+            analyticsStore,
+            sync,
+          );
+          return { content: [{ type: 'text', text: j(payload) }] };
         } finally {
           analyticsStore.close();
         }

@@ -142,6 +142,7 @@ describe('getSessionAnalytics() — behavioural contract', () => {
     // Spot-check every advertised top-level key.
     expect(Object.keys(result).sort()).toEqual(
       [
+        '_ingestion',
         'byToolServer',
         'modelsUsed',
         'period',

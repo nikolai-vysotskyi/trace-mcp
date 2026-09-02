@@ -1,7 +1,13 @@
 import type { AnalyticsStore } from './analytics-store.js';
 import { listAllSessions } from './log-parser.js';
 import { analyzeOptimizations, type OptimizationReport } from './rules.js';
-import { attachNoSessionDataWarning, syncAnalytics, syncProjectAnalytics } from './sync.js';
+import {
+  attachIngestionStatus,
+  attachNoSessionDataWarning,
+  type IngestionStatus,
+  syncAnalytics,
+  syncProjectAnalytics,
+} from './sync.js';
 
 export type { OptimizationReport } from './rules.js';
 
@@ -28,17 +34,17 @@ interface SessionAnalytics {
   modelsUsed: Record<string, { sessions: number; tokens: number }>;
   /** Set when zero session data was found both on disk and in the aggregation — see TRA-76. */
   _warnings?: string[];
+  /** Ingestion watermark of the analytics DB — see TRA-695. */
+  _ingestion?: IngestionStatus;
 }
 
 export function getSessionAnalytics(
   store: AnalyticsStore,
   opts: AnalyticsOptions,
 ): SessionAnalytics {
-  if (opts.projectPath) {
-    syncProjectAnalytics(store, opts.projectPath);
-  } else {
-    syncAnalytics(store);
-  }
+  const sync = opts.projectPath
+    ? syncProjectAnalytics(store, opts.projectPath)
+    : syncAnalytics(store);
 
   const period = opts.period ?? 'week';
   const result = store.getSessionAnalytics({
@@ -87,6 +93,7 @@ export function getSessionAnalytics(
     listAllSessions(opts.projectPath).length === 0,
     opts.projectPath,
   );
+  attachIngestionStatus(analytics, store, sync);
 
   return analytics;
 }
@@ -95,11 +102,9 @@ export function getOptimizationReport(
   store: AnalyticsStore,
   opts: AnalyticsOptions,
 ): OptimizationReport {
-  if (opts.projectPath) {
-    syncProjectAnalytics(store, opts.projectPath);
-  } else {
-    syncAnalytics(store);
-  }
+  const sync = opts.projectPath
+    ? syncProjectAnalytics(store, opts.projectPath)
+    : syncAnalytics(store);
 
   const period = opts.period ?? 'week';
   const toolCallRows = store.getToolCallsForOptimization({
@@ -119,6 +124,7 @@ export function getOptimizationReport(
     listAllSessions(opts.projectPath).length === 0,
     opts.projectPath,
   );
+  attachIngestionStatus(report, store, sync);
 
   return report;
 }
