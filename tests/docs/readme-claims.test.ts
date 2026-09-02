@@ -256,6 +256,9 @@ describe('docs site numeric claims (TRA-174)', () => {
     { path: '.claude-plugin/marketplace.json', tolerance: 5 },
     { path: '.codex-plugin/plugin.json', tolerance: 5 },
     { path: '.codex-plugin/marketplace.json', tolerance: 5 },
+    // TRA-634: the Agent Plugins root manifest is a scanner-facing surface with
+    // the same prose counts, so it drifts the same way the others did.
+    { path: 'plugin.json', tolerance: 5 },
   ];
 
   for (const { path, tolerance, skipLine } of docs) {
