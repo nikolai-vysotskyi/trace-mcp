@@ -23,6 +23,7 @@ import { getTestsFor } from '../framework/tests.js';
 import { CALL_GRAPH_METHODOLOGY } from '../shared/confidence.js';
 import { buildNegativeEvidence } from '../shared/evidence.js';
 import { probeSymbolName } from '../shared/evidence-text-probe.js';
+import { buildEmptyResultNote } from '../shared/empty-note.js';
 import {
   compactUsageRefs,
   DetailLevelSchema,
@@ -303,6 +304,11 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
         const anchor = symbol_id ?? fqn ?? file_path;
         const sym = symbol_id ? store.getSymbolBySymbolId(symbol_id) : undefined;
         const probe = probeSymbolName(store, projectRoot, anchor);
+        const note = buildEmptyResultNote(
+          store,
+          projectRoot,
+          result.value.target.file ?? file_path,
+        );
         const enriched = {
           ...result.value,
           evidence: buildNegativeEvidence({
@@ -314,6 +320,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
             symbolKind: sym?.kind,
             textOccurrences: probe.occurrences,
           }),
+          ...(note ? { empty_result_note: note } : {}),
         };
         return { content: [{ type: 'text', text: jh('find_usages', enriched) }] };
       }
@@ -373,6 +380,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
         const stats = store.getStats();
         const sym = store.getSymbolBySymbolId(root.symbol_id);
         const probe = probeSymbolName(store, projectRoot, root.symbol_id);
+        const note = buildEmptyResultNote(store, projectRoot, root.file);
         const enriched = {
           ...result.value,
           _methodology: CALL_GRAPH_METHODOLOGY,
@@ -385,6 +393,7 @@ export function registerFrameworkTools(server: McpServer, ctx: ServerContext): v
             symbolKind: sym?.kind,
             textOccurrences: probe.occurrences,
           }),
+          ...(note ? { empty_result_note: note } : {}),
         };
         return { content: [{ type: 'text', text: jh('get_call_graph', enriched) }] };
       }
