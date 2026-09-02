@@ -1,6 +1,6 @@
 {
   "name": "trace-mcp-app",
-  "version": "3.9.0",
+  "version": "3.11.0",
   "private": true,
   "description": "trace-mcp menu bar app",
   "main": "dist/main/index.js",
@@ -22,7 +22,8 @@
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "electron-updater": "^6.6.2",
-    "i18next": "^26.4.0"
+    "i18next": "^26.4.0",
+    "jsonc-parser": "^3.3.1"
   },
   "overrides": {
     "@luma.gl/core": "9.2.6",

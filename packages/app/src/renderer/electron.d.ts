@@ -31,6 +31,7 @@ declare global {
       retryDaemonSetup?: () => Promise<DaemonSetupState>;
       onDaemonSetupState?: (cb: (state: DaemonSetupState) => void) => () => void;
       detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
+      guessFirstProject: () => Promise<{ path: string; name: string } | null>;
       getMcpClientStatuses: (
         scope?: 'global' | 'project',
       ) => Promise<{
@@ -39,7 +40,7 @@ declare global {
         statuses?: Array<{
           client: string;
           configPath: string | null;
-          status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+          status: 'missing' | 'up_to_date' | 'stale' | 'legacy' | 'unmanageable' | 'unknown';
           staleReason?: string;
           level?: 'base' | 'standard' | 'max' | null;
         }>;
@@ -53,7 +54,6 @@ declare global {
       openProjectTab: (root: string) => Promise<{ ok: boolean }>;
       closeCurrentTab: () => Promise<{ ok: boolean }>;
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
-      onTabBarChanged: (callback: (visible: boolean) => void) => () => void;
       setAppearance: (appearance: 'auto' | 'light' | 'dark') => void;
       setLocale: (locale: string) => void;
       syncSidebarWidth: (width: number) => void;

@@ -104,6 +104,19 @@ describe('sidebar app menu', () => {
     expect(header?.querySelector('.status')?.className).toContain('is-info');
   });
 
+  it('renders long status text cleanly in the header without breaking structure', () => {
+    const longError =
+      'Cannot set properties of undefined (setting autoDownload) — long status message that wraps across multiple lines';
+    const { trigger } = renderMenu({
+      update: { available: false, current: '3.10.0', error: longError },
+    });
+    const header = openMenu(trigger).querySelector('.ws-ctx-header');
+    const statusText = header?.querySelector('.status .text');
+    expect(statusText?.textContent).toBe(longError);
+    expect(statusText?.getAttribute('title')).toBe(longError);
+    expect(header?.querySelector('.status')?.className).toContain('is-warn');
+  });
+
   /* Nikolai on the four-row APPEARANCE group: "это оч плохо во всплывашке".
      One labelled row with the switcher inline — and the segments are icon-only,
      so each one's accessible NAME is what has to carry Auto / Light / Dark. */

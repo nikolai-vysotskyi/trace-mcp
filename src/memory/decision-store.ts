@@ -7,6 +7,8 @@
  * linkage to code symbols/files, enabling code-aware memory queries.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import Database from 'better-sqlite3';
 import { logger } from '../logger.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
@@ -48,6 +50,8 @@ export type {
   SessionSearchResult,
   ReviewEventRow,
   SchedulerStateRow,
+  StaleDecisionReport,
+  PruneDecisionsResult,
 } from './decision-types.js';
 import type {
   DecisionType,
@@ -64,6 +68,8 @@ import type {
   SessionSearchResult,
   ReviewEventRow,
   SchedulerStateRow,
+  StaleDecisionReport,
+  PruneDecisionsResult,
 } from './decision-types.js';
 
 // DecisionQuery, DecisionTimelineEntry, session-chunk, review-event,
@@ -1208,5 +1214,229 @@ export class DecisionStore {
     merged_content?: string;
   }): { applied: boolean; affected_ids: number[] } {
     return this.consolidationOps.applyConsolidationVerdict(opts);
+  }
+
+  // ── STALE ROOT PRUNING / HYGIENE ───────────────────────────────────
+
+  /** Find distinct project_root paths across all memory tables that no longer exist on disk. */
+  findStaleRoots(): string[] {
+    const tables = [
+      'decisions',
+      'session_chunks',
+      'decision_clusters',
+      'project_memos',
+      'scheduler_state',
+    ];
+    const roots = new Set<string>();
+    for (const table of tables) {
+      try {
+        const rows = this.db.prepare(`SELECT DISTINCT project_root FROM ${table}`).all() as Array<{
+          project_root: string;
+        }>;
+        for (const r of rows) {
+          if (r.project_root) roots.add(r.project_root);
+        }
+      } catch {
+        /* table missing on legacy db */
+      }
+    }
+    return [...roots].filter((r) => !fs.existsSync(r));
+  }
+
+  /** Scan for orphaned decisions, chunks, clusters, and memos belonging to missing project roots. */
+  findStale(): StaleDecisionReport {
+    const staleRoots = this.findStaleRoots();
+
+    let staleDecisions: Array<{
+      id: number;
+      title: string;
+      project_root: string;
+      type: DecisionType;
+    }> = [];
+    let decisionsCount = 0;
+    let chunksCount = 0;
+    let clustersCount = 0;
+    let memosCount = 0;
+    let schedulerStatesCount = 0;
+    let staleMinedSessionsCount = 0;
+
+    if (staleRoots.length > 0) {
+      const placeholders = staleRoots.map(() => '?').join(',');
+      try {
+        const dRows = this.db
+          .prepare(
+            `SELECT id, title, project_root, type FROM decisions WHERE project_root IN (${placeholders})`,
+          )
+          .all(...staleRoots) as Array<{
+          id: number;
+          title: string;
+          project_root: string;
+          type: DecisionType;
+        }>;
+        staleDecisions = dRows;
+        decisionsCount = dRows.length;
+      } catch {
+        /* ignore */
+      }
+
+      try {
+        const row = this.db
+          .prepare(
+            `SELECT COUNT(*) as c FROM session_chunks WHERE project_root IN (${placeholders})`,
+          )
+          .get(...staleRoots) as { c: number };
+        chunksCount = row.c;
+      } catch {
+        /* ignore */
+      }
+
+      try {
+        const row = this.db
+          .prepare(
+            `SELECT COUNT(*) as c FROM decision_clusters WHERE project_root IN (${placeholders})`,
+          )
+          .get(...staleRoots) as { c: number };
+        clustersCount = row.c;
+      } catch {
+        /* ignore */
+      }
+
+      try {
+        const row = this.db
+          .prepare(
+            `SELECT COUNT(*) as c FROM project_memos WHERE project_root IN (${placeholders})`,
+          )
+          .get(...staleRoots) as { c: number };
+        memosCount = row.c;
+      } catch {
+        /* ignore */
+      }
+
+      try {
+        const row = this.db
+          .prepare(
+            `SELECT COUNT(*) as c FROM scheduler_state WHERE project_root IN (${placeholders})`,
+          )
+          .get(...staleRoots) as { c: number };
+        schedulerStatesCount = row.c;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    try {
+      const minedRows = this.db.prepare('SELECT session_path FROM mined_sessions').all() as Array<{
+        session_path: string;
+      }>;
+      staleMinedSessionsCount = minedRows.filter(
+        (r) => r.session_path && path.isAbsolute(r.session_path) && !fs.existsSync(r.session_path),
+      ).length;
+    } catch {
+      /* ignore */
+    }
+
+    return {
+      staleRoots,
+      decisionsCount,
+      chunksCount,
+      clustersCount,
+      memosCount,
+      schedulerStatesCount,
+      staleMinedSessionsCount,
+      staleDecisions,
+    };
+  }
+
+  /**
+   * Prune decisions and associated data for project roots that no longer exist on disk.
+   * Runs in a single transaction.
+   */
+  pruneStale(opts?: {
+    staleRoots?: string[];
+    includeMinedSessions?: boolean;
+  }): PruneDecisionsResult {
+    const staleRoots = opts?.staleRoots ?? this.findStaleRoots();
+    const result: PruneDecisionsResult = {
+      staleRoots,
+      decisions: 0,
+      chunks: 0,
+      clusters: 0,
+      memos: 0,
+      schedulerStates: 0,
+      minedSessions: 0,
+    };
+
+    this.db.transaction(() => {
+      if (staleRoots.length > 0) {
+        const placeholders = staleRoots.map(() => '?').join(',');
+
+        try {
+          const res = this.db
+            .prepare(`DELETE FROM decisions WHERE project_root IN (${placeholders})`)
+            .run(...staleRoots);
+          result.decisions = res.changes;
+        } catch {
+          /* ignore */
+        }
+
+        try {
+          const res = this.db
+            .prepare(`DELETE FROM session_chunks WHERE project_root IN (${placeholders})`)
+            .run(...staleRoots);
+          result.chunks = res.changes;
+        } catch {
+          /* ignore */
+        }
+
+        try {
+          const res = this.db
+            .prepare(`DELETE FROM decision_clusters WHERE project_root IN (${placeholders})`)
+            .run(...staleRoots);
+          result.clusters = res.changes;
+        } catch {
+          /* ignore */
+        }
+
+        try {
+          const res = this.db
+            .prepare(`DELETE FROM project_memos WHERE project_root IN (${placeholders})`)
+            .run(...staleRoots);
+          result.memos = res.changes;
+        } catch {
+          /* ignore */
+        }
+
+        try {
+          const res = this.db
+            .prepare(`DELETE FROM scheduler_state WHERE project_root IN (${placeholders})`)
+            .run(...staleRoots);
+          result.schedulerStates = res.changes;
+        } catch {
+          /* ignore */
+        }
+      }
+
+      if (opts?.includeMinedSessions) {
+        try {
+          const minedRows = this.db
+            .prepare('SELECT session_path FROM mined_sessions')
+            .all() as Array<{ session_path: string }>;
+          const staleMinedPaths = minedRows
+            .map((r) => r.session_path)
+            .filter((p) => p && path.isAbsolute(p) && !fs.existsSync(p));
+          if (staleMinedPaths.length > 0) {
+            const placeholders = staleMinedPaths.map(() => '?').join(',');
+            const res = this.db
+              .prepare(`DELETE FROM mined_sessions WHERE session_path IN (${placeholders})`)
+              .run(...staleMinedPaths);
+            result.minedSessions = res.changes;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    })();
+
+    return result;
   }
 }

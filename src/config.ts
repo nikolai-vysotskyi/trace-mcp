@@ -1153,7 +1153,7 @@ export function validateConfigUpdate(incoming: Record<string, unknown>): string[
   return errors;
 }
 
-/** Load global config from ~/.trace-mcp/.config.json */
+/** Load global config from ~/.trace/.config.json */
 export function loadGlobalConfigRaw(): Record<string, unknown> {
   try {
     const raw = readIfExists(GLOBAL_CONFIG_PATH);
@@ -1164,13 +1164,21 @@ export function loadGlobalConfigRaw(): Record<string, unknown> {
   }
 }
 
-/** Load per-project config overrides via cosmiconfig (optional, for local overrides). */
+/**
+ * Load per-project config overrides via cosmiconfig (optional, for local
+ * overrides). `.trace.json` is preferred; `.trace-mcp.json` (and its
+ * siblings) are read as a fallback so existing per-project configs keep
+ * working without a manual rename (TRA-611).
+ */
 async function loadProjectConfigRaw(searchFrom: string): Promise<Record<string, unknown>> {
   const explorer = cosmiconfig('trace-mcp', {
     searchPlaces: [
+      '.trace/.config.json',
+      '.trace.json',
       '.trace-mcp/.config.json',
       '.trace-mcp.json',
       '.trace-mcp',
+      '.config/trace.json',
       '.config/trace-mcp.json',
       'package.json',
     ],
@@ -1225,6 +1233,10 @@ export async function loadConfig(searchFrom?: string): Promise<TraceMcpResult<Tr
     merged = mergeConfigs(merged, localRaw);
 
     // Env var overrides
+    if (process.env.TRACE_MCP_PRESET) {
+      merged.tools = (merged.tools as Record<string, unknown>) ?? {};
+      (merged.tools as Record<string, unknown>).preset = process.env.TRACE_MCP_PRESET;
+    }
     if (process.env.TRACE_MCP_DB_PATH) {
       merged.db = merged.db ?? {};
       (merged.db as Record<string, unknown>).path = process.env.TRACE_MCP_DB_PATH;

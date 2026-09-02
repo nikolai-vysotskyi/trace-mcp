@@ -49,6 +49,7 @@ import { Notebook } from './tabs/Notebook';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
 import { type Appearance, useTheme } from './theme.js';
+import { useWholeLocation } from './whole-location.js';
 import { Workspace } from './workspace/Workspace';
 
 // The Ask tab is the only thing that pulls react-markdown + remark-gfm in, and
@@ -286,6 +287,9 @@ function ProjectFileExplorer({
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; path: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  // A row drops its location rather than shrink it to a sliver (TRA-504). The
+  // sidebar is drag-resizable, so this re-measures on every width change too.
+  useWholeLocation(listRef);
   const LIMIT = 30;
 
   // Debounce scope to avoid fetching on every keystroke
@@ -636,21 +640,28 @@ function MenuContent({
   tab,
   appearance,
   onAppearanceChange,
+  onOpenSetupWizard,
 }: {
   tab: GlobalTab;
   appearance: Appearance;
   onAppearanceChange: (next: Appearance) => void;
+  onOpenSetupWizard?: () => void;
 }) {
   return (
     <>
       {tab === 'workspace' && <Workspace />}
       {tab === 'clients' && <Clients />}
       {tab === 'settings' && (
-        <Settings appearance={appearance} onAppearanceChange={onAppearanceChange} />
+        <Settings
+          appearance={appearance}
+          onAppearanceChange={onAppearanceChange}
+          onOpenSetupWizard={onOpenSetupWizard}
+        />
       )}
     </>
   );
 }
+
 
 // ── Project content ───────────────────────────────────────────
 function ProjectContent({
@@ -721,7 +732,6 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [_isFullscreen, setIsFullscreen] = useState(false);
-  const [tabBarVisible, setTabBarVisible] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickFiles, setQuickFiles] = useState<string[]>([]);
   /* The element surfaces portal their toolbar into. Callback ref rather than
@@ -988,14 +998,6 @@ export function App() {
       return api.onFullscreenChanged((fs: boolean) => setIsFullscreen(fs));
     }
   }, []);
-
-  /* Opening a project opens a native macOS tab, and AppKit then paints its tab
-     bar over the top of the web contents — the viewport does not shrink, so
-     everything we draw on the top line ends up underneath it (TRA-399). The
-     main process reports the tab bar's presence; the stage reserves its height.
-     Wired here rather than in the sidebar because the whole window shifts. */
-  useEffect(() => window.electronAPI?.onTabBarChanged?.(setTabBarVisible), []);
-
   const isGraph = isProject && projectTab === 'graph';
   const needsFlexLayout = isProject && (projectTab === 'graph' || projectTab === 'ask');
   /* Surfaces that draw their own toolbar own the whole pane: a 16px inset turns
@@ -1032,7 +1034,6 @@ export function App() {
       className="ws-stage flex flex-col h-screen"
       data-mode={theme}
       data-platform={hasInsetTitleBar() ? 'mac' : 'other'}
-      data-tabbar={tabBarVisible ? 'on' : undefined}
     >
       {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
       {quickOpen && <QuickOpen items={quickOpenItems()} onClose={() => setQuickOpen(false)} />}
@@ -1177,6 +1178,7 @@ export function App() {
                   tab={globalTab}
                   appearance={appearance}
                   onAppearanceChange={setAppearance}
+                  onOpenSetupWizard={() => setShowOnboarding(true)}
                 />
               </ErrorBoundary>
             )}

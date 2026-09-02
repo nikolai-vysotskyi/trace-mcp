@@ -140,11 +140,16 @@ export function KpiTile({
           measures 3.28:1, and --badge-accent-fg only reaches 4.29:1. Promoting
           the label to --label instead is 10.02:1 and reads as selected. */}
       <span
-        className="inline-flex items-center gap-1 text-[11px] leading-[13px] font-medium"
-        style={{ color: active ? 'var(--label)' : 'var(--label-secondary)' }}
+        className="inline-flex items-center gap-1 text-[11px] leading-[13px] font-medium max-w-full"
+        style={{
+          color: active ? 'var(--label)' : 'var(--label-secondary)',
+          height: 13,
+          minHeight: 13,
+          maxHeight: 13,
+        }}
       >
-        {tone ? <Icon name={TONE_ICON[tone]} size={11} /> : null}
-        {label}
+        {tone ? <Icon name={TONE_ICON[tone]} size={11} className="shrink-0" /> : null}
+        <span className="truncate min-w-0">{label}</span>
       </span>
 
       {/* `unavailable` outranks `pending`: a fetch that finished and failed is
@@ -181,16 +186,27 @@ export function KpiTile({
           it is the tallest part of the tile and the only part a user can
           reconstruct by widening the window. The value never goes.
 
-          Two lines are reserved whatever the string does. A tile is 132–214px
-          wide and the catalogue runs +30% longer than English in German and
-          Russian, so whether this wraps is not something the layout gets to
-          assume — and `kpiStripHeight()` in Workspace.tsx sizes the whole strip
-          off one constant tile height. Reserving the second line keeps that
-          constant true in every language instead of only in English. */}
+          Two lines are reserved and clamped whatever the string does. A tile
+          is 132–225px wide and the catalogue runs +30% longer than English in
+          German and Russian, while English's own delta captions can exceed two
+          lines at narrow widths. Clamping to two lines on the comparison (and one
+          line on the label) keeps TILE_H = 112 true by construction in every
+          language at every width instead of depending on translator discipline
+          (TRA-492). */}
       {dense ? null : (
         <span
-          className="text-[11px] leading-[13px]"
-          style={{ color: 'var(--label-secondary)', minHeight: 26, display: 'block' }}
+          className="text-[11px] leading-[13px] line-clamp-2"
+          style={{
+            color: 'var(--label-secondary)',
+            height: 26,
+            minHeight: 26,
+            maxHeight: 26,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            wordBreak: 'break-word',
+          }}
         >
           {/* `unavailable` outranks `pending`: a fetch that finished and failed
               is not still loading, so the skeleton must not win when both are

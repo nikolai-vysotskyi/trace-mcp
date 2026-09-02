@@ -23,7 +23,12 @@
  *    install pointing at itself — see `decideTakeover`.
  */
 
-import { execFileSync } from 'node:child_process';
+import {
+  execFile,
+  execFileSync,
+  type ExecFileException,
+  type ExecFileOptions,
+} from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -40,12 +45,9 @@ export { generatePlist, PLIST_LABEL, PLIST_MARKER, PLIST_VERSION } from './daemo
 const IS_WINDOWS = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
 
-/** Mirrors src/init/launcher.ts::getLauncherDir and daemon-lifecycle.ts. */
-export function getLauncherDir(): string {
-  const envDir = process.env.TRACE_MCP_HOME?.trim();
-  if (envDir) return envDir;
-  return path.join(os.homedir(), '.trace-mcp');
-}
+import { getLauncherDir, getLauncherShimPath, SHIM_NAMES } from './trace-home';
+
+export { getLauncherDir };
 
 
 /** The wrapper that turns our own binary back into a Node runtime. */
@@ -191,11 +193,102 @@ export function readLauncherEnv(dir = getLauncherDir()): {
     if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
       value = value.slice(1, -1);
     }
-    if (key === 'TRACE_MCP_NODE') out.node = value;
-    else if (key === 'TRACE_MCP_CLI') out.cli = value;
-    else if (key === 'TRACE_MCP_VERSION') out.version = value;
+    // Both spellings: a launcher.env written by a CLI that has taken the
+    // TRACE_* rename (TRA-610) has to stay readable by an app that predates it,
+    // and vice versa. Reading is where tolerance is free; writing still emits
+    // the legacy keys, below, because the installed shim reads those.
+    if (key === 'TRACE_NODE' || key === 'TRACE_MCP_NODE') out.node = value;
+    else if (key === 'TRACE_CLI' || key === 'TRACE_MCP_CLI') out.cli = value;
+    else if (key === 'TRACE_VERSION' || key === 'TRACE_MCP_VERSION') out.version = value;
   }
   return out;
+}
+
+/**
+ * The command the app should shell out to. A machine that only ever installed
+ * the DMG has nothing on PATH — the shim this module wrote is the only one
+ * there is — so a bare bin name fails with ENOENT and every client the setup
+ * wizard tries to connect silently does nothing.
+ *
+ * The shim's own name is whichever one is installed (`trace` after TRA-610,
+ * `trace-mcp` before it); the PATH fallback stays on the legacy name, which the
+ * package ships as an alias and which therefore resolves on both sides of the
+ * rename. An explicit TRACE_BIN / TRACE_MCP_BIN wins over both.
+ */
+export function resolveCliCommand(dir = getLauncherDir()): string {
+  const override = process.env.TRACE_BIN?.trim() || process.env.TRACE_MCP_BIN?.trim();
+  if (override && isExecutable(override)) return override;
+  const shim = getLauncherShimPath(dir);
+  return isExecutable(shim) ? shim : SHIM_NAMES[SHIM_NAMES.length - 1];
+}
+
+/** How to spawn the CLI with no shell: `execFile(file, [...prefixArgs, ...argv])`. */
+export interface CliInvocation {
+  file: string;
+  prefixArgs: string[];
+  /** Environment the runner needs, merged over `process.env` by `execCli`. */
+  env?: Record<string, string>;
+}
+
+/**
+ * The shim `resolveCliCommand` returns is a `.cmd` on Windows, and Node cannot
+ * launch a `.bat`/`.cmd` at all without a shell — see
+ * https://nodejs.org/api/child_process.html#spawning-bat-and-cmd-files-on-windows.
+ * Every no-shell `execFile` against it therefore failed, which is why the MCP
+ * clients screen could not read a status, Connect or Update on Windows
+ * (TRA-638). The PATH fallback does not rescue it either: there is no
+ * extensionless `trace-mcp` on Windows.
+ *
+ * `shell: true` is not the fix. The argv these callers pass carries project
+ * paths; it is passed as argv precisely so that spaces and `&` in them are
+ * never interpreted, and turning on a shell would reopen that.
+ *
+ * So run the CLI the way the shim itself runs it: a real executable with
+ * `cli.js` as its first argument. `launcher.env` already records that cli.js,
+ * and our own binary is a Node runtime under `ELECTRON_RUN_AS_NODE` — which is
+ * the whole job of `bin/node-runtime.cmd`. The caller's argv stays argv.
+ */
+export function resolveCliInvocation(
+  opts: { dir?: string; execPath?: string; isWindows?: boolean } = {},
+): CliInvocation {
+  const dir = opts.dir ?? getLauncherDir();
+  const viaShim: CliInvocation = { file: resolveCliCommand(dir), prefixArgs: [] };
+  if (!(opts.isWindows ?? IS_WINDOWS)) return viaShim;
+
+  // Nothing installed to point at: fall through and let the spawn fail with
+  // the same ENOENT it would have anyway, rather than inventing a path.
+  const { cli } = readLauncherEnv(dir);
+  if (!cli || !isFile(cli)) return viaShim;
+
+  return {
+    file: opts.execPath ?? process.execPath,
+    prefixArgs: [cli],
+    env: { ELECTRON_RUN_AS_NODE: '1' },
+  };
+}
+
+/**
+ * `execFile` against the CLI, with the Windows launcher problem solved once.
+ * Callers go through here rather than `resolveCliCommand` so a fourth IPC
+ * cannot quietly reintroduce the spawn that does not work.
+ */
+export function execCli(
+  args: string[],
+  options: Omit<ExecFileOptions, 'encoding'>,
+  callback: (error: ExecFileException | null, stdout: string, stderr: string) => void,
+): void {
+  const { file, prefixArgs, env } = resolveCliInvocation();
+  execFile(
+    file,
+    [...prefixArgs, ...args],
+    {
+      windowsHide: true,
+      ...options,
+      encoding: 'utf-8',
+      env: { ...process.env, ...options.env, ...env },
+    },
+    callback,
+  );
 }
 
 /**
@@ -203,7 +296,12 @@ export function readLauncherEnv(dir = getLauncherDir()): {
  * from a checkout (`pnpm dev:electron`), where the developer's own npm install
  * owns the control plane and this module must keep its hands off.
  */
-export function bundledServerDir(resourcesPath = process.resourcesPath): string | null {
+export function bundledServerDir(
+  // `process.resourcesPath` is Electron's, and since daemon-lifecycle.ts reaches
+  // this module for `resolveCliInvocation`, the root tsconfig compiles this file
+  // too (src/daemon/__tests__ imports daemon-lifecycle) — with plain Node types.
+  resourcesPath = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath,
+): string | null {
   if (!resourcesPath) return null;
   const dir = path.join(resourcesPath, 'server');
   return isFile(path.join(dir, 'dist', 'cli.js')) ? dir : null;
@@ -242,11 +340,24 @@ export function launcherEnvContent(nodePath: string, cliPath: string, version: s
     if (v.includes('"')) throw new Error(`launcher config value contains a double quote: ${v}`);
     return `"${v}"`;
   };
+  const cli = cliPath.replaceAll('\\', '/');
   return [
     '# Managed by the trace-mcp app — do not edit by hand.',
     '# Rewritten whenever the app installs or repairs its bundled daemon.',
+    '#',
+    // Both key families, because this file and the shim that reads it are
+    // versioned independently: the app takes over an existing install and
+    // rewrites launcher.env wholesale, while `init` owns the shim. Once
+    // TRA-610 renames the shim to read TRACE_*, an app that still wrote only
+    // TRACE_MCP_* would erase the keys the newly-selected `trace` shim needs —
+    // launchd would then start a shim with no Node and no CLI to exec. A shim
+    // ignores keys it does not know, so writing both costs three lines and
+    // removes the ordering dependency between the two releases entirely.
+    `TRACE_NODE=${quote(nodePath)}`,
+    `TRACE_CLI=${quote(cli)}`,
+    `TRACE_VERSION=${quote(version)}`,
     `TRACE_MCP_NODE=${quote(nodePath)}`,
-    `TRACE_MCP_CLI=${quote(cliPath.replaceAll('\\', '/'))}`,
+    `TRACE_MCP_CLI=${quote(cli)}`,
     `TRACE_MCP_VERSION=${quote(version)}`,
     '',
   ].join('\n');
@@ -400,7 +511,10 @@ export async function ensureDaemonInstalled(opts: EnsureOptions): Promise<Ensure
   const domain = `gui/${uid}`;
   const plist = opts.launchAgentPath ?? plistPath();
   const runLaunchctl = opts.runLaunchctl ?? launchctl;
-  const shimPath = path.join(binDir, IS_WINDOWS ? 'trace-mcp.cmd' : 'trace-mcp');
+  // Whichever shim name is actually on disk: the LaunchAgent must exec a file
+  // that exists, and after the TRA-610 rename that is `trace` on a machine the
+  // CLI has migrated and `trace-mcp` on one it has not.
+  const shimPath = getLauncherShimPath(home);
 
   let plistCurrent = false;
   try {
