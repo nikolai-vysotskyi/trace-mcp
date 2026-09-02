@@ -393,11 +393,23 @@ export function useDaemon() {
   }, []);
 
   const removeProject = useCallback(async (root: string) => {
+    let res: Response;
     try {
-      await fetch(`${BASE}/api/projects?project=${encodeURIComponent(root)}`, { method: 'DELETE' });
-      setProjects((prev) => prev.filter((p) => p.root !== root));
+      res = await fetch(`${BASE}/api/projects?project=${encodeURIComponent(root)}`, {
+        method: 'DELETE',
+      });
     } catch {
       // SSE will reconcile
+      return;
+    }
+    setProjects((prev) => prev.filter((p) => p.root !== root));
+    const body = (await res.json().catch(() => ({}))) as {
+      failures?: { tier: string; error: string }[];
+    };
+    if (body.failures?.length) {
+      throw new Error(
+        `Cleanup incomplete for ${root}: ${body.failures.map((f) => f.tier).join(', ')}`,
+      );
     }
   }, []);
 
