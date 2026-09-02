@@ -39,6 +39,10 @@ export const guard = {
   'health.down': '未运行',
   'health.unknown': '未知',
 
+  'reason.neverStarted': '此项目中的编程助手还没有启动过 trace-mcp。重启助手即可让守卫生效。',
+  'reason.heartbeatStale': 'trace-mcp 最后一次响应是{{ago}}。重启编程助手即可恢复拦截。',
+  'reason.channelQuiet': '守卫已安装并在等待——最后一次工具调用是{{ago}}。',
+
   'mode.aria': 'guard 模式',
   'mode.strict': '严格',
   'mode.strictHelp': '当 trace-mcp 工具能回答同一个问题时，拦截 Read、Grep 和 Glob',

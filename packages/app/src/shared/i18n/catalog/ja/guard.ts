@@ -39,6 +39,10 @@ export const guard = {
   'health.down': '停止中',
   'health.unknown': '不明',
 
+  'reason.neverStarted': 'このプロジェクトではコーディングアシスタントがまだ trace-mcp を起動していません。再起動するとガードが有効になります。',
+  'reason.heartbeatStale': 'trace-mcp の最後の応答は{{ago}}です。コーディングアシスタントを再起動すると強制が再開します。',
+  'reason.channelQuiet': 'ガードはインストール済みで待機中です。最後のツール呼び出しは{{ago}}でした。',
+
   'mode.aria': 'ガードのモード',
   'mode.strict': 'ストリクト',
   'mode.strictHelp': 'trace-mcp のツールで答えられる場合、Read、Grep、Glob をブロックします',

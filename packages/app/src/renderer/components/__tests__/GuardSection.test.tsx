@@ -9,7 +9,8 @@ interface StatusShape {
   health: 'ok' | 'stalled' | 'down' | 'unknown';
   mode: 'strict' | 'coach' | 'off';
   bypassUntil?: number;
-  reason?: string;
+  reason?: 'heartbeat_stale' | 'channel_quiet' | 'never_started';
+  reasonSeconds?: number;
   coachExpiresAt?: number;
   autoPromoted?: boolean;
 }
@@ -50,7 +51,7 @@ it('initializes the project before reading its status', async () => {
 });
 
 it('still reports status when initialization throws', async () => {
-  const guard = stubGuard({ health: 'down', mode: 'strict', reason: 'server not running' });
+  const guard = stubGuard({ health: 'down', mode: 'strict', reason: 'never_started' });
   guard.initialize.mockRejectedValueOnce(new Error('read-only volume'));
   render(<GuardSection root={ROOT} />);
 
@@ -73,11 +74,31 @@ it.each([
   expect(container.querySelector('.lx-badge')).toBeTruthy();
 });
 
-it('shows the failure reason as reading text, not only as a tone', async () => {
-  stubGuard({ health: 'down', mode: 'strict', reason: 'Heartbeat stale (412s)' });
+/* The badge names the condition; the line names the cause and the next step.
+   Restating "not running" under a red badge that already says it is what
+   TRA-490 filed, so the assertion is on the advice, not on any sentence. */
+it('follows the badge with the cause and the one thing to do next', async () => {
+  stubGuard({ health: 'down', mode: 'strict', reason: 'never_started' });
   render(<GuardSection root={ROOT} />);
 
-  expect(await screen.findByText('Heartbeat stale (412s)')).toBeTruthy();
+  const line = await screen.findByText(/hasn't started trace-mcp in this project yet/);
+  expect(line.textContent).toContain('Restart it');
+  expect(screen.getAllByText(/Not running/)).toHaveLength(1);
+});
+
+it('dates a stopped server instead of printing a raw second count', async () => {
+  stubGuard({ health: 'down', mode: 'strict', reason: 'heartbeat_stale', reasonSeconds: 412 });
+  render(<GuardSection root={ROOT} />);
+
+  expect(await screen.findByText(/trace-mcp last checked in 6 minutes ago/)).toBeTruthy();
+});
+
+it('says nothing under the card when the cause carries no advice', async () => {
+  stubGuard({ health: 'down', mode: 'strict' });
+  const { container } = render(<GuardSection root={ROOT} />);
+
+  await screen.findByText('Not running');
+  expect(container.querySelectorAll('p')).toHaveLength(0);
 });
 
 /* ── Mode ─────────────────────────────────────────────────────────────────── */

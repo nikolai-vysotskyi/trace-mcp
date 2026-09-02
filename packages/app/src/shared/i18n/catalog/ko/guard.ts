@@ -39,6 +39,10 @@ export const guard = {
   'health.down': '실행 중 아님',
   'health.unknown': '알 수 없음',
 
+  'reason.neverStarted': '이 프로젝트에서 코딩 어시스턴트가 아직 trace-mcp를 시작하지 않았습니다. 어시스턴트를 다시 시작하면 가드가 적용됩니다.',
+  'reason.heartbeatStale': 'trace-mcp의 마지막 응답은 {{ago}}입니다. 코딩 어시스턴트를 다시 시작하면 적용이 재개됩니다.',
+  'reason.channelQuiet': '가드는 설치되어 대기 중입니다. 마지막 도구 호출은 {{ago}}였습니다.',
+
   'mode.aria': '가드 모드',
   'mode.strict': '엄격',
   'mode.strictHelp': 'trace-mcp 툴로 답할 수 있으면 Read, Grep, Glob을 차단',
