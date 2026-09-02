@@ -97,20 +97,30 @@ function powershell(script) {
 }
 
 /**
- * The version Windows itself believes is installed, read from the uninstall
- * entry electron-builder's NSIS target writes. Not a guessed path under
- * `%LOCALAPPDATA%\\Programs`: that guess was wrong on the runner, and the
- * registry is what Add/Remove Programs — and any future installer — reads.
- * `null` when nothing is installed.
+ * Every trace-mcp version Windows believes is installed, from the uninstall
+ * entries electron-builder's NSIS target writes. Not a guessed path under
+ * `%LOCALAPPDATA%\\Programs` — the real one is `…\\Programs\\trace-mcp-app`,
+ * derived from the appId, and the registry is what Add/Remove Programs and any
+ * future installer read anyway. The entry is named `trace-mcp <version>`.
+ *
+ * A list rather than one value because "exactly one install, at the new
+ * version" is the property worth asserting: an upgrade that left the old entry
+ * behind would be a half-applied update, and one that reported the new version
+ * while still listing the old one is not the state a user ends up in.
  */
-function installedVersion() {
+function installedVersions() {
   const out = powershell(
     `$ErrorActionPreference='SilentlyContinue'
      Get-ItemProperty '${UNINSTALL_KEYS}' |
-       Where-Object { $_.DisplayName -eq '${PRODUCT}' } |
-       Select-Object -First 1 -ExpandProperty DisplayVersion`,
+       Where-Object { $_.DisplayName -like '${PRODUCT} *' } |
+       Select-Object -ExpandProperty DisplayVersion`,
   );
-  return out || null;
+  return out
+    ? out
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
 }
 
 /** Printed when an install did not land — the guesswork this replaces. */
@@ -134,20 +144,20 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * Silent install, then wait for the result to actually be on disk.
  *
  * Two reasons not to trust the installer's exit: the oneClick target hands off
- * to an elevated/spawned phase that outlives the process we waited on, and on
- * an upgrade it removes the old build before laying down the new one, so the
- * exe is briefly absent and then briefly the OLD version. Poll for the version
- * we are expecting rather than sleeping a guessed interval.
+ * to a phase that outlives the process we waited on, and on an upgrade it
+ * removes the old build before registering the new one, so for a moment
+ * nothing is installed at all. Poll for the state we expect rather than
+ * sleeping a guessed interval. Returns what it settled on.
  */
 async function installAndWaitFor(exe, args, wantVersion) {
   console.log(`> ${path.basename(exe)} ${args.join(' ')}`);
   execFileSync(exe, args, { stdio: 'inherit', timeout: 10 * 60_000 });
 
   const deadline = Date.now() + 3 * 60_000;
-  let seen = null;
+  let seen = [];
   while (Date.now() < deadline) {
-    seen = installedVersion();
-    if (seen === wantVersion) break;
+    seen = installedVersions();
+    if (seen.length === 1 && seen[0] === wantVersion) break;
     await sleep(3_000);
   }
 
@@ -157,8 +167,8 @@ async function installAndWaitFor(exe, args, wantVersion) {
   powershell(
     `$ErrorActionPreference='SilentlyContinue'; Get-Process ${PRODUCT} | Stop-Process -Force; exit 0`,
   );
-  if (seen !== wantVersion) dumpInstallState();
-  return seen;
+  if (seen.length !== 1 || seen[0] !== wantVersion) dumpInstallState();
+  return seen.join(', ') || 'nothing';
 }
 
 async function download(url, dest) {
@@ -201,7 +211,7 @@ async function main() {
   );
   const before = await installAndWaitFor(oldSetup, ['/S'], fromVersion);
   if (before !== fromVersion) {
-    die(`installed ${fromTag} but Windows reports ${before ?? 'no trace-mcp installed'}`);
+    die(`installed ${fromTag} but Windows reports ${before}`);
   }
   console.log(`Installed ${fromVersion}.`);
 
@@ -233,7 +243,7 @@ async function main() {
   // 4. The swap, with the flags electron-updater's NSIS path passes.
   const after = await installAndWaitFor(newSetup, ['/S', '--updated'], feed.version);
   if (after !== feed.version) {
-    die(`update did not take: expected ${feed.version}, Windows reports ${after ?? 'nothing'}`);
+    die(`update did not take: expected ${feed.version}, Windows reports ${after}`);
   }
 
   console.log(`OK: ${fromVersion} -> ${after} on a real Windows install, no npm involved.`);
