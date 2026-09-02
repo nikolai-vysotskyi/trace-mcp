@@ -329,6 +329,10 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] `document.documentElement.scrollWidth === window.innerWidth` at the
       narrow width — no sideways page scroll.
 - [ ] Wide tables scroll themselves, not the page.
+- [ ] No footer nav label breaks into fragments — count links taller than one
+      line at 1440px, 1200px and 390px, not at 1440px alone. The landing
+      footer's sub-column width falls by ~13px in the 1184–1262px band and
+      that is where a long label first breaks (§9).
 - [ ] Every region where `scrollWidth > clientWidth` shows the `scroll →`
       label, and every region that fits does not — count both, at 1440px and
       at 390px. A region is any element that scrolls itself: the table
@@ -451,3 +455,49 @@ back in the browser, wait out the 200ms `border-color` transition — a
 "intelligence" and nowhere else; at `72px/820px` it ran to three lines and split
 "AI coding agents" across two of them. Change the wording, re-measure the line
 count at 1440px and at 390px.
+
+---
+
+## 9. The landing footer
+
+The counterpart to §2's `See also` block: the same 22 pages, from the same
+`docs/_data/docs_nav.yml`, on a page that does not use the layout. It used to
+be two hand-written columns naming 12 of them, and it had drifted past the
+whole `/vs/` cluster (TRA-629). **Never hand-write this list.** Which pages
+are in it, what they are called and in what order is the SEO agent's, exactly
+as in §2 — this section governs the layout only.
+
+**`/ Docs` spans two of the four grid tracks, and two rows.** Two tracks
+because 22 links in one track runs 22 rows deep beside a 4-row `/ Product`.
+Two rows because `/ Product` + `/ Docs` + `/ Source` already fill row one, so
+`/ Contact` lands on a row of its own with three empty tracks beside it;
+letting `/ Docs` claim the second row pulls `/ Contact` up under `/ Product`
+and takes 129px of dead space out of the footer. Below 700px the grid is two
+tracks, `/ Docs` takes a full row anyway, and the span is reset to `auto`.
+
+**The sub-columns are `columns`, not a grid** — the one place on the site
+where multi-column beats it. Its sub-columns read top-to-bottom, the same
+direction as the plain `/ Product` and `/ Source` lists either side; a
+row-flow grid puts items 1, 4, 7 down the first sub-column, which scatters
+`docs_nav.yml`'s order — the five `/vs/` pages landed one per row across all
+three. That order is not ours to scatter. It also removes the ragged rows: two
+labels wrap to a second line, and in a grid they set the height of every cell
+in their row, opening 48px gaps that read as group breaks (§1: 32–48px means
+"new group starts here") where nothing begins.
+
+§2's `See also` block keeps its grid. It is a standalone block with no
+vertical list beside it to disagree with, and it skips the current page, so a
+column count is not stable there anyway.
+
+**The floor is 176px, and it is measured.** `vs codebase-memory-mcp` sets on
+one line at 173px. 160px looks fine at 1440px only because the sub-column
+happens to resolve to 176 there; between roughly 1184px and 1262px of viewport
+it resolves to 163 and the label breaks into two fragments. Dropping to two
+sub-columns is the better answer, which is what the floor buys. Re-measure it
+against the longest label whenever `docs_nav.yml` gains one — the intrinsic
+width of a Space Mono 12px label at `0.04em`, not an estimate.
+
+`PR review context benchmark` and `Cut Claude Code token usage` are 212px and
+take two lines in every layout; a sub-column wide enough for them fits two,
+not three. `break-inside: avoid` keeps each one whole so it still reads as a
+single target, the same one-cell-per-link rule as §2.

@@ -66,14 +66,14 @@ file has tracked for months has been a *capability* gap, and we have closed
 them at a rate almost nothing else closes them at. The gap that is actually
 binding is on the other side: **reach, and first value.** 102 GitHub stars
 after five months, ~20 human page views a day on the site, Reddit as our
-single largest referrer and unreadable to us, and 41% of installs that we
-cannot even attribute to a client.
+single largest referrer and unreadable to us, and a client attribution we
+could not read at all until TRA-643 found out why.
 
 This is not an argument to slow the engine room down. It is an argument
 that the next several weeks of *strategic* work — the items below, and the
 weekly focus derived from them — should be measured in users reaching first
-value, not in capability shipped. The three "ready to start" items are all
-of that shape.
+value, not in capability shipped. All four "ready to start" items are of
+that shape.
 
 ## Adoption — metric of record
 
@@ -91,6 +91,48 @@ keeps event data for 14 months at most, so anything older survives only there.
 It is deliberately not on `master`: a PR opened by `GITHUB_TOKEN` never
 triggers CI, so it could never satisfy the required checks.
 
+**`by_preset` / `by_tools_advertised` — pending, one manual step** (TRA-643).
+The ping now reports the resolved preset and the size of the surface it
+advertised, on the same basis `preset-surface-budget.test.ts` measures (preset
+members plus the ten ungated meta-tools; verified against a live `tools/list`
+at minimal 28 / design 21 / standard 55). That turns the published "67-86%
+preset saving" from a bench claim into a field one, and makes the silent
+`full` → `standard` default migration (TRA-538) observable for the first time.
+Both sections stay empty until `preset` and `tools_advertised` are registered
+as **event-scoped custom dimensions** in GA4 property `551114458` (Admin →
+Custom definitions → Create custom dimension; event parameter names exactly
+`preset` and `tools_advertised`). GA4 does not backfill, so the series starts
+at registration, not at release. Until then the snapshot degrades to two empty
+sections rather than failing — the reports are wrapped so an unregistered
+dimension cannot take the daily snapshot down with it.
+
+**How to read `by_client`, and why `unknown` is not a share of installs**
+(TRA-643, 2026-09-02). Two separate things produce a missing client, and the
+snapshot used to hide one of them:
+
+- `"unknown"` is a value the install *sent* — its telemetry state had no client
+  name when the ping fired. Until this issue that was mostly our own bug: the
+  ping's final `saveState` persisted a snapshot taken *before* the HTTP request,
+  so the name `recordUsagePingClient` wrote while the request was in flight was
+  erased. The client's `initialize` lands mid-flight on essentially every
+  session, so an install whose only session of the day was the one that pinged
+  never recorded a client at all, and reported `unknown` again the next day,
+  forever. Only installs that opened a *second* session on some day — after
+  that day's ping had already been sent and the ping short-circuited — ever
+  escaped. Fixed and covered by a regression test in
+  `src/telemetry/__tests__/usage-ping.test.ts`.
+- `(not set)` is GA4 having no value at all. The snapshot script silently
+  dropped those rows, which is why the 2026-09-01 file shows `by_client`
+  summing to 36 against 61 monthly active users, `by_version` to 34, and
+  `installs_28d` to 59 events against `events_28d: 310`. The gap was not
+  visible and not explained. `(not set)` is now kept as its own key.
+
+So the "41% of installs report no client" reading (25 of 61) used a denominator
+that never applied: 61 is every active user, while 25 sits inside a breakdown
+that only covers 36 of them. Do not divide a `customEvent:` breakdown by
+`active_users` — divide it by that breakdown's own total, and read the residue
+as `(not set)`.
+
 Caveat when citing it: the ping's credentials ship in plaintext inside the
 published npm package (public by design — see SECURITY.md "Telemetry
 Credentials"), so the events are **unauthenticated and can be inflated by
@@ -106,10 +148,16 @@ suspect until corroborated.
 Two things that number is already telling us, both actionable and both
 picked up as items below:
 
-- **We cannot attribute 41% of installs to a client** (25 of 61 report
-  `unknown`), and the ping carries no field for the active tool preset at
-  all. So the flagship efficiency claim — 67–86% — is bench-verified and
-  **not field-verified**. Item 1.
+- **Client attribution was broken, and the "41%" that named it was not a
+  real number.** 25 of 61 was read as a share of installs; 25 sits inside a
+  breakdown that only covers 36 of those 61, because the snapshot script
+  dropped GA4's `(not set)` rows. Underneath it was our own bug: the ping's
+  final state save erased the client name recorded while the request was in
+  flight, so any install whose only session of the day was the one that
+  pinged stayed `unknown` forever. Both fixed in TRA-643, which also added
+  the missing `preset` / `tools_advertised` fields — so the flagship
+  efficiency claim (67–86%) moves from bench-verified to field-verifiable
+  once the GA4 dimensions are registered. Item 1.
 - **Version spread is wider than a 12-release week should produce.** More
   installs are seen on 3.8.0 than on 3.10.0, and 3.9.0 does not appear at
   all — which is consistent with TRA-566 (v3.9.0 shipped with no Windows
@@ -130,24 +178,87 @@ stars, and traffic *views* uniques** — nothing else. Channel-by-channel
 state lives in `ops/user-signal.md`; listing-by-listing state in
 `ops/distribution.md`. GitHub, 2026-09-02: **102 stars, 15 forks.**
 
+### The funnel — four numbers around that denominator (TRA-645)
+
+Active installs is a denominator with nothing on either side of it. Without
+that, every listing rewrite, hero redesign, README restructure and outreach PR
+is graded on taste. Four numbers fix it, one per stage:
+
+| Stage | Number | Source | Window |
+| --- | --- | --- | --- |
+| Arrivals | unique visitors to the GitHub repo | `acquisition.views_uniques_14d` | rolling 14 d |
+| Installs | first-ever pings | `installs_28d.new` | 28 d |
+| Activation | % of active installs with ≥1 indexed repository | `activation.activated_pct` | 28 d |
+| Retention | day ÷ month active installs | `funnel.retention_dau_mau_pct` | 1 d over 28 d |
+
+**Do not refresh these by hand either.** All four are computed by the same
+daily `ga4-snapshot.yml` run and published under `funnel:` in
+[`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml) —
+that file is where a weekly run reads them, not this page. As of **2026-09-02**:
+178 arrivals (14 d), 24 new installs, retention 51% (35 day / 69 month), and
+activation still blocked — see below.
+
+**Two credentials stand between this and all four numbers**, both verified
+against the live property by a `workflow_dispatch` on 2026-09-02
+([run 33556680379](https://github.com/nikolai-vysotskyi/trace-mcp/actions/runs/33556680379)).
+Neither is a design question; do not re-investigate them, and do not read the
+resulting `null`s as zeros.
+
+1. **`repos_indexed` is not a registered GA4 custom dimension.** The ping has
+   been sending it all along and GA4 has been dropping it: `runReport` answers
+   *"Field customEvent:repos_indexed is not a valid dimension"*, and registration
+   is **not retroactive**, so every reading before it is created is
+   unrecoverable — the sooner it exists, the sooner activation has history.
+   Registered today: `version`, `client`, `install_type`, `model`. Creating it
+   is one form in GA4 Admin → Custom definitions (event scope, parameter name
+   `repos_indexed`). Automating it was tried and reverted: the Admin API is not
+   enabled on the credential's GCP project (480706841486), so the script could
+   only have logged a failure once a day.
+2. **`GH_TRAFFIC_TOKEN` is unset.** GitHub's traffic endpoints require
+   `Administration: read`, a permission `GITHUB_TOKEN` cannot be granted, so the
+   workflow gets HTTP 403 and records that in `acquisition.error`. A
+   fine-grained PAT on this repo with that one permission fills it. Until then
+   arrivals must be read by hand with the `gh api` calls in
+   `ops/distribution.md`, and nothing accumulates — GitHub's window is 14 days
+   and drops what falls out of it.
+
+Three things to keep attached to them. The windows differ, so arrivals →
+installs is a direction and not a conversion rate. The ping's credentials are
+public, so all four are inflatable and are a trend, not an audit. And
+`activated_pct` is taken against its own buckets rather than against
+`active_users.month`, because GA4 deduplicates active users within a dimension
+value and not across them — an install that indexes its first repository
+mid-window is counted on both sides.
+
+Activation is the one to watch. It is the only one of the four that measures
+whether an install ever reached the product's value, and it is the ceiling on
+everything downstream of install: if a meaningful share of installs ping day
+after day with zero indexed repositories, that number outranks every capability
+item below.
+
+Acquisition already has a finding. Over two independent 14-day windows
+(2026-08-30 and 2026-09-02) **not one of the twelve directory listings in
+`ops/distribution.md` appears as a referrer** — arrivals come from search,
+Reddit and our own site. New distribution effort belongs where those arrivals
+are; see that file's "Arrivals" column for the limits on that conclusion.
+
 ## Ready to start
 
 ### 1. Field-verify the preset savings, and close the attribution hole in the ping (TRA-643)
-The ping (`src/telemetry/usage-ping.ts`) sends `version`, `platform`,
-`node_major`, `tokens_saved`, `calls`, `client`, `install_type`,
-`previous_version`, device, `model` and `repos_indexed` — and **nothing
-about the tool surface the session actually advertised.** So the number the
-whole product now leads with (67–86% off the tool surface) is measured on
-this repo's bench and unmeasured in the field, and 25 of 61 installs do not
-even say which client they run.
+**Instrumentation landed** (PR #748): the ping now sends `preset` and
+`tools_advertised`, on the same basis `preset-surface-budget.test.ts`
+measures, so the number the whole product leads with (67–86% off the tool
+surface) becomes field-checkable rather than bench-only. The attribution
+hole turned out to be two separate defects, both fixed in the same change —
+see "How to read `by_client`" above.
 
-**Why now:** presets are the single biggest efficiency change we have ever
-shipped, they became the default silently (TRA-538 rewrote pre-v3.3
-`"preset": "full"` configs on upgrade), and we have no way to see whether
-that landed. Add the active preset and the advertised tool count to the
-ping, read them back in `adoption.yml`, and separately find out why `client`
-is unknown 41% of the time — an MCP client that does not identify itself is
-also a client we cannot write install docs for.
+**What is left is not code.** The two dimensions must be registered in GA4
+(event-scoped, named exactly `preset` and `tools_advertised`) before any
+value reaches `adoption.yml`; GA4 does not backfill, so the series starts at
+registration. Then one read-back after the first snapshot that carries them:
+what fraction of installs run which preset, and whether the silent
+`full` → `standard` default migration (TRA-538) actually landed. Until that
+read-back exists, "67–86%" stays a bench figure and must be cited as one.
 
 ### 2. Execute the rename in the order the decision fixed (TRA-644 — decided)
 **Decided 2026-09-02: `trace` is the command, `trace-mcp` is the project.**
@@ -193,9 +304,35 @@ acquisition-channel signal plus one activation number would let the
 distribution, SEO, outreach and web-design autopilots stop arguing from
 aesthetics.
 
+### 4. Put the one measurement made on other people's code where people arrive (TRA-647)
+TRA-534 measured input-token cost across 60 merged bug-fix PRs from six OSS
+repositories: median **13,595 → 1,326 tokens, 90.6% saved**, p90 44,246 →
+3,667, affected call sites readable 20% → 60% with 100% at least located. It
+is pinned (`benchmarks/pr-context/dataset.json`), reproducible
+(`scripts/bench-pr-context.ts`) and rendered from generated data
+(`docs/_data/pr_context_bench.json`), never hand-typed. It is the only
+number this project has that was not produced by the tool measuring itself
+on its own repository.
+
+Measured on `origin/master`, 2026-09-01: `pr-context-benchmark` appears
+**zero times in `docs/index.html` and zero times in `README.md`**. The page
+is reachable from one place, `docs/_data/docs_nav.yml`. Every figure a
+visitor actually sees still comes from our own estimators.
+
+**Why now:** items 1-3 all say the binding gap is reach and first value, and
+this is the cheapest credibility we will ever have — the work is already
+done and published, it just is not on the door. Both doors are being
+rebuilt this week (TRA-607/608/609 on the above-the-fold of the site and the
+README), so it lands inside those rewrites or costs a second redesign later.
+Its honest boundary ships with it: quality on that dataset is *structural*
+coverage, not a model's judgement, and the page already names the 5 PRs of
+60 where the index did not pay off. The quality arm is **TRA-568**, promoted
+out of backlog — a token number without a quality number is an efficiency
+claim, not a value claim, which is exactly the move we criticise peers for.
+
 ## Big bets — design pass before any code
 
-### 4. One door instead of 169 — a router preset (new, TRA-646)
+### 5. One door instead of 169 — a router preset (new, TRA-646)
 Presets took the advertised surface down by hiding tools behind
 `load_tools`. That worked, it broke nothing, and it has an obvious limit:
 even `minimal` still advertises 28 full JSON Schemas, and TRA-186 already
@@ -233,7 +370,7 @@ this is a new mode beside presets or a replacement for `full`. Not a
 contract break if it ships as a preset (`router`), which is the shape to
 design toward.
 
-### 5. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
+### 6. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
 trace-mcp's whole pitch is "reuse instead of recompute", but reuse only
 happens within one developer's laptop, across turns. A team of five on the
 same repo each index it separately and never see each other's decisions —
@@ -253,7 +390,7 @@ no demand-side reason to unpark it either.
   67–86% without a contract break. Do not reopen it for efficiency reasons;
   only merge two tools if they are genuinely the same tool.
 - **Chasing competitor feature/tool-count parity for its own sake** — see
-  `comparisons.md`'s "deliberately NOT chasing" list. Item 4 is the sharper
+  `comparisons.md`'s "deliberately NOT chasing" list. Item 5 is the sharper
   version of why: count was never the metric, in either direction, and the
   two largest peers are competing in the opposite direction anyway.
 - **Rewriting CFG/taint analysis onto a real AST/dataflow engine** — a real
