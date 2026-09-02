@@ -46,6 +46,7 @@ Rules for keeping it honest:
 | [Docker MCP Catalog](https://github.com/docker/mcp-registry) | **No** — listed all 328 entries of `servers/` via the GitHub contents API | None | — | **Blocked on an artifact we don't have.** Both paths need something trace-mcp isn't: "Local" wants a Dockerfile in our repo, "Remote" wants a reachable streamable-http/SSE endpoint. A plain npm/stdio package qualifies for neither. Adding a Dockerfile is a product decision, not a listings one — don't smuggle it in as distribution work | 2026-08-29 |
 | Continue.dev Hub | — | None | — | **Dead product, not a gap.** Continue was acquired by Cursor (June 2026), the final release shipped 2026-06-19, cloud data was deleted after 2026-07-15, `hub.continue.dev` no longer resolves. The GitHub repo is **not** archived and is still public — do not describe it as read-only — but it has shipped nothing since (last commit 2026-07-21). Re-check only if Cursor stands a successor up | 2026-08-29 |
 | [LobeHub](https://lobehub.com/mcp) | **No** — the `trace-mcp` listing there is `Mnehmos/trace-mcp`, an unrelated project with the same name | None | — | Publishing is `npx @lobehub/market-cli`, and it requires `lhm login` (browser OIDC) plus `lhm github connect` (browser ownership check). There is no token-only path: verified in `@lobehub/market-cli@0.0.41` itself, because their docs pages under `lobehub.com/docs/market/*` are content-free stubs. `plugin publish` and `plugin claim` both go through `createUserSDK()`, which aborts with "Not logged in. Run `lhm login` first" unless a user OAuth token is on disk; the `MARKET_CLIENT_ID`/`MARKET_CLIENT_SECRET` env pair is never used for publishing. Human-only, like Smithery | 2026-08-29 |
+| [skillsllm.com](https://skillsllm.com/skill/trace-mcp) | **Yes** — found while checking it as a "roundup" (see below); it is a directory, and we were already in it | None | Accurate and live: 177 tools / 81 languages / 102 stars, matching `docs/_data/counts.yml` on the day it was read. Passed their Semgrep + dependency scan | Nothing to submit. Their `/about` says a scraper "searches GitHub daily for repositories containing SKILL.md files or tagged with relevant topics like `claude-code`, `ai-agent`, `mcp-server`" — we carry all three, so the topics row below is what put us here and what keeps the numbers current. A `/submit` form and a paid "Featured Listing" also exist; neither is needed | 2026-09-02 |
 | GitHub repo topics | **Yes** — always on, the surface is ours | `github.com` 25/8 — indistinguishable from any other in-GitHub link | **20 of 20 slots used** — the cap. Changed 2026-08-30: dropped `token` and `tokens` (3,892 / 1,572 repos, almost all auth or crypto — wrong audience for a word we only meant one way) and `claude-skill` (near-duplicate of `claude-skills`, which is the bigger of the two: 7,662 vs 4,841); added `code-graph` (208 repos), `dependency-graph` (901) and `static-analysis` (8,072) | The one listing surface we own outright: `gh api -X PUT repos/:r/topics --input <json>`, instant, reversible, no review. Topic pages are a browse surface, so a *small* exact topic like `code-graph` is worth more than a big vague one. Sizes via `gh api "search/repositories?q=topic:<t>&per_page=1" --jq .total_count`. Before rebalancing again: 7 of the 20 slots are `claude-*` variants (8 before this change), which is defensible but is where the next slot comes from; `rag` (43,793) is the other weak slot — we retrieve, but we are not a RAG pipeline | 2026-08-30 |
 
 The repo's own `description` and `homepage` are part of that surface and were
@@ -114,6 +115,60 @@ numbers into the daily snapshot on the
 branch under `acquisition:`, which is the durable record. Re-read this column
 against that history before adding a surface, and update the cell in the same
 change that touches one.
+
+### Third-party roundups and comparison articles (TRA-682)
+
+A different surface class from the table above, added 2026-09-02 because the
+ledger had no concept of it: searched for `roundup`, `listicle`, `blog`,
+`dev.to`, `article`, `builder.io` and `outreach`, zero hits on all seven. It
+matters because page one for our category head term ("best MCP server code
+intelligence codebase graph 2026") is **entirely** third-party articles — not one
+vendor site ranks, which is the normal shape for a query where the searcher
+wants a neutral opinion. So the five `/vs/` pages cannot win these queries by
+on-page work, however good they get.
+
+| Surface | Listed | Arrivals | What it shows | How to change it | Verified |
+|---|---|---|---|---|---|
+| [dev.to/coder11](https://dev.to/coder11/code-review-graph-vs-graphify-vs-codebase-memory-mcp-the-best-code-intelligence-mcp-tools-for-ai-3ea) | **No** | None | code-review-graph, Graphify, codebase-memory-mcp, with a language / token-reduction / tool-count matrix | Comments are open and the thread was still live 15 days after publication. Same author and same text as the saurabhsharma.dev row — **one door, not two** | 2026-09-02 |
+| [saurabhsharma.dev](https://www.saurabhsharma.dev/blogs/code-graph-mcp-tools-comparison/) | **No** | None | The dev.to piece on the author's own site, published 2026-07-02 | Saurabh Sharma, `github.com/coder0011`, email published on the site. Reachable as a person; there is nothing to submit to | 2026-09-02 |
+| [sverklo.com](https://sverklo.com/blog/practical-guide-mcp-code-intelligence/) | **No** | None | "Honest Comparison of 12 Options", May 2026 | **Not a third party — it is a competitor's own blog.** Sverklo is one of the twelve it compares and discloses that outright ("the project that wrote this guide"). Corrections would go to `github.com/sverklo/sverklo` issues. Treat as a competitor page we might be added to out of goodwill, not as an editorial door | 2026-09-02 |
+| [chatforest.com](https://chatforest.com/reviews/code-intelligence-codebase-graph-mcp-servers/) | **No** | None | GitNexus, code-review-graph, codebase-memory-mcp, Claude Context, CodeGraphContext, SocratiCode, sverklo, and others down to 18 stars | Self-described "AI-native publication", agent-authored, and it **re-verifies star counts against live GitHub** (published 2026-04-25, re-verified 2026-08-24). No contact form and no submit page, newsletter only; oversight is Rob Nugen. The lever is being discoverable to their next re-verification pass, not pitching anyone. It already lists tools at 18 and 77 stars, so its bar is not adoption | 2026-09-02 |
+| [builder.io/blog](https://www.builder.io/blog/best-mcp-servers-2026) | **No** | None | 40+ MCP servers over 11 categories — Context7, GitHub, Figma, Playwright, Stripe. Published 2025-12-10 | **Not our category page.** A general MCP roundup with no code-intelligence section; it ranks for our head term on breadth. Company blog, no correction or suggestion path. Lowest value of the five | 2026-09-02 |
+
+`skillsllm.com` was the sixth URL in that set and is **not** an article at all —
+it is an auto-generated directory, we are already in it, and it has moved to the
+table above.
+
+**The correction angle does not exist, and that is the finding.** The plan was to
+use stale star counts and feature tables as an opening, on the theory that a
+factual correction is legitimate where a cold pitch is not. Checked every number
+against live GitHub on 2026-09-02: code-review-graph 31.1k, codebase-memory-mcp
+41.8k, GitNexus 46.9k, Graphify 113.8k, CodeGraphContext 4.2k. The articles are
+not wrong — they are accurate snapshots at their own publication dates, and
+chatforest's 2026-08-24 re-check is within a few percent of live. There is
+nothing to correct. And **none of the five mentions trace-mcp at all**, so
+nothing they say about us is out of date either; the ask is inclusion, which is
+a cold pitch, which is the thing the correction angle was meant to avoid.
+
+**What actually gates us, written down so it is not re-derived as an outreach
+problem.** Every tool these articles name sits between 4.2k and 113.8k stars.
+trace-mcp has 102. Four of the five order or frame by adoption, and no amount of
+outreach moves that number. The exception is chatforest, which lists tools at 18
+and 77 stars and re-verifies on a schedule — the only one of the five where
+inclusion is plausibly a discoverability problem rather than a scale problem, and
+also the only one with no human to pitch. That points where the Arrivals column
+already points: the lever is being findable by an automated re-crawl, not writing
+to people. The skillsllm row above is the same mechanism having already worked.
+
+**`Mnehmos/trace-mcp` is a different project, not a misattribution of ours**
+(verified 2026-09-02). `mcprepository.com/mnehmos/trace-mcp` describes a tool
+that "detects schema mismatches between data producers and consumers"; it names
+nothing of ours and links nothing of ours. The GitHub repo behind it now **404s**
+while the account (`Mnehmos`, 65 public repos) is live, so it was renamed or
+taken down. Same collision is already recorded in the LobeHub row. Nothing to
+correct, but it is the likely source of the `traceix mcp` / `mcp tracing`
+impressions-without-clicks, and it means the bare name "Trace MCP" is not ours to
+claim on directories.
 
 ## macOS code signing and notarization
 
