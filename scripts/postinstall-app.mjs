@@ -52,6 +52,7 @@ import {
   recoverInterruptedSwap,
   runningBundlePath,
 } from './locate-app.mjs';
+import { traceHomeDir } from './trace-home.mjs';
 
 // Every installed bundle on this machine, the primary target first. Empty
 // means no install was found — the script then exits 0 like the old hardcoded
@@ -92,7 +93,7 @@ if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
  *
  * macOS: `launchctl stop` triggers SIGTERM; the plist's KeepAlive=true auto
  *   respawns the service using the now-updated binary path.
- * Linux/Windows: kill the PID recorded in ~/.trace-mcp/daemon.pid. The next
+ * Linux/Windows: kill the PID recorded in the CLI state dir's daemon.pid. The next
  *   stdio session or Electron tray poll will ensureDaemon() back up.
  * Manually-spawned dev daemons (no pidfile, no launchd) are not touched —
  *   the developer will restart them as needed.
@@ -103,7 +104,7 @@ function stopRunningDaemon() {
       execFileSync(LAUNCHCTL_BIN, ['stop', 'com.trace-mcp.server'], { stdio: 'ignore' });
       return;
     }
-    const pidFile = path.join(os.homedir(), '.trace-mcp', 'daemon.pid');
+    const pidFile = path.join(traceHomeDir(), 'daemon.pid');
     if (!fs.existsSync(pidFile)) return;
     const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
     if (!Number.isInteger(pid) || pid <= 0) return;
@@ -129,7 +130,7 @@ stopRunningDaemon();
 // that goes looking for state. Deleted here because this hook is the one piece
 // of code every upgrading install runs.
 try {
-  fs.unlinkSync(path.join(os.homedir(), '.trace-mcp', 'app-update-state.json'));
+  fs.unlinkSync(path.join(traceHomeDir(), 'app-update-state.json'));
 } catch {
   /* absent on a clean machine — the normal case */
 }

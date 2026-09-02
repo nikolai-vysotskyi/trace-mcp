@@ -22,6 +22,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { traceHomeDir } from '../../../scripts/trace-home.mjs';
+
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 9333;
 
@@ -387,7 +389,7 @@ function cliPath() {
 
 function ensureFixture(pin) {
   const repoRoot = path.resolve(appDir, '..', '..');
-  const dir = path.join(os.homedir(), '.trace-mcp', 'perf-fixture', pin.commit.slice(0, 12));
+  const dir = path.join(traceHomeDir(), 'perf-fixture', pin.commit.slice(0, 12));
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(path.dirname(dir), { recursive: true });
     execFileSync('git', ['worktree', 'add', '--detach', dir, pin.commit], {

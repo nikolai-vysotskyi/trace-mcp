@@ -148,6 +148,33 @@ describe.skipIf(process.platform === 'win32')('locateInstalledApp', () => {
     expect(result?.appPath).toBe(markerTarget);
   });
 
+  /* TRA-667: `src/global.ts` renames ~/.trace-mcp to ~/.trace on first import, so
+     after the migration the old directory is gone. A resolver hardcoded to it
+     reads nothing and silently degrades to an mdfind/fallback guess. */
+  it('reads the marker from ~/.trace once the CLI has migrated', () => {
+    const markerTarget = createFakeBundle(path.join(home, 'marker-dest'));
+    fs.mkdirSync(path.join(home, '.trace'), { recursive: true });
+    fs.writeFileSync(
+      path.join(home, '.trace', 'app-location.json'),
+      JSON.stringify({
+        appPath: markerTarget,
+        bundleId: BUNDLE_ID,
+        version: '1.2.3',
+        writtenAt: Date.now(),
+      }),
+    );
+
+    const { result } = runLocate({
+      homeDir: home,
+      fallbackDirs: [],
+      mdfindBin: createMdfindStub(home, ['/nowhere/should-not-be-used.app']),
+      platform: 'darwin',
+    });
+
+    expect(result?.source).toBe('marker');
+    expect(result?.appPath).toBe(markerTarget);
+  });
+
   it('rejects a marker whose bundle no longer exists, falls through to mdfind', () => {
     // Marker points at a path that was deleted between launches.
     fs.mkdirSync(path.join(home, '.trace-mcp'), { recursive: true });
@@ -314,6 +341,16 @@ describe.skipIf(process.platform === 'win32')('locateInstalledApp', () => {
     runWriteMarker(home, builtBundle, '1.51.1');
 
     expect(fs.existsSync(path.join(home, '.trace-mcp', 'app-location.json'))).toBe(false);
+  });
+
+  it('writeAppLocationMarker writes into ~/.trace once the CLI has migrated', () => {
+    fs.mkdirSync(path.join(home, '.trace'), { recursive: true });
+    const target = createFakeBundle(path.join(home, 'bundle-here'));
+
+    runWriteMarker(home, target, '1.51.1');
+
+    expect(fs.existsSync(path.join(home, '.trace', 'app-location.json'))).toBe(true);
+    expect(fs.existsSync(path.join(home, '.trace-mcp'))).toBe(false);
   });
 
   it('writeAppLocationMarker round-trips through the marker reader', () => {

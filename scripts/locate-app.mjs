@@ -16,7 +16,8 @@
  *
  * Resolution chain (highest-confidence first):
  *
- *   1. **Marker file** `~/.trace-mcp/app-location.json`, written by Electron
+ *   1. **Marker file** `~/.trace/app-location.json` (`~/.trace-mcp` on a
+ *      machine the CLI has not renamed yet), written by Electron
  *      main on every startup from `process.execPath`. This is exact: the path
  *      came from the running bundle itself, not from a guess about install
  *      conventions. The marker is the steady-state mechanism after the first
@@ -46,6 +47,8 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { traceHomeDir } from './trace-home.mjs';
 
 export const APP_NAME = 'trace-mcp.app';
 export const BUNDLE_ID = 'com.trace-mcp.app';
@@ -160,7 +163,7 @@ export function locateInstalledApp(options = {}) {
   const mdfindBin = options.mdfindBin ?? '/usr/bin/mdfind';
   const plistBuddyBin = options.plistBuddyBin ?? '/usr/libexec/PlistBuddy';
   const fallbackDirs = options.fallbackDirs ?? [path.join(home, 'Applications'), '/Applications'];
-  const markerPath = path.join(home, '.trace-mcp', LOCATION_MARKER_FILENAME);
+  const markerPath = path.join(traceHomeDir(options.homeDir), LOCATION_MARKER_FILENAME);
 
   const fromMarker = resolveFromMarker(markerPath, bundleId, plistBuddyBin);
   if (fromMarker) return { appPath: fromMarker, source: 'marker' };
@@ -315,7 +318,9 @@ export function recoverInterruptedSwap(options = {}) {
   // locateInstalledApp() here, because after an interrupted swap the path it
   // names no longer validates. Read the raw path instead.
   const dirs = new Set(fallbackDirs);
-  const markerAppPath = readMarkerAppPath(path.join(home, '.trace-mcp', LOCATION_MARKER_FILENAME));
+  const markerAppPath = readMarkerAppPath(
+    path.join(traceHomeDir(options.homeDir), LOCATION_MARKER_FILENAME),
+  );
   if (markerAppPath) dirs.add(path.dirname(markerAppPath));
 
   const backupPattern = new RegExp(`^${escapeRegExp(appName)}\\.bak-\\d+$`);
@@ -376,8 +381,7 @@ export function writeAppLocationMarker(appPath, meta = {}) {
   // Never record a build output as the install location — see TRA-357.
   if (!isPlausibleInstallPath(appPath)) return;
   try {
-    const home = meta.homeDir ?? os.homedir();
-    const markerDir = path.join(home, '.trace-mcp');
+    const markerDir = traceHomeDir(meta.homeDir);
     fs.mkdirSync(markerDir, { recursive: true });
     const payload = {
       appPath,
