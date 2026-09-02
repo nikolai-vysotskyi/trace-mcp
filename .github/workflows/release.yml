@@ -225,6 +225,13 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: macos-latest
+    # The Developer ID certificate lives in this environment, not at repository
+    # level, and the environment only deploys from protected branches (TRA-628).
+    # That is what keeps the signing identity out of reach of a workflow added
+    # on some other branch — `on: push: branches: [master]` above is a property
+    # of this file, and a repository-level secret is readable by any workflow
+    # that names it. Removing this line silently un-gates the certificate.
+    environment: apple-signing
     permissions:
       contents: write
       id-token: write
@@ -266,10 +273,10 @@ jobs:
           npm pkg set version="$ROOT_VERSION"
 
       # Sign + notarize (TRA-436). The certificate never leaves this step's
-      # environment, and this workflow only ever runs on `push: master` or
-      # workflow_dispatch — neither is reachable from a fork — so a fork PR
-      # cannot obtain the signing material. electron-builder reads CSC_* for
-      # the Developer ID identity and APPLE_* for notarytool; it prints neither.
+      # environment; it reaches the job only because the job declares
+      # `environment: apple-signing` above, and only on a protected branch.
+      # electron-builder reads CSC_* for the Developer ID identity and APPLE_*
+      # for notarytool; it prints neither.
       # Do not add `--debug` here: it dumps the resolved env.
       - name: Package with electron-builder
         working-directory: packages/app
