@@ -242,9 +242,20 @@ export class DomainRepository {
   getAllOrmAssociations(fileIds?: number[]): OrmAssociationRow[] {
     if (fileIds && fileIds.length > 0) {
       const ph = fileIds.map(() => '?').join(',');
+      // Associations declared elsewhere can *target* a model in a changed file
+      // — reindexing that file drops the model node and its edges, so the
+      // scoped resolver has to see those rows too or the edge stays lost until
+      // the next full index. They are unresolved by construction:
+      // deleteEntitiesByFile nulls target_model_id when the target is deleted.
       return this.db
-        .prepare(`SELECT * FROM orm_associations WHERE file_id IN (${ph})`)
-        .all(...fileIds) as OrmAssociationRow[];
+        .prepare(
+          `SELECT * FROM orm_associations
+           WHERE file_id IN (${ph})
+              OR (target_model_id IS NULL
+                  AND target_model_name IN
+                      (SELECT name FROM orm_models WHERE file_id IN (${ph})))`,
+        )
+        .all(...fileIds, ...fileIds) as OrmAssociationRow[];
     }
     return this.db.prepare('SELECT * FROM orm_associations').all() as OrmAssociationRow[];
   }
