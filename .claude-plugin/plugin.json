@@ -9,7 +9,7 @@
   "license": "MIT",
   "commands": [],
   "mcpServers": {
-    "trace-mcp": {
+    "trace": {
       "command": "trace-mcp"
     }
   },
