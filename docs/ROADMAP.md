@@ -72,7 +72,7 @@ could not read at all until TRA-643 found out why.
 This is not an argument to slow the engine room down. It is an argument
 that the next several weeks of *strategic* work — the items below, and the
 weekly focus derived from them — should be measured in users reaching first
-value, not in capability shipped. All four "ready to start" items are of
+value, not in capability shipped. All five "ready to start" items are of
 that shape.
 
 ## Adoption — metric of record
@@ -236,6 +236,17 @@ everything downstream of install: if a meaningful share of installs ping day
 after day with zero indexed repositories, that number outranks every capability
 item below.
 
+**Activation measures setup, not use — and the number that measures use is
+already in the payload** (found 2026-09-02, item 5). `repos_indexed` says an
+install once registered a project. It does not say the agent ever called a
+tool again. The ping has carried the second number since it was written:
+`calls`, the count of trace-mcp tool calls since the previous ping
+(`src/savings.ts` `recordCall` → `usage-ping.ts:229-250`). It is a per-tool-call
+counter kept by the MCP server itself, so it is comparable across clients. It
+appears **zero times in `scripts/ga4-snapshot.mjs`** — the only ping field of
+substance no report has ever read. Nothing above should be read as "installs
+are using the product"; so far we know they installed it.
+
 Acquisition already has a finding. Over two independent 14-day windows
 (2026-08-30 and 2026-09-02) **not one of the twelve directory listings in
 `ops/distribution.md` appears as a referrer** — arrivals come from search,
@@ -330,9 +341,49 @@ coverage, not a model's judgement, and the page already names the 5 PRs of
 out of backlog — a token number without a quality number is an efficiency
 claim, not a value claim, which is exactly the move we criticise peers for.
 
+### 5. Read `calls`, not just `repos_indexed` — does the product get used, and by which client? (new, TRA-673)
+Every efficiency number this project publishes assumes the agent calls our
+tools instead of reading files. That assumption has never been checked outside
+one client, and the mechanism that enforces it is not portable:
+
+- **Level 3 (the PreToolUse guard hook that actually blocks Read/Grep) is
+  Claude Code only**, and Level 4's tweakcc system-prompt rewrite likewise
+  (`README.md`, "Getting the most out of trace-mcp"). Cursor and Windsurf get
+  a rules file (`src/init/ide-rules.ts`); everyone else gets tool descriptions.
+  Below Level 3 the product is asking, not routing.
+- **Session mining, the cross-session pillar, has two providers** — `hermes`
+  and `codex` (`src/session/providers/`). For a Cursor or Windsurf install,
+  decision memory and `search_sessions` start empty and stay that way.
+- The one breakdown we have (2026-09-01) is 8 claude-code, 2 codex, 1 grok
+  inside a 36-row `by_client` bucket. Too small to conclude from, which is the
+  point: we are shipping into MCP directories on the premise of client
+  neutrality while our strongest mechanisms exist for one client.
+
+**The measurement is nearly free**, because the counter is already being sent
+and simply never read — see "Activation measures setup, not use" above. Work:
+read `calls` in `scripts/ga4-snapshot.mjs` alongside `tokens_saved`, break it
+down by `client`, and publish it under `funnel:` as the activation number that
+means *use* (`repos_indexed` stays as setup). Then one read-back: what share of
+active installs called a tool at all in the window, and does that share differ
+between hook-capable and hook-less clients.
+
+**Why it is here and not a tactical ticket.** If use is flat across clients,
+Level 3 is a nice-to-have and reach work should go wide — every directory, every
+client. If it collapses without the hook, then our addressable market is
+"clients that can enforce tool routing", the honest response is portable
+enforcement (or a much stronger Level 1), and half the distribution effort is
+currently pointed at installs that will never reach value. Those are opposite
+strategies and we cannot presently tell them apart.
+
+**One dependency, and it is the same one three other items are waiting on.**
+`calls` needs registering in GA4 as an event-scoped custom metric, exactly like
+`repos_indexed` / `preset` / `tools_advertised` need registering as dimensions.
+GA4 does not backfill any of them. That makes four fields in one admin session
+rather than four separate asks — bundle it.
+
 ## Big bets — design pass before any code
 
-### 5. One door instead of 169 — a router preset (new, TRA-646)
+### 6. One door instead of 169 — a router preset (new, TRA-646)
 Presets took the advertised surface down by hiding tools behind
 `load_tools`. That worked, it broke nothing, and it has an obvious limit:
 even `minimal` still advertises 28 full JSON Schemas, and TRA-186 already
@@ -370,7 +421,7 @@ this is a new mode beside presets or a replacement for `full`. Not a
 contract break if it ships as a preset (`router`), which is the shape to
 design toward.
 
-### 6. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
+### 7. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
 trace-mcp's whole pitch is "reuse instead of recompute", but reuse only
 happens within one developer's laptop, across turns. A team of five on the
 same repo each index it separately and never see each other's decisions —
@@ -384,7 +435,7 @@ that item 3 sharpens the trigger condition: with 61 installs across 11
 countries and no evidence of a single multi-seat user, there is currently
 no demand-side reason to unpark it either.
 
-### 7. Decide what the State Engine makes us — waiting on its own numbers (TRA-649)
+### 8. Decide what the State Engine makes us — waiting on its own numbers (TRA-649)
 `trace_state_*` — init, patch, get, checkpoint, rollback over a SQLite task
 store with RFC 7396 merge patches, plus a `trace://state/{task_id}`
 resource — is a second product pillar, and it arrived through an
@@ -415,7 +466,7 @@ claim item 4 exists to stop us making.
   67–86% without a contract break. Do not reopen it for efficiency reasons;
   only merge two tools if they are genuinely the same tool.
 - **Chasing competitor feature/tool-count parity for its own sake** — see
-  `comparisons.md`'s "deliberately NOT chasing" list. Item 5 is the sharper
+  `comparisons.md`'s "deliberately NOT chasing" list. Item 6 is the sharper
   version of why: count was never the metric, in either direction, and the
   two largest peers are competing in the opposite direction anyway.
 - **Rewriting CFG/taint analysis onto a real AST/dataflow engine** — a real
