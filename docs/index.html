@@ -11,7 +11,11 @@ layout: null
 
   <!-- ── Primary Meta ── -->
   <title>trace-mcp — precomputed code intelligence for AI coding agents</title>
-  <meta name="description" content="A structured map of your codebase for AI agents. trace-mcp indexes your repo once so agents stop re-reading the same files every turn. {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens assembling code-review context, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos. Open source, local-first, MCP-native.">
+  <!-- Front-loaded on the SEO Agent's measurement: Google truncates this around
+       155 characters, and the previous wording shared its first 133 with the old
+       one, so the number was cut mid-word in the snippet. The 155-char cut now
+       lands after "we don't own". -->
+  <meta name="description" content="{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context — median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own. trace-mcp indexes your codebase once so AI agents stop re-reading the same files. Open source, local-first, MCP-native.">
   <meta name="keywords" content="ai execution layer, recomputation, context bloat, token reduction, ai agents, mcp, model context protocol, code intelligence, code graph, llm developer tools, agent observability, agent optimization, claude code, cursor, windsurf, dependency graph, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
   <meta name="robots" content="index, follow, max-image-preview:large">
@@ -2060,7 +2064,9 @@ layout: null
 
       <p class="hero-desc">
         trace-mcp indexes your repository once so agents stop re-reading the same files every turn.
-        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens on real pull requests, 100% local.</span>
+        <!-- Same verbatim claim wording as the metrics tile below: two paraphrases
+             of one number read as two claims to anything extracting them. -->
+        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, 100% local.</span>
       </p>
 
       <!-- Two actions, no more (TRA-609): the DMG and the command that installs the
