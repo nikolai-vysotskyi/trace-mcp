@@ -131,6 +131,8 @@ Encoding matters, but not uniformly. Our measurements (`scripts/bench-toon.ts`, 
 
 The rule underneath: compact tabular encodings win when every row has the same scalar columns, and lose the moment a row contains a nested object or an inner array. Full method and the breakeven curve are on the [TOON savings page](/toon-savings.html).
 
+Every number in this section is measured by trace-mcp on trace-mcp. The one measurement taken on code we do not own is the [PR review context benchmark](/pr-context-benchmark.html) — 60 merged pull requests across six open-source repositories — and to see what any of this is worth on your own sessions rather than on ours, [session analytics](/analytics.html) reports the same figures from your local agent logs.
+
 ## 5. Prefer one structural query over many reads
 
 "What breaks if I change this function" answered by reading files is an open-ended crawl: find the definition, grep for the name, open each hit, follow each of those. Answered from a dependency graph it is one call that returns the affected symbols and the tests covering them.

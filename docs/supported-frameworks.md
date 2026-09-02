@@ -37,7 +37,11 @@ The list below says which languages are supported. It does not say how deep
 each one goes, and the spread is wide — some get a full AST and a call graph,
 others get symbol extraction only. The [language capability
 matrix](language-matrix.md) has the per-language breakdown: parser, import
-edges, call edges, type edges, and whether a test covers the plugin.
+edges, call edges, type edges, and whether a test covers the plugin. Detection
+is automatic, but a language whose files sit outside the default globs needs an
+`include` entry — see [configuration](configuration.md#options). The tools a
+detected framework unlocks are marked framework-gated in the [tools
+reference](tools-reference.md).
 
 ### Tree-sitter (full AST parsing)
 

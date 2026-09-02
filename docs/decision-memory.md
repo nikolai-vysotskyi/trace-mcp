@@ -31,7 +31,7 @@ updated: 2026-08-30
   }
 }
 </script>
-trace-mcp includes a persistent decision knowledge graph that captures architectural decisions, tech choices, bug root causes, preferences, and conventions — linked to the code they're about.
+trace-mcp includes a persistent decision knowledge graph that captures architectural decisions, tech choices, bug root causes, preferences, and conventions — linked to the code they're about, on the same symbol and file nodes the indexer builds ([architecture](architecture.md)).
 
 ## Why
 
@@ -47,7 +47,7 @@ The system tries to capture the kinds of reasoning that disappear from the diff 
 - **The thing that was tried first and didn't work** — recovered from session logs by `mine_sessions`, because agents rarely volunteer their own dead ends. This is the highest-value content and the easiest to lose without dedicated capture.
 - **The local convention being established** — "all new endpoints go through `withAuth` even if the route looks public." Stops the next agent from reinventing or violating it.
 
-Each of these is linked to the symbol or file it's about, so the next agent who touches that code sees the reasoning surface automatically through `get_change_impact` or `plan_turn` — they don't have to know the decision exists to find it.
+Each of these is linked to the symbol or file it's about, so the next agent who touches that code sees the reasoning surface automatically through `get_change_impact` or `plan_turn` — they don't have to know the decision exists to find it. Both of those, and the `*_decision` / `mine_sessions` tools below, are listed in the [tools reference](tools-reference.md).
 
 ## Architecture
 

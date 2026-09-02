@@ -33,6 +33,13 @@ updated: 2026-09-01
 </script>
 Configuration is optional — trace-mcp works out of the box for standard projects.
 
+This page is the reference for the file itself: where it lives, how the layers
+merge, and every key. Several sections of it are big enough to have their own
+page — the [quality gates](quality-gates.md) thresholds, the
+[telemetry](telemetry.md) span exporter, the memory knobs that bound the
+[daemon](daemon-memory.md), and the [tweakcc](tweakcc.md) enforcement tier that
+`trace-mcp init` writes here on your behalf.
+
 ---
 
 ## How config works
@@ -176,7 +183,7 @@ Two different things can leave a folder out of the index — check which one app
 | `follow_symlinks` | `boolean` | `false` | Follow directory symlinks during file discovery. Leave off unless you know the tree is free of symlink cycles — enabling it on a tree with a cycle (e.g. Ansible Molecule's `roles/<role>/molecule/<scenario>/roles/<role> -> ../../../` layout) can silently truncate traversal. Symlinked *files* are always skipped regardless of this setting. |
 | `ignore.directories` | `string[]` | `[]` | Extra directory names to skip (added to built-in list) |
 | `ignore.patterns` | `string[]` | `[]` | Extra gitignore-style patterns to exclude from indexing |
-| `plugins` | `string[]` | `[]` | Paths to custom plugins |
+| `plugins` | `string[]` | `[]` | Paths to custom plugins — see [development](development.md#adding-a-new-integration-plugin) for the plugin interface |
 | `security.secret_patterns` | `string[]` | Common patterns | Regex patterns for secret filtering |
 | `security.max_file_size_bytes` | `number` | `524288` | Max file size to index (bytes) |
 
@@ -553,7 +560,7 @@ Every `tools.*` option works from a project-local config file (`.trace-mcp/.conf
 
 | Value | What ships | When to use |
 |---|---|---|
-| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere (CLAUDE.md, tweakcc), or don't want opinionated rules |
+| `"off"` *(default)* | Nothing | Default — you already manage agent behavior elsewhere (CLAUDE.md, [tweakcc](tweakcc.md)), or don't want opinionated rules |
 | `"minimal"` | One rule: never fabricate paths/symbols/APIs — call `search`/`get_symbol`/run the command | Minimal nudge tied to trace-mcp tool use, no personality prescription |
 | `"strict"` | 8 rules: no flattery, disagree on wrong premises, never fabricate, stop when confused, goal-driven execution, verify before reporting "done", 2-strike rule, surgical changes only | Max-tier default — aligns agent behavior across a team |
 
@@ -904,3 +911,7 @@ trace-mcp analytics trends     # Daily usage trends
 - **File size limits** — per-file byte cap prevents OOM on large files
 - **Artisan whitelist** — only safe artisan commands allowed (when Laravel integration is enabled)
 - **HTTP rate limiting** — 60 req/min per IP on HTTP/SSE transport
+
+What counts as a failing security finding *in your own code* is a separate
+setting — `quality_gates.rules.max_security_critical_findings`, documented with
+this project's own calibrated numbers under [quality gates](quality-gates.md).

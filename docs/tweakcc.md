@@ -33,6 +33,12 @@ updated: 2026-08-30
 </script>
 > **Requires:** [tweakcc](https://github.com/Piebald-AI/tweakcc) — a tool that patches Claude Code's system prompts directly.
 
+This is the Claude-Code-specific half of tool routing. The cross-client half —
+which tools are advertised at all, and how much of each schema — is
+`tools.preset` and friends in [configuration](configuration.md#tool-exposure--agent-behavior); what that
+is worth in tokens is measured in [cutting Claude Code token
+usage](reduce-claude-code-token-usage.md).
+
 ---
 
 ## Why system prompt routing?

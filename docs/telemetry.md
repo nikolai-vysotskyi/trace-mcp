@@ -33,7 +33,10 @@ updated: 2026-09-01
 </script>
 trace-mcp ships a pluggable observability bridge (P13) that emits
 OpenTelemetry-compatible spans for every AI provider call and every MCP tool
-invocation. The default sink is `noop` — opt-in only.
+invocation. The default sink is `noop` — opt-in only, and switched on with the
+`telemetry.*` keys described in [configuration](configuration.md). Turning it on
+also unlocks the persistent `window` values of `analyze_perf`, which is
+otherwise limited to the current session ([analytics](analytics.md)).
 
 > **This page is about spans you export to your own collector.** It is not the
 > anonymous daily install ping, which is a separate subsystem reporting to the

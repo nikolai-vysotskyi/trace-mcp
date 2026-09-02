@@ -166,7 +166,11 @@ page says how deep each one is. Every language in the list gets symbol
 extraction; call graphs and type edges are a much smaller set. For what each
 language's framework integrations understand on top of that, see [supported
 frameworks](supported-frameworks.md); for the \`include\` globs referenced
-below, see [configuration](configuration.md).
+below, see [configuration](configuration.md). The edge columns are what makes
+the graph queryable: a language with call edges answers \`get_call_graph\` and
+call-aware \`find_usages\` ([tools reference](tools-reference.md)), one without
+them still answers \`search\` and \`get_outline\`. How those edges are produced
+is the two-pass pipeline in [architecture](architecture.md#indexing-pipeline).
 
 - **indexed with the default config:** ${counts.indexedByDefault} (the rest need an \`include\` entry — see below)
 - **tree-sitter parser:** ${counts.treeSitter} · **regex parser:** ${counts.regex} · **custom parser:** ${counts.custom}

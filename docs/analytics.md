@@ -31,7 +31,7 @@ updated: 2026-08-30
   }
 }
 </script>
-trace-mcp includes a built-in analytics engine that parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage.
+trace-mcp includes a built-in analytics engine that parses AI agent session logs, tracks token savings, detects wasteful patterns, and assesses technology coverage. It measures what your sessions actually cost; [cutting Claude Code token usage](reduce-claude-code-token-usage.md) is the list of levers to pull once the report names the waste, and the [PR review context benchmark](pr-context-benchmark.md) is the same measurement run on somebody else's repositories.
 
 ---
 
@@ -83,7 +83,7 @@ Both formats are auto-detected during sync. No configuration needed.
 
 ### Local-machine scoping
 
-`get_session_analytics`, `get_optimization_report`, `get_real_savings`, and `analyze_perf` (for `window` other than `"session"`) only see session logs that physically exist on the machine running the MCP server — they read `~/.claude/projects/<encoded-path>/` and `<project>/.claw/sessions/` directly, they do not fetch data from any other machine. If you invoke them from a fresh checkout, a remote/cloud agent runtime, or a CI sandbox that never ran a local Claude Code / Claw Code session for this project, there is nothing to find and the tools report that. `get_session_analytics`/`get_optimization_report`/`get_real_savings` distinguish this from "checked, nothing to report" by adding a `_warnings` field when both the discoverable log files and the aggregated result are empty. `analyze_perf` with a persistent `window` additionally requires `telemetry.enabled: true` in config (off by default) and returns an explicit `error` when it's off.
+`get_session_analytics`, `get_optimization_report`, `get_real_savings`, and `analyze_perf` (for `window` other than `"session"`) only see session logs that physically exist on the machine running the MCP server — they read `~/.claude/projects/<encoded-path>/` and `<project>/.claw/sessions/` directly, they do not fetch data from any other machine. If you invoke them from a fresh checkout, a remote/cloud agent runtime, or a CI sandbox that never ran a local Claude Code / Claw Code session for this project, there is nothing to find and the tools report that. `get_session_analytics`/`get_optimization_report`/`get_real_savings` distinguish this from "checked, nothing to report" by adding a `_warnings` field when both the discoverable log files and the aggregated result are empty. `analyze_perf` with a persistent `window` additionally requires `telemetry.enabled: true` in [config](configuration.md) (off by default) and returns an explicit `error` when it's off — that flag is the same span emitter documented under [telemetry](telemetry.md).
 
 ### JSONL format differences
 

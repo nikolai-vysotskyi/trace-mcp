@@ -204,6 +204,39 @@ describe('docs footer nav covers every indexed page', () => {
   });
 
   /**
+   * Footer coverage made every page reachable, but it made every page equally
+   * reachable: one flat 22-link ribbon repeated site-wide carries no topical
+   * signal, so no page reads as a hub. In-text links are what group pages into
+   * topics — the /vs/ cluster already does this and was the model copied for
+   * the token-cost, setup and coverage clusters (TRA-658).
+   *
+   * Threshold is 1, not the 3-6 the clusters actually carry: this exists to
+   * stop a NEW page shipping as a dead end, not to freeze the current density.
+   * Links injected by the layout do not count — only what the page's own body
+   * says. Pages excluded from the sitemap (`noindex: true`) are internal
+   * working documents and are not checked.
+   */
+  it('every published page links somewhere in its own body, not just the footer', async () => {
+    const { sourceFor } = await import('../../scripts/gen-sitemap.mjs');
+    const deadEnds = sitemapPaths().filter((path) => {
+      const raw = readFileSync(join(DOCS, sourceFor(path)), 'utf-8');
+      const body = raw
+        .replace(/^---\n[\s\S]*?\n---\n/, '')
+        .replace(/<script[\s\S]*?<\/script>/g, '');
+      return ![...body.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)].some(
+        ([, href]) =>
+          // Internal = same-site: a rooted path or a sibling .md/.html page.
+          // Bare fragments are same-page, so they do not connect anything.
+          /^\/[^/]/.test(href) || /^[\w./-]+\.(md|html)(#|$)/.test(href),
+      );
+    });
+    expect(
+      deadEnds,
+      `published pages with no in-text internal link — add links in prose where the subject comes up, not a "See also" block: ${deadEnds.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  /**
    * Both footers, not just the layout's. This check used to read
    * `_layouts/default.html` alone, so it could not see that `index.html` —
    * which has `layout: null` and its own hand-written footer — still listed
