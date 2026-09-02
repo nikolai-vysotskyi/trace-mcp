@@ -44,6 +44,7 @@ vi.mock('../src/init/hooks.js', () => ({
   installReindexHook: vi.fn(() => ({ target: 'reindex', action: 'updated' })),
   installPrecompactHook: vi.fn(() => ({ target: 'precompact', action: 'updated' })),
   installWorktreeHook: vi.fn(() => [{ target: 'worktree', action: 'updated' }]),
+  migrateLegacyToolPrefix: vi.fn(() => []),
 }));
 vi.mock('../src/init/claude-md.js', () => ({
   updateClaudeMd: vi.fn(() => ({ target: 'claude-md', action: 'updated' })),
@@ -162,6 +163,10 @@ describe('runPostUpdateMigrations', () => {
     const { updateClaudeMd } = await import('../src/init/claude-md.js');
     expect(updateClaudeMd).toHaveBeenCalled();
 
+    // Should have migrated the legacy tool-name prefix (TRA-650)
+    const { migrateLegacyToolPrefix } = await import('../src/init/hooks.js');
+    expect(migrateLegacyToolPrefix).toHaveBeenCalled();
+
     // Should stamp new version in cache
     const written = getWrittenCache();
     expect(written).not.toBeNull();
@@ -180,12 +185,17 @@ describe('runPostUpdateMigrations', () => {
 
     await runPostUpdateMigrations();
 
-    const { installGuardHook } = await import('../src/init/hooks.js');
+    const { installGuardHook, migrateLegacyToolPrefix } = await import('../src/init/hooks.js');
     expect(installGuardHook).not.toHaveBeenCalled();
 
     // But CLAUDE.md should still be updated
     const { updateClaudeMd } = await import('../src/init/claude-md.js');
     expect(updateClaudeMd).toHaveBeenCalled();
+
+    // The tool-prefix migration is NOT gated on the guard hook being
+    // installed (TRA-650) — a permission allowlist entry can exist from a
+    // user manually approving a tool call, with no guard hook at all.
+    expect(migrateLegacyToolPrefix).toHaveBeenCalled();
   });
 
   it('continues on hook install failure', async () => {
@@ -194,6 +204,24 @@ describe('runPostUpdateMigrations', () => {
     const hooks = await import('../src/init/hooks.js');
     vi.mocked(hooks.installGuardHook).mockImplementation(() => {
       throw new Error('hook fail');
+    });
+
+    // Should not throw
+    await runPostUpdateMigrations();
+
+    // Should still update CLAUDE.md and stamp version
+    const { updateClaudeMd } = await import('../src/init/claude-md.js');
+    expect(updateClaudeMd).toHaveBeenCalled();
+    const written = getWrittenCache();
+    expect(written!.installedVersion).toBe('2.0.0');
+  });
+
+  it('continues on tool-prefix migration failure', async () => {
+    setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0', installedVersion: '1.9.0' });
+
+    const hooks = await import('../src/init/hooks.js');
+    vi.mocked(hooks.migrateLegacyToolPrefix).mockImplementation(() => {
+      throw new Error('tool-prefix migration fail');
     });
 
     // Should not throw

@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { atomicWriteJson } from '../utils/atomic-write.js';
+import { buildToolPrefixMigrationStep } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import { withPs1Bom } from './ps1-bom.js';
 import type { InitStepResult } from './types.js';
@@ -640,6 +641,48 @@ export function cleanupLegacyHooks(opts: { global?: boolean; dryRun?: boolean })
         action: 'updated',
         detail: `Removed legacy hooks: ${[...removedNames].join(', ')}`,
       });
+    }
+  }
+
+  return results;
+}
+
+// --- Legacy tool-name prefix migration (TRA-650) -------------------------
+
+/**
+ * Rewrite the legacy `mcp__trace-mcp__` MCP tool-name prefix to `mcp__trace__`
+ * wherever a Claude-family settings file has it — permission allowlist
+ * entries (`permissions.allow` / `permissions.deny`) and hook `matcher`
+ * strings a user wrote themselves, naming one of our tools in full.
+ *
+ * `configureMcpClients` (TRA-611) only migrates the `mcpServers` entry; it
+ * never touches settings.json — a different file entirely for Claude Code,
+ * whose permission/hook config lives separately from its MCP server list.
+ * Without this, every allowlisted trace tool re-prompts for approval after
+ * the rename, and any hook matcher keyed on our old tool names silently
+ * stops firing.
+ *
+ * Scans the same two files per client that `installHook` already writes to
+ * — the global `settings.json` and the project-scoped `settings.local.json`
+ * — so coverage here can never drift from what trace-mcp itself already
+ * manages in those files. Deliberately does NOT gate on `clientExists()`
+ * (unlike `cleanupLegacyHooks`/`installHook`): that only checks the GLOBAL
+ * config dir, so gating both scopes on it wrongly skipped an existing
+ * project-scoped `settings.local.json` on a machine with no `~/.claude` at
+ * all (TRA-650 review). `buildToolPrefixMigrationStep` already treats a
+ * missing file as a no-op, so scanning unconditionally is both correct and
+ * cheap. Surgical string rewrite only (see `migrateToolNamePrefixInFile`):
+ * everything else in the file, including content trace-mcp does not own,
+ * comes back byte-for-byte unchanged.
+ */
+export function migrateLegacyToolPrefix(opts: { dryRun?: boolean } = {}): InitStepResult[] {
+  const results: InitStepResult[] = [];
+
+  for (const client of CLIENTS) {
+    for (const global of [true, false]) {
+      const sPath = settingsPath(client, global);
+      const step = buildToolPrefixMigrationStep(sPath, { dryRun: opts.dryRun });
+      if (step) results.push(step);
     }
   }
 

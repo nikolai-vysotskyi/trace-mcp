@@ -397,3 +397,50 @@ describe('configureMcpClients ↔ getMcpClientStatuses round-trip', () => {
     }
   });
 });
+
+// TRA-650: `trace clients update` (the desktop app's "Migrate" button) calls
+// configureMcpClients() directly and nothing else — it never routes through
+// `trace init`'s migrateLegacyToolPrefix step. So the mcpServers rename and
+// the settings.json tool-prefix rewrite must both happen inside
+// configureMcpClients() itself, or clicking Migrate leaves an allowlisted
+// tool re-prompting and a hook matcher silently dead.
+describe('configureMcpClients migrates the settings.json tool-name prefix too', () => {
+  it('rewrites a legacy permission allowlist entry and hook matcher alongside the mcpServers rename', () => {
+    const settingsPath = path.join(fakeHome, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        permissions: { allow: ['mcp__trace-mcp__search', 'Bash(git log)'] },
+        hooks: {
+          PreToolUse: [{ matcher: 'mcp__trace-mcp__search', hooks: [{ type: 'command' }] }],
+        },
+      }),
+    );
+
+    const results = configureMcpClients(['claude-code'], projectRoot, { scope: 'global' });
+
+    const updated = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    expect(updated.permissions.allow).toEqual(['mcp__trace__search', 'Bash(git log)']);
+    expect(updated.hooks.PreToolUse[0].matcher).toBe('mcp__trace__search');
+    expect(results.some((r) => r.target === settingsPath && r.action === 'updated')).toBe(true);
+  });
+
+  it('resolves the settings.json path against ~/.claude for claude-desktop even under --scope project', () => {
+    // claude-desktop is ALWAYS_GLOBAL — its mcpServers entry and settings.json
+    // both stay under HOME regardless of the requested scope. A regression
+    // here would instead create/write <projectRoot>/.claude/settings.local.json.
+    const globalSettingsPath = path.join(fakeHome, '.claude', 'settings.json');
+    fs.mkdirSync(path.dirname(globalSettingsPath), { recursive: true });
+    fs.writeFileSync(
+      globalSettingsPath,
+      JSON.stringify({ permissions: { allow: ['mcp__trace-mcp__search'] } }),
+    );
+
+    configureMcpClients(['claude-desktop'], projectRoot, { scope: 'project' });
+
+    const updated = JSON.parse(fs.readFileSync(globalSettingsPath, 'utf8'));
+    expect(updated.permissions.allow).toEqual(['mcp__trace__search']);
+    expect(fs.existsSync(path.join(projectRoot, '.claude', 'settings.local.json'))).toBe(false);
+  });
+});

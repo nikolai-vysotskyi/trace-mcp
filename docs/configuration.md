@@ -732,6 +732,29 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 
 For all other clients only the Base tier applies — there is no equivalent of Claude Code hooks or tweakcc in those tools.
 
+### Renaming `trace-mcp` → `trace`: what `init` can and can't reach
+
+MCP clients advertise every tool prefixed with the server key, so the rename
+also renames the tool prefix a client-side config may reference in full:
+`mcp__trace-mcp__search` becomes `mcp__trace__search`. `trace init` (and the
+post-update migration that runs automatically when the daemon starts after
+an upgrade) rewrites this everywhere it owns the file:
+
+- The `mcpServers` entry itself, in every supported client above.
+- Claude Code / Claw Code **permission allowlist entries**
+  (`permissions.allow` / `permissions.deny`) and **hook `matcher` strings**,
+  in both the global `settings.json` and the project-scoped
+  `settings.local.json`.
+
+**What stays manual.** Anything you wrote yourself outside those specific
+fields is not touched — most commonly, tool names spelled out in your own
+prose inside `CLAUDE.md` / `AGENTS.md` (`init` only rewrites the routing
+block it generated, not arbitrary text you added), or a permission/hook
+config in a file trace-mcp doesn't manage the shape of. If a tool call stops
+matching a hook, or an allowlisted tool starts re-prompting for approval
+after upgrading, grep your own config for `mcp__trace-mcp__` and replace it
+with `mcp__trace__`.
+
 ### Multica workspace agents
 
 Multica agents don't run `trace-mcp init` — each agent's MCP wiring is set directly with `multica agent update --mcp-config-file <json>` (or `agent create --mcp-config-file` on first setup), scoped to that one agent. Every agent inherits a runtime-provided `trace-mcp` entry that runs the unconfigured default preset (`minimal`); to give a role its own preset, override the `trace-mcp` entry by name — the agent's own `mcp_config` always wins that collision:
