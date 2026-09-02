@@ -1,3 +1,6 @@
+/** Below this many days `sanitizedTokens` returns the raw sum, unsanitized. */
+export const MIN_DAYS_FOR_TRIM: number;
+
 /** Cheapest tracked model, whose input price floors the dollar figure. */
 export const PRICE_MODEL: string;
 
