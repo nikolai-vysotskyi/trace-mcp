@@ -350,7 +350,7 @@ program
   .description('Start MCP server (stdio transport)')
   .option(
     '--preset <name>',
-    'Tool preset (e.g. minimal, review, dev, security, design, perf, architecture, standard, full)',
+    'Tool preset (e.g. router, minimal, review, dev, security, design, perf, architecture, standard, full)',
   )
   .action(async (opts: { preset?: string } = {}) => {
     if (opts.preset) {
@@ -528,7 +528,7 @@ program
   )
   .option(
     '--preset <name>',
-    'Default tool preset for daemon sessions (e.g. minimal, review, dev, security, design, perf, architecture, standard, full)',
+    'Default tool preset for daemon sessions (e.g. router, minimal, review, dev, security, design, perf, architecture, standard, full)',
   )
   .action(async (opts: { port: string; host: string; allowRemote?: boolean; preset?: string }) => {
     if (opts.preset) {
