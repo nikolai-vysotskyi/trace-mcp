@@ -27,7 +27,7 @@ import { ProjectStatsModal } from '../components/ProjectStatsModal';
 import { useDaemon } from '../hooks/useDaemon';
 import { deriveDaemonState } from '../workspace/useWorkspaceProjects';
 import { t } from '../i18n';
-import { formatDate, formatNumber, relativeTime } from '../i18n/format';
+import { formatDate, formatList, formatNumber, relativeTime } from '../i18n/format';
 import { Icon } from '../lattice/icons';
 import {
   Badge,
@@ -488,6 +488,28 @@ export function ProjectOverview({
   const badgeLabel = (value: string): string =>
     BADGE_KEY[value] ? t(BADGE_KEY[value]) : value;
 
+  /* One condition, one sentence — even when it breaks four sections (TRA-662).
+     Every section here reads the same daemon, so two of them failing together
+     is one fact said twice, which is what TRA-469 removed for the daemon-DOWN
+     case. That pane only steps in when the daemon is unreachable; a daemon that
+     is up and answering badly used to leave each section to state the failure
+     on its own. So: a second failure collapses them into one line at the top of
+     the surface, naming what is missing and retrying all of it with one button,
+     and the failed sections do not render at all — a heading over a card that
+     only repeats the banner is not information. One failure stays in place,
+     where the reader is already looking. */
+  const statsFailed = statsLoad === 'failed' && !stats;
+  const coverageFailed = coverageLoad === 'failed' && !coverage;
+  const smellsFailed = smellsLoad === 'failed' && !smells;
+  const servicesFailed = servicesLoad === 'failed' && svcList.length === 0;
+  const failures: { what: string; retry: () => void }[] = [];
+  if (statsFailed) failures.push({ what: t('errorIndexSummary'), retry: fetchStats });
+  if (coverageFailed) failures.push({ what: t('errorCoverage'), retry: fetchCoverage });
+  if (smellsFailed)
+    failures.push({ what: t('errorQuality'), retry: () => fetchSmells(smellsCategory) });
+  if (servicesFailed) failures.push({ what: t('errorServices'), retry: fetchServices });
+  const collapsed = failures.length > 1;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Toolbar ──────────────────────────────────────────────────── */}
@@ -654,12 +676,24 @@ export function ProjectOverview({
             </div>
           )}
 
+          {collapsed && (
+            <Card>
+              <SectionError
+                what={formatList(failures.map((f) => f.what))}
+                onRetry={() => {
+                  for (const f of failures) f.retry();
+                }}
+              />
+            </Card>
+          )}
+
           {/* ── Index ──────────────────────────────────────────────── */}
+          {!(collapsed && statsFailed) && (
           <Section title={t('sectionIndex')}>
             <Card>
               {statsLoad === 'loading' && !stats ? (
                 <SkeletonRows rows={5} />
-              ) : statsLoad === 'failed' && !stats ? (
+              ) : statsFailed ? (
                 <SectionError what={t('errorIndexSummary')} onRetry={fetchStats} />
               ) : stats ? (
                 <>
@@ -696,6 +730,7 @@ export function ProjectOverview({
               )}
             </Card>
           </Section>
+          )}
 
           {/* ── Guard ─────────────────────────────────────────────────
               Second, not last: it is live state about how agents read this
@@ -704,6 +739,7 @@ export function ProjectOverview({
           <GuardSection root={root} />
 
           {/* ── Coverage ───────────────────────────────────────────── */}
+          {!(collapsed && coverageFailed) && (
           <Section
             title={t('sectionCoverage')}
             trailing={
@@ -723,7 +759,7 @@ export function ProjectOverview({
                   <Skeleton width="100%" height={6} radius={3} />
                   <Skeleton width={140} height={11} />
                 </div>
-              ) : coverageLoad === 'failed' && !coverage ? (
+              ) : coverageFailed ? (
                 <SectionError what={t('errorCoverage')} onRetry={fetchCoverage} />
               ) : coverage && coverage.coverage.total_significant === 0 ? (
                 /* Nothing to cover is not 100% covered. A full green meter over
@@ -809,8 +845,10 @@ export function ProjectOverview({
               )}
             </Card>
           </Section>
+          )}
 
           {/* ── Quality ────────────────────────────────────────────── */}
+          {!(collapsed && smellsFailed) && (
           <Section
             title={t('sectionQuality')}
             trailing={
@@ -832,7 +870,7 @@ export function ProjectOverview({
             <Card>
               {smellsLoad === 'loading' && !smells ? (
                 <SkeletonRows rows={4} />
-              ) : smellsLoad === 'failed' && !smells ? (
+              ) : smellsFailed ? (
                 <SectionError what={t('errorQuality')} onRetry={() => fetchSmells(smellsCategory)} />
               ) : visibleFindings.length === 0 ? (
                 <EmptyState
@@ -895,8 +933,10 @@ export function ProjectOverview({
               )}
             </Card>
           </Section>
+          )}
 
           {/* ── Services ───────────────────────────────────────────── */}
+          {!(collapsed && servicesFailed) && (
           <Section
             title={t('sectionServices')}
             count={svcList.length}
@@ -910,7 +950,7 @@ export function ProjectOverview({
               <Card>
                 <SkeletonRows rows={2} />
               </Card>
-            ) : servicesLoad === 'failed' && svcList.length === 0 ? (
+            ) : servicesFailed ? (
               <Card>
                 <SectionError what={t('errorServices')} onRetry={fetchServices} />
               </Card>
@@ -1057,6 +1097,7 @@ export function ProjectOverview({
               </div>
             )}
           </Section>
+          )}
         </div>
         )}
       </div>

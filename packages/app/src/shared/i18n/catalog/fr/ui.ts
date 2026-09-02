@@ -4,7 +4,7 @@ export const ui = {
   gradeBadge: 'Note de dette technique {{grade}}',
   loading: 'Chargement',
   retry: 'Réessayer',
-  sectionError: 'Impossible de charger {{what}}. Le démon est peut-être encore en indexation.',
+  sectionError: 'Impossible de charger {{what}}.',
 
   filterMatch: 'Inclure',
   filterExclude: 'Exclure',

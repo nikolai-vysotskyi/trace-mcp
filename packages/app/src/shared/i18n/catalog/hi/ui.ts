@@ -4,7 +4,7 @@ export const ui = {
   gradeBadge: 'टेक-डेट ग्रेड {{grade}}',
   loading: 'लोड हो रहा है',
   retry: 'फिर से',
-  sectionError: '{{what}} लोड नहीं हो सका। डेमन शायद अभी इंडेक्स कर रहा है।',
+  sectionError: '{{what}} लोड नहीं हो सका।',
 
   filterMatch: 'मैच',
   filterExclude: 'हटाएँ',

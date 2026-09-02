@@ -308,6 +308,31 @@ describe('ProjectOverview surface', () => {
     /* The toolbar does not disappear when one section fails. */
     expect(screen.getByRole('button', { name: 'Reindex' })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Retry' }).length).toBeGreaterThan(0);
+    /* And it does not name a cause it cannot know (TRA-662). */
+    expect(screen.queryByText(/still be indexing/)).toBeNull();
+  });
+
+  /* TRA-662. The daemon is UP here — the pane above never fires — and two
+     sections fail anyway. Before this they each stated it separately, which
+     put the same sentence on screen twice, over a project last indexed five
+     days ago and a daemon with nothing running. */
+  it('states a multi-section failure once, with one retry', async () => {
+    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': null });
+    render(<ProjectOverview root={ROOT} />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Couldn't load the index summary and the quality scan."),
+      ).toBeTruthy(),
+    );
+    expect(screen.getAllByRole('button', { name: 'Retry' })).toHaveLength(1);
+    /* The collapsed sections leave no empty heading behind — a title over a
+       card that only repeats the banner is not information. */
+    expect(screen.queryByText('Index')).toBeNull();
+    expect(screen.queryByText('Quality')).toBeNull();
+    /* The sections that answered are untouched. */
+    expect(screen.getByText('Coverage')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reindex' })).toBeTruthy();
   });
 });
 

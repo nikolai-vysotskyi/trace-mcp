@@ -195,7 +195,14 @@ export function SkeletonRows({ rows }: { rows: number }) {
   );
 }
 
-/** Inline "we couldn't measure this" panel with the one action that helps. */
+/** Inline "we couldn't measure this" panel with the one action that helps.
+
+    It names WHAT is missing and nothing else. It used to add "The daemon may
+    still be indexing", which is a cause this primitive cannot know — on a
+    project last indexed five days ago, with the daemon up and its Indexing KPI
+    reading "nothing running", it was simply false (TRA-662). Retry is the next
+    step, and it is right there. A caller that does know the cause says it in
+    its own words, the way GuardSection does. */
 export function SectionError({ what, onRetry }: { what: string; onRetry: () => void }) {
   const { t } = useTranslation('ui');
   return (

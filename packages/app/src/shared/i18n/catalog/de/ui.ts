@@ -4,7 +4,7 @@ export const ui = {
   gradeBadge: 'Tech-Debt-Note {{grade}}',
   loading: 'Wird geladen',
   retry: 'Erneut versuchen',
-  sectionError: '{{what}} konnte nicht geladen werden. Der Daemon indexiert womöglich noch.',
+  sectionError: '{{what}} konnte nicht geladen werden.',
 
   // ── FilterBar ───────────────────────────────────────────────────────────
   filterMatch: 'Treffer',

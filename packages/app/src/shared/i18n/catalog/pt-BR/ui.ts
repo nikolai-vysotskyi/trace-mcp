@@ -4,7 +4,7 @@ export const ui = {
   gradeBadge: 'Nota de dívida técnica {{grade}}',
   loading: 'Carregando',
   retry: 'Tentar de novo',
-  sectionError: 'Não foi possível carregar: {{what}}. O daemon pode ainda estar indexando.',
+  sectionError: 'Não foi possível carregar: {{what}}.',
 
   filterMatch: 'Incluir',
   filterExclude: 'Excluir',

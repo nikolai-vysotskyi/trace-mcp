@@ -665,6 +665,26 @@ catalogue string in all ten locales; a section that cannot tell "busy" from "not
 running" must not pick one. Deciding that is the surface's job, because the
 surface is what holds the daemon state.
 
+That corollary was written and then not applied: `SectionError`'s catalogue string
+kept "The daemon may still be indexing" for another five months, and every case the
+daemon-down pane does *not* cover still printed it. On a project last indexed five
+days ago, with the daemon up and the Indexing KPI reading `0 · nothing running`,
+Index and Quality both failed for some third reason and both asserted the one cause
+that was provably false (TRA-662). **A failure with no known cause is a complete
+statement: what could not be loaded, plus the control that tries again.** Retry is
+the next step and it is already in the row; the invented sentence between them only
+had to be wrong once to cost the reader a diagnosis.
+
+**And "at surface level" is not "when the source is down".** The collapse rule above
+was implemented as a daemon-down branch, so the moment the daemon was up and merely
+answering badly, each section went back to speaking for itself — the same duplication
+the rule forbids, reached by the other door. Count the failures, not the source's
+state: **a second failing section collapses them into one line at the top of the
+surface, naming what is missing and retrying all of it with one button, and the
+sections it speaks for do not render.** A heading over a card that only repeats the
+banner is not information. One failure stays in place, where the reader is already
+looking.
+
 **The test for "down" is a shared reducer, not a fresh `!connected`.**
 `deriveDaemonState()` already encodes that a daemon which has not answered *yet*
 is not one that is failing to. `connected` is false for the first moments of every
