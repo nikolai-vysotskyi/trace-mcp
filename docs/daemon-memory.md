@@ -7,6 +7,32 @@ updated: 2026-09-02
 
 # Daemon memory: what it costs and what caps it
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Daemon memory: what it costs and what caps it",
+  "description": "Measured resident-set attribution for the trace-mcp daemon — what each region holds and which config knob bounds it.",
+  "url": "https://trace-mcp.com/daemon-memory.html",
+  "datePublished": "2026-08-29",
+  "dateModified": "{{ page.updated }}",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/daemon-memory.html"
+  }
+}
+</script>
+
 The HTTP daemon is a background process — the shared-index deployment described
 under [configuration](configuration.md#stdio-vs-http--choosing-your-setup). If
 it outweighs the user's browser it has failed regardless of how fast queries

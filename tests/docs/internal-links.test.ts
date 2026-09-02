@@ -276,6 +276,22 @@ describe('docs footer nav covers every indexed page', () => {
   });
 
   /**
+   * The TechArticle JSON-LD is hand-written into each page's body rather than
+   * emitted by the layout, so it drifts the same way the footer nav did: 19 of
+   * the 22 doc pages carried it and daemon-memory, language-matrix and
+   * tools-index shipped with only the layout's WebPage (TRA-677). The layout
+   * cannot emit it — headline and datePublished are per-page and are not in
+   * front matter — so a guard is what keeps a new page from skipping it.
+   */
+  it('every indexed docs page carries TechArticle schema', async () => {
+    const { sourceFor } = await import('../../scripts/gen-sitemap.mjs');
+    const missing = sitemapPaths().filter(
+      (path) => !readFileSync(join(DOCS, sourceFor(path)), 'utf-8').includes('"TechArticle"'),
+    );
+    expect(missing, `indexed pages without TechArticle JSON-LD: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  /**
    * Both footers, not just the layout's. This check used to read
    * `_layouts/default.html` alone, so it could not see that `index.html` —
    * which has `layout: null` and its own hand-written footer — still listed

@@ -161,6 +161,32 @@ updated: ${new Date().toISOString().slice(0, 10)}
 
 # Language capability matrix
 
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "Language capability matrix",
+  "description": "What each of the ${counts.total} supported languages actually extracts — parser, edges, and test coverage.",
+  "url": "https://trace-mcp.com/language-matrix.html",
+  "datePublished": "2026-08-29",
+  "dateModified": "{{ page.updated }}",
+  "author": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "publisher": {
+    "@type": "Person",
+    "name": "Nikolai Vysotskyi",
+    "url": "https://github.com/nikolai-vysotskyi"
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://trace-mcp.com/language-matrix.html"
+  }
+}
+</script>
+
 trace-mcp ships ${counts.total} language plugins. They are not equally deep, and this
 page says how deep each one is. Every language in the list gets symbol
 extraction; call graphs and type edges are a much smaller set. For what each
