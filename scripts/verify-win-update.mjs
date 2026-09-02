@@ -38,11 +38,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = 'nikolai-vysotskyi/trace-mcp';
-const INSTALL_DIR = path.join(
-  process.env.LOCALAPPDATA ?? '',
-  'Programs',
-  'trace-mcp',
-);
+const INSTALL_DIR = path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'trace-mcp');
 const APP_EXE = path.join(INSTALL_DIR, 'trace-mcp.exe');
 
 /** Throws rather than exits, so every check below is reachable from a test. */
@@ -99,19 +95,42 @@ function installedVersion() {
   return v || null;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 /**
- * Silent install. The oneClick installer launches the app when it finishes
- * (`runAfterFinish` defaults on) — on a runner that leaves a GUI process
- * holding the install directory open, which the next install would fight.
+ * Silent install, then wait for the result to actually be on disk.
+ *
+ * Two reasons not to trust the installer's exit: the oneClick target hands off
+ * to an elevated/spawned phase that outlives the process we waited on, and on
+ * an upgrade it removes the old build before laying down the new one, so the
+ * exe is briefly absent and then briefly the OLD version. Poll for the version
+ * we are expecting rather than sleeping a guessed interval.
  */
-function runInstaller(exe, args) {
+async function installAndWaitFor(exe, args, wantVersion) {
   console.log(`> ${path.basename(exe)} ${args.join(' ')}`);
   execFileSync(exe, args, { stdio: 'inherit', timeout: 10 * 60_000 });
+
+  const deadline = Date.now() + 3 * 60_000;
+  let seen = null;
+  while (Date.now() < deadline) {
+    seen = installedVersion();
+    if (seen === wantVersion) break;
+    await sleep(3_000);
+  }
+
+  // `runAfterFinish` defaults on, so the app is now running and holding the
+  // install directory open — the next install would fight it. Failing to kill
+  // it is not itself a verification failure, hence the swallowed errors.
   execFileSync(
     'powershell',
-    ['-NoProfile', '-Command', "Start-Sleep -Seconds 10; Get-Process trace-mcp -ErrorAction SilentlyContinue | Stop-Process -Force"],
+    [
+      '-NoProfile',
+      '-Command',
+      "$ErrorActionPreference='SilentlyContinue'; Get-Process trace-mcp | Stop-Process -Force; exit 0",
+    ],
     { stdio: 'inherit' },
   );
+  return seen;
 }
 
 async function download(url, dest) {
@@ -129,9 +148,7 @@ async function resolveTags() {
   );
   const withInstaller = (await res.json()).filter(
     (r) =>
-      !r.draft &&
-      !r.prerelease &&
-      r.assets.some((a) => /^trace-mcp\.Setup\..+\.exe$/.test(a.name)),
+      !r.draft && !r.prerelease && r.assets.some((a) => /^trace-mcp\.Setup\..+\.exe$/.test(a.name)),
   );
   if (withInstaller.length < 2) {
     die('fewer than two stable releases carry a Windows installer — nothing to update from');
@@ -154,9 +171,9 @@ async function main() {
     `https://github.com/${REPO}/releases/download/${fromTag}/trace-mcp.Setup.${fromVersion}.exe`,
     oldSetup,
   );
-  runInstaller(oldSetup, ['/S']);
-  if (installedVersion() !== fromVersion) {
-    die(`installed ${fromTag} but the app reports ${installedVersion() ?? 'nothing'} at ${APP_EXE}`);
+  const before = await installAndWaitFor(oldSetup, ['/S'], fromVersion);
+  if (before !== fromVersion) {
+    die(`installed ${fromTag} but the app reports ${before ?? 'nothing'} at ${APP_EXE}`);
   }
   console.log(`Installed ${fromVersion}.`);
 
@@ -167,7 +184,9 @@ async function main() {
   console.log(`--- ${feedUrl}\n${feedText}`);
   const feed = readFeed(feedText);
   if (!isNewer(feed.version, fromVersion)) {
-    die(`latest.yml offers ${feed.version}, which is not newer than the installed ${fromVersion} — no update would ever be offered`);
+    die(
+      `latest.yml offers ${feed.version}, which is not newer than the installed ${fromVersion} — no update would ever be offered`,
+    );
   }
 
   // 3. The artifact it names, hashed the way electron-updater hashes it before
@@ -184,8 +203,7 @@ async function main() {
   console.log(`${feed.file} matches the sha512 in latest.yml.`);
 
   // 4. The swap, with the flags electron-updater's NSIS path passes.
-  runInstaller(newSetup, ['/S', '--updated']);
-  const after = installedVersion();
+  const after = await installAndWaitFor(newSetup, ['/S', '--updated'], feed.version);
   if (after !== feed.version) {
     die(`update did not take: expected ${feed.version} at ${APP_EXE}, found ${after ?? 'nothing'}`);
   }
