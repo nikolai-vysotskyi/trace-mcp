@@ -22,6 +22,7 @@ import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { type CliInvocation, resolveCliInvocation } from './daemon-install';
 import { getLauncherDir, getLauncherShimPath, SHIM_NAMES } from './trace-home';
 
 const isWin = process.platform === 'win32';
@@ -88,9 +89,14 @@ function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
   ok: boolean;
   error?: string;
 } {
-  let bin: string;
+  // TRA-638: on Windows the shim is a `.cmd`, which execFileSync cannot launch
+  // without a shell — `shell: isWin` below is the only reason this path worked
+  // while the identical MCP-client spawns failed. Prefer the runtime + cli.js
+  // that launcher.env records, so no shell is involved at all.
+  let inv: CliInvocation;
   try {
-    bin = resolveTraceMcpBinary();
+    inv = resolveCliInvocation();
+    if (inv.prefixArgs.length === 0) inv = { file: resolveTraceMcpBinary(), prefixArgs: [] };
   } catch (err) {
     return { ok: false, error: (err as Error).message };
   }
@@ -98,12 +104,13 @@ function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
   try {
     // execFileSync avoids shell-injection concerns around the resolved path.
     // Windows paths may contain spaces; pass as single arg.
-    execFileSync(bin, ['daemon', subcommand], {
+    execFileSync(inv.file, [...inv.prefixArgs, 'daemon', subcommand], {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
-      // `shell: true` is required on Windows to resolve .cmd/.bat wrappers
-      // that npm global installs generate.
-      shell: isWin,
+      // Last resort only: a Windows machine with no launcher.env to point at
+      // can still have a `.cmd` on PATH, and this argv is two literals.
+      shell: isWin && inv.prefixArgs.length === 0,
+      env: inv.env ? { ...process.env, ...inv.env } : process.env,
       encoding: 'utf-8',
     });
     return { ok: true };

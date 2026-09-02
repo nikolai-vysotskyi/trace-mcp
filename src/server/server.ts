@@ -18,11 +18,13 @@ import {
   DECISIONS_DB_PATH,
   ensureGlobalDirs,
   getSnapshotPath,
+  STATE_DB_PATH,
   TOPOLOGY_DB_PATH,
 } from '../global.js';
 import { buildProjectContext } from '../indexer/project-context.js';
 import { logger } from '../logger.js';
 import { DecisionStore } from '../memory/decision-store.js';
+import { StateEngine } from '../state/state-engine.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProgressState } from '../progress.js';
 import { computePageRank } from '../scoring/pagerank.js';
@@ -53,6 +55,7 @@ import { registerProjectsTools } from '../tools/register/projects.js';
 import { registerQualityTools } from '../tools/register/quality.js';
 import { registerRefactoringTools } from '../tools/register/refactoring.js';
 import { registerSessionTools } from '../tools/register/session.js';
+import { registerStateTools } from '../tools/register/state.js';
 import { withHints } from '../tools/shared/hints.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { sanitizeValue } from '../utils/mcp-sanitize.js';
@@ -210,6 +213,7 @@ import type { PipelineLifecycleEvent } from './types.js';
 export interface ServerDeps {
   topoStore?: TopologyStore | null;
   decisionStore?: DecisionStore | null;
+  stateEngine?: StateEngine | null;
   /**
    * Optional per-session callback fired for every MCP tool call. Used by the
    * Electron app to stream live activity over the /api/events SSE bus.
@@ -321,14 +325,9 @@ export function createServer(
       });
   }
 
-  // Anonymous active-install ping (opt-out via TRACE_MCP_TELEMETRY=off; inert
-  // until TRACE_MCP_GA_MEASUREMENT_ID/TRACE_MCP_GA_API_SECRET are configured).
-  // Fire-and-forget — never blocks startup, never throws.
-  void sendUsagePing({ version: PKG_VERSION }).catch((err) => {
-    logger.debug({ err }, 'telemetry.usage_ping_unexpected_error');
-  });
-
-  // The ping above fires before any client has spoken, so the client name is
+  // The usage ping fires at the end of this function — it reports the preset
+  // and the advertised tool count, neither of which exists until the surface is
+  // built. It still precedes the client's handshake, so the client name is
   // recorded here and reported by the *next* day's ping.
   server.server.oninitialized = () => {
     const name = server.server.getClientVersion()?.name;
@@ -482,6 +481,13 @@ export function createServer(
         /* best-effort */
       }
     }
+    if (ownsStateEngine && stateEngine) {
+      try {
+        stateEngine.close();
+      } catch {
+        /* best-effort */
+      }
+    }
     if (ownsTopoStore && topoStore) {
       try {
         topoStore.close();
@@ -536,21 +542,22 @@ export function createServer(
   // server, and the desktop app can render the project status badge.
   const heartbeat = startHeartbeat(projectRoot, deps?.transport ?? 'stdio');
 
-  const { _originalTool, registeredToolNames, toolHandlers, deferredTools } = installToolGate(
-    server,
-    config,
-    activePreset,
-    savings,
-    journal,
-    j,
-    extractResultCount,
-    extractCompactResult,
-    stripMetaFields,
-    projectRoot,
-    (success) => heartbeat.recordToolCall(success),
-    deps?.onJournalEntry,
-    deps?.sessionId,
-  );
+  const { _originalTool, registeredToolNames, ungatedToolNames, toolHandlers, deferredTools } =
+    installToolGate(
+      server,
+      config,
+      activePreset,
+      savings,
+      journal,
+      j,
+      extractResultCount,
+      extractCompactResult,
+      stripMetaFields,
+      projectRoot,
+      (success) => heartbeat.recordToolCall(success),
+      deps?.onJournalEntry,
+      deps?.sessionId,
+    );
 
   if (presetName !== 'full') {
     logger.info(
@@ -636,6 +643,14 @@ export function createServer(
     decisionStore = new DecisionStore(DECISIONS_DB_PATH);
   }
 
+  // Build state engine (SKILL.state execution state store)
+  const ownsStateEngine = deps?.stateEngine === undefined;
+  let stateEngine: StateEngine | null = deps?.stateEngine ?? null;
+  if (ownsStateEngine) {
+    ensureGlobalDirs();
+    stateEngine = new StateEngine(STATE_DB_PATH);
+  }
+
   // Build shared context and register all tools
   const ctx: ServerContext = {
     store,
@@ -656,6 +671,7 @@ export function createServer(
     progress: progress ?? null,
     topoStore,
     decisionStore,
+    stateEngine,
     telemetrySink,
     rankingLedger,
     // R09 v2: default to a no-op so non-daemon contexts (CLI fallback,
@@ -703,11 +719,25 @@ export function createServer(
   registerQualityTools(server, ctx);
   registerMemoryTools(server, ctx);
   registerKnowledgeTools(server, ctx);
+  registerStateTools(server, ctx);
   registerSessionTools(server, metaCtx);
 
   // Must run after the last registration: the SDK installs its `tools/call`
   // handler lazily on the first `server.tool(...)` (TRA-412).
   installRetiredToolHints(server);
+
+  // Anonymous active-install ping (opt-out via TRACE_MCP_TELEMETRY=off; inert
+  // until TRACE_MCP_GA_MEASUREMENT_ID/TRACE_MCP_GA_API_SECRET are configured).
+  // Fire-and-forget — never blocks startup, never throws. Last, so it can
+  // report the surface this session actually built: `registeredToolNames` is
+  // only complete once every register*Tools call above has run (TRA-643).
+  void sendUsagePing({
+    version: PKG_VERSION,
+    preset: presetName,
+    toolsAdvertised: registeredToolNames.length + ungatedToolNames.length,
+  }).catch((err) => {
+    logger.debug({ err }, 'telemetry.usage_ping_unexpected_error');
+  });
 
   return { server, journal, dispose, toolHandlers };
 }

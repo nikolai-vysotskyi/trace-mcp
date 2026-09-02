@@ -26,7 +26,9 @@
  * local embeddings the desktop app already gets from Ollama
  * (packages/app/src/main/ollama-control.ts), and the server's code paths
  * already tolerate its absence. Also excluded: `*.map` and `*.d.ts`, which are
- * 60 MB of the 65 MB `dist/` and nothing reads at runtime.
+ * 60 MB of the 65 MB `dist/` and nothing reads at runtime, and — see
+ * `payloadFilter` — the build-only and other-platform halves of the staged
+ * packages, which are 119 MB of what the naive copy produced (TRA-605).
  *
  * Native modules ship as installed for Node, not rebuilt for Electron: all of
  * them are N-API, so the same `.node` loads under both ABIs.
@@ -69,6 +71,54 @@ export const PAYLOAD_ROOTS = [
   '@ast-grep/napi',
   '@vue/compiler-sfc',
   'sqlite-vec',
+];
+
+/**
+ * The grammars the daemon can actually load: the values of `LANG_GRAMMARS` in
+ * `src/parser/tree-sitter.ts`, which is the only thing `getParser` ever asks
+ * `getWasmPath` for.
+ *
+ * `tree-sitter-wasm` ships 112 grammars and 133 MB of them, because a grammar
+ * is one giant parse table (98% of each `.wasm` is its data section — there is
+ * no debug info to strip and `wasm-opt` has nothing to chew on). The 80 we
+ * never load are 92 MB, more than a third of the whole DMG, and systemverilog
+ * alone is 21 MB. Kept honest from both ends: `stage-server.test.ts` fails if
+ * `LANG_GRAMMARS` grows past this list, and `stageServer` below fails if the
+ * package stops shipping one of them.
+ */
+export const PAYLOAD_GRAMMARS = [
+  'bash',
+  'c',
+  'c_sharp',
+  'cpp',
+  'css',
+  'dart',
+  'elisp',
+  'elixir',
+  'elm',
+  'embedded_template',
+  'go',
+  'html',
+  'java',
+  'javascript',
+  'json',
+  'kotlin',
+  'lua',
+  'objc',
+  'ocaml',
+  'php',
+  'python',
+  'ruby',
+  'rust',
+  'scala',
+  'solidity',
+  'swift',
+  'toml',
+  'tsx',
+  'typescript',
+  'vue',
+  'yaml',
+  'zig',
 ];
 
 function resolvePackageDir(name, from) {
@@ -190,6 +240,44 @@ function copyTree(src, dest, filter) {
   fs.cpSync(src, dest, { recursive: true, dereference: true, filter });
 }
 
+/**
+ * What not to copy out of a staged package. Everything here exists to build or
+ * debug the package, never to run it, and together it is 119 MB of the 214 MB
+ * payload:
+ *
+ *   - `*.map` — the same rule `dist/` already gets; 2.6 MB in web-tree-sitter.
+ *   - `better-sqlite3/deps` and `/src` — the sqlite3 amalgamation and the C++
+ *     that node-gyp compiles into a `.node`. A staged payload always resolves
+ *     a prebuilt one (`lib/binding.js` → `prebuilds/<platform>-<arch>.node`),
+ *     so 9.9 MB of build inputs ride along for nothing.
+ *   - `better-sqlite3/prebuilds` for other platforms — 14 MB of the 16 MB
+ *     there. Unlike the `@ast-grep/napi-*` packages, which the closure already
+ *     narrows by `os`/`cpu`, better-sqlite3 keeps all eight in one package and
+ *     picks at runtime, so nothing else was cutting them.
+ *   - `tree-sitter-wasm/out/<grammar>` outside PAYLOAD_GRAMMARS — 92 MB.
+ *
+ * `assertStagedArch` still runs over the result, so pruning to the wrong
+ * prebuild fails the build rather than the user's first launch.
+ */
+function payloadFilter(name, pkgDir, targetOs, targetCpu) {
+  const grammars = new Set(PAYLOAD_GRAMMARS);
+  return (src) => {
+    if (src.endsWith('.map')) return false;
+    const parts = path.relative(pkgDir, src).split(path.sep);
+    if (name === 'better-sqlite3') {
+      if (parts[0] === 'deps' || parts[0] === 'src') return false;
+      // `linuxmusl-x64.node` is a linux prebuild too, hence prefix not equality.
+      if (parts[0] === 'prebuilds' && parts.length > 1) {
+        return parts[1].startsWith(targetOs) && parts[1].endsWith(`-${targetCpu}.node`);
+      }
+    }
+    if (name === 'tree-sitter-wasm' && parts[0] === 'out' && parts.length > 1) {
+      return grammars.has(parts[1]);
+    }
+    return true;
+  };
+}
+
 export function stageServer({ targetArch, targetOs } = {}) {
   const cpu = targetArch ?? process.arch;
   const os = targetOs ?? process.platform;
@@ -204,9 +292,14 @@ export function stageServer({ targetArch, targetOs } = {}) {
   fs.rmSync(PAYLOAD, { recursive: true, force: true });
   fs.mkdirSync(PAYLOAD, { recursive: true });
 
+  // `index.js` is the npm package's library entry, and tsup emits it as a
+  // second self-contained bundle rather than a chunk shared with `cli.js`.
+  // Nothing can reach it here: the payload is entered only through
+  // `dist/cli.js` (daemon-install.ts) and the trimmed manifest below declares
+  // no `main`. So it is 10.3 MB of a duplicate server per DMG.
   copyTree(distDir, path.join(PAYLOAD, 'dist'), (src) => {
     const base = path.basename(src);
-    return !base.endsWith('.map') && !base.endsWith('.d.ts');
+    return !base.endsWith('.map') && !base.endsWith('.d.ts') && base !== 'index.js';
   });
 
   copyTree(path.join(REPO_ROOT, 'hooks'), path.join(PAYLOAD, 'hooks'));
@@ -250,7 +343,18 @@ export function stageServer({ targetArch, targetOs } = {}) {
     );
   }
   for (const [name, dir] of found) {
-    copyTree(dir, path.join(PAYLOAD, 'node_modules', name));
+    copyTree(dir, path.join(PAYLOAD, 'node_modules', name), payloadFilter(name, dir, os, cpu));
+  }
+
+  // A grammar the package stopped shipping fails `Language.load` with an
+  // empty-message Error that every plugin swallows into "0 symbols extracted"
+  // (TRA-330). Catch it here rather than in the DMG.
+  const stagedGrammars = new Set(
+    fs.readdirSync(path.join(PAYLOAD, 'node_modules', 'tree-sitter-wasm', 'out')),
+  );
+  const absent = PAYLOAD_GRAMMARS.filter((g) => !stagedGrammars.has(g));
+  if (absent.length > 0) {
+    throw new Error(`tree-sitter-wasm ships no grammar for: ${absent.join(', ')}`);
   }
 
   if (os === 'darwin') assertStagedArch(PAYLOAD, cpu);

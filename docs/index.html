@@ -1363,16 +1363,34 @@ layout: null
     }
     .footer-col a:hover { color: var(--text-display); }
     /* 22 doc links stacked single-file would run 22 rows deep against a
-       4-row Product column. Two grid tracks wide with an auto-fill inner
-       grid, it settles at 3 × 8 — the same `repeat(auto-fill, minmax(...))`
-       rule the doc-page footer uses (DESIGN-WEB.md §2), one cell per link so
-       a wrapped label still reads as one target. */
-    .footer-col-docs { grid-column: span 2; }
+       4-row Product column, so the column is two grid tracks wide and the
+       links flow into three sub-columns of their own.
+
+       Multi-column, not a grid: its sub-columns read top-to-bottom, the same
+       direction as the plain /Product and /Source lists either side of it. A
+       row-flow grid put items 1, 4, 7… down the first sub-column, which
+       scattered docs_nav.yml's order — the five /vs/ pages landed one per row
+       across all three. That order is the SEO agent's (DESIGN-WEB.md §2) and
+       reading down is what preserves it. It also drops the ragged rows: two
+       labels wrap to a second line, and in a grid they set the height of
+       every cell in their row, opening 48px gaps that read as group breaks. */
+    .footer-col-docs { grid-column: span 2; grid-row: span 2; }
     .footer-doc-links {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      columns: 176px 3;
       column-gap: 32px;
     }
+    /* 176px is the floor because `vs codebase-memory-mcp` sets on one line at
+       173px. At 160px it fits only because the sub-column happens to resolve
+       to 176 at 1440 — between roughly 1184px and 1262px of viewport it
+       resolves to 163 and the label breaks into two fragments. Dropping to
+       two sub-columns there is the better answer.
+
+       The two 212px labels (`PR review context benchmark`, `Cut Claude Code
+       token usage`) take two lines in every layout; a sub-column wide enough
+       for them would leave room for two, not three. `break-inside: avoid`
+       keeps each one whole so it still reads as a single target
+       (DESIGN-WEB.md §2). */
+    .footer-doc-links a { break-inside: avoid; }
     .footer-bottom {
       display: flex; justify-content: space-between; align-items: center;
       padding-top: 24px;
@@ -1389,6 +1407,9 @@ layout: null
 
     @media (max-width: 700px) {
       .footer-grid { grid-template-columns: repeat(2, 1fr); gap: 32px; }
+      /* Two tracks: /Docs already takes a full row of its own, so the second
+         row it reserves on desktop would be empty here. */
+      .footer-col-docs { grid-row: auto; }
       .footer-bottom { flex-direction: column; gap: 16px; align-items: flex-start; }
     }
 

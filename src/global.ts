@@ -140,6 +140,9 @@ export const TOPOLOGY_DB_PATH = path.join(TRACE_MCP_HOME, 'topology.db');
 /** Decision memory database (cross-session knowledge graph). */
 export const DECISIONS_DB_PATH = path.join(TRACE_MCP_HOME, 'decisions.db');
 
+/** Agent execution state database (SKILL.state engine). */
+export const STATE_DB_PATH = path.join(TRACE_MCP_HOME, 'state.db');
+
 /** Per-project + per-operation PID lock files (see src/utils/pid-lock.ts). */
 export const LOCKS_DIR = path.join(TRACE_MCP_HOME, 'locks');
 
