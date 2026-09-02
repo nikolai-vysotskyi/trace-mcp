@@ -344,7 +344,7 @@ async function main() {
     // 3. Hand over to the app: this is `applyUpdate()`, the call the Update
     // button makes, running inside the installed build.
     const app = launchApp(installedExe(), traceHome, path.join(tmp, 'user-data'));
-    const page = await waitForPage(120_000, `http://127.0.0.1:${CDP_PORT}`);
+    const page = await waitForPage(120_000, CDP_PORT);
     const cdp = await connect(page.webSocketDebuggerUrl);
 
     const applied = await evaluate(cdp, 'window.electronAPI.applyUpdate()', 15 * 60_000);

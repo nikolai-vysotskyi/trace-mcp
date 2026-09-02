@@ -35,8 +35,11 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function targets(origin = ORIGIN) {
-  const res = await fetch(`${origin}/json/list`);
+/* A port number, not an origin string: the DevTools endpoint is always on
+   loopback, and keeping the host a literal is what stops a caller — or a
+   security scan reading this — from having to trust where it points. */
+async function targets(port = PORT) {
+  const res = await fetch(`http://127.0.0.1:${Number(port)}/json/list`);
   return res.json();
 }
 
@@ -46,16 +49,18 @@ async function targets(origin = ORIGIN) {
  * Exported because scripts/verify-win-update.mjs drives the *installed* app the
  * same way, on a runner: same protocol, different binary.
  */
-export async function waitForPage(timeoutMs = 30_000, origin = ORIGIN) {
+export async function waitForPage(timeoutMs = 30_000, port = PORT) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
-      const page = (await targets(origin)).find((t) => t.type === 'page');
+      const page = (await targets(port)).find((t) => t.type === 'page');
       if (page) return page;
     } catch {
       // endpoint not up yet
     }
-    if (Date.now() > deadline) throw new Error(`no page target on ${origin} after ${timeoutMs}ms`);
+    if (Date.now() > deadline) {
+      throw new Error(`no page target on 127.0.0.1:${port} after ${timeoutMs}ms`);
+    }
     await sleep(500);
   }
 }
