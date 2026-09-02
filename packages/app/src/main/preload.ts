@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openInEditor: (filePath: string): Promise<void> => ipcRenderer.invoke('open-in-editor', filePath),
   openExternal: (url: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('open-external', url),
+  showInFolder: (target: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('show-in-folder', target),
   detectIdeApps: (): Promise<{ id: string; name: string; bundlePath: string }[]> =>
     ipcRenderer.invoke('detect-ide-apps'),
   openInIde: (bundlePath: string, filePath: string): Promise<{ ok: boolean; error?: string }> =>

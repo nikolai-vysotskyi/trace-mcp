@@ -30,7 +30,12 @@ import {
 import { GLOBAL_ACTIONS, type GlobalAction } from '../../shared/global-actions.js';
 import { appearanceOptions, type Appearance } from '../theme.js';
 import { localeOptions, t, useLocale } from '../i18n/index.js';
-import { describeStaleRoots, formatAgo, type UpdateState } from '../update-check.js';
+import {
+  describeDuplicateApps,
+  describeStaleRoots,
+  formatAgo,
+  type UpdateState,
+} from '../update-check.js';
 import { SidebarRow } from './SidebarRow';
 
 export interface AppMenuProps {
@@ -50,6 +55,8 @@ interface Summary {
   title?: string;
   /** A shell command the user must run themselves — offered as a copy item. */
   command?: string;
+  /** The duplicate install to reveal in Finder — offered as a menu item. */
+  revealPath?: string;
 }
 
 /** The header's second line: what we know about this version right now. */
@@ -66,6 +73,13 @@ function updateSummary(update: UpdateState, checking: boolean): Summary {
   if (update.staleRoots?.length) {
     const stale = describeStaleRoots(update.staleRoots);
     return { text: stale.label, tone: 'is-warn', title: stale.title, command: stale.command };
+  }
+  /* Below the stale root, above "up to date": a second installed bundle is a
+     real divergence, but the copy in hand is still current, so it must not
+     borrow the voice of a version that is actually behind (TRA-692). */
+  if (update.duplicateApps?.length) {
+    const dup = describeDuplicateApps(update.duplicateApps);
+    return { text: dup.label, tone: 'is-warn', title: dup.title, revealPath: dup.revealPath };
   }
   return {
     text: t('update:headerUpToDate', { when: formatAgo(update.lastChecked) }),
@@ -186,6 +200,23 @@ export function AppMenu({
                 onClick={run(() => void navigator.clipboard?.writeText(summary.command as string))}
               >
                 {t('update:copyStaleRootCommand')}
+              </MenuItem>
+            </>
+          )}
+          {/* Reveal, not open: opening the other bundle launches the very copy
+              the user came here to decide about. Finder is where both remedies
+              start — drag it to the Trash, or double-click it to let it
+              update itself. */}
+          {summary.revealPath && (
+            <>
+              <MenuSeparator />
+              <MenuItem
+                icon="folder"
+                onClick={run(
+                  () => void window.electronAPI?.showInFolder?.(summary.revealPath as string),
+                )}
+              >
+                {t('update:revealDuplicateApp')}
               </MenuItem>
             </>
           )}

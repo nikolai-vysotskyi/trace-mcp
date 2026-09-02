@@ -20,19 +20,25 @@ type CheckResult = {
   latest?: string;
   lastChecked?: number;
   staleRoots?: { root: string; version: string }[];
+  duplicateApps?: { path: string; version: string; running: boolean }[];
 };
 
 /** Set by mockApi so a test can drive electron-updater's progress events. */
 let emitProgress: ((percent: number) => void) | null = null;
 
+/** Set by mockApi so a test can assert what the Finder item was pointed at. */
+let showInFolder = vi.fn();
+
 function mockApi(check: CheckResult, openExternal = vi.fn(), applyUpdate = vi.fn()) {
   emitProgress = null;
+  showInFolder = vi.fn();
   (window as unknown as { electronAPI: unknown }).electronAPI = {
     checkForUpdate: vi.fn().mockResolvedValue(check),
     checkPendingUpdate: vi.fn().mockResolvedValue({ pending: false }),
     applyUpdate,
     restartApp: vi.fn(),
     openExternal,
+    showInFolder,
     onUpdateProgress: (cb: (p: { percent: number }) => void) => {
       emitProgress = (percent) => cb({ percent });
       return () => {
@@ -123,6 +129,35 @@ describe('update states', () => {
     expect(screen.queryByText('Copy update command')).toBeNull();
   });
 
+  /* TRA-692: the same divergence one layer up. Both copies can be current, so
+     the line cannot lean on a version number, and neither copy is the wrong
+     one — the header states the condition and the item opens Finder on the copy
+     that is NOT running, which is the one a user would act on. */
+  it('reports a second installed copy and points Finder at the idle one', async () => {
+    mockApi({
+      available: false,
+      current: '3.14.0',
+      lastChecked: Date.now(),
+      duplicateApps: [
+        { path: '/Applications/trace-mcp.app', version: '3.10.0', running: false },
+        { path: '/Users/you/Applications/trace-mcp.app', version: '3.14.0', running: true },
+      ],
+    });
+
+    render(<Menu />);
+    fireEvent.click(screen.getByRole('button', { name: /trace-mcp/ }));
+
+    const status = document.querySelector('.ws-ctx-header .status');
+    await waitFor(() => expect(status?.textContent).toContain('Installed more than once'));
+    expect(status?.className).toContain('is-warn');
+    const title = status?.querySelector('.text')?.getAttribute('title') ?? '';
+    expect(title).toContain('/Applications/trace-mcp.app · v3.10.0');
+    expect(title).toContain('/Users/you/Applications/trace-mcp.app · v3.14.0 — running now');
+
+    fireEvent.click(await screen.findByText('Show the other copy in Finder'));
+    expect(showInFolder).toHaveBeenCalledWith('/Applications/trace-mcp.app');
+  });
+
   it('a genuinely current bundle says so in the menu, and nowhere else', async () => {
     mockApi({ available: false, current: '3.1.1', latest: '3.1.1', lastChecked: Date.now() });
 
@@ -134,6 +169,8 @@ describe('update states', () => {
       expect(document.querySelector('.ws-ctx-header .name')?.textContent).toBe('Version 3.1.1'),
     );
     expect(document.querySelector('.ws-ctx-header .status')?.textContent).toContain('Up to date');
+    // One install, so nothing to reveal — the item exists only in that state.
+    expect(screen.queryByText('Show the other copy in Finder')).toBeNull();
     // No card in the sidebar when there is nothing to do about it.
     expect(container.querySelector('.update-card')).toBeNull();
   });
