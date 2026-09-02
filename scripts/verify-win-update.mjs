@@ -146,7 +146,8 @@ function installedVersions() {
     `$ErrorActionPreference='SilentlyContinue'
      Get-ItemProperty '${UNINSTALL_KEYS}' |
        Where-Object { $_.DisplayName -like '${PRODUCT} *' } |
-       Select-Object -ExpandProperty DisplayVersion`,
+       ForEach-Object { $_.DisplayVersion }
+     exit 0`,
   );
   return out
     ? out
@@ -156,27 +157,28 @@ function installedVersions() {
     : [];
 }
 
+/**
+ * Where the installed app lives. This NSIS target writes no `InstallLocation`,
+ * so the uninstaller's own path is what locates the directory — it is quoted and
+ * followed by `/currentuser`, e.g. `"…\\trace-mcp-app\\Uninstall trace-mcp.exe"
+ * /currentuser`. Property access rather than `-ExpandProperty`: expanding a
+ * property an entry does not carry makes powershell exit non-zero.
+ */
 function installedExe() {
-  const out = powershell(
+  const raw = powershell(
     `$ErrorActionPreference='SilentlyContinue'
-     Get-ItemProperty '${UNINSTALL_KEYS}' |
-       Where-Object { $_.DisplayName -like '${PRODUCT} *' } |
-       Select-Object -First 1 -ExpandProperty InstallLocation`,
+     $e = Get-ItemProperty '${UNINSTALL_KEYS}' |
+       Where-Object { $_.DisplayName -like '${PRODUCT} *' } | Select-Object -First 1
+     if ($e) { if ($e.InstallLocation) { $e.InstallLocation } else { $e.UninstallString } }
+     exit 0`,
   );
-  // InstallLocation is not always written; fall back to the directory the
-  // uninstaller sits in, which is.
+  if (!raw) die('no trace-mcp entry in the uninstall registry to locate the app from');
+  const target = raw.startsWith('"') ? raw.slice(1, raw.indexOf('"', 1)) : raw.split(' /')[0];
   const dir =
-    out ||
-    powershell(
-      `$ErrorActionPreference='SilentlyContinue'
-       Get-ItemProperty '${UNINSTALL_KEYS}' |
-         Where-Object { $_.DisplayName -like '${PRODUCT} *' } |
-         Select-Object -First 1 -ExpandProperty UninstallString`,
-    ).replace(/^"|"\s.*$|"$/g, '');
-  if (!dir) die('no install location for trace-mcp in the uninstall registry');
-  return fs.statSync(dir).isDirectory()
-    ? path.join(dir, `${PRODUCT}.exe`)
-    : path.join(path.dirname(dir), `${PRODUCT}.exe`);
+    fs.existsSync(target) && fs.statSync(target).isDirectory() ? target : path.dirname(target);
+  const exe = path.join(dir, `${PRODUCT}.exe`);
+  if (!fs.existsSync(exe)) die(`uninstall entry points at ${dir}, which holds no ${PRODUCT}.exe`);
+  return exe;
 }
 
 function killApp() {
