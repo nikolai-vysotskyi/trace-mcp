@@ -38,8 +38,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = 'nikolai-vysotskyi/trace-mcp';
-const INSTALL_DIR = path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'trace-mcp');
-const APP_EXE = path.join(INSTALL_DIR, 'trace-mcp.exe');
+const PRODUCT = 'trace-mcp';
+
+const UNINSTALL_KEYS = [
+  'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+  'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+  'HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*',
+].join("','");
 
 /** Throws rather than exits, so every check below is reachable from a test. */
 function die(msg) {
@@ -85,14 +90,42 @@ export function readFeed(text) {
   return feed;
 }
 
+function powershell(script) {
+  return execFileSync('powershell', ['-NoProfile', '-Command', script], {
+    encoding: 'utf8',
+  }).trim();
+}
+
+/**
+ * The version Windows itself believes is installed, read from the uninstall
+ * entry electron-builder's NSIS target writes. Not a guessed path under
+ * `%LOCALAPPDATA%\\Programs`: that guess was wrong on the runner, and the
+ * registry is what Add/Remove Programs — and any future installer — reads.
+ * `null` when nothing is installed.
+ */
 function installedVersion() {
-  if (!fs.existsSync(APP_EXE)) return null;
-  const v = execFileSync(
-    'powershell',
-    ['-NoProfile', '-Command', `(Get-Item -LiteralPath '${APP_EXE}').VersionInfo.ProductVersion`],
-    { encoding: 'utf8' },
-  ).trim();
-  return v || null;
+  const out = powershell(
+    `$ErrorActionPreference='SilentlyContinue'
+     Get-ItemProperty '${UNINSTALL_KEYS}' |
+       Where-Object { $_.DisplayName -eq '${PRODUCT}' } |
+       Select-Object -First 1 -ExpandProperty DisplayVersion`,
+  );
+  return out || null;
+}
+
+/** Printed when an install did not land — the guesswork this replaces. */
+function dumpInstallState() {
+  console.log('--- install state');
+  console.log(
+    powershell(
+      `$ErrorActionPreference='SilentlyContinue'
+       Get-ChildItem "$env:LOCALAPPDATA\\Programs" -Recurse -Depth 1 -Filter '*.exe' |
+         Select-Object -ExpandProperty FullName
+       Get-ItemProperty '${UNINSTALL_KEYS}' |
+         Where-Object { $_.DisplayName -like '*trace*' } |
+         Format-List DisplayName,DisplayVersion,InstallLocation,UninstallString`,
+    ) || '(nothing under %LOCALAPPDATA%\\Programs, no matching uninstall entry)',
+  );
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -121,15 +154,10 @@ async function installAndWaitFor(exe, args, wantVersion) {
   // `runAfterFinish` defaults on, so the app is now running and holding the
   // install directory open — the next install would fight it. Failing to kill
   // it is not itself a verification failure, hence the swallowed errors.
-  execFileSync(
-    'powershell',
-    [
-      '-NoProfile',
-      '-Command',
-      "$ErrorActionPreference='SilentlyContinue'; Get-Process trace-mcp | Stop-Process -Force; exit 0",
-    ],
-    { stdio: 'inherit' },
+  powershell(
+    `$ErrorActionPreference='SilentlyContinue'; Get-Process ${PRODUCT} | Stop-Process -Force; exit 0`,
   );
+  if (seen !== wantVersion) dumpInstallState();
   return seen;
 }
 
@@ -173,7 +201,7 @@ async function main() {
   );
   const before = await installAndWaitFor(oldSetup, ['/S'], fromVersion);
   if (before !== fromVersion) {
-    die(`installed ${fromTag} but the app reports ${before ?? 'nothing'} at ${APP_EXE}`);
+    die(`installed ${fromTag} but Windows reports ${before ?? 'no trace-mcp installed'}`);
   }
   console.log(`Installed ${fromVersion}.`);
 
@@ -205,7 +233,7 @@ async function main() {
   // 4. The swap, with the flags electron-updater's NSIS path passes.
   const after = await installAndWaitFor(newSetup, ['/S', '--updated'], feed.version);
   if (after !== feed.version) {
-    die(`update did not take: expected ${feed.version} at ${APP_EXE}, found ${after ?? 'nothing'}`);
+    die(`update did not take: expected ${feed.version}, Windows reports ${after ?? 'nothing'}`);
   }
 
   console.log(`OK: ${fromVersion} -> ${after} on a real Windows install, no npm involved.`);
