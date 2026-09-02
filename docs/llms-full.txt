@@ -119,7 +119,7 @@ A subproject is any working repository that is part of your project's ecosystem:
 
 ### Cross-project
 
-Every session is attached to one project, but these two tools reach across to any OTHER project already registered with trace-mcp (`~/.trace-mcp/registry.json`) — see [Configuration](configuration.md#cross-project-tools).
+Every session is attached to one project, but these two tools reach across to any OTHER project already registered with trace-mcp (`~/.trace/registry.json`) — see [Configuration](configuration.md#cross-project-tools).
 
 | Tool | What it does |
 |---|---|
@@ -468,7 +468,7 @@ Configuration is optional — trace-mcp works out of the box for standard projec
 All trace-mcp state lives in `~/.trace-mcp/`:
 
 ```
-~/.trace-mcp/
+~/.trace/
   .config.json              # global config + per-project sections
   registry.json             # registered projects
   index/
@@ -1251,7 +1251,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      ▼
 ┌──────────────────────────────────────────┐
 │  Subprojects (auto, post-index)         │
-│  Topology DB (~/.trace-mcp/topology.db) │
+│  Topology DB (~/.trace/topology.db)     │
 │  Auto-detect services per project       │
 │  Contracts · Endpoints · Client calls   │
 │  Cross-service impact edges             │
@@ -1267,7 +1267,7 @@ When AI is enabled, a background pipeline runs after indexing to generate summar
 All state is centralized in `~/.trace-mcp/`:
 
 ```
-~/.trace-mcp/
+~/.trace/
   .config.json              # global config + per-project settings
   registry.json             # project registry (all added projects)
   topology.db               # cross-service topology + subproject graph

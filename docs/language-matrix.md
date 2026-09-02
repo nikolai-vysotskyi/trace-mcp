@@ -32,7 +32,7 @@ is the two-pass pipeline in [architecture](architecture.md#indexing-pipeline).
 | Column | Meaning |
 | --- | --- |
 | Parser | `tree-sitter` — real grammar-based AST. `regex` — pattern extraction, no AST. `custom` — hand-written parser for a structured format. |
-| Default | The shipped default `include` globs reach files with this extension. Where this is empty the plugin only runs once you add the extension to `include` in `.trace-mcp.json`. |
+| Default | The shipped default `include` globs reach files with this extension. Where this is empty the plugin only runs once you add the extension to `include` in `.trace.json`. |
 | Imports | Import statements are resolved into graph edges. Plugins outside this set still parse imports, but nothing turns them into edges yet. |
 | Calls | A call-graph resolver exists, so "who calls this" is answerable for this language. |
 | Types | Type-annotation or inheritance edges are resolved. |

@@ -107,7 +107,7 @@ pnpm run test:watch             # Watch mode
 ```
 
 CI additionally runs the repo's own [quality gates](quality-gates.md) against
-this codebase, with thresholds set in `.trace-mcp.json` — see
+this codebase, with thresholds set in `.trace.json` — see
 [configuration](configuration.md) for how that file merges with global
 settings.
 
@@ -391,7 +391,7 @@ node scripts/capture-screenshots.mjs --check     # are the committed ones stale?
 
 The run launches the real Electron window against a seeded demo state and
 writes WebP files into `docs/images/`. It does not touch the daemon you already
-have running, your `~/.trace-mcp`, or your project registry: the demo daemon
+have running, your `~/.trace`, or your project registry: the demo daemon
 gets its own port and its own `TRACE_MCP_DATA_DIR`, the demo projects are
 `git archive` extracts of this repo at HEAD placed under `/tmp/trace-mcp-demo`,
 and Electron gets a throwaway Chromium profile. Nothing in the frame identifies

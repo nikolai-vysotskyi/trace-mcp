@@ -31,10 +31,10 @@ traffic. `ps -o rss=` reported 1.55 GB; `vmmap -summary` splits it:
 The `mapped file` rows are per-project and worth reading directly:
 
 ```
-64.0M  63.6M  .trace-mcp/index/thewed-2f9565b74fb5.db
-64.0M  63.7M  .trace-mcp/index/general-e8778b435c05.db
-64.0M  63.3M  .trace-mcp/index/assetfeed-76da1a753b39.db
-34.1M  33.4M  .trace-mcp/index/workdir-45190de3e39c.db
+64.0M  63.6M  .trace/index/thewed-2f9565b74fb5.db
+64.0M  63.7M  .trace/index/general-e8778b435c05.db
+64.0M  63.3M  .trace/index/assetfeed-76da1a753b39.db
+34.1M  33.4M  .trace/index/workdir-45190de3e39c.db
 ...
 ```
 
@@ -88,7 +88,7 @@ vmmap -summary "$PID"                # region breakdown
 vmmap "$PID" | grep 'mapped file'    # per-project index.db mmap residency
 ```
 
-`Daemon vitals` lines in `~/.trace-mcp/daemon.log` carry `rss_mb`,
+`Daemon vitals` lines in `~/.trace/daemon.log` carry `rss_mb`,
 `heap_used_mb` and `projects_loaded` every 60 s, which is the cheap way to
 watch the floor over time.
 
