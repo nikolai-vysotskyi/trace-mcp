@@ -15,13 +15,16 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { traceHomeDir } from '../../scripts/trace-home.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const MODULE_PATH = path.join(REPO_ROOT, 'scripts', 'trace-home.mjs');
+// A bare Windows path (`C:\...`) is not a valid ESM specifier — it doesn't
+// start with `/`, so Node treats it as a bare package name instead of an
+// absolute path and resolution fails. `file://` URLs work on every platform.
+const MODULE_SPECIFIER = pathToFileURL(path.join(REPO_ROOT, 'scripts', 'trace-home.mjs')).href;
 
 let home: string;
 
@@ -38,7 +41,7 @@ function resolveWithEnv(env: Record<string, string>): string {
   const harness = path.join(home, 'harness.mjs');
   fs.writeFileSync(
     harness,
-    `import { traceHomeDir } from ${JSON.stringify(MODULE_PATH)};\n` +
+    `import { traceHomeDir } from ${JSON.stringify(MODULE_SPECIFIER)};\n` +
       `process.stdout.write(traceHomeDir());\n`,
   );
   return execFileSync(process.execPath, [harness], {
