@@ -146,7 +146,10 @@ async function traffic(repo, token) {
  * client" got read off a denominator that was never the right one.
  */
 function breakdown(res) {
-  const out = {};
+  // Null-prototype: these keys come from outside (a client name the install
+  // picks for itself, a referrer host), and `{}['__proto__'] = x` is a silent
+  // no-op — that row would vanish from the published breakdown with no trace.
+  const out = Object.create(null);
   for (const row of res?.rows ?? []) {
     const k = row.dimensionValues?.[0]?.value;
     if (k) out[k] = Number(row.metricValues?.[0]?.value ?? 0);
@@ -259,12 +262,21 @@ const [
     metrics: [{ name: 'activeUsers' }],
     limit: 500,
   }).catch((e) => ({ error: why(e) })),
+  // Its own error line rather than a silent `null`: this query can fail on its
+  // own (quota, a malformed second dimension) while the single-dimension one
+  // above succeeds, and empty client maps under a healthy `usage:` block read
+  // as "no client reports use" instead of "this query did not run".
+  //
+  // ponytail: `limit` truncates server-side without saying so — GA4's own
+  // `(other)` folding lands in `unknown`, but a 1000-row cut leaves no trace.
+  // Check `rowCount` if the client × calls combinations ever get near it; at
+  // single-digit clients and ~60 installs they are three orders away.
   report(token, propertyId, {
     dateRanges: range(28),
     dimensions: [{ name: 'customEvent:client' }, { name: 'customEvent:calls' }],
     metrics: [{ name: 'activeUsers' }],
     limit: 1000,
-  }).catch(() => null),
+  }).catch((e) => ({ error: why(e) })),
   traffic(process.env.GITHUB_REPOSITORY, process.env.GH_TRAFFIC_TOKEN),
 ]);
 
@@ -406,7 +418,7 @@ ${errLine(called?.error)}  used: ${use.used}
   unknown: ${use.unknown}
   by_calls:
 ${yaml(use.buckets, 4)}
-  by_client_used_pct:
+${calledByClient?.error ? `  by_client_error: ${JSON.stringify(calledByClient.error)}\n` : ''}  by_client_used_pct:
 ${yaml(useByClient.used_pct, 4)}
   by_client_installs:
 ${yaml(useByClient.installs, 4)}

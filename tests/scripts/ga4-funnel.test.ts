@@ -106,6 +106,17 @@ describe('usageByClient', () => {
   it('handles no rows at all', () => {
     expect(usageByClient(undefined)).toEqual({ used_pct: {}, installs: {} });
   });
+
+  it('keeps an install whose client name is a prototype key', () => {
+    // The ping is unauthenticated and the client names itself, so this key is
+    // reachable by anyone. On a plain `{}` the assignment is a silent no-op and
+    // the install disappears from the one number that decides reach strategy.
+    const result = usageByClient([clientRow('__proto__', '5', 7)]);
+
+    expect(result.installs.__proto__).toBe(7);
+    expect(result.used_pct.__proto__).toBe(100);
+    expect({}.hasOwnProperty).toBeTypeOf('function'); // nothing polluted globally
+  });
 });
 
 describe('share', () => {

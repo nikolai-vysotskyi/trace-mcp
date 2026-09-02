@@ -146,8 +146,13 @@ export function usageByClient(rows) {
     const rest = { dimensionValues: row.dimensionValues.slice(1), metricValues: row.metricValues };
     byClient.set(client, [...(byClient.get(client) ?? []), rest]);
   }
-  const used_pct = {};
-  const installs = {};
+  // Null-prototype, because the key is a client name the install chooses for
+  // itself and the ping is unauthenticated: `{}['__proto__'] = x` is a silent
+  // no-op, so a forged `client=__proto__` would delete itself from both maps
+  // with no error and no `unknown` credit — invisible in the one number this
+  // function exists to produce.
+  const used_pct = Object.create(null);
+  const installs = Object.create(null);
   for (const [client, clientRows] of byClient) {
     const u = usage(clientRows);
     used_pct[client] = u.used_pct;
