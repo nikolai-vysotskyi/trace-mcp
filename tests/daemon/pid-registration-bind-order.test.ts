@@ -36,6 +36,7 @@ const CLI = path.join(REPO_ROOT, 'dist', 'cli.js');
 const PORT = 3797;
 const TMP_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-bindorder-'));
 const PID_FILE = path.join(TMP_HOME, 'daemon.pid');
+const TELEMETRY_STATE = path.join(TMP_HOME, 'telemetry-state.json');
 
 /**
  * This suite exercises the built `dist/cli.js`, and `pnpm test` has no build
@@ -66,6 +67,12 @@ function spawnDaemon(): ChildProcess {
       TRACE_MCP_DATA_DIR: TMP_HOME,
       // Not launchd: keep the plist/KeepAlive path out of a unit test.
       TRACE_MCP_MANAGED_BY: 'test',
+      // The ping suppresses itself under CI, which would also suppress the
+      // TRA-671 counters this suite asserts on. Clear it for the child only.
+      // Nothing is sent: no GA credentials are baked into a local build and
+      // none are passed here, so `sendUsagePing` returns before any fetch —
+      // only the on-disk counters move.
+      CI: '',
     },
     stdio: 'ignore',
   });
@@ -157,6 +164,18 @@ describe.skipIf(!BUILD_CURRENT)(
       expect(after.alive).toBe(true);
       expect(after.pid).toBe(winner.pid);
       expect(winner.exitCode).toBeNull();
+
+      // TRA-671 rides on the same bind-order rule. The reliability counters
+      // count *daemons*, so the loser — which never owned the port — must not
+      // appear as a start. It must also not leave `daemonRunning` set: the next
+      // real start would read that as an unclean stop that never happened, and
+      // the bind race is precisely the situation the counter exists to measure.
+      const telemetry = JSON.parse(fs.readFileSync(TELEMETRY_STATE, 'utf-8')) as {
+        daemonStarts?: number;
+        daemonUncleanStops?: number;
+      };
+      expect(telemetry.daemonStarts).toBe(1);
+      expect(telemetry.daemonUncleanStops).toBe(0);
     }, 240_000);
   },
 );

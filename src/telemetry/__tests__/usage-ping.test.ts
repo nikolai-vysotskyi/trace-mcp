@@ -4,7 +4,12 @@ vi.mock('node:fs');
 vi.mock('../top-model.js', () => ({ topModelLastDay: () => 'claude-opus-4-6' }));
 
 import fs from 'node:fs';
-import { recordUsagePingClient, sendUsagePing } from '../usage-ping.js';
+import {
+  recordDaemonCleanStop,
+  recordDaemonStart,
+  recordUsagePingClient,
+  sendUsagePing,
+} from '../usage-ping.js';
 
 function makeFetchSpy(): {
   fetchImpl: typeof fetch;
@@ -296,5 +301,90 @@ describe('sendUsagePing', () => {
       sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl }),
     ).resolves.toBeUndefined();
     expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('daemon reliability counters (TRA-671)', () => {
+  /** Back the mocked fs with one in-memory string, so writes are readable back. */
+  function statefulFs(initial: string | null): { read: () => Record<string, unknown> } {
+    let state = initial;
+    vi.mocked(fs.readFileSync).mockImplementation(() => {
+      if (state === null) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      return state;
+    });
+    vi.mocked(fs.writeFileSync).mockImplementation((_p, data) => {
+      state = String(data);
+    });
+    return { read: () => JSON.parse(String(state)) as Record<string, unknown> };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(fs.mkdirSync).mockImplementation(() => undefined);
+  });
+
+  it('counts a start, and counts the previous run as unclean when no clean stop was recorded', () => {
+    const store = statefulFs(null);
+
+    recordDaemonStart(CONFIGURED_ENV);
+    expect(store.read()).toMatchObject({
+      daemonStarts: 1,
+      daemonUncleanStops: 0,
+      daemonRunning: true,
+    });
+
+    // Daemon dies to SIGKILL — no clean-stop record — and starts again.
+    recordDaemonStart(CONFIGURED_ENV);
+    expect(store.read()).toMatchObject({ daemonStarts: 2, daemonUncleanStops: 1 });
+  });
+
+  it('does not count a start that followed a graceful shutdown', () => {
+    const store = statefulFs(null);
+
+    recordDaemonStart(CONFIGURED_ENV);
+    recordDaemonCleanStop(CONFIGURED_ENV);
+    expect(store.read().daemonRunning).toBe(false);
+
+    recordDaemonStart(CONFIGURED_ENV);
+    expect(store.read()).toMatchObject({ daemonStarts: 2, daemonUncleanStops: 0 });
+  });
+
+  it('honours the opt-out on both recorders', () => {
+    recordDaemonStart({ TRACE_MCP_TELEMETRY: 'off' });
+    recordDaemonCleanStop({ TRACE_MCP_TELEMETRY: 'off' });
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  it('reports the counters and clears exactly what it sent', async () => {
+    const store = statefulFs(
+      JSON.stringify({
+        installId: 'fixed-id',
+        lastPingDate: '2000-01-01',
+        daemonStarts: 4,
+        daemonUncleanStops: 2,
+        daemonRunning: true,
+      }),
+    );
+    // A restart lands while the ping is in flight — it must survive the reset.
+    const fetchImpl = vi.fn(async () => {
+      recordDaemonStart(CONFIGURED_ENV);
+      return new Response(null, { status: 204 });
+    }) as unknown as typeof fetch;
+
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+
+    const written = store.read();
+    expect(written.daemonStarts).toBe(1);
+    expect(written.daemonUncleanStops).toBe(1);
+  });
+
+  it('sends zeroes for a stdio-only install that never ran a daemon', async () => {
+    statefulFs(JSON.stringify({ installId: 'fixed-id', lastPingDate: '2000-01-01' }));
+    const { fetchImpl, calls } = makeFetchSpy();
+    await sendUsagePing({ version: '1.2.3', env: CONFIGURED_ENV, fetchImpl });
+    const params = (calls[0]!.body as { events: Array<{ params: Record<string, unknown> }> })
+      .events[0]!.params;
+    expect(params.daemon_starts).toBe(0);
+    expect(params.daemon_unclean_stops).toBe(0);
   });
 });
