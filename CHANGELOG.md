@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.13.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.12.0...v3.13.0) (2026-09-02)
+
+
+### Features
+
+* **tools:** explain empty results with a capped, data-derived note (TRA-680) ([#779](https://github.com/nikolai-vysotskyi/trace-mcp/issues/779)) ([024c76b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/024c76bc3dc724b46cf24858db8dd7ea13ce156f))
+
+
+### Bug Fixes
+
+* **site:** generate llms-full.txt, guard llms.txt against page drift (TRA-681) ([#780](https://github.com/nikolai-vysotskyi/trace-mcp/issues/780)) ([21cfc5b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/21cfc5b6aef7110fdd8d64dcef1eb49be457afc2))
+
+
+### Performance
+
+* **app:** let the Graph tab go quiet when nobody is watching (TRA-683) ([#783](https://github.com/nikolai-vysotskyi/trace-mcp/issues/783)) ([0c79f0e](https://github.com/nikolai-vysotskyi/trace-mcp/commit/0c79f0e240b13602fee54928993ea19da38945e5))
+* **app:** reconcile both TRA-617 passes, measure the app offscreen, price the idle Graph tab ([#781](https://github.com/nikolai-vysotskyi/trace-mcp/issues/781)) ([942a206](https://github.com/nikolai-vysotskyi/trace-mcp/commit/942a206ba230f1560c00327c041af6ff77c574e8))
+
+
+### Documentation
+
+* add TechArticle schema to three pages and guard it in CI ([#776](https://github.com/nikolai-vysotskyi/trace-mcp/issues/776)) ([64214fb](https://github.com/nikolai-vysotskyi/trace-mcp/commit/64214fb5de52c7cc76dac5e08685acb6283b1131))
+* **ops:** add third-party roundup surface class to distribution ledger ([#782](https://github.com/nikolai-vysotskyi/trace-mcp/issues/782)) ([59d3159](https://github.com/nikolai-vysotskyi/trace-mcp/commit/59d315915e6d28d36f2ecc611beb3a4327c7b85b))
+
 ## [3.12.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.11.0...v3.12.0) (2026-09-02)
 
 
