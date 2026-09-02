@@ -69,6 +69,29 @@ export class FileRepository {
     return this._stmts.getFile.get(path) as FileRow | undefined;
   }
 
+  /**
+   * Read-side lookup: exact path, else a *unique* suffix match.
+   *
+   * Agents run with cwd inside a subdirectory of the indexed root (a Laravel app
+   * under a monorepo, a checkout under a workspace dir) and pass paths relative
+   * to that cwd. Exact matching then misses a file the index actually holds, and
+   * the agent burns a round-trip on NOT_FOUND plus another on the search() it
+   * falls back to. Only an unambiguous match is accepted — two candidates mean
+   * we cannot know which one was meant, so it stays a miss.
+   *
+   * Never use this on the indexer write path: inserts must stay exact.
+   */
+  resolveFile(path: string): FileRow | undefined {
+    const exact = this._stmts.getFile.get(path) as FileRow | undefined;
+    if (exact) return exact;
+    const normalized = path.replace(/^\.?\//, '');
+    if (!normalized) return undefined;
+    const rows = this.db
+      .prepare('SELECT * FROM files WHERE path = ? OR path LIKE ? ESCAPE ? LIMIT 2')
+      .all(normalized, `%/${normalized.replace(/([%_\\])/g, '\\$1')}`, '\\') as FileRow[];
+    return rows.length === 1 ? rows[0] : undefined;
+  }
+
   getFileById(id: number): FileRow | undefined {
     return this._stmts.getFileById.get(id) as FileRow | undefined;
   }

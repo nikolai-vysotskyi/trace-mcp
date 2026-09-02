@@ -1147,7 +1147,7 @@ export async function getFileOutline(
   filePath: string,
   opts: GetFileOutlineOptions = {},
 ): Promise<TraceMcpResult<FileOutlineResult>> {
-  const file = store.getFile(filePath);
+  const file = store.resolveFile(filePath);
   if (!file) {
     return err(notFound(filePath));
   }
