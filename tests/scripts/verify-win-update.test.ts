@@ -5,10 +5,17 @@ import { describe, expect, it } from 'vitest';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MODULE_PATH = path.join(__dirname, '..', '..', 'scripts', 'verify-win-update.mjs');
 
-const { readFeed, isNewer } = (await import(MODULE_PATH)) as {
-  readFeed: (text: string) => { version: string; file: string; sha512: string };
+const { readFeed, isNewer, auditUpdateLog } = (await import(MODULE_PATH)) as {
+  readFeed: (text: string) => { version: string; file: string };
   isNewer: (a: string, b: string) => boolean;
+  auditUpdateLog: (text: string) => { events: string[]; problems: string[] };
 };
+
+/** What the app writes when the electron-updater branch runs (index.ts). */
+const GOOD_LOG = [
+  '{"ts":"2026-09-02T16:00:00.000Z","event":"apply-update:downloaded","version":"3.13.0"}',
+  '',
+].join('\n');
 
 /** electron-builder's real output, as published on v3.11.0. */
 const FEED = `version: 3.11.0
@@ -22,24 +29,42 @@ releaseDate: '2026-09-01T18:36:13.000Z'
 `;
 
 describe('verify-win-update', () => {
-  it('reads the three fields electron-updater acts on', () => {
+  it('reads the version and installer name the app will be offered', () => {
     expect(readFeed(FEED)).toEqual({
       version: '3.11.0',
       file: 'trace-mcp.Setup.3.11.0.exe',
-      sha512: 'bbb==',
     });
   });
 
-  // The indented `files:` entry carries its own sha512. Picking that one up
-  // instead of the top-level field would compare the installer against a hash
-  // of something else and fail every release for no reason.
-  it('takes the top-level sha512, not the one nested under files', () => {
-    expect(readFeed(FEED).sha512).not.toBe('aaa==');
-  });
-
+  // The indented `files:` entry repeats `url`/`sha512`. Anchoring at column 0
+  // is what keeps the top-level `path` from being shadowed by them.
   it('rejects a feed missing a field rather than proceeding with undefined', () => {
     expect(() => readFeed('version: 3.11.0\n')).toThrow(/path/);
-    expect(() => readFeed(FEED.replace(/^sha512: bbb==$/m, ''))).toThrow(/sha512/);
+    expect(() => readFeed(FEED.replace(/^path: .*$/m, ''))).toThrow(/path/);
+  });
+
+  describe('auditUpdateLog', () => {
+    it('accepts a log where only the electron-updater branch ran', () => {
+      expect(auditUpdateLog(GOOD_LOG).problems).toEqual([]);
+    });
+
+    // The whole point of the acceptance criterion: npm must never be reached
+    // on Windows. Seeing either event means the channel guard picked wrong.
+    it('rejects a log carrying npm-path events', () => {
+      const npm = `${GOOD_LOG}{"ts":"x","event":"apply-update:no-npm"}\n`;
+      expect(auditUpdateLog(npm).problems.join()).toMatch(/apply-update:no-npm/);
+      const resolve = `${GOOD_LOG}{"ts":"x","event":"resolve-npm:start"}\n`;
+      expect(auditUpdateLog(resolve).problems.join()).toMatch(/resolve-npm:start/);
+    });
+
+    it('rejects a log where the download never completed', () => {
+      const failed = '{"ts":"x","event":"apply-update:failed","summary":"boom"}\n';
+      expect(auditUpdateLog(failed).problems.join()).toMatch(/apply-update:downloaded/);
+    });
+
+    it('survives a truncated trailing line rather than throwing', () => {
+      expect(auditUpdateLog(`${GOOD_LOG}{"ts":"x","eve`).problems).toEqual([]);
+    });
   });
 
   it('compares versions numerically, not as strings', () => {

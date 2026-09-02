@@ -35,28 +35,33 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function targets() {
-  const res = await fetch(`${ORIGIN}/json/list`);
+async function targets(origin = ORIGIN) {
+  const res = await fetch(`${origin}/json/list`);
   return res.json();
 }
 
-/** First page target, retried — Electron opens its window a beat after boot. */
-async function waitForPage(timeoutMs = 30_000) {
+/**
+ * First page target, retried — Electron opens its window a beat after boot.
+ *
+ * Exported because scripts/verify-win-update.mjs drives the *installed* app the
+ * same way, on a runner: same protocol, different binary.
+ */
+export async function waitForPage(timeoutMs = 30_000, origin = ORIGIN) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
-      const page = (await targets()).find((t) => t.type === 'page');
+      const page = (await targets(origin)).find((t) => t.type === 'page');
       if (page) return page;
     } catch {
       // endpoint not up yet
     }
-    if (Date.now() > deadline) throw new Error(`no page target on ${ORIGIN} after ${timeoutMs}ms`);
+    if (Date.now() > deadline) throw new Error(`no page target on ${origin} after ${timeoutMs}ms`);
     await sleep(500);
   }
 }
 
 /** Minimal CDP session over the built-in WebSocket (Node >= 22). */
-async function connect(wsUrl) {
+export async function connect(wsUrl) {
   const ws = new WebSocket(wsUrl);
   const pending = new Map();
   let nextId = 1;
@@ -197,8 +202,14 @@ async function shot(outFile, opts) {
   console.log(`wrote ${outFile}`);
 }
 
-const [cmd, ...rest] = process.argv.slice(2);
-if (cmd === 'launch') {
+// Importing this module for `connect`/`waitForPage` must not run the CLI.
+const [cmd, ...rest] =
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+    ? process.argv.slice(2)
+    : [];
+if (cmd === undefined) {
+  // imported, not invoked
+} else if (cmd === 'launch') {
   launch(rest.includes('--visible'));
 } else if (cmd === 'shot') {
   const out = rest.find((a) => !a.startsWith('--'));
