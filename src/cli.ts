@@ -544,11 +544,6 @@ program
     // anything else, so a crash loop is visible in daemon.log itself rather
     // than only via `launchctl print` after someone thinks to look.
     logPreviousExit();
-    // TRA-671: the same post-mortem as two counters the daily ping can carry —
-    // launchd's record is mac-only and visible only to whoever runs
-    // `daemon status`, so "how often does a daemon die without shutting down"
-    // has never been answerable outside this machine.
-    recordDaemonStart();
     // TRA-421 registers our PID so clients can tell "busy" from "dead" without
     // /health. TRA-525: that registration happens in the listen() callback, NOT
     // here. Writing it before bind let a process that never becomes the daemon
@@ -3107,6 +3102,13 @@ program
       // without ever having touched daemon.pid, so a failed spawn can no longer
       // convince the app's watchdog that the live daemon died.
       writeOwnDaemonPidFile();
+      // TRA-671 counts the start here for the same reason, and not earlier in
+      // this action: a process that loses the bind race, or one that exits from
+      // the auto-update check above, never becomes the daemon. Counting it as a
+      // start would also leave the "running" flag set, so the next real start
+      // would report an unclean stop that never happened — and the bind race is
+      // exactly the situation this counter exists to measure.
+      recordDaemonStart();
       // Self-heal: readDaemonPid() unlinks the file whenever it names a dead
       // process, so a single poisoning event used to disarm the guard for the
       // rest of this daemon's life. Re-assert it periodically; the write is
