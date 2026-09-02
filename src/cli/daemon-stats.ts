@@ -141,6 +141,10 @@ export function renderHookStats(agg: HookAggregate, windowLabel: string): string
   lines.push(fmt('daemon path  ', agg.daemon));
   lines.push(fmt('cli fallback ', agg.cli));
   lines.push(fmt('skipped      ', agg.skipped));
+  // Since reindex hook v0.5 the dispatch is detached, so these durations are
+  // daemon round-trip time, not time the agent waited. Saying so here because
+  // reading them as agent cost is what produced TRA-694.
+  lines.push('  (durations are daemon round-trip; the hook does not wait on them)');
   const reasonKeys = Object.keys(agg.reasons).sort();
   if (reasonKeys.length > 0) {
     const parts = reasonKeys.map((k) => `"${k}": ${agg.reasons[k]}`);
