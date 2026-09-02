@@ -35,6 +35,7 @@ import { encode as tokenEncode } from 'gpt-tokenizer';
 import { decode as toonDecode } from '@toon-format/toon';
 import { z } from 'zod';
 
+import { INDEX_DIR } from '../src/global.js';
 import { initializeDatabase } from '../src/db/schema.js';
 import { Store } from '../src/db/store.js';
 import { DecisionStore } from '../src/memory/decision-store.js';
@@ -347,7 +348,7 @@ function renderTable(rows: Row[]): string {
 // ── Live index access ──────────────────────────────────────────────────────
 
 function findSelfIndexDb(): string | null {
-  const indexDir = path.join(os.homedir(), '.trace-mcp', 'index');
+  const indexDir = INDEX_DIR;
   if (!fs.existsSync(indexDir)) return null;
   // The trace-mcp self index is named trace-mcp-<hash>.db (no -session suffix).
   // Pick the biggest non-session file as a tiebreaker if multiple exist.

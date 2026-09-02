@@ -2,7 +2,7 @@
  * Shared markdown routing-block writer used by both CLAUDE.md and AGENTS.md.
  *
  * The BLOCK content is the single source of truth for "how an AI agent should
- * route through trace-mcp". Anything that drifts between CLAUDE.md and
+ * route through trace". Anything that drifts between CLAUDE.md and
  * AGENTS.md is a bug — the block is authored here so both files stay in sync.
  *
  * File-I/O is intentionally kept here (not in the caller) so competitor
@@ -31,6 +31,12 @@ const COMPETING_MARKER_TOOLS = [
   'code-compass',
   'repo-map',
 ];
+
+/** Matches our own generated heading, current ("trace") and pre-TRA-611
+ * ("trace-mcp") spellings — anchored to the exact heading text so it never
+ * matches an unrelated user heading that merely starts with the word
+ * "trace" (e.g. "## Trace logging policy"). */
+const TRACE_HEADING_RE = /^#{1,6}\s+trace(?:-mcp)?\s+Tool Routing\b/i;
 
 export const TRACE_ROUTING_BLOCK = `${START_MARKER}
 ## trace Tool Routing
@@ -63,7 +69,7 @@ ${END_MARKER}`;
 /** Backwards-compatible alias for legacy imports. */
 export const TRACE_MCP_ROUTING_BLOCK = TRACE_ROUTING_BLOCK;
 
-/** Upsert the trace routing block into \`filePath\`. Idempotent. */
+/** Upsert the trace routing block into `filePath`. Idempotent. */
 export function upsertTraceMcpBlock(
   filePath: string,
   opts: { dryRun?: boolean } = {},
@@ -182,12 +188,11 @@ function removeOrphanedTraceMcpContent(content: string): string {
   const before = content.slice(0, firstStart.idx);
   const markerBlock = content.slice(firstStart.idx, firstEnd.idx + firstEnd.marker.length);
   const after = content.slice(firstEnd.idx + firstEnd.marker.length);
-  const traceHeadingRe = /^(#{1,6})\s+trace(?:-mcp)?\b/i;
   const cleanBefore = filterSections(before.split('\n'), (heading) =>
-    traceHeadingRe.test(heading),
+    TRACE_HEADING_RE.test(heading),
   ).join('\n');
   const cleanAfter = filterSections(after.split('\n'), (heading) =>
-    traceHeadingRe.test(heading),
+    TRACE_HEADING_RE.test(heading),
   ).join('\n');
   return cleanBefore + markerBlock + cleanAfter;
 }
@@ -214,7 +219,7 @@ function removeCompetingHeadingSections(content: string): string {
   let lines = content.split('\n');
   lines = filterSections(lines, (headingLine) => competingHeadingRe.test(headingLine));
   lines = filterSections(lines, (headingLine, _level, body) => {
-    if (/trace(?:-mcp)?/i.test(headingLine)) return false;
+    if (TRACE_HEADING_RE.test(headingLine)) return false;
     return competitorRe.test(body);
   });
   lines = removeEmptyParentSections(lines);

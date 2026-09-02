@@ -7,11 +7,12 @@
  * this file duplicated the launchd/spawn logic and drifted over time.
  *
  * Binary resolution order:
- *   1. TRACE_MCP_BIN env override (dev installs, CI)
- *   2. Launcher shim at $TRACE_MCP_HOME/bin/trace-mcp (or trace-mcp.cmd on
- *      Windows). Installed by `trace-mcp init`. Survives nvm/Herd/Volta/fnm
- *      Node version swaps because the shim resolves Node + cli.js at runtime.
- *   3. `which trace-mcp` / `where trace-mcp` PATH lookup. Often fails when
+ *   1. TRACE_BIN / TRACE_MCP_BIN env override (dev installs, CI)
+ *   2. Launcher shim under the launcher dir — `trace` where the CLI has already
+ *      migrated, `trace-mcp` where it has not (see trace-home.ts). Installed by
+ *      init. Survives nvm/Herd/Volta/fnm Node version swaps because the shim
+ *      resolves Node + cli.js at runtime.
+ *   3. `which trace` / `which trace-mcp` PATH lookup. Often fails when
  *      Electron is launched from Finder — GUI apps inherit PATH from
  *      /etc/paths and launchd, NOT from ~/.zshrc / ~/.bashrc, so a Herd /
  *      nvm-installed binary won't be visible here.
@@ -21,24 +22,10 @@ import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { type CliInvocation, resolveCliInvocation } from './daemon-install';
+import { getLauncherDir, getLauncherShimPath, SHIM_NAMES } from './trace-home';
 
 const isWin = process.platform === 'win32';
-
-// Mirrors src/init/launcher.ts: getLauncherDir() — keep in sync if that
-// function changes. We don't import from src/init/launcher.ts because the
-// Electron main bundle is compiled standalone (tsconfig.main.json rootDir
-// is packages/app/src/main) and pulling in the launcher module would drag
-// the entire init subsystem into the app build.
-function getLauncherDir(): string {
-  const envDir = process.env.TRACE_MCP_HOME?.trim();
-  if (envDir) return envDir;
-  return path.join(os.homedir(), '.trace-mcp');
-}
-
-function getLauncherShimPath(): string {
-  const basename = isWin ? 'trace-mcp.cmd' : 'trace-mcp';
-  return path.join(getLauncherDir(), 'bin', basename);
-}
 
 // On POSIX, require the file exists AND has at least one executable bit set.
 // On Windows there is no executable bit — existence is enough; .cmd extension
@@ -57,11 +44,11 @@ function isExecutableFile(p: string): boolean {
 
 function resolveTraceMcpBinary(): string {
   // 1. Explicit override — dev (npm link) and CI both rely on this.
-  const override = process.env.TRACE_MCP_BIN?.trim();
+  const override = process.env.TRACE_BIN?.trim() || process.env.TRACE_MCP_BIN?.trim();
   if (override) {
     if (!isExecutableFile(override)) {
       throw new Error(
-        `TRACE_MCP_BIN is set to "${override}" but that file does not exist or is not executable`,
+        `TRACE_BIN is set to "${override}" but that file does not exist or is not executable`,
       );
     }
     return override;
@@ -73,17 +60,26 @@ function resolveTraceMcpBinary(): string {
 
   // 3. PATH fallback — likely to fail in GUI-launched Electron, which is
   // exactly the bug we're working around, but useful for terminal-launched
-  // dev runs where ~/.trace-mcp/bin isn't populated yet.
-  try {
-    const cmd = isWin ? 'where trace-mcp' : 'which trace-mcp';
-    const out = execSync(cmd, { encoding: 'utf-8' }).trim();
-    // `where` on Windows may return several lines; take the first.
-    const first = out.split(/\r?\n/)[0]?.trim();
-    if (first) return first;
-  } catch {
-    // fall through to the unified error below
+  // dev runs where the launcher dir isn't populated yet. Both bin names are
+  // tried: the package ships them as aliases of one another (TRA-610), and
+  // which one is on PATH depends only on when the machine last installed.
+  for (const bin of SHIM_NAMES) {
+    try {
+      const out = execSync(isWin ? `where ${bin}` : `which ${bin}`, {
+        encoding: 'utf-8',
+      }).trim();
+      // `where` on Windows may return several lines; take the first.
+      const first = out.split(/\r?\n/)[0]?.trim();
+      if (first) return first;
+    } catch {
+      // not this one — try the next, then the unified error below
+    }
   }
 
+  // Named with the legacy command on purpose: this sentence is something the
+  // user types, and `trace-mcp init` works on every published version, before
+  // and after the rename. It stops being the right advice only once the `trace`
+  // bin has actually shipped (TRA-611).
   throw new Error(
     `trace-mcp launcher shim not found at ${shim} and no trace-mcp in PATH — run 'trace-mcp init' from a terminal first`,
   );
@@ -93,9 +89,14 @@ function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
   ok: boolean;
   error?: string;
 } {
-  let bin: string;
+  // TRA-638: on Windows the shim is a `.cmd`, which execFileSync cannot launch
+  // without a shell — `shell: isWin` below is the only reason this path worked
+  // while the identical MCP-client spawns failed. Prefer the runtime + cli.js
+  // that launcher.env records, so no shell is involved at all.
+  let inv: CliInvocation;
   try {
-    bin = resolveTraceMcpBinary();
+    inv = resolveCliInvocation();
+    if (inv.prefixArgs.length === 0) inv = { file: resolveTraceMcpBinary(), prefixArgs: [] };
   } catch (err) {
     return { ok: false, error: (err as Error).message };
   }
@@ -103,12 +104,13 @@ function runDaemonCommand(subcommand: 'start' | 'stop' | 'restart'): {
   try {
     // execFileSync avoids shell-injection concerns around the resolved path.
     // Windows paths may contain spaces; pass as single arg.
-    execFileSync(bin, ['daemon', subcommand], {
+    execFileSync(inv.file, [...inv.prefixArgs, 'daemon', subcommand], {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
-      // `shell: true` is required on Windows to resolve .cmd/.bat wrappers
-      // that npm global installs generate.
-      shell: isWin,
+      // Last resort only: a Windows machine with no launcher.env to point at
+      // can still have a `.cmd` on PATH, and this argv is two literals.
+      shell: isWin && inv.prefixArgs.length === 0,
+      env: inv.env ? { ...process.env, ...inv.env } : process.env,
       encoding: 'utf-8',
     });
     return { ok: true };
@@ -146,8 +148,8 @@ export function stopDaemon(): { ok: boolean; error?: string } {
  * Is the daemon process provably alive right now, independent of /health?
  *
  * Mirrors src/daemon/lifecycle.ts: isDaemonProcessAlive(). Kept as a local
- * ~10-line read for the same reason getLauncherDir() is duplicated above — the
- * Electron main bundle compiles standalone and cannot import from src/.
+ * ~10-line read for the same reason trace-home.ts re-states getLauncherDir() —
+ * the Electron main bundle compiles standalone and cannot import from src/.
  *
  * The daemon registers its own PID at startup (TRA-421), so an unanswered
  * /health with this returning `true` means "busy", not "dead".

@@ -241,6 +241,16 @@ is what `.lx-badge` paints. Badge foreground and status text are not interchange
 **Status is never carried by colour alone.** A tone always arrives with a glyph and a
 written label (`KpiTile.tsx`, the workspace KPI strip).
 
+**A measured pair has to stay the pair that renders — so a tint is opaque, never an
+alpha.** The rule generalises past badges: when a fill is translucent, the ratio you
+measured is only the ratio on the one backing you measured it against, and every other
+backing silently produces a different, unmeasured pair. The `--badge-*-fg` labels clear
+their tint by about 0.3, so as an 18% alpha they measured 4.37–4.49 in a content well,
+4.37–4.45 on a hovered row and 1.0–1.9 on a selection fill. Mix the hue **into
+`--surface`** — `color-mix(in srgb, var(--status-red) 18%, var(--surface))` — which
+paints the identical pixel on `--surface` and pins the ratio everywhere else. Content
+does not composite with what is behind it; only glass does, and a badge is content.
+
 ### Measured contrast
 
 Run `node packages/app/scripts/design-tokens.mjs` for the current table. As of this
@@ -466,10 +476,20 @@ x=38 in every row.
 
 **A file row leads with the filename, not the path.** The name is what identifies
 the row, so it gets `--label` and the front of the line; the *leaf* directory follows
-it in `--label-secondary` and is the only part allowed to shorten. Never the reverse —
-a path-first row spends its width on `src/renderer/tabs/` and then eats the filename's
-extension, which is the one token the reader was looking for (TRA-503). Everything
-above the leaf belongs in the row's tooltip.
+it in `--label-secondary`. Never the reverse — a path-first row spends its width on
+`src/renderer/tabs/` and then eats the filename's extension, which is the one token
+the reader was looking for (TRA-503). Everything above the leaf belongs in the row's
+tooltip.
+
+**Secondary text is shown whole or not at all — it never shortens to a sliver.**
+Giving the location all of the shrink kept the filename intact but ran out at a
+fragment rather than at nothing: `GraphExplorerGPU.t…  t  46` at the 220px default,
+a clipped glyph beside the count at the 180px minimum. A lone letter next to a
+right-aligned number reads as a status badge, not as a place, so it costs width and
+returns nothing (TRA-504). Hide it instead — the row's tooltip still carries the full
+path, and the width goes back to the name, which is what four of twelve rows needed
+to stop truncating. Whether it fits is the one thing CSS cannot ask; measure it
+(`whole-location.ts`) and spend it on a class.
 
 **Anything that lives in the sidebar is a row.** Nav items are rows. Settings is a row.
 The idle update banner is a row. The footer was the last strip running its own
@@ -615,6 +635,20 @@ does not blink a banner with it, while recovery publishes immediately. Escalatin
 makes a working app look broken. Keep apart only what the user would act on differently —
 "busy" and "not running" are two states because one is a wait and the other is a button.
 
+**A badge states the condition; the line under it states the cause and the next
+step.** A red `Not running` badge with `trace-mcp server not running` printed 190px
+below it is one fact twice, and the second copy is where the advice should have been
+(TRA-490). If the second line cannot say something the badge does not — why this
+happened, or what the reader does about it — it does not get written at all.
+
+**A cause crosses the IPC boundary as a code, never as a sentence.** The main process
+knows *that* the heartbeat is stale; only the renderer knows the language the app is in
+and how much room the line has. `guard-control.ts` used to hand over
+`Heartbeat stale (412s)`, which the renderer printed verbatim in all ten locales and in
+seconds nobody counts. Main returns `'heartbeat_stale'` plus the number; the renderer
+owns the wording and the time formatting. This applies to every status a surface reads
+over IPC or HTTP, not to the guard alone.
+
 **A surface whose every section reads one source states its failure once, at
 surface level.** Five sections that each fetch from the daemon do not produce five
 pieces of information when the daemon is down — they produce one, said five times.
@@ -630,6 +664,46 @@ primitive must not name a cause it cannot know.** `SectionError` renders one
 catalogue string in all ten locales; a section that cannot tell "busy" from "not
 running" must not pick one. Deciding that is the surface's job, because the
 surface is what holds the daemon state.
+
+That corollary was written and then not applied: `SectionError`'s catalogue string
+kept "The daemon may still be indexing" for another five months, and every case the
+daemon-down pane does *not* cover still printed it. On a project last indexed five
+days ago, with the daemon up and the Indexing KPI reading `0 · nothing running`,
+Index and Quality both failed for some third reason and both asserted the one cause
+that was provably false (TRA-662). **A failure with no known cause is a complete
+statement: what could not be loaded, plus the control that tries again.** Retry is
+the next step and it is already in the row; the invented sentence between them only
+had to be wrong once to cost the reader a diagnosis.
+
+**And "at surface level" is not "when the source is down".** The collapse rule above
+was implemented as a daemon-down branch, so the moment the daemon was up and merely
+answering badly, each section went back to speaking for itself — the same duplication
+the rule forbids, reached by the other door. Count the failures, not the source's
+state: **a second failing section collapses them into one line at the top of the
+surface, naming what is missing and retrying all of it with one button, and the
+sections it speaks for do not render.** A heading over a card that only repeats the
+banner is not information. One failure stays in place, where the reader is already
+looking.
+
+**A list dropped into a sentence written for one thing is not a sentence.**
+`Intl.ListFormat` joins the nouns; it cannot inflect the verb around them. The
+collapsed line above, built from the singular string, would have shipped Spanish
+as `No se **pudo** cargar el resumen del índice y el escaneo de calidad` —
+grammar the English original has no way to show, because English marks neither.
+So a sentence that can take a list gets its own catalogue key, plural in every
+language, chosen by the caller (which is the only place that knows the list has
+two entries) — not an i18next `count`, which would demand `_few`/`_many` forms
+from Russian for a distinction it does not make here.
+
+**And a string that opens on `{{what}}` is a sentence you have not read.** German's
+was `{{what}} konnte nicht geladen werden`, so every German error on this surface
+had opened with a lowercase article for five months, and `errorQuality` was
+accusative (`den Qualitätsscan`) inside a passive that takes the nominative —
+both invisible in English review, and neither survivable in the plural. The
+phrasing that does survive is the one Russian and Portuguese already used: a
+lead-in, a colon, then the noun (`Fehler beim Laden: …`). Where an interpolation
+lands at the start of a sentence, check capitalisation and case in that language
+before checking anything else.
 
 **The test for "down" is a shared reducer, not a fresh `!connected`.**
 `deriveDaemonState()` already encodes that a daemon which has not answered *yet*
@@ -1479,6 +1553,8 @@ new evidence.
 | Paths truncate at the **head**, keeping the tail | The tail is the part that distinguishes siblings; tail-truncation hid the only useful segment. |
 | Sidebar file paths use a `dir`/`name` flex split, not `direction: rtl` | The rtl hack mangled any path containing `.` or `_` runs (`.idea/workspace.xml` → `idea/workspace.xml.`). |
 | A file row is **name first, location second** — and the location is the leaf directory, not the path (TRA-503) | A 180–320px row fits one of the two. Location-first spent up to 45% of the row on `src/renderer/tabs/` and truncated the filename anyway: `Settings.tsx` rendered as `src/render…Settings.t…`, losing the extension on every row that overflowed. Quick open already listed a file as name-then-directory; the sidebar and Ask now match it. |
+| A row's location is **hidden, not shortened**, once it stops fitting (TRA-504) | Shrink runs out at a fragment, not at nothing: at 220px `tabs` rendered as `t` beside the count, at 180px as a clipped glyph. Measured over twelve rows, dropping it also returned enough width for four filenames to stop truncating. Which rows qualify is measured (`dir.scrollWidth > dir.clientWidth`), because flexbox has no "whole or nothing" — a `7ch` cap makes short names pay and `direction: rtl` is inert under `unicode-bidi: plaintext`. |
+| The measurement is taken with the location **visible** | Measuring a hidden element reports it as fitting, so a row that kept its class would flip state on every pass. |
 | Whitespace separates sidebar groups, not rules | Fewer lines, clearer grouping; matches the platform sidebar. |
 | Rows are windowed past 100 items | A thousand projects costs what a hundred does. |
 | A surface with extra columns collapses them with a **container query**, trailing column first | At the 640px window minimum the app sidebar already takes 220. Ask's chat rail + inspector left the conversation at zero width and painted the inspector over its own toolbar. The rules must be last in the file — a container query adds no specificity. |

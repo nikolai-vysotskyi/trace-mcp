@@ -64,6 +64,9 @@
   padding-left: 78px;
   -webkit-app-region: drag;
 }
+.ws-stage[data-platform="mac"][data-tabbar="on"] .ws-sidebar-titlebar {
+  padding-left: 12px;
+}
 .ws-sidebar-titlebar > * {
   -webkit-app-region: no-drag;
 }
@@ -275,6 +278,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* …down to nothing, literally: a location that cannot render whole is not
+   shown at all. Shrinking one ran out at a sliver instead — `GraphExplorerGPU.t…
+   t  47` at the 220px default, a clipped glyph fragment at the 180px minimum —
+   and a lone letter beside a right-aligned count reads as a status badge, not
+   as a place (TRA-504). The row's tooltip still carries the full path. Which
+   rows qualify is measured in `whole-location.ts`; CSS cannot see it. */
+.ws-sb-path.is-loc-clipped .dir {
+  display: none;
+}
 
 /* Sidebar empty / loading states. */
 .ws-sb-empty {
@@ -419,6 +431,9 @@
 /* Collapsed sidebar on macOS: the traffic lights land on this header instead. */
 .ws-stage[data-platform="mac"] .ws-shell.is-collapsed .ws-content-head {
   padding-left: 78px;
+}
+.ws-stage[data-platform="mac"][data-tabbar="on"] .ws-shell.is-collapsed .ws-content-head {
+  padding-left: 12px;
 }
 
 .ws-content-body {

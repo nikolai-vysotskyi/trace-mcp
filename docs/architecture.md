@@ -1,7 +1,7 @@
 ---
-title: "trace-mcp Architecture — indexing pipeline, storage, and MCP server internals"
+title: "Architecture — indexing pipeline, storage, and MCP server internals"
 description: "How trace-mcp indexes a codebase into a queryable graph: tree-sitter parsing, SQLite + FTS5 storage, optional LSP enrichment, and the MCP server that serves it all."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # Architecture
@@ -32,6 +32,10 @@ updated: 2026-08-30
 }
 </script>
 ## Indexing pipeline
+
+This page describes how the index is built. What it exposes once built is the
+[tools reference](tools-reference.md); which languages reach which depth of the
+pipeline below is the [language capability matrix](language-matrix.md).
 
 trace-mcp uses a two-pass indexing pipeline:
 
@@ -72,7 +76,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      ▼
 ┌──────────────────────────────────────────┐
 │  Subprojects (auto, post-index)         │
-│  Topology DB (~/.trace-mcp/topology.db) │
+│  Topology DB (~/.trace/topology.db)     │
 │  Auto-detect services per project       │
 │  Contracts · Endpoints · Client calls   │
 │  Cross-service impact edges             │
@@ -85,10 +89,11 @@ When AI is enabled, a background pipeline runs after indexing to generate summar
 
 ### Storage
 
-All state is centralized in `~/.trace-mcp/`:
+All state is centralized in `~/.trace/`, and what goes in it is set by
+[configuration](configuration.md#how-config-works):
 
 ```
-~/.trace-mcp/
+~/.trace/
   .config.json              # global config + per-project settings
   registry.json             # project registry (all added projects)
   topology.db               # cross-service topology + subproject graph
@@ -125,7 +130,7 @@ Plugins are the core extensibility mechanism. There are two types:
 
 ### Language plugins
 
-Located in `src/indexer/plugins/language/`. Each plugin handles symbol extraction for one language using tree-sitter.
+Located in `src/indexer/plugins/language/`. Each plugin handles symbol extraction for one language using tree-sitter. Depth varies by plugin — see the [language capability matrix](language-matrix.md) for which ones resolve import, call and type edges, and [supported frameworks](supported-frameworks.md) for the integration layer on top.
 
 Registered plugins: PHP, TypeScript/JavaScript, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS.
 
@@ -185,6 +190,10 @@ Three module resolvers handle cross-file imports:
 - **PageRank** — symbol importance based on the dependency graph
 - **Hybrid scoring** — combines BM25 + graph signals
 - **Structured assembly** — assembles context within a token budget, maximizing coverage
+
+Alongside the code graph, trace-mcp keeps a second store of *why* the code is
+shaped this way — see [decision memory](decision-memory.md). Writing a new
+plugin for either pass is covered in [development](development.md#adding-a-new-language-plugin).
 
 ---
 

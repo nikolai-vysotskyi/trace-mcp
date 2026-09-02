@@ -186,6 +186,47 @@ describe('rules / analyzeOptimizations', () => {
     });
   });
 
+  // TRA-641: unused-trace-tools decides "did this session use trace-mcp?"
+  // by matching tool_server. After the trace-mcp -> trace rename (TRA-611/
+  // 614), a migrated client logs tool_server: "trace" instead of
+  // "trace-mcp"/"trace_mcp" -- this must still count as trace-mcp usage, or
+  // every migrated session's nav calls (Read/Grep/Glob) get wrongly flagged
+  // as "trace-mcp tools available but never called".
+  describe('unused-trace-tools rule', () => {
+    const traceServerSpellings = ['trace', 'trace-mcp', 'trace_mcp'] as const;
+
+    for (const server of traceServerSpellings) {
+      it(`recognizes tool_server="${server}" as trace-mcp usage -- nav calls are not flagged`, () => {
+        const calls: ToolCallRow[] = [
+          makeToolCall({
+            tool_name: `mcp__${server}__search`,
+            tool_server: server,
+            tool_short_name: 'search',
+            target_file: null,
+          }),
+          makeToolCall({ tool_name: 'Read', tool_short_name: 'Read', tool_server: 'builtin' }),
+          makeToolCall({ tool_name: 'Read', tool_short_name: 'Read', tool_server: 'builtin' }),
+        ];
+
+        const report = analyzeOptimizations(calls, 'all');
+        const hit = report.optimizations.find((o) => o.rule === 'unused-trace-tools');
+        expect(hit).toBeUndefined();
+      });
+    }
+
+    it('flags a session that only uses nav tools with no recognized trace-mcp call', () => {
+      const calls: ToolCallRow[] = [
+        makeToolCall({ tool_name: 'Read', tool_short_name: 'Read', tool_server: 'builtin' }),
+        makeToolCall({ tool_name: 'Read', tool_short_name: 'Read', tool_server: 'builtin' }),
+        makeToolCall({ tool_name: 'Grep', tool_short_name: 'Grep', tool_server: 'builtin' }),
+      ];
+
+      const report = analyzeOptimizations(calls, 'all');
+      const hit = report.optimizations.find((o) => o.rule === 'unused-trace-tools');
+      expect(hit).toBeDefined();
+    });
+  });
+
   describe('semantic-degraded-no-provider rule', () => {
     it('detects search calls whose semantic request silently fell back to lexical', () => {
       const calls: ToolCallRow[] = [

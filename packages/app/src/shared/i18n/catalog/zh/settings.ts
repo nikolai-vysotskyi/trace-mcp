@@ -308,4 +308,8 @@ export const settings = {
   'schema.logging.max_size.label': '日志大小上限（MB）',
 
   'schema.watch.debounce.label': '防抖（毫秒）',
+
+  /* ── Setup wizard ── */
+  'app.setupWizard': "初始设置向导",
+  'app.runSetupWizard': "运行向导…",
 } as const;

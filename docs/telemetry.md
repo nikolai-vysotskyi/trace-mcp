@@ -1,7 +1,7 @@
 ---
 title: "Telemetry & Observability — OpenTelemetry spans for every MCP tool call"
 description: "trace-mcp's pluggable observability bridge emits OpenTelemetry-compatible spans for every AI provider call and every MCP tool call."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # Telemetry & Observability
@@ -33,7 +33,18 @@ updated: 2026-08-30
 </script>
 trace-mcp ships a pluggable observability bridge (P13) that emits
 OpenTelemetry-compatible spans for every AI provider call and every MCP tool
-invocation. The default sink is `noop` — opt-in only.
+invocation. The default sink is `noop` — opt-in only, and switched on with the
+`telemetry.*` keys described in [configuration](configuration.md). Turning it on
+also unlocks the persistent `window` values of `analyze_perf`, which is
+otherwise limited to the current session ([analytics](analytics.md)).
+
+> **This page is about spans you export to your own collector.** It is not the
+> anonymous daily install ping, which is a separate subsystem reporting to the
+> maintainer. That one's published field list — everything it sends and how to
+> turn it off — lives in the README under
+> [Usage telemetry](https://github.com/nikolai-vysotskyi/trace-mcp#usage-telemetry),
+> with the source in `src/telemetry/usage-ping.ts`. Nothing on this page
+> phones home.
 
 ## Quickstart (3 commands)
 
@@ -41,8 +52,8 @@ invocation. The default sink is `noop` — opt-in only.
 # 1. Stand up a local OTLP collector (Jaeger all-in-one).
 cd ops/telemetry && docker compose up -d && cd -
 
-# 2. Enable the bridge for this project (.trace-mcp.json is gitignored).
-cat > .trace-mcp.json <<'JSON'
+# 2. Enable the bridge for this project (.trace.json is gitignored).
+cat > .trace.json <<'JSON'
 {
   "telemetry": {
     "observability": {
@@ -79,7 +90,7 @@ status `ERROR`. The error is rethrown so caller control flow is unchanged.
 
 ## Switching sinks
 
-In `.trace-mcp.json` (or `~/.trace-mcp/.config.json` for a global default):
+In `.trace.json` (or `~/.trace/.config.json` for a global default):
 
 | Goal                         | Config                                                                                              |
 | ---------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -136,7 +147,7 @@ tool-flavoured spans so dashboards stay consistent.
 
 ```bash
 cd ops/telemetry && docker compose down -v
-rm .trace-mcp.json   # if you don't want telemetry enabled going forward
+rm .trace.json   # if you don't want telemetry enabled going forward
 ```
 
 ## Performance

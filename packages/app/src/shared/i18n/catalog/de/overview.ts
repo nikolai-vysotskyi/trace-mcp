@@ -36,7 +36,7 @@ export const overview = {
 
   errorIndexSummary: 'die Index-Übersicht',
   errorCoverage: 'die Abdeckung der Abhängigkeiten',
-  errorQuality: 'den Qualitätsscan',
+  errorQuality: 'der Qualitätsscan',
   errorServices: 'die Dienstliste',
 
   // ── Coverage ──

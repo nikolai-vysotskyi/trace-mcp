@@ -79,7 +79,7 @@ describe('postinstall-control-plane', () => {
     expect(result.status).toBe(0);
     // launcher.env should NOT be written when opt-out is active.
     expect(fs.existsSync(path.join(home, 'launcher.env'))).toBe(false);
-    expect(fs.existsSync(path.join(home, 'bin', 'trace-mcp'))).toBe(false);
+    expect(fs.existsSync(path.join(home, 'bin', 'trace'))).toBe(false);
   });
 
   it('skips dev checkout (.git next to package.json)', () => {
@@ -144,7 +144,7 @@ describe('postinstall-control-plane', () => {
       expect(envContent).toMatch(/^TRACE_MCP_CLI=".*\/dist\/cli\.js"$/m);
       expect(envContent).toMatch(/^TRACE_MCP_VERSION="9\.9\.9-test"$/m);
 
-      const shimName = process.platform === 'win32' ? 'trace-mcp.cmd' : 'trace-mcp';
+      const shimName = process.platform === 'win32' ? 'trace.cmd' : 'trace';
       const shimPath = path.join(home, 'bin', shimName);
       expect(fs.existsSync(shimPath)).toBe(true);
 
@@ -164,6 +164,80 @@ describe('postinstall-control-plane', () => {
       expect(Buffer.compare(shim1, shim2)).toBe(0);
       // Suppress unused-variable lint for result1; the assertion above already ran.
       void result1;
+    } finally {
+      fs.rmSync(fakePkg, { recursive: true, force: true });
+    }
+  });
+
+  it('migrates a pre-existing ~/.trace-mcp home dir to ~/.trace and preserves a legacy bin symlink', () => {
+    // No TRACE_MCP_DATA_DIR override this time — exercise the real default
+    // resolution (~/.trace, migrated from ~/.trace-mcp) instead of pinning it.
+    const fakePkg = mkTmp('trace-mcp-fakepkg-');
+    try {
+      fs.mkdirSync(path.join(fakePkg, 'scripts'), { recursive: true });
+      fs.mkdirSync(path.join(fakePkg, 'hooks'), { recursive: true });
+      fs.mkdirSync(path.join(fakePkg, 'dist'), { recursive: true });
+      fs.copyFileSync(SCRIPT_PATH, path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs'));
+      for (const name of [
+        'trace-mcp-launcher.sh',
+        'trace-mcp-launcher.cmd',
+        'trace-mcp-launcher.ps1',
+      ]) {
+        const src = path.join(REPO_ROOT, 'hooks', name);
+        if (fs.existsSync(src)) fs.copyFileSync(src, path.join(fakePkg, 'hooks', name));
+      }
+      fs.writeFileSync(path.join(fakePkg, 'dist', 'cli.js'), '// fake\n');
+      fs.writeFileSync(
+        path.join(fakePkg, 'package.json'),
+        JSON.stringify({ name: 'trace-mcp', version: '9.9.9-test' }),
+      );
+
+      // Pre-existing ~/.trace-mcp with a marker file, as a real pre-TRA-611 install would have.
+      const legacyHome = path.join(home, '.trace-mcp');
+      fs.mkdirSync(legacyHome, { recursive: true });
+      fs.writeFileSync(path.join(legacyHome, 'registry.json'), '{"marker":true}');
+
+      const fakeScript = path.join(fakePkg, 'scripts', 'postinstall-control-plane.mjs');
+      execFileSync(process.execPath, [fakeScript], {
+        // tests/setup/isolate-home.ts pins TRACE_MCP_DATA_DIR for the whole
+        // worker process so the suite never touches the real ~/.trace — this
+        // test exercises the *default* (unoverridden) resolution, so clear
+        // both env vars the script accepts as an override (see global.ts).
+        // os.homedir() reads USERPROFILE on Windows, not HOME — set both so
+        // the child resolves to the same fake home regardless of platform.
+        env: buildEnv({
+          HOME: home,
+          USERPROFILE: home,
+          CI: 'true',
+          TRACE_MCP_DATA_DIR: undefined,
+          TRACE_MCP_HOME: undefined,
+        }),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+      });
+
+      const newHome = path.join(home, '.trace');
+      // The rename carried the marker file over — not a copy that left a stale duplicate.
+      expect(fs.readFileSync(path.join(newHome, 'registry.json'), 'utf-8')).toBe('{"marker":true}');
+      // Old data doesn't linger behind at the legacy path — only the compat symlink (below) does.
+      expect(fs.existsSync(path.join(legacyHome, 'registry.json'))).toBe(false);
+
+      const shimName = process.platform === 'win32' ? 'trace.cmd' : 'trace';
+      expect(fs.existsSync(path.join(newHome, 'bin', shimName))).toBe(true);
+
+      // Durable marker: a later `trace init`/postinstall run must be able to
+      // retry the compat symlink below even if this run's attempt had failed,
+      // so this has to outlive the one-shot in-process migration flag.
+      expect(fs.existsSync(path.join(newHome, '.migrated-from-trace-mcp'))).toBe(true);
+
+      // Legacy absolute path a pre-rename MCP client config still points at.
+      const legacyShimName = process.platform === 'win32' ? 'trace-mcp.cmd' : 'trace-mcp';
+      const legacyShimPath = path.join(legacyHome, 'bin', legacyShimName);
+      const legacyStat = fs.lstatSync(legacyShimPath);
+      expect(legacyStat.isSymbolicLink()).toBe(true);
+      expect(fs.realpathSync(legacyShimPath)).toBe(
+        fs.realpathSync(path.join(newHome, 'bin', shimName)),
+      );
     } finally {
       fs.rmSync(fakePkg, { recursive: true, force: true });
     }

@@ -17,6 +17,7 @@ import {
   startDaemonLogRotation,
   writeOwnDaemonPidFile,
 } from './daemon/lifecycle.js';
+import { recordDaemonCleanStop, recordDaemonStart } from './telemetry/usage-ping.js';
 
 if (process.argv.includes('serve') || process.argv.length === 2) {
   hardenStdio();
@@ -340,14 +341,21 @@ async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig
 const program = new Command();
 
 program
-  .name('trace-mcp')
+  .name('trace')
   .description('Framework-Aware Code Intelligence for Laravel/Vue/Inertia/Nuxt')
   .version(PKG_VERSION, '-v, --version');
 
 program
   .command('serve', { isDefault: true })
   .description('Start MCP server (stdio transport)')
-  .action(async () => {
+  .option(
+    '--preset <name>',
+    'Tool preset (e.g. minimal, review, dev, security, design, perf, architecture, standard, full)',
+  )
+  .action(async (opts: { preset?: string } = {}) => {
+    if (opts.preset) {
+      process.env.TRACE_MCP_PRESET = opts.preset;
+    }
     // Keep a stray unhandled rejection / uncaught exception from tearing down
     // the whole MCP session — log it and stay alive instead (see #202-adjacent
     // "disconnects/crashes" reports).
@@ -518,7 +526,14 @@ program
     '--allow-remote',
     'Permit a non-loopback --host. The daemon is unauthenticated — only use behind your own auth.',
   )
-  .action(async (opts: { port: string; host: string; allowRemote?: boolean }) => {
+  .option(
+    '--preset <name>',
+    'Default tool preset for daemon sessions (e.g. minimal, review, dev, security, design, perf, architecture, standard, full)',
+  )
+  .action(async (opts: { port: string; host: string; allowRemote?: boolean; preset?: string }) => {
+    if (opts.preset) {
+      process.env.TRACE_MCP_PRESET = opts.preset;
+    }
     // A single unhandled rejection must not take down the daemon serving every
     // registered project — log and stay alive.
     installProcessSafetyNet('serve-http');
@@ -2893,6 +2908,8 @@ program
       // process that is already on its way out (TRA-556).
       clearInterval(pidReassert);
       clearOwnDaemonPidFile();
+      // Reaching here at all is what makes this stop "clean" (TRA-671).
+      recordDaemonCleanStop();
       httpServer.close(() => process.exit(0));
     };
     process.on('SIGINT', shutdown);
@@ -3085,6 +3102,13 @@ program
       // without ever having touched daemon.pid, so a failed spawn can no longer
       // convince the app's watchdog that the live daemon died.
       writeOwnDaemonPidFile();
+      // TRA-671 counts the start here for the same reason, and not earlier in
+      // this action: a process that loses the bind race, or one that exits from
+      // the auto-update check above, never becomes the daemon. Counting it as a
+      // start would also leave the "running" flag set, so the next real start
+      // would report an unclean stop that never happened — and the bind race is
+      // exactly the situation this counter exists to measure.
+      recordDaemonStart();
       // Self-heal: readDaemonPid() unlinks the file whenever it names a dead
       // process, so a single poisoning event used to disarm the guard for the
       // rest of this daemon's life. Re-assert it periodically; the write is

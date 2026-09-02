@@ -49,6 +49,7 @@ import { Notebook } from './tabs/Notebook';
 import { ProjectOverview } from './tabs/ProjectOverview';
 import { Settings } from './tabs/Settings';
 import { type Appearance, useTheme } from './theme.js';
+import { useWholeLocation } from './whole-location.js';
 import { Workspace } from './workspace/Workspace';
 
 // The Ask tab is the only thing that pulls react-markdown + remark-gfm in, and
@@ -286,6 +287,9 @@ function ProjectFileExplorer({
   const [selected, setSelected] = useState<string | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; path: string } | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  // A row drops its location rather than shrink it to a sliver (TRA-504). The
+  // sidebar is drag-resizable, so this re-measures on every width change too.
+  useWholeLocation(listRef);
   const LIMIT = 30;
 
   // Debounce scope to avoid fetching on every keystroke
@@ -636,21 +640,28 @@ function MenuContent({
   tab,
   appearance,
   onAppearanceChange,
+  onOpenSetupWizard,
 }: {
   tab: GlobalTab;
   appearance: Appearance;
   onAppearanceChange: (next: Appearance) => void;
+  onOpenSetupWizard?: () => void;
 }) {
   return (
     <>
       {tab === 'workspace' && <Workspace />}
       {tab === 'clients' && <Clients />}
       {tab === 'settings' && (
-        <Settings appearance={appearance} onAppearanceChange={onAppearanceChange} />
+        <Settings
+          appearance={appearance}
+          onAppearanceChange={onAppearanceChange}
+          onOpenSetupWizard={onOpenSetupWizard}
+        />
       )}
     </>
   );
 }
+
 
 // ── Project content ───────────────────────────────────────────
 function ProjectContent({
@@ -1018,15 +1029,23 @@ export function App() {
   );
   const toggleLivesInSidebar = !sidebarCollapsed && hasInsetTitleBar();
 
+  const [tabCount, setTabCount] = useState<number>(0);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onTabListChanged) return;
+    return api.onTabListChanged((tabs) => setTabCount(tabs.length));
+  }, []);
+
   return (
     <div
       className="ws-stage flex flex-col h-screen"
       data-mode={theme}
       data-platform={hasInsetTitleBar() ? 'mac' : 'other'}
+      data-tabbar={tabCount > 1 ? 'on' : 'off'}
     >
       {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
       {quickOpen && <QuickOpen items={quickOpenItems()} onClose={() => setQuickOpen(false)} />}
-      {/* Windows custom tab bar (hidden on macOS — native tabs handle it) */}
       <WindowTabBar />
 
       <div className={`ws-shell${sidebarCollapsed ? ' is-collapsed' : ''}`}>
@@ -1167,6 +1186,7 @@ export function App() {
                   tab={globalTab}
                   appearance={appearance}
                   onAppearanceChange={setAppearance}
+                  onOpenSetupWizard={() => setShowOnboarding(true)}
                 />
               </ErrorBoundary>
             )}

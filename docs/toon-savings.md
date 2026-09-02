@@ -1,7 +1,7 @@
 ---
 title: "TOON Output Format — Measured Token Savings on Real Tool Calls"
 description: "Real-world token measurements for trace-mcp's TOON (Token-Oriented Object Notation) output format across tabular MCP tool responses."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # TOON Token Savings — Measured
@@ -33,7 +33,11 @@ updated: 2026-08-30
 </script>
 This document captures real-world token measurements for the TOON output
 format wired across trace-mcp tools, plus the independent `search_text`
-`grouping: "by_file"` reshape.
+`grouping: "by_file"` reshape. Encoding is one of several levers on response
+size — presets, `compact_schemas` and the reshapes below are collected in [how
+to cut Claude Code token usage](reduce-claude-code-token-usage.md), and the
+end-to-end cost of a real task is measured on somebody else's repositories in
+the [PR review context benchmark](pr-context-benchmark.md).
 
 ## TL;DR — which tools support TOON
 
@@ -49,7 +53,10 @@ net win on representative payloads:
 | `get_feature_context` |  **+7.9%**       | Mostly flat items; modest gain.                         |
 
 For every other tool TOON is off by default and the parameter is not
-accepted in the schema.
+accepted in the schema — the per-tool `toon` parameter is listed with each
+tool in the [tools reference](tools-reference.md). To see what the encoding is
+worth on your own traffic rather than on this corpus, `get_real_savings` and
+`get_optimization_report` report it per session ([analytics](analytics.md)).
 
 ## Why we removed TOON from 4 tools
 

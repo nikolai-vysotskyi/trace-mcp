@@ -263,6 +263,8 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
         TRACE_MCP_PS_BIN: opts.runningBundle
           ? writePsStub(tmp, opts.runningBundle)
           : '/usr/bin/false',
+        // Silence Spotlight queries so tests never resolve bundles on the host.
+        TRACE_MCP_MDFIND_BIN: '/usr/bin/false',
         // Confine the orphan-staging sweep to this fixture. Without it the
         // script would reach into the real /Applications of whatever machine
         // runs the suite.
@@ -394,17 +396,13 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
     expect(fs.readFileSync(path.join(systemDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
       '3.5.2',
     );
-    // The other copy is an install too, so it is re-staged rather than left
-    // holding the corrupt leftover: same version, and a zip that verifies.
-    expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending-version'), 'utf-8')).toBe(
-      '3.5.2',
-    );
-    expect(fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending.zip')).toString()).not.toBe(
-      'orphan',
-    );
-    expect(
-      fs.readFileSync(path.join(fx.installDir, '.trace-mcp-pending.sha256'), 'utf-8'),
-    ).not.toBe('f'.repeat(64));
+    // The other copy is not running, so it is updated directly in place
+    // rather than left holding corrupt leftover staging: bundle moved to 3.5.2,
+    // and the old orphan staging files are cleaned up.
+    expect(readBundleVersion(fx.appPath)).toBe('3.5.2');
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.zip'))).toBe(false);
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending.sha256'))).toBe(false);
+    expect(fs.existsSync(path.join(fx.installDir, '.trace-mcp-pending-version'))).toBe(false);
   });
 
   /* Found on the founder's machine: `/Applications/trace-mcp.app` sat on 3.3.0

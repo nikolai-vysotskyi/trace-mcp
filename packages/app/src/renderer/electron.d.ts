@@ -31,6 +31,7 @@ declare global {
       retryDaemonSetup?: () => Promise<DaemonSetupState>;
       onDaemonSetupState?: (cb: (state: DaemonSetupState) => void) => () => void;
       detectMcpClients: () => Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]>;
+      guessFirstProject: () => Promise<{ path: string; name: string } | null>;
       getMcpClientStatuses: (
         scope?: 'global' | 'project',
       ) => Promise<{
@@ -39,7 +40,7 @@ declare global {
         statuses?: Array<{
           client: string;
           configPath: string | null;
-          status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+          status: 'missing' | 'up_to_date' | 'stale' | 'legacy' | 'unmanageable' | 'unknown';
           staleReason?: string;
           level?: 'base' | 'standard' | 'max' | null;
         }>;
@@ -107,7 +108,8 @@ declare global {
           toolCallsFailed?: number;
           quietSeconds?: number;
           bypassUntil?: number;
-          reason?: string;
+          reason?: 'heartbeat_stale' | 'channel_quiet' | 'never_started';
+          reasonSeconds?: number;
           initializedAt?: number;
           coachExpiresAt?: number;
           autoPromoted?: boolean;

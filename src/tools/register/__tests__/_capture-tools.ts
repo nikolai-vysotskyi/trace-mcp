@@ -21,6 +21,7 @@ import { registerProjectsTools } from '../projects.js';
 import { registerQualityTools } from '../quality.js';
 import { registerRefactoringTools } from '../refactoring.js';
 import { registerSessionTools } from '../session.js';
+import { registerStateTools } from '../state.js';
 
 export interface CapturedTool {
   name: string;
@@ -55,6 +56,18 @@ export function baseCtx(overrides: Record<string, unknown> = {}): ServerContext 
     reranker: null,
     rankingLedger: null,
     decisionStore: {},
+    stateEngine: {
+      onStateChange: () => () => {},
+      initState: () => ({}),
+      getState: () => null,
+      patchState: () => ({ success: true }),
+      createCheckpoint: () => ({ id: 1 }),
+      rollbackToCheckpoint: () => ({ success: true }),
+      addDeadEnd: () => ({ success: true }),
+      listStates: () => [],
+      deleteState: () => true,
+      close: () => {},
+    },
     telemetrySink: null,
     topoStore: null,
     progress: null,
@@ -117,6 +130,7 @@ export function captureAllTools(ctxOverrides: Record<string, unknown> = {}): Cap
   registerMemoryTools(s, ctx);
   registerRefactoringTools(s, ctx);
   registerKnowledgeTools(s, ctx);
+  registerStateTools(s, ctx);
   registerSessionTools(s, mctx);
   return captured;
 }

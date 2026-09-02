@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { distance as levenshtein } from 'fastest-levenshtein';
+import { filePatternToLike } from './fts.js';
 
 // ─── Trigram utilities ─────────────────────────────────────
 
@@ -127,7 +128,7 @@ export function fuzzySearch(
     }
     if (filePattern) {
       filterConditions.push('f.path LIKE ?');
-      filterParams.push(`%${filePattern}%`);
+      filterParams.push(filePatternToLike(filePattern));
     }
   }
 

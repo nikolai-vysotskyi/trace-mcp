@@ -18,6 +18,7 @@ const pkg = JSON.parse(readFileSync(path.resolve(process.cwd(), 'package.json'),
 const MAIN_RUNTIME_DEPS = [
   'electron-updater', // main process, Windows update path
   'i18next', // main process menu/tray/dialog strings (react-i18next is renderer-only)
+  'jsonc-parser', // shared/mcp-detector, reached from the detect-mcp-clients handler
 ];
 
 describe('packaged production dependencies', () => {

@@ -167,6 +167,23 @@ describe('updateClaudeMd', () => {
     expect(written).toContain('Keep this');
   });
 
+  it('preserves an unrelated user heading that merely starts with the word "Trace"', () => {
+    // Regression test: the orphan-content cleanup used to match ANY heading
+    // starting with "trace"/"trace-mcp" (a bare word-boundary check), which
+    // deleted unrelated user-owned sections like "## Trace logging policy".
+    // It must only match our own generated "trace[-mcp] Tool Routing" heading.
+    const existing = `# Project\n\n## Trace logging policy\n\nDo not log secrets.\n\n${START_MARKER}\nold\n${END_MARKER}\n`;
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readFileSync.mockReturnValue(existing);
+
+    const result = updateClaudeMd('/project', {});
+    expect(result.action).toBe('updated');
+
+    const written = String(mockFs.writeFileSync.mock.calls[0][1]);
+    expect(written).toContain('## Trace logging policy');
+    expect(written).toContain('Do not log secrets.');
+  });
+
   it('returns already_configured when block is identical', () => {
     // We need the actual block content — simulate by writing then re-reading
     mockFs.existsSync.mockReturnValue(false);
