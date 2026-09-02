@@ -294,10 +294,20 @@ const EVAL_SCRIPT = String.raw`
       return false;
     }
 
+    // The scroll hint is visible text that has to be read, and it is the one
+    // element the sweep could never see: it is aria-hidden (correct — a screen
+    // reader navigates the region directly and does not scroll it) and it is
+    // display:none until the region actually overflows. Both skips below would
+    // drop it, so reveal it and exempt it. aria-hidden marks decoration for the
+    // AT tree; it does not exempt painted text from 1.4.3.
+    for (const hint of document.querySelectorAll('.scroll-hint')) {
+      hint.classList.add('is-visible');
+    }
+
     const results = [];
     const allElements = Array.from(document.querySelectorAll('*'));
     for (const el of allElements) {
-      if (isAriaHidden(el)) continue;
+      if (isAriaHidden(el) && !el.classList.contains('scroll-hint')) continue;
       if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'NOSCRIPT' || el.tagName === 'SVG' || el.tagName === 'HEAD' || el.tagName === 'HTML') continue;
 
       let hasDirectText = false;
