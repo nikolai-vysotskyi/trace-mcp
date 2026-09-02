@@ -790,15 +790,20 @@ with `mcp__trace__`.
 
 ### Multica workspace agents
 
-Multica agents don't run `trace-mcp init` — each agent's MCP wiring is set directly with `multica agent update --mcp-config-file <json>` (or `agent create --mcp-config-file` on first setup), scoped to that one agent. Every agent inherits a runtime-provided `trace-mcp` entry that runs the unconfigured default preset (`minimal`); to give a role its own preset, override the `trace-mcp` entry by name — the agent's own `mcp_config` always wins that collision:
+Multica agents don't run `trace-mcp init` — each agent's MCP wiring is set directly with `multica agent update --mcp-config-file <json>` (or `agent create --mcp-config-file` on first setup), scoped to that one agent. An agent with no `mcp_config` inherits the machine's own MCP setup, so its preset is whatever `tools.preset` says in `~/.trace-mcp/.config.json` (`standard` unless you changed it).
+
+Setting `mcp_config` does **not** override the inherited `trace-mcp` entry by name — Multica launches that agent with `--strict-mcp-config`, so it gets *only* the servers you list. Everything else the machine provides (user-scope servers, plugin servers, hosted connectors) disappears for that agent. List every server the role still needs, not just `trace-mcp`:
 
 ```json
 {
   "mcpServers": {
-    "trace-mcp": { "command": "trace-mcp", "args": ["--preset", "dev"] }
+    "trace-mcp": { "command": "trace-mcp", "args": ["serve", "--preset", "dev"] },
+    "context7": { "command": "context7-mcp", "args": [] }
   }
 }
 ```
+
+`--preset` is an option of the `serve` subcommand — `args` without `serve` starts nothing.
 
 ```bash
 multica agent update <agent-id> --mcp-config-file ./trace-mcp-dev.json
@@ -817,6 +822,8 @@ The role → preset matrix used in the trace-mcp workspace itself (adjust to you
 | Performance analysis | `perf` | `analyze_perf`, complexity/coupling trends, risk hotspots |
 
 `multica agent update --mcp-config*` **replaces** the agent's entire `mcp_config` — it does not merge. If the agent already has other private MCP servers configured, read them back first (only a workspace owner/admin can; `mcp_config` reads redacted for agent actors) and include them in the new payload, or the update will silently remove them.
+
+If you can't read it back (agent actors can't), you can still recover the *set* of servers a past run had from Claude Code's own connection logs on the machine that ran it — `~/Library/Caches/claude-cli-nodejs/<encoded-workdir>/mcp-logs-<server>/` has one directory per connected server. Under `--strict-mcp-config` that listing is exactly the config's server set; only each server's argv is still unknown.
 
 ---
 
