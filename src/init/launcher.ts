@@ -4,17 +4,23 @@
  * from a config file written here, with a probe fallback — so node upgrades
  * (nvm/Herd/Volta/fnm) don't break MCP registration.
  *
- * Layout under $TRACE_MCP_HOME (default ~/.trace-mcp):
- *   bin/trace-mcp     — bash shim, copied from hooks/trace-mcp-launcher.sh
+ * Layout under $TRACE_MCP_HOME (default ~/.trace):
+ *   bin/trace         — bash shim, copied from hooks/trace-mcp-launcher.sh
  *   launcher.env      — KV config (TRACE_MCP_NODE, TRACE_MCP_CLI, TRACE_MCP_VERSION)
  *   launcher.log      — rolling resolution diagnostics written by the shim
+ *
+ * A pre-TRA-611 install also gets `~/.trace-mcp/bin/trace-mcp` preserved as a
+ * symlink to the above — see installLegacyBinCompat().
  */
 
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { withPs1Bom } from './ps1-bom.js';
+import { atomicWriteString } from '../utils/atomic-write.js';
+import { isSymlink } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
+import { LEGACY_MIGRATION_MARKER, TRACE_MCP_HOME } from '../global.js';
 import type { InitStepResult } from './types.js';
 import { LAUNCHER_VERSION } from './types.js';
 
@@ -33,7 +39,7 @@ interface LauncherArtifact {
 
 const ARTIFACTS: LauncherArtifact[] = IS_WINDOWS
   ? [
-      { src: 'trace-mcp-launcher.cmd', dest: 'trace-mcp.cmd', mode: 0o755, isPrimaryShim: true },
+      { src: 'trace-mcp-launcher.cmd', dest: 'trace.cmd', mode: 0o755, isPrimaryShim: true },
       {
         src: 'trace-mcp-launcher.ps1',
         dest: 'trace-mcp-launcher.ps1',
@@ -41,12 +47,18 @@ const ARTIFACTS: LauncherArtifact[] = IS_WINDOWS
         isPrimaryShim: false,
       },
     ]
-  : [{ src: 'trace-mcp-launcher.sh', dest: 'trace-mcp', mode: 0o755, isPrimaryShim: true }];
+  : [{ src: 'trace-mcp-launcher.sh', dest: 'trace', mode: 0o755, isPrimaryShim: true }];
+
+// Legacy (pre-TRA-611) destination basenames, kept only to install the
+// `~/.trace-mcp/bin/`-legacy compat symlinks — see installLegacyBinCompat().
+const LEGACY_PRIMARY_DEST = IS_WINDOWS ? 'trace-mcp.cmd' : 'trace-mcp';
 
 export function getLauncherDir(): string {
+  // Distinct from TRACE_MCP_DATA_DIR (src/global.ts) — the Electron main
+  // process resolves the same directory via this env var; keep it as-is.
   const envDir = process.env.TRACE_MCP_HOME?.trim();
   if (envDir) return envDir;
-  return path.join(os.homedir(), '.trace-mcp');
+  return path.join(os.homedir(), '.trace');
 }
 
 export function getLauncherPath(): string {
@@ -107,14 +119,16 @@ export function readInstalledLauncherVersion(): string | null {
 }
 
 function ensureDir(dir: string): void {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-function atomicWrite(filePath: string, content: string, mode: number): void {
-  ensureDir(path.dirname(filePath));
-  const tmp = `${filePath}.tmp.${process.pid}.${Date.now()}`;
-  fs.writeFileSync(tmp, content, { mode });
-  fs.renameSync(tmp, filePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    if (!IS_WINDOWS) {
+      try {
+        fs.chmodSync(dir, 0o700);
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
 }
 
 /**
@@ -149,7 +163,10 @@ export function writeLauncherConfig(cfg: LauncherConfig): void {
     `TRACE_MCP_VERSION=${quoteEnvValue(cfg.version)}`,
     '',
   ];
-  atomicWrite(getLauncherConfigPath(), lines.join('\n'), 0o600);
+  atomicWriteString(getLauncherConfigPath(), lines.join('\n'), {
+    mode: 0o600,
+    rejectSymlinks: true,
+  });
 }
 
 /**
@@ -181,6 +198,30 @@ export function readLauncherConfig(): Partial<LauncherConfig> {
 export interface InstallLauncherOpts {
   dryRun?: boolean;
   force?: boolean;
+}
+
+/**
+ * Preserve `~/.trace-mcp/bin/trace-mcp` (`trace-mcp.cmd` on Windows) as a
+ * symlink to the new `~/.trace/bin/trace` shim, so a client or script still
+ * pointed at the pre-TRA-611 absolute path keeps working after the rename.
+ * Gated on LEGACY_MIGRATION_MARKER (a durable file left in the new home the
+ * moment the rename succeeds) rather than the one-shot
+ * TRACE_MCP_HOME_MIGRATED flag: that flag is only true for the single process
+ * that performed the rename, so a symlink failure there (permissions,
+ * dry-run) would otherwise never get a second chance. The marker survives
+ * restarts, so every later `trace init`/`upgrade` retries until it succeeds.
+ */
+function installLegacyBinCompat(): void {
+  if (!fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER))) return;
+  const legacyDir = path.join(os.homedir(), '.trace-mcp', 'bin');
+  const legacyPath = path.join(legacyDir, LEGACY_PRIMARY_DEST);
+  try {
+    if (isSymlink(legacyPath) || fs.existsSync(legacyPath)) return;
+    ensureDir(legacyDir);
+    fs.symlinkSync(getLauncherPath(), legacyPath);
+  } catch {
+    /* best-effort — the durable marker means the next `trace init` retries */
+  }
 }
 
 /**
@@ -223,11 +264,21 @@ export function installLauncher(opts: InstallLauncherOpts): InitStepResult {
     // Prepend a UTF-8 BOM for .ps1 artifacts so Windows PowerShell 5.1 decodes
     // them as UTF-8 regardless of the machine's system codepage (cp1251 etc.).
     const content = withPs1Bom(artifactDest, fs.readFileSync(src));
-    const tmp = `${artifactDest}.tmp.${process.pid}.${Date.now()}`;
-    fs.writeFileSync(tmp, content, { mode: a.mode });
-    fs.renameSync(tmp, artifactDest);
-    if (!IS_WINDOWS) fs.chmodSync(artifactDest, a.mode);
+    atomicWriteString(artifactDest, content.toString('utf-8'), {
+      mode: a.mode,
+      rejectSymlinks: true,
+      trailingNewline: false,
+    });
+    if (!IS_WINDOWS) {
+      try {
+        fs.chmodSync(artifactDest, a.mode);
+      } catch {
+        /* best-effort */
+      }
+    }
   }
+
+  installLegacyBinCompat();
 
   return {
     target: dest,

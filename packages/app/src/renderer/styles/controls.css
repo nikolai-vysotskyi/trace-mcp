@@ -366,8 +366,16 @@
 
 /* ============================================================================
    BADGE — .lx-badge
-   Capsule, 11px/500, sentence case. Tinted fill at 18% with the SATURATED HUE
-   as the label colour. Never white-on-a-light-fill.
+   Capsule, 11px/500, sentence case. Never white-on-a-light-fill.
+
+   The tinted fill is the hue at 18% mixed into --surface, OPAQUE — not the hue
+   at 18% alpha. The --badge-*-fg labels clear 4.5:1 over that fill with about
+   0.3 of margin, so with a translucent fill the ratio moved with whatever the
+   badge happened to sit on and the margin was gone before the badge left the
+   plain surface: measured 4.37–4.49 over --surface-sunken, 4.37–4.45 over a
+   hovered row, 1.0–1.9 over an accent selection fill. An opaque fill paints the
+   same pixels on --surface and pins the ratio everywhere else. A badge is
+   content, and content does not composite with its backing (TRA-635).
    Not focusable, so 24px does not apply — 18px keeps it inside a 24px row.
    ============================================================================ */
 .lx-badge {
@@ -394,27 +402,27 @@
   color: var(--badge-neutral-fg);
 }
 .lx-badge.t-accent {
-  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
   color: var(--badge-accent-fg);
 }
 .lx-badge.t-green {
-  background: color-mix(in oklab, var(--status-green) 18%, transparent);
+  background: color-mix(in srgb, var(--status-green) 18%, var(--surface));
   color: var(--badge-green-fg);
 }
 .lx-badge.t-orange {
-  background: color-mix(in oklab, var(--status-orange) 18%, transparent);
+  background: color-mix(in srgb, var(--status-orange) 18%, var(--surface));
   color: var(--badge-orange-fg);
 }
 .lx-badge.t-red {
-  background: color-mix(in oklab, var(--status-red) 18%, transparent);
+  background: color-mix(in srgb, var(--status-red) 18%, var(--surface));
   color: var(--badge-red-fg);
 }
 .lx-badge.t-blue {
-  background: color-mix(in oklab, var(--status-blue) 18%, transparent);
+  background: color-mix(in srgb, var(--status-blue) 18%, var(--surface));
   color: var(--badge-blue-fg);
 }
 .lx-badge.t-purple {
-  background: color-mix(in oklab, var(--status-purple) 18%, transparent);
+  background: color-mix(in srgb, var(--status-purple) 18%, var(--surface));
   color: var(--badge-purple-fg);
 }
 

@@ -3,13 +3,15 @@
 /**
  * postinstall hook for `npm install -g trace-mcp`.
  *
- * Self-heals the control plane so users don't have to run `trace-mcp init`
+ * Self-heals the control plane so users don't have to run `trace init`
  * manually after each install or upgrade. Specifically:
  *
- *   1. Writes ~/.trace-mcp/launcher.env with absolute Node + dist/cli.js paths.
- *   2. Installs the launcher shim at ~/.trace-mcp/bin/trace-mcp (POSIX) or
- *      ~/.trace-mcp/bin/trace-mcp.cmd (Windows) by copying from hooks/.
- *   3. On macOS: installs/refreshes ~/Library/LaunchAgents/com.trace-mcp.server.plist
+ *   1. Migrates a pre-TRA-611 ~/.trace-mcp/ to ~/.trace/, if present.
+ *   2. Writes ~/.trace/launcher.env with absolute Node + dist/cli.js paths.
+ *   3. Installs the launcher shim at ~/.trace/bin/trace (POSIX) or
+ *      ~/.trace/bin/trace.cmd (Windows) by copying from hooks/, and preserves
+ *      ~/.trace-mcp/bin/trace-mcp as a compat symlink when (1) migrated.
+ *   4. On macOS: installs/refreshes ~/Library/LaunchAgents/com.trace-mcp.server.plist
  *      and bootstraps it with launchd. Kickstarts the service if it was
  *      already loaded so the new binary is picked up.
  *
@@ -18,7 +20,7 @@
  *   - Dev checkouts (.git next to package.json) and `npm link` symlinks are skipped.
  *   - TRACE_MCP_MANAGED_BY=launchd: skip (we're being run by launchd, don't recurse).
  *   - CI=true: skip launchd bootstrap (don't pollute CI machines).
- *   - All errors swallowed and logged to ~/.trace-mcp/postinstall.log.
+ *   - All errors swallowed and logged to ~/.trace/postinstall.log.
  *   - Daemon is NOT auto-started; only kickstarted if it was already loaded.
  *
  * Runs after preflight-native.mjs and postinstall-app.mjs in the postinstall
@@ -51,6 +53,42 @@ const __dirname = path.dirname(__filename);
 // scripts/postinstall-control-plane.mjs → package root is two levels up.
 const PKG_ROOT = path.resolve(__dirname, '..');
 
+// Mirrors src/global.ts::LEGACY_MIGRATION_MARKER — MUST match (TRA-611).
+const LEGACY_MIGRATION_MARKER = '.migrated-from-trace-mcp';
+
+// Mirrors src/global.ts::migrateLegacyHomeDir — MUST match (TRA-611). A
+// same-volume rename is atomic and, unlike a copy, leaves nothing stale
+// behind. This script runs before the CLI itself does (postinstall fires
+// immediately after `npm install`), so it has to perform the same rename
+// rather than relying on src/global.ts's own migration to have happened yet.
+function isSymlink(targetPath) {
+  try {
+    return fs.lstatSync(targetPath).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+function migrateLegacyHomeDir(target, legacy) {
+  try {
+    if (fs.existsSync(target)) return false;
+    // A dangling symlink at `target` fails existsSync (it follows the link,
+    // finds nothing) but must still block the rename — isSymlink uses lstat,
+    // which doesn't follow it.
+    if (isSymlink(target) || isSymlink(legacy)) return false;
+    if (!fs.statSync(legacy).isDirectory()) return false;
+    fs.renameSync(legacy, target);
+    try {
+      fs.writeFileSync(path.join(target, LEGACY_MIGRATION_MARKER), '');
+    } catch {
+      /* best-effort — worst case a later run just doesn't retry the symlink */
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const TRACE_MCP_HOME = (() => {
   const override = process.env.TRACE_MCP_DATA_DIR || process.env.TRACE_MCP_HOME;
   if (override && override.length > 0) {
@@ -59,7 +97,11 @@ const TRACE_MCP_HOME = (() => {
       : override;
     return path.resolve(expanded);
   }
-  return path.join(os.homedir(), '.trace-mcp');
+  const homedir = os.homedir();
+  const target = path.join(homedir, '.trace');
+  const legacy = path.join(homedir, '.trace-mcp');
+  migrateLegacyHomeDir(target, legacy);
+  return target;
 })();
 
 const LOG_PATH = path.join(TRACE_MCP_HOME, 'postinstall.log');
@@ -159,14 +201,18 @@ function writeLauncherEnv(nodePath, cliPath, version) {
   atomicWrite(LAUNCHER_ENV_PATH, lines.join('\n'), 0o600);
 }
 
+// Legacy (pre-TRA-611) primary shim basename — used only to install the
+// `~/.trace-mcp/bin/`-legacy compat symlink, mirrors src/init/launcher.ts.
+const LEGACY_PRIMARY_DEST = IS_WINDOWS ? 'trace-mcp.cmd' : 'trace-mcp';
+
 function installLauncherShim() {
   // Windows ships .cmd + .ps1; POSIX a single bash script.
   const artifacts = IS_WINDOWS
     ? [
-        { src: 'trace-mcp-launcher.cmd', dest: 'trace-mcp.cmd' },
+        { src: 'trace-mcp-launcher.cmd', dest: 'trace.cmd' },
         { src: 'trace-mcp-launcher.ps1', dest: 'trace-mcp-launcher.ps1' },
       ]
-    : [{ src: 'trace-mcp-launcher.sh', dest: 'trace-mcp' }];
+    : [{ src: 'trace-mcp-launcher.sh', dest: 'trace' }];
 
   ensureDir(LAUNCHER_DIR);
   for (const a of artifacts) {
@@ -180,6 +226,30 @@ function installLauncherShim() {
     fs.writeFileSync(tmp, content, { mode: 0o755 });
     fs.renameSync(tmp, destPath);
     if (!IS_WINDOWS) fs.chmodSync(destPath, 0o755);
+  }
+}
+
+/**
+ * Preserve `~/.trace-mcp/bin/trace-mcp` as a symlink to the new
+ * `~/.trace/bin/trace` shim, mirroring src/init/launcher.ts's
+ * installLegacyBinCompat(). Gated on LEGACY_MIGRATION_MARKER (durable) rather
+ * than TRACE_MCP_HOME_MIGRATED (true only for the one process that performed
+ * the rename) so a failed symlink attempt gets retried on the next install.
+ */
+function installLegacyBinCompat(shimPath) {
+  if (!fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER))) return;
+  const legacyDir = path.join(os.homedir(), '.trace-mcp', 'bin');
+  const legacyPath = path.join(legacyDir, LEGACY_PRIMARY_DEST);
+  try {
+    if (fs.lstatSync(legacyPath)) return; // already present (symlink or file)
+  } catch {
+    /* ENOENT — proceed to create it */
+  }
+  try {
+    ensureDir(legacyDir);
+    fs.symlinkSync(shimPath, legacyPath);
+  } catch {
+    /* best-effort — a legacy script can still recover via `trace init` */
   }
 }
 
@@ -451,8 +521,9 @@ function main() {
   let shimPath = '';
   try {
     installLauncherShim();
-    shimPath = path.join(LAUNCHER_DIR, IS_WINDOWS ? 'trace-mcp.cmd' : 'trace-mcp');
+    shimPath = path.join(LAUNCHER_DIR, IS_WINDOWS ? 'trace.cmd' : 'trace');
     log('shim', `installed ${shimPath}`);
+    installLegacyBinCompat(shimPath);
   } catch (err) {
     log('shim', `failed: ${err.message || err}`);
   }

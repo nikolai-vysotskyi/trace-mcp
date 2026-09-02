@@ -60,6 +60,26 @@ describe('PAYLOAD_ROOTS', () => {
   });
 });
 
+describe('PAYLOAD_GRAMMARS', () => {
+  it('covers every grammar getParser can ask for', async () => {
+    const { PAYLOAD_GRAMMARS } = await stageServer();
+    // vitest runs with packages/app as its root, as above.
+    const src = readFileSync(path.resolve(process.cwd(), '../../src/parser/tree-sitter.ts'), 'utf-8');
+    const block =
+      src.match(/LANG_GRAMMARS: Record<string, SupportedLanguage> = \{([\s\S]*?)\n\};/)?.[1] ?? '';
+    const grammars = [...block.matchAll(/:\s*'([^']+)',/g)].map((m) => m[1]);
+    expect(grammars.length).toBeGreaterThan(0);
+    // Every line of the map must have yielded a grammar, or this test passes
+    // by matching nothing while the payload silently loses a language.
+    expect(grammars.length).toBe(block.trim().split('\n').length);
+    for (const grammar of grammars) {
+      // Missing here means the DMG ships no parse table for that language and
+      // every file in it indexes as zero symbols — silently.
+      expect(PAYLOAD_GRAMMARS).toContain(grammar);
+    }
+  });
+});
+
 describe('collectClosure', () => {
   it('reports a required dependency it cannot resolve instead of staging a hole', async () => {
     const { collectClosure } = await stageServer();

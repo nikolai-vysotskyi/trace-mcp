@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — plain .mjs script, no type declarations
-import { findDuplicatePrs, formatReport, issueKeys } from '../../scripts/check-duplicate-pr.mjs';
+import {
+  findDuplicatePrs,
+  formatReport,
+  isReleasePr,
+  issueKeys,
+} from '../../scripts/check-duplicate-pr.mjs';
 
 // Fixtures are the real PRs from the TRA-476 incident, trimmed to the fields
 // the check reads. Two of these pairs are duplicates that cost a full
@@ -36,6 +41,22 @@ const PR_612 = {
   body: 'Follow-up to #608.',
 };
 
+// #723, the release-please PR that the guard failed on 2026-09-01: its body is
+// the changelog, so it names every issue merged since the last release.
+const PR_723 = {
+  number: 723,
+  title: 'chore(master): release 3.12.0',
+  body: '## 3.12.0\n\n### Features\n\n* first-run setup flow (TRA-439)\n* price the default tool surface (TRA-448)\n* dead-daemon pane (TRA-469)',
+};
+
+describe('isReleasePr', () => {
+  it('recognises the release-please title and nothing else', () => {
+    expect(isReleasePr(PR_723)).toBe(true);
+    expect(isReleasePr({ title: 'chore(deps): bump vitest' })).toBe(false);
+    expect(isReleasePr(PR_597)).toBe(false);
+  });
+});
+
 describe('issueKeys', () => {
   it('collects distinct keys case-insensitively', () => {
     expect(issueKeys('Closes TRA-448, supersedes tra-448 and TRA-455')).toEqual([
@@ -69,6 +90,14 @@ describe('findDuplicatePrs', () => {
 
   it('ignores itself and unrelated issues', () => {
     expect(findDuplicatePrs(PR_597, [PR_597, PR_611])).toEqual([]);
+  });
+
+  it('never flags the release PR, whose changelog names every merged issue', () => {
+    expect(findDuplicatePrs(PR_723, [PR_597, PR_611])).toEqual([]);
+  });
+
+  it('never flags a PR against the release PR either', () => {
+    expect(findDuplicatePrs(PR_597, [PR_723])).toEqual([]);
   });
 });
 

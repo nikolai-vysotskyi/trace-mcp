@@ -33,6 +33,14 @@ export interface DeferredTool {
 interface ToolGateResult {
   _originalTool: McpServer['tool'];
   registeredToolNames: string[];
+  /**
+   * Meta-tools registered through `_originalTool`, outside the preset gate.
+   * They are advertised like any other tool, so the surface a client sees in
+   * `tools/list` is these plus `registeredToolNames` — which is the basis
+   * preset-surface-budget.test.ts measures, and the number the usage ping
+   * reports as `tools_advertised` (TRA-643).
+   */
+  ungatedToolNames: string[];
   toolHandlers: Map<string, (params: Record<string, unknown>) => Promise<ToolResponse>>;
   /** Tools outside the active preset, registered-but-disabled and loadable. */
   deferredTools: Map<string, DeferredTool>;
@@ -86,6 +94,7 @@ export function installToolGate(
 
   const _originalTool = server.tool.bind(server);
   const registeredToolNames: string[] = [];
+  const ungatedToolNames: string[] = [];
   const toolHandlers = new Map<
     string,
     (params: Record<string, unknown>) => Promise<ToolResponse>
@@ -165,11 +174,18 @@ export function installToolGate(
   // the same eager-load behaviour as gated tools.
   const annotatedOriginalTool = ((...oArgs: unknown[]) => {
     const oName = oArgs[0] as string;
+    ungatedToolNames.push(oName);
     injectAnnotations(oArgs);
     const registered = (_originalTool as (...args: unknown[]) => unknown)(...oArgs);
     stampAlwaysLoad(oName, registered);
     return registered;
   }) as typeof _originalTool;
 
-  return { _originalTool: annotatedOriginalTool, registeredToolNames, toolHandlers, deferredTools };
+  return {
+    _originalTool: annotatedOriginalTool,
+    registeredToolNames,
+    ungatedToolNames,
+    toolHandlers,
+    deferredTools,
+  };
 }

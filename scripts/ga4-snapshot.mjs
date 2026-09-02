@@ -13,9 +13,16 @@
  * Auth is a service-account JWT signed with node:crypto — no dependency, and
  * nothing to keep up to date. Needs GA4_SA_KEY (the service account JSON) and
  * GA4_PROPERTY_ID in the environment.
+ *
+ * It also carries the acquisition end of the funnel (TRA-645), which is not
+ * GA4 at all but GitHub's traffic API — one file, one durable record, and the
+ * GitHub window is 14 days rolling, so it needs copying out even more urgently
+ * than GA4's 14 months does. That needs GITHUB_REPOSITORY and GH_TRAFFIC_TOKEN;
+ * without them the acquisition block records why it is empty.
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import { activation, share } from './ga4-funnel.mjs';
 import { PRICE_MODEL, PRICE_PER_TOKEN, sanitizedTokens, usd } from './ga4-savings.mjs';
 
 const OUT = 'docs/_data/adoption.yml';
@@ -78,14 +85,71 @@ async function report(token, propertyId, body) {
 }
 
 const range = (days) => [{ startDate: `${days}daysAgo`, endDate: 'today' }];
-const num = (r, i = 0) => Number(r.rows?.[0]?.metricValues?.[i]?.value ?? 0);
+const num = (r, i = 0) => Number(r?.rows?.[0]?.metricValues?.[i]?.value ?? 0);
 
-/** `dimension -> value` breakdown, largest first, as a plain object. */
+/** YAML-safe one-liner for an error we want visible instead of a silent 0. */
+const why = (e) =>
+  String(e?.message ?? e)
+    .replace(/["\r\n]+/g, ' ')
+    .slice(0, 200);
+
+/**
+ * The top of the funnel: where visitors to the repo came from.
+ *
+ * GitHub's traffic API is the only acquisition source available to us — the
+ * docs site has no analytics of its own, and Reddit (our largest referrer) is
+ * unreadable from a run at all (`ops/user-signal.md`). Its window is a rolling
+ * 14 days and nothing older is retrievable, which is exactly why the numbers
+ * are copied into the daily snapshot: the `adoption-data` branch becomes the
+ * durable record, the same argument that created it for GA4.
+ *
+ * Needs a token with `Administration: read` — `GITHUB_TOKEN` cannot be granted
+ * that scope, so this degrades to a recorded reason rather than a missing key.
+ */
+async function traffic(repo, token) {
+  if (!repo || !token) return { error: 'no repo/token in the environment' };
+  const get = async (p) => {
+    const res = await fetch(`https://api.github.com/repos/${repo}/traffic/${p}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    });
+    if (!res.ok) throw new Error(`${p}: HTTP ${res.status}`);
+    return res.json();
+  };
+  try {
+    const [views, referrers] = await Promise.all([get('views'), get('popular/referrers')]);
+    return {
+      views_uniques_14d: Number(views?.uniques ?? 0),
+      // Uniques, not raw counts: the raw view count is as inflatable as any
+      // other unauthenticated counter, and clones already proved that (TRA-540).
+      referrers: Object.fromEntries(
+        (referrers ?? []).map((r) => [r.referrer, Number(r.uniques ?? 0)]),
+      ),
+    };
+  } catch (e) {
+    return { error: why(e) };
+  }
+}
+
+/**
+ * `dimension -> value` breakdown, largest first, as a plain object.
+ *
+ * `(not set)` is kept, not dropped (TRA-643). It means something different from
+ * every other key: our own `"unknown"` is a value the install sent, while
+ * `(not set)` is GA4 having no value for that dimension at all — an event that
+ * predates the custom dimension's registration, or one GA4 generated itself.
+ * Dropping it made every breakdown sum to less than `active_users` with nothing
+ * in the file to explain the gap, which is how "41% of installs report no
+ * client" got read off a denominator that was never the right one.
+ */
 function breakdown(res) {
   const out = {};
-  for (const row of res.rows ?? []) {
+  for (const row of res?.rows ?? []) {
     const k = row.dimensionValues?.[0]?.value;
-    if (k && k !== '(not set)') out[k] = Number(row.metricValues?.[0]?.value ?? 0);
+    if (k) out[k] = Number(row.metricValues?.[0]?.value ?? 0);
   }
   return out;
 }
@@ -95,7 +159,34 @@ const propertyId = process.env.GA4_PROPERTY_ID;
 if (!propertyId) throw new Error('GA4_PROPERTY_ID is not set');
 const token = await accessToken(key);
 
-const [d1, d7, d28, versions, countries, clients, saved, installs] = await Promise.all([
+/**
+ * A dimension the ping only started sending in TRA-643. GA4 rejects a report on
+ * a custom dimension that is not registered in the property, and this workflow
+ * is the only durable record of the trend — so a missing registration must cost
+ * one empty section, not the whole daily snapshot.
+ */
+const optionalBreakdown = (dimension, metric = 'activeUsers') =>
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: dimension }],
+    metrics: [{ name: metric }],
+    limit: 25,
+  }).catch(() => null);
+
+const [
+  d1,
+  d7,
+  d28,
+  versions,
+  countries,
+  clients,
+  saved,
+  installs,
+  presets,
+  surfaces,
+  indexed,
+  arrivals,
+] = await Promise.all([
   report(token, propertyId, { dateRanges: range(1), metrics: [{ name: 'activeUsers' }] }),
   report(token, propertyId, { dateRanges: range(7), metrics: [{ name: 'activeUsers' }] }),
   report(token, propertyId, {
@@ -145,6 +236,19 @@ const [d1, d7, d28, versions, countries, clients, saved, installs] = await Promi
     metrics: [{ name: 'eventCount' }],
     limit: 10,
   }).catch(() => null),
+  optionalBreakdown('customEvent:preset'),
+  optionalBreakdown('customEvent:tools_advertised'),
+  // Activation (TRA-645). Resolved rather than caught to null: if the custom
+  // dimension is not registered in the property, GA4 says so by name, and that
+  // message is worth publishing — an empty block with no reason reads as "every
+  // install activated" to the next person who looks at it.
+  report(token, propertyId, {
+    dateRanges: range(28),
+    dimensions: [{ name: 'customEvent:repos_indexed' }],
+    metrics: [{ name: 'activeUsers' }],
+    limit: 250,
+  }).catch((e) => ({ error: why(e) })),
+  traffic(process.env.GITHUB_REPOSITORY, process.env.GH_TRAFFIC_TOKEN),
 ]);
 
 const savings = sanitizedTokens(
@@ -154,10 +258,21 @@ const savings = sanitizedTokens(
   })),
 );
 
+// Keys via JSON.stringify, not `"${k}"`: every one of these comes from outside
+// — an MCP client name the client chooses for itself, a referrer host GitHub
+// reports — and a `"` or `\` in one would otherwise emit a broken file and take
+// the whole snapshot down with it. A YAML double-quoted scalar escapes exactly
+// like a JSON string, so this is the escaping, not an approximation of it.
 const yaml = (obj, indent = 2) =>
   Object.entries(obj)
-    .map(([k, v]) => `${' '.repeat(indent)}"${k}": ${v}`)
+    .map(([k, v]) => `${' '.repeat(indent)}${JSON.stringify(String(k))}: ${v}`)
     .join('\n') || `${' '.repeat(indent)}{}`;
+
+const act = activation(indexed?.rows);
+const newInstalls = installs ? (breakdown(installs).new ?? 0) : 0;
+const yamlNum = (v) => (v === null || v === undefined ? 'null' : v);
+/** An `error:` line when a source failed, nothing when it did not. */
+const errLine = (e) => (e ? `  error: "${e}"\n` : '');
 
 const body = `# Adoption snapshot from the GA4 property (TraceMCP). Generated by
 # .github/workflows/ga4-snapshot.yml — do not edit by hand; edits are overwritten.
@@ -199,10 +314,70 @@ savings:
   since: "${SINCE}"
   days: ${savings.days}
   capped_days: ${savings.capped_days}
+
+# The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
+# SEO, outreach or design change can be graded against something instead of
+# taste. Every one is derived below in this same file; none is hand-collected.
+#
+#   arrivals    unique visitors to the GitHub repo, GitHub's rolling 14 days
+#   installs    first-ever pings in 28 days (\`installs_28d.new\`)
+#   activated   % of active installs reporting at least one indexed repository
+#   retention   day / month active installs — how many of the month ran today
+#
+# Mind the windows: arrivals is 14 days and everything else is 28, so
+# arrivals→installs is a direction, not a conversion rate. The unauthenticated-
+# counter caveat above applies to all four.
+funnel:
+  arrivals_uniques_14d: ${yamlNum(arrivals.views_uniques_14d)}
+  new_installs_28d: ${newInstalls}
+  activated_pct: ${yamlNum(act.activated_pct)}
+  retention_dau_mau_pct: ${yamlNum(share(num(d1), num(d28)))}
+
+# Activation, from the ping's \`repos_indexed\` param. An install that reports
+# day after day with zero indexed repositories reached the product and never
+# reached its value — that population, not the install count, is the ceiling on
+# everything the product does after install.
+#
+# \`activated_pct\` is taken against these buckets' own total, never against
+# \`active_users.month\`: GA4 deduplicates \`activeUsers\` within a dimension value
+# and not across them, so an install that indexed its first repo mid-window is
+# counted in both \`0\` and a non-zero bucket. An \`error\` here instead of buckets
+# means the custom dimension is not registered in the property.
+activation:
+${errLine(indexed?.error)}  activated: ${act.activated}
+  not_activated: ${act.not_activated}
+  activated_pct: ${yamlNum(act.activated_pct)}
+  unknown: ${act.unknown}
+  by_repos_indexed:
+${yaml(act.buckets, 4)}
+
+# Acquisition — where the repo's visitors came from, over GitHub's rolling
+# 14-day window. This is the only acquisition signal available to us: the docs
+# site carries no analytics, and Reddit, our largest referrer, cannot be read
+# from a run at all (\`ops/user-signal.md\`). Cross-check these names against the
+# "Arrivals" column of \`ops/distribution.md\` before adding another directory.
+acquisition:
+  views_uniques_14d: ${yamlNum(arrivals.views_uniques_14d)}
+${errLine(arrivals.error)}  referrers_uniques_14d:
+${yaml(arrivals.referrers ?? {}, 4)}
 installs_28d:
 ${yaml(installs ? breakdown(installs) : {})}
 by_version:
 ${yaml(breakdown(versions))}
+
+# Which tool preset installs actually run, and how many tools that surface
+# advertises (TRA-643). \`preset-surface-budget.test.ts\` measures the same basis
+# — preset members plus the ungated meta-tools — so these two are the field
+# check on its 67-86% claim. \`tools_advertised\` runs higher than the bench on
+# any repo with a detected framework: those tools are registration-gated and the
+# bench never registers them.
+#
+# Both are empty until the dimensions are registered in the GA4 property; GA4
+# does not backfill, so values only start at registration.
+by_preset:
+${yaml(presets ? breakdown(presets) : {})}
+by_tools_advertised:
+${yaml(surfaces ? breakdown(surfaces) : {})}
 by_country:
 ${yaml(breakdown(countries))}
 by_client:

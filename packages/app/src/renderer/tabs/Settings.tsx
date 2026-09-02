@@ -1469,9 +1469,11 @@ function PrefRow({
 function AppPrefsCard({
   appearance,
   onChange,
+  onOpenSetupWizard,
 }: {
   appearance: Appearance;
   onChange: (next: Appearance) => void;
+  onOpenSetupWizard?: () => void;
 }) {
   const { locale, setLocale } = useLocale();
   return (
@@ -1490,7 +1492,7 @@ function AppPrefsCard({
         </PrefRow>
         {/* The same list the app menu's Language row shows, from the same
             localeOptions() — one control on two surfaces, as Appearance is. */}
-        <PrefRow label={t('settings:app.language')} last>
+        <PrefRow label={t('settings:app.language')} last={!onOpenSetupWizard}>
           <PopUpButton
             options={localeOptions()}
             value={locale}
@@ -1498,6 +1500,13 @@ function AppPrefsCard({
             aria-label={t('settings:app.language')}
           />
         </PrefRow>
+        {onOpenSetupWizard && (
+          <PrefRow label={t('settings:app.setupWizard')} last>
+            <Button size="small" onClick={onOpenSetupWizard}>
+              {t('settings:app.runSetupWizard')}
+            </Button>
+          </PrefRow>
+        )}
       </Card>
     </Section>
   );
@@ -1514,6 +1523,7 @@ type Screen =
 export function Settings({
   appearance,
   onAppearanceChange,
+  onOpenSetupWizard,
 }: {
   /* App-level preference, not a daemon config field: it lives in localStorage
      and is owned by useTheme() in App.tsx, which is what applies [data-theme].
@@ -1521,6 +1531,7 @@ export function Settings({
      cannot disagree about what the user picked (TRA-306). */
   appearance: Appearance;
   onAppearanceChange: (next: Appearance) => void;
+  onOpenSetupWizard?: () => void;
 }) {
   /* One subscription for the whole pane: every string below resolves through
      the module-level `t`, and this is what re-renders the subtree — and with it
@@ -1633,7 +1644,11 @@ export function Settings({
         </Toolbar>
         <div className="flex-1 overflow-auto flex flex-col">
           <div className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 720 }}>
-            <AppPrefsCard appearance={appearance} onChange={onAppearanceChange} />
+            <AppPrefsCard
+              appearance={appearance}
+              onChange={onAppearanceChange}
+              onOpenSetupWizard={onOpenSetupWizard}
+            />
           </div>
           <div className="flex-1 flex items-center justify-center">
           {/* A finished fetch that produced nothing is not still loading. The
@@ -1810,8 +1825,13 @@ export function Settings({
                 t('settings:app.title').toLowerCase().includes(q) ||
                 t('settings:appearance.theme').toLowerCase().includes(q) ||
                 t('settings:app.language').toLowerCase().includes(q) ||
+                t('settings:app.setupWizard').toLowerCase().includes(q) ||
                 localeOptions().some((l) => l.label.toLowerCase().includes(q))) && (
-                <AppPrefsCard appearance={appearance} onChange={onAppearanceChange} />
+                <AppPrefsCard
+                  appearance={appearance}
+                  onChange={onAppearanceChange}
+                  onOpenSetupWizard={onOpenSetupWizard}
+                />
               )}
 
               <SectionList

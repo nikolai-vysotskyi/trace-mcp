@@ -16,9 +16,11 @@ describe('Tool config schema', () => {
     expect((standard as Set<string>).size).toBeLessThan(80);
   });
 
-  it('every non-full preset carries register_edit and batch', () => {
+  it('every non-full preset carries core infra tools (search, get_symbol, register_edit, batch)', () => {
     for (const [name, tools] of Object.entries(TOOL_PRESETS)) {
       if (tools === 'all') continue;
+      expect(tools, `preset "${name}" is missing search`).toContain('search');
+      expect(tools, `preset "${name}" is missing get_symbol`).toContain('get_symbol');
       expect(tools, `preset "${name}" is missing register_edit`).toContain('register_edit');
       expect(tools, `preset "${name}" is missing batch`).toContain('batch');
     }
@@ -320,5 +322,33 @@ describe('Tool presets', () => {
     expect(toolAllowed('search')).toBe(true);
     expect(toolAllowed('get_outline')).toBe(true);
     expect(toolAllowed('predict_bugs')).toBe(false); // not in preset
+  });
+
+  it('resolvePresetName respects TRACE_MCP_PRESET env var override', async () => {
+    const { resolvePresetName } = await import('../../src/server/tool-filter.js');
+    const config = { tools: { preset: 'minimal' } } as any;
+
+    expect(resolvePresetName(config)).toBe('minimal');
+
+    process.env.TRACE_MCP_PRESET = 'dev';
+    try {
+      expect(resolvePresetName(config)).toBe('dev');
+    } finally {
+      delete process.env.TRACE_MCP_PRESET;
+    }
+  });
+
+  it('loadConfig applies TRACE_MCP_PRESET override', async () => {
+    const { loadConfig } = await import('../../src/config.js');
+    process.env.TRACE_MCP_PRESET = 'security';
+    try {
+      const result = await loadConfig();
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.tools?.preset).toBe('security');
+      }
+    } finally {
+      delete process.env.TRACE_MCP_PRESET;
+    }
   });
 });
