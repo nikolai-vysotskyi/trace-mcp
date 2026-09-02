@@ -62,6 +62,12 @@ function presetPayloadChars(preset: string): { chars: number; tools: number } {
  * enough to hide a preset drifting back toward the full surface.
  */
 const PRESET_CHAR_CEILINGS: Record<string, number> = {
+  // TRA-675. Membership is empty, so this is exactly UNGATED_META_TOOLS:
+  // 10 tools / 7,120 chars / 1,604 tok against this reconstruction — 95.6%
+  // below `full` (161,652 / 37,145) and 79.2% below the `minimal` default
+  // (34,207 / 7,838). The ceiling leaves room for a meta-tool or two and none
+  // for the preset quietly acquiring members.
+  router: 8_000,
   minimal: 38_000,
   review: 42_000,
   dev: 58_000,

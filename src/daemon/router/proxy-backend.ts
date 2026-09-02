@@ -70,6 +70,21 @@ export interface ProxyBackendOptions {
 const REINIT_TIMEOUT_MS = 10_000;
 
 /**
+ * Max wall-clock to wait for the internal `tools/list` that primes the deferred
+ * catalog. Shorter than the reinit budget: this only decorates a `load_tools`
+ * reply, so timing out costs an empty catalog, not a broken session.
+ */
+const PRIME_TIMEOUT_MS = 5_000;
+
+/**
+ * Id prefix for those internal requests. Recognising a prime by its id rather
+ * than by a live entry in `pendingPrimeIds` is what keeps a *late* reply — one
+ * that lost the timeout race — from falling through to the client as a response
+ * to a request it never made.
+ */
+const PRIME_ID_PREFIX = '__trace_prime_tools_list_';
+
+/**
  * How many reinitialize+retry attempts to make on a lost session before giving
  * up and letting the error propagate (so the watcher can fall back to local
  * mode). Greater than 1 because the daemon can restart *again* in the narrow
@@ -166,6 +181,10 @@ export class ProxyBackend implements Backend {
    * of the schemas `load_tools` echoes back (TRA-402).
    */
   private daemonTools: Array<{ name: string; description?: string; inputSchema?: unknown }> = [];
+  /** Ids of internal `tools/list` primes, whose responses never reach the client. */
+  private readonly pendingPrimeIds = new Map<string, () => void>();
+  private priming: Promise<void> | null = null;
+  private primeSeq = 0;
 
   constructor(opts: ProxyBackendOptions) {
     this.opts = opts;
@@ -212,7 +231,26 @@ export class ProxyBackend implements Backend {
       const id = messageId(msg);
       const called = toolCallName(msg);
       if (called === 'load_tools' && this.opts.toolSurface && id !== undefined) {
-        this.handleLoadTools(msg, id);
+        await this.handleLoadTools(msg, id);
+        return;
+      }
+      // `batch` dispatches by name on the daemon side, past this filter — that
+      // is deliberate (TRA-675: it is what makes the `router` preset usable
+      // without an escalation round-trip). `tools.exclude` is the exception:
+      // it is a hard restriction, so it has to be enforced on the inner names
+      // too, not just the outer `batch`.
+      const excludedInBatch = called === 'batch' ? this.excludedBatchCall(msg) : undefined;
+      if (excludedInBatch !== undefined) {
+        if (id !== undefined) {
+          this.onmessage?.({
+            jsonrpc: '2.0',
+            id,
+            error: {
+              code: METHOD_NOT_FOUND,
+              message: `Tool "${excludedInBatch}" is excluded by config and cannot be called through batch.`,
+            },
+          } as unknown as JSONRPCMessage);
+        }
         return;
       }
       // A filtered-out tool must be genuinely uncallable, not merely hidden
@@ -340,7 +378,58 @@ export class ProxyBackend implements Backend {
    * still gets the loaded tools' schemas in the reply and can drive them
    * through `batch`.
    */
-  private handleLoadTools(msg: JSONRPCMessage, id: string | number): void {
+  /**
+   * First `tools.exclude`d name inside a `batch` call, or undefined if there is
+   * none (or this isn't a shape we can read).
+   */
+  private excludedBatchCall(msg: JSONRPCMessage): string | undefined {
+    const isExcluded = this.opts.toolSurface?.isExcluded;
+    if (!isExcluded) return undefined;
+    const args = ((msg as Record<string, unknown>).params as Record<string, unknown> | undefined)
+      ?.arguments as { calls?: Array<{ tool?: unknown }> } | undefined;
+    if (!Array.isArray(args?.calls)) return undefined;
+    return args.calls.find((c) => typeof c?.tool === 'string' && isExcluded(c.tool as string))
+      ?.tool as string | undefined;
+  }
+
+  /**
+   * Make sure `daemonTools` is populated before answering `load_tools`.
+   *
+   * It is normally filled as a side effect of the client's own `tools/list`,
+   * but that only happens if a list passed through *this* backend — which it
+   * does not when the session started on the local backend and was swapped to
+   * the proxy afterwards. On that path `load_tools()` reported an empty
+   * catalog: the discovery half of progressive disclosure silently gone
+   * (TRA-675). So ask the daemon ourselves and swallow the reply.
+   */
+  private primeDaemonTools(): Promise<void> {
+    if (this.daemonTools.length > 0 || !this.httpTransport) return Promise.resolve();
+    if (this.priming) return this.priming;
+    const id = `${PRIME_ID_PREFIX}${++this.primeSeq}`;
+    this.priming = (async () => {
+      try {
+        const done = new Promise<void>((resolve) => {
+          this.pendingPrimeIds.set(id, resolve);
+        });
+        await this.httpTransport!.send({
+          jsonrpc: '2.0',
+          id,
+          method: 'tools/list',
+          params: {},
+        } as unknown as JSONRPCMessage);
+        await Promise.race([done, delay(PRIME_TIMEOUT_MS)]);
+      } catch (err) {
+        logger.debug({ err: String(err) }, 'ProxyBackend: tools/list prime failed');
+      } finally {
+        this.pendingPrimeIds.delete(id);
+        this.priming = null;
+      }
+    })();
+    return this.priming;
+  }
+
+  private async handleLoadTools(msg: JSONRPCMessage, id: string | number): Promise<void> {
+    await this.primeDaemonTools();
     const surface = this.opts.toolSurface!;
     const filter = this.opts.toolFilter!;
     const args = ((msg as Record<string, unknown>).params as Record<string, unknown> | undefined)
@@ -446,6 +535,21 @@ export class ProxyBackend implements Backend {
       // one during its original handshake; a duplicate would corrupt its state.
       if (this.pendingReinitId !== null && messageId(msg) === this.pendingReinitId) {
         this.resolveReinit?.();
+        return;
+      }
+      // An internal tools/list prime: record the daemon's surface, tell nobody.
+      // Matched on the id prefix, so a reply that arrived after its timeout is
+      // still swallowed instead of reaching the client as a response to a
+      // request the client never sent.
+      const primeId = messageId(msg);
+      if (typeof primeId === 'string' && primeId.startsWith(PRIME_ID_PREFIX)) {
+        const tools = ((msg as Record<string, unknown>).result as { tools?: unknown })?.tools;
+        if (Array.isArray(tools)) {
+          this.daemonTools = tools as typeof this.daemonTools;
+        }
+        const resolvePrime = this.pendingPrimeIds.get(primeId);
+        this.pendingPrimeIds.delete(primeId);
+        resolvePrime?.();
         return;
       }
       this.onmessage?.(this.filterToolsListResponse(msg));

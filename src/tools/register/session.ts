@@ -819,7 +819,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
   // --- Batch API: multiple tool calls in one MCP request ---
   _originalTool(
     'batch',
-    'Execute multiple trace-mcp tools in a single MCP request. Returns results for all calls. Use to reduce round-trips when you need several independent queries (e.g., get_outline for 3 files, or search + get_symbol together). Read-only (delegates to other tools). Returns JSON: { batch_results: [{ tool, result }], total }.',
+    "Execute multiple trace-mcp tools in a single MCP request. Dispatches any registered tool by name, including tools this session's preset defers — so a deferred tool is callable here without a load_tools round-trip (tools.exclude stays a hard restriction). Use to reduce round-trips when you need several independent queries (e.g., get_outline for 3 files, or search + get_symbol together). Read-only (delegates to other tools). Returns JSON: { batch_results: [{ tool, result }], total }.",
     {
       calls: z
         .array(
@@ -834,8 +834,19 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
     },
     async ({ calls }) => {
       const results: { tool: string; result?: unknown; error?: string }[] = [];
+      const excluded = new Set(config.tools?.exclude ?? []);
       for (const call of calls) {
-        const handler = toolHandlers.get(call.tool);
+        // `tools.exclude` is the one hard restriction — a tool excluded by
+        // config must be unreachable through every door, including this one.
+        if (excluded.has(call.tool)) {
+          results.push({ tool: call.tool, error: `Tool "${call.tool}" is excluded by config` });
+          continue;
+        }
+        // Preset-deferred tools are dispatchable here on purpose (TRA-675):
+        // the daemon-backed path has always behaved this way, and the `router`
+        // preset depends on it. Falling back to `deferredTools` keeps the local
+        // path identical instead of answering "Unknown tool" for the same call.
+        const handler = toolHandlers.get(call.tool) ?? deferredTools.get(call.tool)?.handler;
         if (!handler) {
           results.push({ tool: call.tool, error: `Unknown tool: ${call.tool}` });
           continue;

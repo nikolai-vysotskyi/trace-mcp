@@ -6,6 +6,18 @@
  */
 
 export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
+  // The router surface (TRA-675): membership is deliberately empty, so a
+  // session advertises only UNGATED_META_TOOLS — 10 tools, 1,604 tokens, 95.6%
+  // below `full` and 79.2% below the shipped `minimal` default. It is usable
+  // rather than crippled because `batch` dispatches any non-excluded tool by
+  // name, including ones this preset defers (see the `batch` description), so
+  // there is no escalation round-trip: `load_tools()` names the catalog and
+  // `batch` calls it. Opt-in, never the default — on a host that already defers
+  // tool schemas itself (Claude Code's ToolSearch) it buys ~2.9k tokens while
+  // taking away the first-five-minutes tools `ALWAYS_LOAD_TOOLS` protects; on a
+  // host without one it buys ~6.2k per session.
+  router: [],
+
   // The default surface (TRA-402). Membership is ALWAYS_LOAD_TOOLS — the
   // first-five-minutes set below — plus the decision-memory quartet. Those two
   // lists used to disagree: `minimal` omitted get_task_context, get_call_graph
