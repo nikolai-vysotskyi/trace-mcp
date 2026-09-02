@@ -178,14 +178,20 @@ pkg_roots() {
     [ -d "$root" ] && echo "$root"
   done
 
-  # Whatever npm itself calls the global root — catches custom prefixes
-  # (`npm config set prefix`) and bundled runtimes we don't know by name.
-  # Plain PATH lookup, no login shell: a slow or hanging shell profile must
-  # never stall an MCP handshake.
-  if command -v npm >/dev/null 2>&1; then
-    n=$(npm root -g 2>/dev/null | tail -1)
-    [ -n "$n" ] && [ -d "$n" ] && echo "$n"
+  # Custom prefixes (`npm config set prefix`) and bundled runtimes we don't
+  # know by name. Read from config, never by running `npm root -g`: the shim
+  # inherits the MCP client's PATH, which in a project directory can contain a
+  # repository-controlled `node_modules/.bin`, so spawning a PATH-resolved
+  # `npm` would turn a stale config into code execution from the opened repo
+  # (and could hang the handshake on top of that).
+  n="${NPM_CONFIG_PREFIX:-}"
+  if [ -z "$n" ] && [ -r "$HOME/.npmrc" ]; then
+    n=$(sed -n 's/^[[:space:]]*prefix[[:space:]]*=[[:space:]]*//p' "$HOME/.npmrc" | tail -1)
+    # Strip surrounding quotes and expand a leading ~ — npm accepts both.
+    n="${n%\"}"; n="${n#\"}"; n="${n%\'}"; n="${n#\'}"
+    case "$n" in '~'/*) n="$HOME/${n#\~/}" ;; esac
   fi
+  [ -n "$n" ] && [ -d "$n/lib/node_modules" ] && echo "$n/lib/node_modules"
 
   return 0
 }
@@ -234,12 +240,24 @@ probe_cli() {
 # Persist a freshly probed pair so the next start takes the fast path, and so
 # a client that never reaches `trace-mcp init` still stops paying for the probe.
 heal_config() {
-  local node="$1" cli="$2" tmp
+  local node="$1" cli="$2" tmp old_umask
   # The shim strips exactly one pair of quotes and never expands; a literal
   # quote in a path would corrupt the file, so skip rather than mangle.
   case "$node$cli" in *'"'*) return 0 ;; esac
-  mkdir -p "$TRACE_HOME" 2>/dev/null || return 0
+  # Never pin the config to a swap-window backup: that directory is about to
+  # be deleted, so the "fast path" it buys would be a dangling one.
+  case "$cli" in
+    *trace-mcp.tmcp-bak-*|*/.trace-mcp-*) return 0 ;;
+  esac
+  if [ ! -d "$TRACE_HOME" ]; then
+    mkdir -p "$TRACE_HOME" 2>/dev/null || return 0
+    chmod 700 "$TRACE_HOME" 2>/dev/null || true
+  fi
   tmp="$CONFIG.tmp.$$"
+  # launcher.env is a 0600 file by contract (src/init/launcher.ts). The
+  # process umask must not be allowed to widen it during a heal.
+  old_umask=$(umask)
+  umask 077
   {
     printf '# Managed by trace-mcp — do not edit by hand.\n'
     printf '# Rewritten by the launcher after a successful probe.\n'
@@ -249,6 +267,7 @@ heal_config() {
     # different build than the one the stale config described, and a wrong
     # version is worse than none. `trace-mcp init` restores it.
   } > "$tmp" 2>/dev/null && mv -f "$tmp" "$CONFIG" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+  umask "$old_umask"
   return 0
 }
 

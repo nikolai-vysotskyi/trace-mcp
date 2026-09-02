@@ -212,3 +212,30 @@ describe('Windows launcher .cmd template', () => {
     expect(body.indexOf('-WindowStyle Hidden')).toBeLessThan(body.indexOf('-File'));
   });
 });
+
+describe('Windows launcher .ps1 package roots', () => {
+  // Static content check: the .ps1 only runs on win32 runners, but the set of
+  // roots it searches is the whole point of TRA-701 and must not silently
+  // drift away from the POSIX shim's.
+  const body = fs.readFileSync(
+    path.resolve(__dirname, '..', '..', 'hooks', 'trace-mcp-launcher.ps1'),
+    'utf-8',
+  );
+
+  it('searches the npm-global, Volta image and custom-prefix roots', () => {
+    expect(body).toContain("Join-Path $env:APPDATA 'npm\\node_modules'");
+    expect(body).toContain('Volta\\tools\\image\\packages\\trace-mcp\\lib\\node_modules');
+    expect(body).toContain('$env:NPM_CONFIG_PREFIX');
+    expect(body).toContain(".npmrc'");
+  });
+
+  it('resolves the custom prefix from config, never by spawning npm', () => {
+    // Same reason as the POSIX shim: the launcher inherits the MCP client's
+    // PATH, which in a project directory can carry a repo-controlled npm.
+    expect(body).not.toMatch(/npm\s+root\s+-g/);
+  });
+
+  it('does not pin launcher.env to a swap-window backup directory', () => {
+    expect(body).toContain('tmcp-bak-');
+  });
+});

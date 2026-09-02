@@ -153,6 +153,30 @@ function Get-PkgRoots {
         # Unix-style layout (some cross-platform setups)
         $roots += (Join-Path $dir '..\lib\node_modules')
     }
+    # Volta keeps each global package under its own image directory.
+    if ($env:LOCALAPPDATA) {
+        $roots += (Join-Path $env:LOCALAPPDATA 'Volta\tools\image\packages\trace-mcp\lib\node_modules')
+    }
+    # Custom prefixes (`npm config set prefix`). Read from config files, never
+    # by spawning npm: the shim inherits the MCP client's PATH, which in
+    # a project directory can contain a repository-controlled `node_modules\.bin`,
+    # so spawning a PATH-resolved npm would turn a stale config into code
+    # execution from the opened repository.
+    $prefix = $env:NPM_CONFIG_PREFIX
+    if (-not $prefix -and $env:USERPROFILE) {
+        $npmrc = Join-Path $env:USERPROFILE '.npmrc'
+        if (Test-Path -LiteralPath $npmrc -PathType Leaf) {
+            foreach ($line in [System.IO.File]::ReadAllLines($npmrc)) {
+                if ($line -match '^\s*prefix\s*=\s*(.+?)\s*$') {
+                    $prefix = $Matches[1].Trim('"').Trim("'")
+                }
+            }
+        }
+    }
+    if ($prefix) {
+        $roots += (Join-Path $prefix 'node_modules')
+        $roots += (Join-Path $prefix 'lib\node_modules')
+    }
     return ($roots | Select-Object -Unique)
 }
 
@@ -188,6 +212,9 @@ function Save-LauncherConfig {
     # The parser strips exactly one pair of quotes and never expands; a literal
     # quote in a path would corrupt the file, so skip rather than mangle.
     if ($NodeExe.Contains('"') -or $Cli.Contains('"')) { return }
+    # Never pin the config to a swap-window backup: that directory is about to
+    # be deleted, so the "fast path" it buys would be a dangling one.
+    if ($Cli -match 'trace-mcp\.tmcp-bak-' -or $Cli -match '[\\/]\.trace-mcp-') { return }
     try {
         if (-not (Test-Path -LiteralPath $TraceHome -PathType Container)) {
             New-Item -ItemType Directory -Path $TraceHome -Force -ErrorAction Stop | Out-Null

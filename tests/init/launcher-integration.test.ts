@@ -238,6 +238,63 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
 
       expect(status).toBe(0);
       expect(stdout.trim()).toBe(`NODE_ARGS:${bakCli} serve`);
+      // The backup directory is about to be deleted — pinning the config to it
+      // would only buy a dangling fast path on the next start.
+      expect(fs.existsSync(path.join(traceHome, 'launcher.env'))).toBe(true);
+      expect(fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8')).not.toContain(
+        'tmcp-bak',
+      );
+    });
+
+    it.skipIf(process.platform === 'win32')('keeps the healed launcher.env at 0600', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      plantNvmPackage(home);
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+      fs.chmodSync(path.join(traceHome, 'launcher.env'), 0o600);
+
+      runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      const mode = fs.statSync(path.join(traceHome, 'launcher.env')).mode & 0o777;
+      expect(mode).toBe(0o600);
+    });
+
+    it('never executes an npm found on PATH', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      plantNvmPackage(home);
+      // A repository-controlled `node_modules/.bin` is a normal thing to find
+      // on an MCP client's PATH. Resolving the global prefix must not run it.
+      const hostileBin = path.join(home, 'hostile-bin');
+      fs.mkdirSync(hostileBin, { recursive: true });
+      const sentinel = path.join(home, 'NPM_WAS_RUN');
+      fs.writeFileSync(path.join(hostileBin, 'npm'), `#!/bin/bash\ntouch ${sentinel}\n`, {
+        mode: 0o755,
+      });
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+      const result = spawnSync(LAUNCHER_SRC, ['serve'], {
+        env: { HOME: home, TRACE_MCP_HOME: traceHome, PATH: `${hostileBin}:/usr/bin:/bin` },
+        encoding: 'utf-8',
+        timeout: 5000,
+      });
+
+      expect(result.status).toBe(0);
+      expect(fs.existsSync(sentinel)).toBe(false);
+    });
+
+    it('honours a custom npm prefix from ~/.npmrc without running npm', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      const prefix = path.join(home, 'custom-prefix');
+      const pkgDir = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(pkgDir, { recursive: true });
+      fs.writeFileSync(path.join(pkgDir, 'cli.js'), '// custom prefix cli\n');
+      const cli = fs.realpathSync(path.join(pkgDir, 'cli.js'));
+      fs.writeFileSync(path.join(home, '.npmrc'), `prefix=${prefix}\n`);
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
     });
   });
 
