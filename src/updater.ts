@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import https from 'node:https';
 import path from 'node:path';
@@ -6,6 +6,36 @@ import { fileURLToPath } from 'node:url';
 import { ensureGlobalDirs, TRACE_MCP_HOME } from './global.js';
 import { logger } from './logger.js';
 import { atomicWriteJson } from './utils/atomic-write.js';
+
+/**
+ * Run a child process without blocking the event loop.
+ *
+ * TRA-703: this used to be `spawnSync`. On the MCP stdio path that froze the
+ * whole process — including the JSON-RPC stream — for as long as `npm install`
+ * took, so `initialize` never got answered and the client marked the server
+ * failed for the entire session.
+ */
+function run(
+  cmd: string,
+  args: string[],
+  timeoutMs: number,
+): Promise<{ status: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    execFile(
+      cmd,
+      args,
+      { encoding: 'utf-8', timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 },
+      (err, stdout, stderr) => {
+        const code = (err as (Error & { code?: number | string }) | null)?.code;
+        resolve({
+          status: err ? (typeof code === 'number' ? code : 1) : 0,
+          stdout: stdout ?? '',
+          stderr: stderr ?? '',
+        });
+      },
+    );
+  });
+}
 
 declare const PKG_VERSION_INJECTED: string;
 const CURRENT_VERSION =
@@ -92,14 +122,14 @@ const BACKUP_DIR_PREFIX = 'trace-mcp.tmcp-bak-';
  * Goes through a login shell so the GUI-launched daemon picks up the same
  * PATH (nvm/volta/homebrew) the user has in the terminal.
  */
-function resolveNpmRoot(): string | null {
+async function resolveNpmRoot(): Promise<string | null> {
   const shell = process.env.SHELL;
   const cmd = shell ? shell : 'npm';
   const args = shell ? ['-lc', 'npm root -g'] : ['root', '-g'];
   try {
-    const result = spawnSync(cmd, args, { encoding: 'utf-8', timeout: 30_000 });
+    const result = await run(cmd, args, 30_000);
     if (result.status !== 0) return null;
-    const line = (result.stdout ?? '').trim().split('\n').pop()?.trim() ?? '';
+    const line = result.stdout.trim().split('\n').pop()?.trim() ?? '';
     return line || null;
   } catch {
     return null;
@@ -361,27 +391,23 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
   // Pre-flight: wipe any `.trace-mcp-<rand>` scratch dirs from prior interrupted
   // installs. `--force` swaps the package dir wholesale instead of relying on
   // npm's rename dance, which is the fragile step that fails with ENOTEMPTY.
-  const npmRoot = resolveNpmRoot();
+  const npmRoot = await resolveNpmRoot();
   if (npmRoot) {
     cleanStaleScratchDirs(npmRoot);
     reconcileStaleBackups(npmRoot);
   }
 
   const runInstall = () =>
-    spawnSync('npm', ['install', '-g', `trace-mcp@${latestVersion}`, '--force'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 120_000,
-      encoding: 'utf-8',
-    });
+    run('npm', ['install', '-g', `trace-mcp@${latestVersion}`, '--force'], 120_000);
 
-  let result = runInstall();
+  let result = await runInstall();
 
   // ENOTEMPTY even after --force means the main `trace-mcp` dir itself is in a
   // corrupt half-extracted state. Atomic-rename it aside, retry once, and
   // rollback the rename if the retry also fails. NEVER destroy the package dir
   // outright — a second install failure (network blip, ENOSPC, registry hiccup)
   // would leave the user with no trace-mcp at all.
-  if (result.status !== 0 && /ENOTEMPTY/.test(result.stderr ?? '') && npmRoot) {
+  if (result.status !== 0 && /ENOTEMPTY/.test(result.stderr) && npmRoot) {
     logger.warn('Auto-update: ENOTEMPTY detected, backing up corrupt install dir and retrying');
     cleanStaleScratchDirs(npmRoot);
 
@@ -405,7 +431,7 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
       }
     }
 
-    result = runInstall();
+    result = await runInstall();
 
     if (result.status === 0) {
       // Install succeeded — drop the backup.
@@ -454,7 +480,7 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
 
   if (result.status !== 0) {
     logger.warn(
-      { stderr: (result.stderr ?? '').slice(-500), status: result.status },
+      { stderr: result.stderr.slice(-500), status: result.status },
       'Auto-update: npm install failed',
     );
     // Increment the consecutive-failure counter for this exact target.
@@ -486,8 +512,54 @@ export async function checkAndInstallUpdate(opts: AutoUpdateOptions = {}): Promi
   // (including the consecutive-failure counter — success resets the streak).
   writeCache({ lastChecked: now, latestVersion, installedVersion: latestVersion });
 
-  logger.info({ version: latestVersion }, 'Auto-update: installed successfully, restarting...');
+  logger.info(
+    { version: latestVersion },
+    'Auto-update: installed successfully — takes effect on the next start',
+  );
   return true;
+}
+
+/** How long to wait after startup before touching the registry (TRA-703). */
+export const BACKGROUND_UPDATE_DELAY_MS = 10_000;
+
+/**
+ * Kick off the update check + post-update migrations *off* the startup path.
+ *
+ * TRA-703: `serve` used to `await checkAndInstallUpdate()` before wiring the
+ * stdio transport, so the first session after any release spent its whole
+ * startup inside `npm install` and never answered `initialize` — the client
+ * marked the server failed for the entire session. Nothing here is awaited,
+ * and a successful install no longer exits the process: the new version is on
+ * disk and takes effect the next time the client starts the server, so a live
+ * session is never restarted underneath its client.
+ *
+ * Both are best-effort: a process that exits inside the delay window simply
+ * skips this round. Only the two long-lived serve paths call this, and the
+ * cache state they act on persists, so the next start picks the work back up.
+ *
+ * ponytail: no cross-process lock — concurrent sessions can race on the same
+ * `npm install -g`, exactly as they did before this change. Add a lockfile in
+ * TRACE_MCP_HOME if that race is ever observed to matter.
+ */
+export function scheduleBackgroundUpdate(
+  opts: AutoUpdateOptions & { delayMs?: number; install?: boolean } = {},
+): void {
+  const timer = setTimeout(() => {
+    void (async () => {
+      try {
+        // Migrations first: they compare the cache stamp against the version we
+        // are actually running, and the install below rewrites that stamp.
+        await runPostUpdateMigrations();
+        if (opts.install !== false) {
+          await checkAndInstallUpdate({ checkIntervalHours: opts.checkIntervalHours });
+        }
+      } catch (e) {
+        logger.debug({ error: e }, 'Auto-update: background update failed (non-fatal)');
+      }
+    })();
+  }, opts.delayMs ?? BACKGROUND_UPDATE_DELAY_MS);
+  // Never hold the process open just to run an update.
+  timer.unref();
 }
 
 /**
