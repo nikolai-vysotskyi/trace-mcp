@@ -119,6 +119,9 @@ export class AnalyticsStore {
     this.db = new Database(p);
     restrictDbPerms(p);
     this.db.pragma('journal_mode = WAL');
+    // Concurrent syncs are now routine (the Stop hook fires one per turn), so
+    // wait out a writer instead of failing the read with SQLITE_BUSY.
+    this.db.pragma('busy_timeout = 5000');
 
     this.db.pragma(`journal_size_limit = ${100 * 1024 * 1024}`);
     this.db.pragma('foreign_keys = OFF'); // for performance during bulk inserts

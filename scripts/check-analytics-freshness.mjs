@@ -56,32 +56,62 @@ function round1(n) {
   return Math.round(n * 10) / 10;
 }
 
-/** mtime (epoch ms) of the newest `*.jsonl` under ~/.claude/projects, or null. */
-function newestSessionLogMtime(root) {
+/** mtime (epoch ms) of the newest `*.jsonl` directly under `dir`, or null. */
+function newestJsonlIn(dir) {
   let newest = null;
-  let dirs;
+  let files;
   try {
-    dirs = fs.readdirSync(root, { withFileTypes: true });
+    files = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
     return null;
   }
-  for (const d of dirs) {
-    if (!d.isDirectory()) continue;
-    let files;
+  for (const f of files) {
+    if (!f.isFile() || !f.name.endsWith('.jsonl')) continue;
     try {
-      files = fs.readdirSync(path.join(root, d.name), { withFileTypes: true });
+      const { mtimeMs } = fs.statSync(path.join(dir, f.name));
+      if (newest === null || mtimeMs > newest) newest = mtimeMs;
     } catch {
-      continue;
+      /* skip */
     }
-    for (const f of files) {
-      if (!f.isFile() || !f.name.endsWith('.jsonl')) continue;
-      try {
-        const { mtimeMs } = fs.statSync(path.join(root, d.name, f.name));
-        if (newest === null || mtimeMs > newest) newest = mtimeMs;
-      } catch {
-        /* skip */
-      }
+  }
+  return newest;
+}
+
+/**
+ * Every directory `syncAnalytics` ingests from: Claude Code's
+ * `~/.claude/projects/<encoded>/`, plus Claw Code's `<project>/.claw/sessions`
+ * for each registered project. A checker that watches a narrower set than the
+ * syncer would report `ok` on exactly the silent staleness it exists to catch.
+ */
+export function sessionLogDirs(home) {
+  const dirs = [];
+  const claudeRoot = path.join(home, '.claude', 'projects');
+  try {
+    for (const d of fs.readdirSync(claudeRoot, { withFileTypes: true })) {
+      if (d.isDirectory()) dirs.push(path.join(claudeRoot, d.name));
     }
+  } catch {
+    /* no Claude Code logs on this machine */
+  }
+  try {
+    const registry = JSON.parse(
+      fs.readFileSync(path.join(home, '.trace-mcp', 'registry.json'), 'utf8'),
+    );
+    for (const entry of Object.values(registry.projects ?? {})) {
+      if (entry?.root) dirs.push(path.join(entry.root, '.claw', 'sessions'));
+    }
+  } catch {
+    /* no registry, or unreadable — Claude Code dirs still checked */
+  }
+  return dirs;
+}
+
+/** mtime (epoch ms) of the newest session log anywhere the syncer looks. */
+function newestSessionLogMtime(home) {
+  let newest = null;
+  for (const dir of sessionLogDirs(home)) {
+    const m = newestJsonlIn(dir);
+    if (m !== null && (newest === null || m > newest)) newest = m;
   }
   return newest;
 }
@@ -106,7 +136,7 @@ function main() {
     }
   }
 
-  const newestLogMs = newestSessionLogMtime(path.join(os.homedir(), '.claude', 'projects'));
+  const newestLogMs = newestSessionLogMtime(os.homedir());
   const parsedAtMs = watermark.parsed_at ? Date.parse(watermark.parsed_at) : null;
   const result = evaluateFreshness({
     parsedAtMs: Number.isNaN(parsedAtMs) ? null : parsedAtMs,

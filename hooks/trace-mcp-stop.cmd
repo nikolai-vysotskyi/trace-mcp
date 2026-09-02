@@ -1,9 +1,12 @@
 @echo off
 REM trace-mcp-stop v0.1.0
 REM trace-mcp Stop hook (Windows)
-REM Async session mining: spawns a detached `trace-mcp memory mine`, then an
-REM incremental `trace-mcp analytics sync` (TRA-695), and exits immediately so
-REM the agent's turn completion is never blocked.
+REM Async session mining: spawns a detached `trace-mcp memory mine` and an
+REM incremental `trace-mcp analytics sync` (TRA-695), then exits immediately so
+REM the agent's turn completion is never blocked. The two write to different
+REM databases, so they run side by side rather than chained; each gets its own
+REM log file. Only the mine is covered by the single-flight lock — a concurrent
+REM `analytics sync` is harmless, it re-skips every unchanged log.
 
 setlocal enabledelayedexpansion
 
@@ -38,6 +41,7 @@ powershell -NoProfile -Command ^
   "$logFile = Join-Path $env:TEMP ('trace-mcp-stop-mining-' + $hash + '.log');" ^
   "$proc = Start-Process -FilePath '%TRACE_MCP_BIN%' -ArgumentList @('memory','mine','--project',$projectRoot) -WindowStyle Hidden -PassThru -RedirectStandardOutput $logFile -RedirectStandardError $logFile;" ^
   "if ($proc) { $proc.Id | Out-File -FilePath $lockFile -Encoding ascii -Force };" ^
-  "Start-Process -FilePath '%TRACE_MCP_BIN%' -ArgumentList @('analytics','sync') -WindowStyle Hidden | Out-Null"
+  "$syncLog = Join-Path $env:TEMP ('trace-mcp-stop-analytics-' + $hash + '.log');" ^
+  "Start-Process -FilePath '%TRACE_MCP_BIN%' -ArgumentList @('analytics','sync') -WindowStyle Hidden -RedirectStandardOutput $syncLog -RedirectStandardError $syncLog | Out-Null"
 
 exit /b 0

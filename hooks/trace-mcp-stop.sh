@@ -61,7 +61,9 @@ LOG_FILE="${TMPDIR:-/tmp}/trace-mcp-stop-mining-${PROJECT_HASH}.log"
   nohup "$TRACE_MCP_BIN" memory mine \
     --project "$PROJECT_ROOT" \
     >"$LOG_FILE" 2>&1
-  # Incremental: skips every session log whose mtime hasn't moved.
+  # Incremental: skips every session log whose mtime hasn't moved. Deliberately
+  # NOT --project — the whole point of TRA-695 is that a project nobody stops in
+  # goes stale unnoticed, and a global pass costs one stat per log file.
   nohup "$TRACE_MCP_BIN" analytics sync >>"$LOG_FILE" 2>&1
   rm -f "$LOCK_FILE" 2>/dev/null || true
 ) >/dev/null 2>&1 &
