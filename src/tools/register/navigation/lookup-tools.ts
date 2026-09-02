@@ -230,6 +230,9 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
         };
       }
       markExplored(filePath);
+      // A suffix-resolved path was consulted under its canonical name too, so a
+      // follow-up Read of either spelling counts as consulted.
+      if (result.value.path !== filePath) markExplored(result.value.path);
       const fileRow = store.getFile(result.value.path);
       const freshness = fileRow ? computeFileFreshness(projectRoot, fileRow) : 'fresh';
       const summary = aggregateFreshness([freshness]);
