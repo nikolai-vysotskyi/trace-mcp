@@ -37,6 +37,15 @@ describe('Store.resolveFile', () => {
     expect(store.resolveFile('/app/Models/City.php')?.path).toBe('pkg/app/Models/City.php');
   });
 
+  it('prefers the normalized exact match over suffix candidates', () => {
+    const store = createTestStore();
+    seed(store, ['app/Models/City.php', 'sub/app/Models/City.php']);
+    // './' spelling must resolve to the root file, not be rejected as ambiguous
+    // just because a subdirectory holds a file with the same suffix.
+    expect(store.resolveFile('./app/Models/City.php')?.path).toBe('app/Models/City.php');
+    expect(store.resolveFile('/app/Models/City.php')?.path).toBe('app/Models/City.php');
+  });
+
   it('refuses to guess when the suffix is ambiguous', () => {
     const store = createTestStore();
     seed(store, ['a/app/Models/City.php', 'b/app/Models/City.php']);

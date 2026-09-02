@@ -5,6 +5,7 @@ export class FileRepository {
   private readonly _stmts: {
     insertFile: Database.Statement;
     getFile: Database.Statement;
+    resolveSuffix: Database.Statement;
     getFileById: Database.Statement;
     updateFileHash: Database.Statement;
     updateFileMtime: Database.Statement;
@@ -29,6 +30,7 @@ export class FileRepository {
          RETURNING id`,
       ),
       getFile: db.prepare('SELECT * FROM files WHERE path = ?'),
+      resolveSuffix: db.prepare('SELECT * FROM files WHERE path LIKE ? ESCAPE ? LIMIT 2'),
       getFileById: db.prepare('SELECT * FROM files WHERE id = ?'),
       updateFileHash: db.prepare(
         "UPDATE files SET content_hash = ?, byte_length = ?, mtime_ms = ?, indexed_at = datetime('now') WHERE id = ?",
@@ -86,9 +88,17 @@ export class FileRepository {
     if (exact) return exact;
     const normalized = path.replace(/^\.?\//, '');
     if (!normalized) return undefined;
-    const rows = this.db
-      .prepare('SELECT * FROM files WHERE path = ? OR path LIKE ? ESCAPE ? LIMIT 2')
-      .all(normalized, `%/${normalized.replace(/([%_\\])/g, '\\$1')}`, '\\') as FileRow[];
+    if (normalized !== path) {
+      // An exact hit on the normalized spelling is still exact — it must not be
+      // put up against suffix candidates, or a same-named file in some
+      // subdirectory would make it look ambiguous.
+      const normalizedExact = this._stmts.getFile.get(normalized) as FileRow | undefined;
+      if (normalizedExact) return normalizedExact;
+    }
+    const rows = this._stmts.resolveSuffix.all(
+      `%/${normalized.replace(/([%_\\])/g, '\\$1')}`,
+      '\\',
+    ) as FileRow[];
     return rows.length === 1 ? rows[0] : undefined;
   }
 
