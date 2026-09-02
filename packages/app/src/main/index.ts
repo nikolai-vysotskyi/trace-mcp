@@ -3,6 +3,7 @@ import { execFile, spawn } from 'child_process';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import { resolveAutoUpdaterExport } from './autoupdater-interop';
 import { t } from './i18n';
 import { registerAppMenu } from './menu';
 import { getLauncherDir } from './trace-home';
@@ -622,10 +623,7 @@ async function getAutoUpdater() {
     throw new Error(`electron-updater is not the update channel on ${process.platform}`);
   }
   const mod = await import('electron-updater');
-  const autoUpdater = mod.autoUpdater ?? mod.default?.autoUpdater;
-  if (!autoUpdater) {
-    throw new Error('electron-updater did not export autoUpdater');
-  }
+  const autoUpdater = resolveAutoUpdaterExport(mod);
   // Download only when the user asks: the renderer's Update button drives the
   // whole flow, so a silent background download would fight the UI's state.
   autoUpdater.autoDownload = false;
