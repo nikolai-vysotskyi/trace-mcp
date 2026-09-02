@@ -401,6 +401,11 @@ ${yaml(surfaces ? breakdown(surfaces) : {})}
 #                       going through the shutdown handler — SIGKILL, an OS
 #                       memory kill, a native crash, or power loss
 #   unclean_pct         the ratio; this is the number to watch week to week
+#   active_users_28d    the report's own \`activeUsers\`, as the denominator's
+#                       scale. NOT "installs that sent these fields": during
+#                       rollout most of that population is on a version that
+#                       does not send them at all, so the two diverge and only
+#                       the ratio above is safe to read as a rate.
 #
 # A machine that sleeps, reboots or logs out normally sends SIGTERM and is NOT
 # counted here. Reboot-heavy weeks still lift it, so read the trend and not a
@@ -410,7 +415,7 @@ daemon:
 ${errLine(daemon?.error)}  starts_28d: ${num(daemon)}
   unclean_stops_28d: ${num(daemon, 1)}
   unclean_pct: ${yamlNum(share(num(daemon, 1), num(daemon)))}
-  reporting_installs_28d: ${num(daemon, 2)}
+  active_users_28d: ${num(daemon, 2)}
 by_country:
 ${yaml(breakdown(countries))}
 by_client:
