@@ -955,6 +955,7 @@ export class ProjectManager {
         freedBytes: 0,
         topology: { subprojects: 0, services: 0 },
         decisions: { decisions: 0, chunks: 0, clusters: 0, memos: 0 },
+        failures: [{ tier: 'artifacts', error: String(err) }],
       };
     }
     unregisterProject(root);
@@ -968,6 +969,7 @@ export class ProjectManager {
         projectRoot: root,
         deletedFiles: artifacts.deleted.length,
         freedBytes: artifacts.freedBytes,
+        failures: artifacts.failures,
       },
       'Project removed from daemon',
     );
