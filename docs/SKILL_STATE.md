@@ -20,12 +20,46 @@ For a 50-step coding workflow, an agent routinely spends **250,000+ prompt token
 ## The Solution: Linear O(T) State Engine
 
 With `SKILL.state`, the agent maintains an explicit, structured execution state in SQLite. Context is bounded to:
-1. **Compact State Block** (~150–250 tokens in Markdown format).
+1. **Compact State Block** — replayed across 30 real agent sessions, the state
+   block a turn actually carries averages **343 tokens**, above the ~150–250 the
+   design assumed. Plans and modified-file lists on real tasks are longer than the
+   examples they were sized against.
 2. **Sliding Window** of the last 1–2 tool interactions (~1,000 tokens).
 
 $$\text{Tokens}_{\text{StateEngine}} = \sum_{t=1}^T \left( C_0 + |S(t)| + W \right) = \mathcal{O}(T)$$
 
-This delivers **60% to 88% prompt token reductions** on long-horizon agent tasks while increasing Pass@1 rates through explicit dead-end avoidance and atomic checkpoints.
+## What is actually measured
+
+`pnpm bench:state-replay` replays local Claude Code session logs: the ReAct arm is
+the prompt size the provider really billed each turn, and the state block is
+rebuilt turn by turn from what the session had done *so far* (its TodoWrite plan,
+the files it had edited, the symbols it had looked up) and sized with the shipped
+serializer. Nothing a turn could not yet know is charged to it.
+
+On 30 real sessions (median 251 turns, window = 2):
+
+| Metric | Median |
+|---|---|
+| State block carried per turn | 343 tokens |
+| Raw prompt-token reduction | **74.0%** |
+| Reduction priced with prompt caching | **67.3%** |
+
+Two results matter more than the headline:
+
+- **Prompt caching eats part of the win.** ReAct's history is append-only and
+  therefore almost entirely cache reads at 0.1x. A sliding window rewrites its tail
+  every turn at 1.25x. Both arms are priced with the same multipliers on their
+  observed ordinary / cache-write / cache-read components; raw token counts still
+  overstate the saving by about 7 points at the median.
+- **The win is not uniform, and short sessions can lose.** The one sub-30-turn
+  session in the set (15 turns) came out at 5% raw and **−7.2%** billed. That is a
+  single observation: it shows the sign can flip on short tasks, and does not
+  locate the crossover. Sizing that threshold needs a stratified short-session
+  sample this set does not contain.
+
+`src/eval/state-benchmark.ts` remains a closed-form model whose output is a
+restatement of its constants; the replay harness is the number to quote. Neither
+measures task success — we have no Pass@1 evidence, only prompt cost.
 
 ---
 
