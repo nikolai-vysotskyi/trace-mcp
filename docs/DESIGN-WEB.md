@@ -92,6 +92,19 @@ error has now shipped twice:
   `SCROLL →`, `LICENSE`, and the terminal's comment lines. The "no" answer in
   our own comparison table was the least readable text on the site.
 
+**Raising `--text-disabled` did not flatten the ramp — measured, not assumed.**
+The objection to raising it was that `#848484` and `--text-secondary` `#999999`
+sit 21 hex steps apart and would stop reading as two levels, trading a contrast
+failure for a hierarchy failure. In CIE L\* — which is what the eye separates on,
+not hex distance — the four dark levels land at 55.1 / 63.2 / 92.0 / 100.0, and
+the four light ones at 46.0 / 37.8 / 9.3 / 0.0. Both ramps step
+**8 / 29 / 8**: the disabled-to-secondary gap is 8.1 in dark and 8.2 in light.
+Light has always shipped that separation and has always read as four levels, so
+dark now reads as four levels for the same reason. Neither of the alternatives —
+pushing `--text-secondary` up to keep the gap, or dropping dark to three levels —
+is needed. Compare greys in L\*, not in hex; hex distance is not perception, and
+it is what made this look like a trade-off.
+
 Dark mode is the default. Light is opt-in and equally first-class — never
 ship a change checked in one mode only.
 
@@ -321,8 +334,18 @@ appearance without a screenshot or a measurement is not a finding.
       alongside the doc pages because it carries its own copy of the tokens
       (§7) and has drifted from this table before.
 - [ ] A new `aria-hidden` on anything the sweep now skips is deliberate
-      decoration, not a way to silence a failure. Only two exist: the YC badge
-      mark and the landing's 400px ghost `94%`.
+      decoration, not a way to silence a failure. `aria-hidden` means "not for
+      the AT tree"; it does not exempt painted text from 1.4.3, and the two are
+      not the same axis. `scroll →` is the case that proves it — correctly
+      `aria-hidden` (a screen reader navigates the region directly and never
+      scrolls it) yet visible functional text, and on top of that `display:none`
+      until the region actually overflows. Both of the sweep's skips dropped it,
+      so the one label §2 argues hardest for was the one label nothing measured:
+      44 of them on `/` and `/configuration.html` alone. The sweep now reveals
+      every `.scroll-hint` and checks it despite `aria-hidden`. Anything else
+      given `aria-hidden` must be decoration you would not mind being illegible
+      — currently the YC badge mark, the `MIT` and licence badge marks, the
+      terminal's `$` prompt, and the landing's 400px ghost `94%`.
 
 **Widths**
 - [ ] Desktop (1440px) and narrow (≤500px) both screenshotted.
