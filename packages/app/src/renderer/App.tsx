@@ -755,6 +755,11 @@ export function App() {
       : [newMenuTab()],
   );
   const { theme } = useTheme();
+  /* Hoisted here, not inside AppTabView: one owner of update state for the
+     whole window, not one per mounted tab. AppTabView used to call
+     useUpdateCheck() itself, so every kept-alive tab started its own
+     10-minute poll and its own update-progress subscription. */
+  const update = useUpdateCheck();
 
   const openOrFocusProjectTab = useCallback((root: string) => {
     setTabs((prev) => {
@@ -819,20 +824,32 @@ export function App() {
     return api.onFocusTab((tabId) => selectTab(tabId));
   }, [selectTab]);
 
-  /* Cmd/Ctrl+T new tab, Ctrl+Tab / Ctrl+Shift+Tab cycle. Cmd/Ctrl+W (close tab)
-     and Cmd/Ctrl+1…9 (select tab by index) are deliberately NOT bound here:
-     the native View menu already owns CmdOrCtrl+1…9 for section switching and
-     CmdOrCtrl+W for `role: 'close'` (main/menu.ts), which now closes the
-     app's only window instead of a tab. Binding the same combo again here
-     would fire both handlers on every press. Repointing those accelerators
-     needs a main/menu.ts change, out of this issue's renderer-only scope. */
+  /* Cmd/Ctrl+T new tab, Cmd/Ctrl+W close active tab, Cmd/Ctrl+1…9 select tab
+     by index, Ctrl+Tab / Ctrl+Shift+Tab cycle. These own CmdOrCtrl+W and
+     CmdOrCtrl+1…9 outright — main/menu.ts no longer registers accelerators
+     for them (see menu.ts sectionItems / the "Close tab" item), so there is
+     nothing left to double-fire against. */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const primary = e.metaKey || e.ctrlKey;
-      if (primary && !e.altKey && !e.shiftKey && (e.key === 't' || e.key === 'T')) {
-        e.preventDefault();
-        openOrFocusMenuTab();
-        return;
+      if (primary && !e.altKey && !e.shiftKey) {
+        if (e.key === 't' || e.key === 'T') {
+          e.preventDefault();
+          openOrFocusMenuTab();
+          return;
+        }
+        if (e.key === 'w' || e.key === 'W') {
+          e.preventDefault();
+          const active = tabs.find((tab) => tab.active);
+          if (active) closeTab(active.id);
+          return;
+        }
+        if (e.key >= '1' && e.key <= '9') {
+          e.preventDefault();
+          const target = tabs[Number(e.key) - 1];
+          if (target) selectTab(target.id);
+          return;
+        }
       }
       if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'Tab') {
         e.preventDefault();
@@ -841,7 +858,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [openOrFocusMenuTab, cycleTab]);
+  }, [openOrFocusMenuTab, cycleTab, closeTab, selectTab, tabs]);
 
   return (
     <div
@@ -857,6 +874,8 @@ export function App() {
           tab={tab}
           isActive={tab.active}
           initialGlobalTab={tab.id === firstTabId ? initialParams.tab : undefined}
+          update={update}
+          onCloseSelf={() => closeTab(tab.id)}
         />
       ))}
     </div>
@@ -867,19 +886,19 @@ function AppTabView({
   tab,
   isActive,
   initialGlobalTab,
+  update,
+  onCloseSelf,
 }: {
   tab: TabInfo;
   isActive: boolean;
   initialGlobalTab?: string | null;
+  update: UpdateCheck;
+  onCloseSelf: () => void;
 }) {
   const { t } = useTranslation('shell');
   const isProject = tab.kind === 'project';
   const root = tab.root ?? null;
   const { appearance, setAppearance } = useTheme();
-  /* One owner of update state for the whole window: the app menu's header
-     reports it, the card acts on it, and "Check for updates…" — from the
-     application menu or from the app menu — drives the same check (TRA-363). */
-  const update = useUpdateCheck();
 
   const [globalTab, setGlobalTab] = useState<GlobalTab>(normalizeGlobalTab(initialGlobalTab));
   const [projectTab, setProjectTab] = useState<ProjectTab>('overview');
@@ -1079,9 +1098,21 @@ function AppTabView({
         case 'check-for-update':
           update.check();
           break;
+        case 'close-tab':
+          onCloseSelf();
+          break;
       }
     });
-  }, [isActive, toggleSidebar, selectSection, focusSearch, openSettings, pickProject, update.check]);
+  }, [
+    isActive,
+    toggleSidebar,
+    selectSection,
+    focusSearch,
+    openSettings,
+    pickProject,
+    update.check,
+    onCloseSelf,
+  ]);
 
   // ⌘P — the second quick-open key. Not in the menu (one accelerator per item).
   useEffect(() => {

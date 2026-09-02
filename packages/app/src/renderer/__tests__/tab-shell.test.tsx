@@ -220,4 +220,75 @@ describe('tab bar ownership', () => {
 
     expect(visibleText('.ws-sidebar')).toContain('Workspace');
   });
+
+  /* main/menu.ts no longer accelerates CmdOrCtrl+W or CmdOrCtrl+1…9 — this
+     handler owns both outright now (TRA-700 review). */
+  it('Cmd/Ctrl+W closes the active project tab, falling back to the menu tab', async () => {
+    await renderApp('/?view=menu&tab=workspace');
+    await act(async () => emitOpenTab('/projects/assetfeed'));
+    expect(screen.getByTitle('/projects/assetfeed')).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'w', metaKey: true });
+    });
+
+    expect(screen.queryByTitle('/projects/assetfeed')).toBeNull();
+    expect(visibleText('.ws-sidebar')).toContain('Workspace');
+  });
+
+  it('Cmd/Ctrl+W on the menu tab is a no-op — the menu tab is never closable', async () => {
+    await renderApp('/?view=menu&tab=workspace');
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'w', metaKey: true });
+    });
+
+    expect(document.querySelector('.ws-sidebar')).not.toBeNull();
+  });
+
+  it('Cmd/Ctrl+1…9 selects a tab by position', async () => {
+    await renderApp('/?view=menu&tab=workspace');
+    await act(async () => emitOpenTab('/projects/assetfeed'));
+    // Opening activated the project tab (position 2); ⌘1 should hand focus
+    // back to the menu tab at position 1.
+    expect(visibleText('.ws-sidebar')).not.toContain('Workspace');
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: '1', metaKey: true });
+    });
+
+    expect(visibleText('.ws-sidebar')).toContain('Workspace');
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: '2', metaKey: true });
+    });
+
+    expect(screen.getByTitle('/projects/assetfeed')).toBeTruthy();
+    expect(visibleText('.ws-sidebar')).not.toContain('Workspace');
+  });
+
+  /* Regression for the review finding on #807: useUpdateCheck() used to live
+     inside AppTabView, so every kept-alive tab started its own poller and
+     update-progress subscription — N mounted tabs, N update checks. It now
+     lives in the shell and is passed down, so opening a second tab must not
+     trigger a second check. */
+  it('shares one update check across every mounted tab, not one per tab', async () => {
+    const api = window.electronAPI as unknown as { checkForUpdate: ReturnType<typeof vi.fn> };
+    await renderApp('/?view=menu&tab=workspace');
+    expect(api.checkForUpdate).toHaveBeenCalledTimes(1);
+
+    await act(async () => emitOpenTab('/projects/assetfeed'));
+
+    expect(api.checkForUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('Cmd/Ctrl+N (beyond the open tab count) is a no-op', async () => {
+    await renderApp('/?view=menu&tab=workspace');
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: '2', metaKey: true });
+    });
+
+    expect(document.querySelector('[data-tabbar]')?.getAttribute('data-tabbar')).toBe('off');
+  });
 });

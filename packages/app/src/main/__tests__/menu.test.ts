@@ -95,9 +95,32 @@ describe('application menu', () => {
     expect(keys.get('Quick open…')).toBe('CmdOrCtrl+Shift+O');
     expect(keys.get('Open project…')).toBe('CmdOrCtrl+O');
     expect(keys.get('New window')).toBe('CmdOrCtrl+N');
-    expect(keys.get('Close tab')).toBe('CmdOrCtrl+W');
     expect(keys.get('Close window')).toBe('CmdOrCtrl+Shift+W');
     expect(keys.get('Reload')).toBe('CmdOrCtrl+R');
+  });
+
+  /* TRA-700: one BrowserWindow for the whole app now, so `role: 'close'` on
+     CmdOrCtrl+W would close the app's only window instead of a tab. The
+     renderer's own keydown handler (App.tsx) owns CmdOrCtrl+W and
+     CmdOrCtrl+1…9 outright — nothing here may accelerate either, or the two
+     handlers would double-fire on the same keypress. */
+  it('leaves CmdOrCtrl+W and CmdOrCtrl+1…9 unaccelerated — the renderer owns them', () => {
+    setWindowSections(1, [
+      { id: 'overview', label: 'Overview' },
+      { id: 'ask', label: 'Ask' },
+      { id: 'graph', label: 'Graph' },
+    ]);
+    buildAppMenu();
+    const keys = accelerators();
+    expect(keys.get('Close tab')).toBeUndefined();
+    for (const value of keys.values()) {
+      expect(value).not.toMatch(/^CmdOrCtrl\+[1-9]$/);
+    }
+  });
+
+  it('still lets a mouse close the active tab, routed through app-command', () => {
+    click(menu('File'), 'Close tab');
+    expect(sent).toEqual([{ command: 'close-tab' }]);
   });
 
   /* TRA-363: the sidebar's app menu offers the same four actions. Both lists
@@ -133,7 +156,11 @@ describe('application menu', () => {
     expect(sent).toEqual([{ command: 'toggle-sidebar' }, { command: 'find' }]);
   });
 
-  it('numbers the focused window’s own sections ⌘1…⌘n', () => {
+  /* TRA-700: the View menu still lists the focused window's own sections by
+     name — clicking one still works — it just no longer carries a ⌘-number
+     of its own. Selecting a tab's section by number is now the renderer's
+     CmdOrCtrl+1…9 keydown handler (App.tsx), covered in tab-shell.test.tsx. */
+  it('lists the focused window’s own sections, by label, still clickable', () => {
     setWindowSections(1, [
       { id: 'overview', label: 'Overview' },
       { id: 'ask', label: 'Ask' },
@@ -141,21 +168,11 @@ describe('application menu', () => {
     ]);
     buildAppMenu();
     const view = menu('View');
-    expect(view.find((i) => i.label === 'Overview')?.accelerator).toBe('CmdOrCtrl+1');
-    expect(view.find((i) => i.label === 'Graph')?.accelerator).toBe('CmdOrCtrl+3');
+    expect(view.find((i) => i.label === 'Overview')).toBeTruthy();
+    expect(view.find((i) => i.label === 'Graph')).toBeTruthy();
 
     click(view, 'Graph');
     expect(sent).toEqual([{ command: 'select-section', arg: 3 }]);
-  });
-
-  it('caps the section list at the nine keys that exist', () => {
-    setWindowSections(
-      1,
-      Array.from({ length: 12 }, (_, i) => ({ id: `s${i}`, label: `Section ${i}` })),
-    );
-    buildAppMenu();
-    const numbered = menu('View').filter((i) => /^CmdOrCtrl\+\d$/.test(i.accelerator ?? ''));
-    expect(numbered).toHaveLength(9);
   });
 
   it('shows no section items for a window that never reported any', () => {
