@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
+import { UNGATED_META_TOOLS } from '../../src/server/tool-filter.js';
 import { resolvePreset, TOOL_PRESETS } from '../../src/tools/project/presets.js';
 
 describe('Tool config schema', () => {
@@ -19,6 +20,15 @@ describe('Tool config schema', () => {
   it('every non-full preset carries core infra tools (search, get_symbol, register_edit, batch)', () => {
     for (const [name, tools] of Object.entries(TOOL_PRESETS)) {
       if (tools === 'all') continue;
+      // `router` is the deliberate exception (TRA-675): its membership is empty
+      // and its usability comes from `batch`, which every session gets through
+      // UNGATED_META_TOOLS rather than through preset membership. Asserted
+      // instead by proxy-tool-preset.test.ts (the advertised surface) and
+      // batch-door.test.ts (deferred tools stay dispatchable).
+      if (tools.length === 0) {
+        expect(UNGATED_META_TOOLS.has('batch'), `preset "${name}" has no door`).toBe(true);
+        continue;
+      }
       expect(tools, `preset "${name}" is missing search`).toContain('search');
       expect(tools, `preset "${name}" is missing get_symbol`).toContain('get_symbol');
       expect(tools, `preset "${name}" is missing register_edit`).toContain('register_edit');

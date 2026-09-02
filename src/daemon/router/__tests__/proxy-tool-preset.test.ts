@@ -353,6 +353,18 @@ describe('daemon proxy answers load_tools locally (TRA-402)', () => {
     expect(await p.listTools()).not.toContain('get_pagerank');
   });
 
+  it('lists the deferred surface even when no tools/list came through this backend', async () => {
+    // The swap case (session starts local, router moves it to the proxy): the
+    // client already listed tools through the *other* backend, so the proxy
+    // never saw a tools/list and reported an empty catalog — the discovery half
+    // of progressive disclosure silently gone (TRA-675). It primes itself now.
+    const p = await startEscalatingProxy(minimalConfig);
+    const result = (await p.loadTools({})) as { deferred_tools: string[] };
+    expect(result.deferred_tools.length).toBeGreaterThan(100);
+    expect(result.deferred_tools).toContain('get_pagerank');
+    expect(result.deferred_tools).not.toContain('search');
+  });
+
   it('passes toolSurface when constructing ProxyBackend, or escalation is dead on the shipped path', () => {
     const src = readFileSync(fileURLToPath(new URL('../session.ts', import.meta.url)), 'utf8');
     const ctor = src.slice(src.indexOf('new ProxyBackend('));
@@ -372,6 +384,79 @@ describe('StdioSession wires the filter into every proxy backend (TRA-250)', () 
     expect(ctor.slice(0, ctor.indexOf('});')), 'session.ts must pass toolFilter').toContain(
       'toolFilter:',
     );
+  });
+});
+
+describe('the router preset and batch-as-door (TRA-675)', () => {
+  const routerConfig = { tools: { preset: 'router' } } as TraceMcpConfig;
+
+  it('advertises exactly the ungated meta-tools and nothing else', async () => {
+    const names = await proxiedToolNames(routerConfig);
+    expect([...names].sort()).toEqual([...UNGATED_META_TOOLS].sort());
+  });
+
+  it('forwards a batch whose inner call is outside the preset', async () => {
+    // This is what makes an empty preset usable rather than crippled: the
+    // filter applies to the outer tool name, so `batch` reaches the daemon's
+    // full registry with no escalation round-trip. Deliberate, not accidental.
+    const { backend, transport, toClient } = await startProxy(routerConfig);
+    await backend.send({
+      jsonrpc: '2.0',
+      id: 42,
+      method: 'tools/call',
+      params: { name: 'batch', arguments: { calls: [{ tool: 'get_circular_imports', args: {} }] } },
+    } as unknown as JSONRPCMessage);
+    expect(
+      transport.forwarded.some((m) => (m as { method?: string }).method === 'tools/call'),
+    ).toBe(true);
+    expect((toClient.at(-1) as { error?: unknown }).error).toBeUndefined();
+  });
+
+  it('rejects a batch whose inner call is excluded by config, without forwarding it', async () => {
+    // A preset is a deferral; `tools.exclude` is a restriction. It has to hold
+    // through every door, so the proxy reads the inner names for this one case.
+    const transport = new FakeDaemonTransport(DAEMON_TOOLS);
+    const toClient: JSONRPCMessage[] = [];
+    const config = {
+      tools: { preset: 'router', exclude: ['get_circular_imports'] },
+    } as TraceMcpConfig;
+    const backend = new ProxyBackend({
+      daemonUrl: 'http://127.0.0.1:0',
+      projectRoot: '/nonexistent/fake-project',
+      clientId: 'tra-675-test',
+      toolFilter: createToolFilter(config),
+      toolSurface: {
+        isExcluded: (name) => (config.tools?.exclude ?? []).includes(name),
+        load: () => undefined,
+      },
+      transportFactory: () => transport,
+    });
+    backend.onmessage = (m) => toClient.push(m);
+    backends.push(backend);
+    await backend.start();
+
+    await backend.send({
+      jsonrpc: '2.0',
+      id: 43,
+      method: 'tools/call',
+      params: {
+        name: 'batch',
+        arguments: {
+          calls: [
+            { tool: 'search', args: { query: 'x' } },
+            { tool: 'get_circular_imports', args: {} },
+          ],
+        },
+      },
+    } as unknown as JSONRPCMessage);
+
+    const reply = toClient.at(-1) as { id?: unknown; error?: { code: number; message: string } };
+    expect(reply.id).toBe(43);
+    expect(reply.error?.message).toContain('get_circular_imports');
+    expect(
+      transport.forwarded.some((m) => (m as { method?: string }).method === 'tools/call'),
+      'an excluded tool must never reach the daemon, not even wrapped in a batch',
+    ).toBe(false);
   });
 });
 

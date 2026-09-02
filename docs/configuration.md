@@ -443,7 +443,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 ```jsonc
 {
   "tools": {
-    "preset": "standard",                // "full" | "standard" | "minimal" | "review" | "architecture" | "dev" | "security" | "design" | "perf"
+    "preset": "standard",                // "full" | "standard" | "minimal" | "review" | "architecture" | "dev" | "security" | "design" | "perf" | "router"
     "description_verbosity": "full",     // "full" | "minimal" | "none"
     "instructions_verbosity": "full",    // "full" | "minimal" | "none" — controls the tool-routing block
     "client_profile": "auto",            // "auto" | "off" | "claude-code" | "codex" | "cursor" | "vscode" | "generic"
@@ -456,7 +456,7 @@ The `tools.*` section controls what the MCP server injects into every session �
 
 | Option | Default | Description |
 |---|---|---|
-| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (41 tools), `dev` (42 tools), `security` (35 tools), `design` (26 tools), `perf` (31 tools), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
+| `tools.preset` | `"minimal"` | Tool preset — the number is the upper bound on the tool surface; framework-gated tools only appear when the framework is detected. `minimal` (28 tools, default), `standard` (60 tools — covers >99% of real-world tool calls per session-log mining), `review` (32 tools), `architecture` (41 tools), `dev` (42 tools), `security` (35 tools), `design` (26 tools), `perf` (31 tools), `router` (10 tools — see [The router preset](#the-router-preset)), or `full` (every registered tool, opt-in). A preset is a *deferral*, not a restriction: everything outside it is registered but hidden, and `load_tools` pulls any of it in mid-session. `tools.exclude` remains a hard restriction that `load_tools` cannot undo. |
 | `tools.include` | — | Whitelist specific tools by name |
 | `tools.exclude` | — | Blacklist specific tools by name |
 | `tools.description_verbosity` | `"full"` | Per-tool description length. `minimal` = first sentence. `none` = empty |
@@ -498,6 +498,14 @@ returns each loaded tool's full JSON schema in its response, and the loaded tool
 is immediately reachable through `batch` — `batch({ calls: [{ tool, args }] })`
 — which is in every preset.
 
+`batch` dispatches by name against the whole registry, deferred tools included,
+so a deferred tool is callable through it *without* loading it first. That is
+deliberate (it is what the `router` preset below is built on), and the price is
+one round-trip's worth of schema you never see: you have to know the tool's
+arguments, or read them from `load_tools`. `tools.exclude` is not reachable this
+way — the exclusion is checked on the inner call names too, on both the local
+and the daemon-backed path.
+
 What escalation cannot do is widen `tools.exclude`. Exclusion stays a hard
 restriction; `load_tools` reports those names under `blocked` and leaves them
 off. If you want a tool gone, exclude it — don't rely on the preset.
@@ -509,13 +517,38 @@ in a flag set to save tokens into a 36.3k-token surface instead of a 7.8k one.
 Failing toward the cheap surface costs at most one `load_tools` round-trip.
 
 Measured `tools/list` cost of each preset on this repo (serialized chars, then
-o200k tokens, 2026-09-01): `design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
+o200k tokens, 2026-09-01; `router` added 2026-09-02): `router` 7.1k / 1.6k,
+`design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
 34.0k / 7.8k, `review` 37.3k / 8.6k, `security` 41.5k / 9.6k, `architecture`
 44.3k / 10.2k, `dev` 51.3k / 11.9k, `standard` 64.6k / 14.9k, `full` 157.7k /
 36.3k. Against `full`, that is a 67% cut on the widest role preset (`dev`) and
 86% on the narrowest (`design`) — framework-gated tools are excluded, so a
 project that detects the matching framework pays more.
 `load_tools` itself is 0.9k of that — the price of making the other 123k optional.
+
+### The router preset
+
+`"preset": "router"` advertises **no** code-intelligence tools at all — only the
+session meta-tools that are never gated, `load_tools` and `batch` among them. Ten
+tools, 1.6k tokens, 95.6% below `full` and 79.2% below the `minimal` default.
+
+It is usable rather than crippled because the two halves cover each other:
+`load_tools()` names the ~150 deferred tools (names only — the schemas are what
+you are not paying for), and `batch` calls any of them directly. So the session
+pays for a catalog instead of a surface, and there is no escalation round-trip
+unless you want the schemas.
+
+```jsonc
+{ "tools": { "preset": "router" } }      // or: trace-mcp --preset router
+```
+
+It is **opt-in and will not become the default.** On a host that already defers
+tool schemas itself — Claude Code's ToolSearch, which keeps only the 15
+`ALWAYS_LOAD_TOOLS` eagerly loaded — `router` saves ~2.9k tokens and takes away
+exactly the first-five-minutes tools that stamp exists to protect. On a host
+without such a mechanism it saves ~6.2k per session, every session. Take it if
+your client has no tool deferral of its own, or if you are running many short
+sessions where the surface is most of what you pay.
 
 ### Client profiles
 
