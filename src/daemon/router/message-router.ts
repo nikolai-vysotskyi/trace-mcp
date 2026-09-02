@@ -98,10 +98,14 @@ export class MessageRouter {
       await this.activeBackend.send(msg);
     } catch (err) {
       logger.error({ err: String(err) }, 'MessageRouter: backend send failed');
-      // Synthesize error response so the client doesn't hang.
-      if (isRequest(msg)) {
-        await this.sendErrorResponseSafely(msg.id, -32603, `Backend send failed: ${String(err)}`);
+      // Synthesize error response so the client doesn't hang — but only if the
+      // id is still ours to answer. A backend stopped mid-send rejects here
+      // after the caller has already claimed the id via forgetPending() to
+      // re-issue it elsewhere; answering anyway would give the client two
+      // responses for one id.
+      if (isRequest(msg) && this.pendingRequestIds.has(msg.id)) {
         this.clearPending(msg.id);
+        await this.sendErrorResponseSafely(msg.id, -32603, `Backend send failed: ${String(err)}`);
       }
     }
   }
@@ -168,9 +172,9 @@ export class MessageRouter {
           await newBackend.send(m);
         } catch (err) {
           logger.error({ err: String(err) }, 'MessageRouter: flush send failed');
-          if (isRequest(m)) {
-            await this.sendErrorResponseSafely(m.id, -32603, `Backend send failed: ${String(err)}`);
+          if (isRequest(m) && this.pendingRequestIds.has(m.id)) {
             this.clearPending(m.id);
+            await this.sendErrorResponseSafely(m.id, -32603, `Backend send failed: ${String(err)}`);
           }
         }
       }
@@ -198,12 +202,22 @@ export class MessageRouter {
         await backend.send(m);
       } catch (err) {
         logger.error({ err: String(err) }, 'MessageRouter: flushPending send failed');
-        if (isRequest(m)) {
-          await this.sendErrorResponseSafely(m.id, -32603, `Backend send failed: ${String(err)}`);
+        if (isRequest(m) && this.pendingRequestIds.has(m.id)) {
           this.clearPending(m.id);
+          await this.sendErrorResponseSafely(m.id, -32603, `Backend send failed: ${String(err)}`);
         }
       }
     }
+  }
+
+  /**
+   * Drop a pending request id without answering it. For a caller that intends
+   * to re-issue the same frame through another backend: without this, the next
+   * swap would synthesize an error response for it and the client would end up
+   * with two responses for one id.
+   */
+  forgetPending(id: string | number): void {
+    this.clearPending(id);
   }
 
   /**

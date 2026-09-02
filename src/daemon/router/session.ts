@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Readable, Writable } from 'node:stream';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { TraceMcpConfig } from '../../config.js';
@@ -23,6 +24,12 @@ import type { Backend } from './types.js';
 declare const PKG_VERSION_INJECTED: string;
 const PKG_VERSION =
   typeof PKG_VERSION_INJECTED !== 'undefined' ? PKG_VERSION_INJECTED : '0.0.0-dev';
+
+/**
+ * How long a daemon-backed session gets to answer `initialize` before we give
+ * up on it and serve the session in-process instead.
+ */
+const PROXY_INITIALIZE_TIMEOUT_MS = 1_000;
 
 function isInitializeRequest(msg: JSONRPCMessage): boolean {
   const m = msg as Record<string, unknown>;
@@ -54,6 +61,9 @@ export interface StdioSessionOptions {
    * Defaults to env TRACE_MCP_HANDSHAKE_TIMEOUT or 5_000. Set 0 to disable.
    */
   handshakeTimeoutMs?: number;
+  /** Overrides for the stdio streams. Defaults to the process's own. */
+  stdin?: Readable;
+  stdout?: Writable;
 }
 
 /**
@@ -92,14 +102,36 @@ export class StdioSession {
    * sees the handshake and every frame going back to the client.
    */
   private readonly clientProfile: ClientProfileGate;
+  /** Id of the in-flight `initialize` request the watchdog below is timing. */
+  private initializeId: string | number | null = null;
+  private initializeTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Set once a daemon has failed to answer `initialize` for this session.
+   * Blocks the watcher from swapping us back onto it — a daemon whose /health
+   * works while its MCP handler is wedged would otherwise be re-adopted on the
+   * next poll and hang the session all over again.
+   */
+  private proxyDisabled = false;
 
   constructor(opts: StdioSessionOptions) {
     this.opts = opts;
     this.clientProfile = new ClientProfileGate(opts.config);
-    this.stdio = stripRedundantSchemaKeyword(new StdioServerTransport());
+    this.stdio = stripRedundantSchemaKeyword(new StdioServerTransport(opts.stdin, opts.stdout));
     this.router = new MessageRouter({
-      sendToClient: (msg) =>
-        this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage),
+      sendToClient: (msg) => {
+        const id = (msg as unknown as { id?: string | number }).id;
+        if (id !== undefined && id === this.initializeId) {
+          this.clearInitializeWatchdog();
+          // A daemon that fails the handshake fast is the same problem as one
+          // that never answers, and gets the same answer: swallow its error
+          // and replay the handshake locally rather than failing the client.
+          if (Object.hasOwn(msg as object, 'error')) {
+            void this.fallbackToLocal(id, 'proxy-initialize-error');
+            return;
+          }
+        }
+        return this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage);
+      },
       drainTimeoutMs: opts.drainTimeoutMs ?? 5_000,
     });
     this.watcher = new PollingDaemonWatcher({
@@ -126,6 +158,7 @@ export class StdioSession {
       this.clientProfile.observeFromClient(msg);
       if (isInitializeRequest(msg as JSONRPCMessage)) {
         logger.info({ profile: this.clientProfile.name }, 'StdioSession: resolved client profile');
+        this.armInitializeWatchdog((msg as unknown as { id: string | number }).id);
       }
       void this.router.ingestFromClient(msg as JSONRPCMessage);
     };
@@ -134,34 +167,27 @@ export class StdioSession {
     };
 
     await this.watcher.start();
-    let daemonActive = this.watcher.getCurrentState();
+    const daemonActive = this.watcher.getCurrentState();
 
-    // Auto-spawn: if no daemon is up and we're allowed to spawn one, try it.
-    // This avoids N concurrent local-mode indexings in a multi-root workspace
-    // where N stdio sessions would otherwise each build their own DB.
-    if (!daemonActive && this.opts.autoSpawnDaemon !== false) {
-      const spawnTimeoutMs = this.opts.autoSpawnTimeoutMs ?? 5_000;
-      logger.info(
-        { port: this.opts.daemonPort, timeoutMs: spawnTimeoutMs },
-        'StdioSession: attempting daemon auto-spawn',
+    // Pick a backend from the daemon state we already know. Spawning a daemon
+    // is an optimization and must never gate the handshake (TRA-704) — it runs
+    // in the background below, and the watcher swaps us onto it when it lands.
+    let initialBackend: Backend = daemonActive
+      ? this.buildProxyBackend()
+      : this.buildLocalBackend();
+    try {
+      await initialBackend.start();
+    } catch (err) {
+      if (initialBackend.kind === 'local') throw err;
+      // Daemon answered /health but wouldn't take the session — serve this
+      // session in-process rather than failing the whole connection.
+      logger.warn(
+        { err: String(err) },
+        'StdioSession: proxy backend failed to start, falling back to local mode',
       );
-      const result = await tryAutoSpawnDaemon(this.opts.daemonPort, spawnTimeoutMs);
-      if (result.ok) {
-        daemonActive = true;
-        logger.info(
-          { alreadyRunning: result.alreadyRunning },
-          'StdioSession: daemon is reachable after auto-spawn',
-        );
-      } else {
-        logger.warn(
-          { error: result.error },
-          'StdioSession: daemon auto-spawn failed, falling back to local mode',
-        );
-      }
+      initialBackend = this.buildLocalBackend();
+      await initialBackend.start();
     }
-
-    const initialBackend = daemonActive ? this.buildProxyBackend() : this.buildLocalBackend();
-    await initialBackend.start();
     this.router.setInitialBackend(initialBackend);
     this.desiredMode = initialBackend.kind;
 
@@ -214,6 +240,43 @@ export class StdioSession {
       },
       'StdioSession bootstrapped',
     );
+
+    // Now that the client can be answered, try to bring a daemon up. Success
+    // is picked up by the watcher, which swaps this session onto a proxy
+    // backend; failure just leaves us in local mode.
+    if (!daemonActive && this.opts.autoSpawnDaemon !== false) {
+      void this.backgroundAutoSpawn();
+    }
+  }
+
+  /**
+   * Spawn a daemon off the critical path. A daemon that is starting up or
+   * busy indexing can take minutes to answer /health — awaiting that before
+   * `stdio.start()` used to leave `initialize` unanswered past the client's
+   * MCP startup timeout, so the whole server came up as `failed` (TRA-704).
+   */
+  private async backgroundAutoSpawn(): Promise<void> {
+    const spawnTimeoutMs = this.opts.autoSpawnTimeoutMs ?? 5_000;
+    logger.info(
+      { port: this.opts.daemonPort, timeoutMs: spawnTimeoutMs },
+      'StdioSession: attempting daemon auto-spawn in background',
+    );
+    try {
+      const result = await tryAutoSpawnDaemon(this.opts.daemonPort, spawnTimeoutMs);
+      if (result.ok) {
+        logger.info(
+          { alreadyRunning: result.alreadyRunning },
+          'StdioSession: daemon is reachable after auto-spawn',
+        );
+      } else {
+        logger.warn(
+          { error: result.error },
+          'StdioSession: daemon auto-spawn failed, staying in local mode',
+        );
+      }
+    } catch (err) {
+      logger.warn({ err: String(err) }, 'StdioSession: daemon auto-spawn threw');
+    }
   }
 
   /**
@@ -230,6 +293,7 @@ export class StdioSession {
     this.idleTimer = null;
     this.handshake?.cancel();
     this.handshake = null;
+    this.clearInitializeWatchdog();
 
     const active = this.router.getActiveBackend();
     await this.router.shutdown();
@@ -256,8 +320,52 @@ export class StdioSession {
 
   // ── Internals ───────────────────────────────────────────────────────
 
+  /**
+   * A reachable /health is not proof that the daemon's MCP handler can answer.
+   * Give the proxy a bounded window to complete the handshake; if it misses,
+   * serve the session in-process and replay the frame there, so the client
+   * gets a real `initialize` result instead of a hung connection (TRA-704).
+   */
+  private armInitializeWatchdog(id: string | number): void {
+    this.clearInitializeWatchdog();
+    if (this.router.getActiveKind() !== 'proxy') return;
+    this.initializeId = id;
+    this.initializeTimer = setTimeout(() => {
+      void this.fallbackToLocal(id, 'proxy-initialize-timeout');
+    }, PROXY_INITIALIZE_TIMEOUT_MS);
+    this.initializeTimer.unref?.();
+  }
+
+  private clearInitializeWatchdog(): void {
+    if (this.initializeTimer) clearTimeout(this.initializeTimer);
+    this.initializeTimer = null;
+    this.initializeId = null;
+  }
+
+  /**
+   * Take the handshake away from a daemon that could not complete it — it
+   * either timed out or answered with an error — and finish it in-process by
+   * replaying the cached frame through a local backend.
+   */
+  private async fallbackToLocal(id: string | number, reason: string): Promise<void> {
+    this.clearInitializeWatchdog();
+    if (this.shuttingDown || this.router.getActiveKind() !== 'proxy') return;
+    logger.warn(
+      { id, reason, timeoutMs: PROXY_INITIALIZE_TIMEOUT_MS },
+      'StdioSession: daemon did not complete initialize — serving this session in local mode',
+    );
+    this.proxyDisabled = true;
+    // Drop the in-flight id so the swap does not answer it with a synthetic
+    // error; the replay below is the response the client actually receives.
+    this.router.forgetPending(id);
+    await this.swapTo(this.buildLocalBackend(), reason);
+    if (this.router.getActiveKind() !== 'local' || !this.cachedInitialize) return;
+    await this.router.ingestFromClient(this.cachedInitialize);
+  }
+
   private async onDaemonStateChange(nowActive: boolean): Promise<void> {
     if (this.shuttingDown) return;
+    if (nowActive && this.proxyDisabled) return;
     const currentKind = this.router.getActiveKind();
     if (nowActive) {
       if (currentKind === 'proxy') return; // already proxying
@@ -333,7 +441,7 @@ export class StdioSession {
     this.wakePromise = (async () => {
       try {
         logger.info('StdioSession: wake up from idle');
-        const daemonActive = this.watcher.getCurrentState();
+        const daemonActive = this.watcher.getCurrentState() && !this.proxyDisabled;
         const next = daemonActive ? this.buildProxyBackend() : this.buildLocalBackend();
         await next.start();
         this.desiredMode = next.kind;
