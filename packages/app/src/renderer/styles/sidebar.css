@@ -64,6 +64,9 @@
   padding-left: 78px;
   -webkit-app-region: drag;
 }
+.ws-stage[data-platform="mac"][data-tabbar="on"] .ws-sidebar-titlebar {
+  padding-left: 12px;
+}
 .ws-sidebar-titlebar > * {
   -webkit-app-region: no-drag;
 }
@@ -428,6 +431,9 @@
 /* Collapsed sidebar on macOS: the traffic lights land on this header instead. */
 .ws-stage[data-platform="mac"] .ws-shell.is-collapsed .ws-content-head {
   padding-left: 78px;
+}
+.ws-stage[data-platform="mac"][data-tabbar="on"] .ws-shell.is-collapsed .ws-content-head {
+  padding-left: 12px;
 }
 
 .ws-content-body {

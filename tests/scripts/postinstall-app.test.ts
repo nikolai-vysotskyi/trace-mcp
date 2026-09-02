@@ -263,6 +263,8 @@ describe.skipIf(process.platform !== 'darwin')('postinstall-app.mjs bundle swap'
         TRACE_MCP_PS_BIN: opts.runningBundle
           ? writePsStub(tmp, opts.runningBundle)
           : '/usr/bin/false',
+        // Silence Spotlight queries so tests never resolve bundles on the host.
+        TRACE_MCP_MDFIND_BIN: '/usr/bin/false',
         // Confine the orphan-staging sweep to this fixture. Without it the
         // script would reach into the real /Applications of whatever machine
         // runs the suite.

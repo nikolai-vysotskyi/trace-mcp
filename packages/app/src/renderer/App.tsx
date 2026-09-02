@@ -1029,15 +1029,23 @@ export function App() {
   );
   const toggleLivesInSidebar = !sidebarCollapsed && hasInsetTitleBar();
 
+  const [tabCount, setTabCount] = useState<number>(0);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onTabListChanged) return;
+    return api.onTabListChanged((tabs) => setTabCount(tabs.length));
+  }, []);
+
   return (
     <div
       className="ws-stage flex flex-col h-screen"
       data-mode={theme}
       data-platform={hasInsetTitleBar() ? 'mac' : 'other'}
+      data-tabbar={tabCount > 1 ? 'on' : 'off'}
     >
       {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
       {quickOpen && <QuickOpen items={quickOpenItems()} onClose={() => setQuickOpen(false)} />}
-      {/* Windows custom tab bar (hidden on macOS — native tabs handle it) */}
       <WindowTabBar />
 
       <div className={`ws-shell${sidebarCollapsed ? ' is-collapsed' : ''}`}>

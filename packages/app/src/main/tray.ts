@@ -296,7 +296,6 @@ function getTabList(focusedWebContentsId?: number): TabInfo[] {
 }
 
 function broadcastTabList(): void {
-  if (isMac) return; // macOS uses native tabs
   const allWindows = [menuWindow, ...projectWindows.values()];
   const focusedWin = BrowserWindow.getFocusedWindow();
   const tabs = getTabList(focusedWin?.webContents.id);
