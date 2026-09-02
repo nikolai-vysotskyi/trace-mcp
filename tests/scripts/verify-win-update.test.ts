@@ -48,13 +48,27 @@ describe('verify-win-update', () => {
       expect(auditUpdateLog(GOOD_LOG).problems).toEqual([]);
     });
 
-    // The whole point of the acceptance criterion: npm must never be reached
-    // on Windows. Seeing either event means the channel guard picked wrong.
-    it('rejects a log carrying npm-path events', () => {
-      const npm = `${GOOD_LOG}{"ts":"x","event":"apply-update:no-npm"}\n`;
-      expect(auditUpdateLog(npm).problems.join()).toMatch(/apply-update:no-npm/);
-      const resolve = `${GOOD_LOG}{"ts":"x","event":"resolve-npm:start"}\n`;
-      expect(auditUpdateLog(resolve).problems.join()).toMatch(/resolve-npm:start/);
+    // The whole point of the acceptance criterion: the npm install branch must
+    // never be reached on Windows. Any apply-update event outside the
+    // electron-updater pair means the channel guard picked wrong — including
+    // ones nobody thought to enumerate.
+    it.each([
+      'apply-update:no-npm',
+      'apply-update:start',
+      'apply-update:attempt-1',
+      'apply-update:enotempty-recovery',
+      'apply-update:some-future-npm-event',
+    ])('rejects a log carrying %s', (event) => {
+      const log = `${GOOD_LOG}{"ts":"x","event":"${event}"}\n`;
+      expect(auditUpdateLog(log).problems.join()).toMatch(event);
+    });
+
+    // `resolve-npm:*` comes from check-for-update's stale-global-root report,
+    // which runs on every platform and says nothing about the update channel.
+    // TRA-368's text asked for its absence; a real passing run contains it.
+    it('accepts resolve-npm events, which are not update-path events', () => {
+      const log = `${GOOD_LOG}{"ts":"x","event":"resolve-npm:not-found","scanned":[]}\n`;
+      expect(auditUpdateLog(log).problems).toEqual([]);
     });
 
     it('rejects a log where the download never completed', () => {

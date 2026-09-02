@@ -96,10 +96,25 @@ export function readFeed(text) {
 }
 
 /**
- * `update.log` is JSON lines. The two things worth asserting are that the
- * electron-updater branch ran and that the npm branch did not — the npm events
- * are unreachable on win32 by `updateChannelFor`, so seeing one means the
- * channel guard picked the wrong path.
+ * `apply-update` events written by the electron-updater branch. Anything else
+ * under that prefix belongs to the npm branch (`:start`, `:attempt-1`,
+ * `:attempt-2`, `:enotempty-recovery`, `:no-npm`), which `updateChannelFor`
+ * makes unreachable on win32 — so seeing one means the channel guard picked the
+ * wrong path. Listing the good events rather than the bad ones is deliberate: a
+ * new npm-branch event is then caught without anyone remembering to add it.
+ */
+const UPDATER_EVENTS = new Set(['apply-update:downloaded', 'apply-update:failed']);
+
+/**
+ * `update.log` is JSON lines. Two things are worth asserting: the
+ * electron-updater branch ran, and the npm install branch did not.
+ *
+ * Note what is NOT asserted. TRA-368 asked for "no `resolve-npm:*` entries",
+ * but those are written by `resolveNpmRoots()` from the `check-for-update`
+ * handler, which reports global npm roots holding a stale *CLI* — it runs on
+ * every platform on every periodic check and says nothing about which update
+ * channel was used. A real run has one, and failing on it only means the
+ * criterion was written against an assumption the code does not hold.
  */
 export function auditUpdateLog(text) {
   const events = text
@@ -119,8 +134,8 @@ export function auditUpdateLog(text) {
   if (!events.includes('apply-update:downloaded')) {
     problems.push('no `apply-update:downloaded` — the electron-updater branch never completed');
   }
-  const npm = events.filter((e) => e === 'apply-update:no-npm' || e.startsWith('resolve-npm:'));
-  if (npm.length) problems.push(`npm-path events present: ${npm.join(', ')}`);
+  const npm = events.filter((e) => e.startsWith('apply-update:') && !UPDATER_EVENTS.has(e));
+  if (npm.length) problems.push(`npm update-path events present: ${npm.join(', ')}`);
   return { events, problems };
 }
 
