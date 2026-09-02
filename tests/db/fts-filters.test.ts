@@ -7,7 +7,7 @@
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { TraceMcpConfig } from '../../src/config.js';
-import { escapeFtsQuery, searchFts } from '../../src/db/fts.js';
+import { escapeFtsQuery, filePatternToLike, searchFts } from '../../src/db/fts.js';
 import type { Store } from '../../src/db/store.js';
 import { IndexingPipeline } from '../../src/indexer/pipeline.js';
 import { PhpLanguagePlugin } from '../../src/indexer/plugins/language/php/index.js';
@@ -81,6 +81,39 @@ describe('searchFts filter push-down', () => {
       const sym = store.getSymbolBySymbolId(r.symbolIdStr);
       const file = store.getFileById(sym!.file_id);
       expect(file?.path).toContain('app/');
+    }
+  });
+
+  // TRA-676: file_pattern used to be spliced straight into a `%...%` LIKE
+  // clause, so glob wildcards (`*`) were matched as literal characters and
+  // any glob-style pattern silently returned zero rows.
+  it('filePattern filter accepts a glob wildcard (*.ts)', () => {
+    const results = searchFts(store.db, 'add', 50, 0, { filePattern: '*.ts' });
+    expect(results.length).toBeGreaterThan(0);
+    for (const r of results) {
+      const sym = store.getSymbolBySymbolId(r.symbolIdStr);
+      const file = store.getFileById(sym!.file_id);
+      expect(file?.path.endsWith('.ts')).toBe(true);
+    }
+  });
+
+  it('filePattern filter accepts a directory glob (src/**)', () => {
+    const results = searchFts(store.db, 'add', 50, 0, { filePattern: 'src/**' });
+    expect(results.length).toBeGreaterThan(0);
+    for (const r of results) {
+      const sym = store.getSymbolBySymbolId(r.symbolIdStr);
+      const file = store.getFileById(sym!.file_id);
+      expect(file?.path.startsWith('src/')).toBe(true);
+    }
+  });
+
+  it('filePattern filter accepts a leading-** glob (**/*.ts)', () => {
+    const results = searchFts(store.db, 'add', 50, 0, { filePattern: '**/*.ts' });
+    expect(results.length).toBeGreaterThan(0);
+    for (const r of results) {
+      const sym = store.getSymbolBySymbolId(r.symbolIdStr);
+      const file = store.getFileById(sym!.file_id);
+      expect(file?.path.endsWith('.ts')).toBe(true);
     }
   });
 
@@ -173,5 +206,27 @@ describe('escapeFtsQuery', () => {
 
   it('handles query that is only boolean operators', () => {
     expect(escapeFtsQuery('OR AND NOT')).toBe('');
+  });
+});
+
+describe('filePatternToLike', () => {
+  it('converts * to the SQL wildcard %', () => {
+    expect(filePatternToLike('*.ts')).toBe('%.ts');
+  });
+
+  it('converts ? to the SQL single-char wildcard _', () => {
+    expect(filePatternToLike('file?.ts')).toBe('file_.ts');
+  });
+
+  it('converts ** to consecutive %% — equivalent to a single % in SQL LIKE', () => {
+    expect(filePatternToLike('src/**')).toBe('src/%%');
+  });
+
+  it('handles a leading-** glob', () => {
+    expect(filePatternToLike('**/*.ts')).toBe('%%/%.ts');
+  });
+
+  it('wraps a plain pattern (no wildcards) in % for substring matching', () => {
+    expect(filePatternToLike('src/index.ts')).toBe('%src/index.ts%');
   });
 });
