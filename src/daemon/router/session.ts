@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Readable, Writable } from 'node:stream';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import type { TraceMcpConfig } from '../../config.js';
@@ -54,6 +55,9 @@ export interface StdioSessionOptions {
    * Defaults to env TRACE_MCP_HANDSHAKE_TIMEOUT or 5_000. Set 0 to disable.
    */
   handshakeTimeoutMs?: number;
+  /** Overrides for the stdio streams. Defaults to the process's own. */
+  stdin?: Readable;
+  stdout?: Writable;
 }
 
 /**
@@ -96,7 +100,7 @@ export class StdioSession {
   constructor(opts: StdioSessionOptions) {
     this.opts = opts;
     this.clientProfile = new ClientProfileGate(opts.config);
-    this.stdio = stripRedundantSchemaKeyword(new StdioServerTransport());
+    this.stdio = stripRedundantSchemaKeyword(new StdioServerTransport(opts.stdin, opts.stdout));
     this.router = new MessageRouter({
       sendToClient: (msg) =>
         this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage),
@@ -134,34 +138,27 @@ export class StdioSession {
     };
 
     await this.watcher.start();
-    let daemonActive = this.watcher.getCurrentState();
+    const daemonActive = this.watcher.getCurrentState();
 
-    // Auto-spawn: if no daemon is up and we're allowed to spawn one, try it.
-    // This avoids N concurrent local-mode indexings in a multi-root workspace
-    // where N stdio sessions would otherwise each build their own DB.
-    if (!daemonActive && this.opts.autoSpawnDaemon !== false) {
-      const spawnTimeoutMs = this.opts.autoSpawnTimeoutMs ?? 5_000;
-      logger.info(
-        { port: this.opts.daemonPort, timeoutMs: spawnTimeoutMs },
-        'StdioSession: attempting daemon auto-spawn',
+    // Pick a backend from the daemon state we already know. Spawning a daemon
+    // is an optimization and must never gate the handshake (TRA-704) — it runs
+    // in the background below, and the watcher swaps us onto it when it lands.
+    let initialBackend: Backend = daemonActive
+      ? this.buildProxyBackend()
+      : this.buildLocalBackend();
+    try {
+      await initialBackend.start();
+    } catch (err) {
+      if (initialBackend.kind === 'local') throw err;
+      // Daemon answered /health but wouldn't take the session — serve this
+      // session in-process rather than failing the whole connection.
+      logger.warn(
+        { err: String(err) },
+        'StdioSession: proxy backend failed to start, falling back to local mode',
       );
-      const result = await tryAutoSpawnDaemon(this.opts.daemonPort, spawnTimeoutMs);
-      if (result.ok) {
-        daemonActive = true;
-        logger.info(
-          { alreadyRunning: result.alreadyRunning },
-          'StdioSession: daemon is reachable after auto-spawn',
-        );
-      } else {
-        logger.warn(
-          { error: result.error },
-          'StdioSession: daemon auto-spawn failed, falling back to local mode',
-        );
-      }
+      initialBackend = this.buildLocalBackend();
+      await initialBackend.start();
     }
-
-    const initialBackend = daemonActive ? this.buildProxyBackend() : this.buildLocalBackend();
-    await initialBackend.start();
     this.router.setInitialBackend(initialBackend);
     this.desiredMode = initialBackend.kind;
 
@@ -214,6 +211,43 @@ export class StdioSession {
       },
       'StdioSession bootstrapped',
     );
+
+    // Now that the client can be answered, try to bring a daemon up. Success
+    // is picked up by the watcher, which swaps this session onto a proxy
+    // backend; failure just leaves us in local mode.
+    if (!daemonActive && this.opts.autoSpawnDaemon !== false) {
+      void this.backgroundAutoSpawn();
+    }
+  }
+
+  /**
+   * Spawn a daemon off the critical path. A daemon that is starting up or
+   * busy indexing can take minutes to answer /health — awaiting that before
+   * `stdio.start()` used to leave `initialize` unanswered past the client's
+   * MCP startup timeout, so the whole server came up as `failed` (TRA-704).
+   */
+  private async backgroundAutoSpawn(): Promise<void> {
+    const spawnTimeoutMs = this.opts.autoSpawnTimeoutMs ?? 5_000;
+    logger.info(
+      { port: this.opts.daemonPort, timeoutMs: spawnTimeoutMs },
+      'StdioSession: attempting daemon auto-spawn in background',
+    );
+    try {
+      const result = await tryAutoSpawnDaemon(this.opts.daemonPort, spawnTimeoutMs);
+      if (result.ok) {
+        logger.info(
+          { alreadyRunning: result.alreadyRunning },
+          'StdioSession: daemon is reachable after auto-spawn',
+        );
+      } else {
+        logger.warn(
+          { error: result.error },
+          'StdioSession: daemon auto-spawn failed, staying in local mode',
+        );
+      }
+    } catch (err) {
+      logger.warn({ err: String(err) }, 'StdioSession: daemon auto-spawn threw');
+    }
   }
 
   /**
