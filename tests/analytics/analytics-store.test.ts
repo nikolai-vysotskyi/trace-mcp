@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AnalyticsStore } from '../../src/analytics/analytics-store.js';
+import { AnalyticsStore, isTraceToolServer } from '../../src/analytics/analytics-store.js';
 import type { ParsedSession } from '../../src/analytics/log-parser.js';
 import { createTmpDir, removeTmpDir } from '../test-utils.js';
 
@@ -236,5 +236,25 @@ describe('AnalyticsStore', () => {
     expect(searchCall).toBeDefined();
     expect(searchCall!.input_snippet).toContain('authenticate user');
     expect(searchCall!.input_snippet).toContain('"semantic":"on"');
+  });
+});
+
+// TRA-641: the trace-mcp -> trace rename (TRA-611/614) means a migrated
+// client logs tool_server: "trace" instead of "trace-mcp"/"trace_mcp".
+// isTraceToolServer is the single shared predicate every analytics call
+// site (rules.ts, real-savings.ts) must use so historical rows and
+// post-migration rows both keep counting as "our own" tool calls.
+describe('isTraceToolServer', () => {
+  it('recognizes all known trace-mcp server key spellings', () => {
+    expect(isTraceToolServer('trace')).toBe(true);
+    expect(isTraceToolServer('trace-mcp')).toBe(true);
+    expect(isTraceToolServer('trace_mcp')).toBe(true);
+  });
+
+  it('does not match unrelated or merely-similar server keys', () => {
+    expect(isTraceToolServer('builtin')).toBe(false);
+    expect(isTraceToolServer('phpstorm')).toBe(false);
+    expect(isTraceToolServer('trace-mcp-http')).toBe(false);
+    expect(isTraceToolServer('')).toBe(false);
   });
 });

@@ -131,14 +131,17 @@ function writeStatus(
   return file;
 }
 
-/** Write a project-level .mcp.json declaring trace-mcp's configured transport. */
-function writeMcpJson(cwd: string, kind: 'stdio' | 'http'): string {
+/** Write a project-level .mcp.json declaring trace-mcp's configured transport.
+ * `key` defaults to the legacy "trace-mcp" server key; pass "trace" to
+ * simulate a config produced by the post-rename "Migrate to trace" flow
+ * (TRA-611/614) -- see TRA-641. */
+function writeMcpJson(cwd: string, kind: 'stdio' | 'http', key = 'trace-mcp'): string {
   const file = path.join(cwd, '.mcp.json');
   const entry =
     kind === 'stdio'
       ? { command: 'trace-mcp', args: ['serve'] }
       : { type: 'http', url: 'http://127.0.0.1:3741/mcp' };
-  fs.writeFileSync(file, JSON.stringify({ mcpServers: { 'trace-mcp': entry } }));
+  fs.writeFileSync(file, JSON.stringify({ mcpServers: { [key]: entry } }));
   return file;
 }
 
@@ -516,6 +519,39 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     });
     writeMcpJson(projectDir, 'stdio');
     const file = path.join(projectDir, 'match.ts');
+    fs.writeFileSync(file, 'export {};');
+    expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
+  });
+
+  // TRA-641: after the "Migrate to trace" one-click flow (TRA-614), a
+  // user's .mcp.json keys the server as "trace" instead of "trace-mcp".
+  // The transport-mismatch lookup must recognize the new key too, or the
+  // check silently stops firing for every migrated user.
+  it('transport mismatch: detects it under the post-migration "trace" key too', () => {
+    writeStatus(projectDir, {
+      tool_calls_total: 5,
+      last_successful_tool_call_at: new Date().toISOString(),
+      mcp_sessions_active: 1,
+      transport: 'http',
+    });
+    writeMcpJson(projectDir, 'stdio', 'trace');
+    const file = path.join(projectDir, 'mismatch-trace.ts');
+    fs.writeFileSync(file, 'export {};');
+    const decision = runGuard('Read', { file_path: file }, sessionId, projectDir);
+    expect(decision.allowed).toBe(true);
+    expect(decision.context ?? '').toContain("'http'");
+    expect(decision.context ?? '').toContain("'stdio'");
+  });
+
+  it('transport match: "trace" key with matching transport still enforces strict', () => {
+    writeStatus(projectDir, {
+      tool_calls_total: 5,
+      last_successful_tool_call_at: new Date().toISOString(),
+      mcp_sessions_active: 1,
+      transport: 'stdio',
+    });
+    writeMcpJson(projectDir, 'stdio', 'trace');
+    const file = path.join(projectDir, 'match-trace.ts');
     fs.writeFileSync(file, 'export {};');
     expect(runGuard('Read', { file_path: file }, sessionId, projectDir).allowed).toBe(false);
   });

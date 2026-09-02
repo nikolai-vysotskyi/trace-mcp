@@ -30,6 +30,23 @@ function buildInputSnippet(tc: ToolCallEvent): string | null {
   return null;
 }
 
+/**
+ * All known `tool_server` spellings that identify a call as trace-mcp's own
+ * MCP tool, keyed from `mcp__<server>__<tool>` (see parseToolName in
+ * log-parser.ts). `trace` is the current key after the trace-mcp -> trace
+ * rename (TRA-611); `trace-mcp` / `trace_mcp` are the pre-rename legacy
+ * keys. Historical session logs recorded before the rename -- and clients
+ * that haven't migrated yet -- still carry the legacy spellings, so all
+ * three must keep resolving to "ours" for analytics (get_optimization_report,
+ * get_real_savings) to stay correct across the migration. See TRA-641.
+ */
+export const TRACE_TOOL_SERVERS: ReadonlySet<string> = new Set(['trace', 'trace-mcp', 'trace_mcp']);
+
+/** True when `server` (a ToolCallRow.tool_server value) identifies a trace-mcp tool call. */
+export function isTraceToolServer(server: string): boolean {
+  return TRACE_TOOL_SERVERS.has(server);
+}
+
 export interface ToolCallRow {
   tool_name: string;
   tool_server: string;

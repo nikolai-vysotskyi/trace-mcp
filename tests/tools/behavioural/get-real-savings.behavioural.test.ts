@@ -157,4 +157,62 @@ describe('get_real_savings — analyzeRealSavings() behavioural contract', () =>
     expect(report.sessionsAnalyzed).toBe(2);
     expect(report.fileReadsAnalyzed).toBe(3);
   });
+
+  // TRA-641: abComparison's "with trace-mcp" bucket is decided by matching
+  // tool_server. After the trace-mcp -> trace rename (TRA-611/614), a
+  // migrated client logs tool_server: "trace" instead of
+  // "trace-mcp"/"trace_mcp" -- sessions using the new key must still land in
+  // "withTrace", or get_real_savings' headline A/B numbers silently go to
+  // zero the moment a user migrates.
+  describe('abComparison hasTrace detection across tool_server spellings', () => {
+    function traceCall(sessionId: string, server: string): ToolCallRow {
+      return {
+        tool_name: `mcp__${server}__search`,
+        tool_server: server,
+        tool_short_name: 'search',
+        output_size_chars: 500,
+        output_tokens_estimate: 150,
+        target_file: null,
+        is_error: 0,
+        session_id: sessionId,
+        input_snippet: null,
+      };
+    }
+
+    function nonTraceCall(sessionId: string): ToolCallRow {
+      return {
+        tool_name: 'Read',
+        tool_server: 'builtin',
+        tool_short_name: 'Read',
+        output_size_chars: 500,
+        output_tokens_estimate: 150,
+        target_file: null,
+        is_error: 0,
+        session_id: sessionId,
+        input_snippet: null,
+      };
+    }
+
+    it('counts "trace", "trace-mcp", and "trace_mcp" sessions all as "with trace-mcp"', () => {
+      const store = createTestStore();
+      const calls: ToolCallRow[] = [
+        // Two sessions on the post-migration "trace" key.
+        traceCall('with-trace-1', 'trace'),
+        traceCall('with-trace-2', 'trace'),
+        // One session each on the pre-migration legacy keys.
+        traceCall('with-legacy-hyphen', 'trace-mcp'),
+        traceCall('with-legacy-underscore', 'trace_mcp'),
+        // Two sessions with no trace-mcp usage at all.
+        nonTraceCall('without-1'),
+        nonTraceCall('without-2'),
+      ];
+
+      const report = analyzeRealSavings(store, calls, 'all');
+      expect(report.abComparison).toBeDefined();
+      // Without the fix, "trace" sessions fall through to "without" and
+      // these counts come out as 2 / 4 instead of 4 / 2.
+      expect(report.abComparison?.sessionsWithTraceMcp.count).toBe(4);
+      expect(report.abComparison?.sessionsWithoutTraceMcp.count).toBe(2);
+    });
+  });
 });

@@ -27,7 +27,11 @@ describe('Claude Code plugin manifests', () => {
   it('plugin.json mcpServers points at the bin name from package.json', () => {
     const bin = pkg.bin as Record<string, string>;
     const servers = plugin.mcpServers as Record<string, { command: string }>;
-    const command = servers['trace-mcp']?.command;
+    // TRA-641: the server key is "trace" (post-rename, TRA-611/614) even
+    // though the command it invokes is still "trace-mcp" -- a user on an
+    // older global install has no `trace` bin yet.
+    expect(Object.keys(servers)).toEqual(['trace']);
+    const command = servers['trace']?.command;
     expect(command).toBeDefined();
     // command must be one of the declared bin names so npm install -g exposes it on PATH
     expect(Object.keys(bin)).toContain(command);
@@ -165,7 +169,10 @@ describe('Codex CLI plugin manifests', () => {
     expect(plugin.mcpServers).toBe('./.mcp.json');
     const bin = pkg.bin as Record<string, string>;
     const mcpConfig = readJson('.codex-plugin', '.mcp.json') as Record<string, { command: string }>;
-    const command = mcpConfig['trace-mcp']?.command;
+    // TRA-641: same key change as the Claude Code plugin -- "trace" key,
+    // "trace-mcp" command (see the analogous assertion above).
+    expect(Object.keys(mcpConfig)).toEqual(['trace']);
+    const command = mcpConfig['trace']?.command;
     expect(command).toBeDefined();
     expect(Object.keys(bin)).toContain(command);
   });
