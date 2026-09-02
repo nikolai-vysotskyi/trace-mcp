@@ -18,6 +18,7 @@ import {
   migrateClientConfigServers,
   migrateDirectorySafely,
   migrateProjectConfig,
+  migrateToolNamePrefixInFile,
 } from '../../src/utils/path-migration.js';
 import { atomicWriteString } from '../../src/utils/atomic-write.js';
 
@@ -257,6 +258,124 @@ describe('Path and Directory Migration Security', () => {
       const res = migrateClientConfigServers(symlinkFile);
       expect(res.migrated).toBe(false);
       expect(res.error).toMatch(/symlink/);
+    });
+  });
+
+  describe('Tool Name Prefix (mcp__trace-mcp__* -> mcp__trace__*) Migration', () => {
+    it('rewrites a permission allowlist entry naming the legacy tool prefix', () => {
+      const settingsPath = join(tempDir, 'settings.json');
+      const original =
+        '{\n  "permissions": {\n    "allow": [\n      "mcp__trace-mcp__search",\n      "Bash(git status)"\n    ]\n  }\n}\n';
+      writeFileSync(settingsPath, original);
+
+      const res = migrateToolNamePrefixInFile(settingsPath);
+      expect(res.migrated).toBe(true);
+      expect(res.occurrences).toBe(1);
+
+      const updated = readFileSync(settingsPath, 'utf8');
+      expect(updated).toBe(original.replace('mcp__trace-mcp__search', 'mcp__trace__search'));
+      const parsed = JSON.parse(updated);
+      expect(parsed.permissions.allow).toEqual(['mcp__trace__search', 'Bash(git status)']);
+    });
+
+    it('rewrites every occurrence in a hook matcher string and counts them', () => {
+      const settingsPath = join(tempDir, 'settings.json');
+      const original = JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            {
+              matcher: 'mcp__trace-mcp__search|mcp__trace-mcp__get_symbol',
+              hooks: [{ type: 'command', command: '/bin/my-custom-hook.sh' }],
+            },
+          ],
+        },
+      });
+      writeFileSync(settingsPath, original);
+
+      const res = migrateToolNamePrefixInFile(settingsPath);
+      expect(res.migrated).toBe(true);
+      expect(res.occurrences).toBe(2);
+
+      const parsed = JSON.parse(readFileSync(settingsPath, 'utf8'));
+      expect(parsed.hooks.PreToolUse[0].matcher).toBe('mcp__trace__search|mcp__trace__get_symbol');
+      // Untouched sibling content survives verbatim.
+      expect(parsed.hooks.PreToolUse[0].hooks[0].command).toBe('/bin/my-custom-hook.sh');
+    });
+
+    it('preserves unrelated content and formatting byte-for-byte, including no trailing newline', () => {
+      const settingsPath = join(tempDir, 'settings.json');
+      // Irregular indentation and no trailing newline — content trace-mcp does
+      // not own the shape of, so a JSON.parse + stringify round-trip would
+      // silently reformat it. Must come back identical apart from the prefix.
+      const original =
+        '{"weird":   "spacing",\n"permissions":{"allow":["mcp__trace-mcp__search"]},\n"nested":{"deep":{"value":42}}}';
+      writeFileSync(settingsPath, original);
+
+      const res = migrateToolNamePrefixInFile(settingsPath);
+      expect(res.migrated).toBe(true);
+
+      const updated = readFileSync(settingsPath, 'utf8');
+      expect(updated).toBe(original.replace('mcp__trace-mcp__search', 'mcp__trace__search'));
+      expect(updated.endsWith('\n')).toBe(false);
+    });
+
+    it('is a no-op and does not write when the legacy prefix is absent', () => {
+      const settingsPath = join(tempDir, 'settings.json');
+      const original = '{"permissions":{"allow":["mcp__trace__search"]}}';
+      writeFileSync(settingsPath, original);
+      const before = statSync(settingsPath).mtimeMs;
+
+      const res = migrateToolNamePrefixInFile(settingsPath);
+      expect(res.migrated).toBe(false);
+      expect(res.occurrences).toBe(0);
+      expect(readFileSync(settingsPath, 'utf8')).toBe(original);
+      expect(statSync(settingsPath).mtimeMs).toBe(before);
+    });
+
+    it('returns migrated:false without error for a file that does not exist', () => {
+      const res = migrateToolNamePrefixInFile(join(tempDir, 'nope.json'));
+      expect(res.migrated).toBe(false);
+      expect(res.occurrences).toBe(0);
+      expect(res.error).toBeUndefined();
+    });
+
+    it('dry-run reports the migration without writing', () => {
+      const settingsPath = join(tempDir, 'settings.json');
+      const original = '{"permissions":{"allow":["mcp__trace-mcp__search"]}}';
+      writeFileSync(settingsPath, original);
+
+      const res = migrateToolNamePrefixInFile(settingsPath, undefined, undefined, {
+        dryRun: true,
+      });
+      expect(res.migrated).toBe(true);
+      expect(res.occurrences).toBe(1);
+      expect(readFileSync(settingsPath, 'utf8')).toBe(original);
+    });
+
+    it('refuses to write through a symlink', () => {
+      const realFile = join(tempDir, 'real-settings.json');
+      const symlinkFile = join(tempDir, 'settings.json');
+      writeFileSync(
+        realFile,
+        JSON.stringify({ permissions: { allow: ['mcp__trace-mcp__search'] } }),
+      );
+      symlinkSync(realFile, symlinkFile);
+
+      const res = migrateToolNamePrefixInFile(symlinkFile);
+      expect(res.migrated).toBe(false);
+      expect(res.error).toMatch(/symlink/);
+      // The real file behind the symlink was never touched either.
+      expect(readFileSync(realFile, 'utf8')).toContain('mcp__trace-mcp__search');
+    });
+
+    it('preserves the file mode on rewrite', () => {
+      if (IS_WINDOWS) return;
+      const settingsPath = join(tempDir, 'settings.json');
+      writeFileSync(settingsPath, '{"permissions":{"allow":["mcp__trace-mcp__search"]}}');
+      chmodSync(settingsPath, 0o644);
+
+      migrateToolNamePrefixInFile(settingsPath);
+      expect(statSync(settingsPath).mode & 0o777).toBe(0o644);
     });
   });
 

@@ -24,6 +24,7 @@ import path from 'node:path';
 import { atomicWriteString } from './atomic-write.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { readIfExists } from './safe-fs.js';
+import type { InitStepResult } from '../init/types.js';
 
 const IS_WINDOWS = process.platform === 'win32';
 
@@ -403,4 +404,118 @@ export function migrateClientConfigServers(
   }
 
   return { migrated: false };
+}
+
+/**
+ * Default legacy/new MCP tool-name prefix pair for the trace-mcp -> trace
+ * rebrand (TRA-650). MCP clients advertise every tool as
+ * `mcp__<server-key>__<tool>`, so renaming the server key also renames the
+ * prefix a user may have written out in full themselves — in a permission
+ * allowlist entry, a hook matcher, or elsewhere.
+ */
+export const LEGACY_TOOL_NAME_PREFIX = 'mcp__trace-mcp__';
+export const NEW_TOOL_NAME_PREFIX = 'mcp__trace__';
+
+export interface ToolNamePrefixMigrationResult {
+  /** Whether the file was (or, under dryRun, would be) rewritten. */
+  migrated: boolean;
+  /** Number of legacy-prefix occurrences found. */
+  occurrences: number;
+  error?: string;
+}
+
+/**
+ * Rewrite every occurrence of a legacy MCP tool-name prefix
+ * (`mcp__trace-mcp__` by default) to the new one (`mcp__trace__`) inside an
+ * arbitrary text file — a permission allowlist entry (`permissions.allow` /
+ * `permissions.deny`), a hook `matcher` string, or any other place a user
+ * wrote one of our tool names out in full.
+ *
+ * `migrateClientConfigServers` above (and `configureMcpClients`) already
+ * migrate the `mcpServers` entry itself; this covers everything else that
+ * rename silently breaks (TRA-650) — files whose overall shape trace-mcp
+ * does not own, so a JSON.parse + JSON.stringify round-trip is the wrong
+ * tool here: it would reformat/reorder content that belongs to the user
+ * (and some of these files, like Claude Code's settings.json, may carry
+ * keys or formatting no schema in this codebase knows about). A literal
+ * substring replace changes only the exact bytes of the legacy prefix and
+ * returns everything else byte-for-byte, including whether the file ends
+ * with a trailing newline.
+ */
+export function migrateToolNamePrefixInFile(
+  filePath: string,
+  legacyPrefix: string = LEGACY_TOOL_NAME_PREFIX,
+  newPrefix: string = NEW_TOOL_NAME_PREFIX,
+  opts: { dryRun?: boolean } = {},
+): ToolNamePrefixMigrationResult {
+  if (isSymlink(filePath)) {
+    return {
+      migrated: false,
+      occurrences: 0,
+      error: `Refusing to write through symlink at "${filePath}".`,
+    };
+  }
+
+  const raw = readIfExists(filePath);
+  if (raw === null) return { migrated: false, occurrences: 0 };
+
+  const parts = raw.split(legacyPrefix);
+  const occurrences = parts.length - 1;
+  if (occurrences === 0) return { migrated: false, occurrences: 0 };
+
+  if (opts.dryRun) return { migrated: true, occurrences };
+
+  // Preserve the file's existing permissions — this is a rewrite, not a
+  // fresh write, and the file may carry secrets-adjacent tool-approval state.
+  let mode = 0o600;
+  try {
+    mode = fs.statSync(filePath).mode & 0o777;
+  } catch {
+    /* fall back to 0600 */
+  }
+
+  atomicWriteString(filePath, parts.join(newPrefix), {
+    mode,
+    rejectSymlinks: true,
+    // Never let atomic-write's own newline normalization add or remove a
+    // trailing newline — the substring replace above already preserves
+    // whatever the original file ended with, byte for byte.
+    trailingNewline: false,
+  });
+
+  return { migrated: true, occurrences };
+}
+
+/**
+ * Run {@link migrateToolNamePrefixInFile} against `filePath` and translate
+ * the result into the `InitStepResult` shape shared by `init`/`upgrade`/
+ * `clients update` reporting, so every caller renders it the same way.
+ * Returns `null` when there is nothing to report — the file doesn't exist,
+ * or it already carries the new prefix only — so callers can push straight
+ * into a results array without a second `migrated` check.
+ */
+export function buildToolPrefixMigrationStep(
+  filePath: string,
+  opts: { dryRun?: boolean } = {},
+): InitStepResult | null {
+  const res = migrateToolNamePrefixInFile(
+    filePath,
+    LEGACY_TOOL_NAME_PREFIX,
+    NEW_TOOL_NAME_PREFIX,
+    opts,
+  );
+
+  if (res.error) {
+    return { target: filePath, action: 'skipped', detail: res.error };
+  }
+  if (!res.migrated) return null;
+
+  const plural = res.occurrences === 1 ? '' : 's';
+  return {
+    target: filePath,
+    action: 'updated',
+    detail: opts.dryRun
+      ? `Would rewrite ${res.occurrences} legacy tool-prefix reference${plural} (mcp__trace-mcp__ → mcp__trace__)`
+      : `Rewrote ${res.occurrences} legacy tool-prefix reference${plural} (mcp__trace-mcp__ → mcp__trace__)`,
+  };
 }
