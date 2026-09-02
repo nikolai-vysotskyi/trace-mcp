@@ -456,6 +456,32 @@ back in the browser, wait out the 200ms `border-color` transition — a
 "AI coding agents" across two of them. Change the wording, re-measure the line
 count at 1440px and at 390px.
 
+**The hero's two mono caps rows stack below 700px, and neither is a wrapped
+flex row on a phone** (TRA-607). `.hero-meta` and `.hero-trust` are single
+rows at desktop widths and both fail small, in the two ways a `flex-wrap` row
+of mono caps always fails:
+
+- `.hero-trust` wraps mid-list and a `.dot` separator ends the line. Measured
+  on the last box of each line, not judged by eye: a dot was the rightmost box
+  at 660, 600, 520, 430, 390, 360 and 320px — every width below the existing
+  700px breakpoint, and none above it. This is §9's "no label breaks into
+  fragments" rule one section up the page. Below 700px it is a column, the
+  dots are `display: none`, and `.ok`'s emphasis is dropped: stacked, one
+  highlighted item of three reads as a heading over the other two rather than
+  as the strongest peer.
+- `.hero-meta` is `label / divider / label`, and `flex-wrap` is not set, so it
+  never breaks between its children — instead both labels wrap *inside*
+  themselves into two cramped columns with a divider that has no width left to
+  draw. It stops fitting on one line at 520px (17px → 33px) and takes three
+  lines at 320px. Below 700px it is a column and the divider is hidden.
+
+Both are bound to the hero's existing 700px breakpoint rather than to the
+520px where `.hero-meta` actually breaks. That is deliberate — one breakpoint
+for the hero beats a second one 180px away — and it costs 17px of height
+between 520px and 700px. The stack costs `.hero-trust` 20px at 390px (58 →
+78), all of it below the two actions, so the CTA moves 6px and nothing above
+the fold is lost.
+
 ---
 
 ## 9. The landing footer
