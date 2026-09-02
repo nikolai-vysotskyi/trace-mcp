@@ -5,9 +5,17 @@
  * while preserving comments, formatting, and trailing commas.
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import { applyEdits, type ModificationOptions, modify, parse } from 'jsonc-parser';
-import { DEFAULT_CONFIG_JSONC, ensureGlobalDirs, GLOBAL_CONFIG_PATH } from './global.js';
+import {
+  DEFAULT_CONFIG_JSONC,
+  ensureGlobalDirs,
+  GLOBAL_CONFIG_PATH,
+  TRACE_MCP_HOME,
+} from './global.js';
 import { logger } from './logger.js';
+import { isEphemeralProjectRoot, listProjects } from './registry.js';
+import { acquireLock, type LockHandle, LockError, releaseLock } from './utils/pid-lock.js';
 import { atomicWriteString } from './utils/atomic-write.js';
 import { readIfExists } from './utils/safe-fs.js';
 
@@ -30,16 +38,100 @@ export function readGlobalConfigText(): string {
   return readIfExists(GLOBAL_CONFIG_PATH) ?? DEFAULT_CONFIG_JSONC;
 }
 
+// ---------------------------------------------------------------------------
+// Serialising the read-modify-write cycle (TRA-702)
+// ---------------------------------------------------------------------------
+//
+// Every mutation here is read text -> compute edits -> atomically write the
+// whole file back. Two of those interleaved lose one side's change entirely:
+// the second writer's `atomicWriteString` publishes a buffer read before the
+// first writer's rename. That was always true for two concurrent
+// `saveProjectConfigJsonc` calls (two agent runs registering at once), and
+// `pruneProjectConfigSections` makes it much easier to hit, because its read-
+// to-write window spans hundreds of edits — ~2s on the first backlog drain,
+// while agent processes keep registering projects.
+//
+// So the cycle takes a cross-process lock, and every writer in this file goes
+// through it. Reads are not locked: a torn read is impossible (writers publish
+// by rename) and a slightly stale one is harmless.
+
+const CONFIG_LOCK_NAME = 'global-config';
+/** How long a writer waits for a peer before giving up on the lock. */
+const CONFIG_LOCK_WAIT_MS = 3000;
+const CONFIG_LOCK_POLL_MS = 25;
+
+function sleepSync(ms: number): void {
+  // These call sites are sync (and on the CLI's startup path), so this is the
+  // only way to back off without restructuring every caller to async.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function tryAcquireConfigLock(waitMs: number): LockHandle | null {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try {
+      return acquireLock({
+        // Resolved per call, not at import: TRACE_MCP_HOME can be redirected
+        // (tests, the TRA-611 rename), and a cached dir would scope the lock
+        // to the wrong state directory.
+        lockDir: path.join(TRACE_MCP_HOME, 'locks'),
+        name: CONFIG_LOCK_NAME,
+        op: 'config-write',
+      });
+    } catch (err) {
+      if (!(err instanceof LockError)) throw err;
+      if (Date.now() >= deadline) return null;
+      sleepSync(CONFIG_LOCK_POLL_MS);
+    }
+  }
+}
+
+/**
+ * Run a config read-modify-write while holding the global-config lock.
+ *
+ * On timeout it runs `fn` anyway. Losing the lock must not make a config write
+ * fail outright — that is strictly worse than today's behaviour, and a wedged
+ * lock file would otherwise brick every registration on the machine.
+ */
+function withGlobalConfigLock<T>(fn: () => T): T {
+  const handle = tryAcquireConfigLock(CONFIG_LOCK_WAIT_MS);
+  try {
+    return fn();
+  } finally {
+    if (handle) releaseLock(handle);
+  }
+}
+
+/**
+ * Lock variant for janitorial work: returns `null` rather than proceeding
+ * unlocked. Used by the sweep, whose whole risk is overwriting a concurrent
+ * writer — and which loses nothing by trying again on the next hourly pass.
+ */
+function withGlobalConfigLockOrSkip<T>(fn: () => T): T | null {
+  const handle = tryAcquireConfigLock(CONFIG_LOCK_WAIT_MS);
+  if (!handle) return null;
+  try {
+    return fn();
+  } finally {
+    releaseLock(handle);
+  }
+}
+
+/** `modifyGlobalConfigJsonc` without the lock — for callers already holding it. */
+function modifyGlobalConfigJsoncUnlocked(jsonPath: (string | number)[], value: unknown): void {
+  const text = readGlobalConfigText();
+  const edits = modify(text, jsonPath, value, FORMAT_OPTS);
+  const updated = applyEdits(text, edits);
+  atomicWriteString(GLOBAL_CONFIG_PATH, updated, { mode: 0o600 });
+}
+
 /**
  * Set a value at `jsonPath` in the global JSONC config, preserving comments.
  * `jsonPath` is an array of property names / indices, e.g. `['projects', '/foo']`.
  * Pass `undefined` as value to remove the key.
  */
 export function modifyGlobalConfigJsonc(jsonPath: (string | number)[], value: unknown): void {
-  const text = readGlobalConfigText();
-  const edits = modify(text, jsonPath, value, FORMAT_OPTS);
-  const updated = applyEdits(text, edits);
-  atomicWriteString(GLOBAL_CONFIG_PATH, updated, { mode: 0o600 });
+  withGlobalConfigLock(() => modifyGlobalConfigJsoncUnlocked(jsonPath, value));
 }
 
 // ---------------------------------------------------------------------------
@@ -57,16 +149,89 @@ export function modifyGlobalConfigJsonc(jsonPath: (string | number)[], value: un
  */
 export function saveProjectConfigJsonc(projectRoot: string, config: Record<string, unknown>): void {
   ensureGlobalDirs();
-  const existing = parse(readGlobalConfigText()) as
-    | { projects?: Record<string, Record<string, unknown>> }
-    | undefined;
-  const existingSection = existing?.projects?.[projectRoot] ?? {};
-  modifyGlobalConfigJsonc(['projects', projectRoot], { ...existingSection, ...config });
+  // The read and the write are one critical section: the merge below is
+  // computed from `existing`, so a peer writing in between would be silently
+  // reverted by our write.
+  withGlobalConfigLock(() => {
+    const existing = parse(readGlobalConfigText()) as
+      | { projects?: Record<string, Record<string, unknown>> }
+      | undefined;
+    const existingSection = existing?.projects?.[projectRoot] ?? {};
+    modifyGlobalConfigJsoncUnlocked(['projects', projectRoot], {
+      ...existingSection,
+      ...config,
+    });
+  });
 }
 
 /** Remove a per-project config section from the global config file (JSONC-safe). */
 export function removeProjectConfigJsonc(projectRoot: string): void {
   modifyGlobalConfigJsonc(['projects', projectRoot], undefined);
+}
+
+/**
+ * Drop dead per-project sections from `.config.json` (TRA-702).
+ *
+ * `projects` is the only unbounded map in the global config, and it was the
+ * only registration store with no sweep at all: registry.json has had
+ * `sweepMissingRoots` / `sweepEphemeralProjects` since TRA-36 / TRA-335, but
+ * `setupProject` writes here on a separate path that none of them reach. On
+ * the reported machine that left 593 sections / 785 KB — reparsed on every
+ * server start, i.e. on every agent run.
+ *
+ * Two kinds go, and only these two:
+ *
+ *  - the root no longer exists **and** no registry entry claims it. Both
+ *    halves matter: registry.json is the authority for what the user actually
+ *    registered and already runs a 7-day grace period, so an unmounted volume
+ *    keeps its config here instead of being punished for being offline.
+ *  - the root is a one-shot agent workdir that nothing registered. The Multica
+ *    runtime abandons its checkout *in place*, so these stay on disk forever
+ *    and an existence check alone never reaches them. An explicitly registered
+ *    workdir-shaped root is a deliberate act (`add`/`init`) and is kept.
+ *
+ * Removal is per-key against one in-memory buffer, then a single atomic write.
+ * Replacing the whole `projects` object in one edit would be shorter, but it
+ * reserialises every *retained* section too and so drops the comments a user
+ * hand-wrote inside them — the per-project data `saveProjectConfigJsonc` and
+ * the #218 regression tests already go out of their way to preserve. Looping
+ * `removeProjectConfigJsonc` would keep the comments but re-read and rewrite
+ * the file once per section; this keeps both properties.
+ */
+export function pruneProjectConfigSections(): string[] {
+  // Held across the whole read-edit-write cycle. Without it, a section written
+  // by a concurrent `setupProject()` after our read is erased by our write —
+  // and if that lands between an agent run's save and its immediate
+  // `loadConfig()`, the run indexes with schema defaults instead of its
+  // detected config. The window is ~2s wide on the first backlog drain.
+  return (
+    withGlobalConfigLockOrSkip(() => {
+      let text = readGlobalConfigText();
+      const parsed = parse(text) as { projects?: Record<string, unknown> } | undefined;
+      const projects = parsed?.projects;
+      if (!projects || typeof projects !== 'object') return [];
+
+      const registered = new Set(listProjects().map((p) => p.root));
+      const removed: string[] = [];
+
+      for (const root of Object.keys(projects)) {
+        const claimed = registered.has(root);
+        const dead = !claimed && !fs.existsSync(root);
+        const orphanWorkdir = !claimed && isEphemeralProjectRoot(root);
+        if (dead || orphanWorkdir) removed.push(root);
+      }
+
+      if (removed.length === 0) return []; // don't rewrite a healthy config
+
+      for (const root of removed) {
+        text = applyEdits(text, modify(text, ['projects', root], undefined, FORMAT_OPTS));
+      }
+      ensureGlobalDirs();
+      atomicWriteString(GLOBAL_CONFIG_PATH, text, { mode: 0o600 });
+      logger.debug({ removed: removed.length }, 'Pruned dead project sections from global config');
+      return removed;
+    }) ?? [] // lock busy — a writer is active; try again on the next sweep
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -132,13 +297,15 @@ export function saveGlobalSettingsJsonc(
   incoming: Record<string, unknown>,
 ): Record<string, unknown> {
   ensureGlobalDirs();
-  const text = readGlobalConfigText();
-  const existing = (parse(text) as Record<string, unknown> | null) ?? {};
-  const updatedText = applySettingsDiff(text, [], incoming, existing);
-  if (updatedText !== text) {
-    atomicWriteString(GLOBAL_CONFIG_PATH, updatedText, { mode: 0o600 });
-  }
-  return (parse(updatedText) as Record<string, unknown> | null) ?? {};
+  return withGlobalConfigLock(() => {
+    const text = readGlobalConfigText();
+    const existing = (parse(text) as Record<string, unknown> | null) ?? {};
+    const updatedText = applySettingsDiff(text, [], incoming, existing);
+    if (updatedText !== text) {
+      atomicWriteString(GLOBAL_CONFIG_PATH, updatedText, { mode: 0o600 });
+    }
+    return (parse(updatedText) as Record<string, unknown> | null) ?? {};
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +335,10 @@ const PRESET_MIGRATED_KEY = 'preset_default_migrated';
  */
 export function migrateGlobalConfig(): MigrateResult {
   ensureGlobalDirs();
+  return withGlobalConfigLock(() => migrateGlobalConfigUnlocked());
+}
+
+function migrateGlobalConfigUnlocked(): MigrateResult {
   const result: MigrateResult = { added: [], changed: false };
 
   const existingText = readGlobalConfigText();

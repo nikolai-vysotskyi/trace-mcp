@@ -216,19 +216,26 @@ describe('recordPkgRoot', () => {
       .split('\n')
       .filter((l) => l.trim());
 
+  // `recordPkgRoot` runs the input through `path.resolve`, so a POSIX literal
+  // comes back drive-qualified on Windows ('/a/b' -> 'D:\a\b') and a hardcoded
+  // POSIX expectation fails there. Build both sides with the platform's own
+  // separator so these assert the dedup/cap behaviour rather than the host OS.
+  const pkgRoot = (prefix: string) => path.join(path.resolve(prefix), 'lib', 'node_modules');
+  const cliUnder = (prefix: string) => path.join(pkgRoot(prefix), 'trace-mcp', 'dist', 'cli.js');
+
   it('records the node_modules root the cli was installed into', () => {
-    recordPkgRoot('/opt/homebrew/lib/node_modules/trace-mcp/dist/cli.js');
-    expect(rootsOf()).toEqual(['/opt/homebrew/lib/node_modules']);
+    recordPkgRoot(cliUnder('/opt/homebrew'));
+    expect(rootsOf()).toEqual([pkgRoot('/opt/homebrew')]);
   });
 
   it('deduplicates and caps the list', () => {
     for (let i = 0; i < 14; i++) {
-      recordPkgRoot(`/prefix${i}/lib/node_modules/trace-mcp/dist/cli.js`);
+      recordPkgRoot(cliUnder(`/prefix${i}`));
     }
-    recordPkgRoot('/prefix13/lib/node_modules/trace-mcp/dist/cli.js');
+    recordPkgRoot(cliUnder('/prefix13'));
     const roots = rootsOf();
     expect(roots).toHaveLength(10);
-    expect(roots.at(-1)).toBe('/prefix13/lib/node_modules');
+    expect(roots.at(-1)).toBe(pkgRoot('/prefix13'));
     expect(new Set(roots).size).toBe(10);
   });
 

@@ -119,6 +119,15 @@ export function setupProject(
 
   // 2. Generate & save config
   const config = generateConfig(detection);
+  // TRA-702: this write is unconditional on purpose, ephemeral roots included.
+  // Skipping it for one-shot workdirs looks like the obvious fix for the
+  // .config.json bloat, but both stdio startup and the daemon's project loader
+  // call setupProject() and then immediately loadConfig(root) — which reads
+  // back exactly this section. Skipping the write silently downgrades the run
+  // to schema defaults, losing the detected framework include/exclude set (for
+  // presets like n8n's `**/*.json` that means not indexing the files the
+  // integration exists for). Collecting these sections afterwards is
+  // softGcSweep's job; see pruneProjectConfigSections.
   saveProjectConfig(absRoot, {
     root: config.root,
     include: config.include,

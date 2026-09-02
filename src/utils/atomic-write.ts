@@ -117,6 +117,54 @@ export function atomicWriteString(
 }
 
 /**
+ * Tmp files written by {@link atomicWriteString}: `.<basename>.tmp.<pid>.<rand>`.
+ * The trailing hex is what keeps this from matching a user file that merely has
+ * ".tmp." in its name.
+ */
+const ORPHAN_TMP_PATTERN = /^\..+\.tmp\.\d+\.[0-9a-f]{12}$/;
+
+/** Default age before a leftover tmp is assumed orphaned rather than in flight. */
+const ORPHAN_TMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Delete atomic-write tmp files in `dir` older than `maxAgeMs` (TRA-702).
+ *
+ * The write path above unlinks its own tmp on error, but a process killed
+ * between `open` and `rename` never runs that handler — so every crash leaks
+ * one file, forever. Twelve had accumulated in ~/.trace-mcp, the oldest four
+ * months old.
+ *
+ * The age cutoff is the safety margin: a tmp younger than it may belong to a
+ * write still in flight in another process, and removing that would turn a
+ * healthy write into a spurious failure. Best-effort throughout — a sweep that
+ * cannot read the directory is not worth failing a daemon start over.
+ */
+export function sweepOrphanTmpFiles(dir: string, maxAgeMs = ORPHAN_TMP_MAX_AGE_MS): string[] {
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return []; // no state dir yet, or unreadable — nothing to collect
+  }
+
+  const cutoff = Date.now() - maxAgeMs;
+  const removed: string[] = [];
+  for (const name of names) {
+    if (!ORPHAN_TMP_PATTERN.test(name)) continue;
+    const full = path.join(dir, name);
+    try {
+      const st = fs.lstatSync(full);
+      if (!st.isFile() || st.mtimeMs > cutoff) continue;
+      fs.unlinkSync(full);
+      removed.push(full);
+    } catch {
+      // vanished under us, or not ours to delete — either way, skip it
+    }
+  }
+  return removed;
+}
+
+/**
  * Atomically write a JSON-serialisable value to disk with a trailing newline.
  * Convenience wrapper around {@link atomicWriteString}.
  */
