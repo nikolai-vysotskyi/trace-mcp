@@ -270,7 +270,15 @@ describe('Store', () => {
       const fileB = store.insertFile('models/post.ts', 'typescript', 'hD', 50);
       const userModelId = store.insertOrmModel({ name: 'User', orm: 'mongoose' }, fileA);
       const postModelId = store.insertOrmModel({ name: 'Post', orm: 'mongoose' }, fileB);
-      store.insertOrmAssociation(postModelId, userModelId, 'User', 'belongsTo', undefined, fileB, 5);
+      store.insertOrmAssociation(
+        postModelId,
+        userModelId,
+        'User',
+        'belongsTo',
+        undefined,
+        fileB,
+        5,
+      );
 
       expect(() => store.deleteFile(fileA)).not.toThrow();
 
