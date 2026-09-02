@@ -52,8 +52,8 @@ otherwise limited to the current session ([analytics](analytics.md)).
 # 1. Stand up a local OTLP collector (Jaeger all-in-one).
 cd ops/telemetry && docker compose up -d && cd -
 
-# 2. Enable the bridge for this project (.trace-mcp.json is gitignored).
-cat > .trace-mcp.json <<'JSON'
+# 2. Enable the bridge for this project (.trace.json is gitignored).
+cat > .trace.json <<'JSON'
 {
   "telemetry": {
     "observability": {
@@ -90,7 +90,7 @@ status `ERROR`. The error is rethrown so caller control flow is unchanged.
 
 ## Switching sinks
 
-In `.trace-mcp.json` (or `~/.trace-mcp/.config.json` for a global default):
+In `.trace.json` (or `~/.trace/.config.json` for a global default):
 
 | Goal                         | Config                                                                                              |
 | ---------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -147,7 +147,7 @@ tool-flavoured spans so dashboards stay consistent.
 
 ```bash
 cd ops/telemetry && docker compose down -v
-rm .trace-mcp.json   # if you don't want telemetry enabled going forward
+rm .trace.json   # if you don't want telemetry enabled going forward
 ```
 
 ## Performance

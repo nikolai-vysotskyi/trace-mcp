@@ -76,7 +76,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      ▼
 ┌──────────────────────────────────────────┐
 │  Subprojects (auto, post-index)         │
-│  Topology DB (~/.trace-mcp/topology.db) │
+│  Topology DB (~/.trace/topology.db)     │
 │  Auto-detect services per project       │
 │  Contracts · Endpoints · Client calls   │
 │  Cross-service impact edges             │
@@ -89,11 +89,11 @@ When AI is enabled, a background pipeline runs after indexing to generate summar
 
 ### Storage
 
-All state is centralized in `~/.trace-mcp/`, and what goes in it is set by
+All state is centralized in `~/.trace/`, and what goes in it is set by
 [configuration](configuration.md#how-config-works):
 
 ```
-~/.trace-mcp/
+~/.trace/
   .config.json              # global config + per-project settings
   registry.json             # project registry (all added projects)
   topology.db               # cross-service topology + subproject graph

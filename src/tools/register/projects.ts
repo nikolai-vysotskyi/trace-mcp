@@ -22,7 +22,7 @@ export function registerProjectsTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'list_projects',
-    'List projects registered with trace-mcp (~/.trace-mcp/registry.json), plus any known subprojects. Use with call_project_tool to query a project other than the one this session is attached to. Read-only. Returns JSON: { projects: [{ root, name, type, lastIndexed }], subprojects?: [{ name, repo_root, project_root }], total }.',
+    'List projects registered with trace-mcp (~/.trace/registry.json), plus any known subprojects. Use with call_project_tool to query a project other than the one this session is attached to. Read-only. Returns JSON: { projects: [{ root, name, type, lastIndexed }], subprojects?: [{ name, repo_root, project_root }], total }.',
     {},
     async () => {
       const projects = listProjects().map((p) => ({

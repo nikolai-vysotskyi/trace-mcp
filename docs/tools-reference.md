@@ -1,7 +1,7 @@
 ---
 title: "trace-mcp MCP Tools Reference — code-intelligence tools by task and framework"
 description: "The trace-mcp MCP tools you reach for most, grouped by task — navigation, refactoring, impact analysis, security, and framework-aware queries. Every tool is listed in the tool index."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # Tools reference
@@ -143,7 +143,7 @@ A subproject is any working repository that is part of your project's ecosystem:
 
 ### Cross-project
 
-Every session is attached to one project, but these two tools reach across to any OTHER project already registered with trace-mcp (`~/.trace-mcp/registry.json`) — see [Configuration](configuration.md#cross-project-tools).
+Every session is attached to one project, but these two tools reach across to any OTHER project already registered with trace-mcp (`~/.trace/registry.json`) — see [Configuration](configuration.md#cross-project-tools).
 
 | Tool | What it does |
 |---|---|
@@ -295,7 +295,7 @@ the +15% cutoff the TOON allowlist is built on, so wiring it would have cost
 tokens rather than saved them. See [TOON savings](toon-savings.md).
 
 Two rarely-used `search` tuning parameters were also removed. Per-channel
-fusion weights now come from `~/.trace-mcp/tuning.jsonc` (written by
+fusion weights now come from `~/.trace/tuning.jsonc` (written by
 `tune_weights`) instead of `fusion_weights` on every call, and `fusion_debug`
 is gone. The nested `fusion_weights` object was the single most expensive
 structure in the whole tool schema, paid by every client on every session.

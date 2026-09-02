@@ -28,7 +28,7 @@ Symlinks can be used to escape the project root and read arbitrary files.
 
 Files are filtered through multiple layers:
 
-1. **Config exclude patterns** — directories excluded by default: `node_modules`, `.git`, `dist`, `build`, `.next`, `__pycache__`, `.venv`, `vendor`, `.trace-mcp`, `coverage`, `.turbo`.
+1. **Config exclude patterns** — directories excluded by default: `node_modules`, `.git`, `dist`, `build`, `.next`, `__pycache__`, `.venv`, `vendor`, `coverage`.
 2. **File watcher ignore** — `@parcel/watcher` is configured with the same ignore list. Double filtering is applied (at subscription level and event processing level).
 3. **`.traceignore`** — project-root file (gitignore syntax) that **completely excludes** matched files from indexing. Unlike `.gitignore` (which only hides content from AI output but keeps graph metadata), `.traceignore` prevents files from being parsed or stored at all. Intended for generated code, vendored dependencies, and large data files.
 4. User-configurable `exclude` patterns and `ignore.directories` / `ignore.patterns` in the config file.
@@ -144,7 +144,7 @@ A regex-based content scanner can detect secrets in source files:
 
 ## Storage Safety
 
-* The SQLite database defaults to `.trace-mcp/index.db` (project-relative, hidden directory).
+* The SQLite database lives outside the project, at `~/.trace/index/<name>-<hash>.db`.
 * Configurable via `db.path` in config or `TRACE_MCP_DB_PATH` environment variable.
 * **WAL mode** enabled for safe concurrent reads during indexing + tool queries.
 * **Foreign key constraints** enforced to maintain referential integrity.
