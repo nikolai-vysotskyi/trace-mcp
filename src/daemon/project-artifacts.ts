@@ -24,6 +24,14 @@ import { logger } from '../logger.js';
 import { getProject, isEphemeralProjectRoot, listProjects } from '../registry.js';
 import { INDEX_DIR } from '../shared/paths.js';
 
+/** A tier that failed outright (as opposed to finding nothing to clean up). */
+export interface ArtifactFailure {
+  /** Which cleanup tier failed, e.g. "index_db", "topology", "decisions.session_chunks". */
+  tier: string;
+  /** The underlying error, stringified. */
+  error: string;
+}
+
 /** Result of a project artifact cleanup pass. */
 export interface RemoveArtifactsResult {
   /** Absolute paths that were deleted. */
@@ -36,6 +44,12 @@ export interface RemoveArtifactsResult {
   topology: { subprojects: number; services: number };
   /** Decision-store rows dropped for this project_root, if any. */
   decisions: { decisions: number; chunks: number; clusters: number; memos: number };
+  /**
+   * Tiers that threw instead of completing, distinct from a tier that ran
+   * and genuinely found nothing to do. A zero count next to a failures entry
+   * for the same tier means "the driver wouldn't load", not "nothing here".
+   */
+  failures: ArtifactFailure[];
 }
 
 /** Options for {@link removeProjectArtifacts}. */
@@ -48,44 +62,47 @@ export interface RemoveArtifactsOptions {
 /** SQLite sidecars that may exist next to a `.db` file. */
 const SQLITE_SIDECARS = ['', '-wal', '-shm', '-journal'] as const;
 
-function tryUnlink(file: string): { deleted: boolean; bytes: number } {
+function tryUnlink(file: string): { deleted: boolean; bytes: number; error?: string } {
   try {
     const stat = fs.statSync(file);
     fs.unlinkSync(file);
     return { deleted: true, bytes: stat.size };
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
-    if (code !== 'ENOENT') {
-      logger.warn({ file, err }, 'project-artifacts: unlink failed');
-    }
-    return { deleted: false, bytes: 0 };
+    if (code === 'ENOENT') return { deleted: false, bytes: 0 };
+    logger.error({ file, err }, 'project-artifacts: unlink failed');
+    return { deleted: false, bytes: 0, error: String(err) };
   }
 }
 
-function deleteDbWithSidecars(basePath: string, result: RemoveArtifactsResult): void {
+function deleteDbWithSidecars(basePath: string, result: RemoveArtifactsResult, tier: string): void {
   for (const suffix of SQLITE_SIDECARS) {
     const full = basePath + suffix;
-    const { deleted, bytes } = tryUnlink(full);
+    const { deleted, bytes, error } = tryUnlink(full);
     if (deleted) {
       result.deleted.push(full);
       result.freedBytes += bytes;
     }
+    if (error) result.failures.push({ tier, error: `${full}: ${error}` });
   }
 }
 
-function listIndexDirFiles(): string[] {
+function listIndexDirFiles(result: RemoveArtifactsResult): string[] {
   try {
     return fs.readdirSync(INDEX_DIR);
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
-    if (code !== 'ENOENT') {
-      logger.warn({ err }, 'project-artifacts: failed to list INDEX_DIR');
-    }
+    if (code === 'ENOENT') return [];
+    logger.error({ err }, 'project-artifacts: failed to list INDEX_DIR');
+    result.failures.push({ tier: 'index_dir_list', error: String(err) });
     return [];
   }
 }
 
-function dropTopologyRows(root: string): { subprojects: number; services: number } {
+function dropTopologyRows(
+  root: string,
+  result: RemoveArtifactsResult,
+): { subprojects: number; services: number } {
   if (!fs.existsSync(TOPOLOGY_DB_PATH)) return { subprojects: 0, services: 0 };
   try {
     // Lazy import to avoid pulling better-sqlite3 unless a topology DB exists.
@@ -100,7 +117,8 @@ function dropTopologyRows(root: string): { subprojects: number; services: number
       store.close();
     }
   } catch (err) {
-    logger.warn({ err, root }, 'project-artifacts: topology cleanup failed (non-fatal)');
+    logger.error({ err, root }, 'project-artifacts: topology cleanup failed');
+    result.failures.push({ tier: 'topology', error: String(err) });
     return { subprojects: 0, services: 0 };
   }
 }
@@ -132,7 +150,7 @@ export async function sweepEphemeralTopology(): Promise<string[]> {
       store.close();
     }
   } catch (err) {
-    logger.warn({ err }, 'project-artifacts: ephemeral topology sweep failed (non-fatal)');
+    logger.error({ err }, 'project-artifacts: ephemeral topology sweep failed');
   }
   return dropped;
 }
@@ -144,7 +162,7 @@ interface DecisionDeleteCounts {
   memos: number;
 }
 
-function dropDecisionRows(root: string): DecisionDeleteCounts {
+function dropDecisionRows(root: string, result: RemoveArtifactsResult): DecisionDeleteCounts {
   const empty: DecisionDeleteCounts = { decisions: 0, chunks: 0, clusters: 0, memos: 0 };
   if (!fs.existsSync(DECISIONS_DB_PATH)) return empty;
   try {
@@ -175,7 +193,8 @@ function dropDecisionRows(root: string): DecisionDeleteCounts {
           // Table may not exist on older DBs — ignore.
           const msg = (err as Error)?.message ?? '';
           if (!/no such table/i.test(msg)) {
-            logger.warn({ err, table, root }, 'project-artifacts: decision table delete failed');
+            logger.error({ err, table, root }, 'project-artifacts: decision table delete failed');
+            result.failures.push({ tier: `decisions.${table}`, error: String(err) });
           }
         }
       }
@@ -184,7 +203,8 @@ function dropDecisionRows(root: string): DecisionDeleteCounts {
       db.close();
     }
   } catch (err) {
-    logger.warn({ err, root }, 'project-artifacts: decision cleanup failed (non-fatal)');
+    logger.error({ err, root }, 'project-artifacts: decision cleanup failed');
+    result.failures.push({ tier: 'decisions', error: String(err) });
     return empty;
   }
 }
@@ -212,6 +232,7 @@ export function removeProjectArtifacts(
     freedBytes: 0,
     topology: { subprojects: 0, services: 0 },
     decisions: { decisions: 0, chunks: 0, clusters: 0, memos: 0 },
+    failures: [],
   };
 
   // TRA-38: use the registry's own recorded dbPath, not a fresh
@@ -251,7 +272,7 @@ export function removeProjectArtifacts(
     }
   } else {
     // 1. Index DB + WAL/SHM/journal sidecars
-    deleteDbWithSidecars(indexDbBase, result);
+    deleteDbWithSidecars(indexDbBase, result, 'index_db');
     // Nothing holds a DB that no longer exists.
     removeHoldersDir(indexDbBase);
   }
@@ -266,7 +287,7 @@ export function removeProjectArtifacts(
     const taskCacheSuffix = `-${hash}.db`;
     const taskCachePrefix = 'daemon-task-cache-';
     const seenBases = new Set<string>();
-    for (const file of listIndexDirFiles()) {
+    for (const file of listIndexDirFiles(result)) {
       let base: string | null = null;
       if (file.startsWith(sessionPrefix) && /\.db(-wal|-shm|-journal)?$/.test(file)) {
         base = file.replace(/(-wal|-shm|-journal)$/, '');
@@ -279,15 +300,15 @@ export function removeProjectArtifacts(
       }
       if (!base || seenBases.has(base)) continue;
       seenBases.add(base);
-      deleteDbWithSidecars(path.join(INDEX_DIR, base), result);
+      deleteDbWithSidecars(path.join(INDEX_DIR, base), result, 'session_task_cache_db');
     }
   }
 
   // 4. Topology rows
-  result.topology = dropTopologyRows(absRoot);
+  result.topology = dropTopologyRows(absRoot, result);
 
   // 5. Decisions DB project-scoped rows
-  result.decisions = dropDecisionRows(absRoot);
+  result.decisions = dropDecisionRows(absRoot, result);
 
   logger.info(
     {
@@ -297,8 +318,11 @@ export function removeProjectArtifacts(
       freedBytes: result.freedBytes,
       topology: result.topology,
       decisions: result.decisions,
+      failures: result.failures,
     },
-    'project-artifacts: cleanup complete',
+    result.failures.length > 0
+      ? 'project-artifacts: cleanup completed with failures'
+      : 'project-artifacts: cleanup complete',
   );
 
   return result;

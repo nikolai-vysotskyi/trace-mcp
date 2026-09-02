@@ -2409,6 +2409,7 @@ program
             freedBytes: artifacts.freedBytes,
             topology: artifacts.topology,
             decisions: artifacts.decisions,
+            failures: artifacts.failures,
           }),
         );
         return;

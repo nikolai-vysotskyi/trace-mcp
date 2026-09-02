@@ -95,8 +95,12 @@ export class DaemonClient {
   }
 
   // DELETE /api/projects?project=<root>
-  async removeProject(root: string): Promise<{ status: string; project: string }> {
-    return this.delete<{ status: string; project: string }>(
+  async removeProject(root: string): Promise<{
+    status: string;
+    project: string;
+    failures: { tier: string; error: string }[];
+  }> {
+    return this.delete<{ status: string; project: string; failures: { tier: string; error: string }[] }>(
       `/api/projects?project=${encodeURIComponent(root)}`,
     );
   }
