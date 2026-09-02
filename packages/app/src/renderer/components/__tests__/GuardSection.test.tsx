@@ -90,7 +90,7 @@ it('dates a stopped server instead of printing a raw second count', async () => 
   stubGuard({ health: 'down', mode: 'strict', reason: 'heartbeat_stale', reasonSeconds: 412 });
   render(<GuardSection root={ROOT} />);
 
-  expect(await screen.findByText(/trace-mcp last checked in 6 minutes ago/)).toBeTruthy();
+  expect(await screen.findByText(/trace-mcp last reported 6 minutes ago/)).toBeTruthy();
 });
 
 it('says nothing under the card when the cause carries no advice', async () => {
