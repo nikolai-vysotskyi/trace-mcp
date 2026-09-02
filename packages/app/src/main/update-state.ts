@@ -17,6 +17,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { isPlausibleInstallPath } from './install-path';
 import { getLauncherDir } from './trace-home';
 
 /** A global npm root that currently holds a `trace-mcp` install. */
@@ -147,4 +148,106 @@ export function staleRootInUse(
     }
   }
   return null;
+}
+
+// --- Installed .app bundles --------------------------------------------------
+//
+// The same shape one layer up from the npm roots above: electron-updater updates
+// the bundle it is *running from*, so a machine carrying two installed copies
+// (`/Applications` and `~/Applications`, the second dragged in later) keeps the
+// other frozen at whatever version it arrived at — and whichever copy launches
+// next decides the version the user gets. `app-location.json` records one
+// location and validates it (TRA-357); a second plausible bundle elsewhere is
+// invisible to every check we have (TRA-692).
+
+/** The bundle filename we install under. Mirrors `scripts/locate-app.mjs`. */
+export const APP_BUNDLE_NAME = 'trace-mcp.app';
+
+/** An installed `trace-mcp.app` found on disk. */
+export interface AppBundle {
+  /** Absolute path to the `.app` bundle. */
+  path: string;
+  /** `CFBundleShortVersionString`, without a leading `v`. */
+  version: string;
+  /** True for the bundle this process is running from. */
+  running: boolean;
+}
+
+/**
+ * The version a bundle claims, from `Contents/Info.plist`.
+ *
+ * Mirrors `readBundleVersion` in `scripts/locate-app.mjs` — same regex over the
+ * XML plist, no `PlistBuddy` subprocess. The plist is the only honest answer to
+ * "what is installed here": sidecar markers record what a swap intended and part
+ * company with the bundle whenever one is replaced out-of-band (TRA-443).
+ */
+export function readBundleVersion(appPath: string): string | undefined {
+  try {
+    const raw = fs.readFileSync(path.join(appPath, 'Contents', 'Info.plist'), 'utf-8');
+    const m = raw.match(/<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/);
+    return m?.[1]?.trim().replace(/^v/, '') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The `.app` bundle an Electron main process runs from, or null when it does not
+ * run out of one (`electron .` during development, Windows, Linux).
+ */
+export function runningAppBundle(execPath: string): string | null {
+  const marker = `.app${path.sep}Contents${path.sep}MacOS${path.sep}`;
+  const at = execPath.indexOf(marker);
+  return at < 0 ? null : execPath.slice(0, at + '.app'.length);
+}
+
+/** The bundle path `app-location.json` records, or null. */
+export function readAppLocationMarker(
+  markerPath: string = path.join(getLauncherDir(), 'app-location.json'),
+): string | null {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(markerPath, 'utf-8')) as { appPath?: unknown };
+    return typeof parsed.appPath === 'string' ? parsed.appPath : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Every installed bundle among `candidates`, with the running one marked.
+ *
+ * Deduplicated by realpath, so a path reached twice (the marker and the
+ * conventional directory it already names) counts once. Build outputs are
+ * skipped by the same gate the location marker uses — a bundle inside a checkout
+ * is not an install and must not raise a duplicate warning on a dev machine.
+ */
+export function scanAppBundles(
+  candidates: readonly (string | null | undefined)[],
+  runningPath: string | null,
+): AppBundle[] {
+  let running: string | null = null;
+  if (runningPath) {
+    try {
+      running = fs.realpathSync(runningPath);
+    } catch {
+      running = runningPath;
+    }
+  }
+  const seen = new Set<string>();
+  const found: AppBundle[] = [];
+  for (const candidate of candidates) {
+    if (!candidate || !isPlausibleInstallPath(candidate)) continue;
+    let real: string;
+    try {
+      real = fs.realpathSync(candidate);
+    } catch {
+      continue; // Nothing at that path.
+    }
+    if (seen.has(real)) continue;
+    seen.add(real);
+    const version = readBundleVersion(candidate);
+    if (!version) continue; // Not one of ours, or half-swapped.
+    found.push({ path: candidate, version, running: real === running });
+  }
+  return found;
 }
