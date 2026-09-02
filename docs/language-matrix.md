@@ -25,7 +25,7 @@ is the two-pass pipeline in [architecture](architecture.md#indexing-pipeline).
 - **import edges:** 13
 - **call edges (`get_call_graph`, call-aware `find_usages`):** 3
 - **type / inheritance edges:** 2
-- **covered by a plugin test:** 67
+- **covered by a plugin test:** 68
 
 ## What the columns mean
 
@@ -80,7 +80,7 @@ second thing, so it is much shorter than the language list — see
 | blade | .blade.php | regex | yes | — | — | — | yes |
 | c | .c .h | tree-sitter | yes | — | — | — | yes |
 | clojure | .clj .cljs .cljc .edn | regex | yes | — | — | — | — |
-| cmake | .cmake CMakeLists.txt | regex | yes | — | — | — | — |
+| cmake | .cmake CMakeLists.txt | regex | yes | — | — | — | yes |
 | cobol | .cob .cbl .cpy .cobol | regex (multi-pass) | yes | — | — | — | yes |
 | common-lisp | .lisp .lsp .cl .asd | regex (multi-pass) | yes | — | — | — | yes |
 | cpp | .cpp .cxx .cc .hpp | tree-sitter | yes | — | — | — | yes |

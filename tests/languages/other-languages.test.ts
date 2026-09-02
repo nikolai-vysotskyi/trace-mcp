@@ -7,6 +7,7 @@ import { AssemblyLanguagePlugin } from '../../src/indexer/plugins/language/assem
 import { AutoHotkeyLanguagePlugin } from '../../src/indexer/plugins/language/autohotkey/index.js';
 import { BashLanguagePlugin } from '../../src/indexer/plugins/language/bash/index.js';
 import { BladeLanguagePlugin } from '../../src/indexer/plugins/language/blade/index.js';
+import { CMakeLanguagePlugin } from '../../src/indexer/plugins/language/cmake/index.js';
 import { EjsLanguagePlugin } from '../../src/indexer/plugins/language/ejs/index.js';
 import { ElixirLanguagePlugin } from '../../src/indexer/plugins/language/elixir/index.js';
 import { ErlangLanguagePlugin } from '../../src/indexer/plugins/language/erlang/index.js';
@@ -754,5 +755,83 @@ describe('Makefile', () => {
     for (const bogus of ['#', 'run', 'mocha', '\\']) {
       expect(r.symbols.some((s: any) => s.name === bogus)).toBe(false);
     }
+  });
+});
+
+// ==============================
+// 28. CMake
+// ==============================
+describe('CMake', () => {
+  const plugin = new CMakeLanguagePlugin();
+  const p = (s: string) => parse(plugin, s, 'CMakeLists.txt');
+
+  it('extracts a function() declaration', async () => {
+    const r = await p('function(greet name)\n  message(STATUS "Hello, ${name}")\nendfunction()\n');
+    expect(r.symbols.some((s: any) => s.name === 'greet' && s.kind === 'function')).toBe(true);
+  });
+
+  it('extracts a macro() declaration, flagged distinctly from a function', async () => {
+    const r = await p('macro(add_common_flags target)\n  set(x 1)\nendmacro()\n');
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'add_common_flags' && s.kind === 'function' && s.metadata?.macro,
+      ),
+    ).toBe(true);
+  });
+
+  it('extracts project() as a module', async () => {
+    const r = await p('project(myapp)\n');
+    expect(r.symbols.some((s: any) => s.name === 'myapp' && s.kind === 'module')).toBe(true);
+  });
+
+  it('extracts add_executable/add_library/add_custom_target, tagged by target kind', async () => {
+    const r = await p(
+      'add_executable(myapp main.cpp)\nadd_library(mylib STATIC lib.cpp)\nadd_custom_target(docs COMMAND doxygen)\n',
+    );
+    expect(
+      r.symbols.some((s: any) => s.name === 'myapp' && s.metadata?.target === 'executable'),
+    ).toBe(true);
+    expect(r.symbols.some((s: any) => s.name === 'mylib' && s.metadata?.target === 'library')).toBe(
+      true,
+    );
+    expect(r.symbols.some((s: any) => s.name === 'docs' && s.metadata?.target === 'custom')).toBe(
+      true,
+    );
+  });
+
+  it('extracts set() and option() as variables, option flagged distinctly', async () => {
+    const r = await p(
+      'set(CMAKE_CXX_STANDARD 17)\noption(BUILD_TESTS "Build the test suite" ON)\n',
+    );
+    expect(
+      r.symbols.some((s: any) => s.name === 'CMAKE_CXX_STANDARD' && s.kind === 'variable'),
+    ).toBe(true);
+    expect(
+      r.symbols.some(
+        (s: any) => s.name === 'BUILD_TESTS' && s.kind === 'variable' && s.metadata?.option,
+      ),
+    ).toBe(true);
+  });
+
+  it('extracts include, find_package and add_subdirectory as import edges', async () => {
+    const r = await p(
+      'include(cmake/Utils.cmake)\nfind_package(Threads REQUIRED)\nadd_subdirectory(src)\n',
+    );
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'cmake/Utils.cmake')).toBe(true);
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'Threads')).toBe(true);
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'src')).toBe(true);
+  });
+
+  it('does not truncate a path argument at the first "/" or "."', async () => {
+    // A naive `\w+` capture stops at the slash and reports the module as
+    // just "third_party" — the actual vendored directory name is lost.
+    const r = await p('add_subdirectory(third_party/fmt)\n');
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'third_party/fmt')).toBe(true);
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'third_party')).toBe(false);
+  });
+
+  it('strips surrounding quotes from a quoted include path', async () => {
+    const r = await p('include("cmake/Utils.cmake")\n');
+    expect(r.edges?.some((e: any) => e.metadata?.module === 'cmake/Utils.cmake')).toBe(true);
   });
 });
