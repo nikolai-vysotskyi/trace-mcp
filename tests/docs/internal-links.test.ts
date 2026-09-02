@@ -38,6 +38,34 @@ function navPaths(): string[] {
   return [...yml.matchAll(/^\s*url:\s*(\S+)\s*$/gm)].map((m) => m[1]);
 }
 
+/**
+ * Same-site links a reader can actually click, from a page's own body.
+ *
+ * Front matter, the TechArticle JSON-LD, fenced blocks and code spans are
+ * stripped first: none of them renders as an `<a>`, and a link shown as a code
+ * sample connects nothing. Reference-style links (`[x][ref]`) are not
+ * recognised — no docs page uses them, and if one starts to, this under-counts
+ * and the page goes red rather than silently passing.
+ */
+function inTextInternalLinks(markdown: string): string[] {
+  const body = markdown
+    .replace(/^---\n[\s\S]*?\n---\n/, '')
+    .replace(/<script[\s\S]*?<\/script>/g, '')
+    .replace(/^```[\s\S]*?^```/gm, '')
+    .replace(/`[^`\n]*`/g, '');
+  return [...body.matchAll(/\[[^\]]*\]\(\s*([^)\s]+)(?:\s+"[^"]*")?\s*\)/g)]
+    .map(([, href]) => href)
+    .filter(
+      (href) =>
+        // `//host/page.md` is protocol-relative — it leaves the site, so it is
+        // external however much it looks like a sibling path.
+        !href.startsWith('//') &&
+        // Internal = a rooted path or a sibling .md/.html page. A bare fragment
+        // is same-page, so it does not connect anything.
+        (/^\/[^/]/.test(href) || /^[\w./-]+\.(md|html)(#|$)/.test(href)),
+    );
+}
+
 describe('docs footer nav covers every indexed page', () => {
   it('every sitemap URL appears in _data/docs_nav.yml', () => {
     const missing = sitemapPaths().filter((p) => !navPaths().includes(p));
@@ -201,6 +229,50 @@ describe('docs footer nav covers every indexed page', () => {
       unpinned,
       `READMEs with front matter but no \`permalink:\` pinning them to their directory URL: ${unpinned.join(', ')}`,
     ).toEqual([]);
+  });
+
+  /**
+   * Footer coverage made every page reachable, but it made every page equally
+   * reachable: one flat 22-link ribbon repeated site-wide carries no topical
+   * signal, so no page reads as a hub. In-text links are what group pages into
+   * topics — the /vs/ cluster already does this and was the model copied for
+   * the token-cost, setup and coverage clusters (TRA-658).
+   *
+   * Threshold is 1, not the 3-6 the clusters actually carry: this exists to
+   * stop a NEW page shipping as a dead end, not to freeze the current density.
+   * Links injected by the layout do not count — only what the page's own body
+   * says. Pages excluded from the sitemap (`noindex: true`) are internal
+   * working documents and are not checked.
+   */
+  it('every published page links somewhere in its own body, not just the footer', async () => {
+    const { sourceFor } = await import('../../scripts/gen-sitemap.mjs');
+    const deadEnds = sitemapPaths().filter(
+      (path) =>
+        inTextInternalLinks(readFileSync(join(DOCS, sourceFor(path)), 'utf-8')).length === 0,
+    );
+    expect(
+      deadEnds,
+      `published pages with no in-text internal link — add links in prose where the subject comes up, not a "See also" block: ${deadEnds.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  // The matcher above decides whether a page counts as a dead end, so its two
+  // failure directions are worth pinning down. A false positive is the costly
+  // one — it reports a dead end as linked and the guard goes quiet — so an
+  // external URL and a link that only exists inside a code sample must not
+  // count. A false negative just turns the page red, which announces itself.
+  it.each([
+    ['rooted path', '[config](/configuration.html)', true],
+    ['sibling page', '[config](configuration.md)', true],
+    ['sibling page with anchor', '[storage](architecture.md#storage)', true],
+    ['link with a title attribute', '[config](configuration.md "Config reference")', true],
+    ['absolute external URL', '[repo](https://github.com/x/y/blob/main/a.md)', false],
+    ['protocol-relative external URL', '[outside](//example.com/page.md)', false],
+    ['bare fragment (same page)', '[top](#quickstart)', false],
+    ['inside a code span', 'use `[config](configuration.md)` in prose', false],
+    ['inside a fenced block', '```md\n[config](configuration.md)\n```', false],
+  ])('link detection: %s', (_name, markdown, isInternal) => {
+    expect(inTextInternalLinks(markdown).length > 0).toBe(isInternal);
   });
 
   /**

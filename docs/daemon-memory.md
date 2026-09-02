@@ -2,13 +2,15 @@
 layout: default
 title: "Daemon memory: what it costs and what caps it"
 description: Measured resident-set attribution for the trace-mcp daemon — what each region holds and which config knob bounds it.
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # Daemon memory: what it costs and what caps it
 
-The HTTP daemon is a background process. If it outweighs the user's browser it
-has failed regardless of how fast queries are. This page records what the
+The HTTP daemon is a background process — the shared-index deployment described
+under [configuration](configuration.md#stdio-vs-http--choosing-your-setup). If
+it outweighs the user's browser it has failed regardless of how fast queries
+are. This page records what the
 resident set is actually made of, measured rather than estimated, and which
 knob bounds each part.
 
@@ -99,3 +101,9 @@ until the delay is shown to matter.
 
 The sweep also cannot help a daemon that does not live long enough to run it —
 see TRA-421 on daemon restarts.
+
+Every knob named above — `daemon_eager_load_projects`,
+`project_idle_unload_minutes`, `index_mmap_mb`, `index_cache_mb` — is a
+[configuration](configuration.md) key, and what the mapped `index.db` files
+actually hold is the storage layer described in
+[architecture](architecture.md#storage).
