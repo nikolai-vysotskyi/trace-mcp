@@ -2,7 +2,7 @@
 layout: default
 title: "Daemon memory: what it costs and what caps it"
 description: Measured resident-set attribution for the trace-mcp daemon — what each region holds and which config knob bounds it.
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # Daemon memory: what it costs and what caps it

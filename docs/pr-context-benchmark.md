@@ -1,7 +1,7 @@
 ---
 title: "PR Review Context Benchmark — Measured Input-Token Cost on Real Pull Requests"
 description: "Reproducible measurement of how many input tokens trace-mcp context saves over naive file loading when reviewing real merged pull requests across open-source repositories."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # PR Review Context Benchmark
