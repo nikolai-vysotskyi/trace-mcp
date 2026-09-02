@@ -495,6 +495,12 @@ What escalation cannot do is widen `tools.exclude`. Exclusion stays a hard
 restriction; `load_tools` reports those names under `blocked` and leaves them
 off. If you want a tool gone, exclude it — don't rely on the preset.
 
+A preset name that doesn't resolve — a typo, or a preset added in a version
+newer than the one installed — falls back to `minimal` and logs a warning naming
+the available presets. Before v3.12 it fell back to `full`, which turned a typo
+in a flag set to save tokens into a 36.3k-token surface instead of a 7.8k one.
+Failing toward the cheap surface costs at most one `load_tools` round-trip.
+
 Measured `tools/list` cost of each preset on this repo (serialized chars, then
 o200k tokens, 2026-09-01): `design` 21.9k / 5.0k, `perf` 32.3k / 7.5k, `minimal`
 34.0k / 7.8k, `review` 37.3k / 8.6k, `security` 41.5k / 9.6k, `architecture`

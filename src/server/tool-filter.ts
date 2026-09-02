@@ -13,7 +13,8 @@
  * default path) saw the full surface regardless of its preset.
  */
 import type { TraceMcpConfig } from '../config.js';
-import { resolvePreset } from '../tools/project/presets.js';
+import { logger } from '../logger.js';
+import { listPresets, resolvePreset } from '../tools/project/presets.js';
 
 /**
  * Tools registered through `_originalTool` in src/tools/register/session.ts —
@@ -49,12 +50,52 @@ export const UNGATED_META_TOOLS: ReadonlySet<string> = new Set([
  * session before it asks its first question.
  */
 export function resolvePresetName(config: TraceMcpConfig): string {
-  return process.env.TRACE_MCP_PRESET ?? config.tools?.preset ?? 'minimal';
+  return process.env.TRACE_MCP_PRESET ?? config.tools?.preset ?? DEFAULT_PRESET;
 }
 
-/** Resolved preset set; unknown names fall back to the full surface. */
+/** The shipped default, and the surface an unresolvable preset name falls back to. */
+export const DEFAULT_PRESET = 'minimal';
+
+/** Unknown names already warned about, so the warning is once per process, not once per filter. */
+const warnedUnknownPresets = new Set<string>();
+
+/**
+ * Resolve the session's preset, failing toward the *cheap* surface (TRA-648).
+ *
+ * This used to fall back to `all` when the name didn't resolve, which turned a
+ * typo in `TRACE_MCP_PRESET` — or a preset that only exists in a newer version
+ * than the one installed — into a silent 7.2x cost increase (`design` is 21
+ * tools / 5,042 tokens; `full` is 151 / 36,277), landing on exactly the session
+ * that asked to be cheap. Since TRA-402 gave presets `load_tools`, guessing
+ * small costs one escalation round-trip and guessing large costs ~31k tokens
+ * per session, so the cheap surface is the right way to fail. The name is
+ * reported too, because callers log it and `get_preset_info` reports it — a
+ * session must not claim to be running a preset it isn't.
+ */
+export function resolveSessionPreset(config: TraceMcpConfig): {
+  name: string;
+  tools: Set<string> | 'all';
+  unknownName?: string;
+} {
+  const requested = resolvePresetName(config);
+  const resolved = resolvePreset(requested);
+  if (resolved) return { name: requested, tools: resolved };
+
+  if (!warnedUnknownPresets.has(requested)) {
+    warnedUnknownPresets.add(requested);
+    logger.warn(
+      { preset: requested, fallback: DEFAULT_PRESET, available: listPresets().map((p) => p.name) },
+      `Unknown tool preset "${requested}" — using "${DEFAULT_PRESET}" instead. ` +
+        'Anything outside it is one `load_tools` call away.',
+    );
+  }
+  // Non-null: DEFAULT_PRESET is a key of TOOL_PRESETS, pinned by tool-filter.test.ts.
+  return { name: DEFAULT_PRESET, tools: resolvePreset(DEFAULT_PRESET)!, unknownName: requested };
+}
+
+/** Resolved preset set; unknown names fall back to the default surface. */
 export function resolveActivePreset(config: TraceMcpConfig): Set<string> | 'all' {
-  return resolvePreset(resolvePresetName(config)) ?? 'all';
+  return resolveSessionPreset(config).tools;
 }
 
 /**
