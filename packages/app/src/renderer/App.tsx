@@ -5,7 +5,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { GuardOnboarding, isOnboardingDone } from './components/GuardOnboarding';
 import { QuickOpen, type QuickOpenItem } from './components/QuickOpen';
 import { SidebarRow } from './components/SidebarRow';
-import { WindowTabBar } from './components/WindowTabBar';
+import { type TabInfo, WindowTabBar } from './components/WindowTabBar';
 import { DAEMON_FETCH_TIMEOUT_MS } from './hooks/useDaemon';
 import { t } from './i18n';
 import { formatNumber } from './i18n/format';
@@ -714,17 +714,174 @@ function ProjectContent({
 }
 
 // ── Main App ──────────────────────────────────────────────────
+/** Basename of a project root, used as the tab title. */
+function basename(root: string): string {
+  const sep = root.includes('\\') && !root.includes('/') ? '\\' : '/';
+  return root.split(sep).filter(Boolean).pop() || root;
+}
+
+function newMenuTab(): TabInfo {
+  return { id: 'menu', kind: 'menu', title: t('shell:menuWindow'), active: true };
+}
+
+function activateTab(tabs: TabInfo[], id: string): TabInfo[] {
+  return tabs.map((tab) => ({ ...tab, active: tab.id === id }));
+}
+
+/**
+ * The window shell: owns the tab list and switches which tab's `AppTabView`
+ * is visible. There is exactly one `BrowserWindow` for the whole app
+ * (TRA-699) — a "tab" is renderer state here, not a window, so switching is
+ * a local state update instead of an IPC round trip to focus a window.
+ * Inactive tabs stay mounted (hidden via `display:none`) rather than
+ * unmounting, so switching back doesn't re-run their indexing queries.
+ */
 export function App() {
+  const [initialParams] = useState(getUrlParams);
+  const firstTabId = initialParams.view === 'project' && initialParams.root
+    ? initialParams.root
+    : 'menu';
+  const [tabs, setTabs] = useState<TabInfo[]>(() =>
+    initialParams.view === 'project' && initialParams.root
+      ? [
+          {
+            id: initialParams.root,
+            kind: 'project' as const,
+            root: initialParams.root,
+            title: basename(initialParams.root),
+            active: true,
+          },
+        ]
+      : [newMenuTab()],
+  );
+  const { theme } = useTheme();
+
+  const openOrFocusProjectTab = useCallback((root: string) => {
+    setTabs((prev) => {
+      const existing = prev.find((tab) => tab.kind === 'project' && tab.root === root);
+      if (existing) return activateTab(prev, existing.id);
+      const next: TabInfo = { id: root, kind: 'project', root, title: basename(root), active: true };
+      return [...prev.map((tab) => ({ ...tab, active: false })), next];
+    });
+  }, []);
+
+  const openOrFocusMenuTab = useCallback(() => {
+    setTabs((prev) => {
+      const existing = prev.find((tab) => tab.kind === 'menu');
+      if (existing) return activateTab(prev, existing.id);
+      return [...prev.map((tab) => ({ ...tab, active: false })), newMenuTab()];
+    });
+  }, []);
+
+  const selectTab = useCallback((id: string) => {
+    setTabs((prev) => activateTab(prev, id));
+  }, []);
+
+  const cycleTab = useCallback((direction: 1 | -1) => {
+    setTabs((prev) => {
+      if (prev.length <= 1) return prev;
+      const from = prev.findIndex((tab) => tab.active);
+      const to = (from + direction + prev.length) % prev.length;
+      return activateTab(prev, prev[to].id);
+    });
+  }, []);
+
+  /* Closing the active tab falls back to the menu tab (creating one if it
+     isn't open) rather than leaving the window with nothing to show — there
+     is always at least one tab mounted. */
+  const closeTab = useCallback((id: string) => {
+    if (id === 'menu') return;
+    setTabs((prev) => {
+      const wasActive = prev.find((tab) => tab.id === id)?.active ?? false;
+      const rest = prev.filter((tab) => tab.id !== id);
+      if (rest.length === 0) return [newMenuTab()];
+      if (!wasActive) return rest;
+      const fallback = rest.find((tab) => tab.kind === 'menu') ?? rest[rest.length - 1];
+      return activateTab(rest, fallback.id);
+    });
+  }, []);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onOpenTab) return;
+    return api.onOpenTab(({ root }) => openOrFocusProjectTab(root));
+  }, [openOrFocusProjectTab]);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onNewTab) return;
+    return api.onNewTab(() => openOrFocusMenuTab());
+  }, [openOrFocusMenuTab]);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onFocusTab) return;
+    return api.onFocusTab((tabId) => selectTab(tabId));
+  }, [selectTab]);
+
+  /* Cmd/Ctrl+T new tab, Ctrl+Tab / Ctrl+Shift+Tab cycle. Cmd/Ctrl+W (close tab)
+     and Cmd/Ctrl+1…9 (select tab by index) are deliberately NOT bound here:
+     the native View menu already owns CmdOrCtrl+1…9 for section switching and
+     CmdOrCtrl+W for `role: 'close'` (main/menu.ts), which now closes the
+     app's only window instead of a tab. Binding the same combo again here
+     would fire both handlers on every press. Repointing those accelerators
+     needs a main/menu.ts change, out of this issue's renderer-only scope. */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const primary = e.metaKey || e.ctrlKey;
+      if (primary && !e.altKey && !e.shiftKey && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault();
+        openOrFocusMenuTab();
+        return;
+      }
+      if (e.ctrlKey && !e.metaKey && !e.altKey && e.key === 'Tab') {
+        e.preventDefault();
+        cycleTab(e.shiftKey ? -1 : 1);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [openOrFocusMenuTab, cycleTab]);
+
+  return (
+    <div
+      className="ws-stage flex flex-col h-screen"
+      data-mode={theme}
+      data-platform={hasInsetTitleBar() ? 'mac' : 'other'}
+      data-tabbar={tabs.length > 1 ? 'on' : 'off'}
+    >
+      <WindowTabBar tabs={tabs} onSelect={selectTab} onClose={closeTab} />
+      {tabs.map((tab) => (
+        <AppTabView
+          key={tab.id}
+          tab={tab}
+          isActive={tab.active}
+          initialGlobalTab={tab.id === firstTabId ? initialParams.tab : undefined}
+        />
+      ))}
+    </div>
+  );
+}
+
+function AppTabView({
+  tab,
+  isActive,
+  initialGlobalTab,
+}: {
+  tab: TabInfo;
+  isActive: boolean;
+  initialGlobalTab?: string | null;
+}) {
   const { t } = useTranslation('shell');
-  const { view, tab, root } = getUrlParams();
-  const isProject = view === 'project' && root !== null;
-  const { theme, appearance, setAppearance } = useTheme();
+  const isProject = tab.kind === 'project';
+  const root = tab.root ?? null;
+  const { appearance, setAppearance } = useTheme();
   /* One owner of update state for the whole window: the app menu's header
      reports it, the card acts on it, and "Check for updates…" — from the
      application menu or from the app menu — drives the same check (TRA-363). */
   const update = useUpdateCheck();
 
-  const [globalTab, setGlobalTab] = useState<GlobalTab>(normalizeGlobalTab(tab));
+  const [globalTab, setGlobalTab] = useState<GlobalTab>(normalizeGlobalTab(initialGlobalTab));
   const [projectTab, setProjectTab] = useState<ProjectTab>('overview');
   const [sidebarWidth, setSidebarWidth] = useState(readSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
@@ -745,7 +902,7 @@ export function App() {
   // window. Project sub-windows skip it; the wizard belongs in the place
   // where the user manages projects.
   const [showOnboarding, setShowOnboarding] = useState(
-    !isProject && view === 'menu' && !isOnboardingDone(),
+    tab.kind === 'menu' && !isOnboardingDone(),
   );
 
   const onGraphGpuSettingsChange = useCallback((patch: Partial<GraphGPUSettings>) => {
@@ -885,11 +1042,18 @@ export function App() {
      this is the single renderer-side handler — ⌘P below is the one exception,
      because Electron allows a menu item only one accelerator. */
   useEffect(() => {
+    // Only the active tab may claim the window's ⌘1…⌘9 section labels — an
+    // inactive tab mounting in the background must not steal them.
+    if (!isActive) return;
     const api = window.electronAPI;
     api?.setWindowSections?.(sectionList.map((t) => ({ id: t.id, label: t.label })));
-  }, [sectionList]);
+  }, [sectionList, isActive]);
 
   useEffect(() => {
+    // app-command is one page-wide IPC channel now (single window, several
+    // mounted tabs) — only the active tab may act on it, or every mounted
+    // tab would react to the same keypress at once.
+    if (!isActive) return;
     const api = window.electronAPI;
     if (!api?.onAppCommand) return;
     return api.onAppCommand((command, arg) => {
@@ -917,10 +1081,11 @@ export function App() {
           break;
       }
     });
-  }, [toggleSidebar, selectSection, focusSearch, openSettings, pickProject, update.check]);
+  }, [isActive, toggleSidebar, selectSection, focusSearch, openSettings, pickProject, update.check]);
 
   // ⌘P — the second quick-open key. Not in the menu (one accelerator per item).
   useEffect(() => {
+    if (!isActive) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
       if (e.key !== 'p' && e.key !== 'P') return;
@@ -929,7 +1094,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [isActive]);
 
   /* Quick-open's file list. Fetched when the panel opens rather than on mount:
      it is a bigger page than the sidebar's 30 rows and nobody pays for it
@@ -1026,24 +1191,10 @@ export function App() {
   );
   const toggleLivesInSidebar = !sidebarCollapsed && hasInsetTitleBar();
 
-  const [tabCount, setTabCount] = useState<number>(0);
-
-  useEffect(() => {
-    const api = window.electronAPI;
-    if (!api?.onTabListChanged) return;
-    return api.onTabListChanged((tabs) => setTabCount(tabs.length));
-  }, []);
-
   return (
-    <div
-      className="ws-stage flex flex-col h-screen"
-      data-mode={theme}
-      data-platform={hasInsetTitleBar() ? 'mac' : 'other'}
-      data-tabbar={tabCount > 1 ? 'on' : 'off'}
-    >
+    <div style={{ display: isActive ? 'contents' : 'none' }}>
       {showOnboarding && <GuardOnboarding onClose={() => setShowOnboarding(false)} />}
       {quickOpen && <QuickOpen items={quickOpenItems()} onClose={() => setQuickOpen(false)} />}
-      <WindowTabBar />
 
       <div className={`ws-shell${sidebarCollapsed ? ' is-collapsed' : ''}`}>
         {!sidebarCollapsed && (

@@ -54,7 +54,6 @@ declare global {
       /** Repair drifted entries. Setup asks for an enforcement level; this never does. */
       updateMcpClients: (clientNames: string[]) => Promise<{ ok: boolean; error?: string }>;
       openProjectTab: (root: string) => Promise<{ ok: boolean }>;
-      closeCurrentTab: () => Promise<{ ok: boolean }>;
       onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => () => void;
       setAppearance: (appearance: 'auto' | 'light' | 'dark') => void;
       setLocale: (locale: string) => void;
@@ -96,12 +95,11 @@ declare global {
       // Application menu ↔ renderer (TRA-297)
       setWindowSections: (sections: { id: string; label: string }[]) => void;
       onAppCommand: (callback: (command: string, arg?: unknown) => void) => () => void;
-      // Tab management (Windows custom tab bar)
+      // Tab bar: the renderer owns the tab list; main only pushes lifecycle events.
       getPlatform: () => Promise<string>;
-      focusTab: (tabId: string) => Promise<{ ok: boolean }>;
-      onTabListChanged: (
-        callback: (tabs: { id: string; title: string; type: string; active: boolean }[]) => void,
-      ) => () => void;
+      onOpenTab: (callback: (payload: { root: string }) => void) => () => void;
+      onNewTab: (callback: () => void) => () => void;
+      onFocusTab: (callback: (tabId: string) => void) => () => void;
       guard: {
         status: (projectRoot: string) => Promise<{
           health: 'ok' | 'stalled' | 'down' | 'unknown';
