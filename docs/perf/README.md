@@ -100,10 +100,10 @@ detached git worktree at the commit pinned in
 [`packages/app/scripts/perf-fixture.json`](../../packages/app/scripts/perf-fixture.json),
 indexes it with this checkout's own `dist/cli.js`, registers it with the daemon, drives
 it, and unregisters it again at the end. The worktree lives at
-`~/.trace-mcp/perf-fixture/<commit12>` — deliberately outside any checkout, because the
+`~/.trace/perf-fixture/<commit12>` — deliberately outside any checkout, because the
 daemon reroutes a registration for a path under an already-registered project to that
 parent, which would silently point the workload at the wrong repo. Remove it with
-`git worktree remove ~/.trace-mcp/perf-fixture/<commit12>` when you want a cold fixture.
+`git worktree remove ~/.trace/perf-fixture/<commit12>` when you want a cold fixture.
 
 **The action script — do not change it without bumping `revision` in the pin file.**
 
