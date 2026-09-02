@@ -120,7 +120,16 @@ export class StdioSession {
     this.router = new MessageRouter({
       sendToClient: (msg) => {
         const id = (msg as unknown as { id?: string | number }).id;
-        if (id !== undefined && id === this.initializeId) this.clearInitializeWatchdog();
+        if (id !== undefined && id === this.initializeId) {
+          this.clearInitializeWatchdog();
+          // A daemon that fails the handshake fast is the same problem as one
+          // that never answers, and gets the same answer: swallow its error
+          // and replay the handshake locally rather than failing the client.
+          if (Object.hasOwn(msg as object, 'error')) {
+            void this.fallbackToLocal(id, 'proxy-initialize-error');
+            return;
+          }
+        }
         return this.stdio.send(this.clientProfile.applyToClient(msg) as JSONRPCMessage);
       },
       drainTimeoutMs: opts.drainTimeoutMs ?? 5_000,
@@ -322,7 +331,7 @@ export class StdioSession {
     if (this.router.getActiveKind() !== 'proxy') return;
     this.initializeId = id;
     this.initializeTimer = setTimeout(() => {
-      void this.onInitializeTimeout(id);
+      void this.fallbackToLocal(id, 'proxy-initialize-timeout');
     }, PROXY_INITIALIZE_TIMEOUT_MS);
     this.initializeTimer.unref?.();
   }
@@ -333,18 +342,23 @@ export class StdioSession {
     this.initializeId = null;
   }
 
-  private async onInitializeTimeout(id: string | number): Promise<void> {
+  /**
+   * Take the handshake away from a daemon that could not complete it — it
+   * either timed out or answered with an error — and finish it in-process by
+   * replaying the cached frame through a local backend.
+   */
+  private async fallbackToLocal(id: string | number, reason: string): Promise<void> {
     this.clearInitializeWatchdog();
     if (this.shuttingDown || this.router.getActiveKind() !== 'proxy') return;
     logger.warn(
-      { id, timeoutMs: PROXY_INITIALIZE_TIMEOUT_MS },
-      'StdioSession: daemon did not answer initialize — serving this session in local mode',
+      { id, reason, timeoutMs: PROXY_INITIALIZE_TIMEOUT_MS },
+      'StdioSession: daemon did not complete initialize — serving this session in local mode',
     );
     this.proxyDisabled = true;
     // Drop the in-flight id so the swap does not answer it with a synthetic
     // error; the replay below is the response the client actually receives.
     this.router.forgetPending(id);
-    await this.swapTo(this.buildLocalBackend(), 'proxy-initialize-timeout');
+    await this.swapTo(this.buildLocalBackend(), reason);
     if (this.router.getActiveKind() !== 'local' || !this.cachedInitialize) return;
     await this.router.ingestFromClient(this.cachedInitialize);
   }
