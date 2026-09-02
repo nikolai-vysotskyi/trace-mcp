@@ -4,6 +4,13 @@ export const update = {
     'エディタは {{pkgDir}} から trace-mcp を起動しており、そこは v{{version}} です。このコピーは別の npm でインストールされたため、アプリを更新しても変わりません。更新するまで、すべての MCP クライアントは古いサーバーを使い続けます。\n\nターミナルから更新してください:\n{{command}}',
   copyStaleRootCommand: '更新コマンドをコピー',
 
+  duplicateApps: '複数インストールされています',
+  duplicateApp: '{{path}} · v{{version}}',
+  duplicateAppRunning: '{{path}} · v{{version}} — 実行中',
+  duplicateAppsTitle:
+    'この Mac には trace-mcp のコピーが複数あります:\n\n{{list}}\n\n更新されるのは開いたコピーだけです。次に起動したコピーがバージョンを決めます。使うコピーを残して、もう一方はゴミ箱に移動してください。あるいは、もう一方を一度開いて自身で更新させてください。',
+  revealDuplicateApp: 'もう一方のコピーを Finder に表示',
+
   headerVersion: 'バージョン {{version}}',
   headerChecking: '確認中…',
   headerAvailable: 'バージョン {{version}} が利用できます',

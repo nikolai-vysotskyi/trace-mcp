@@ -11,6 +11,17 @@ export const update = {
     'Your editors launch trace-mcp from {{pkgDir}}, which is on v{{version}}. That copy was installed by a different npm, so updating this app did not touch it — until it is updated, every MCP client keeps using the old server.\n\nUpdate it from a terminal:\n{{command}}',
   copyStaleRootCommand: 'Copy update command',
 
+  /* Two installed copies of the app. No count in the line: three copies is the
+     same sentence, and no plural forms to keep in ten catalogues (TRA-692). The
+     line states the condition rather than blaming a copy — neither is the wrong
+     one, and the title hands back the choice instead of an instruction. */
+  duplicateApps: 'Installed more than once',
+  duplicateApp: '{{path}} · v{{version}}',
+  duplicateAppRunning: '{{path}} · v{{version}} — running now',
+  duplicateAppsTitle:
+    'This Mac holds more than one copy of trace-mcp:\n\n{{list}}\n\nOnly the copy you open gets updated, so whichever one you launch next decides the version you get. Keep the copy you use and move the other to the Trash — or open the other one once and let it update itself.',
+  revealDuplicateApp: 'Show the other copy in Finder',
+
   // ── The app menu's header (AppMenu.tsx) ─────────────────────────────────
   headerVersion: 'Version {{version}}',
   headerChecking: 'Checking…',

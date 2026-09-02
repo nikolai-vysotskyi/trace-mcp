@@ -4,6 +4,13 @@ export const update = {
     'Deine Editoren starten trace-mcp aus {{pkgDir}}, dort liegt v{{version}}. Diese Kopie wurde von einem anderen npm installiert, das Update dieser App hat sie also nicht berührt — bis sie aktualisiert ist, nutzt jeder MCP-Client weiter den alten Server.\n\nIm Terminal aktualisieren:\n{{command}}',
   copyStaleRootCommand: 'Update-Befehl kopieren',
 
+  duplicateApps: 'Mehrfach installiert',
+  duplicateApp: '{{path}} · v{{version}}',
+  duplicateAppRunning: '{{path}} · v{{version}} — läuft gerade',
+  duplicateAppsTitle:
+    'Auf diesem Mac liegt mehr als eine Kopie von trace-mcp:\n\n{{list}}\n\nNur die Kopie, die Sie öffnen, wird aktualisiert — welche Sie als Nächstes starten, entscheidet also über Ihre Version. Behalten Sie die Kopie, die Sie nutzen, und verschieben Sie die andere in den Papierkorb — oder öffnen Sie die andere einmal und lassen Sie sie sich selbst aktualisieren.',
+  revealDuplicateApp: 'Andere Kopie im Finder zeigen',
+
   // ── The app menu's header (AppMenu.tsx) ─────────────────────────────────
   headerVersion: 'Version {{version}}',
   headerChecking: 'Wird geprüft…',

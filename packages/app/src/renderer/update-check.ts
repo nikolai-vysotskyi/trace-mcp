@@ -60,6 +60,39 @@ export function describeStaleRoots(staleRoots: { root: string; version: string }
   };
 }
 
+/**
+ * The same problem one layer up from the npm roots: electron-updater updates the
+ * bundle it is *running from*, so a machine holding two installed copies keeps
+ * the other frozen, and whichever one launches next decides the version the user
+ * gets (TRA-692).
+ *
+ * Neither copy is the wrong one, so the line does not scold and the title does
+ * not prescribe: what the user has is a choice — keep the copy they launch and
+ * delete the other, or open the other once and let it update itself. The line
+ * carries no count, so three copies read as truthfully as two.
+ */
+export function describeDuplicateApps(
+  duplicateApps: { path: string; version: string; running: boolean }[],
+): {
+  label: string;
+  title: string;
+  /** The copy that is NOT running — the one a Finder window should land on. */
+  revealPath?: string;
+} {
+  const list = duplicateApps
+    .map((a) =>
+      a.running
+        ? t('update:duplicateAppRunning', { path: a.path, version: a.version })
+        : t('update:duplicateApp', { path: a.path, version: a.version }),
+    )
+    .join('\n');
+  return {
+    label: t('update:duplicateApps'),
+    title: t('update:duplicateAppsTitle', { list }),
+    revealPath: duplicateApps.find((a) => !a.running)?.path,
+  };
+}
+
 export function formatAgo(ts?: number, now: number = Date.now()): string {
   if (!ts) return t('common:never');
   return relativeTime(ts, now, 'short');

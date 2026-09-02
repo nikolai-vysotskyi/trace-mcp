@@ -76,6 +76,17 @@ ipcMain.handle('open-external', async (_event, url: string) => {
   return { ok: true };
 });
 
+// IPC: reveal a path in Finder/Explorer. Reveals, never opens: the duplicate
+// install the app menu points at is an `.app`, and `shell.openPath` on one would
+// launch the very copy the user came here to delete (TRA-692).
+ipcMain.handle('show-in-folder', async (_event, target: string) => {
+  if (typeof target !== 'string' || !path.isAbsolute(target)) {
+    return { ok: false, error: 'invalid path' };
+  }
+  shell.showItemInFolder(target);
+  return { ok: true };
+});
+
 // IPC: detect installed IDEs (macOS-first; Windows/Linux return []).
 // Scans /Applications and ~/Applications for well-known IDE .app bundles.
 ipcMain.handle('detect-ide-apps', async () => {
