@@ -8,12 +8,12 @@
 # Caveat: the ping's credentials ship in the published bundle (SECURITY.md
 # "Telemetry Credentials"), so events are unauthenticated and inflatable.
 # Read as a trend; treat a step change as suspect until corroborated.
-updated: "2026-09-01T06:42:43.592Z"
+updated: "2026-09-02T06:45:33.241Z"
 active_users:
-  day: 54
-  week: 61
-  month: 61
-events_28d: 310
+  day: 41
+  week: 75
+  month: 75
+events_28d: 364
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2025-01-01.
@@ -30,39 +30,113 @@ events_28d: 310
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 42850200
-  tokens_saved_raw: 42850200
-  usd_saved: 42.85
+  tokens_saved: 75488840
+  tokens_saved_raw: 75488840
+  usd_saved: 75.49
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2025-01-01"
-  days: 3
+  days: 4
   capped_days: 0
+
+# The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
+# SEO, outreach or design change can be graded against something instead of
+# taste. Every one is derived below in this same file; none is hand-collected.
+#
+#   arrivals    unique visitors to the GitHub repo, GitHub's rolling 14 days
+#   installs    first-ever pings in 28 days (`installs_28d.new`)
+#   activated   % of active installs reporting at least one indexed repository
+#   retention   day / month active installs — how many of the month ran today
+#
+# Mind the windows: arrivals is 14 days and everything else is 28, so
+# arrivals→installs is a direction, not a conversion rate. The unauthenticated-
+# counter caveat above applies to all four.
+funnel:
+  arrivals_uniques_14d: null
+  new_installs_28d: 30
+  activated_pct: null
+  retention_dau_mau_pct: 55
+
+# Activation, from the ping's `repos_indexed` param. An install that reports
+# day after day with zero indexed repositories reached the product and never
+# reached its value — that population, not the install count, is the ceiling on
+# everything the product does after install.
+#
+# `activated_pct` is taken against these buckets' own total, never against
+# `active_users.month`: GA4 deduplicates `activeUsers` within a dimension value
+# and not across them, so an install that indexed its first repo mid-window is
+# counted in both `0` and a non-zero bucket. An `error` here instead of buckets
+# means the custom dimension is not registered in the property.
+activation:
+  error: "runReport failed: Did you mean customEvent:model? Field customEvent:repos_indexed is not a valid dimension. For a list of valid dimensions and metrics, see https://developers.google.com/analytics/devg"
+  activated: 0
+  not_activated: 0
+  activated_pct: null
+  unknown: 0
+  by_repos_indexed:
+    "0": 0
+    "1": 0
+    "2-5": 0
+    "6+": 0
+
+# Acquisition — where the repo's visitors came from, over GitHub's rolling
+# 14-day window. This is the only acquisition signal available to us: the docs
+# site carries no analytics, and Reddit, our largest referrer, cannot be read
+# from a run at all (`ops/user-signal.md`). Cross-check these names against the
+# "Arrivals" column of `ops/distribution.md` before adding another directory.
+acquisition:
+  views_uniques_14d: null
+  error: "views: HTTP 403"
+  referrers_uniques_14d:
+    {}
 installs_28d:
-  "unknown": 31
-  "new": 15
-  "active": 8
-  "upgrade": 5
+  "(not set)": 251
+  "unknown": 37
+  "new": 30
+  "upgrade": 23
+  "active": 19
+  "downgrade": 1
 by_version:
-  "3.8.0": 17
-  "3.10.0": 13
+  "(not set)": 36
+  "3.10.0": 21
+  "3.8.0": 19
+  "3.11.0": 10
   "3.7.0": 2
   "3.5.2": 1
   "3.6.0": 1
+
+# Which tool preset installs actually run, and how many tools that surface
+# advertises (TRA-643). `preset-surface-budget.test.ts` measures the same basis
+# — preset members plus the ungated meta-tools — so these two are the field
+# check on its 67-86% claim. `tools_advertised` runs higher than the bench on
+# any repo with a detected framework: those tools are registration-gated and the
+# bench never registers them.
+#
+# Both are empty until the dimensions are registered in the GA4 property; GA4
+# does not backfill, so values only start at registration.
+by_preset:
+  {}
+by_tools_advertised:
+  {}
 by_country:
+  "(not set)": 48
+  "Russia": 6
+  "Chile": 4
   "Sweden": 4
   "United States": 4
-  "Chile": 3
   "Brazil": 2
+  "Malta": 2
+  "Germany": 1
   "Indonesia": 1
   "Iran": 1
-  "Malta": 1
   "Poland": 1
-  "Russia": 1
   "United Arab Emirates": 1
   "United Kingdom": 1
 by_client:
-  "unknown": 25
+  "unknown": 40
+  "(not set)": 36
   "claude-code": 8
-  "codex-mcp-client": 2
+  "codex-mcp-client": 3
+  "antigravity-client": 1
   "grok-shell-trace-mcp": 1
+  "pi-mcp-trace-mcp": 1
