@@ -9,7 +9,8 @@ export const ui = {
   gradeBadge: 'Оценка техдолга {{grade}}',
   loading: 'Загрузка',
   retry: 'Повторить',
-  sectionError: 'Не удалось загрузить: {{what}}. Возможно, служба ещё индексирует.',
+  sectionError: 'Не удалось загрузить: {{what}}.',
+  sectionsError: 'Не удалось загрузить: {{what}}.',
 
   filterMatch: 'Совпадение',
   filterExclude: 'Исключить',

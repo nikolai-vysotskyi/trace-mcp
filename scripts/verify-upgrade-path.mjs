@@ -27,6 +27,8 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { traceHomeDir } from './trace-home.mjs';
+
 const REPO = 'nikolai-vysotskyi/trace-mcp';
 const BUNDLE_ID = 'com.trace-mcp.app';
 
@@ -134,7 +136,9 @@ async function run() {
   const apps = path.join(sandbox, 'Applications');
   const home = path.join(sandbox, 'home');
   fs.mkdirSync(apps);
-  fs.mkdirSync(path.join(home, '.trace-mcp'), { recursive: true });
+  // The post-rename layout (TRA-611) is what a current machine has, so that is
+  // what the postinstall run below has to be exercised against.
+  fs.mkdirSync(path.join(home, '.trace'), { recursive: true });
 
   // ponytail: a stub that reports "nothing running" rather than a fake process
   // tree. pgrep answers for the whole machine, so without this the developer's own
@@ -164,7 +168,7 @@ async function run() {
     console.log(`  installed ${before}`);
 
     fs.writeFileSync(
-      path.join(home, '.trace-mcp', 'app-location.json'),
+      path.join(traceHomeDir(home), 'app-location.json'),
       JSON.stringify({ appPath, bundleId: BUNDLE_ID, version: before, writtenAt: Date.now() }),
     );
 

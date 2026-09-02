@@ -12,7 +12,8 @@ export const ui = {
   gradeBadge: 'Tech debt grade {{grade}}',
   loading: 'Loading',
   retry: 'Retry',
-  sectionError: "Couldn't load {{what}}. The daemon may still be indexing.",
+  sectionError: "Couldn't load {{what}}.",
+  sectionsError: "Couldn't load {{what}}.",
 
   // ── FilterBar ───────────────────────────────────────────────────────────
   filterMatch: 'Match',

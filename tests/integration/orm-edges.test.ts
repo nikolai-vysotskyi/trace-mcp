@@ -4,6 +4,7 @@
  * associations are correctly mapped to ORM-specific edge types.
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { TraceMcpConfigSchema } from '../../src/config.js';
@@ -23,6 +24,23 @@ function makeConfig(
   include: string[],
 ): ReturnType<typeof TraceMcpConfigSchema.parse> {
   return TraceMcpConfigSchema.parse({ include, exclude: ['node_modules/**'] });
+}
+
+/** Count Post → User `mongoose_references` edges, by model name. */
+function postToUserEdges(store: ReturnType<typeof createTestStore>): number {
+  const byId = new Map(store.getAllOrmModels().map((m) => [m.id, m.name]));
+  const nodeToModel = new Map<number, string>();
+  for (const [id, name] of byId) {
+    const nodeId = store.getNodeId('orm_model', id);
+    if (nodeId != null) nodeToModel.set(nodeId, name);
+  }
+  return store
+    .getEdgesByType('mongoose_references')
+    .filter(
+      (e) =>
+        nodeToModel.get(e.source_node_id) === 'Post' &&
+        nodeToModel.get(e.target_node_id) === 'User',
+    ).length;
 }
 
 describe('ORM edge type resolution', () => {
@@ -47,6 +65,41 @@ describe('ORM edge type resolution', () => {
 
       // Verify no sequelize_* edge types were accidentally created
       expect(store.getEdgesByType('sequelize_has_many')).toHaveLength(0);
+    });
+  });
+
+  describe('cross-file associations survive an incremental reindex', () => {
+    it('re-links a mongoose_references edge after the target model file is reindexed', async () => {
+      const store = createTestStore();
+      const registry = new PluginRegistry();
+      registry.registerLanguagePlugin(new TypeScriptLanguagePlugin());
+      registry.registerFrameworkPlugin(new MongoosePlugin());
+
+      // Real fixture: models/post.ts holds `ref: 'User'`, models/user.ts
+      // defines User — the cross-file shape TRA-663 crashed on. Copied so the
+      // test can touch a file without dirtying the fixture.
+      const tmpDir = createTmpDir('mongoose-incremental-');
+      fs.cpSync(path.resolve(__dirname, '../fixtures/mongoose-8'), tmpDir, { recursive: true });
+      const userPath = path.join(tmpDir, 'models/user.ts');
+
+      try {
+        const pipeline = new IndexingPipeline(
+          store,
+          registry,
+          makeConfig(tmpDir, ['**/*.ts']),
+          tmpDir,
+        );
+        await pipeline.indexAll();
+        expect(postToUserEdges(store)).toBeGreaterThan(0);
+
+        // Reindex only the *target* file — post.ts's association points at it.
+        fs.appendFileSync(userPath, '// touched\n');
+        await pipeline.indexFiles([userPath]);
+
+        expect(postToUserEdges(store)).toBeGreaterThan(0);
+      } finally {
+        removeTmpDir(tmpDir);
+      }
     });
   });
 

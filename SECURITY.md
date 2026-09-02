@@ -28,7 +28,7 @@ Symlinks can be used to escape the project root and read arbitrary files.
 
 Files are filtered through multiple layers:
 
-1. **Config exclude patterns** — directories excluded by default: `node_modules`, `.git`, `dist`, `build`, `.next`, `__pycache__`, `.venv`, `vendor`, `.trace-mcp`, `coverage`, `.turbo`.
+1. **Config exclude patterns** — directories excluded by default: `node_modules`, `.git`, `dist`, `build`, `.next`, `__pycache__`, `.venv`, `vendor`, `coverage`.
 2. **File watcher ignore** — `@parcel/watcher` is configured with the same ignore list. Double filtering is applied (at subscription level and event processing level).
 3. **`.traceignore`** — project-root file (gitignore syntax) that **completely excludes** matched files from indexing. Unlike `.gitignore` (which only hides content from AI output but keeps graph metadata), `.traceignore` prevents files from being parsed or stored at all. Intended for generated code, vendored dependencies, and large data files.
 4. User-configurable `exclude` patterns and `ignore.directories` / `ignore.patterns` in the config file.
@@ -144,7 +144,7 @@ A regex-based content scanner can detect secrets in source files:
 
 ## Storage Safety
 
-* The SQLite database defaults to `.trace-mcp/index.db` (project-relative, hidden directory).
+* The SQLite database lives outside the project, at `~/.trace/index/<name>-<hash>.db`.
 * Configurable via `db.path` in config or `TRACE_MCP_DB_PATH` environment variable.
 * **WAL mode** enabled for safe concurrent reads during indexing + tool queries.
 * **Foreign key constraints** enforced to maintain referential integrity.
@@ -234,6 +234,32 @@ A missing or invalid attestation means the package was **not** built by the offi
 
 ---
 
+## CI Secret Scoping
+
+A repository-level GitHub Actions secret is readable by **any** workflow in the
+repo that names it, on any branch. The trigger on a given workflow file
+(`on: push: branches: [master]`) protects that file, not the secret. Credentials
+whose loss cannot be undone by rotating a config value therefore live in a
+branch-gated **environment**, so they are simply not injected into a job running
+outside a protected branch:
+
+| Environment | Secrets | Consumer |
+| --- | --- | --- |
+| `apple-signing` | `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | `release.yml` :: `build-app-mac` |
+| `npm` | npm publish (OIDC), `TRACE_MCP_GA_*` | `release.yml` :: `publish` |
+
+`CSC_LINK` is the Developer ID Application private key: whoever holds it can
+sign and notarize arbitrary software as *Mykola Vysotskyi (UWBRFD57K5)*, and the
+only remedy is revoking the identity — which invalidates every artifact already
+signed with it. That asymmetry is why it gets an environment and, for example,
+`GA4_SA_KEY` (read-only analytics service account, consumed by
+`ga4-snapshot.yml`) deliberately does not: rotating it costs one key swap.
+
+Removing `environment:` from a job that consumes these secrets un-gates them
+silently — the release still succeeds. Treat that line as part of the control.
+
+---
+
 ## Telemetry Credentials — Public by Design
 
 The anonymous active-install ping (`src/telemetry/usage-ping.ts`) uses GA4's
@@ -320,4 +346,5 @@ If you discover a security vulnerability, please report it responsibly:
 | Auto-update Gatekeeper check | `spctl -a -t exec` on staged bundle | No |
 | Auto-update opt-out | Disabled when set | Yes (`TRACE_MCP_NO_AUTO_UPDATE=1`) |
 | npm provenance attestation | Sigstore/OIDC on every release | No |
+| Apple signing secret scope | `apple-signing` environment, protected branches only | No |
 | GA4 telemetry credentials | Public by design, ship in `dist/`, write-only | Yes (`TRACE_MCP_TELEMETRY=off`) |

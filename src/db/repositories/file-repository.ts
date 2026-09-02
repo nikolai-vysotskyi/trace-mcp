@@ -113,6 +113,18 @@ export class FileRepository {
   }
 
   deleteEntitiesByFile(fileId: number): void {
+    // Associations in OTHER files can point at this file's models via
+    // target_model_id, which has no ON DELETE clause — deleting the models
+    // below would hit a FOREIGN KEY violation and abort the whole indexing
+    // run. Unresolve those pointers instead; target_model_name survives, so
+    // the next resolve pass can re-link them.
+    this.db
+      .prepare(
+        `UPDATE orm_associations SET target_model_id = NULL
+         WHERE target_model_id IN (SELECT id FROM orm_models WHERE file_id = ?)`,
+      )
+      .run(fileId);
+
     for (const [table, nodeType] of [
       ['routes', 'route'],
       ['components', 'component'],

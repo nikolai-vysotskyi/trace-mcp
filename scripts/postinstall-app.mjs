@@ -52,6 +52,7 @@ import {
   recoverInterruptedSwap,
   runningBundlePath,
 } from './locate-app.mjs';
+import { traceHomeDir } from './trace-home.mjs';
 
 // Every installed bundle on this machine, the primary target first. Empty
 // means no install was found — the script then exits 0 like the old hardcoded
@@ -72,6 +73,7 @@ const GITHUB_REPO = getAppDistRepo();
 const API_BASE = process.env.TRACE_MCP_UPDATE_API_BASE || 'https://api.github.com';
 const PGREP_BIN = process.env.TRACE_MCP_PGREP_BIN || '/usr/bin/pgrep';
 const PS_BIN = process.env.TRACE_MCP_PS_BIN || '/bin/ps';
+const MDFIND_BIN = process.env.TRACE_MCP_MDFIND_BIN || '/usr/bin/mdfind';
 // The directories a bundle conventionally lives in — same defaults as
 // locate-app.mjs. The multi-bundle scan and the orphan sweep below read them,
 // and only tests override them: a test must never be able to swap or delete
@@ -92,7 +94,7 @@ if (process.env.TRACE_MCP_NO_AUTO_UPDATE === '1') process.exit(0);
  *
  * macOS: `launchctl stop` triggers SIGTERM; the plist's KeepAlive=true auto
  *   respawns the service using the now-updated binary path.
- * Linux/Windows: kill the PID recorded in ~/.trace-mcp/daemon.pid. The next
+ * Linux/Windows: kill the PID recorded in the CLI state dir's daemon.pid. The next
  *   stdio session or Electron tray poll will ensureDaemon() back up.
  * Manually-spawned dev daemons (no pidfile, no launchd) are not touched —
  *   the developer will restart them as needed.
@@ -103,7 +105,7 @@ function stopRunningDaemon() {
       execFileSync(LAUNCHCTL_BIN, ['stop', 'com.trace-mcp.server'], { stdio: 'ignore' });
       return;
     }
-    const pidFile = path.join(os.homedir(), '.trace-mcp', 'daemon.pid');
+    const pidFile = path.join(traceHomeDir(), 'daemon.pid');
     if (!fs.existsSync(pidFile)) return;
     const pid = parseInt(fs.readFileSync(pidFile, 'utf-8').trim(), 10);
     if (!Number.isInteger(pid) || pid <= 0) return;
@@ -129,7 +131,7 @@ stopRunningDaemon();
 // that goes looking for state. Deleted here because this hook is the one piece
 // of code every upgrading install runs.
 try {
-  fs.unlinkSync(path.join(os.homedir(), '.trace-mcp', 'app-update-state.json'));
+  fs.unlinkSync(path.join(traceHomeDir(), 'app-update-state.json'));
 } catch {
   /* absent on a clean machine — the normal case */
 }
@@ -141,7 +143,10 @@ if (process.platform !== 'darwin') process.exit(0);
 // script exits below, leaving the user permanently without an app. This is
 // the recovery path that actually fires in practice: the daemon's self-update
 // re-runs the postinstall even when the .app cannot be launched at all.
-for (const { action, path: target } of recoverInterruptedSwap()) {
+for (const { action, path: target } of recoverInterruptedSwap({
+  fallbackDirs: CONVENTIONAL_APP_DIRS,
+  mdfindBin: MDFIND_BIN,
+})) {
   console.log(`  trace-mcp: ${action} ${target} (interrupted update)`);
 }
 
@@ -152,7 +157,10 @@ for (const { action, path: target } of recoverInterruptedSwap()) {
 // reporting success. Electron main already derives its install dir from
 // `process.execPath`, so targeting the running bundle is what makes the two
 // sides agree by construction. See runningBundlePath() in locate-app.mjs.
-const located = locateInstalledApp();
+const located = locateInstalledApp({
+  fallbackDirs: CONVENTIONAL_APP_DIRS,
+  mdfindBin: MDFIND_BIN,
+});
 const running = runningBundlePath({ pgrepBin: PGREP_BIN, psBin: PS_BIN });
 const target = running ?? located?.appPath;
 if (!target) process.exit(0);

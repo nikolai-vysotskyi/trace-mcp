@@ -18,6 +18,7 @@ import {
   installWorktreeHook,
   installLifecycleHooks,
   cleanupLegacyHooks,
+  migrateLegacyToolPrefix,
 } from '../init/hooks.js';
 import { setupLauncher } from '../init/launcher.js';
 import { configureMcpClients } from '../init/mcp-client.js';
@@ -679,6 +680,13 @@ function executeSteps(
       steps.push(...installHermesHooks({ dryRun: opts.dryRun, autoAllowlist: true }));
     }
   }
+
+  // 3b. Legacy tool-name prefix in permission allowlists + hook matchers
+  // (mcp__trace-mcp__* -> mcp__trace__*). Independent of `opts.installHooks`:
+  // a permission allowlist entry can exist (from a user manually approving a
+  // tool call) whether or not our own hooks are installed this run, so this
+  // must not be nested inside the `if (opts.installHooks)` block above.
+  steps.push(...migrateLegacyToolPrefix({ dryRun: opts.dryRun }));
 
   // 4. CLAUDE.md (global)
   if (opts.claudeMdScope === 'global') {

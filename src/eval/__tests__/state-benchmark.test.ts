@@ -22,8 +22,10 @@ describe('SKILL.state A/B Token Benchmark (TRA-600)', () => {
     // Prompt at step 100 in ReAct should exceed 90,000 tokens
     expect(s100.reactPromptTokens).toBeGreaterThan(90_000);
 
-    // Prompt at step 100 in StateEngine should stay bounded below 4,000 tokens
-    expect(s100.stateEnginePromptTokens).toBeLessThan(4_000);
+    // Prompt at step 100 in StateEngine stays bounded. The bound moved from 4,000
+    // to 4,500 when the state block's default size was corrected from a guessed
+    // 180 tokens to the 350 measured by state-trace-replay.ts.
+    expect(s100.stateEnginePromptTokens).toBeLessThan(4_500);
   });
 
   it('evaluates all standard benchmark scenarios', () => {

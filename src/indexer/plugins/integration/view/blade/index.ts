@@ -13,6 +13,7 @@ import type {
   RawEdge,
   ResolveContext,
 } from '../../../../../plugin-api/types.js';
+import { validatePath } from '../../../../../utils/security.js';
 
 interface BladeDirective {
   type: 'extends' | 'include' | 'component' | 'x-component';
@@ -446,16 +447,86 @@ export class BladePlugin implements FrameworkPlugin {
   };
 
   detect(ctx: ProjectContext): boolean {
-    // Check if resources/views/ exists with .blade.php files
+    const rootPath = ctx.rootPath;
+
+    // Check if resources/views/ exists at root with .blade.php files
     try {
-      const viewsDir = path.join(ctx.rootPath, 'resources', 'views');
-      const stat = fs.statSync(viewsDir);
-      if (!stat.isDirectory()) return false;
-      // Quick check: any .blade.php in the directory tree
-      return this.hasBlade(viewsDir);
+      const viewsDir = path.join(rootPath, 'resources', 'views');
+      const check = validatePath('resources/views', rootPath);
+      if (
+        check.isOk() &&
+        fs.existsSync(viewsDir) &&
+        !fs.lstatSync(viewsDir).isSymbolicLink() &&
+        fs.statSync(viewsDir).isDirectory() &&
+        this.hasBlade(viewsDir, rootPath)
+      ) {
+        return true;
+      }
     } catch {
-      return false;
+      /* ignore */
     }
+
+    // Check subdirectories 1-2 levels deep
+    try {
+      const skipDirs = new Set(['node_modules', 'vendor', '.git', 'dist', 'build', '__pycache__']);
+      const entries = fs.readdirSync(rootPath, { withFileTypes: true });
+      for (const e of entries) {
+        if (!e.isDirectory() || e.name.startsWith('.') || skipDirs.has(e.name)) continue;
+        const check1 = validatePath(e.name, rootPath);
+        if (check1.isErr()) continue;
+        const d1 = path.join(rootPath, e.name);
+        try {
+          if (fs.lstatSync(d1).isSymbolicLink()) continue;
+        } catch {
+          continue;
+        }
+
+        const subViews = path.join(d1, 'resources', 'views');
+        const subViewsRel = path.join(e.name, 'resources', 'views');
+        if (
+          validatePath(subViewsRel, rootPath).isOk() &&
+          fs.existsSync(subViews) &&
+          !fs.lstatSync(subViews).isSymbolicLink() &&
+          fs.statSync(subViews).isDirectory() &&
+          this.hasBlade(subViews, rootPath)
+        ) {
+          return true;
+        }
+
+        try {
+          const subEntries = fs.readdirSync(d1, { withFileTypes: true });
+          for (const se of subEntries) {
+            if (!se.isDirectory() || se.name.startsWith('.') || skipDirs.has(se.name)) continue;
+            const rel2 = path.join(e.name, se.name);
+            if (validatePath(rel2, rootPath).isErr()) continue;
+            const d2 = path.join(d1, se.name);
+            try {
+              if (fs.lstatSync(d2).isSymbolicLink()) continue;
+            } catch {
+              continue;
+            }
+
+            const deepViews = path.join(d2, 'resources', 'views');
+            const deepViewsRel = path.join(rel2, 'resources', 'views');
+            if (
+              validatePath(deepViewsRel, rootPath).isOk() &&
+              fs.existsSync(deepViews) &&
+              !fs.lstatSync(deepViews).isSymbolicLink() &&
+              fs.statSync(deepViews).isDirectory() &&
+              this.hasBlade(deepViews, rootPath)
+            ) {
+              return true;
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    return false;
   }
 
   registerSchema() {
@@ -590,13 +661,24 @@ export class BladePlugin implements FrameworkPlugin {
     return ok(edges);
   }
 
-  private hasBlade(dir: string): boolean {
+  private hasBlade(dir: string, rootPath?: string, depth = 0): boolean {
+    if (depth > 6) return false;
     try {
+      if (rootPath) {
+        const rel = path.relative(rootPath, dir);
+        if (validatePath(rel, rootPath).isErr()) return false;
+      }
       const entries = fs.readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isFile() && entry.name.endsWith('.blade.php')) return true;
-        if (entry.isDirectory()) {
-          if (this.hasBlade(path.join(dir, entry.name))) return true;
+        if (entry.isDirectory() && !entry.name.startsWith('.')) {
+          const subDir = path.join(dir, entry.name);
+          try {
+            if (fs.lstatSync(subDir).isSymbolicLink()) continue;
+          } catch {
+            continue;
+          }
+          if (this.hasBlade(subDir, rootPath, depth + 1)) return true;
         }
       }
     } catch {

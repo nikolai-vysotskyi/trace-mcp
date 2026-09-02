@@ -4,7 +4,8 @@ export const ui = {
   gradeBadge: 'Nota de deuda técnica {{grade}}',
   loading: 'Cargando',
   retry: 'Reintentar',
-  sectionError: 'No se pudo cargar {{what}}. Puede que el daemon siga indexando.',
+  sectionError: 'No se pudo cargar {{what}}.',
+  sectionsError: 'No se pudieron cargar {{what}}.',
 
   filterMatch: 'Coincide',
   filterExclude: 'Excluir',

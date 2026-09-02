@@ -17,7 +17,7 @@ npm install -g trace-mcp
 trace-mcp init       # writes ~/.trace-mcp/launcher.env
 ```
 
-The plugin's `mcpServers.trace-mcp.command` points at the `trace-mcp` binary, so Claude Code will spawn it directly. No extra wiring needed.
+The plugin's `mcpServers.trace.command` points at the `trace-mcp` binary, so Claude Code will spawn it directly. No extra wiring needed.
 
 ## Install
 

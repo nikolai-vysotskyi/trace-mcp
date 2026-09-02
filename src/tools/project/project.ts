@@ -74,6 +74,7 @@ interface ProjectMapResult {
   languages: { language: string; count: number }[];
   detectedVersions?: DetectedVersion[];
   dependencySummary?: { total: number; dev: number; byEcosystem: Record<string, number> };
+  diagnostics?: string[];
 }
 
 interface ProjectMapSummary {
@@ -82,6 +83,43 @@ interface ProjectMapSummary {
   symbolCount: number;
   languages: string[];
   detectedVersions?: DetectedVersion[];
+  diagnostics?: string[];
+}
+
+function getArtifactDiagnostics(store: Store, frameworks: string[]): string[] | undefined {
+  if (frameworks.length > 0) return undefined;
+
+  const counts: string[] = [];
+  try {
+    const r =
+      (store.db.prepare('SELECT COUNT(*) as c FROM routes').get() as { c: number } | undefined)
+        ?.c ?? 0;
+    if (r > 0) counts.push(`${r} routes`);
+  } catch {}
+  try {
+    const c =
+      (store.db.prepare('SELECT COUNT(*) as c FROM components').get() as { c: number } | undefined)
+        ?.c ?? 0;
+    if (c > 0) counts.push(`${c} components`);
+  } catch {}
+  try {
+    const m =
+      (store.db.prepare('SELECT COUNT(*) as c FROM migrations').get() as { c: number } | undefined)
+        ?.c ?? 0;
+    if (m > 0) counts.push(`${m} migrations`);
+  } catch {}
+  try {
+    const o =
+      (store.db.prepare('SELECT COUNT(*) as c FROM orm_models').get() as { c: number } | undefined)
+        ?.c ?? 0;
+    if (o > 0) counts.push(`${o} orm_models`);
+  } catch {}
+
+  if (counts.length === 0) return undefined;
+
+  return [
+    `Indexed artifacts found (${counts.join(', ')}), but no frameworks were detected. Manifest files (package.json, composer.json, etc.) may be missing or located in unindexed directories.`,
+  ];
 }
 
 export function getProjectMap(
@@ -100,6 +138,7 @@ export function getProjectMap(
   }
 
   const detectedVersions = projectContext?.detectedVersions;
+  const diagnostics = getArtifactDiagnostics(store, frameworks);
 
   if (summaryOnly) {
     const languageRows = store.db
@@ -113,6 +152,7 @@ export function getProjectMap(
       symbolCount: stats.totalSymbols,
       languages: languageRows.map((r) => r.language),
       detectedVersions: detectedVersions?.length ? detectedVersions : undefined,
+      diagnostics,
     };
   }
 
@@ -154,5 +194,6 @@ export function getProjectMap(
     languages: languageRows,
     detectedVersions: detectedVersions?.length ? detectedVersions : undefined,
     dependencySummary,
+    diagnostics,
   };
 }

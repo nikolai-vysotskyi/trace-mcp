@@ -10,6 +10,7 @@ import path from 'node:path';
 import { applyEdits, type FormattingOptions, modify, parse as parseJsonc } from 'jsonc-parser';
 import YAML from 'yaml';
 import { atomicWriteJson, atomicWriteString } from '../utils/atomic-write.js';
+import { buildToolPrefixMigrationStep } from '../utils/path-migration.js';
 import { readIfExists } from '../utils/safe-fs.js';
 import { isGuardHookInstalled } from './hooks.js';
 import { getLauncherPath } from './launcher.js';
@@ -384,6 +385,35 @@ export function configureMcpClients(
         detail: `Error: ${(err as Error).message}`,
       });
     }
+  }
+
+  // TRA-650: the mcpServers entry above and a Claude-family client's
+  // settings.json (permission allowlist entries, hook `matcher` strings) are
+  // two different files that go stale on the exact same rename — rewriting
+  // the tool-name prefix here keeps them in sync as part of this function's
+  // own consistency boundary. This is deliberately in `configureMcpClients`
+  // itself, not only in `trace init`'s `migrateLegacyToolPrefix` step: the
+  // desktop app's "Migrate" button calls `trace clients update`, which calls
+  // this function directly and nothing else (see clients.ts's own comment on
+  // why it can't route through `init`) — without this, clicking Migrate left
+  // an allowlisted tool re-prompting and a hook matcher silently dead
+  // immediately after the click (review finding on this PR).
+  for (const name of clientNames) {
+    const configDir = CLAUDE_FAMILY_CONFIG_DIR[name];
+    if (!configDir) continue;
+
+    // claude-desktop shares '.claude' with claude-code here but, like its
+    // mcpServers entry above (see ALWAYS_GLOBAL_CLIENTS on buildExpectedEntry),
+    // its settings.json is never project-scoped — a project-scoped run must
+    // not go pinning a `<project>/.claude/settings.local.json` write for it.
+    const effectiveScope: McpScope = ALWAYS_GLOBAL_CLIENTS.has(name) ? 'global' : opts.scope;
+    const settingsFile =
+      effectiveScope === 'global'
+        ? path.join(HOME, configDir, 'settings.json')
+        : path.resolve(projectRoot, configDir, 'settings.local.json');
+
+    const step = buildToolPrefixMigrationStep(settingsFile, { dryRun: opts.dryRun });
+    if (step) results.push(step);
   }
 
   return results;
@@ -790,9 +820,12 @@ export interface McpClientStatus {
 
 /**
  * Where each Claude-family client keeps the settings.json that hooks are wired
- * into. Other clients don't run hooks, so they have no level.
+ * into. Other clients don't run hooks, so they have no level. Also the file
+ * `configureMcpClients` migrates the legacy tool-name prefix in (TRA-650) —
+ * exported so `clients update` targets exactly the same set without a second,
+ * possibly-drifting list.
  */
-const CLAUDE_FAMILY_CONFIG_DIR: Partial<Record<DetectedMcpClient['name'], string>> = {
+export const CLAUDE_FAMILY_CONFIG_DIR: Partial<Record<DetectedMcpClient['name'], string>> = {
   'claude-code': '.claude',
   'claude-desktop': '.claude',
   'claw-code': '.claw',
