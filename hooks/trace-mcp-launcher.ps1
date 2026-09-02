@@ -153,6 +153,16 @@ function Get-PkgRoots {
         # Unix-style layout (some cross-platform setups)
         $roots += (Join-Path $dir '..\lib\node_modules')
     }
+    # Roots recorded by past installs (mirrors src/init/launcher.ts::recordPkgRoot).
+    # This is how a prefix we cannot name in advance becomes findable without
+    # asking npm at runtime. Values are opaque paths, never evaluated.
+    $rootsFile = Join-Path $TraceHome 'pkg-roots'
+    if (Test-Path -LiteralPath $rootsFile -PathType Leaf) {
+        foreach ($line in [System.IO.File]::ReadAllLines($rootsFile)) {
+            $t = $line.Trim()
+            if ($t -and -not $t.StartsWith('#')) { $roots += $t }
+        }
+    }
     # Volta keeps each global package under its own image directory.
     if ($env:LOCALAPPDATA) {
         $roots += (Join-Path $env:LOCALAPPDATA 'Volta\tools\image\packages\trace-mcp\lib\node_modules')

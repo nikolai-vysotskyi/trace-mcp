@@ -6,7 +6,9 @@ import {
   getLauncherConfigPath,
   getLauncherDir,
   getLauncherPath,
+  getPkgRootsPath,
   installLauncher,
+  recordPkgRoot,
   readInstalledLauncherVersion,
   readLauncherConfig,
   resolveCurrentCliPath,
@@ -198,6 +200,44 @@ describe('setupLauncher (install + config)', () => {
   });
 });
 
+describe('recordPkgRoot', () => {
+  let tmp: string;
+  beforeEach(() => {
+    tmp = mkTmpHome();
+  });
+  afterEach(() => {
+    delete process.env.TRACE_MCP_HOME;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  const rootsOf = () =>
+    fs
+      .readFileSync(getPkgRootsPath(), 'utf-8')
+      .split('\n')
+      .filter((l) => l.trim());
+
+  it('records the node_modules root the cli was installed into', () => {
+    recordPkgRoot('/opt/homebrew/lib/node_modules/trace-mcp/dist/cli.js');
+    expect(rootsOf()).toEqual(['/opt/homebrew/lib/node_modules']);
+  });
+
+  it('deduplicates and caps the list', () => {
+    for (let i = 0; i < 14; i++) {
+      recordPkgRoot(`/prefix${i}/lib/node_modules/trace-mcp/dist/cli.js`);
+    }
+    recordPkgRoot('/prefix13/lib/node_modules/trace-mcp/dist/cli.js');
+    const roots = rootsOf();
+    expect(roots).toHaveLength(10);
+    expect(roots.at(-1)).toBe('/prefix13/lib/node_modules');
+    expect(new Set(roots).size).toBe(10);
+  });
+
+  it('ignores a cli path that is not under a node_modules root', () => {
+    recordPkgRoot('/somewhere/dist/cli.js');
+    expect(fs.existsSync(getPkgRootsPath())).toBe(false);
+  });
+});
+
 describe('Windows launcher .cmd template', () => {
   // Static content check — runs on every platform since it just reads the
   // template file, not a spawned process. The cmd->powershell hop does not
@@ -227,6 +267,7 @@ describe('Windows launcher .ps1 package roots', () => {
     expect(body).toContain('Volta\\tools\\image\\packages\\trace-mcp\\lib\\node_modules');
     expect(body).toContain('$env:NPM_CONFIG_PREFIX');
     expect(body).toContain(".npmrc'");
+    expect(body).toContain("'pkg-roots'");
   });
 
   it('resolves the custom prefix from config, never by spawning npm', () => {

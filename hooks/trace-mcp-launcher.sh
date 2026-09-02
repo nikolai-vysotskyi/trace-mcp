@@ -9,9 +9,21 @@
 
 set -u
 
+# The shim inherits the MCP client's PATH, and a client started in a project
+# directory routinely carries that repository's `node_modules/.bin` on it. Every
+# helper this script runs (date, sed, head, ls, realpath, mv, ...) would
+# otherwise be resolvable to a repo-controlled executable. Pin PATH to system
+# directories for our own work and hand the client's PATH back to node right
+# before exec — the server itself needs it to find git, LSP servers and npm.
+CLIENT_PATH="$PATH"
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export PATH
+
 TRACE_HOME="${TRACE_MCP_HOME:-$HOME/.trace}"
 CONFIG="$TRACE_HOME/launcher.env"
 LOG="$TRACE_HOME/launcher.log"
+# One global node_modules root per line, appended by each install.
+PKG_ROOTS_FILE="$TRACE_HOME/pkg-roots"
 
 log() {
   # Best-effort append; never abort on log failure.
@@ -58,6 +70,7 @@ if [ -n "${TRACE_MCP_CLI_OVERRIDE:-}"  ]; then CLI_PATH="$TRACE_MCP_CLI_OVERRIDE
 # --- 3. Fast path: config is good → exec directly ---
 if [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ] && [ -n "$CLI_PATH" ] && [ -f "$CLI_PATH" ]; then
   log "exec(config) node=$NODE_PATH cli=$CLI_PATH argc=$#"
+  PATH="$CLIENT_PATH"
   exec "$NODE_PATH" "$CLI_PATH" "$@"
 fi
 
@@ -178,6 +191,23 @@ pkg_roots() {
     [ -d "$root" ] && echo "$root"
   done
 
+  # Roots recorded by past installs. This is how a prefix we cannot name in
+  # advance — a bundled runtime, a corporate `npm config set prefix` — becomes
+  # findable, without asking npm at runtime. Values are opaque paths, never
+  # evaluated; same trust model as launcher.env.
+  if [ -r "$PKG_ROOTS_FILE" ]; then
+    while IFS= read -r root || [ -n "$root" ]; do
+      case "$root" in ''|\#*) continue ;; esac
+      [ -d "$root" ] && echo "$root"
+    done < "$PKG_ROOTS_FILE"
+  fi
+
+  # Runtimes that bundle their own node and install us into it. Named here
+  # because their prefix is on no standard list and predates the registry
+  # above — an install under one of them now records itself too.
+  [ -d "$HOME/.hermes/node/lib/node_modules" ] &&
+    echo "$HOME/.hermes/node/lib/node_modules"
+
   # Custom prefixes (`npm config set prefix`) and bundled runtimes we don't
   # know by name. Read from config, never by running `npm root -g`: the shim
   # inherits the MCP client's PATH, which in a project directory can contain a
@@ -292,4 +322,5 @@ if [ "$HEALED" = 1 ] && [ "$USING_OVERRIDE" = 0 ]; then
 fi
 
 log "exec(probe) node=$NODE_PATH cli=$CLI_PATH argc=$#"
+PATH="$CLIENT_PATH"
 exec "$NODE_PATH" "$CLI_PATH" "$@"

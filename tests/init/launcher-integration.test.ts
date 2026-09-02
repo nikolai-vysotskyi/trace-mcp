@@ -258,27 +258,81 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       expect(mode).toBe(0o600);
     });
 
-    it('never executes an npm found on PATH', () => {
-      const { home, traceHome, node } = setupFakeHome();
-      plantNvmPackage(home);
-      // A repository-controlled `node_modules/.bin` is a normal thing to find
-      // on an MCP client's PATH. Resolving the global prefix must not run it.
-      const hostileBin = path.join(home, 'hostile-bin');
-      fs.mkdirSync(hostileBin, { recursive: true });
-      const sentinel = path.join(home, 'NPM_WAS_RUN');
-      fs.writeFileSync(path.join(hostileBin, 'npm'), `#!/bin/bash\ntouch ${sentinel}\n`, {
-        mode: 0o755,
-      });
-      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+    // A repository-controlled `node_modules/.bin` is a normal thing to sit on
+    // an MCP client's PATH. None of the helpers the shim runs may resolve to it.
+    it.each(['npm', 'sed', 'date', 'head', 'ls', 'realpath', 'mv', 'dirname'])(
+      'never executes a hostile %s found on PATH',
+      (helper) => {
+        const { home, traceHome, node } = setupFakeHome();
+        plantNvmPackage(home);
+        const hostileBin = path.join(home, `hostile-bin-${helper}`);
+        fs.mkdirSync(hostileBin, { recursive: true });
+        const sentinel = path.join(home, `RAN_${helper}`);
+        fs.writeFileSync(path.join(hostileBin, helper), `#!/bin/bash\ntouch ${sentinel}\n`, {
+          mode: 0o755,
+        });
+        // A prefix line makes the shim read ~/.npmrc, exercising that branch too.
+        fs.writeFileSync(path.join(home, '.npmrc'), `prefix=${path.join(home, 'nowhere')}\n`);
+        writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+        const result = spawnSync(LAUNCHER_SRC, ['serve'], {
+          env: { HOME: home, TRACE_MCP_HOME: traceHome, PATH: `${hostileBin}:/usr/bin:/bin` },
+          encoding: 'utf-8',
+          timeout: 5000,
+        });
+
+        expect(result.status).toBe(0);
+        expect(fs.existsSync(sentinel)).toBe(false);
+      },
+    );
+
+    it('hands the client PATH back to node, not the sanitised one', () => {
+      const { home, traceHome, cli } = setupFakeHome();
+      // The server itself needs the client's PATH to find git, LSP servers, npm.
+      const node = path.join(home, 'path-echo-node');
+      fs.writeFileSync(node, '#!/bin/bash\necho "NODE_PATH_ENV:$PATH"\n', { mode: 0o755 });
+      writeConfig(traceHome, node, cli);
 
       const result = spawnSync(LAUNCHER_SRC, ['serve'], {
-        env: { HOME: home, TRACE_MCP_HOME: traceHome, PATH: `${hostileBin}:/usr/bin:/bin` },
+        env: { HOME: home, TRACE_MCP_HOME: traceHome, PATH: '/client/bin:/usr/bin:/bin' },
         encoding: 'utf-8',
         timeout: 5000,
       });
 
-      expect(result.status).toBe(0);
-      expect(fs.existsSync(sentinel)).toBe(false);
+      expect(result.stdout.trim()).toBe('NODE_PATH_ENV:/client/bin:/usr/bin:/bin');
+    });
+
+    it('finds the package in a bundled runtime prefix recorded by a past install', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      // Prefixes like this are on no standard list — the only way the shim can
+      // know about them is the registry each install appends to.
+      const root = path.join(home, 'some-bundled-runtime', 'node', 'lib', 'node_modules');
+      fs.mkdirSync(path.join(root, 'trace-mcp', 'dist'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'trace-mcp', 'dist', 'cli.js'), '// bundled cli\n');
+      const cli = fs.realpathSync(path.join(root, 'trace-mcp', 'dist', 'cli.js'));
+      fs.writeFileSync(path.join(traceHome, 'pkg-roots'), `# recorded by install\n${root}\n`);
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    it('finds the package in a Hermes bundled node prefix', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      // The prefix on the machine that reported TRA-701: node bundled by the
+      // runtime, package installed into it, named by no standard layout.
+      const dist = path.join(home, '.hermes', 'node', 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(dist, { recursive: true });
+      fs.writeFileSync(path.join(dist, 'cli.js'), '// hermes cli\n');
+      const cli = fs.realpathSync(path.join(dist, 'cli.js'));
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
     });
 
     it('honours a custom npm prefix from ~/.npmrc without running npm', () => {
