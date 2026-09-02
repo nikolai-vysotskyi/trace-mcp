@@ -141,4 +141,13 @@ export const COMPACT_CORE_PARAMS: Record<string, string[]> = {
   search_bundles: ['query', 'kind'],
   pin: ['symbol_id', 'file_path'],
   call_project_tool: ['project', 'tool', 'args'],
+
+  // SKILL.state
+  trace_state_init: ['task_id', 'goal'],
+  trace_state_patch: ['task_id', 'patch'],
+  trace_state_get: ['task_id'],
+  trace_state_checkpoint: ['task_id', 'label'],
+  trace_state_rollback: ['task_id', 'checkpoint'],
+  trace_state_add_dead_end: ['task_id', 'reason'],
+  trace_state_list: [],
 };

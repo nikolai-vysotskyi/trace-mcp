@@ -5,7 +5,7 @@ description: Use trace-mcp tools for code navigation, impact analysis, and frame
 
 # trace-mcp — Code Intelligence Routing
 
-trace-mcp is a framework-aware code intelligence MCP server. It exposes 169 tools that return semantic, structured results over a cross-language dependency graph. When trace-mcp is available, it is almost always cheaper and more accurate than native file tools.
+trace-mcp is a framework-aware code intelligence MCP server. It exposes 177 tools that return semantic, structured results over a cross-language dependency graph. When trace-mcp is available, it is almost always cheaper and more accurate than native file tools.
 
 ## When to Use
 

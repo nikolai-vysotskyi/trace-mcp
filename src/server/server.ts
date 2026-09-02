@@ -18,11 +18,13 @@ import {
   DECISIONS_DB_PATH,
   ensureGlobalDirs,
   getSnapshotPath,
+  STATE_DB_PATH,
   TOPOLOGY_DB_PATH,
 } from '../global.js';
 import { buildProjectContext } from '../indexer/project-context.js';
 import { logger } from '../logger.js';
 import { DecisionStore } from '../memory/decision-store.js';
+import { StateEngine } from '../state/state-engine.js';
 import type { PluginRegistry } from '../plugin-api/registry.js';
 import type { ProgressState } from '../progress.js';
 import { computePageRank } from '../scoring/pagerank.js';
@@ -53,6 +55,7 @@ import { registerProjectsTools } from '../tools/register/projects.js';
 import { registerQualityTools } from '../tools/register/quality.js';
 import { registerRefactoringTools } from '../tools/register/refactoring.js';
 import { registerSessionTools } from '../tools/register/session.js';
+import { registerStateTools } from '../tools/register/state.js';
 import { withHints } from '../tools/shared/hints.js';
 import { TopologyStore } from '../topology/topology-db.js';
 import { sanitizeValue } from '../utils/mcp-sanitize.js';
@@ -210,6 +213,7 @@ import type { PipelineLifecycleEvent } from './types.js';
 export interface ServerDeps {
   topoStore?: TopologyStore | null;
   decisionStore?: DecisionStore | null;
+  stateEngine?: StateEngine | null;
   /**
    * Optional per-session callback fired for every MCP tool call. Used by the
    * Electron app to stream live activity over the /api/events SSE bus.
@@ -477,6 +481,13 @@ export function createServer(
         /* best-effort */
       }
     }
+    if (ownsStateEngine && stateEngine) {
+      try {
+        stateEngine.close();
+      } catch {
+        /* best-effort */
+      }
+    }
     if (ownsTopoStore && topoStore) {
       try {
         topoStore.close();
@@ -632,6 +643,14 @@ export function createServer(
     decisionStore = new DecisionStore(DECISIONS_DB_PATH);
   }
 
+  // Build state engine (SKILL.state execution state store)
+  const ownsStateEngine = deps?.stateEngine === undefined;
+  let stateEngine: StateEngine | null = deps?.stateEngine ?? null;
+  if (ownsStateEngine) {
+    ensureGlobalDirs();
+    stateEngine = new StateEngine(STATE_DB_PATH);
+  }
+
   // Build shared context and register all tools
   const ctx: ServerContext = {
     store,
@@ -652,6 +671,7 @@ export function createServer(
     progress: progress ?? null,
     topoStore,
     decisionStore,
+    stateEngine,
     telemetrySink,
     rankingLedger,
     // R09 v2: default to a no-op so non-daemon contexts (CLI fallback,
@@ -699,6 +719,7 @@ export function createServer(
   registerQualityTools(server, ctx);
   registerMemoryTools(server, ctx);
   registerKnowledgeTools(server, ctx);
+  registerStateTools(server, ctx);
   registerSessionTools(server, metaCtx);
 
   // Must run after the last registration: the SDK installs its `tools/call`

@@ -14,6 +14,7 @@ import type { RankingLedger } from '../runtime/ranking-ledger.js';
 import type { TelemetrySink } from '../runtime/telemetry-sink.js';
 import type { SessionJournal } from '../session/journal.js';
 import type { SessionTracker } from '../session/tracker.js';
+import type { StateEngine } from '../state/state-engine.js';
 import type { TopologyStore } from '../topology/topology-db.js';
 
 export type ToolResponse = { content: [{ type: 'text'; text: string }]; isError?: boolean };
@@ -96,6 +97,8 @@ export interface ServerContext {
   topoStore: TopologyStore | null;
   /** Decision memory store (null if memory disabled) */
   decisionStore: DecisionStore | null;
+  /** Agent execution state engine (null if state disabled) */
+  stateEngine: StateEngine | null;
   /** Optional persistent telemetry sink (null when telemetry.enabled = false) */
   telemetrySink: TelemetrySink | null;
   /** Optional persistent ranking ledger for self-tuning (null when disabled) */
