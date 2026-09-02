@@ -138,6 +138,8 @@ trace-mcp ships with an optional Electron desktop app (`packages/app`) that give
 
 **Install on Windows:** run `trace-mcp.Setup.<version>.exe` from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest).
 
+**In-app updater stuck on an old build?** App versions 3.10.0 and earlier on macOS/Windows can't update themselves — "Check for updates…" shows `Cannot set properties of undefined (setting 'autoDownload')` and does nothing, a bug fixed in 3.11.0 that the affected builds can't fetch their own way out of. Reinstall by hand: [download the .dmg](https://trace-mcp.com/) (macOS) or grab the latest `trace-mcp.Setup.<version>.exe` from [Releases](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest) (Windows) — or, if you have the CLI installed, run `trace-mcp install-app`.
+
 The app talks to the same `trace-mcp` daemon (`http://127.0.0.1:3741`) that MCP clients use, so anything you index from the app is immediately available to Claude Code / Cursor / etc. If you only want the MCP server and the CLI, you do not need the app at all — [`npm install -g trace-mcp`](#quick-start) is the whole install.
 
 ---

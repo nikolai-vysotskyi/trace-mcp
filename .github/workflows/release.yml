@@ -63,7 +63,22 @@ jobs:
           ```
           UPGRADE
           )
-          gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${FOOTER}"
+          # TRA-687: app builds <=3.10.0 (macOS/Windows) can't self-update, and
+          # the fix ships inside the very updater those builds can't run. Their
+          # only surface onto a live page is "View changelog", which opens
+          # /releases — so the recovery note has to live in every release's
+          # notes, not just the one that shipped the fix, for it to ever reach
+          # them. Same append mechanism as the Upgrade footer above.
+          RECOVERY=$(cat <<'RECOVERY'
+
+          ---
+
+          ### In-app updater stuck?
+
+          App builds 3.10.0 and earlier on macOS/Windows can't update themselves — "Check for updates…" shows `Cannot set properties of undefined (setting 'autoDownload')` and does nothing. Reinstall by hand: [download the .dmg](https://trace-mcp.com/) (macOS), grab the `.exe` installer from this page (Windows), or run `trace-mcp install-app` if you have the CLI.
+          RECOVERY
+          )
+          gh release edit "$TAG" --repo "${{ github.repository }}" --notes "${BODY}${FOOTER}${RECOVERY}"
 
   # Gate between the app builds and npm, and the one place that can take a
   # release back out of `latest`. The release exists the moment the tag is cut,
