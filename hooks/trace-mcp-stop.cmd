@@ -1,8 +1,9 @@
 @echo off
 REM trace-mcp-stop v0.1.0
 REM trace-mcp Stop hook (Windows)
-REM Async session mining: spawns a detached `trace-mcp memory mine` and exits
-REM immediately so the agent's turn completion is never blocked.
+REM Async session mining: spawns a detached `trace-mcp memory mine`, then an
+REM incremental `trace-mcp analytics sync` (TRA-695), and exits immediately so
+REM the agent's turn completion is never blocked.
 
 setlocal enabledelayedexpansion
 
@@ -36,6 +37,7 @@ powershell -NoProfile -Command ^
   "}" ^
   "$logFile = Join-Path $env:TEMP ('trace-mcp-stop-mining-' + $hash + '.log');" ^
   "$proc = Start-Process -FilePath '%TRACE_MCP_BIN%' -ArgumentList @('memory','mine','--project',$projectRoot) -WindowStyle Hidden -PassThru -RedirectStandardOutput $logFile -RedirectStandardError $logFile;" ^
-  "if ($proc) { $proc.Id | Out-File -FilePath $lockFile -Encoding ascii -Force }"
+  "if ($proc) { $proc.Id | Out-File -FilePath $lockFile -Encoding ascii -Force };" ^
+  "Start-Process -FilePath '%TRACE_MCP_BIN%' -ArgumentList @('analytics','sync') -WindowStyle Hidden | Out-Null"
 
 exit /b 0
