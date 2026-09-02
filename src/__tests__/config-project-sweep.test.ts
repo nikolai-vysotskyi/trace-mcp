@@ -159,6 +159,36 @@ describe('pruneProjectConfigSections (TRA-702)', () => {
     expect(Object.keys(readProjects())).toEqual([live]);
   });
 
+  it('skips entirely while another process holds the config lock', () => {
+    // The sweep reads the file, computes hundreds of edits, then writes the
+    // whole thing back — ~2s wide on the first backlog drain, while other
+    // agent processes keep registering projects. Its write would publish a
+    // buffer that predates a peer's section, silently reverting it; if that
+    // landed between a run's save and its immediate loadConfig(), the run
+    // would index with schema defaults.
+    //
+    // Within one process this cannot happen — the sweep is synchronous, so
+    // nothing else in that process runs during it. The real peer is another
+    // process, which is what the cross-process lock serialises. Here that peer
+    // is simulated by a lock file held by a live pid that is not us; the sweep
+    // must decline to touch the file at all and retry on the next hourly pass.
+    const dead = path.join(tmpHome, 'deleted-project');
+    writeConfig({ [dead]: { root: '.' } });
+    const before = fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8');
+
+    const lockDir = path.join(tmpHome, 'locks');
+    fs.mkdirSync(lockDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(lockDir, 'global-config.pid'),
+      // pid 1 is always alive and is never this test process, so the lock
+      // reads as genuinely held rather than stale.
+      JSON.stringify({ pid: 1, started_at: Date.now(), hostname: os.hostname(), op: 'peer' }),
+    );
+
+    expect(configJsonc.pruneProjectConfigSections()).toEqual([]);
+    expect(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')).toBe(before);
+  });
+
   it('leaves a config with no dead sections untouched', () => {
     const live = fs.mkdtempSync(path.join(tmpHome, 'live-'));
     writeConfig({ [live]: { root: '.' } });

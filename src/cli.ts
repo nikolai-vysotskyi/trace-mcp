@@ -248,16 +248,26 @@ function softGcSweep(): void {
     logger.warn({ err }, 'pruneIndexDir soft-prune failed (non-fatal)');
   }
 
+  // TRA-702: this used to call `pruneStaleProjects()`, which deregisters a
+  // missing root the first time it is seen missing — no grace period. That
+  // contradicted the 7-day grace `sweepMissingRoots` applies on the startup
+  // path, and the two ran against the same registry an hour apart, so the
+  // grace never actually held: a root on an unmounted volume lost its registry
+  // row on the next hourly sweep. That in turn made it unregistered, which is
+  // half the condition `pruneProjectConfigSections` below uses to delete a
+  // config section — so the volume coming back found neither. Use the
+  // grace-aware sweep on both paths; `pruneStaleProjects` stays for the
+  // explicit `doctor` / `prune --apply` review flows, where immediate is right.
   try {
-    const removed = pruneStaleProjects();
+    const { removed } = sweepMissingRoots(7);
     if (removed.length > 0) {
       logger.info(
         { removed },
-        `Pruned ${removed.length} stale registry entr${removed.length === 1 ? 'y' : 'ies'}`,
+        `Deregistered ${removed.length} project(s) with a root missing >7 days`,
       );
     }
   } catch (err) {
-    logger.warn({ err }, 'pruneStaleProjects soft-prune failed (non-fatal)');
+    logger.warn({ err }, 'sweepMissingRoots soft-prune failed (non-fatal)');
   }
 
   // TRA-702: same job as the registry prune above, on the other registration
@@ -3219,23 +3229,12 @@ program
         const softGcTimer = setInterval(softGcSweep, 60 * 60_000);
         softGcTimer.unref();
 
-        // Soft GC (TRA-36): deregister + delete the DB for projects whose root
-        // has been gone for >7 days (e.g. ephemeral per-run container workdirs
-        // that are never coming back). First sighting only timestamps the entry
-        // so a transiently-unmounted drive isn't punished — see sweepMissingRoots.
-        try {
-          const { removed } = sweepMissingRoots(7);
-          if (removed.length > 0) {
-            logger.info(
-              { removedRoots: removed },
-              `Deregistered ${removed.length} project(s) with a root missing >7 days`,
-            );
-          }
-        } catch (err) {
-          logger.warn({ err }, 'sweepMissingRoots failed (non-fatal)');
-        }
+        // Soft GC (TRA-36): deregistering roots missing >7 days now happens
+        // inside softGcSweep() above, which already ran once just now and
+        // repeats hourly. It used to be duplicated here with the hourly path
+        // calling the grace-less `pruneStaleProjects` instead (TRA-702).
 
-        // Soft GC (TRA-335): the sweep above only reaches workdirs that were
+        // Soft GC (TRA-335): that sweep only reaches workdirs that were
         // *deleted*. Agent runtimes that leave their one-shot checkout on disk
         // (Multica, and CI/sandbox workflows shaped like it) leave an entry
         // `prune` will always classify as live, so the registry grew one row —
