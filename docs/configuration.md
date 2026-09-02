@@ -93,10 +93,10 @@ All trace state lives in `~/.trace/` (with automatic backwards compatibility and
 
 ### Per-project config file (optional)
 
-You can place a config file at `.trace-mcp/.config.json` in your project root to override settings without editing the global config:
+You can place a config file at `.trace/.config.json` in your project root to override settings without editing the global config:
 
 ```jsonc
-// /path/to/project/.trace-mcp/.config.json
+// /path/to/project/.trace/.config.json
 {
   "include": ["src/**/*.ts", "lib/**/*.ts"],
   "exclude": ["node_modules/**", "dist/**", "coverage/**"],
@@ -111,13 +111,13 @@ You can place a config file at `.trace-mcp/.config.json` in your project root to
 }
 ```
 
-Alternative locations (checked in order): `.trace-mcp/.config.json`, `.trace-mcp.json`, `.trace-mcp`, `.config/trace-mcp.json`, `package.json` (under `"trace-mcp"` key). Once the `trace` rename lands, each of these gains a `trace`-spelled twin (`.trace/.config.json`, `.trace.json`, …) that is checked first; the `trace-mcp` names above stay in the list permanently.
+Alternative locations (checked in order): `.trace/.config.json`, `.trace.json`, `.trace-mcp/.config.json`, `.trace-mcp.json`, `.trace-mcp`, `.config/trace.json`, `.config/trace-mcp.json`, `package.json` (under `"trace-mcp"` key). The `trace-mcp`-spelled names keep working permanently — nothing is removed.
 
 ---
 
 ## Migration from trace-mcp to trace
 
-The command, the MCP server key written into client configs, and the state directory are shortening from `trace-mcp` to `trace`. The motivation is token cost: MCP clients prefix every tool name with the server key, so the whole tool list is re-sent as `mcp__trace__<tool>` rather than `mcp__trace-mcp__<tool>` on every turn — a per-turn saving multiplied by every advertised tool.
+**The project is `trace-mcp`; the command is `trace`.** The rename lives at exactly that boundary — the CLI verb, the MCP server key written into client configs, and the local state directory shorten to `trace`, and nothing else does: not the npm package, not this repo, not the domain, not the registry entry. The reason is ergonomics, not efficiency — the same shape as `rg` for ripgrep or `kubectl` for kubernetes. The measured token saving from the shorter tool prefix (`mcp__trace__<tool>` vs. `mcp__trace-mcp__<tool>`) is real but small: 66–366 tokens per turn depending on tokenizer and preset, 0.74–1.23% of a tool list that already costs 8k–45k tokens.
 
 **The npm package keeps its name.** It is `trace-mcp` and stays `trace-mcp`: `trace` on npm is an unrelated package by another author, so `npm install -g trace` would install someone else's code. Install with `npm install -g trace-mcp` or `npx -y trace-mcp@latest`.
 
@@ -182,7 +182,7 @@ Two different things can leave a folder out of the index — check which one app
 2. **The folder just isn't a built-in skip dir, but nothing in `include` matches its files.** The default `include` covers every extension a registered language plugin claims, *except* the pure data formats — JSON, XML (`.xml`, `.svg`, `.csproj`, ...) and INI (`.ini`, `.conf`, `.properties`, ...) — which are left out because lockfiles and fixtures would swamp the index. Add an explicit pattern for those:
 
    ```jsonc
-   // .trace-mcp/.config.json
+   // .trace/.config.json
    {
      "include": ["schemas/**/*.json"]
    }
@@ -577,7 +577,7 @@ it hid and how to get it back — without it a suppressed tool is invisible, sin
 `load_tools()` lists what the *preset* deferred and a suppressed tool is inside
 the preset.
 
-Every `tools.*` option works from a project-local config file (`.trace-mcp/.config.json`) as well as the global one — none of them are global-only. The tool surface is built once per MCP session, so a change takes effect on the next session (restart the MCP client); the daemon does not need restarting.
+Every `tools.*` option works from a project-local config file (`.trace/.config.json`) as well as the global one — none of them are global-only. The tool surface is built once per MCP session, so a change takes effect on the next session (restart the MCP client); the daemon does not need restarting.
 
 ### Agent behavior rules
 
@@ -596,7 +596,7 @@ Every `tools.*` option works from a project-local config file (`.trace-mcp/.conf
 - Auto-updates on `npm upgrade trace-mcp` — no re-init required to pull new rule wording.
 - Single source of truth alongside the tool-routing block.
 
-If you want to override in one project without affecting others, put `"agent_behavior": "off"` (or any other value) in that project's `.trace-mcp/.config.json` — per-project config takes precedence over global.
+If you want to override in one project without affecting others, put `"agent_behavior": "off"` (or any other value) in that project's `.trace/.config.json` — per-project config takes precedence over global.
 
 ### 4-tier resolution system
 
@@ -651,7 +651,7 @@ When a project is indexed (via `serve`, `serve-http`, or `index`):
    - **Flat workspace** — scans first-level subdirectories for root markers (`package.json`, `composer.json`, `go.mod`, etc.). Requires ≥2 found (e.g. `project/frontend/` + `project/backend/`)
    - **Grouped workspace** — scans two levels deep (`root/group/service/`). Requires ≥2 found (e.g. `project/org/service-a/` + `project/org/service-b/`)
    - **Monolith fallback** — treats the project root as a single subproject
-2. Each detected subproject is **registered** and bound to the project in `~/.trace-mcp/topology.db`
+2. Each detected subproject is **registered** and bound to the project in `~/.trace/topology.db`
 3. **API contracts** are parsed (OpenAPI, GraphQL SDL, Protobuf) for each subproject
 4. Code is **scanned** for HTTP/gRPC client calls (fetch, axios, Http::, requests, etc.)
 5. Client calls are **matched** to known endpoints from other subprojects
@@ -709,7 +709,7 @@ The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported
 
 Every MCP session is still attached to exactly one project (see [stdio vs HTTP](#stdio-vs-http--choosing-your-setup)) — but two tools let an agent reach across to any OTHER project already registered with trace-mcp, without opening a second MCP connection:
 
-- **`list_projects`** — lists every project in `~/.trace-mcp/registry.json` (root, name, type, last-indexed timestamp), plus known subprojects when topology is enabled for the current session.
+- **`list_projects`** — lists every project in `~/.trace/registry.json` (root, name, type, last-indexed timestamp), plus known subprojects when topology is enabled for the current session.
 - **`call_project_tool { project, tool, args }`** — runs any of the {{ site.data.counts.tools }} normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
 
 This is read-only relay wiring — it never starts indexing or a file watcher for the target project. In the HTTP daemon, a target project already warm in memory is served directly; a cold one is opened on demand via the same read-mostly path used for on-demand subprojects. Under `stdio` (no daemon), the target project's existing index database is opened directly; a project that has never been indexed cannot be relayed to.

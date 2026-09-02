@@ -287,7 +287,7 @@ trace add         # register current project for indexing
 
 *(The npm package is still called `trace-mcp` — only the command it installs is shortened. `trace-mcp init`, `trace-mcp add`, and every other `trace-mcp …` invocation keep working.)*
 
-All state lives in `~/.trace/` (with automatic fallback from `~/.trace-mcp/`) — your project directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
+All state lives in `~/.trace/` (with automatic fallback from `~/.trace-mcp/`) — your project directory stays clean unless you opt into `.traceignore` or `.trace/.config.json`.
 
 **Using Claude Code or Codex CLI?** After `npm install -g trace-mcp`, skip `trace init`'s client-wiring step and install the plugin directly instead — no `git clone` needed either way:
 
@@ -327,19 +327,19 @@ Then in your MCP client:
 
 ## Migration from trace-mcp to trace
 
-The CLI command, the MCP server key written into client configs, and the state directory are shortening from `trace-mcp` to `trace`. The reason is token cost, not branding: MCP clients prefix every tool name with the server key, so the whole tool list is re-sent as `mcp__trace__<tool>` rather than `mcp__trace-mcp__<tool>` on every turn — a per-turn saving multiplied by every advertised tool.
+**The project is still `trace-mcp`. The command is now `trace`.** The rename lives at exactly that boundary and nowhere else — the npm package, this repo, the domain, and the registry entry all keep the `trace-mcp` name. The reason is ergonomics, the same shape as `rg` for ripgrep or `kubectl` for kubernetes — not token savings: the measured saving from the shorter MCP tool prefix is real but small, 66–366 tokens per turn depending on tokenizer and preset, 0.74–1.23% of a tool list that already costs 8k–45k tokens.
 
 **The npm package name does not change.** It is still `trace-mcp`, and it always will be — `trace` on npm is an unrelated package by another author. Install with `npm install -g trace-mcp` or `npx -y trace-mcp@latest`.
 
 What does change, and what stays:
 
-- **Command name** — `trace <cmd>` is the new spelling. `trace-mcp <cmd>` stays as an alias, with no removal planned; scripts and CI that call it need no edit.
+- **Command name** — `trace <cmd>` is the new spelling. `trace-mcp <cmd>` stays as an alias **permanently** — on macOS, `/usr/bin/trace` is Apple's own `trace(1)`, so keep using `trace-mcp` in scripts, CI, or any PATH you don't control yourself.
 - **MCP client entries** — `trace init` and `trace upgrade` rename an existing `mcpServers["trace-mcp"]` entry to `mcpServers["trace"]` and point it at the new command. Nothing is deleted; an entry left as `trace-mcp` keeps working, it just costs more tokens.
 - **State directory** — `~/.trace/`, falling back to `~/.trace-mcp/` when the old one exists and the new one does not. Indexes are not rebuilt.
 - **Project config** — `.trace.json` is read first, `.trace-mcp.json` after it. Existing files keep working where they are.
 - **Plugin and registry identifiers** — unchanged: `@nikolai-vysotskyi/trace-mcp` for the Claude Code plugin, `io.github.nikolai-vysotskyi/trace-mcp` in the MCP registry.
 
-Nothing here requires action from you. If you never run `init` again, your existing setup keeps working exactly as it does today.
+**One thing `init` can't do for you.** The MCP tool prefix moves too — `mcp__trace-mcp__search` becomes `mcp__trace__search`. `init` migrates the `mcpServers` entry it owns, but not text you wrote yourself: Claude Code permission allowlists, hook matchers, or your own `mcp__trace-mcp__*` mentions in `CLAUDE.md`/`AGENTS.md` prose. If a hook stops matching or an allowlisted tool starts re-prompting after upgrading, grep your own config for `mcp__trace-mcp__` and replace it with `mcp__trace__`. Everything else above happens automatically the next time you run `trace init` or `trace upgrade` — details: [Configuration](https://trace-mcp.com/configuration.html#renaming-trace-mcp--trace-what-init-can-and-cant-reach).
 
 ---
 
@@ -348,12 +348,12 @@ Nothing here requires action from you. If you never run `init` again, your exist
 trace-mcp runs entirely on your machine. Nothing about your source code is uploaded, and there is no account to create.
 
 - **Indexing happens locally.** The MCP server is a Node process you run yourself — stdio or `http://127.0.0.1:3741`.
-- **Index lives in `~/.trace-mcp/`**, never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
+- **Index lives in `~/.trace/`** (falling back to `~/.trace-mcp/` if that's what you already have), never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace/.config.json`.
 - **Semantic search is offline by default** — bundled ONNX embeddings, no API keys, no outbound calls. Switch to Ollama (local) or OpenAI (opt-in) via config.
 - **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below — nothing else is phoned home.
 - **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
 - **The daemon trusts loopback and nothing else.** `serve-http` is unauthenticated by design: a caller on `127.0.0.1` is already you. A non-loopback `--host` is therefore refused unless you pass `--allow-remote` and front the port with your own auth — see [Configuration](https://trace-mcp.com/configuration.html#http-daemon--one-warm-index-shared-across-many-projects).
-- **To wipe everything**, delete `~/.trace-mcp/` — that directory is the whole footprint.
+- **To wipe everything**, delete `~/.trace/` (or `~/.trace-mcp/` on an install that hasn't migrated yet) — that directory is the whole footprint.
 
 ### Usage telemetry
 
@@ -395,7 +395,7 @@ Picking **Max** during `trace-mcp init` (the default) layers on two more amplifi
 - **tweakcc system-prompt rewrites** patch Claude Code's core tool descriptions so the model internalizes "use trace-mcp search" instead of "use Grep" from the start. Claude Code only.
 - **`agent_behavior: "strict"`** ships a compact set of discipline rules via MCP instructions — no flattery, disagree on wrong premises, never fabricate, goal-driven execution, 2-strike session hygiene, no drive-by refactors. Cross-client (Claude Code, Cursor, Codex, Windsurf) and auto-updates on `npm upgrade trace-mcp` without re-running `init`.
 
-This is the setup for making the same discipline rules apply to every teammate's agent without asking anyone to configure it. Tune or disable via `tools.agent_behavior` in `~/.trace-mcp/.config.json` — see [Tool exposure & agent behavior](https://trace-mcp.com/configuration.html#tool-exposure--agent-behavior).
+This is the setup for making the same discipline rules apply to every teammate's agent without asking anyone to configure it. Tune or disable via `tools.agent_behavior` in `~/.trace/.config.json` — see [Tool exposure & agent behavior](https://trace-mcp.com/configuration.html#tool-exposure--agent-behavior).
 
 ---
 
