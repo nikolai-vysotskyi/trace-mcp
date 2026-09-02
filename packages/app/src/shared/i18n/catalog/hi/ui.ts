@@ -5,6 +5,7 @@ export const ui = {
   loading: 'लोड हो रहा है',
   retry: 'फिर से',
   sectionError: '{{what}} लोड नहीं हो सका।',
+  sectionsError: '{{what}} लोड नहीं हो सके।',
 
   filterMatch: 'मैच',
   filterExclude: 'हटाएँ',

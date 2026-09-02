@@ -10,6 +10,7 @@ export const ui = {
   loading: 'Загрузка',
   retry: 'Повторить',
   sectionError: 'Не удалось загрузить: {{what}}.',
+  sectionsError: 'Не удалось загрузить: {{what}}.',
 
   filterMatch: 'Совпадение',
   filterExclude: 'Исключить',

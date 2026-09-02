@@ -685,6 +685,26 @@ sections it speaks for do not render.** A heading over a card that only repeats 
 banner is not information. One failure stays in place, where the reader is already
 looking.
 
+**A list dropped into a sentence written for one thing is not a sentence.**
+`Intl.ListFormat` joins the nouns; it cannot inflect the verb around them. The
+collapsed line above, built from the singular string, would have shipped Spanish
+as `No se **pudo** cargar el resumen del índice y el escaneo de calidad` —
+grammar the English original has no way to show, because English marks neither.
+So a sentence that can take a list gets its own catalogue key, plural in every
+language, chosen by the caller (which is the only place that knows the list has
+two entries) — not an i18next `count`, which would demand `_few`/`_many` forms
+from Russian for a distinction it does not make here.
+
+**And a string that opens on `{{what}}` is a sentence you have not read.** German's
+was `{{what}} konnte nicht geladen werden`, so every German error on this surface
+had opened with a lowercase article for five months, and `errorQuality` was
+accusative (`den Qualitätsscan`) inside a passive that takes the nominative —
+both invisible in English review, and neither survivable in the plural. The
+phrasing that does survive is the one Russian and Portuguese already used: a
+lead-in, a colon, then the noun (`Fehler beim Laden: …`). Where an interpolation
+lands at the start of a sentence, check capitalisation and case in that language
+before checking anything else.
+
 **The test for "down" is a shared reducer, not a fresh `!connected`.**
 `deriveDaemonState()` already encodes that a daemon which has not answered *yet*
 is not one that is failing to. `connected` is false for the first moments of every

@@ -5,6 +5,7 @@ export const ui = {
   loading: '読み込み中',
   retry: '再試行',
   sectionError: '{{what}}を読み込めませんでした。',
+  sectionsError: '{{what}}を読み込めませんでした。',
 
   filterMatch: '一致',
   filterExclude: '除外',

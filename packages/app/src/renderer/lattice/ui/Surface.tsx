@@ -203,13 +203,28 @@ export function SkeletonRows({ rows }: { rows: number }) {
     reading "nothing running", it was simply false (TRA-662). Retry is the next
     step, and it is right there. A caller that does know the cause says it in
     its own words, the way GuardSection does. */
-export function SectionError({ what, onRetry }: { what: string; onRetry: () => void }) {
+export function SectionError({
+  what,
+  several = false,
+  onRetry,
+}: {
+  what: string;
+  /** `what` names more than one thing, so the sentence around it is plural.
+      A separate key rather than an i18next plural: only the caller knows the
+      list has two entries, the collapsed banner is never singular, and a
+      `count` would demand `_few`/`_many` forms from Russian and Arabic for a
+      distinction none of them make here. German is why this exists at all —
+      "die Index-Übersicht und der Qualitätsscan **konnten** nicht geladen
+      werden", against `konnte` for one. */
+  several?: boolean;
+  onRetry: () => void;
+}) {
   const { t } = useTranslation('ui');
   return (
     <div className="flex items-center gap-2 px-3 py-2.5">
       <Icon name="warning" size={14} />
       <span className="text-[13px] leading-4 flex-1" style={{ color: 'var(--label-secondary)' }}>
-        {t('sectionError', { what })}
+        {t(several ? 'sectionsError' : 'sectionError', { what })}
       </span>
       <Button size="small" onClick={onRetry}>
         {t('retry')}

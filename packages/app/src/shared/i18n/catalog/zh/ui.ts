@@ -5,6 +5,7 @@ export const ui = {
   loading: '加载中',
   retry: '重试',
   sectionError: '无法加载{{what}}。',
+  sectionsError: '无法加载{{what}}。',
 
   filterMatch: '匹配',
   filterExclude: '排除',

@@ -5,6 +5,7 @@ export const ui = {
   loading: 'Chargement',
   retry: 'Réessayer',
   sectionError: 'Impossible de charger {{what}}.',
+  sectionsError: 'Impossible de charger {{what}}.',
 
   filterMatch: 'Inclure',
   filterExclude: 'Exclure',

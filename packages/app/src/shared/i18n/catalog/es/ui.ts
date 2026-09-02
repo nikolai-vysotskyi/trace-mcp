@@ -5,6 +5,7 @@ export const ui = {
   loading: 'Cargando',
   retry: 'Reintentar',
   sectionError: 'No se pudo cargar {{what}}.',
+  sectionsError: 'No se pudieron cargar {{what}}.',
 
   filterMatch: 'Coincide',
   filterExclude: 'Excluir',

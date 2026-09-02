@@ -5,6 +5,7 @@ export const ui = {
   loading: '불러오는 중',
   retry: '다시 시도',
   sectionError: '{{what}}을(를) 불러오지 못했습니다.',
+  sectionsError: '{{what}}을(를) 불러오지 못했습니다.',
 
   filterMatch: '일치',
   filterExclude: '제외',

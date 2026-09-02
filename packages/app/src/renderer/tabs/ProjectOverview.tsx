@@ -679,6 +679,7 @@ export function ProjectOverview({
           {collapsed && (
             <Card>
               <SectionError
+                several
                 what={formatList(failures.map((f) => f.what))}
                 onRetry={() => {
                   for (const f of failures) f.retry();

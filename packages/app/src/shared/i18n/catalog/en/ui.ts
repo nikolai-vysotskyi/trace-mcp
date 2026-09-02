@@ -13,6 +13,7 @@ export const ui = {
   loading: 'Loading',
   retry: 'Retry',
   sectionError: "Couldn't load {{what}}.",
+  sectionsError: "Couldn't load {{what}}.",
 
   // ── FilterBar ───────────────────────────────────────────────────────────
   filterMatch: 'Match',

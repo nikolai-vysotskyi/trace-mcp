@@ -355,4 +355,22 @@ describe('the surface reads from the catalogue, not from literals', () => {
     expect(screen.getByText('Файлов проиндексировано')).toBeTruthy();
     expect(screen.queryByText('Reindex')).toBeNull();
   });
+
+  /* A list of nouns dropped into a sentence written for one noun is not a
+     sentence. `Intl.ListFormat` joins the nouns and cannot touch the verb
+     around them: Spanish needs `pudieron`, not `pudo`. German's old wording
+     `{{what}} konnte nicht geladen werden` could not be pluralised into a
+     correct sentence at all — the interpolation was sentence-initial, so it
+     also opened every German error with a lowercase article — and now reads
+     off a colon, where number and case stop mattering. */
+  it.each([
+    ['de', 'Fehler beim Laden: die Index-Übersicht und der Qualitätsscan.'],
+    ['es', 'No se pudieron cargar el resumen del índice y el escaneo de calidad.'],
+  ])('agrees with a plural subject in %s', async (locale, sentence) => {
+    setLocale(locale);
+    mockApi({ '/stats': null, '/coverage': COVERAGE, '/subprojects': {}, '/smells': null });
+    render(<ProjectOverview root={ROOT} />);
+
+    await waitFor(() => expect(screen.getByText(sentence)).toBeTruthy());
+  });
 });
