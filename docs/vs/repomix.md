@@ -1,7 +1,7 @@
 ---
 title: "Repomix Alternative: trace-mcp vs Repomix for AI code context"
 description: "Repomix packs your repository into one prompt. trace-mcp indexes it into a queryable graph. Head-to-head on token cost, freshness, search, and refactoring — plus when Repomix is still the right pick."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # Repomix alternative: trace-mcp vs Repomix
@@ -151,5 +151,6 @@ Yes, and it is a sensible setup — Repomix for handing a whole small or third-p
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
 - The other head-to-heads: [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs codegraph](/vs/codegraph.html) · [vs Context Mode](/vs/context-mode.html)
+- Comparing Repomix against something other than us: [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) — packing against indexing, on their own terms.
 - [Cut Claude Code token usage](/reduce-claude-code-token-usage.html) — the measured tactics, including the ones that have nothing to do with us.
 - [Get started](/#install) — no configuration required.

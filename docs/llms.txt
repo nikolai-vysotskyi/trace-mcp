@@ -17,6 +17,7 @@ layout: null
 - [trace-mcp vs codebase-memory-mcp](https://trace-mcp.com/vs/codebase-memory-mcp.html): Head-to-head against the closest peer — same knowledge-graph premise, opposite bets on language breadth vs framework depth.
 - [trace-mcp vs codegraph](https://trace-mcp.com/vs/codegraph.html): Head-to-head against the largest peer by stars — one advertised tool optimised for orientation vs a broad surface that continues past navigation.
 - [trace-mcp vs Context Mode](https://trace-mcp.com/vs/context-mode.html): Head-to-head against the adjacent lane — compressing what tool calls return vs making structural questions about code cheap to ask.
+- [Repomix vs codegraph](https://trace-mcp.com/vs/repomix-vs-codegraph.html): The two other tools compared to each other — packing a repository into one file vs indexing it into a queryable graph, and where trace-mcp sits between them.
 - [PR review context benchmark](https://trace-mcp.com/pr-context-benchmark.html): Input-token cost of AI code-review context measured on 60 merged pull requests across six open-source repositories — trace-mcp versus loading the changed files.
 - [How to reduce Claude Code token usage](https://trace-mcp.com/reduce-claude-code-token-usage.html): Seven measured tactics for cutting agent token cost, including the ones that have nothing to do with trace-mcp.
 - [Configuration](https://trace-mcp.com/configuration.html): All config file options; trace-mcp works out of the box without one.

@@ -1,7 +1,7 @@
 ---
 title: "CodeGraph MCP Alternative: trace-mcp vs codegraph for AI coding agents"
 description: "codegraph advertises one tool and optimises for orienting an agent in an unfamiliar repo; trace-mcp ships a broad graph with refactoring, security scanning and code-linked memory. Head-to-head on tool surface, language and framework coverage, benchmarks — plus where codegraph is clearly ahead."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # CodeGraph MCP alternative: trace-mcp vs codegraph
@@ -165,5 +165,6 @@ No. Both index locally into SQLite, need no API key, and survive restarts.
 
 - Full field: [how trace-mcp compares](/comparisons.html) against 20+ code-graph and memory MCP servers.
 - The other head-to-heads: [vs Repomix](/vs/repomix.html) · [vs Serena](/vs/serena.html) · [vs codebase-memory-mcp](/vs/codebase-memory-mcp.html) · [vs Context Mode](/vs/context-mode.html)
+- Comparing codegraph against something other than us: [Repomix vs codegraph](/vs/repomix-vs-codegraph.html) — indexing against packing, on their own terms.
 - [Architecture](/architecture.html) — how the indexing pipeline, storage and LSP enrichment fit together.
 - [Get started](/#install) — no configuration required.
