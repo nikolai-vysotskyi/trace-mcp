@@ -177,9 +177,14 @@ import {
   unloadModel as ollamaUnload,
 } from './ollama-control';
 import {
+  type AppBundle,
+  APP_BUNDLE_NAME,
   findStaleRoots,
   type GlobalInstall,
+  readAppLocationMarker,
   readLauncherCliPath,
+  runningAppBundle,
+  scanAppBundles,
   scanGlobalInstalls,
   staleRootInUse,
 } from './update-state';
@@ -657,7 +662,14 @@ ipcMain.handle('check-for-update', async () => {
   // in because the user's own npm may own a root the static scan never guesses.
   const { configRoot, binRoot } = await resolveNpmRoots();
   const staleRoots = staleRootClientsUse(configRoot, binRoot);
-  return staleRoots.length > 0 ? { ...result, staleRoots } : result;
+  // Same rationale for a second installed .app bundle: the update applies to the
+  // copy that is running and says nothing about the copy launched tomorrow.
+  const duplicateApps = duplicateAppInstalls();
+  return {
+    ...result,
+    ...(staleRoots.length > 0 ? { staleRoots } : {}),
+    ...(duplicateApps.length > 0 ? { duplicateApps } : {}),
+  };
 });
 
 async function checkForUpdate() {
@@ -848,6 +860,27 @@ function staleGlobalRoots(...extraRoots: (string | null | undefined)[]): GlobalI
 function staleRootClientsUse(...extraRoots: (string | null | undefined)[]): GlobalInstall[] {
   const inUse = staleRootInUse(staleGlobalRoots(...extraRoots), readLauncherCliPath());
   return inUse ? [inUse] : [];
+}
+
+/**
+ * Installed `.app` bundles when there is more than one, empty otherwise.
+ *
+ * The two conventional install directories plus whatever the location marker
+ * records — the same set every other resolver of "where is the app" considers,
+ * minus Spotlight, which needs a subprocess and adds nothing on the machines
+ * this happens on. Empty on the normal single-install machine (TRA-692).
+ */
+function duplicateAppInstalls(): AppBundle[] {
+  if (process.platform !== 'darwin') return [];
+  const bundles = scanAppBundles(
+    [
+      path.join('/Applications', APP_BUNDLE_NAME),
+      path.join(os.homedir(), 'Applications', APP_BUNDLE_NAME),
+      readAppLocationMarker(),
+    ],
+    runningAppBundle(process.execPath),
+  );
+  return bundles.length > 1 ? bundles : [];
 }
 
 async function resolveNpmBin(): Promise<string | null> {
