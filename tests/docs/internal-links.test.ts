@@ -292,6 +292,36 @@ describe('docs footer nav covers every indexed page', () => {
   });
 
   /**
+   * llms.txt is the file AI search systems read first, and for a product whose
+   * users are AI agents a stale one is not a missed opportunity — it is a wrong
+   * answer served confidently. It is hand-maintained (the descriptions are
+   * better than the front-matter ones) and had drifted past the same four newest
+   * pages the footer had (TRA-681), so the list needs the same guard the footer
+   * got rather than a generator.
+   */
+  it('llms.txt links every indexed page', () => {
+    const llms = readFileSync(join(DOCS, 'llms.txt'), 'utf-8');
+    const missing = sitemapPaths().filter((p) => !llms.includes(`https://trace-mcp.com${p}`));
+    expect(missing, `indexed pages absent from llms.txt: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  /**
+   * llms-full.txt was 170 KB of hand-copied page text with no generator, so it
+   * drifted in both directions at once: four pages absent, four more serving
+   * copies older than the live page. It is generated now, and presence alone is
+   * not the property worth checking — currency is. This is a fixed-point test
+   * like the sitemap one above: it goes red both when a page is added and when
+   * an existing page's text changes.
+   */
+  it('llms-full.txt is what the generator would produce', async () => {
+    const { build } = await import('../../scripts/gen-llms-full.mjs');
+    expect(
+      readFileSync(join(DOCS, 'llms-full.txt'), 'utf-8'),
+      'docs/llms-full.txt is stale — run `pnpm docs:sitemap`',
+    ).toBe(build());
+  });
+
+  /**
    * Both footers, not just the layout's. This check used to read
    * `_layouts/default.html` alone, so it could not see that `index.html` —
    * which has `layout: null` and its own hand-written footer — still listed
