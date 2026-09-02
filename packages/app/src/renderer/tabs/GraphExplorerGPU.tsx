@@ -829,6 +829,12 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // While the solver is stopped nothing moves on its own, so an unchanged
   // fingerprint means the whole label + halo pass can be skipped.
   const lastLabelSigRef = useRef<string>('');
+  // Identity of the highlight map / selection set the last pass ran against —
+  // both are replaced wholesale by every writer, never mutated in place.
+  const lastLabelDepsRef = useRef<{
+    highlight: Map<number, number> | null;
+    selection: Set<number> | null;
+  }>({ highlight: null, selection: null });
   // Throttles per-tick camera refit during simulation (see onSimulationTick).
   const lastTickFitRef = useRef<number>(0);
   // Whether we've already frozen the layout on this render cycle. Set true
@@ -1402,12 +1408,27 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     // fingerprint. The origin's screen position covers pan and zoom in one
     // call. Without this the pass rewrote textContent/transform on every
     // label, plus repainted the halo canvas, 30×/s forever.
+    // The highlight map and the selection set are compared by identity, not by
+    // size: every writer replaces them with a fresh Map/Set, and two different
+    // selections of the same size are exactly the case a size check misses.
     const origin = graph.spaceToScreenPosition([0, 0]);
-    const sig = `${origin[0]}|${origin[1]}|${zoom}|${hovered?.id ?? ''}|${selected?.id ?? ''}|${
-      highlightedDepthRef.current?.size ?? -1
-    }|${selectedIndicesRef.current?.size ?? -1}|${showLabelsRef.current}|${nodesRef.current.length}`;
-    if (!graph.isSimulationRunning && sig === lastLabelSigRef.current) return;
+    const cw = containerRef.current?.clientWidth ?? 0;
+    const ch = containerRef.current?.clientHeight ?? 0;
+    const sig = `${origin[0]}|${origin[1]}|${zoom}|${hovered?.id ?? ''}|${selected?.id ?? ''}|${showLabelsRef.current}|${nodes.length}|${cw}x${ch}`;
+    const deps = lastLabelDepsRef.current;
+    if (
+      !graph.isSimulationRunning &&
+      sig === lastLabelSigRef.current &&
+      deps.highlight === highlightedDepthRef.current &&
+      deps.selection === selectedIndicesRef.current
+    ) {
+      return;
+    }
     lastLabelSigRef.current = sig;
+    lastLabelDepsRef.current = {
+      highlight: highlightedDepthRef.current,
+      selection: selectedIndicesRef.current,
+    };
     // Labels toggle is the master switch — when off, wipe any existing labels
     // and bail before re-adding any. Reading via ref avoids any stale-closure
     // risk if the RAF loop outlives a dep change.
@@ -1431,8 +1452,6 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const indices = new Set<number>();
     const highlightedDepth = highlightedDepthRef.current;
     const highlightActive = highlightedDepth != null && highlightedDepth.size > 0;
-    const cw = containerRef.current?.clientWidth ?? 0;
-    const ch = containerRef.current?.clientHeight ?? 0;
     const HARD_CAP = 80;
     const placed: LabelBox[] = [];
     const screenOf = (idx: number): [number, number] | null => {
