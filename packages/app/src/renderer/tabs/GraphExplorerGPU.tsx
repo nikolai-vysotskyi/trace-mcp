@@ -32,6 +32,7 @@ import {
   useMenuAnchor,
 } from '../lattice/ui';
 import { userFacingError } from './graph-error';
+import { breathAction } from './graph-idle';
 
 const BASE = 'http://127.0.0.1:3741';
 
@@ -824,6 +825,16 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // clearHighlight restores from this instead of a flat theme-default color.
   const defaultLinkColorsRef = useRef<Float32Array | null>(null);
   const rafLabelRef = useRef<number | null>(null);
+  // Last frame's label-input fingerprint (camera, hover, selection, data).
+  // While the solver is stopped nothing moves on its own, so an unchanged
+  // fingerprint means the whole label + halo pass can be skipped.
+  const lastLabelSigRef = useRef<string>('');
+  // Identity of the highlight map / selection set the last pass ran against —
+  // both are replaced wholesale by every writer, never mutated in place.
+  const lastLabelDepsRef = useRef<{
+    highlight: Map<number, number> | null;
+    selection: Set<number> | null;
+  }>({ highlight: null, selection: null });
   // Throttles per-tick camera refit during simulation (see onSimulationTick).
   const lastTickFitRef = useRef<number>(0);
   // Whether we've already frozen the layout on this render cycle. Set true
@@ -1392,6 +1403,32 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     if (!graph || !layer) return;
 
     const zoom = graph.getZoomLevel();
+    // Idle short-circuit (TRA-683). Point positions only move while the
+    // solver runs; everything else that can move a label is in this
+    // fingerprint. The origin's screen position covers pan and zoom in one
+    // call. Without this the pass rewrote textContent/transform on every
+    // label, plus repainted the halo canvas, 30×/s forever.
+    // The highlight map and the selection set are compared by identity, not by
+    // size: every writer replaces them with a fresh Map/Set, and two different
+    // selections of the same size are exactly the case a size check misses.
+    const origin = graph.spaceToScreenPosition([0, 0]);
+    const cw = containerRef.current?.clientWidth ?? 0;
+    const ch = containerRef.current?.clientHeight ?? 0;
+    const sig = `${origin[0]}|${origin[1]}|${zoom}|${hovered?.id ?? ''}|${selected?.id ?? ''}|${showLabelsRef.current}|${nodes.length}|${cw}x${ch}`;
+    const deps = lastLabelDepsRef.current;
+    if (
+      !graph.isSimulationRunning &&
+      sig === lastLabelSigRef.current &&
+      deps.highlight === highlightedDepthRef.current &&
+      deps.selection === selectedIndicesRef.current
+    ) {
+      return;
+    }
+    lastLabelSigRef.current = sig;
+    lastLabelDepsRef.current = {
+      highlight: highlightedDepthRef.current,
+      selection: selectedIndicesRef.current,
+    };
     // Labels toggle is the master switch — when off, wipe any existing labels
     // and bail before re-adding any. Reading via ref avoids any stale-closure
     // risk if the RAF loop outlives a dep change.
@@ -1415,8 +1452,6 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const indices = new Set<number>();
     const highlightedDepth = highlightedDepthRef.current;
     const highlightActive = highlightedDepth != null && highlightedDepth.size > 0;
-    const cw = containerRef.current?.clientWidth ?? 0;
-    const ch = containerRef.current?.clientHeight ?? 0;
     const HARD_CAP = 80;
     const placed: LabelBox[] = [];
     const screenOf = (idx: number): [number, number] | null => {
@@ -1761,6 +1796,9 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
       // its one initial fit-view pass.
       frozenRef.current = false;
       userInteractedRef.current = false;
+      // Fresh data — force the next label pass to run even if the camera and
+      // node count happen to match the previous render.
+      lastLabelSigRef.current = '';
 
       const prevGraph = graphRef.current;
       let carryPositions: number[] | Float32Array | null = null;
@@ -2709,6 +2747,39 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     };
   }, [live]);
 
+  // ── Idle wake-up ──────────────────────────────────────────────
+  // Any pointer, wheel or click over the pane counts as "someone is looking".
+  // The breathing interval below reads this to decide whether to keep
+  // re-heating the solver; when it has already let the solver stop, the next
+  // event here restarts it immediately instead of waiting up to 2.5 s.
+  const lastInteractionRef = useRef<number>(performance.now());
+  const idlePausedRef = useRef(false);
+  useEffect(() => {
+    // The whole pane, not just the canvas — toolbar clicks (Fit, search,
+    // filters) are the user looking at the graph too.
+    const pane = paneRef.current;
+    if (!pane) return;
+    const events = ['pointerdown', 'pointermove', 'wheel'] as const;
+    const wake = () => {
+      lastInteractionRef.current = performance.now();
+      if (!idlePausedRef.current) return;
+      idlePausedRef.current = false;
+      const g = graphRef.current;
+      if (!g || !liveRef.current || offscreenPausedRef.current) return;
+      try {
+        g.unpause();
+        g.start(0.15);
+        setSimRunning(true);
+      } catch {
+        /* graph destroyed between events — the interval will re-arm */
+      }
+    };
+    for (const ev of events) pane.addEventListener(ev, wake, { passive: true });
+    return () => {
+      for (const ev of events) pane.removeEventListener(ev, wake);
+    };
+  }, []);
+
   // ── Breathing interval ────────────────────────────────────────
   // Wall-clock re-heat: every 2.5 s, if the user hasn't paused via Live,
   // bump alpha back up with `graph.start(0.15)`. This has to be a plain
@@ -2717,13 +2788,29 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
   // (0.001), so a tick-driven re-heat can never recover from full decay.
   // `isSimulationRunning`-guarded unpause handles the "resumed from a full
   // stop" case that pause/unpause alone can't restart.
+  //
+  // Breathing stops on its own once the pane has been idle (TRA-683):
+  // cosmos.gl's frame loop only keeps running while the simulation is, so
+  // pausing it takes the tab's idle cost to ~nothing. The Live dot goes
+  // amber, which is what it already means — live, but not currently solving.
   useEffect(() => {
     if (!live) return;
     const id = window.setInterval(() => {
       const g = graphRef.current;
       if (!g) return;
       if (!liveRef.current) return;
+      const action = breathAction(
+        performance.now() - lastInteractionRef.current,
+        idlePausedRef.current,
+      );
+      if (action === 'stay-paused') return;
       try {
+        if (action === 'pause') {
+          g.pause();
+          idlePausedRef.current = true;
+          if (simRunning) setSimRunning(false);
+          return;
+        }
         g.start(0.15);
         if (!simRunning) setSimRunning(true);
       } catch {
@@ -2742,6 +2829,10 @@ export const GraphExplorerGPU = forwardRef<GraphExplorerGPUHandle, Props>(functi
     const graph = graphRef.current;
     if (!graph) return;
     if (live) {
+      // Flipping the toggle is an interaction — clear any idle pause so the
+      // breathing interval doesn't stop the solver again on its next tick.
+      lastInteractionRef.current = performance.now();
+      idlePausedRef.current = false;
       // If alpha has decayed past the re-heat threshold and the sim has
       // naturally stopped, bump it back up so the toggle takes visible
       // effect. Otherwise a simple unpause is enough.
