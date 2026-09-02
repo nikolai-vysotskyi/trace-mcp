@@ -26,9 +26,11 @@
 </p>
 
 <p align="center">
-  <strong>40–50% fewer tokens</strong> on average &nbsp;·&nbsp; <strong>up to 2× effective capacity</strong> &nbsp;·&nbsp; <strong>up to 99% less redundant processing</strong>
+  <strong>90.6% fewer input tokens</strong> to assemble code-review context &nbsp;·&nbsp; median across <strong>60 merged pull requests</strong> in six open-source repositories that are not ours
   <br>
-  <sub>Based on early benchmarks across agent workflows with repeated context and dependency traversal.</sub>
+  <sub>13,595 → 1,326 input tokens per pull request — and <em>more</em> of the code the change can break is visible, not less (20% → 60% of affected call sites readable).<br>
+  That coverage figure is structural, not an LLM quality score, and on 5 of the 60 the index barely paid off — the page names them.<br>
+  <a href="https://trace-mcp.com/pr-context-benchmark.html">Method, pinned dataset, one-command reproduction →</a></sub>
 </p>
 
 > AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
@@ -156,6 +158,8 @@ trace-mcp combines **code graph navigation**, **cross-session memory**, and **re
 ## Token reduction — what we measured
 
 AI agents burn tokens recomputing what they already discovered last turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp replaces that with **precision context**: only the symbols, edges, and signatures relevant to the query, served from a graph that was computed once.
+
+**Start with the measurement that isn't ours.** Everything else in this section is trace-mcp measured on trace-mcp's own repository by trace-mcp's own estimators. The [PR review context benchmark](https://trace-mcp.com/pr-context-benchmark.html) is the exception: assembling review context for 60 merged pull requests across six open-source repositories — `hono`, `axios`, `express`, `requests`, `flask`, `got` — cost a median 1,326 input tokens against 13,595 for loading the diff plus every file it touches, **90.6% less**, counted with `gpt-tokenizer` rather than estimated. The base and head SHAs are pinned in `benchmarks/pr-context/dataset.json`, `npx tsx scripts/bench-pr-context.ts` re-runs it, and the 5 pull requests where the index barely paid off are published alongside the wins.
 
 **What to expect — by workload:**
 
