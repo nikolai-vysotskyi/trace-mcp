@@ -8,41 +8,72 @@ noindex: true
 # Product Roadmap
 
 Strategic view of trace-mcp, revisited roughly weekly by the Product Roadmap
-& Vision autopilot, which also turns 2-4 of the items below into that week's
+& Vision autopilot, which also turns the items below into that week's
 operational focus (see the "This Week's Focus" section of the trace-mcp
 Operations project). This file tracks *why* something should move the
 product forward — not day-to-day bugs, tool tweaks, or indexing hygiene
 (those live as regular issues, tracked by other autopilots). An item is
 removed here once it ships, is superseded, or turns out not to matter.
 
-## Where the product stands
+## Where the product stands (revised 2026-09-02)
 
-Both items that were "ready to start" two revisions ago shipped:
-**CI-native PR intelligence** (TRA-127) and the **multi-project tool
-surface** (TRA-93/TRA-143). The item that replaced them last revision has
-now also shipped: **TRA-186's tool-schema-tax cut** landed in two releases
-(v1.48.3 PR #377, v1.48.4 PR #380) — tool description text 73,947→~64k
-chars, per-parameter description text 32,281→30,245 chars, both now
-regression-guarded by `tool-schema-budget.test.ts`. That's a real but modest
-cut (~6% off the ~203k-char/~50.7k-token baseline Nikolai measured), because
-the investigation surfaced the actual shape of the cost: of the ~94k
-inputSchema chars, only ~30-32k is prose (`.describe()` text) we control —
-the remaining ~60k+ is structural JSON Schema (`type`, `required`, `enum`,
-`minimum`/`maximum`) generated from legitimate parameter counts, which
-**cannot shrink without removing parameters or consolidating tools** —
-both are breaking MCP tool-contract changes, not prose edits. See item 1
-below for the resulting next step.
+The previous revision of this file described a v1.48.x product with an
+unsolved tool-schema tax and no adoption number. Both of those are now out
+of date, and the second one changes what this roadmap should be about.
 
-Per `docs/comparisons.md`'s own honest self-assessment, six of seven
-competitive gaps from the last deep pass are shipped and adversarially
-re-validated. The two remaining technical gaps (a peer-reviewed bug-risk
-metric; CFG/taint staying line-based/lexical instead of full AST/dataflow)
-are known architectural ceilings, not low-hanging fruit — leave them
-tracked in `comparisons.md`, not here.
+**The schema-tax thread is closed, and not the way this file predicted.**
+The last revision's only "ready to start" item was *scope tool-consolidation
+candidates into per-tool migration issues* — merge `pin_file`/`pin_symbol`,
+`search`/`search_with_mode`, the three edit-safety tools, and accept a
+breaking MCP tool-contract change in exchange for a smaller advertised
+surface. That item is **removed as superseded**: role-based presets
+(TRA-601/602/603, shipped) got the same win with **no contract break at
+all**. A preset is a *deferral*, not a restriction — every tool stays
+registered and `load_tools` pulls any of it back mid-session — so the
+advertised surface shrinks while capability stays whole. Measured on this
+repo: `minimal` 28 tools (now the default), `standard` 60, and six role
+presets between 26 and 42, for a **67% cut on the widest role preset
+(`dev`) and 86% on the narrowest (`design`)** against `full`. Ceilings are
+regression-guarded in `preset-surface-budget.test.ts`; documented sizes are
+checked against the real filter by `preset-claims.test.ts`. Nothing about
+tool consolidation is worth a contract break now.
 
-The other standing question is unchanged: **who trace-mcp serves and how
-far the current single-developer, single-repo model can stretch before it
-needs to change shape.**
+**The rename to `trace` is the largest thing in flight, and its measured
+efficiency case is ~1%.** TRA-613 (PR #720) benchmarked the actual rename
+against a real `initialize` + `tools/list` round-trip on four tokenizers:
+2 tokens per tool on GPT tokenizers, 3 on Claude/Gemini — 66 / 120 / 366
+tokens off `minimal` / `standard` / `full`, i.e. **0.74–1.23%** of what
+that surface already costs. That is a fine result and a bad justification.
+If the rename ships, it ships as a **positioning** decision, and it has to
+be judged and sequenced as one — see item 2 below.
+
+**Everything else is capability that landed fast.** Twelve releases in
+seven days (v3.2.0 → v3.11.0, 345 commits), a signed and notarized macOS
+DMG with electron-updater, an app that installs and repairs its own daemon,
+first-run setup, topology/decision-store pruning, Rust import resolution,
+and the SKILL.state linear context engine landing behind PR #715. The
+engine room is not the problem.
+
+## The one thing this roadmap is now about
+
+For the first time we can read the adoption metric of record, and it says
+**61 monthly active installs**.
+
+Set that beside the production rate — 27 autopilots, 12 releases and 345
+commits in the last seven days — and the ratio is the strategy. We are
+shipping roughly fifty commits a day for sixty-one users. Every gap this
+file has tracked for months has been a *capability* gap, and we have closed
+them at a rate almost nothing else closes them at. The gap that is actually
+binding is on the other side: **reach, and first value.** 102 GitHub stars
+after five months, ~20 human page views a day on the site, Reddit as our
+single largest referrer and unreadable to us, and a client attribution we
+could not read at all until TRA-643 found out why.
+
+This is not an argument to slow the engine room down. It is an argument
+that the next several weeks of *strategic* work — the items below, and the
+weekly focus derived from them — should be measured in users reaching first
+value, not in capability shipped. All four "ready to start" items are of
+that shape.
 
 ## Adoption — metric of record
 
@@ -53,13 +84,54 @@ day, opt-out via `TRACE_MCP_TELEMETRY=off`). Read it in the GA4 property
 holds unrelated properties; do not write to those).
 
 **Do not refresh this by hand.** `.github/workflows/ga4-snapshot.yml` pulls the
-numbers daily via the GA4 Data API — active users by day/week/month, and the
-breakdown by version, country and MCP client — and publishes them to the
+numbers daily via the GA4 Data API and publishes them to the
 [`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml)
 branch, plus each run's job summary. That branch is the durable record: GA4
 keeps event data for 14 months at most, so anything older survives only there.
 It is deliberately not on `master`: a PR opened by `GITHUB_TOKEN` never
 triggers CI, so it could never satisfy the required checks.
+
+**`by_preset` / `by_tools_advertised` — pending, one manual step** (TRA-643).
+The ping now reports the resolved preset and the size of the surface it
+advertised, on the same basis `preset-surface-budget.test.ts` measures (preset
+members plus the ten ungated meta-tools; verified against a live `tools/list`
+at minimal 28 / design 21 / standard 55). That turns the published "67-86%
+preset saving" from a bench claim into a field one, and makes the silent
+`full` → `standard` default migration (TRA-538) observable for the first time.
+Both sections stay empty until `preset` and `tools_advertised` are registered
+as **event-scoped custom dimensions** in GA4 property `551114458` (Admin →
+Custom definitions → Create custom dimension; event parameter names exactly
+`preset` and `tools_advertised`). GA4 does not backfill, so the series starts
+at registration, not at release. Until then the snapshot degrades to two empty
+sections rather than failing — the reports are wrapped so an unregistered
+dimension cannot take the daily snapshot down with it.
+
+**How to read `by_client`, and why `unknown` is not a share of installs**
+(TRA-643, 2026-09-02). Two separate things produce a missing client, and the
+snapshot used to hide one of them:
+
+- `"unknown"` is a value the install *sent* — its telemetry state had no client
+  name when the ping fired. Until this issue that was mostly our own bug: the
+  ping's final `saveState` persisted a snapshot taken *before* the HTTP request,
+  so the name `recordUsagePingClient` wrote while the request was in flight was
+  erased. The client's `initialize` lands mid-flight on essentially every
+  session, so an install whose only session of the day was the one that pinged
+  never recorded a client at all, and reported `unknown` again the next day,
+  forever. Only installs that opened a *second* session on some day — after
+  that day's ping had already been sent and the ping short-circuited — ever
+  escaped. Fixed and covered by a regression test in
+  `src/telemetry/__tests__/usage-ping.test.ts`.
+- `(not set)` is GA4 having no value at all. The snapshot script silently
+  dropped those rows, which is why the 2026-09-01 file shows `by_client`
+  summing to 36 against 61 monthly active users, `by_version` to 34, and
+  `installs_28d` to 59 events against `events_28d: 310`. The gap was not
+  visible and not explained. `(not set)` is now kept as its own key.
+
+So the "41% of installs report no client" reading (25 of 61) used a denominator
+that never applied: 61 is every active user, while 25 sits inside a breakdown
+that only covers 36 of them. Do not divide a `customEvent:` breakdown by
+`active_users` — divide it by that breakdown's own total, and read the residue
+as `(not set)`.
 
 Caveat when citing it: the ping's credentials ship in plaintext inside the
 published npm package (public by design — see SECURITY.md "Telemetry
@@ -68,88 +140,264 @@ anyone**. Active installs is the best adoption signal we have, not an
 auditable one; read it as a trend, and treat a sudden step change as
 suspect until corroborated.
 
-**npm weekly downloads are not an adoption metric** and should not be cited
-as one. Measured 2026-08-28 (TRA-273): 9,013 downloads over 92 days, but
-every daily peak is a publish day — 226 on 08-10 (v1.47.0), 344 on 08-17
-(v1.47.1), 1,322 on 08-27 (nine releases). Strip publish days and the
-baseline is flat at 20–45/day for the whole quarter. The graph measures our
-release cadence and registry mirrors, not users. If it must appear in a
-report, annotate the publish days.
-
-Re-confirmed 2026-08-29 (TRA-413) with a stronger tell than publish-day
-peaks: `https://api.npmjs.org/versions/trace-mcp/last-week` shows all 104
-published versions clustered at a near-uniform 136–198 weekly downloads
-while the median version is 2, and day-old releases hit parity with
-month-old ones instantly. That is a mirror sweeping the version history,
-not users — nobody installs `1.48.0`, `1.48.1` and `1.48.2` in equal
-measure. Decision: the npm-downloads badge is removed from the homepage
-trust strip and no download figure is cited on any public surface. Adoption
-metric of record is GitHub stars + traffic uniques. Re-check the per-version
-flatness quarterly, not per run.
-
-The same caveat now covers **git clones** (measured 2026-08-30, TRA-540):
-16,006 clones / 928 uniques in 14 days, ramping 166 → 8,736 per day across
-08-24…08-29 while human page views stayed flat at ~20/day. Unique *cloners*
-inflated along with the raw count (62 → 300), so clone uniques are no safer
-than clone totals. Whatever swept the npm version history swept git too. The
-metric of record is therefore GitHub stars plus traffic **views** uniques only
-— clones are excluded from it. Channel-by-channel state now lives in
-`ops/user-signal.md`.
-
-GitHub stars, same date: 101 total (April 58, May 23, June 8, July 5,
-August 6), 14 forks — a launch burst that decayed ~10× and stayed flat.
-
-| Date | Active installs | Notes |
+| Date | Active installs (day / week / month) | Notes |
 | --- | --- | --- |
-| 2026-08-28 | _pending GA4 read access_ | Ping verified end to end: published `trace-mcp@2.0.0` carries baked credentials, payload validates against the Measurement Protocol debug endpoint. |
+| 2026-08-28 | _pending GA4 read access_ | Ping verified end to end against the Measurement Protocol debug endpoint. |
+| 2026-09-01 | **54 / 61 / 61** | First real read. 310 events in 28 days; 15 new installs, 8 returning, 5 upgrades, 31 unattributed. 11 countries. Clients: 25 unknown, 8 claude-code, 2 codex, 1 grok. Versions seen: 3.8.0 (17), 3.10.0 (13), 3.7.0 (2), 3.6.0 (1), 3.5.2 (1). |
+
+Two things that number is already telling us, both actionable and both
+picked up as items below:
+
+- **Client attribution was broken, and the "41%" that named it was not a
+  real number.** 25 of 61 was read as a share of installs; 25 sits inside a
+  breakdown that only covers 36 of those 61, because the snapshot script
+  dropped GA4's `(not set)` rows. Underneath it was our own bug: the ping's
+  final state save erased the client name recorded while the request was in
+  flight, so any install whose only session of the day was the one that
+  pinged stayed `unknown` forever. Both fixed in TRA-643, which also added
+  the missing `preset` / `tools_advertised` fields — so the flagship
+  efficiency claim (67–86%) moves from bench-verified to field-verifiable
+  once the GA4 dimensions are registered. Item 1.
+- **Version spread is wider than a 12-release week should produce.** More
+  installs are seen on 3.8.0 than on 3.10.0, and 3.9.0 does not appear at
+  all — which is consistent with TRA-566 (v3.9.0 shipped with no Windows
+  assets and no `latest.yml`, so Windows updates were silently dead), but
+  is not yet proven to be that. Worth attributing before assuming it is
+  benign.
+
+**npm weekly downloads are not an adoption metric** and should not be cited
+as one. Settled twice (TRA-273, TRA-413): all published versions cluster at
+a near-uniform weekly count while the median version has ~2 real installs,
+and day-old releases hit parity with month-old ones instantly. That is a
+mirror sweeping the version history. **Git clones are out too** (TRA-540):
+16,006 clones / 928 uniques in 14 days while human page views stayed flat
+at ~20/day, with unique *cloners* inflating alongside the raw count.
+
+The public-facing metric of record is therefore **active installs, GitHub
+stars, and traffic *views* uniques** — nothing else. Channel-by-channel
+state lives in `ops/user-signal.md`; listing-by-listing state in
+`ops/distribution.md`. GitHub, 2026-09-02: **102 stars, 15 forks.**
+
+### The funnel — four numbers around that denominator (TRA-645)
+
+Active installs is a denominator with nothing on either side of it. Without
+that, every listing rewrite, hero redesign, README restructure and outreach PR
+is graded on taste. Four numbers fix it, one per stage:
+
+| Stage | Number | Source | Window |
+| --- | --- | --- | --- |
+| Arrivals | unique visitors to the GitHub repo | `acquisition.views_uniques_14d` | rolling 14 d |
+| Installs | first-ever pings | `installs_28d.new` | 28 d |
+| Activation | % of active installs with ≥1 indexed repository | `activation.activated_pct` | 28 d |
+| Retention | day ÷ month active installs | `funnel.retention_dau_mau_pct` | 1 d over 28 d |
+
+**Do not refresh these by hand either.** All four are computed by the same
+daily `ga4-snapshot.yml` run and published under `funnel:` in
+[`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml) —
+that file is where a weekly run reads them, not this page. As of **2026-09-02**:
+178 arrivals (14 d), 24 new installs, retention 51% (35 day / 69 month), and
+activation still blocked — see below.
+
+**Two credentials stand between this and all four numbers**, both verified
+against the live property by a `workflow_dispatch` on 2026-09-02
+([run 33556680379](https://github.com/nikolai-vysotskyi/trace-mcp/actions/runs/33556680379)).
+Neither is a design question; do not re-investigate them, and do not read the
+resulting `null`s as zeros.
+
+1. **`repos_indexed` is not a registered GA4 custom dimension.** The ping has
+   been sending it all along and GA4 has been dropping it: `runReport` answers
+   *"Field customEvent:repos_indexed is not a valid dimension"*, and registration
+   is **not retroactive**, so every reading before it is created is
+   unrecoverable — the sooner it exists, the sooner activation has history.
+   Registered today: `version`, `client`, `install_type`, `model`. Creating it
+   is one form in GA4 Admin → Custom definitions (event scope, parameter name
+   `repos_indexed`). Automating it was tried and reverted: the Admin API is not
+   enabled on the credential's GCP project (480706841486), so the script could
+   only have logged a failure once a day.
+2. **`GH_TRAFFIC_TOKEN` is unset.** GitHub's traffic endpoints require
+   `Administration: read`, a permission `GITHUB_TOKEN` cannot be granted, so the
+   workflow gets HTTP 403 and records that in `acquisition.error`. A
+   fine-grained PAT on this repo with that one permission fills it. Until then
+   arrivals must be read by hand with the `gh api` calls in
+   `ops/distribution.md`, and nothing accumulates — GitHub's window is 14 days
+   and drops what falls out of it.
+
+Three things to keep attached to them. The windows differ, so arrivals →
+installs is a direction and not a conversion rate. The ping's credentials are
+public, so all four are inflatable and are a trend, not an audit. And
+`activated_pct` is taken against its own buckets rather than against
+`active_users.month`, because GA4 deduplicates active users within a dimension
+value and not across them — an install that indexes its first repository
+mid-window is counted on both sides.
+
+Activation is the one to watch. It is the only one of the four that measures
+whether an install ever reached the product's value, and it is the ceiling on
+everything downstream of install: if a meaningful share of installs ping day
+after day with zero indexed repositories, that number outranks every capability
+item below.
+
+Acquisition already has a finding. Over two independent 14-day windows
+(2026-08-30 and 2026-09-02) **not one of the twelve directory listings in
+`ops/distribution.md` appears as a referrer** — arrivals come from search,
+Reddit and our own site. New distribution effort belongs where those arrivals
+are; see that file's "Arrivals" column for the limits on that conclusion.
 
 ## Ready to start
 
-### 1. Scope tool-consolidation candidates into per-tool migration issues (follow-up to TRA-186)
-TRA-186's own investigation named the candidate list (pin_file/pin_symbol,
-discover_claude_sessions/discover_hermes_sessions, search/search_with_mode,
-the three "is it safe to edit" tools, and others surfaced during the trim)
-and explicitly recommended **not** folding consolidation into that issue,
-since each merge is a breaking MCP tool-contract change and needs its own
-migration note (which callers break, what the replacement call looks like).
-This item is: pull that list into scoped issues, one (or a small related
-group) per issue, each with a concrete before/after tool signature and a
-migration note — a design/scoping pass, not a code-first pass.
+### 1. Field-verify the preset savings, and close the attribution hole in the ping (TRA-643)
+**Instrumentation landed** (PR #748): the ping now sends `preset` and
+`tools_advertised`, on the same basis `preset-surface-budget.test.ts`
+measures, so the number the whole product leads with (67–86% off the tool
+surface) becomes field-checkable rather than bench-only. The attribution
+hole turned out to be two separate defects, both fixed in the same change —
+see "How to read `by_client`" above.
 
-**Why now:** it's the only remaining lever that moves the ~50k baseline
-materially (prose trimming is now regression-tested and tapped out at ~6%).
-It's also the more consequential kind of change — every merge is a contract
-break for anyone with the old tool name pinned — so it deserves the
-scoping rigor TRA-186 asked for, not a batch rewrite done casually.
+**What is left is not code.** The two dimensions must be registered in GA4
+(event-scoped, named exactly `preset` and `tools_advertised`) before any
+value reaches `adoption.yml`; GA4 does not backfill, so the series starts at
+registration. Then one read-back after the first snapshot that carries them:
+what fraction of installs run which preset, and whether the silent
+`full` → `standard` default migration (TRA-538) actually landed. Until that
+read-back exists, "67–86%" stays a bench figure and must be cited as one.
 
-## Big bet — needs a design pass before any code
+### 2. Execute the rename in the order the decision fixed (TRA-644 — decided)
+**Decided 2026-09-02: `trace` is the command, `trace-mcp` is the project.**
+Thesis, per-surface table and reopen condition in
+[`ops/rename-to-trace.md`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/ops/rename-to-trace.md).
+The short name takes only what sits on a developer's own disk and is
+migrated by code we control — the CLI binary, the MCP server key, `~/.trace`.
+The npm package, `trace-mcp.com` and its indexed URLs, the `server.json`
+registry identity, the repo name and topics, the ~10 external listings and
+the Electron bundle (TRA-636, cancelled) all keep `trace-mcp`.
 
-### 2. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
-trace-mcp's whole pitch is "reuse instead of recompute" — but today reuse
-only happens *within one developer's laptop, across turns*. A team of five
-engineers on the same repo each index it separately, each mine their own
-decisions separately, and never see each other's "why was this built this
-way" answers. That's the same recomputation leak the product exists to
-close, just at the team level instead of the turn level.
+Two verified facts closed the full-rename option. **`trace` has been taken
+on npm since 2024**, so `npx trace` was never available and the install
+command — the most-copied string we have — could not be renamed under any
+plan; the question was only where the boundary between two names sits. And
+**the whole prize is 0.74–1.23%** (TRA-613), all of it in the server key and
+the CLI verb, none of it in the package name, the domain, the registry entry
+or the bundle. So the boundary goes where the tokens are, which also makes
+this an ordinary two-name split (`ripgrep`/`rg`, `neovim`/`nvim`) rather
+than a partial cutover, and leaves nothing in the program irreversible and
+no door that needs a human.
 
-The design pass (TRA-128) is done: a lightweight shared-graph mode — a
-daemon reachable by a team instead of localhost-only, with a shared decision
-store — would turn trace-mcp from a personal productivity tool into a team
-artifact, and is the kind of capability that could eventually justify a
-hosted/paid tier. But the design's own recommended smallest slice is a
-network-reachable server component, which falls squarely in the one
-category this project's rules reserve for Nikolai's explicit call (no
-hosted backend / paid infra on an autopilot's own authority). **Status:
-correctly parked, not stalled** — the design stays valid and ready to
-resume the moment there's an explicit go-ahead or an actual team asking for
-it (the issue's own trigger condition). Nothing to do here until then.
+**What is left is execution, in one order.** TRA-641 first: analytics still
+classify our calls as `tool_server === 'trace-mcp'`, and TRA-614's Migrate
+button is merged but not in v3.11.0 — once the release carrying it ships,
+`get_real_savings` reports zero, silently. Then TRA-611 (#730), then TRA-615
+(#717) rewritten to state the boundary rather than announce a rename. TRA-650
+covers the one real breakage: the tool prefix in allowlists, hook matchers
+and prose that users wrote themselves, which `init` cannot reach.
+
+### 3. Put a funnel behind the 61, not just a number (TRA-645)
+We now have a denominator, and no funnel. Reach → install → **activation**
+→ retention is mostly derivable from what we already collect: `repos_indexed`
+tells us whether an install ever indexed anything, `install_type` separates
+new from returning, `by_version` shows whether they stay current. Nothing
+tells us where they came from — GitHub referrers say Reddit, which we
+cannot read (`ops/user-signal.md`), and the directory ledger tracks presence
+but never arrival.
+
+**Why now:** with 61 installs, a 10-install swing is a 16% move and every
+listing, page and README rewrite is currently graded on taste. One
+acquisition-channel signal plus one activation number would let the
+distribution, SEO, outreach and web-design autopilots stop arguing from
+aesthetics.
+
+### 4. Put the one measurement made on other people's code where people arrive (TRA-647)
+TRA-534 measured input-token cost across 60 merged bug-fix PRs from six OSS
+repositories: median **13,595 → 1,326 tokens, 90.6% saved**, p90 44,246 →
+3,667, affected call sites readable 20% → 60% with 100% at least located. It
+is pinned (`benchmarks/pr-context/dataset.json`), reproducible
+(`scripts/bench-pr-context.ts`) and rendered from generated data
+(`docs/_data/pr_context_bench.json`), never hand-typed. It is the only
+number this project has that was not produced by the tool measuring itself
+on its own repository.
+
+Measured on `origin/master`, 2026-09-01: `pr-context-benchmark` appears
+**zero times in `docs/index.html` and zero times in `README.md`**. The page
+is reachable from one place, `docs/_data/docs_nav.yml`. Every figure a
+visitor actually sees still comes from our own estimators.
+
+**Why now:** items 1-3 all say the binding gap is reach and first value, and
+this is the cheapest credibility we will ever have — the work is already
+done and published, it just is not on the door. Both doors are being
+rebuilt this week (TRA-607/608/609 on the above-the-fold of the site and the
+README), so it lands inside those rewrites or costs a second redesign later.
+Its honest boundary ships with it: quality on that dataset is *structural*
+coverage, not a model's judgement, and the page already names the 5 PRs of
+60 where the index did not pay off. The quality arm is **TRA-568**, promoted
+out of backlog — a token number without a quality number is an efficiency
+claim, not a value claim, which is exactly the move we criticise peers for.
+
+## Big bets — design pass before any code
+
+### 5. One door instead of 169 — a router preset (new, TRA-646)
+Presets took the advertised surface down by hiding tools behind
+`load_tools`. That worked, it broke nothing, and it has an obvious limit:
+even `minimal` still advertises 28 full JSON Schemas, and TRA-186 already
+established that ~60k of the schema cost is *structural* — `type`,
+`required`, `enum`, bounds generated from legitimate parameter counts —
+which no prose edit touches.
+
+The structural version of the same idea is to stop being a 169-tool server
+at all: advertise a **router plus a catalog** — `plan_turn` already exists
+as an opening-move router, `load_tools` already exists as the pull
+mechanism — and let everything else be summoned by name rather than
+declared up front. The advertised surface would become roughly constant
+instead of scaling with the tool count, which also decouples our tool
+growth from our context cost permanently, and inverts the one axis every
+peer competes on (more tools = better) into one we can defend with numbers.
+
+**This is not speculative — the market leader already ships it.**
+`comparisons.md`'s own August 2026 source read found that codegraph (68.7K
+stars) implements eight MCP tools and **advertises exactly one of them** by
+default: `DEFAULT_MCP_TOOLS` is the single-element set `{explore}`, with
+the rest re-enablable through an allowlist env var. Their whole advertised
+surface costs roughly **1.9K tokens**. Their stated reason, in a source
+comment, is not token cost at all — it is that *presence itself steers
+mis-picks*. codebase-memory-mcp (41.2K stars) makes a weaker version of the
+same call with tool profiles. So the open question is not whether anyone
+would ship this; it is whether it survives at 169 tools instead of 8, which
+is exactly what a design pass is for.
+
+**Unknowns that a design pass has to answer before any code:** whether a
+model reliably reaches for a tool it cannot see (this is the whole bet, and
+it is an empirical question we can A/B today with `load_tools` as it
+stands); the extra round-trip cost of summon-then-call versus the saved
+schema cost; what happens to clients that cache `tools/list`; and whether
+this is a new mode beside presets or a replacement for `full`. Not a
+contract break if it ships as a preset (`router`), which is the shape to
+design toward.
+
+### 6. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
+trace-mcp's whole pitch is "reuse instead of recompute", but reuse only
+happens within one developer's laptop, across turns. A team of five on the
+same repo each index it separately and never see each other's decisions —
+the same recomputation leak the product exists to close, at team scale.
+
+The design pass (TRA-128) is done and stays valid. Its own smallest slice
+is a network-reachable server component, which falls in the one category
+reserved for Nikolai's explicit call (no hosted backend / paid infra on an
+autopilot's authority). **Status: correctly parked, not stalled.** Note
+that item 3 sharpens the trigger condition: with 61 installs across 11
+countries and no evidence of a single multi-seat user, there is currently
+no demand-side reason to unpark it either.
 
 ## Explicitly not doing right now
 
-- Chasing competitor feature/tool-count parity for its own sake — see
-  `comparisons.md`'s "deliberately NOT chasing" list. Still holds, and item
-  1 above is the sharper version of why: count alone was never the right
-  metric to chase, in either direction.
-- Rewriting CFG/taint analysis onto a real AST/dataflow engine — real gap,
-  correctly filed as a known ceiling, not a roadmap item until something
-  forces the issue (e.g. a security-critical false negative in the wild).
+- **Tool consolidation as a token play.** Superseded by presets, which got
+  67–86% without a contract break. Do not reopen it for efficiency reasons;
+  only merge two tools if they are genuinely the same tool.
+- **Chasing competitor feature/tool-count parity for its own sake** — see
+  `comparisons.md`'s "deliberately NOT chasing" list. Item 5 is the sharper
+  version of why: count was never the metric, in either direction, and the
+  two largest peers are competing in the opposite direction anyway.
+- **Rewriting CFG/taint analysis onto a real AST/dataflow engine** — a real
+  gap, correctly filed in `comparisons.md` as a known ceiling, not a
+  roadmap item until something forces it (e.g. a security-critical false
+  negative in the wild).
+- **Adding language #82 or framework #88 as a headline.** 81/87 is already
+  past the point where the count persuades anyone; per-language *edge
+  resolution depth* (the `resolution_tier` we already store) is the claim
+  worth making, and it is the coverage autopilot's focus this week.

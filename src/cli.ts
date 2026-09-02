@@ -80,6 +80,7 @@ import { initializeDatabase } from './db/schema.js';
 import { Store } from './db/store.js';
 import {
   DAEMON_LOG_PATH,
+  DECISIONS_DB_PATH,
   DEFAULT_DAEMON_PORT,
   ensureGlobalDirs,
   GLOBAL_CONFIG_PATH,
@@ -87,6 +88,7 @@ import {
   INDEX_DIR,
   TOPOLOGY_DB_PATH,
 } from './global.js';
+import { DecisionStore } from './memory/decision-store.js';
 import { sweepOrphanedSessionDbs } from './daemon/router/session-db.js';
 import { IndexingPipeline } from './indexer/pipeline.js';
 import {
@@ -254,6 +256,44 @@ function softGcSweep(): void {
   } catch (err) {
     logger.warn({ err }, 'pruneStaleProjects soft-prune failed (non-fatal)');
   }
+
+  try {
+    if (fs.existsSync(TOPOLOGY_DB_PATH)) {
+      const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
+      try {
+        const res = topoStore.pruneStale();
+        if (res.services > 0 || res.subprojects > 0) {
+          logger.info(
+            { removedServices: res.services, removedSubprojects: res.subprojects },
+            `Pruned ${res.services} stale service(s) and ${res.subprojects} stale subproject(s) from topology.db`,
+          );
+        }
+      } finally {
+        topoStore.close();
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, 'pruneStaleTopology soft-prune failed (non-fatal)');
+  }
+
+  try {
+    if (fs.existsSync(DECISIONS_DB_PATH)) {
+      const store = new DecisionStore(DECISIONS_DB_PATH);
+      try {
+        const res = store.pruneStale({ includeMinedSessions: true });
+        if (res.decisions > 0 || res.chunks > 0) {
+          logger.info(
+            { removedDecisions: res.decisions, removedRoots: res.staleRoots },
+            `Pruned ${res.decisions} orphaned decision(s) across ${res.staleRoots.length} deleted project root(s)`,
+          );
+        }
+      } finally {
+        store.close();
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, 'pruneStaleDecisions soft-prune failed (non-fatal)');
+  }
 }
 
 async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig): Promise<void> {
@@ -300,14 +340,21 @@ async function runSubprojectAutoSync(projectRoot: string, config: TraceMcpConfig
 const program = new Command();
 
 program
-  .name('trace-mcp')
+  .name('trace')
   .description('Framework-Aware Code Intelligence for Laravel/Vue/Inertia/Nuxt')
   .version(PKG_VERSION, '-v, --version');
 
 program
   .command('serve', { isDefault: true })
   .description('Start MCP server (stdio transport)')
-  .action(async () => {
+  .option(
+    '--preset <name>',
+    'Tool preset (e.g. minimal, review, dev, security, design, perf, architecture, standard, full)',
+  )
+  .action(async (opts: { preset?: string } = {}) => {
+    if (opts.preset) {
+      process.env.TRACE_MCP_PRESET = opts.preset;
+    }
     // Keep a stray unhandled rejection / uncaught exception from tearing down
     // the whole MCP session — log it and stay alive instead (see #202-adjacent
     // "disconnects/crashes" reports).
@@ -478,7 +525,14 @@ program
     '--allow-remote',
     'Permit a non-loopback --host. The daemon is unauthenticated — only use behind your own auth.',
   )
-  .action(async (opts: { port: string; host: string; allowRemote?: boolean }) => {
+  .option(
+    '--preset <name>',
+    'Default tool preset for daemon sessions (e.g. minimal, review, dev, security, design, perf, architecture, standard, full)',
+  )
+  .action(async (opts: { port: string; host: string; allowRemote?: boolean; preset?: string }) => {
+    if (opts.preset) {
+      process.env.TRACE_MCP_PRESET = opts.preset;
+    }
     // A single unhandled rejection must not take down the daemon serving every
     // registered project — log and stay alive.
     installProcessSafetyNet('serve-http');

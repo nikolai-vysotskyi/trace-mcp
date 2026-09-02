@@ -17,16 +17,6 @@
   background: var(--surface-sunken, var(--surface));
 }
 
-/* The native macOS tab bar is AppKit's band, not ours, and it is painted OVER
-   the top of the web contents — `innerHeight` never shrinks, so without this
-   the tab bar simply covers the app's own top band and every control on it
-   (TRA-399). Reserve its height so our band starts below it instead of under
-   it. Only on macOS, and only while a tab bar is actually up: the main process
-   sets data-tabbar from the live tab count. */
-.ws-stage[data-platform="mac"][data-tabbar="on"] {
-  padding-top: var(--mac-tabbar-h);
-}
-
 .ws-shell {
   display: flex;
   flex: 1;
@@ -285,6 +275,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* …down to nothing, literally: a location that cannot render whole is not
+   shown at all. Shrinking one ran out at a sliver instead — `GraphExplorerGPU.t…
+   t  47` at the 220px default, a clipped glyph fragment at the 180px minimum —
+   and a lone letter beside a right-aligned count reads as a status badge, not
+   as a place (TRA-504). The row's tooltip still carries the full path. Which
+   rows qualify is measured in `whole-location.ts`; CSS cannot see it. */
+.ws-sb-path.is-loc-clipped .dir {
+  display: none;
+}
 
 /* Sidebar empty / loading states. */
 .ws-sb-empty {
@@ -431,16 +430,6 @@
   padding-left: 78px;
 }
 
-/* …and the 78px that clears the traffic lights goes with them. With a tab bar
-   up the lights are in AppKit's band, not ours, so reserving their width here
-   would leave the sidebar toggle floating in a gap nothing occupies. 6px lines
-   its box up with the selection pills below it. */
-.ws-stage[data-platform="mac"][data-tabbar="on"] .ws-sidebar-titlebar {
-  padding-left: 6px;
-}
-.ws-stage[data-platform="mac"][data-tabbar="on"] .ws-shell.is-collapsed .ws-content-head {
-  padding-left: 12px;
-}
 .ws-content-body {
   flex: 1;
   min-height: 0;

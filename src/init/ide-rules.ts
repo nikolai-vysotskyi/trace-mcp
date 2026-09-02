@@ -23,15 +23,15 @@ const TOOL_ROUTING_POLICY = `IMPORTANT: For ANY code exploration task, ALWAYS us
 | Read one symbol's source | \`get_symbol\` | reading full file |
 | What breaks if I change X | \`get_change_impact\` | guessing |
 | All usages of a symbol | \`find_usages\` | grep / find references |
-| All implementations of an interface | \`get_type_hierarchy\` | listing directories |
+| All implementations of an interface | \`get_implementations\` | listing directories |
 | All classes implementing X | \`search\` with \`implements\` filter | grep |
 | Project health / coverage gaps | \`self_audit\` | manual inspection |
 | Dead code / dead exports | \`get_dead_code\` (\`mode: "exports_only"\`) | grep for unused |
 | Context for a task | \`get_feature_context\` | reading many files |
 | Tests for a symbol | \`get_tests_for\` | searching test files |
-| HTTP request flow | \`get_request_flow\` | reading route files |
-| DB model relationships | \`get_model_context\` | reading model + migration files |
-| Component tree | \`get_component_tree\` | reading component files |
+| HTTP request flow | \`get_request_flow\` (framework-gated) | reading route files |
+| DB model relationships | \`get_model_context\` (framework-gated) | reading model + migration files |
+| Component tree | \`get_component_tree\` (framework-gated) | reading component files |
 | Circular dependencies | \`get_circular_imports\` | manual tracing |
 
 Start sessions with \`get_project_map\` (summary_only=true) to get project overview.

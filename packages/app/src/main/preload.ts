@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   detectMcpClients: (): Promise<{ name: string; configPath: string; hasTraceMcp: boolean }[]> =>
     ipcRenderer.invoke('detect-mcp-clients'),
+  guessFirstProject: (): Promise<{ path: string; name: string } | null> =>
+    ipcRenderer.invoke('guess-first-project'),
   getMcpClientStatuses: (
     scope?: 'global' | 'project',
   ): Promise<{
@@ -43,7 +45,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     statuses?: Array<{
       client: string;
       configPath: string | null;
-      status: 'missing' | 'up_to_date' | 'stale' | 'unmanageable' | 'unknown';
+      status: 'missing' | 'up_to_date' | 'stale' | 'legacy' | 'unmanageable' | 'unknown';
       staleReason?: string;
       level?: 'base' | 'standard' | 'max' | null;
     }>;
@@ -65,13 +67,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('fullscreen-changed', handler);
     return () => {
       ipcRenderer.removeListener('fullscreen-changed', handler);
-    };
-  },
-  onTabBarChanged: (callback: (visible: boolean) => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, visible: boolean) => callback(visible);
-    ipcRenderer.on('tabbar-changed', handler);
-    return () => {
-      ipcRenderer.removeListener('tabbar-changed', handler);
     };
   },
   /** Mirror the renderer's appearance choice onto `nativeTheme`, so the

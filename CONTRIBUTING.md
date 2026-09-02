@@ -37,6 +37,17 @@ GitHub account re-creates the same unresolvable check.
 
 trace-mcp currently has a single maintainer with commit access. `master` is protected by required status checks (CodeQL, Semgrep, `impact-report`) — these run on every PR and must pass before merge. There is no required-approving-review count: with one collaborator, a "1 approval" rule can never be satisfied by anyone but the PR author, so it was dropped rather than kept as a check that always reads "satisfied" without anyone having looked. If a second maintainer joins, review requirements will be reinstated.
 
+Branch protection deliberately does **not** require a branch to be up to date with `master`
+before merging (`strict: false`, set 2026-09-01). The four required checks — CodeQL,
+`Semgrep scan`, `impact-report`, `scope-guard` — all read the pull request's own diff, so
+re-running them against a base that moved five minutes ago adds no signal. Work lands here
+from several agents in parallel and `master` moves faster than those checks take to finish,
+so requiring an up-to-date branch turned every merge into a race that most attempts lost:
+update the branch, wait ~4 minutes for the scans, find the branch behind again. Correctness
+against a moving base is what `test` and `build` are for — they run on every PR and again on
+`master` after merge. Don't switch strict mode back on to fix a bad merge; set up GitHub's
+merge queue instead, which handles the same problem without the busy-wait.
+
 ## How to Contribute
 
 1. Fork the repository

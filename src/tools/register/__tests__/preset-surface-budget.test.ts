@@ -34,14 +34,23 @@ function presetPayloadChars(preset: string): { chars: number; tools: number } {
 }
 
 /**
- * Measured 2026-08-29 against this reconstruction, with `load_tools` and the
- * widened `minimal` preset in place:
+ * Measured 2026-09-01 against this reconstruction, with `load_tools`, the
+ * widened `minimal` preset and the TRA-603 role presets in place. Token column
+ * is gpt-tokenizer (o200k) over the same serialized payload:
  *
- *   minimal       28 tools /  34,041 chars  (the shipped default)
- *   review        27 tools /  28,866 chars
- *   architecture  35 tools /  33,629 chars
- *   standard      55 tools /  64,598 chars  (the previous default)
- *   full         151 tools / 157,060 chars
+ *   design        21 tools /  21,911 chars /  5,042 tok  (-86.1% vs full)
+ *   perf          31 tools /  32,295 chars /  7,506 tok  (-79.3%)
+ *   minimal       28 tools /  34,041 chars /  7,806 tok  (-78.5%, shipped default)
+ *   review        32 tools /  37,272 chars /  8,587 tok  (-76.3%)
+ *   security      35 tools /  41,499 chars /  9,590 tok  (-73.6%)
+ *   architecture  41 tools /  44,258 chars / 10,211 tok  (-71.9%)
+ *   dev           42 tools /  51,325 chars / 11,853 tok  (-67.3%)
+ *   standard      55 tools /  64,598 chars / 14,902 tok  (-58.9%, previous default)
+ *   full         151 tools / 157,695 chars / 36,277 tok
+ *
+ * Counts exclude framework-gated tools, which `captureAllTools` does not
+ * register — `design` and `standard` each name five of them, so a project with
+ * the matching framework detected pays more than the row above.
  *
  * `load_tools` itself is 905 of those chars — 0.6% of the full surface, and
  * what makes the other 123k optional.
@@ -49,13 +58,17 @@ function presetPayloadChars(preset: string): { chars: number; tools: number } {
  * These sit below the TRA-250 live-daemon measurement (minimal 32,914 /
  * standard 68,818 / full 187,790 chars) because that path serialized through a
  * daemon with framework-gated tools active; the ratios, which is what these
- * ceilings guard, match. Headroom is ~10%: enough for a tool or two, not enough
- * to hide a preset drifting back toward the full surface.
+ * ceilings guard, match. Headroom is ~10-15%: enough for a tool or two, not
+ * enough to hide a preset drifting back toward the full surface.
  */
 const PRESET_CHAR_CEILINGS: Record<string, number> = {
-  minimal: 37_500,
-  review: 32_000,
-  architecture: 37_000,
+  minimal: 38_000,
+  review: 42_000,
+  dev: 58_000,
+  security: 46_000,
+  design: 25_000,
+  perf: 37_000,
+  architecture: 50_000,
   standard: 71_000,
 };
 

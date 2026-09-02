@@ -28,9 +28,20 @@ jobs:
         env:
           GA4_SA_KEY: ${{ secrets.GA4_SA_KEY }}
           GA4_PROPERTY_ID: ${{ secrets.GA4_PROPERTY_ID }}
+          # Acquisition (TRA-645). GitHub's traffic endpoints need
+          # `Administration: read`, which `GITHUB_TOKEN` cannot be granted, so a
+          # fine-grained PAT in `GH_TRAFFIC_TOKEN` is what actually reads them.
+          # The fallback keeps the step honest rather than green-and-empty: it
+          # records the HTTP status in `acquisition.error` instead of silently
+          # publishing no referrers.
+          GH_TRAFFIC_TOKEN: ${{ secrets.GH_TRAFFIC_TOKEN || secrets.GITHUB_TOKEN }}
         run: node scripts/ga4-snapshot.mjs
 
+      # Only from master. A dispatch on a feature branch is how this workflow is
+      # tested against the real property, and a test run must not write the
+      # durable record.
       - name: Publish to the adoption-data branch
+        if: github.ref == 'refs/heads/master'
         run: |
           set -euo pipefail
           if [ -z "$(git status --porcelain -- docs/_data/adoption.yml)" ]; then

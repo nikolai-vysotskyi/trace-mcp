@@ -21,12 +21,24 @@ export function issueKeys(text) {
 }
 
 /**
+ * A release-please PR restates every issue in the changelog it assembles, so it
+ * collides with every open PR by construction — and the work it names is already
+ * merged, which is the opposite of duplicated. Excluded on both sides.
+ *
+ * @param {{title?: string}} pr
+ */
+export function isReleasePr(pr) {
+  return /^chore\(.*\): release \d/.test(pr.title ?? '');
+}
+
+/**
  * Open PRs that claim the same TRA issue as `pr` and that `pr` does not cite.
  *
  * @param {{number: number, title: string, body?: string}} pr
  * @param {Array<{number: number, title: string, body?: string}>} openPrs
  */
 export function findDuplicatePrs(pr, openPrs) {
+  if (isReleasePr(pr)) return [];
   const keys = issueKeys(`${pr.title}\n${pr.body ?? ''}`);
   if (keys.length === 0) return [];
   const cited = new Set(
@@ -36,6 +48,7 @@ export function findDuplicatePrs(pr, openPrs) {
     (other) =>
       other.number !== pr.number &&
       !cited.has(other.number) &&
+      !isReleasePr(other) &&
       issueKeys(`${other.title}\n${other.body ?? ''}`).some((k) => keys.includes(k)),
   );
 }

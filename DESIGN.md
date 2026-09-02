@@ -241,6 +241,16 @@ is what `.lx-badge` paints. Badge foreground and status text are not interchange
 **Status is never carried by colour alone.** A tone always arrives with a glyph and a
 written label (`KpiTile.tsx`, the workspace KPI strip).
 
+**A measured pair has to stay the pair that renders — so a tint is opaque, never an
+alpha.** The rule generalises past badges: when a fill is translucent, the ratio you
+measured is only the ratio on the one backing you measured it against, and every other
+backing silently produces a different, unmeasured pair. The `--badge-*-fg` labels clear
+their tint by about 0.3, so as an 18% alpha they measured 4.37–4.49 in a content well,
+4.37–4.45 on a hovered row and 1.0–1.9 on a selection fill. Mix the hue **into
+`--surface`** — `color-mix(in srgb, var(--status-red) 18%, var(--surface))` — which
+paints the identical pixel on `--surface` and pins the ratio everywhere else. Content
+does not composite with what is behind it; only glass does, and a badge is content.
+
 ### Measured contrast
 
 Run `node packages/app/scripts/design-tokens.mjs` for the current table. As of this
@@ -466,10 +476,20 @@ x=38 in every row.
 
 **A file row leads with the filename, not the path.** The name is what identifies
 the row, so it gets `--label` and the front of the line; the *leaf* directory follows
-it in `--label-secondary` and is the only part allowed to shorten. Never the reverse —
-a path-first row spends its width on `src/renderer/tabs/` and then eats the filename's
-extension, which is the one token the reader was looking for (TRA-503). Everything
-above the leaf belongs in the row's tooltip.
+it in `--label-secondary`. Never the reverse — a path-first row spends its width on
+`src/renderer/tabs/` and then eats the filename's extension, which is the one token
+the reader was looking for (TRA-503). Everything above the leaf belongs in the row's
+tooltip.
+
+**Secondary text is shown whole or not at all — it never shortens to a sliver.**
+Giving the location all of the shrink kept the filename intact but ran out at a
+fragment rather than at nothing: `GraphExplorerGPU.t…  t  46` at the 220px default,
+a clipped glyph beside the count at the 180px minimum. A lone letter next to a
+right-aligned number reads as a status badge, not as a place, so it costs width and
+returns nothing (TRA-504). Hide it instead — the row's tooltip still carries the full
+path, and the width goes back to the name, which is what four of twelve rows needed
+to stop truncating. Whether it fits is the one thing CSS cannot ask; measure it
+(`whole-location.ts`) and spend it on a class.
 
 **Anything that lives in the sidebar is a row.** Nav items are rows. Settings is a row.
 The idle update banner is a row. The footer was the last strip running its own
@@ -837,54 +857,18 @@ Two things to know before touching the offset:
 `src/renderer/styles/__tests__/tokens.test.ts` fail if the constant, the token, the
 stylesheets and `tray.ts` ever drift apart again.
 
-### The second top band: the native tab bar is macOS's, not ours
+### macOS window chrome and multi-window architecture
 
-Opening a project opens a native macOS **tab**, so the normal state of this app is a
-tabbed window — not an edge case. AppKit then draws a tab bar, and because the window is
-`titleBarStyle: 'hiddenInset'` (full-size content view) it draws it **over** the web
-contents: `innerHeight` stays equal to `outerHeight`, nothing reflows, and the tab bar
-simply covers the top 20px of whatever the renderer painted. That is most of the
-band above, so the surface toolbar and the sidebar toggle went from "misaligned" to
-"gone" (TRA-399).
+In earlier versions, opening a project attached as a native macOS AppKit tab (`tabbingIdentifier`, `addTabbedWindow`).
+However, on `titleBarStyle: 'hiddenInset'` (full-size content view) windows, AppKit's native `NSTabBar` has no standard titlebar container allocated and renders squashed/clipped at the top border of the window, displacing traffic lights and causing layout distortion across tab switches and focus events (TRA-370, TRA-399, TRA-432, TRA-523, TRA-587).
 
-The rule that follows: **a band we do not draw still has to be reserved.** The tab bar is
-AppKit's, we cannot restyle it and we cannot ask whether it is up — so:
+Under TRA-587:
+- **macOS uses clean, independent windows**: Each window (Workspace + individual projects) is an independent window with standard `titleBarStyle: 'hiddenInset'` and native vibrancy sidebar.
+- **Top band baseline is unified**: The traffic lights always sit centered in the 44px top band at `{ x: 14, y: 15 }` (`TRAFFIC_LIGHT_X`, `TRAFFIC_LIGHT_Y`).
+- **Sidebar toggle stays stable**: A `78px` left pad on `.ws-sidebar-titlebar` consistently clears the traffic lights without shifting or recalculating.
+- **Non-macOS platforms**: Windows and Linux use `WindowTabBar` (a custom HTML tab strip broadcast via IPC).
 
-- `MAC_TAB_BAR_H` (20px, measured, `chrome-metrics.ts`) and `--mac-tabbar-h` are one
-  number, exactly like `TOP_BAND_H`. The stage reserves it with `padding-top` while
-  `data-tabbar="on"`, and the app's own band starts below it. Never draw into it.
-- **A geometry we do not draw is measured from two independent landmarks, never one.**
-  This constant shipped wrong twice off a single reading — 36 (TRA-370), then 28
-  (TRA-432) — because each time one landmark was found, believed, and shipped. Take
-  both: where the bar's own plate stops (the same row at every x across the window),
-  and where the control it carries is centred (the selected tab's pill). They have to
-  agree; when they do not, neither is the answer yet. Measured on macOS 26.5 /
-  Electron 41.10.6 at 2x: plate ends at 20.0, tab pill spans 0.5–17.5, centre 9.0.
-- **Every pixel of surplus in a reserved band is visible twice.** It renders as a dead
-  strip of window backdrop under the bar, and it drops the traffic lights by half its
-  height, because they are centred in what this number says. 36 put them 8px below the
-  tabs; 28 put them 4px below (TRA-523, reported twice before it was measured right).
-- **Assert chrome geometry against something outside the constant.** 28 went back to 36
-  on its own when an unrelated PR was squashed from a stale base (#659), and the suite
-  stayed green: the only assertion compared `MAC_TAB_BAR_H` with itself. A test written
-  against a measured AppKit landmark fails on both a bad re-measurement and a silent
-  revert; a test written against the constant fails on neither.
-- **The traffic lights belong to whichever band holds the top line**, not to a constant.
-  With no tab bar that is our 44px band (centre 22); with one it is AppKit's 20px tab bar
-  (centre 10, the tab pill's own centre line). `trafficLightYFor(tabBarVisible)` is the
-  only place that chooses, and `tab-chrome.test.ts` asserts the result against the
-  measured tab centre — not against `MAC_TAB_BAR_H`, which is the number under suspicion.
-- **`trafficLightPosition` is applied once, at window creation, and AppKit re-lays the
-  title bar out under it.** So every event that can change the tab count re-applies it —
-  `show`, `focus`, `closed`, `did-finish-load` — synchronously and again a frame later,
-  because the tab bar comes and goes asynchronously. Without that, closing back to one tab
-  left the lights 6px high until a window resize forced a layout pass, which is the "nudge
-  the window and it fixes itself" users report.
-- The 78px that clears the lights in `.ws-sidebar-titlebar` goes away with them: while the
-  tab bar holds the lights, reserving their width leaves the toggle floating in a gap.
-
-`src/main/__tests__/tab-chrome.test.ts` drives the real window events and fails if any of
-those stops firing.
+`src/main/__tests__/tab-chrome.test.ts` and `src/main/__tests__/chrome-metrics.test.ts` assert consistent traffic light placement and independent window management.
 
 ### Where a global action lives
 
@@ -1515,6 +1499,8 @@ new evidence.
 | Paths truncate at the **head**, keeping the tail | The tail is the part that distinguishes siblings; tail-truncation hid the only useful segment. |
 | Sidebar file paths use a `dir`/`name` flex split, not `direction: rtl` | The rtl hack mangled any path containing `.` or `_` runs (`.idea/workspace.xml` → `idea/workspace.xml.`). |
 | A file row is **name first, location second** — and the location is the leaf directory, not the path (TRA-503) | A 180–320px row fits one of the two. Location-first spent up to 45% of the row on `src/renderer/tabs/` and truncated the filename anyway: `Settings.tsx` rendered as `src/render…Settings.t…`, losing the extension on every row that overflowed. Quick open already listed a file as name-then-directory; the sidebar and Ask now match it. |
+| A row's location is **hidden, not shortened**, once it stops fitting (TRA-504) | Shrink runs out at a fragment, not at nothing: at 220px `tabs` rendered as `t` beside the count, at 180px as a clipped glyph. Measured over twelve rows, dropping it also returned enough width for four filenames to stop truncating. Which rows qualify is measured (`dir.scrollWidth > dir.clientWidth`), because flexbox has no "whole or nothing" — a `7ch` cap makes short names pay and `direction: rtl` is inert under `unicode-bidi: plaintext`. |
+| The measurement is taken with the location **visible** | Measuring a hidden element reports it as fitting, so a row that kept its class would flip state on every pass. |
 | Whitespace separates sidebar groups, not rules | Fewer lines, clearer grouping; matches the platform sidebar. |
 | Rows are windowed past 100 items | A thousand projects costs what a hundred does. |
 | A surface with extra columns collapses them with a **container query**, trailing column first | At the 640px window minimum the app sidebar already takes 220. Ask's chat rail + inspector left the conversation at zero width and painted the inspector over its own toolbar. The rules must be last in the file — a container query adds no specificity. |

@@ -18,6 +18,7 @@ const pkg = JSON.parse(readFileSync(path.resolve(process.cwd(), 'package.json'),
 const MAIN_RUNTIME_DEPS = [
   'electron-updater', // main process, Windows update path
   'i18next', // main process menu/tray/dialog strings (react-i18next is renderer-only)
+  'jsonc-parser', // shared/mcp-detector, reached from the detect-mcp-clients handler
 ];
 
 describe('packaged production dependencies', () => {
@@ -29,5 +30,11 @@ describe('packaged production dependencies', () => {
     // Renderer-only: Vite bundles it, and it drags @babel/runtime in with it.
     expect(pkg.dependencies?.['react-i18next']).toBeUndefined();
     expect(pkg.devDependencies?.['react-i18next']).toBeDefined();
+  });
+
+  it('exports autoUpdater on default namespace for dynamic import interop', async () => {
+    const mod = await import('electron-updater');
+    const hasAutoUpdater = 'autoUpdater' in (mod.default ?? mod) || 'autoUpdater' in mod;
+    expect(hasAutoUpdater).toBe(true);
   });
 });

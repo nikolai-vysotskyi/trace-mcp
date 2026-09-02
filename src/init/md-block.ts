@@ -2,7 +2,7 @@
  * Shared markdown routing-block writer used by both CLAUDE.md and AGENTS.md.
  *
  * The BLOCK content is the single source of truth for "how an AI agent should
- * route through trace-mcp". Anything that drifts between CLAUDE.md and
+ * route through trace". Anything that drifts between CLAUDE.md and
  * AGENTS.md is a bug — the block is authored here so both files stay in sync.
  *
  * File-I/O is intentionally kept here (not in the caller) so competitor
@@ -31,34 +31,34 @@ const COMPETING_MARKER_TOOLS = [
 ];
 
 export const TRACE_MCP_ROUTING_BLOCK = `${START_MARKER}
-## trace-mcp Tool Routing
+## trace Tool Routing
 
-IMPORTANT: For ANY code exploration task, ALWAYS use trace-mcp tools first. NEVER use Read/Grep/Glob/Bash(ls,find) for navigating source code.
+IMPORTANT: For ANY code exploration task, ALWAYS use trace tools first. NEVER use Read/Grep/Glob/Bash(ls,find) for navigating source code.
 
-| Task | trace-mcp tool | Instead of |
+| Task | trace tool | Instead of |
 |------|---------------|------------|
 | Find a function/class/method | \`search\` | Grep |
 | Understand a file before editing | \`get_outline\` | Read (full file) |
 | Read one symbol's source | \`get_symbol\` | Read (full file) |
 | What breaks if I change X | \`get_change_impact\` | guessing |
 | All usages of a symbol | \`find_usages\` | Grep |
-| All implementations of an interface | \`get_type_hierarchy\` | ls/find on directories |
+| All implementations of an interface | \`get_implementations\` | ls/find on directories |
 | All classes implementing X | \`search\` with \`implements\` filter | Grep |
 | Project health / coverage gaps | \`self_audit\` | manual inspection |
 | Dead code / dead exports | \`get_dead_code\` (\`mode: "exports_only"\`) | Grep for unused |
 | Context for a task | \`get_feature_context\` | reading 15 files |
 | Tests for a symbol | \`get_tests_for\` | Glob + Grep |
-| Untested symbols (deep) | \`get_untested_symbols\` (classifies "unreached" vs "imported_not_called") | manual audit |
-| HTTP request flow | \`get_request_flow\` | reading route files |
-| DB model relationships | \`get_model_context\` | reading model + migrations |
-| Component tree | \`get_component_tree\` | reading component files |
+| Untested symbols (deep) | \`get_untested_symbols\` (deferred — load via \`load_tools\`) | manual audit |
+| HTTP request flow | \`get_request_flow\` (framework-gated) | reading route files |
+| DB model relationships | \`get_model_context\` (framework-gated) | reading model + migrations |
+| Component tree | \`get_component_tree\` (framework-gated) | reading component files |
 | Circular dependencies | \`get_circular_imports\` | manual tracing |
 
 Use Read/Grep/Glob ONLY for non-code files (.md, .json, .yaml, config) or before Edit.
 Start sessions with \`get_project_map\` (summary_only=true).
 ${END_MARKER}`;
 
-/** Upsert the trace-mcp routing block into `filePath`. Idempotent. */
+/** Upsert the trace routing block into `filePath`. Idempotent. */
 export function upsertTraceMcpBlock(
   filePath: string,
   opts: { dryRun?: boolean } = {},
@@ -70,9 +70,9 @@ export function upsertTraceMcpBlock(
       return { target: filePath, action: 'skipped', detail: `Would create ${basename(filePath)}` };
     }
     if (existing.includes(START_MARKER)) {
-      return { target: filePath, action: 'skipped', detail: 'Would update trace-mcp block' };
+      return { target: filePath, action: 'skipped', detail: 'Would update trace block' };
     }
-    return { target: filePath, action: 'skipped', detail: 'Would append trace-mcp block' };
+    return { target: filePath, action: 'skipped', detail: 'Would append trace block' };
   }
 
   if (existing === null) {
@@ -97,7 +97,7 @@ export function upsertTraceMcpBlock(
     return {
       target: filePath,
       action: 'updated',
-      detail: cleaned ? 'Updated trace-mcp block and removed competing sections' : undefined,
+      detail: cleaned ? 'Updated trace block and removed competing sections' : undefined,
     };
   }
 
@@ -109,8 +109,8 @@ export function upsertTraceMcpBlock(
     target: filePath,
     action: 'updated',
     detail: cleaned
-      ? 'Appended trace-mcp block and removed competing sections'
-      : 'Appended trace-mcp block',
+      ? 'Appended trace block and removed competing sections'
+      : 'Appended trace block',
   };
 }
 
@@ -153,7 +153,10 @@ function removeOrphanedTraceMcpContent(content: string): string {
   const before = content.slice(0, startIdx);
   const markerBlock = content.slice(startIdx, endIdx + END_MARKER.length);
   const after = content.slice(endIdx + END_MARKER.length);
-  const traceMcpHeadingRe = /^(#{1,6})\s+trace-mcp\b/i;
+  // Matches our own heading in both its current ("trace") and pre-TRA-611
+  // ("trace-mcp") forms, so a stray duplicate left outside the marker block
+  // gets cleaned up regardless of which version wrote it.
+  const traceMcpHeadingRe = /^(#{1,6})\s+trace(-mcp)?\b/i;
   const cleanBefore = filterSections(before.split('\n'), (heading) =>
     traceMcpHeadingRe.test(heading),
   ).join('\n');
@@ -185,7 +188,7 @@ function removeCompetingHeadingSections(content: string): string {
   let lines = content.split('\n');
   lines = filterSections(lines, (headingLine) => competingHeadingRe.test(headingLine));
   lines = filterSections(lines, (headingLine, _level, body) => {
-    if (/trace-mcp/i.test(headingLine)) return false;
+    if (/^#{1,6}\s+trace(-mcp)?\b/i.test(headingLine)) return false;
     return competitorRe.test(body);
   });
   lines = removeEmptyParentSections(lines);

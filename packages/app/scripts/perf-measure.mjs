@@ -263,9 +263,9 @@ function eagerKb() {
 /** Packaged-bundle sizes, if `pnpm run pack` has been run. Null otherwise. */
 function artifactMb() {
   const dir = path.join(appDir, 'release', 'mac-arm64');
-  if (!fs.existsSync(dir)) return { mac_app_unpacked: null, mac_asar: null };
+  if (!fs.existsSync(dir)) return { mac_app_unpacked: null, mac_asar: null, mac_server_payload: null };
   const bundle = fs.readdirSync(dir).find((f) => f.endsWith('.app'));
-  if (!bundle) return { mac_app_unpacked: null, mac_asar: null };
+  if (!bundle) return { mac_app_unpacked: null, mac_asar: null, mac_server_payload: null };
   const size = (p) => {
     let bytes = 0;
     const walk = (d) => {
@@ -281,6 +281,10 @@ function artifactMb() {
   return {
     mac_app_unpacked: size(path.join(dir, bundle)),
     mac_asar: size(path.join(dir, bundle, 'Contents', 'Resources', 'app.asar')),
+    // Tracked separately because it is the only large part of the bundle the
+    // repo controls: ~267 MB of the rest is the Electron framework, so a ×1.5
+    // rule on the total cannot see the embedded daemon doubling (TRA-605).
+    mac_server_payload: size(path.join(dir, bundle, 'Contents', 'Resources', 'server')),
   };
 }
 
