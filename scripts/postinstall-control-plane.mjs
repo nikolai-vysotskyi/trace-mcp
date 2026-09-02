@@ -107,6 +107,9 @@ const TRACE_MCP_HOME = (() => {
 const LOG_PATH = path.join(TRACE_MCP_HOME, 'postinstall.log');
 const LAUNCHER_DIR = path.join(TRACE_MCP_HOME, 'bin');
 const LAUNCHER_ENV_PATH = path.join(TRACE_MCP_HOME, 'launcher.env');
+const PKG_ROOTS_PATH = path.join(TRACE_MCP_HOME, 'pkg-roots');
+/** Keep in sync with src/init/launcher.ts::MAX_PKG_ROOTS. */
+const MAX_PKG_ROOTS = 10;
 const DAEMON_LOG_PATH = path.join(TRACE_MCP_HOME, 'daemon.log');
 // Opt-out sentinel (#202) — keep in sync with src/global.ts::DAEMON_DISABLED_PATH.
 const DAEMON_DISABLED_PATH = path.join(TRACE_MCP_HOME, 'daemon.disabled');
@@ -199,6 +202,27 @@ function writeLauncherEnv(nodePath, cliPath, version) {
     '',
   ];
   atomicWrite(LAUNCHER_ENV_PATH, lines.join('\n'), 0o600);
+  recordPkgRoot(cliPath);
+}
+
+// Mirror src/init/launcher.ts::recordPkgRoot. Remembers the global
+// node_modules root this install landed in, so the shim can still find
+// dist/cli.js there once launcher.env goes stale. Prefixes we cannot
+// enumerate — bundled runtimes, `npm config set prefix` — only become
+// findable this way; the shim is not allowed to ask npm at runtime.
+function recordPkgRoot(cliPath) {
+  const root = path.resolve(path.dirname(cliPath), '..', '..');
+  if (path.basename(root) !== 'node_modules') return;
+  try {
+    const existing = (fs.existsSync(PKG_ROOTS_PATH) ? fs.readFileSync(PKG_ROOTS_PATH, 'utf-8') : '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#'));
+    if (existing.includes(root)) return;
+    atomicWrite(PKG_ROOTS_PATH, `${[...existing, root].slice(-MAX_PKG_ROOTS).join('\n')}\n`, 0o600);
+  } catch {
+    /* best-effort — a missed record only costs the shim a probe */
+  }
 }
 
 // Legacy (pre-TRA-611) primary shim basename — used only to install the

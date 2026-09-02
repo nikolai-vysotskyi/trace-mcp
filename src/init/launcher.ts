@@ -26,6 +26,9 @@ import { LAUNCHER_VERSION } from './types.js';
 
 const IS_WINDOWS = process.platform === 'win32';
 
+/** Upper bound on remembered package roots — keeps the shim's probe O(small). */
+const MAX_PKG_ROOTS = 10;
+
 // Artifacts shipped from hooks/ and installed under $TRACE_MCP_HOME/bin/.
 // On Unix a single shim file carries the resolution logic; on Windows a
 // .cmd shim is what MCP clients spawn, but the actual logic lives in a
@@ -195,6 +198,39 @@ export function readLauncherConfig(): Partial<LauncherConfig> {
   return result;
 }
 
+export function getPkgRootsPath(): string {
+  return path.join(getLauncherDir(), 'pkg-roots');
+}
+
+/**
+ * Record the global `node_modules` root this build was installed into, so the
+ * shim can find `dist/cli.js` there later even when launcher.env has gone
+ * stale. Prefixes we cannot enumerate — bundled runtimes, corporate
+ * `npm config set prefix` — only become findable this way, and the shim is not
+ * allowed to ask npm at runtime (it inherits the MCP client's PATH, which in a
+ * project directory can carry a repo-controlled `node_modules/.bin`).
+ *
+ * Append-only, deduplicated, capped: an entry costs one `-d` test per start.
+ */
+export function recordPkgRoot(cliPath: string): void {
+  // <root>/trace-mcp/dist/cli.js → <root>
+  const root = path.resolve(path.dirname(cliPath), '..', '..');
+  if (path.basename(root) !== 'node_modules') return;
+  const file = getPkgRootsPath();
+  try {
+    const existing = (readIfExists(file) ?? '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#'));
+    if (existing.includes(root)) return;
+    const next = [...existing, root].slice(-MAX_PKG_ROOTS);
+    ensureDir(path.dirname(file));
+    atomicWriteString(file, `${next.join('\n')}\n`, { mode: 0o600, rejectSymlinks: true });
+  } catch {
+    /* best-effort — a missed record only costs the shim a probe */
+  }
+}
+
 export interface InstallLauncherOpts {
   dryRun?: boolean;
   force?: boolean;
@@ -333,6 +369,7 @@ export function setupLauncher(
       cli: resolveCurrentCliPath(),
       version: opts.pkgVersion,
     };
+    recordPkgRoot(cfg.cli);
     const existing = readLauncherConfig();
     const unchanged =
       existing.node === cfg.node && existing.cli === cfg.cli && existing.version === cfg.version;
