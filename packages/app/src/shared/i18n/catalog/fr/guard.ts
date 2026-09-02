@@ -41,6 +41,10 @@ export const guard = {
   'health.down': 'Arrêté',
   'health.unknown': 'Inconnu',
 
+  'reason.neverStarted': "Votre assistant de code n'a pas encore lancé trace-mcp dans ce projet. Redémarrez-le pour activer le guard.",
+  'reason.heartbeatStale': "Dernier signe de vie de trace-mcp : {{ago}}. Redémarrez votre assistant de code pour reprendre l'application des règles.",
+  'reason.channelQuiet': 'Le guard est installé et en attente — le dernier appel d’outil date de {{ago}}.',
+
   'mode.aria': 'Mode du guard',
   'mode.strict': 'Strict',
   'mode.strictHelp':

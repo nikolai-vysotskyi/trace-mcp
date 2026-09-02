@@ -51,6 +51,10 @@ export const guard = {
   'health.down': 'Not running',
   'health.unknown': 'Unknown',
 
+  'reason.neverStarted': "Your coding assistant hasn't started trace-mcp in this project yet. Restart it to pick up the guard.",
+  'reason.heartbeatStale': 'trace-mcp last reported {{ago}}. Restart your coding assistant to resume enforcement.',
+  'reason.channelQuiet': 'The guard is installed and waiting — the last tool call was {{ago}}.',
+
   'mode.aria': 'Guard mode',
   'mode.strict': 'Strict',
   'mode.strictHelp': 'Block Read, Grep and Glob when a trace-mcp tool answers the question',

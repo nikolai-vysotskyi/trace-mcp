@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { t } from '../i18n';
-import { formatDate } from '../i18n/format';
+import { formatDate, relativeTime } from '../i18n/format';
 import {
   Badge,
   Button,
@@ -39,12 +39,14 @@ import {
 
 type GuardMode = 'strict' | 'coach' | 'off';
 type GuardHealth = 'ok' | 'stalled' | 'down' | 'unknown';
+type GuardReason = 'heartbeat_stale' | 'channel_quiet' | 'never_started';
 
 interface GuardState {
   health: GuardHealth;
   mode: GuardMode;
   bypassUntil?: number;
-  reason?: string;
+  reason?: GuardReason;
+  reasonSeconds?: number;
   coachExpiresAt?: number;
   autoPromoted?: boolean;
 }
@@ -68,6 +70,23 @@ const MODE_OPTIONS: ReadonlyArray<{ value: GuardMode; label: string; title: stri
 
 const POLL_MS = 15_000;
 const BYPASS_MINUTES = 10;
+
+/** The one line under the card: why enforcement is not running, and the one
+    thing that changes it. It never restates the badge — "Not running" is the
+    condition, this is the cause and the next step (TRA-490). Cases with no
+    honest advice render nothing rather than a sentence that ends nowhere. */
+export function reasonLine(state: GuardState, now: number): string | null {
+  if (!state.reason) return null;
+  if (state.reason === 'never_started') return t('guard:reason.neverStarted');
+  const ago =
+    state.reasonSeconds === undefined
+      ? null
+      : relativeTime(now - state.reasonSeconds * 1000, now);
+  if (!ago) return null;
+  return state.reason === 'heartbeat_stale'
+    ? t('guard:reason.heartbeatStale', { ago })
+    : t('guard:reason.channelQuiet', { ago });
+}
 
 /** "in 9 minutes" / "in 6 days". Future-tense sibling of `relativeTime`, which
     is past-only by design — hence its own counted keys rather than a call into
@@ -238,9 +257,9 @@ export function GuardSection({ root }: { root: string }) {
           </>
         ) : null}
       </Card>
-      {state?.reason && state.health !== 'ok' ? (
+      {state && state.health !== 'ok' && reasonLine(state, now) ? (
         <p className="text-[11px] leading-[13px] px-1" style={{ color: 'var(--label-secondary)' }}>
-          {state.reason}
+          {reasonLine(state, now)}
         </p>
       ) : null}
     </Section>

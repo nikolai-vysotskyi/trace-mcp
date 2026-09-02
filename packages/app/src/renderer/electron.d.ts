@@ -108,7 +108,8 @@ declare global {
           toolCallsFailed?: number;
           quietSeconds?: number;
           bypassUntil?: number;
-          reason?: string;
+          reason?: 'heartbeat_stale' | 'channel_quiet' | 'never_started';
+          reasonSeconds?: number;
           initializedAt?: number;
           coachExpiresAt?: number;
           autoPromoted?: boolean;

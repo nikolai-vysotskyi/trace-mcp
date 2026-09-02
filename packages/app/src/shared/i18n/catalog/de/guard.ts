@@ -41,6 +41,10 @@ export const guard = {
   'health.down': 'Läuft nicht',
   'health.unknown': 'Unbekannt',
 
+  'reason.neverStarted': 'Dein Coding-Assistent hat trace-mcp in diesem Projekt noch nie gestartet. Starte ihn neu, damit der Guard greift.',
+  'reason.heartbeatStale': 'Letztes Lebenszeichen von trace-mcp: {{ago}}. Starte deinen Coding-Assistenten neu, um die Durchsetzung fortzusetzen.',
+  'reason.channelQuiet': 'Der Guard ist installiert und wartet — der letzte Tool-Aufruf war {{ago}}.',
+
   'mode.aria': 'Guard-Modus',
   'mode.strict': 'Strikt',
   'mode.strictHelp': 'Read, Grep und Glob blockieren, wenn ein trace-mcp-Tool die Frage beantwortet',

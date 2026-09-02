@@ -44,6 +44,10 @@ export const guard = {
   'health.down': 'Не запущен',
   'health.unknown': 'Неизвестно',
 
+  'reason.neverStarted': 'Ассистент ещё ни разу не запускал trace-mcp в этом проекте. Перезапустите его, чтобы страж заработал.',
+  'reason.heartbeatStale': 'Последний отклик trace-mcp — {{ago}}. Перезапустите ассистента, чтобы вернуть ограничения.',
+  'reason.channelQuiet': 'Страж установлен и ждёт — последний вызов инструмента был {{ago}}.',
+
   'mode.aria': 'Режим стража',
   'mode.strict': 'Строгий',
   'mode.strictHelp': 'Блокировать Read, Grep и Glob, когда на вопрос отвечает инструмент trace-mcp',

@@ -635,6 +635,20 @@ does not blink a banner with it, while recovery publishes immediately. Escalatin
 makes a working app look broken. Keep apart only what the user would act on differently —
 "busy" and "not running" are two states because one is a wait and the other is a button.
 
+**A badge states the condition; the line under it states the cause and the next
+step.** A red `Not running` badge with `trace-mcp server not running` printed 190px
+below it is one fact twice, and the second copy is where the advice should have been
+(TRA-490). If the second line cannot say something the badge does not — why this
+happened, or what the reader does about it — it does not get written at all.
+
+**A cause crosses the IPC boundary as a code, never as a sentence.** The main process
+knows *that* the heartbeat is stale; only the renderer knows the language the app is in
+and how much room the line has. `guard-control.ts` used to hand over
+`Heartbeat stale (412s)`, which the renderer printed verbatim in all ten locales and in
+seconds nobody counts. Main returns `'heartbeat_stale'` plus the number; the renderer
+owns the wording and the time formatting. This applies to every status a surface reads
+over IPC or HTTP, not to the guard alone.
+
 **A surface whose every section reads one source states its failure once, at
 surface level.** Five sections that each fetch from the daemon do not produce five
 pieces of information when the daemon is down — they produce one, said five times.
