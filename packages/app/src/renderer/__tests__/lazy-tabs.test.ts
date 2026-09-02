@@ -6,10 +6,16 @@ import { describe, expect, it } from 'vitest';
 // fine and only breaks when a user clicks the tab. This asserts the names the wrappers
 // depend on still exist.
 describe('lazily loaded tabs', () => {
-  it('AskTab is still a named export', async () => {
-    const mod = await import('../tabs/AskTab');
-    expect(typeof mod.AskTab).toBe('function');
-  });
+  // 30s, not the 5s default: this import pulls in the whole markdown/micromark stack —
+  // the suite's single heaviest — and blows the default budget on a loaded machine.
+  it(
+    'AskTab is still a named export',
+    async () => {
+      const mod = await import('../tabs/AskTab');
+      expect(typeof mod.AskTab).toBe('function');
+    },
+    30_000,
+  );
 
   it('Activity is still a named export', async () => {
     const mod = await import('../tabs/Activity');
