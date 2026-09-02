@@ -1,9 +1,24 @@
 #!/usr/bin/env bash
-# trace-mcp-reindex v0.4.1
+# trace-mcp-reindex v0.5.0
 # trace-mcp PostToolUse auto-reindex hook
 # Daemon-first: posts to the running daemon's /api/projects/reindex-file
 # endpoint via curl (no Node startup). Falls back to a cold subprocess
 # only when the daemon is unreachable.
+#
+# v0.5 changes (TRA-694 — the dispatch no longer blocks the agent):
+#   - Notifying the daemon that a file changed is fire-and-forget: reindexing
+#     is asynchronous on the daemon side and nothing here consumes the result.
+#     Yet the curl ran in the foreground, so every edit paid its round trip —
+#     p50 372 ms on the happy path, and the full `--max-time 2` ceiling
+#     whenever the daemon was up but not answering. Measured over 16,440
+#     recorded runs: 12,215 s (3 h 24 min) of agent wall clock, 70% of it on
+#     timeouts. The whole dispatch is now detached; the hook returns in ~5 ms.
+#   - Fixed the failure classification. `curl -w '%{http_code}'` prints "000"
+#     itself on connection failure AND exits non-zero, so the old
+#     `|| echo "000"` appended a second one: HTTP_CODE became "000000", which
+#     matched no case arm and was recorded as `other`. Every connection
+#     failure in the history is mislabelled, and `no-daemon` — which the tests
+#     believed they covered — never occurred once in 16,440 lines.
 
 set -euo pipefail
 
@@ -122,46 +137,61 @@ write_stat() {
       "$ts" "$path_kind" "$reason" "$wall_ms" >> "$STATS_FILE" ) 2>/dev/null || true
 }
 
-# Wallclock for the dispatch attempt.
-START_MS=$(now_ms)
+dispatch() {
+  # Wallclock for the dispatch attempt.
+  local START_MS END_MS WALL_MS HTTP_CODE REASON
+  START_MS=$(now_ms)
 
-# Try daemon first — single curl, ~5 ms RTT. No Node startup.
-HTTP_CODE=$(curl -sS --max-time 2 -o /dev/null -w '%{http_code}' -X POST \
-    -H 'Content-Type: application/json' \
-    -d "$(jq -n --arg p "$PROJECT_ROOT" --arg f "$FILE_PATH" '{project:$p,path:$f}')" \
-    "http://127.0.0.1:${PORT}/api/projects/reindex-file" 2>/dev/null || echo "000")
+  # Try daemon first — single curl, ~5 ms RTT. No Node startup.
+  # `-w '%{http_code}'` yields "000" on any pre-HTTP failure (refused,
+  # timeout, DNS). curl's exit status is deliberately ignored: the code it
+  # printed is the whole signal, and `|| echo` here corrupts it (see v0.5).
+  HTTP_CODE=$(curl -sS --max-time 2 -o /dev/null -w '%{http_code}' -X POST \
+      -H 'Content-Type: application/json' \
+      -d "$(jq -n --arg p "$PROJECT_ROOT" --arg f "$FILE_PATH" '{project:$p,path:$f}')" \
+      "http://127.0.0.1:${PORT}/api/projects/reindex-file" 2>/dev/null) || true
+  # Empty means curl is missing or died before writing anything — same
+  # observable state as a refused connection.
+  [[ -z "$HTTP_CODE" ]] && HTTP_CODE="000"
 
-END_MS=$(now_ms)
-WALL_MS=$((END_MS - START_MS))
+  END_MS=$(now_ms)
+  WALL_MS=$((END_MS - START_MS))
 
-if [[ "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
-  write_stat "daemon" "ok" "$WALL_MS" "$END_MS"
-  exit 0
-fi
+  if [[ "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
+    write_stat "daemon" "ok" "$WALL_MS" "$END_MS"
+    return 0
+  fi
 
-# Classify failure for stats. 000 = no daemon / connection refused / timeout
-# (curl exits before HTTP). Distinguish timeout via curl exit code is fiddly
-# under set -e; we collapse "couldn't connect" into no-daemon.
-case "$HTTP_CODE" in
-  400) REASON="400" ;;
-  404) REASON="404" ;;
-  503) REASON="503" ;;
-  5*)  REASON="5xx" ;;
-  000) REASON="no-daemon" ;;
-  *)   REASON="other" ;;
-esac
+  # Classify failure for stats. 000 = no daemon / connection refused / timeout
+  # (curl exits before HTTP). Distinguish timeout via curl exit code is fiddly
+  # under set -e; we collapse "couldn't connect" into no-daemon.
+  case "$HTTP_CODE" in
+    400) REASON="400" ;;
+    404) REASON="404" ;;
+    503) REASON="503" ;;
+    5*)  REASON="5xx" ;;
+    000) REASON="no-daemon" ;;
+    *)   REASON="other" ;;
+  esac
 
-# Fallback: cold spawn (legacy behavior). Only hit when daemon is down.
-# Phase 5+7 audit fix: `nohup ... &` returns immediately after fork, so any
-# duration we measure post-fork is just the spawn cost — NOT the cold CLI
-# reindex duration the user actually pays. Record only the curl wallclock so
-# `daemon stats` shows the cost of *detecting* the daemon is down, not a
-# misleading fake reindex time.
-if command -v trace-mcp >/dev/null 2>&1; then
-  nohup trace-mcp index-file "$FILE_PATH" >/dev/null 2>&1 &
-  write_stat "cli" "$REASON" "$WALL_MS" "$END_MS"
-else
-  write_stat "skipped" "$REASON" "$WALL_MS" "$END_MS"
-fi
+  # Fallback: cold spawn (legacy behavior). Only hit when daemon is down.
+  # Phase 5+7 audit fix: `nohup ... &` returns immediately after fork, so any
+  # duration we measure post-fork is just the spawn cost — NOT the cold CLI
+  # reindex duration the user actually pays. Record only the curl wallclock so
+  # `daemon stats` shows the cost of *detecting* the daemon is down, not a
+  # misleading fake reindex time.
+  if command -v trace-mcp >/dev/null 2>&1; then
+    nohup trace-mcp index-file "$FILE_PATH" >/dev/null 2>&1 &
+    write_stat "cli" "$REASON" "$WALL_MS" "$END_MS"
+  else
+    write_stat "skipped" "$REASON" "$WALL_MS" "$END_MS"
+  fi
+}
+
+# Detach. Redirecting all three fds is not cosmetic: a background job that
+# keeps the hook's stdout open makes the caller block reading that pipe until
+# the job ends, which would reinstate exactly the wait we are removing.
+dispatch </dev/null >/dev/null 2>&1 &
+disown 2>/dev/null || true
 
 exit 0
