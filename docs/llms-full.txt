@@ -177,7 +177,7 @@ trace-mcp ci-report --base main --head HEAD --format markdown --output report.md
 trace-mcp ci-report --base main --head HEAD --fail-on high
 ```
 
-Generates a change impact report with blast radius, risk scores, test coverage gaps, architecture violations, and dead code. See [README](../README.md#cipr-change-impact-reports) for GitHub Action setup.
+Generates a change impact report with blast radius, risk scores, test coverage gaps, architecture violations, and dead code. See [README](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/README.md#cipr-change-impact-reports) for GitHub Action setup.
 
 ## Security context export (CLI)
 
@@ -1464,7 +1464,7 @@ Two different things can leave a folder out of the index — check which one app
    }
    ```
 
-   `include` in a per-project config file **replaces** the built-in list rather than adding to it (config merge is shallow) — copy the defaults from [`src/config.ts`](../src/config.ts) alongside your addition if you still want the rest of the project indexed.
+   `include` in a per-project config file **replaces** the built-in list rather than adding to it (config merge is shallow) — copy the defaults from [`src/config.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/src/config.ts) alongside your addition if you still want the rest of the project indexed.
 
 ---
 
@@ -3242,8 +3242,8 @@ are deeply nested and small.
 
 ## Methodology
 
-- Script: [`scripts/bench-toon.ts`](../scripts/bench-toon.ts) for the
-  per-tool numbers; [`scripts/toon-diagnostic-2.ts`](../scripts/toon-diagnostic-2.ts)
+- Script: [`scripts/bench-toon.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/scripts/bench-toon.ts) for the
+  per-tool numbers; [`scripts/toon-diagnostic-2.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/scripts/toon-diagnostic-2.ts)
   for the table-vs-list-mode curve.
 - Invocation pattern: each registered MCP tool's closure is captured via a
   fake `server.tool(...)`. This bypasses the MCP transport but exercises the
@@ -3516,7 +3516,7 @@ The score that drives the review queue combines a base prior with multiplicative
 
 For mined decisions, the pattern's intrinsic confidence (see [Extraction patterns](#extraction-patterns)) is additionally multiplied by `1 + 0.05 × n` where `n` is the number of context boosters (`because`, `reason`, `pros and cons`, `alternative`, `architecture`, `design decision`) found in the surrounding turn.
 
-The implementation lives in [`src/memory/decision-confidence.ts`](../src/memory/decision-confidence.ts).
+The implementation lives in [`src/memory/decision-confidence.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/src/memory/decision-confidence.ts).
 
 ## MCP tools
 
@@ -3643,7 +3643,7 @@ The mining pipeline also filters non-user content before it reaches the store. B
 | `<task-notification>…</task-notification>` | Autonomous protocol payloads from background agents |
 | `<local-command-stdout>…</local-command-stdout>` | Captured shell output (may contain secrets) |
 
-`<command-message>` and `<command-name>` are kept — those wrap real user slash-commands and are part of the conversation. Implementation: `stripPrivacyTags` in [`src/memory/conversation-miner.ts`](../src/memory/conversation-miner.ts).
+`<command-message>` and `<command-name>` are kept — those wrap real user slash-commands and are part of the conversation. Implementation: `stripPrivacyTags` in [`src/memory/conversation-miner.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/src/memory/conversation-miner.ts).
 
 ## CLI
 

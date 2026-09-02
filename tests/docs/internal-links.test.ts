@@ -256,6 +256,30 @@ describe('docs footer nav covers every indexed page', () => {
     ).toEqual([]);
   });
 
+  /**
+   * docs/ is the site root, so a link written for the repo checkout — `../src/config.ts`,
+   * `../README.md` — resolves to https://trace-mcp.com/src/config.ts and 404s. Eight of
+   * them were live across five pages, each verified 404 on 2026-09-02. Source files get
+   * a GitHub blob URL instead; a `../` that stays inside docs/ still resolves and passes.
+   */
+  it('no docs page links out of the site root with a relative path', () => {
+    const escaping = readdirSync(DOCS, { recursive: true, encoding: 'utf-8' })
+      .map((f) => f.replace(/\\/g, '/'))
+      .filter((f) => f.endsWith('.md') && !f.startsWith('_'))
+      .flatMap((f) => {
+        const dir = f.includes('/') ? f.replace(/\/[^/]*$/, '') : '.';
+        const body = readFileSync(join(DOCS, f), 'utf-8').replace(/^```[\s\S]*?^```/gm, '');
+        return [...body.matchAll(/\[[^\]]*\]\(\s*(\.\.\/[^)\s]+)/g)]
+          .map(([, href]) => href)
+          .filter((href) => join(dir, href).startsWith('..'))
+          .map((href) => `${f} -> ${href}`);
+      });
+    expect(
+      escaping,
+      `docs links that escape docs/ and 404 on the live site — use a https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/ URL: ${escaping.join(', ')}`,
+    ).toEqual([]);
+  });
+
   // The matcher above decides whether a page counts as a dead end, so its two
   // failure directions are worth pinning down. A false positive is the costly
   // one — it reports a dead end as linked and the guard goes quiet — so an
