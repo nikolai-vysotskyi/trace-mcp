@@ -488,7 +488,10 @@ export function buildProjectContext(rootPath: string): ProjectContext {
       const reqBlock = goModRaw.match(/require\s*\(([\s\S]*?)\)/);
       if (reqBlock) {
         for (const line of reqBlock[1].split('\n')) {
-          const dep = line.match(/^\s*([^\s/]+(?:\/[^\s]+)*)\s+(v[\d.]+\S*)/);
+          // Each path segment excludes '/' as well as whitespace: with `[^\s]+`
+          // inside the repeated group the same "a/b/c" is matchable in 2^n ways,
+          // which is exponential backtracking on a crafted go.mod (js/redos).
+          const dep = line.match(/^\s*([^\s/]+(?:\/[^\s/]+)*)\s+(v[\d.]+\S*)/);
           if (dep) goDeps.push({ name: dep[1], version: dep[2] });
         }
       }

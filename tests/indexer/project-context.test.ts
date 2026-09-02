@@ -613,6 +613,29 @@ dependencies = ["fastapi>=0.100.0"]
       );
     });
 
+    /**
+     * The require-block line parser used `([^\s/]+(?:\/[^\s]+)*)`, whose repeated
+     * group could itself consume slashes — so "a/b/c" was matchable 2^n ways and a
+     * go.mod line of many "!/" repetitions backtracked exponentially (js/redos,
+     * flagged by CodeQL on #711). Indexing is pointed at arbitrary checkouts, so
+     * the input is not trusted. 200 repetitions hangs for minutes unfixed.
+     */
+    it('parses a go.mod require block in linear time on a crafted line', () => {
+      writeFixtureFile(
+        tmpDir,
+        'go.mod',
+        `module example.com/m\n\ngo 1.22\n\nrequire (\n\t${'!/'.repeat(200)}\n\tgithub.com/gin-gonic/gin v1.9.1\n)\n`,
+      );
+
+      const start = Date.now();
+      const ctx = buildProjectContext(tmpDir);
+
+      expect(Date.now() - start).toBeLessThan(2000);
+      expect(ctx.goMod?.deps).toContainEqual(
+        expect.objectContaining({ name: 'github.com/gin-gonic/gin', version: 'v1.9.1' }),
+      );
+    });
+
     it('excludes manifests inside node_modules, vendor, .git, .venv, dist, build', () => {
       writeFixtureFile(
         tmpDir,
