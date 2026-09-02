@@ -158,6 +158,17 @@ jobs:
           echo "::error::$TAG verified but could not be returned to stable — users will not be offered it"
           exit 1
 
+  # TRA-368: the asset gate above proves latest.yml is ON the release. It cannot
+  # prove an install would act on it — a feed whose sha512 no longer matches the
+  # installer beside it passes that check and still leaves every Windows install
+  # unable to update, silently. This installs the previous release and updates it
+  # for real. Deliberately NOT a `needs:` of `publish`: it takes ~10 minutes and
+  # a failure here does not make the npm package wrong.
+  verify-win-update:
+    needs: [release-please, verify-release-assets]
+    if: needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != ''
+    uses: ./.github/workflows/verify-win-update.yml
+
   publish:
     needs: [release-please, verify-release-assets]
     if: needs.release-please.outputs.release_created == 'true' || github.event.inputs.publish_tag != ''
