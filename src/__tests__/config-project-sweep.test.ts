@@ -2,15 +2,21 @@
  * TRA-702: `.config.json` grew to 1 MB / 593 project sections on the reported
  * machine, 440 of them pointing at directories that no longer exist.
  *
- * TRA-396 stopped one-shot agent workdirs from reaching `registry.json`, but
- * `setupProject` writes the per-project *config* section before
- * `registerProject` ever applies that check — so every agent run still left a
- * permanent section behind, and nothing swept them. This covers both halves:
- * not writing new ones, and draining the backlog.
+ * `setupProject` writes one section per root it sets up, and every sweep that
+ * existed worked on `registry.json` — a different file — so this map had no
+ * collector at all. The section itself has to keep being written even for
+ * one-shot workdirs, because the run that follows reads it back (see
+ * tests/project-setup/ephemeral-config-section.test.ts); collecting them
+ * afterwards, on softGcSweep's hourly timer, is what bounds the file.
+ *
+ * These cases pin what the sweep removes and — the part that matters — what it
+ * must not: a registered root that is only transiently missing, comments a user
+ * hand-wrote in a retained section, and a healthy config it should not rewrite.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { parse } from 'jsonc-parser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('pruneProjectConfigSections (TRA-702)', () => {
@@ -39,7 +45,15 @@ describe('pruneProjectConfigSections (TRA-702)', () => {
   }
 
   function readProjects(): Record<string, unknown> {
-    return JSON.parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')).projects ?? {};
+    // jsonc, not JSON: the file is documented as comment-bearing, and one of
+    // these cases deliberately writes comments into it.
+    return (
+      (
+        parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')) as {
+          projects?: Record<string, unknown>;
+        }
+      )?.projects ?? {}
+    );
   }
 
   function registerRoot(root: string): void {
@@ -109,6 +123,40 @@ describe('pruneProjectConfigSections (TRA-702)', () => {
     const writesToConfig = spy.mock.calls.filter(([, dest]) => dest === GLOBAL_CONFIG_PATH);
     expect(writesToConfig).toHaveLength(1);
     spy.mockRestore();
+  });
+
+  it('preserves comments inside the project sections it keeps', () => {
+    // Replacing the whole `projects` object in one edit is shorter, but it
+    // reserialises the retained sections too and drops any comment a user
+    // hand-wrote in them. `.config.json` is JSONC and documented as
+    // hand-editable; #218 already protects this data on the write path.
+    const live = fs.mkdtempSync(path.join(tmpHome, 'live-'));
+    const dead = path.join(tmpHome, 'deleted-project');
+    fs.mkdirSync(path.dirname(GLOBAL_CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(
+      GLOBAL_CONFIG_PATH,
+      `{
+  // top-level note
+  "projects": {
+    ${JSON.stringify(live)}: {
+      // keep the generated globs, we tuned these by hand
+      "root": ".",
+      "include": ["src/**"] // only source
+    },
+    ${JSON.stringify(dead)}: { "root": "." }
+  }
+}
+`,
+    );
+
+    expect(configJsonc.pruneProjectConfigSections()).toEqual([dead]);
+
+    const after = fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8');
+    expect(after).toContain('// top-level note');
+    expect(after).toContain('// keep the generated globs, we tuned these by hand');
+    expect(after).toContain('// only source');
+    expect(after).not.toContain('deleted-project');
+    expect(Object.keys(readProjects())).toEqual([live]);
   });
 
   it('leaves a config with no dead sections untouched', () => {

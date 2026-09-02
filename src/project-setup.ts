@@ -16,12 +16,7 @@ import type { DetectionResult } from './init/types.js';
 import { detectProject } from './init/detector.js';
 import { logger } from './logger.js';
 import type { NewRootOverlap, RegistryEntry } from './registry.js';
-import {
-  findOverlapForNewRoot,
-  getProject,
-  isEphemeralProjectRoot,
-  registerProject,
-} from './registry.js';
+import { findOverlapForNewRoot, getProject, registerProject } from './registry.js';
 import { isDangerousProjectRoot } from './dangerous-root.js';
 
 // Re-exported so the many existing `from './project-setup.js'` importers keep working.
@@ -124,20 +119,20 @@ export function setupProject(
 
   // 2. Generate & save config
   const config = generateConfig(detection);
-  // TRA-702: mirror registerProject's ephemeral rule here. TRA-396 kept
-  // one-shot agent workdirs out of registry.json, but this write happens
-  // *before* that check ever runs and lands in a different file, so every
-  // agent run still left a permanent section in .config.json — 593 of them,
-  // 785 KB, reparsed on every server start. The section is only ever read
-  // back by a later run against the same path, and no later run visits a
-  // workdir, so for these roots it is write-only state.
-  if (!isEphemeralProjectRoot(absRoot)) {
-    saveProjectConfig(absRoot, {
-      root: config.root,
-      include: config.include,
-      exclude: config.exclude,
-    });
-  }
+  // TRA-702: this write is unconditional on purpose, ephemeral roots included.
+  // Skipping it for one-shot workdirs looks like the obvious fix for the
+  // .config.json bloat, but both stdio startup and the daemon's project loader
+  // call setupProject() and then immediately loadConfig(root) — which reads
+  // back exactly this section. Skipping the write silently downgrades the run
+  // to schema defaults, losing the detected framework include/exclude set (for
+  // presets like n8n's `**/*.json` that means not indexing the files the
+  // integration exists for). Collecting these sections afterwards is
+  // softGcSweep's job; see pruneProjectConfigSections.
+  saveProjectConfig(absRoot, {
+    root: config.root,
+    include: config.include,
+    exclude: config.exclude,
+  });
 
   // 3. Ensure global dirs, then register in the global registry. Registering
   // here (rather than after DB init, as before TRA-38) resolves the actual

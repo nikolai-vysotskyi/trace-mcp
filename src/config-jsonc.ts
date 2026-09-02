@@ -91,30 +91,37 @@ export function removeProjectConfigJsonc(projectRoot: string): void {
  *    and an existence check alone never reaches them. An explicitly registered
  *    workdir-shaped root is a deliberate act (`add`/`init`) and is kept.
  *
- * One rewrite for the whole set, not one per section — a section-at-a-time
- * loop would re-serialise a megabyte hundreds of times.
+ * Removal is per-key against one in-memory buffer, then a single atomic write.
+ * Replacing the whole `projects` object in one edit would be shorter, but it
+ * reserialises every *retained* section too and so drops the comments a user
+ * hand-wrote inside them — the per-project data `saveProjectConfigJsonc` and
+ * the #218 regression tests already go out of their way to preserve. Looping
+ * `removeProjectConfigJsonc` would keep the comments but re-read and rewrite
+ * the file once per section; this keeps both properties.
  */
 export function pruneProjectConfigSections(): string[] {
-  const text = readGlobalConfigText();
+  let text = readGlobalConfigText();
   const parsed = parse(text) as { projects?: Record<string, unknown> } | undefined;
   const projects = parsed?.projects;
   if (!projects || typeof projects !== 'object') return [];
 
   const registered = new Set(listProjects().map((p) => p.root));
-  const kept: Record<string, unknown> = {};
   const removed: string[] = [];
 
-  for (const [root, section] of Object.entries(projects)) {
+  for (const root of Object.keys(projects)) {
     const claimed = registered.has(root);
     const dead = !claimed && !fs.existsSync(root);
     const orphanWorkdir = !claimed && isEphemeralProjectRoot(root);
     if (dead || orphanWorkdir) removed.push(root);
-    else kept[root] = section;
   }
 
   if (removed.length === 0) return []; // don't rewrite a healthy config
 
-  modifyGlobalConfigJsonc(['projects'], kept);
+  for (const root of removed) {
+    text = applyEdits(text, modify(text, ['projects', root], undefined, FORMAT_OPTS));
+  }
+  ensureGlobalDirs();
+  atomicWriteString(GLOBAL_CONFIG_PATH, text, { mode: 0o600 });
   logger.debug({ removed: removed.length }, 'Pruned dead project sections from global config');
   return removed;
 }

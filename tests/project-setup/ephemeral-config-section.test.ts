@@ -4,16 +4,22 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 /**
- * TRA-702: TRA-396 kept one-shot agent-run checkouts out of registry.json, but
- * `setupProject` writes the per-project section into `.config.json` *before*
- * `registerProject` ever applies that check — a different file, on a path no
- * sweep reached. So every agent run still left a permanent section behind, and
- * `.config.json` reached 593 sections / 785 KB, reparsed on every server start.
+ * TRA-702 regression guard.
  *
- * These pin the write-side half of the fix. The sweep that drains the existing
- * backlog is covered in src/__tests__/config-project-sweep.test.ts.
+ * `.config.json` grew to 593 project sections because `setupProject` writes one
+ * per root and nothing collected them. The tempting fix — skip the write for
+ * one-shot agent workdirs, mirroring what `registerProject` does — is wrong:
+ * both stdio startup and the daemon's project loader call `setupProject()` and
+ * then immediately `loadConfig(root)`, reading back exactly that section. Skip
+ * it and the run silently falls back to schema defaults, losing the detected
+ * framework include/exclude set. For a preset like n8n's `**\/*.json` that
+ * means not indexing the files the integration exists for.
+ *
+ * So the section is written for every root, and `pruneProjectConfigSections`
+ * (on softGcSweep's hourly timer) collects the ephemeral ones afterwards. This
+ * pins the half that is easy to "optimise" back into a bug.
  */
-describe('project-setup — per-project config section for ephemeral roots', () => {
+describe('project-setup — config fidelity for ephemeral roots (TRA-702)', () => {
   let fakeHome: string;
   let originalHome: string | undefined;
 
@@ -35,51 +41,51 @@ describe('project-setup — per-project config section for ephemeral roots', () 
     fs.rmSync(fakeHome, { recursive: true, force: true });
   });
 
-  function makeRepo(dir: string): string {
-    fs.mkdirSync(dir, { recursive: true });
+  function makeExpressRepo(dir: string): string {
+    fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
     fs.writeFileSync(
       path.join(dir, 'package.json'),
-      JSON.stringify({ name: 'proj', version: '0.0.0' }),
+      JSON.stringify({ name: 'proj', version: '0.0.0', dependencies: { express: '^4.18.0' } }),
     );
+    fs.writeFileSync(path.join(dir, 'src', 'index.js'), 'require("express")();\n');
     return dir;
   }
 
-  // Resolved through global.js rather than hardcoded: the state dir is
-  // ~/.trace or ~/.trace-mcp depending on TRA-611 rename state, and a wrong
-  // guess here reads as an empty config, which would make these vacuous.
-  async function configProjects(): Promise<Record<string, unknown>> {
-    const { GLOBAL_CONFIG_PATH } = await import('../../src/global.js');
-    expect(GLOBAL_CONFIG_PATH.startsWith(fakeHome)).toBe(true);
-    if (!fs.existsSync(GLOBAL_CONFIG_PATH)) return {};
-    const { parse } = await import('jsonc-parser');
-    return (
-      (
-        parse(fs.readFileSync(GLOBAL_CONFIG_PATH, 'utf-8')) as {
-          projects?: Record<string, unknown>;
-        }
-      )?.projects ?? {}
-    );
-  }
-
-  test('writes no config section for a one-shot agent workdir', async () => {
+  test('an ephemeral workdir still loads the config its detection generated', async () => {
     const container = fs.mkdtempSync(path.join(os.tmpdir(), 'tm-eph-'));
-    const workdir = makeRepo(
+    const workdir = makeExpressRepo(
       path.join(container, 'multica_workspaces_acme', 'proj-1', 'tra-9-abc', 'workdir', 'repo'),
     );
 
     const { setupProject } = await import('../../src/project-setup.js');
-    setupProject(workdir);
+    const { loadConfig } = await import('../../src/config.js');
+    const { generateConfig } = await import('../../src/init/config-generator.js');
 
-    expect(Object.keys(await configProjects())).not.toContain(workdir);
+    const setup = setupProject(workdir);
+    const generated = generateConfig(setup.detection);
+    const loaded = await loadConfig(workdir);
+
+    // The effective config the run indexes with must be the detected one, not
+    // the broad schema defaults. This is the assertion that fails if the
+    // per-project write is ever skipped for ephemeral roots again.
+    expect(loaded.isOk()).toBe(true);
+    if (loaded.isOk()) {
+      // `include` is the framework-specific half and is loaded verbatim; it is
+      // what silently narrows to the schema default if the write is skipped.
+      // `exclude` is deliberately not compared — the loader normalises it by
+      // prefixing `**/`, so it is never equal to the generated form.
+      expect(loaded.value.include).toEqual(generated.include);
+
+      // Guard against the assertion above passing vacuously: the detected set
+      // must actually differ from what a root with no section falls back to,
+      // otherwise "loaded == generated" would hold even with the write skipped.
+      const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'tm-bare-'));
+      const fallback = await loadConfig(bare);
+      expect(fallback.isOk()).toBe(true);
+      if (fallback.isOk()) expect(loaded.value.include).not.toEqual(fallback.value.include);
+      fs.rmSync(bare, { recursive: true, force: true });
+    }
+
     fs.rmSync(container, { recursive: true, force: true });
-  });
-
-  test('still writes a config section for an ordinary project root', async () => {
-    const repo = makeRepo(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tm-real-')), 'app'));
-
-    const { setupProject } = await import('../../src/project-setup.js');
-    setupProject(repo);
-
-    expect(Object.keys(await configProjects())).toContain(repo);
   });
 });

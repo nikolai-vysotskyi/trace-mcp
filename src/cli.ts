@@ -260,6 +260,40 @@ function softGcSweep(): void {
     logger.warn({ err }, 'pruneStaleProjects soft-prune failed (non-fatal)');
   }
 
+  // TRA-702: same job as the registry prune above, on the other registration
+  // store. `setupProject` writes a per-project section into .config.json for
+  // every root it sets up — ephemeral ones included, because the run that
+  // follows reads it back — and nothing collected them, so the file reached
+  // 593 sections / 785 KB and was reparsed on every server start. Hourly (not
+  // startup-only) is what keeps a long-running daemon's file small, since each
+  // agent run adds one section while the daemon stays up.
+  try {
+    const removedSections = pruneProjectConfigSections();
+    if (removedSections.length > 0) {
+      logger.info(
+        { removedSections: removedSections.length },
+        `Pruned ${removedSections.length} dead project section(s) from the global config`,
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, 'pruneProjectConfigSections soft-prune failed (non-fatal)');
+  }
+
+  // TRA-702: atomic writes unlink their own tmp on error, but a process killed
+  // between open and rename never runs that handler — so every crash leaked one
+  // file into the state dir, permanently.
+  try {
+    const removedTmps = sweepOrphanTmpFiles(TRACE_MCP_HOME);
+    if (removedTmps.length > 0) {
+      logger.info(
+        { removedTmps: removedTmps.length },
+        `Removed ${removedTmps.length} orphaned atomic-write tmp file(s)`,
+      );
+    }
+  } catch (err) {
+    logger.warn({ err }, 'sweepOrphanTmpFiles soft-prune failed (non-fatal)');
+  }
+
   try {
     if (fs.existsSync(TOPOLOGY_DB_PATH)) {
       const topoStore = new TopologyStore(TOPOLOGY_DB_PATH);
@@ -3199,38 +3233,6 @@ program
           }
         } catch (err) {
           logger.warn({ err }, 'sweepMissingRoots failed (non-fatal)');
-        }
-
-        // Soft GC (TRA-702): every sweep above works on registry.json, but
-        // `setupProject` also writes a per-project section into .config.json —
-        // a separate file none of them touch. That map had no collector at
-        // all and reached 593 entries / 785 KB, reparsed on every server
-        // start. See pruneProjectConfigSections for what it will and won't drop.
-        try {
-          const removedSections = pruneProjectConfigSections();
-          if (removedSections.length > 0) {
-            logger.info(
-              { removedSections: removedSections.length },
-              `Pruned ${removedSections.length} dead project section(s) from the global config`,
-            );
-          }
-        } catch (err) {
-          logger.warn({ err }, 'pruneProjectConfigSections failed (non-fatal)');
-        }
-
-        // TRA-702: atomic writes unlink their own tmp on error, but a process
-        // killed between open and rename never runs that handler — so every
-        // crash leaked one file into the state dir, permanently.
-        try {
-          const removedTmps = sweepOrphanTmpFiles(TRACE_MCP_HOME);
-          if (removedTmps.length > 0) {
-            logger.info(
-              { removedTmps: removedTmps.length },
-              `Removed ${removedTmps.length} orphaned atomic-write tmp file(s)`,
-            );
-          }
-        } catch (err) {
-          logger.warn({ err }, 'sweepOrphanTmpFiles failed (non-fatal)');
         }
 
         // Soft GC (TRA-335): the sweep above only reaches workdirs that were
