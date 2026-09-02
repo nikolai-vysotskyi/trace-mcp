@@ -9,6 +9,11 @@
       "extra-files": [
         {
           "type": "json",
+          "path": "plugin.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
           "path": "packages/app/package.json",
           "jsonpath": "$.version"
         },

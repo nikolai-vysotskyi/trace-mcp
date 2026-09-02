@@ -115,6 +115,7 @@ describe('MCP registry manifest (server.json)', () => {
 describe('install-surface token claims stay honest', () => {
   const surfaces = [
     'package.json',
+    'plugin.json',
     'server.json',
     '.claude-plugin/plugin.json',
     '.claude-plugin/marketplace.json',
@@ -196,5 +197,38 @@ describe('Codex CLI plugin manifests', () => {
       const scriptName = match?.[1];
       expect(() => readFileSync(join(REPO_ROOT, 'hooks', scriptName ?? ''))).not.toThrow();
     }
+  });
+});
+
+describe('Agent Plugins specification (root plugin.json & mcp.json)', () => {
+  const pkg = readJson('package.json');
+  const plugin = readJson('plugin.json');
+  const mcp = readJson('mcp.json');
+
+  it('plugin.json version matches package.json version', () => {
+    expect(plugin.version).toBe(pkg.version);
+  });
+
+  it('plugin.json name matches package.json name', () => {
+    expect(plugin.name).toBe(pkg.name);
+  });
+
+  it('mcp.json declares stdio transport with bin command', () => {
+    const bin = pkg.bin as Record<string, string>;
+    const servers = mcp.mcpServers as Record<string, { type: string; command: string }>;
+    const server = servers['trace-mcp'];
+    expect(server).toBeDefined();
+    expect(server?.type).toBe('stdio');
+    expect(Object.keys(bin)).toContain(server?.command);
+  });
+
+  it('release-please is configured to bump root plugin.json version', () => {
+    const config = readJson('release-please-config.json') as {
+      packages: Record<string, { 'extra-files': Array<{ path: string; jsonpath: string }> }>;
+    };
+    const paths = config.packages['.']['extra-files']
+      .filter((f) => f.path === 'plugin.json')
+      .map((f) => f.jsonpath);
+    expect(paths).toContain('$.version');
   });
 });
