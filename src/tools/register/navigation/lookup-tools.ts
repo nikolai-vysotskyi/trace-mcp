@@ -16,6 +16,7 @@ import { getFileOutline, getSymbol } from '../../navigation/navigation.js';
 import { getRelatedSymbols } from '../../navigation/related.js';
 import { fallbackOutline } from '../../navigation/zero-index.js';
 import { CHANGE_IMPACT_METHODOLOGY } from '../../shared/confidence.js';
+import { buildEmptyResultNote } from '../../shared/empty-note.js';
 import { compactOutlineSymbols, DetailLevelSchema, isMinimal } from '../../_common/detail-level.js';
 import { OutputFormatSchema, encodeResponse } from '../../_common/output-format.js';
 
@@ -325,6 +326,10 @@ export function registerLookupTools(server: McpServer, ctx: ServerContext): void
       const payload: Record<string, unknown> = includeMethodology
         ? { ...result.value, _methodology: CHANGE_IMPACT_METHODOLOGY }
         : { ...result.value };
+      if (result.value.totalAffected === 0) {
+        const note = buildEmptyResultNote(store, projectRoot, result.value.target.path);
+        if (note) payload.empty_result_note = note;
+      }
       // Enrich with linked decisions (code-aware memory)
       if (decisionStore) {
         const linkedDecisions = decisionsForImpact(
