@@ -178,27 +178,51 @@ stars, and traffic *views* uniques** — nothing else. Channel-by-channel
 state lives in `ops/user-signal.md`; listing-by-listing state in
 `ops/distribution.md`. GitHub, 2026-09-02: **102 stars, 15 forks.**
 
-### The funnel — four numbers around that denominator (TRA-645)
+### The funnel — five numbers around that denominator (TRA-645, TRA-673)
 
 Active installs is a denominator with nothing on either side of it. Without
 that, every listing rewrite, hero redesign, README restructure and outreach PR
-is graded on taste. Four numbers fix it, one per stage:
+is graded on taste. Five numbers fix it, one per stage:
 
 | Stage | Number | Source | Window |
 | --- | --- | --- | --- |
 | Arrivals | unique visitors to the GitHub repo | `acquisition.views_uniques_14d` | rolling 14 d |
 | Installs | first-ever pings | `installs_28d.new` | 28 d |
 | Activation | % of active installs with ≥1 indexed repository | `activation.activated_pct` | 28 d |
+| Use | % of active installs that called a tool at all | `usage.used_pct` | 28 d |
 | Retention | day ÷ month active installs | `funnel.retention_dau_mau_pct` | 1 d over 28 d |
 
-**Do not refresh these by hand either.** All four are computed by the same
+**Activation and use are two stages, not two readings of one** (TRA-673).
+`repos_indexed` says an install completed *setup*; an install that indexed a
+repo in July and has not called a tool since still counts as activated. The
+ping has carried `calls` — trace-mcp tool calls since the previous ping,
+counted by the MCP server itself and therefore comparable across clients —
+since it was written, and no report read it. `scripts/ga4-snapshot.mjs` now
+does. The published figure is `used_pct`, a per-install boolean, and never a
+call total: the ping's credentials are public, so a summed counter is
+inflatable exactly like `tokens_saved`, while a boolean is bounded above by
+`active_users` and costs one forged install per point.
+
+`usage.by_client_used_pct` is the number with a strategy attached. The
+mechanism that actually routes an agent to our tools — the PreToolUse guard
+hook — is Claude Code only, Cursor and Windsurf get a rules file, and every
+other client gets tool descriptions, which ask rather than route. Session
+mining has providers for two clients. If use holds across clients, the hook is
+a nice-to-have and reach work goes wide; if it collapses without one, our
+addressable market is clients that can enforce routing, and a large share of
+current distribution effort points at installs that will never reach value. We
+ship into MCP directories on a premise of client neutrality and have never
+tested it. **Read the answer beside `by_client_installs`** — the only client
+breakdown we have is 8 claude-code / 2 codex / 1 grok, which concludes nothing.
+
+**Do not refresh these by hand either.** All of them are computed by the same
 daily `ga4-snapshot.yml` run and published under `funnel:` in
 [`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml) —
 that file is where a weekly run reads them, not this page. As of **2026-09-02**:
 178 arrivals (14 d), 24 new installs, retention 51% (35 day / 69 month), and
-activation still blocked — see below.
+activation still blocked — see below. Use is blocked on the same one form.
 
-**Two credentials stand between this and all four numbers**, both verified
+**Two credentials stand between this and all five numbers**, both verified
 against the live property by a `workflow_dispatch` on 2026-09-02
 ([run 33556680379](https://github.com/nikolai-vysotskyi/trace-mcp/actions/runs/33556680379)).
 Neither is a design question; do not re-investigate them, and do not read the
@@ -213,7 +237,14 @@ resulting `null`s as zeros.
    is one form in GA4 Admin → Custom definitions (event scope, parameter name
    `repos_indexed`). Automating it was tried and reverted: the Admin API is not
    enabled on the credential's GCP project (480706841486), so the script could
-   only have logged a failure once a day.
+   only have logged a failure once a day. **The same form now covers four
+   parameters, not one** — `repos_indexed`, `preset` and `tools_advertised`
+   (TRA-643), plus `calls` (TRA-673). All four are event-scoped custom
+   *dimensions*; `calls` is read as a dimension deliberately, because the Data
+   API has no `client_id` and a summed metric can therefore never yield the
+   per-install boolean the use stage is built on. One admin session registers
+   all four, and every day before it is unrecoverable for all four. Do not open
+   a fifth separate ask.
 2. **`GH_TRAFFIC_TOKEN` is unset.** GitHub's traffic endpoints require
    `Administration: read`, a permission `GITHUB_TOKEN` cannot be granted, so the
    workflow gets HTTP 403 and records that in `acquisition.error`. A
@@ -224,17 +255,22 @@ resulting `null`s as zeros.
 
 Three things to keep attached to them. The windows differ, so arrivals →
 installs is a direction and not a conversion rate. The ping's credentials are
-public, so all four are inflatable and are a trend, not an audit. And
-`activated_pct` is taken against its own buckets rather than against
-`active_users.month`, because GA4 deduplicates active users within a dimension
-value and not across them — an install that indexes its first repository
-mid-window is counted on both sides.
+public, so all of them are inflatable and are a trend, not an audit. And both
+`activated_pct` and `used_pct` are taken against their own buckets rather than
+against `active_users.month`, because GA4 deduplicates active users within a
+dimension value and not across them — an install that indexes its first
+repository or makes its first call mid-window is counted on both sides.
 
-Activation is the one to watch. It is the only one of the four that measures
-whether an install ever reached the product's value, and it is the ceiling on
-everything downstream of install: if a meaningful share of installs ping day
-after day with zero indexed repositories, that number outranks every capability
-item below.
+Use is the one to watch — activation was, until it became clear activation only
+measures setup. Every efficiency number we publish assumes the agent calls our
+tools instead of reading files; `used_pct` is the only number that says whether
+it does. It is the ceiling on everything downstream of install, and the gap
+between `activated_pct` and `used_pct` is the population that reached the
+product and stopped.
+
+**The one read-back this is for**, once a snapshot carries it: what share of
+active installs called a tool at all in the window, and whether that share
+differs between hook-capable and hook-less clients. Write the answer here.
 
 **Activation measures setup, not use — and the number that measures use is
 already in the payload** (found 2026-09-02, item 5). `repos_indexed` says an
@@ -263,10 +299,11 @@ surface) becomes field-checkable rather than bench-only. The attribution
 hole turned out to be two separate defects, both fixed in the same change —
 see "How to read `by_client`" above.
 
-**What is left is not code.** The two dimensions must be registered in GA4
+**What is left is not code.** The dimensions must be registered in GA4
 (event-scoped, named exactly `preset` and `tools_advertised`) before any
 value reaches `adoption.yml`; GA4 does not backfill, so the series starts at
-registration. Then one read-back after the first snapshot that carries them:
+registration. That registration is now shared with `repos_indexed` and `calls`
+— four parameters, one admin session, one ask. Do not raise it separately. Then one read-back after the first snapshot that carries them:
 what fraction of installs run which preset, and whether the silent
 `full` → `standard` default migration (TRA-538) actually landed. Until that
 read-back exists, "67–86%" stays a bench figure and must be cited as one.
