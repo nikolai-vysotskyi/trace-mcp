@@ -30,7 +30,7 @@
     "postinstall": "node scripts/preflight-native.mjs && node scripts/postinstall-app.mjs && node scripts/postinstall-control-plane.mjs",
     "prepublishOnly": "pnpm run build",
     "prepare": "simple-git-hooks",
-    "docs:sitemap": "node scripts/gen-sitemap.mjs",
+    "docs:sitemap": "node scripts/gen-sitemap.mjs && node scripts/gen-llms-full.mjs",
     "docs:language-matrix": "tsx scripts/language-matrix.ts",
     "docs:tools-index": "tsx scripts/tools-index.ts",
     "gen:tz-country": "node scripts/gen-tz-country.mjs"

@@ -10,19 +10,23 @@ layout: null
 ## Docs
 
 - [Tools reference](https://trace-mcp.com/tools-reference.html): Full list of the {{ site.data.counts.tools }} MCP tools and 9 resources trace-mcp exposes, registered dynamically per detected framework.
+- [Tool index](https://trace-mcp.com/tools-index.html): Alphabetical index of every MCP tool with its one-line description, generated from the server's own registrations.
 - [How trace-mcp compares](https://trace-mcp.com/comparisons.html): Feature-by-feature comparison against other code-graph and code-intelligence MCP servers.
 - [trace-mcp vs Repomix](https://trace-mcp.com/vs/repomix.html): Head-to-head against Repomix — packing a repository into one prompt vs indexing it into a queryable graph, and when Repomix is the better pick.
 - [trace-mcp vs Serena](https://trace-mcp.com/vs/serena.html): Head-to-head against Serena — a live LSP proxy vs a precomputed framework-aware graph.
 - [trace-mcp vs codebase-memory-mcp](https://trace-mcp.com/vs/codebase-memory-mcp.html): Head-to-head against the closest peer — same knowledge-graph premise, opposite bets on language breadth vs framework depth.
 - [trace-mcp vs codegraph](https://trace-mcp.com/vs/codegraph.html): Head-to-head against the largest peer by stars — one advertised tool optimised for orientation vs a broad surface that continues past navigation.
 - [trace-mcp vs Context Mode](https://trace-mcp.com/vs/context-mode.html): Head-to-head against the adjacent lane — compressing what tool calls return vs making structural questions about code cheap to ask.
+- [PR review context benchmark](https://trace-mcp.com/pr-context-benchmark.html): Input-token cost of AI code-review context measured on 60 merged pull requests across six open-source repositories — trace-mcp versus loading the changed files.
 - [How to reduce Claude Code token usage](https://trace-mcp.com/reduce-claude-code-token-usage.html): Seven measured tactics for cutting agent token cost, including the ones that have nothing to do with trace-mcp.
 - [Configuration](https://trace-mcp.com/configuration.html): All config file options; trace-mcp works out of the box without one.
 - [Architecture](https://trace-mcp.com/architecture.html): The two-pass indexing pipeline and how the dependency graph is built and stored.
 - [Supported frameworks & languages](https://trace-mcp.com/supported-frameworks.html): The {{ site.data.counts.languages }} supported languages and the frameworks each plugin understands.
+- [Language capability matrix](https://trace-mcp.com/language-matrix.html): What each of the {{ site.data.counts.languages }} supported languages actually extracts — parser, edge types, and test coverage.
 - [Session Analytics & Coverage Intelligence](https://trace-mcp.com/analytics.html): The built-in engine that parses agent session logs and tracks token savings and waste.
 - [TOON Token Savings — Measured](https://trace-mcp.com/toon-savings.html): Real-world token measurements for the TOON output format across trace-mcp tools.
 - [Decision memory](https://trace-mcp.com/decision-memory.html): The persistent decision knowledge graph linking architectural decisions and tradeoffs to code.
+- [Daemon memory](https://trace-mcp.com/daemon-memory.html): Measured resident-set attribution for the trace-mcp daemon — what each region holds and which config knob bounds it.
 - [Telemetry & Observability](https://trace-mcp.com/telemetry.html): The OpenTelemetry-compatible span emitter for AI provider calls and MCP tool invocations.
 - [Quality gates](https://trace-mcp.com/quality-gates.html): How `.trace.json` quality-gate thresholds are configured and calibrated.
 - [System Prompt Routing via tweakcc](https://trace-mcp.com/tweakcc.html): Wiring trace-mcp tool usage directly into Claude Code's system prompt via tweakcc.
