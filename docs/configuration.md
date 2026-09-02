@@ -748,6 +748,8 @@ Multica agents don't run `trace-mcp init` — each agent's MCP wiring is set dir
 multica agent update <agent-id> --mcp-config-file ./trace-mcp-dev.json
 ```
 
+> **Check that the agent's installed `trace-mcp` supports `--preset` before rolling this out.** The flag shipped after 3.11.0; an older binary exits immediately with `unknown option '--preset'`, and because a dead MCP server is silent, the agent simply runs with **zero** trace-mcp tools instead of a smaller set. Verify with `trace-mcp --help | grep -- --preset` on the machine the agent runs on. Same trap applies to a `command` pointing at a build inside a per-task working directory — those get cleaned up.
+
 The role → preset matrix used in the trace-mcp workspace itself (adjust to your own roles):
 
 | Agent role | Preset | Why |
