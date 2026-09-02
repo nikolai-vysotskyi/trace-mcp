@@ -288,6 +288,20 @@ token reduction" and the registry still had 3.1.1/3.2.0 with the old string,
 because both are populated by the release workflow. Do not report a directory as
 corrected until the release that carries the text is out.
 
+**The headline number a listing scrapes changed on 2026-09-02 (TRA-647).** The
+README's above-the-fold claim is no longer "40–50% fewer tokens on average" — it
+is the PR-context benchmark, "90.6% fewer input tokens", measured on 60 merged
+pull requests in six repositories we do not own, with a link to the method page.
+Every listing that scrapes the README or the npm page live — glama.ai above, and
+any other in this table whose "how it can be changed" column says the same —
+will pick that up **at the next release**, not at the merge, by the rule in the
+paragraph above. Two consequences for a future run: do not "correct" a directory
+that still shows the old wording before the carrying release is published, and
+do not hand-type the number into a submission form. It is generated into
+`docs/_data/pr_context_bench.json` by `scripts/bench-pr-context.ts` and guarded
+by `tests/docs/readme-claims.test.ts` — same discipline as
+`docs/_data/counts.yml`.
+
 **TRA-263's "165 tools" is stale.** `docs/_data/counts.yml` says 169 and the
 README already agreed. TRA-346's "141 schema-carrying tools" answers a different
 question and is not a competing count.
