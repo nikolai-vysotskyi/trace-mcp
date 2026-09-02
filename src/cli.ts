@@ -142,7 +142,7 @@ import { SubprojectManager } from './subproject/manager.js';
 import { buildGraphData, generateHtml } from './tools/analysis/visualize.js';
 import { scanCodeSmells } from './tools/quality/code-smells.js';
 import { TopologyStore } from './topology/topology-db.js';
-import { checkAndInstallUpdate, runPostUpdateMigrations } from './updater.js';
+import { checkAndInstallUpdate, scheduleBackgroundUpdate } from './updater.js';
 import { atomicWriteJson, sweepOrphanTmpFiles } from './utils/atomic-write.js';
 import { sqliteUtcToIso } from './utils/sqlite-time.js';
 
@@ -408,24 +408,18 @@ program
     installProcessSafetyNet('serve');
     const projectRoot = process.cwd();
 
-    // Auto-update: check if a newer trace-mcp version is available and install it.
+    // Auto-update + post-update migrations. TRA-703: both run in the background,
+    // never on the path to the `initialize` response — awaiting them here made
+    // the first session after every release time out and connect as `failed`.
     // Controlled by ~/.trace-mcp/.config.json: { "auto_update": true, "auto_update_check_interval_hours": 24 }
     const globalRaw = loadGlobalConfigRaw();
-    if (globalRaw.auto_update !== false) {
-      const intervalHours =
+    scheduleBackgroundUpdate({
+      checkIntervalHours:
         typeof globalRaw.auto_update_check_interval_hours === 'number'
           ? globalRaw.auto_update_check_interval_hours
-          : 12;
-      const updated = await checkAndInstallUpdate({ checkIntervalHours: intervalHours });
-      if (updated) {
-        // New version installed — exit cleanly. The MCP client will restart this
-        // process, which will now run the updated binary.
-        process.exit(0);
-      }
-    }
-
-    // Post-update migrations: hooks, CLAUDE.md, reindex — runs once after version change
-    await runPostUpdateMigrations();
+          : 12,
+      install: globalRaw.auto_update !== false,
+    });
 
     // Detect git linked worktrees so we share the main repo's index instead
     // of building a redundant copy.  projectRoot stays as the worktree path
@@ -598,19 +592,19 @@ program
     // the file naming a dead PID. isDaemonProcessAlive() then read "dead" while
     // a healthy daemon was serving, which disarmed the very guard that exists to
     // stop the restart war (measured: 724 restarts in 18.7h, peak 89/h).
-    // Auto-update (same logic as serve)
+    // Auto-update (same logic as serve). TRA-703: also off the startup path —
+    // a daemon stuck in `npm install` never binds its port, so every stdio
+    // client that auto-spawned it sits in tryAutoSpawnDaemon until timeout and
+    // only then answers `initialize`. The watchdog below picks up the installed
+    // version on its next tick and restarts the daemon between sessions.
     const globalRaw = loadGlobalConfigRaw();
-    if (globalRaw.auto_update !== false) {
-      const intervalHours =
+    scheduleBackgroundUpdate({
+      checkIntervalHours:
         typeof globalRaw.auto_update_check_interval_hours === 'number'
           ? globalRaw.auto_update_check_interval_hours
-          : 12;
-      const updated = await checkAndInstallUpdate({ checkIntervalHours: intervalHours });
-      if (updated) process.exit(0);
-    }
-
-    // Post-update migrations: hooks, CLAUDE.md, reindex — runs once after version change
-    await runPostUpdateMigrations();
+          : 12,
+      install: globalRaw.auto_update !== false,
+    });
 
     // Phase 5.1: defer registered-project loading until AFTER httpServer.listen
     // so the daemon is reachable from the first millisecond. Requests against
@@ -3117,7 +3111,7 @@ program
     }
 
     // ── Registry auto-update watchdog (TRA-180) ──────────────────
-    // checkAndInstallUpdate only runs once, at process startup. A daemon kept
+    // checkAndInstallUpdate otherwise runs once, shortly after startup. A daemon kept
     // alive for weeks by launchd/tray or a long-lived stdio client that never
     // reconnects therefore never re-hits the npm registry, so it can silently
     // sit on a stale version indefinitely (unlike the local-staleness check
