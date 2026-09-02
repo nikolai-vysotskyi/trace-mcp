@@ -3,7 +3,9 @@
 # trace-mcp Stop hook
 #
 # After the agent stops, mines newly produced session logs in the background
-# so newly emitted decisions land in the index without manual invocation.
+# so newly emitted decisions land in the index without manual invocation, then
+# ingests them into the analytics DB so `analytics report/optimize/savings` and
+# anything reading ~/.trace-mcp/analytics.db directly stay current (TRA-695).
 #
 # Async by design: the foreground process exits within milliseconds. The mine
 # runs in a detached `nohup ... &` subshell so the agent's turn completion is
@@ -59,6 +61,10 @@ LOG_FILE="${TMPDIR:-/tmp}/trace-mcp-stop-mining-${PROJECT_HASH}.log"
   nohup "$TRACE_MCP_BIN" memory mine \
     --project "$PROJECT_ROOT" \
     >"$LOG_FILE" 2>&1
+  # Incremental: skips every session log whose mtime hasn't moved. Deliberately
+  # NOT --project — the whole point of TRA-695 is that a project nobody stops in
+  # goes stale unnoticed, and a global pass costs one stat per log file.
+  nohup "$TRACE_MCP_BIN" analytics sync >>"$LOG_FILE" 2>&1
   rm -f "$LOCK_FILE" 2>/dev/null || true
 ) >/dev/null 2>&1 &
 disown 2>/dev/null || true

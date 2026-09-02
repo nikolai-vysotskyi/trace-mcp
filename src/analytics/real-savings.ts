@@ -5,6 +5,7 @@
 
 import type { Store } from '../db/store.js';
 import { isTraceToolServer, type ToolCallRow } from './analytics-store.js';
+import type { IngestionStatus } from './sync.js';
 
 interface FileAlternative {
   file: string;
@@ -50,6 +51,8 @@ interface RealSavingsReport {
 
   /** Set when zero session data was found both on disk and in the aggregation — see TRA-76. */
   _warnings?: string[];
+  /** Ingestion watermark of the analytics DB — see TRA-695. */
+  _ingestion?: IngestionStatus;
 }
 
 const MODEL_PRICING: Record<string, number> = {
