@@ -637,7 +637,35 @@ layout: null
       .hero-cta .btn { padding: 14px 22px; font-size: 11px; justify-content: center; }
       .hero-install { font-size: 12px; min-height: 52px; padding: 0 14px; gap: 10px; }
       .hero-alt-arch { font-size: 11px; margin-top: 12px; }
-      .hero-trust { font-size: 11px; gap: 8px; margin-top: 14px; }
+      /* One item per line, no dots. As a wrapped row a separator ends a line at
+         every tested width from 660px down — measured, not assumed: the last box
+         on the first line is a `.dot` at 660, 600, 520, 430, 390, 360 and 320.
+         Stacking removes that at a cost of 20px at 390px (58px → 78px), all of
+         it below the two actions. */
+      .hero-trust {
+        font-size: 11px;
+        margin-top: 14px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+      .hero-trust .dot { display: none; }
+      /* Stacked, the row's one emphasised item stops reading as the strongest of
+         three peers and starts reading as a heading over the two below it — a
+         hierarchy that is not there. Inline (≥700px) the emphasis still works,
+         so it is dropped here only. */
+      .hero-trust .ok { color: inherit; font-weight: inherit; }
+      /* Both labels on their own line rather than two columns fighting over 390px.
+         The row stops fitting at 520px (17px → 33px) and takes three lines at
+         320px; the divider has no width left to draw by then, so it goes. This
+         reuses the hero's 700px breakpoint instead of adding a second one 180px
+         away — the cost is 17px of height between 520px and 700px. */
+      .hero-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+      }
+      .hero-meta .divider { display: none; }
     }
 
     /* ── Metrics strip (proof row under hero) ── */
