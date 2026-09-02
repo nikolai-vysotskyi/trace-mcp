@@ -72,7 +72,7 @@ could not read at all until TRA-643 found out why.
 This is not an argument to slow the engine room down. It is an argument
 that the next several weeks of *strategic* work — the items below, and the
 weekly focus derived from them — should be measured in users reaching first
-value, not in capability shipped. All four "ready to start" items are of
+value, not in capability shipped. All five "ready to start" items are of
 that shape.
 
 ## Adoption — metric of record
@@ -178,27 +178,51 @@ stars, and traffic *views* uniques** — nothing else. Channel-by-channel
 state lives in `ops/user-signal.md`; listing-by-listing state in
 `ops/distribution.md`. GitHub, 2026-09-02: **102 stars, 15 forks.**
 
-### The funnel — four numbers around that denominator (TRA-645)
+### The funnel — five numbers around that denominator (TRA-645, TRA-673)
 
 Active installs is a denominator with nothing on either side of it. Without
 that, every listing rewrite, hero redesign, README restructure and outreach PR
-is graded on taste. Four numbers fix it, one per stage:
+is graded on taste. Five numbers fix it, one per stage:
 
 | Stage | Number | Source | Window |
 | --- | --- | --- | --- |
 | Arrivals | unique visitors to the GitHub repo | `acquisition.views_uniques_14d` | rolling 14 d |
 | Installs | first-ever pings | `installs_28d.new` | 28 d |
 | Activation | % of active installs with ≥1 indexed repository | `activation.activated_pct` | 28 d |
+| Use | % of active installs that called a tool at all | `usage.used_pct` | 28 d |
 | Retention | day ÷ month active installs | `funnel.retention_dau_mau_pct` | 1 d over 28 d |
 
-**Do not refresh these by hand either.** All four are computed by the same
+**Activation and use are two stages, not two readings of one** (TRA-673).
+`repos_indexed` says an install completed *setup*; an install that indexed a
+repo in July and has not called a tool since still counts as activated. The
+ping has carried `calls` — trace-mcp tool calls since the previous ping,
+counted by the MCP server itself and therefore comparable across clients —
+since it was written, and no report read it. `scripts/ga4-snapshot.mjs` now
+does. The published figure is `used_pct`, a per-install boolean, and never a
+call total: the ping's credentials are public, so a summed counter is
+inflatable exactly like `tokens_saved`, while a boolean is bounded above by
+`active_users` and costs one forged install per point.
+
+`usage.by_client_used_pct` is the number with a strategy attached. The
+mechanism that actually routes an agent to our tools — the PreToolUse guard
+hook — is Claude Code only, Cursor and Windsurf get a rules file, and every
+other client gets tool descriptions, which ask rather than route. Session
+mining has providers for two clients. If use holds across clients, the hook is
+a nice-to-have and reach work goes wide; if it collapses without one, our
+addressable market is clients that can enforce routing, and a large share of
+current distribution effort points at installs that will never reach value. We
+ship into MCP directories on a premise of client neutrality and have never
+tested it. **Read the answer beside `by_client_installs`** — the only client
+breakdown we have is 8 claude-code / 2 codex / 1 grok, which concludes nothing.
+
+**Do not refresh these by hand either.** All of them are computed by the same
 daily `ga4-snapshot.yml` run and published under `funnel:` in
 [`adoption-data`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/adoption-data/adoption.yml) —
 that file is where a weekly run reads them, not this page. As of **2026-09-02**:
 178 arrivals (14 d), 24 new installs, retention 51% (35 day / 69 month), and
-activation still blocked — see below.
+activation still blocked — see below. Use is blocked on the same one form.
 
-**Two credentials stand between this and all four numbers**, both verified
+**Two credentials stand between this and all five numbers**, both verified
 against the live property by a `workflow_dispatch` on 2026-09-02
 ([run 33556680379](https://github.com/nikolai-vysotskyi/trace-mcp/actions/runs/33556680379)).
 Neither is a design question; do not re-investigate them, and do not read the
@@ -213,7 +237,14 @@ resulting `null`s as zeros.
    is one form in GA4 Admin → Custom definitions (event scope, parameter name
    `repos_indexed`). Automating it was tried and reverted: the Admin API is not
    enabled on the credential's GCP project (480706841486), so the script could
-   only have logged a failure once a day.
+   only have logged a failure once a day. **The same form now covers four
+   parameters, not one** — `repos_indexed`, `preset` and `tools_advertised`
+   (TRA-643), plus `calls` (TRA-673). All four are event-scoped custom
+   *dimensions*; `calls` is read as a dimension deliberately, because the Data
+   API has no `client_id` and a summed metric can therefore never yield the
+   per-install boolean the use stage is built on. One admin session registers
+   all four, and every day before it is unrecoverable for all four. Do not open
+   a fifth separate ask.
 2. **`GH_TRAFFIC_TOKEN` is unset.** GitHub's traffic endpoints require
    `Administration: read`, a permission `GITHUB_TOKEN` cannot be granted, so the
    workflow gets HTTP 403 and records that in `acquisition.error`. A
@@ -224,17 +255,33 @@ resulting `null`s as zeros.
 
 Three things to keep attached to them. The windows differ, so arrivals →
 installs is a direction and not a conversion rate. The ping's credentials are
-public, so all four are inflatable and are a trend, not an audit. And
-`activated_pct` is taken against its own buckets rather than against
-`active_users.month`, because GA4 deduplicates active users within a dimension
-value and not across them — an install that indexes its first repository
-mid-window is counted on both sides.
+public, so all of them are inflatable and are a trend, not an audit. And both
+`activated_pct` and `used_pct` are taken against their own buckets rather than
+against `active_users.month`, because GA4 deduplicates active users within a
+dimension value and not across them — an install that indexes its first
+repository or makes its first call mid-window is counted on both sides.
 
-Activation is the one to watch. It is the only one of the four that measures
-whether an install ever reached the product's value, and it is the ceiling on
-everything downstream of install: if a meaningful share of installs ping day
-after day with zero indexed repositories, that number outranks every capability
-item below.
+Use is the one to watch — activation was, until it became clear activation only
+measures setup. Every efficiency number we publish assumes the agent calls our
+tools instead of reading files; `used_pct` is the only number that says whether
+it does. It is the ceiling on everything downstream of install, and the gap
+between `activated_pct` and `used_pct` is the population that reached the
+product and stopped.
+
+**The one read-back this is for**, once a snapshot carries it: what share of
+active installs called a tool at all in the window, and whether that share
+differs between hook-capable and hook-less clients. Write the answer here.
+
+**Activation measures setup, not use — and the number that measures use is
+already in the payload** (found 2026-09-02, item 5). `repos_indexed` says an
+install once registered a project. It does not say the agent ever called a
+tool again. The ping has carried the second number since it was written:
+`calls`, the count of trace-mcp tool calls since the previous ping
+(`src/savings.ts` `recordCall` → `usage-ping.ts:229-250`). It is a per-tool-call
+counter kept by the MCP server itself, so it is comparable across clients. It
+appears **zero times in `scripts/ga4-snapshot.mjs`** — the only ping field of
+substance no report has ever read. Nothing above should be read as "installs
+are using the product"; so far we know they installed it.
 
 Acquisition already has a finding. Over two independent 14-day windows
 (2026-08-30 and 2026-09-02) **not one of the twelve directory listings in
@@ -252,10 +299,11 @@ surface) becomes field-checkable rather than bench-only. The attribution
 hole turned out to be two separate defects, both fixed in the same change —
 see "How to read `by_client`" above.
 
-**What is left is not code.** The two dimensions must be registered in GA4
+**What is left is not code.** The dimensions must be registered in GA4
 (event-scoped, named exactly `preset` and `tools_advertised`) before any
 value reaches `adoption.yml`; GA4 does not backfill, so the series starts at
-registration. Then one read-back after the first snapshot that carries them:
+registration. That registration is now shared with `repos_indexed` and `calls`
+— four parameters, one admin session, one ask. Do not raise it separately. Then one read-back after the first snapshot that carries them:
 what fraction of installs run which preset, and whether the silent
 `full` → `standard` default migration (TRA-538) actually landed. Until that
 read-back exists, "67–86%" stays a bench figure and must be cited as one.
@@ -330,9 +378,49 @@ coverage, not a model's judgement, and the page already names the 5 PRs of
 out of backlog — a token number without a quality number is an efficiency
 claim, not a value claim, which is exactly the move we criticise peers for.
 
+### 5. Read `calls`, not just `repos_indexed` — does the product get used, and by which client? (new, TRA-673)
+Every efficiency number this project publishes assumes the agent calls our
+tools instead of reading files. That assumption has never been checked outside
+one client, and the mechanism that enforces it is not portable:
+
+- **Level 3 (the PreToolUse guard hook that actually blocks Read/Grep) is
+  Claude Code only**, and Level 4's tweakcc system-prompt rewrite likewise
+  (`README.md`, "Getting the most out of trace-mcp"). Cursor and Windsurf get
+  a rules file (`src/init/ide-rules.ts`); everyone else gets tool descriptions.
+  Below Level 3 the product is asking, not routing.
+- **Session mining, the cross-session pillar, has two providers** — `hermes`
+  and `codex` (`src/session/providers/`). For a Cursor or Windsurf install,
+  decision memory and `search_sessions` start empty and stay that way.
+- The one breakdown we have (2026-09-01) is 8 claude-code, 2 codex, 1 grok
+  inside a 36-row `by_client` bucket. Too small to conclude from, which is the
+  point: we are shipping into MCP directories on the premise of client
+  neutrality while our strongest mechanisms exist for one client.
+
+**The measurement is nearly free**, because the counter is already being sent
+and simply never read — see "Activation measures setup, not use" above. Work:
+read `calls` in `scripts/ga4-snapshot.mjs` alongside `tokens_saved`, break it
+down by `client`, and publish it under `funnel:` as the activation number that
+means *use* (`repos_indexed` stays as setup). Then one read-back: what share of
+active installs called a tool at all in the window, and does that share differ
+between hook-capable and hook-less clients.
+
+**Why it is here and not a tactical ticket.** If use is flat across clients,
+Level 3 is a nice-to-have and reach work should go wide — every directory, every
+client. If it collapses without the hook, then our addressable market is
+"clients that can enforce tool routing", the honest response is portable
+enforcement (or a much stronger Level 1), and half the distribution effort is
+currently pointed at installs that will never reach value. Those are opposite
+strategies and we cannot presently tell them apart.
+
+**One dependency, and it is the same one three other items are waiting on.**
+`calls` needs registering in GA4 as an event-scoped custom metric, exactly like
+`repos_indexed` / `preset` / `tools_advertised` need registering as dimensions.
+GA4 does not backfill any of them. That makes four fields in one admin session
+rather than four separate asks — bundle it.
+
 ## Big bets — design pass before any code
 
-### 5. One door instead of 169 — a router preset (new, TRA-646)
+### 6. One door instead of 169 — a router preset (new, TRA-646)
 Presets took the advertised surface down by hiding tools behind
 `load_tools`. That worked, it broke nothing, and it has an obvious limit:
 even `minimal` still advertises 28 full JSON Schemas, and TRA-186 already
@@ -370,7 +458,7 @@ this is a new mode beside presets or a replacement for `full`. Not a
 contract break if it ships as a preset (`router`), which is the shape to
 design toward.
 
-### 6. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
+### 7. Team-shared graph — parked, needs Nikolai's go-ahead (TRA-128)
 trace-mcp's whole pitch is "reuse instead of recompute", but reuse only
 happens within one developer's laptop, across turns. A team of five on the
 same repo each index it separately and never see each other's decisions —
@@ -384,7 +472,7 @@ that item 3 sharpens the trigger condition: with 61 installs across 11
 countries and no evidence of a single multi-seat user, there is currently
 no demand-side reason to unpark it either.
 
-### 7. Decide what the State Engine makes us — waiting on its own numbers (TRA-649)
+### 8. Decide what the State Engine makes us — waiting on its own numbers (TRA-649)
 `trace_state_*` — init, patch, get, checkpoint, rollback over a SQLite task
 store with RFC 7396 merge patches, plus a `trace://state/{task_id}`
 resource — is a second product pillar, and it arrived through an
@@ -415,7 +503,7 @@ claim item 4 exists to stop us making.
   67–86% without a contract break. Do not reopen it for efficiency reasons;
   only merge two tools if they are genuinely the same tool.
 - **Chasing competitor feature/tool-count parity for its own sake** — see
-  `comparisons.md`'s "deliberately NOT chasing" list. Item 5 is the sharper
+  `comparisons.md`'s "deliberately NOT chasing" list. Item 6 is the sharper
   version of why: count was never the metric, in either direction, and the
   two largest peers are competing in the opposite direction anyway.
 - **Rewriting CFG/taint analysis onto a real AST/dataflow engine** — a real
