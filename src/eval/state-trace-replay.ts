@@ -25,20 +25,29 @@ import type { AgentExecutionState } from '../state/types.js';
 export interface ReplayTurn {
   /** Prompt tokens the provider actually saw on this turn. */
   promptTokens: number;
-  /** Tokens read from prompt cache (billed at ~0.1x). */
+  /** Ordinary input tokens (billed at 1x). */
+  inputTokens: number;
+  /** Tokens written to prompt cache (billed at 1.25x). */
+  cacheCreationTokens: number;
+  /** Tokens read from prompt cache (billed at 0.1x). */
   cacheReadTokens: number;
+  /**
+   * The state a SKILL.state agent would have been carrying *into* this turn —
+   * reconstructed from earlier turns only, never from what came after.
+   */
+  state: AgentExecutionState;
 }
 
 export interface ReplaySession {
   sessionId: string;
   /** Turns of the longest run without a context reset (compaction / new prefix). */
   turns: ReplayTurn[];
-  state: AgentExecutionState;
 }
 
 export interface ReplayResult {
   sessionId: string;
   turns: number;
+  /** Mean size of the state block actually charged across the replayed turns. */
   stateTokens: number;
   baseTokens: number;
   reactTotalTokens: number;
@@ -62,44 +71,58 @@ const CACHE_WRITE_MULTIPLIER = 1.25;
  */
 export function replaySession(session: ReplaySession, windowSize = 2): ReplayResult {
   const { turns } = session;
-  const stateMarkdown = serializeStateToMarkdown(session.state);
-  const stateTokens = estimateTokenCount(stateMarkdown);
   const base = turns[0]?.promptTokens ?? 0;
+  const first = turns[0];
 
   // Growth attributable to turn t: what the transcript gained since the previous turn.
   const growth = turns.map((turn, i) =>
     i === 0 ? 0 : Math.max(0, turn.promptTokens - turns[i - 1]!.promptTokens),
   );
 
+  // The state block changes as the task progresses; serialize each distinct snapshot once.
+  const sizeCache = new Map<AgentExecutionState, number>();
+  const sizeOf = (state: AgentExecutionState): number => {
+    let size = sizeCache.get(state);
+    if (size === undefined) {
+      size = estimateTokenCount(serializeStateToMarkdown(state));
+      sizeCache.set(state, size);
+    }
+    return size;
+  };
+
   let reactTotal = 0;
   let stateTotal = 0;
   let reactBilled = 0;
   let stateBilled = 0;
+  let stateTokensSum = 0;
 
   for (let t = 0; t < turns.length; t++) {
     const turn = turns[t]!;
+    const stateTokens = sizeOf(turn.state);
+    stateTokensSum += stateTokens;
+
     reactTotal += turn.promptTokens;
-    reactBilled +=
-      turn.cacheReadTokens * CACHE_READ_MULTIPLIER +
-      Math.max(0, turn.promptTokens - turn.cacheReadTokens);
+    reactBilled += billed(turn.inputTokens, turn.cacheCreationTokens, turn.cacheReadTokens);
 
     let window = 0;
     for (let k = Math.max(0, t - windowSize + 1); k <= t; k++) window += growth[k]!;
     const statePrompt = base + stateTokens + window;
     stateTotal += statePrompt;
 
-    // ponytail: the state arm rewrites its tail every turn, so only the fixed
-    // base prefix can stay cached. Upper bound on how well it can cache.
-    stateBilled +=
+    // The state arm rewrites its tail every turn, so only the fixed base prefix can
+    // stay cached — an upper bound on how well it can cache. The base itself is priced
+    // from the classes actually observed on turn 1, so both arms pay the same for it.
+    const basePrice =
       t === 0
-        ? statePrompt * CACHE_WRITE_MULTIPLIER
-        : base * CACHE_READ_MULTIPLIER + (stateTokens + window) * CACHE_WRITE_MULTIPLIER;
+        ? billed(first!.inputTokens, first!.cacheCreationTokens, first!.cacheReadTokens)
+        : base * CACHE_READ_MULTIPLIER;
+    stateBilled += basePrice + (stateTokens + window) * CACHE_WRITE_MULTIPLIER;
   }
 
   return {
     sessionId: session.sessionId,
     turns: turns.length,
-    stateTokens,
+    stateTokens: Math.round(stateTokensSum / turns.length),
     baseTokens: base,
     reactTotalTokens: reactTotal,
     stateTotalTokens: stateTotal,
@@ -108,6 +131,11 @@ export function replaySession(session: ReplaySession, windowSize = 2): ReplayRes
     stateBilledTokens: Math.round(stateBilled),
     billedSavingsPercent: pct(reactBilled, stateBilled),
   };
+}
+
+/** Prices one turn's prompt with Anthropic's cache multipliers. */
+function billed(input: number, cacheCreation: number, cacheRead: number): number {
+  return input + cacheCreation * CACHE_WRITE_MULTIPLIER + cacheRead * CACHE_READ_MULTIPLIER;
 }
 
 function pct(from: number, to: number): number {
@@ -182,6 +210,19 @@ export function parseSessionLog(sessionId: string, jsonl: string): ReplaySession
   // One assistant message is logged once per content block; count it once.
   const countedMessages = new Set<string>();
 
+  // The state is rebuilt as the transcript advances. `snapshot` is re-materialized
+  // only after something changed, so unchanged turns share one object (and one
+  // serialization) while a later change can never rewrite an earlier turn's block.
+  let dirty = true;
+  let snapshot: AgentExecutionState | null = null;
+  const currentState = (): AgentExecutionState => {
+    if (dirty || !snapshot) {
+      snapshot = buildState(sessionId, goal, todos, files, symbols, lastError);
+      dirty = false;
+    }
+    return snapshot;
+  };
+
   for (const line of jsonl.split('\n')) {
     if (!line.trim()) continue;
     let entry: RawEntry;
@@ -197,45 +238,77 @@ export function parseSessionLog(sessionId: string, jsonl: string): ReplaySession
     if (entry.type === 'user' && !goal) {
       const text = textOf(entry.message?.content).trim();
       // Skip the harness preamble blocks; the first real sentence is the goal.
-      if (text && !text.startsWith('<')) goal = text.replace(/\s+/g, ' ').slice(0, 240);
+      if (text && !text.startsWith('<')) {
+        goal = text.replace(/\s+/g, ' ').slice(0, 240);
+        dirty = true;
+      }
     }
 
     if (entry.type === 'user') {
       const err = hasErrorResult(entry.message?.content);
-      if (err) lastError = err;
+      if (err) {
+        lastError = err;
+        dirty = true;
+      }
     }
 
     if (entry.type !== 'assistant') continue;
+
+    // Record the turn BEFORE folding in its own tool calls: the prompt that produced
+    // this turn could only carry what earlier turns had established.
+    const usage = entry.message?.usage;
+    const messageId = entry.message?.id;
+    if (usage && messageId && !countedMessages.has(messageId)) {
+      countedMessages.add(messageId);
+      const inputTokens = usage.input_tokens ?? 0;
+      const cacheCreationTokens = usage.cache_creation_input_tokens ?? 0;
+      const cacheReadTokens = usage.cache_read_input_tokens ?? 0;
+      const promptTokens = inputTokens + cacheCreationTokens + cacheReadTokens;
+      if (promptTokens > 0) {
+        turns.push({
+          promptTokens,
+          inputTokens,
+          cacheCreationTokens,
+          cacheReadTokens,
+          state: currentState(),
+        });
+      }
+    }
 
     for (const call of toolUses(entry.message?.content)) {
       const input = call.input;
       if (call.name === 'TodoWrite' && Array.isArray(input.todos)) {
         todos = input.todos as Array<{ content?: string; status?: string }>;
+        dirty = true;
       }
       const path = input.file_path ?? input.path;
       if ((call.name === 'Edit' || call.name === 'Write') && typeof path === 'string') {
         files.push(path);
+        dirty = true;
       }
       const sym = input.fqn ?? input.symbol_id;
-      if (typeof sym === 'string' && sym) symbols.push(sym);
+      if (typeof sym === 'string' && sym) {
+        symbols.push(sym);
+        dirty = true;
+      }
     }
-
-    const usage = entry.message?.usage;
-    const messageId = entry.message?.id;
-    if (!usage || !messageId || countedMessages.has(messageId)) continue;
-    countedMessages.add(messageId);
-    const promptTokens =
-      (usage.input_tokens ?? 0) +
-      (usage.cache_creation_input_tokens ?? 0) +
-      (usage.cache_read_input_tokens ?? 0);
-    if (promptTokens <= 0) continue;
-    turns.push({ promptTokens, cacheReadTokens: usage.cache_read_input_tokens ?? 0 });
   }
 
   const segment = longestNonResetSegment(turns);
   if (segment.length < 5) return null;
 
-  const state = AgentExecutionStateSchema.parse({
+  return { sessionId, turns: segment };
+}
+
+function buildState(
+  sessionId: string,
+  goal: string,
+  todos: Array<{ content?: string; status?: string }>,
+  files: string[],
+  symbols: string[],
+  lastError: string | null,
+): AgentExecutionState {
+  return AgentExecutionStateSchema.parse({
     task_id: sessionId.slice(0, 8),
     goal: goal || 'unspecified task',
     plan: {
@@ -260,8 +333,6 @@ export function parseSessionLog(sessionId: string, jsonl: string): ReplaySession
     },
     blockers_and_dead_ends: { last_error: lastError },
   }) as AgentExecutionState;
-
-  return { sessionId, turns: segment, state };
 }
 
 /**

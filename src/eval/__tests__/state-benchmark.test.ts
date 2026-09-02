@@ -24,7 +24,7 @@ describe('SKILL.state A/B Token Benchmark (TRA-600)', () => {
 
     // Prompt at step 100 in StateEngine stays bounded. The bound moved from 4,000
     // to 4,500 when the state block's default size was corrected from a guessed
-    // 180 tokens to the 600 measured by state-trace-replay.ts.
+    // 180 tokens to the 350 measured by state-trace-replay.ts.
     expect(s100.stateEnginePromptTokens).toBeLessThan(4_500);
   });
 

@@ -65,8 +65,8 @@ export interface BenchmarkResult {
  * @param avgToolOutputTokens Average tokens returned by tools (e.g. outline, symbol, search)
  * @param avgToolCallTokens Average tokens in tool call params
  * @param baseSystemPromptTokens Base system prompt size (default: ~1,500 tokens)
- * @param stateMarkdownTokens Average size of compact state markdown (default: 600 —
- *   median measured over 30 real sessions by `state-trace-replay.ts`)
+ * @param stateMarkdownTokens Average size of compact state markdown (default: 350 —
+ *   measured over 30 real sessions by `state-trace-replay.ts`)
  * @param slidingWindowCalls Number of recent calls retained in StateEngine window (default: 2)
  */
 export function runSimulation(
@@ -74,7 +74,7 @@ export function runSimulation(
   avgToolOutputTokens = 850,
   avgToolCallTokens = 100,
   baseSystemPromptTokens = 1500,
-  stateMarkdownTokens = 600,
+  stateMarkdownTokens = 350,
   slidingWindowCalls = 2,
 ): BenchmarkStepMetrics[] {
   const metrics: BenchmarkStepMetrics[] = [];
