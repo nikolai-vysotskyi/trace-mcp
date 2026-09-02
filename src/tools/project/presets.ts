@@ -110,6 +110,10 @@ export const TOOL_PRESETS: Record<string, string[] | 'all'> = {
 
   // SKILL.state agent execution state tracking suite (TRA-596, arXiv:2608.26263)
   state: [
+    // Core infra every non-full preset carries: a preset that cannot look a
+    // symbol up is not a usable surface on its own (tool-config.test.ts).
+    'search',
+    'get_symbol',
     'register_edit',
     'batch',
     'trace_state_init',
