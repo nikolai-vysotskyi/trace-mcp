@@ -23,6 +23,8 @@ export type UpdateState = {
   lastChecked?: number;
   error?: string;
   staleRoots?: { root: string; version: string }[];
+  /** Installed `.app` bundles when this machine holds more than one (TRA-692). */
+  duplicateApps?: { path: string; version: string; running: boolean }[];
 };
 
 /**

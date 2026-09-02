@@ -11,7 +11,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   findStaleRoots,
   type GlobalInstall,
+  readAppLocationMarker,
   readLauncherCliPath,
+  runningAppBundle,
+  scanAppBundles,
   scanGlobalInstalls,
   staleRootInUse,
 } from '../update-state';
@@ -188,5 +191,101 @@ describe('staleRootInUse', () => {
     fs.mkdirSync(linkRoot);
     fs.symlinkSync(path.join(stale, 'trace-mcp'), path.join(linkRoot, 'trace-mcp'), 'dir');
     expect(staleRootInUse([{ root: stale, version: '3.0.0' }], cli(linkRoot))?.root).toBe(stale);
+  });
+});
+
+/* TRA-692: two installed bundles, only the running one gets updated. The scan is
+   what makes the other copy visible at all. */
+describe('scanAppBundles', () => {
+  let tmp: string;
+
+  const makeBundle = (dir: string, version?: string): string => {
+    const appPath = path.join(tmp, dir, 'trace-mcp.app');
+    fs.mkdirSync(path.join(appPath, 'Contents', 'MacOS'), { recursive: true });
+    if (version !== undefined) {
+      fs.writeFileSync(
+        path.join(appPath, 'Contents', 'Info.plist'),
+        `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>\n<key>CFBundleIdentifier</key>\n<string>com.trace-mcp.app</string>\n<key>CFBundleShortVersionString</key>\n<string>${version}</string>\n</dict></plist>\n`,
+      );
+    }
+    return appPath;
+  };
+  const exec = (appPath: string): string => path.join(appPath, 'Contents', 'MacOS', 'trace-mcp');
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-bundles-'));
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('reports both bundles and their versions, marking the running one', () => {
+    const system = makeBundle('Applications', '3.10.0');
+    const user = makeBundle('home-apps', '3.11.0');
+    expect(scanAppBundles([system, user], runningAppBundle(exec(user)))).toEqual([
+      { path: system, version: '3.10.0', running: false },
+      { path: user, version: '3.11.0', running: true },
+    ]);
+  });
+
+  it('reports the single install on a normal machine — the caller gates on length', () => {
+    const only = makeBundle('Applications', '3.11.0');
+    expect(
+      scanAppBundles(
+        [only, null, path.join(tmp, 'gone', 'trace-mcp.app')],
+        runningAppBundle(exec(only)),
+      ),
+    ).toEqual([{ path: only, version: '3.11.0', running: true }]);
+  });
+
+  it('counts a path reached twice — marker and directory — once', () => {
+    const only = makeBundle('Applications', '3.11.0');
+    const viaLink = path.join(tmp, 'link.app');
+    fs.symlinkSync(only, viaLink, 'dir');
+    expect(scanAppBundles([only, viaLink], null)).toHaveLength(1);
+  });
+
+  it('skips a build output and a bundle with no readable version', () => {
+    const built = makeBundle(path.join('checkout', 'packages', 'app', 'release'), '3.11.0');
+    const versionless = makeBundle('Applications');
+    expect(scanAppBundles([built, versionless], null)).toEqual([]);
+  });
+});
+
+describe('runningAppBundle', () => {
+  // Built with path.join so the separator matches the one the helper looks for
+  // on whatever platform a contributor runs the suite from.
+  const bundle = path.join(path.sep, 'Applications', 'trace-mcp.app');
+
+  it('walks back from the executable to the bundle', () => {
+    expect(runningAppBundle(path.join(bundle, 'Contents', 'MacOS', 'trace-mcp'))).toBe(bundle);
+  });
+
+  it('returns null for a process not running out of a bundle', () => {
+    expect(runningAppBundle(path.join(path.sep, 'usr', 'local', 'bin', 'electron'))).toBeNull();
+  });
+});
+
+describe('readAppLocationMarker', () => {
+  let tmp: string;
+
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-mcp-marker-'));
+  });
+  afterEach(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('reads the recorded appPath', () => {
+    const marker = path.join(tmp, 'app-location.json');
+    fs.writeFileSync(marker, JSON.stringify({ appPath: '/Applications/trace-mcp.app' }));
+    expect(readAppLocationMarker(marker)).toBe('/Applications/trace-mcp.app');
+  });
+
+  it('returns null when the marker is absent or malformed', () => {
+    expect(readAppLocationMarker(path.join(tmp, 'absent.json'))).toBeNull();
+    const broken = path.join(tmp, 'broken.json');
+    fs.writeFileSync(broken, '{ not json');
+    expect(readAppLocationMarker(broken)).toBeNull();
   });
 });

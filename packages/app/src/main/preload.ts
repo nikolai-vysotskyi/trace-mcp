@@ -97,6 +97,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     error?: string;
     /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
     staleRoots?: { root: string; version: string }[];
+    /** Installed `.app` bundles when this machine holds more than one (TRA-692). */
+    duplicateApps?: { path: string; version: string; running: boolean }[];
   }> => ipcRenderer.invoke('check-for-update'),
   /** `percent` is only present while a download is still in flight. */
   checkPendingUpdate: (): Promise<{ pending: boolean; version?: string; percent?: number }> =>
