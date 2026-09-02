@@ -1,6 +1,34 @@
+import type { execFile as ExecFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+/**
+ * Stub `child_process.execFile` with a canned result per invocation.
+ * updater.ts shells out twice: `npm root -g` (or `$SHELL -lc 'npm root -g'`)
+ * and `npm install -g trace-mcp@<v> --force`.
+ */
+function stubExecFile(
+  execFileMock: typeof ExecFile,
+  impl: (cmd: string, args: string[]) => { status: number; stdout?: string; stderr?: string },
+): void {
+  vi.mocked(execFileMock).mockImplementation(((
+    cmd: string,
+    args: string[],
+    _opts: unknown,
+    cb: (err: Error | null, stdout: string, stderr: string) => void,
+  ) => {
+    const r = impl(cmd, args);
+    const err =
+      r.status === 0
+        ? null
+        : Object.assign(new Error('command failed'), {
+            code: r.status,
+          });
+    cb(err, r.stdout ?? '', r.stderr ?? '');
+    return {} as ReturnType<typeof ExecFile>;
+  }) as unknown as typeof ExecFile);
+}
 
 // Mock fs before importing the module under test
 vi.mock('node:fs');
@@ -288,21 +316,14 @@ describe('checkAndInstallUpdate', () => {
       lastFailedVersion: '2.0.0',
     });
 
-    const { spawnSync } = await import('node:child_process');
-    vi.mocked(spawnSync).mockReturnValue({
-      status: 0,
-      stdout: '',
-      stderr: '',
-      pid: 0,
-      output: [],
-      signal: null,
-    });
+    const { execFile } = await import('node:child_process');
+    stubExecFile(execFile, () => ({ status: 0 }));
 
     const result = await checkAndInstallUpdate({ checkIntervalHours: 24 });
     expect(result).toBe(false);
-    // Must NOT have attempted npm install (no spawnSync call for `npm install`).
+    // Must NOT have attempted npm install.
     const installCalls = vi
-      .mocked(spawnSync)
+      .mocked(execFile)
       .mock.calls.filter((c) => Array.isArray(c[1]) && c[1].includes('install'));
     expect(installCalls).toHaveLength(0);
   });
@@ -310,16 +331,9 @@ describe('checkAndInstallUpdate', () => {
   it('records lastFailedInstall when npm install fails', async () => {
     setupCache({ lastChecked: Date.now(), latestVersion: '2.0.0' });
 
-    const { spawnSync } = await import('node:child_process');
-    // Every spawnSync call (npm root probe + install attempts) returns failure.
-    vi.mocked(spawnSync).mockReturnValue({
-      status: 1,
-      stdout: '',
-      stderr: 'npm error something broke',
-      pid: 0,
-      output: [],
-      signal: null,
-    });
+    const { execFile } = await import('node:child_process');
+    // Every child process (npm root probe + install attempts) returns failure.
+    stubExecFile(execFile, () => ({ status: 1, stderr: 'npm error something broke' }));
 
     const result = await checkAndInstallUpdate({ checkIntervalHours: 24 });
     expect(result).toBe(false);
@@ -335,15 +349,8 @@ describe('checkAndInstallUpdate', () => {
     setupCache({ lastChecked: 0, latestVersion: '2.0.0' });
 
     // Mock npm install success
-    const { spawnSync } = await import('node:child_process');
-    vi.mocked(spawnSync).mockReturnValue({
-      status: 0,
-      stdout: '',
-      stderr: '',
-      pid: 0,
-      output: [],
-      signal: null,
-    });
+    const { execFile } = await import('node:child_process');
+    stubExecFile(execFile, () => ({ status: 0 }));
 
     // Mock fetchLatestVersion to return 2.0.0
     const https = await import('node:https');

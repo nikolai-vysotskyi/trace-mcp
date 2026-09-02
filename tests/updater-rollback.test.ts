@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('node:child_process', () => ({ spawnSync: vi.fn() }));
+vi.mock('node:child_process', () => ({ execFile: vi.fn() }));
 vi.mock('node:https', () => ({ get: vi.fn() }));
 
 // Mock dynamic-import targets so post-update migrations never trigger here.
@@ -98,21 +98,20 @@ describe('checkAndInstallUpdate — backup + rollback', () => {
       JSON.stringify({ lastChecked: Date.now(), latestVersion: '2.0.0' }),
     );
 
-    const { spawnSync } = await import('node:child_process');
-    vi.mocked(spawnSync).mockImplementation(((cmd: string, args: readonly string[]) => {
+    const { execFile } = await import('node:child_process');
+    vi.mocked(execFile).mockImplementation(((
+      cmd: string,
+      args: readonly string[],
+      _opts: unknown,
+      cb: (err: Error | null, stdout: string, stderr: string) => void,
+    ) => {
       const argList = Array.isArray(args) ? args : [];
       const isNpmRootProbe =
         (cmd === 'npm' && argList[0] === 'root' && argList[1] === '-g') ||
         argList.some((a) => typeof a === 'string' && a.includes('npm root -g'));
       if (isNpmRootProbe) {
-        return {
-          status: 0,
-          stdout: `${tmpRoot}\n`,
-          stderr: '',
-          pid: 0,
-          output: [],
-          signal: null,
-        } as unknown as ReturnType<typeof spawnSync>;
+        cb(null, `${tmpRoot}\n`, '');
+        return {} as ReturnType<typeof execFile>;
       }
       // Install call — pop the next staged result.
       const r =
@@ -121,15 +120,13 @@ describe('checkAndInstallUpdate — backup + rollback', () => {
         ({ status: 0, stderr: '' } as { status: number; stderr: string });
       installCallCount++;
       r.sideEffect?.();
-      return {
-        status: r.status,
-        stdout: '',
-        stderr: r.stderr,
-        pid: 0,
-        output: [],
-        signal: null,
-      } as unknown as ReturnType<typeof spawnSync>;
-    }) as typeof spawnSync);
+      cb(
+        r.status === 0 ? null : Object.assign(new Error('npm install failed'), { code: r.status }),
+        '',
+        r.stderr,
+      );
+      return {} as ReturnType<typeof execFile>;
+    }) as unknown as typeof execFile);
 
     (globalThis as Record<string, unknown>).PKG_VERSION_INJECTED = '1.0.0';
     // Bypass the `.git`-next-to-package-json dev-checkout guard — tests run
