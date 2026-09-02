@@ -144,6 +144,103 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
     expect(log).toContain(`cli=${cli}`);
   });
 
+  // TRA-701: node and cli.js must resolve independently. Before v0.4.0 the cli
+  // was only ever looked for next to the selected node, so a machine with the
+  // package in a different npm prefix lost the MCP server outright (3576 fatal
+  // launcher errors in the field).
+  describe('cli.js resolves independently of the selected node', () => {
+    // Plants an nvm-layout tree under the fake HOME holding node + the package,
+    // so the probe has a prefix to find that is NOT the configured node's.
+    function plantNvmPackage(home: string, cliBody = '// fake cli\n'): string {
+      const version = 'v22.22.2';
+      const prefix = path.join(home, '.nvm', 'versions', 'node', version);
+      fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
+      fs.writeFileSync(path.join(prefix, 'bin', 'node'), '#!/bin/bash\nexit 1\n', { mode: 0o755 });
+      fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), `${version}\n`);
+      const pkgDir = path.join(prefix, 'lib', 'node_modules', 'trace-mcp', 'dist');
+      fs.mkdirSync(pkgDir, { recursive: true });
+      const cli = path.join(pkgDir, 'cli.js');
+      fs.writeFileSync(cli, cliBody);
+      // The launcher normalises probed paths through realpath; on macOS the
+      // temp dir lives behind the /var → /private/var symlink, so compare
+      // against the resolved form.
+      return fs.realpathSync(cli);
+    }
+
+    it('finds the package in another prefix when the configured node has none', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      const otherCli = plantNvmPackage(home);
+      // Configured node is fine; its own prefix carries no trace-mcp package.
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${otherCli} serve`);
+    });
+
+    it('rewrites launcher.env with the probed pair so the next start is fast', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      const otherCli = plantNvmPackage(home);
+      writeConfig(traceHome, node, path.join(home, 'gone', 'cli.js'));
+
+      runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      const cfg = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+      expect(cfg).toContain(`TRACE_MCP_NODE="${node}"`);
+      expect(cfg).toContain(`TRACE_MCP_CLI="${otherCli}"`);
+      // Header must keep the trusted-emitter provenance marker (env-classifier).
+      expect(cfg.split('\n')[0]).toMatch(/^# Managed by trace-mcp\b/);
+      // Second run now takes the config fast path.
+      const { stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${otherCli} serve`);
+      expect(fs.readFileSync(path.join(traceHome, 'launcher.log'), 'utf-8')).toContain(
+        'exec(config)',
+      );
+    });
+
+    it('does not persist env overrides into launcher.env', () => {
+      const { home, traceHome, node, cli } = setupFakeHome();
+      // No config at all — overrides carry the run.
+      const { status } = runLauncher(
+        {
+          HOME: home,
+          TRACE_MCP_HOME: traceHome,
+          TRACE_MCP_NODE_OVERRIDE: node,
+          TRACE_MCP_CLI_OVERRIDE: cli,
+        },
+        ['serve'],
+      );
+
+      expect(status).toBe(0);
+      expect(fs.existsSync(path.join(traceHome, 'launcher.env'))).toBe(false);
+    });
+
+    it('survives the npm swap window via the renamed-aside package dir', () => {
+      const { home, traceHome, node } = setupFakeHome();
+      // Package root exists but `trace-mcp/` is mid-rename: only the backup
+      // directory our updater leaves behind is on disk.
+      const root = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2', 'lib', 'node_modules');
+      const bakDir = path.join(root, 'trace-mcp.tmcp-bak-4242', 'dist');
+      fs.mkdirSync(bakDir, { recursive: true });
+      fs.writeFileSync(path.join(bakDir, 'cli.js'), '// previous version\n');
+      const bakCli = fs.realpathSync(path.join(bakDir, 'cli.js'));
+      fs.mkdirSync(path.join(home, '.nvm', 'alias'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.nvm', 'alias', 'default'), 'v22.22.2\n');
+      const nvmBin = path.join(home, '.nvm', 'versions', 'node', 'v22.22.2', 'bin');
+      fs.mkdirSync(nvmBin, { recursive: true });
+      fs.writeFileSync(path.join(nvmBin, 'node'), '#!/bin/bash\nexit 1\n', { mode: 0o755 });
+
+      writeConfig(traceHome, node, path.join(root, 'trace-mcp', 'dist', 'cli.js'));
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${bakCli} serve`);
+    });
+  });
+
   it('stale config (broken paths) falls through to probe and still errors cleanly', () => {
     const { home, traceHome } = setupFakeHome();
     writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
