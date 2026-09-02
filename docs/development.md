@@ -1,7 +1,7 @@
 ---
 title: "Contributing to trace-mcp — local setup, build, and test"
 description: "How to set up trace-mcp for local development: install, build, run the test suite, and the conventions to follow before opening a PR."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # Development
@@ -32,6 +32,10 @@ updated: 2026-08-30
 }
 </script>
 ## Setup
+
+Read [architecture](architecture.md) first — the two-pass pipeline, the plugin
+interface and the storage layout are what most of the code below is arranged
+around.
 
 ```bash
 git clone https://github.com/nikolai-vysotskyi/trace-mcp.git
@@ -101,6 +105,11 @@ pnpm run test                       # All tests (1668 tests, ~2s)
 pnpm run test --run <pattern>  # Run specific test files
 pnpm run test:watch             # Watch mode
 ```
+
+CI additionally runs the repo's own [quality gates](quality-gates.md) against
+this codebase, with thresholds set in `.trace-mcp.json` — see
+[configuration](configuration.md) for how that file merges with global
+settings.
 
 Test files live alongside source or in `tests/`:
 

@@ -1,7 +1,7 @@
 ---
 title: "How to Reduce Claude Code Token Usage — 7 measured tactics"
 description: "Seven ways to cut token usage in Claude Code, ordered by measured impact: stop full-file reads, trim your MCP tool surface, pick the right output format. With real numbers and honest caveats."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # How to reduce Claude Code token usage
@@ -130,6 +130,8 @@ Encoding matters, but not uniformly. Our measurements (`scripts/bench-toon.ts`, 
 | Repeated long paths (`search_text`) | flat → grouped by file | **+20.8%** |
 
 The rule underneath: compact tabular encodings win when every row has the same scalar columns, and lose the moment a row contains a nested object or an inner array. Full method and the breakeven curve are on the [TOON savings page](/toon-savings.html).
+
+Every number in this section is measured by trace-mcp on trace-mcp. The one measurement taken on code we do not own is the [PR review context benchmark](/pr-context-benchmark.html) — 60 merged pull requests across six open-source repositories — and to see what any of this is worth on your own sessions rather than on ours, [session analytics](/analytics.html) reports the same figures from your local agent logs.
 
 ## 5. Prefer one structural query over many reads
 

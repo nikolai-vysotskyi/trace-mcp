@@ -1,7 +1,7 @@
 ---
 title: "PR Review Context Benchmark — Measured Input-Token Cost on Real Pull Requests"
 description: "Reproducible measurement of how many input tokens trace-mcp context saves over naive file loading when reviewing real merged pull requests across open-source repositories."
-updated: 2026-08-30
+updated: 2026-09-02
 ---
 
 # PR Review Context Benchmark
@@ -33,7 +33,8 @@ updated: 2026-08-30
 </script>
 
 Every claim about token reduction on this site used to rest on trace-mcp's own
-internal estimators. That is not good enough for anyone outside the project.
+internal estimators — the [session analytics](analytics.md) numbers, measured by
+the tool on itself. That is not good enough for anyone outside the project.
 This page is the measurement on somebody else's code: **{{ site.data.pr_context_bench.pr_count }}
 real merged pull requests** across **{{ site.data.pr_context_bench.repo_count }}**
 open-source repositories, with the PR numbers and commit SHAs pinned in the
@@ -161,7 +162,8 @@ So the honest reading of this page is narrow and it is deliberately narrow:
 tenth of the tokens and puts strictly more of the affected call graph in front
 of the reviewer.** Whether that translates into catching more bugs is an open
 question, and this benchmark is the harness a future run would extend to answer
-it.
+it. For the levers that produce that difference — presets, compact schemas and
+the TOON encoding — see [cutting Claude Code token usage](reduce-claude-code-token-usage.md).
 
 ## See also
 
