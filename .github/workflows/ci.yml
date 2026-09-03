@@ -190,6 +190,36 @@ jobs:
       - name: Biome check (formatter + linter, errors only)
         run: pnpm exec biome ci --diagnostic-level=error
 
+  # ───────────────────────────────────────────────────────────────────────────
+  # The "0 vulnerabilities in prod" promise in SECURITY.md, enforced. Without
+  # this the promise held only as long as someone remembered to check by hand
+  # — it had drifted to 6 (4 high) before anyone noticed (TRA-733).
+  #
+  # ponytail: `pnpm audit`, no third-party action. Prod tree only: a dev-only
+  # advisory should not block a PR. Deliberate exceptions go in
+  # `pnpm.auditConfig.ignoreGhsas` in package.json, so an accepted risk is
+  # written down next to the overrides instead of remembered.
+  # ───────────────────────────────────────────────────────────────────────────
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      # No `cache: 'pnpm'` here on purpose: this job never installs, so the
+      # pnpm store never exists and the post-job cache save fails the run.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      # Audits the lockfile; no install needed.
+      - name: pnpm audit (production dependencies)
+        run: pnpm audit --prod --audit-level=moderate
+
   no-ai-marks:
     runs-on: ubuntu-latest
     timeout-minutes: 3
