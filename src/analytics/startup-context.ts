@@ -32,6 +32,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
+import { claudeHome } from '../shared/paths.js';
 import { listAllSessions } from './log-parser.js';
 
 // --- Pricing (USD per million tokens, sonnet-class — same table the rest of
@@ -155,6 +156,24 @@ const ATTACHMENT_PAYLOAD_KEYS: Record<string, string[]> = {
 };
 
 const BOOKKEEPING_KEYS = new Set(['type', 'hookName', 'hookEvent', 'toolUseID', 'command']);
+
+/**
+ * An MCP server appears in the log under two different spellings.
+ *
+ * `mcp_instructions_delta.addedNames` carries the configured name verbatim —
+ * `claude.ai Cloudflare Developer Platform`. A tool call carries it folded into
+ * a tool id that has to satisfy the API's `^[a-zA-Z0-9_-]+$`, so it arrives as
+ * `mcp__claude_ai_Cloudflare_Developer_Platform__<tool>`.
+ *
+ * Matching the two spellings by string equality silently fails for every server
+ * whose name has a space or a dot in it: the configured name shows zero calls,
+ * the folded name shows every call, and a server in constant use is reported as
+ * never called — which this module would then recommend switching off. Fold both
+ * sides before comparing.
+ */
+export function normalizeServerName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
 
 function deepChars(value: unknown): number {
   if (typeof value === 'string') return value.length;
@@ -414,6 +433,7 @@ async function scanSessionFile(filePath: string, projectPath: string): Promise<F
       const b = block as { type?: string; name?: string };
       if (b?.type !== 'tool_use' || typeof b.name !== 'string' || rec.isSidechain) continue;
       if (b.name.startsWith('mcp__')) {
+        // Already folded by the client — the map is keyed on the folded form.
         const server = b.name.split('__')[1] ?? 'unknown';
         mcpToolCalls.set(server, (mcpToolCalls.get(server) ?? 0) + 1);
       }
@@ -497,10 +517,10 @@ async function scanSessionFile(filePath: string, projectPath: string): Promise<F
  * which is the number that matters for "should I trim this file".
  */
 function readInstructionFiles(projectRoot?: string): InstructionFileRow[] {
-  const home = os.homedir();
+  const home = claudeHome();
   const candidates = [
-    path.join(home, '.claude', 'CLAUDE.md'),
-    path.join(home, '.claude', 'AGENTS.md'),
+    path.join(home, 'CLAUDE.md'),
+    path.join(home, 'AGENTS.md'),
     ...(projectRoot
       ? [path.join(projectRoot, 'CLAUDE.md'), path.join(projectRoot, 'AGENTS.md')]
       : []),
@@ -555,6 +575,8 @@ interface RecommendationInputs {
   skillInvocations: Set<string>;
   instructionFiles: InstructionFileRow[];
   freshSessions: number;
+  /** Fresh sessions in the project the instruction files were read from. */
+  projectFreshSessions: number;
   meanStartup: number;
   startupUsd: number;
   days: number;
@@ -624,24 +646,35 @@ function buildRecommendations(input: RecommendationInputs): Recommendation[] {
 
   /* Text that appears in both the global and the project instruction file is
      read twice in every session that loads both. This one is not evidence of
-     non-use — it is evidence of duplication, which is the same claim made
-     about the same bytes twice, and needs no usage proof. */
-  const global = input.instructionFiles.find((f) =>
-    f.path.includes(`${path.sep}.claude${path.sep}`),
-  );
-  const project = input.instructionFiles.find((f) => f !== global);
-  if (global && project) {
+     non-use — it is evidence of duplication, the same claim made about the same
+     bytes twice — so it needs no usage proof.
+
+     Both files must be named, not merely "the first two on the list": the list
+     is sorted by size and holds up to two GLOBAL files, so picking the largest
+     and then "any other" pairs ~/.claude/AGENTS.md against ~/.claude/CLAUDE.md
+     and never looks at the project at all. Pair by basename, with one file
+     inside ~/.claude and the other outside it. */
+  const home = claudeHome();
+  const isGlobal = (f: InstructionFileRow) => f.path.startsWith(home + path.sep);
+  for (const basename of ['CLAUDE.md', 'AGENTS.md']) {
+    const named = input.instructionFiles.filter((f) => path.basename(f.path) === basename);
+    const global = named.find(isGlobal);
+    const project = named.find((f) => !isGlobal(f));
+    if (!global || !project) continue;
     const shared = sharedLineTokens(global.path, project.path);
-    if (shared > 0) {
-      out.push({
-        kind: 'duplicateInstructions',
-        target: project.path,
-        evidence: `${shared} tokens of text appear in both this file and ${global.path}; every session that loads both reads them twice.`,
-        tokensPerSession: shared,
-        usdOverWindow: usdFor(shared, input.freshSessions),
-        sessionsObserved: input.freshSessions,
-      });
-    }
+    if (shared <= 0) continue;
+    out.push({
+      kind: 'duplicateInstructions',
+      target: project.path,
+      evidence: `${shared} tokens of text appear in both this file and ${global.path}; every session in this project reads them twice.`,
+      tokensPerSession: shared,
+      // Sessions in THIS project, not on the whole machine: a project file is
+      // read by its own project's sessions, and pricing it against every
+      // session on the machine multiplies the number by however many other
+      // projects the user works in.
+      usdOverWindow: usdFor(shared, input.projectFreshSessions),
+      sessionsObserved: input.projectFreshSessions,
+    });
   }
 
   return out.sort((a, b) => b.usdOverWindow - a.usdOverWindow);
@@ -793,27 +826,31 @@ export async function analyzeStartupContext(
     }))
     .sort((a, b) => b.meanTokens - a.meanTokens);
 
-  const serversPresent = new Map<string, { sessions: number; tokens: number }>();
+  /* Keyed by the folded name so a startup announcement and a tool call to the
+     same server land in the same row; `display` keeps the name the user
+     configured, which is the one worth showing. See normalizeServerName. */
+  const serversPresent = new Map<string, { display: string; sessions: number; tokens: number }>();
   for (const session of freshSessions) {
     for (const [server, tokens] of session.mcpServers) {
-      const row = serversPresent.get(server) ?? { sessions: 0, tokens: 0 };
+      const key = normalizeServerName(server);
+      const row = serversPresent.get(key) ?? { display: server, sessions: 0, tokens: 0 };
       row.sessions++;
       row.tokens += tokens;
-      serversPresent.set(server, row);
+      serversPresent.set(key, row);
     }
   }
   const mcpServers: McpServerRow[] = [
     ...new Set([...serversPresent.keys(), ...mcpToolCalls.keys()]),
   ]
-    .map((server) => ({
-      server,
-      sessionsPresent: serversPresent.get(server)?.sessions ?? 0,
-      instructionTokens: Math.round(
-        (serversPresent.get(server)?.tokens ?? 0) /
-          Math.max(1, serversPresent.get(server)?.sessions ?? 1),
-      ),
-      toolCalls: mcpToolCalls.get(server) ?? 0,
-    }))
+    .map((key) => {
+      const present = serversPresent.get(key);
+      return {
+        server: present?.display ?? key,
+        sessionsPresent: present?.sessions ?? 0,
+        instructionTokens: Math.round((present?.tokens ?? 0) / Math.max(1, present?.sessions ?? 1)),
+        toolCalls: mcpToolCalls.get(key) ?? 0,
+      };
+    })
     .sort((a, b) => b.sessionsPresent - a.sessionsPresent || b.toolCalls - a.toolCalls);
 
   const skillsPresent = new Map<string, { sessions: number; tokens: number }>();
@@ -869,6 +906,9 @@ export async function analyzeStartupContext(
       skillInvocations,
       instructionFiles,
       freshSessions: freshSessions.length,
+      projectFreshSessions: opts.projectRoot
+        ? freshSessions.filter((s) => s.projectPath === opts.projectRoot).length
+        : 0,
       meanStartup,
       startupUsd,
       days,

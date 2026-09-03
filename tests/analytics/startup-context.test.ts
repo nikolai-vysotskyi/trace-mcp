@@ -14,8 +14,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { analyzeStartupContext, splitSkillListing } from '../../src/analytics/startup-context.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  analyzeStartupContext,
+  normalizeServerName,
+  splitSkillListing,
+} from '../../src/analytics/startup-context.js';
 
 const HOOK_TEXT = 'x'.repeat(4000); // 1000 tokens
 /* Two skills, one used and one not. The listing's real shape is
@@ -51,8 +55,8 @@ const LINES: unknown[] = [
     type: 'attachment',
     attachment: {
       type: 'mcp_instructions_delta',
-      addedNames: ['trace-mcp', 'idle-server'],
-      addedBlocks: ['t'.repeat(400), 'i'.repeat(800)],
+      addedNames: ['trace-mcp', 'idle-server', 'claude.ai Gmail'],
+      addedBlocks: ['t'.repeat(400), 'i'.repeat(800), 'g'.repeat(600)],
     },
   },
   { type: 'user', message: { content: [{ type: 'text', text: TASK_TEXT }] } },
@@ -67,6 +71,9 @@ const LINES: unknown[] = [
       usage: usage({ cache_read_input_tokens: 40_000, input_tokens: 100 }),
       content: [
         { type: 'tool_use', name: 'mcp__trace-mcp__search' },
+        // The client folds `claude.ai Gmail` into the tool id it is allowed to
+        // send. The audit has to recognise it as the same server.
+        { type: 'tool_use', name: 'mcp__claude_ai_Gmail__send_message' },
         { type: 'tool_use', name: 'Skill', input: { skill: 'used-skill' } },
       ],
     },
@@ -143,6 +150,9 @@ describe('analyzeStartupContext', () => {
     const audit = await run();
     expect(audit.mcpServers).toEqual([
       { server: 'trace-mcp', sessionsPresent: 1, instructionTokens: 100, toolCalls: 1 },
+      // One row, not two: the configured name is shown, the folded name is
+      // what its calls arrived under, and both belong to the same server.
+      { server: 'claude.ai Gmail', sessionsPresent: 1, instructionTokens: 150, toolCalls: 1 },
       { server: 'idle-server', sessionsPresent: 1, instructionTokens: 200, toolCalls: 0 },
     ]);
   });
@@ -161,6 +171,12 @@ describe('analyzeStartupContext', () => {
     // Used at least once → never suggested, however big it is.
     expect(byTarget['used-skill']).toBeUndefined();
     expect(byTarget['trace-mcp']).toBeUndefined();
+
+    /* Regression (review of PR #843): a server configured as `claude.ai Gmail`
+       has its calls logged as `mcp__claude_ai_Gmail__…`. Comparing the two
+       spellings literally showed zero calls for a server used in every single
+       session — and this module would then have advised switching it off. */
+    expect(byTarget['claude.ai Gmail']).toBeUndefined();
 
     // A hook is one of the largest itemised sources here and still gets no
     // suggestion: nothing in the log proves the model ignored its output.
@@ -195,5 +211,65 @@ describe('splitSkillListing', () => {
     expect([...perSkill.keys()]).toEqual(['alpha', 'beta']);
     // alpha owns its own line plus the wrapped continuation.
     expect(perSkill.get('alpha')).toBeGreaterThan(perSkill.get('beta') as number);
+  });
+});
+
+describe('normalizeServerName', () => {
+  it('folds a configured name the way the client folds it into a tool id', () => {
+    expect(normalizeServerName('claude.ai Gmail')).toBe('claude_ai_Gmail');
+    expect(normalizeServerName('plugin:telegram:telegram')).toBe('plugin_telegram_telegram');
+    // Already legal — folding must leave it alone, or every plain name breaks.
+    expect(normalizeServerName('trace-mcp')).toBe('trace-mcp');
+  });
+});
+
+/* Regression (review of PR #843): the instruction-file list is sorted by size
+   and can hold TWO global files, so "the biggest one, then any other" paired
+   ~/.claude/AGENTS.md against ~/.claude/CLAUDE.md and never looked at the
+   project at all. The pair has to be named: same basename, one inside
+   ~/.claude and one outside it. */
+describe('duplicate instruction files', () => {
+  let home: string;
+  let project: string;
+  const SHARED = 'This paragraph is long enough to count as real duplicated instruction text.';
+
+  beforeAll(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-home-'));
+    project = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-proj-'));
+    fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+    // A second, LARGER global file — the decoy the old pairing picked.
+    fs.writeFileSync(
+      path.join(home, '.claude', 'AGENTS.md'),
+      `${'padding line here\n'.repeat(80)}`,
+    );
+    fs.writeFileSync(path.join(home, '.claude', 'CLAUDE.md'), `${SHARED}\nglobal-only line\n`);
+    fs.writeFileSync(path.join(project, 'CLAUDE.md'), `${SHARED}\nproject-only line\n`);
+    vi.spyOn(os, 'homedir').mockReturnValue(home);
+  });
+
+  afterAll(() => {
+    vi.restoreAllMocks();
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(project, { recursive: true, force: true });
+  });
+
+  it('pairs the project file with the global file of the same name', async () => {
+    const audit = await analyzeStartupContext({
+      days: 365,
+      projectRoot: project,
+      listSessions: () =>
+        Array.from({ length: 25 }, () => ({
+          filePath: path.join(dir, 'session.jsonl'),
+          projectPath: project,
+          client: 'claude-code' as const,
+          mtime: Date.now(),
+        })),
+    });
+    const dup = audit.recommendations.filter((r) => r.kind === 'duplicateInstructions');
+    expect(dup).toHaveLength(1);
+    expect(dup[0].target).toBe(path.join(project, 'CLAUDE.md'));
+    expect(dup[0].evidence).toContain(path.join(home, '.claude', 'CLAUDE.md'));
+    // Priced against this project's sessions, not every session on the machine.
+    expect(dup[0].sessionsObserved).toBe(25);
   });
 });

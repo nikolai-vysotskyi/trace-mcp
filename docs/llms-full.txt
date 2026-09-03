@@ -3014,8 +3014,10 @@ benchmark_project({ queries?: number, seed?: number, format?: "json" | "markdown
 What the session startup block is made of and what it costs — the context every session pays for before your first message: the harness system prompt, tool schemas, MCP servers, the skill and agent listings, and SessionStart hook output.
 
 ```
-get_startup_context_audit({ days?: number })
+get_startup_context_audit()
 ```
+
+No parameters: the look-back window is fixed at 30 days. A parameter here would have to survive `compact_schemas`, which strips non-core params from the schema and so freezes them at their default without saying so.
 
 Returns: the block's size distribution across fresh sessions, a decomposition by source (hooks are named individually), the block's share of the input-side bill, the mid-session cache rebuilds that make it get paid twice and what each cost, MCP servers present at startup alongside how often they were actually called, the instruction files on disk, and `recommendations` — suggestions with a per-start token price and a cost over the window.
 
