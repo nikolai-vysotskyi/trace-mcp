@@ -176,6 +176,7 @@ ipcMain.handle('open-in-ide', async (_event, bundlePath: string, filePath: strin
   });
 });
 
+import { DaemonClient } from './api-client';
 import { type DaemonSetupState, ensureDaemonInstalled, execCli } from './daemon-install';
 import { isDaemonProcessAlive, restartDaemon } from './daemon-lifecycle';
 import {
@@ -190,6 +191,10 @@ import {
 import {
   type AppBundle,
   APP_BUNDLE_NAME,
+  cliPathOwnedByRoot,
+  cmpSemver,
+  daemonUpdateDegradeToCommand,
+  evaluateDaemonUpdate,
   findStaleRoots,
   type GlobalInstall,
   readAppLocationMarker,
@@ -199,6 +204,11 @@ import {
   scanGlobalInstalls,
   staleRootInUse,
 } from './update-state';
+
+// Separate from tray.ts's own instance: that one drives the health-poll /
+// restart-on-mismatch loop, this one only ever answers "what version is
+// running" for the Settings/menu update surface (TRA-686).
+const daemonApiClient = new DaemonClient();
 
 // IPC: restart daemon (kill old, create plist if needed, start new via launchd)
 ipcMain.handle('restart-daemon', async () => {
@@ -480,25 +490,6 @@ const updateCache: {
   rateLimitedUntil?: number;
 } = {};
 
-function cmpSemver(a: string, b: string): number {
-  // Returns 1 if a > b, -1 if a < b, 0 if equal. Pre-release suffix (-rc.1) sorts lower.
-  const norm = (v: string) => {
-    const [main, pre] = v.replace(/^v/, '').split('-');
-    return { parts: main.split('.').map((n) => Number(n) || 0), pre: pre || '' };
-  };
-  const A = norm(a);
-  const B = norm(b);
-  for (let i = 0; i < Math.max(A.parts.length, B.parts.length); i++) {
-    const x = A.parts[i] || 0;
-    const y = B.parts[i] || 0;
-    if (x !== y) return x > y ? 1 : -1;
-  }
-  if (A.pre === B.pre) return 0;
-  if (!A.pre) return 1; // 1.2.3 > 1.2.3-rc.1
-  if (!B.pre) return -1;
-  return A.pre > B.pre ? 1 : -1;
-}
-
 function fetchLatestFromNpm(): Promise<{ status: number; version?: string }> {
   return new Promise((resolve, reject) => {
     const https = require('node:https') as typeof import('node:https');
@@ -776,6 +767,34 @@ async function checkForUpdate() {
       lastChecked: updateCache.lastChecked,
       error: toUpdateErrorMessage(err),
     };
+  }
+}
+
+// IPC: check for a daemon update — independent of the app-bundle check above.
+// The daemon runs the globally-installed `trace-mcp` package and can drift
+// from the app's own version in either direction (TRA-686), so this reads the
+// daemon's OWN version over /health rather than assuming it matches
+// `app.getVersion()`.
+ipcMain.handle('check-for-daemon-update', async () => checkForDaemonUpdate());
+
+async function checkForDaemonUpdate() {
+  const now = Date.now();
+  let current: string | undefined;
+  try {
+    const health = await daemonApiClient.health();
+    current = health.version?.replace(/^v/, '');
+  } catch (err) {
+    return { available: false, lastChecked: now, error: toUpdateErrorMessage(err) };
+  }
+
+  try {
+    const npm = await fetchLatestFromNpm();
+    if (npm.status === 200 && npm.version) {
+      return evaluateDaemonUpdate(current, npm.version, now);
+    }
+    return { available: false, current, lastChecked: now, error: `HTTP ${npm.status}` };
+  } catch (err) {
+    return { available: false, current, lastChecked: now, error: toUpdateErrorMessage(err) };
   }
 }
 
@@ -1100,41 +1119,24 @@ function readInstalledVersion(roots: {
   return fromConfig ?? fromBin;
 }
 
-ipcMain.handle('apply-update', async () => {
-  if (UPDATE_CHANNEL === 'electron-updater') {
-    // No npm involvement: electron-updater downloads the artifact described by
-    // the channel file (latest-mac.yml / latest.yml) and installs it on
-    // quit/restart. Progress reaches the renderer over `update-progress`.
-    try {
-      const updater = await getAutoUpdater();
-      // downloadUpdate() requires a check in this same process first.
-      const check = await updater.checkForUpdates();
-      const version = check?.updateInfo?.version?.replace(/^v/, '');
-      downloadPercent = 0;
-      await updater.downloadUpdate();
-      updateDownloaded = true;
-      downloadedVersion = version;
-      appendUpdateLog({ event: 'apply-update:downloaded', version });
-      return { ok: true, pending: true, version };
-    } catch (err) {
-      const summary = (err as Error)?.message ?? String(err);
-      // A failed download leaves nothing behind: the next check starts clean
-      // rather than parking the user in a state they cannot leave (TRA-431).
-      downloadPercent = undefined;
-      appendUpdateLog({ event: 'apply-update:failed', summary });
-      return { ok: false, error: `${summary}\n\nFull log: ${updateLogPath()}` };
-    }
-  }
-
+/**
+ * Runs `npm install -g trace-mcp@latest --force` against a resolved npm
+ * binary, with the ENOTEMPTY recovery retry and full audit logging.
+ *
+ * Shared by the app's own npm-fallback update path (Linux, which has no
+ * packaged-app updater to hand off to) and the daemon update action — one
+ * install mechanism, not two (TRA-686). Callers are responsible for
+ * resolving `npmBin` first: what they do when it cannot be resolved differs
+ * (the app path surfaces a plain error; the daemon path degrades to a
+ * copyable command), so that decision stays with them.
+ */
+async function performNpmGlobalUpdate(npmBin: string): Promise<
+  | { ok: true; installedVersion?: string; npmRoots: { configRoot: string | null; binRoot: string | null } }
+  | { ok: false; error: string }
+> {
   // `install --force` is the robust swap: it replaces the package directory
   // wholesale rather than relying on `update`'s rename dance, which breaks when
   // the prior install left trace-mcp in a partially-extracted state.
-  const npmBin = await resolveNpmBin();
-  if (!npmBin) {
-    const msg = `Could not locate \`npm\`. Looked in: SHELL profile, /opt/homebrew, /usr/local, nvm, Herd. Install Node/npm or add it to your login shell PATH.`;
-    appendUpdateLog({ event: 'apply-update:no-npm' });
-    return { ok: false, error: `${msg}\n\nFull log: ${updateLogPath()}` };
-  }
   // Execute the resolved npm binary directly with execFile (no shell) so we
   // don't depend on PATH and avoid command-line injection if npmBin contains
   // unusual characters.
@@ -1230,23 +1232,60 @@ ipcMain.handle('apply-update', async () => {
       error: `${summary}\n\nFull log: ${updateLogPath()}`,
     };
   }
+
   const installedVersion = readInstalledVersion(npmRoots);
-  const running = app.getVersion().replace(/^v/, '');
+  appendUpdateLog({
+    event: 'apply-update:ok',
+    installedVersion: installedVersion ?? null,
+    npmRoot,
+  });
+  return { ok: true, installedVersion, npmRoots };
+}
+
+ipcMain.handle('apply-update', async () => {
+  if (UPDATE_CHANNEL === 'electron-updater') {
+    // No npm involvement: electron-updater downloads the artifact described by
+    // the channel file (latest-mac.yml / latest.yml) and installs it on
+    // quit/restart. Progress reaches the renderer over `update-progress`.
+    try {
+      const updater = await getAutoUpdater();
+      // downloadUpdate() requires a check in this same process first.
+      const check = await updater.checkForUpdates();
+      const version = check?.updateInfo?.version?.replace(/^v/, '');
+      downloadPercent = 0;
+      await updater.downloadUpdate();
+      updateDownloaded = true;
+      downloadedVersion = version;
+      appendUpdateLog({ event: 'apply-update:downloaded', version });
+      return { ok: true, pending: true, version };
+    } catch (err) {
+      const summary = (err as Error)?.message ?? String(err);
+      // A failed download leaves nothing behind: the next check starts clean
+      // rather than parking the user in a state they cannot leave (TRA-431).
+      downloadPercent = undefined;
+      appendUpdateLog({ event: 'apply-update:failed', summary });
+      return { ok: false, error: `${summary}\n\nFull log: ${updateLogPath()}` };
+    }
+  }
+
+  const npmBin = await resolveNpmBin();
+  if (!npmBin) {
+    const msg = `Could not locate \`npm\`. Looked in: SHELL profile, /opt/homebrew, /usr/local, nvm, Herd. Install Node/npm or add it to your login shell PATH.`;
+    appendUpdateLog({ event: 'apply-update:no-npm' });
+    return { ok: false, error: `${msg}\n\nFull log: ${updateLogPath()}` };
+  }
+
+  const result = await performNpmGlobalUpdate(npmBin);
+  if (!result.ok) return result;
 
   // `npm install -g` writes into exactly one global root. On a machine with
   // several (nvm + Herd + a bundled runtime), the rest keep whatever version
   // they last received — and nothing else here would ever say so. The log keeps
   // every stale root (they are all useful when diagnosing an update); only the
   // one MCP clients actually run is worth surfacing in the UI (TRA-377).
-  const allStaleRoots = staleGlobalRoots(npmRoot, npmRoots.binRoot);
+  const allStaleRoots = staleGlobalRoots(result.npmRoots.configRoot, result.npmRoots.binRoot);
   const staleRoots = staleRootInUse(allStaleRoots, readLauncherCliPath());
 
-  appendUpdateLog({
-    event: 'apply-update:ok',
-    installedVersion: installedVersion ?? null,
-    runningVersion: running,
-    staleRoots: allStaleRoots,
-  });
   // `pending: false` on purpose: this channel has no packaged app to restart
   // into, so `npm install -g` moved the CLI and nothing else.
   return {
@@ -1254,6 +1293,55 @@ ipcMain.handle('apply-update', async () => {
     pending: false,
     ...(staleRoots ? { staleRoots: [staleRoots] } : {}),
   };
+});
+
+// IPC: update the daemon specifically — same npm install as the app's own
+// fallback path above, always available regardless of UPDATE_CHANNEL (the
+// daemon is never installed via electron-updater), followed by a daemon
+// restart through the existing lifecycle path so the new code takes over
+// immediately rather than waiting for the next version-mismatch poll.
+ipcMain.handle('apply-daemon-update', async () => {
+  const npmBin = await resolveNpmBin();
+  if (!npmBin) {
+    appendUpdateLog({ event: 'apply-daemon-update:no-npm' });
+    return daemonUpdateDegradeToCommand(
+      'Could not locate `npm`. Install Node/npm or add it to your login shell PATH.',
+    );
+  }
+
+  // A resolvable npm on the machine is not evidence that npm owns what's
+  // actually running — the daemon's control plane may be the app's own
+  // bundled runtime instead (TRA-438: a DMG-only install adopts no npm and
+  // points `launcher.env` at its own staged server). Only the launcher CLI
+  // path says which install is real, so it — not "did resolveNpmBin() find
+  // something" — is the gate: install only through a root that provably owns
+  // it, or this silently creates/repoints a global npm install nobody asked
+  // for.
+  const npmRoots = await resolveNpmRoots();
+  const cliPath = readLauncherCliPath();
+  const npmOwnsRunningCli =
+    cliPathOwnedByRoot(cliPath, npmRoots.configRoot) ||
+    cliPathOwnedByRoot(cliPath, npmRoots.binRoot);
+  if (!npmOwnsRunningCli) {
+    appendUpdateLog({ event: 'apply-daemon-update:not-npm-owned', cliPath, npmRoots });
+    return daemonUpdateDegradeToCommand(
+      'The running daemon is not an npm install — this app cannot update it automatically.',
+    );
+  }
+
+  const result = await performNpmGlobalUpdate(npmBin);
+  if (!result.ok) return daemonUpdateDegradeToCommand(result.error);
+
+  const restart = restartDaemon();
+  if (!restart.ok) {
+    appendUpdateLog({ event: 'apply-daemon-update:restart-failed', error: restart.error });
+    return {
+      ok: false,
+      error: `Installed v${result.installedVersion ?? 'latest'}, but restarting the daemon failed: ${restart.error ?? 'unknown error'}. It will pick up the new version on its next restart.`,
+    };
+  }
+
+  return { ok: true, version: result.installedVersion };
 });
 
 /**

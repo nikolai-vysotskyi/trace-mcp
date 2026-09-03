@@ -34,6 +34,7 @@ import {
   describeDuplicateApps,
   describeStaleRoots,
   formatAgo,
+  type DaemonUpdateState,
   type UpdateState,
 } from '../update-check.js';
 import { SidebarRow } from './SidebarRow';
@@ -41,6 +42,8 @@ import { SidebarRow } from './SidebarRow';
 export interface AppMenuProps {
   update: UpdateState;
   checking: boolean;
+  daemonUpdate: DaemonUpdateState;
+  daemonChecking: boolean;
   onCheckForUpdate: () => void;
   appearance: Appearance;
   onAppearanceChange: (next: Appearance) => void;
@@ -59,17 +62,38 @@ interface Summary {
   revealPath?: string;
 }
 
-/** The header's second line: what we know about this version right now. */
-function updateSummary(update: UpdateState, checking: boolean): Summary {
-  if (checking) return { text: t('update:headerChecking'), tone: 'is-busy' };
+/** The header's second line: what we know about this version right now.
+ *  One button drives both checks (TRA-686), so this line has to be able to
+ *  name either — or both — of app and daemon as the thing that is behind,
+ *  not just report on the app bundle it used to be the only reader of. */
+function updateSummary(
+  update: UpdateState,
+  checking: boolean,
+  daemonUpdate: DaemonUpdateState,
+  daemonChecking: boolean,
+): Summary {
+  if (checking || daemonChecking) return { text: t('update:headerChecking'), tone: 'is-busy' };
+  // The app row's own error keeps first claim on the line — unchanged from
+  // before the daemon row existed.
   if (update.error) return { text: update.error, tone: 'is-warn', title: update.error };
-  if (update.available) {
+  const appBehind = update.available;
+  const daemonBehind = daemonUpdate.available;
+  if (appBehind && daemonBehind) {
+    return { text: t('update:headerBothAvailable'), tone: 'is-info' };
+  }
+  if (appBehind) {
     return { text: t('update:headerAvailable', { version: update.latest }), tone: 'is-info' };
   }
-  /* This root is current, but the npm root this root is current, but the npm root
-     the launcher shim points into is not, so every MCP client is on the old
-     server (TRA-364). The main process only sends roots that are actually in
-     use, so reaching here always means the user has something to fix. */
+  if (daemonBehind) {
+    return {
+      text: t('update:headerDaemonAvailable', { version: daemonUpdate.latest }),
+      tone: 'is-info',
+    };
+  }
+  /* This root is current, but the npm root the launcher shim points into is
+     not, so every MCP client is on the old server (TRA-364). The main process
+     only sends roots that are actually in use, so reaching here always means
+     the user has something to fix. */
   if (update.staleRoots?.length) {
     const stale = describeStaleRoots(update.staleRoots);
     return { text: stale.label, tone: 'is-warn', title: stale.title, command: stale.command };
@@ -81,6 +105,9 @@ function updateSummary(update: UpdateState, checking: boolean): Summary {
     const dup = describeDuplicateApps(update.duplicateApps);
     return { text: dup.label, tone: 'is-warn', title: dup.title, revealPath: dup.revealPath };
   }
+  if (daemonUpdate.error) {
+    return { text: daemonUpdate.error, tone: 'is-warn', title: daemonUpdate.error };
+  }
   return {
     text: t('update:headerUpToDate', { when: formatAgo(update.lastChecked) }),
     tone: 'is-ok',
@@ -90,6 +117,8 @@ function updateSummary(update: UpdateState, checking: boolean): Summary {
 export function AppMenu({
   update,
   checking,
+  daemonUpdate,
+  daemonChecking,
   onCheckForUpdate,
   appearance,
   onAppearanceChange,
@@ -105,7 +134,7 @@ export function AppMenu({
      and its own cross-window sync, so a prop would only be plumbing. */
   const { locale, setLocale } = useLocale();
   const open = menu.at !== null;
-  const summary = updateSummary(update, checking);
+  const summary = updateSummary(update, checking, daemonUpdate, daemonChecking);
 
   const toggle = (): void => {
     if (open) {
@@ -138,7 +167,7 @@ export function AppMenu({
       key={action.id}
       icon={action.icon}
       shortcut={action.shortcut}
-      disabled={action.id === 'check-for-update' && checking}
+      disabled={action.id === 'check-for-update' && (checking || daemonChecking)}
       onClick={runAction(action)}
     >
       {t(action.labelKey)}

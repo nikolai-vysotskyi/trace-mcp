@@ -112,6 +112,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     /** Global npm roots holding an older trace-mcp than the newest install on this machine. */
     staleRoots?: { root: string; version: string }[];
   }> => ipcRenderer.invoke('apply-update'),
+  /* The daemon's own version, checked and updated independently of the app
+     bundle above — the two can drift apart in either direction (TRA-686). */
+  checkForDaemonUpdate: (): Promise<{
+    available: boolean;
+    current?: string;
+    latest?: string;
+    lastChecked?: number;
+    error?: string;
+  }> => ipcRenderer.invoke('check-for-daemon-update'),
+  applyDaemonUpdate: (): Promise<{
+    ok: boolean;
+    version?: string;
+    error?: string;
+    /** Present when the install could not run automatically — a command to copy and run by hand. */
+    command?: string;
+  }> => ipcRenderer.invoke('apply-daemon-update'),
   /* electron-updater's own `download-progress`, forwarded verbatim. The
      download runs for minutes on a slow link, so the card needs a real number
      rather than an indeterminate bar that cannot distinguish slow from hung. */

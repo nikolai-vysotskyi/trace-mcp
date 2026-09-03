@@ -48,6 +48,7 @@ import {
 } from '../lattice/ui';
 import { useDaemon } from '../hooks/useDaemon';
 import { type Appearance, appearanceOptions } from '../theme.js';
+import { formatAgo, type DaemonUpdateCheck, type UpdateCheck } from '../update-check.js';
 import {
   CONFIG_SCHEMA,
   computeDiff,
@@ -1512,6 +1513,172 @@ function AppPrefsCard({
   );
 }
 
+/* ═══ UpdatesCard ═════════════════════════════════════════════════════
+   The app bundle and the daemon are updated through different mechanisms
+   (electron-updater / an npm fallback, versus an npm install the daemon
+   restarts into) and checked against different version sources (the app's
+   own updater vs the daemon's /health), so they get independent rows: a
+   failure checking or updating one must never blank out the other
+   (TRA-686). Same three shapes as the rest of this screen — Section, Card,
+   36-ish px rows — plus a copyable-command line for the one state neither
+   row can fix on its own. */
+const firstLine = (s: string): string => s.split('\n')[0].trim();
+
+function UpdateRow({
+  title,
+  version,
+  status,
+  statusTitle,
+  warn,
+  checking,
+  updating,
+  onCheck,
+  onUpdate,
+  updateLabel,
+  command,
+  last,
+}: {
+  title: string;
+  version?: string;
+  status: string;
+  /** The untruncated text behind `status` — a multi-line npm error, typically. */
+  statusTitle?: string;
+  warn: boolean;
+  checking: boolean;
+  updating: boolean;
+  onCheck: () => void;
+  onUpdate?: () => void;
+  /** Defaults to Update/Updating…; the app row overrides it to Restart while a download is pending. */
+  updateLabel?: string;
+  command?: string;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-1.5"
+      style={{ padding: '8px 12px', borderBottom: rowBorder(last ?? false) }}
+    >
+      <div className="flex items-center gap-2.5">
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] leading-4" style={{ color: 'var(--label)' }}>
+            {version ? `${title} · v${version}` : title}
+          </div>
+          {/* A check is reported in words, not by dimming the refresh glyph: the
+              disabled icon lands at 22% label on surface (~1.6:1), which is not
+              a state anyone can read. `aria-live` so it is also announced. */}
+          <div
+            className="text-[11px] leading-[13px] truncate"
+            style={{ color: warn && !checking ? 'var(--status-red)' : 'var(--label-secondary)' }}
+            aria-live="polite"
+            title={statusTitle}
+          >
+            {checking ? t('update:headerChecking') : status}
+          </div>
+        </div>
+        <Button
+          variant="icon"
+          icon="refresh"
+          onClick={onCheck}
+          disabled={checking}
+          aria-label={t('update:settingsCheck')}
+          title={t('update:settingsCheck')}
+        />
+        {onUpdate && (
+          <Button variant="bordered" size="small" disabled={updating} onClick={onUpdate}>
+            {updating ? t('update:cardUpdating') : (updateLabel ?? t('update:cardUpdate'))}
+          </Button>
+        )}
+      </div>
+      {command && (
+        <div className="flex items-start gap-1.5">
+          {/* Wraps rather than truncates: the ellipsis fell exactly on
+              `install -g trace-mcp@latest` and left the npm path — the half that
+              says nothing — as the only visible part of the command. */}
+          <code
+            className="flex-1 min-w-0 text-[11px] leading-[15px]"
+            style={{ color: 'var(--label-secondary)', overflowWrap: 'anywhere' }}
+            title={command}
+          >
+            {command}
+          </code>
+          <Button
+            variant="icon"
+            icon="content_copy"
+            onClick={() => void navigator.clipboard?.writeText(command)}
+            aria-label={t('update:copyStaleRootCommand')}
+            title={t('update:copyStaleRootCommand')}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UpdatesCard({
+  update,
+  daemonUpdate,
+}: {
+  update: UpdateCheck;
+  daemonUpdate: DaemonUpdateCheck;
+}) {
+  const app = update.state;
+  /* npm and electron-updater both fail in paragraphs — `npm error code EACCES`
+     plus three more lines. An 11px row shows the first line and hands the rest
+     to the tooltip; the copyable command underneath carries the next step. */
+  const appStatus = update.pendingVersion
+    ? t('update:cardReadyTitle', { version: update.pendingVersion })
+    : app.error
+      ? firstLine(app.error)
+      : update.progress !== null
+        ? /* The button already says "Updating…"; the row says what is coming
+             down and how far along it is, rather than repeating the label. */
+          `${t('update:cardAvailableTitle', { version: app.latest })} · ${Math.round(update.progress)}%`
+        : app.available
+          ? t('update:cardAvailableTitle', { version: app.latest })
+          : t('update:headerUpToDate', { when: formatAgo(app.lastChecked) });
+
+  const daemon = daemonUpdate.state;
+  const daemonStatus = daemon.error
+    ? firstLine(daemon.error)
+    : daemon.available
+      ? t('update:cardAvailableTitle', { version: daemon.latest })
+      : t('update:headerUpToDate', { when: formatAgo(daemon.lastChecked) });
+
+  return (
+    <Section title={t('update:settingsTitle')}>
+      <Card>
+        <UpdateRow
+          title={t('update:settingsAppRow')}
+          version={app.current}
+          status={appStatus}
+          statusTitle={app.error}
+          warn={Boolean(app.error)}
+          checking={update.checking}
+          updating={update.updating}
+          onCheck={update.check}
+          onUpdate={
+            update.pendingVersion ? update.restart : app.available ? update.apply : undefined
+          }
+          updateLabel={update.pendingVersion ? t('update:cardRestart') : undefined}
+        />
+        <UpdateRow
+          title={t('update:settingsDaemonRow')}
+          version={daemon.current}
+          status={daemonStatus}
+          statusTitle={daemon.error}
+          warn={Boolean(daemon.error)}
+          checking={daemonUpdate.checking}
+          updating={daemonUpdate.updating}
+          onCheck={daemonUpdate.check}
+          onUpdate={daemon.available ? daemonUpdate.apply : undefined}
+          command={daemon.command}
+          last
+        />
+      </Card>
+    </Section>
+  );
+}
+
 /* ═══ Main ═══════════════════════════════════════════════════════════ */
 
 type Screen =
@@ -1524,6 +1691,8 @@ export function Settings({
   appearance,
   onAppearanceChange,
   onOpenSetupWizard,
+  update: appUpdateCheck,
+  daemonUpdate,
 }: {
   /* App-level preference, not a daemon config field: it lives in localStorage
      and is owned by useTheme() in App.tsx, which is what applies [data-theme].
@@ -1532,6 +1701,11 @@ export function Settings({
   appearance: Appearance;
   onAppearanceChange: (next: Appearance) => void;
   onOpenSetupWizard?: () => void;
+  /* Same one-poller-per-window state App.tsx already hands to the app menu
+     and the sidebar card — Settings is a third reader, not a second poller
+     (TRA-363, extended to the daemon row by TRA-686). */
+  update: UpdateCheck;
+  daemonUpdate: DaemonUpdateCheck;
 }) {
   /* One subscription for the whole pane: every string below resolves through
      the module-level `t`, and this is what re-renders the subtree — and with it
@@ -1643,7 +1817,8 @@ export function Settings({
           </h2>
         </Toolbar>
         <div className="flex-1 overflow-auto flex flex-col">
-          <div className="px-4 pt-4 mx-auto w-full" style={{ maxWidth: 720 }}>
+          <div className="flex flex-col gap-6 px-4 pt-4 mx-auto w-full" style={{ maxWidth: 720 }}>
+            <UpdatesCard update={appUpdateCheck} daemonUpdate={daemonUpdate} />
             <AppPrefsCard
               appearance={appearance}
               onChange={onAppearanceChange}
@@ -1817,6 +1992,13 @@ export function Settings({
                   </div>
                 </div>
               </Card>
+
+              {(!q ||
+                t('update:settingsTitle').toLowerCase().includes(q) ||
+                t('update:settingsAppRow').toLowerCase().includes(q) ||
+                t('update:settingsDaemonRow').toLowerCase().includes(q)) && (
+                <UpdatesCard update={appUpdateCheck} daemonUpdate={daemonUpdate} />
+              )}
 
               {/* Searchable by the group's name, by either row's label, and by
                   the language names themselves — someone looking for Russian

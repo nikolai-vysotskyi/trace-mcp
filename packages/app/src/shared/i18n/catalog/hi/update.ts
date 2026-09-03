@@ -15,6 +15,8 @@ export const update = {
   headerChecking: 'जाँच हो रही है…',
   headerAvailable: 'वर्ज़न {{version}} उपलब्ध',
   headerUpToDate: 'अप टू डेट · {{when}} जाँचा गया',
+  headerDaemonAvailable: 'डेमॉन अपडेट उपलब्ध · v{{version}}',
+  headerBothAvailable: 'ऐप और डेमॉन दोनों के अपडेट उपलब्ध',
 
   cardReadyTitle: 'v{{version}} तैयार',
   cardReadySubtitle: 'इंस्टॉल के लिए रीस्टार्ट करें · v{{current}}',
@@ -23,4 +25,9 @@ export const update = {
   cardAvailableSubtitle: 'अभी v{{current}} · {{when}} जाँचा गया',
   cardUpdate: 'अपडेट',
   cardUpdating: 'अपडेट हो रहा है…',
+
+  settingsTitle: 'अपडेट',
+  settingsAppRow: 'ऐप',
+  settingsDaemonRow: 'डेमॉन',
+  settingsCheck: 'अपडेट देखें',
 } as const;

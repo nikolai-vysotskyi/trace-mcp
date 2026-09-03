@@ -21,7 +21,9 @@ import {
 } from './lattice/ui';
 import {
   formatAgo,
+  type DaemonUpdateCheck,
   type UpdateCheck,
+  useDaemonUpdateCheck,
   useUpdateCheck,
 } from './update-check.js';
 import {
@@ -642,8 +644,12 @@ function MenuContent({
   appearance,
   onAppearanceChange,
   onOpenSetupWizard,
+  update,
+  daemonUpdate,
 }: {
   tab: GlobalTab;
+  update: UpdateCheck;
+  daemonUpdate: DaemonUpdateCheck;
   appearance: Appearance;
   onAppearanceChange: (next: Appearance) => void;
   onOpenSetupWizard?: () => void;
@@ -657,6 +663,8 @@ function MenuContent({
           appearance={appearance}
           onAppearanceChange={onAppearanceChange}
           onOpenSetupWizard={onOpenSetupWizard}
+          update={update}
+          daemonUpdate={daemonUpdate}
         />
       )}
     </>
@@ -758,8 +766,12 @@ export function App() {
   /* Hoisted here, not inside AppTabView: one owner of update state for the
      whole window, not one per mounted tab. AppTabView used to call
      useUpdateCheck() itself, so every kept-alive tab started its own
-     10-minute poll and its own update-progress subscription. */
+     10-minute poll and its own update-progress subscription. The daemon gets
+     its own poller alongside it, not a second call to this one: it is a
+     different artifact on a different update mechanism, and a failure
+     checking one must never blank out the other (TRA-686). */
   const update = useUpdateCheck();
+  const daemonUpdate = useDaemonUpdateCheck();
 
   const openOrFocusProjectTab = useCallback((root: string) => {
     setTabs((prev) => {
@@ -875,6 +887,7 @@ export function App() {
           isActive={tab.active}
           initialGlobalTab={tab.id === firstTabId ? initialParams.tab : undefined}
           update={update}
+          daemonUpdate={daemonUpdate}
           onCloseSelf={() => closeTab(tab.id)}
         />
       ))}
@@ -887,12 +900,14 @@ function AppTabView({
   isActive,
   initialGlobalTab,
   update,
+  daemonUpdate,
   onCloseSelf,
 }: {
   tab: TabInfo;
   isActive: boolean;
   initialGlobalTab?: string | null;
   update: UpdateCheck;
+  daemonUpdate: DaemonUpdateCheck;
   onCloseSelf: () => void;
 }) {
   const { t } = useTranslation('shell');
@@ -1096,7 +1111,10 @@ function AppTabView({
           void pickProject();
           break;
         case 'check-for-update':
+          // One button, both checks (TRA-686): the app menu and the native
+          // "Check for updates…" item both funnel through this one command.
           update.check();
+          daemonUpdate.check();
           break;
         case 'close-tab':
           onCloseSelf();
@@ -1111,6 +1129,7 @@ function AppTabView({
     openSettings,
     pickProject,
     update.check,
+    daemonUpdate.check,
     onCloseSelf,
   ]);
 
@@ -1289,7 +1308,12 @@ function AppTabView({
             <AppMenu
               update={update.state}
               checking={update.checking}
-              onCheckForUpdate={update.check}
+              daemonUpdate={daemonUpdate.state}
+              daemonChecking={daemonUpdate.checking}
+              onCheckForUpdate={() => {
+                update.check();
+                daemonUpdate.check();
+              }}
               appearance={appearance}
               onAppearanceChange={setAppearance}
               onSettings={openSettings}
@@ -1366,6 +1390,8 @@ function AppTabView({
                   appearance={appearance}
                   onAppearanceChange={setAppearance}
                   onOpenSetupWizard={() => setShowOnboarding(true)}
+                  update={update}
+                  daemonUpdate={daemonUpdate}
                 />
               </ErrorBoundary>
             )}
