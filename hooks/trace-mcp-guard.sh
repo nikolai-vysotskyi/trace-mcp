@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
-# trace-mcp-guard v0.14.0
+# trace-mcp-guard v0.15.0
 # REQUIRES: trace-mcp >= 1.32.7   (status JSON sentinel introduced in this version)
+#
+# v0.15 changes (guard v2 — TRA-711, navigation streak gate):
+#   - The guard no longer intervenes on an isolated navigation call. TRA-705
+#     measured the trace path at 1.45x the cost of a bare grep agent on a light
+#     navigation question with identical correctness (27/30 vs 27/30) — routing
+#     that question through us is a measured regression, not a saving. The win
+#     is on multi-step work (1.39x our way), so the guard now waits for the
+#     session to actually be crawling.
+#   - Navigation-class denies (Read/Grep/Glob/Bash code exploration/git
+#     show|diff|log -p) now fire from the TRACE_MCP_GUARD_NAV_MIN'th (default 3)
+#     navigation attempt within TRACE_MCP_GUARD_NAV_WINDOW seconds (default
+#     300). Below that the hook exits silently.
+#   - Relationship questions ("who calls X", "what breaks if I change Y",
+#     "which tests cover Z") bypass the gate and are routed from the first
+#     call — that is the shape where the advantage is measured. The
+#     UserPromptSubmit hook (v0.3.0) sets the flag and resets the streak on
+#     each new user prompt.
+#   - Security rules (.env) and Agent(Explore) are unaffected: they are not
+#     navigation-cost tradeoffs.
 #
 # v0.14 changes (fixes TRA-152 — recursive/pathless grep-cat bypass):
 #   - The Bash grep/rg/find/cat/head/tail/etc. code-exploration rule required
@@ -359,6 +378,61 @@ AUTO_DEGRADE_DENY_THRESHOLD=${TRACE_MCP_GUARD_AUTO_DENY:-5}
 AUTO_DEGRADE_WINDOW_SEC=${TRACE_MCP_GUARD_AUTO_WINDOW:-300}
 AUTO_DEGRADE_DURATION_SEC=${TRACE_MCP_GUARD_AUTO_DURATION:-300}
 
+# ─── Navigation streak gate (guard v2 — TRA-711) ───────────────────
+# TRA-705 measured the trace path costing 1.45x MORE than a bare grep agent on
+# a single light navigation question, at equal correctness (27/30 vs 27/30);
+# the advantage only appears on multi-step work (1.39x our way). Routing every
+# isolated "where is X defined" through trace-mcp is therefore a measured
+# regression, so the guard now stays silent until a session is actually
+# crawling: navigation-class denies fire from the NAV_STREAK_MIN'th navigation
+# attempt inside a rolling window, not from the first.
+#
+# Two things reset the streak: a window of quiet (nothing navigational for
+# NAV_STREAK_WINDOW_SEC) and a new user prompt (the UserPromptSubmit hook
+# clears the counter — a new question is a new streak).
+#
+# The gate is bypassed entirely for relationship questions ("who calls X",
+# "what breaks if I change Y", "which tests cover Z") — the shape where the
+# advantage IS measured. The UserPromptSubmit hook flags those.
+#
+# Security rules (.env access) and the Agent(Explore) rule never pass through
+# this gate: they are not navigation-cost tradeoffs.
+NAV_STREAK_MIN=${TRACE_MCP_GUARD_NAV_MIN:-3}
+NAV_STREAK_WINDOW_SEC=${TRACE_MCP_GUARD_NAV_WINDOW:-300}
+NAV_STREAK_FILE="$READS_DIR/.nav-streak"
+NAV_FORCE_FILE="$READS_DIR/.nav-force"
+
+# Record one navigation attempt. Exits 0 (silent allow) while the session is
+# still below the intervention threshold; returns normally once it is at or
+# past it, letting the caller fall through to deny().
+nav_hit() {
+  # Relationship question in flight → intervene from the first call.
+  if [[ -f "$NAV_FORCE_FILE" ]]; then
+    return 0
+  fi
+  if (( NAV_STREAK_MIN <= 1 )); then
+    return 0
+  fi
+
+  local now count last
+  now=$(date +%s)
+  count=0
+  last=0
+  if [[ -f "$NAV_STREAK_FILE" ]]; then
+    read -r count last < "$NAV_STREAK_FILE" 2>/dev/null || true
+  fi
+  [[ "$count" =~ ^[0-9]+$ ]] || count=0
+  [[ "$last" =~ ^[0-9]+$ ]] || last=0
+  if (( last == 0 || now - last > NAV_STREAK_WINDOW_SEC )); then
+    count=0
+  fi
+  count=$((count + 1))
+  echo "$count $now" > "$NAV_STREAK_FILE" 2>/dev/null || true
+  if (( count < NAV_STREAK_MIN )); then
+    exit 0
+  fi
+}
+
 # Convert ISO 8601 timestamp → epoch seconds. Empty/invalid input → 0.
 iso_to_epoch() {
   local ts="$1"
@@ -652,6 +726,8 @@ if [[ "$TOOL_NAME" == "Read" ]]; then
         "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Read as fallback."
     fi
 
+    # Navigation gate: an isolated read is cheaper natively than through us.
+    nav_hit
     # No marker → deny. Track repeat denies for escalation.
     DENY_COUNT=0
     if [[ -f "$DENY_STATE" ]]; then
@@ -720,6 +796,7 @@ if [[ "$TOOL_NAME" == "Grep" ]]; then
       "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Grep as fallback."
   fi
 
+  nav_hit
   PATTERN=$(echo "$INPUT" | jq -r '.tool_input.pattern // empty')
   deny \
     "Use trace-mcp for code search — it understands symbols and relationships." \
@@ -750,6 +827,7 @@ if [[ "$TOOL_NAME" == "Glob" ]]; then
       "trace-mcp guard: ${HEARTBEAT_REASON}. Allowing Glob as fallback."
   fi
 
+  nav_hit
   deny \
     "Use trace-mcp for code file discovery — it knows your project structure." \
     "trace-mcp alternatives:\\n- get_project_map { \\\"summary_only\\\": true } — project overview (frameworks, languages, structure)\\n- search { \\\"query\\\": \\\"keyword\\\", \\\"file_pattern\\\": \\\"src/tools/*\\\" } — find symbols in specific paths\\n- get_outline { \\\"path\\\": \\\"path/to/file\\\" } — see what is in a file\\nUse Glob only for non-code file patterns."
@@ -780,18 +858,21 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
   # git show/diff/log -p/blame on code paths — these are de-facto Read.
   if echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +(show|blame|cat-file)( |$)'; then
+      nav_hit
       backoff_hit "bash-git-show"
       deny \
         "Use trace-mcp instead of \\\"git show/blame/cat-file\\\" for reading code." \
         "trace-mcp alternatives:\\n- get_symbol { \\\"fqn\\\": \\\"...\\\" } — current source\\n- get_outline { \\\"path\\\": \\\"...\\\" } — file structure\\n- get_changed_symbols / compare_branches — git-aware diffs\\nUse git show/blame/cat-file only on non-code files."
     fi
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +log +.*(-p|--patch)( |$)'; then
+      nav_hit
       backoff_hit "bash-git-log-p"
       deny \
         "Use trace-mcp instead of \\\"git log -p\\\" for reading code." \
         "trace-mcp alternatives:\\n- compare_branches { \\\"branch\\\": \\\"current\\\" } — symbol-level diff\\n- get_changed_symbols { } — diff-aware symbol list"
     fi
     if echo "$COMMAND" | grep -qE '(^|[ |;&])git +diff( |$)'; then
+      nav_hit
       backoff_hit "bash-git-diff"
       deny \
         "Use trace-mcp instead of \\\"git diff\\\" on code files." \
@@ -822,6 +903,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
      && echo "$COMMAND" | grep -qE "$SOURCE_DIR_RE" \
      && ! echo "$COMMAND" | grep -qE "$EXCLUDE_DIR_RE" \
      && ! echo "$COMMAND" | grep -qE "$SAFE_ROOT_RE"; then
+    nav_hit
     backoff_hit "bash-ls-find"
     deny \
       "Use trace-mcp instead of \\\"ls\\\"/\\\"find\\\" on source-tree paths — it knows your project structure." \
@@ -851,6 +933,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
      && ! echo "$COMMAND" | grep -qE "$EXCLUDE_DIR_RE" \
      && ! echo "$COMMAND" | grep -qE "$SAFE_ROOT_RE" \
      && { echo "$COMMAND" | grep -qiE "$CODE_EXT_ANYWHERE_RE" || echo "$COMMAND" | grep -qE "$SOURCE_DIR_RE"; }; then
+    nav_hit
     backoff_hit "bash-code-shell"
     deny \
       "Use trace-mcp instead of shell commands for code exploration." \
@@ -859,6 +942,7 @@ if [[ "$TOOL_NAME" == "Bash" ]]; then
 
   # Input redirection from a code file: `cmd < src/foo.ts`.
   if echo "$COMMAND" | grep -qE '< +[^ ]+' && echo "$COMMAND" | grep -qiE "$CODE_EXT_RE"; then
+    nav_hit
     backoff_hit "bash-input-redir"
     deny \
       "Use trace-mcp instead of shell input-redirection on code files." \

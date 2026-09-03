@@ -38,7 +38,16 @@ function runGuard(
 
   const result = spawnSync('bash', [HOOK_SCRIPT], {
     input: payload,
-    env: { ...process.env, CLAUDE_TOOL_NAME: toolName, ...extraEnv },
+    // Guard v2 (TRA-711) only intervenes from the third navigation call in a
+    // session. Every test below drives a single call to pin one deny RULE, so
+    // the gate is neutralised here; the gate itself is covered by its own
+    // describe block, which sets the knob back.
+    env: {
+      ...process.env,
+      CLAUDE_TOOL_NAME: toolName,
+      TRACE_MCP_GUARD_NAV_MIN: '1',
+      ...extraEnv,
+    },
     cwd,
     encoding: 'utf-8',
     timeout: 5000,
@@ -1311,5 +1320,114 @@ describe.skipIf(process.platform === 'win32')('trace-mcp-guard.sh v0.7', () => {
     });
     expect(decision.allowed).toBe(true);
     expect(decision.context ?? '').toContain('trace-mcp guard');
+  });
+});
+
+// ─── Guard v2: navigation streak gate (TRA-711) ─────────────────────
+//
+// TRA-705 measured a light navigation question costing 1.45x more through the
+// trace path than a bare grep agent at identical correctness (27/30 vs 27/30);
+// the advantage only shows on multi-step work. So the guard must be SILENT on
+// an isolated navigation call and only intervene once the session is crawling.
+// These tests drive the shipped default (no TRACE_MCP_GUARD_NAV_MIN override),
+// which is why they call runGuard with the knob explicitly unset.
+describe.skipIf(process.platform === 'win32')('navigation streak gate (TRA-711)', () => {
+  const projectDir = path.join(
+    TMP_BASE,
+    `trace-mcp-navgate-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  let sessionId: string;
+  let heartbeatFile: string;
+
+  /** runGuard with the shipped nav-gate default, not the suite-wide override. */
+  function nav(
+    toolName: string,
+    toolInput: Record<string, unknown>,
+    extraEnv: Record<string, string> = {},
+  ): HookDecision {
+    return runGuard(toolName, toolInput, sessionId, projectDir, {
+      TRACE_MCP_GUARD_NAV_MIN: '3',
+      ...extraEnv,
+    });
+  }
+
+  function readsDir(): string {
+    return path.join(TMP_BASE, `trace-mcp-reads-${sessionId}`);
+  }
+
+  beforeEach(() => {
+    fs.mkdirSync(projectDir, { recursive: true });
+    sessionId = `vitest-nav-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    heartbeatFile = setHeartbeatAlive(projectDir);
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(readsDir())) fs.rmSync(readsDir(), { recursive: true, force: true });
+    if (fs.existsSync(projectDir)) {
+      const real = fs.realpathSync(projectDir);
+      for (const p of [
+        path.join(TMP_BASE, `trace-mcp-consulted-${projectHash(real)}`),
+        path.join(TMP_BASE, `trace-mcp-bypass-${projectHash(real)}`),
+        path.join(TMP_BASE, `trace-mcp-status-${projectHash(real)}.json`),
+      ]) {
+        if (fs.existsSync(p)) fs.rmSync(p, { recursive: true, force: true });
+      }
+      fs.rmSync(projectDir, { recursive: true, force: true });
+    }
+    if (fs.existsSync(heartbeatFile)) fs.rmSync(heartbeatFile, { force: true });
+  });
+
+  it('stays silent on the first isolated Grep — the measured regression case', () => {
+    const decision = nav('Grep', { pattern: 'handleRequest' });
+    expect(decision.allowed).toBe(true);
+    expect(decision.context).toBeUndefined();
+  });
+
+  it('intervenes from the third navigation call in a session', () => {
+    expect(nav('Grep', { pattern: 'one' }).allowed).toBe(true);
+    expect(nav('Grep', { pattern: 'two' }).allowed).toBe(true);
+    const third = nav('Grep', { pattern: 'three' });
+    expect(third.allowed).toBe(false);
+    expect(third.reason ?? '').toMatch(/trace-mcp/i);
+  });
+
+  it('counts navigation attempts across tools, not per tool', () => {
+    expect(nav('Grep', { pattern: 'one' }).allowed).toBe(true);
+    expect(nav('Glob', { pattern: 'src/**/*.ts' }).allowed).toBe(true);
+    expect(nav('Bash', { command: 'grep -rn foo src/' }).allowed).toBe(false);
+  });
+
+  it('routes from the FIRST call when a relationship question is flagged', () => {
+    fs.mkdirSync(readsDir(), { recursive: true });
+    fs.writeFileSync(path.join(readsDir(), '.nav-force'), '');
+    const decision = nav('Grep', { pattern: 'handleRequest' });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason ?? '').toMatch(/trace-mcp/i);
+  });
+
+  it('resets the streak after a quiet window', () => {
+    expect(nav('Grep', { pattern: 'one' }).allowed).toBe(true);
+    expect(nav('Grep', { pattern: 'two' }).allowed).toBe(true);
+    // Backdate the streak past the window — the next call starts over.
+    const streak = path.join(readsDir(), '.nav-streak');
+    const stale = Math.floor(Date.now() / 1000) - 600;
+    fs.writeFileSync(streak, `2 ${stale}\n`);
+    expect(nav('Grep', { pattern: 'three' }, { TRACE_MCP_GUARD_NAV_WINDOW: '300' }).allowed).toBe(
+      true,
+    );
+  });
+
+  it('never gates .env access — that rule is security, not navigation cost', () => {
+    const envFile = path.join(projectDir, '.env');
+    fs.writeFileSync(envFile, 'SECRET=1');
+    const decision = nav('Read', { file_path: envFile });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason ?? '').toMatch(/get_env_vars/i);
+  });
+
+  it('never gates Agent(Explore) — a 50K-token subagent is not a light lookup', () => {
+    const decision = nav('Agent', { subagent_type: 'Explore', description: 'look around' });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason ?? '').toMatch(/Agent\(Explore\)/);
   });
 });

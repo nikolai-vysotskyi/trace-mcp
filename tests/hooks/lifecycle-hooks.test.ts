@@ -266,6 +266,56 @@ describe.skipIf(process.platform === 'win32')('lifecycle hook scripts (POSIX)', 
       expect(status).toBe(0);
       expect(stdout.trim()).toBe('');
     });
+
+    // Guard v2 routing signal (TRA-711). These assertions are about the files
+    // the hook leaves in the guard's per-session state dir, not its stdout —
+    // the PreToolUse guard is the consumer.
+    describe('guard v2 routing signal', () => {
+      const readsDir = (sessionId: string) =>
+        path.join(process.env.TMPDIR ?? '/tmp', `trace-mcp-reads-${sessionId}`);
+
+      function submit(prompt: string, sessionId: string) {
+        makeStub(stubDir, '[]', 0);
+        const r = runHook(USER_PROMPT_SUBMIT, JSON.stringify({ prompt, session_id: sessionId }), {
+          stubDir,
+          cwd: projectDir,
+        });
+        expect(r.status).toBe(0);
+      }
+
+      let sessionId: string;
+      beforeEach(() => {
+        sessionId = `ups-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      });
+      afterEach(() => {
+        fs.rmSync(readsDir(sessionId), { recursive: true, force: true });
+      });
+
+      it('flags relationship questions so the guard routes from the first call', () => {
+        submit('who calls resolvePreset?', sessionId);
+        expect(fs.existsSync(path.join(readsDir(sessionId), '.nav-force'))).toBe(true);
+      });
+
+      it('flags "what breaks" and test-coverage questions too', () => {
+        submit('what breaks if I change the Store constructor', sessionId);
+        expect(fs.existsSync(path.join(readsDir(sessionId), '.nav-force'))).toBe(true);
+        submit('which tests cover the indexer pipeline', sessionId);
+        expect(fs.existsSync(path.join(readsDir(sessionId), '.nav-force'))).toBe(true);
+      });
+
+      it('clears the flag on a plain navigation question', () => {
+        submit('who calls resolvePreset?', sessionId);
+        submit('where is resolvePreset defined', sessionId);
+        expect(fs.existsSync(path.join(readsDir(sessionId), '.nav-force'))).toBe(false);
+      });
+
+      it('resets the navigation streak on every new prompt', () => {
+        fs.mkdirSync(readsDir(sessionId), { recursive: true });
+        fs.writeFileSync(path.join(readsDir(sessionId), '.nav-streak'), '5 12345\n');
+        submit('now do something else entirely', sessionId);
+        expect(fs.existsSync(path.join(readsDir(sessionId), '.nav-streak'))).toBe(false);
+      });
+    });
   });
 
   describe('trace-mcp-stop.sh', () => {
