@@ -8,12 +8,12 @@
 # Caveat: the ping's credentials ship in the published bundle (SECURITY.md
 # "Telemetry Credentials"), so events are unauthenticated and inflatable.
 # Read as a trend; treat a step change as suspect until corroborated.
-updated: "2026-09-02T06:45:33.241Z"
+updated: "2026-09-03T06:41:45.399Z"
 active_users:
-  day: 41
-  week: 75
-  month: 75
-events_28d: 364
+  day: 39
+  week: 90
+  month: 90
+events_28d: 425
 
 # Tokens the indexed answers saved against reading the same code raw, summed
 # across every install that has not opted out, since 2025-01-01.
@@ -30,14 +30,14 @@ events_28d: 364
 # "at least", never as a typical or best case. Pricing at Opus would multiply it
 # by five and need a caveat carried alongside the number forever.
 savings:
-  tokens_saved: 75488840
-  tokens_saved_raw: 75488840
-  usd_saved: 75.49
+  tokens_saved: 15585271
+  tokens_saved_raw: 77143025
+  usd_saved: 15.59
   price_model: "claude-haiku-4-5"
   price_usd_per_mtok: 1.00
   since: "2025-01-01"
-  days: 4
-  capped_days: 0
+  days: 5
+  capped_days: 1
 
 # The funnel (TRA-645) — four numbers, one per stage, so a week's distribution,
 # SEO, outreach or design change can be graded against something instead of
@@ -46,16 +46,24 @@ savings:
 #   arrivals    unique visitors to the GitHub repo, GitHub's rolling 14 days
 #   installs    first-ever pings in 28 days (`installs_28d.new`)
 #   activated   % of active installs reporting at least one indexed repository
+#   used        % of active installs that called a tool at all in the window
 #   retention   day / month active installs — how many of the month ran today
+#
+# `activated` and `used` are two different stages, not two readings of one
+# (TRA-673). `activated` is *setup*: it says an install once registered a
+# project, so an install that indexed a repo in July and has not called a tool
+# since still counts. `used` is *use*. When they diverge, the gap between them
+# is the population that reached the product and stopped.
 #
 # Mind the windows: arrivals is 14 days and everything else is 28, so
 # arrivals→installs is a direction, not a conversion rate. The unauthenticated-
-# counter caveat above applies to all four.
+# counter caveat above applies to all of them.
 funnel:
   arrivals_uniques_14d: null
-  new_installs_28d: 30
+  new_installs_28d: 44
   activated_pct: null
-  retention_dau_mau_pct: 55
+  used_pct: null
+  retention_dau_mau_pct: 43
 
 # Activation, from the ping's `repos_indexed` param. An install that reports
 # day after day with zero indexed repositories reached the product and never
@@ -79,6 +87,44 @@ activation:
     "2-5": 0
     "6+": 0
 
+# Use, from the ping's `calls` param — trace-mcp tool calls since the previous
+# ping, counted by the MCP server itself and therefore comparable across
+# clients (TRA-673). This is the number every efficiency claim we publish
+# assumes: an agent that reads files instead of calling the tools saves nothing,
+# whatever the benchmark says.
+#
+# `used_pct` is the figure to quote, not a call total. The ping's credentials
+# are public, so a summed counter is inflatable exactly like `tokens_saved`;
+# a per-install boolean is bounded above by `active_users` and costs one forged
+# install per point. Same denominator rule as activation above — the share is
+# over these buckets' own total, never over `active_users.month`.
+#
+# `by_client_used_pct` is the one that decides distribution strategy. The
+# mechanism that actually routes an agent to our tools — the PreToolUse guard
+# hook — is Claude Code only, and session mining has providers for two clients.
+# If use holds across clients, reach work goes wide; if it collapses without a
+# hook, our addressable market is clients that can enforce routing. Read it
+# beside `by_client_installs`: single-digit denominators conclude nothing.
+#
+# Empty until `calls` is registered as an event-scoped custom dimension in the
+# property; GA4 does not backfill, so values start at registration.
+usage:
+  error: "runReport failed: Did you mean customEvent:arch? Field customEvent:calls is not a valid dimension. For a list of valid dimensions and metrics, see https://developers.google.com/analytics/devguides/rep"
+  used: 0
+  not_used: 0
+  used_pct: null
+  unknown: 0
+  by_calls:
+    "0": 0
+    "1-9": 0
+    "10-99": 0
+    "100+": 0
+  by_client_error: "runReport failed: Did you mean customEvent:arch? Field customEvent:calls is not a valid dimension. For a list of valid dimensions and metrics, see https://developers.google.com/analytics/devguides/rep"
+  by_client_used_pct:
+    {}
+  by_client_installs:
+    {}
+
 # Acquisition — where the repo's visitors came from, over GitHub's rolling
 # 14-day window. This is the only acquisition signal available to us: the docs
 # site carries no analytics, and Reddit, our largest referrer, cannot be read
@@ -86,22 +132,25 @@ activation:
 # "Arrivals" column of `ops/distribution.md` before adding another directory.
 acquisition:
   views_uniques_14d: null
-  error: "views: HTTP 403"
+  error: "popular/referrers: HTTP 403"
   referrers_uniques_14d:
     {}
 installs_28d:
-  "(not set)": 251
-  "unknown": 37
-  "new": 30
-  "upgrade": 23
-  "active": 19
+  "(not set)": 255
+  "upgrade": 57
+  "new": 44
+  "unknown": 40
+  "active": 25
   "downgrade": 1
 by_version:
   "(not set)": 36
-  "3.10.0": 21
+  "3.10.0": 26
+  "3.11.0": 23
   "3.8.0": 19
-  "3.11.0": 10
+  "3.14.0": 10
   "3.7.0": 2
+  "3.12.0": 1
+  "3.13.0": 1
   "3.5.2": 1
   "3.6.0": 1
 
@@ -118,25 +167,57 @@ by_preset:
   {}
 by_tools_advertised:
   {}
+
+# Daemon reliability in the field (TRA-671). Until this, everything we knew
+# about the background daemon came from one developer's machine — `daemon
+# status` and daemon.log say plenty, but only to whoever opens them.
+#
+#   starts_28d          daemon starts reported across all installs
+#   unclean_stops_28d   of those, how many followed a run that ended without
+#                       going through the shutdown handler — SIGKILL, an OS
+#                       memory kill, a native crash, or power loss
+#   unclean_pct         the ratio; this is the number to watch week to week
+#   active_users_28d    the report's own `activeUsers`, as the denominator's
+#                       scale. NOT "installs that sent these fields": during
+#                       rollout most of that population is on a version that
+#                       does not send them at all, so the two diverge and only
+#                       the ratio above is safe to read as a rate.
+#
+# A machine that sleeps, reboots or logs out normally sends SIGTERM and is NOT
+# counted here. Reboot-heavy weeks still lift it, so read the trend and not a
+# single figure. An `error` means the custom metrics are not registered in the
+# property yet; GA4 does not backfill, so values only start at registration.
+daemon:
+  error: "runReport failed: Did you mean customEvent:ram_gb? Field customEvent:daemon_starts is not a valid metric.  For a list of valid dimensions and metrics, see https://developers.google.com/analytics/devgu"
+  starts_28d: 0
+  unclean_stops_28d: 0
+  unclean_pct: null
+  active_users_28d: 0
 by_country:
-  "(not set)": 48
-  "Russia": 6
+  "(not set)": 54
+  "Russia": 7
+  "United States": 6
   "Chile": 4
   "Sweden": 4
-  "United States": 4
+  "Denmark": 3
   "Brazil": 2
   "Malta": 2
+  "Australia": 1
   "Germany": 1
+  "Hong Kong": 1
   "Indonesia": 1
   "Iran": 1
+  "Italy": 1
   "Poland": 1
+  "Spain": 1
   "United Arab Emirates": 1
   "United Kingdom": 1
 by_client:
-  "unknown": 40
+  "unknown": 55
   "(not set)": 36
-  "claude-code": 8
-  "codex-mcp-client": 3
+  "claude-code": 11
+  "codex-mcp-client": 4
   "antigravity-client": 1
   "grok-shell-trace-mcp": 1
+  "opencode": 1
   "pi-mcp-trace-mcp": 1
