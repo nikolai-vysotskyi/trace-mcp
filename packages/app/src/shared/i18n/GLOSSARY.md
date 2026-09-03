@@ -10,6 +10,9 @@ Canonical terms and localization conventions across languages for the trace-mcp 
    - **Japanese**: Full-width punctuation（、。）in prose; no extra space between numbers and Japanese units (e.g., `10分`, `1件`, `5本` instead of `10 分`, `1 件`, `5 本`).
    - **German**: Informal tone (*du/deine/dein*, never mix with formal *Sie/Ihre*). Spelling with *x* for *indexieren / indexiert* (never *indizieren*).
 4. **Button & Action Precision**: Action buttons should name the exact action concisely (e.g., "一時停止" for temporary pause vs "停止" for complete stop).
+5. **Width Budgets**: Some labels sit in a fixed slot and truncate rather than wrap. Measured on the running renderer at 1280 pt, sidebar expanded:
+   - Workspace KPI tile label (`kpi*` in `workspace.ts`, 11 px, `.truncate`): **96 px**. German "Braucht Aufmerksamkeit" needed 132 px and rendered as "Braucht Aufmer…"; shortened to "Zu prüfen" (52 px).
+   - When a translation overruns a budget, shorten the string first. Change the CSS only if English overruns too.
 
 ---
 
@@ -43,6 +46,7 @@ Canonical terms and localization conventions across languages for the trace-mcp 
 | **Graph** | Graph | グラフ | Граф | Visual code dependency graph |
 | **Tech-debt grade** | Tech-Debt-Note | 技術的負債の評価 | Оценка техдолга | A–F code quality grade |
 | **Findings** | Funde | 検出 | Находки | Code smell / issue scanner results |
+| **Needs attention** | Zu prüfen | 要対応 | Требуют внимания | Workspace KPI tile — 96 px budget, see Principle 5 |
 | **Coverage** | Abdeckung | カバレッジ | Покрытие | Dependency & plugin coverage |
 | **Workspace** | Workspace | ワークスペース | Пространство | Top-level projects table |
 | **MCP Clients** | MCP-Clients | MCP クライアント | Клиенты MCP | Connected editor clients |

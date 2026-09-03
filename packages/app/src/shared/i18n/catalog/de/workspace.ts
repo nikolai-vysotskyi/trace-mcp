@@ -59,7 +59,7 @@ export const workspace = {
   kpiFiles: 'Dateien',
   kpiSymbols: 'Symbole',
   kpiHealthy: 'In Ordnung',
-  kpiNeedsAttention: 'Braucht Aufmerksamkeit',
+  kpiNeedsAttention: 'Zu prüfen',
   kpiIndexing: 'Wird indexiert',
   kpiTrackingFromToday: 'Erfassung ab heute',
   kpiPerProject: '{{n}} pro Projekt',
