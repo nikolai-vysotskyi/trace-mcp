@@ -9,11 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  getLauncherPath,
-  installLauncher,
-  legacyCompatCmdBody,
-} from '../../src/init/launcher.js';
+import { getLauncherPath, installLauncher, legacyCompatCmdBody } from '../../src/init/launcher.js';
 import { LAUNCHER_VERSION } from '../../src/init/types.js';
 
 const STALE_SHIM = '#!/bin/bash\n# trace-mcp-launcher v0.3.0\nexit 127\n';
