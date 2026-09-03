@@ -6,9 +6,11 @@ removed by a rule, downvoted as an ad, or both. **Nobody but Nikolai posts
 this**, same as the HN draft — an agent may write and revise it, publishing
 under the project's name is his call.
 
-Numbers verified 2026-08-30 against `docs/_data/counts.yml` (81 languages /
-87 frameworks / 169 tools). Nothing enforces this file — `readme-claims.test.ts`
-guards `README.md` only — so re-read the source before posting.
+Numbers come from `docs/_data/counts.yml` (81 languages / 87 frameworks / 177
+tools) and `docs/_data/pr_context_bench.json`, both generated.
+`tests/docs/readme-claims.test.ts` guards this file too as of 2026-09-03, so a
+stale count fails CI rather than surfacing under a post — but the tolerance is
+±5, so re-read the sources before posting anyway.
 
 ## We are already on Reddit and cannot read it
 
@@ -86,15 +88,20 @@ Body:
 > ties PHP to a Vue component, that a DI decorator is an edge, that an Eloquent
 > relation implies a table from a migration.
 >
-> Numbers, honestly: about 40–50% fewer tokens across a mixed session. Individual
-> structured calls go much higher, but that is a per-call peak and quoting it as
-> an average is how these posts lose credibility. Runs locally, no API keys. One
-> anonymous daily ping goes to Google Analytics; `TRACE_MCP_TELEMETRY=off` kills
-> it.
+> Numbers, honestly. The one I did not run on my own code: 60 merged bug-fix PRs
+> from six repos I do not maintain (axios, express, got, hono, flask, requests),
+> assembling review context for each — median 13,595 → 1,326 input tokens, 90.6%
+> fewer, with more of the affected call sites visible rather than fewer. Five of
+> the 60 barely improved and the page names them. Pinned SHAs, one command to
+> re-run: trace-mcp.com/pr-context-benchmark.html. Across a whole mixed session
+> it is more like 40–50%, and that is the honest number for your bill.
 >
-> `npx trace-mcp index . && npx trace-mcp benchmark .` prints per-task numbers for
-> your own repo — read the caveats in the reply below before you quote them at
-> anyone. Happy to answer anything, including where it is worse than the
+> Runs locally, no API keys. One anonymous daily ping goes to Google Analytics;
+> `TRACE_MCP_TELEMETRY=off` kills it.
+>
+> `npx trace-mcp index . && npx trace-mcp benchmark .` gives you an estimate for
+> your own repo — an estimate, not the measurement above; caveats in the reply
+> below. Happy to answer anything, including where it is worse than the
 > alternatives.
 
 Drop the tree-sitter detail and the language count — that audience reads counts
@@ -123,13 +130,19 @@ Body:
 > migration. So `get_change_impact` crosses language boundaries instead of
 > stopping at the import graph.
 >
-> Numbers, honestly: about 40–50% fewer tokens across a mixed session. Individual
-> structured calls go much higher, but that is a per-call peak and quoting it as
-> an average is how these posts lose credibility. It is MIT, runs locally, and
-> there is one anonymous daily ping you can kill with `TRACE_MCP_TELEMETRY=off`.
+> Numbers, on code that is not mine: 60 merged bug-fix PRs across axios,
+> express, got, hono, flask and requests, assembling the context a reviewer
+> needs. Median 13,595 → 1,326 input tokens, 90.6% fewer, and more of the
+> affected call sites end up readable, not fewer. Five of the 60 barely moved and
+> those are listed with their numbers —
+> trace-mcp.com/pr-context-benchmark.html, pinned SHAs, one command. Whole mixed
+> sessions land nearer 40–50%; I would not quote the 90.6% as an average. It is
+> MIT, runs locally, and there is one anonymous daily ping you can kill with
+> `TRACE_MCP_TELEMETRY=off`.
 >
-> `npx trace-mcp index . && npx trace-mcp benchmark .` prints per-task numbers for
-> your own repo. Happy to answer anything, including where it is worse than the
+> `npx trace-mcp index . && npx trace-mcp benchmark .` estimates the same thing
+> for your own repo — estimates, and I would rather you took the PR numbers,
+> which are measured. Happy to answer anything, including where it is worse than the
 > alternatives — Repomix is the better tool if you only want to stuff a repo into
 > one prompt, and I say so on the comparison page.
 
@@ -151,7 +164,17 @@ The Reddit versions of the HN questions, in the order they actually arrive:
    baseline?"** This is the one that decides the thread, and it arrives fast. Two
    comparable posts in these subs were taken apart on exactly this: one for
    moving tokens from output to input rather than removing them, one for
-   estimating tokens as bytes ÷ 4. The honest answer, which is checkable in
+   estimating tokens as bytes ÷ 4. **Answer with the PR benchmark, not with the
+   in-repo estimator** — `trace-mcp.com/pr-context-benchmark.html`: 60 merged
+   PRs in six repos nobody here maintains, base and head SHAs pinned in
+   `benchmarks/pr-context/dataset.json`, both sides actually assembled rather
+   than modelled, the 5 losing cases published, and `scripts/bench-pr-context.ts`
+   re-runs it. That is the one artifact in this project that a hostile reader
+   cannot take apart by reading the source, because reading the source is the
+   invitation.
+
+   The estimator is a **different number** and the distinction is the whole
+   answer to this question, so make it yourself before someone else does. In
    `src/analytics/benchmark.ts`: tokens are estimated from character count using
    a chars-per-token ratio that is **calibrated against a real BPE tokenizer**
    (`gpt-tokenizer`, cl100k_base) when it is installed, falling back to 4.0
@@ -165,9 +188,12 @@ The Reddit versions of the HN questions, in the order they actually arrive:
    OpenAI's tokenizer, not Claude's. It models a ceiling. For numbers measured
    from real sessions there is `trace-mcp analytics savings`. Never let someone
    else be the one to point out that the estimate is an estimate.
-3. **"169 tools is going to blow up my context."** → fair. Tools register per
-   detected framework, presets narrow it further, and shrinking the surface is
-   ongoing work. Don't argue this one; agree and describe the mechanism.
+3. **"177 tools is going to blow up my context."** → fair, and answerable with a
+   number: the default is 28 `minimal` tools, ~11.6K tokens at session start
+   (schema plus server instructions). 177 is the catalogue; 60 `standard` and
+   `full` are opt-in, and anything outside the preset is one `load_tools` call
+   away. Don't argue this one; agree that the catalogue is large and say what
+   the client is actually served.
 4. **"Does it phone home?"** → yes, one anonymous ping a day: random id, version,
    OS, two aggregate counters. No paths, no code. **Say where it goes** — an HTTP
    POST to `google-analytics.com` via the GA4 Measurement Protocol, with the

@@ -34,6 +34,10 @@ const DOCS = [
   'docs/llms-full.txt',
   'docs/comparisons.md',
   'docs/reduce-claude-code-token-usage.md',
+  // TRA-722: the launch drafts answer "177 tools will blow up my context" with
+  // the served default, which is the same number under the same drift pressure.
+  'ops/launch-hn.md',
+  'ops/launch-reddit.md',
 ];
 const PRESETS = [
   'standard',
