@@ -799,6 +799,51 @@ describe('CMake', () => {
     );
   });
 
+  it('extracts add_executable target with a hyphenated name', () => {
+    const r = p('add_executable(my-tool main.cpp)');
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'my-tool' && s.kind === 'function' && s.metadata?.target === 'executable',
+      ),
+    ).toBe(true);
+  });
+
+  // Real-world repro from fmtlib/fmt's CMakeLists.txt: hyphenated add_library
+  // target names used to truncate at the hyphen (`\w+` doesn't match `-`),
+  // so `fmt-header-only` and `fmt-c` both collapsed into the wrong name `fmt`.
+  it('extracts hyphenated add_library target names distinctly', () => {
+    const r = p(
+      'add_library(fmt src/format.cc)\nadd_library(fmt-header-only INTERFACE)\nadd_library(fmt-c src/fmt-c.cc)',
+    );
+    const names = r.symbols
+      .filter((s: any) => s.metadata?.target === 'library')
+      .map((s: any) => s.name);
+    expect(names).toEqual(['fmt', 'fmt-header-only', 'fmt-c']);
+  });
+
+  // Real-world repro: `add_library(fmt::${target} ALIAS ${target})` inside a
+  // helper function. The old regex partial-matched "fmt" out of "fmt::..."
+  // and recorded it as a real library target, colliding with the actual
+  // `fmt` target defined elsewhere in the same file. Skipping an
+  // unparseable alias/generator-expression target is correct; fabricating
+  // a wrong one is not.
+  it('does not fabricate a target from an ALIAS with a namespaced/variable name', () => {
+    const r = p('add_library(fmt::${target} ALIAS ${target})\nadd_library(fmt src/format.cc)');
+    const libraryTargets = r.symbols.filter((s: any) => s.metadata?.target === 'library');
+    expect(libraryTargets.map((s: any) => s.name)).toEqual(['fmt']);
+  });
+
+  it('extracts add_custom_target with a hyphenated name', () => {
+    const r = p('add_custom_target(format-check COMMAND clang-format --check)');
+    expect(
+      r.symbols.some(
+        (s: any) =>
+          s.name === 'format-check' && s.kind === 'function' && s.metadata?.target === 'custom',
+      ),
+    ).toBe(true);
+  });
+
   it('extracts set() and option() as variables, option flagged distinctly', async () => {
     const r = await p(
       'set(CMAKE_CXX_STANDARD 17)\noption(BUILD_TESTS "Build the test suite" ON)\n',
@@ -833,5 +878,14 @@ describe('CMake', () => {
   it('strips surrounding quotes from a quoted include path', async () => {
     const r = await p('include("cmake/Utils.cmake")\n');
     expect(r.edges?.some((e: any) => e.metadata?.module === 'cmake/Utils.cmake')).toBe(true);
+  });
+
+  // Real-world repro from nlohmann/json and fmtlib/fmt: every real
+  // add_subdirectory() call in both files hit this bug, because a naive
+  // capture is greedy and swallows the closing paren too.
+  it('extracts add_subdirectory edge without the trailing paren', () => {
+    const r = p('add_subdirectory(src/modules)\nadd_subdirectory(test/fuzzing)');
+    const modules = r.edges?.map((e: any) => e.metadata?.module) ?? [];
+    expect(modules).toEqual(['src/modules', 'test/fuzzing']);
   });
 });
