@@ -162,7 +162,7 @@ See [Analytics](analytics.md) for full documentation.
 | `get_real_savings` | Analyze actual sessions: how much trace-mcp saves vs raw file reads |
 | `benchmark_project` | Synthetic benchmark: raw reads vs trace-mcp compact responses (5 scenarios) |
 | `get_coverage_report` | Technology profile: deps from manifests, coverage by trace-mcp plugins, gaps |
-| `get_startup_context_audit` | What every session pays for before the first message, by source, what it costs, and what the logs prove went unused |
+| `get_startup_context_audit` | What every session pays for before the first message, by source, what it costs, what the logs prove went unused, and where it says the same thing twice |
 | `get_usage_trends` | Daily token usage trends over time |
 | `get_session_stats` | Real-time token savings for the current session |
 | `audit_config` | Audit AI agent config files for stale refs, dead paths, bloat, scope leaks |
@@ -246,7 +246,7 @@ Requires `ai.enabled: true` in config. See [Configuration](configuration.md#ai-c
 | "Where am I wasting tokens?" | `get_optimization_report` — detects repeated reads, bash-grep, large files |
 | "How much would trace-mcp save?" | `get_real_savings` — compares actual reads vs compact alternatives |
 | "Quick efficiency benchmark" | `benchmark_project` — synthetic per-category estimate of the structured-task ceiling, not measured savings (use `get_real_savings` for those) |
-| "What am I paying before I even type?" | `get_startup_context_audit` — the startup block by source, its share of the bill, and what rebuilds it |
+| "What am I paying before I even type?" | `get_startup_context_audit` — the startup block by source, its share of the bill, what rebuilds it, and a delete-only diff for the text it repeats |
 | "What tech isn't covered?" | `get_coverage_report` — gaps in plugin coverage for your deps |
 
 ---
@@ -482,7 +482,7 @@ which excludes the framework-specific rows.
 | `get_session_journal` | Session history: all tool calls made, files read, zero-result searches, and duplicate queries. | always |
 | `get_session_snapshot` | Compact session snapshot (~200 tokens) for context recovery after compaction. | always |
 | `get_session_stats` | Token savings stats for this session: per-tool call counts, estimated token savings, reduction percentage, dedup savings, and per-tool latency (p50/p95/max/e… | always |
-| `get_startup_context_audit` | What every session pays for before the first user message, what it costs, and what the logs prove went unused. | always |
+| `get_startup_context_audit` | What every session pays for before your first message, what it costs, and what went unused. | always |
 | `get_state_stores` | List all Zustand stores and Redux Toolkit slices with their state fields, actions/reducers, and dispatch sites. | framework |
 | `get_subproject_clients` | Find all client calls across subprojects that call a specific endpoint. | opt-in |
 | `get_subproject_graph` | Show all subprojects and their cross-repo connections. | opt-in |
@@ -3056,6 +3056,26 @@ Returns: the block's size distribution across fresh sessions, a decomposition by
 Every recommendation rests on **evidence of non-use over a stated observation window**, never on size: an MCP server whose instructions loaded into N startups and whose tools were never called, a skill listed at every start and never invoked, text duplicated between the global and project instruction files. A tool that is missing from the startup block is a tool the agent will not call, so a suggestion made because something is *big* can cost its reader far more than it saves. SessionStart hooks are deliberately excluded from suggestions for the same reason — nothing in the log says whether the model used a hook's output, so there is no evidence of non-use to stand on. They stay in the decomposition, where the reader sees the cost and decides.
 
 Everything is computed locally from `~/.claude/projects/*.jsonl`; nothing leaves the machine. The system prompt, tool schemas and CLAUDE.md are never written to the session log, so they are reported together as one residual row rather than split apart — the payload's `notes` says so too.
+
+#### `textCompression` — where the block says the same thing twice
+
+The audit answers "what does the block cost and what in it went unused". The `textCompression` field on the same payload answers the other half — of the text that is *needed* and stays, how much of it is a rule you already receive from somewhere else?
+
+It rides along on this tool rather than being one of its own: it is the same question, and a second parameterless tool would add schema chars to every session that lists tools while diluting the `compact_schemas` reduction documented in [configuration](configuration.html).
+
+It compares your own `CLAUDE.md`, `AGENTS.md` and `MEMORY.md` against the instruction text that MCP servers, the skill listing and SessionStart hooks *actually sent* at startup — read from your recent session logs, not reconstructed from config — and proposes deletions with a unified diff and a per-session token delta.
+
+**Nothing is written, and nothing is reworded.** The invariant, which the payload states and the tests enforce:
+
+> a passage is only proposed for removal when another source in the same startup block still delivers it — and each removal names that source and quotes it.
+
+That is deliberately not an LLM rewrite. On real instruction files the compressible mass is not verbose prose, it is restatement across sources: a `CLAUDE.md` section that repeats, in the author's own words, a rule an MCP server already sends. Paraphrasing that saves a little and risks a lot; dropping the second copy saves the same tokens with the instruction still present, verbatim, in the block. It is also what makes "the meaning survived" checkable instead of a matter of taste.
+
+Matching is on sentences and word overlap, so a rule counts as restated even when the two wordings share no exact line — which is the normal case, and the reason exact-duplicate detection finds nothing.
+
+Two things it will not do. A section is never rolled up at a fraction, however large the token count: rolling up at 60% deletes the other 40%, which is text nothing else says. And it never proposes edits to text it does not own — a third party's skill descriptions, another server's instructions, a plugin hook's output. Those are the reference corpus: read to prove duplication, reported in `notCompressible` with their size and the reason, never rewritten.
+
+Applying a proposal — with a backup and one-action rollback — is separate work; this only shows you the diff.
 
 ### `get_coverage_report`
 

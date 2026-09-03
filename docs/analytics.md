@@ -165,6 +165,26 @@ Every recommendation rests on **evidence of non-use over a stated observation wi
 
 Everything is computed locally from `~/.claude/projects/*.jsonl`; nothing leaves the machine. The system prompt, tool schemas and CLAUDE.md are never written to the session log, so they are reported together as one residual row rather than split apart — the payload's `notes` says so too.
 
+#### `textCompression` — where the block says the same thing twice
+
+The audit answers "what does the block cost and what in it went unused". The `textCompression` field on the same payload answers the other half — of the text that is *needed* and stays, how much of it is a rule you already receive from somewhere else?
+
+It rides along on this tool rather than being one of its own: it is the same question, and a second parameterless tool would add schema chars to every session that lists tools while diluting the `compact_schemas` reduction documented in [configuration](configuration.html).
+
+It compares your own `CLAUDE.md`, `AGENTS.md` and `MEMORY.md` against the instruction text that MCP servers, the skill listing and SessionStart hooks *actually sent* at startup — read from your recent session logs, not reconstructed from config — and proposes deletions with a unified diff and a per-session token delta.
+
+**Nothing is written, and nothing is reworded.** The invariant, which the payload states and the tests enforce:
+
+> a passage is only proposed for removal when another source in the same startup block still delivers it — and each removal names that source and quotes it.
+
+That is deliberately not an LLM rewrite. On real instruction files the compressible mass is not verbose prose, it is restatement across sources: a `CLAUDE.md` section that repeats, in the author's own words, a rule an MCP server already sends. Paraphrasing that saves a little and risks a lot; dropping the second copy saves the same tokens with the instruction still present, verbatim, in the block. It is also what makes "the meaning survived" checkable instead of a matter of taste.
+
+Matching is on sentences and word overlap, so a rule counts as restated even when the two wordings share no exact line — which is the normal case, and the reason exact-duplicate detection finds nothing.
+
+Two things it will not do. A section is never rolled up at a fraction, however large the token count: rolling up at 60% deletes the other 40%, which is text nothing else says. And it never proposes edits to text it does not own — a third party's skill descriptions, another server's instructions, a plugin hook's output. Those are the reference corpus: read to prove duplication, reported in `notCompressible` with their size and the reason, never rewritten.
+
+Applying a proposal — with a backup and one-action rollback — is separate work; this only shows you the diff.
+
 ### `get_coverage_report`
 
 Technology profile — which dependencies are covered by trace-mcp plugins and which are not.
