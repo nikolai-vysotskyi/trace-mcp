@@ -73,9 +73,20 @@ function migrateLegacyHomeDir(target: string, legacy: string): boolean {
       /* best-effort — worst case a later run just doesn't retry the symlink */
     }
     return true;
-  } catch {
-    // No legacy dir (ENOENT) or a rename failure (cross-device, permissions)
-    // — fall through and let ensureGlobalDirs() create `target` fresh.
+  } catch (err) {
+    // ENOENT means there is no legacy dir at all — a clean install, nothing to
+    // say. Anything else (cross-device rename on a mounted $HOME, permissions)
+    // means the data IS there and we are about to start from an empty home
+    // instead: indistinguishable from a fresh install unless we say so. The
+    // old directory is left untouched, so the fix is a manual move (TRA-732).
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      console.warn(
+        `[trace] Could not migrate "${legacy}" to "${target}": ${(err as Error).message}\n` +
+          `[trace] Starting with an empty "${target}". Your existing projects, decision ` +
+          `memory and indexes are still in "${legacy}" — move that directory to ` +
+          `"${target}" manually to keep them.`,
+      );
+    }
     return false;
   }
 }

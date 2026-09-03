@@ -10,7 +10,46 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { atomicWriteJson, atomicWriteString } from '../../src/utils/atomic-write.js';
+import {
+  atomicWriteBuffer,
+  atomicWriteJson,
+  atomicWriteString,
+} from '../../src/utils/atomic-write.js';
+
+describe('atomicWriteBuffer', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'trace-atomic-buf-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('writes non-UTF-8 bytes verbatim and appends nothing', () => {
+    const target = join(dir, 'blob.bin');
+    const bytes = Buffer.from([0x00, 0xff, 0xfe, 0x80, 0x81, 0x0a, 0x7f]);
+    atomicWriteBuffer(target, bytes);
+    expect(readFileSync(target)).toEqual(bytes);
+  });
+
+  it('applies the requested mode', () => {
+    if (process.platform === 'win32') return;
+    const target = join(dir, 'secret.bin');
+    atomicWriteBuffer(target, Buffer.from([0x01]), { mode: 0o600 });
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+  });
+
+  it('refuses to write through a symlink', () => {
+    const real = join(dir, 'real.bin');
+    const link = join(dir, 'link.bin');
+    writeFileSync(real, 'untouched');
+    symlinkSync(real, link);
+
+    expect(() => atomicWriteBuffer(link, Buffer.from([0xff]))).toThrow(/symlink/);
+    expect(readFileSync(real, 'utf8')).toBe('untouched');
+  });
+});
 
 describe('atomicWriteString', () => {
   let dir: string;

@@ -21,7 +21,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { atomicWriteString } from './atomic-write.js';
+import { atomicWriteBuffer, atomicWriteString } from './atomic-write.js';
 import { restrictDbPerms } from '../shared/db-perms.js';
 import { readIfExists } from './safe-fs.js';
 import type { InitStepResult } from '../init/types.js';
@@ -244,7 +244,7 @@ export function migrateDirectorySafely(
                 const sStat = fs.lstatSync(sidecarSrc);
                 if (sStat.isFile() && !sStat.isSymbolicLink()) {
                   copyFileAtomic(sidecarSrc, sidecarDest, mode);
-                  restrictDbPerms(destItem);
+                  restrictDbPerms(sidecarDest);
                   processedSidecars.add(sidecarSrc);
                 }
               } catch {
@@ -298,11 +298,9 @@ function copyFileAtomic(source: string, destination: string, mode: number): void
   if (!fs.existsSync(destDir)) {
     fs.mkdirSync(destDir, { recursive: true });
   }
-  atomicWriteString(destination, content.toString('utf-8'), {
-    mode,
-    rejectSymlinks: true,
-    trailingNewline: false,
-  });
+  // Bytes, not text: this copies SQLite databases and bin/ shims. Going
+  // through a UTF-8 string would map every invalid byte to U+FFFD (TRA-732).
+  atomicWriteBuffer(destination, content, { mode, rejectSymlinks: true });
 }
 
 /**
