@@ -180,6 +180,35 @@ describe('Path and Directory Migration Security', () => {
         expect(statSync(join(destDir, 'decisions.db-shm')).mode & 0o777).toBe(0o600);
       }
     });
+
+    // TRA-732: the copy path used to round-trip through a UTF-8 string, which
+    // maps every invalid byte to U+FFFD (1 byte in, 3 out). The five tests
+    // above all pass on a file corrupted that way because their fixtures are
+    // ASCII. A real database is not.
+    it('copies a database and its sidecars byte-for-byte', () => {
+      const dbBytes = Buffer.concat([
+        Buffer.from('SQLite format 3\0', 'binary'),
+        Buffer.from([0x10, 0x00, 0x01, 0x01, 0x00, 0x40, 0x20, 0x20, 0xff, 0xfe, 0x80, 0x81]),
+      ]);
+      const walBytes = Buffer.from([0x37, 0x7f, 0x06, 0x82, 0xff, 0xc0, 0x00, 0xed]);
+      writeFileSync(join(srcDir, 'state.db'), dbBytes);
+      writeFileSync(join(srcDir, 'state.db-wal'), walBytes);
+
+      const result = migrateDirectorySafely(srcDir, destDir);
+      expect(result.success).toBe(true);
+
+      expect(readFileSync(join(destDir, 'state.db'))).toEqual(dbBytes);
+      expect(readFileSync(join(destDir, 'state.db-wal'))).toEqual(walBytes);
+    });
+
+    it('copies a non-database binary file without appending a newline', () => {
+      const blob = Buffer.from([0x00, 0xff, 0x0a, 0x80, 0x7f]);
+      writeFileSync(join(srcDir, 'cache.bin'), blob);
+
+      const result = migrateDirectorySafely(srcDir, destDir);
+      expect(result.success).toBe(true);
+      expect(readFileSync(join(destDir, 'cache.bin'))).toEqual(blob);
+    });
   });
 
   describe('Project Config (.trace-mcp.json -> .trace.json) Migration', () => {

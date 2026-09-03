@@ -168,11 +168,13 @@ All security checks return structured `TraceMcpResult` values with a dedicated `
 
 Transitive advisories are pinned to patched versions via `overrides` in `package.json`, so fixes apply even when upstream packages have not yet released a bump:
 
-* `protobufjs >= 7.5.5` — closes the prototype-pollution RCE (GHSA-xq3m-2v4x-88gg) reachable through the optional `@huggingface/transformers` → `onnxruntime-web` chain.
-* `hono >= 4.12.14` and `@hono/node-server >= 1.19.14` — closes cookie, `ipRestriction`, `serveStatic`, and `toSSG` path-traversal advisories reachable through `@modelcontextprotocol/sdk`.
-* `vite >= 7.3.2` — closes the dev-server `fs.deny` bypass, `.map` path traversal, and WS file-read advisories reachable through `vitest`.
+* `protobufjs >= 8.6.6` — closes the prototype-pollution RCE (GHSA-xq3m-2v4x-88gg) reachable through the optional `@huggingface/transformers` → `onnxruntime-web` chain.
+* `hono >= 4.12.25` and `@hono/node-server >= 2.0.5` — closes cookie, `ipRestriction`, `serveStatic`, and `toSSG` path-traversal advisories reachable through `@modelcontextprotocol/sdk`.
+* `vite >= 8.0.16` — closes the dev-server `fs.deny` bypass, `.map` path traversal, and WS file-read advisories reachable through `vitest`.
+* `fast-uri >= 4.1.3` — closes four host-confusion / SSRF advisories reachable through `@modelcontextprotocol/sdk` → `ajv`.
+* `qs >= 6.16.0` — closes the array-limit bypass and DoS advisories reachable through `@modelcontextprotocol/sdk` → `express` → `body-parser`.
 
-`npm audit` is expected to report **0 vulnerabilities** on a clean install. Re-check after any lockfile change.
+The **0 vulnerabilities** invariant is enforced, not assumed: the `audit` job in `.github/workflows/ci.yml` runs `pnpm audit --prod --audit-level=moderate` on every push and PR, and a `moderate`-or-worse advisory in the production tree fails the build. An advisory we consciously accept is recorded in `pnpm.auditConfig.ignoreGhsas` in `package.json` — next to the `overrides`, so the exception is written down rather than remembered.
 
 ---
 
