@@ -10,7 +10,7 @@
  *    are therefore upper-bound estimates, not measured savings.
  *  - Tokens are estimated from character count. With `gpt-tokenizer` installed the
  *    estimator calibrates against a sample to give a more accurate chars-per-token
- *    ratio; otherwise it falls back to the legacy chars/3.5 heuristic (documented
+ *    ratio; otherwise it falls back to DEFAULT_CHARS_PER_TOKEN = 4.0 (documented
  *    in BenchmarkResult.methodology and accuracy).
  *  - Each scenario is sampled `samples` times with seed-shifted re-rolls so the
  *    output includes a mean, stddev, and p95 — single-shot is no longer the only

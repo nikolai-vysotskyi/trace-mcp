@@ -218,7 +218,13 @@ See [Session analytics & token savings tracking](https://trace-mcp.com/analytics
 <details>
 <summary>Methodology</summary>
 
-Measured using `benchmark_project` — runs eleven real task categories (symbol lookup, file exploration, text search, find usages, context bundle, batch overhead, impact analysis, call graph traversal, type hierarchy, tests-for, composite task context) against the indexed project. "Without trace-mcp" = estimated tokens from equivalent Read/Grep/Glob operations (full file reads, grep output). "With trace-mcp" = actual tokens returned by trace-mcp tools (targeted symbols, outlines, graph results). Token counts estimated using trace-mcp's built-in savings tracker.
+Estimated using `benchmark_project` — it walks eleven task categories (symbol lookup, file exploration, text search, find usages, context bundle, batch overhead, impact analysis, call graph traversal, type hierarchy, tests-for, composite task context) over the indexed project. **No trace-mcp tool is invoked.** Every figure on both sides is a scenario-specific synthetic heuristic, and the heuristics differ per scenario. They draw on three kinds of input, mixed differently in each one:
+
+- **Real values from the index** — file `byte_length`, symbol source and signature sizes. These carry the baseline for symbol lookup, file exploration, impact analysis and call graph traversal.
+- **Assumed result shapes** for operations with no indexed equivalent — e.g. text search and find-usages baselines assume a fixed grep yield (matches × context lines × 80 chars), `get_tests_for` is assumed to answer in ~400 characters, and the batch-overhead scenario adds fixed per-call MCP framing / hint / metadata token constants.
+- **A fixed fraction of the baseline**, between 0.05 and 0.45, where neither of the above applies.
+
+Character counts are converted to tokens by an estimator calibrated against `cl100k_base` when `gpt-tokenizer` is installed, and by a fixed chars-per-token ratio of 4.0 otherwise. The result is an upper bound on the reduction, not a measurement of it — the same caveats are printed in the tool output and documented at the top of `src/analytics/benchmark.ts`.
 
 Reproduce it yourself:
 ```
@@ -275,7 +281,7 @@ benchmark_project  # runs against the current project
 npx trace-mcp benchmark .
 ```
 
-Indexes the project, runs 11 structured task benchmarks (symbol lookup, impact analysis, call graph, type hierarchy, …), and prints per-task token cost — without trace vs. with. You'll see exactly where your agent recomputes work it could reuse.
+Indexes the project, runs 11 structured task benchmarks (symbol lookup, impact analysis, call graph, type hierarchy, …), and prints estimated per-task token cost — without trace vs. with. You'll see exactly where your agent recomputes work it could reuse. It is a synthetic estimate computed from your index, not a record of real tool calls (see the Methodology block under “Token reduction” above); for measured savings from your own sessions use `trace-mcp analytics savings`.
 
 **Then wire it into your AI agent:**
 
