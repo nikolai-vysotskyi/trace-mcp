@@ -132,16 +132,37 @@ describe('useTheme', () => {
     expect(() => renderHook(() => useTheme())).not.toThrow();
   });
 
+  /* A real `storage` event fires AFTER the other window's write landed, so the
+     test has to move localStorage too — the event is the nudge, not the value. */
   it('syncs from another window, including a clear back to Auto', () => {
     const { result } = renderHook(() => useTheme());
     act(() => {
+      localStorage.setItem(THEME_KEY, 'dark');
       window.dispatchEvent(new StorageEvent('storage', { key: THEME_KEY, newValue: 'dark' }));
     });
     expect(result.current.appearance).toBe('dark');
 
     act(() => {
+      localStorage.removeItem(THEME_KEY);
       window.dispatchEvent(new StorageEvent('storage', { key: THEME_KEY, newValue: null }));
     });
     expect(result.current.appearance).toBe('auto');
+  });
+
+  /* TRA-754. TRA-700 split the single useTheme() call into two — the window
+     shell keeps `theme` for .ws-stage[data-mode], the tab view keeps
+     setAppearance for the toggle — and per-hook useState let them disagree:
+     the click moved [data-theme] and localStorage but not [data-mode], so the
+     app only picked up the new theme on the next launch. */
+  it('every instance in the window sees the same choice', () => {
+    const shell = renderHook(() => useTheme());
+    const tab = renderHook(() => useTheme());
+
+    act(() => tab.result.current.setAppearance('dark'));
+    expect(shell.result.current.appearance).toBe('dark');
+    expect(shell.result.current.theme).toBe('dark');
+
+    act(() => tab.result.current.setAppearance('auto'));
+    expect(shell.result.current.appearance).toBe('auto');
   });
 });
