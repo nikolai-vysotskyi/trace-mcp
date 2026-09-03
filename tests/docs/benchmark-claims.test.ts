@@ -13,52 +13,50 @@ import { describe, expect, it } from 'vitest';
  * trace-mcp side was "actual tokens returned by trace-mcp tools", which an
  * outside reviewer caught by reading the source.
  *
- * The guard is positive on purpose: it pins the disclaimers that must be
- * present, because a blacklist of phrasings is trivially paraphrased around.
- * The blacklist below is only a backstop for the exact wording that shipped.
+ * The guard is deliberately positive: it pins the disclaimer that must sit at
+ * each of the three places the benchmark is presented. Two review passes tried
+ * a phrase blacklist and then a proximity regex instead; both were paraphrased
+ * around within minutes, and the regex also flagged the TOON and analytics
+ * docs, which legitimately do report real tool calls.
+ *
+ * ponytail: pins wording, not meaning — an editor who rewrites a pinned
+ * sentence gets a failure and has to re-read this file, which is the point. If
+ * these strings start churning for innocent reasons, pin section anchors
+ * instead of sentences.
  */
 
 const ROOT = join(import.meta.dirname, '..', '..');
 
-/** Every place the benchmark is presented must carry one of these. */
+/** Disclaimer required at each place README.md presents the benchmark. */
 const REQUIRED_DISCLAIMERS = [
+  // Methodology block
   'No trace-mcp tool is invoked.',
+  // The standalone caveat paragraph above "Run it yourself"
   '**This is a synthetic estimate**',
+  // Quick start, where `npx trace-mcp benchmark .` is first mentioned
   'synthetic estimate computed from your index, not a record of real tool calls',
 ];
 
-/**
- * Backstop: "actual/measured/observed/real ... token(s) ... tool/call/response"
- * within one sentence. Catches the paraphrases a substring blacklist misses.
- */
-const MEASURED_CLAIM =
-  /\b(actual|measured|observed|real|live)\b[^.\n]{0,80}\btokens?\b[^.\n]{0,80}\b(tool|tools|call|calls|response|responses)\b/i;
-
 describe('benchmark_project is described as an estimate', () => {
-  const readme = () => readFileSync(join(ROOT, 'README.md'), 'utf-8');
-
   it.each(REQUIRED_DISCLAIMERS)('README.md still says: %s', (phrase) => {
     expect(
-      readme(),
-      `README.md lost a benchmark disclaimer — benchmark_project invokes no tool (TRA-762)`,
+      readFileSync(join(ROOT, 'README.md'), 'utf-8'),
+      'README.md lost a benchmark disclaimer — benchmark_project invokes no tool (TRA-762)',
     ).toContain(phrase);
-  });
-
-  it('README.md claims no measured tool output for the benchmark', () => {
-    // Scoped to benchmark prose: other features (TOON output, analytics savings)
-    // legitimately do report measurements taken on real tool calls.
-    const hits = readme()
-      .split('\n')
-      .filter((line) => /benchmark|with(out)? trace-mcp/i.test(line))
-      .filter((line) => MEASURED_CLAIM.test(line));
-    expect(
-      hits,
-      'README.md reads as if benchmark_project reports real tool output — it does not (TRA-762)',
-    ).toEqual([]);
   });
 
   it('benchmark.ts still carries its synthetic-estimator caveat', () => {
     const source = readFileSync(join(ROOT, 'src', 'analytics', 'benchmark.ts'), 'utf-8');
     expect(source).toContain('not real tool invocations');
+  });
+
+  it('the documented fallback chars-per-token ratio matches the code', () => {
+    const source = readFileSync(join(ROOT, 'src', 'analytics', 'benchmark.ts'), 'utf-8');
+    const ratio = source.match(/const DEFAULT_CHARS_PER_TOKEN = ([\d.]+);/)?.[1];
+    expect(ratio, 'DEFAULT_CHARS_PER_TOKEN not found in benchmark.ts').toBeDefined();
+    expect(
+      readFileSync(join(ROOT, 'README.md'), 'utf-8'),
+      `README.md quotes a fallback chars-per-token ratio other than ${ratio}`,
+    ).toContain(`fixed chars-per-token ratio of ${ratio}`);
   });
 });

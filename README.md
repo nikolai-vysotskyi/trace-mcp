@@ -224,7 +224,7 @@ Estimated using `benchmark_project` — it walks eleven task categories (symbol 
 - **Assumed result shapes** for operations with no indexed equivalent — e.g. text search and find-usages baselines assume a fixed grep yield (matches × context lines × 80 chars), `get_tests_for` is assumed to answer in ~400 characters, and the batch-overhead scenario adds fixed per-call MCP framing / hint / metadata token constants.
 - **A fixed fraction of the baseline**, between 0.05 and 0.45, where neither of the above applies.
 
-Character counts are converted to tokens by an estimator calibrated against `cl100k_base` when `gpt-tokenizer` is installed, and by a chars/3.5 heuristic otherwise. The result is an upper bound on the reduction, not a measurement of it — the same caveats are printed in the tool output and documented at the top of `src/analytics/benchmark.ts`.
+Character counts are converted to tokens by an estimator calibrated against `cl100k_base` when `gpt-tokenizer` is installed, and by a fixed chars-per-token ratio of 4.0 otherwise. The result is an upper bound on the reduction, not a measurement of it — the same caveats are printed in the tool output and documented at the top of `src/analytics/benchmark.ts`.
 
 Reproduce it yourself:
 ```
