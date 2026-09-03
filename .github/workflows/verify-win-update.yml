@@ -1,0 +1,59 @@
+name: Verify Windows update
+
+# TRA-368. The Windows self-update path was only ever verified by reading the
+# config: nobody on the project has a Windows machine, and none is coming. This
+# runner is the only place a real install can be updated, so the check lives
+# here rather than in a checklist nobody can execute.
+#
+# It runs against the PUBLISHED release, not the build output — the whole
+# failure mode is a feed that is fine on the runner and unreachable or
+# mismatched once uploaded. release.yml calls it after verify-release-assets,
+# and it can be dispatched by hand against any two releases.
+
+on:
+  workflow_call:
+    inputs:
+      from_tag:
+        description: 'Release to install first. Defaults to the previous stable release with an installer.'
+        type: string
+        required: false
+        default: ''
+  # A check nobody can run locally has to be exercised by the PR that changes
+  # it, or it rots into a workflow that has only ever passed by assumption.
+  pull_request:
+    paths:
+      - 'scripts/verify-win-update.mjs'
+      - '.github/workflows/verify-win-update.yml'
+  workflow_dispatch:
+    inputs:
+      from_tag:
+        description: 'Release to install first (e.g. v3.10.0). Blank = previous stable release with an installer.'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    # Two full installer downloads plus the app's own ~130 MB update download.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      # No install step: the script and the CDP client it imports are both
+      # stdlib-only on purpose, so this job cannot fail for a reason that has
+      # nothing to do with the update path.
+      - name: Update a real install from the published release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Read through the environment, not interpolated into the command
+          # line: `from_tag` is dispatch input and would be shell injection.
+          FROM_TAG: ${{ inputs.from_tag }}
+        run: node scripts/verify-win-update.mjs
