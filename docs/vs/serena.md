@@ -1,7 +1,7 @@
 ---
 title: "Serena MCP Alternative: trace-mcp vs Serena for agent code navigation"
-description: "Serena drives a live language server; trace-mcp precomputes a framework-aware code graph. Head-to-head on precision, startup cost, refactoring, security and memory — plus where Serena is clearly ahead."
-updated: 2026-08-30
+description: "Serena drives a live language server; trace-mcp precomputes a framework-aware code graph. Head-to-head on precision, startup cost and refactoring."
+updated: 2026-09-03
 ---
 
 # Serena MCP alternative: trace-mcp vs Serena

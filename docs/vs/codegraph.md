@@ -1,7 +1,7 @@
 ---
 title: "CodeGraph MCP Alternative: trace-mcp vs codegraph for AI coding agents"
-description: "codegraph advertises one tool and optimises for orienting an agent in an unfamiliar repo; trace-mcp ships a broad graph with refactoring, security scanning and code-linked memory. Head-to-head on tool surface, language and framework coverage, benchmarks — plus where codegraph is clearly ahead."
-updated: 2026-09-02
+description: "codegraph advertises one tool for orienting an agent in an unfamiliar repo; trace-mcp ships a broad graph with refactoring, security and memory."
+updated: 2026-09-03
 ---
 
 # CodeGraph MCP alternative: trace-mcp vs codegraph

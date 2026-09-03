@@ -1,7 +1,7 @@
 ---
 title: "Quality Gates Reference — complexity, security, and coverage thresholds"
-description: "How trace-mcp's quality_gates.rules in .trace.json override CLI defaults for cyclomatic complexity, security findings, and coverage — with this project's own thresholds as a worked example."
-updated: 2026-09-02
+description: "How quality_gates.rules in .trace.json overrides CLI defaults for cyclomatic complexity, security findings and coverage, with worked thresholds."
+updated: 2026-09-03
 ---
 
 # Quality gates — this project's thresholds
