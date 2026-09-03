@@ -131,6 +131,14 @@ jobs:
               - 'packages/app/src/main/daemon-lifecycle.ts'
               - 'packages/app/src/main/trace-home.ts'
               - 'tests/app/**'
+            # TRA-755: sixth. The launcher has a separate PowerShell backend,
+            # and nothing here ever put it on a Windows runner — a syntax error
+            # in it breaks the MCP connection for every Windows install at once,
+            # and its two end-to-end tests are skipped for a runner issue. The
+            # shim files are the most Windows-shaped code we ship.
+              - 'hooks/**'
+              - 'src/init/launcher.ts'
+              - 'tests/init/**'
             core:
               - 'src/**'
               - 'scripts/**'

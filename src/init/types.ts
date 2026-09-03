@@ -106,4 +106,7 @@ export const MIRROR_HOOK_VERSION = '0.2.0';
 // 0.5.0 (TRA-742): probe_node falls back to the node beside a recorded package
 // root, so a machine whose only node is a bundled runtime or a custom npm
 // prefix no longer dies with "node binary not found".
-export const LAUNCHER_VERSION = '0.5.0';
+// 0.6.0 (TRA-755): the resolved node is version-gated against engines.node. An
+// older one used to exec fine and die on a SyntaxError the client could only
+// report as "failed to connect" — and get pinned into launcher.env on the way.
+export const LAUNCHER_VERSION = '0.6.0';
