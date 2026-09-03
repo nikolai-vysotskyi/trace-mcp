@@ -99,6 +99,14 @@ describe.skipIf(process.platform !== 'win32')('guard v2 navigation gate on Windo
     expect(nav('handleRequest')).toBe(true);
   });
 
+  it('matches the Russian relationship shapes too', () => {
+    // The .cmd carries these as \uXXXX escapes and decodes stdin as UTF-8, so a
+    // non-ASCII prompt has to survive both hops to reach the regex.
+    prompt('кто вызывает handleRequest?');
+    expect(fs.existsSync(path.join(readsDir(), '.nav-force'))).toBe(true);
+    expect(nav('handleRequest')).toBe(true);
+  });
+
   it('a plain question clears the relationship flag', () => {
     prompt('who calls handleRequest?');
     prompt('rename the config loader');
