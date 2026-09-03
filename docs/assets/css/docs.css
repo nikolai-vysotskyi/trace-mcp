@@ -480,6 +480,20 @@ main {
   padding-right: 0;
 }
 
+/* Centred columns are undone here, not in the Markdown. kramdown turns a
+   `|:---:|` delimiter into an inline `style="text-align: center"` on every
+   cell of that column, and an inline style beats the `text-align: left`
+   above — so twelve tables shipped with centred value columns nobody wrote a
+   rule for. A centred cell holding a phrase has two ragged edges and no
+   common start to scan down, and it sits in a row whose label column is
+   left-aligned. `!important` is the only thing that outranks the inline
+   style. Right-aligned columns keep theirs: numbers line up on their units,
+   which is what right alignment is for. */
+.prose th[style*="center"],
+.prose td[style*="center"] {
+  text-align: left !important;
+}
+
 /* Capability marks. The comparison tables used ✅/❌ — emoji as UI, and a
    green that is a second accent colour. The mark is now plain ✓/✗ text, and
    yes/no separate on opacity, which is how this system encodes state.
