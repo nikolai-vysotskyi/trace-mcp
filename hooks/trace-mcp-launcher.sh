@@ -180,18 +180,19 @@ node_from_nvm_tree() {
 # `trace-mcp init` recorded. Without this, a machine whose ONLY node is such a
 # runtime dies with "node binary not found" while a working node + cli.js sit
 # on disk — the mirror image of the prefix-pairing bug fixed in v0.4.0.
+#
+# Emits EVERY such node, not just the first: with the version gate below,
+# stopping at the first one lets a root holding an old runtime mask a newer
+# node recorded in a later root.
 node_from_pkg_roots() {
   local root candidate
   while IFS= read -r root; do
     [ -n "$root" ] || continue
     # <prefix>/lib/node_modules → <prefix>/bin/node
     candidate="$root/../../bin/node"
-    if [ -x "$candidate" ]; then
-      normalise_path "$candidate"
-      return 0
-    fi
+    [ -x "$candidate" ] && normalise_path "$candidate"
   done <<< "$(pkg_roots)"
-  return 1
+  return 0
 }
 
 # Every node worth trying, one per line, most-likely-first.
@@ -217,8 +218,8 @@ node_candidates() {
     [ -x "$fnm_dir/bin/node" ] && echo "$fnm_dir/bin/node"
   done
 
-  # 4f. Last resort: a prefix that only pkg_roots knows about.
-  n=$(node_from_pkg_roots) && echo "$n"
+  # 4f. Last resort: prefixes that only pkg_roots knows about.
+  node_from_pkg_roots
 
   return 0
 }
@@ -407,8 +408,9 @@ if [ "$USING_NODE_OVERRIDE" = 0 ] && [ -n "$NODE_PATH" ] && [ -x "$NODE_PATH" ];
   if ! is_bounded_major "$NODE_MAJOR"; then
     NODE_MAJOR=$(node_major "$NODE_PATH") || NODE_MAJOR=0
     # Cache only a pair we are actually going to use — never write back a
-    # node we are about to reject.
-    if [ "$NODE_MAJOR" -ge "$NODE_MIN_MAJOR" ] && [ -n "$CLI_PATH" ] && [ -f "$CLI_PATH" ]; then
+    # node we are about to reject, and never an override: CLI_PATH may be a
+    # throwaway debug path, and baking it in would outlive the debug session.
+    if [ "$USING_OVERRIDE" = 0 ] && [ "$NODE_MAJOR" -ge "$NODE_MIN_MAJOR" ] && [ -n "$CLI_PATH" ] && [ -f "$CLI_PATH" ]; then
       heal_config "$NODE_PATH" "$CLI_PATH" "$NODE_MAJOR"
     fi
   fi

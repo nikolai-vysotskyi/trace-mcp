@@ -475,6 +475,27 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
         expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
       });
 
+      // Review of #831: the gate's own heal path skipped the "never persist an
+      // override" rule, so verifying a legacy config under a temporary
+      // TRACE_MCP_CLI_OVERRIDE baked that throwaway path into launcher.env and
+      // every later start without the override used it.
+      it('does not persist a CLI override while verifying a legacy config', () => {
+        const { home, traceHome, node, cli } = setupFakeHome();
+        writeConfig(traceHome, node, cli); // legacy: no recorded major
+        const debugCli = path.join(home, 'debug-cli.js');
+        fs.writeFileSync(debugCli, '// throwaway\n');
+
+        const { status } = runLauncher(
+          { HOME: home, TRACE_MCP_HOME: traceHome, TRACE_MCP_CLI_OVERRIDE: debugCli },
+          ['serve'],
+        );
+
+        expect(status).toBe(0);
+        const cfg = fs.readFileSync(path.join(traceHome, 'launcher.env'), 'utf-8');
+        expect(cfg).not.toContain(debugCli);
+        expect(cfg).toContain(`TRACE_MCP_CLI="${cli}"`);
+      });
+
       it('caches the verified major so the next start spawns nothing extra', () => {
         const { home, traceHome, node, cli } = setupFakeHome();
         writeConfig(traceHome, node, cli); // legacy config: no recorded major
@@ -574,6 +595,35 @@ describe.skipIf(process.platform === 'win32')('launcher shim integration', () =>
       fs.writeFileSync(
         path.join(traceHome, 'pkg-roots'),
         `${path.join(prefix, 'lib', 'node_modules')}\n`,
+      );
+      writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
+
+      const { status, stdout } = runLauncher({ HOME: home, TRACE_MCP_HOME: traceHome }, ['serve']);
+
+      expect(status).toBe(0);
+      expect(stdout.trim()).toBe(`NODE_ARGS:${cli} serve`);
+    });
+
+    // Review of #831: node_from_pkg_roots returned after the first executable
+    // it found. Combined with the version gate that let an old runtime in the
+    // first root mask a supported node recorded in a later one.
+    it('keeps looking past a too-old node in an earlier pkg-roots entry', () => {
+      const { home, traceHome } = setupFakeHome();
+      const oldPrefix = path.join(home, 'old-runtime', 'node');
+      fs.mkdirSync(path.join(oldPrefix, 'bin'), { recursive: true });
+      fs.writeFileSync(path.join(oldPrefix, 'bin', 'node'), fakeNodeBody('20.11.0'), {
+        mode: 0o755,
+      });
+      fs.mkdirSync(path.join(oldPrefix, 'lib', 'node_modules'), { recursive: true });
+      const goodPrefix = path.join(home, 'new-runtime', 'node');
+      const { cli } = plantPrefix(goodPrefix);
+      fs.writeFileSync(
+        path.join(traceHome, 'pkg-roots'),
+        [
+          path.join(oldPrefix, 'lib', 'node_modules'),
+          path.join(goodPrefix, 'lib', 'node_modules'),
+          '',
+        ].join('\n'),
       );
       writeConfig(traceHome, '/nonexistent/node', '/nonexistent/cli.js');
 

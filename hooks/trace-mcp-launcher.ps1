@@ -181,8 +181,9 @@ if (-not $UsingNodeOverride -and (Test-NodeBinary $NodePath)) {
         $cached = if ($null -eq $probed) { 0 } else { $probed }
         $NodeMajor = "$cached"
         # Cache only a pair we are actually going to use - never write back a
-        # node we are about to reject.
-        if ($cached -ge $NodeMinMajor -and (Test-CliFile $CliPath)) {
+        # node we are about to reject, and never an override: $CliPath may be a
+        # throwaway debug path, and baking it in would outlive the session.
+        if (-not $UsingOverride -and $cached -ge $NodeMinMajor -and (Test-CliFile $CliPath)) {
             Save-LauncherConfig $NodePath $CliPath $NodeMajor
         }
     }
@@ -251,7 +252,12 @@ function Get-NodeCandidates {
 # the exec succeeds, cli.js dies on a SyntaxError, and the pair gets healed into
 # launcher.env so every later start repeats it - with no error line anywhere.
 function Find-Node {
+    # Records whether ANY node.exe was seen, so the failure message can tell
+    # "no node installed" apart from "node installed but too old" - including
+    # the pkg-roots ones below, which Get-NodeCandidates does not enumerate.
+    $script:SawAnyNode = $false
     foreach ($c in @(Get-NodeCandidates)) {
+        $script:SawAnyNode = $true
         $major = Get-NodeMajor $c
         if ($null -ne $major -and $major -ge $NodeMinMajor) { return $c }
     }
@@ -267,6 +273,7 @@ function Find-Node {
         foreach ($rel in @('..\node.exe', '..\..\node.exe')) {
             $c = Join-Path $r $rel
             if (-not (Test-NodeBinary $c)) { continue }
+            $script:SawAnyNode = $true
             $resolved = (Resolve-Path -LiteralPath $c).Path
             $major = Get-NodeMajor $resolved
             if ($null -ne $major -and $major -ge $NodeMinMajor) { return $resolved }
@@ -363,7 +370,7 @@ $Healed = $false
 if (-not (Test-NodeBinary $NodePath)) {
     $NodePath = Find-Node
     if (-not $NodePath) {
-        if (@(Get-NodeCandidates).Count -gt 0) {
+        if ($script:SawAnyNode) {
             Die "no Node.js >= $NodeMinMajor found - trace-mcp needs it; upgrade Node or set TRACE_MCP_NODE_OVERRIDE"
         }
         Die 'node binary not found - install Node.js (nodejs.org / nvs / nvm-windows / volta) or set TRACE_MCP_NODE_OVERRIDE'
