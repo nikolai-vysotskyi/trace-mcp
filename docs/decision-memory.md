@@ -132,7 +132,7 @@ The score that drives the review queue combines a base prior with multiplicative
 
 For mined decisions, the pattern's intrinsic confidence (see [Extraction patterns](#extraction-patterns)) is additionally multiplied by `1 + 0.05 × n` where `n` is the number of context boosters (`because`, `reason`, `pros and cons`, `alternative`, `architecture`, `design decision`) found in the surrounding turn.
 
-The implementation lives in [`src/memory/decision-confidence.ts`](../src/memory/decision-confidence.ts).
+The implementation lives in [`src/memory/decision-confidence.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/src/memory/decision-confidence.ts).
 
 ## MCP tools
 
@@ -259,7 +259,7 @@ The mining pipeline also filters non-user content before it reaches the store. B
 | `<task-notification>…</task-notification>` | Autonomous protocol payloads from background agents |
 | `<local-command-stdout>…</local-command-stdout>` | Captured shell output (may contain secrets) |
 
-`<command-message>` and `<command-name>` are kept — those wrap real user slash-commands and are part of the conversation. Implementation: `stripPrivacyTags` in [`src/memory/conversation-miner.ts`](../src/memory/conversation-miner.ts).
+`<command-message>` and `<command-name>` are kept — those wrap real user slash-commands and are part of the conversation. Implementation: `stripPrivacyTags` in [`src/memory/conversation-miner.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/src/memory/conversation-miner.ts).
 
 ## CLI
 

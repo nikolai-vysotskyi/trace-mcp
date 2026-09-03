@@ -114,8 +114,8 @@ are deeply nested and small.
 
 ## Methodology
 
-- Script: [`scripts/bench-toon.ts`](../scripts/bench-toon.ts) for the
-  per-tool numbers; [`scripts/toon-diagnostic-2.ts`](../scripts/toon-diagnostic-2.ts)
+- Script: [`scripts/bench-toon.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/scripts/bench-toon.ts) for the
+  per-tool numbers; [`scripts/toon-diagnostic-2.ts`](https://github.com/nikolai-vysotskyi/trace-mcp/blob/master/scripts/toon-diagnostic-2.ts)
   for the table-vs-list-mode curve.
 - Invocation pattern: each registered MCP tool's closure is captured via a
   fake `server.tool(...)`. This bypasses the MCP transport but exercises the
