@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { activation, share, usage, usageByClient } from '../../scripts/ga4-funnel.mjs';
+import {
+  activation,
+  clientReporting,
+  share,
+  usage,
+  usageByClient,
+} from '../../scripts/ga4-funnel.mjs';
 
 /** One GA4 row: a `repos_indexed` value and how many active installs reported it. */
 const row = (value: string, users: number) => ({
@@ -116,6 +122,66 @@ describe('usageByClient', () => {
     expect(result.installs.__proto__).toBe(7);
     expect(result.used_pct.__proto__).toBe(100);
     expect({}.hasOwnProperty).toBeTypeOf('function'); // nothing polluted globally
+  });
+});
+
+describe('clientReporting', () => {
+  it('reads the real 2026-09-03 by_version as not yet readable', () => {
+    // The snapshot that raised TRA-748: 12 of 120 rows on a version carrying the
+    // TRA-643 client fix, nineteen hours after v3.12.0 shipped. A client split
+    // over this population says nothing, and `readable` is what says so.
+    const result = clientReporting([
+      row('(not set)', 36),
+      row('3.10.0', 26),
+      row('3.11.0', 23),
+      row('3.8.0', 19),
+      row('3.14.0', 10),
+      row('3.7.0', 2),
+      row('3.12.0', 1),
+      row('3.13.0', 1),
+      row('3.5.2', 1),
+      row('3.6.0', 1),
+    ]);
+
+    expect(result).toEqual({
+      fix_version: '3.12.0',
+      at_or_above: 12,
+      below: 72,
+      unknown: 36,
+      // Over placed rows only — `(not set)` is not evidence of an old install.
+      pct: 14,
+      readable: false,
+    });
+  });
+
+  it('opens the gate once past half the placed field', () => {
+    expect(clientReporting([row('3.12.0', 6), row('3.8.0', 4)])).toMatchObject({
+      pct: 60,
+      readable: true,
+    });
+  });
+
+  it('compares release numbers, not strings', () => {
+    // '3.9.0' > '3.12.0' lexicographically; below the floor numerically.
+    const result = clientReporting([row('3.9.0', 5), row('3.100.0', 5)]);
+
+    expect(result.below).toBe(5);
+    expect(result.at_or_above).toBe(5);
+  });
+
+  it('counts a prerelease of the fix as carrying it', () => {
+    expect(clientReporting([row('3.12.0-rc.1', 3)]).at_or_above).toBe(3);
+  });
+
+  it('reports no version rows as null, not as an unreadable field', () => {
+    expect(clientReporting([]).readable).toBeNull();
+    expect(clientReporting(undefined).pct).toBeNull();
+  });
+
+  it('keeps unparseable versions out of both sides', () => {
+    const result = clientReporting([row('dev', 4), row('', 2), row('3.14.0', 1)]);
+
+    expect(result).toMatchObject({ unknown: 6, at_or_above: 1, below: 0, pct: 100 });
   });
 });
 
