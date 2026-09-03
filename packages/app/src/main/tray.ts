@@ -81,8 +81,7 @@ function getTrayIconPaths(): { active: string; inactive: string } {
 }
 
 let tray: Tray;
-let menuWindow: BrowserWindow | null = null;
-const projectWindows = new Map<string, BrowserWindow>(); // root → window
+let mainWindow: BrowserWindow | null = null;
 let healthInterval: ReturnType<typeof setInterval>;
 let daemonReachable = false;
 /**
@@ -260,71 +259,14 @@ function presentWindow(win: BrowserWindow): void {
   win.focus();
 }
 
-// ── Custom tab bar for Windows ─────────────────────────────────
-// On macOS we use native tabs. On Windows we broadcast a tab list
-// to every window so the renderer can draw its own tab strip.
-
-interface TabInfo {
-  id: string; // 'menu' or project root path
-  title: string;
-  type: 'menu' | 'project';
-  active: boolean;
-}
-
-function getTabList(focusedWebContentsId?: number): TabInfo[] {
-  const tabs: TabInfo[] = [];
-  if (menuWindow && !menuWindow.isDestroyed()) {
-    tabs.push({
-      id: 'menu',
-      title: t('tray:menuWindow'),
-      type: 'menu',
-      active: menuWindow.webContents.id === focusedWebContentsId,
-    });
-  }
-  for (const [root, win] of projectWindows) {
-    if (!win.isDestroyed()) {
-      const sep = process.platform === 'win32' ? '\\' : '/';
-      tabs.push({
-        id: root,
-        title: root.split(sep).filter(Boolean).pop() || root,
-        type: 'project',
-        active: win.webContents.id === focusedWebContentsId,
-      });
-    }
-  }
-  return tabs;
-}
-
-function broadcastTabList(): void {
-  const allWindows = [menuWindow, ...projectWindows.values()];
-  const focusedWin = BrowserWindow.getFocusedWindow();
-  const tabs = getTabList(focusedWin?.webContents.id);
-  for (const win of allWindows) {
-    if (!win || win.isDestroyed() || win.webContents.isDestroyed()) continue;
-    // Send tab list with 'active' relative to each window
-    const tabsForWin = tabs.map((t) => ({
-      ...t,
-      active:
-        win.webContents.id ===
-        (t.id === 'menu' ? menuWindow?.webContents.id : projectWindows.get(t.id)?.webContents.id),
-    }));
-    safeSend(win, 'tab-list-changed', tabsForWin);
-  }
-}
-
-// IPC: focus a tab by id (Windows custom tab bar)
+// IPC: focus a tab by id. Tab state lives in the renderer (TRA-700 gives it
+// the list), so main's part is bringing the OS window forward — only main can
+// do that — and relaying which tab was asked for; the renderer does the switch.
 ipcMain.handle('focus-tab', (_event, tabId: string) => {
-  if (tabId === 'menu') {
-    if (menuWindow && !menuWindow.isDestroyed()) {
-      presentWindow(menuWindow);
-    }
-  } else {
-    const win = projectWindows.get(tabId);
-    if (win && !win.isDestroyed()) {
-      presentWindow(win);
-    }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    presentWindow(mainWindow);
+    safeSend(mainWindow, 'focus-tab', tabId);
   }
-  broadcastTabList();
   return { ok: true };
 });
 
@@ -332,10 +274,10 @@ ipcMain.handle('focus-tab', (_event, tabId: string) => {
 ipcMain.handle('open-settings', (_event: Electron.IpcMainInvokeEvent, section?: string) => {
   showMenuWindow('settings');
   // Inject section param by reloading with the extra query param
-  if (section && menuWindow && !menuWindow.isDestroyed()) {
+  if (section && mainWindow && !mainWindow.isDestroyed()) {
     const base = `file://${path.join(__dirname, '..', 'renderer', 'index.html')}`;
     const qs = new URLSearchParams({ view: 'menu', tab: 'settings', section }).toString();
-    menuWindow.loadURL(`${base}?${qs}`);
+    mainWindow.loadURL(`${base}?${qs}`);
   }
   return { ok: true };
 });
@@ -346,89 +288,54 @@ ipcMain.handle('open-clients', () => {
   return { ok: true };
 });
 
-// IPC: get current platform (renderer needs this to decide whether to show custom tabs)
+// IPC: get current platform (renderer needs this to lay out the tab strip)
 ipcMain.handle('get-platform', () => process.platform);
 
 function hideDockIfNoWindows(): void {
-  if (isMac && !menuWindow && projectWindows.size === 0) {
+  if (isMac && !mainWindow) {
     app.dock?.hide();
   }
 }
 
 export function showMenuWindow(tab?: string): void {
-  if (menuWindow && !menuWindow.isDestroyed()) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     if (tab) {
-      menuWindow.loadURL(getRendererUrl({ view: 'menu', tab }));
+      mainWindow.loadURL(getRendererUrl({ view: 'menu', tab }));
     }
-    presentWindow(menuWindow);
+    presentWindow(mainWindow);
     return;
   }
 
-  menuWindow = new BrowserWindow(createWindowOptions());
-  menuWindow.loadURL(getRendererUrl({ view: 'menu', ...(tab ? { tab } : {}) }));
+  mainWindow = new BrowserWindow(createWindowOptions());
+  mainWindow.loadURL(getRendererUrl({ view: 'menu', ...(tab ? { tab } : {}) }));
 
-  menuWindow.webContents.on('did-finish-load', () => {
-    menuWindow?.setTitle(t('tray:menuWindow'));
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow?.setTitle(t('tray:menuWindow'));
   });
 
-  menuWindow.once('ready-to-show', () => {
-    if (menuWindow) presentWindow(menuWindow);
-    broadcastTabList();
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow) presentWindow(mainWindow);
   });
 
-  setupWindowEvents(menuWindow);
+  setupWindowEvents(mainWindow);
 
-  menuWindow.on('closed', () => {
-    menuWindow = null;
+  mainWindow.on('closed', () => {
+    mainWindow = null;
     hideDockIfNoWindows();
-    broadcastTabList();
   });
-
-  menuWindow.on('focus', () => broadcastTabList());
 }
 
 function openProjectTab(root: string): void {
-  // If project already open, focus its tab
-  const existing = projectWindows.get(root);
-  if (existing && !existing.isDestroyed()) {
-    if (!HIDDEN_WINDOWS) existing.focus();
-    return;
-  }
-
-  // Ensure menu window exists first (it becomes the first tab)
-  if (!menuWindow || menuWindow.isDestroyed()) {
+  // The window is a one-time thing; every project after the first becomes a
+  // tab inside it via IPC, not another BrowserWindow.
+  if (!mainWindow || mainWindow.isDestroyed()) {
     showMenuWindow();
   }
-
-  const win = new BrowserWindow(createWindowOptions());
-  projectWindows.set(root, win);
-
-  win.loadURL(getRendererUrl({ view: 'project', root }));
-
-  win.once('ready-to-show', () => {
-    presentWindow(win);
-    broadcastTabList();
-  });
-
-  setupWindowEvents(win);
-
-  // Set tab title to project name
-  const sep = process.platform === 'win32' ? '\\' : '/';
-  const projectName = root.split(sep).filter(Boolean).pop() || root;
-  win.webContents.on('did-finish-load', () => {
-    win.setTitle(projectName);
-  });
-
-  win.on('closed', () => {
-    projectWindows.delete(root);
-    hideDockIfNoWindows();
-    broadcastTabList();
-  });
-
-  win.on('focus', () => broadcastTabList());
+  safeSend(mainWindow, 'open-tab', { root });
+  if (mainWindow) presentWindow(mainWindow);
 }
 
-// IPC: open a project as a native tab
+// IPC: open a project as a tab in the single app window
 ipcMain.handle('open-project-tab', (_event, root: string) => {
   openProjectTab(root);
   return { ok: true };
@@ -470,12 +377,13 @@ ipcMain.on('set-appearance', (_event, value: unknown) => {
 
 // IPC: sync sidebar width across all tabbed windows
 ipcMain.on('sync-sidebar-width', (event, width: number) => {
-  const sender = event.sender;
-  const allWindows = [menuWindow, ...projectWindows.values()];
-  for (const win of allWindows) {
-    if (win && !win.isDestroyed() && !win.webContents.isDestroyed() && win.webContents !== sender) {
-      safeSend(win, 'sidebar-width-changed', width);
-    }
+  if (
+    mainWindow &&
+    !mainWindow.isDestroyed() &&
+    !mainWindow.webContents.isDestroyed() &&
+    mainWindow.webContents !== event.sender
+  ) {
+    safeSend(mainWindow, 'sidebar-width-changed', width);
   }
 });
 
@@ -559,8 +467,7 @@ export function refreshTrayMenu(): void {
   if (!tray || tray.isDestroyed()) return;
   setTrayIcon(daemonReachable);
   tray.setContextMenu(buildContextMenu());
-  if (menuWindow && !menuWindow.isDestroyed()) menuWindow.setTitle(t('tray:menuWindow'));
-  broadcastTabList();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setTitle(t('tray:menuWindow'));
 }
 
 function shouldAttemptRestart(failureTick: number): boolean {
@@ -721,8 +628,9 @@ export async function checkHealth(): Promise<void> {
 // Handle native "+" button in tab bar — macOS only
 if (isMac) {
   app.on('new-window-for-tab', () => {
-    if (menuWindow && !menuWindow.isDestroyed()) {
-      presentWindow(menuWindow);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      presentWindow(mainWindow);
+      safeSend(mainWindow, 'new-tab');
     } else {
       showMenuWindow();
     }
