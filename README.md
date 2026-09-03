@@ -278,22 +278,24 @@ benchmark_project  # runs against the current project
 npx trace-mcp benchmark .
 ```
 
-Indexes the project, runs 11 structured task benchmarks (symbol lookup, impact analysis, call graph, type hierarchy, …), and prints per-task token cost — without trace-mcp vs. with. You'll see exactly where your agent recomputes work it could reuse.
+Indexes the project, runs 11 structured task benchmarks (symbol lookup, impact analysis, call graph, type hierarchy, …), and prints per-task token cost — without trace vs. with. You'll see exactly where your agent recomputes work it could reuse.
 
 **Then wire it into your AI agent:**
 
 ```bash
 npm install -g trace-mcp
-trace-mcp init        # one-time global setup (MCP clients, hooks, CLAUDE.md)
-trace-mcp add         # register current project for indexing
+trace init        # one-time global setup (MCP clients, hooks, CLAUDE.md)
+trace add         # register current project for indexing
 ```
 
 - `init` — configures your MCP client (Claude Code, Cursor, Windsurf, Claude Desktop, …), installs the guard hook, adds routing rules to `~/.claude/CLAUDE.md`.
-- `add` — detects frameworks, creates the per-project index, registers the project. Re-run in every project you want trace-mcp to understand.
+- `add` — detects frameworks, creates the per-project index, registers the project. Re-run in every project you want trace to understand.
 
-All state lives in `~/.trace-mcp/` — your project directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
+*(The npm package is still called `trace-mcp` — only the command it installs is shortened. `trace-mcp init`, `trace-mcp add`, and every other `trace-mcp …` invocation keep working.)*
 
-**Using Claude Code or Codex CLI?** After `npm install -g trace-mcp`, skip `trace-mcp init`'s client-wiring step and install the plugin directly instead — no `git clone` needed either way:
+All state lives in `~/.trace/` (with automatic fallback from `~/.trace-mcp/`) — your project directory stays clean unless you opt into `.traceignore` or `.trace/.config.json`.
+
+**Using Claude Code or Codex CLI?** After `npm install -g trace-mcp`, skip `trace init`'s client-wiring step and install the plugin directly instead — no `git clone` needed either way:
 
 ```bash
 # Claude Code
@@ -314,7 +316,7 @@ Then in your MCP client:
 > get_change_impact on app/Models/User.php to see what depends on it
 ```
 
-**Indexing a markdown vault (Obsidian / Logseq / plain MD).** Point `trace-mcp add` at the vault root — `.md`/`.mdx`/`.markdown` are picked up by default. Each note becomes a `note:<basename>` symbol, headings nest as sections, `[[wikilinks]]` and `![[embeds]]` resolve to graph edges, frontmatter `aliases:` make alternate names resolvable, and `#tags` aggregate so every note carrying `#sgr` is one `find_usages` away.
+**Indexing a markdown vault (Obsidian / Logseq / plain MD).** Point `trace add` at the vault root — `.md`/`.mdx`/`.markdown` are picked up by default. Each note becomes a `note:<basename>` symbol, headings nest as sections, `[[wikilinks]]` and `![[embeds]]` resolve to graph edges, frontmatter `aliases:` make alternate names resolvable, and `#tags` aggregate so every note carrying `#sgr` is one `find_usages` away.
 
 ```
 > find_usages on note:my-concept     // backlinks across the vault
@@ -329,17 +331,35 @@ Then in your MCP client:
 
 ---
 
+## Migration from trace-mcp to trace
+
+**The project is still `trace-mcp`. The command is now `trace`.** The rename lives at exactly that boundary and nowhere else — the npm package, this repo, the domain, and the registry entry all keep the `trace-mcp` name. The reason is ergonomics, the same shape as `rg` for ripgrep or `kubectl` for kubernetes — not token savings: the measured saving from the shorter MCP tool prefix is real but small, 66–366 tokens per turn depending on tokenizer and preset, 0.74–1.23% of a tool list that already costs 8k–45k tokens.
+
+**The npm package name does not change.** It is still `trace-mcp`, and it always will be — `trace` on npm is an unrelated package by another author. Install with `npm install -g trace-mcp` or `npx -y trace-mcp@latest`.
+
+What does change, and what stays:
+
+- **Command name** — `trace <cmd>` is the new spelling. `trace-mcp <cmd>` stays as an alias **permanently** — on macOS, `/usr/bin/trace` is Apple's own `trace(1)`, so keep using `trace-mcp` in scripts, CI, or any PATH you don't control yourself.
+- **MCP client entries** — `trace init` and `trace upgrade` rename an existing `mcpServers["trace-mcp"]` entry to `mcpServers["trace"]` and point it at the new command. Nothing is deleted; an entry left as `trace-mcp` keeps working, it just costs more tokens.
+- **State directory** — `~/.trace/`, falling back to `~/.trace-mcp/` when the old one exists and the new one does not. Indexes are not rebuilt.
+- **Project config** — `.trace.json` is read first, `.trace-mcp.json` after it. Existing files keep working where they are.
+- **Plugin and registry identifiers** — unchanged: `@nikolai-vysotskyi/trace-mcp` for the Claude Code plugin, `io.github.nikolai-vysotskyi/trace-mcp` in the MCP registry.
+
+**One thing `init` can't do for you.** The MCP tool prefix moves too — `mcp__trace-mcp__search` becomes `mcp__trace__search`. `init` migrates the `mcpServers` entry it owns, but not text you wrote yourself: Claude Code permission allowlists, hook matchers, or your own `mcp__trace-mcp__*` mentions in `CLAUDE.md`/`AGENTS.md` prose. If a hook stops matching or an allowlisted tool starts re-prompting after upgrading, grep your own config for `mcp__trace-mcp__` and replace it with `mcp__trace__`. Everything else above happens automatically the next time you run `trace init` or `trace upgrade` — details: [Configuration](https://trace-mcp.com/configuration.html#renaming-trace-mcp--trace-what-init-can-and-cant-reach).
+
+---
+
 ## Local-first by design
 
 trace-mcp runs entirely on your machine. Nothing about your source code is uploaded, and there is no account to create.
 
 - **Indexing happens locally.** The MCP server is a Node process you run yourself — stdio or `http://127.0.0.1:3741`.
-- **Index lives in `~/.trace-mcp/`**, never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace-mcp/.config.json`.
+- **Index lives in `~/.trace/`** (falling back to `~/.trace-mcp/` if that's what you already have), never inside your project and never uploaded. Your repo directory stays clean unless you opt into `.traceignore` or `.trace/.config.json`.
 - **Semantic search is offline by default** — bundled ONNX embeddings, no API keys, no outbound calls. Switch to Ollama (local) or OpenAI (opt-in) via config.
 - **No telemetry about your code, queries, or usage.** The only thing that ever leaves your machine is described below — nothing else is phoned home.
 - **What your AI client sees is governed by your AI client.** trace-mcp returns graph results over MCP; how Claude Code / Cursor / Codex / Windsurf forward them to a model is up to that client's privacy model.
 - **The daemon trusts loopback and nothing else.** `serve-http` is unauthenticated by design: a caller on `127.0.0.1` is already you. A non-loopback `--host` is therefore refused unless you pass `--allow-remote` and front the port with your own auth — see [Configuration](https://trace-mcp.com/configuration.html#http-daemon--one-warm-index-shared-across-many-projects).
-- **To wipe everything**, delete `~/.trace-mcp/` — that directory is the whole footprint.
+- **To wipe everything**, delete `~/.trace/` (or `~/.trace-mcp/` on an install that hasn't migrated yet) — that directory is the whole footprint.
 
 ### Usage telemetry
 
@@ -381,7 +401,7 @@ Picking **Max** during `trace-mcp init` (the default) layers on two more amplifi
 - **tweakcc system-prompt rewrites** patch Claude Code's core tool descriptions so the model internalizes "use trace-mcp search" instead of "use Grep" from the start. Claude Code only.
 - **`agent_behavior: "strict"`** ships a compact set of discipline rules via MCP instructions — no flattery, disagree on wrong premises, never fabricate, goal-driven execution, 2-strike session hygiene, no drive-by refactors. Cross-client (Claude Code, Cursor, Codex, Windsurf) and auto-updates on `npm upgrade trace-mcp` without re-running `init`.
 
-This is the setup for making the same discipline rules apply to every teammate's agent without asking anyone to configure it. Tune or disable via `tools.agent_behavior` in `~/.trace-mcp/.config.json` — see [Tool exposure & agent behavior](https://trace-mcp.com/configuration.html#tool-exposure--agent-behavior).
+This is the setup for making the same discipline rules apply to every teammate's agent without asking anyone to configure it. Tune or disable via `tools.agent_behavior` in `~/.trace/.config.json` — see [Tool exposure & agent behavior](https://trace-mcp.com/configuration.html#tool-exposure--agent-behavior).
 
 ---
 
@@ -397,9 +417,9 @@ Decisions, tradeoffs, and discoveries from AI-agent conversations usually vanish
 - **Search** — `query_decisions` (FTS5 + filters) for decisions; `search_sessions` for raw conversation content across all past sessions.
 
 ```bash
-trace-mcp memory mine                           # extract decisions from sessions
-trace-mcp memory search "GraphQL migration"     # search past conversations
-trace-mcp memory timeline --file src/auth.ts    # decision history for a file
+trace memory mine                           # extract decisions from sessions
+trace memory search "GraphQL migration"     # search past conversations
+trace memory timeline --file src/auth.ts    # decision history for a file
 ```
 
 > Full tool list, CLI, temporal validity, service scoping: [Decision memory](https://trace-mcp.com/decision-memory.html).
@@ -410,20 +430,20 @@ trace-mcp memory timeline --file src/auth.ts    # decision history for a file
 
 ## Subprojects
 
-A **subproject** is any repo in your project's ecosystem — microservice, frontend, shared lib, CLI tool. trace-mcp **links dependency graphs across subprojects**: if service A calls an endpoint in service B, changing the endpoint in B shows up as a breaking change for A.
+A **subproject** is any repo in your project's ecosystem — microservice, frontend, shared lib, CLI tool. trace **links dependency graphs across subprojects**: if service A calls an endpoint in service B, changing the endpoint in B shows up as a breaking change for A.
 
-Discovery is automatic. On each index, trace-mcp detects subprojects (Docker Compose, flat/grouped workspaces, monolith fallback), parses API contracts (OpenAPI, GraphQL SDL, Protobuf/gRPC), scans code for HTTP client calls (fetch, axios, `Http::`, `requests`, `http.Get`, gRPC stubs, GraphQL ops), and links the calls to known endpoints.
+Discovery is automatic. On each index, trace detects subprojects (Docker Compose, flat/grouped workspaces, monolith fallback), parses API contracts (OpenAPI, GraphQL SDL, Protobuf/gRPC), scans code for HTTP client calls (fetch, axios, `Http::`, `requests`, `http.Get`, gRPC stubs, GraphQL ops), and links the calls to known endpoints.
 
 ```bash
-cd ~/projects/my-app && trace-mcp add
+cd ~/projects/my-app && trace add
 # → auto-detects user-service (openapi.yaml) and order-service
 # → links order-service → user-service via /api/users/{id}
 
-trace-mcp subproject impact --endpoint=/api/users
+trace subproject impact --endpoint=/api/users
 # → [order-service] src/services/user-client.ts:42 (axios, confidence: 85%)
 ```
 
-External subprojects can be added manually with `trace-mcp subproject add --repo=... --project=...`. MCP tools: `get_subproject_graph`, `get_subproject_impact`, `get_subproject_clients`, `subproject_add_repo`, `subproject_sync`.
+External subprojects can be added manually with `trace subproject add --repo=... --project=...`. MCP tools: `get_subproject_graph`, `get_subproject_impact`, `get_subproject_clients`, `subproject_add_repo`, `subproject_sync`.
 
 > Full CLI, detection modes, MCP-tool reference, topology config: [Configuration — topology & subprojects](https://trace-mcp.com/configuration.html#topology--subprojects).
 
@@ -433,7 +453,7 @@ External subprojects can be added manually with `trace-mcp subproject add --repo
 
 ## CI/PR change impact reports
 
-`trace-mcp ci-report --base main --head HEAD` produces a markdown or JSON report per pull request: **summary, blast radius** (depth-2 reverse dep traversal), **test coverage gaps** (per-symbol `hasTestReach`), **risk analysis** (30% complexity + 25% churn + 25% coupling + 20% blast radius), **architecture violations** (auto-detects clean / hexagonal presets), and **new dead exports**.
+`trace ci-report --base main --head HEAD` produces a markdown or JSON report per pull request: **summary, blast radius** (depth-2 reverse dep traversal), **test coverage gaps** (per-symbol `hasTestReach`), **risk analysis** (30% complexity + 25% churn + 25% coupling + 20% blast radius), **architecture violations** (auto-detects clean / hexagonal presets), and **new dead exports**.
 
 Use `--fail-on high` to block merges on high-risk changes. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for a ready-to-use GitHub Action that runs `build → test → impact-report` and posts a sticky PR comment on every push.
 

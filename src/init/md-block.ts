@@ -13,8 +13,10 @@ import fs from 'node:fs';
 import { readIfExists } from '../utils/safe-fs.js';
 import type { InitStepResult } from './types.js';
 
-export const START_MARKER = '<!-- trace-mcp:start -->';
-export const END_MARKER = '<!-- trace-mcp:end -->';
+export const START_MARKER = '<!-- trace:start -->';
+export const LEGACY_START_MARKER = '<!-- trace-mcp:start -->';
+export const END_MARKER = '<!-- trace:end -->';
+export const LEGACY_END_MARKER = '<!-- trace-mcp:end -->';
 
 /** Competing tools whose marker blocks should be removed on upsert. */
 const COMPETING_MARKER_TOOLS = [
@@ -30,13 +32,19 @@ const COMPETING_MARKER_TOOLS = [
   'repo-map',
 ];
 
-export const TRACE_MCP_ROUTING_BLOCK = `${START_MARKER}
+/** Matches our own generated heading, current ("trace") and pre-TRA-611
+ * ("trace-mcp") spellings — anchored to the exact heading text so it never
+ * matches an unrelated user heading that merely starts with the word
+ * "trace" (e.g. "## Trace logging policy"). */
+const TRACE_HEADING_RE = /^#{1,6}\s+trace(?:-mcp)?\s+Tool Routing\b/i;
+
+export const TRACE_ROUTING_BLOCK = `${START_MARKER}
 ## trace Tool Routing
 
 IMPORTANT: For ANY code exploration task, ALWAYS use trace tools first. NEVER use Read/Grep/Glob/Bash(ls,find) for navigating source code.
 
 | Task | trace tool | Instead of |
-|------|---------------|------------|
+|------|------------|------------|
 | Find a function/class/method | \`search\` | Grep |
 | Understand a file before editing | \`get_outline\` | Read (full file) |
 | Read one symbol's source | \`get_symbol\` | Read (full file) |
@@ -58,6 +66,9 @@ Use Read/Grep/Glob ONLY for non-code files (.md, .json, .yaml, config) or before
 Start sessions with \`get_project_map\` (summary_only=true).
 ${END_MARKER}`;
 
+/** Backwards-compatible alias for legacy imports. */
+export const TRACE_MCP_ROUTING_BLOCK = TRACE_ROUTING_BLOCK;
+
 /** Upsert the trace routing block into `filePath`. Idempotent. */
 export function upsertTraceMcpBlock(
   filePath: string,
@@ -65,18 +76,22 @@ export function upsertTraceMcpBlock(
 ): InitStepResult {
   const existing = readIfExists(filePath);
 
+  const hasAnyMarker =
+    existing !== null &&
+    (existing.includes(START_MARKER) || existing.includes(LEGACY_START_MARKER));
+
   if (opts.dryRun) {
     if (existing === null) {
       return { target: filePath, action: 'skipped', detail: `Would create ${basename(filePath)}` };
     }
-    if (existing.includes(START_MARKER)) {
+    if (hasAnyMarker) {
       return { target: filePath, action: 'skipped', detail: 'Would update trace block' };
     }
     return { target: filePath, action: 'skipped', detail: 'Would append trace block' };
   }
 
   if (existing === null) {
-    fs.writeFileSync(filePath, `${TRACE_MCP_ROUTING_BLOCK}\n`);
+    fs.writeFileSync(filePath, `${TRACE_ROUTING_BLOCK}\n`);
     return { target: filePath, action: 'created' };
   }
 
@@ -85,9 +100,13 @@ export function upsertTraceMcpBlock(
 
   content = removeCompetingBlocks(content);
 
-  if (content.includes(START_MARKER)) {
-    const re = new RegExp(`${escapeRegex(START_MARKER)}[\\s\\S]*?${escapeRegex(END_MARKER)}`, 'm');
-    content = content.replace(re, TRACE_MCP_ROUTING_BLOCK);
+  const markerRe = new RegExp(
+    `(?:${escapeRegex(START_MARKER)}|${escapeRegex(LEGACY_START_MARKER)})[\\s\\S]*?(?:${escapeRegex(END_MARKER)}|${escapeRegex(LEGACY_END_MARKER)})`,
+    'm',
+  );
+
+  if (markerRe.test(content)) {
+    content = content.replace(markerRe, TRACE_ROUTING_BLOCK);
     content = cleanupWhitespace(content);
     if (content === originalContent) {
       return { target: filePath, action: 'already_configured' };
@@ -103,7 +122,7 @@ export function upsertTraceMcpBlock(
 
   content = cleanupWhitespace(content);
   const separator = content.endsWith('\n') ? '\n' : '\n\n';
-  fs.writeFileSync(filePath, `${content + separator + TRACE_MCP_ROUTING_BLOCK}\n`);
+  fs.writeFileSync(filePath, `${content + separator + TRACE_ROUTING_BLOCK}\n`);
   const cleaned = originalContent !== content;
   return {
     target: filePath,
@@ -134,34 +153,46 @@ function removeCompetingBlocks(content: string): string {
 
 function removeOrphanedEndMarkers(content: string): string {
   let result = content;
-  while (result.includes(END_MARKER)) {
-    const startIdx = result.indexOf(START_MARKER);
-    const endIdx = result.indexOf(END_MARKER);
-    if (endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
-      result = result.slice(0, endIdx) + result.slice(endIdx + END_MARKER.length);
-    } else {
-      break;
+  for (const endMarker of [END_MARKER, LEGACY_END_MARKER]) {
+    while (result.includes(endMarker)) {
+      const startIdxes = [START_MARKER, LEGACY_START_MARKER]
+        .map((m) => result.indexOf(m))
+        .filter((idx) => idx !== -1);
+      const startIdx = startIdxes.length > 0 ? Math.min(...startIdxes) : -1;
+      const endIdx = result.indexOf(endMarker);
+      if (endIdx !== -1 && (startIdx === -1 || endIdx < startIdx)) {
+        result = result.slice(0, endIdx) + result.slice(endIdx + endMarker.length);
+      } else {
+        break;
+      }
     }
   }
   return result;
 }
 
 function removeOrphanedTraceMcpContent(content: string): string {
-  const startIdx = content.indexOf(START_MARKER);
-  const endIdx = content.indexOf(END_MARKER);
-  if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) return content;
-  const before = content.slice(0, startIdx);
-  const markerBlock = content.slice(startIdx, endIdx + END_MARKER.length);
-  const after = content.slice(endIdx + END_MARKER.length);
-  // Matches our own heading in both its current ("trace") and pre-TRA-611
-  // ("trace-mcp") forms, so a stray duplicate left outside the marker block
-  // gets cleaned up regardless of which version wrote it.
-  const traceMcpHeadingRe = /^(#{1,6})\s+trace(-mcp)?\b/i;
+  const startItems = [START_MARKER, LEGACY_START_MARKER]
+    .map((m) => ({ marker: m, idx: content.indexOf(m) }))
+    .filter((x) => x.idx !== -1);
+  const endItems = [END_MARKER, LEGACY_END_MARKER]
+    .map((m) => ({ marker: m, idx: content.indexOf(m) }))
+    .filter((x) => x.idx !== -1);
+
+  if (startItems.length === 0 || endItems.length === 0) return content;
+  startItems.sort((a, b) => a.idx - b.idx);
+  endItems.sort((a, b) => a.idx - b.idx);
+  const firstStart = startItems[0];
+  const firstEnd = endItems[0];
+  if (firstEnd.idx < firstStart.idx) return content;
+
+  const before = content.slice(0, firstStart.idx);
+  const markerBlock = content.slice(firstStart.idx, firstEnd.idx + firstEnd.marker.length);
+  const after = content.slice(firstEnd.idx + firstEnd.marker.length);
   const cleanBefore = filterSections(before.split('\n'), (heading) =>
-    traceMcpHeadingRe.test(heading),
+    TRACE_HEADING_RE.test(heading),
   ).join('\n');
   const cleanAfter = filterSections(after.split('\n'), (heading) =>
-    traceMcpHeadingRe.test(heading),
+    TRACE_HEADING_RE.test(heading),
   ).join('\n');
   return cleanBefore + markerBlock + cleanAfter;
 }
@@ -188,7 +219,7 @@ function removeCompetingHeadingSections(content: string): string {
   let lines = content.split('\n');
   lines = filterSections(lines, (headingLine) => competingHeadingRe.test(headingLine));
   lines = filterSections(lines, (headingLine, _level, body) => {
-    if (/^#{1,6}\s+trace(-mcp)?\b/i.test(headingLine)) return false;
+    if (TRACE_HEADING_RE.test(headingLine)) return false;
     return competitorRe.test(body);
   });
   lines = removeEmptyParentSections(lines);

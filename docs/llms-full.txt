@@ -1461,10 +1461,10 @@ page — the [quality gates](quality-gates.md) thresholds, the
 
 ## How config works
 
-All trace-mcp state lives in `~/.trace-mcp/`:
+All trace state lives in `~/.trace/` (with automatic backwards compatibility and fallback from legacy `~/.trace-mcp/`):
 
 ```
-~/.trace-mcp/
+~/.trace/
   .config.json              # global config + per-project sections
   registry.json             # registered projects
   index/
@@ -1473,14 +1473,14 @@ All trace-mcp state lives in `~/.trace-mcp/`:
 
 ### Config merge order
 
-1. **Global defaults** — `~/.trace-mcp/.config.json` (top-level keys)
-2. **Per-project section** — `~/.trace-mcp/.config.json → projects["/path/to/project"]` (created by `trace-mcp add`)
-3. **Local override** — `.trace-mcp.json` in the project directory (optional, for project-specific overrides)
+1. **Global defaults** — `~/.trace/.config.json` (or `~/.trace-mcp/.config.json` fallback)
+2. **Per-project section** — `~/.trace/.config.json → projects["/path/to/project"]` (created by `trace add`)
+3. **Local override** — `.trace.json` (or legacy `.trace-mcp.json`) in the project directory
 4. **Zod schema defaults** — fallback values
 
 ### Global config example
 
-`~/.trace-mcp/.config.json`:
+`~/.trace/.config.json`:
 ```jsonc
 {
   // Global defaults (apply to all projects)
@@ -1492,7 +1492,7 @@ All trace-mcp state lives in `~/.trace-mcp/`:
     "max_file_size_bytes": 524288
   },
 
-  // Per-project settings (created by `trace-mcp add`)
+  // Per-project settings (created by `trace add`)
   "projects": {
     "/Users/me/projects/my-app": {
       "root": ".",
@@ -1510,10 +1510,10 @@ All trace-mcp state lives in `~/.trace-mcp/`:
 
 ### Per-project config file (optional)
 
-You can place a config file at `.trace-mcp/.config.json` in your project root to override settings without editing the global config:
+You can place a config file at `.trace/.config.json` in your project root to override settings without editing the global config:
 
 ```jsonc
-// /path/to/project/.trace-mcp/.config.json
+// /path/to/project/.trace/.config.json
 {
   "include": ["src/**/*.ts", "lib/**/*.ts"],
   "exclude": ["node_modules/**", "dist/**", "coverage/**"],
@@ -1528,7 +1528,26 @@ You can place a config file at `.trace-mcp/.config.json` in your project root to
 }
 ```
 
-Alternative locations (checked in order): `.trace-mcp/.config.json`, `.trace-mcp.json`, `.trace-mcp`, `.config/trace-mcp.json`, `package.json` (under `"trace-mcp"` key).
+Alternative locations (checked in order): `.trace/.config.json`, `.trace.json`, `.trace-mcp/.config.json`, `.trace-mcp.json`, `.trace-mcp`, `.config/trace.json`, `.config/trace-mcp.json`, `package.json` (under `"trace-mcp"` key). The `trace-mcp`-spelled names keep working permanently — nothing is removed.
+
+---
+
+## Migration from trace-mcp to trace
+
+**The project is `trace-mcp`; the command is `trace`.** The rename lives at exactly that boundary — the CLI verb, the MCP server key written into client configs, and the local state directory shorten to `trace`, and nothing else does: not the npm package, not this repo, not the domain, not the registry entry. The reason is ergonomics, not efficiency — the same shape as `rg` for ripgrep or `kubectl` for kubernetes. The measured token saving from the shorter tool prefix (`mcp__trace__<tool>` vs. `mcp__trace-mcp__<tool>`) is real but small: 66–366 tokens per turn depending on tokenizer and preset, 0.74–1.23% of a tool list that already costs 8k–45k tokens.
+
+**The npm package keeps its name.** It is `trace-mcp` and stays `trace-mcp`: `trace` on npm is an unrelated package by another author, so `npm install -g trace` would install someone else's code. Install with `npm install -g trace-mcp` or `npx -y trace-mcp@latest`.
+
+| | Before | After |
+|---|---|---|
+| npm package | `trace-mcp` | `trace-mcp` (unchanged) |
+| Command | `trace-mcp <cmd>` | `trace <cmd>` — `trace-mcp` kept as an alias |
+| MCP server key in client configs | `trace-mcp` | `trace` |
+| State directory | `~/.trace-mcp/` | `~/.trace/`, falling back to `~/.trace-mcp/` |
+| Project config | `.trace-mcp.json` | `.trace.json`, then `.trace-mcp.json` |
+| Plugin / registry ids | `trace-mcp` | `trace-mcp` (unchanged) |
+
+`trace init` and `trace upgrade` rename an existing `mcpServers["trace-mcp"]` entry to `mcpServers["trace"]` in every client they can write to, preserving whatever else you configured on that entry. Nothing is deleted, and an entry you leave spelled `trace-mcp` keeps connecting — it just costs the longer tool prefix. Existing indexes are not rebuilt.
 
 ---
 
@@ -1580,7 +1599,7 @@ Two different things can leave a folder out of the index — check which one app
 2. **The folder just isn't a built-in skip dir, but nothing in `include` matches its files.** The default `include` covers every extension a registered language plugin claims, *except* the pure data formats — JSON, XML (`.xml`, `.svg`, `.csproj`, ...) and INI (`.ini`, `.conf`, `.properties`, ...) — which are left out because lockfiles and fixtures would swamp the index. Add an explicit pattern for those:
 
    ```jsonc
-   // .trace-mcp/.config.json
+   // .trace/.config.json
    {
      "include": ["schemas/**/*.json"]
    }
@@ -2008,7 +2027,7 @@ it hid and how to get it back — without it a suppressed tool is invisible, sin
 `load_tools()` lists what the *preset* deferred and a suppressed tool is inside
 the preset.
 
-Every `tools.*` option works from a project-local config file (`.trace-mcp/.config.json`) as well as the global one — none of them are global-only. The tool surface is built once per MCP session, so a change takes effect on the next session (restart the MCP client); the daemon does not need restarting.
+Every `tools.*` option works from a project-local config file (`.trace/.config.json`) as well as the global one — none of them are global-only. The tool surface is built once per MCP session, so a change takes effect on the next session (restart the MCP client); the daemon does not need restarting.
 
 ### Agent behavior rules
 
@@ -2027,7 +2046,7 @@ Every `tools.*` option works from a project-local config file (`.trace-mcp/.conf
 - Auto-updates on `npm upgrade trace-mcp` — no re-init required to pull new rule wording.
 - Single source of truth alongside the tool-routing block.
 
-If you want to override in one project without affecting others, put `"agent_behavior": "off"` (or any other value) in that project's `.trace-mcp/.config.json` — per-project config takes precedence over global.
+If you want to override in one project without affecting others, put `"agent_behavior": "off"` (or any other value) in that project's `.trace/.config.json` — per-project config takes precedence over global.
 
 ### 4-tier resolution system
 
@@ -2082,7 +2101,7 @@ When a project is indexed (via `serve`, `serve-http`, or `index`):
    - **Flat workspace** — scans first-level subdirectories for root markers (`package.json`, `composer.json`, `go.mod`, etc.). Requires ≥2 found (e.g. `project/frontend/` + `project/backend/`)
    - **Grouped workspace** — scans two levels deep (`root/group/service/`). Requires ≥2 found (e.g. `project/org/service-a/` + `project/org/service-b/`)
    - **Monolith fallback** — treats the project root as a single subproject
-2. Each detected subproject is **registered** and bound to the project in `~/.trace-mcp/topology.db`
+2. Each detected subproject is **registered** and bound to the project in `~/.trace/topology.db`
 3. **API contracts** are parsed (OpenAPI, GraphQL SDL, Protobuf) for each subproject
 4. Code is **scanned** for HTTP/gRPC client calls (fetch, axios, Http::, requests, etc.)
 5. Client calls are **matched** to known endpoints from other subprojects
@@ -2140,7 +2159,7 @@ The scanner detects HTTP/gRPC/GraphQL calls in 12+ patterns across all supported
 
 Every MCP session is still attached to exactly one project (see [stdio vs HTTP](#stdio-vs-http--choosing-your-setup)) — but two tools let an agent reach across to any OTHER project already registered with trace-mcp, without opening a second MCP connection:
 
-- **`list_projects`** — lists every project in `~/.trace-mcp/registry.json` (root, name, type, last-indexed timestamp), plus known subprojects when topology is enabled for the current session.
+- **`list_projects`** — lists every project in `~/.trace/registry.json` (root, name, type, last-indexed timestamp), plus known subprojects when topology is enabled for the current session.
 - **`call_project_tool { project, tool, args }`** — runs any of the {{ site.data.counts.tools }} normal trace-mcp tools against a DIFFERENT registered project's already-indexed data and returns that tool's response verbatim. `project` must be a root from `list_projects`; an unregistered root or an unknown `tool` name returns a structured `{ error: { code, message, data } }` payload instead of throwing.
 
 This is read-only relay wiring — it never starts indexing or a file watcher for the target project. In the HTTP daemon, a target project already warm in memory is served directly; a cold one is opened on demand via the same read-mostly path used for on-demand subprojects. Under `stdio` (no daemon), the target project's existing index database is opened directly; a project that has never been indexed cannot be relayed to.
@@ -2151,25 +2170,25 @@ No existing tool's schema changes because of this — `call_project_tool` dispat
 
 ## Supported MCP clients
 
-`trace-mcp init` detects installed MCP clients and writes a `trace-mcp` server entry into each one's native config format. Pick clients interactively, or pass `--mcp-client <name>` for non-interactive runs.
+`trace init` (or `trace-mcp init`) detects installed MCP clients and writes a `trace` server entry into each one's native config format (with `trace-mcp` legacy compatibility preserved). Pick clients interactively, or pass `--mcp-client <name>` for non-interactive runs.
 
 | Client | Config path | Format | Top-level key | Notes |
 |---|---|---|---|---|
 | Claude Code | `~/.claude.json`, `<project>/.mcp.json` | JSON | `mcpServers` | Supports Base / Standard / Max enforcement tiers (hooks, tweakcc) |
 | Claw Code | `~/.claw/settings.json`, `<project>/.claw.json` | JSON | `mcpServers` | Same enforcement tiers as Claude Code |
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) | JSON | `mcpServers` | Quit Claude.app before init — it overwrites foreign keys on preference flush |
-| Cursor | `~/.cursor/mcp.json`, `<project>/.cursor/mcp.json` | JSON | `mcpServers` | Also writes `.cursor/rules/trace-mcp.mdc` |
+| Cursor | `~/.cursor/mcp.json`, `<project>/.cursor/mcp.json` | JSON | `mcpServers` | Also writes `.cursor/rules/trace.mdc` |
 | Windsurf | `~/.windsurf/mcp.json`, `<project>/.windsurf/mcp.json` | JSON | `mcpServers` | Also writes `.windsurfrules` |
 | Continue | `~/.continue/mcpServers/mcp.json` | JSON | `mcpServers` | |
 | Junie | `~/.junie/mcp/mcp.json` | JSON | `mcpServers` | |
 | JetBrains AI Assistant | IDE-internal XML | — | — | Manual: Settings → Tools → AI Assistant → MCP. Use "Import from Claude" if Claude Desktop is configured |
-| Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.trace-mcp]` | |
+| Codex | `~/.codex/config.toml` | TOML | `[mcp_servers.trace]` | A legacy `[mcp_servers.trace-mcp]` table is detected and renamed on `init` |
 | Hermes Agent | `$HERMES_HOME/config.yaml` (default `~/.hermes/config.yaml`) | YAML | `mcp_servers` | Always global; also writes `AGENTS.md` and pre-allowlists hooks |
 | **AMP** (Sourcegraph) | `~/.config/amp/settings.json[c]`, `<project>/.amp/settings.json[c]` | JSON / JSONC | `amp.mcpServers` (literal dot in key) | Comments and formatting preserved via `jsonc-parser`. Also writes `AGENTS.md` |
-| **Warp** | Cloud-synced storage (no writable file) | — | — | Manual: Settings → Agents → MCP servers → + Add → paste JSON. If Claude Code is also configured, enable "File-based MCP servers" so Warp inherits trace-mcp from `~/.claude.json`. Also writes `AGENTS.md` |
+| **Warp** | Cloud-synced storage (no writable file) | — | — | Manual: Settings → Agents → MCP servers → + Add → paste JSON. If Claude Code is also configured, enable "File-based MCP servers" so Warp inherits trace from `~/.claude.json`. Also writes `AGENTS.md` |
 | **Factory Droid** | `~/.factory/mcp.json`, `<project>/.factory/mcp.json` | JSON | `mcpServers` (entries need `type: "stdio"`) | Also writes `AGENTS.md` |
 | **Cline** | `<VS Code User>/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json` | JSON | `mcpServers` | VS Code extension; global-only (globalStorage has no per-project variant). Detected only when the extension's settings dir exists |
-| **Kilo Code** | `<VS Code User>/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` | JSON | `mcpServers` | Legacy VS Code extension config. The newer Kilo CLI (≥ v7) uses a non-standard `~/.config/kilo/kilo.jsonc` shape (`mcp` key, `command` as array) that trace-mcp does not write — configure that manually if you use the CLI |
+| **Kilo Code** | `<VS Code User>/globalStorage/kilocode.kilo-code/settings/mcp_settings.json` | JSON | `mcpServers` | Legacy VS Code extension config. The newer Kilo CLI (≥ v7) uses a non-standard `~/.config/kilo/kilo.jsonc` shape (`mcp` key, `command` as array) that trace does not write — configure that manually if you use the CLI |
 | **Antigravity** (Google) | `~/.gemini/config/mcp_config.json` | JSON | `mcpServers` | Global-only (no documented per-project config as of mid-2026) |
 | **Kimi Code CLI** (Moonshot) | `~/.kimi/mcp.json` | JSON | `mcpServers` | Global-only; format is compatible with other MCP clients |
 
@@ -2246,20 +2265,20 @@ If you can't read it back (agent actors can't), you can still recover the *set* 
 
 ## stdio vs HTTP — choosing your setup
 
-trace-mcp speaks MCP over two transports. Which one to pick depends on whether you want a process per repo or one long-lived daemon serving many projects.
+trace speaks MCP over two transports. Which one to pick depends on whether you want a process per repo or one long-lived daemon serving many projects.
 
 ### stdio — recommended for per-repo agent sessions
 
-`trace-mcp serve` runs the server over stdio. Your MCP client launches one process per session with the working directory set to the repo you opened, so the project is auto-detected from there — no URL, no `?project=`, and each session is isolated to its own repo. No daemon is required: it runs in-process, and if a daemon happens to be running it transparently reuses the warm index.
+`trace serve` runs the server over stdio. Your MCP client launches one process per session with the working directory set to the repo you opened, so the project is auto-detected from there — no URL, no `?project=`, and each session is isolated to its own repo. No daemon is required: it runs in-process, and if a daemon happens to be running it transparently reuses the warm index.
 
 Wire it up without touching a committed file:
 
 ```bash
 # Across all your projects (stored in ~/.claude.json, not committed):
-claude mcp add --scope user trace-mcp -- npx -y trace-mcp@latest serve
+claude mcp add --scope user trace -- npx -y trace-mcp@latest serve
 
 # Just one project, not committed (local scope):
-claude mcp add --scope local trace-mcp -- npx -y trace-mcp@latest serve
+claude mcp add --scope local trace -- npx -y trace-mcp@latest serve
 ```
 
 To share one config with the whole team, commit a portable stdio entry to `.mcp.json` — it carries no machine-specific URL or path:
@@ -2267,7 +2286,7 @@ To share one config with the whole team, commit a portable stdio entry to `.mcp.
 ```json
 {
   "mcpServers": {
-    "trace-mcp": { "command": "npx", "args": ["-y", "trace-mcp@latest", "serve"] }
+    "trace": { "command": "npx", "args": ["-y", "trace-mcp@latest", "serve"] }
   }
 }
 ```
@@ -2276,7 +2295,7 @@ Each developer's session spawns its own per-repo process; nothing is shared or h
 
 ### HTTP daemon — one warm index shared across many projects
 
-`trace-mcp serve-http` runs a long-lived daemon (default `127.0.0.1:3741`) that holds warm indexes for several registered projects and backs the desktop app. MCP clients connect with the target project in the URL:
+`trace serve-http` runs a long-lived daemon (default `127.0.0.1:3741`) that holds warm indexes for several registered projects and backs the desktop app. MCP clients connect with the target project in the URL:
 
 ```
 http://127.0.0.1:3741/mcp?project=/absolute/path/to/repo
@@ -2288,7 +2307,7 @@ The daemon multiplexes projects — one process serves all of them — but each 
 
 > **The daemon's trust boundary is loopback.** `serve-http` has no authentication: every `/api` route and `/mcp` itself trust the caller, and `?project=` / `X-Trace-Project` / `params._meta["traceMcp/projectRoot"]` can name any directory on the machine — the daemon will index and serve it. On `127.0.0.1` that grants nothing extra, because anything able to reach the port already runs as you and can read those files directly. Binding elsewhere hands that power to the network, so a non-loopback `--host` is refused unless you also pass `--allow-remote`, and even then you are expected to put your own authentication (SSH tunnel, reverse proxy, VPN) in front of the port.
 
-> **One project per session.** Both transports resolve exactly one project per MCP session — stdio from the working directory, HTTP from `?project=`. A single session cannot query across repositories today; to work with several repos, register each (`trace-mcp add <path>`) and add one MCP entry per repo (HTTP) or open one session per repo (stdio). Cross-repo queries inside a single session — useful for multi-repo/pseudo-monorepo setups — are tracked as an enhancement in [#199](https://github.com/nikolai-vysotskyi/trace-mcp/issues/199).
+> **One project per session.** Both transports resolve exactly one project per MCP session — stdio from the working directory, HTTP from `?project=`. A single session cannot query across repositories today; to work with several repos, register each (`trace add <path>`) and add one MCP entry per repo (HTTP) or open one session per repo (stdio). Cross-repo queries inside a single session — useful for multi-repo/pseudo-monorepo setups — are tracked as an enhancement in [#199](https://github.com/nikolai-vysotskyi/trace-mcp/issues/199).
 
 | | stdio | HTTP daemon |
 |---|---|---|
@@ -2302,7 +2321,7 @@ The daemon multiplexes projects — one process serves all of them — but each 
 
 ## Hermes Agent sessions
 
-Hermes Agent (NousResearch) stores conversations in a SQLite database at `$HERMES_HOME/state.db` (default `~/.hermes/state.db`) plus one DB per profile under `<home>/profiles/<name>/state.db`. trace-mcp reads these read-only and exposes them through:
+Hermes Agent (NousResearch) stores conversations in a SQLite database at `$HERMES_HOME/state.db` (default `~/.hermes/state.db`) plus one DB per profile under `<home>/profiles/<name>/state.db`. trace reads these read-only and exposes them through:
 
 - `discover_hermes_sessions` — MCP tool that lists sessions without mining or indexing them.
 - `mine_sessions` — if you pass a `project_root`, the decision miner also walks every Hermes session it can see and records any decisions it finds under that project. When `project_root` is absent Hermes is skipped entirely — global conversations are deliberately not attributed to a guessed project.
@@ -2334,59 +2353,61 @@ With `enabled: "auto"` the provider is registered at boot; discovery returns an 
 
 ## CLI
 
+*(All commands support both `trace <command>` and legacy `trace-mcp <command>` aliases.)*
+
 ```bash
 # Setup
-trace-mcp init                 # One-time global setup (MCP clients, hooks, CLAUDE.md)
-trace-mcp add [dir]            # Register a project for indexing
-trace-mcp list                 # List all registered projects
-trace-mcp upgrade [dir]        # Upgrade all projects (or specific one) — migrations + reindex
+trace init                 # One-time global setup (MCP clients, hooks, CLAUDE.md)
+trace add [dir]            # Register a project for indexing
+trace list                 # List all registered projects
+trace upgrade [dir]        # Upgrade all projects (or specific one) — migrations + reindex
 
 # Server
-trace-mcp serve                # Start MCP server (stdio transport)
-trace-mcp serve-http           # Start HTTP/SSE server (default: 127.0.0.1:3741)
-  -p, --port <port>            # Custom port
-  --host <host>                # Custom host (loopback only unless --allow-remote)
-  --allow-remote               # Permit a non-loopback --host (see the trust boundary note)
+trace serve                # Start MCP server (stdio transport)
+trace serve-http           # Start HTTP/SSE server (default: 127.0.0.1:3741)
+  -p, --port <port>        # Custom port
+  --host <host>            # Custom host (loopback only unless --allow-remote)
+  --allow-remote           # Permit a non-loopback --host (see the trust boundary note)
 
 # Manual indexing
-trace-mcp index <dir>          # Index a project directory
-  -f, --force                  # Force reindex all files
+trace index <dir>          # Index a project directory
+  -f, --force              # Force reindex all files
 
 # Subprojects (= services bound to projects)
-trace-mcp subproject add       # Add a subproject to a project
-  --repo <path>                # Subproject/service path (required)
-  --project <path>             # Project this subproject belongs to (required)
-  --contract <paths...>        # Explicit contract file paths
-  --name <name>                # Display name
-trace-mcp subproject remove <name-or-path>   # Remove a subproject
-trace-mcp subproject list                    # List subprojects
-  --project <path>             # Filter to a specific project
-  --json                       # Output as JSON
-trace-mcp subproject sync                    # Re-scan all subprojects
-trace-mcp subproject impact                  # Cross-subproject impact analysis
-  --endpoint <path>            # Endpoint path pattern
-  --method <method>            # HTTP method filter
-  --service <name>             # Service name filter
-  --json                       # Output as JSON
+trace subproject add       # Add a subproject to a project
+  --repo <path>            # Subproject/service path (required)
+  --project <path>         # Project this subproject belongs to (required)
+  --contract <paths...>    # Explicit contract file paths
+  --name <name>            # Display name
+trace subproject remove <name-or-path>   # Remove a subproject
+trace subproject list                    # List subprojects
+  --project <path>         # Filter to a specific project
+  --json                   # Output as JSON
+trace subproject sync                    # Re-scan all subprojects
+trace subproject impact                  # Cross-subproject impact analysis
+  --endpoint <path>        # Endpoint path pattern
+  --method <method>        # HTTP method filter
+  --service <name>         # Service name filter
+  --json                   # Output as JSON
 
 # Hooks
-trace-mcp setup-hooks          # Install guard hook (blocks Read/Grep/Glob/Bash on code + Agent(Explore))
-  --global                     # Install globally
-  --uninstall                  # Remove hook
+trace setup-hooks          # Install guard hook (blocks Read/Grep/Glob/Bash on code + Agent(Explore))
+  --global                 # Install globally
+  --uninstall              # Remove hook
 
 # Analytics (see docs/analytics.md)
-trace-mcp analytics sync       # Parse session logs into analytics DB
-  --full                       # Force full rescan
-trace-mcp analytics report     # Token usage report
-  --period <p>                 # today, week, month, all (default: week)
-trace-mcp analytics optimize   # Optimization recommendations
-trace-mcp analytics savings    # Real savings analysis
-trace-mcp analytics benchmark  # Synthetic token efficiency benchmark
-  --queries <n>                # Queries per scenario (default: 10)
-  --format <fmt>               # text, json, markdown
-trace-mcp analytics coverage   # Technology coverage report
-trace-mcp analytics trends     # Daily usage trends
-  --days <n>                   # Number of days (default: 30)
+trace analytics sync       # Parse session logs into analytics DB
+  --full                   # Force full rescan
+trace analytics report     # Token usage report
+  --period <p>             # today, week, month, all (default: week)
+trace analytics optimize   # Optimization recommendations
+trace analytics savings    # Real savings analysis
+trace analytics benchmark  # Synthetic token efficiency benchmark
+  --queries <n>            # Queries per scenario (default: 10)
+  --format <fmt>           # text, json, markdown
+trace analytics coverage   # Technology coverage report
+trace analytics trends     # Daily usage trends
+  --days <n>               # Number of days (default: 30)
 ```
 
 ---
@@ -3025,36 +3046,36 @@ audit_config()
 
 ## CLI Commands
 
-All analytics commands are under `trace-mcp analytics`:
+All analytics commands are under `trace analytics` (supports `trace-mcp analytics` alias):
 
 ```bash
 # Sync session logs into analytics DB
-trace-mcp analytics sync [--full]
+trace analytics sync [--full]
 
 # Token usage report
-trace-mcp analytics report [--period today|week|month|all] [--format text|json]
+trace analytics report [--period today|week|month|all] [--format text|json]
 
 # Optimization recommendations
-trace-mcp analytics optimize [--period today|week|month|all] [--format text|json]
+trace analytics optimize [--period today|week|month|all] [--format text|json]
 
 # Real savings analysis
-trace-mcp analytics savings [--period today|week|month|all] [--format text|json]
+trace analytics savings [--period today|week|month|all] [--format text|json]
 
 # Synthetic benchmark
-trace-mcp analytics benchmark [--queries 10] [--seed 42] [--format text|json|markdown]
+trace analytics benchmark [--queries 10] [--seed 42] [--format text|json|markdown]
 
 # Technology coverage
-trace-mcp analytics coverage [--format text|json]
+trace analytics coverage [--format text|json]
 
 # Usage trends
-trace-mcp analytics trends [--days 30] [--format text|json]
+trace analytics trends [--days 30] [--format text|json]
 ```
 
 ---
 
 ## Storage
 
-Analytics data lives in `~/.trace-mcp/analytics.db` (separate from project indexes):
+Analytics data lives in `~/.trace/analytics.db` (or `~/.trace-mcp/analytics.db` fallback, separate from project indexes):
 
 ```sql
 sessions       — one row per parsed session (tokens, model, timestamps)
@@ -3062,7 +3083,7 @@ tool_calls     — one row per tool call (name, server, output size, target file
 sync_state     — file paths + mtime for incremental sync
 ```
 
-Session savings (in-memory tracker) persist to `~/.trace-mcp/savings.json`.
+Session savings (in-memory tracker) persist to `~/.trace/savings.json` (or `~/.trace-mcp/savings.json`).
 
 ### Incremental sync
 
@@ -3769,18 +3790,20 @@ The mining pipeline also filters non-user content before it reaches the store. B
 
 ## CLI
 
+*(Commands support both `trace` and `trace-mcp` aliases)*
+
 ```bash
-trace-mcp memory mine [--project=.] [--force] [--min-confidence=0.6]
-trace-mcp memory index [--project=.] [--force]
-trace-mcp memory search "query" [--project=.] [--limit=20]
-trace-mcp memory decisions [--project=.] [--type=tech_choice] [--search="query"] [--json]
-trace-mcp memory stats [--project=.] [--json]
-trace-mcp memory timeline [--project=.] [--file=path] [--symbol=id]
+trace memory mine [--project=.] [--force] [--min-confidence=0.6]
+trace memory index [--project=.] [--force]
+trace memory search "query" [--project=.] [--limit=20]
+trace memory decisions [--project=.] [--type=tech_choice] [--search="query"] [--json]
+trace memory stats [--project=.] [--json]
+trace memory timeline [--project=.] [--file=path] [--symbol=id]
 ```
 
 ## Storage
 
-All decision memory is stored in `~/.trace-mcp/decisions.db` (SQLite, WAL mode). Tables:
+All decision memory is stored in `~/.trace/decisions.db` (or `~/.trace-mcp/decisions.db` fallback, SQLite, WAL mode). Tables:
 
 - `decisions` — decision records with code linkage, temporal validity, service scoping
 - `decisions_fts` — FTS5 virtual table for full-text search over decisions

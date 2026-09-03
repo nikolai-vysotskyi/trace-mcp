@@ -1,10 +1,10 @@
-<!-- trace-mcp:start -->
+<!-- trace:start -->
 ## trace Tool Routing
 
 IMPORTANT: For ANY code exploration task, ALWAYS use trace tools first. NEVER use Read/Grep/Glob/Bash(ls,find) for navigating source code.
 
 | Task | trace tool | Instead of |
-|------|---------------|------------|
+|------|------------|------------|
 | Find a function/class/method | `search` | Grep |
 | Understand a file before editing | `get_outline` | Read (full file) |
 | Read one symbol's source | `get_symbol` | Read (full file) |
@@ -24,4 +24,4 @@ IMPORTANT: For ANY code exploration task, ALWAYS use trace tools first. NEVER us
 
 Use Read/Grep/Glob ONLY for non-code files (.md, .json, .yaml, config) or before Edit.
 Start sessions with `get_project_map` (summary_only=true).
-<!-- trace-mcp:end -->
+<!-- trace:end -->

@@ -336,7 +336,6 @@ low effort against its claimed 60-90% cut.** That list tracks the gap between
 claimed and measured, so our "40-50%" is a liability there and
 `npx trace-mcp benchmark .` is the asset. PR #53 was written on that basis.
 
-
 ## Channels that need a human
 
 Not blockers to route around — genuinely outside what an agent may do alone:
