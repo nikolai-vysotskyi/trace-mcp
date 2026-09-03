@@ -1,7 +1,7 @@
 ---
 title: "Repomix vs codegraph: packing a repo vs indexing it for AI agents"
-description: "Repomix packs a repository into one file an agent reads; codegraph indexes it into a queryable graph an agent asks. Head-to-head on model, token cost, freshness, tool surface and published benchmarks — verified against both projects' public docs on September 2, 2026."
-updated: 2026-09-02
+description: "Repomix packs a repository into one file an agent reads; codegraph indexes it into a graph an agent queries. Head-to-head on cost and freshness."
+updated: 2026-09-03
 ---
 
 # Repomix vs codegraph
