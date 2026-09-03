@@ -46,6 +46,7 @@ Canonical terms and localization conventions across languages for the trace-mcp 
 | **Graph** | Graph | グラフ | Граф | Visual code dependency graph |
 | **Tech-debt grade** | Tech-Debt-Note | 技術的負債の評価 | Оценка техдолга | A–F code quality grade |
 | **Findings** | Funde | 検出 | Находки | Code smell / issue scanner results |
+| **Stale** (session) | Veraltet | 応答なし | Давно молчит | No heartbeat for 120 s — *not* "expired"; the client may come back |
 | **Needs attention** | Zu prüfen | 要対応 | Требуют внимания | Workspace KPI tile — 96 px budget, see Principle 5 |
 | **Coverage** | Abdeckung | カバレッジ | Покрытие | Dependency & plugin coverage |
 | **Workspace** | Workspace | ワークスペース | Пространство | Top-level projects table |

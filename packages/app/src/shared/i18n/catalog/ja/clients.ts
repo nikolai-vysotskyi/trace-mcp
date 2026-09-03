@@ -13,7 +13,7 @@ export const clients = {
 
   sessionActive: 'アクティブ',
   sessionIdle: '待機中',
-  sessionStale: '期限切れ',
+  sessionStale: '応答なし',
 
   connected: '接続済み',
   connect: '接続',
