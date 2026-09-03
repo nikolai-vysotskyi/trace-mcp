@@ -5,7 +5,7 @@
 <h1 align="center">trace-mcp</h1>
 
 <p align="center">
-  Precomputed code intelligence for AI coding agents. Cut token usage by 40–50% and navigate codebases instantly.
+  Precomputed code intelligence for AI coding agents — they reuse a graph of your codebase instead of re-reading it.
 </p>
 
 <p align="center">
@@ -431,7 +431,17 @@ trace-mcp sends at most one anonymous ping per day, per install, to help us coun
 
 Source: [`src/telemetry/usage-ping.ts`](src/telemetry/usage-ping.ts).
 
-For security-sensitive environments, review [SECURITY.md](SECURITY.md) before use.
+### Security
+
+<p align="center">
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml/badge.svg" alt="Semgrep" /></a>
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/nikolai-vysotskyi/trace-mcp"><img src="https://api.securityscorecards.dev/projects/github.com/nikolai-vysotskyi/trace-mcp/badge" alt="OpenSSF Scorecard" /></a>
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security"><img src="https://img.shields.io/badge/security-policy-blue" alt="Security policy" /></a>
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security/dependabot"><img src="https://img.shields.io/badge/Dependabot-enabled-success" alt="Dependabot enabled" /></a>
+</p>
+
+Every push is scanned by CodeQL and Semgrep, dependencies are tracked by Dependabot, and supply-chain posture is scored by OpenSSF Scorecard. For security-sensitive environments, review [SECURITY.md](SECURITY.md) before use.
 
 ---
 
