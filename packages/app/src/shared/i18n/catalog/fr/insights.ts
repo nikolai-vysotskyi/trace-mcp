@@ -33,4 +33,38 @@ export const insights = {
   rowScore: 'score {{score}}',
   rowHotspot: 'complexité {{complexity}} · {{commits}} commits',
   rowHotspotConfidence: 'complexité {{complexity}} · {{commits}} commits · {{confidence}}',
+
+  reportStartupTitle: 'Contexte de démarrage',
+  reportStartupDescription:
+    'Ce que chaque session paie avant votre premier message, ce que cela coûte et ce qui le fait payer deux fois. Lu dans les journaux de session de ce Mac ; rien n’est envoyé nulle part.',
+  runningStartup: 'Mesure du bloc de démarrage dans vos journaux de session…',
+
+  startupBlockRow: 'Bloc de démarrage — {{tokens}} jetons',
+  startupBlockDetail: 'médiane · p10 {{p10}} · p90 {{p90}} · {{sessions}} sessions en {{days}} jours',
+  startupCostRow: 'Coût du démarrage — {{usd}}',
+  startupCostDetail: 'sur {{total}} dépensés en entrée pendant {{days}} jours',
+  startupSourceRow: '{{source}} — {{tokens}} jetons',
+  startupSourceDetail: 'mesuré sur {{sessions}} sessions',
+  startupResidualDetail:
+    'Non détaillé — l’invite système, les schémas d’outils et CLAUDE.md n’atteignent jamais le journal de session',
+  startupRebuildRow: 'Cache reconstruit : {{cause}} — {{events}} fois',
+  startupRebuildDetail: '{{usd}} en plus de la lecture des mêmes jetons depuis le cache',
+  startupServerRow: '{{server}} — dans {{sessions}} blocs de démarrage',
+  startupServerDetail: 'appelé {{calls}} fois',
+
+  sourceResidual: 'Invite système, schémas d’outils et instructions',
+  sourceSkills: 'Liste des compétences',
+  sourceDeferredTools: 'Liste des outils différés',
+  sourceAgentListing: 'Liste des agents',
+  sourceMcpInstructions: 'Instructions des serveurs MCP',
+  sourceMemory: 'Fichiers de mémoire',
+  sourceOther: 'Autres insertions',
+  sourceHook: 'Hook : {{name}}',
+
+  causeCompact: 'contexte compacté',
+  causeTtlExpiry: 'cache expiré entre deux messages',
+  causeModelSwitch: 'changement de modèle',
+  causeToolsChanged: 'changement de la panoplie d’outils',
+  causeListingChanged: 'changement de la liste des compétences ou des agents',
+  causeUnexplained: 'cause non identifiée',
 } as const;

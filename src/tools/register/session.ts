@@ -7,6 +7,7 @@ import { formatBenchmarkMarkdown, runBenchmark } from '../../analytics/benchmark
 import { listAllSessions } from '../../analytics/log-parser.js';
 import { analyzeRealSavings } from '../../analytics/real-savings.js';
 import { getOptimizationReport, getSessionAnalytics } from '../../analytics/session-analytics.js';
+import { analyzeStartupContext } from '../../analytics/startup-context.js';
 import {
   attachIngestionStatus,
   attachNoSessionDataWarning,
@@ -425,6 +426,39 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         return { content: [{ type: 'text', text: formatBenchmarkMarkdown(result) }] };
       }
       return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // --- Analytics: Startup Context Audit (preset-gated; scans the whole
+  // machine's logs, so it is a report you ask for, not one every session pays
+  // schema tokens to keep on the shelf). ---
+  server.tool(
+    'get_startup_context_audit',
+    "What the session's startup block is made of and what it costs: the context every session pays for before the first user message — system prompt, tool schemas, MCP servers, skill and agent listings, SessionStart hooks — decomposed by source, plus the mid-session cache rebuilds that make it get paid twice. Read-only, computed locally from session logs. Returns JSON: { startupTokens, sources: [{ source, meanTokens, pctOfStartup }], cost, cacheBreakers, mcpServers, instructionFiles }.",
+    {
+      days: z
+        .number()
+        .int()
+        .min(1)
+        .max(365)
+        .optional()
+        .describe('Look-back window in days (default 30)'),
+    },
+    async ({ days }) => {
+      try {
+        const result = await analyzeStartupContext({ days, projectRoot });
+        return { content: [{ type: 'text' as const, text: j(result) }] };
+      } catch (e) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: j({ error: e instanceof Error ? e.message : String(e) }),
+            },
+          ],
+          isError: true,
+        };
+      }
     },
   );
 

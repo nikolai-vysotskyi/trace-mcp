@@ -31,4 +31,38 @@ export const insights = {
   rowScore: 'スコア {{score}}',
   rowHotspot: '複雑度 {{complexity}} · コミット {{commits}} 件',
   rowHotspotConfidence: '複雑度 {{complexity}} · コミット {{commits}} 件 · {{confidence}}',
+
+  reportStartupTitle: '起動時のコンテキスト',
+  reportStartupDescription:
+    '最初のメッセージを送る前に、どのセッションも何に対して支払っているか、その費用はいくらか、何が原因で二重に支払うことになるか。この Mac のセッションログから読み取ります。どこにも送信しません。',
+  runningStartup: 'セッションログから起動ブロックを計測しています…',
+
+  startupBlockRow: '起動ブロック — {{tokens}} トークン',
+  startupBlockDetail: '中央値 · p10 {{p10}} · p90 {{p90}} · {{days}} 日間で {{sessions}} セッション',
+  startupCostRow: '起動コスト — {{usd}}',
+  startupCostDetail: '{{days}} 日間の入力費用 {{total}} のうち',
+  startupSourceRow: '{{source}} — {{tokens}} トークン',
+  startupSourceDetail: '{{sessions}} セッションで計測',
+  startupResidualDetail:
+    '内訳なし — システムプロンプト、ツールスキーマ、CLAUDE.md はセッションログに残りません',
+  startupRebuildRow: 'キャッシュ再構築: {{cause}} — {{events}} 回',
+  startupRebuildDetail: '同じトークンをキャッシュから読む場合に比べて {{usd}} 多い',
+  startupServerRow: '{{server}} — {{sessions}} 件の起動ブロックに含まれる',
+  startupServerDetail: '呼び出し {{calls}} 回',
+
+  sourceResidual: 'システムプロンプト・ツールスキーマ・指示ファイル',
+  sourceSkills: 'スキル一覧',
+  sourceDeferredTools: '遅延ツール一覧',
+  sourceAgentListing: 'エージェント一覧',
+  sourceMcpInstructions: 'MCP サーバーの指示',
+  sourceMemory: 'メモリファイル',
+  sourceOther: 'その他の挿入',
+  sourceHook: 'フック: {{name}}',
+
+  causeCompact: 'コンテキストの圧縮',
+  causeTtlExpiry: 'メッセージの間にキャッシュが期限切れ',
+  causeModelSwitch: 'モデルの切り替え',
+  causeToolsChanged: 'ツール構成の変更',
+  causeListingChanged: 'スキルまたはエージェント一覧の変更',
+  causeUnexplained: '原因を特定できず',
 } as const;

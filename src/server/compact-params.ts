@@ -83,6 +83,9 @@ export const COMPACT_CORE_PARAMS: Record<string, string[]> = {
   plan_batch_change: ['package', 'from_version', 'to_version'],
   get_project_health: [],
   benchmark_project: [],
+  // `days` has a default and the report is useful without it, so compact mode
+  // can drop it from the schema entirely (the handler still accepts it).
+  get_startup_context_audit: [],
 
   // Session / Memory
   add_decision: ['title', 'content', 'type', 'symbol_id', 'file_path', 'tags'],

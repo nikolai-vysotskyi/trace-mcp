@@ -33,4 +33,38 @@ export const insights = {
   rowScore: 'pontuação {{score}}',
   rowHotspot: 'complexidade {{complexity}} · {{commits}} commits',
   rowHotspotConfidence: 'complexidade {{complexity}} · {{commits}} commits · {{confidence}}',
+
+  reportStartupTitle: 'Contexto de inicialização',
+  reportStartupDescription:
+    'O que cada sessão paga antes da sua primeira mensagem, quanto custa e o que faz esse custo ser pago duas vezes. Lido dos registros de sessão deste Mac; nada é enviado a lugar nenhum.',
+  runningStartup: 'Medindo o bloco de inicialização nos seus registros de sessão…',
+
+  startupBlockRow: 'Bloco de inicialização — {{tokens}} tokens',
+  startupBlockDetail: 'mediana · p10 {{p10}} · p90 {{p90}} · {{sessions}} sessões em {{days}} dias',
+  startupCostRow: 'Custo da inicialização — {{usd}}',
+  startupCostDetail: 'de {{total}} gastos em entrada ao longo de {{days}} dias',
+  startupSourceRow: '{{source}} — {{tokens}} tokens',
+  startupSourceDetail: 'medido em {{sessions}} sessões',
+  startupResidualDetail:
+    'Sem detalhamento — o prompt do sistema, os esquemas de ferramentas e o CLAUDE.md nunca chegam ao registro de sessão',
+  startupRebuildRow: 'Cache reconstruído: {{cause}} — {{events}} vezes',
+  startupRebuildDetail: '{{usd}} além de ler os mesmos tokens do cache',
+  startupServerRow: '{{server}} — em {{sessions}} blocos de inicialização',
+  startupServerDetail: 'chamado {{calls}} vezes',
+
+  sourceResidual: 'Prompt do sistema, esquemas de ferramentas e instruções',
+  sourceSkills: 'Lista de habilidades',
+  sourceDeferredTools: 'Lista de ferramentas adiadas',
+  sourceAgentListing: 'Lista de agentes',
+  sourceMcpInstructions: 'Instruções dos servidores MCP',
+  sourceMemory: 'Arquivos de memória',
+  sourceOther: 'Outras inserções',
+  sourceHook: 'Hook: {{name}}',
+
+  causeCompact: 'contexto compactado',
+  causeTtlExpiry: 'cache expirou entre mensagens',
+  causeModelSwitch: 'modelo mudou',
+  causeToolsChanged: 'conjunto de ferramentas mudou',
+  causeListingChanged: 'lista de habilidades ou agentes mudou',
+  causeUnexplained: 'causa não identificada',
 } as const;

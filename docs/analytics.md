@@ -149,6 +149,18 @@ benchmark_project({ queries?: number, seed?: number, format?: "json" | "markdown
 
 **5 scenarios:** symbol lookup, file exploration, search, impact analysis, call graph. Uses actual index data with seeded randomness for reproducibility.
 
+### `get_startup_context_audit`
+
+What the session startup block is made of and what it costs — the context every session pays for before your first message: the harness system prompt, tool schemas, MCP servers, the skill and agent listings, and SessionStart hook output.
+
+```
+get_startup_context_audit({ days?: number })
+```
+
+Returns: the block's size distribution across fresh sessions, a decomposition by source (hooks are named individually), the block's share of the input-side bill, the mid-session cache rebuilds that make it get paid twice and what each cost, MCP servers present at startup alongside how often they were actually called, and the instruction files on disk.
+
+Everything is computed locally from `~/.claude/projects/*.jsonl`; nothing leaves the machine. The system prompt, tool schemas and CLAUDE.md are never written to the session log, so they are reported together as one residual row rather than split apart — the payload's `notes` says so too.
+
 ### `get_coverage_report`
 
 Technology profile — which dependencies are covered by trace-mcp plugins and which are not.

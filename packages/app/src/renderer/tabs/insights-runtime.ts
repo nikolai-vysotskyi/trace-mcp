@@ -32,7 +32,7 @@ const BASE = 'http://127.0.0.1:3741';
 // read-only. Each entry maps a report id to the MCP tool it calls and
 // (optionally) a transform that produces the tool arguments.
 
-export type ReportId = 'claudemd_drift' | 'pagerank' | 'risk_hotspots';
+export type ReportId = 'claudemd_drift' | 'pagerank' | 'risk_hotspots' | 'startup_context';
 
 export interface ReportDef {
   id: ReportId;
@@ -70,6 +70,16 @@ export const INSIGHT_REPORTS: ReportDef[] = [
     descriptionKey: 'insights:reportRiskDescription',
     mcpTool: 'get_risk_hotspots',
     argTransform: () => ({ limit: 20 }),
+  },
+  {
+    id: 'startup_context',
+    titleKey: 'insights:reportStartupTitle',
+    descriptionKey: 'insights:reportStartupDescription',
+    mcpTool: 'get_startup_context_audit',
+    /* 30 days, the tool's own default — a month is long enough for the cost
+       column to mean something and short enough that the scan stays under a
+       minute on a heavily used machine. */
+    argTransform: () => ({ days: 30 }),
   },
 ];
 
@@ -213,6 +223,117 @@ export function flattenRiskHotspotRows(payload: unknown): InsightRows {
   return { rows };
 }
 
+// ── Startup context audit (TRA-759) ──────────────────────────────────
+// The one report that is about the user's whole machine rather than this
+// project: the block of context every session pays for before the first
+// message. Rows read top-down as the story — how big, what it cost, what it
+// is made of, what made it get paid twice, and which MCP servers are in it.
+
+const SOURCE_LABEL: Record<string, string> = {
+  systemPromptToolSchemasAndInstructions: 'insights:sourceResidual',
+  skills: 'insights:sourceSkills',
+  deferredToolListing: 'insights:sourceDeferredTools',
+  agentListing: 'insights:sourceAgentListing',
+  mcpInstructions: 'insights:sourceMcpInstructions',
+  memory: 'insights:sourceMemory',
+  other: 'insights:sourceOther',
+};
+
+const CAUSE_LABEL: Record<string, string> = {
+  compact: 'insights:causeCompact',
+  ttlExpiry: 'insights:causeTtlExpiry',
+  modelSwitch: 'insights:causeModelSwitch',
+  toolsChanged: 'insights:causeToolsChanged',
+  listingChanged: 'insights:causeListingChanged',
+  unexplained: 'insights:causeUnexplained',
+};
+
+/** A hook's own name is the actionable part, so it is kept verbatim. */
+function sourceLabel(source: string): string {
+  if (source.startsWith('hook:')) {
+    return t('insights:sourceHook', { name: source.slice('hook:'.length) });
+  }
+  const key = SOURCE_LABEL[source];
+  return key ? t(key) : source;
+}
+
+interface StartupAudit {
+  days?: number;
+  sessions?: { fresh?: number };
+  startupTokens?: { p10?: number; median?: number; p90?: number };
+  sources?: Array<{
+    source?: string;
+    meanTokens?: number;
+    pctOfStartup?: number;
+    sessions?: number;
+    itemised?: boolean;
+  }>;
+  cost?: { startupUsd?: number; inputSideUsd?: number; pctOfInputBill?: number };
+  cacheBreakers?: Array<{ cause?: string; events?: number; extraUsd?: number }>;
+  mcpServers?: Array<{ server?: string; sessionsPresent?: number; toolCalls?: number }>;
+}
+
+export function flattenStartupContextRows(payload: unknown): InsightRows {
+  const p = (payload ?? {}) as StartupAudit;
+  const days = p.days ?? 0;
+  const num = (n: number | undefined) => (n ?? 0).toLocaleString();
+  const usd = (n: number | undefined) => `$${Math.round(n ?? 0).toLocaleString()}`;
+  const rows: InsightRow[] = [];
+
+  if (p.startupTokens?.median) {
+    rows.push({
+      primary: t('insights:startupBlockRow', { tokens: num(p.startupTokens.median) }),
+      secondary: t('insights:startupBlockDetail', {
+        p10: num(p.startupTokens.p10),
+        p90: num(p.startupTokens.p90),
+        sessions: num(p.sessions?.fresh),
+        days,
+      }),
+    });
+  }
+  if (p.cost?.startupUsd) {
+    rows.push({
+      primary: t('insights:startupCostRow', { usd: usd(p.cost.startupUsd) }),
+      secondary: t('insights:startupCostDetail', { total: usd(p.cost.inputSideUsd), days }),
+      badge: `${p.cost.pctOfInputBill ?? 0}%`,
+    });
+  }
+  for (const s of p.sources ?? []) {
+    rows.push({
+      primary: t('insights:startupSourceRow', {
+        source: sourceLabel(s.source ?? '?'),
+        tokens: num(s.meanTokens),
+      }),
+      secondary:
+        s.itemised === false
+          ? t('insights:startupResidualDetail')
+          : t('insights:startupSourceDetail', { sessions: num(s.sessions) }),
+      badge: `${s.pctOfStartup ?? 0}%`,
+    });
+  }
+  for (const b of p.cacheBreakers ?? []) {
+    const key = CAUSE_LABEL[b.cause ?? ''];
+    rows.push({
+      primary: t('insights:startupRebuildRow', {
+        cause: key ? t(key) : (b.cause ?? '?'),
+        events: num(b.events),
+      }),
+      secondary: t('insights:startupRebuildDetail', { usd: usd(b.extraUsd) }),
+    });
+  }
+  for (const m of p.mcpServers ?? []) {
+    if (!m.sessionsPresent) continue;
+    rows.push({
+      primary: t('insights:startupServerRow', {
+        server: m.server ?? '?',
+        sessions: num(m.sessionsPresent),
+      }),
+      secondary: t('insights:startupServerDetail', { calls: num(m.toolCalls) }),
+    });
+  }
+  return { rows };
+}
+
 export function flattenReport(reportId: ReportId, payload: unknown): InsightRows {
   switch (reportId) {
     case 'claudemd_drift':
@@ -221,6 +342,8 @@ export function flattenReport(reportId: ReportId, payload: unknown): InsightRows
       return flattenPagerankRows(payload);
     case 'risk_hotspots':
       return flattenRiskHotspotRows(payload);
+    case 'startup_context':
+      return flattenStartupContextRows(payload);
   }
 }
 
