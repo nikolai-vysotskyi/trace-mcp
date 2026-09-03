@@ -16,19 +16,29 @@
 
 ## Download
 
-- **macOS** — [Apple Silicon and Intel `.dmg`](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest)
-- **Windows** — [installer `.exe`](https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest)
-- **Linux, or any machine with Node.js 20+** — `npm install -g trace-mcp`
+<!-- A table, not styled boxes: GitHub strips CSS, so the mock's three cards are the
+     one construct that renders as three equal columns on github.com itself. -->
+<table align="center">
+  <tr>
+    <td align="center" width="240"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><strong>macOS</strong></a><br /><sub>Apple Silicon &middot; Intel</sub></td>
+    <td align="center" width="240"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><strong>Windows</strong></a><br /><sub>.exe installer</sub></td>
+    <td align="center" width="240"><a href="https://www.npmjs.com/package/trace-mcp"><strong>npm</strong></a><br /><sub>server only, any OS</sub></td>
+  </tr>
+</table>
 
-Then `trace init` once per machine to wire it into your agent, and `trace add` in every project you want indexed. [Quick start →](#quick-start)
+```bash
+npm install -g trace-mcp   # MCP server, no app
+trace init                 # wire it into your agent, once per machine
+trace add                  # index the repo you are in
+```
+
+**90.6% fewer input tokens** to review a pull request — median over 60 merged PRs in six repos that are not ours, 13,595 → 1,326 per pull request. [Method and reproduction →](https://trace-mcp.com/pr-context-benchmark.html)
 
 <p align="center">
   <img src="docs/images/app-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance" width="820" height="512" loading="lazy" />
   <br/>
   <sub>The <a href="#desktop-app">desktop app</a>: a GPU graph explorer over the same index the MCP server serves.</sub>
 </p>
-
-90.6% is the median across 60 merged pull requests in six open-source repositories that are not ours — 13,595 → 1,326 input tokens per pull request. [Method, pinned dataset, one-command reproduction →](https://trace-mcp.com/pr-context-benchmark.html)
 
 ---
 

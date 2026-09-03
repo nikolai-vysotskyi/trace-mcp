@@ -38,14 +38,16 @@ describe('docs landing page — macOS download button', () => {
     expect(html).not.toMatch(/trace-mcp-\d+\.\d+\.\d+[-\w]*\.(dmg|zip)/);
   });
 
-  it('offers every other install path behind one quiet link, not a choice up front', () => {
-    // Other architecture, Windows zip, Linux, checksums — all of them live on the
-    // releases page behind a single link in the quiet row (TRA-738). The hero must
-    // never ask the visitor to classify their own machine before downloading.
-    const note = html.match(/<p class="hero-note">[\s\S]*?<\/p>/)?.[0];
-    expect(note, 'no .hero-note row in docs/index.html').toBeDefined();
-    expect(note!).toMatch(/All downloads/);
-    expect(note!).toMatch(/npm install -g trace-mcp/);
+  it('offers the other platforms under the button, not as a choice in front of it', () => {
+    // The alternatives are a quiet row below the single button (TRA-738), and they
+    // are links, so a visitor without JS still reaches every build.
+    const alt = html.match(/<p class="hero-alt">[\s\S]*?<\/p>/)?.[0];
+    expect(alt, 'no .hero-alt row in docs/index.html').toBeDefined();
+    expect(alt!).toMatch(/data-alt-1/);
+    expect(alt!).toMatch(/data-alt-2/);
+    expect(alt!).toMatch(/all downloads/);
+    // Every one of them points somewhere real without JavaScript.
+    expect(alt!.match(/href="https:\/\/github\.com[^"]+"/g)?.length).toBe(3);
   });
 
   it('resolves a Windows installer too, not only a DMG (TRA-738)', () => {
@@ -54,6 +56,14 @@ describe('docs landing page — macOS download button', () => {
     expect(html).toMatch(/const isWin = /);
     expect(html).toMatch(/\\\.exe\$/);
     expect(html).toMatch(/Download for Windows/);
+  });
+
+  it('names the architecture on the button, not just the platform', () => {
+    // "Download for macOS" sends an Intel Mac a file it cannot tell apart from the
+    // arm64 one until it has downloaded it.
+    expect(html).toMatch(/Download for Mac \(/);
+    expect(html).toMatch(/Apple Silicon/);
+    expect(html).toMatch(/Intel/);
   });
 
   it('defaults to arm64 when architecture detection is inconclusive', () => {
