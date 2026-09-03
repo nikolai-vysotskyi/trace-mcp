@@ -279,9 +279,7 @@ layout: null
       --text-secondary: #999999;
       --text-primary: #E8E8E8;
       --text-display: #FFFFFF;
-      --accent: #E54047; /* 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see DESIGN-WEB.md #1 */
-      --accent-subtle: rgba(229, 64, 71, 0.15);
-      --accent-solid: #D71921; /* landing-only fill under white text: 5.18:1 with #FFFFFF */
+      --accent: #E54047; /* danger only — failure, regression, cost. Never chrome. 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see DESIGN-WEB.md #1 */
       --success: #4A9E5C;
       --warning: #D4A843;
 
@@ -305,9 +303,7 @@ layout: null
       --text-secondary: #595959;
       --text-primary: #1A1A1A;
       --text-display: #000000;
-      --accent: #B3151C; /* 6.33 page / 6.91 surface / 6.06 raised (governs) */
-      --accent-subtle: rgba(179, 21, 28, 0.12);
-      --accent-solid: #D71921; /* landing-only fill under white text: 5.18:1 with #FFFFFF */
+      --accent: #B3151C; /* danger only — failure, regression, cost. Never chrome. 6.33 page / 6.91 surface / 6.06 raised (governs) */
       --success: #2E7D3E;
       --warning: #A8822E;
 
@@ -363,7 +359,6 @@ layout: null
     .label-display { color: var(--text-display); }
     .label-disabled { color: var(--text-disabled); }
     .label-success { color: var(--success); }
-    .label-accent { color: var(--accent); }
 
     /* ── Nav ── */
     nav {
@@ -397,10 +392,11 @@ layout: null
       color: var(--text-disabled);
       text-transform: uppercase;
     }
+    /* Monochrome: red on this site means something is wrong, and "online" is
+       not wrong. The pulse carries the liveness, not the hue. */
     .status-dot {
       width: 6px; height: 6px; border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 8px var(--accent);
+      background: var(--text-display);
       animation: pulse 2s ease-in-out infinite;
     }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -496,17 +492,20 @@ layout: null
       min-height: 44px;
       white-space: nowrap;
     }
+    /* The one action on the page, drawn in the loudest thing a monochrome
+       page has: full inversion. 21:1 either way. A red fill here asked the
+       reader to be careful instead of to download. */
     .btn-primary {
-      background: var(--accent-solid);
-      color: #FFFFFF;
-      box-shadow: 0 0 0 0 rgba(215, 25, 33, 0.4);
+      background: var(--text-display);
+      color: var(--black);
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-display) 40%, transparent);
       transition: background-color 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
                   box-shadow 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
                   transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
     }
     .btn-primary:hover {
-      background: #B21218;
-      box-shadow: 0 0 0 4px rgba(215, 25, 33, 0.18);
+      background: var(--text-primary);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--text-display) 18%, transparent);
     }
     .btn-secondary {
       background: transparent;
@@ -1597,9 +1596,8 @@ layout: null
     .pain-num::before {
       content: '';
       width: 8px; height: 8px;
-      background: var(--accent);
+      background: var(--text-display);
       border-radius: 50%;
-      box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
       flex-shrink: 0;
     }
     .pain-text {
@@ -1626,7 +1624,7 @@ layout: null
       content: '/';
       position: absolute;
       left: 64px; top: 2px;
-      color: var(--accent);
+      color: var(--text-disabled);
       font-family: var(--font-mono);
       font-size: 22px;
       line-height: 1;
@@ -1863,12 +1861,6 @@ layout: null
       color: var(--text-display);
       overflow-wrap: break-word;
     }
-    .diff-quote .neg {
-      color: var(--text-disabled);
-      text-decoration: line-through;
-      text-decoration-thickness: 1px;
-      text-decoration-color: var(--accent);
-    }
     .diff-quote .pos {
       color: var(--text-display);
       font-weight: 700;
@@ -1953,8 +1945,7 @@ layout: null
       transform: translateY(-50%);
       width: 8px; height: 8px;
       border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 14px var(--accent);
+      background: var(--text-display);
     }
     .category-headline {
       font-family: var(--font-body);

@@ -16,8 +16,43 @@ deliberately different — the app is native to macOS, the site is Nothing.
 Never port a decision from one to the other, and never "unify" them.
 
 The site's aesthetic is **Nothing**: monospaced caps for service labels, a dot
-lattice, near-monochrome, red as the single accent, generous air, no gradients,
-no shadows.
+lattice, monochrome, generous air, no gradients, no shadows.
+
+---
+
+## 0. Red means something is wrong. Nothing else.
+
+Nikolai's decision, 2026-09-03. It overrides the earlier "red is the single
+accent" rule that the rest of this file was written under, and it overrides the
+`nothing-design` skill where the two disagree. The copy in the agent brief and
+the copy here are the same rule; change one, change both.
+
+Red on our surfaces says **error, regression, degradation, or "here is what it
+costs without trace-mcp"**. Nothing else.
+
+Not allowed:
+
+- a red fill on the primary CTA, or on any button meant to be pressed;
+- red as a brand accent — dots, chips, outlines, underlines, hover states,
+  bullets, glyphs, icons;
+- red as decoration in banners, logo lockups, and social previews.
+
+The reason is not taste. Red reads as a warning: a download button in red asks
+the reader to be careful rather than to download, and next to an honest
+`without trace-mcp — 13,595 tok` — where red is right — one hue is saying two
+opposite things on one screen.
+
+What replaces it: the base stays monochrome. An element that needs an accent
+takes it from an accent palette recorded in this file, and red is not in that
+palette. **No palette has been chosen yet**, so until one is, the answer is
+monochrome at maximum contrast and more air — not "some other colour".
+
+Landing and doc pages carry **zero** red as of TRA-739: the CTA is a full
+inversion (`--text-display` fill, `--black` label, 21:1 both themes), the nav
+liveness dot, the problem-list bullets and the category dot are
+`--text-display`, and a doc-page link is `--text-display` plus its underline.
+`--accent` stays defined in both files as the reserved danger colour with its
+ratios intact; `--accent-solid`, whose only job was the red CTA fill, is gone.
 
 ---
 
@@ -26,7 +61,8 @@ no shadows.
 Two surfaces implement these: `docs/index.html` (landing, inline `<style>`) and
 `docs/assets/css/docs.css` (every documentation page). The values must match.
 A token that exists in only one of them is a component token and must say so
-here — otherwise it reads as drift. There is exactly one: `--accent-solid`.
+here — otherwise it reads as drift. There are none: `--accent-solid` was the
+only one, and §0 removed it.
 
 Surfaces — a text token has to clear its ratio against **every** one of these
 it is painted on, because all three are in use on the same page:
@@ -63,18 +99,18 @@ contrast sweep below is what keeps it that way. Raising the red further to
 clear `#1A1A1A` too would push it to roughly `#EA5057`, which reads pink
 rather than red, and red being *this* red is not negotiable.
 
-**`--accent-solid` `#D71921` is not in the table above and is not a shared
-token.** It is the brand red as a **fill** — the landing's primary button —
-so it is never a foreground and has no ratio against a surface. The only
-ratio it has is white text on it: **5.18**. It lives in `docs/index.html`
-alone and is deliberately absent from `docs/assets/css/docs.css`, which has
-no filled-red component; adding it there would be a dead token. If a doc page
-ever grows one, define it there in the same PR.
+**`--accent` is the danger colour and nothing else** (§0). It is currently
+painted on no element of either surface; it stays defined, with its ratios,
+because the next genuine failure state must not have to re-derive a red that
+clears AA. It is lighter in dark and darker in light because a foreground has
+to fight its background. Never use it as a fill under white text — `#E54047`
+behind white is 4.07 and fails.
 
-`--accent` (link/glyph red) is lighter in dark and darker in light because a
-foreground has to fight its background; a fill does not. Never use
-`--accent-solid` as a text colour, and never use `--accent` as a fill under
-white text — `#E54047` behind white is 4.07 and fails.
+**`--accent-solid` `#D71921` no longer exists.** It was the brand red as a
+**fill**, and its only consumer was the landing's primary button, which §0
+removed in TRA-739. Do not reintroduce it: a red fill has no remaining job
+here, and a fill red that no element uses is how the CTA got red back the
+last time.
 
 **Compute a ratio against the surface the text actually sits on, in both
 themes.** `#FFFFFF` in light and `#000000` in dark are the most forgiving
@@ -170,8 +206,12 @@ Order: sticky header (brand + theme toggle) → `h1` → prose → `Last updated
   the `h2` drops its own — never two hairlines around an empty band.
 - `h4`–`h6` are Space Mono 11px caps at `--text-secondary`, not scaled-down
   headings.
-- Links are `--accent` with a 40%-opacity underline that goes solid on hover.
-  Red is the only chrome colour on a doc page.
+- Links are `--text-display` with a 40%-opacity underline of the same colour
+  that goes solid on hover. **A doc page has no chrome colour at all** (§0):
+  the link is the brightest text in its paragraph *and* the only underlined
+  one, so the affordance survives greyscale and colour blindness, which the
+  old red-plus-underline never needed to. Blockquotes take
+  `--border-visible`, not red.
 - Tables: **no zebra striping.** Rows separate on a `--border` hairline; the
   head is a Space Mono 10px caps label, not a bold band. Every table is
   wrapped in a focusable `.table-scroll` region by the layout script, so a
@@ -291,9 +331,13 @@ WebP conversion.
 - Toast popups — use inline `[SAVED]` / `[ERROR: …]`.
 - Filled or multi-colour icons, emoji as UI — including `✅` / `❌` / `⚠️`
   as capability marks in a table.
-- A second accent colour. Red is the only one. `--accent` and `--accent-solid`
-  are two lightnesses of the same red for two jobs (§1), not two accents.
-- `--accent` as a fill under white text, or `--accent-solid` as a text colour.
+- **Red on anything that is not a failure, a regression, or a cost** (§0):
+  no red CTA, dot, chip, bullet, outline, underline, hover, icon, banner or
+  social preview. This overrides the old "red is the single accent" rule.
+- Reintroducing `--accent-solid`, or any red fill.
+- A second accent colour. There is no first one — the base is monochrome and
+  no accent palette has been chosen yet (§0).
+- `--accent` as a fill under white text.
 - Red text on `--surface-raised` in dark — 4.27:1, the one gap in §1.
 - A colour value recorded with a ratio against a background it is not painted
   on. Quote the worst of the three surfaces, in both themes.
@@ -385,6 +429,18 @@ appearance without a screenshot or a measurement is not a finding.
       wrapper *and* every `pre` *and* the landing page's `.terminal-body`.
       Code blocks and the landing terminal were each read out of this line
       once and shipped clipped and unlabelled for months.
+
+**Colour**
+- [ ] No red outside a failure state. Not a claim — a command:
+
+      ```
+      grep -ni 'var(--accent)\|#D71921\|#E54047\|#B3151C' \
+        docs/index.html docs/assets/css/docs.css
+      ```
+
+      Every hit must be either a token definition or an element that means
+      something is wrong (§0). Today the correct output is the two token
+      definitions per file and nothing else.
 
 **Type & spacing**
 - [ ] Within the 2 families / 3 sizes / 2 weights budget.
@@ -486,8 +542,12 @@ left, with the whole right half empty is not asymmetry, it is a page that
 started and gave up. `.hero { text-align: center }` plus `margin: 0 auto` on
 `.hero-headline` (900px) and `.hero-desc` (660px).
 
-**One action. The button.** `.btn .btn-primary .btn-lg`, the one red on the
-screen. It ships labelled `Download` pointing at `/releases/latest` so it works
+**One action. The button.** `.btn .btn-primary .btn-lg` — a full inversion,
+`--text-display` fill under a `--black` label, 21:1 in both themes. It is the
+loudest thing a monochrome page has, and on a page whose base is near-black or
+near-white nothing else competes with a solid block of the opposite end. It
+shipped red until TRA-739; §0 is why it is not red now, and the inversion is
+what a primary CTA looks like here from now on. It ships labelled `Download` pointing at `/releases/latest` so it works
 without JS (TRA-440), and `resolveDownload()` narrows it to a single file and
 renames it only once it has found that file in the release JSON. The label names
 the exact machine — `Download for Mac (Apple Silicon)`, `Download for Mac
@@ -522,7 +582,9 @@ no focus ring and nothing for a screen reader; the `$` is `aria-hidden`, the
 `copy` label is `aria-live="polite"` so `copied` is announced. It keeps its
 technical 8px box on `--surface` — but side by side with the red pill that box
 read as a second button of equal weight, which is what this hero keeps being
-pulled back into, so it is a full row down instead. Off macOS and Windows it
+pulled back into, so it is a full row down instead. That verdict predates the
+inversion and survives it: an outlined box next to a solid block of the
+opposite end still reads as a second button when the two sit side by side. Off macOS and Windows it
 gains `.is-primary` and is the hero's only action.
 
 **The headline is measured, not guessed.** `clamp(36px, 5.2vw, 60px)` over
