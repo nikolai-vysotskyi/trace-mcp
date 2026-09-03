@@ -364,7 +364,7 @@ function clip(text: string, max = 200): string {
  * gone. A heading standing over nothing is not an instruction, and dropping it
  * removes no claim the file was making.
  */
-export function compressAgainstCorpus(
+function compressAgainstCorpus(
   filePath: string,
   original: string,
   ref: RefUnit[],
@@ -553,7 +553,7 @@ export interface StartupTextOptions {
   listSessions?: typeof listAllSessions;
 }
 
-export const COMPRESSION_INVARIANT =
+const COMPRESSION_INVARIANT =
   'Nothing is reworded. A passage is only proposed for removal when another source in the same startup block still delivers it — each removal names that source and quotes it.';
 
 export async function analyzeStartupText(
