@@ -151,7 +151,7 @@ Allowlist:
 - `query_decisions`
 - `search`
 
-For `search_text`, prefer `grouping: "by_file"` (lossless path-dedup in JSON) over TOON — the two don't stack and grouping is the cheaper win.
+For `search_text`, `grouping: "by_file"` is the default (lossless path-dedup in JSON) and beats TOON — the two don't stack and grouping is the cheaper win. Pass `grouping: "flat"` only if you need the ungrouped `matches[]` shape.
 
 Other tools are NOT TOON-enabled — they regressed in measurements (heterogeneous payloads with nested objects or arrays land in TOON's list mode, which costs more tokens than JSON). Don't pass `output_format: "toon"` to a tool not on this list; it will be rejected by schema validation. Drift guardrail: `src/tools/register/__tests__/toon-drift.test.ts` keeps the schema, description, and allowlist in sync.
 
