@@ -76,8 +76,25 @@ export interface McpServerRow {
   server: string;
   /** Fresh sessions whose startup block announced this server. */
   sessionsPresent: number;
+  /** Mean tokens its instruction block costs in a startup that carries it. */
+  instructionTokens: number;
   /** Tool calls actually made to it across the scanned corpus. */
   toolCalls: number;
+}
+
+export interface Recommendation {
+  /** `unusedMcpServer` | `unusedSkill` | `duplicateInstructions` */
+  kind: string;
+  /** The server, skill or file the suggestion is about. */
+  target: string;
+  /** What was observed, in the user's terms — the proof, not the guess. */
+  evidence: string;
+  /** Tokens this would take off every session's startup block. */
+  tokensPerSession: number;
+  /** What those tokens cost over the observation window, at the same rate the headline uses. */
+  usdOverWindow: number;
+  /** Fresh sessions this was observed in — the denominator behind `evidence`. */
+  sessionsObserved: number;
 }
 
 export interface InstructionFileRow {
@@ -103,6 +120,15 @@ export interface StartupContextAudit {
   mcpServers: McpServerRow[];
   /** Instruction files on disk right now — paid once per session, forever. */
   instructionFiles: InstructionFileRow[];
+  /**
+   * Suggestions, each backed by evidence of NON-USE over the stated window —
+   * never by size alone. A tool that is not in the startup block is a tool the
+   * agent will not call, so trimming by size is how a report like this costs
+   * its reader more than it saves.
+   */
+  recommendations: Recommendation[];
+  /** The window `recommendations` observed, said out loud rather than implied. */
+  observationWindow: string;
   notes: string[];
   scanMs: number;
 }
@@ -177,6 +203,30 @@ function attachmentSource(att: Record<string, unknown>): string {
   }
 }
 
+/**
+ * Split the startup skill listing into its per-skill lines.
+ *
+ * The listing is one blob of `- <name>: <description>` lines, and the
+ * description is where the tokens are — skill authors write them with no token
+ * budget in mind, and every session reads all of them. Pricing a skill needs
+ * its own line, not the blob's total. A continuation line (a description that
+ * wrapped) belongs to the skill above it.
+ */
+export function splitSkillListing(content: string): Map<string, number> {
+  const perSkill = new Map<string, number>();
+  let current: string | null = null;
+  for (const line of content.split('\n')) {
+    const head = /^-\s+([A-Za-z0-9_.:-]+):\s/.exec(line);
+    if (head) current = head[1];
+    if (!current) continue;
+    perSkill.set(current, (perSkill.get(current) ?? 0) + line.length + 1);
+  }
+  for (const [skill, chars] of perSkill) {
+    perSkill.set(skill, Math.round(chars / CHARS_PER_TOKEN));
+  }
+  return perSkill;
+}
+
 // --- Small stats helpers ---
 
 function percentile(sorted: number[], p: number): number {
@@ -226,13 +276,17 @@ interface FreshSession {
   cacheCreate1h: number;
   /** source label → tokens */
   bySource: Map<string, number>;
-  mcpServers: Set<string>;
+  /** MCP server → tokens its instruction block cost in THIS session's startup. */
+  mcpServers: Map<string, number>;
+  /** Skill → tokens its line of the startup listing cost. */
+  skills: Map<string, number>;
 }
 
 interface FileScan {
   calls: ApiCall[];
   fresh: FreshSession | null;
   mcpToolCalls: Map<string, number>;
+  skillInvocations: Set<string>;
 }
 
 function timestampSeconds(ts: unknown): number {
@@ -252,10 +306,12 @@ function timestampSeconds(ts: unknown): number {
 async function scanSessionFile(filePath: string, projectPath: string): Promise<FileScan> {
   const calls: ApiCall[] = [];
   const mcpToolCalls = new Map<string, number>();
+  const skillInvocations = new Set<string>();
   const seenMessageIds = new Set<string>();
 
   const preFirstBySource = new Map<string, number>();
-  const startupMcpServers = new Set<string>();
+  const startupMcpServers = new Map<string, number>();
+  const startupSkills = new Map<string, number>();
   let preFirstUserChars = 0;
   let assistantBeforeFirstCall = false;
   let firstCall: { ctx: number; cacheCreate: number; cacheCreate1h: number } | null = null;
@@ -296,9 +352,20 @@ async function scanSessionFile(filePath: string, projectPath: string): Promise<F
     if (type === 'attachment') {
       const att = (rec.attachment ?? {}) as Record<string, unknown>;
       const attType = String(att.type ?? '');
-      if (attType === 'mcp_instructions_delta') {
-        for (const name of (att.addedNames as unknown[]) ?? []) {
-          if (typeof name === 'string' && firstCall === null) startupMcpServers.add(name);
+      if (firstCall === null && attType === 'mcp_instructions_delta') {
+        // `addedNames[i]` and `addedBlocks[i]` are the same server, so the
+        // instruction text can be priced per server rather than in one lump.
+        const names = (att.addedNames as unknown[]) ?? [];
+        const blocks = (att.addedBlocks as unknown[]) ?? [];
+        names.forEach((name, i) => {
+          if (typeof name !== 'string') return;
+          const tokens = Math.round(deepChars(blocks[i]) / CHARS_PER_TOKEN);
+          startupMcpServers.set(name, (startupMcpServers.get(name) ?? 0) + tokens);
+        });
+      }
+      if (firstCall === null && attType === 'skill_listing') {
+        for (const [skill, tokens] of splitSkillListing(String(att.content ?? ''))) {
+          startupSkills.set(skill, (startupSkills.get(skill) ?? 0) + tokens);
         }
       }
       if (firstCall === null) {
@@ -349,6 +416,10 @@ async function scanSessionFile(filePath: string, projectPath: string): Promise<F
       if (b.name.startsWith('mcp__')) {
         const server = b.name.split('__')[1] ?? 'unknown';
         mcpToolCalls.set(server, (mcpToolCalls.get(server) ?? 0) + 1);
+      }
+      if (b.name === 'Skill') {
+        const skill = (block as { input?: { skill?: unknown } }).input?.skill;
+        if (typeof skill === 'string') skillInvocations.add(skill);
       }
       if (b.name === 'ToolSearch' || b.name.endsWith('load_tools'))
         pendingEvents.add('toolsChanged');
@@ -410,11 +481,12 @@ async function scanSessionFile(filePath: string, projectPath: string): Promise<F
         cacheCreate1h: firstCall.cacheCreate1h,
         bySource,
         mcpServers: startupMcpServers,
+        skills: startupSkills,
       };
     }
   }
 
-  return { calls, fresh, mcpToolCalls };
+  return { calls, fresh, mcpToolCalls, skillInvocations };
 }
 
 // --- Instruction files on disk ---
@@ -463,6 +535,143 @@ function classifyRebuild(call: ApiCall, previous: ApiCall): string {
   return 'unexplained';
 }
 
+// --- Recommendations ---
+
+/**
+ * A suggestion is only made when the window is wide enough to mean something.
+ * Below this many fresh sessions carrying the candidate, "never called" is a
+ * small sample rather than evidence, and the cost of a wrong suggestion — a
+ * tool the agent then cannot call — is higher than the tokens it would save.
+ *
+ * The bar is on the candidate's OWN observations, not on its share of all
+ * startups: a server configured for one project is present in a minority of
+ * sessions and is no less proven unused within them.
+ */
+const MIN_SESSIONS_FOR_EVIDENCE = 20;
+
+interface RecommendationInputs {
+  mcpServers: McpServerRow[];
+  skillsPresent: Map<string, { sessions: number; tokens: number }>;
+  skillInvocations: Set<string>;
+  instructionFiles: InstructionFileRow[];
+  freshSessions: number;
+  meanStartup: number;
+  startupUsd: number;
+  days: number;
+}
+
+/**
+ * Turn the measurements into suggestions — strictly on evidence of NON-USE
+ * over the observed window, never on size.
+ *
+ * The asymmetry is the whole design: a tool missing from the startup block is
+ * a tool the agent will not call, so a suggestion made because something is
+ * big can cost its reader far more than it saves. "Big" is therefore never a
+ * reason here; "loaded into N startups and called zero times" is.
+ *
+ * That rule is also why SessionStart hooks get no suggestion even though they
+ * are among the largest itemised sources. A hook's output goes into the
+ * prompt, and nothing in the log says whether the model used it — so there is
+ * no evidence of non-use to stand on. Hooks stay in the decomposition, where
+ * the reader sees what they cost and decides for themselves.
+ *
+ * Money uses the same attribution as the headline: a token's share of the
+ * startup block is its share of what the block cost over the window.
+ */
+function buildRecommendations(input: RecommendationInputs): Recommendation[] {
+  const out: Recommendation[] = [];
+  if (input.freshSessions < MIN_SESSIONS_FOR_EVIDENCE || input.meanStartup <= 0) return out;
+  /* What this many tokens cost over the window: their share of the mean
+     startup block, times what the block cost, times the share of sessions
+     that actually carried them. Summing the per-session tokens across
+     sessions and dividing by ONE block's size would double-count the
+     sessions — it priced an 86-token skill at more than the whole block. */
+  const usdFor = (tokensPerSession: number, sessionsObserved: number) =>
+    round(
+      (tokensPerSession / input.meanStartup) *
+        input.startupUsd *
+        (sessionsObserved / Math.max(1, input.freshSessions)),
+    );
+
+  for (const server of input.mcpServers) {
+    if (server.toolCalls > 0) continue;
+    if (server.sessionsPresent < MIN_SESSIONS_FOR_EVIDENCE || server.instructionTokens <= 0)
+      continue;
+    out.push({
+      kind: 'unusedMcpServer',
+      target: server.server,
+      evidence: `Its instructions were in ${server.sessionsPresent} of ${input.freshSessions} startups over ${input.days} days, and not one of its tools was called.`,
+      tokensPerSession: server.instructionTokens,
+      usdOverWindow: usdFor(server.instructionTokens, server.sessionsPresent),
+      sessionsObserved: server.sessionsPresent,
+    });
+  }
+
+  for (const [skill, row] of input.skillsPresent) {
+    if (input.skillInvocations.has(skill)) continue;
+    if (row.sessions < MIN_SESSIONS_FOR_EVIDENCE) continue;
+    const perSession = Math.round(row.tokens / row.sessions);
+    if (perSession <= 0) continue;
+    out.push({
+      kind: 'unusedSkill',
+      target: skill,
+      evidence: `Listed in ${row.sessions} of ${input.freshSessions} startups over ${input.days} days and never invoked.`,
+      tokensPerSession: perSession,
+      usdOverWindow: usdFor(perSession, row.sessions),
+      sessionsObserved: row.sessions,
+    });
+  }
+
+  /* Text that appears in both the global and the project instruction file is
+     read twice in every session that loads both. This one is not evidence of
+     non-use — it is evidence of duplication, which is the same claim made
+     about the same bytes twice, and needs no usage proof. */
+  const global = input.instructionFiles.find((f) =>
+    f.path.includes(`${path.sep}.claude${path.sep}`),
+  );
+  const project = input.instructionFiles.find((f) => f !== global);
+  if (global && project) {
+    const shared = sharedLineTokens(global.path, project.path);
+    if (shared > 0) {
+      out.push({
+        kind: 'duplicateInstructions',
+        target: project.path,
+        evidence: `${shared} tokens of text appear in both this file and ${global.path}; every session that loads both reads them twice.`,
+        tokensPerSession: shared,
+        usdOverWindow: usdFor(shared, input.freshSessions),
+        sessionsObserved: input.freshSessions,
+      });
+    }
+  }
+
+  return out.sort((a, b) => b.usdOverWindow - a.usdOverWindow);
+}
+
+/** Tokens worth of non-trivial lines present in both instruction files. */
+function sharedLineTokens(a: string, b: string): number {
+  const linesOf = (file: string): string[] => {
+    try {
+      return fs.readFileSync(file, 'utf8').split('\n');
+    } catch {
+      return [];
+    }
+  };
+  // Short lines are headings, bullets and blanks that collide by accident;
+  // counting them would invent duplication that is not there.
+  const meaningful = (line: string) => line.trim().length >= 40;
+  const first = new Set(
+    linesOf(a)
+      .filter(meaningful)
+      .map((l) => l.trim()),
+  );
+  let chars = 0;
+  for (const line of linesOf(b)) {
+    const t = line.trim();
+    if (meaningful(t) && first.has(t)) chars += t.length + 1;
+  }
+  return Math.round(chars / CHARS_PER_TOKEN);
+}
+
 // --- Entry point ---
 
 export interface StartupContextOptions {
@@ -495,6 +704,7 @@ export async function analyzeStartupContext(
   const callsByProject = new Map<string, Array<[number, number]>>();
   const rebuilds = new Map<string, { events: number; tokens: number; extraUsd: number }>();
   const mcpToolCalls = new Map<string, number>();
+  const skillInvocations = new Set<string>();
   let inputSideUsd = 0;
   let scanned = 0;
 
@@ -512,6 +722,7 @@ export async function analyzeStartupContext(
     for (const [server, n] of scan.mcpToolCalls) {
       mcpToolCalls.set(server, (mcpToolCalls.get(server) ?? 0) + n);
     }
+    for (const skill of scan.skillInvocations) skillInvocations.add(skill);
 
     let bucket = callsByProject.get(file.projectPath);
     if (!bucket) {
@@ -582,10 +793,13 @@ export async function analyzeStartupContext(
     }))
     .sort((a, b) => b.meanTokens - a.meanTokens);
 
-  const serversPresent = new Map<string, number>();
+  const serversPresent = new Map<string, { sessions: number; tokens: number }>();
   for (const session of freshSessions) {
-    for (const server of session.mcpServers) {
-      serversPresent.set(server, (serversPresent.get(server) ?? 0) + 1);
+    for (const [server, tokens] of session.mcpServers) {
+      const row = serversPresent.get(server) ?? { sessions: 0, tokens: 0 };
+      row.sessions++;
+      row.tokens += tokens;
+      serversPresent.set(server, row);
     }
   }
   const mcpServers: McpServerRow[] = [
@@ -593,10 +807,26 @@ export async function analyzeStartupContext(
   ]
     .map((server) => ({
       server,
-      sessionsPresent: serversPresent.get(server) ?? 0,
+      sessionsPresent: serversPresent.get(server)?.sessions ?? 0,
+      instructionTokens: Math.round(
+        (serversPresent.get(server)?.tokens ?? 0) /
+          Math.max(1, serversPresent.get(server)?.sessions ?? 1),
+      ),
       toolCalls: mcpToolCalls.get(server) ?? 0,
     }))
     .sort((a, b) => b.sessionsPresent - a.sessionsPresent || b.toolCalls - a.toolCalls);
+
+  const skillsPresent = new Map<string, { sessions: number; tokens: number }>();
+  for (const session of freshSessions) {
+    for (const [skill, tokens] of session.skills) {
+      const row = skillsPresent.get(skill) ?? { sessions: 0, tokens: 0 };
+      row.sessions++;
+      row.tokens += tokens;
+      skillsPresent.set(skill, row);
+    }
+  }
+
+  const instructionFiles = readInstructionFiles(opts.projectRoot);
 
   const firstCallCacheWriteUsd = freshSessions.reduce(
     (usd, s) =>
@@ -632,9 +862,22 @@ export async function analyzeStartupContext(
       }))
       .sort((a, b) => b.extraUsd - a.extraUsd),
     mcpServers,
-    instructionFiles: readInstructionFiles(opts.projectRoot),
+    instructionFiles,
+    recommendations: buildRecommendations({
+      mcpServers,
+      skillsPresent,
+      skillInvocations,
+      instructionFiles,
+      freshSessions: freshSessions.length,
+      meanStartup,
+      startupUsd,
+      days,
+    }),
+    observationWindow: `${days} days, ${freshSessions.length} fresh sessions`,
     notes: [
       'Computed locally from session logs. Nothing is sent anywhere.',
+      'Every recommendation rests on evidence of non-use over the stated window — never on size. A tool missing from the startup block is a tool the agent will not call.',
+      "SessionStart hooks get no recommendation on purpose: nothing in the log says whether the model used a hook's output, so there is no evidence of non-use to stand on.",
       'The system prompt, tool schemas and CLAUDE.md are never written to the session log — they can only be reported together, as the residual row.',
       'Itemised rows estimate tokens as chars/4; the total and the residual are exact.',
       'Rows are means per fresh session so they sum to the mean block; the distribution above is medians.',

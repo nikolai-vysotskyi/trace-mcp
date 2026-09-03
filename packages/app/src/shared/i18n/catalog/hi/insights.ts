@@ -66,4 +66,11 @@ export const insights = {
   causeToolsChanged: 'टूल का सेट बदला',
   causeListingChanged: 'स्किल या एजेंट सूची बदली',
   causeUnexplained: 'कारण पहचाना नहीं गया',
+
+  recUnusedMcpServer: 'MCP सर्वर {{target}} — कभी नहीं बुलाया गया',
+  recUnusedSkill: 'स्किल {{target}} — कभी इस्तेमाल नहीं हुई',
+  recDuplicateInstructions: '{{target}} में निर्देशों का दोहराया गया पाठ',
+  recDetail:
+    '{{days}} दिनों में {{total}} में से {{sessions}} शुरुआतों में · हर बार {{tokens}} टोकन · {{usd}}',
+  recBadge: 'अप्रयुक्त',
 } as const;

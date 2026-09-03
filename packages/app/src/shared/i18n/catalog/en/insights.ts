@@ -80,4 +80,11 @@ export const insights = {
   causeToolsChanged: 'tool surface changed',
   causeListingChanged: 'skill or agent listing changed',
   causeUnexplained: 'cause not identified',
+
+  recUnusedMcpServer: 'MCP server {{target}} — never called',
+  recUnusedSkill: 'Skill {{target}} — never invoked',
+  recDuplicateInstructions: 'Duplicated instruction text in {{target}}',
+  recDetail:
+    'In {{sessions}} of {{total}} startups over {{days}} days · {{tokens}} tokens each start · {{usd}}',
+  recBadge: 'unused',
 } as const;

@@ -65,4 +65,11 @@ export const insights = {
   causeToolsChanged: 'ツール構成の変更',
   causeListingChanged: 'スキルまたはエージェント一覧の変更',
   causeUnexplained: '原因を特定できず',
+
+  recUnusedMcpServer: 'MCP サーバー {{target}} — 一度も呼ばれていません',
+  recUnusedSkill: 'スキル {{target}} — 一度も使われていません',
+  recDuplicateInstructions: '{{target}} に重複した指示テキスト',
+  recDetail:
+    '{{days}} 日間の {{total}} 回の起動のうち {{sessions}} 回に含まれ、毎回 {{tokens}} トークン · {{usd}}',
+  recBadge: '未使用',
 } as const;

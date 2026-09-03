@@ -67,4 +67,11 @@ export const insights = {
   causeToolsChanged: 'conjunto de ferramentas mudou',
   causeListingChanged: 'lista de habilidades ou agentes mudou',
   causeUnexplained: 'causa não identificada',
+
+  recUnusedMcpServer: 'Servidor MCP {{target}} — nunca chamado',
+  recUnusedSkill: 'Habilidade {{target}} — nunca usada',
+  recDuplicateInstructions: 'Texto de instruções duplicado em {{target}}',
+  recDetail:
+    'Em {{sessions}} de {{total}} inicializações ao longo de {{days}} dias · {{tokens}} tokens em cada · {{usd}}',
+  recBadge: 'sem uso',
 } as const;

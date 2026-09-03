@@ -178,7 +178,7 @@ which excludes the framework-specific rows.
 | `get_session_journal` | Session history: all tool calls made, files read, zero-result searches, and duplicate queries. | always |
 | `get_session_snapshot` | Compact session snapshot (~200 tokens) for context recovery after compaction. | always |
 | `get_session_stats` | Token savings stats for this session: per-tool call counts, estimated token savings, reduction percentage, dedup savings, and per-tool latency (p50/p95/max/e… | always |
-| `get_startup_context_audit` | What the session's startup block is made of and what it costs: the context every session pays for before the first user message — system prompt, tool schemas… | always |
+| `get_startup_context_audit` | What every session pays for before the first user message, what it costs, and what the logs prove went unused. | always |
 | `get_state_stores` | List all Zustand stores and Redux Toolkit slices with their state fields, actions/reducers, and dispatch sites. | framework |
 | `get_subproject_clients` | Find all client calls across subprojects that call a specific endpoint. | opt-in |
 | `get_subproject_graph` | Show all subprojects and their cross-repo connections. | opt-in |

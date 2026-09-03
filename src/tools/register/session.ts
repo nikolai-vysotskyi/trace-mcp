@@ -434,7 +434,7 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
   // schema tokens to keep on the shelf). ---
   server.tool(
     'get_startup_context_audit',
-    "What the session's startup block is made of and what it costs: the context every session pays for before the first user message — system prompt, tool schemas, MCP servers, skill and agent listings, SessionStart hooks — decomposed by source, plus the mid-session cache rebuilds that make it get paid twice. Read-only, computed locally from session logs. Returns JSON: { startupTokens, sources: [{ source, meanTokens, pctOfStartup }], cost, cacheBreakers, mcpServers, instructionFiles }.",
+    'What every session pays for before the first user message, what it costs, and what the logs prove went unused. Decomposes the startup block by source (system prompt, tool schemas, MCP servers, skill/agent listings, hooks), prices the cache rebuilds that make it get paid twice, and suggests removals backed by evidence of non-use — never by size. Read-only, local. Returns JSON: { startupTokens, sources, cost, cacheBreakers, mcpServers, instructionFiles, recommendations, observationWindow }.',
     /* No parameters on purpose. The look-back window is the only knob this
        report could have, and a fixed 30 days is the answer for "what does my
        startup block cost" — while a param here would have to survive

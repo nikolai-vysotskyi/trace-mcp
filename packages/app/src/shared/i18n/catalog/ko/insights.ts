@@ -65,4 +65,11 @@ export const insights = {
   causeToolsChanged: '도구 구성 변경',
   causeListingChanged: '스킬 또는 에이전트 목록 변경',
   causeUnexplained: '원인 미상',
+
+  recUnusedMcpServer: 'MCP 서버 {{target}} — 한 번도 호출되지 않음',
+  recUnusedSkill: '스킬 {{target}} — 한 번도 사용되지 않음',
+  recDuplicateInstructions: '{{target}}에 중복된 지침 텍스트',
+  recDetail:
+    '{{days}}일 동안 {{total}}번의 시작 중 {{sessions}}번에 포함 · 매번 {{tokens}} 토큰 · {{usd}}',
+  recBadge: '미사용',
 } as const;

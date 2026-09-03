@@ -15,10 +15,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { analyzeStartupContext } from '../../src/analytics/startup-context.js';
+import { analyzeStartupContext, splitSkillListing } from '../../src/analytics/startup-context.js';
 
 const HOOK_TEXT = 'x'.repeat(4000); // 1000 tokens
-const SKILL_TEXT = 'y'.repeat(2000); // 500 tokens
+/* Two skills, one used and one not. The listing's real shape is
+   `- <name>: <description>` lines, which is what makes per-skill pricing —
+   and therefore a per-skill suggestion — possible at all. */
+const SKILL_TEXT = [`- used-skill: ${'y'.repeat(1000)}`, `- idle-skill: ${'y'.repeat(996)}`].join(
+  '\n',
+); // ~500 tokens total
 const TASK_TEXT = 'z'.repeat(800); // 200 tokens, and NOT part of startup
 
 function usage(over: Record<string, unknown> = {}) {
@@ -44,7 +49,11 @@ const LINES: unknown[] = [
   { type: 'attachment', attachment: { type: 'skill_listing', content: SKILL_TEXT } },
   {
     type: 'attachment',
-    attachment: { type: 'mcp_instructions_delta', addedNames: ['trace-mcp'], addedBlocks: [] },
+    attachment: {
+      type: 'mcp_instructions_delta',
+      addedNames: ['trace-mcp', 'idle-server'],
+      addedBlocks: ['t'.repeat(400), 'i'.repeat(800)],
+    },
   },
   { type: 'user', message: { content: [{ type: 'text', text: TASK_TEXT }] } },
   assistant('m1', { cache_creation_input_tokens: 40_000 }, '2026-09-01T10:00:00Z'),
@@ -56,7 +65,10 @@ const LINES: unknown[] = [
       id: 'm2',
       model: 'claude-x',
       usage: usage({ cache_read_input_tokens: 40_000, input_tokens: 100 }),
-      content: [{ type: 'tool_use', name: 'mcp__trace-mcp__search' }],
+      content: [
+        { type: 'tool_use', name: 'mcp__trace-mcp__search' },
+        { type: 'tool_use', name: 'Skill', input: { skill: 'used-skill' } },
+      ],
     },
   },
   // A rebuild two hours later: the cache TTL explains it, nothing else.
@@ -82,17 +94,19 @@ afterAll(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-function run() {
+/* `count` copies of the same session. Recommendations need a window wide
+   enough that "never used" is evidence rather than a small sample, so the
+   suggestion tests run against a corpus, not a single file. */
+function run(count = 1) {
   return analyzeStartupContext({
     days: 365,
-    listSessions: () => [
-      {
+    listSessions: () =>
+      Array.from({ length: count }, () => ({
         filePath: path.join(dir, 'session.jsonl'),
         projectPath: '/fixture/project',
         client: 'claude-code' as const,
         mtime: Date.now(),
-      },
-    ],
+      })),
   });
 }
 
@@ -105,10 +119,10 @@ describe('analyzeStartupContext', () => {
 
     const bySource = Object.fromEntries(audit.sources.map((s) => [s.source, s.meanTokens]));
     expect(bySource['hook:superpowers']).toBe(1000);
-    expect(bySource.skills).toBe(500);
-    expect(bySource.systemPromptToolSchemasAndInstructions).toBe(
-      39_800 - 1000 - 500 - (bySource.mcpInstructions ?? 0),
-    );
+    expect(bySource.skills).toBe(Math.round(SKILL_TEXT.length / 4));
+    // The residual is exactly what the itemised rows do not account for.
+    const itemised = audit.sources.filter((s) => s.itemised).reduce((n, s) => n + s.meanTokens, 0);
+    expect(bySource.systemPromptToolSchemasAndInstructions).toBe(39_800 - itemised);
 
     const summed = audit.sources.reduce((n, s) => n + s.meanTokens, 0);
     expect(summed).toBe(39_800);
@@ -127,7 +141,38 @@ describe('analyzeStartupContext', () => {
 
   it('reports MCP servers present at startup alongside how often they were called', async () => {
     const audit = await run();
-    expect(audit.mcpServers).toEqual([{ server: 'trace-mcp', sessionsPresent: 1, toolCalls: 1 }]);
+    expect(audit.mcpServers).toEqual([
+      { server: 'trace-mcp', sessionsPresent: 1, instructionTokens: 100, toolCalls: 1 },
+      { server: 'idle-server', sessionsPresent: 1, instructionTokens: 200, toolCalls: 0 },
+    ]);
+  });
+
+  it('suggests only what the logs prove went unused', async () => {
+    const audit = await run(25);
+    const byTarget = Object.fromEntries(audit.recommendations.map((r) => [r.target, r]));
+
+    // Listed at every start, never invoked → a suggestion, with the count that
+    // backs it and a per-start token price.
+    expect(byTarget['idle-skill']?.kind).toBe('unusedSkill');
+    expect(byTarget['idle-skill']?.sessionsObserved).toBe(25);
+    expect(byTarget['idle-skill']?.tokensPerSession).toBeGreaterThan(0);
+    expect(byTarget['idle-server']?.kind).toBe('unusedMcpServer');
+
+    // Used at least once → never suggested, however big it is.
+    expect(byTarget['used-skill']).toBeUndefined();
+    expect(byTarget['trace-mcp']).toBeUndefined();
+
+    // A hook is one of the largest itemised sources here and still gets no
+    // suggestion: nothing in the log proves the model ignored its output.
+    expect(audit.recommendations.some((r) => r.target.includes('superpowers'))).toBe(false);
+
+    expect(audit.observationWindow).toContain('25 fresh sessions');
+  });
+
+  it('stays silent when the window is too narrow to be evidence', async () => {
+    // Same never-used skill, three sessions. "Never" over three starts is a
+    // small sample, and a wrong suggestion costs more than the tokens it saves.
+    expect((await run(3)).recommendations).toEqual([]);
   });
 
   it('attributes part of the input bill to the startup block', async () => {
@@ -136,5 +181,19 @@ describe('analyzeStartupContext', () => {
     expect(audit.cost.startupUsd).toBeGreaterThan(0);
     expect(audit.cost.pctOfInputBill).toBeGreaterThan(0);
     expect(audit.cost.pctOfInputBill).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('splitSkillListing', () => {
+  it('prices each skill by its own line, wrapped descriptions included', () => {
+    const listing = [
+      '- alpha: one two three',
+      '  continued on the next line',
+      '- beta: short',
+    ].join('\n');
+    const perSkill = splitSkillListing(listing);
+    expect([...perSkill.keys()]).toEqual(['alpha', 'beta']);
+    // alpha owns its own line plus the wrapped continuation.
+    expect(perSkill.get('alpha')).toBeGreaterThan(perSkill.get('beta') as number);
   });
 });

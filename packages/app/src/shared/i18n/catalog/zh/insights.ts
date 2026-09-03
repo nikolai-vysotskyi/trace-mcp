@@ -64,4 +64,10 @@ export const insights = {
   causeToolsChanged: '工具集合发生变化',
   causeListingChanged: '技能或代理清单发生变化',
   causeUnexplained: '原因未确定',
+
+  recUnusedMcpServer: 'MCP 服务器 {{target}} — 从未被调用',
+  recUnusedSkill: '技能 {{target}} — 从未被使用',
+  recDuplicateInstructions: '{{target}} 中存在重复的指令文本',
+  recDetail: '{{days}} 天内 {{total}} 次启动中出现 {{sessions}} 次 · 每次 {{tokens}} 个 token · {{usd}}',
+  recBadge: '未使用',
 } as const;

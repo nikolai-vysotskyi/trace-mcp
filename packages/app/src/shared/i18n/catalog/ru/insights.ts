@@ -72,4 +72,11 @@ export const insights = {
   causeToolsChanged: 'изменился набор инструментов',
   causeListingChanged: 'изменился список скиллов или агентов',
   causeUnexplained: 'причина не установлена',
+
+  recUnusedMcpServer: 'MCP-сервер {{target}} — ни разу не вызван',
+  recUnusedSkill: 'Скилл {{target}} — ни разу не использован',
+  recDuplicateInstructions: 'Повтор текста инструкций в {{target}}',
+  recDetail:
+    'В {{sessions}} стартах из {{total}} за {{days}} дн. · {{tokens}} токенов на каждом · {{usd}}',
+  recBadge: 'не используется',
 } as const;

@@ -179,7 +179,7 @@ See [Analytics](analytics.md) for full documentation.
 | `get_real_savings` | Analyze actual sessions: how much trace-mcp saves vs raw file reads |
 | `benchmark_project` | Synthetic benchmark: raw reads vs trace-mcp compact responses (5 scenarios) |
 | `get_coverage_report` | Technology profile: deps from manifests, coverage by trace-mcp plugins, gaps |
-| `get_startup_context_audit` | What every session pays for before the first message, by source, and what it costs |
+| `get_startup_context_audit` | What every session pays for before the first message, by source, what it costs, and what the logs prove went unused |
 | `get_usage_trends` | Daily token usage trends over time |
 | `get_session_stats` | Real-time token savings for the current session |
 | `audit_config` | Audit AI agent config files for stale refs, dead paths, bloat, scope leaks |

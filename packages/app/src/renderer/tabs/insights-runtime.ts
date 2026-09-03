@@ -255,6 +255,16 @@ const SOURCE_LABEL: Record<string, string> = {
   other: 'insights:sourceOther',
 };
 
+/* One label per recommendation kind. The payload also carries a ready-made
+   English `evidence` sentence for the MCP consumer (an agent), but the app
+   rebuilds the same claim from the structured fields so it speaks the user's
+   language rather than the tool's. */
+const RECOMMENDATION_LABEL: Record<string, string> = {
+  unusedMcpServer: 'insights:recUnusedMcpServer',
+  unusedSkill: 'insights:recUnusedSkill',
+  duplicateInstructions: 'insights:recDuplicateInstructions',
+};
+
 const CAUSE_LABEL: Record<string, string> = {
   compact: 'insights:causeCompact',
   ttlExpiry: 'insights:causeTtlExpiry',
@@ -285,6 +295,13 @@ interface StartupAudit {
     itemised?: boolean;
   }>;
   cost?: { startupUsd?: number; inputSideUsd?: number; pctOfInputBill?: number };
+  recommendations?: Array<{
+    kind?: string;
+    target?: string;
+    tokensPerSession?: number;
+    usdOverWindow?: number;
+    sessionsObserved?: number;
+  }>;
   cacheBreakers?: Array<{ cause?: string; events?: number; extraUsd?: number }>;
   mcpServers?: Array<{ server?: string; sessionsPresent?: number; toolCalls?: number }>;
 }
@@ -312,6 +329,23 @@ export function flattenStartupContextRows(payload: unknown): InsightRows {
       primary: t('insights:startupCostRow', { usd: usd(p.cost.startupUsd) }),
       secondary: t('insights:startupCostDetail', { total: usd(p.cost.inputSideUsd), days }),
       badge: `${p.cost.pctOfInputBill ?? 0}%`,
+    });
+  }
+  /* Suggestions lead: they are the only rows the reader can act on, and each
+     one names the observation it rests on rather than just a number. */
+  for (const r of p.recommendations ?? []) {
+    const key = RECOMMENDATION_LABEL[r.kind ?? ''];
+    if (!key) continue;
+    rows.push({
+      primary: t(key, { target: r.target ?? '?' }),
+      secondary: t('insights:recDetail', {
+        sessions: num(r.sessionsObserved),
+        total: num(p.sessions?.fresh),
+        days,
+        tokens: num(r.tokensPerSession),
+        usd: usd(r.usdOverWindow),
+      }),
+      badge: t('insights:recBadge'),
     });
   }
   for (const s of p.sources ?? []) {
