@@ -1,7 +1,7 @@
 ---
 title: "TOON Output Format — Measured Token Savings on Real Tool Calls"
 description: "Real-world token measurements for trace-mcp's TOON (Token-Oriented Object Notation) output format across tabular MCP tool responses."
-updated: 2026-09-02
+updated: 2026-09-03
 ---
 
 # TOON Token Savings — Measured
@@ -157,12 +157,12 @@ pnpm exec tsx scripts/toon-diagnostic-2.ts
 
 All percentages are computed against the **flat-json baseline** (2160 tokens
 / 7850 bytes for the same 50-hit corpus). `output_format: "toon"` is no
-longer accepted on this tool; `grouping: "by_file"` stays and is the
-recommended optimisation.
+longer accepted on this tool; `grouping: "by_file"` stays and, as of
+TRA-711, is the **default** — `grouping: "flat"` is the opt-out.
 
 | scenario | json_tokens | savings_pct | json_bytes | bytes_savings_pct | notes |
 |---|---:|---:|---:|---:|---|
-| search_text flat (default) | 2160 | 0% | 7850 | 0% | baseline |
+| search_text flat | 2160 | 0% | 7850 | 0% | baseline |
 | search_text by_file | 1710 | **+20.8%** | 5826 | +25.8% | 8 files, 50 hits |
 
 `grouping: "by_file"` is a pure structural reshape — it deduplicates file
@@ -191,8 +191,9 @@ of `output_format`.
 - For everything else, JSON is the default and the only accepted output
   format. The encoder regression on heterogeneous / nested / small payloads
   outweighs any benefit.
-- For `search_text`, prefer `grouping: "by_file"` when paths repeat across
-  hits — that is a clean +20.8% lossless win and is unrelated to TOON.
+- For `search_text`, `grouping: "by_file"` is the default (TRA-711) — a
+  clean +20.8% lossless win whenever paths repeat across hits, unrelated to
+  TOON. `grouping: "flat"` restores the old `matches[]` shape.
 - Document the float-precision caveat for callers that hash or diff
   responses.
 

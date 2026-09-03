@@ -1,5 +1,5 @@
 @echo off
-REM trace-mcp-guard v0.12.0
+REM trace-mcp-guard v0.13.0
 REM trace-mcp PreToolUse guard (Windows)
 REM Blocks Read/Grep/Glob/Bash on source code files + Agent(Explore) subagents - redirects to trace-mcp tools.
 REM Allows: non-code files, Read before Edit, safe Bash commands (git, npm, build, test).
@@ -124,6 +124,8 @@ if /i "%DECISION:~0,6%"=="LIMIT:" (
 )
 
 if /i "%DECISION%"=="DENY_FIRST" (
+    call :nav_hit
+    if "!NAV_BELOW!"=="1" goto :allow
     call :deny "Use trace-mcp for code reading - it returns only what you need, saving tokens." "trace-mcp alternatives: get_outline, get_symbol, search, get_feature_context. If you need full file content before editing, retry Read - it will be allowed."
     goto :cleanup
 )
@@ -151,6 +153,8 @@ if exist "%DENY_MARKER%" (
 )
 echo.> "%DENY_MARKER%"
 
+call :nav_hit
+if "!NAV_BELOW!"=="1" goto :allow
 call :deny "Use trace-mcp for code reading - it returns only what you need, saving tokens." "trace-mcp alternatives: get_outline, get_symbol, search, get_feature_context. If you need full file content before editing, retry Read - it will be allowed."
 goto :cleanup
 
@@ -199,6 +203,8 @@ echo "%GREP_PATH%" | findstr /i /r "node_modules vendor dist build \.git" >nul 2
 if %errorlevel%==0 goto :allow
 
 for /f "usebackq delims=" %%i in (`powershell -NoProfile -Command "(Get-Content '%TMPINPUT%' -Raw | ConvertFrom-Json).tool_input.pattern"`) do set "PATTERN=%%i"
+call :nav_hit
+if "!NAV_BELOW!"=="1" goto :allow
 call :deny "Use trace-mcp for code search - it understands symbols and relationships." "trace-mcp alternatives: search, find_usages, get_call_graph. Use Grep only for non-code files (.md, .json, .yaml, config)."
 goto :cleanup
 
@@ -222,6 +228,8 @@ REM Allow glob for non-code patterns
 echo "%GLOB_PATTERN%" | findstr /i /r "\.md \.json \.ya*ml \.toml \.txt \.html \.xml \.csv \.cfg \.ini \.lock \.log" >nul 2>&1
 if %errorlevel%==0 goto :allow
 
+call :nav_hit
+if "!NAV_BELOW!"=="1" goto :allow
 call :deny "Use trace-mcp for code file discovery - it knows your project structure." "trace-mcp alternatives: get_project_map, search with file_pattern, get_outline. Use Glob only for non-code file patterns."
 goto :cleanup
 
@@ -288,6 +296,8 @@ echo "%COMMAND%" | findstr /i /r /c:"node_modules" /c:"vendor[/\\]" /c:"dist[/\\
 if %errorlevel%==0 set "HAS_VENDORED=1"
 
 if "%HAS_LIST%"=="1" if "%HAS_SRC%"=="1" if "%HAS_VENDORED%"=="0" (
+    call :nav_hit
+    if "!NAV_BELOW!"=="1" goto :allow
     call :deny "Use trace-mcp instead of ls/dir/find on source-tree paths - it knows your project structure." "trace-mcp alternatives: get_project_map (structure overview), get_outline (file symbols), search with file_pattern. Use ls/dir/find only on non-source dirs (dist, build, /tmp, node_modules)."
     goto :cleanup
 )
@@ -302,6 +312,8 @@ echo "%COMMAND%" | findstr /i /r "\.ts \.tsx \.js \.jsx \.py \.go \.rs \.java \.
 if %errorlevel%==0 set "HAS_CODE=1"
 
 if "%HAS_EXPLORE%"=="1" if "%HAS_CODE%"=="1" (
+    call :nav_hit
+    if "!NAV_BELOW!"=="1" goto :allow
     call :deny "Use trace-mcp instead of shell commands for code exploration." "trace-mcp has structured tools: search, get_symbol, get_outline, find_usages. Use Bash only for builds, tests, git, and system commands."
     goto :cleanup
 )
@@ -309,6 +321,30 @@ if "%HAS_EXPLORE%"=="1" if "%HAS_CODE%"=="1" (
 goto :allow
 
 REM --- Helpers ---
+
+REM Navigation streak gate (guard v2 - TRA-711).
+REM TRA-705 measured the trace path at 1.45x the cost of a bare grep agent on a
+REM single light navigation question at equal correctness, so the guard stays
+REM silent until the session is actually crawling. Sets NAV_BELOW=1 while the
+REM session is still under the threshold; callers allow the call when it is.
+REM
+REM This is the conservative half of the POSIX behaviour in trace-mcp-guard.sh:
+REM count only, with no rolling window and no relationship-question bypass,
+REM because Windows ships no UserPromptSubmit hook to reset the streak per prompt.
+:nav_hit
+set "NAV_BELOW=0"
+set "NAV_MIN=3"
+if defined TRACE_MCP_GUARD_NAV_MIN set "NAV_MIN=%TRACE_MCP_GUARD_NAV_MIN%"
+set /a NAV_MIN=NAV_MIN+0 >nul 2>&1
+if !NAV_MIN! LEQ 1 goto :eof
+set "NAV_DIR=%TEMP%\trace-mcp-reads-%SESSION_ID%"
+if not exist "!NAV_DIR!" mkdir "!NAV_DIR!" >nul 2>&1
+set "NAV_COUNT=0"
+if exist "!NAV_DIR!\.nav-streak" set /p NAV_COUNT=<"!NAV_DIR!\.nav-streak"
+set /a NAV_COUNT=NAV_COUNT+1 >nul 2>&1
+> "!NAV_DIR!\.nav-streak" echo !NAV_COUNT!
+if !NAV_COUNT! LSS !NAV_MIN! set "NAV_BELOW=1"
+goto :eof
 
 :is_env_example
 REM Sets ENV_EXAMPLE=1 if %1 contains a template-style env filename

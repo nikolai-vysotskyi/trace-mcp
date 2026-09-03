@@ -1,8 +1,20 @@
 #!/usr/bin/env bash
-# trace-mcp-user-prompt-submit v0.1.0
+# trace-mcp-user-prompt-submit v0.3.0
 # trace-mcp UserPromptSubmit hook
 #
-# On each user prompt, runs a fast FTS5 query against the decision memory
+# Two jobs, in this order:
+#
+#   1. Guard v2 routing signal (TRA-711). Each new user prompt starts a new
+#      navigation streak, so the counter the PreToolUse guard keeps is reset
+#      here. The prompt is also matched against relationship-question shapes
+#      ("who calls X", "what breaks if I change Y", "which tests cover Z") —
+#      the shape where TRA-705 measured trace-mcp winning. A match writes a
+#      flag that makes the guard route from the FIRST navigation call instead
+#      of waiting for the third. This runs before anything that can fail, so a
+#      missing CLI or daemon never costs us the signal.
+#
+#   2. Decision-memory injection (below). On each user prompt, runs a fast FTS5
+#      query against the decision memory
 # (top-K=3) using the prompt as the search string and injects the matching
 # decisions as additionalContext so the agent sees them BEFORE processing.
 #
@@ -32,6 +44,32 @@ fi
 PROMPT=$(printf '%s' "$INPUT" | jq -r '.prompt // .user_prompt // .input // empty' 2>/dev/null)
 if [[ -z "$PROMPT" ]]; then
   exit 0
+fi
+
+# ─── Guard v2 routing signal (TRA-711) ─────────────────────────────
+# Shares the guard's per-session state directory verbatim; keep the path
+# construction in sync with hooks/trace-mcp-guard.sh.
+UPS_SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // "default"' 2>/dev/null)
+UPS_READS_DIR="${TMPDIR:-/tmp}/trace-mcp-reads-${UPS_SESSION_ID:-default}"
+mkdir -p "$UPS_READS_DIR" 2>/dev/null || true
+
+# A new prompt is a new question: the previous navigation streak should not
+# make the guard intervene on the first call of an unrelated light one.
+rm -f "$UPS_READS_DIR/.nav-streak" 2>/dev/null || true
+
+# Relationship-question shapes. These are the queries TRA-705 measured
+# trace-mcp winning on (call graph / blast radius / test coverage), so they
+# skip the streak gate and get routed from the first navigation call. The
+# Russian alternatives are here because this matches user input, not because
+# it is user-visible text.
+UPS_NAV_FORCE_RE='(who (calls|uses|invokes|imports)|call(ers|ed by|[- ]graph)|what (breaks|will break|would break)|blast radius|impact of (changing|renaming|removing)|affected by|safe to (change|rename|delete|remove)|(which|what) tests|tests? (cover|covering|for)|test coverage (for|of)|all (usages|references|callers|dependents)|where is .* used|depends on this|reverse dependenc)'
+UPS_NAV_FORCE_RE_RU='(кто (вызывает|использует|импортирует)|что сломается|что затрон|на что повлия|какие тесты|где используется|кто зависит|все (вызовы|использования|места использования))'
+
+if printf '%s' "$PROMPT" | grep -qiE "$UPS_NAV_FORCE_RE" \
+   || printf '%s' "$PROMPT" | grep -qiE "$UPS_NAV_FORCE_RE_RU"; then
+  : > "$UPS_READS_DIR/.nav-force" 2>/dev/null || true
+else
+  rm -f "$UPS_READS_DIR/.nav-force" 2>/dev/null || true
 fi
 
 # Truncate the prompt to a sane FTS5 query size (the search column accepts up

@@ -319,12 +319,46 @@ export interface MigrateResult {
 }
 
 /**
- * Marker recording that the one-shot `tools.preset` default rewrite below has
- * already run for this config. Without it the rewrite could not tell our own
- * former default apart from a deliberate `full`, and every upgrade would undo
- * a user who re-selected it.
+ * Marker recording which of the one-shot `tools.preset` default rewrites below
+ * have already run for this config. Without it the rewrite could not tell one
+ * of our own former defaults apart from a deliberate choice, and every upgrade
+ * would undo a user who re-selected it.
+ *
+ * Historically a boolean (v1, TRA-538). It is read as a version number now —
+ * `true` means "v1 applied" — so a later stale default can be retired without
+ * re-running the earlier rewrites against a user who deliberately re-picked
+ * what they undid.
  */
 const PRESET_MIGRATED_KEY = 'preset_default_migrated';
+
+/**
+ * Presets we once shipped as THE default, each with the marker version that
+ * retires it. A config still carrying one of these is carrying our old default
+ * rather than a choice — the key is present, just stale, so the additive
+ * key-merge below never touches it and the install keeps paying for a surface
+ * it never asked for.
+ *
+ * - v1 (TRA-538): `full` — the pre-TRA-402 default.
+ * - v2 (TRA-711): `standard` — the default between `full` and `minimal`. Found
+ *   in the field: a developer machine advertising 55 tools where `minimal`
+ *   advertises 28, because the config predates TRA-402 and the v1 rewrite only
+ *   looked at `full`.
+ */
+const PRESET_DEFAULT_MIGRATIONS: readonly { version: number; from: string }[] = [
+  { version: 1, from: 'full' },
+  { version: 2, from: 'standard' },
+];
+
+const PRESET_MIGRATION_VERSION = PRESET_DEFAULT_MIGRATIONS[PRESET_DEFAULT_MIGRATIONS.length - 1]
+  .version as number;
+
+/** Read the marker as a version. Legacy `true` means v1 was applied. */
+function presetMigrationVersion(tools: Record<string, unknown> | undefined): number {
+  const raw = tools?.[PRESET_MIGRATED_KEY];
+  if (raw === true) return 1;
+  if (typeof raw === 'number' && Number.isInteger(raw) && raw > 0) return raw;
+  return 0;
+}
 
 /**
  * Migrate global config: for every top-level key present in DEFAULT_CONFIG_JSONC
@@ -349,27 +383,27 @@ function migrateGlobalConfigUnlocked(): MigrateResult {
 
   let text = existingText;
 
-  // TRA-538: configs written before TRA-402 carry `tools.preset: "full"` — our
-  // old default, not a choice. Adding keys was never going to fix those: the
-  // key is present, just stale, so every such install keeps paying for the full
-  // tool surface on every turn. Rewrite it once to whatever the template ships
-  // (a single source of truth, so this stays right when the default moves
-  // again), silently, then mark the config so a user who later re-selects
-  // `full` is never reverted by a later upgrade.
+  // TRA-538 / TRA-711: a config carrying one of our former defaults (see
+  // PRESET_DEFAULT_MIGRATIONS) is carrying a stale value, not a choice. Adding
+  // keys was never going to fix those: the key is present, so every such
+  // install keeps paying for a tool surface it never picked. Rewrite it once
+  // to whatever the template ships (a single source of truth, so this stays
+  // right when the default moves again), silently, then bump the marker so a
+  // user who later re-selects that preset is never reverted by an upgrade.
   const existingTools = existing.tools as Record<string, unknown> | undefined;
   const shippedPreset = (defaults.tools as Record<string, unknown> | undefined)?.preset;
-  const alreadyMigrated = existingTools?.[PRESET_MIGRATED_KEY] === true;
+  const appliedVersion = presetMigrationVersion(existingTools);
 
-  if (
-    !alreadyMigrated &&
-    existingTools?.preset === 'full' &&
-    typeof shippedPreset === 'string' &&
-    shippedPreset !== 'full'
-  ) {
-    const edits = modify(text, ['tools', 'preset'], shippedPreset, FORMAT_OPTS);
-    if (edits.length > 0) {
-      text = applyEdits(text, edits);
-      result.added.push(`tools.preset: full → ${shippedPreset}`);
+  if (typeof shippedPreset === 'string') {
+    for (const { version, from } of PRESET_DEFAULT_MIGRATIONS) {
+      if (version <= appliedVersion) continue;
+      if (existingTools?.preset !== from || from === shippedPreset) continue;
+      const edits = modify(text, ['tools', 'preset'], shippedPreset, FORMAT_OPTS);
+      if (edits.length > 0) {
+        text = applyEdits(text, edits);
+        result.added.push(`tools.preset: ${from} → ${shippedPreset}`);
+      }
+      break;
     }
   }
 
@@ -409,8 +443,13 @@ function migrateGlobalConfigUnlocked(): MigrateResult {
 
   // Set after the loop above: on a config with no `tools` section at all, that
   // loop is what creates it, and writing the marker first would get clobbered.
-  if (!alreadyMigrated) {
-    const edits = modify(text, ['tools', PRESET_MIGRATED_KEY], true, FORMAT_OPTS);
+  if (appliedVersion < PRESET_MIGRATION_VERSION) {
+    const edits = modify(
+      text,
+      ['tools', PRESET_MIGRATED_KEY],
+      PRESET_MIGRATION_VERSION,
+      FORMAT_OPTS,
+    );
     if (edits.length > 0) text = applyEdits(text, edits);
   }
 
