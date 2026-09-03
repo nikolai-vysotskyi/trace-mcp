@@ -63,13 +63,32 @@ measures task success — we have no Pass@1 evidence, only prompt cost.
 
 ---
 
+## Availability: not on the default surface
+
+The `trace_state_*` tools are always registered, but they are **not advertised by
+the default `tools.preset` (`minimal`)** — they are members of the `state` and
+`full` presets only (`src/tools/project/presets.ts`). On a default install
+`tools/list` does not contain them, and the recipe below will not run as written
+until you do one of:
+
+- call them through `batch`, which dispatches any registered tool by name,
+  including ones the active preset defers;
+- `load_tools({ tools: ["trace_state_init", ...] })` to advertise them for the
+  session (`get_preset_info` lists what is deferred);
+- set `tools.preset` to `state` or `full` in config, or `TRACE_MCP_PRESET`.
+
+Keeping them off `minimal` is deliberate: the measurement above puts the win on
+long sessions, and the one short session in the set lost. Until the crossover is
+located, paying schema tokens for these seven tools in every session — most of
+which are short — is not justified by anything measured.
+
 ## MCP Tools Suite
 
 | Tool | Purpose |
 |------|---------|
 | `trace_state_init` | Initialize a new task state with goal & initial plan steps |
 | `trace_state_patch` | Apply an atomic RFC 7396 JSON Merge Patch to update state |
-| `trace_state_get` | Retrieve state as compact Markdown (~150 tokens) or JSON |
+| `trace_state_get` | Retrieve state as compact Markdown (343 tokens at the replay median) or JSON |
 | `trace_state_checkpoint` | Create a named snapshot checkpoint for rollback |
 | `trace_state_rollback` | Restore state to a saved checkpoint |
 | `trace_state_add_dead_end` | Fast shortcut to record failed approaches and prevent repetition |
