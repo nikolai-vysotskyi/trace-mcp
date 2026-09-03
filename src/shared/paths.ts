@@ -76,6 +76,17 @@ export const TELEMETRY_STATE_PATH = path.join(TRACE_MCP_HOME, 'telemetry-state.j
 
 // ── Foreign IDE / agent paths trace-mcp introspects ──────────────
 
+/**
+ * Claude Code per-user home — instruction files, skills, plugins, session logs.
+ *
+ * A function rather than a const because callers that reconstruct a user's
+ * startup context resolve it per call; a value frozen at import cannot follow
+ * a changed HOME, which is exactly what the tests for those callers do.
+ */
+export function claudeHome(): string {
+  return path.join(os.homedir(), '.claude');
+}
+
 /** Claude Code project store: `~/.claude/projects/<encoded-cwd>/<session>.jsonl`. */
 export const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 

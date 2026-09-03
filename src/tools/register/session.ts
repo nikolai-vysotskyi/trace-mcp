@@ -7,6 +7,7 @@ import { formatBenchmarkMarkdown, runBenchmark } from '../../analytics/benchmark
 import { listAllSessions } from '../../analytics/log-parser.js';
 import { analyzeRealSavings } from '../../analytics/real-savings.js';
 import { getOptimizationReport, getSessionAnalytics } from '../../analytics/session-analytics.js';
+import { analyzeStartupContext } from '../../analytics/startup-context.js';
 import {
   attachIngestionStatus,
   attachNoSessionDataWarning,
@@ -425,6 +426,36 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
         return { content: [{ type: 'text', text: formatBenchmarkMarkdown(result) }] };
       }
       return { content: [{ type: 'text', text: j(result) }] };
+    },
+  );
+
+  // --- Analytics: Startup Context Audit (preset-gated; scans the whole
+  // machine's logs, so it is a report you ask for, not one every session pays
+  // schema tokens to keep on the shelf). ---
+  server.tool(
+    'get_startup_context_audit',
+    'What every session pays for before the first user message, what it costs, and what the logs prove went unused. Decomposes the startup block by source (system prompt, tool schemas, MCP servers, skill/agent listings, hooks), prices the cache rebuilds that make it get paid twice, and suggests removals backed by evidence of non-use — never by size. Read-only, local. Returns JSON: { startupTokens, sources, cost, cacheBreakers, mcpServers, instructionFiles, recommendations, observationWindow }.',
+    /* No parameters on purpose. The look-back window is the only knob this
+       report could have, and a fixed 30 days is the answer for "what does my
+       startup block cost" — while a param here would have to survive
+       compact_schemas, which strips non-core params from the schema and so
+       silently freezes them at their default anyway. */
+    {},
+    async () => {
+      try {
+        const result = await analyzeStartupContext({ projectRoot });
+        return { content: [{ type: 'text' as const, text: j(result) }] };
+      } catch (e) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: j({ error: e instanceof Error ? e.message : String(e) }),
+            },
+          ],
+          isError: true,
+        };
+      }
     },
   );
 

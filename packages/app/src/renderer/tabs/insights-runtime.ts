@@ -32,7 +32,7 @@ const BASE = 'http://127.0.0.1:3741';
 // read-only. Each entry maps a report id to the MCP tool it calls and
 // (optionally) a transform that produces the tool arguments.
 
-export type ReportId = 'claudemd_drift' | 'pagerank' | 'risk_hotspots';
+export type ReportId = 'claudemd_drift' | 'pagerank' | 'risk_hotspots' | 'startup_context';
 
 export interface ReportDef {
   id: ReportId;
@@ -70,6 +70,13 @@ export const INSIGHT_REPORTS: ReportDef[] = [
     descriptionKey: 'insights:reportRiskDescription',
     mcpTool: 'get_risk_hotspots',
     argTransform: () => ({ limit: 20 }),
+  },
+  {
+    id: 'startup_context',
+    titleKey: 'insights:reportStartupTitle',
+    descriptionKey: 'insights:reportStartupDescription',
+    mcpTool: 'get_startup_context_audit',
+    argTransform: () => ({}),
   },
 ];
 
@@ -127,6 +134,25 @@ export function buildRpcCall(reportId: ReportId, projectRoot: string, id: number
       name: def.mcpTool,
       arguments: def.argTransform(projectRoot),
     },
+  };
+}
+
+/**
+ * Every report calls a tool that is outside the daemon's default preset, and a
+ * tool outside the preset is registered-but-disabled: `tools/call` comes back
+ * `Tool <name> disabled` rather than running. `load_tools` is the escape hatch
+ * (TRA-402) — it is ungated precisely so a session can pull in what it needs.
+ * Sending it before the report call is what makes the Insights tab work
+ * against a stock daemon.
+ */
+export function buildLoadToolsCall(reportId: ReportId, id: number = 2): JsonRpcCall {
+  const def = REPORT_BY_ID[reportId];
+  if (!def) throw new Error(`Unknown report id: ${reportId}`);
+  return {
+    jsonrpc: '2.0',
+    id,
+    method: 'tools/call',
+    params: { name: 'load_tools', arguments: { tools: [def.mcpTool] } },
   };
 }
 
@@ -213,6 +239,151 @@ export function flattenRiskHotspotRows(payload: unknown): InsightRows {
   return { rows };
 }
 
+// ── Startup context audit (TRA-759) ──────────────────────────────────
+// The one report that is about the user's whole machine rather than this
+// project: the block of context every session pays for before the first
+// message. Rows read top-down as the story — how big, what it cost, what it
+// is made of, what made it get paid twice, and which MCP servers are in it.
+
+const SOURCE_LABEL: Record<string, string> = {
+  systemPromptToolSchemasAndInstructions: 'insights:sourceResidual',
+  skills: 'insights:sourceSkills',
+  deferredToolListing: 'insights:sourceDeferredTools',
+  agentListing: 'insights:sourceAgentListing',
+  mcpInstructions: 'insights:sourceMcpInstructions',
+  memory: 'insights:sourceMemory',
+  other: 'insights:sourceOther',
+};
+
+/* One label per recommendation kind. The payload also carries a ready-made
+   English `evidence` sentence for the MCP consumer (an agent), but the app
+   rebuilds the same claim from the structured fields so it speaks the user's
+   language rather than the tool's. */
+const RECOMMENDATION_LABEL: Record<string, string> = {
+  unusedMcpServer: 'insights:recUnusedMcpServer',
+  unusedSkill: 'insights:recUnusedSkill',
+  duplicateInstructions: 'insights:recDuplicateInstructions',
+};
+
+const CAUSE_LABEL: Record<string, string> = {
+  compact: 'insights:causeCompact',
+  ttlExpiry: 'insights:causeTtlExpiry',
+  modelSwitch: 'insights:causeModelSwitch',
+  toolsChanged: 'insights:causeToolsChanged',
+  listingChanged: 'insights:causeListingChanged',
+  unexplained: 'insights:causeUnexplained',
+};
+
+/** A hook's own name is the actionable part, so it is kept verbatim. */
+function sourceLabel(source: string): string {
+  if (source.startsWith('hook:')) {
+    return t('insights:sourceHook', { name: source.slice('hook:'.length) });
+  }
+  const key = SOURCE_LABEL[source];
+  return key ? t(key) : source;
+}
+
+interface StartupAudit {
+  days?: number;
+  sessions?: { fresh?: number };
+  startupTokens?: { p10?: number; median?: number; p90?: number };
+  sources?: Array<{
+    source?: string;
+    meanTokens?: number;
+    pctOfStartup?: number;
+    sessions?: number;
+    itemised?: boolean;
+  }>;
+  cost?: { startupUsd?: number; inputSideUsd?: number; pctOfInputBill?: number };
+  recommendations?: Array<{
+    kind?: string;
+    target?: string;
+    tokensPerSession?: number;
+    usdOverWindow?: number;
+    sessionsObserved?: number;
+  }>;
+  cacheBreakers?: Array<{ cause?: string; events?: number; extraUsd?: number }>;
+  mcpServers?: Array<{ server?: string; sessionsPresent?: number; toolCalls?: number }>;
+}
+
+export function flattenStartupContextRows(payload: unknown): InsightRows {
+  const p = (payload ?? {}) as StartupAudit;
+  const days = p.days ?? 0;
+  const num = (n: number | undefined) => (n ?? 0).toLocaleString();
+  const usd = (n: number | undefined) => `$${Math.round(n ?? 0).toLocaleString()}`;
+  const rows: InsightRow[] = [];
+
+  if (p.startupTokens?.median) {
+    rows.push({
+      primary: t('insights:startupBlockRow', { tokens: num(p.startupTokens.median) }),
+      secondary: t('insights:startupBlockDetail', {
+        p10: num(p.startupTokens.p10),
+        p90: num(p.startupTokens.p90),
+        sessions: num(p.sessions?.fresh),
+        days,
+      }),
+    });
+  }
+  if (p.cost?.startupUsd) {
+    rows.push({
+      primary: t('insights:startupCostRow', { usd: usd(p.cost.startupUsd) }),
+      secondary: t('insights:startupCostDetail', { total: usd(p.cost.inputSideUsd), days }),
+      badge: `${p.cost.pctOfInputBill ?? 0}%`,
+    });
+  }
+  /* Suggestions lead: they are the only rows the reader can act on, and each
+     one names the observation it rests on rather than just a number. */
+  for (const r of p.recommendations ?? []) {
+    const key = RECOMMENDATION_LABEL[r.kind ?? ''];
+    if (!key) continue;
+    rows.push({
+      primary: t(key, { target: r.target ?? '?' }),
+      secondary: t('insights:recDetail', {
+        sessions: num(r.sessionsObserved),
+        total: num(p.sessions?.fresh),
+        days,
+        tokens: num(r.tokensPerSession),
+        usd: usd(r.usdOverWindow),
+      }),
+      badge: t('insights:recBadge'),
+    });
+  }
+  for (const s of p.sources ?? []) {
+    rows.push({
+      primary: t('insights:startupSourceRow', {
+        source: sourceLabel(s.source ?? '?'),
+        tokens: num(s.meanTokens),
+      }),
+      secondary:
+        s.itemised === false
+          ? t('insights:startupResidualDetail')
+          : t('insights:startupSourceDetail', { sessions: num(s.sessions) }),
+      badge: `${s.pctOfStartup ?? 0}%`,
+    });
+  }
+  for (const b of p.cacheBreakers ?? []) {
+    const key = CAUSE_LABEL[b.cause ?? ''];
+    rows.push({
+      primary: t('insights:startupRebuildRow', {
+        cause: key ? t(key) : (b.cause ?? '?'),
+        events: num(b.events),
+      }),
+      secondary: t('insights:startupRebuildDetail', { usd: usd(b.extraUsd) }),
+    });
+  }
+  for (const m of p.mcpServers ?? []) {
+    if (!m.sessionsPresent) continue;
+    rows.push({
+      primary: t('insights:startupServerRow', {
+        server: m.server ?? '?',
+        sessions: num(m.sessionsPresent),
+      }),
+      secondary: t('insights:startupServerDetail', { calls: num(m.toolCalls) }),
+    });
+  }
+  return { rows };
+}
+
 export function flattenReport(reportId: ReportId, payload: unknown): InsightRows {
   switch (reportId) {
     case 'claudemd_drift':
@@ -221,6 +392,8 @@ export function flattenReport(reportId: ReportId, payload: unknown): InsightRows
       return flattenPagerankRows(payload);
     case 'risk_hotspots':
       return flattenRiskHotspotRows(payload);
+    case 'startup_context':
+      return flattenStartupContextRows(payload);
   }
 }
 
@@ -267,6 +440,21 @@ export const defaultInsightsClient: InsightsClient = {
       body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }),
     }).then((r) => r.text().catch(() => ''));
 
+    // Escalate into the report's tool before calling it — see buildLoadToolsCall.
+    // A failure here is not fatal: if the tool was already in the preset the
+    // call below simply runs, and if it was not, that call reports the real error.
+    await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'mcp-session-id': sessionId,
+      },
+      body: JSON.stringify(buildLoadToolsCall(reportId)),
+    })
+      .then((r) => r.text().catch(() => ''))
+      .catch(() => '');
+
     const callRes = await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
       headers: {
@@ -274,7 +462,7 @@ export const defaultInsightsClient: InsightsClient = {
         Accept: 'application/json, text/event-stream',
         'mcp-session-id': sessionId,
       },
-      body: JSON.stringify(buildRpcCall(reportId, root)),
+      body: JSON.stringify(buildRpcCall(reportId, root, 3)),
     });
     if (!callRes.ok) {
       throw new Error(
