@@ -1,37 +1,15 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TOP_BAND_H, trafficLightCentreY } from '../../../shared/chrome-metrics.js';
-import { WindowTabBar } from '../WindowTabBar';
+import { type TabInfo, WindowTabBar } from '../WindowTabBar';
 
-interface TabInfo {
-  id: string;
-  title: string;
-  type: string;
-  active: boolean;
-}
-
-function stubElectronAPI(platform = 'darwin', initialTabs: TabInfo[] = []) {
-  let tabCallback: ((tabs: TabInfo[]) => void) | null = null;
-
+function stubElectronAPI(platform = 'darwin') {
   const api = {
     getPlatform: vi.fn(async () => platform),
-    onTabListChanged: vi.fn((cb: (tabs: TabInfo[]) => void) => {
-      tabCallback = cb;
-      cb(initialTabs);
-      return () => {
-        tabCallback = null;
-      };
-    }),
-    focusTab: vi.fn(async (_id: string) => ({ ok: true })),
-    closeCurrentTab: vi.fn(async () => ({ ok: true })),
   };
-
   (window as unknown as { electronAPI: typeof api }).electronAPI = api;
-  return {
-    api,
-    emitTabs: (tabs: TabInfo[]) => tabCallback?.(tabs),
-  };
+  return { api };
 }
 
 afterEach(() => {
@@ -41,24 +19,25 @@ afterEach(() => {
 
 describe('WindowTabBar', () => {
   it('renders nothing when only 1 tab exists', async () => {
-    const { container } = render(<WindowTabBar />);
-    stubElectronAPI('darwin', [
-      { id: 'menu', title: 'Workspace', type: 'menu', active: true },
-    ]);
-
-    await waitFor(() => {
-      expect(container.firstChild).toBeNull();
-    });
+    stubElectronAPI();
+    const { container } = render(
+      <WindowTabBar
+        tabs={[{ id: 'menu', kind: 'menu', title: 'Workspace', active: true }]}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(container.firstChild).toBeNull();
   });
 
   it('renders tab strip on macOS with 78px padding for traffic lights', async () => {
+    stubElectronAPI('darwin');
     const tabs: TabInfo[] = [
-      { id: 'menu', title: 'Workspace', type: 'menu', active: true },
-      { id: '/projects/assetfeed', title: 'assetfeed', type: 'project', active: false },
+      { id: 'menu', kind: 'menu', title: 'Workspace', active: true },
+      { id: '/projects/assetfeed', kind: 'project', root: '/projects/assetfeed', title: 'assetfeed', active: false },
     ];
-    stubElectronAPI('darwin', tabs);
 
-    const { container } = render(<WindowTabBar />);
+    const { container } = render(<WindowTabBar tabs={tabs} onSelect={() => {}} onClose={() => {}} />);
 
     await screen.findByText('Workspace');
     expect(screen.getByText('assetfeed')).toBeTruthy();
@@ -73,13 +52,13 @@ describe('WindowTabBar', () => {
      TOP_BAND_H — lights centred at 22 in a strip centred at 18. Assert the tie,
      not the number: if either side moves alone, this fails. */
   it('sizes the strip so the traffic lights land on its centre line', async () => {
+    stubElectronAPI('darwin');
     const tabs: TabInfo[] = [
-      { id: 'menu', title: 'Workspace', type: 'menu', active: true },
-      { id: '/projects/assetfeed', title: 'assetfeed', type: 'project', active: false },
+      { id: 'menu', kind: 'menu', title: 'Workspace', active: true },
+      { id: '/projects/assetfeed', kind: 'project', root: '/projects/assetfeed', title: 'assetfeed', active: false },
     ];
-    stubElectronAPI('darwin', tabs);
 
-    const { container } = render(<WindowTabBar />);
+    const { container } = render(<WindowTabBar tabs={tabs} onSelect={() => {}} onClose={() => {}} />);
     await screen.findByText('Workspace');
 
     const bar = container.firstChild as HTMLElement;
@@ -88,49 +67,64 @@ describe('WindowTabBar', () => {
   });
 
   it('renders tab strip on Windows/Linux with 4px padding', async () => {
+    stubElectronAPI('win32');
     const tabs: TabInfo[] = [
-      { id: 'menu', title: 'Workspace', type: 'menu', active: true },
-      { id: '/projects/thewed', title: 'thewed', type: 'project', active: false },
+      { id: 'menu', kind: 'menu', title: 'Workspace', active: true },
+      { id: '/projects/thewed', kind: 'project', root: '/projects/thewed', title: 'thewed', active: false },
     ];
-    stubElectronAPI('win32', tabs);
 
-    const { container } = render(<WindowTabBar />);
+    const { container } = render(<WindowTabBar tabs={tabs} onSelect={() => {}} onClose={() => {}} />);
 
     await screen.findByText('Workspace');
     const bar = container.firstChild as HTMLElement;
     expect(bar.style.paddingLeft).toBe('4px');
   });
 
-  it('switches tab on click', async () => {
+  it('calls onSelect with the clicked tab id — no IPC, purely local', async () => {
+    stubElectronAPI('darwin');
     const tabs: TabInfo[] = [
-      { id: 'menu', title: 'Workspace', type: 'menu', active: true },
-      { id: '/projects/assetfeed', title: 'assetfeed', type: 'project', active: false },
+      { id: 'menu', kind: 'menu', title: 'Workspace', active: true },
+      { id: '/projects/assetfeed', kind: 'project', root: '/projects/assetfeed', title: 'assetfeed', active: false },
     ];
-    const { api } = stubElectronAPI('darwin', tabs);
+    const onSelect = vi.fn();
 
-    render(<WindowTabBar />);
+    render(<WindowTabBar tabs={tabs} onSelect={onSelect} onClose={() => {}} />);
 
     const projectTab = await screen.findByText('assetfeed');
     fireEvent.click(projectTab);
 
-    expect(api.focusTab).toHaveBeenCalledWith('/projects/assetfeed');
+    expect(onSelect).toHaveBeenCalledWith('/projects/assetfeed');
   });
 
-  it('closes a project tab on close button click', async () => {
+  it('calls onClose with the tab id when its close button is clicked', async () => {
+    stubElectronAPI('darwin');
     const tabs: TabInfo[] = [
-      { id: 'menu', title: 'Workspace', type: 'menu', active: true },
-      { id: '/projects/assetfeed', title: 'assetfeed', type: 'project', active: false },
+      { id: 'menu', kind: 'menu', title: 'Workspace', active: true },
+      { id: '/projects/assetfeed', kind: 'project', root: '/projects/assetfeed', title: 'assetfeed', active: false },
     ];
-    const { api } = stubElectronAPI('darwin', tabs);
+    const onClose = vi.fn();
+    const onSelect = vi.fn();
 
-    render(<WindowTabBar />);
+    render(<WindowTabBar tabs={tabs} onSelect={onSelect} onClose={onClose} />);
 
     const closeBtn = await screen.findByRole('button', { name: /close/i });
     fireEvent.click(closeBtn);
 
-    expect(api.focusTab).toHaveBeenCalledWith('/projects/assetfeed');
-    await waitFor(() => {
-      expect(api.closeCurrentTab).toHaveBeenCalled();
-    });
+    expect(onClose).toHaveBeenCalledWith('/projects/assetfeed');
+    // The close (×) click must not also select the tab it's closing.
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('never offers a close button on the menu tab', async () => {
+    stubElectronAPI('darwin');
+    const tabs: TabInfo[] = [
+      { id: 'menu', kind: 'menu', title: 'Workspace', active: true },
+      { id: '/projects/assetfeed', kind: 'project', root: '/projects/assetfeed', title: 'assetfeed', active: false },
+    ];
+
+    render(<WindowTabBar tabs={tabs} onSelect={() => {}} onClose={() => {}} />);
+    await screen.findByText('Workspace');
+
+    expect(screen.getAllByRole('button', { name: /close/i })).toHaveLength(1);
   });
 });
