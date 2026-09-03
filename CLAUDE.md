@@ -272,3 +272,12 @@ the same closed doors and sometimes decides the opposite of the last one.
 
 Numbers quoted to the outside world come from `docs/_data/counts.yml`. Never
 hand-type a tool/language/framework count into a listing, a form, or `server.json`.
+
+## Client start-block token costs
+
+`ops/context-block-levers.md` is the measured ledger of what a user can switch
+off in Claude Code / the Agent SDK to shrink the tokens sent before the first
+question: per-tool schema prices, the system-prompt options, and the traps
+(`--tools ""` costs *more*, not less). **Read it before promising, building or
+documenting any start-block optimisation, and update it in the same change.**
+Every number there carries the harness and the date it was measured.
