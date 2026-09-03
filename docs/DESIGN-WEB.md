@@ -43,16 +43,49 @@ the reader to be careful rather than to download, and next to an honest
 opposite things on one screen.
 
 What replaces it: the base stays monochrome. An element that needs an accent
-takes it from an accent palette recorded in this file, and red is not in that
-palette. **No palette has been chosen yet**, so until one is, the answer is
-monochrome at maximum contrast and more air — not "some other colour".
+takes it from the accent palette below, and red is not in it.
 
-Landing and doc pages carry **zero** red as of TRA-739: the CTA is a full
-inversion (`--text-display` fill, `--black` label, 21:1 both themes), the nav
-liveness dot, the problem-list bullets and the category dot are
-`--text-display`, and a doc-page link is `--text-display` plus its underline.
-`--accent` stays defined in both files as the reserved danger colour with its
-ratios intact; `--accent-solid`, whose only job was the red CTA fill, is gone.
+**The accent is cobalt** (TRA-753). TRA-739 removed the red and left the whole
+first screen monochrome; Nikolai's verdict on that was that the button had
+stopped standing out. Monochrome is the right base, but the one action on the
+page is the one thing that is allowed not to be monochrome.
+
+| Role | Token | Dark | Light | Ratio |
+|---|---|---|---|---|
+| Fill under a white label | `--accent-solid` | `#2B5FE3` | `#2B5FE3` | **5.46** |
+| Fill hover | `--accent-solid-hover` | `#1B49B8` | `#1B49B8` | **7.80** |
+| Foreground (links, glyphs) | `--accent` | `#5B8CFF` | `#1E4FCB` | **5.50** / **6.07** worst surface |
+| Failure, regression, cost | `--negative` | `#E54047` | `#B3151C` | **4.27** / **6.06** worst surface |
+
+Cobalt's hue is 222°: **136° from the negative red** (358°) and **90° from the
+success green** (132°), so the `without / with` receipt has no two colours that
+argue. Its conventionality is the argument for it rather than against — a blue
+button does not ask the reader to hesitate. It also closes the gap the red
+never did: `--accent` on `--surface-raised` in dark was 4.27 and forced a "no
+accent text on raised" ban; cobalt is 5.50.
+
+The two candidates it beat, measured the same way — white on the fill, worst
+surface for the foreground:
+
+| Candidate | Fill | White on fill | Dark fg | worst | Light fg | worst | Why not |
+|---|---|---|---|---|---|---|---|
+| Indigo | `#5A3FE0` | 6.52 | `#9A87FF` | 6.79 | `#5232C9` | 6.93 | the 2020s AI-startup violet; dates fast |
+| Teal | `#0E7C86` | 4.95 | `#2FBECC` | 9.36 | `#0A6670` | 5.85 | 54° from `--success` — argues with `with trace-mcp` |
+
+Rejected before those and not to be re-proposed: pure monochrome, and the four
+red-fleck variants — dot, ring, chip, monochrome.
+
+**Cobalt is the accent, not a repaint of everything TRA-739 made monochrome.**
+It is spent in exactly two places, both of them "this is the thing you act on":
+the primary CTA fill, and a link inside prose. The nav liveness dot, the
+problem-list bullets, the category dot and the punchline glyph stay
+`--text-display` / `--text-disabled` as TRA-739 left them — they are not
+actions, and a page where every mark is accent-coloured has no accent.
+
+Landing and doc pages carry **zero** decorative red as of TRA-739. What used to
+be `--accent` (the danger red) is now `--negative`, with its ratios intact,
+because the next genuine failure state must not have to re-derive it. Red as a
+fill has no job on the site: never reintroduce a red `--accent-solid`.
 
 ---
 
@@ -61,8 +94,8 @@ ratios intact; `--accent-solid`, whose only job was the red CTA fill, is gone.
 Two surfaces implement these: `docs/index.html` (landing, inline `<style>`) and
 `docs/assets/css/docs.css` (every documentation page). The values must match.
 A token that exists in only one of them is a component token and must say so
-here — otherwise it reads as drift. There are none: `--accent-solid` was the
-only one, and §0 removed it.
+here — otherwise it reads as drift. There are two: `--accent-solid` and
+`--accent-solid-hover`, both landing-only fills (§0).
 
 Surfaces — a text token has to clear its ratio against **every** one of these
 it is painted on, because all three are in use on the same page:
@@ -85,32 +118,42 @@ surface, raised.** The governing number is bold.
 | `--text-secondary` | `#999999` | 7.37 / 6.63 / **6.11** | `#595959` | 6.42 / 7.00 / **6.15** |
 | `--text-primary` | `#E8E8E8` | 17.14 / 15.41 / **14.20** | `#1A1A1A` | 15.96 / 17.40 / **15.27** |
 | `--text-display` | `#FFFFFF` | 21.00 / 18.88 / **17.40** | `#000000` | 19.26 / 21.00 / **18.43** |
-| `--accent` | `#E54047` | 5.16 / 4.64 / **4.27** | `#B3151C` | 6.33 / 6.91 / **6.06** |
+| `--accent` | `#5B8CFF` | 6.64 / 5.97 / **5.50** | `#1E4FCB` | 6.34 / 6.92 / **6.07** |
+| `--negative` | `#E54047` | 5.16 / 4.64 / **4.27** | `#B3151C` | 6.33 / 6.91 / **6.06** |
 
 **`--surface-raised` is always the worst of the three,** in both themes — it is
 the lightest surface in dark and the darkest in light, so it is the one every
 foreground has the least room against. Never quote a token's ratio from `page`
 because it is the biggest number.
 
-`--accent` in dark is the one token that does **not** clear 4.5:1 everywhere:
+`--negative` in dark is the one token that does **not** clear 4.5:1 everywhere:
 `#E54047` on `--surface-raised` is 4.27. Red text is therefore not allowed on
 `--surface-raised` in dark. It is not currently used there anywhere; the
 contrast sweep below is what keeps it that way. Raising the red further to
 clear `#1A1A1A` too would push it to roughly `#EA5057`, which reads pink
-rather than red, and red being *this* red is not negotiable.
+rather than red, and the negative being *this* red is not negotiable.
 
-**`--accent` is the danger colour and nothing else** (§0). It is currently
+**`--negative` is the danger colour and nothing else** (§0). It is currently
 painted on no element of either surface; it stays defined, with its ratios,
 because the next genuine failure state must not have to re-derive a red that
 clears AA. It is lighter in dark and darker in light because a foreground has
 to fight its background. Never use it as a fill under white text — `#E54047`
-behind white is 4.07 and fails.
+behind white is 4.07 and fails. It was called `--accent` until TRA-753; the
+name was the whole problem, since a token named "accent" invites decoration.
 
-**`--accent-solid` `#D71921` no longer exists.** It was the brand red as a
-**fill**, and its only consumer was the landing's primary button, which §0
-removed in TRA-739. Do not reintroduce it: a red fill has no remaining job
-here, and a fill red that no element uses is how the CTA got red back the
-last time.
+**`--accent-solid` `#2B5FE3` and `--accent-solid-hover` `#1B49B8` are the
+accent as a fill,** so they are never a foreground and have no ratio against a
+surface. The only ratio they have is the white label on them: **5.46** and
+**7.80**. Their one consumer is the landing's primary button, so they live in
+`docs/index.html` alone; `docs/assets/css/docs.css` has no filled component and
+adding them there would be dead tokens. A **red** `--accent-solid` is a
+different matter and is banned outright (§4): the old `#D71921` is gone and a
+fill red that no element uses is how the CTA got red back the last time.
+
+`--accent` (link/glyph cobalt) is lighter in dark and darker in light because a
+foreground has to fight its background; a fill does not. Never use
+`--accent-solid` as a text colour, and never use `--accent` as a fill under
+white text — `#5B8CFF` behind white is 3.16 and fails.
 
 **Compute a ratio against the surface the text actually sits on, in both
 themes.** `#FFFFFF` in light and `#000000` in dark are the most forgiving
@@ -211,7 +254,7 @@ Order: sticky header (brand + theme toggle) → `h1` → prose → `Last updated
   the link is the brightest text in its paragraph *and* the only underlined
   one, so the affordance survives greyscale and colour blindness, which the
   old red-plus-underline never needed to. Blockquotes take
-  `--border-visible`, not red.
+  `--border-visible`, not an accent.
 - Tables: **no zebra striping.** Rows separate on a `--border` hairline; the
   head is a Space Mono 10px caps label, not a bold band. Every table is
   wrapped in a focusable `.table-scroll` region by the layout script, so a
@@ -334,10 +377,15 @@ WebP conversion.
 - **Red on anything that is not a failure, a regression, or a cost** (§0):
   no red CTA, dot, chip, bullet, outline, underline, hover, icon, banner or
   social preview. This overrides the old "red is the single accent" rule.
-- Reintroducing `--accent-solid`, or any red fill.
-- A second accent colour. There is no first one — the base is monochrome and
-  no accent palette has been chosen yet (§0).
-- `--accent` as a fill under white text.
+- Reintroducing a **red** `--accent-solid`, or any red fill.
+- A second accent colour. Cobalt is the only one; `--accent` and
+  `--accent-solid` are two lightnesses of it for two jobs (§1), not two
+  accents. `--negative` is not an accent — it is the danger colour, §0.
+- Spending the accent on anything that is not an action. The CTA fill and a
+  prose link are the whole list; dots, bullets, glyphs and tags stay
+  monochrome (§0). A page where every mark is accent-coloured has no accent.
+- `--accent` as a fill under white text (3.16, fails), or `--accent-solid` as
+  a text colour.
 - Red text on `--surface-raised` in dark — 4.27:1, the one gap in §1.
 - A colour value recorded with a ratio against a background it is not painted
   on. Quote the worst of the three surfaces, in both themes.
@@ -434,13 +482,23 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] No red outside a failure state. Not a claim — a command:
 
       ```
-      grep -ni 'var(--accent)\|#D71921\|#E54047\|#B3151C' \
+      grep -ni 'var(--negative)\|#D71921\|#E54047\|#B3151C' \
         docs/index.html docs/assets/css/docs.css
       ```
 
       Every hit must be either a token definition or an element that means
-      something is wrong (§0). Today the correct output is the two token
-      definitions per file and nothing else.
+      something is wrong (§0). Today the correct output is the two
+      `--negative` definitions per file and nothing else. `#D71921` — the old
+      red fill — must never appear at all.
+- [ ] The accent is spent only on actions. Also a command:
+
+      ```
+      grep -n 'var(--accent)\|var(--accent-solid' \
+        docs/index.html docs/assets/css/docs.css
+      ```
+
+      Every hit must be a token definition, `.btn-primary`, or `.prose a`
+      (§0). A dot, bullet, glyph or tag in the output is the finding.
 
 **Type & spacing**
 - [ ] Within the 2 families / 3 sizes / 2 weights budget.
@@ -542,12 +600,12 @@ left, with the whole right half empty is not asymmetry, it is a page that
 started and gave up. `.hero { text-align: center }` plus `margin: 0 auto` on
 `.hero-headline` (900px) and `.hero-desc` (660px).
 
-**One action. The button.** `.btn .btn-primary .btn-lg` — a full inversion,
-`--text-display` fill under a `--black` label, 21:1 in both themes. It is the
-loudest thing a monochrome page has, and on a page whose base is near-black or
-near-white nothing else competes with a solid block of the opposite end. It
-shipped red until TRA-739; §0 is why it is not red now, and the inversion is
-what a primary CTA looks like here from now on. It ships labelled `Download` pointing at `/releases/latest` so it works
+**One action. The button.** `.btn .btn-primary .btn-lg` — an `--accent-solid`
+cobalt fill under a white label, 5.46:1 in both themes. It shipped red until
+TRA-739 (§0 is why it is not red), then spent one release as a full inversion,
+which fixed the meaning but read as one more monochrome slab on a monochrome
+page and stopped being the loudest thing on the screen. Cobalt is the system
+accent (§0) and this button is the main place it is spent. It ships labelled `Download` pointing at `/releases/latest` so it works
 without JS (TRA-440), and `resolveDownload()` narrows it to a single file and
 renames it only once it has found that file in the release JSON. The label names
 the exact machine — `Download for Mac (Apple Silicon)`, `Download for Mac
@@ -580,7 +638,7 @@ question the visitor has to answer before downloading (TRA-440).
 button, not beside it.** A `<span onclick>` gave the copy action no tab stop,
 no focus ring and nothing for a screen reader; the `$` is `aria-hidden`, the
 `copy` label is `aria-live="polite"` so `copied` is announced. It keeps its
-technical 8px box on `--surface` — but side by side with the red pill that box
+technical 8px box on `--surface` — but side by side with the filled pill that box
 read as a second button of equal weight, which is what this hero keeps being
 pulled back into, so it is a full row down instead. That verdict predates the
 inversion and survives it: an outlined box next to a solid block of the
@@ -661,3 +719,73 @@ width of a Space Mono 12px label at `0.04em`, not an estimate.
 take two lines in every layout; a sub-column wide enough for them fits two,
 not three. `break-inside: avoid` keeps each one whole so it still reads as a
 single target, the same one-cell-per-link rule as §2.
+
+---
+
+## 10. The README header
+
+The README is a site surface too — it is the first screen for anyone arriving
+from GitHub, and GitHub's own stylesheet is the one thing we cannot override.
+So the header is **pictures**, not markup GitHub gets to style. Regenerate with:
+
+```
+node scripts/gen-readme-banner.mjs
+```
+
+**PNG @2x, never SVG.** GitHub renders README images in an isolated context
+where an SVG's `@font-face` never loads: Space Grotesk falls back to a system
+font and the layout shifts. The script renders real HTML in headless Chrome
+with the self-hosted `docs/fonts/*.woff2`, at `deviceScaleFactor: 2`. Verify
+on github.com itself, not in a local Markdown preview — the local preview does
+load the fonts and will tell you it is fine when it is not.
+
+**Both appearances, one `<picture>`.** Each image ships as
+`<source media="(prefers-color-scheme: light)">` plus a dark `<img>`. GitHub
+honours it. Never stack the two.
+
+**Every number is generated.** The banner reads `docs/_data/counts.yml` and
+`docs/_data/pr_context_bench.json` — the same sources the site uses. A hand-
+retouched PNG turns "177 tools" into a silent lie two releases later. This is
+the one place in the site where extra code is the right answer.
+
+**The words have to exist as text as well.** A picture is invisible to search
+and to a screen reader. So: a meaningful `alt` carrying the full claim, plus
+the description sentence kept as a real paragraph below the buttons. The two
+say the same thing; change them together.
+
+**Geometry.** Banner 1200×340 CSS px, rendered at 2×, shown at `width="750"`.
+Three button plates of 400×108, shown at `width="250"` each — 750 total, so
+they line up under the banner and do not wrap: GitHub's README column is about
+807px on a wide window and narrower on the readme tab, and a 900px strip wraps
+the third button onto its own line. Each plate carries its own background so the
+strip continues the banner instead of floating on GitHub's canvas; **keep the
+three anchors on one source line**, because any whitespace between them paints
+a seam of GitHub's background through the strip.
+
+**Buttons.** macOS first and filled with `--accent-solid` — it is the platform
+most visitors are on and the only one with a signed installer. Windows and npm
+are outlined. Sub-labels are full white on the fill (5.46:1); the tinted
+`#DCE5FF` that reads better as hierarchy is 4.34 and fails.
+
+**The button label is body type, not a service label.** Space Grotesk 600 at
+17px in sentence case, tracking `-0.01em`. It shipped once as Space Mono caps
+at 14px and was unreadable, for a reason worth keeping: a monospace gives every
+letter the same width and caps removes the ascenders and descenders, so both
+cues a reader recognises a whole word by are gone at once. The 10px technical
+sub-label stays monospaced caps — it is short, and it holds the link to the
+site's language.
+
+**A shell command is never set in caps.** The npm button read
+`NPM INSTALL -G TRACE-MCP`, and `-G` is a different npm flag from `-g`: anyone
+retyping it off the picture gets an error. The command belongs in the sub-label,
+lowercase, no tracking, exactly as a terminal shows it (`.btn .s.cmd`), with
+`Install via npm` as the label above it.
+
+**Weight.** The dot lattice is most of the file, and it quantises to a palette
+with no visible loss: the generator pipes each PNG through `pngquant` when it
+is on `PATH` — 230 KB → 80 KB for the banner, 25 KB → 7 KB per button, so one
+appearance of the whole header is ~104 KB. `pngquant` is optional so a
+contributor without it can still regenerate; the run says so when it skips.
+
+**Badges: five maximum, real sources only.** Currently three — CI, npm version,
+licence. No badge for a number we could state in words.
