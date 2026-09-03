@@ -263,18 +263,20 @@ The mining pipeline also filters non-user content before it reaches the store. B
 
 ## CLI
 
+*(Commands support both `trace` and `trace-mcp` aliases)*
+
 ```bash
-trace-mcp memory mine [--project=.] [--force] [--min-confidence=0.6]
-trace-mcp memory index [--project=.] [--force]
-trace-mcp memory search "query" [--project=.] [--limit=20]
-trace-mcp memory decisions [--project=.] [--type=tech_choice] [--search="query"] [--json]
-trace-mcp memory stats [--project=.] [--json]
-trace-mcp memory timeline [--project=.] [--file=path] [--symbol=id]
+trace memory mine [--project=.] [--force] [--min-confidence=0.6]
+trace memory index [--project=.] [--force]
+trace memory search "query" [--project=.] [--limit=20]
+trace memory decisions [--project=.] [--type=tech_choice] [--search="query"] [--json]
+trace memory stats [--project=.] [--json]
+trace memory timeline [--project=.] [--file=path] [--symbol=id]
 ```
 
 ## Storage
 
-All decision memory is stored in `~/.trace-mcp/decisions.db` (SQLite, WAL mode). Tables:
+All decision memory is stored in `~/.trace/decisions.db` (or `~/.trace-mcp/decisions.db` fallback, SQLite, WAL mode). Tables:
 
 - `decisions` — decision records with code linkage, temporal validity, service scoping
 - `decisions_fts` — FTS5 virtual table for full-text search over decisions

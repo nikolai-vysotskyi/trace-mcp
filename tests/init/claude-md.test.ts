@@ -37,8 +37,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const START_MARKER = '<!-- trace-mcp:start -->';
-const END_MARKER = '<!-- trace-mcp:end -->';
+const START_MARKER = '<!-- trace:start -->';
+const END_MARKER = '<!-- trace:end -->';
+const LEGACY_START_MARKER = '<!-- trace-mcp:start -->';
+const LEGACY_END_MARKER = '<!-- trace-mcp:end -->';
 
 describe('updateClaudeMd', () => {
   it('returns skipped on dry run when file does not exist', () => {
@@ -112,6 +114,22 @@ describe('updateClaudeMd', () => {
     expect(written).toContain('## Other stuff');
   });
 
+  it('migrates legacy trace-mcp markers to trace markers', () => {
+    const existing = `# My Project\n\n${LEGACY_START_MARKER}\nlegacy content\n${LEGACY_END_MARKER}\n\n## Other stuff\n\nKeep this content.\n`;
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readFileSync.mockReturnValue(existing);
+
+    const result = updateClaudeMd('/project', {});
+    expect(result.action).toBe('updated');
+
+    const written = String(mockFs.writeFileSync.mock.calls[0][1]);
+    expect(written).toContain(START_MARKER);
+    expect(written).toContain(END_MARKER);
+    expect(written).not.toContain('legacy content');
+    expect(written).toContain('trace Tool Routing');
+    expect(written).toContain('## Other stuff');
+  });
+
   it('appends block when no markers exist', () => {
     mockFs.existsSync.mockReturnValue(true);
     mockFs.readFileSync.mockReturnValue('# Existing content\n\nSome text\n');
@@ -147,6 +165,23 @@ describe('updateClaudeMd', () => {
     expect(written).not.toContain('jCodeMunch');
     expect(written).toContain('## Other');
     expect(written).toContain('Keep this');
+  });
+
+  it('preserves an unrelated user heading that merely starts with the word "Trace"', () => {
+    // Regression test: the orphan-content cleanup used to match ANY heading
+    // starting with "trace"/"trace-mcp" (a bare word-boundary check), which
+    // deleted unrelated user-owned sections like "## Trace logging policy".
+    // It must only match our own generated "trace[-mcp] Tool Routing" heading.
+    const existing = `# Project\n\n## Trace logging policy\n\nDo not log secrets.\n\n${START_MARKER}\nold\n${END_MARKER}\n`;
+    mockFs.existsSync.mockReturnValue(true);
+    mockFs.readFileSync.mockReturnValue(existing);
+
+    const result = updateClaudeMd('/project', {});
+    expect(result.action).toBe('updated');
+
+    const written = String(mockFs.writeFileSync.mock.calls[0][1]);
+    expect(written).toContain('## Trace logging policy');
+    expect(written).toContain('Do not log secrets.');
   });
 
   it('returns already_configured when block is identical', () => {

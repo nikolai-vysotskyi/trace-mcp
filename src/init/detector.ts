@@ -69,7 +69,9 @@ export function detectProject(dir: string): DetectionResult {
   const claudeMdContent = readIfExists(claudeMdPath);
   const hasClaudeMd = claudeMdContent !== null;
   const claudeMdHasTraceMcpBlock =
-    claudeMdContent !== null && claudeMdContent.includes('<!-- trace-mcp:start -->');
+    claudeMdContent !== null &&
+    (claudeMdContent.includes('<!-- trace:start -->') ||
+      claudeMdContent.includes('<!-- trace-mcp:start -->'));
 
   const { hasGuardHook, guardHookVersion } = detectGuardHook();
 
@@ -133,21 +135,23 @@ function detectPackageManagers(root: string): PackageManagerInfo[] {
 export { detectMcpClients } from '../../packages/app/src/shared/mcp-detector.js';
 
 function detectExistingConfig(root: string): { path: string } | null {
-  // Check dedicated config files
+  // Check dedicated config files (.trace.json takes precedence over legacy .trace-mcp.json)
   const candidates = [
+    path.join(root, '.trace.json'),
     path.join(root, '.trace-mcp.json'),
+    path.join(root, '.config', 'trace.json'),
     path.join(root, '.config', 'trace-mcp.json'),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return { path: p };
   }
-  // Check package.json "trace-mcp" field (cosmiconfig searches here too)
+  // Check package.json "trace" or "trace-mcp" field (cosmiconfig searches here too)
   const pkgPath = path.join(root, 'package.json');
   const pkgRaw = readIfExists(pkgPath);
   if (pkgRaw !== null) {
     try {
       const pkg = JSON.parse(pkgRaw);
-      if (pkg['trace-mcp']) return { path: pkgPath };
+      if (pkg.trace || pkg['trace-mcp']) return { path: pkgPath };
     } catch {
       /* ignore malformed package.json */
     }
@@ -159,10 +163,14 @@ function detectExistingDb(
   root: string,
   globalDbPath?: string,
 ): { path: string; schemaVersion: number; fileCount: number } | null {
-  // Check global location first, then legacy local location
+  // Check global location first, then local locations
   const candidates = globalDbPath
-    ? [globalDbPath, path.join(root, '.trace-mcp', 'index.db')]
-    : [path.join(root, '.trace-mcp', 'index.db')];
+    ? [
+        globalDbPath,
+        path.join(root, '.trace', 'index.db'),
+        path.join(root, '.trace-mcp', 'index.db'),
+      ]
+    : [path.join(root, '.trace', 'index.db'), path.join(root, '.trace-mcp', 'index.db')];
   const dbPath = candidates.find((p) => fs.existsSync(p));
   if (!dbPath) return null;
   try {

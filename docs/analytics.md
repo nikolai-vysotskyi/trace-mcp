@@ -189,36 +189,36 @@ audit_config()
 
 ## CLI Commands
 
-All analytics commands are under `trace-mcp analytics`:
+All analytics commands are under `trace analytics` (supports `trace-mcp analytics` alias):
 
 ```bash
 # Sync session logs into analytics DB
-trace-mcp analytics sync [--full]
+trace analytics sync [--full]
 
 # Token usage report
-trace-mcp analytics report [--period today|week|month|all] [--format text|json]
+trace analytics report [--period today|week|month|all] [--format text|json]
 
 # Optimization recommendations
-trace-mcp analytics optimize [--period today|week|month|all] [--format text|json]
+trace analytics optimize [--period today|week|month|all] [--format text|json]
 
 # Real savings analysis
-trace-mcp analytics savings [--period today|week|month|all] [--format text|json]
+trace analytics savings [--period today|week|month|all] [--format text|json]
 
 # Synthetic benchmark
-trace-mcp analytics benchmark [--queries 10] [--seed 42] [--format text|json|markdown]
+trace analytics benchmark [--queries 10] [--seed 42] [--format text|json|markdown]
 
 # Technology coverage
-trace-mcp analytics coverage [--format text|json]
+trace analytics coverage [--format text|json]
 
 # Usage trends
-trace-mcp analytics trends [--days 30] [--format text|json]
+trace analytics trends [--days 30] [--format text|json]
 ```
 
 ---
 
 ## Storage
 
-Analytics data lives in `~/.trace-mcp/analytics.db` (separate from project indexes):
+Analytics data lives in `~/.trace/analytics.db` (or `~/.trace-mcp/analytics.db` fallback, separate from project indexes):
 
 ```sql
 sessions       — one row per parsed session (tokens, model, timestamps)
@@ -226,7 +226,7 @@ tool_calls     — one row per tool call (name, server, output size, target file
 sync_state     — file paths + mtime for incremental sync
 ```
 
-Session savings (in-memory tracker) persist to `~/.trace-mcp/savings.json`.
+Session savings (in-memory tracker) persist to `~/.trace/savings.json` (or `~/.trace-mcp/savings.json`).
 
 ### Incremental sync
 
