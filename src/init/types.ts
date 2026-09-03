@@ -103,4 +103,7 @@ export const SESSION_END_HOOK_VERSION = '0.2.0';
 // rewrites what the model sees, so it must never turn on silently for an
 // existing install.
 export const MIRROR_HOOK_VERSION = '0.2.0';
-export const LAUNCHER_VERSION = '0.4.0';
+// 0.5.0 (TRA-742): probe_node falls back to the node beside a recorded package
+// root, so a machine whose only node is a bundled runtime or a custom npm
+// prefix no longer dies with "node binary not found".
+export const LAUNCHER_VERSION = '0.5.0';

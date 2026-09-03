@@ -118,6 +118,8 @@ Files matching `.gitignore` patterns are **indexed for graph metadata** (symbols
 
 CodeQL and Semgrep run on every push/PR with `security-extended` + OWASP/nodejsscan rulesets, which surfaces a structural false-positive shape specific to this codebase: **`js/path-injection`**. Nearly every MCP tool takes a `file_path`-shaped argument, and the sanitizer (`validatePath()` / `guardPath()`, see above) runs in the tool-registration wrapper (`src/tools/register/*.ts`) one call away from the implementation function CodeQL flags — interprocedural taint tracking doesn't follow the sanitizer across that boundary. Per the precedent set in alerts #1068/#1069 ("local read-only search under the registered project root, same trust domain as the CLI/MCP user"), this bucket is dismissed in bulk as **won't fix** whenever the flagged path either passes through `validatePath()`/`guardPath()` before use, or is sourced from already-validated indexed data (e.g. `file_path` columns populated at index time). New `js/path-injection` alerts should be checked against this pattern and dismissed with the same justification rather than left to accumulate — but a path that reaches a sink *without* going through the wrapper is a real bug, not this exception.
 
+OpenSSF Scorecard contributes a second structural bucket: **`TokenPermissionsID` on `.github/workflows/release.yml`**. Scorecard flags any `contents: write`, but release-please *is* the release: it pushes release commits, creates tags, and publishes GitHub Releases, so the workflow cannot function without that scope. These alerts are dismissed as **won't fix** with the justification "release-please requires `contents: write` to create tags and releases; the permission is scoped to a job in a workflow gated on `master`", and re-dismissed the same way when a Scorecard run re-raises them. The exception is deliberately narrow — it covers `release.yml` only. A `contents: write` grant in any other workflow, or one at the top level rather than scoped to the job that needs it, is a real finding and gets fixed (as `ga4-snapshot.yml` was). Two adjacent Scorecard results are also expected and not gaps: `Signed-Releases: 0` reflects that release assets carry `actions/attest-build-provenance` attestations, which Scorecard does not look for (it only counts `.sig`/`.asc`/`.intoto.jsonl` uploaded as release assets), and the legacy branch-protection API reporting `allow_force_pushes: true` on `master` is overridden by the active `default` ruleset's `non_fast_forward` rule with an empty bypass list.
+
 The remaining volume buckets (`ajinabraham.njsscan.dos.regex_dos`, `js/insecure-temporary-file`, `js/file-system-race`) are **not** covered by this exception — they involve regex-shape and TOCTOU analysis that has to be judged per call site, not by a single architectural argument, and a lazy blanket dismissal here would hide a real bug class (this tool is designed to scan arbitrary — including untrusted/third-party — codebases, so a crafted file triggering catastrophic backtracking in one of the scanner's own detection regexes is a plausible local DoS). These are tracked for individual review rather than dismissed.
 
 ---
@@ -259,6 +261,29 @@ signed with it. That asymmetry is why it gets an environment and, for example,
 
 Removing `environment:` from a job that consumes these secrets un-gates them
 silently — the release still succeeds. Treat that line as part of the control.
+
+---
+
+## Repository Security Settings
+
+Two controls live in GitHub's repository settings rather than in this repo, so
+they are recorded here — settings have no diff and no reviewer.
+
+* **Actions SHA pinning is enforced by the platform** (`sha_pinning_required:
+  true`, enabled 2026-09-03). Every third-party action must be pinned to a full
+  40-character commit SHA; `uses: some/action@v4` is rejected. All 17 `uses:`
+  references were already SHA-pinned by review discipline when this was turned
+  on, so the switch is a ratchet, not a migration.
+* **Secret scanning covers provider patterns only, and cannot be widened on this
+  plan.** Scanning and push protection are on (free for public repos), but
+  *non-provider patterns* (private keys, connection strings, custom bearer
+  tokens) and *validity checks* require GitHub Secret Protection, which is sold
+  for organization-owned repositories on Team/Enterprise. This repo is
+  user-owned on the free plan: `PATCH /repos/{o}/{r}` accepts
+  `secret_scanning_non_provider_patterns` / `secret_scanning_validity_checks`
+  with HTTP 200 and silently leaves both `disabled`. Verified 2026-09-03 —
+  don't re-attempt the API call, it looks like it worked. Generic secrets are
+  caught by review, not by the platform.
 
 ---
 

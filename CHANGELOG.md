@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 
+## [3.16.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.15.0...v3.16.0) (2026-09-03)
+
+
+### Features
+
+* **analytics:** publish the client-reporting gate in adoption.yml (TRA-748) ([#827](https://github.com/nikolai-vysotskyi/trace-mcp/issues/827)) ([70fa3ef](https://github.com/nikolai-vysotskyi/trace-mcp/commit/70fa3ef7fbc151d4ad9237a0133c5b9cb9e18bb1))
+* **docs:** rebuild the first screen of the site and the README around one download (TRA-738) ([#819](https://github.com/nikolai-vysotskyi/trace-mcp/issues/819)) ([d2a8df9](https://github.com/nikolai-vysotskyi/trace-mcp/commit/d2a8df93d93e590667fb171f538f9ba92e0db7d4))
+
+
+### Bug Fixes
+
+* **app:** the theme switcher applies without a restart (TRA-754) ([#828](https://github.com/nikolai-vysotskyi/trace-mcp/issues/828)) ([ac22e43](https://github.com/nikolai-vysotskyi/trace-mcp/commit/ac22e430a409bfce2b8f7abdbe0411adb11f7b1b))
+* **doctor:** stop flagging trace-mcp's own tool names as competitor directives ([a6b1017](https://github.com/nikolai-vysotskyi/trace-mcp/commit/a6b1017c94fef6ef9cd6b56f1458f43bd367e3f5))
+* **security:** patch fast-uri/qs advisories and enforce the audit invariant in CI (TRA-733) ([#817](https://github.com/nikolai-vysotskyi/trace-mcp/issues/817)) ([502168c](https://github.com/nikolai-vysotskyi/trace-mcp/commit/502168cedef99acbb3c950f27528fc922449dcf3))
+
+
+### Documentation
+
+* **roadmap:** calls is a GA4 custom dimension, not a metric ([#826](https://github.com/nikolai-vysotskyi/trace-mcp/issues/826)) ([051b81b](https://github.com/nikolai-vysotskyi/trace-mcp/commit/051b81bd9f53c08ea29c4f74cba6a7d585277725))
+
 ## [3.15.0](https://github.com/nikolai-vysotskyi/trace-mcp/compare/v3.14.0...v3.15.0) (2026-09-03)
 
 
