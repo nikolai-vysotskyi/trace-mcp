@@ -73,6 +73,10 @@ ORIG_CHARS=${#ORIGINAL}
 
 SPILL_DIR="$HOME_DIR/$SESSION_ID"
 mkdir -p "$SPILL_DIR" 2>/dev/null || exit 0
+# A spill is only useful while its session is alive, so anything older than a
+# day is garbage. Without this the directory grows for as long as the hook is
+# installed.
+find "$HOME_DIR" -name '*.txt' -type f -mtime +1 -delete 2>/dev/null
 SPILL="$SPILL_DIR/$(date +%s)-$$.txt"
 printf '%s' "$ORIGINAL" >"$SPILL" 2>/dev/null || exit 0
 

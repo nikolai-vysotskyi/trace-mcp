@@ -140,6 +140,21 @@ describe('trace-mcp mirror hook', () => {
     }
   });
 
+  it('reaps stale spills but keeps the current one', () => {
+    const stale = path.join(home, 'old-session');
+    fs.mkdirSync(stale, { recursive: true });
+    const staleFile = path.join(stale, 'ancient.txt');
+    fs.writeFileSync(staleFile, 'old');
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    fs.utimesSync(staleFile, twoDaysAgo, twoDaysAgo);
+
+    const noisy = Array.from({ length: 400 }, () => 'copying asset').join('\n');
+    const { output } = runMirror('Bash', bashResponse(noisy));
+
+    expect(fs.existsSync(staleFile)).toBe(false);
+    expect(fs.existsSync(output!.match(/Full output: (\S+)/)![1])).toBe(true);
+  });
+
   // The harness discards a rewrite whose shape differs from the tool's own
   // output envelope, silently and without changing the transcript. Only the
   // text field may move; every sibling key must survive untouched.
