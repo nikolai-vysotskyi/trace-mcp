@@ -1,11 +1,28 @@
+<!-- Header images are generated — `node scripts/gen-readme-banner.mjs` re-renders
+     them from docs/_data/counts.yml and docs/_data/pr_context_bench.json. Never
+     retouch a PNG by hand: the numbers in it would stop tracking the data.
+     PNG @2x rather than SVG because GitHub renders README images in an isolated
+     context where an SVG's @font-face never loads and Space Grotesk falls back. -->
 <p align="center">
-  <img src="packages/app/build/icon-256.png" alt="trace-mcp logo" width="128" />
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="docs/images/readme/banner-light.png" />
+    <img src="docs/images/readme/banner-dark.png" width="750" alt="trace-mcp — precomputed code intelligence for AI coding agents. Index the repo once so the agent stops re-reading the same files. Context to review one pull request: 13,595 tokens without trace-mcp, 1,326 with it — 90.6% less, median over 60 merged PRs in 6 open-source repos that are not ours. 177 tools, 81 languages, 87 framework integrations, 100% local, MIT." />
+  </picture>
 </p>
 
-<h1 align="center">trace-mcp</h1>
+<!-- The three buttons carry their own background plate and sit flush against each
+     other, so they continue the banner instead of floating on GitHub's canvas.
+     Keep the anchors on one line: any whitespace between them paints a seam. -->
+<p align="center"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-macos-light.png" /><img src="docs/images/readme/btn-macos-dark.png" width="250" alt="Download for macOS — Apple Silicon, Intel, .dmg" /></picture></a><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-windows-light.png" /><img src="docs/images/readme/btn-windows-dark.png" width="250" alt="Download for Windows — .exe installer" /></picture></a><a href="https://www.npmjs.com/package/trace-mcp"><picture><source media="(prefers-color-scheme: light)" srcset="docs/images/readme/btn-npm-light.png" /><img src="docs/images/readme/btn-npm-dark.png" width="250" alt="Install via npm — npm install -g trace-mcp" /></picture></a></p>
 
 <p align="center">
-  trace-mcp is an MCP server that indexes your repository once so AI coding agents stop re-reading the same files &mdash; <strong>90.6% fewer input tokens</strong> to review a pull request.
+  <sub><b>WORKS WITH</b> &nbsp;&middot;&nbsp; Claude Code &nbsp;&middot;&nbsp; Cursor &nbsp;&middot;&nbsp; Codex &nbsp;&middot;&nbsp; Windsurf &nbsp;&middot;&nbsp; Zed &nbsp;&middot;&nbsp; any MCP client</sub>
+</p>
+
+<!-- The banner carries this sentence as a picture; this line carries it as text,
+     so search and screen readers get the same claim. Keep the two in sync. -->
+<p align="center">
+  <strong>trace-mcp</strong> is an MCP server that indexes your repository once so AI coding agents stop re-reading the same files &mdash; <strong>90.6% fewer input tokens</strong> to review a pull request.
 </p>
 
 <p align="center">
@@ -13,18 +30,6 @@
   <a href="https://www.npmjs.com/package/trace-mcp"><img src="https://img.shields.io/npm/v/trace-mcp" alt="npm version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
 </p>
-
-## Download
-
-<!-- A table, not styled boxes: GitHub strips CSS, so the mock's three cards are the
-     one construct that renders as three equal columns on github.com itself. -->
-<table align="center">
-  <tr>
-    <td align="center" width="240"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><strong>macOS</strong></a><br /><sub>Apple Silicon &middot; Intel</sub></td>
-    <td align="center" width="240"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><strong>Windows</strong></a><br /><sub>.exe installer</sub></td>
-    <td align="center" width="240"><a href="https://www.npmjs.com/package/trace-mcp"><strong>npm</strong></a><br /><sub>server only, any OS</sub></td>
-  </tr>
-</table>
 
 ```bash
 npm install -g trace-mcp   # MCP server, no app

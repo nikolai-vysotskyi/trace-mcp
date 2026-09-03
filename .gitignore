@@ -38,3 +38,6 @@ tests/recall-harness/report.md
 
 # Jekyll build output (contrast sweep serves it when present)
 docs/_site/
+
+# Scratch HTML from scripts/gen-readme-banner.mjs
+docs/images/.banner-tmp-*.html
