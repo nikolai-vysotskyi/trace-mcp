@@ -413,8 +413,12 @@ currently pointed at installs that will never reach value. Those are opposite
 strategies and we cannot presently tell them apart.
 
 **One dependency, and it is the same one three other items are waiting on.**
-`calls` needs registering in GA4 as an event-scoped custom metric, exactly like
-`repos_indexed` / `preset` / `tools_advertised` need registering as dimensions.
+`calls` needs registering in GA4 as an event-scoped custom **dimension**, exactly
+like `repos_indexed` / `preset` / `tools_advertised` — not a metric, as an earlier
+revision of this line said. `scripts/ga4-snapshot.mjs` queries `customEvent:calls`
+in the `dimensions` array (once alone, once crossed with `client`), and GA4 will
+not serve a metric registration to a dimension slot: registering it as a metric
+leaves `usage` and `by_client_used_pct` exactly as blank as they are now.
 GA4 does not backfill any of them. That makes four fields in one admin session
 rather than four separate asks — bundle it.
 
