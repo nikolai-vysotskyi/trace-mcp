@@ -5,32 +5,55 @@ import { describe, expect, it } from 'vitest';
 /**
  * `benchmark_project` never invokes a trace-mcp tool (TRA-762).
  *
- * Both sides of the comparison are character-count estimates: the baseline from
- * `byte_length` in the index, the trace-mcp side from indexed symbol/signature
- * sizes or a fixed per-scenario multiplier. `src/analytics/benchmark.ts` says so
- * in its header and repeats it in the tool's `caveats` output. README.md had
- * drifted to claiming the trace-mcp side was "actual tokens returned by
- * trace-mcp tools", which an outside reviewer caught by reading the source.
+ * Every figure it prints is a scenario-specific synthetic heuristic over the
+ * index — real byte/source/signature sizes for some scenarios, assumed grep
+ * yields and reply sizes for others, a fixed 0.05–0.45 fraction of the baseline
+ * for the rest. `src/analytics/benchmark.ts` says so in its header and repeats
+ * it in the tool's `caveats` output. README.md had drifted to claiming the
+ * trace-mcp side was "actual tokens returned by trace-mcp tools", which an
+ * outside reviewer caught by reading the source.
  *
- * This guards the two directions that drift: the docs re-acquiring a
- * measured-savings claim, and the code silently losing its own disclaimer.
+ * The guard is positive on purpose: it pins the disclaimers that must be
+ * present, because a blacklist of phrasings is trivially paraphrased around.
+ * The blacklist below is only a backstop for the exact wording that shipped.
  */
 
 const ROOT = join(import.meta.dirname, '..', '..');
 
-const FORBIDDEN = [
-  'actual tokens returned by trace-mcp',
-  'actual tokens returned by trace',
-  'measured tokens returned',
+/** Every place the benchmark is presented must carry one of these. */
+const REQUIRED_DISCLAIMERS = [
+  'No trace-mcp tool is invoked.',
+  '**This is a synthetic estimate**',
+  'synthetic estimate computed from your index, not a record of real tool calls',
 ];
 
+/**
+ * Backstop: "actual/measured/observed/real ... token(s) ... tool/call/response"
+ * within one sentence. Catches the paraphrases a substring blacklist misses.
+ */
+const MEASURED_CLAIM =
+  /\b(actual|measured|observed|real|live)\b[^.\n]{0,80}\btokens?\b[^.\n]{0,80}\b(tool|tools|call|calls|response|responses)\b/i;
+
 describe('benchmark_project is described as an estimate', () => {
-  it.each(['README.md', 'docs/index.html'])('%s claims no measured tool output', (page) => {
-    const source = readFileSync(join(ROOT, page), 'utf-8');
-    const found = FORBIDDEN.filter((claim) => source.includes(claim));
+  const readme = () => readFileSync(join(ROOT, 'README.md'), 'utf-8');
+
+  it.each(REQUIRED_DISCLAIMERS)('README.md still says: %s', (phrase) => {
     expect(
-      found,
-      `${page} claims benchmark_project returns real tool output — it does not (TRA-762)`,
+      readme(),
+      `README.md lost a benchmark disclaimer — benchmark_project invokes no tool (TRA-762)`,
+    ).toContain(phrase);
+  });
+
+  it('README.md claims no measured tool output for the benchmark', () => {
+    // Scoped to benchmark prose: other features (TOON output, analytics savings)
+    // legitimately do report measurements taken on real tool calls.
+    const hits = readme()
+      .split('\n')
+      .filter((line) => /benchmark|with(out)? trace-mcp/i.test(line))
+      .filter((line) => MEASURED_CLAIM.test(line));
+    expect(
+      hits,
+      'README.md reads as if benchmark_project reports real tool output — it does not (TRA-762)',
     ).toEqual([]);
   });
 

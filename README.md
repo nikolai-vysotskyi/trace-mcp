@@ -218,7 +218,13 @@ See [Session analytics & token savings tracking](https://trace-mcp.com/analytics
 <details>
 <summary>Methodology</summary>
 
-Estimated using `benchmark_project` — it walks eleven task categories (symbol lookup, file exploration, text search, find usages, context bundle, batch overhead, impact analysis, call graph traversal, type hierarchy, tests-for, composite task context) over the indexed project. **No trace-mcp tool is actually invoked.** "Without trace-mcp" = tokens estimated from the file `byte_length` values stored in the index, standing in for equivalent Read/Grep/Glob operations. "With trace-mcp" = tokens estimated from indexed symbol source/signature sizes where available, and otherwise from a fixed per-scenario multiplier of the baseline (0.05–0.45 depending on the scenario). Both sides are character-count estimates, calibrated against `cl100k_base` when `gpt-tokenizer` is installed. The result is an upper bound on the reduction, not a measurement of it — the same caveats are printed in the tool output and documented at the top of `src/analytics/benchmark.ts`.
+Estimated using `benchmark_project` — it walks eleven task categories (symbol lookup, file exploration, text search, find usages, context bundle, batch overhead, impact analysis, call graph traversal, type hierarchy, tests-for, composite task context) over the indexed project. **No trace-mcp tool is invoked.** Every figure on both sides is a scenario-specific synthetic heuristic, and the heuristics differ per scenario. They draw on three kinds of input, mixed differently in each one:
+
+- **Real values from the index** — file `byte_length`, symbol source and signature sizes. These carry the baseline for symbol lookup, file exploration, impact analysis and call graph traversal.
+- **Assumed result shapes** for operations with no indexed equivalent — e.g. text search and find-usages baselines assume a fixed grep yield (matches × context lines × 80 chars), `get_tests_for` is assumed to answer in ~400 characters, and the batch-overhead scenario adds fixed per-call MCP framing / hint / metadata token constants.
+- **A fixed fraction of the baseline**, between 0.05 and 0.45, where neither of the above applies.
+
+Character counts are converted to tokens by an estimator calibrated against `cl100k_base` when `gpt-tokenizer` is installed, and by a chars/3.5 heuristic otherwise. The result is an upper bound on the reduction, not a measurement of it — the same caveats are printed in the tool output and documented at the top of `src/analytics/benchmark.ts`.
 
 Reproduce it yourself:
 ```
