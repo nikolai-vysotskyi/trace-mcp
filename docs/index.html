@@ -521,15 +521,16 @@ layout: null
     .btn:hover .arrow { transform: translateX(3px); }
 
     /* ── Hero ── */
+    /* Centred, four elements deep (TRA-738). The asymmetric left-aligned stack this
+       replaces is the composition §2.7 prefers, and it is the wrong one for a first
+       screen whose whole job is one sentence and one button — with nothing in the
+       right half to balance it, the page read as a paragraph the visitor had to
+       finish before finding the download. */
     .hero {
-      padding: 128px 0 80px;
+      padding: 112px 0 64px;
       position: relative;
+      text-align: center;
     }
-    .hero-meta {
-      display: flex; align-items: center; gap: 16px;
-      margin-bottom: 56px;
-    }
-    .hero-meta .divider { flex: 1; height: 1px; background: var(--border-visible); }
     .hero-headline {
       font-family: var(--font-body);
       /* 60/900 is the pair that breaks this headline after "intelligence" and
@@ -541,10 +542,11 @@ layout: null
       letter-spacing: -0.025em;
       color: var(--text-display);
       max-width: 900px;
+      margin: 0 auto;
       overflow-wrap: break-word;
     }
     .hero-desc {
-      margin-top: 28px;
+      margin: 28px auto 0;
       max-width: 660px;
       font-size: 19px;
       line-height: 1.55;
@@ -555,122 +557,85 @@ layout: null
        weight here would spend a budget slot on what one shade already says. */
     .hero-desc .accent-text { color: var(--text-display); }
     .hero-cta {
-      margin-top: 56px;
-      display: flex; gap: 12px; flex-wrap: wrap;
-      align-items: center;
+      margin-top: 48px;
+      display: flex; gap: 12px;
+      justify-content: center;
     }
-    /* The second install path, and the only one off macOS. A technical 8px box,
-       not a pill: it reads as a terminal line, and the pill next to it is the
-       one thing on this row that should read as a button. */
-    .hero-install {
-      display: inline-flex; align-items: center; gap: 14px;
-      min-height: 56px;
-      padding: 0 20px;
-      background: var(--surface);
-      border: 1px solid var(--border-visible);
-      border-radius: 8px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      color: var(--text-display);
-      text-align: left;
-      cursor: pointer;
-      transition: border-color 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
-    }
-    .hero-install:hover { border-color: var(--text-display); }
-    /* Off macOS the DMG button is removed and this is the hero's only action. */
-    .hero-install.is-primary { border-color: var(--text-display); }
-    .hero-install .prompt { color: var(--text-secondary); }
-    .hero-install code { color: var(--text-display); font-size: inherit; }
-    .hero-install .copy {
-      align-self: stretch;
-      display: flex; align-items: center;
-      /* Pins the label to the right edge once the box goes full-width on a phone;
-         no effect while the box sizes to its content on desktop. */
-      margin-left: auto;
-      padding-left: 14px;
-      border-left: 1px solid var(--border);
-      font-size: 10px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-    }
-    .hero-install:hover .copy { color: var(--text-display); }
-    .hero-alt-arch {
-      margin-top: 14px;
+    /* The quiet line under the button: the npm path, what the thing is, and the one
+       link to everything else. Mono caps at --text-secondary so the whole row sits a
+       clear step below the button and never competes with it. */
+    .hero-note {
+      margin-top: 24px;
       font-family: var(--font-mono);
       font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--text-secondary);
+      display: flex; flex-wrap: wrap; gap: 14px;
+      align-items: center; justify-content: center;
     }
-    .hero-alt-arch a {
-      color: var(--text-secondary);
-      border-bottom: 1px solid var(--border-visible);
-      transition: color 200ms ease-out, border-color 200ms ease-out;
-    }
-    .hero-alt-arch a:hover { color: var(--text-display); border-color: var(--text-display); }
-    .hero-trust {
-      /* Far enough from the architecture link above that the two mono caps rows
-         do not read as one paragraph. */
-      margin-top: 28px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-secondary);
-      display: flex; flex-wrap: wrap; gap: 10px;
-      align-items: center;
-    }
-    .hero-trust .dot {
+    .hero-note .dot {
       width: 3px; height: 3px; border-radius: 50%;
       background: var(--border-visible);
       display: inline-block;
     }
-    .hero-trust .ok {
-      color: var(--text-display);
-      font-weight: 500;
+    .hero-note > a {
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border-visible);
+      transition: color 200ms ease-out, border-color 200ms ease-out;
     }
+    .hero-note > a:hover { color: var(--text-display); border-color: var(--text-display); }
+    /* The second install path, and the only one off macOS and Windows. No box any
+       more: boxed, it read as a second button beside the red pill, which is the
+       "two actions of equal weight" the hero keeps being pulled back into. It is a
+       line of terminal text that happens to copy itself. */
+    .hero-install {
+      display: inline-flex; align-items: baseline; gap: 8px;
+      padding: 0;
+      background: none;
+      border: 0;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      color: var(--text-primary);
+      text-align: left;
+      cursor: pointer;
+    }
+    .hero-install .prompt { color: var(--text-disabled); }
+    .hero-install code {
+      color: var(--text-primary);
+      font-size: inherit;
+      border-bottom: 1px dashed var(--border-visible);
+      transition: color 200ms ease-out, border-color 200ms ease-out;
+    }
+    .hero-install:hover code { color: var(--text-display); border-color: var(--text-display); }
+    .hero-install .copy {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-disabled);
+      transition: color 200ms ease-out;
+    }
+    .hero-install:hover .copy { color: var(--text-secondary); }
     @media (max-width: 700px) {
-      .hero { padding: 88px 0 40px; }
-      .hero-meta { margin-bottom: 28px; }
+      .hero { padding: 72px 0 40px; }
       .hero-headline { font-size: clamp(30px, 8vw, 44px); max-width: 100%; }
       .hero-desc { margin-top: 20px; font-size: 16px; }
-      /* One column, both full width: on a phone the two actions stack rather
-         than compete for a row 390px wide. The install line used to be
-         display:none here, which left a phone with no copyable command at all. */
-      .hero-cta { margin-top: 28px; gap: 10px; flex-direction: column; align-items: stretch; }
-      .hero-cta .btn { padding: 14px 22px; font-size: 11px; justify-content: center; }
-      .hero-install { font-size: 12px; min-height: 52px; padding: 0 14px; gap: 10px; }
-      .hero-alt-arch { font-size: 11px; margin-top: 12px; }
-      /* One item per line, no dots. As a wrapped row a separator ends a line at
-         every tested width from 660px down — measured, not assumed: the last box
-         on the first line is a `.dot` at 660, 600, 520, 430, 390, 360 and 320.
-         Stacking removes that at a cost of 20px at 390px (58px → 78px), all of
-         it below the two actions. */
-      .hero-trust {
+      /* Full width, one button: on a phone the download is a target, not a pill
+         floating in the middle of a 390px row. */
+      .hero-cta { margin-top: 28px; }
+      .hero-cta .btn { flex: 1; padding: 16px 22px; font-size: 11px; justify-content: center; }
+      /* One item per line, no dots, still centred. As a wrapped row a separator
+         ends a line at every tested width below the breakpoint — the same defect
+         `.hero-trust` had here before (TRA-607). */
+      .hero-note {
         font-size: 11px;
-        margin-top: 14px;
+        margin-top: 20px;
         flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
+        gap: 10px;
       }
-      .hero-trust .dot { display: none; }
-      /* Stacked, the row's one emphasised item stops reading as the strongest of
-         three peers and starts reading as a heading over the two below it — a
-         hierarchy that is not there. Inline (≥700px) the emphasis still works,
-         so it is dropped here only. */
-      .hero-trust .ok { color: inherit; font-weight: inherit; }
-      /* Both labels on their own line rather than two columns fighting over 390px.
-         The row stops fitting at 520px (17px → 33px) and takes three lines at
-         320px; the divider has no width left to draw by then, so it goes. This
-         reuses the hero's 700px breakpoint instead of adding a second one 180px
-         away — the cost is 17px of height between 520px and 700px. */
-      .hero-meta {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 6px;
-      }
-      .hero-meta .divider { display: none; }
+      .hero-note .dot { display: none; }
     }
 
     /* ── Metrics strip (proof row under hero) ── */
@@ -2088,57 +2053,50 @@ layout: null
   <section class="hero" style="border-top: none;">
     <div class="container">
 
-      <div class="hero-meta">
-        <span class="label">/ Recomputation &rarr; Reuse · AI Execution Layer</span>
-        <span class="divider"></span>
-        <span class="label label-disabled">v<span data-version>&hellip;</span> / mit license</span>
-      </div>
-
+      <!-- Four elements, centred, and nothing else (TRA-738): headline, one line of
+           what it is, one button, one quiet line. The service label, the version /
+           licence row, the alt-architecture link and the three-item trust row all
+           used to sit here too — eight blocks above the fold where Ollama has three.
+           Everything removed either lives below (licence in the footer, agents in the
+           capabilities section) or is one click away behind "All downloads". -->
       <h1 class="hero-headline">
         Precomputed code intelligence for AI coding agents
       </h1>
 
+      <!-- Same verbatim wording as README.md's first screen and as the metrics tile
+           below: two paraphrases of one number read as two claims to anything
+           extracting them. -->
       <p class="hero-desc">
-        trace-mcp indexes your repository once so agents stop re-reading the same files every turn.
-        <!-- Same verbatim claim wording as the metrics tile below: two paraphrases
-             of one number read as two claims to anything extracting them. -->
-        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, 100% local.</span>
+        Index your repository once so AI agents stop re-reading the same files &mdash;
+        <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request.</span>
       </p>
 
-      <!-- Two actions, no more (TRA-609): the DMG and the command that installs the
-           same thing without one. The two buttons that used to sit here both had a
-           second home already — the header links to the repo and to #install, which
-           is where "Analyze your AI system" pointed. Both survive on a phone. -->
       <div class="hero-cta">
         <!-- Rendered for everyone and pointed at the releases page, not hidden behind
              JS (TRA-440): a visitor without JavaScript gets a button that works, one
-             click further from the file. detectMac() below removes it off macOS and
-             rewrites the href to the DMG for the architecture it detects. -->
+             click further from the file. resolveDownload() below narrows it to a single
+             file on macOS and on Windows, and names the platform it detected. -->
         <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"
            rel="noopener" class="btn btn-primary btn-lg" data-dmg>
-          Download for macOS <span class="arrow">&darr;</span>
+          <span data-dmg-label>Download</span> <span class="arrow">&darr;</span>
         </a>
-        <!-- A real <button>, not the <span onclick> this used to be: the only way to
-             copy the install command was a mouse click, and it took no focus ring. -->
+      </div>
+
+      <p class="hero-note">
+        <!-- A real <button>, not a <span onclick>: the only way to copy the install
+             command used to be a mouse click, and it took no focus ring. -->
         <button type="button" class="hero-install" onclick="copyInstall(this)">
           <span class="prompt" aria-hidden="true">$</span>
           <code>npm install -g trace-mcp</code>
           <span class="copy" aria-live="polite">copy</span>
         </button>
-      </div>
-
-      <!-- The other architecture stays a quiet link, never a question the visitor has
-           to answer before downloading (TRA-440). Shown only once JS knows the Mac. -->
-      <p class="hero-alt-arch" data-dmg-alt hidden>
-        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener" data-dmg-other></a>
-      </p>
-
-      <p class="hero-trust">
-        <span class="ok">Open source (MIT)</span>
         <span class="dot"></span>
-        <span>Local-first</span>
+        <span>Open source (MIT), local-first</span>
         <span class="dot"></span>
-        <span>Works with Claude Code, Cursor, Windsurf, Codex</span>
+        <!-- The one quiet link, and the only place the visitor is ever asked to pick:
+             other architecture, Windows zip, Linux, checksums. Never a question in
+             front of the button (TRA-440). -->
+        <a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest" rel="noopener">All downloads &rarr;</a>
       </p>
 
     </div>
@@ -3082,24 +3040,24 @@ layout: null
       });
   })();
 
-  // Resolve the macOS download (TRA-440). The button ships pointing at the
-  // releases page so it works without JS; everything here only ever narrows it
-  // to one file, or removes it on a machine that cannot run a .dmg.
-  (function macDownload() {
+  // Resolve the download for the visitor's machine (TRA-440, TRA-738). The button
+  // ships labelled "Download" and pointing at the releases page so it works without
+  // JS; everything here only ever narrows it to one file and names the platform, or
+  // removes it on a machine that has no installer to offer.
+  (function resolveDownload() {
     const btn = document.querySelector('[data-dmg]');
-    const altBox = document.querySelector('[data-dmg-alt]');
-    const altLink = document.querySelector('[data-dmg-other]');
+    const btnLabel = document.querySelector('[data-dmg-label]');
     if (!btn) return;
 
     // iPadOS reports "MacIntel" too, and has no use for a .dmg — the touch-point
     // count is what separates it from a real Mac.
     const isMac = /Mac/i.test(navigator.platform || navigator.userAgent) && navigator.maxTouchPoints <= 1;
-    if (!isMac) {
+    const isWin = /Win/i.test(navigator.platform || navigator.userAgent);
+    if (!isMac && !isWin) {
+      // Linux, and anything else the release has no installer for: the npm line in
+      // the quiet row below is the whole install path there, and it is already on
+      // the page. A button to a releases page full of .dmg and .exe is not an offer.
       btn.remove();
-      // Leaves the hero without a primary action otherwise. The install command
-      // is the right one to promote here: it is the only path that works off a Mac.
-      const install = document.querySelector('.hero-install');
-      if (install) install.classList.add('is-primary');
       return;
     }
 
@@ -3127,31 +3085,26 @@ layout: null
       return 'arm64';
     };
 
-    const label = { arm64: 'Apple Silicon', x64: 'Intel' };
-
     Promise.all([
-      detectArch(),
+      isMac ? detectArch() : Promise.resolve('x64'),
       fetch('https://api.github.com/repos/nikolai-vysotskyi/trace-mcp/releases/latest')
         .then(r => r.ok ? r.json() : Promise.reject())
     ]).then(([arch, release]) => {
-      // Asset names carry the version (trace-mcp-<version>-arm64.dmg), so there is no
-      // version-free permalink to hardcode — match on the suffix instead and let
-      // the release be the only place a version number exists.
-      const dmg = (a) => (release.assets || []).find(x => x.name.endsWith('-' + a + '.dmg'));
-      const mine = dmg(arch);
-      const other = arch === 'arm64' ? 'x64' : 'arm64';
-      const theirs = dmg(other);
-      if (!mine) return; // No DMG in the latest release: leave the releases-page fallback.
+      // Asset names carry the version (trace-mcp-<version>-arm64.dmg,
+      // trace-mcp.Setup.<version>.exe), so there is no version-free permalink to
+      // hardcode — match on the shape instead and let the release be the only place
+      // a version number exists.
+      const assets = release.assets || [];
+      const mine = isWin
+        ? assets.find(x => /\.exe$/i.test(x.name))
+        : assets.find(x => x.name.endsWith('-' + arch + '.dmg'));
+      if (!mine) return; // Nothing for this platform in the latest release: leave the fallback.
 
       btn.href = mine.browser_download_url;
       btn.setAttribute('download', '');
       btn.title = mine.name;
-      if (theirs && altLink && altBox) {
-        altLink.href = theirs.browser_download_url;
-        altLink.setAttribute('download', '');
-        altLink.textContent = label[other] + ' Mac?';
-        altBox.hidden = false;
-      }
+      // The label names the platform only once a file has actually been found for it.
+      if (btnLabel) btnLabel.textContent = isWin ? 'Download for Windows' : 'Download for macOS';
     }).catch(() => {}); // Rate-limited or offline: the releases-page href still works.
   })();
 

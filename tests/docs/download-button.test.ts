@@ -38,11 +38,22 @@ describe('docs landing page — macOS download button', () => {
     expect(html).not.toMatch(/trace-mcp-\d+\.\d+\.\d+[-\w]*\.(dmg|zip)/);
   });
 
-  it('offers the other architecture as a link rather than a required choice', () => {
-    expect(html).toMatch(/\bdata-dmg-other\b/);
-    // Hidden until JS confirms a Mac and finds the asset — an empty link is worse
-    // than none.
-    expect(html).toMatch(/<p class="hero-alt-arch"[^>]*\bhidden\b/);
+  it('offers every other install path behind one quiet link, not a choice up front', () => {
+    // Other architecture, Windows zip, Linux, checksums — all of them live on the
+    // releases page behind a single link in the quiet row (TRA-738). The hero must
+    // never ask the visitor to classify their own machine before downloading.
+    const note = html.match(/<p class="hero-note">[\s\S]*?<\/p>/)?.[0];
+    expect(note, 'no .hero-note row in docs/index.html').toBeDefined();
+    expect(note!).toMatch(/All downloads/);
+    expect(note!).toMatch(/npm install -g trace-mcp/);
+  });
+
+  it('resolves a Windows installer too, not only a DMG (TRA-738)', () => {
+    // `btn.remove()` on every non-Mac left Windows visitors with no button at all,
+    // while the release has shipped an .exe since v3.14.0.
+    expect(html).toMatch(/const isWin = /);
+    expect(html).toMatch(/\\\.exe\$/);
+    expect(html).toMatch(/Download for Windows/);
   });
 
   it('defaults to arm64 when architecture detection is inconclusive', () => {

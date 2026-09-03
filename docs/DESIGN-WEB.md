@@ -443,35 +443,55 @@ Numbered last because §1–§7 were written before this section existed; renumb
 would break the `§` references inside this file and the one in `docs/index.html`.
 Read it as the landing-page counterpart to §2.
 
-**Two actions. Never three** (TRA-609). The hero carries the DMG button and the
-install command, and nothing else. It shipped with four competing elements —
-`Download for macOS`, `Analyze your AI system`, `View on GitHub`, and the install
-line — which is not a hierarchy, it is a row. Both of the removed buttons already
-had a home: the header links to the repo and to `#install`, on desktop and on a
-phone. Check that before adding a fifth thing back.
+**Four elements, centred, and nothing else** (TRA-738): headline → one line of
+what it is → one button → one quiet mono row. That is the whole first screen.
+Anything else belongs below the fold or one click away, and the burden is on the
+addition, not on the removal.
 
-**The two actions do not look alike.** The DMG is `.btn .btn-primary .btn-lg` — a
-red pill, the one red on the screen. The install line is `.hero-install` — a
-technical 8px box on `--surface` with a `$` prompt, the command, and a `COPY`
-label behind a hairline. A pill next to a pill reads as two buttons of equal
-weight; that is what the dashed pill it replaced did.
+The list of what used to sit here is the point: a service label
+(`/ Recomputation → Reuse · AI Execution Layer`), a version + licence row, a
+two-sentence description, two actions of different natures, an
+alternative-architecture link, and a three-item trust row — eight blocks above
+the fold where Ollama, the reference, has three. Left-aligned, they read as a
+paragraph the visitor had to finish before finding the download.
 
-**`.hero-install` is a `<button>`.** It was a `<span onclick>`, so the only way to
-copy the command was a mouse — no tab stop, no focus ring, nothing for a screen
-reader. The `$` is `aria-hidden`; the `copy` label is `aria-live="polite"` so the
-`copied` state is announced.
+**Centred, and this is the one place on the site where it is.** §2.7 prefers
+asymmetry, and it is right everywhere there is a second column to balance
+against. There is none here: one sentence and one button, alone, off to the
+left, with the whole right half empty is not asymmetry, it is a page that
+started and gave up. `.hero { text-align: center }` plus `margin: 0 auto` on
+`.hero-headline` (900px) and `.hero-desc` (660px).
 
-**It is visible on a phone.** It used to be `display: none` under 700px, which
-left a phone visitor with a DMG button and no copyable command at all. Below
-700px the row becomes one column, both actions go full width, and `.copy` pins
-right on `margin-left: auto`.
+**One action. The button.** `.btn .btn-primary .btn-lg`, the one red on the
+screen. It ships labelled `Download` pointing at `/releases/latest` so it works
+without JS (TRA-440), and `resolveDownload()` narrows it to a single file and
+renames it `Download for macOS` / `Download for Windows` only once it has found
+that file in the release JSON. Never a label naming a platform the page has not
+confirmed.
 
-**Off macOS the DMG button is removed** (TRA-440) and `.hero-install` gains
-`.is-primary`, which raises its border to `--text-display`. Without that the
-hero has no primary action anywhere outside a Mac. When you read that border
-back in the browser, wait out the 200ms `border-color` transition — a
-`getComputedStyle` fired in the same tick as the `classList.add` returns the
-*start* colour and looks like the rule never matched.
+**Platform detection covers macOS arm64, macOS x64 and Windows x64** (TRA-738).
+It used to `btn.remove()` on everything that was not a Mac, which left every
+Windows visitor with no button at all while the release had shipped
+`trace-mcp.Setup.<version>.exe` since v3.14.0. arm64-unless-proven-Intel is the
+Mac default and stays that way. On Linux the button is still removed — the
+release has no installer to offer there, and the npm line below is the whole
+install path.
+
+**The quiet row is `.hero-note`** — mono caps, 12px, `--text-secondary`,
+centred, wrapping to one item per line below 700px with the dots hidden. It
+holds three things and no more: the npm command, `Open source (MIT),
+local-first`, and one link to everything else. `All downloads →` is the single
+place the visitor is ever asked to choose — other architecture, Windows zip,
+Linux, checksums all live behind it. Never put a platform question in front of
+the button.
+
+**`.hero-install` is a `<button>` and it has no box.** A `<span onclick>` gave
+the copy action no tab stop, no focus ring and nothing for a screen reader; the
+`$` is `aria-hidden`, the `copy` label is `aria-live="polite"` so `copied` is
+announced. The bordered `--surface` box it used to wear made it a second button
+beside the pill, which is the "two actions of equal weight" this hero keeps
+being pulled back into. It is now a line of terminal text with a dashed
+underline that happens to copy itself.
 
 **The headline is measured, not guessed.** `clamp(36px, 5.2vw, 60px)` over
 `max-width: 900px` is the pair that breaks the current wording after
@@ -479,38 +499,26 @@ back in the browser, wait out the 200ms `border-color` transition — a
 "AI coding agents" across two of them. Change the wording, re-measure the line
 count at 1440px and at 390px.
 
-**The hero's two mono caps rows stack below 700px, and neither is a wrapped
-flex row on a phone** (TRA-607). `.hero-meta` and `.hero-trust` are single
-rows at desktop widths and both fail small, in the two ways a `flex-wrap` row
-of mono caps always fails:
-
-- `.hero-trust` wraps mid-list and a `.dot` separator ends the line. Measured
-  on the last box of each line, not judged by eye: a dot was the rightmost box
-  at 660, 600, 520, 430, 390, 360 and 320px, and at none of 700, 760, 820,
-  900, 1024 or 1440px. Those are the tested widths — the sweep samples them,
-  it does not walk every integer — so read it as "every tested width below the
-  breakpoint". This is §9's "no label breaks into fragments" rule one section
-  up the page. At 700px and below it is a column, the dots are
-  `display: none`, and `.ok`'s emphasis is dropped: stacked, one highlighted
-  item of three reads as a heading over the other two rather than as the
-  strongest peer.
-- `.hero-meta` is `label / divider / label`, and `flex-wrap` is not set, so it
-  never breaks between its children — instead both labels wrap *inside*
-  themselves into two cramped columns with a divider that has no width left to
-  draw. It stops fitting on one line at 520px (17px → 33px) and takes three
-  lines at 320px. At 700px and below it is a column and the divider is hidden.
+**The mono caps row stacks below 700px, and is never a wrapped flex row on a
+phone** (TRA-607, inherited by `.hero-note` in TRA-738). A `flex-wrap` row of
+mono caps always fails the same way: it wraps mid-list and a `.dot` separator
+ends the line. Measured on the last box of each line, not judged by eye — on
+the row this replaced a dot was the rightmost box at 660, 600, 520, 430, 390,
+360 and 320px, and at none of 700, 760, 820, 900, 1024 or 1440px. This is §9's
+"no label breaks into fragments" rule one section up the page. At 700px and
+below `.hero-note` is a centred column with `.dot { display: none }`.
 
 `@media (max-width: 700px)` includes 700px itself, so the stacked form starts
 *at* 700px while the defect it fixes starts just below — the rule is applied
 one tested step wider than the failure. Inline behaviour is what you get above
 700px, not at it.
 
-Both are bound to the hero's existing 700px breakpoint rather than to the
-520px where `.hero-meta` actually breaks. That is deliberate — one breakpoint
-for the hero beats a second one 180px away — and it costs 17px of height
-between 520px and 700px. The stack costs `.hero-trust` 20px at 390px (58 →
-78), all of it below the two actions, so the CTA moves 6px and nothing above
-the fold is lost.
+**The first screen fits a 13" laptop, and that is a measurement.** At
+1440×900 with the header, `.hero` bottom sits at 536px and the quiet row at
+472px — button and all, with the metrics strip already showing underneath.
+Re-measure `getBoundingClientRect().bottom` on `.hero` after any change to the
+headline wording, the description, or the hero's padding; a first screen whose
+button falls below 900px is a regression however good it looks at 1440×1080.
 
 ---
 
