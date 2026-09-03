@@ -5,7 +5,7 @@
 <h1 align="center">trace-mcp</h1>
 
 <p align="center">
-  Index your repository once so AI agents stop re-reading the same files &mdash; <strong>90.6% fewer input tokens</strong> to review a pull request.
+  trace-mcp is an MCP server that indexes your repository once so AI coding agents stop re-reading the same files &mdash; <strong>90.6% fewer input tokens</strong> to review a pull request.
 </p>
 
 <p align="center">
@@ -85,7 +85,7 @@ We started with code intelligence, where the repetition is most expensive, and t
 
 ---
 
-## The problem
+## Why agents keep re-reading
 
 AI coding agents recompute the same work every turn — and they're **framework-blind** while doing it.
 

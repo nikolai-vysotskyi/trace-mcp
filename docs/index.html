@@ -15,7 +15,7 @@ layout: null
        155 characters, and the previous wording shared its first 133 with the old
        one, so the number was cut mid-word in the snippet. The 155-char cut now
        lands after "we don't own". -->
-  <meta name="description" content="{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context — median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own. trace-mcp indexes your codebase once so AI agents stop re-reading the same files. Open source, local-first, MCP-native.">
+  <meta name="description" content="{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request — median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in open-source repos we don't own. trace-mcp indexes your codebase once so AI agents stop re-reading the same files. Open source, local-first, MCP-native.">
   <meta name="keywords" content="ai execution layer, recomputation, context bloat, token reduction, ai agents, mcp, model context protocol, code intelligence, code graph, llm developer tools, agent observability, agent optimization, claude code, cursor, windsurf, dependency graph, tree-sitter, lsp">
   <meta name="author" content="Nikolai Vysotskyi">
   <meta name="robots" content="index, follow, max-image-preview:large">
@@ -79,14 +79,14 @@ layout: null
     "@type": "SoftwareApplication",
     "name": "trace-mcp",
     "alternateName": "trace-mcp — Recomputation → Reuse for AI Systems",
-    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. A median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests across {{ site.data.pr_context_bench.repo_count }} open-source repositories. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
+    "description": "AI agents recompute the same work every turn — re-reading files, re-traversing dependencies, re-inflating context. trace-mcp makes them reuse instead. A median {{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, measured on {{ site.data.pr_context_bench.pr_count }} merged pull requests across {{ site.data.pr_context_bench.repo_count }} open-source repositories. Framework-aware dependency graph via MCP, {{ site.data.counts.languages }} languages, {{ site.data.counts.frameworks }} integrations.",
     "url": "https://trace-mcp.com/",
     "image": "https://trace-mcp.com/og-image.png",
     "applicationCategory": "DeveloperApplication",
     "applicationSubCategory": "Code Intelligence",
     "operatingSystem": "macOS, Linux, Windows",
     "softwareRequirements": "Node.js 20+",
-    "downloadUrl": "https://www.npmjs.com/package/trace-mcp",
+    "downloadUrl": "https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest",
     "installUrl": "https://www.npmjs.com/package/trace-mcp",
     "codeRepository": "https://github.com/nikolai-vysotskyi/trace-mcp",
     "programmingLanguage": "TypeScript",
@@ -109,7 +109,7 @@ layout: null
     },
     "featureList": [
       "Recomputation → reuse layer for AI systems — agents stop re-reading and re-traversing",
-      "{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to assemble code-review context, median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories",
+      "{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request, median over {{ site.data.pr_context_bench.pr_count }} merged pull requests in {{ site.data.pr_context_bench.repo_count }} open-source repositories",
       "40–50% fewer tokens on average across real agent workflows",
       "Up to 2× effective capacity at the same context budget",
       "Up to 99% less redundant processing in structured tasks (code navigation, dependency traversal)",
@@ -2088,7 +2088,7 @@ layout: null
            below: two paraphrases of one number read as two claims to anything
            extracting them. -->
       <p class="hero-desc">
-        Index your repository once so AI agents stop re-reading the same files &mdash;
+        trace-mcp is an MCP server that indexes your repository once so AI coding agents stop re-reading the same files &mdash;
         <span class="accent-text">{{ site.data.pr_context_bench.median_savings_pct }}% fewer input tokens to review a pull request.</span>
       </p>
 
@@ -3103,6 +3103,12 @@ layout: null
       return;
     }
 
+    // The platform is known synchronously, so name it now and let the release fetch
+    // append only " (Apple Silicon)" later. Waiting for the network to write the whole
+    // label shifted a centred button from "Download" to "Download for Mac (Apple
+    // Silicon)" — roughly double the width, at the top of the screen, on a delay.
+    if (btnLabel) btnLabel.textContent = isWin ? 'Download for Windows' : 'Download for Mac';
+
     // ponytail: arm64 unless something positively says Intel. Apple stopped
     // selling Intel Macs in 2023, and an inconclusive guess that sends an Apple
     // Silicon user to the x64 build still runs — under Rosetta, slowly — while
@@ -3145,12 +3151,11 @@ layout: null
       btn.href = mine.browser_download_url;
       btn.setAttribute('download', '');
       btn.title = mine.name;
-      // The label names the exact machine — "Mac (Apple Silicon)", not "macOS" — and
-      // only once a file has actually been found for it.
-      if (btnLabel) {
-        btnLabel.textContent = isWin
-          ? 'Download for Windows'
-          : 'Download for Mac (' + (arch === 'arm64' ? 'Apple Silicon' : 'Intel') + ')';
+      // Only the architecture is appended here — the platform half of the label was
+      // written synchronously above, so this adds ~15 characters rather than swapping
+      // the whole label once the network answers.
+      if (btnLabel && !isWin) {
+        btnLabel.textContent = 'Download for Mac (' + (arch === 'arm64' ? 'Apple Silicon' : 'Intel') + ')';
       }
 
       // The two platforms the button is not offering, in the row below it.
