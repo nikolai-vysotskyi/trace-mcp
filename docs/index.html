@@ -279,7 +279,10 @@ layout: null
       --text-secondary: #999999;
       --text-primary: #E8E8E8;
       --text-display: #FFFFFF;
-      --accent: #E54047; /* danger only — failure, regression, cost. Never chrome. 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see DESIGN-WEB.md #1 */
+      --accent: #5B8CFF; /* 6.64 page / 5.97 surface / 5.50 raised (governs) */
+      --accent-solid: #2B5FE3; /* landing-only fill under white text: 5.46:1 */
+      --accent-solid-hover: #1B49B8; /* 7.80:1 with #FFFFFF */
+      --negative: #E54047; /* danger only — failure, regression, cost. Never chrome. 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see DESIGN-WEB.md #1 */
       --success: #4A9E5C;
       --warning: #D4A843;
 
@@ -303,7 +306,10 @@ layout: null
       --text-secondary: #595959;
       --text-primary: #1A1A1A;
       --text-display: #000000;
-      --accent: #B3151C; /* danger only — failure, regression, cost. Never chrome. 6.33 page / 6.91 surface / 6.06 raised (governs) */
+      --accent: #1E4FCB; /* 6.34 page / 6.92 surface / 6.07 raised (governs) */
+      --accent-solid: #2B5FE3; /* landing-only fill under white text: 5.46:1 */
+      --accent-solid-hover: #1B49B8; /* 7.80:1 with #FFFFFF */
+      --negative: #B3151C; /* danger only — failure, regression, cost. Never chrome. 6.33 page / 6.91 surface / 6.06 raised (governs) */
       --success: #2E7D3E;
       --warning: #A8822E;
 
@@ -492,20 +498,23 @@ layout: null
       min-height: 44px;
       white-space: nowrap;
     }
-    /* The one action on the page, drawn in the loudest thing a monochrome
-       page has: full inversion. 21:1 either way. A red fill here asked the
-       reader to be careful instead of to download. */
+    /* The one action on the page. A red fill asked the reader to be careful
+       instead of to download; full inversion fixed the meaning but read as one
+       more monochrome slab and stopped being the loudest thing on the screen
+       (TRA-753). Cobalt is the system accent: white label at 5.46:1, and no
+       hue it can be confused with — 136 degrees from the negative red, 90 from
+       the success green. */
     .btn-primary {
-      background: var(--text-display);
-      color: var(--black);
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--text-display) 40%, transparent);
+      background: var(--accent-solid);
+      color: #FFFFFF;
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-solid) 40%, transparent);
       transition: background-color 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
                   box-shadow 200ms cubic-bezier(0.25, 0.1, 0.25, 1),
                   transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
     }
     .btn-primary:hover {
-      background: var(--text-primary);
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--text-display) 18%, transparent);
+      background: var(--accent-solid-hover);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-solid) 22%, transparent);
     }
     .btn-secondary {
       background: transparent;

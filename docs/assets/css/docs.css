@@ -69,7 +69,8 @@
   --text-secondary: #999999;
   --text-primary: #e8e8e8;
   --text-display: #ffffff;
-  --accent: #e54047; /* danger only — failure, regression, cost. Never chrome. 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see DESIGN-WEB.md #1 */
+  --accent: #5b8cff; /* 6.64 page / 5.97 surface / 5.50 raised (governs) */
+  --negative: #e54047; /* danger only — failure, regression, cost. Never chrome. 5.16 page / 4.64 surface / 4.27 raised — no red text on raised, see DESIGN-WEB.md #1 */
 
   --nav-bg: rgba(0, 0, 0, 0.85);
   --dot-color: var(--border);
@@ -91,7 +92,8 @@
   --text-secondary: #595959;
   --text-primary: #1a1a1a;
   --text-display: #000000;
-  --accent: #b3151c; /* danger only — failure, regression, cost. Never chrome. 6.33 page / 6.91 surface / 6.06 raised (governs) */
+  --accent: #1e4fcb; /* 6.34 page / 6.92 surface / 6.07 raised (governs) */
+  --negative: #b3151c; /* danger only — failure, regression, cost. Never chrome. 6.33 page / 6.91 surface / 6.06 raised (governs) */
 
   --nav-bg: rgba(245, 245, 245, 0.85);
   --dot-color: var(--border-visible);
@@ -338,20 +340,21 @@ main {
 
 /* A link is the brightest text in the paragraph plus a rule under it — the
    underline is what carries the affordance, so it survives greyscale and
-   colour blindness alike. Red would say "this link is a problem". */
+   colour blindness alike. Red would have said "this link is a problem";
+   cobalt is the system accent and says "this is a link" (TRA-753). */
 .prose a {
-  color: var(--text-display);
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
-  text-decoration-color: color-mix(in srgb, var(--text-display) 40%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
   transition: text-decoration-color 150ms var(--ease);
 }
 .prose a:hover {
-  text-decoration-color: var(--text-display);
+  text-decoration-color: var(--accent);
 }
 /* Scroll regions are tab stops too. Left out, they fall through to Chrome's
-   own ring — blue in the light theme, which is a second accent colour. */
+   own ring — a blue that is not our blue, which reads as a second accent. */
 :where(a, button, summary, .table-scroll, .prose pre):focus-visible {
   outline: 1px solid var(--text-display);
   outline-offset: 2px;
