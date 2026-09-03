@@ -5,12 +5,12 @@ Nikolai posts this.** An agent may write and revise it; publishing under the
 project's name is his call, and it is irreversible in a way a directory listing
 is not.
 
-Numbers below come from `docs/_data/counts.yml` and the README's own framing,
-verified 2026-08-30 (81 languages / 87 frameworks / 169 tools). Re-read both
-before posting — 80 became 81 languages inside a day once, and a Show HN thread
-is the worst place to be caught with a stale figure. Nothing enforces this file:
-`tests/docs/readme-claims.test.ts` guards README.md only, so these figures go
-stale silently.
+Numbers below come from `docs/_data/counts.yml` (81 languages / 87 frameworks /
+177 tools) and `docs/_data/pr_context_bench.json` — both generated, neither
+hand-typed. `tests/docs/readme-claims.test.ts` now guards this file too, so a
+count that rots here fails CI instead of surfacing in a live thread. Re-read
+both sources before posting anyway: the test enforces a ±5 tolerance on counts
+and cannot know that a number was true and is no longer interesting.
 
 ## When to post
 
@@ -48,15 +48,24 @@ it is not what a reader recognises.
 > integrations, so `get_change_impact` crosses language boundaries instead of
 > stopping at the import graph.
 >
-> Across a session I measure 40–50% fewer tokens on mixed work. Individual
-> structured calls — impact analysis, call graphs, type hierarchy — go far higher,
-> but that is a per-call peak and I have stopped quoting it as if it were the
-> average.
+> The measurement I trust is on other people's code: 60 merged bug-fix PRs from
+> six OSS repos (axios, express, got, hono, flask, requests — TS/JS and
+> Python, 12 candidate PRs each, 12 skipped), assembling the context
+> a reviewer needs for each. Median 13,595 → 1,326 input tokens, 90.6% fewer —
+> and *more* of the code the change can break ends up visible, not less (20% →
+> 60% of affected call sites readable). On 5 of the 60 it barely paid off; the
+> page lists those five with their numbers. Base and head SHAs are pinned in the
+> repo and one command re-runs the whole thing:
+> https://trace-mcp.com/pr-context-benchmark.html
+>
+> Across a mixed session I see 40–50% overall, which is the number that matters
+> for a bill and the one I would defend; the 90.6% is a specific task done well,
+> not an average of everything.
 >
 > Runs entirely locally. No API keys, no code leaves the machine, MIT.
-> `npx trace-mcp index . && npx trace-mcp benchmark .` prints the per-task
-> numbers against your own repo in about five minutes, which is a better
-> argument than anything I can write here.
+> `npx trace-mcp index . && npx trace-mcp benchmark .` gives you a per-task
+> estimate for your own repo in about five minutes — an estimate, see the
+> caveats in my first comment; the PR numbers above are the measured ones.
 
 ## First comment — post it yourself, immediately
 
@@ -72,11 +81,14 @@ to be caught as not. This is the whole reason the thread is worth having.
 > `src/telemetry/usage-ping.ts`. Saying "local-first" without saying that first is
 > how a thread goes bad.
 >
-> The headline benchmark is a **synthetic estimate**, not measured savings. The
-> "without" side is computed from file sizes in the index and the "with" side from
-> per-scenario multipliers — it shows a ceiling. For real numbers from your own
-> usage there is `trace-mcp analytics savings`, which reads what your sessions
-> actually did.
+> Two different benchmarks ship in this repo and only one of them is a
+> measurement. The PR-context one in the post is real: fixed PR list, pinned
+> SHAs, both sides actually assembled. The one you get from `npx trace-mcp
+> benchmark .` is a **synthetic estimate** — the "without" side is computed from
+> file sizes in the index and the "with" side from per-scenario multipliers, so
+> it shows a ceiling for your repo, not savings you have banked. Do not read the
+> two as the same number. For what your own sessions actually did there is
+> `trace-mcp analytics savings`.
 >
 > It is an index, not a compiler. Edges carry a resolution tier
 > (`scip_resolved` > `lsp_resolved` > `ast_resolved` > `ast_inferred` >
@@ -96,10 +108,14 @@ Each answer must be checkable in one click. Do not improvise these.
    Repomix, codegraph, Context Mode, codebase-memory-mcp). Never disparage a competitor from
    memory; the comparison pages are written to survive the maintainer of the
    other project reading them, which on HN they will.
-2. **"40–50% of what, measured how?"** → the README's "Token reduction" section
-   and `npx trace-mcp index . && npx trace-mcp benchmark .` (the benchmark reads
-   an existing index — without the index step it has nothing to measure). Say
-   plainly that mixed real-world workloads land 30–60% depending on stack.
+2. **"90.6% of what, measured how?"** → `trace-mcp.com/pr-context-benchmark.html`,
+   which is the whole reason this thread is worth having: 60 merged PRs, six
+   repos we do not maintain, pinned SHAs, the 5 losing cases published, one
+   command to re-run. Answer with that page, not with
+   `npx trace-mcp benchmark .` — that one is the synthetic estimator and
+   volunteering it as the proof is how the thread turns. Mixed real-world
+   sessions land 30–60% depending on stack; say so before someone extrapolates
+   90.6% to their monthly bill.
 3. **"Why not just use the LSP?"** → we do, optionally, as an enrichment pass. The
    graph exists so an answer costs one call instead of a live query per edge, and
    so cross-language framework edges exist at all — no LSP knows that an Inertia
@@ -112,10 +128,13 @@ Each answer must be checkable in one click. Do not improvise these.
    point at `docs/telemetry.md` — that page is the OTLP observability bridge, a
    different feature that is disabled by default. Answer this one in full,
    immediately, every time it is asked.
-5. **"169 tools?! That is context bloat."** → a fair hit. Tools register per
-   detected framework, presets exist, and the schema budget has a regression test
-   (TRA-186). Do not get defensive: the honest line is that the surface is large
-   and shrinking it is active work.
+5. **"177 tools?! That is context bloat."** → a fair hit, with a concrete
+   answer now: the shipped default serves 28 `minimal` tools, **~11.6K tokens**
+   of `tools/list` plus server instructions at session start. 177 is the
+   catalogue, not what your client is served, and the rest is one `load_tools`
+   call away. The wider presets — 60 `standard`, and `full` for the lot — are opt-in,
+   and the schema budget has a regression test (TRA-186). Do not get defensive
+   and do not quote 177 as the cost — say the number the client actually pays.
 
 ## What not to do
 
