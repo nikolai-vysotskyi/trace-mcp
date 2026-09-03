@@ -176,6 +176,22 @@ Order: sticky header (brand + theme toggle) → `h1` → prose → `Last updated
   head is a Space Mono 10px caps label, not a bold band. Every table is
   wrapped in a focusable `.table-scroll` region by the layout script, so a
   wide tool table scrolls itself instead of the page.
+- **Every table column is left-aligned, except numbers, which go right.**
+  Centring is for a single glyph in a fixed-width column and nothing else: a
+  centred cell holding a phrase has two ragged edges, no common start to scan
+  down, and sits in a row whose label column is left-aligned — left → centre →
+  centre across one row. Measured on the published site, 409 cells on
+  `/comparisons.html` were centred and 130 of them wrapped to two or more
+  lines, with each line starting somewhere different. Right alignment stays
+  where it earns its keep: `toon-savings.html` right-aligns its numeric
+  columns so the digits line up on their units.
+  The alignment does not come from this stylesheet — kramdown turns a
+  `|:---:|` delimiter row into an inline `style="text-align: center"` on every
+  cell of that column, and an inline style outranks any rule here. So the
+  override is `.prose td[style*="center"] { text-align: left !important }`,
+  which also catches the next table someone writes with `:---:`. **Fix it in
+  the CSS, never by editing the Markdown** — content files belong to the SEO
+  agent, and a per-file fix is exactly how this drifted onto twelve tables.
 - **A scroll region says so.** A region with more to the right carries a
   `scroll →` label — Space Mono 10px caps at `--text-disabled`, right-aligned
   10px above the head row, the same instrument-label voice as the `thead`.
@@ -352,6 +368,13 @@ appearance without a screenshot or a measurement is not a finding.
 - [ ] `document.documentElement.scrollWidth === window.innerWidth` at the
       narrow width — no sideways page scroll.
 - [ ] Wide tables scroll themselves, not the page.
+- [ ] No table cell computes to `text-align: center` — read it off the
+      elements, not off the stylesheet, because the alignment arrives as an
+      inline style from kramdown and never appears in a `.css` diff:
+      `[...document.querySelectorAll('.prose td, .prose th')]
+      .filter(c => getComputedStyle(c).textAlign === 'center').length`
+      must be 0 on every page with a table. Right-aligned numeric columns are
+      expected and stay.
 - [ ] No footer nav label breaks into fragments — count links taller than one
       line at 1440px, 1200px and 390px, not at 1440px alone. The landing
       footer's sub-column width falls by ~13px in the 1184–1262px band and
