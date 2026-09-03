@@ -22,7 +22,7 @@
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { activation, share, usage, usageByClient } from './ga4-funnel.mjs';
+import { activation, clientReporting, share, usage, usageByClient } from './ga4-funnel.mjs';
 import { PRICE_MODEL, PRICE_PER_TOKEN, sanitizedTokens, usd } from './ga4-savings.mjs';
 
 const OUT = 'docs/_data/adoption.yml';
@@ -313,6 +313,7 @@ const yaml = (obj, indent = 2) =>
 const act = activation(indexed?.rows);
 const use = usage(called?.rows);
 const useByClient = usageByClient(calledByClient?.rows);
+const clientFix = clientReporting(versions?.rows);
 const newInstalls = installs ? (breakdown(installs).new ?? 0) : 0;
 const yamlNum = (v) => (v === null || v === undefined ? 'null' : v);
 /** An `error:` line when a source failed, nothing when it did not. */
@@ -420,7 +421,9 @@ ${yaml(act.buckets, 4)}
 # hook — is Claude Code only, and session mining has providers for two clients.
 # If use holds across clients, reach work goes wide; if it collapses without a
 # hook, our addressable market is clients that can enforce routing. Read it
-# beside \`by_client_installs\`: single-digit denominators conclude nothing.
+# beside \`by_client_installs\`: single-digit denominators conclude nothing — and
+# beside \`client_reporting\` further down, which says whether the population
+# being split can report a client at all yet (TRA-748).
 #
 # Empty until \`calls\` is registered as an event-scoped custom dimension in the
 # property; GA4 does not backfill, so values start at registration.
@@ -449,6 +452,28 @@ installs_28d:
 ${yaml(installs ? breakdown(installs) : {})}
 by_version:
 ${yaml(breakdown(versions))}
+
+# Whether \`by_client\` below — and \`by_client_used_pct\` above — can be read at
+# all yet (TRA-748). Derived from \`by_version\`, not sent by the client.
+#
+# Installs older than \`fix_version\` report their client as \`unknown\` whatever
+# client they run: the ping's final \`saveState\` persisted a snapshot taken
+# before the HTTP request and erased the name the request had just recorded
+# (fixed in TRA-643). So a client split over a mostly-\`below\` population cannot
+# say whether tool use holds across clients — in either direction.
+#
+#   pct         share of placed rows on a version that reports a client
+#   readable    that share past half; until then, re-read and record, do not
+#               conclude. \`null\` means no version rows at all.
+#   unknown     rows whose version GA4 has no value for — not evidence of an
+#               old install, so kept out of \`pct\` entirely.
+client_reporting:
+  fix_version: "${clientFix.fix_version}"
+  at_or_above: ${clientFix.at_or_above}
+  below: ${clientFix.below}
+  unknown: ${clientFix.unknown}
+  pct: ${yamlNum(clientFix.pct)}
+  readable: ${yamlNum(clientFix.readable)}
 
 # Which tool preset installs actually run, and how many tools that surface
 # advertises (TRA-643). \`preset-surface-budget.test.ts\` measures the same basis

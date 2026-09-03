@@ -114,13 +114,14 @@ const COMPETING_CLAUDE_MD_PATTERNS: { pattern: RegExp; competitor: string; marke
   },
   { pattern: /<!-- ?code-index:start ?-->/i, competitor: 'code-index', marker: 'code-index:start' },
   // jcodemunch — tool name references (distinctive API surface)
+  //
+  // Only names jcodemunch does NOT share with trace-mcp belong here. get_context_bundle,
+  // embed_repo, get_session_stats and suggest_queries are trace-mcp's own tools, so
+  // matching them flagged every file that documents trace-mcp itself — including this
+  // repo's CLAUDE.md (TRA-746).
   { pattern: /jcodemunch|jCodeMunch/i, competitor: 'jcodemunch-mcp' },
   {
-    pattern: /get_file_outline|get_symbol_source|get_context_bundle|get_ranked_context/i,
-    competitor: 'jcodemunch-mcp',
-  },
-  {
-    pattern: /embed_repo|get_blast_radius|get_session_stats|suggest_queries/i,
+    pattern: /get_file_outline|get_symbol_source|get_ranked_context|get_blast_radius/i,
     competitor: 'jcodemunch-mcp',
   },
   // repomix
