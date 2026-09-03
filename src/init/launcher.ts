@@ -236,27 +236,114 @@ export interface InstallLauncherOpts {
   force?: boolean;
 }
 
+/** Header line every shim we ship carries — `# trace-mcp-launcher v0.4.0`. */
+const LAUNCHER_HEADER_RE = /trace-mcp-launcher v[0-9]+\.[0-9]+\.[0-9]+/;
+
+/** True only for a shim this project wrote, so we never clobber a user's file. */
+function isOwnedShim(file: string): boolean {
+  try {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(256);
+      fs.readSync(fd, buf, 0, 256, 0);
+      return LAUNCHER_HEADER_RE.test(buf.toString('utf-8'));
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Preserve `~/.trace-mcp/bin/trace-mcp` (`trace-mcp.cmd` on Windows) as a
- * symlink to the new `~/.trace/bin/trace` shim, so a client or script still
- * pointed at the pre-TRA-611 absolute path keeps working after the rename.
- * Gated on LEGACY_MIGRATION_MARKER (a durable file left in the new home the
- * moment the rename succeeds) rather than the one-shot
- * TRACE_MCP_HOME_MIGRATED flag: that flag is only true for the single process
- * that performed the rename, so a symlink failure there (permissions,
- * dry-run) would otherwise never get a second chance. The marker survives
- * restarts, so every later `trace init`/`upgrade` retries until it succeeds.
+ * Body of the Windows compat shim. Windows symlinks need privileges the
+ * installer usually lacks, so the legacy `.cmd` delegates by exec instead —
+ * which tracks launcher upgrades just as a symlink would, since it resolves
+ * the current shim at run time rather than copying it.
+ */
+export function legacyCompatCmdBody(currentLauncher: string): string {
+  return [
+    '@echo off',
+    `REM trace-mcp-launcher v${LAUNCHER_VERSION} compat shim — do not edit by hand.`,
+    'REM Delegates to the current launcher so this path tracks every upgrade.',
+    `"${currentLauncher}" %*`,
+    '',
+  ].join('\r\n');
+}
+
+/**
+ * Point `legacyPath` at `current` without ever leaving the legacy path missing.
+ *
+ * The old path is what a registered MCP client spawns, so it must survive a
+ * failed replacement: unlinking first and then failing to create the
+ * replacement would take the client's launcher away entirely — worse than the
+ * stale shim we set out to fix. Both branches build the new entry beside the
+ * old one and swap it in with a single rename.
+ */
+function writeLegacyCompat(legacyPath: string, current: string): void {
+  const tmp = `${legacyPath}.tmp.${process.pid}`;
+  try {
+    if (IS_WINDOWS) {
+      fs.writeFileSync(tmp, legacyCompatCmdBody(current), { mode: 0o755 });
+    } else {
+      fs.symlinkSync(current, tmp);
+    }
+    fs.renameSync(tmp, legacyPath);
+  } catch (err) {
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      /* nothing to clean up */
+    }
+    throw err;
+  }
+}
+
+/**
+ * Keep `~/.trace-mcp/bin/trace-mcp` (`trace-mcp.cmd` on Windows) pointing at the
+ * current `~/.trace/bin/trace` shim, so a client still registered at the
+ * pre-TRA-611 absolute path keeps working after the rename.
+ *
+ * The legacy path must *delegate*, not be a copy. A pre-rename install left a
+ * real shim file there, and `installLauncher` only ever writes into the current
+ * launcher dir — so a client spawning the legacy path stayed frozen on whatever
+ * launcher version happened to be on disk at migration time, and no later
+ * launcher fix could reach it (TRA-716). Replacing that stale file with a
+ * symlink (or a delegating `.cmd` on Windows) is what makes the legacy path
+ * track every future upgrade.
+ *
+ * Acts when either signal says a legacy path may still be registered:
+ * LEGACY_MIGRATION_MARKER (a durable file left in the new home the moment the
+ * rename succeeds — durable rather than the one-shot TRACE_MCP_HOME_MIGRATED
+ * flag, so a failure here gets retried by every later `trace init`), or a
+ * surviving `~/.trace-mcp/bin` directory, which only a pre-rename install has.
+ * Without either we create nothing: a fresh install has no legacy path to
+ * preserve, and inventing one would just be litter.
  */
 function installLegacyBinCompat(): void {
-  if (!fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER))) return;
   const legacyDir = path.join(os.homedir(), '.trace-mcp', 'bin');
   const legacyPath = path.join(legacyDir, LEGACY_PRIMARY_DEST);
+  const current = getLauncherPath();
+  // When the legacy home *is* the launcher home, the real shim already lives at
+  // this path; delegating it would point it at itself.
+  if (path.resolve(legacyPath) === path.resolve(current)) return;
   try {
-    if (isSymlink(legacyPath) || fs.existsSync(legacyPath)) return;
+    if (isSymlink(legacyPath)) return; // already delegating to the current shim
+    const exists = fs.existsSync(legacyPath);
+    if (
+      !exists &&
+      !fs.existsSync(legacyDir) &&
+      !fs.existsSync(path.join(TRACE_MCP_HOME, LEGACY_MIGRATION_MARKER))
+    ) {
+      return;
+    }
+    // Anything we did not write is the user's own wrapper — leave it alone.
+    if (exists && !isOwnedShim(legacyPath)) return;
     ensureDir(legacyDir);
-    fs.symlinkSync(getLauncherPath(), legacyPath);
+    writeLegacyCompat(legacyPath, current);
   } catch {
-    /* best-effort — the durable marker means the next `trace init` retries */
+    /* best-effort — the durable signals mean the next `trace init` retries,
+       and the legacy path is left exactly as it was found */
   }
 }
 
@@ -274,6 +361,11 @@ export function installLauncher(opts: InstallLauncherOpts): InitStepResult {
   const isCurrent = installedVersion === LAUNCHER_VERSION;
 
   if (isCurrent && !opts.force) {
+    // The shim in the current home is up to date, but the legacy compat path is
+    // a separate file that may still hold a stale pre-rename shim — and this is
+    // the branch an ordinary `trace upgrade` takes, so skipping the repair here
+    // would leave every affected client unfixed (TRA-716).
+    if (!dryRun) installLegacyBinCompat();
     return {
       target: dest,
       action: 'already_configured',
