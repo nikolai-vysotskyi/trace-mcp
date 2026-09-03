@@ -61,7 +61,8 @@ ratios intact; `--accent-solid`, whose only job was the red CTA fill, is gone.
 Two surfaces implement these: `docs/index.html` (landing, inline `<style>`) and
 `docs/assets/css/docs.css` (every documentation page). The values must match.
 A token that exists in only one of them is a component token and must say so
-here — otherwise it reads as drift. There is exactly one: `--accent-solid`.
+here — otherwise it reads as drift. There are none: `--accent-solid` was the
+only one, and §0 removed it.
 
 Surfaces — a text token has to clear its ratio against **every** one of these
 it is painted on, because all three are in use on the same page:
