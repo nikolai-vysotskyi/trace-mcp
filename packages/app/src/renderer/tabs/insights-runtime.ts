@@ -76,10 +76,7 @@ export const INSIGHT_REPORTS: ReportDef[] = [
     titleKey: 'insights:reportStartupTitle',
     descriptionKey: 'insights:reportStartupDescription',
     mcpTool: 'get_startup_context_audit',
-    /* 30 days, the tool's own default — a month is long enough for the cost
-       column to mean something and short enough that the scan stays under a
-       minute on a heavily used machine. */
-    argTransform: () => ({ days: 30 }),
+    argTransform: () => ({}),
   },
 ];
 
@@ -137,6 +134,25 @@ export function buildRpcCall(reportId: ReportId, projectRoot: string, id: number
       name: def.mcpTool,
       arguments: def.argTransform(projectRoot),
     },
+  };
+}
+
+/**
+ * Every report calls a tool that is outside the daemon's default preset, and a
+ * tool outside the preset is registered-but-disabled: `tools/call` comes back
+ * `Tool <name> disabled` rather than running. `load_tools` is the escape hatch
+ * (TRA-402) — it is ungated precisely so a session can pull in what it needs.
+ * Sending it before the report call is what makes the Insights tab work
+ * against a stock daemon.
+ */
+export function buildLoadToolsCall(reportId: ReportId, id: number = 2): JsonRpcCall {
+  const def = REPORT_BY_ID[reportId];
+  if (!def) throw new Error(`Unknown report id: ${reportId}`);
+  return {
+    jsonrpc: '2.0',
+    id,
+    method: 'tools/call',
+    params: { name: 'load_tools', arguments: { tools: [def.mcpTool] } },
   };
 }
 
@@ -390,6 +406,21 @@ export const defaultInsightsClient: InsightsClient = {
       body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }),
     }).then((r) => r.text().catch(() => ''));
 
+    // Escalate into the report's tool before calling it — see buildLoadToolsCall.
+    // A failure here is not fatal: if the tool was already in the preset the
+    // call below simply runs, and if it was not, that call reports the real error.
+    await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        'mcp-session-id': sessionId,
+      },
+      body: JSON.stringify(buildLoadToolsCall(reportId)),
+    })
+      .then((r) => r.text().catch(() => ''))
+      .catch(() => '');
+
     const callRes = await fetch(`${BASE}/mcp?project=${encodeURIComponent(root)}`, {
       method: 'POST',
       headers: {
@@ -397,7 +428,7 @@ export const defaultInsightsClient: InsightsClient = {
         Accept: 'application/json, text/event-stream',
         'mcp-session-id': sessionId,
       },
-      body: JSON.stringify(buildRpcCall(reportId, root)),
+      body: JSON.stringify(buildRpcCall(reportId, root, 3)),
     });
     if (!callRes.ok) {
       throw new Error(

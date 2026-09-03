@@ -34,6 +34,7 @@ export {
   REPORT_BY_ID,
   defaultInsightsClient,
   buildRpcCall,
+  buildLoadToolsCall,
   flattenReport,
   flattenDriftRows,
   flattenPagerankRows,

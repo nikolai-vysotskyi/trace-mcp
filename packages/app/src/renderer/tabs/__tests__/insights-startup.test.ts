@@ -7,7 +7,7 @@
  *  - a hook keeps its own name. "SessionStart hooks cost 2,793 tokens" is
  *    trivia; "hook:superpowers costs 2,793 tokens" is something to act on. */
 import { describe, expect, it } from 'vitest';
-import { flattenStartupContextRows } from '../insights-runtime';
+import { buildLoadToolsCall, flattenStartupContextRows } from '../insights-runtime';
 
 const AUDIT = {
   days: 30,
@@ -62,5 +62,16 @@ describe('flattenStartupContextRows', () => {
   it('returns no rows rather than throwing when the tool answers with nothing', () => {
     expect(flattenStartupContextRows(undefined).rows).toEqual([]);
     expect(flattenStartupContextRows({}).rows).toEqual([]);
+  });
+
+  /* Regression: every Insights report calls a tool the daemon's default preset
+     leaves disabled, so without this escalation `tools/call` answers
+     "Tool <name> disabled" and the pane shows an error instead of a report.
+     Reproduced against a stock `serve-http` daemon on 2026-09-03. */
+  it('escalates into the report tool before calling it', () => {
+    expect(buildLoadToolsCall('startup_context').params).toEqual({
+      name: 'load_tools',
+      arguments: { tools: ['get_startup_context_audit'] },
+    });
   });
 });

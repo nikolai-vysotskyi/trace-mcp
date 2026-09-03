@@ -435,18 +435,15 @@ export function registerSessionTools(server: McpServer, ctx: MetaContext): void 
   server.tool(
     'get_startup_context_audit',
     "What the session's startup block is made of and what it costs: the context every session pays for before the first user message — system prompt, tool schemas, MCP servers, skill and agent listings, SessionStart hooks — decomposed by source, plus the mid-session cache rebuilds that make it get paid twice. Read-only, computed locally from session logs. Returns JSON: { startupTokens, sources: [{ source, meanTokens, pctOfStartup }], cost, cacheBreakers, mcpServers, instructionFiles }.",
-    {
-      days: z
-        .number()
-        .int()
-        .min(1)
-        .max(365)
-        .optional()
-        .describe('Look-back window in days (default 30)'),
-    },
-    async ({ days }) => {
+    /* No parameters on purpose. The look-back window is the only knob this
+       report could have, and a fixed 30 days is the answer for "what does my
+       startup block cost" — while a param here would have to survive
+       compact_schemas, which strips non-core params from the schema and so
+       silently freezes them at their default anyway. */
+    {},
+    async () => {
       try {
-        const result = await analyzeStartupContext({ days, projectRoot });
+        const result = await analyzeStartupContext({ projectRoot });
         return { content: [{ type: 'text' as const, text: j(result) }] };
       } catch (e) {
         return {
