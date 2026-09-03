@@ -208,6 +208,33 @@ describe('detectConflicts', () => {
     expect(jcm!.severity).toBe('critical');
   });
 
+  it('does not flag a CLAUDE.md that documents trace-mcp own tools', () => {
+    // TRA-746: these names belong to trace-mcp, not to any competitor.
+    const root = fixture({
+      'CLAUDE.md':
+        '# Project\n\n' +
+        '- `get_context_bundle({ symbol_id: "..." })` returns symbol + imports\n' +
+        '- `embed_repo` precomputes embeddings\n' +
+        '- `get_session_stats` reports token savings\n' +
+        '- `suggest_queries` lists example calls\n',
+    });
+
+    const report = detectConflicts(root);
+    const claudeConflicts = report.conflicts.filter(
+      (c) => c.category === 'claude_md' && c.target.startsWith(root),
+    );
+    expect(claudeConflicts).toHaveLength(0);
+  });
+
+  it("does not flag this repo's own CLAUDE.md", () => {
+    // TRA-746: the reported false positive, guarded against the real file.
+    const root = process.cwd();
+    const claudeConflicts = detectConflicts(root).conflicts.filter(
+      (c) => c.category === 'claude_md' && c.target.startsWith(root),
+    );
+    expect(claudeConflicts).toEqual([]);
+  });
+
   it('does not flag clean CLAUDE.md', () => {
     const root = fixture({
       'CLAUDE.md': '# Project\n\nUse trace-mcp tools for code navigation.\n',
