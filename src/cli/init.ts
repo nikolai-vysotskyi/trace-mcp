@@ -14,6 +14,7 @@ import { installHermesHooks } from '../init/hermes-hooks.js';
 import {
   installGuardHook,
   installMirrorHook,
+  isMirrorHookInstalled,
   installReindexHook,
   installPrecompactHook,
   installWorktreeHook,
@@ -690,8 +691,10 @@ function executeSteps(
   // 3a. PostToolUse Read/Bash output mirror — opt-in (`--mirror`) and outside
   // the `installHooks` tier gate on purpose. Every other hook observes or
   // advises; this one rewrites what the model sees, so an existing install
-  // must never pick it up silently on a re-init (TRA-750).
-  if (opts.installMirror) {
+  // must never pick it up silently on a re-init (TRA-750). An install the user
+  // ALREADY opted into is refreshed unconditionally, so a fix to the hook
+  // script reaches them without their having to remember the flag.
+  if (opts.installMirror || isMirrorHookInstalled()) {
     steps.push(installMirrorHook({ global: true, dryRun: opts.dryRun }));
   }
 

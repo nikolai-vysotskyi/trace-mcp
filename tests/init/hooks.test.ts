@@ -47,6 +47,8 @@ let isHookOutdated: typeof import('../../src/init/hooks.js').isHookOutdated;
 let installLifecycleHooks: typeof import('../../src/init/hooks.js').installLifecycleHooks;
 let uninstallLifecycleHooks: typeof import('../../src/init/hooks.js').uninstallLifecycleHooks;
 let installSessionStartHook: typeof import('../../src/init/hooks.js').installSessionStartHook;
+let installMirrorHook: typeof import('../../src/init/hooks.js').installMirrorHook;
+let isMirrorHookInstalled: typeof import('../../src/init/hooks.js').isMirrorHookInstalled;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -70,6 +72,8 @@ beforeEach(async () => {
   installLifecycleHooks = mod.installLifecycleHooks;
   uninstallLifecycleHooks = mod.uninstallLifecycleHooks;
   installSessionStartHook = mod.installSessionStartHook;
+  installMirrorHook = mod.installMirrorHook;
+  isMirrorHookInstalled = mod.isMirrorHookInstalled;
 });
 
 afterEach(() => {
@@ -673,6 +677,89 @@ describe('installSessionStartHook', () => {
     const result = installSessionStartHook({ dryRun: true });
     expect(result.action).toBe('skipped');
     expect(result.detail).toContain('session-start');
+  });
+});
+
+// The mirror is the only hook that rewrites what the model sees, so `--mirror`
+// is the only thing that may CREATE an install. But an install the user already
+// opted into has to be refreshable, or a later fix to the hook script never
+// reaches it (TRA-750 review).
+describe('mirror hook opt-in / refresh', () => {
+  it.skipIf(process.platform === 'win32')('returns skipped on dry run', () => {
+    const result = installMirrorHook({ dryRun: true });
+    expect(result.action).toBe('skipped');
+    expect(result.detail).toContain('mirror');
+  });
+
+  it.skipIf(process.platform === 'win32')('installs PostToolUse with the Read|Bash matcher', () => {
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const s = String(p).replace(/\\/g, '/');
+      if (s.includes('trace-mcp-mirror') && !s.includes('.claude')) return true;
+      if (s.includes('.claw')) return false;
+      return false;
+    });
+
+    const result = installMirrorHook({ global: true });
+    expect(result.action).toBe('created');
+
+    const writeCall = mockFs.writeFileSync.mock.calls.find((c) =>
+      String(c[0]).includes('settings.json'),
+    );
+    const settings = JSON.parse(String(writeCall![1]).trim());
+    expect(settings.hooks.PostToolUse).toHaveLength(1);
+    expect(settings.hooks.PostToolUse[0].matcher).toBe('Read|Bash');
+  });
+
+  it('reports an absent mirror as not installed, so a plain init leaves it absent', () => {
+    // No settings.json at all — the default mock state.
+    expect(isMirrorHookInstalled()).toBe(false);
+  });
+
+  it('does not confuse another PostToolUse hook for the mirror', () => {
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const s = String(p).replace(/\\/g, '/');
+      if (s.includes('.claw')) return false;
+      return s.includes('settings.json');
+    });
+    mockFs.readFileSync.mockReturnValue(
+      JSON.stringify({
+        hooks: {
+          PostToolUse: [
+            { matcher: 'Edit|Write|MultiEdit', hooks: [{ command: '/h/trace-mcp-reindex.sh' }] },
+          ],
+        },
+      }),
+    );
+
+    expect(isMirrorHookInstalled()).toBe(false);
+  });
+
+  it('detects an existing mirror install so a later init can refresh it', () => {
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const s = String(p).replace(/\\/g, '/');
+      if (s.includes('.claw')) return false;
+      return s.includes('settings.json');
+    });
+    mockFs.readFileSync.mockReturnValue(
+      JSON.stringify({
+        hooks: {
+          PostToolUse: [{ matcher: 'Read|Bash', hooks: [{ command: '/h/trace-mcp-mirror.sh' }] }],
+        },
+      }),
+    );
+
+    expect(isMirrorHookInstalled()).toBe(true);
+  });
+
+  it('treats a malformed settings.json as no mirror rather than throwing', () => {
+    mockFs.existsSync.mockImplementation((p: fs.PathLike) => {
+      const s = String(p).replace(/\\/g, '/');
+      if (s.includes('.claw')) return false;
+      return s.includes('settings.json');
+    });
+    mockFs.readFileSync.mockReturnValue('{ not json');
+
+    expect(isMirrorHookInstalled()).toBe(false);
   });
 });
 
