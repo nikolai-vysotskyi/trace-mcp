@@ -5,53 +5,50 @@
 <h1 align="center">trace-mcp</h1>
 
 <p align="center">
+  trace-mcp is an MCP server that indexes your repository once so AI coding agents stop re-reading the same files &mdash; <strong>90.6% fewer input tokens</strong> to review a pull request.
+</p>
+
+<p align="center">
   <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/ci.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/ci.yml/badge.svg?branch=master" alt="CI" /></a>
-  <a href="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp"><img src="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp/badges/score.svg" alt="Glama score" /></a>
   <a href="https://www.npmjs.com/package/trace-mcp"><img src="https://img.shields.io/npm/v/trace-mcp" alt="npm version" /></a>
-  <img src="https://img.shields.io/node/v/trace-mcp" alt="Node.js version" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
-  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml/badge.svg" alt="Semgrep" /></a>
-  <a href="https://securityscorecards.dev/viewer/?uri=github.com/nikolai-vysotskyi/trace-mcp"><img src="https://api.securityscorecards.dev/projects/github.com/nikolai-vysotskyi/trace-mcp/badge" alt="OpenSSF Scorecard" /></a>
-  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security"><img src="https://img.shields.io/badge/security-policy-blue" alt="Security policy" /></a>
-  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security/dependabot"><img src="https://img.shields.io/badge/Dependabot-enabled-success" alt="Dependabot enabled" /></a>
-</p>
+## Download
 
-<p align="center">
-  <strong>AI agents recompute the same work. trace-mcp makes them reuse instead.</strong><br>
-  The recomputation → reuse layer for AI systems.
-</p>
+<!-- A table, not styled boxes: GitHub strips CSS, so the mock's three cards are the
+     one construct that renders as three equal columns on github.com itself. -->
+<table align="center">
+  <tr>
+    <td align="center" width="240"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><strong>macOS</strong></a><br /><sub>Apple Silicon &middot; Intel</sub></td>
+    <td align="center" width="240"><a href="https://github.com/nikolai-vysotskyi/trace-mcp/releases/latest"><strong>Windows</strong></a><br /><sub>.exe installer</sub></td>
+    <td align="center" width="240"><a href="https://www.npmjs.com/package/trace-mcp"><strong>npm</strong></a><br /><sub>server only, any OS</sub></td>
+  </tr>
+</table>
 
-<p align="center">
-  <strong>90.6% fewer input tokens</strong> to assemble code-review context &nbsp;·&nbsp; median across <strong>60 merged pull requests</strong> in six open-source repositories that are not ours
-  <br>
-  <sub>13,595 → 1,326 input tokens per pull request — and <em>more</em> of the code the change can break is visible, not less (20% → 60% of affected call sites readable).<br>
-  That coverage figure is structural, not an LLM quality score, and on 5 of the 60 the index barely paid off — the page names them.<br>
-  <a href="https://trace-mcp.com/pr-context-benchmark.html">Method, pinned dataset, one-command reproduction →</a></sub>
-</p>
+```bash
+npm install -g trace-mcp   # MCP server, no app
+trace init                 # wire it into your agent, once per machine
+trace add                  # index the repo you are in
+```
 
-> AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
->
-> trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 177 tools.
->
-> **The same engine indexes markdown vaults.** `[[wikilinks]]` become first-class edges, frontmatter and `#tags` become metadata, headings become nested sections. `find_usages` returns backlinks. `apply_rename` rewrites every link to a renamed note. One MCP server covers both code and knowledge; there is no second tool to plug in.
+**90.6% fewer input tokens** to review a pull request — median over 60 merged PRs in six repos that are not ours, 13,595 → 1,326 per pull request. [Method and reproduction →](https://trace-mcp.com/pr-context-benchmark.html)
 
 <p align="center">
   <img src="docs/images/app-graph.webp" alt="trace-mcp app — GPU graph explorer visualizing symbol connections, light appearance" width="820" height="512" loading="lazy" />
   <br/>
-  <sub>Also ships a <a href="#desktop-app">desktop app</a> with a GPU graph explorer over the same index.</sub>
+  <sub>The <a href="#desktop-app">desktop app</a>: a GPU graph explorer over the same index the MCP server serves.</sub>
 </p>
 
 ---
 
 ## The problem
 
-The binding constraint is **recomputation**, not model capability. Agents treat the context window like a database — they re-read the same files, re-traverse the same dependencies, and re-inflate context every turn with structure they already computed five steps ago. Token bills, latency, and hallucinations all grow with project size instead of with task complexity.
+AI agents pay repeatedly for work they have already done. Every turn, the agent re-reads the same files, re-traverses the same dependencies, and re-inflates the context window with structure it discovered five steps ago. That repeated work is most of what a long session costs in tokens and latency.
 
-trace-mcp closes the recomputation leak. The graph is built once, kept incrementally fresh, and served to every agent that asks — so the same work isn't paid for over and over.
+trace-mcp builds a framework-aware graph of your codebase **once**, then serves it through MCP so the agent reasons from a precomputed structure instead of brute-reading the repo. Ask *"what breaks if I change this model?"* — instead of 80 Grep calls and 190 file reads, the agent calls `get_change_impact` once and gets the blast radius across PHP, Vue, migrations, and DI. 87 framework integrations across 81 languages, 177 tools.
+
+The binding constraint is **recomputation**, not model capability: token bills, latency, and hallucinations all grow with project size instead of with task complexity. trace-mcp closes the recomputation leak. The graph is built once, kept incrementally fresh, and served to every agent that asks — so the same work isn't paid for over and over.
 
 - **Lower cost** — fewer tokens per successful answer, on average and at peak
 - **Lower latency** — fewer sequential tool calls, fewer round-trips to the model
@@ -88,7 +85,7 @@ We started with code intelligence, where the repetition is most expensive, and t
 
 ---
 
-## The problem
+## Why agents keep re-reading
 
 AI coding agents recompute the same work every turn — and they're **framework-blind** while doing it.
 
@@ -530,7 +527,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
          MCP server (stdio or HTTP/SSE)
-         169 tools · 9 resources
+         177 tools · 10 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
@@ -573,6 +570,20 @@ Full docs live at **[trace-mcp.com](https://trace-mcp.com/)** (same content as `
     <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=nikolai-vysotskyi/trace-mcp&type=Date" />
   </picture>
 </a>
+
+---
+
+## Project health
+
+<p align="center">
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/codeql.yml/badge.svg" alt="CodeQL" /></a>
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml"><img src="https://github.com/nikolai-vysotskyi/trace-mcp/actions/workflows/semgrep.yml/badge.svg" alt="Semgrep" /></a>
+  <a href="https://securityscorecards.dev/viewer/?uri=github.com/nikolai-vysotskyi/trace-mcp"><img src="https://api.securityscorecards.dev/projects/github.com/nikolai-vysotskyi/trace-mcp/badge" alt="OpenSSF Scorecard" /></a>
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security"><img src="https://img.shields.io/badge/security-policy-blue" alt="Security policy" /></a>
+  <a href="https://github.com/nikolai-vysotskyi/trace-mcp/security/dependabot"><img src="https://img.shields.io/badge/Dependabot-enabled-success" alt="Dependabot enabled" /></a>
+  <a href="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp"><img src="https://glama.ai/mcp/servers/nikolai-vysotskyi/trace-mcp/badges/score.svg" alt="Glama score" /></a>
+  <img src="https://img.shields.io/node/v/trace-mcp" alt="Node.js version" />
+</p>
 
 ---
 

@@ -67,22 +67,6 @@ interface Claim {
   description: string;
 }
 
-/**
- * Pull the first occurrence of each `<NUMBER> <unit>` claim out of README.
- * Picks the first hit so duplicate claims (e.g. "138 tools" appearing in
- * both intro and table-of-contents) only need to be updated once.
- */
-function findClaim(unit: RegExp, readme: string, description: string): Claim | null {
-  const lines = readme.split('\n');
-  for (const line of lines) {
-    const m = line.match(new RegExp(`(\\d+)\\s+${unit.source}`));
-    if (m) {
-      return { count: Number.parseInt(m[1], 10), rawLine: line.trim(), description };
-    }
-  }
-  return null;
-}
-
 function within(actual: number, claim: number, tolerance: number): boolean {
   return Math.abs(actual - claim) <= tolerance;
 }
@@ -155,15 +139,31 @@ describe('README numeric claims', () => {
     }
   });
 
-  it('MCP tool count in README matches the source of truth (±5)', () => {
-    const claim = findClaim(/tools?/, readme, 'tool count');
-    expect(claim, 'no "X tools" claim found in README').not.toBeNull();
-    if (!claim) return;
-    if (!within(toolCount, claim.count, 5)) {
-      throw new Error(
-        `README claims ${claim.count} tools; src/tools/register/ registers ${toolCount} ` +
-          `framework-agnostic tools. Update README.md line: "${claim.rawLine}"`,
-      );
+  it('every MCP tool count in README matches the source of truth (±5)', () => {
+    // TRA-608: first-match-only left "169 tools · 9 resources" in the
+    // architecture diagram for months while the intro above it said 177 —
+    // the same gap TRA-272 already closed for languages and frameworks.
+    const claims = findAllClaims(/tools?/, readme);
+    expect(claims.length, 'no "X tools" claim found in README').toBeGreaterThan(0);
+    for (const claim of claims) {
+      if (!within(toolCount, claim.count, 5)) {
+        throw new Error(
+          `README claims ${claim.count} tools; src/tools/register/ registers ${toolCount} ` +
+            `framework-agnostic tools. Update README.md line: "${claim.rawLine}"`,
+        );
+      }
+    }
+  });
+
+  it('every resource count in README matches the source of truth (±2)', () => {
+    for (const claim of findAllClaims(/resources?/, readme)) {
+      if (!within(countServerResourceCalls(), claim.count, 2)) {
+        throw new Error(
+          `README claims ${claim.count} resources; src/tools/register/ contains ` +
+            `${countServerResourceCalls()} server.resource(...) registrations. ` +
+            `Update README.md line: "${claim.rawLine}"`,
+        );
+      }
     }
   });
 

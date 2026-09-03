@@ -17,3 +17,21 @@ export function activation(rows: FunnelRow[] | undefined | null): Activation;
 
 /** Percentage, or null when the denominator is missing. */
 export function share(part: number, whole: number): number | null;
+
+export interface ClientReporting {
+  fix_version: string;
+  at_or_above: number;
+  below: number;
+  unknown: number;
+  pct: number | null;
+  readable: boolean | null;
+}
+
+/** First version whose ping reports its client correctly. */
+export const CLIENT_FIX_VERSION: string;
+
+/** Share of `customEvent:version` rows able to report a client (TRA-748). */
+export function clientReporting(
+  rows: FunnelRow[] | undefined | null,
+  floor?: string,
+): ClientReporting;

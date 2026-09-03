@@ -49,6 +49,25 @@ export function atomicWriteString(
   opts: AtomicWriteOptions = {},
 ): void {
   const trailingNewline = opts.trailingNewline ?? true;
+  const body = trailingNewline && !payload.endsWith('\n') ? `${payload}\n` : payload;
+  atomicWriteBuffer(targetPath, Buffer.from(body, 'utf-8'), opts);
+}
+
+/**
+ * Atomically write raw bytes to disk — same tmp + O_EXCL + fsync + rename and
+ * the same symlink rejection as {@link atomicWriteString}, minus the UTF-8
+ * round-trip. Use this for anything that is not text: SQLite databases and
+ * their WAL/SHM sidecars, binaries, archives. Passing such content through
+ * `atomicWriteString` replaces every non-UTF-8 byte with U+FFFD, which for a
+ * database is silent, unrecoverable corruption (TRA-732).
+ *
+ * `trailingNewline` is ignored here — bytes are written verbatim.
+ */
+export function atomicWriteBuffer(
+  targetPath: string,
+  payload: Buffer,
+  opts: AtomicWriteOptions = {},
+): void {
   const rejectSymlinks = opts.rejectSymlinks ?? true;
 
   let linkStat: fs.Stats | null = null;
@@ -80,14 +99,12 @@ export function atomicWriteString(
   const rand = randomBytes(6).toString('hex');
   const tmp = path.join(dir, `.${base}.tmp.${process.pid}.${rand}`);
 
-  const body = trailingNewline && !payload.endsWith('\n') ? `${payload}\n` : payload;
-
   let fd: number | null = null;
   try {
     // O_EXCL prevents accidental clobber of a same-pid+rand collision. mode
     // is applied at create time (before any data is visible at the target).
     fd = fs.openSync(tmp, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, mode);
-    fs.writeFileSync(fd, body);
+    fs.writeFileSync(fd, payload);
     // fsync: ensure data is on disk before the rename publishes it. Best-effort
     // — some filesystems (network, fuse) may not honour this, but POSIX rename
     // is still atomic at the directory entry level.
