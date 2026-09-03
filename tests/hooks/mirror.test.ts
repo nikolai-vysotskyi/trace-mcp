@@ -116,8 +116,9 @@ describe('trace-mcp mirror hook', () => {
   });
 
   it('leaves output alone when compression would not shrink it', () => {
-    // 400 distinct, noise-free lines within the window: nothing to collapse.
-    const incompressible = Array.from({ length: 60 }, (_, i) => `x${i} ${'y'.repeat(60)}`).join(
+    // Distinct, noise-free lines that fit inside the 24/12 window: nothing to
+    // collapse and nothing to elide, so the footer would be pure overhead.
+    const incompressible = Array.from({ length: 30 }, (_, i) => `x${i} ${'y'.repeat(70)}`).join(
       '\n',
     );
     expect(runMirror('Bash', bashResponse(incompressible)).rewritten).toBe(false);
@@ -189,7 +190,7 @@ describe('trace-mcp mirror hook', () => {
   // The footer costs ~120 chars. A saving smaller than that would make the
   // rewrite bigger than the original.
   it('does not inflate when the saving is smaller than the footer', () => {
-    const lines = Array.from({ length: 40 }, (_, i) => `x${i} ${'y'.repeat(60)}`);
+    const lines = Array.from({ length: 30 }, (_, i) => `x${i} ${'y'.repeat(70)}`);
     lines.splice(5, 0, lines[4]); // exactly one collapsible duplicate
     expect(runMirror('Bash', bashResponse(lines.join('\n'))).rewritten).toBe(false);
   });
@@ -251,6 +252,75 @@ describe('trace-mcp mirror hook', () => {
     expect(response.file.totalLines).toBe(400);
     expect(response.file.numLines).toBe(response.file.content.split('\n').length);
     expect(response.file.numLines).toBeLessThan(400);
+  });
+
+  // --- char cap (opt-in, TRA-750) -----------------------------------------
+  // A few very wide lines: the line window never fires, so only the cap can
+  // shrink this. This is the shape most Bash results have.
+
+  /** 6 lines of 4 KB each — under the 24/12 window, far over the char cap. */
+  const wideFewLines = Array.from({ length: 6 }, (_, i) => `line${i} ${'w'.repeat(4000)}`).join(
+    '\n',
+  );
+
+  it('leaves a wide few-line output alone while the cap is off', () => {
+    expect(runMirror('Bash', bashResponse(wideFewLines)).rewritten).toBe(false);
+  });
+
+  it('caps a wide few-line output by characters when opted in', () => {
+    const { rewritten, output } = runMirror('Bash', bashResponse(wideFewLines), {
+      TRACE_MCP_MIRROR_CAP: '1',
+    });
+
+    expect(rewritten).toBe(true);
+    expect(output).toContain('line0 ');
+    expect(output).toContain('char(s) elided by trace-mcp mirror');
+    expect(output).toContain('w'.repeat(500)); // tail survived too
+    // Cap body is the 3000-char budget; the footer names the spill on top.
+    expect(output!.length).toBeLessThan(4000);
+    expect(output).toMatch(/\[trace-mcp mirror] Bash output compressed \d+ → \d+ chars \(−\d+%\)/);
+
+    const spill = output!.match(/Full output: (\S+)/)![1];
+    expect(fs.readFileSync(spill, 'utf-8')).toBe(wideFewLines);
+  });
+
+  it('honours TRACE_MCP_MIRROR_MAX_CHARS', () => {
+    const { output } = runMirror('Bash', bashResponse(wideFewLines), {
+      TRACE_MCP_MIRROR_CAP: '1',
+      TRACE_MCP_MIRROR_MAX_CHARS: '600',
+    });
+    expect(output!.length).toBeLessThan(1000);
+  });
+
+  it('keeps the Read envelope valid when the cap fires', () => {
+    const { rewritten, response } = runMirror('Read', readResponse(wideFewLines), {
+      TRACE_MCP_MIRROR_CAP: '1',
+    });
+
+    expect(rewritten).toBe(true);
+    expect(response.type).toBe('text');
+    expect(Object.keys(response.file).sort()).toEqual(Object.keys(readResponse('').file).sort());
+    expect(response.file.filePath).toBe('/tmp/fixture.log');
+    expect(response.file.totalLines).toBe(6);
+    expect(response.file.numLines).toBe(response.file.content.split('\n').length);
+  });
+
+  it('keeps the Bash envelope valid when the cap fires', () => {
+    const { response } = runMirror('Bash', bashResponse(wideFewLines), {
+      TRACE_MCP_MIRROR_CAP: '1',
+    });
+    expect(Object.keys(response).sort()).toEqual(Object.keys(bashResponse('')).sort());
+    expect(response.stderr).toBe('');
+    expect(response.interrupted).toBe(false);
+  });
+
+  it('does not cap output already under the budget', () => {
+    // 2.5 KB: over MIN_CHARS, under MAX_CHARS — the cap must not touch it, and
+    // with nothing to collapse the whole rewrite is skipped.
+    const small = Array.from({ length: 30 }, (_, i) => `x${i} ${'y'.repeat(70)}`).join('\n');
+    expect(runMirror('Bash', bashResponse(small), { TRACE_MCP_MIRROR_CAP: '1' }).rewritten).toBe(
+      false,
+    );
   });
 
   it('honours the disable switch', () => {

@@ -31,6 +31,8 @@ vi.mock('../src/init/hooks.js', () => ({
   installReindexHook: vi.fn(),
   installPrecompactHook: vi.fn(),
   installWorktreeHook: vi.fn(),
+  installMirrorHook: vi.fn(),
+  isMirrorHookInstalled: vi.fn(() => false),
   migrateLegacyToolPrefix: vi.fn(() => []),
 }));
 vi.mock('../src/init/claude-md.js', () => ({ updateClaudeMd: vi.fn() }));
