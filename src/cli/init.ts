@@ -13,6 +13,7 @@ import { updateClaudeMd } from '../init/claude-md.js';
 import { installHermesHooks } from '../init/hermes-hooks.js';
 import {
   installGuardHook,
+  installMirrorHook,
   installReindexHook,
   installPrecompactHook,
   installWorktreeHook,
@@ -76,6 +77,7 @@ export const initCommand = new Command('init')
   .option('--dry-run', 'Show what would be done without writing files')
   .option('--json', 'Output results as JSON (implies --yes)')
   .option('--index', 'Also register and index the current project')
+  .option('--mirror', 'Install the Read/Bash output mirror hook (opt-in: it rewrites tool output)')
   .action(
     async (opts: {
       yes?: boolean;
@@ -89,6 +91,7 @@ export const initCommand = new Command('init')
       dryRun?: boolean;
       json?: boolean;
       index?: boolean;
+      mirror?: boolean;
     }) => {
       if (opts.scope !== 'project' && opts.scope !== 'global') {
         console.error(`Invalid --scope "${opts.scope}" — must be "project" or "global".`);
@@ -355,6 +358,7 @@ export const initCommand = new Command('init')
           executeSteps(steps, {
             selectedClients,
             installHooks,
+            installMirror: opts.mirror ?? false,
             installTweakcc,
             agentBehavior,
             claudeMdScope,
@@ -372,6 +376,7 @@ export const initCommand = new Command('init')
         executeSteps(steps, {
           selectedClients,
           installHooks,
+          installMirror: opts.mirror ?? false,
           installTweakcc,
           agentBehavior,
           claudeMdScope,
@@ -629,6 +634,7 @@ function executeSteps(
   opts: {
     selectedClients: DetectedMcpClient['name'][];
     installHooks: boolean;
+    installMirror: boolean;
     installTweakcc: boolean;
     agentBehavior: 'strict' | 'off';
     claudeMdScope: 'global' | 'skip';
@@ -679,6 +685,14 @@ function executeSteps(
     if (opts.selectedClients.includes('hermes')) {
       steps.push(...installHermesHooks({ dryRun: opts.dryRun, autoAllowlist: true }));
     }
+  }
+
+  // 3a. PostToolUse Read/Bash output mirror — opt-in (`--mirror`) and outside
+  // the `installHooks` tier gate on purpose. Every other hook observes or
+  // advises; this one rewrites what the model sees, so an existing install
+  // must never pick it up silently on a re-init (TRA-750).
+  if (opts.installMirror) {
+    steps.push(installMirrorHook({ global: true, dryRun: opts.dryRun }));
   }
 
   // 3b. Legacy tool-name prefix in permission allowlists + hook matchers
