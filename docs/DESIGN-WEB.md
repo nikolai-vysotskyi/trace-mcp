@@ -386,9 +386,6 @@ WebP conversion.
   monochrome (§0). A page where every mark is accent-coloured has no accent.
 - `--accent` as a fill under white text (3.16, fails), or `--accent-solid` as
   a text colour.
-- A second accent colour. There is no first one — the base is monochrome and
-  no accent palette has been chosen yet (§0).
-- `--accent` as a fill under white text.
 - Red text on `--surface-raised` in dark — 4.27:1, the one gap in §1.
 - A colour value recorded with a ratio against a background it is not painted
   on. Quote the worst of the three surfaces, in both themes.
