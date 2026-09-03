@@ -1182,7 +1182,7 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
 
   server.tool(
     'search_text',
-    'Full-text search across all indexed files. Supports regex, glob file patterns, language filter. Use for finding strings, comments, TODOs, config values, error messages — anything not captured as a symbol. For symbol search (functions, classes) use search instead. Read-only. Returns JSON: { matches: [{ file, line, text, context }], total_matches }. Set `grouping: "by_file"` to deduplicate file paths in results with many hits.',
+    'Full-text search across all indexed files. Supports regex, glob file patterns, language filter. Use for finding strings, comments, TODOs, config values, error messages — anything not captured as a symbol. For symbol search (functions, classes) use search instead. Read-only. Returns JSON: { files: [{ file, language, hits: [{ line, column, match, context }] }], total_matches } — hits grouped per file, so a long path is paid once. Pass `grouping: "flat"` for the ungrouped matches[] shape.',
     {
       query: z.string().min(1).max(1000).describe('Search string or regex pattern'),
       is_regex: z.boolean().optional().describe('Treat query as regex (default false)'),
@@ -1221,9 +1221,14 @@ export function registerAdvancedTools(server: McpServer, ctx: ServerContext): vo
       grouping: z
         .enum(['flat', 'by_file'])
         .optional()
-        .default('flat')
+        .default('by_file')
+        // TRA-711: by_file is the default. It is a pure structural reshape —
+        // same hits, same order, file path paid once instead of per hit — and
+        // docs/toon-savings.md measured it at +20.8% tokens saved on this
+        // repo's own index. "flat" stays for consumers that want the original
+        // matches[] array.
         .describe(
-          'Payload shape. "flat" (default) is a single matches[] array; "by_file" groups hits per file — saves tokens on long paths with many hits.',
+          'Payload shape. "by_file" (default) groups hits per file, so a long path is paid once; "flat" is a single matches[] array.',
         ),
     },
     async ({

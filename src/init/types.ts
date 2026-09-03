@@ -88,7 +88,7 @@ export interface InitReport {
 // Windows hook now registers as a hidden PowerShell command instead of
 // `cmd /c`. The bump makes `trace-mcp init` treat existing installs as
 // outdated and rewrite the registered command + install the hidden-run shim.
-export const GUARD_HOOK_VERSION = '0.12.0';
+export const GUARD_HOOK_VERSION = '0.13.0';
 // 0.5.0 (TRA-694): the reindex dispatch is detached, so an edit no longer
 // blocks the agent on the daemon round trip. Existing installs must be
 // rewritten to pick it up.
@@ -96,7 +96,7 @@ export const REINDEX_HOOK_VERSION = '0.5.0';
 export const PRECOMPACT_HOOK_VERSION = '0.3.0';
 export const WORKTREE_HOOK_VERSION = '0.3.0';
 export const SESSION_START_HOOK_VERSION = '0.2.0';
-export const USER_PROMPT_SUBMIT_HOOK_VERSION = '0.2.0';
+export const USER_PROMPT_SUBMIT_HOOK_VERSION = '0.3.0'; // nosemgrep: ajinabraham.njsscan.generic.hardcoded_secrets.node_username -- the constant name contains "USER", which the "username" secret heuristic matches; the value is a hook script version.
 export const STOP_HOOK_VERSION = '0.2.0';
 export const SESSION_END_HOOK_VERSION = '0.2.0';
 export const LAUNCHER_VERSION = '0.4.0';

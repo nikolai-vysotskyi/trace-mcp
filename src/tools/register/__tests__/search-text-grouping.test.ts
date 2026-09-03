@@ -108,8 +108,15 @@ describe('search_text — grouping', () => {
     cleanup(fixture);
   });
 
-  it('flat (default) returns matches[] array', async () => {
+  it('by_file is the default shape (TRA-711)', async () => {
     const { parsed } = await call(fixture.tool, { query: 'findMe' });
+    const payload = parsed as Record<string, unknown>;
+    expect(Array.isArray(payload.files)).toBe(true);
+    expect(payload.matches).toBeUndefined();
+  });
+
+  it('flat returns matches[] array', async () => {
+    const { parsed } = await call(fixture.tool, { query: 'findMe', grouping: 'flat' });
     const payload = parsed as { matches: unknown[]; total_matches: number };
     expect(Array.isArray(payload.matches)).toBe(true);
     expect(payload.matches.length).toBeGreaterThan(0);
@@ -118,8 +125,8 @@ describe('search_text — grouping', () => {
   });
 
   it('by_file groups hits under files with line-ordered hits', async () => {
-    const { parsed: flat } = await call(fixture.tool, { query: 'findMe' });
-    const { parsed: grouped } = await call(fixture.tool, { query: 'findMe', grouping: 'by_file' });
+    const { parsed: flat } = await call(fixture.tool, { query: 'findMe', grouping: 'flat' });
+    const { parsed: grouped } = await call(fixture.tool, { query: 'findMe' });
     const flatPayload = flat as {
       matches: Array<{
         file: string;
