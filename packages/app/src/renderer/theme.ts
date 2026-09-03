@@ -6,13 +6,19 @@
    Picking Auto REMOVES the key — absence of a stored value is what Auto means,
    so there is no third value to write and no way to get stuck on an override.
 
-   Cross-window: when the menu and a project window are both open, a `storage`
-   event syncs them (a cleared key arrives as newValue === null).
+   localStorage IS the store, not a mirror of per-hook state: every useTheme()
+   in the window reads the same snapshot and re-renders together. It has to be —
+   the window shell puts [data-mode] on .ws-stage while the tab view owns the
+   toggle, two separate calls, and per-hook useState let them disagree until a
+   restart (TRA-754).
+
+   Cross-window: when two windows are open, a `storage` event re-reads the
+   snapshot (a cleared key means Auto).
 
    Lives outside App.tsx so it is testable without pulling in the whole
    renderer — same reason sidebar-prefs.ts and recent-projects.ts do. */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { t } from './i18n';
 
 export const THEME_KEY = 'trace-mcp-theme';
@@ -49,6 +55,31 @@ export function readStoredAppearance(): Appearance {
   }
 }
 
+/* Same-window subscribers. A `storage` event only reaches OTHER windows, so the
+   writer has to tell its own siblings; by then localStorage already holds the
+   new value, which is why both paths just re-read the snapshot. */
+const listeners = new Set<() => void>();
+
+function subscribeAppearance(onChange: () => void): () => void {
+  listeners.add(onChange);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === THEME_KEY) onChange();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    listeners.delete(onChange);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
+function setStoredAppearance(next: Appearance): void {
+  try {
+    if (next === 'auto') localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, next);
+  } catch {}
+  for (const notify of [...listeners]) notify();
+}
+
 export function systemTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
@@ -58,7 +89,11 @@ export function useTheme(): {
   appearance: Appearance;
   setAppearance: (next: Appearance) => void;
 } {
-  const [appearance, setStored] = useState<Appearance>(() => readStoredAppearance());
+  const appearance = useSyncExternalStore(
+    subscribeAppearance,
+    readStoredAppearance,
+    readStoredAppearance,
+  );
   const [system, setSystem] = useState<Theme>(() => systemTheme());
 
   // Apply / remove the data-theme attribute on every change, and mirror the
@@ -80,22 +115,11 @@ export function useTheme(): {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== THEME_KEY) return;
-      setStored(e.newValue === 'light' || e.newValue === 'dark' ? e.newValue : 'auto');
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  const setAppearance = useCallback((next: Appearance) => {
-    try {
-      if (next === 'auto') localStorage.removeItem(THEME_KEY);
-      else localStorage.setItem(THEME_KEY, next);
-    } catch {}
-    setStored(next);
-  }, []);
-
-  return { theme: appearance === 'auto' ? system : appearance, appearance, setAppearance };
+  // Not a useCallback: the store is the module, so the setter already is one
+  // stable reference for every caller in the window.
+  return {
+    theme: appearance === 'auto' ? system : appearance,
+    appearance,
+    setAppearance: setStoredAppearance,
+  };
 }
