@@ -168,11 +168,11 @@ updated: ${new Date().toISOString().slice(0, 10)}
 {
   "@context": "https://schema.org",
   "@type": "TechArticle",
-  "headline": "trace-mcp tool index",
-  "description": "Alphabetical index of every trace-mcp MCP tool, generated from the server's own registrations.",
+  "headline": {{ page.title | jsonify }},
+  "description": {{ page.description | jsonify }},
   "url": "https://trace-mcp.com/tools-index.html",
   "datePublished": "2026-08-30",
-  "dateModified": "{{ page.updated }}",
+  "dateModified": {{ page.updated | jsonify }},
   "author": {
     "@type": "Person",
     "name": "Nikolai Vysotskyi",

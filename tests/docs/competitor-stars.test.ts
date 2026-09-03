@@ -46,16 +46,19 @@ describe('docs/_data/competitors.yml', () => {
   });
 
   it('every entry names the repository the count came from', () => {
-    const missing = entries.filter(([, c]) => !/^[\w.-]+\/[\w.-]+$/.test(c.repo ?? '')).map(([k]) => k);
+    const missing = entries
+      .filter(([, c]) => !/^[\w.-]+\/[\w.-]+$/.test(c.repo ?? ''))
+      .map(([k]) => k);
     expect(missing, 'each entry needs `repo: owner/name` so the number can be re-checked').toEqual(
       [],
     );
   });
 
-  it('no comparison table hardcodes a star count any more', () => {
-    // The row label is "**GitHub stars**"; every cell in it has to be a Liquid
-    // tag or a figure for a project the data file does not track (marked with
-    // ~ or a plain small number).
+  it('no page hardcodes a tracked competitor’s star count', () => {
+    // Projects the data file tracks must render the tag. Projects it does not
+    // track (jCodeMunch, claude-mem, engram and the rest of the long tail) keep
+    // the figure from the pass that checked them — this test is about one
+    // metric carrying three values, not about tracking every project.
     const pages = [
       'comparisons.md',
       'vs/repomix.md',
@@ -65,15 +68,22 @@ describe('docs/_data/competitors.yml', () => {
       'vs/context-mode.md',
       'vs/repomix-vs-codegraph.md',
     ];
+    // Only the shortened "NN.NK" strings: a three-digit count matches too much
+    // unrelated prose to search for literally.
+    const tracked = new Map(
+      entries.filter(([, c]) => c.stars.endsWith('K')).map(([key, c]) => [c.stars, key]),
+    );
     const offenders: string[] = [];
     for (const page of pages) {
-      for (const line of readFileSync(join(DOCS, page), 'utf-8').split('\n')) {
-        if (!line.includes('**GitHub stars**')) continue;
-        for (const cell of line.split('|').slice(2)) {
-          const value = cell.trim();
-          // A tracked project renders a tag; an untracked one is written with a
-          // leading ~ to mark it as an unverified snapshot.
-          if (/^\d+(\.\d+)?K$/.test(value)) offenders.push(`${page}: ${value}`);
+      const raw = readFileSync(join(DOCS, page), 'utf-8');
+      for (const line of raw.split('\n')) {
+        // Dated verification prose records what a figure used to be ("41.1K ->
+        // 41.2K this pass"). That is history, not a live claim.
+        if (line.trimStart().startsWith('- **Star re-check')) continue;
+        for (const [stars, key] of tracked) {
+          if (line.includes(stars) && !line.includes(`competitors.${key}.stars`)) {
+            offenders.push(`${page}: "${stars}" (${key})`);
+          }
         }
       }
     }

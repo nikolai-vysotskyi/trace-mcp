@@ -1,7 +1,7 @@
 ---
 title: "Context Mode alternative? trace-mcp vs Context Mode for AI coding agents"
 description: "Context Mode keeps raw tool output out of the context window; trace-mcp makes questions about your code cheap to ask. Head-to-head — and why run both."
-updated: 2026-08-30
+updated: 2026-09-03
 ---
 
 # trace-mcp vs Context Mode
