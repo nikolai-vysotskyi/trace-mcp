@@ -85,12 +85,14 @@ function actionItem(id: GlobalActionId): MenuItemConstructorOptions {
       };
 }
 
+/* No accelerator here: CmdOrCtrl+1…9 belongs to the renderer's tab strip now
+   (App.tsx) — one BrowserWindow, several tabs, and the combo picks a tab, not
+   a section (TRA-700). These stay mouse-clickable, just unaccelerated. */
 function sectionItems(): MenuItemConstructorOptions[] {
   const focused = BrowserWindow.getFocusedWindow();
   const sections = focused ? (sectionsByWebContents.get(focused.webContents.id) ?? []) : [];
   return sections.map((section, i) => ({
     label: section.label,
-    accelerator: `CmdOrCtrl+${i + 1}`,
     click: () => send('select-section', i + 1),
   }));
 }
@@ -140,7 +142,12 @@ export function buildAppMenu(): Menu {
         click: () => send('quick-open'),
       },
       { type: 'separator' },
-      { label: t('menu:closeTab'), accelerator: 'CmdOrCtrl+W', role: 'close' },
+      /* No accelerator: CmdOrCtrl+W is the renderer's own keydown handler now
+         (App.tsx) — the old `role: 'close'` closed the focused window, which
+         under the single-window architecture is the app's ONLY window, not a
+         tab (TRA-700). Still clickable from the menu, routed through the
+         same app-command channel the renderer already listens on. */
+      { label: t('menu:closeTab'), click: () => send('close-tab') },
       { label: t('menu:closeWindow'), accelerator: 'CmdOrCtrl+Shift+W', click: closeWindowGroup },
       ...(isMac
         ? []

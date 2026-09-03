@@ -2,9 +2,11 @@
  * Custom tab bar for every platform, macOS included (the native AppKit tabs
  * were removed in PR 708).
  *
- * Displays a horizontal strip of tabs at the top of each window.
- * Each tab represents an open window (Menu + project windows).
- * Clicking a tab sends IPC to focus that window.
+ * Displays a horizontal strip of tabs at the top of the window — the menu tab
+ * plus one per open project. The tab list is owned by the app shell
+ * (App.tsx); this component is a plain controlled view over it. Clicking a
+ * tab switches the mounted view in place — no IPC round trip to main, since
+ * there is only one window to begin with (TRA-698/TRA-700).
  *
  * On macOS this strip is the topmost band, so the system traffic lights are
  * drawn INSIDE it. Its height is therefore TOP_BAND_H — the same number the
@@ -16,16 +18,23 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TOP_BAND_H } from '../../shared/chrome-metrics.js';
 
-interface TabInfo {
+export interface TabInfo {
   id: string;
+  kind: 'menu' | 'project';
+  /** Present for `kind === 'project'`; equals `id`. */
+  root?: string;
   title: string;
-  type: string;
   active: boolean;
 }
 
-export function WindowTabBar() {
+interface WindowTabBarProps {
+  tabs: TabInfo[];
+  onSelect: (tabId: string) => void;
+  onClose: (tabId: string) => void;
+}
+
+export function WindowTabBar({ tabs, onSelect, onClose }: WindowTabBarProps) {
   const { t } = useTranslation('shell');
-  const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [platform, setPlatform] = useState<string>('');
 
   useEffect(() => {
@@ -34,30 +43,14 @@ export function WindowTabBar() {
     api.getPlatform().then((p: string) => setPlatform(p));
   }, []);
 
-  useEffect(() => {
-    const api = window.electronAPI;
-    if (!api?.onTabListChanged) return;
-    return api.onTabListChanged((newTabs: TabInfo[]) => setTabs(newTabs));
-  }, []);
-
   // Don't render if only 1 tab (no strip needed)
   if (tabs.length <= 1) return null;
 
-  const handleTabClick = (tabId: string) => {
-    const api = window.electronAPI;
-    api?.focusTab(tabId);
-  };
-
-  const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
+  const handleCloseTab = (e: React.MouseEvent | React.KeyboardEvent, tabId: string) => {
     e.stopPropagation();
-    // Closing a non-active tab: just tell main to close that window
-    // For simplicity, we only allow closing project tabs (not the menu tab)
+    // Only project tabs are closable — the menu tab is always available.
     if (tabId === 'menu') return;
-    const api = window.electronAPI;
-    // Focus the tab first, then close it
-    api?.focusTab(tabId).then(() => {
-      api?.closeCurrentTab();
-    });
+    onClose(tabId);
   };
 
   return (
@@ -82,7 +75,7 @@ export function WindowTabBar() {
         <button
           type="button"
           key={tab.id}
-          onClick={() => handleTabClick(tab.id)}
+          onClick={() => onSelect(tab.id)}
           style={
             {
               display: 'flex',
@@ -109,7 +102,7 @@ export function WindowTabBar() {
           title={tab.id === 'menu' ? t('menuWindow') : tab.id}
         >
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{tab.title}</span>
-          {tab.type === 'project' && (
+          {tab.kind === 'project' && (
             <span
               role="button"
               tabIndex={0}
@@ -119,7 +112,7 @@ export function WindowTabBar() {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   e.stopPropagation();
-                  handleCloseTab(e as unknown as React.MouseEvent<HTMLSpanElement>, tab.id);
+                  handleCloseTab(e, tab.id);
                 }
               }}
               style={{

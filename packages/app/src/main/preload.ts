@@ -62,7 +62,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('update-mcp-clients', clientNames),
   openProjectTab: (root: string): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('open-project-tab', root),
-  closeCurrentTab: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('close-current-tab'),
   onFullscreenChanged: (callback: (isFullscreen: boolean) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, isFullscreen: boolean) =>
       callback(isFullscreen);
@@ -155,19 +154,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('app-command', handler);
     };
   },
-  // Tab management (Windows custom tab bar)
+  // Tab bar: the renderer owns the tab list (App.tsx); main only pushes
+  // lifecycle events for it to fold in (TRA-700).
   getPlatform: (): Promise<string> => ipcRenderer.invoke('get-platform'),
-  focusTab: (tabId: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('focus-tab', tabId),
-  onTabListChanged: (
-    callback: (tabs: { id: string; title: string; type: string; active: boolean }[]) => void,
-  ) => {
-    const handler = (
-      _event: Electron.IpcRendererEvent,
-      tabs: { id: string; title: string; type: string; active: boolean }[],
-    ) => callback(tabs);
-    ipcRenderer.on('tab-list-changed', handler);
+  onOpenTab: (callback: (payload: { root: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, payload: { root: string }) =>
+      callback(payload);
+    ipcRenderer.on('open-tab', handler);
     return () => {
-      ipcRenderer.removeListener('tab-list-changed', handler);
+      ipcRenderer.removeListener('open-tab', handler);
+    };
+  },
+  onNewTab: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('new-tab', handler);
+    return () => {
+      ipcRenderer.removeListener('new-tab', handler);
+    };
+  },
+  onFocusTab: (callback: (tabId: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, tabId: string) => callback(tabId);
+    ipcRenderer.on('focus-tab', handler);
+    return () => {
+      ipcRenderer.removeListener('focus-tab', handler);
     };
   },
   // trace-mcp guard control: read project status + toggle per-project mode.
