@@ -165,3 +165,71 @@ export function usageByClient(rows) {
 export function share(part, whole) {
   return whole > 0 ? Math.round((part / whole) * 100) : null;
 }
+
+/**
+ * First version whose ping reports its client correctly (TRA-643, `be1fb536`).
+ * Before it, the ping's final `saveState` wrote a snapshot taken before the HTTP
+ * request and erased the client name the request had just recorded, so those
+ * installs report `unknown` no matter which client they run.
+ */
+export const CLIENT_FIX_VERSION = '3.12.0';
+
+/** Semver compare on the numeric release triple; a prerelease suffix is ignored. */
+function cmpVersion(a, b) {
+  // `Number('')` is 0, so an empty segment has to be rejected before the parse —
+  // otherwise `(not set)`'s empty string parses as 0.0.0 and lands below the
+  // floor, which is exactly the unknown-counted-as-evidence bug this guards.
+  const parts = (v) =>
+    String(v)
+      .split('-')[0]
+      .split('.')
+      .map((n) => (n.trim() === '' ? Number.NaN : Number(n)));
+  const [x, y] = [parts(a), parts(b)];
+  if (x.some((n) => !Number.isFinite(n)) || y.some((n) => !Number.isFinite(n))) return null;
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0);
+  return 0;
+}
+
+/**
+ * How much of the field runs a version that can report its client at all
+ * (TRA-748) — the gate on whether `by_client` and `by_client_used_pct` mean
+ * anything yet.
+ *
+ * `by_client_used_pct` becomes non-empty the moment `calls` is registered in the
+ * property, and it decides distribution strategy — but a split computed over a
+ * population that is nine-tenths client-blind cannot answer "does use hold
+ * across clients" in either direction. Nineteen hours after v3.12.0 shipped,
+ * versions carrying the fix were 10% of the rows. Publishing the share here is
+ * the difference between a caveat that travels with the data and a caveat in an
+ * issue nobody re-reads.
+ *
+ * `pct` is over placed rows only, the same denominator discipline as everything
+ * above: GA4's `(not set)` version is not evidence of an old install.
+ *
+ * @param rows GA4 `runReport` rows, dimension `customEvent:version`, metric
+ *   `activeUsers`.
+ */
+export function clientReporting(rows, floor = CLIENT_FIX_VERSION) {
+  let at_or_above = 0;
+  let below = 0;
+  let unknown = 0;
+  for (const row of rows ?? []) {
+    const users = Number(row.metricValues?.[0]?.value ?? 0);
+    if (!Number.isFinite(users) || users <= 0) continue;
+    const c = cmpVersion(row.dimensionValues?.[0]?.value ?? '', floor);
+    if (c === null) unknown += users;
+    else if (c >= 0) at_or_above += users;
+    else below += users;
+  }
+  const pct = share(at_or_above, at_or_above + below);
+  return {
+    fix_version: floor,
+    at_or_above,
+    below,
+    unknown,
+    pct,
+    // The gate itself, as a value rather than something to re-derive: below half
+    // the field on a fix-carrying version, re-read and record — do not conclude.
+    readable: pct === null ? null : pct >= 50,
+  };
+}
