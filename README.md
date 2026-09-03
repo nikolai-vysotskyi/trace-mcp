@@ -527,7 +527,7 @@ Source files (PHP, TS, Vue, Python, Go, Java, Kotlin, Ruby, HTML, CSS, Blade)
                      │
                      ▼
          MCP server (stdio or HTTP/SSE)
-         169 tools · 9 resources
+         177 tools · 10 resources
 ```
 
 **Incremental by default** — files are content-hashed; unchanged files are skipped on re-index.
